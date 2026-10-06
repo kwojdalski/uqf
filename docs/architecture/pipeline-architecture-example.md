@@ -27,12 +27,12 @@ history, not ticks, and a plant appends.
 
 Four kinds of thing put rows on the plant, and they are deliberately not alike:
 
-  | Source           | Implemented by                                                                                                                                                                                                                    | Shape it arrives in                                                                      |
-  | ---              | ---                                                                                                                                                                                                                               | ---                                                                                      |
-  | FX venue feeds   | [`fx_feed`](../../src/etl/streaming/fx_feed.q), [`quotes_feed`](../../src/etl/streaming/quotes_feed.q), [`fx_trades_feed`](../../src/etl/streaming/fx_trades_feed.q) — synthetic here, a venue adapter in production              | `quote` (one bid, one ask), `trades` (sym, side, price, size, pip_factor)                |
-  | Crypto venues    | cryptorust's two kdb recorders, or [`crypto_mock`](../../src/etl/streaming/crypto_mock.q) standing in                                                                                                                             | `crypto_book` (a ladder per venue), `crypto_trades` (venue, fee, exchange id)            |
-  | Databento MBP-10 | [`external/databento_feed.py`](../../python/uqs/src/uqs/external/databento_feed.py) → [`databento_book`](../../src/etl/streaming/databento_book.q)                                                                                | raw MBP-10, folded by the same `.qetl.transform` transform the ODBC backfill applies     |
-  | History          | bounded workers under [`src/etl/workers/`](../../src/etl/workers), run by [`.qetl.job.bounded`](../../src/etl/core/bounded_worker.q)                                                                                              | whatever the upstream holds, written through `.qetl.io` — never via the plant            |
+  | Source           | Implemented by                                                                                                                                                                                                                                | Shape it arrives in                                                                      |
+  | ---              | ---                                                                                                                                                                                                                                           | ---                                                                                      |
+  | FX venue feeds   | [`fx_feed`](../../src/etl/streaming/fx_feed.q), [`fx_orderbook_feed`](../../src/etl/streaming/fx_orderbook_feed.q), [`fx_trades_feed`](../../src/etl/streaming/fx_trades_feed.q) — synthetic here, a venue adapter in production              | `quote` (one bid, one ask), `trades` (sym, side, price, size, pip_factor)                |
+  | Crypto venues    | cryptorust's two kdb recorders, or [`crypto_mock`](../../src/etl/streaming/crypto_mock.q) standing in                                                                                                                                         | `crypto_book` (a ladder per venue), `crypto_trades` (venue, fee, exchange id)            |
+  | Databento MBP-10 | [`external/databento_feed.py`](../../python/uqs/src/uqs/external/databento_feed.py) → [`eq_orderbook`](../../src/etl/streaming/eq_orderbook.q)                                                                                                | raw MBP-10, folded by the same `.qetl.transform` transform the ODBC backfill applies     |
+  | History          | bounded workers under [`src/etl/workers/`](../../src/etl/workers), run by [`.qetl.job.bounded`](../../src/etl/core/bounded_worker.q)                                                                                                          | whatever the upstream holds, written through `.qetl.io` — never via the plant            |
 
 The last row is the one to notice. A backfill writes into storage directly and
 records what it covered in the [coverage
@@ -63,11 +63,10 @@ whose instances take several tables carrying the same fact in different shapes
 and publish one canonical table, with one declared `.qetl.transform` transform
 per source --- refused at load if its output drifts from the canonical schema.
 
-  | Normalizer                                             | Sources                   | Output                                                                                      |
-  | ---                                                    | ---                       | ---                                                                                         |
-  | [`executions`](../../src/etl/streaming/executions.q)   | `trades`, `crypto_trades` | one fill table: source_time, sym, venue, side, size, price, fee, fee_ccy, fill_id           |
-  | [`marks`](../../src/etl/streaming/marks.q)             | `quote`, `crypto_book`    | one mid per instrument: source_time, sym, venue, mid                                        |
-  | [`market_data`](../../src/etl/streaming/market_data.q) | `quote`, `quotes`         | one book shape: source and source_time preserved, so a merge can tell whose liquidity it is |
+  | Normalizer                                             | Sources                                | Output                                                                                      |
+  | ---                                                    | ---                                    | ---                                                                                         |
+  | [`executions`](../../src/etl/streaming/executions.q)   | `trades`, `crypto_trades`              | one fill table: source_time, sym, venue, side, size, price, fee, fee_ccy, fill_id           |
+  | [`market_data`](../../src/etl/streaming/market_data.q) | `quote`, `fx_orderbook`, `crypto_book` | one book shape: source and source_time preserved, so a merge can tell whose liquidity it is |
 
 A third market --- a new venue, a futures feed --- is a mapping in one of these,
 not a change to anything downstream.
@@ -78,14 +77,14 @@ Subscribe, hold state, republish. Each is one file under
 [`src/etl/streaming/`](../../src/etl/streaming), TorQ-free, run by a generic
 runner.
 
-  | Engine                                                                                                      | Reads                 | Holds                                                                                              | Publishes                                                                        |
-  | ---                                                                                                         | ---                   | ---                                                                                                | ---                                                                              |
-  | [`posbook`](../../src/etl/streaming/posbook.q)                                                              | `executions`, `marks` | a [`.qpos`](../../src/portfolio/positions.q) book: position and P&L per sym, weighted-average cost | `position` — FX and crypto in one book                                           |
-  | [`fx_positions`](../../src/etl/streaming/fx_positions.q)                                                    | `orders`              | a `.qdesk` book: net exposure by (sym, book, product); `.qlimit` caps                              | `fx_position` snapshots, `fx_limit_breach` throttled alerts                      |
-  | [`markout`](../../src/etl/streaming/markout.q)                                                              | `trades`, `quote`     | buffered fills awaiting their horizons                                                             | `execution_quality`                                                              |
-  | [`cross`](../../src/etl/streaming/cross.q), [`vectorize`](../../src/etl/streaming/vectorize.q)              | `quotes`, `wide_book` | mirrors                                                                                            | synthetic crosses; a reshaped book                                               |
-  | [`superbook`](../../src/etl/streaming/superbook.q)                                                          | `market_data`         | the freshest ladder per source, expiring                                                           | `superbook` — quoted liquidity merged across sources                             |
-  | [`arbitrage`](../../src/etl/streaming/arbitrage.q), [`crossarb`](../../src/etl/streaming/cross_arbitrage.q) | `superbook`           | —                                                                                                  | crossed levels within the merged book; the direct book against a synthetic route |
+  | Engine                                                                                                      | Reads                            | Holds                                                                                              | Publishes                                                                        |
+  | ---                                                                                                         | ---                              | ---                                                                                                | ---                                                                              |
+  | [`posbook`](../../src/etl/streaming/posbook.q)                                                              | `executions`, `market_data`      | a [`.qpos`](../../src/portfolio/positions.q) book: position and P&L per sym, weighted-average cost | `position` — FX and crypto in one book                                           |
+  | [`fx_positions`](../../src/etl/streaming/fx_positions.q)                                                    | `orders`                         | a `.qdesk` book: net exposure by (sym, book, product); `.qlimit` caps                              | `fx_position` snapshots, `fx_limit_breach` throttled alerts                      |
+  | [`markout`](../../src/etl/streaming/markout.q)                                                              | `trades`, `quote`                | buffered fills awaiting their horizons                                                             | `execution_quality`                                                              |
+  | [`cross`](../../src/etl/streaming/cross.q), [`vectorize`](../../src/etl/streaming/vectorize.q)              | `fx_orderbook`, `wide_orderbook` | mirrors                                                                                            | synthetic crosses; a reshaped book                                               |
+  | [`superbook`](../../src/etl/streaming/superbook.q)                                                          | `market_data`                    | the freshest ladder per source, expiring                                                           | `superbook` — quoted liquidity merged across sources                             |
+  | [`arbitrage`](../../src/etl/streaming/arbitrage.q), [`crossarb`](../../src/etl/streaming/cross_arbitrage.q) | `superbook`                      | —                                                                                                  | crossed levels within the merged book; the direct book against a synthetic route |
 
 `posbook` and `fx_positions` answer different questions and are deliberately two
 engines: *what did we make*, per sym, marked; and *what are we holding*, along
@@ -126,7 +125,7 @@ called from a query, a notebook or a surface.
   [`.qfwd`](../../src/pricing/forwards.q)'s cross-rate chaining.
 - [`.qmicro`](../../src/market_data/microstructure.q),
   [`.qexec`](../../src/execution/execution.q) --- book pressure, microprice,
-  VPIN, markout: over a `quotes` snapshot series or the [event
+  VPIN, markout: over a `fx_orderbook` snapshot series or the [event
   tape](event-tape.md), whichever the metric needs.
 
 Restatement belongs here too: because the ledger in §5 is bitemporal, any of
@@ -142,16 +141,3 @@ these can be asked *as of* a past instant and get the answer that was true then.
   [`.qetl.status`](../../src/etl/core/status.q) writes.
 - The [`uqs` MCP server](../../python/uqs/src/uqs/mcp.py) --- the stack as tools
   an agent can call.
-
-## What a day looks like through it
-
-A fill on Binance reaches `crypto_trades` from the recorder; `executions` spells
-it the way an FX fill is spelled; `posbook` folds it into the same book the
-EURUSD position lives in and marks it to the mid `marks` last saw from the
-Binance ladder. The frontend's position view shows both, through the gateway. At
-the end of the day `.qalloc` says which of the morning's buys that afternoon's
-sell actually closed, under whichever convention the desk reports in --- and if
-a venue's history has to be re-run, the backfill writes the corrected window
-beside the old one, and the ledger says which is which.
-
-None of that required a producer to know about a consumer.

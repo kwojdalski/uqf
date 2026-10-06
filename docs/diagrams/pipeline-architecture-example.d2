@@ -25,6 +25,17 @@
 # which is the failure stack-dataflow.d2's own header records hitting from
 # the other side. Down is taller than wide and a reader scrolls.
 #
+# ON LAYOUT. ELK, not a grid of bands. The bands used to be stacked with
+# `grid-columns: 1`, and d2 draws an edge inside a grid as a straight line
+# over whatever lies between its ends - so every arrow cut through the
+# normalizer, engine and on-demand boxes. ELK routes edges around boxes, the
+# same fix repo-overview.d2 took. Grids stay only INSIDE a band no edge
+# lands in, to wrap its boxes into rows. Two invisible edges hold storage
+# below the engines: nothing real connects them, and without the hint ELK
+# lays storage beside them and the diagram turns into a wide strip again.
+# The tickerplant is one box rather than a band holding one box, because a
+# band title is what the source edges were crossing.
+#
 # ON WHAT IS LEFT OUT. Every process, every port, every table: those are the
 # stack pages. Here a band is a KIND of thing, and a box inside it names the
 # instances. An earlier version drew superbook and market_data as boxes with
@@ -36,21 +47,12 @@
 # (d2lang/d2#831), so a theme pair leaves half the diagram unreadable.
 
 direction: down
-
-# ONE COLUMN, EXPLICITLY. `direction: down` alone does not stack containers -
-# d2 falls back to dagre, which laid these seven bands out side by side at
-# 6113x364, even wider than the 3022x704 that prompted the redraw. A grid is
-# what forces the order, the same fix repo-overview.d2 applies for the same
-# reason.
-grid-columns: 1
-grid-gap: 44
-
 vars: {
   d2-config: {
+    layout-engine: elk
     pad: 40
   }
 }
-
 classes: {
   source: {
     style: {
@@ -102,42 +104,36 @@ classes: {
     }
   }
   band: {
+    label.near: top-left
     style: {
       fill: "#fbfcfd"
       stroke: "#c3c9cf"
       font-color: "#25323d"
       stroke-width: 2
       border-radius: 10
+      font-size: 20
     }
   }
 }
 
 sources: "1 · sources — each arrives in its own market's shape" {
   class: band
-  grid-columns: 4
-  grid-gap: 20
 
-  fx: "FX venues\nfx_feed · quotes_feed\nfx_trades_feed · fx_orders_feed\nsynthetic here, an adapter in production" { class: source }
+  fx: "FX venues\nfx_feed · fx_orderbook_feed\nfx_trades_feed · fx_orders_feed\nsynthetic here, an adapter in production" { class: source }
   crypto: "crypto venues\ncryptorust's two kdb recorders,\nor crypto_mock standing in" { class: source }
   databento: "Databento MBP-10\ndatabento_feed.py, in Python\noutside q entirely" { class: source }
   history: "history\nbounded workers, .qetl.job.bounded\nODBC or an upstream q" { class: source }
 }
 
-plant: "2 · the tickerplant — TorQ's stp1, or .qetl.tick on stock kdb+" {
+plant: "2 · TICKERPLANT - TorQ's stp1, or .qetl.tick on stock kdb+\nevery table passes through here, twice\na job SUBSCRIBES to one and PUBLISHES another\n.u.upd stamps time · keyed tables refused" { class: plant }
+
+normalize: "3 · normalizers — the first waist:\none shape from many (.qetl.job.stream.normalizer)" {
   class: band
   grid-columns: 1
-
-  tp: "TICKERPLANT\nevery table passes through here, twice\na job SUBSCRIBES to one and PUBLISHES another\n.u.upd stamps time · keyed tables refused" { class: plant }
-}
-
-normalize: "3 · normalizers — the first waist: one shape from many (.qetl.job.stream.normalizer)" {
-  class: band
-  grid-columns: 3
   grid-gap: 20
 
   executions: "executions\ntrades + crypto_trades\n→ one fill table" { class: job }
-  marks: "marks\nquote + crypto_book\n→ one mid per instrument" { class: job }
-  marketdata: "market_data\nquote + quotes\n→ one book shape" { class: job }
+  marketdata: "market_data\nquote + fx_orderbook + crypto_book\n→ one book shape" { class: job }
 }
 
 engines: "4 · engines — subscribe, hold state, republish" {
@@ -145,18 +141,16 @@ engines: "4 · engines — subscribe, hold state, republish" {
   grid-columns: 3
   grid-gap: 20
 
-  posbook: "posbook\nexecutions + marks → position\n.qpos, FX and crypto in one book" { class: job }
+  posbook: "posbook\nexecutions + market_data → position\n.qpos, FX and crypto in one book" { class: job }
   fxpos: "fx_positions\norders → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
   markout: "markout\ntrades + quote → execution_quality\n.qexec, at horizons on a timer" { class: job }
   superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
-  reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_book → mkt_orderbook" { class: job }
+  reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_orderbook → mkt_orderbook" { class: job }
 }
 
 store: "5 · storage" {
   class: band
-  grid-columns: 2
-  grid-gap: 20
 
   db: "rdb · hdb\ntoday in memory,\nEOD writedown to disk" { class: store }
   ledger: "etl_coverage\nwhat a backfill published, bitemporally\n.qetl.coverage · .qetl.run" { class: store }
@@ -174,8 +168,6 @@ ondemand: "6 · on demand — pure functions over whatever the store holds" {
 
 surfaces: "7 · surfaces" {
   class: band
-  grid-columns: 3
-  grid-gap: 20
 
   frontend: "uqf_frontend + web\npositions, coverage, fleet, control\nevery query through the gateway" { class: surface }
   airflow: "uqf_airflow_provider\ntriggers a backfill,\nsenses its status files" { class: surface }
@@ -183,26 +175,30 @@ surfaces: "7 · surfaces" {
 }
 
 # --- sources reach the plant, except the one that deliberately does not ---
-sources.fx -> plant.tp
-sources.crypto -> plant.tp
-sources.databento -> plant.tp
+sources.fx -> plant
+sources.crypto -> plant
+sources.databento -> plant
 sources.history -> store.ledger: "writes through .qetl.io, NEVER via the plant -\nand records what it covered" {
   style.stroke: "#a8762f"
   style.stroke-width: 2
 }
 
 # --- the waist, both ways, which is the whole point ---
-plant.tp <-> normalize: "subscribe ⇅ republish" {
+plant <-> normalize: "subscribe ⇅ republish" {
   style.stroke: "#a54a5c"
   style.stroke-width: 3
 }
-plant.tp <-> engines: "subscribe ⇅ republish" {
+plant <-> engines: "subscribe ⇅ republish" {
   style.stroke: "#a54a5c"
   style.stroke-width: 3
 }
 
-plant.tp -> store.db: "every table"
+plant -> store.db: "every table"
 store.db -> ondemand: "read, never written back"
 store.db -> surfaces.frontend: "through the gateway"
 ondemand -> surfaces.frontend
 store.ledger -> surfaces.airflow: "status files" { style.stroke-dash: 4 }
+
+# Layout only: storage sits below the engines, not beside them.
+engines -> store: { style.opacity: 0 }
+normalize -> store: { style.opacity: 0 }

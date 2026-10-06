@@ -28,8 +28,8 @@ PAGE = {
     "fetched": 3,
     "next_cursor": "2026-09-14T00:00:00.000000000",
     "advances": True,
-    "rows": {"wide_book": 3},
-    "sample": {"wide_book": [{"sym": "EURUSD", "mid": 1.08}]},
+    "rows": {"wide_orderbook": 3},
+    "sample": {"wide_orderbook": [{"sym": "EURUSD", "mid": 1.08}]},
     "failures": [],
 }
 
@@ -94,7 +94,7 @@ def invoke(monkeypatch, answer: dict):
 def test_the_command_prints_the_page(monkeypatch):
     result = invoke(monkeypatch, PAGE)
     assert result.exit_code == 0, result.output
-    for said in ("nothing published", "fixture", "advances", "wide_book: 3 row(s)", "EURUSD"):
+    for said in ("nothing published", "fixture", "advances", "wide_orderbook: 3 row(s)", "EURUSD"):
         assert said in result.output
 
 
@@ -105,10 +105,10 @@ def test_an_idle_feed_says_so_and_succeeds(monkeypatch):
 
 
 def test_invalid_output_fails_the_command_and_says_why(monkeypatch):
-    bad = {**PAGE, "state": "invalid", "failures": ['wide_book has columns sym typed "s"']}
+    bad = {**PAGE, "state": "invalid", "failures": ['wide_orderbook has columns sym typed "s"']}
     result = invoke(monkeypatch, bad)
     assert result.exit_code == 1
-    assert "wide_book has columns sym" in result.output
+    assert "wide_orderbook has columns sym" in result.output
 
 
 def test_a_compound_cursor_prints_as_its_fields(monkeypatch):
@@ -126,11 +126,11 @@ def test_a_compound_cursor_prints_as_its_fields(monkeypatch):
 
 #: What .qetl.source.ipc_call logs outside TorQ, as log.q's emit writes it.
 SENT = (
-    '2026.10.05D12:00:00.000000000|TRC|ipc|query sent call="{[c] select from t where '
+    '2026.10.05D12:00:00.000000000|TRACE|ipc|query sent call="{[c] select from t where '
     'time>c}" transport=`ipc request=1 args=,2026.09.13D00:00:00.000000000 job=`vectorize2'
 )
-RETURNED = "2026.10.05D12:00:00.100000000|TRC|ipc|query returned transport=`ipc request=1 rows=3"
-FAILED = '2026.10.05D12:00:00.100000000|TRC|ipc|query failed request=1 error="source down"'
+RETURNED = "2026.10.05D12:00:00.100000000|TRACE|ipc|query returned transport=`ipc request=1 rows=3"
+FAILED = '2026.10.05D12:00:00.100000000|TRACE|ipc|query failed request=1 error="source down"'
 
 
 def test_tracing_is_switched_on_only_when_asked(monkeypatch):
@@ -139,14 +139,14 @@ def test_tracing_is_switched_on_only_when_asked(monkeypatch):
     assert ".qetl.log.trace" not in sent["script"], "a plain preview is unchanged"
     stream_preview.preview(default_paths(), "vectorize2", trace=True)
     assert ".qetl.log.trace 1b;" in sent["script"]
-    assert ".qetl.log.debug 1b;" in sent["script"], "DBG with it, as backfill --trace does"
+    assert ".qetl.log.debug 1b;" in sent["script"], "DEBUG with it, as backfill --trace does"
 
 
 def test_the_traced_lines_come_back_with_the_answer(monkeypatch):
     out = f"loading...\n{SENT}\n{RETURNED}\nUQS_PREVIEW {json.dumps(PAGE)}\n"
     fake_q(monkeypatch, PAGE, stdout=out)
     r = stream_preview.preview(default_paths(), "vectorize2", trace=True)
-    assert [(lv, src) for lv, src, _ in r["trace"]] == [("TRC", "ipc"), ("TRC", "ipc")]
+    assert [(lv, src) for lv, src, _ in r["trace"]] == [("TRACE", "ipc"), ("TRACE", "ipc")]
     assert r["trace"][0][2].startswith('query sent call="{[c] select')
 
 

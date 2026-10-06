@@ -96,11 +96,6 @@ def _check_name(name: str, what: str) -> str:
     return name
 
 
-def _symbol_list(names: list[str]) -> str:
-    """A q symbol-list literal: `enlist` for one, since a bare `` `a `` is an atom."""
-    return f"enlist `{names[0]}" if len(names) == 1 else "`" + "`".join(names)
-
-
 #: A q timespan as a declaration writes it: `0D00:00:05`, `0D00:00:00.500`.
 _PERIOD = re.compile(r"^\d+D\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?$")
 
@@ -213,8 +208,8 @@ def streaming_job(
     # `enlist` for one table, as for `publishes` below and as the tree's own
     # jobs write it: a bare `trades is an atom, which define accepts but which
     # reads as a different shape from every other declaration.
-    sub_literal = "`symbol$()" if is_feed else _symbol_list(subscribe_to)
-    pub_literal = _symbol_list(pubs) if pubs else "`symbol$()"
+    sub_literal = "`symbol$()" if is_feed else poll_steps.symbol_list(subscribe_to)
+    pub_literal = poll_steps.symbol_list(pubs) if pubs else "`symbol$()"
     # (handler, its arguments) in declaration order: a batch handler when the
     # job subscribes, then a timer when it is a feed or was given a period.
     handlers = [] if is_feed else [("on_batch", "[t;x]")]

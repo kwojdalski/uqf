@@ -1,8 +1,8 @@
-/ databento_book.q - the shared MBP-10 fold used by live and bounded jobs.
+/ eq_orderbook.q - the shared MBP-10 fold used by live and bounded jobs.
 / The source contract and worked example belong to the transform, independently
 / of either job lifecycle.
 
-\d .qpipe.transform.databento_book
+\d .qpipe.transform.eq_orderbook
 
 / --- the transform ---------------------------------------------------------
 
@@ -24,7 +24,7 @@ fold:{[batch;prefix] flip batch `$prefix,/:.qpipe.source.databento_mbp10.levels}
 / @param batch MBP-10 records in the source contract's shape
 / @return one book row per record
 to_book:{[batch]
-    if[0=count batch; :.qpipe.transform.databento_book.book];
+    if[0=count batch; :.qpipe.transform.eq_orderbook.book];
     ([] time:batch`ts_event; sym:batch`symbol; action:batch`action; side:batch`side;
         price:batch`price; size:batch`size; sequence:batch`sequence;
         bid_prices:fold[batch;"bid_px_"]; bid_sizes:fold[batch;"bid_sz_"];
@@ -43,7 +43,7 @@ example_book:{[]
         ask_prices:(px[271.66;1];px[271.66;1];px[643f;1];px[643.01;1]);
         ask_sizes:(sz 500;sz 479;sz 100;sz 100))}
 
-.qetl.transform.define[`databento_book;`inputs`output`fn`examples!(
+.qetl.transform.define[`eq_orderbook;`inputs`output`fn`examples!(
     enlist[`batch]!enlist contract;
     book;
     to_book;

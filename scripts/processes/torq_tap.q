@@ -4,7 +4,7 @@
 / filter comes from process.csv's `extras` field (-tables t1 t2 ...), the
 / same convention other processes here already use for CLI flags (e.g.
 / sctp1's -parentproctype); blank/unset means every table. Change it live
-/ with `uqs config set tap1 extras "-tables quote wide_book"` then
+/ with `uqs config set tap1 extras "-tables quote wide_orderbook"` then
 / restart tap1 - no orchestrator-side code needed for the filtering.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - registered
@@ -23,7 +23,7 @@
 if[0=count getenv`UQF_ROOT; '"torq_tap: UQF_ROOT is not set"];
 system"l ",getenv[`UQF_ROOT],"/src/etl/core/log.q";
 
-/ -verbose switches DBG on, the same flag every uqf process script takes.
+/ -verbose switches DEBUG on, the same flag every uqf process script takes.
 if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
 
 \d .qproc.tap
@@ -82,9 +82,9 @@ init:{
 / shape x happens to arrive in (a table, or a list of columns) without
 / needing to know which.
 / .
-/ At INF on purpose, though it is one line per batch: printing the batches is
+/ At INFO on purpose, though it is one line per batch: printing the batches is
 / this process's whole job, it runs only on demand and writes its own log, so
-/ at DBG `uqs logs -f tap1` would show nothing.
+/ at DEBUG `uqs logs -f tap1` would show nothing.
 / .
 / At ROOT, where the tickerplant calls it (scripts/processes/torq_pipeline.q,
 / invariant 5). Everything else this process owns is in .qproc.tap.

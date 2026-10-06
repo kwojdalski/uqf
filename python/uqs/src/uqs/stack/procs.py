@@ -58,8 +58,10 @@ log = get_logger(__name__)
 # `uqs config set monitor1 startwithall 0`.
 VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 
-#: Extra q the gateway loads, appended to its vendored `load` column.
+#: Extra q a vendored process loads, as (before, after) its vendored `load`
+#: column: each path is pathed through an env var torq.sh's envsubst expands.
 #:
+#: gateway1 - the desk catalog, after.
 #: `.qcat` is the desk catalog's authored half - what each table is for, and
 #: which are deliberately not browsable. It has to answer on the process the
 #: BFF already talks to, and that is the gateway: `Gateway.call` runs a
@@ -73,8 +75,30 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: The same overlay reasoning as VENDORED_STARTWITHALL_OVERLAY above - the
 #: vendored row says `${KDBCODE}/processes/gateway.q` and this appends to it
 #: rather than replacing it, because the `load` column takes a
-#: space-separated list and the vendored script must still load first.
-VENDORED_LOAD_OVERLAY = {"gateway1": "processes/uqs_catalog.q"}
+#: space-separated list and TorQ loads it in order.
+#:
+#: gateway1 also loads src/etl/core/intervals.q - the coverage ledger's
+#: interval arithmetic and nothing else. The frontend's /coverage reads
+#: etl_coverage from both tiers, and only the gateway holds both halves, so
+#: it asks the gateway to compose them and find the gaps rather than keeping
+#: a second implementation of that rule in Python.
+#:
+#: hdb1 and dqe1 - the metatables (docs/guides/metatables.md). DQE sends
+#: `.dqe.uqf_metatable` to hdb1 by value and it runs there, so `.qmeta` must be
+#: loaded on hdb1, after its database; dqe1 loads the adapter and `.qmeta`
+#: after its own script, and uqs_dqe_config.q BEFORE it, because dqe.q reads
+#: `.dqe.configcsv` once as it loads (stack/dqe.py). hdb2 is not a DQE target.
+VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "gateway1": (
+        (),
+        ("${UQF_ROOT}/src/etl/core/intervals.q", "${UQF_SCRIPTS}/processes/uqs_catalog.q"),
+    ),
+    "hdb1": ((), ("${UQF_ROOT}/src/metadata/metatables.q",)),
+    "dqe1": (
+        ("${UQF_SCRIPTS}/processes/uqs_dqe_config.q",),
+        ("${UQF_ROOT}/src/metadata/metatables.q", "${UQF_SCRIPTS}/processes/torq_metatables.q"),
+    ),
+}
 
 
 def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
@@ -94,11 +118,11 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
         if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
             row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
         if row["procname"] in VENDORED_LOAD_OVERLAY:
-            extra = VENDORED_LOAD_OVERLAY[row["procname"]]
-            row["load"] = f"{row['load']} ${{UQF_SCRIPTS}}/{extra}".strip()
+            before, after = VENDORED_LOAD_OVERLAY[row["procname"]]
+            row["load"] = " ".join(x for x in (*before, row["load"], *after) if x)
     for row in rows:
         # stp1 loads its schema via -schemafile in `extras`; point it at the
-        # generated copy (vendored database.q + uqf's own `quotes` table -
+        # generated copy (vendored database.q + uqf's own `fx_orderbook` table -
         # see _generated_schema_content()) instead of the vendored file
         # itself, same never-edit-the-vendored-tree approach as process.csv.
         if row["procname"] == "stp1":

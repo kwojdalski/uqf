@@ -113,7 +113,7 @@ def type_name(type_char: str) -> str:
     CASE IS THE VECTOR/ATOM DISTINCTION, and it is the whole reason this is a
     function rather than a dictionary lookup. `f` is a float column - one
     float per row. `F` is a float VECTOR column - a list per row, which is
-    the shape `quotes` and `mkt_orderbook` are built around and the shape
+    the shape `fx_orderbook` and `mkt_orderbook` are built around and the shape
     every pricing function in src/ expects. Rendering `F` as "float" would
     describe a different table.
     .

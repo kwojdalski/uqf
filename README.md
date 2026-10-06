@@ -93,8 +93,8 @@ licensed. So the `q-docs-peachq` hook runs those blocks a second time on PeachQ,
 from the binary `UQF_PEACHQ` names, and fails when it is unset. This does not
 replace the KDB-X run. It is there as well, until the two interpreters are
 compatible enough for one to stand for both. A block that cannot run on PeachQ
-yet is marked `kdbx-only` with the reason (see
-[CI](docs/guides/ci.md#doc-examples)).
+yet is marked `kdbx-only` with the reason (the markers are defined in
+[`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
 
 ```
 export UQF_PEACHQ=/path/to/peachq/q    # e.g. in your shell profile
@@ -155,7 +155,7 @@ and the ETL processes - with generated configuration:
 uv sync
 uv run uqs start all
 uv run uqs summary            # up/down, pid, port and heartbeat per process
-uv run uqs query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
+uv run uqs query "count fx_orderbook" --port 6052   # 6052 = base port + 2 = rdb1
 ```
 
 **Run a backfill.** A bounded worker runs over a range and exits once the window
@@ -213,14 +213,14 @@ declared contract and so needs credentials and a reachable source, and
 Six of them, each with its own contract and its own place in `docs/`. A change
 usually belongs to exactly one.
 
-  | Component                   | Where                                                                                                                        | What it does                                                                                                                                                                                                                                                                                                                                                                                              |
-  | ---                         | ---                                                                                                                          | ---                                                                                                                                                                                                                                                                                                                                                                                                       |
-  | **Data engineering**        | [`src/etl/`](src/etl)                                                                                                        | The pipeline framework: bounded and continuous workers, normalizers that spell many sources one way, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out                                                           |
-  | **Quant library**           | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. Each module is in its own flat namespace (`.qfwd`, `.qopt`, `.qrisk`, `.qexec`, …) with a matching test file and a qDoc block per function — the inventory and the conventions they all follow are [`quant-modules.md`](docs/reference/quant-modules.md)          |
-  | **Data processing**         | [`src/market_data/`](src/market_data)                                                                                        | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw                                                                                                                                                                                                                                             |
-  | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs)                                                                           | The uqf stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them                                                                                                                                                                                                                                     |
-  | **Scheduling and access**   | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web)  | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, and the React desk and operations app                                                                                                                                                                                                                                                                                            |
-  | **Database metadata**       | [`src/metadata/`](src/metadata)                                                                                              | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable group-by breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md)                                                                                                                                                             |
+  | Component                   | Where                                                                                                                        | What it does                                                                                                                                                                                                                                                                                                                                                                                                    |
+  | ---                         | ---                                                                                                                          | ---                                                                                                                                                                                                                                                                                                                                                                                                             |
+  | **Data engineering**        | [`src/etl/`](src/etl)                                                                                                        | The pipeline framework: bounded and continuous workers, normalizers that spell many sources one way, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out                                                                 |
+  | **Quant library**           | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. Each module is in its own flat namespace (`.qfwd`, `.qopt`, `.qrisk`, `.qexec`, …) with a matching test file and a qDoc block per function — the inventory and the conventions they all follow are [`quant-modules.md`](docs/reference/quant-modules.md)                |
+  | **Data processing**         | [`src/market_data/`](src/market_data)                                                                                        | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw                                                                                                                                                                                                                                                   |
+  | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs)                                                                           | The uqf stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them                                                                                                                                                                                                                                           |
+  | **Scheduling and access**   | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web)  | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, and the React desk and operations app                                                                                                                                                                                                                                                                                                  |
+  | **Database metadata**       | [`src/metadata/`](src/metadata)                                                                                              | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable group-by breakdowns, refreshed under an explicit bound and built nightly by TorQ's DQE once `dqe1` is started. [The guide](docs/guides/metatables.md)                                                                                                                                                             |
 
 Authority is split deliberately between them: q and TorQ own process startup,
 source reads and coverage; Airflow owns ordering, retries and alerting. Neither
@@ -263,9 +263,8 @@ scripts/test.py python    # orchestrator and frontend
 scripts/test.py all       # every lane except the two coverage lanes, smoke and stack-smoke
 ```
 
-Fifteen lanes in all, one per layer. The full list, and what each proves that
-`q-unit` cannot, is [the CI guide](docs/guides/ci.md#lanes) --- it is the page
-that also says what the gates check and what CI cannot.
+One lane per layer; run the one matching what you changed.
+`scripts/test.py --help` lists every lane.
 
 ### Coverage
 

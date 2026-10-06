@@ -56,7 +56,7 @@ test_the_refusal_names_every_missing_table_not_only_one:{[t]
 / The regression, stated as itself: fxpositions1's two tables against a
 / plant carrying the nineteen a generated database.q used to define.
 test_the_fx_positions_pair_against_a_plant_that_forgot_them:{[t]
-    h:plant `crypto_book`crypto_trades`databento_book`execution_quality`executions`marks`mkt_orderbook`orders`position`quote`quotes`trade`trades`wide_book;
+    h:plant `crypto_book`crypto_trades`eq_orderbook`execution_quality`executions`mkt_orderbook`orders`position`quote`quotes`trade`trades`wide_orderbook;
     .qunit.assertThrows[{.qtorq.assert_publishable[x;`fx_position`fx_limit_breach]};h;
         "*discarded without an error*";
         "the message says what happens to the rows, not just that a table is absent"]};
@@ -154,7 +154,7 @@ test_record_received_starts_a_table_at_zero_not_at_null:{[t]
 
 test_apply_verbose_reports_the_flag_this_process_was_started_with:{[t]
     / Restores the logging state it may change: debug_enabled is a process
-    / global, and a suite that left DBG on would change what every later
+    / global, and a suite that left DEBUG on would change what every later
     / suite prints.
     saved:.qetl.log.debug_enabled;
     on:.qtorq.apply_verbose[];
@@ -171,7 +171,7 @@ hdb_ok:{[msg] .pipetest.reload_seen,:enlist msg; ::};
 hdb_broken:{[msg] '"reload exploded"};
 
 / The case that logged `hdbs=0` before: two HDBs registered, neither handle
-/ opened (refused with `access`). Nothing reloads, and it is now an ERR, not
+/ opened (refused with `access`). Nothing reloads, and it is now an ERROR, not
 / an INFO indistinguishable from "no HDB running".
 test_registered_hdbs_that_refused_reload_nothing_and_say_so:{[t]
     saved:.qetl.log.err;

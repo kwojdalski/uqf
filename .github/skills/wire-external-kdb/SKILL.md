@@ -101,14 +101,14 @@ timestamp/timespan storage type that doesn't line up with what `ts` needs.
 Based on what step 3 actually found (not a generic template): - A q bridge
 script under `scripts/`, mirroring the shape of the existing
 `scripts/examples/reshape_wide_order_book_example.q` /
-`src/etl/streaming/quotes_feed.q`, that opens the IPC handle to the named server
-(connection details read from the qmcp config or an env var - never hardcoded),
-pulls or subscribes to the real table(s), and reshapes into the `quotes` shape
-using the `book.q` helpers identified in step 3 - or explicitly notes no reshape
-was needed if the live table already matches. - The script must be loadable by
-consumers without editing anything under `lib/` (vendored trees are never edited
-in place, matching this repo's existing convention for `book.q`/`torq_*`
-scripts).
+`src/etl/streaming/fx_orderbook_feed.q`, that opens the IPC handle to the named
+server (connection details read from the qmcp config or an env var - never
+hardcoded), pulls or subscribes to the real table(s), and reshapes into the
+`quotes` shape using the `book.q` helpers identified in step 3 - or explicitly
+notes no reshape was needed if the live table already matches. - The script must
+be loadable by consumers without editing anything under `lib/` (vendored trees
+are never edited in place, matching this repo's existing convention for
+`book.q`/`torq_*` scripts).
 
 ### 5. Verify against the live database, not a fixture
 

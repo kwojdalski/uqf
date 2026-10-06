@@ -14,48 +14,57 @@
 # published interface, so a reader can go and open it.
 #
 # The property worth drawing over all others is the TorQ boundary. Every q
-# file under src/ loads in a plain q process with no TorQ present (bank
-# rule), which is what lets a worker or a streaming job be tested against a
-# recorder instead of a tickerplant. Exactly one namespace may know TorQ
-# exists - .qtorq, in scripts/ - and scripts/gates/check_etl_layering.py fails the
-# build if anything under src/etl/ reaches for it. So the adapter gets its
-# own band, and every arrow into the TorQ stack passes through it.
+# file under src/ loads in a plain q process with no TorQ present, which is
+# what lets a worker or a streaming job be tested against a recorder instead
+# of a tickerplant. Only scripts/processes may know TorQ exists - its runners
+# build on .qtorq (torq_pipeline.q) - and scripts/gates/check_etl_layering.py
+# fails the build if anything under src/etl/ reaches for it. So the runners
+# get their own band, and the pipeline's only arrow into the stack leaves
+# from there. run_stream.q sits beside them because it is a runner too, but
+# it runs a streaming job on stock kdb+ against .qetl.tick and never loads
+# lib/torq.
 #
-# TorQ is not the only way to run a job any more, and the band says so:
-# run_stream.q runs any streaming job on stock kdb+, against .qetl.tick - a
-# plain-q tickerplant in src/etl/core/ - and never loads lib/torq. It sits in
-# scripts/ beside the TorQ runners because it is a runner too, but its arrow
-# stays inside the left column: it goes back to src/, not down to the stack.
+# THE LIVE FEEDS DO NOT GO THROUGH src/. The cryptorust recorders, the
+# Databento handler and the Kafka consumer are external publishers that uqs
+# starts: each opens its own IPC handle to the tickerplant and calls .u.upd
+# (python/uqs/src/uqs/external/). A streaming job then subscribes to what
+# they publish. The batch sources are the other way round: a bounded worker
+# reads them, one window at a time, through a source contract declared under
+# src/etl/sources/. An earlier version of this diagram drew every feed into
+# the declarations, which was true of neither.
 #
-# ON SIZE. A holistic diagram earns its place by being READ, so this is kept
-# to boxes a reader takes in at once: a directory each, one line of what it
-# is. The first draft carried every namespace in the tree and rendered
-# 6107px wide, which in a README is a thumbnail nobody opens. Detail belongs
-# on the page that needs it.
+# LAYOUT. ELK, top to bottom, so every edge is drawn at right angles and
+# routed round the boxes rather than across them. The version before was a
+# fixed two-column grid; a grid draws its cross-column edges as straight
+# lines, and five of them cut diagonally across the page and through the
+# band titles. Two consequences of ELK shape the source below:
+#
+# - Each band's title sits on the side its edges do not use: scripts' at
+#   bottom-right, because both edges enter it from the top and its one edge
+#   leaves from the left of its bottom; the stack's at bottom-left, because
+#   every edge enters it from above. Move an edge and check its band's title.
+# - ELK lays a container's children out in the global direction, so a band
+#   whose boxes are joined by an edge stacks them vertically. The stack's
+#   three processes and the runners therefore carry their flow in their
+#   labels ("fed by stp1") rather than as edges, which keeps each band one row.
+#
+# ON SIZE. A holistic diagram earns its place by being READ, so it is kept to
+# boxes a reader takes in at once: a directory each, a line or two of what it
+# is. Detail belongs on the page that needs it.
 #
 # ON COLOUR. Light fills with dark text in BOTH themes, rather than a d2
 # --dark-theme pairing: d2 still applies explicit styles in dark mode
 # (d2lang/d2#831), so a theme pair leaves half the diagram unreadable. A
 # light card on GitHub's dark background reads fine; a dark fill behind a
-# dark label does not.
+# dark label does not. An edge takes the colour of the box that owns the
+# relationship: brown from outside, green from the framework, red from the
+# TorQ runners, purple from Python.
 
 direction: down
 
-# A GRID, not dagre's free layout. This is a map, and a map has a fixed
-# arrangement - dagre placed the bands by edge weight instead, putting
-# scripts/ above src/ and the running stack in the middle.
-#
-# TWO COLUMNS, not five stacked bands. Stacked, the pipeline's own order
-# (declare, run, publish) read correctly top to bottom, but then every edge
-# from the Python surface had to cross it: the BFF reaching the gateway
-# traversed four bands and three boxes on the way. With the pipeline as one
-# column and everything that talks to it alongside the band it talks to,
-# those become short sideways hops.
-grid-columns: 2
-grid-gap: 80
-
 vars: {
   d2-config: {
+    layout-engine: elk
     pad: 40
   }
 }
@@ -118,148 +127,94 @@ classes: {
     }
   }
   band: {
+    label.near: top-left
     style: {
       fill: "#fbfcfd"
       stroke: "#c3c9cf"
       font-color: "#25323d"
       stroke-width: 2
       border-radius: 10
+      font-size: 18
     }
   }
 }
 
-# ============================================ left column: the q pipeline
+# ================================================================== bands
+#
+# DECLARATION ORDER IS LAYOUT. ELK breaks ties by the order bands, boxes and
+# edges appear here, and reordering them - even to read more naturally - has
+# put "triggers a window" across "status files" and an edge through src/'s
+# title. Re-render and look before committing any reorder.
 
-pipeline: "" {
-  grid-rows: 3
-  grid-gap: 55
-  style: {
-    fill: transparent
-    stroke: transparent
-  }
+outside: "Outside the repository" {
+  class: band
 
-  src: "src/ — q, and none of it knows TorQ exists" {
-    class: band
-    grid-columns: 3
-    grid-gap: 34
-
-    # Column order is chosen, not incidental: whatever a box connects to
-    # outside this band sits on the side nearest it. Declarations are on the
-    # right because the feeds declare into them; with them on the left the
-    # edge crossed the band and dropped its label on top of the quant
-    # library's.
-    quant: "The quant library\nfoundation · pricing · portfolio\nexecution · market_data" { class: lib }
-    core: "src/etl/core/\nthe pipeline framework\n.qetl.job.bounded bounded · .qetl.job.stream streaming · .qetl.job.stream.normalizer\ncoverage · runs · transforms · .qetl.tick plant" { class: fw }
-    decls: "Declarations\nsources/ · workers/ · streaming/\none file each, registered on load" { class: decl }
-
-    decls -> core
-    quant -> core
-  }
-
-  scripts: "scripts/ — the runners, and the only q allowed to know TorQ" {
-    class: band
-    grid-columns: 3
-    grid-gap: 34
-
-    # Same rule: the TorQ runners on the right, because Airflow triggers
-    # them from there, and .qtorq beside the tickerplant it publishes into
-    # in the band below. run_stream.q takes the far left: it has no edge
-    # leaving the band, and on the right Airflow's edge and the status-file
-    # edge both ran straight through it.
-    #
-    # The status-file edge from src/etl/core/ to the Airflow provider leaves
-    # across this band's right-hand gap. With one-line labels the three boxes
-    # spread far enough right to put the runners in its way, so the labels
-    # wrap and the boxes stay narrow enough to leave that gap clear.
-    standalone: "run_stream.q\nany streaming job\non stock kdb+ via .qetl.tick" { class: fw }
-    qtorq: ".qtorq — the TorQ adapter\ndiscovery · subscribe\npublish · timers" { class: adapter }
-    runners: "torq_backfill.q\ntorq_stream.q\none worker or job each" { class: adapter }
-
-    runners -> qtorq
-  }
-
-  stack: "The running stack — lib/torq, vendored, never edited" {
-    class: band
-    grid-columns: 3
-    grid-gap: 34
-
-    tp: "stp1\ntickerplant" { class: runtime }
-    store: "rdb1 · wdb1\nhdb1/2 · sort1" { class: runtime }
-    gw: "gateway1\nthe only door in" { class: runtime }
-
-    tp -> store
-    store -> gw
-  }
-
-  src.core -> scripts.runners: "run" { style.stroke: "#3d7a5a" }
-  src.core -> scripts.standalone: "run, TorQ-free" {
-    style.stroke: "#3d7a5a"
-    style.stroke-dash: 4
-  }
-  scripts.qtorq -> stack.tp: "subscribe · .u.upd" {
-    style.stroke: "#a54a5c"
-    style.stroke-width: 3
-  }
+  live: "Live feeds\nBinance · Bybit (cryptorust)\nDatabento MBP-10 · Kafka" { class: ext }
+  batch: "Batch sources\nDuckDB · an upstream kdb+ · HDBs" { class: ext }
+  airflow: "Airflow\nschedules the backfills" { class: ext }
+  browser: "Browser" { class: ext }
 }
 
-# ========================================= right column: what talks to it
+src: "src/ — plain q, never loads TorQ" {
+  class: band
 
-surfaces: "" {
-  grid-rows: 2
-  grid-gap: 55
-  style: {
-    fill: transparent
-    stroke: transparent
-  }
+  decls: "Declarations\nsources · workers · streaming\nreactions · transforms" { class: decl }
+  quant: "Quant library\nfoundation · pricing · portfolio\nexecution · market_data" { class: lib }
+  core: "src/etl/core — the framework\nbounded · streaming · normalizer\ncoverage · runs · .qetl.tick" { class: fw }
 
-  outside: "Outside the repository" {
-    class: band
-    grid-columns: 1
-    grid-gap: 26
-
-    feeds: "Market data\nBinance · Bybit, via the cryptorust repo\nDatabento MBP-10 · an upstream kdb+" { class: ext }
-    airflow: "Airflow\nschedules and watches the backfills" { class: ext }
-    browser: "Browser" { class: ext }
-  }
-
-  py: "python/ · web/ — everything that is not q" {
-    class: band
-    grid-columns: 1
-    grid-gap: 26
-
-    web: "web/ — React\nDesk · Control · Ops" { class: py }
-    bff: "uqf_frontend\nbackend-for-frontend\ncredentials stay server-side" { class: py }
-    provider: "uqf_airflow_provider\nAirflow's sensor: reads the status files" { class: py }
-    orch: "uqs\nCLI · MCP server · generates process.csv" { class: py }
-  }
-
-  outside.browser -> py.web: "HTTP"
-  py.web -> py.bff
-
-  # No Airflow -> provider edge, though Airflow is what runs the sensor.
-  # Drawn, it ran the length of the right-hand column and passed straight
-  # through web/ and the BFF to reach a box two rows down, and it said
-  # nothing the diagram did not already carry: Airflow triggers a window on
-  # one side and the status files reach the provider on the other. The
-  # relationship is in the box's own label instead.
+  decls -> core { style.stroke: "#5a6a78" }
+  quant -> core { style.stroke: "#5a6a78" }
 }
 
-# ================================================= edges across the columns
+scripts: "scripts/processes — the only q that knows TorQ" {
+  class: band
+  label.near: bottom-right
 
-surfaces.outside.feeds -> pipeline.src.decls: "a source contract each" {
-  style.stroke: "#8a7f6a"
+  runners: "TorQ runners, built on .qtorq\ntorq_backfill · torq_stream\ntorq_tap" { class: adapter }
+  standalone: "run_stream.q\nany streaming job\non plain kdb+" { class: fw }
 }
-surfaces.outside.airflow -> pipeline.scripts.runners: "triggers a window" {
-  style.stroke: "#8a7f6a"
+
+stack: "Running stack — lib/torq, vendored" {
+  class: band
+  label.near: bottom-left
+
+  tp: "stp1\ntickerplant" { class: runtime }
+  store: "rdb1 · wdb1 · hdb1/2\nfed by stp1" { class: runtime }
+  gw: "gateway1\nqueries rdb and hdb" { class: runtime }
 }
-pipeline.src.core -> surfaces.py.provider: "status files on disk, not IPC" {
+
+py: "python/ · web/" {
+  class: band
+
+  web: "web/ — React\nCoverage · Backfills · Desk\nOps · Control" { class: py }
+  bff: "uqf_frontend\nAPI · pooled gateway connections" { class: py }
+  provider: "uqf_airflow_provider\nreads the status files" { class: py }
+  uqs: "uqs\nCLI · MCP · starts stack and feeds" { class: py }
+
+  web -> bff { style.stroke: "#6f4aa5" }
+}
+
+# ================================================================== edges
+
+outside.live -> stack.tp: ".u.upd" { style.stroke: "#8a7f6a" }
+outside.batch -> src.decls: "read per window" { style.stroke: "#8a7f6a" }
+src.core -> scripts.runners: "run" { style.stroke: "#3d7a5a" }
+src.core -> scripts.standalone: "run, TorQ-free" {
+  style.stroke: "#3d7a5a"
+  style.stroke-dash: 4
+}
+scripts.runners -> stack.tp: "subscribe · publish" {
+  style.stroke: "#a54a5c"
+  style.stroke-width: 3
+}
+outside.airflow -> scripts.runners: "triggers a window" { style.stroke: "#8a7f6a" }
+outside.browser -> py.web: "HTTP" { style.stroke: "#8a7f6a" }
+py.bff -> stack.gw: ".gw.syncexec" { style.stroke: "#6f4aa5" }
+src.core -> py.provider: "status files" {
   style.stroke: "#6f4aa5"
   style.stroke-dash: 4
 }
-surfaces.py.bff -> pipeline.stack.gw: "one handle, .gw.syncexec" {
-  style.stroke: "#6f4aa5"
-}
-surfaces.py.orch -> pipeline.stack: "starts · stops · configures" {
+py.uqs -> stack: "starts · stops" {
   style.stroke: "#6f4aa5"
   style.stroke-dash: 4
 }

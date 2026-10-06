@@ -126,7 +126,17 @@ SELECT = """{[t;fc;fo;fv;lim]
 COVERAGE = """{[ds;part;release;at]
   select range_from, range_to from etl_coverage
     where dataset=ds, partition=part, source_version=release,
-          recorded_at<=at, at<superseded_at}"""
+          recorded_at<=at, at<superseded_at, range_to>range_from}"""
+
+#: The coverage ledger's own interval arithmetic, run on the GATEWAY
+#: (`Gateway.call`, not `route`): COVERAGE's rows come back razed from both
+#: tiers, and only the gateway holds both halves, so that is where they are
+#: composed. gateway1 loads src/etl/core/intervals.q for this. Names, not
+#: lambdas - the arithmetic is the one copy a backfill also trusts, never a
+#: second one here. `range_to>range_from` in COVERAGE drops a damaged row (the
+#: ledger refuses one at write) rather than letting it fail the whole read.
+COMPOSE = ".qetl.coverage.compose"
+GAPS = ".qetl.coverage.gaps"
 
 
 def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:

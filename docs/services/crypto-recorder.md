@@ -4,6 +4,8 @@ cryptorust's kdb recorders publish real venue books and fills onto this stack's
 tickerplant; `cryptomock1` stands in for them. Starting, stopping and inspecting
 the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
+![The two cryptorust recorders: the market-data recorder publishes venue books into crypto_book, and the fills recorder polls a running cryptorust OMS and publishes crypto_sim_fills and crypto_trades, all onto stp1; cryptomock1 invents the same tables in their place](../diagrams/crypto-recorder.svg)
+
 ## Market-data recorder
 
 `uqs feed start crypto`/`stop`/`status` (a nested command group, not flat
@@ -32,8 +34,8 @@ uqs feed stop crypto
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
 `ask_prices`/`ask_sizes` - see its definition in `src/etl/plant_tables.q`),
-flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
-`wide_book`:
+flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`fx_orderbook`/
+`wide_orderbook`:
 
 ```
 uqs query "select from crypto_book" --port <rdb1's port>

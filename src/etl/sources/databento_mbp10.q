@@ -45,7 +45,7 @@ columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
 types:"psssfjj",raze 10#enlist "fjfj"
 
 table_name:`mbp10
-target:`databento_book
+target:`eq_orderbook
 time_column:`ts_event
 
 / NOT Databento's documented key, and deliberately said so. (symbol,
@@ -75,9 +75,6 @@ select_list:{[]
           s]} each .qpipe.source.databento_mbp10.columns;
     ", " sv exprs}
 
-/ Private: a timestamp as DuckDB epoch nanoseconds, through .qetl.io.odbc.literal.
-epoch_ns_literal:{[ts] "make_timestamp_ns(",.qetl.io.odbc.literal["j"$ts-1970.01.01D00:00],")"}
-
 / Private: the driver's table in the declared types.
 adapt:{[raw]
     t:update ts_event:1970.01.01D00:00+ts_event from raw;
@@ -93,8 +90,8 @@ adapt:{[raw]
 / @return the records in the window, in the contract's shape
 query:{[h;range_from;range_to]
     sql:"SELECT ",select_list[]," FROM mbp10",
-        " WHERE ts_event >= ",epoch_ns_literal[range_from],
-        " AND ts_event < ",epoch_ns_literal[range_to],
+        " WHERE ts_event >= ",.qetl.io.odbc.duckdb_timestamp[range_from],
+        " AND ts_event < ",.qetl.io.odbc.duckdb_timestamp[range_to],
         " ORDER BY symbol, ts_event, sequence";
     adapt .qetl.io.odbc.run_sql[h;sql]}
 

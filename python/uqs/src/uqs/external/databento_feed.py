@@ -8,8 +8,8 @@ a q process cannot hold a Databento subscription, and TorQ only drives q.
 
 **It carries bytes and decides nothing.** Databento's MBP-10 records go onto
 the tickerplant in the source contract's own field order, unfolded and
-unrenamed, and ``databento1`` (``src/etl/streaming/databento_book.q``)
-applies ``.qetl.transform.apply[`databento_book;...]`` - the same transform the ODBC
+unrenamed, and ``databento1`` (``src/etl/streaming/eq_orderbook.q``)
+applies ``.qetl.transform.apply[`eq_orderbook;...]`` - the same transform the ODBC
 backfill uses - to fold forty per-level columns into four vectors.
 
 That split is the whole point. The fold is forty columns of index
@@ -185,6 +185,6 @@ def databento_feed_status(paths: UqsPaths) -> dict[str, str]:
         "running": str(is_databento_feed_running(paths)),
         "pid": str(pid) if pid is not None else "",
         "publishes": DATABENTO_RAW_TABLE,
-        "folded by": "databento1 -> databento_book",
+        "folded by": "databento1 -> eq_orderbook",
         "log": str(paths.torqdata / "logs" / "databento_feed.log"),
     }

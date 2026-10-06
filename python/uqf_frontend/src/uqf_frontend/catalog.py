@@ -39,7 +39,7 @@ copy and the test that policed it, and both are gone.
 `filterable` is DERIVED rather than stored: it is exactly "every column whose
 type is not LIST", and writing it down would create a second place for it to
 disagree with the types beside it. Vector-valued columns
-(`quotes.bid_prices` and friends) are deliberately NOT filterable - a per-row
+(`fx_orderbook.bid_prices` and friends) are deliberately NOT filterable - a per-row
 list of level prices has no sensible scalar comparison, and offering one
 would invite confusing results. `meta` reports them with a BLANK type
 character, which is how they arrive as LIST.
@@ -150,13 +150,13 @@ class Table:
 #:
 #: LOWERCASE ONLY, and that is the whole rule q uses: a lowercase character
 #: means a SIMPLE vector - one atom per row - and an UPPERCASE one means a
-#: nested column, a list per row. `quotes.bid_prices` reports `F` once it
+#: nested column, a list per row. `fx_orderbook.bid_prices` reports `F` once it
 #: holds float vectors, and a blank only while the table is still empty.
 #:
 #: That distinction is load-bearing and was nearly got wrong: an earlier
 #: version of this map had the blank and no uppercase, which worked against
 #: the empty table declarations and would have raised on the first populated
-#: `quotes` - taking the whole catalog down with it, since one unmappable
+#: `fx_orderbook` - taking the whole catalog down with it, since one unmappable
 #: column makes every table unbuildable. Tested now against a table with rows
 #: in it, which is the only version of this test that means anything.
 #:

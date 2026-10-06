@@ -1,0 +1,43 @@
+# tap.d2 - tap1, the tickerplant inspector.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/services/tap.md.
+#
+# WHAT THIS DIAGRAM IS FOR. tap1 publishes nothing: everything it sees goes
+# to its log, one INFO line per batch with the table in the line's id, and
+# `uqs logs` is how a person reads it. Which tables it taps is process.csv's
+# extras, set with `uqs config` - drawn dashed because it is read once, at
+# start, not on every batch.
+
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    pad: 40
+  }
+}
+
+# The service diagrams' palette (fx-positions-service.d2, markouts.d2), so
+# the set reads as one system: light fills with dark text in both themes.
+classes: {
+  ext: {style: {fill: "#f4f1ea"; stroke: "#8a7f6a"; font-color: "#3d3527"; border-radius: 14}}
+  py: {style: {fill: "#f3eefb"; stroke: "#6f4aa5"; font-color: "#3a1e5f"; border-radius: 6}}
+  feed: {style: {fill: "#f6f0e6"; stroke: "#a8762f"; font-color: "#5c3f13"; border-radius: 6}}
+  job: {style: {fill: "#eaf5ef"; stroke: "#3d7a5a"; font-color: "#1d4733"; border-radius: 6}}
+  plant: {style: {fill: "#fbeef0"; stroke: "#a54a5c"; font-color: "#5f1f2c"; border-radius: 6}}
+  table: {style: {fill: "#eef3fb"; stroke: "#4a6fa5"; font-color: "#1e3a5f"; border-radius: 6}}
+  store: {style: {fill: "#eef1f4"; stroke: "#5a6a78"; font-color: "#25323d"; border-radius: 6}}
+  band: {label.near: top-left; style: {fill: "#fbfcfd"; stroke: "#c3c9cf"; font-color: "#25323d"; stroke-width: 2; border-radius: 10; font-size: 18}}
+}
+
+stp1: "stp1 - tickerplant" { class: plant }
+tap: "tap1 - torq_tap.q\nstarted on demand\npublishes nothing" { class: job }
+log: "tap1's log\none INFO line per batch,\nid = the table" { class: store }
+reader: "uqs logs -f tap1" { class: py }
+config: "uqs config set -- tap1 extras\n\"-tables quote wide_orderbook\"\nempty = every table" { class: py }
+
+stp1 -> tap: "every batch of\nthe tapped tables" { style.stroke: "#a54a5c" }
+tap -> log: "log it, unmodified" { style.stroke: "#3d7a5a" }
+log -> reader: "read by" { style.stroke: "#6f4aa5" }
+config -> tap: "on start" { style.stroke: "#6f4aa5"; style.stroke-dash: 4 }

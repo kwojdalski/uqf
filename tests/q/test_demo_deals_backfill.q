@@ -414,6 +414,49 @@ test_a_declared_default_source_version_is_kept:{[t]
     .qunit.assertEquals[.qetl.job.bounded.default_version `ddbftest_sv_worker;`v7;
         "a run that names no version records coverage under v7"]};
 
+/ .qetl.job.bounded.spec_from_flags - the one command-line parser both
+/ launchers (torq_backfill.q and scripts/dev/run_backfill.q) use. They each
+/ had their own until the dev one was found refusing a missing -version the
+/ fleet one defaulted.
+flags:{[worker;version;lo;hi]
+    o:`worker`from`to!(enlist string worker;enlist lo;enlist hi);
+    $[count version; o,enlist[`version]!enlist enlist version; o]}
+
+test_a_command_line_names_the_worker_range_and_version:{[t]
+    s:.qetl.job.bounded.spec_from_flags flags[`demo_deals_backfill;"v3";"2026.09.13";"2026.09.14"];
+    .qunit.assertEquals[s`worker;`demo_deals_backfill;"the worker, as a symbol"];
+    .qunit.assertEquals[s`spec;`source_version`range_from`range_to!(`v3;2026.09.13D00:00;2026.09.14D00:00);
+        "and the spec, typed"]};
+
+test_a_command_line_without_version_takes_the_declared_default:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_flags;`v9)];
+    .qetl.job.bounded.define[`ddbftest_flags_worker;(`ns`procname`note) _ d];
+    s:.qetl.job.bounded.spec_from_flags flags[`ddbftest_flags_worker;"";"2026.09.13";"2026.09.14"];
+    .qunit.assertEquals[s[`spec]`source_version;`v9;
+        "the declared default, on either launcher - the dev one used to refuse here"]};
+
+test_a_command_line_without_version_is_refused_when_there_is_no_default:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.spec_from_flags;
+        flags[`demo_deals_backfill;"";"2026.09.13";"2026.09.14"];
+        "*missing -version*declares no default source_version*";
+        "a restatable source's release is never guessed"]};
+
+test_a_command_line_missing_flags_names_every_one:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.spec_from_flags;
+        enlist[`worker]!enlist enlist "demo_deals_backfill";
+        "*missing -from, -to*";
+        "both missing bounds in one refusal, not one per restart"]};
+
+test_a_command_line_with_an_empty_range_is_refused_before_anything_starts:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.spec_from_flags;
+        flags[`demo_deals_backfill;"v1";"2026.09.14";"2026.09.14"];
+        "*-from is not before -to*";
+        "an empty window is refused at parse time"];
+    .qunit.assertThrows[.qetl.job.bounded.spec_from_flags;
+        flags[`demo_deals_backfill;"v1";"yesterday";"2026.09.14"];
+        "*-from is not a timestamp: yesterday*";
+        "and a bound that is not a q timestamp says which"]};
+
 test_define_refuses_a_source_version_that_is_not_a_symbol:{[t]
     d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_sv2;"v1")];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_sv2_worker;x]};(`ns`procname`note) _ d;

@@ -98,29 +98,31 @@ the same dict. Setting one in your shell does not override anything ---
 `build_env` wins --- but it will make `uqs list` and the running stack disagree
 about where data lives, which is a confusing way to spend an afternoon.
 
-  | Variable        | Value                                            |
-  | --------------- | ------------------------------------------------ |
-  | `TORQHOME`      | the vendored TorQ tree                           |
-  | `TORQAPPHOME`   | the starter-pack app tree                        |
-  | `TORQDATA`      | data root; `UQF_STATUS_DIR` falls back inside it |
-  | `TORQPROCESSES` | the generated `process.csv`                      |
-  | `UQF_SCRIPTS`   | `scripts/`                                       |
-  | `KDBCONFIG`     | `$TORQHOME/config`                               |
-  | `KDBCODE`       | `$TORQHOME/code`                                 |
-  | `KDBAPPCONFIG`  | `$TORQAPPHOME/appconfig`                         |
-  | `KDBAPPCODE`    | `$TORQAPPHOME/code`                              |
-  | `KDBLIB`        | `$TORQHOME/lib`                                  |
-  | `KDBTESTS`      | `$TORQHOME/tests`                                |
-  | `KDBLOG`        | `$TORQDATA/logs`                                 |
-  | `KDBHDB`        | `$TORQDATA/hdb`                                  |
-  | `KDBWDB`        | `$TORQDATA/wdbhdb`                               |
-  | `KDBTPLOG`      | `$TORQDATA/tplogs`                               |
-  | `KDBDQCDB`      | the DQC database                                 |
-  | `KDBDQEDB`      | the DQE database                                 |
-  | `KDBBASEPORT`   | the port block base                              |
-  | `RLWRAP`        | `rlwrap`                                         |
-  | `QCON`          | `qcon`                                           |
-  | `QCMD`          | `$QCMD`, else `q` --- see above                  |
+  | Variable        | Value                                                             |
+  | --------------- | ------------------------------------------------                  |
+  | `TORQHOME`      | the vendored TorQ tree                                            |
+  | `TORQAPPHOME`   | the starter-pack app tree                                         |
+  | `TORQDATA`      | data root; `UQF_STATUS_DIR` falls back inside it                  |
+  | `TORQPROCESSES` | the generated `process.csv`                                       |
+  | `UQF_SCRIPTS`   | `scripts/`                                                        |
+  | `KDBCONFIG`     | `$TORQHOME/config`                                                |
+  | `KDBCODE`       | `$TORQHOME/code`                                                  |
+  | `KDBAPPCONFIG`  | `$TORQAPPHOME/appconfig`                                          |
+  | `KDBAPPCODE`    | `$TORQAPPHOME/code`                                               |
+  | `KDBSERVCONFIG` | `scripts/torqconfig`: names TorQ's log levels as `.qetl.log` does |
+  | `KDBSERVCODE`   | `scripts/torqcode`: TorQ's password loader, fixed for that layer  |
+  | `KDBLIB`        | `$TORQHOME/lib`                                                   |
+  | `KDBTESTS`      | `$TORQHOME/tests`                                                 |
+  | `KDBLOG`        | `$TORQDATA/logs`                                                  |
+  | `KDBHDB`        | `$TORQDATA/hdb`                                                   |
+  | `KDBWDB`        | `$TORQDATA/wdbhdb`                                                |
+  | `KDBTPLOG`      | `$TORQDATA/tplogs`                                                |
+  | `KDBDQCDB`      | the DQC database                                                  |
+  | `KDBDQEDB`      | the DQE database                                                  |
+  | `KDBBASEPORT`   | the port block base                                               |
+  | `RLWRAP`        | `rlwrap`                                                          |
+  | `QCON`          | `qcon`                                                            |
+  | `QCMD`          | `$QCMD`, else `q` --- see above                                   |
 
 ## Where to put them
 

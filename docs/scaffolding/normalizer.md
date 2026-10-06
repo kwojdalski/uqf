@@ -2,8 +2,9 @@
 
 A normalizer answers one question from several tables that each answer it
 differently. `executions1` turns FX `trades` and crypto `crypto_trades` into one
-`executions` table; `marks1` turns `quote` and `crypto_book` into one mid per
-instrument. Downstream reads one shape and never learns there were two.
+`executions` table; `marketdata1` turns `quote`, `fx_orderbook` and
+`crypto_book` into one book shape. Downstream reads one shape and never learns
+there were several.
 
 It is an [etl](etl.md) with a specific job, and the scaffold knows enough about
 that job to write considerably more of it.

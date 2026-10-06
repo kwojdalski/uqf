@@ -63,7 +63,7 @@ TYPES: tuple[ColumnType, ...] = (
     ColumnType("date", "`date$()", "d", "2026.01.01"),
     ColumnType("time", "`time$()", "t", "00:00:00.000"),
     ColumnType("timespan", "`timespan$()", "n", "0D00:00:01"),
-    #: A general column: what a vector-valued table uses (quotes' bid_prices).
+    #: A general column: what a vector-valued table uses (fx_orderbook's bid_prices).
     ColumnType("list", "()", " ", "1 2 3f"),
 )
 

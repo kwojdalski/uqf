@@ -79,6 +79,11 @@ LITERAL_READS = (
     # refuse naming every missing one at once), so the gate should
     # understand the better idiom rather than push code toward the worse one.
     re.compile(r"required_env\s*:\s*((?:`[A-Z][A-Z0-9_]*)+)"),
+    # q reading several at once: `getenv each `A`B`C`. torq.q reads KDBCODE,
+    # KDBSERVCODE and KDBAPPCODE this way to find the handler directories, and
+    # without this KDBSERVCODE - set by build_env, read only there - looked
+    # exported to nobody.
+    re.compile(r"getenv\s+each\s+((?:`[A-Z][A-Z0-9_]*)+)"),
     # TypeScript: process.env.NAME
     re.compile(r"process\.env\.([A-Z][A-Z0-9_]*)"),
     # `.qdata.cfg` wraps getenv with a `.env`-file fallback, so its reads are

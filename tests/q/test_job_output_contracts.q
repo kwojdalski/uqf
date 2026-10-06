@@ -117,23 +117,21 @@ last_of:{[j] first last exec rows from .sjtest.published where job=j}
 / job -> a niladic function pushing input the job acts on. Each driver
 / runs after .sjtest.reset[], which empties job state and wires every job
 / to .sjtest.recorder.
-drivers:`markout`posbook`vectorize`databento_book`fx_positions`executions`marks`market_data`superbook`arbitrage`cross_arbitrage!(
+drivers:`markout`posbook`vectorize`eq_orderbook`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage!(
     {[] .qpipe.job.markout.on_batch[`trades;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD; side:enlist 1;
             trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
         .qpipe.job.markout.on_batch[`quote;([] time:enlist .sjtest.d 1; sym:enlist `EURUSD;
             bid:enlist 1.1004; ask:enlist 1.1006)];
         .qpipe.job.markout.score_ready .sjtest.d 20};
-    {[] .qpipe.job.posbook.on_batch[`marks;.sjtest.a_mark[`EURUSD;1.104]];
+    {[] .qpipe.job.posbook.on_batch[`market_data;.sjtest.a_book[`EURUSD;1.104]];
         .qpipe.job.posbook.on_batch[`executions;.sjtest.an_execution[.sjtest.d 0;`EURUSD;1;1.1;1e6]]};
-    {[] .qpipe.job.vectorize.on_batch[`wide_book;.sjtest.wide_row[]]};
-    {[] .qpipe.job.databento_book.on_batch[`databento_mbp10;.sjtest.mbp10_batch[]]};
+    {[] .qpipe.job.vectorize.on_batch[`wide_orderbook;.sjtest.wide_row[]]};
+    {[] .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.sjtest.mbp10_batch[]]};
     {[] .qpipe.job.fx_positions.load_limits .sjtest.mk_limits[];
         .qpipe.job.fx_positions.on_batch[`orders;.sjtest.orders_batch[]];
         .qpipe.job.fx_positions.on_timer[]};
     {[] .qpipe.job.executions.on_batch[`trades;.sjtest.fx_fill[`EURUSD;1;1.085;1e6]];
         .qpipe.job.executions.on_batch[`crypto_trades;.sjtest.crypto_fill[`$"BTC-USDT";-1;62000f;0.25]]};
-    {[] .qpipe.job.marks.on_batch[`quote;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD;
-            bid:enlist 1.0849; ask:enlist 1.0851)]};
     {[] .qpipe.job.market_data.on_batch[`quote;.jobouttest.lp_quotes[]]};
     {[] .jobouttest.drivers[`market_data][];
         .qpipe.job.superbook.on_batch[`market_data;.jobouttest.last_of `market_data]};

@@ -200,6 +200,17 @@ what is, not how future documents must be filed.
 
 ## Scope
 
+**Continuous integration is ours, not the reader's.** How CI runs, which gates
+it applies and why are maintainer concerns; the documentation is for people
+running and building on the stack. How to run the tests locally belongs in the
+README's Testing section, kept short.
+
+> *2026-10-06.* `docs/guides/ci.md` sat among the user guides and on the docs
+> site, mostly describing the workflow, its pinned tool versions and its gates.
+> Asked for: "that's something that is onto us not end users". The page was
+> deleted rather than moved, and the README points at `scripts/test.py --help`
+> for the lane list.
+
 **Name the dependencies a documented command needs**, including the ones that
 are missing, rather than assuming the reader has them.
 

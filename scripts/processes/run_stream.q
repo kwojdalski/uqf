@@ -43,7 +43,7 @@
 / The parsed command line: -job, -tp, -port, -plant, -feed, -logdir.
 opts:.Q.opt .z.x
 
-/ -verbose switches DBG on, the same flag every uqf process script takes.
+/ -verbose switches DEBUG on, the same flag every uqf process script takes.
 if[`verbose in key opts; .qetl.log.debug 1b];
 
 / Private: one option's value, or a default. .Q.opt gives a list per key,

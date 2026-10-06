@@ -4,7 +4,7 @@ Its own module rather than a branch of `jobs.py`: a normalizer is three
 declarations in one file - the canonical table, one `.qetl.transform` transform per
 source, and the `.qetl.job.stream.normalize` that registers the job - and the transforms
 are what make it different. See src/etl/core/normalizer.q for why it is a
-kind at all, and src/etl/streaming/marks.q for a finished one.
+kind at all, and src/etl/streaming/executions.q for a finished one.
 
 THE FILE MUST LOAD. `.qetl.transform.define` checks a transform's examples when the
 file is loaded, and refuses one with no rows. So every mapping gets a typed
@@ -89,7 +89,7 @@ def normalizer(
         )
     # Plain `symbol`, not the plant's grouped one: this is the transform's
     # declared output, held strictly against the examples, which carry none -
-    # as marks.q's own output does. The plant's copy keeps its attribute.
+    # as executions.q's own output does. The plant's copy keeps its attribute.
     output = [(c, lit.replace("`g#", "")) for c, lit in columns if c != TIME_COLUMN]
 
     sections = []

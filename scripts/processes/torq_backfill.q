@@ -35,15 +35,15 @@
 /   -from     inclusive lower bound, a q timestamp
 /   -to       exclusive upper bound
 / .
-/   -verbose  optional: switch the DBG level on for this process - the parsed
+/   -verbose  optional: switch the DEBUG level on for this process - the parsed
 /             flags, the worker's declaration, the windows it will cut, every
 /             window as it starts and publishes, and each stage's timing.
 /             `uqs backfill --debug` passes it. Not TorQ's own -debug, which
 /             also stops the log going to its file.
-/   -trace    optional: switch the TRC level on - every query the source is
+/   -trace    optional: switch the TRACE level on - every query the source is
 /             sent, the SQL statement or the q lambda and its bounds, before
 /             it goes and again with the rows and milliseconds it took - and
-/             DBG with it, as -verbose does: a query is read beside the window
+/             DEBUG with it, as -verbose does: a query is read beside the window
 /             it was sent for. `uqs backfill --trace` passes it.
 /   -on_conflict  optional: upsert, replace, ignore, append or fail - what a
 /             write does with a row whose row_key is already there, for this
@@ -68,65 +68,16 @@
 
 \d .qproc.backfill
 
-/ The flags this process reads. Listed so the refusal below can report every
-/ missing one at once rather than over four restarts.
-required_flags:`worker`from`to
+/ The flags this process reads are parsed by .qetl.job.bounded.spec_from_flags
+/ in src/etl/core/bounded_worker.q - the one parser scripts/dev/run_backfill.q
+/ uses too, so a command line means the same thing to both.
 
-/ Refuse unless every required flag has a value, naming all that do not.
-/ .Q.opt keeps each flag's words as a list of strings, so the value is the
-/ first of them. Missing is either not given at all, or given with nothing
-/ after it - which .Q.opt maps to an empty list - so `-from` with no value is
-/ refused here by name rather than failing later as a type error. Presence is
-/ tested with `in key` rather than by indexing, because what a dictionary
-/ returns for an absent key depends on its value list's prototype.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @return flag -> its value, as a string
-require_flags:{[opts]
-    missing:required_flags where not (required_flags in key opts) and 0<count each opts required_flags;
-    if[count missing;
-        '"torq_backfill: missing ",(", " sv "-",/:string missing),
-         " - a backfill with no range would publish the wrong window and record it as covered"];
-    required_flags!first each opts required_flags}
-
-/ The run specification, parsed and typed.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @throws error when a bound is not a q timestamp
-spec_from_flags:{[opts]
-    f:require_flags opts;
-    from_ts:"P"$f`from;
-    to_ts:"P"$f`to;
-    if[null from_ts; '"torq_backfill: -from is not a timestamp: ",f`from];
-    if[null to_ts;   '"torq_backfill: -to is not a timestamp: ",f`to];
-    worker:`$f`worker;
-    `worker`spec!(worker;
-        `source_version`range_from`range_to!(version_from_flags[opts;worker];from_ts;to_ts))}
-
-/ The source_version this run records coverage under: -version when given,
-/ else the worker's declared default, else a refusal - a worker that declares
-/ none is one whose source can be restated, and guessing the release there
-/ files a restatement under the old one.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @param worker the worker's name
-/ @return the version, a symbol
-/ @throws error when neither is there
-version_from_flags:{[opts;worker]
-    if[(`version in key opts) and 0<count opts`version; :`$first opts`version];
-    dv:.qetl.job.bounded.default_version worker;
-    if[null dv;
-        '"torq_backfill: missing -version - ",string[worker]," declares no default source_version, so a run must say which release of the source it records coverage under"];
-    dv}
-
-/ Milliseconds since `t0`, for the timing fields every stage logs.
-/ @param t0 a timestamp, as .z.p returned it
-/ @return elapsed milliseconds as a long
-elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
-
-/ Whether this process was asked for DBG output.
+/ Whether this process was asked for DEBUG output.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -verbose was given
 verbose:{[opts] `verbose in key opts}
 
-/ Whether this process was asked for TRC output.
+/ Whether this process was asked for TRACE output.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -trace was given
 trace:{[opts] `trace in key opts}
@@ -245,7 +196,7 @@ use_hdb:{[decl]
 run:{[]
     t0:.z.p;
     .qetl.log.dbg[`backfill;"command line";enlist[`args]!enlist .z.x];
-    s:spec_from_flags .Q.opt .z.x;
+    s:.qetl.job.bounded.spec_from_flags .Q.opt .z.x;
     worker:s`worker;
     spec:s`spec;
     .qetl.log.info[worker;"backfill process starting";spec];
@@ -275,11 +226,11 @@ run:{[]
     if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
     t1:.z.p;
     (` sv ns,`init)[spec];
-    .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];
+    .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist .qtorq.elapsed_ms t1];
     t2:.z.p;
     r:(` sv ns,`run)[];
     .qetl.log.info[worker;"backfill process finished";
-        r,`run_ms`total_ms!(elapsed_ms t2;elapsed_ms t0)];
+        r,`run_ms`total_ms!(.qtorq.elapsed_ms t2;.qtorq.elapsed_ms t0)];
     / No reload here: the run's finish step called on_hdb_ready with final
     / set, which reloads if anything finished since the last one.
     r}
@@ -302,11 +253,11 @@ run:{[]
   -1 string[.z.p]," | torq_backfill: uqf tree loaded in ",string[`long$(.z.p-t0)%1000000],"ms";
  }[getenv[`UQF_ROOT]];
 
-/ DBG before anything else logs, so -verbose covers discovery too. .qetl.log is
+/ DEBUG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.
 if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
-/ -trace is the most detail there is, so it includes DBG: a traced query is
-/ read beside the window it was sent for, which only DBG logs. The two stay
+/ -trace is the most detail there is, so it includes DEBUG: a traced query is
+/ read beside the window it was sent for, which only DEBUG logs. The two stay
 / separate switches in .qetl.log - only this flag ties them.
 if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 .qetl.log.dbg[`backfill;"debug logging on";
@@ -340,7 +291,7 @@ if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 {[t0]
   .servers.startup[];
   .qetl.log.dbg[`backfill;"registered with discovery";
-      `ms`servers!(.qproc.backfill.elapsed_ms t0;count .servers.SERVERS)];
+      `ms`servers!(.qtorq.elapsed_ms t0;count .servers.SERVERS)];
  }[.z.p];
 
 / Run, then leave. Which terminal states count as success is
@@ -355,7 +306,7 @@ result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
     .qetl.log.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
     `state`error!(`failed;e)}];
 code:.qetl.job.bounded.exit_code result`state;
-/ A non-zero exit is a run that did not do its job, so it is an ERR line - at
-/ INF, `state=failed` read as routine in a log filtered for problems.
+/ A non-zero exit is a run that did not do its job, so it is an ERROR line - at
+/ INFO, `state=failed` read as routine in a log filtered for problems.
 $[0=code; .qetl.log.info; .qetl.log.err][`backfill;"exiting";`state`code!(result`state;code)];
 exit code;

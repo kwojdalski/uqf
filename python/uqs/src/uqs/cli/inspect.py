@@ -130,7 +130,7 @@ def schema(
 
     # A pattern describes EVERY match, one table per rendered block. An exact
     # name is just a pattern that matches itself, so there is one code path
-    # rather than two - and `schema quotes` behaves identically either way.
+    # rather than two - and `schema fx_orderbook` behaves identically either way.
     try:
         matched = schema_view.match_tables(table, target, host=host, **creds) if table else []
         if table and not matched:

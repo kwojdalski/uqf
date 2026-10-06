@@ -15,7 +15,7 @@
 
 / Framework and declarations must both remain visible to exporters and coverage.
 test_nested_framework_and_shared_transform_are_enumerated:{[t]
-    want:`.qetl.cfg.audit`.qetl.job.stream.normalizer`.qetl.job.bounded.runtime`.qpipe.transform.databento_book;
+    want:`.qetl.cfg.audit`.qetl.job.stream.normalizer`.qetl.job.bounded.runtime`.qpipe.transform.eq_orderbook;
     .qunit.assertTrue[all want in .qns.functional[];
         "deep framework modules and shared transforms are functional namespaces"]};
 

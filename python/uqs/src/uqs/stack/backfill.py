@@ -149,12 +149,6 @@ def parse_bound(name: str, text: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
-def to_q_timestamp(when: datetime) -> str:
-    """A UTC datetime as the literal torq_backfill.q parses with "P"$:
-    2026.09.13D00:00:00.000000000, not 2026-09-13T00:00:00Z."""
-    return when.astimezone(UTC).strftime("%Y.%m.%dD%H:%M:%S.%f000")
-
-
 def backfill_flags(
     worker: str,
     source_version: str,
@@ -168,8 +162,8 @@ def backfill_flags(
 ) -> list[str]:
     """The flags torq_backfill.q reads, validated so torq.sh passes them intact.
 
-    `verbose` adds `-verbose`, which switches the process's DBG log level on;
-    `trace` adds `-trace`, its TRC level - every query the source is sent.
+    `verbose` adds `-verbose`, which switches the process's DEBUG log level on;
+    `trace` adds `-trace`, its TRACE level - every query the source is sent.
     `on_conflict` adds `-on_conflict`, this run's strategy for a row already
     there, over the worker's own. `mode` adds `-mode`, spelled as q spells it
     (dry-run becomes dry_run); left out, the process runs for real.
@@ -191,9 +185,9 @@ def backfill_flags(
         "-version",
         source_version,
         "-from",
-        to_q_timestamp(range_from),
+        runs.to_q_timestamp(range_from),
         "-to",
-        to_q_timestamp(range_to),
+        runs.to_q_timestamp(range_to),
     ]
     for name, value in (("worker", worker), ("version", source_version)):
         if not _SAFE_VALUE.fullmatch(value):

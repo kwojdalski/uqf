@@ -24,7 +24,7 @@ beforeNamespace_load:{[]
 / Every table the orchestrator's generated database.q is expected to carry.
 / A floor AND a list: a missing name is caught, and so is a new one added to
 / the q file without a thought about who consumes it.
-expected:`quotes`wide_book`mkt_orderbook`databento_mbp10`databento_book`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`execution_quality`executions`marks`orders`fx_position`fx_limit_breach`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data`deal_positions`trades_copy
+expected:`fx_orderbook`wide_orderbook`mkt_orderbook`databento_mbp10`eq_orderbook`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`execution_quality`executions`orders`fx_position`fx_limit_breach`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data`deal_positions`trades_copy
 
 / The names THIS FILE declares, read back out of it.
 / .
@@ -45,11 +45,11 @@ declared:{[]
 
 / A table's value, by name.
 / .
-/ Exists because inside \d .tabletest a BARE `quotes` resolves to
-/ .tabletest.quotes, which does not exist - the same namespace trap
+/ Exists because inside \d .tabletest a BARE `fx_orderbook` resolves to
+/ .tabletest.fx_orderbook, which does not exist - the same namespace trap
 / .qetl.coverage.ledger[] exists to avoid, and one this file hit on its first run.
 / .
-/ `value nm`, not `value ` sv `,nm`: joining an empty symbol yields `.quotes`
+/ `value nm`, not `value ` sv `,nm`: joining an empty symbol yields `.fx_orderbook`
 / with a LEADING DOT, which is a different name again and resolves to
 / nothing. A plain symbol already looks the table up at the root.
 tbl:{[nm] value nm}
@@ -70,15 +70,15 @@ test_no_undeclared_table_appears:{[t]
 
 / --- shapes their consumers depend on ------------------------------------
 
-test_quotes_matches_the_shape_pricing_expects:{[t]
+test_fx_orderbook_matches_the_shape_pricing_expects:{[t]
     / src/pricing/forwards.q's require_quotes_cols reads these five columns
     / off a quotes table, which leads with `time` because the tickerplant's
     / .u.upd requires the first column to be literally `time`. The library
     / demanded `ts` here until that was made one name tree-wide, so a
     / consumer had to rename at query time; none does now.
-    .qunit.assertEquals[cols .tabletest.tbl `quotes;
+    .qunit.assertEquals[cols .tabletest.tbl `fx_orderbook;
         `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
-        "quotes carries the vector-column shape cross_book_at consumes"]};
+        "fx_orderbook carries the vector-column shape cross_book_at consumes"]};
 
 test_trades_matches_the_shape_the_markout_family_expects:{[t]
     / src/execution/execution.q's markout_at_horizons input shape.
@@ -92,8 +92,8 @@ test_wide_book_levels_are_contiguous_from_zero:{[t]
     / book rather than an error, so the numbering is load-bearing.
     bids:`$"bids",/:string til 11;
     asks:`$"asks",/:string til 11;
-    .qunit.assertEquals[cols .tabletest.tbl `wide_book;`time`sym,bids,asks;
-        "wide_book numbers both sides 0..10 with no gap, as derive_level_groups requires"]};
+    .qunit.assertEquals[cols .tabletest.tbl `wide_orderbook;`time`sym,bids,asks;
+        "wide_orderbook numbers both sides 0..10 with no gap, as derive_level_groups requires"]};
 
 test_wide_book_is_the_unfolded_counterpart_of_mkt_orderbook:{[t]
     / vectorize1 folds one into the other, so the pair only makes sense if
@@ -146,11 +146,13 @@ test_every_table_is_empty_as_declared:{[t]
 / (job; table) pairs where a job declares a table sharing a plant table's
 / NAME without exchanging that table with the plant. Each needs a reason:
 / absent one, a collision is an accident waiting to mislead a reader.
-/ ENLISTED. `((a;b;c))` is just `(a;b;c)` in q - a three-element list, not
-/ a list of one triple - so a single entry without this reads as three
-/ separate fields and matches nothing.
-not_exchanged:enlist (`markout;`quotes;
-    "the shape of the VENDORED `quote` table markout subscribes to (time, sym, bid, ask), held under the name its transform gives that input. The plant's own `quotes` is the depth-aware table with vector columns - a different thing that happens to be spelled plural too")
+/ ENLISTED when it holds one entry. `((a;b;c))` is just `(a;b;c)` in q - a
+/ three-element list, not a list of one triple - so a single entry without it
+/ reads as three separate fields and matches nothing.
+/ .
+/ Empty. markout's `quotes` input was here while the plant's depth table was
+/ also called `quotes`; renaming that table fx_orderbook ended the collision.
+not_exchanged:()
 
 / Private: one symbol per (job; table) pair, so a pair can be tested for
 / membership. q has no composite `in` over two columns - `([a;b]) in tbl`
@@ -192,7 +194,8 @@ test_every_job_table_sharing_a_plant_name_is_exchanged_or_excused:{[t]
     / The loophole in the test above: it derives the comparison from the
     / role, and a table declared with NEITHER role is silently skipped. A
     / name collision is then invisible - which is how markout's `quotes`
-    / (a different shape from the plant's `quotes`) went unnoticed.
+    / (a different shape from the plant's depth table, then also `quotes`)
+    / went unnoticed.
     rows:select from .tabletest.job_tables[]
         where tbl in .tabletest.declared[], role=`internal;
     unexcused:select from rows where not .tabletest.pair'[job;tbl] in .tabletest.excused[];

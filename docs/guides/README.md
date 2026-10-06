@@ -10,7 +10,6 @@ understood and a [reference](../reference/) page to be consulted.
   | [`uqs.md`](uqs.md)                       | running the stack: start, stop, profiles, config, logs, and what each process is                               |
   | [`new-pipeline.md`](new-pipeline.md)     | adding a pipeline end to end — a streaming job, or a source and a bounded worker, including the implementation |
   | [`when-it-breaks.md`](when-it-breaks.md) | a backfill that failed partway, or a streaming job that died: finding the cause and recovering                 |
-  | [`ci.md`](ci.md)                         | what the gates check, what CI cannot check, and how to run each lane locally                                   |
   | [`metatables.md`](metatables.md)         | partition profiling over an HDB                                                                                |
   | [`config-audit.md`](config-audit.md)     | recording runtime configuration changes, and joining them to who made them                                     |
 

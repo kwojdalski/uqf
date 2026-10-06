@@ -79,10 +79,10 @@ def test_a_timestamp_must_be_a_string_or_datetime():
 # -------------------------------------------------------- queries.build_filters
 
 
-#: A quotes-shaped table, built here rather than fetched: these tests are
+#: An fx_orderbook-shaped table, built here rather than fetched: these tests are
 #: about queries.build_filters, not about what the stack happens to carry.
 QUOTES = Table(
-    name="quotes",
+    name="fx_orderbook",
     columns={
         "time": QType.TIMESTAMP,
         "sym": QType.SYMBOL,

@@ -96,7 +96,7 @@ def test_both_kinds_are_reported_in_one_run():
     """A smoke test that stops at the first problem makes you run it again
     to find the second, and these take minutes."""
     problems = stack_smoke.findings(
-        {"cross_arbitrage": 0}, {"cross_arbitrage": {"crossarb1"}}, {"marks1": ["boom"]}
+        {"cross_arbitrage": 0}, {"cross_arbitrage": {"crossarb1"}}, {"executions1": ["boom"]}
     )
     assert {p.kind for p in problems} == {"empty-table", "process-errors"}
 
@@ -105,15 +105,15 @@ def test_errors_are_counted_as_a_difference_not_a_total(tmp_path):
     """A stack that has been up a while has old errors in its logs, and
     failing on those would make this check useless on any machine that had
     ever run anything."""
-    log = tmp_path / "err_marks1.log"
+    log = tmp_path / "err_executions1.log"
     log.write_text("old failure\nanother old one\n")
-    before = stack_smoke.error_log_sizes(tmp_path, {"marks1"})
-    assert before == {"marks1": 2}
-    assert stack_smoke.new_error_lines(tmp_path, before, {"marks1"}) == {}
+    before = stack_smoke.error_log_sizes(tmp_path, {"executions1"})
+    assert before == {"executions1": 2}
+    assert stack_smoke.new_error_lines(tmp_path, before, {"executions1"}) == {}
 
     log.write_text("old failure\nanother old one\nsomething new\n")
-    assert stack_smoke.new_error_lines(tmp_path, before, {"marks1"}) == {
-        "marks1": ["something new"]
+    assert stack_smoke.new_error_lines(tmp_path, before, {"executions1"}) == {
+        "executions1": ["something new"]
     }
 
 

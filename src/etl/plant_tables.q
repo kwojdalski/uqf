@@ -231,14 +231,16 @@ materialise:{[ts] {[t] t set schema t} each ts; ts}
 / That sentence was FALSE for as long as it stood, and is worth keeping the
 / history of. require_quotes_cols demanded `ts` while this table led with
 / `time` - which .u.upd requires of every table's first column - so
-/ cross_book_at refused a real quotes table outright, and the claim of "no
+/ cross_book_at refused a real fx_orderbook table outright, and the claim of "no
 / reshaping" went unchallenged because nothing ever called a pricing
 / function with a tickerplant table. scripts/examples/scenario_example.q
 / now does, on every commit, and the timestamp column is `time everywhere.
-quotes:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-nested[`quotes;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+fx_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+nested[`fx_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
-/ Direct FX books retain their source and original timestamp across normalization.
+/ Every venue's book, FX and crypto, with its source and original timestamp
+/ kept across normalization. posbook1 marks to its level-0 mids; superbook1
+/ merges the FX ones.
 market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
@@ -278,9 +280,9 @@ nested[`config_change;`old`new!"  "];
 / look. The bids<n>/asks<n> naming is not free choice - it matches
 / .qbook.derive_level_groups' prefix-plus-contiguous-digit-suffix
 / convention, which is what folds these into bid_prices/ask_prices.
-wide_book:([]time:`timestamp$(); sym:`g#`symbol$(); bids0:`float$();bids1:`float$();bids2:`float$();bids3:`float$();bids4:`float$();bids5:`float$();bids6:`float$();bids7:`float$();bids8:`float$();bids9:`float$();bids10:`float$();asks0:`float$();asks1:`float$();asks2:`float$();asks3:`float$();asks4:`float$();asks5:`float$();asks6:`float$();asks7:`float$();asks8:`float$();asks9:`float$();asks10:`float$())
+wide_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bids0:`float$();bids1:`float$();bids2:`float$();bids3:`float$();bids4:`float$();bids5:`float$();bids6:`float$();bids7:`float$();bids8:`float$();bids9:`float$();bids10:`float$();asks0:`float$();asks1:`float$();asks2:`float$();asks3:`float$();asks4:`float$();asks5:`float$();asks6:`float$();asks7:`float$();asks8:`float$();asks9:`float$();asks10:`float$())
 
-/ vectorize1's output: wide_book's bids*/asks* folded into vector columns by
+/ vectorize1's output: wide_orderbook's bids*/asks* folded into vector columns by
 / .qbook.book_from_wide_levels, then republished onto the tickerplant - an
 / ordinary database table flowing through rdb1/wdb1/hdb, not private state
 / on vectorize1's own process.
@@ -301,8 +303,8 @@ databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$()
 / .qfwd.cross_book_at read. Carries `ts_event` as well as `time`: the
 / tickerplant stamps `time` on receipt, and a book that knew only when it
 / ARRIVED could not tell a stale feed from a fast one.
-databento_book:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-nested[`databento_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
+eq_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+nested[`eq_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
 
 / Client FX flow as the external Kafka consumer publishes it - one row per
 / consumed record, in the source contract's own field order. Written by
@@ -363,9 +365,6 @@ execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestam
 / normalized row. Named `executions` because `fills` is a q builtin.
 executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$())
 
-/ marks1's output: a mid per instrument from every book the stack carries.
-/ The `marks` normalizer maps `quote` and `crypto_book` onto this.
-marks:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); mid:`float$())
 / fx_orders_feed's output: order flow, most of which never becomes a fill.
 / Wider than `trades` because a position keyed on more than sym needs the
 / dimensions to arrive with the order, and order_status is what

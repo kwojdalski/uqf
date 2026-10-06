@@ -102,18 +102,22 @@ CORE_INFRA: tuple[str, ...] = (
 )
 
 #: The TorQ stack with nothing on top: capture (discovery, the plant), store
-#: (rdb, the intraday writedown, the hdbs), query (the gateway) and keep an
-#: eye on it (monitor, housekeeping). No uqf job, and none of the rest of
-#: CORE_INFRA - the chained plant, metrics, and the sort processes.
+#: (rdb, the intraday writedown, the sort and its workers, the hdbs), query
+#: (the gateway) and keep an eye on it (monitor, metrics, housekeeping). No
+#: uqf job, and of the rest of CORE_INFRA only the chained plant is left out.
 #:
-#: LEAVING OUT sort1 AND ITS WORKERS is safe but not free: at end of day wdb1
-#: hands its intraday writedown to them to sort and move into the HDB. With
-#: none running, TorQ's wdb logs "no sortandreload process detected" as an
-#: ERROR and sorts locally instead (informsortandreload in
-#: lib/torq/code/processes/wdb.q), so the day still lands - on wdb1 itself,
-#: which is busy while it does. Composing with a job profile
-#: (`--profile essential,fx`) starts the full CORE_INFRA, sort processes
-#: included.
+#: THE SORT PROCESSES ARE IN. At end of day wdb1 hands its intraday writedown
+#: to sort1, which sorts it into the HDB across the workers. With no sort
+#: process, TorQ's wdb logs "no sortandreload process detected" as an ERROR
+#: every evening and sorts on wdb1 itself (informsortandreload in
+#: lib/torq/code/processes/wdb.q). None of the three holds a plant slot.
+#: metrics1 does - it subscribes - so essential holds three.
+#:
+#: tpreplay1 IS NOT, and cannot be: it is a one-shot replay that `uqs data
+#: replay` starts with the log, schema and HDB to replay into. Started bare it
+#: exits at startup for want of them (tickerlogreplay.q's exitifnull), and
+#: started with them it EMPTIES the tables of every partition it writes - not
+#: a thing a routine start may do.
 ESSENTIAL_INFRA: tuple[str, ...] = (
     "discovery1",
     "stp1",
@@ -121,9 +125,13 @@ ESSENTIAL_INFRA: tuple[str, ...] = (
     "hdb1",
     "hdb2",
     "wdb1",
+    "sort1",
+    "sortworker1",
+    "sortworker2",
     "gateway1",
     "monitor1",
     "housekeeping1",
+    "metrics1",
 )
 
 #: Profiles that start a smaller infrastructure set than CORE_INFRA, and
@@ -141,13 +149,13 @@ PROFILE_INFRA: dict[str, tuple[str, ...]] = {
 PROFILES: dict[str, tuple[str, ...]] = {
     #: What a `start all` runs today, named so it can be asked about and
     #: diffed. Deliberately NOT the union of the others.
-    "default": ("posbook1", "markout1", "fxpositions1", "quotesfeed1"),
+    "default": ("posbook1", "markout1", "fxpositions1", "fxorderbookfeed1"),
     #: Positions, P&L and execution quality on the FX chain.
     "fx": ("posbook1", "markout1", "fxpositions1"),
     #: Cross-source and cross-currency opportunities, three processes deep.
     "arbitrage": ("arbitrage1", "crossarb1"),
     #: The depth-aware book path: a wide feed folded into vector columns, and
-    #: synthetic crosses off the same quotes.
+    #: synthetic crosses off fx_orderbook.
     "depth": ("vectorize1", "cross1"),
     #: cryptorust's recorders replaced by the in-tree mock. INSTEAD of the
     #: real ones, never alongside - see the module docstring.
@@ -347,12 +355,23 @@ def over_budget(names: Iterable[str]) -> str | None:
     handle is reset.
     """
     wanted = sorted(names)
-    held = plant_slots(resolve(wanted))
+    return over_budget_procs(resolve(wanted), f"profile(s) {', '.join(wanted)}")
+
+
+def over_budget_procs(procnames: Iterable[str], what: str) -> str | None:
+    """Why the processes `procnames` cannot be started together, or None.
+
+    over_budget's check on a resolved set, for a start that is not only
+    profiles: `--profile essential vectorize1` is held to the budget of what it
+    actually starts, the profile's members AND the names added to it. `what`
+    is how the refusal names the request, e.g. "profile(s) fx".
+    """
+    held = plant_slots(procnames)
     slots = allowance()
     if slots is None or held <= slots:
         return None
     return (
-        f"profile(s) {', '.join(wanted)} need {held} tickerplant connections, "
+        f"{what} need {held} tickerplant connections, "
         f"and only {slots} are available ({licence_limit()} on this "
         f"licence, {INBOUND_RESERVE} held back for ad-hoc handles). The plant "
         f"resets the extras rather than refusing them, so the processes past the "

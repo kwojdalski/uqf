@@ -76,7 +76,7 @@ def test_the_follow_path_renders_through_the_same_function(monkeypatch):
             seen.append((level, message))
 
     rec = {"time": "2026.08.22D14:21:10.0", "procname": "p", "proctype": "t"}
-    stack_logs._emit(_Log(), {**rec, "loglevel": "TRC", "message": IPC}, None)
+    stack_logs._emit(_Log(), {**rec, "loglevel": "TRACE", "message": IPC}, None)
     assert seen == [("TRACE", render_query_trace(IPC))]
 
 

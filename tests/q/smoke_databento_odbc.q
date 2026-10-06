@@ -1,7 +1,7 @@
 // smoke_databento_odbc.q - the backfill framework against real data, over
 // ODBC.
 //
-// Runs databento_book_backfill over a range of the DuckDB database built by
+// Runs eq_orderbook_backfill over a range of the DuckDB database built by
 // scripts/dev/dump_databento_duckdb.py, then checks what it published against
 // DuckDB directly, through a second connection:
 //
@@ -53,9 +53,9 @@ check:{[name;ok;detail]
 / --- run ---------------------------------------------------------------------
 
 -1 "range ",string[range_from]," .. ",string range_to;
-.qpipe.job.databento_book_backfill.init[`source_version`range_from`range_to!(`smoke;range_from;range_to)];
+.qpipe.job.eq_orderbook_backfill.init[`source_version`range_from`range_to!(`smoke;range_from;range_to)];
 t0:.z.p;
-r:.qpipe.job.databento_book_backfill.run[];
+r:.qpipe.job.eq_orderbook_backfill.run[];
 -1 "run took ",string .z.p-t0;
 check["run completed";`completed~r`state;.Q.s1 r];
 check["no failed window";0=r`windows_failed;string r`windows_failed];
@@ -63,34 +63,34 @@ check["no failed window";0=r`windows_failed;string r`windows_failed];
 / --- reconcile against DuckDB -------------------------------------------------
 
 h:.qetl.io.odbc.open .qetl.source.require_credentials `databento_mbp10;
-between_sql:" WHERE ts_event >= ",.qpipe.source.databento_mbp10.epoch_ns_literal[range_from]," AND ts_event < ",.qpipe.source.databento_mbp10.epoch_ns_literal[range_to];
+between_sql:" WHERE ts_event >= ",.qetl.io.odbc.duckdb_timestamp[range_from]," AND ts_event < ",.qetl.io.odbc.duckdb_timestamp[range_to];
 
 source_rows:first exec n from .qetl.io.odbc.run_sql[h;"SELECT count(*) AS n FROM mbp10",between_sql];
 check["every source row published";source_rows=r`rows_published;
     "source ",string[source_rows],", published ",string r`rows_published];
-check["target holds what was published";(count databento_book)=r`rows_published;string count databento_book];
+check["target holds what was published";(count eq_orderbook)=r`rows_published;string count eq_orderbook];
 
-keyed:select distinct sym, time, sequence, action, side, price, size from databento_book;
-check["no row published twice";(count keyed)=count databento_book;
-    string[(count databento_book)-count keyed]," duplicate(s) on the row key"];
+keyed:select distinct sym, time, sequence, action, side, price, size from eq_orderbook;
+check["no row published twice";(count keyed)=count eq_orderbook;
+    string[(count eq_orderbook)-count keyed]," duplicate(s) on the row key"];
 
-check["every row inside the range";all databento_book[`time] within (range_from;range_to-1);""];
+check["every row inside the range";all eq_orderbook[`time] within (range_from;range_to-1);""];
 check["range recorded as covered";
-    .qetl.coverage.is_covered[`databento_book;`;`smoke;.z.p;range_from;range_to];""];
+    .qetl.coverage.is_covered[`eq_orderbook;`;`smoke;.z.p;range_from;range_to];""];
 
 per_sym_source:.qetl.io.odbc.run_sql[h;"SELECT symbol, count(*) AS n FROM mbp10",between_sql," GROUP BY symbol ORDER BY symbol"];
-per_sym_book:select n:count i by sym from databento_book;
+per_sym_book:select n:count i by sym from eq_orderbook;
 check["row count per symbol matches";
     ((`$per_sym_source`symbol)!per_sym_source`n)~exec sym!n from per_sym_book;
     .Q.s1 per_sym_source];
 
 / The fold, checked against the source: for the last record of each symbol in
 / the range, re-read its ten levels straight from DuckDB and compare.
-sample:select from databento_book where i=(last;i) fby sym;
+sample:select from eq_orderbook where i=(last;i) fby sym;
 level_sql:{[h;row]
     sql:"SELECT ",(", " sv string .qpipe.source.databento_mbp10.level_fields)," FROM mbp10",
         " WHERE symbol = ",.qetl.io.odbc.literal[string row`sym],
-        " AND ts_event = ",.qpipe.source.databento_mbp10.epoch_ns_literal[row`time],
+        " AND ts_event = ",.qetl.io.odbc.duckdb_timestamp[row`time],
         " AND sequence = ",.qetl.io.odbc.literal[row`sequence],
         " AND action = ",.qetl.io.odbc.literal[string row`action],
         " AND side = ",.qetl.io.odbc.literal[string row`side],
@@ -109,12 +109,12 @@ check["folded levels match the source";all matches;
 
 / --- idempotence ---------------------------------------------------------------
 
-r2:.qpipe.job.databento_book_backfill.run[];
+r2:.qpipe.job.eq_orderbook_backfill.run[];
 check["second run is idle";`idle~r2`state;.Q.s1 r2];
-check["second run published nothing";(count databento_book)=r`rows_published;string count databento_book];
+check["second run published nothing";(count eq_orderbook)=r`rows_published;string count eq_orderbook];
 
-.qpipe.job.databento_book_backfill.cleanup[];
+.qpipe.job.eq_orderbook_backfill.cleanup[];
 
 -1 "";
--1 $[failures=0;"PASS  ";"FAIL  "],string[failures]," check(s) failed; ",string[count databento_book]," rows in databento_book";
+-1 $[failures=0;"PASS  ";"FAIL  "],string[failures]," check(s) failed; ",string[count eq_orderbook]," rows in eq_orderbook";
 exit $[failures=0;0;1]

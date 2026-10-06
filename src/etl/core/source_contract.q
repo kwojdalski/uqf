@@ -660,7 +660,7 @@ coerce:{[source;tbl]
 / ------------------------------------------------------------- FETCHING
 
 / Send an IPC source's query: call `f` on the handle with the window's bounds,
-/ logging the call at TRC (.qetl.log.trace) - the lambda's text and the bounds
+/ logging the call at TRACE (.qetl.log.trace) - the lambda's text and the bounds
 / it runs with - before it is sent, and the rows and milliseconds when it
 / returns.
 / .
@@ -680,7 +680,7 @@ coerce:{[source;tbl]
 / source that reads two tables - stay apart. The run, worker, source,
 / window and attempt come from the scoped log context the bounded worker
 / sets, so a sidecar sending through here is correlated without saying so.
-/ With TRC off nothing is numbered, timed or formatted: the query is sent.
+/ With TRACE off nothing is numbered, timed or formatted: the query is sent.
 ipc:{[h;f;range_from;range_to]
     traced_ipc[h;f;(range_from;range_to);`range_from`range_to!(range_from;range_to)]}
 
@@ -690,7 +690,7 @@ ipc:{[h;f;range_from;range_to]
 / window, so `h({[c] select ... where time>c};cursor)` becomes
 / .qetl.source.ipc_call[h;{[c] select ... where time>c};enlist cursor] - and
 / `uqs stream preview --trace` shows it, as `uqs backfill --trace` shows a
-/ window's. The arguments are logged at TRC, so never pass a credential as
+/ window's. The arguments are logged at TRACE, so never pass a credential as
 / one: credentials belong to the handle, which is not logged.
 / @param h the handle to the source process
 / @param f the function the source process runs
@@ -699,12 +699,12 @@ ipc:{[h;f;range_from;range_to]
 / @eg .qetl.source.ipc_call[{value x};{[c] c+1};enlist 41] -> 42
 ipc_call:{[h;f;args] traced_ipc[h;f;args;enlist[`args]!enlist args]}
 
-/ Private: send `f` with `args` over `h`, logging it at TRC with `shown`
+/ Private: send `f` with `args` over `h`, logging it at TRACE with `shown`
 / beside the call - before it is sent, and with the rows and milliseconds,
-/ or the error, when it comes back. With TRC off it is just sent.
+/ or the error, when it comes back. With TRACE off it is just sent.
 traced_ipc:{[h;f;args;shown]
     msg:enlist[f],args;
-    if[not .qetl.log.enabled`TRC; :h msg];
+    if[not .qetl.log.enabled`TRACE; :h msg];
     t0:.z.p;
     req:`transport`request!(`ipc;.qetl.log.next_request[]);
     .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist call_text f),req,shown);::];
@@ -849,9 +849,9 @@ local_latest:{[root;table]
 
 / Run a local source's query: call `f` with a table reader over the HDB and
 / the window's bounds, traced as .qetl.source.ipc traces an IPC query - the
-/ lambda's text and bounds at TRC before, rows and ms after, a `failed line
+/ lambda's text and bounds at TRACE before, rows and ms after, a `failed line
 / that shares the request number when it throws, and the error rethrown.
-/ With TRC off it only calls.
+/ With TRACE off it only calls.
 / .
 / `f` takes (read;from_ts;to_ts), where read[table;from_ts;to_ts] is
 / local_read over this HDB: so a query reads `read[`trades;from_ts;to_ts]`
@@ -865,7 +865,7 @@ local_latest:{[root;table]
 / @eg count .qetl.source.local[`:/no/such/hdb;{[read;a;b] ([] x:a,b)};1;2]  ->  2
 local:{[root;f;range_from;range_to]
     read:local_read[root];
-    if[not .qetl.log.enabled`TRC; :f[read;range_from;range_to]];
+    if[not .qetl.log.enabled`TRACE; :f[read;range_from;range_to]];
     t0:.z.p;
     req:`transport`request!(`local;.qetl.log.next_request[]);
     .[{.qetl.log.trc[x;y;z]};(`local;"query sent";

@@ -174,6 +174,20 @@ test_unknown_tables_and_empty_batches_publish_nothing:{[t]
     .qpipe.job.superbook.on_timer[];
     .qunit.assertEquals[count published;0;"no unsolicited output before a known pair exists"]};
 
+test_a_crypto_venues_book_never_enters_the_fx_superbook:{[t]
+    / market_data carries crypto books too, for posbook's mids. Merging those
+    / across venues is crypto arbitrage, a decision of its own; until then the
+    / superbook stays FX.
+    `.qpipe.job.superbook.books set empty[];
+    `.sbtest.published set 0#published;
+    .qetl.job.stream.wire[`superbook;record];
+    crypto:update sym:`$"BTC-USDT", source:`binance_spot, source_time:.z.p from fixtures[];
+    .qpipe.job.superbook.on_batch[`market_data;crypto,update source_time:.z.p from fixtures[]];
+    .qunit.assertEquals[exec distinct sym from 0!.qpipe.job.superbook.books;enlist `EURUSD;
+        "only the currency pair's books are kept"];
+    .qunit.assertEquals[exec distinct sym from raze published`rows;enlist `EURUSD;
+        "and only it is published"]};
+
 test_malformed_batch_does_not_partly_update_live_state:{[t]
     `.qpipe.job.superbook.books set state[];
     rows:update source_time:.z.p from fixtures[];
@@ -187,7 +201,7 @@ test_tickerplant_routes_all_three_processes_using_the_real_schemas:{[t]
     `.qpipe.job.superbook.books set empty[];
     `.sbtest.published set 0#published;
     .qetl.tick.schema[`quote;.qpipe.job.market_data.quote];
-    .qetl.tick.schema[`quotes;.qpipe.job.market_data.quotes];
+    .qetl.tick.schema[`fx_orderbook;.qpipe.job.market_data.fx_orderbook];
     {[job]
         output:get ` sv `.qpipe.job,job,job;
         .qetl.tick.schema[job;([] time:`timestamp$()),'output];

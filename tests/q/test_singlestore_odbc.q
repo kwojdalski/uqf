@@ -174,14 +174,14 @@ test_run_sql_names_the_statement_on_failure:{[t]
 
 / Every log line `f` writes, as (level;id;text;fields): a recorder in place of
 / .qetl.log.line, which every level calls - so this sees what is logged, ahead
-/ of the TRC switch test_log.q covers - and the real one put back after.
-/ TRC on for the call: with it off the request paths trace nothing at all.
+/ of the TRACE switch test_log.q covers - and the real one put back after.
+/ TRACE on for the call: with it off the request paths trace nothing at all.
 logged:.testutil.captured_log[1b]
 
 test_run_sql_traces_the_statement_and_what_came_back:{[t]
     lines:.odbctest.logged {.odbctest.with_fake_driver[{.qetl.io.odbc.run_sql[7;"select 1"]}]};
-    .qunit.assertEquals[lines[;0 1 2];((`TRC;`odbc;"sql sent");(`TRC;`odbc;"sql returned"));
-        "one TRC line before the statement is sent, one after"];
+    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`odbc;"sql sent");(`TRACE;`odbc;"sql returned"));
+        "one TRACE line before the statement is sent, one after"];
     .qunit.assertEquals[((lines 0)[3]`statement;(lines 1)[3]`rows);("select 1";1);
         "the exact statement, then the row count"]};
 

@@ -37,19 +37,19 @@ log = get_logger(__name__)
 # contain "|", so split with maxsplit rather than a plain split.
 _LOG_FIELDS = ("time", "host", "proctype", "procname", "loglevel", "id", "message")
 
-# .lg.outmap's own level vocabulary (torq.q's ERROR/ERR/INF/WARN) plus the two
-# .qetl.log adds below it (DBG, TRC - src/etl/core/log.q), mapped onto
-# loguru's level names. DBG and TRC were missing, so every debug and trace
-# line fell through to INFO: labelled INFO, and kept by `--level INFO`.
-_LOGURU_LEVEL = {
-    "ERROR": "ERROR",
-    "ERR": "ERROR",
-    "WARN": "WARNING",
-    "INF": "INFO",
-    "DBG": "DEBUG",
-    "TRC": "TRACE",
-}
+# The five level names a log line carries, least to most severe. .qetl.log
+# writes them (src/etl/core/log.q), and scripts/torqconfig/settings/default.q
+# renames TorQ's own INF/WARN/ERR to them in every TorQ process.
 _LEVEL_ORDER = {"TRACE": 5, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
+
+# The short names a log written before the rename still carries, read as the
+# level each one is. Only for READING such a file: they are not accepted
+# anywhere a level is chosen, and a parsed record never shows them.
+_LEGACY_LEVEL = {"ERR": "ERROR", "WARN": "WARNING", "INF": "INFO", "DBG": "DEBUG", "TRC": "TRACE"}
+
+# A line's level as one of the five. An unknown one reads as INFO, so a line
+# is never dropped for its label.
+_LOGURU_LEVEL = {**{name: name for name in _LEVEL_ORDER}, **_LEGACY_LEVEL}
 
 #: `--level`'s choices, least to most severe - derived, so a level added to
 #: _LEVEL_ORDER reaches every command's completion and help without a third
@@ -117,7 +117,7 @@ def _configure_kdb_log_sink() -> Any:
     """
     from uqs.logger.core import setup_logging
 
-    # TRACE, not DEBUG: a TRC line from a `--trace` backfill is a loguru TRACE
+    # TRACE, not DEBUG: a TRACE line from a `--trace` backfill is a loguru TRACE
     # record, and a DEBUG sink drops it. uqs logs nothing at TRACE itself, so
     # this lets through the processes' trace lines and nothing else.
     return setup_logging(level="TRACE", format_string=_kdb_or_uqs_format)
@@ -167,7 +167,10 @@ def parse_log_line(line: str) -> dict[str, str] | None:
     parts = line.rstrip("\n").split("|", len(_LOG_FIELDS) - 1)
     if len(parts) != len(_LOG_FIELDS):
         return None
-    return dict(zip(_LOG_FIELDS, parts, strict=True))
+    rec = dict(zip(_LOG_FIELDS, parts, strict=True))
+    # One vocabulary out, whichever a file was written in.
+    rec["loglevel"] = _LEGACY_LEVEL.get(rec["loglevel"], rec["loglevel"])
+    return rec
 
 
 def _expected_log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
@@ -182,18 +185,15 @@ def _log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
 def min_level_name(min_level: str | None) -> str | None:
     """`--level` as a loguru level name, or None for no filter.
 
-    Takes the names the log lines print (WARN, ERR, INF, DBG, TRC) as well as
-    loguru's (WARNING, ERROR, ...), case-insensitively. Anything else is
-    refused: it used to rank as 0 and pass every line, so `--level WARN` -
-    the spelling a reader copies from the log itself - filtered nothing.
+    One of the five names the log lines print - TRACE, DEBUG, INFO, WARNING,
+    ERROR - case-insensitively. Anything else is refused, naming the five:
+    an unknown name used to rank as 0 and pass every line.
     """
     if min_level is None:
         return None
     name = min_level.strip().upper()
-    name = _LOGURU_LEVEL.get(name, name)
     if name not in _LEVEL_ORDER:
-        known = sorted(set(_LEVEL_ORDER) | set(_LOGURU_LEVEL), key=str)
-        raise UqsError(f"--level {min_level!r} is not a level: one of {', '.join(known)}")
+        raise UqsError(f"--level {min_level!r} is not a level: one of {', '.join(LEVEL_CHOICES)}")
     return name
 
 

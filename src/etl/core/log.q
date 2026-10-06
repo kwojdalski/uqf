@@ -18,7 +18,7 @@
 /      `debug_level`, `verbose` and `log_verbose` in the requirements imply
 /      a fourth. Without one, diagnostic detail is either always on (and a
 /      million-row backfill floods its log with per-window lines) or never
-/      on (and a stuck worker gives you nothing). DBG is registered in
+/      on (and a stuck worker gives you nothing). DEBUG is registered in
 /      outmap at 0 - off - and switched on per process with .qetl.log.debug[].
 / .
 /   2. A TRACE level, below DEBUG: the exact query a source sends - the SQL
@@ -45,20 +45,31 @@
 
 \d .qetl.log
 
-/ Level names, in severity order. TRC and DBG are this file's additions; the
-/ other three are TorQ's own, kept identical so outmap and pubmap apply
-/ unchanged.
-levels:`TRC`DBG`INF`WARN`ERR
+/ Level names, in severity order - the full words, and the only five a log
+/ line carries. TorQ's own logger writes INF, WARN and ERR; every TorQ
+/ process this stack starts loads scripts/torqconfig/settings/default.q,
+/ which renames those three on their way into the file, so a log reads one
+/ vocabulary whichever layer wrote the line.
+levels:`TRACE`DEBUG`INFO`WARNING`ERROR
 
 / The levels off unless a process switches them on, each with its own switch.
-quiet:`TRC`DBG
+quiet:`TRACE`DEBUG
 
-/ Register DBG with TorQ's routing tables if TorQ is loaded and has not
-/ heard of it. Off by default (0): nothing changes for an existing process
-/ until it opts in. Idempotent, so it is safe to call from every worker's
-/ init rather than exactly once.
+/ How TorQ routes the levels it already knows, for the names this file uses
+/ instead: (TorQ's name; this file's). outmap and pubmap are keyed by level,
+/ so a level they do not hold is neither printed nor published - INFO
+/ unregistered would silence every line.
+torq_names:`INF`WARN`ERR!`INFO`WARNING`ERROR
+
+/ Register this file's levels with TorQ's routing tables if TorQ is loaded
+/ and has not heard of them: INFO, WARNING and ERROR routed as TorQ routes
+/ INF, WARN and ERR; TRACE and DEBUG off (0), so nothing changes for a
+/ process until it opts in. Idempotent, and called by the first line logged.
 register:{[]
     if[not torq_loaded[]; :0b];
+    {[torq;ours]
+        if[not ours in key .lg.outmap; .lg.outmap[ours]:0^.lg.outmap torq];
+        if[not ours in key .lg.pubmap; .lg.pubmap[ours]:0^.lg.pubmap torq]}'[key torq_names;value torq_names];
     {if[not x in key .lg.outmap; .lg.outmap[x]:0];
      if[not x in key .lg.pubmap; .lg.pubmap[x]:0]} each quiet;
     1b}
@@ -68,10 +79,10 @@ register:{[]
 / Per process, not global, because the case for debug is one misbehaving
 / worker - turning it on fleet-wide is how you lose the signal in the noise
 / you switched it on to find.
-/ @param on 1b to emit DBG lines, 0b to suppress them
+/ @param on 1b to emit DEBUG lines, 0b to suppress them
 debug:{[on]
     register[];
-    if[torq_loaded[]; .lg.outmap[`DBG]:$[on;1;0]];
+    if[torq_loaded[]; .lg.outmap[`DEBUG]:$[on;1;0]];
     debug_enabled::on;
     on}
 
@@ -79,17 +90,17 @@ debug_enabled:0b
 
 / Switch trace output - every query a source sends - on (or off) for THIS
 / process. Independent of debug: either can be on without the other.
-/ @param on 1b to emit TRC lines, 0b to suppress them
+/ @param on 1b to emit TRACE lines, 0b to suppress them
 trace:{[on]
     register[];
-    if[torq_loaded[]; .lg.outmap[`TRC]:$[on;1;0]];
+    if[torq_loaded[]; .lg.outmap[`TRACE]:$[on;1;0]];
     trace_enabled::on;
     on}
 
 trace_enabled:0b
 
 / Private: is a quiet level switched on, outside TorQ?
-switched:{[level] $[level=`DBG; debug_enabled; level=`TRC; trace_enabled; 1b]}
+switched:{[level] $[level=`DEBUG; debug_enabled; level=`TRACE; trace_enabled; 1b]}
 
 / Private: render a field dict as space-separated k=v, values via .Q.s1 so a
 / symbol, a timestamp and a string all render unambiguously and a list does
@@ -147,9 +158,9 @@ torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 
 / Private: the transport. TorQ's .lg.l when loaded, stdout otherwise.
 / .
-/ Level gating outside TorQ mirrors TorQ's own default: DBG is suppressed
-/ unless debug[] was called, TRC unless trace[] was, everything else prints.
-/ That way a test that asserts "this DBG line was not emitted" gets the same
+/ Level gating outside TorQ mirrors TorQ's own default: DEBUG is suppressed
+/ unless debug[] was called, TRACE unless trace[] was, everything else prints.
+/ That way a test that asserts "this DEBUG line was not emitted" gets the same
 / answer whether or not torq.q happens to be loaded.
 emit:{[level;id;msg]
     $[torq_loaded[];
@@ -163,6 +174,7 @@ emit:{[level;id;msg]
 / Split out so `line` can check BEFORE rendering. Mirrors the transport's own
 / gating: TorQ's outmap when it is loaded, the debug switch when it is not.
 enabled:{[level]
+    if[torq_loaded[]; if[not level in key .lg.outmap; register[]]];
     $[torq_loaded[];
         0<0^.lg.outmap level;
       switched level]}
@@ -171,7 +183,7 @@ enabled:{[level]
 / .
 / The suppression check comes FIRST, before the fields are rendered (bank
 / the logging question). Rendering a message nobody will read is pure waste, and
-/ the waste is concentrated exactly where it hurts: DBG is off by default and
+/ the waste is concentrated exactly where it hurts: DEBUG is off by default and
 / is the level a worker emits per WINDOW, so a million-row backfill with
 / debug off would otherwise render and discard one message per window.
 / .
@@ -248,15 +260,15 @@ next_request:{[] request_seq::request_seq+1; request_seq}
 / @param fields a dict of the values, rendered k=v after the text
 / @eg .qetl.log.info[`demo_deals_backfill;"window published";
 /        `range_from`range_to`rows!(2026.09.11D00:00;2026.09.12D00:00;1234)]
-trc:{[id;text;fields]  line[`TRC;id;text;fields]}
-dbg:{[id;text;fields]  line[`DBG;id;text;fields]}
-info:{[id;text;fields] line[`INF;id;text;fields]}
-warn:{[id;text;fields] line[`WARN;id;text;fields]}
+trc:{[id;text;fields]  line[`TRACE;id;text;fields]}
+dbg:{[id;text;fields]  line[`DEBUG;id;text;fields]}
+info:{[id;text;fields] line[`INFO;id;text;fields]}
+warn:{[id;text;fields] line[`WARNING;id;text;fields]}
 
 / Log an error. Does NOT throw and does NOT exit - TorQ's .lg.e does both
 / depending on .proc state, which is right for an init failure and wrong
 / for a worker recording that one window failed and moving on. A
 / worker that wants to abort throws itself; this only records.
-err:{[id;text;fields]  line[`ERR;id;text;fields]}
+err:{[id;text;fields]  line[`ERROR;id;text;fields]}
 
 \d .

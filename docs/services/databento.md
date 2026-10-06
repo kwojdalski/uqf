@@ -4,6 +4,8 @@ A live market-data feed: an external Python handler publishes raw MBP-10 rows,
 and `databento1` folds them into the book shape. Starting, stopping and
 inspecting the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
+![The Databento handler publishes raw MBP-10 rows to stp1; databento1 subscribes, folds them with the same .qetl.transform the ODBC backfill applies, and publishes eq_orderbook](../diagrams/databento.svg)
+
 `uqs feed start databento`/`stop`/`status` subscribe to
 [Databento](https://databento.com) and stream MBP-10 into this stack. It is the
 live counterpart to the ODBC backfill in
@@ -24,19 +26,21 @@ works). It refuses to start without one rather than failing on its first call.
 **Two halves, and the split is the point.** A Python handler holds the
 subscription and publishes raw MBP-10 onto `databento_mbp10` - forty per-level
 columns, exactly as Databento sends them. `databento1`, an ordinary streaming
-job, subscribes to that and republishes `databento_book`, folding the forty
+job, subscribes to that and republishes `eq_orderbook`, folding the forty
 columns into four level-0-first vectors with **the same `.qetl.transform`
 transform the backfill uses**. The fold exists once, in q, with its own worked
 examples; the Python side decides nothing about what a book is.
 
 The handler is not a process.csv row, for the same reason cryptorust is not: a q
 process cannot hold a Databento subscription, so it gets a pidfile and a
-subprocess rather than a `torq.sh` entry. `databento1` *is* a normal row and
-starts with the stack.
+subprocess rather than a `torq.sh` entry. `databento1` *is* a normal row, but
+`startwithall=0`: with no handler running nothing publishes the table it
+subscribes to, so it starts with the handler (`uqs start databento1`) or not at
+all.
 
 ```
-uqs query "select from databento_book" --port 6052   # rdb1
-uqs query "select time, ts_event, sym, price from databento_book" --port 6052
+uqs query "select from eq_orderbook" --port 6052   # rdb1
+uqs query "select time, ts_event, sym, price from eq_orderbook" --port 6052
 ```
 
 Rows carry **both** clocks: `time` is stamped by the tickerplant on receipt,

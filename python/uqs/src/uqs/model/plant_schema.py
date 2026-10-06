@@ -84,7 +84,7 @@ def _publishers(pipelines: Iterable[Any]) -> dict[str, set[str]]:
 
 
 def _generated_schema_content(paths: UqsPaths) -> str:
-    """The vendored database.q's tables, plus uqf's own `quotes`/`wide_book`/
+    """The vendored database.q's tables, plus uqf's own `fx_orderbook`/`wide_orderbook`/
     `mkt_orderbook`/`crypto_book` tables appended - never edited in place, always
     read fresh from the vendored file. stp1's process.csv row (see
     _composed_rows) is pointed at the generated copy this produces

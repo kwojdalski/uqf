@@ -28,7 +28,7 @@ a third lifecycle. Its dispatcher and mapping registry live under
 A private transform may stay beside its job. A shared transform belongs in
 `src/etl/transforms/<name>.q`, under `.qpipe.transform.<name>`; the loader reads
 sources, shared transforms, bounded workers and streaming jobs in that order.
-For example, both Databento jobs use the `databento_book` transform without
+For example, both Databento jobs use the `eq_orderbook` transform without
 requiring either job to own the other's computation.
 
 Framework services use the same root: `.qetl.io`, `.qetl.dag`, `.qetl.reaction`,
@@ -37,30 +37,6 @@ Framework services use the same root: `.qetl.io`, `.qetl.dag`, `.qetl.reaction`,
 writer can live under `.qpipe.io.<name>`. A custom reaction handler can live
 under `.qpipe.reaction.<name>`. The graph is derived from declarations, so there
 is no separate pipeline graph to maintain.
-
-## Updating callers from the previous names
-
-This is a namespace change without compatibility aliases. Update q scripts, IPC
-expressions and sidecar declarations together. Process names, environment
-variables and persisted table schemas are unchanged.
-
-  | Previous root            | Current namespace                                      |
-  | ---                      | ---                                                    |
-  | `qsrc`, `qxf`            | `.qetl.source`, `.qetl.transform`                      |
-  | `qbw`, `qstream`         | `.qetl.job.bounded`, `.qetl.job.stream`                |
-  | `qnorm.define`           | `.qetl.job.stream.normalize`                           |
-  | `qnorm` helpers          | `.qetl.job.stream.normalizer`                          |
-  | `qfeed`                  | `.qpipe.source`                                        |
-  | `qwrk`, `qsub`           | `.qpipe.job`                                           |
-  | `qpipe` adapter          | `.qtorq`                                               |
-  | `qio`, `qodbc`           | `.qetl.io`, `.qetl.io.odbc`                            |
-  | `qdag`, `qreact`         | `.qetl.dag`, `.qetl.reaction`                          |
-  | `qmatz`, `qrun`          | `.qetl.coverage`, `.qetl.run`                          |
-  | `qwcfg`, `qaudit`        | `.qetl.cfg`, `.qetl.cfg.audit`                         |
-  | `qhb`, `qstatus`         | `.qetl.hb`, `.qetl.status`                             |
-  | `qbfstate`, `qwrt`       | `.qetl.job.bounded.state`, `.qetl.job.bounded.runtime` |
-  | `qcont`                  | `.qetl.job.continuous`                                 |
-  | `qcoer`, `qlog`, `qtick` | `.qetl.coerce`, `.qetl.log`, `.qetl.tick`              |
 
 Every declaring function refuses a bad declaration **when the file loads**,
 naming the key, so a mistake below surfaces the first time the tree is loaded

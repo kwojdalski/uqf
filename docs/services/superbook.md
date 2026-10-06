@@ -10,7 +10,7 @@ can name where to buy and where to sell.
 <!-- Source: docs/diagrams/superbook-chain.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
 
-![The chain top to bottom: the quote and quotes tables into marketdata1, which publishes market_data; superbook1 subscribes to that and publishes superbook; arbitrage1 and crossarb1 both subscribe to superbook and publish arbitrage and cross_arbitrage](../diagrams/superbook-chain.svg)
+![The chain top to bottom: the quote and fx_orderbook tables into marketdata1, which publishes market_data; superbook1 subscribes to that and publishes superbook; arbitrage1 and crossarb1 both subscribe to superbook and publish arbitrage and cross_arbitrage](../diagrams/superbook-chain.svg)
 
 Every arrow between a process and a table is a publish or a subscribe, never a
 call: `superbook1` does not invoke `marketdata1`, it subscribes to the table
@@ -46,8 +46,9 @@ place that states them.
 Being a closed chain is what makes starting and stopping it as a set safe.
 `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1`,
 and `arbitrage` by nothing, so the three start and stop together and no
-default-start job notices either way. Their own inputs, `quote` and `quotes`,
-are published by `fxfeed1` and `quotesfeed1`, which do run by default.
+default-start job notices either way. Their own inputs, `quote` and
+`fx_orderbook`, are published by `fxfeed1` and `fxorderbookfeed1`, which do run
+by default.
 
 ## Source contract
 
@@ -63,8 +64,8 @@ are published by `fxfeed1` and `quotesfeed1`, which do run by default.
   | `bid_sizes`, `ask_sizes`   | Available **base-currency** quantities aligned with prices |
 
 `quote.src` becomes `source`; scalar prices and sizes become one-level vectors.
-The existing single-publisher `quotes` demo feed is mapped to `UQFDEPTH`. These
-two feeds have no exchange event timestamp, so the adapter preserves their
+The existing single-publisher `fx_orderbook` demo feed is mapped to `UQFDEPTH`.
+These two feeds have no exchange event timestamp, so the adapter preserves their
 original plant receipt time as `source_time`. Non-FX symbols on the shared
 `quote` table are filtered out.
 
@@ -72,8 +73,9 @@ A new feed can publish this canonical shape, or add a source mapping to
 `src/etl/streaming/market_data.q` using the existing
 `.qetl.job.stream.normalizer` framework. Use the same source identifier for
 duplicate transports of the same liquidity. Do not interleave another producer
-into the source-less `quotes` table. Incremental feeds must reconstruct a full
-source snapshot first. Use the exchange event time when the feed supplies one.
+into the source-less `fx_orderbook` table. Incremental feeds must reconstruct a
+full source snapshot first. Use the exchange event time when the feed supplies
+one.
 
 Pairs must already use the same orientation, product and settlement date.
 `USDEUR` and `EURUSD` remain different books. This version does not invert pairs

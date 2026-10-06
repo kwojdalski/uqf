@@ -86,7 +86,10 @@ def test_unknown_operator_is_refused_by_the_schema(client, gw):
 def test_vector_column_cannot_be_filtered_on(client, gw):
     resp = client.post(
         "/query",
-        json={"table": "quotes", "filters": [{"column": "bid_prices", "op": "eq", "value": 1.0}]},
+        json={
+            "table": "fx_orderbook",
+            "filters": [{"column": "bid_prices", "op": "eq", "value": 1.0}],
+        },
     )
     assert resp.status_code == 422
     assert "vector" in resp.json()["detail"]

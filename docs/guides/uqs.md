@@ -53,7 +53,7 @@ typing `meta` at a q prompt:
 
 ```
 uqs schema                  # every table on rdb1, with row and column counts
-uqs schema quotes           # one table's columns, types and attributes
+uqs schema fx_orderbook         # one table's columns, types and attributes
 uqs schema 'crypto*'        # every table matching a pattern, one block each
 uqs schema --proc hdb1      # the history instead of today
 uqs schema --port 6052      # a port directly, skipping --proc resolution
@@ -94,9 +94,9 @@ It reads the live process, not `src/etl/plant_tables.q`'s declarations.
 Two things the output says that `meta` alone does not:
 
 - **Case is the vector/atom distinction.** `f` is a float column; `F` is a float
-  *vector* column, one list per row - the shape `quotes` and `mkt_orderbook` are
-  built around and that every pricing function in `src/` expects. They render as
-  `float` and `float vector`.
+  *vector* column, one list per row - the shape `fx_orderbook` and
+  `mkt_orderbook` are built around and that every pricing function in `src/`
+  expects. They render as `float` and `float vector`.
 - **A column's type can change with its contents.** An empty vector column
   reports as `general`, because q cannot know the element type until a row
   exists. The same table reads `general` before its first publish and
@@ -287,33 +287,41 @@ uqs list profiles
 uqs start --profile arbitrage
 uqs start --profile depth,crypto
 uqs start --profile essential      # the TorQ stack alone, no uqf jobs
+uqs start --profile essential vectorize1 cross1   # a profile plus named processes
 UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows it
 ```
+
+Process names given beside `--profile` are added to the set: the profile's
+members, infrastructure first, then the names, each started once. They are not
+widened to what they read - a name whose producer is missing is warned about, as
+on a plain start - and `all` cannot be added. The budget below is checked on the
+whole combined set, so a profile that fits plus names that take it past the cap
+is refused before anything starts. `uqs up` takes the same combination.
 
   | profile     | leaves                                   | slots                           |
   | ---         | ---                                      | ---                             |
   | `default`   | what `start all` runs today              | 13/14                           |
-  | `fx`        | `posbook1`, `markout1`, `fxpositions1`   | 12/14                           |
+  | `fx`        | `posbook1`, `markout1`, `fxpositions1`   | 13/14                           |
   | `arbitrage` | `arbitrage1`, `crossarb1`                | 10/14                           |
   | `depth`     | `vectorize1`, `cross1`                   | 8/14                            |
   | `crypto`    | `cryptomock1`                            | 5/14                            |
-  | `essential` | none - the TorQ stack alone (see below)  | 2/14                            |
-  | `all`       | every profile's leaves except `crypto`'s | 20/14 - refused on this licence |
+  | `essential` | none - the TorQ stack alone (see below)  | 3/14                            |
+  | `all`       | every profile's leaves except `crypto`'s | 19/14 - refused on this licence |
 
 **A profile over the cap is refused**; a positional `start` over it is only
-warned about. `fx` and `arbitrage` each fit and together need seventeen:
+warned about. `fx` and `arbitrage` each fit and together need sixteen:
 
 ```
 $ uqs start --profile fx,arbitrage
-profile(s) arbitrage, fx need 17 tickerplant connections, and only 14 are
+profile(s) arbitrage, fx need 16 tickerplant connections, and only 14 are
 available (16 on this licence, 2 held back for ad-hoc handles). ...
 ```
 
 **`all` needs a larger licence, and says so.** It is every standing set at once -
 the union of the other profiles' leaves, derived so a new leaf joins it
-automatically - and that holds twenty plant connections, more than the community
-licence has. On that licence it is refused like any profile over the cap. On a q
-licence that allows more concurrent connections, say how many with
+automatically - and that holds nineteen plant connections, more than the
+community licence has. On that licence it is refused like any profile over the
+cap. On a q licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
 is held to - `--profile`, `uqs list profiles`' `fits` column and the
 positional-start warning. On PeachQ (`UQF_Q_IMPL=peachq`, see the README's
@@ -327,16 +335,17 @@ not start `cryptomock1`, which replaces cryptorust's recorder rather than
 joining it.
 
 **`essential` is the TorQ stack with nothing on top**: `discovery1`, `stp1`,
-`rdb1`, `hdb1`, `hdb2`, `wdb1`, `gateway1`, `monitor1` and `housekeeping1` -
-nine processes, two plant slots. It is the one profile that starts less than the
-full infrastructure: no chained plant (`sctp1`), no `metrics1`, and no sort
-processes (`sort1`, `sortworker1`, `sortworker2`). The day still rolls over
-without them: at end of day `wdb1` looks for a sort process, logs
-`can't connect to the sortandreload - no sortandreload process detected` as an
-error, and sorts the writedown into the HDB itself - so expect that error line,
-and `wdb1` busy while it sorts. Composing it with a job profile -
+`rdb1`, `hdb1`, `hdb2`, `wdb1`, `sort1`, `sortworker1`, `sortworker2`,
+`gateway1`, `monitor1`, `housekeeping1` and `metrics1` - thirteen processes,
+three plant slots (`rdb1`, `wdb1` and `metrics1` subscribe). It is the one
+profile that starts less than the full infrastructure: only the chained plant
+(`sctp1`) is left out. At end of day `wdb1` hands its writedown to `sort1`,
+which sorts it into the HDB across the two workers, so `wdb1` stays free.
+`tpreplay1` is never in a profile: it is the one-shot replay
+[`data replay`](#replaying-a-tickerplant-log) starts with a log to replay, and
+started without one it exits at once. Composing `essential` with a job profile -
 `--profile essential,fx` - starts the full infrastructure that job profile
-needs, sort processes included.
+needs.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.
@@ -412,8 +421,9 @@ uqs summary --sort Status --columns status
 
 ```
 ┃ Process      ┃ Depends on                  ┃ Inputs                ┃ Outputs        ┃
-│ posbook1     │ executions1, marks1         │ executions, marks     │ position       │
-│ databento1   │ (databento_mbp10: external) │ databento_mbp10       │ databento_book │
+│ posbook1     │ executions1, marketdata1    │ executions,           │ position       │
+│              │                             │ market_data           │                │
+│ databento1   │ (databento_mbp10: external) │ databento_mbp10       │ eq_orderbook │
 │ executions1  │ fxtradesfeed1, cryptomock1, │ trades, crypto_trades │ executions     │
 │              │ (crypto_trades: external)   │                       │                │
 │ upstream_    │ (upstream_trades: external) │ upstream_trades       │ imported_trades│
@@ -553,7 +563,7 @@ them through the CLI's own coloured logger:
 uqs logs                          # last 20 lines per process, all processes
 uqs logs stp1 rdb1 -n 50          # last 50 lines each, merged and time-sorted
 uqs logs -f                       # the last 20 lines, then live, Ctrl-C to stop
-uqs logs quotesfeed1 -f --level WARNING   # live tail, warnings/errors only
+uqs logs fxorderbookfeed1 -f --level WARNING   # live tail, warnings/errors only
 ```
 
 Lines are sorted by the log's own timestamp. `-f` keeps following across
@@ -594,25 +604,25 @@ Every uqf process script - `torq_stream.q` (every streaming job),
 `torq_backfill.q`, `torq_tap.q`, `run_stream.q` - logs the stages where it can
 stall, so the last line in `uqs logs <procname>` says where it stopped:
 
-  | Last line                                                                   | What it means                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-  | ---                                                                         | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-  | `qtorq: loading uqf tree from ...` with no `loaded in` after it             | a q file failed to load - the error follows, or is in `err_<procname>.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-  | `starting streaming job`                                                    | the job and what it subscribes to and publishes, logged before anything can block                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-  | `waiting for the tickerplant - if this is the last line, it is not running` | `stp1` is down: `uqs start stp1`. This used to wait forever in silence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-  | `subscribing` / `streaming job wired - running`                             | subscribed and running                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-  | no `first batch received` for a table                                       | nothing is arriving on it: its publisher is down or publishes nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-  | `first batch received` but no `first rows published`                        | input arrives and the job publishes nothing from it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-  | `on_batch failed`                                                           | the job's handler threw, with the table and the error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-  | `backfill process failed` then `backtrace`                                  | a backfill's error, and where it happened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-  | `no credential - running on the source's fixture` (WARN)                    | a backfill is publishing the fixture, not live data. The line names the variable (`UQF_SOURCE_CRED_<SOURCE>`), what its value should be for that source - an ODBC connection string, or `host:port` for kdb+ - and an example. Export it in the shell you run `uqs backfill` from, or put it in `.envrc` (loaded by uqs once `direnv allow`ed)                                                                                                                                                                                                            |
-  | `hdb reload: could not open a handle to every registered hdb` (ERR)         | a backfill wrote its rows and the running HDB has not reloaded them. `registered` is how many HDBs discovery knows, `opened` how many let this process in; TorQ's own `connection to ... failed: access` line just before says it was refused. A backfill connects as the ETL identity (`appconfig/passwords/metrics.txt`) unless `passwords/backfill.txt` or `<procname>.txt` gives it its own - see its `outbound credential` line at startup. `hdb reload requested` now reports `registered`, `opened` and `reloaded`, so `0 0 0` is "no HDB running" |
-  | `idle - every window in the range is already covered`                       | nothing to do at this `--version`: coverage says the range is done. A new source release is a new version                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-  | `checkpoint is for another run - starting from the beginning`               | the range or version changed since the last run, so its checkpoint does not apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-  | `state file unreadable - using the previous generation` (WARN)              | a cursor, checkpoint or ledger file did not parse - a crash mid-write, a full disk, a hand edit - and its `.bak` was used instead: at most one page or window is done again                                                                                                                                                                                                                                                                                                                                                                               |
-  | `load_checkpoint: ... is unreadable ... and so is its .bak`                 | neither generation of a backfill's checkpoint parses. `uqs remove checkpoint WORKER` starts the run over; windows already in the coverage ledger are still skipped                                                                                                                                                                                                                                                                                                                                                                                        |
-  | `retrying after a transport error`                                          | the source failed transiently; the attempt, backoff and error follow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+  | Last line                                                                    | What it means                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+  | ---                                                                          | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | `qtorq: loading uqf tree from ...` with no `loaded in` after it              | a q file failed to load - the error follows, or is in `err_<procname>.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+  | `starting streaming job`                                                     | the job and what it subscribes to and publishes, logged before anything can block                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+  | `waiting for the tickerplant - if this is the last line, it is not running`  | `stp1` is down: `uqs start stp1`. This used to wait forever in silence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+  | `subscribing` / `streaming job wired - running`                              | subscribed and running                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+  | no `first batch received` for a table                                        | nothing is arriving on it: its publisher is down or publishes nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+  | `first batch received` but no `first rows published`                         | input arrives and the job publishes nothing from it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | `on_batch failed`                                                            | the job's handler threw, with the table and the error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+  | `backfill process failed` then `backtrace`                                   | a backfill's error, and where it happened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+  | `no credential - running on the source's fixture` (WARNING)                  | a backfill is publishing the fixture, not live data. The line names the variable (`UQF_SOURCE_CRED_<SOURCE>`), what its value should be for that source - an ODBC connection string, or `host:port` for kdb+ - and an example. Export it in the shell you run `uqs backfill` from, or put it in `.envrc` (loaded by uqs once `direnv allow`ed)                                                                                                                                                                                                            |
+  | `hdb reload: could not open a handle to every registered hdb` (ERROR)        | a backfill wrote its rows and the running HDB has not reloaded them. `registered` is how many HDBs discovery knows, `opened` how many let this process in; TorQ's own `connection to ... failed: access` line just before says it was refused. A backfill connects as the ETL identity (`appconfig/passwords/metrics.txt`) unless `passwords/backfill.txt` or `<procname>.txt` gives it its own - see its `outbound credential` line at startup. `hdb reload requested` now reports `registered`, `opened` and `reloaded`, so `0 0 0` is "no HDB running" |
+  | `idle - every window in the range is already covered`                        | nothing to do at this `--version`: coverage says the range is done. A new source release is a new version                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+  | `checkpoint is for another run - starting from the beginning`                | the range or version changed since the last run, so its checkpoint does not apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+  | `state file unreadable - using the previous generation` (WARNING)            | a cursor, checkpoint or ledger file did not parse - a crash mid-write, a full disk, a hand edit - and its `.bak` was used instead: at most one page or window is done again                                                                                                                                                                                                                                                                                                                                                                               |
+  | `load_checkpoint: ... is unreadable ... and so is its .bak`                  | neither generation of a backfill's checkpoint parses. `uqs remove checkpoint WORKER` starts the run over; windows already in the coverage ledger are still skipped                                                                                                                                                                                                                                                                                                                                                                                        |
+  | `retrying after a transport error`                                           | the source failed transiently; the attempt, backoff and error follow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-**More detail - the DBG level** - adds the process's pid, port and cwd, the
+**More detail - the DEBUG level** - adds the process's pid, port and cwd, the
 subscription result, the tables the tickerplant defines, every timer installed,
 and every batch and publish with running totals. A backfill adds its
 declaration, stage timings, and the ETL core's own decisions: the coverage gaps
@@ -672,7 +682,7 @@ process listing: 47 line(s)
 configured ports for 46 process(es)
 monitor1 not reached; Heartbeat column is a monitoring gap, not a verdict
 parsed 46 row(s): 23 up, 23 down
-starved process(es): executions1, marks1
+starved process(es): executions1, marketdata1
 ```
 
 It also prints each process's load time on its latest start:

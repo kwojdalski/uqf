@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -25,6 +25,7 @@ UQF_ROOT = Path(__file__).resolve().parents[3]
 _WRITE = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q
+\\l src/etl/core/intervals.q
 \\l src/etl/core/materialisation.q
 \\l src/etl/core/run.q
 \\l src/etl/core/status.q
@@ -133,6 +134,7 @@ def test_a_run_that_never_finished_has_no_counts(ledger, paths):
 _OLD_LEDGER = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q
+\\l src/etl/core/intervals.q
 \\l src/etl/core/materialisation.q
 \\l src/etl/core/run.q
 \\l src/etl/core/status.q
@@ -184,3 +186,14 @@ def test_migrate_upgrades_a_ledger_from_before_the_range_and_counts(tmp_path, pa
 def test_bad_arguments_are_refused_before_q_sees_them(ledger, paths, call, message):
     with pytest.raises(UqsError, match=message):
         call(paths, ledger)
+
+
+def test_a_bound_reaches_q_as_the_same_instant_in_utc():
+    """The one q-timestamp formatter. Its predecessor here formatted the wall
+    time it was handed, so a +02:00 bound was spliced two hours late."""
+    warsaw = datetime(2026, 9, 13, 2, 0, tzinfo=timezone(timedelta(hours=2)))
+    assert runs.to_q_timestamp(warsaw) == "2026.09.13D00:00:00.000000000"
+    assert runs.to_q_timestamp(datetime(2026, 9, 13, tzinfo=UTC)) == "2026.09.13D00:00:00.000000000"
+    assert runs.to_q_timestamp(datetime(2026, 9, 13)) == "2026.09.13D00:00:00.000000000", (
+        "a naive datetime is UTC here, not this machine's local time"
+    )

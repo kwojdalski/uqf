@@ -58,15 +58,15 @@ def test_definition_refuses_an_unknown_table():
         schemas.definition("no_such_table")
 
 
-def test_the_wide_book_levels_are_paired_and_contiguous_from_zero():
+def test_the_wide_orderbook_levels_are_paired_and_contiguous_from_zero():
     # .qbook.derive_level_groups finds levels by a prefix plus a CONTIGUOUS
     # digit suffix, so a gap yields a shorter book rather than an error, and
     # a bid level with no ask is a book nothing can price. Read from the q
     # definition, which is the only place the level count is stated.
-    definition = schemas.definition("wide_book")
+    definition = schemas.definition("wide_orderbook")
     bids = [int(n) for n in re.findall(r"\bbids(\d+):", definition)]
     asks = [int(n) for n in re.findall(r"\basks(\d+):", definition)]
-    assert bids, "wide_book declares no bid levels"
+    assert bids, "wide_orderbook declares no bid levels"
     assert bids == list(range(len(bids)))
     assert asks == bids
 

@@ -12,7 +12,7 @@ If your rows come from a timer rather than a subscription you want
 ## Command
 
 ```bash
-uqs job new spreadmon --subscribe-to quotes \
+uqs job new spreadmon --subscribe-to fx_orderbook \
     --publishes spread_bps --columns "sym:symbol, spread:float"
 ```
 
@@ -29,13 +29,13 @@ scaffold spreadmon:
   create tests/q/test_spreadmon.q (20 lines)
   append to tests/run_tests.q (1 line)
   note: implement .qpipe.job.spreadmon.on_batch, then replace the scaffolded test
-  note: start it with its producers: quotes
+  note: start it with its producers: fx_orderbook
 ```
 
-That last note is the one to read. `quotes` has a producer --- `quotesfeed1` ---
-and an etl started without it subscribes **successfully**, heartbeats, reports
-`up`, and receives nothing. There is no error and no symptom except an output
-table that stays empty.
+That last note is the one to read. `fx_orderbook` has a producer ---
+`fxorderbookfeed1` --- and an etl started without it subscribes
+**successfully**, heartbeats, reports `up`, and receives nothing. There is no
+error and no symptom except an output table that stays empty.
 
 ## What you get
 
@@ -52,7 +52,7 @@ on_batch:{[t;x]
 
 .qetl.job.stream.define[`spreadmon;`procname`subscribe_to`publishes`on_batch`note!(
     `spreadmon1;
-    `quotes;
+    `fx_orderbook;
     enlist `spread_bps;
     .qpipe.job.spreadmon.on_batch;
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
@@ -94,7 +94,7 @@ it to a recorder and reads the job's output as data. Use
 
 ```q
 .qetl.job.stream.wire[`spreadmon; {[t;x] `.mytest.published set (t;x); count x}];
-.qpipe.job.spreadmon.on_batch[`quotes; fixture];
+.qpipe.job.spreadmon.on_batch[`fx_orderbook; fixture];
 .qunit.assertEquals[count last .mytest.published; 3; "one row per quoted pair"];
 ```
 

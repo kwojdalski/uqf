@@ -126,6 +126,19 @@ literal:{[v]
       '"literal: no SQL rendering for type ",string[t],
        " - refusing rather than guessing, because a wrong rendering is usually still valid SQL"]}
 
+/ A timestamp as DuckDB SQL for the same instant, to the nanosecond:
+/ make_timestamp_ns over epoch nanoseconds, the long going through `literal`.
+/ .
+/ Not `literal` on the timestamp itself: that is SingleStore's DATETIME(6)
+/ form, which drops the sub-second part, and a window bound that loses its
+/ nanoseconds fetches rows either side of the window. Every DuckDB source
+/ cuts its windows with this - databento_mbp10 and duckdb_deals each had
+/ their own copy, byte for byte.
+/ @param ts a timestamp
+/ @return SQL text for the same instant
+/ @eg .qetl.io.odbc.duckdb_timestamp[2026.09.11D09:00:00.000000001]  ->  "make_timestamp_ns(1789117200000000001)"
+duckdb_timestamp:{[ts] "make_timestamp_ns(",literal["j"$ts-1970.01.01D00:00],")"}
+
 / ------------------------------------------------------- CONNECTING
 
 / Build a SingleStore connection string from its parts.
@@ -199,13 +212,13 @@ with_connection:{[conn;f]
 / handler never fired, and the first live caller found out when `meta` on
 / the "table" failed. Found the first time this file ran against a driver.
 / .
-/ The statement is logged at TRC (.qetl.log.trace) before it is sent - so a
+/ The statement is logged at TRACE (.qetl.log.trace) before it is sent - so a
 / query that hangs is in the log - and again with the rows and milliseconds
 / when it returns. Every ODBC source sends through here, so this is the one
 / place a backfill's SQL is visible.
 run_sql:{[h;sql]
     require_available[];
-    if[not .qetl.log.enabled`TRC;
+    if[not .qetl.log.enabled`TRACE;
         :.[{[hd;st] .odbc.eval[hd;st]};(h;sql);
           {[sql;e] '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql]]];
     t0:.z.p;
