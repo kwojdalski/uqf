@@ -93,6 +93,14 @@ def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(fake_paths: Uqs
     assert (fake_paths.torqdata / "logs").is_dir()
 
 
+def test_bootstrap_writes_dqe_its_query_list(fake_paths: UqsPaths, monkeypatch):
+    """The generated copy dqe1 is pointed at (stack/dqe.py), written beside
+    process.csv and database.q on every bootstrap."""
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    runtime.bootstrap(fake_paths, base_port=7000)
+    assert "meta_quotes_by_sym" in fake_paths.generated_dqe_config.read_text()
+
+
 def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
@@ -1653,6 +1661,58 @@ def test_gateway1_loads_the_desk_catalog_after_its_own_script():
     )
 
 
+def test_hdb1_loads_the_metatables_after_its_database():
+    """DQE sends `.dqe.uqf_metatable` to hdb1 by value and it runs there, so
+    `.qmeta` has to be loaded on hdb1 - after the database, which the vendored
+    `load` column names and must stay first."""
+    real = stack_paths.default_paths()
+    vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
+    upstream = {row["procname"]: row["load"] for row in csv.DictReader(io.StringIO(vendored))}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
+
+    assert composed["hdb1"]["load"].split() == [
+        upstream["hdb1"],
+        "${UQF_ROOT}/src/metadata/metatables.q",
+    ]
+
+
+def test_dqe1_is_pointed_at_the_generated_config_before_its_own_script_loads():
+    """dqe.q reads `.dqe.configcsv` once, as it loads, keeping a value that is
+    already set - so the file that sets it must come FIRST, and the adapter it
+    schedules after."""
+    real = stack_paths.default_paths()
+    vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
+    upstream = {row["procname"]: row["load"] for row in csv.DictReader(io.StringIO(vendored))}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
+
+    assert composed["dqe1"]["load"].split() == [
+        "${UQF_SCRIPTS}/processes/uqs_dqe_config.q",
+        upstream["dqe1"],
+        "${UQF_ROOT}/src/metadata/metatables.q",
+        "${UQF_SCRIPTS}/processes/torq_metatables.q",
+    ]
+
+
+def test_every_overlaid_file_exists():
+    """A path in the `load` column that does not exist fails only when that
+    process starts - and dqe1 does not start with the stack."""
+    real = stack_paths.default_paths()
+    roots = {"${UQF_ROOT}": real.repo_root, "${UQF_SCRIPTS}": real.scripts_dir}
+    for before, after in stack_procs.VENDORED_LOAD_OVERLAY.values():
+        for entry in (*before, *after):
+            var, rest = entry.split("/", 1)
+            assert (roots[var] / rest).is_file(), entry
+
+
+def test_dqe1_still_does_not_start_with_the_stack():
+    """Starting DQE is a separate decision from wiring it: dqe.q subscribes to
+    the tickerplant, and stp1's inbound budget has one slot to spare."""
+    real = stack_paths.default_paths()
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
+    assert composed["dqe1"]["startwithall"] == "0"
+    assert composed["dqedb1"]["startwithall"] == "0"
+
+
 def test_the_load_overlay_touches_no_other_process():
     """A vendored row this tree does not mean to change must come through
     byte-identical - the failure mode of a field-level overlay is reaching
@@ -1666,7 +1726,7 @@ def test_the_load_overlay_touches_no_other_process():
     }
     composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
     for procname, original in vendored.items():
-        if procname == "gateway1":
+        if procname in stack_procs.VENDORED_LOAD_OVERLAY:
             continue
         assert composed[procname]["load"] == original, f"{procname}'s load column was altered"
 

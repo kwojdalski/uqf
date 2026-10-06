@@ -23,6 +23,7 @@ from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive
 from uqs.stack import render as stack_render
+from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env
 from uqs.stack.procs import effective_process_rows
 
@@ -130,6 +131,10 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
     # Same extend-never-edit approach as process.csv above, for stp1's
     # -schemafile (see _generated_schema_content/_composed_rows).
     paths.generated_schema.write_text(_generated_schema_content(paths))
+
+    # Same again for DQE's query list: the vendored rows plus this tree's
+    # metatables, which dqe1 is pointed at (stack/dqe.py).
+    write_dqe_config(paths)
 
     # Make the HDB rectangular, now that database.q says what it should
     # hold. A partitioned kdb+ database needs every table in every

@@ -210,22 +210,49 @@ result:
 
 ## TorQ DQE integration
 
-Load both files on the DQE process and each target HDB:
+The stack wires this in. DQE itself stays off with `uqs start`, for the reason
+[uqs.md](uqs.md#what-actually-starts) gives, so start it when you want the
+metatables built:
 
-```q
-\l src/metadata/metatables.q
-\l scripts/processes/torq_metatables.q
+```sh
+uqs start dqe1 dqedb1
 ```
 
-The adapter returns a dictionary of metatable name to result table. It can be
-called directly on the HDB:
+From then on DQE builds every metatable in its query list at 04:30 UTC, each
+from the previous day's partition on `hdb1`, and stores it in DQEDB's
+`advancedres`. One is defined:
+
+  | Metatable            | From     | Grouped by | Measurements                      |
+  | ---                  | ---      | ---        | ---                               |
+  | `meta_quotes_by_sym` | `quotes` | `sym`      | `rows`, `first_time`, `last_time` |
+
+What uqs sets up for it, on every command:
+
+- `hdb1` loads `src/metadata/metatables.q` after its database. DQE sends
+  `.dqe.uqf_metatable` to `hdb1` by value and it runs there.
+- `dqe1` loads `scripts/processes/uqs_dqe_config.q` before its own script, and
+  `metatables.q` and the adapter, `scripts/processes/torq_metatables.q`, after
+  it.
+- `$TORQDATA/dqengineconfig.csv` is the starter pack's query list with this
+  tree's metatables appended. `uqs_dqe_config.q` points DQE at it; the vendored
+  file is not edited.
+
+To add a metatable, append a row to `UQF_DQE_ROWS` in
+[`python/uqs/src/uqs/stack/dqe.py`](../../python/uqs/src/uqs/stack/dqe.py). Its
+`params` are the adapter's six arguments as q - name, table, partition column,
+partitions, group columns, aggregates - and must hold no comma, because DQE
+reads the file as plain comma-separated text. DQE `value`s them each time it
+arms its timers, at start and at every end of day, so `.z.d-1` is the day just
+finished.
+
+The adapter can also be called directly on an HDB that has both files loaded:
 
 ```q
 .dqe.uqf_metatable[`meta_trade_by_market;`trade;`date;
     2026.09.01 2026.09.02;`sym`venue;()!()]
 ```
 
-Or submitted through existing DQE transport from a configured DQE process:
+Or submitted through DQE's own transport from `dqe1`:
 
 ```q
 .dqe.runquery[`.dqe.uqf_metatable;
@@ -233,12 +260,11 @@ Or submitted through existing DQE transport from a configured DQE process:
     `table;enlist`hdb1]
 ```
 
-Use the actual configured process name in place of `hdb1`. DQE reflects the
-adapter's `tab` parameter into `advancedres.table` and records its name in
-`resultkeys`. The nested `resultdata` retains **source partition values**;
-DQEDB's own storage date is not the source partition date. DQE persistence
-retains its own append/history semantics; `.qmeta.refresh` does not mutate DQEDB
-or change DQE's retention policy. No TorQ files are patched.
+DQE reflects the adapter's `tab` parameter into `advancedres.table` and records
+its name in `resultkeys`. The nested `resultdata` retains **source partition
+values**; DQEDB's own storage date is not the source partition date. DQE
+persistence retains its own append/history semantics; `.qmeta.refresh` does not
+mutate DQEDB or change DQE's retention policy. No TorQ files are patched.
 
 ## Verification
 
@@ -252,5 +278,7 @@ in a fresh KDB-X process. Tests cover exact totals, eFX grouping, custom
 aggregates, empty slices, repeat refresh and the adapter result shape. Unit
 tests additionally cover disappearing groups, failed refreshes, schema changes,
 redefined aggregates, invalid inputs, logical symbol partitions, and every
-`reconcile` status against an in-memory coverage ledger. The full live DQE
+`reconcile` status against an in-memory coverage ledger.
+`python/uqs/tests/test_dqe_config.py` reads the generated query list as DQE does
+and runs each of this tree's rows through the adapter. The full live DQE
 transport and DQEDB lifecycle are not exercised by these tests.
