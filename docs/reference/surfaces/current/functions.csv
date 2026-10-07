@@ -625,6 +625,7 @@ qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,bound_padding,value,,
 qetl.source,call_text,function,1,f
+qetl.source,check_table,function,5,source what columns types tbl
 qetl.source,coerce,function,2,source tbl
 qetl.source,coercers,dict,,
 qetl.source,column_names,function,1,tbl
@@ -636,6 +637,7 @@ qetl.source,define,function,2,source decl
 qetl.source,defined,function,1,
 qetl.source,fetch_window,function,4,source h range_from range_to
 qetl.source,has_credentials,function,1,source
+qetl.source,input_names,function,1,source
 qetl.source,ipc,function,4,h f range_from range_to
 qetl.source,ipc_call,function,3,h f args
 qetl.source,load_zone_table,function,1,path
@@ -653,6 +655,7 @@ qetl.source,nonexistent_message,function,2,tz bad
 qetl.source,offset_at,function,2,tz ts
 qetl.source,offsets_for,function,1,tz
 qetl.source,optional_declarations,dict,,
+qetl.source,primary,function,2,source fetched
 qetl.source,require_credentials,function,1,source
 qetl.source,require_zone_table,function,1,tz
 qetl.source,required_declarations,value,,
@@ -665,8 +668,10 @@ qetl.source,type_chars,function,1,tbl
 qetl.source,utc_to_local,function,2,tz ts
 qetl.source,validate,function,2,source tbl
 qetl.source,validate_fixture,function,1,source
+qetl.source,validate_inputs,function,3,source decl given
 qetl.source,validate_live,function,2,source h
 qetl.source,window_fixture,function,3,decl range_from range_to
+qetl.source,window_rows,function,4,decl t range_from range_to
 qetl.source,zone_names,value,,
 qetl.source,zone_table,table,,
 qetl.status,legal_transitions,dict,,
@@ -1180,6 +1185,7 @@ qpipe.job.hdb_demo_markouts_backfill,quality_check,function,1,batch
 qpipe.job.hdb_demo_markouts_backfill,range_from,value,,
 qpipe.job.hdb_demo_markouts_backfill,range_to,value,,
 qpipe.job.hdb_demo_markouts_backfill,run,function,1,
+qpipe.job.hdb_demo_markouts_backfill,score,function,2,fills quotes
 qpipe.job.hdb_demo_markouts_backfill,source_version,value,,
 qpipe.job.hdb_demo_markouts_backfill,spec,function,1,
 qpipe.job.hdb_transfer_backfill,checkpoint,function,1,cursor
@@ -1345,13 +1351,12 @@ qpipe.source.duckdb_deals,tz,value,,
 qpipe.source.hdb_demo_markouts,columns,value,,
 qpipe.source.hdb_demo_markouts,fixture,function,1,
 qpipe.source.hdb_demo_markouts,lookback,value,,
-qpipe.source.hdb_demo_markouts,none,table,,
 qpipe.source.hdb_demo_markouts,query,function,3,h range_from range_to
 qpipe.source.hdb_demo_markouts,raw_fills,function,1,
 qpipe.source.hdb_demo_markouts,raw_quotes,function,1,
 qpipe.source.hdb_demo_markouts,row_key,value,,
-qpipe.source.hdb_demo_markouts,score,function,2,deals quotes
 qpipe.source.hdb_demo_markouts,source_name,value,,
+qpipe.source.hdb_demo_markouts,supporting,dict,,
 qpipe.source.hdb_demo_markouts,target,value,,
 qpipe.source.hdb_demo_markouts,time_column,value,,
 qpipe.source.hdb_demo_markouts,types,value,,

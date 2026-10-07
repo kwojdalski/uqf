@@ -556,4 +556,65 @@ test_with_trace_off_a_request_is_only_sent:{[t]
     .qunit.assertEquals[(r;.qetl.log.request_seq;count lines);(([] x:1 2);before;0);
         "the query runs, and nothing is numbered, formatted or logged"]};
 
+
+/ --- supporting inputs (#617) ----------------------------------------------
+
+/ The declaration above, with one supporting input `q`: a primary `ext` of
+/ two rows (days 1 and 5) and a quote row on day 0, before any window.
+sup:{[] enlist[`q]!enlist ([] ts:`timestamp$(); bid:`float$())}
+decl2:{[]
+    d:@[.srctest.decl[];`fixture;:;
+        {`ext`q!(([] ts:.srctest.d 1 5; px:1.5 2.5);([] ts:enlist .srctest.d 0; bid:enlist 1.1))}];
+    / An amend, not a join with `enlist`: enlisting a dict makes a one-row table.
+    @[d;`supporting;:;.srctest.sup[]]}
+
+test_a_source_can_declare_supporting_inputs:{[t]
+    .qetl.source.define[`t;.srctest.decl2[]];
+    .qunit.assertEquals[.qetl.source.input_names `t;`ext`q;"the primary, then each supporting input"]};
+
+test_a_source_without_supporting_inputs_has_one:{[t]
+    .qetl.source.define[`t;.srctest.decl[]];
+    .qunit.assertEquals[.qetl.source.input_names `t;enlist `ext;"as every source before #617"]};
+
+test_a_supporting_input_must_be_a_table:{[t]
+    bad:@[.srctest.decl2[];`supporting;:;enlist[`q]!enlist 1];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};bad;"*must each be a table*";"a contract is an empty table"]};
+
+test_a_supporting_input_cannot_be_the_primary:{[t]
+    bad:@[.srctest.decl2[];`supporting;:;enlist[`ext]!enlist ([] ts:`timestamp$())];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};bad;"*its own table_name*";
+        "the primary is described by columns and types, so it cannot also be supporting"]};
+
+test_a_zoned_source_cannot_declare_supporting_inputs:{[t]
+    bad:@[.srctest.decl2[];`tz;:;`$"Europe/London"];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};bad;"*need tz `UTC*";
+        "only the primary is converted to UTC, so a supporting table would be read in the wrong clock"]};
+
+test_a_source_with_supporting_inputs_returns_a_dict:{[t]
+    .qetl.source.define[`t;.srctest.decl2[]];
+    .qunit.assertThrows[{.qetl.source.validate[`t;x]};([] ts:enlist .srctest.d 1; px:enlist 1.5);
+        "*must return a dict of ext, q*";"a bare table is not both inputs"]};
+
+test_every_input_must_be_returned:{[t]
+    .qetl.source.define[`t;.srctest.decl2[]];
+    .qunit.assertThrows[{.qetl.source.validate[`t;x]};enlist[`ext]!enlist ([] ts:enlist .srctest.d 1; px:enlist 1.5);
+        "*must return input(s) ext, q*";"a missing supporting input is refused, not read as empty"]};
+
+test_a_supporting_input_is_held_to_its_own_contract:{[t]
+    .qetl.source.define[`t;.srctest.decl2[]];
+    got:`ext`q!(([] ts:enlist .srctest.d 1; px:enlist 1.5);([] ts:enlist .srctest.d 0; bid:enlist `x));
+    .qunit.assertThrows[{.qetl.source.validate[`t;x]};got;"*input q does not satisfy its contract*";
+        "a supporting input whose type changed is a contract breach too"]};
+
+test_both_inputs_validate_together:{[t]
+    .qetl.source.define[`t;.srctest.decl2[]];
+    .qunit.assertTrue[.qetl.source.validate_fixture `t;"the fixture's two inputs satisfy their two contracts"]};
+
+test_only_the_primary_input_is_cut_to_the_window:{[t]
+    .qetl.source.define[`t;.srctest.decl2[]];
+    got:last .qetl.source.fetch_window[`t;0Ni;.srctest.d 1;.srctest.d 2];
+    .qunit.assertEquals[(count got`ext;count got`q);(1;1);
+        "day 5 is outside the window, and day 0's quote is kept: supporting rows are context"];
+    .qunit.assertEquals[.qetl.source.primary[`t;got];got`ext;"the primary is the window's own rows"]};
+
 \d .

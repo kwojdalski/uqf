@@ -4,13 +4,21 @@
 / No HDB is needed. The live path is driven through a stand-in handle that
 / evaluates each query against in-memory `trades` and `quote` tables, so what
 / is proven is everything on this side of the wire: which two queries a
-/ window sends, over which bounds, and how their rows are scored. The full
-/ lifecycle (init, run, idle second run, dry run) is test_every_worker_runs.q's,
-/ which drives this worker with every other.
+/ window sends, over which bounds, and which rows come back. The scoring is
+/ the worker's transform (#617), so it is asserted through that - the same
+/ call a window makes. The full lifecycle (init, run, idle second run, dry
+/ run) is test_every_worker_runs.q's, which drives this worker with every
+/ other.
 
 \d .mbftest
 
 spec_for:{[version;from_ts;to_ts] `source_version`range_from`range_to!(version;from_ts;to_ts)}
+
+/ Two inputs, scored as a window scores them.
+scored:{[inputs] .qetl.transform.apply[`hdb_demo_markouts_score;inputs]}
+
+/ The fixture's fills and quotes, scored.
+scored_fixture:{[] scored .qpipe.source.hdb_demo_markouts.fixture[]}
 
 / The fixture's day: its fills are at 10:00:00-10:00:07 and 23:59:59.
 day:{[] (2026.09.17D00:00:00.000000000;2026.09.18D00:00:00.000000000)}
@@ -25,7 +33,7 @@ setUp_fresh:{[]
     .qetl.cfg.reset[];
     .qetl.cfg.set_layers[()!();()!();()!()];
     setenv[`UQF_DRY_RUN;""];
-    setenv[`UQF_SOURCE_CRED_HDB_MARKOUTS;""];
+    setenv[`UQF_SOURCE_CRED_HDB_DEMO_MARKOUTS;""];
     .qetl.job.bounded.state.release_lock `hdb_demo_markouts_backfill;
     .qetl.job.bounded.state.clear_checkpoint `hdb_demo_markouts_backfill;
     `demo_execution_quality set 0#.qetl.plant.shape `demo_execution_quality;
@@ -36,7 +44,7 @@ tearDown_release:{[] .qpipe.job.hdb_demo_markouts_backfill.cleanup[];}
 / --- scoring --------------------------------------------------------------
 
 test_every_fill_is_scored_at_every_live_horizon:{[t]
-    f:.qpipe.source.hdb_demo_markouts.fixture[];
+    f:.mbftest.scored_fixture[];
     .qunit.assertEquals[(count f;asc distinct f`horizon);(4*count .qpipe.job.demo_markout.horizons;asc .qpipe.job.demo_markout.horizons);
         "four fills, each at the live job's horizons"]};
 
@@ -45,19 +53,36 @@ test_the_horizons_are_the_live_jobs_not_a_copy:{[t]
     / cannot drift apart.
     keep:.qpipe.job.demo_markout.horizons;
     .qpipe.job.demo_markout.horizons:enlist 0D00:00:01;
-    n:count .qpipe.source.hdb_demo_markouts.fixture[];
+    n:count .mbftest.scored_fixture[];
     .qpipe.job.demo_markout.horizons:keep;
     .qunit.assertEquals[n;4;"one horizon, one row per fill"]};
 
 test_a_markout_is_the_live_functions_answer:{[t]
     / EURUSD bought at 1.1001; the 1s mid is (1.1004+1.1006)/2 = 1.1005, so +4 pips.
-    f:.qpipe.source.hdb_demo_markouts.fixture[];
+    f:.mbftest.scored_fixture[];
     r:first select from f where sym=`EURUSD, trade_time=2026.09.17D10:00:00, horizon=0D00:00:01;
     .qunit.assertEquals[(r`ref_price;r`markout_pips);(1.1005;4f);"a buy marked against the later mid"]};
 
+test_the_scoring_is_a_verified_transform:{[t]
+    / #617: the markout is no longer hidden in the source's query, where the
+    / fixture path skipped it - it is a transform whose examples run here.
+    .qunit.assertTrue[all exec passed from .qetl.transform.verify `hdb_demo_markouts_score;
+        "every example, and the empty case, give what was worked by hand"]};
+
+test_no_fills_score_to_nothing_whatever_the_quotes_hold:{[t]
+    inputs:@[.qpipe.source.hdb_demo_markouts.fixture[];`trades;0#];
+    .qunit.assertEquals[.mbftest.scored inputs;0#.qetl.plant.shape `demo_execution_quality;
+        "the primary input owns the window: quotes alone publish nothing"]};
+
+test_the_fixture_is_cut_to_the_window_but_its_quotes_are_not:{[t]
+    / Fills at 10:00:00-10:00:07 and 23:59:59; quotes at 09:59:59-10:00:20.
+    got:last .qetl.source.fetch_window[`hdb_demo_markouts;0Ni;2026.09.17D10:00:00;2026.09.17D10:00:06];
+    .qunit.assertEquals[(count got`trades;count got`quote);(2;6);
+        "two fills in [10:00:00;10:00:06), and every quote, including 09:59:59's before the window"]};
+
 test_a_fill_with_no_later_quote_keeps_a_null_markout:{[t]
     / As the live job does: the gap shows instead of the fill vanishing.
-    f:.qpipe.source.hdb_demo_markouts.fixture[];
+    f:.mbftest.scored_fixture[];
     .qunit.assertEquals[exec count i from f where sym=`GBPUSD, null markout_pips;2;
         "both GBPUSD horizons are null, and present"]};
 
@@ -109,13 +134,15 @@ test_a_window_sends_two_queries_reading_quotes_past_its_end:{[t]
     .qunit.assertEquals[.mbftest.sent 0;w;"fills over the window itself"];
     .qunit.assertEquals[.mbftest.sent 1;(w 0;(w 1)+max .qpipe.job.demo_markout.horizons);
         "quotes on to the window's end plus the longest horizon"];
-    .qunit.assertEquals[count r;6;"the window's three fills, scored at both horizons"]};
+    .qunit.assertEquals[key r;`trades`quote;"both inputs, raw - the scoring is the transform's"];
+    .qunit.assertEquals[count .mbftest.scored r;6;"the window's three fills, scored at both horizons"]};
 
 test_the_live_path_scores_exactly_as_the_fixture_does:{[t]
-    / The fixture is the same scoring over the same rows, so the live path
-    / over the fixture's day must give the same table.
+    / The fixture is the same rows, so the live path over the fixture's day
+    / must score to the same table.
     r:.mbftest.with_hdb {.qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;.mbftest.day[]0;.mbftest.day[]1]};
-    .qunit.assertEquals[`trade_time xasc r;.qpipe.source.hdb_demo_markouts.fixture[];"live and fixture agree"]};
+    .qunit.assertTrue[.qetl.source.validate[`hdb_demo_markouts;r];"the live inputs satisfy both contracts"];
+    .qunit.assertEquals[.mbftest.scored r;.mbftest.scored_fixture[];"live and fixture agree"]};
 
 test_a_fill_early_in_a_window_is_priced_by_the_quote_before_it:{[t]
     / The quote live at 10:00:03 was set at 09:59:50 - before the window.
@@ -128,7 +155,7 @@ test_a_fill_early_in_a_window_is_priced_by_the_quote_before_it:{[t]
             sym:`EURUSD`EURUSD; bid:1.1 1.2; ask:1.1002 1.2002);
         .qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;2026.09.17D10:00;2026.09.17D11:00]};
     r:.mbftest.with_hdb {.mbftest.early[]};
-    .qunit.assertEquals[exec markout_pips from r;1 1f;
+    .qunit.assertEquals[exec markout_pips from .mbftest.scored r;1 1f;
         "both horizons priced against the 09:59:50 mid (1.1001), not null"]};
 
 test_the_quote_before_a_window_is_bounded_by_the_lookback:{[t]
@@ -141,11 +168,39 @@ test_the_quote_before_a_window_is_bounded_by_the_lookback:{[t]
             bid:enlist 1.1; ask:enlist 1.1002);
         .qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;2026.09.17D10:00;2026.09.17D11:00]};
     r:.mbftest.with_hdb {.mbftest.stale[]};
-    .qunit.assertTrue[all null exec markout_pips from r;"sixteen days back is past the 7-day lookback"]};
+    .qunit.assertTrue[all null exec markout_pips from .mbftest.scored r;"sixteen days back is past the 7-day lookback"]};
 
 test_a_window_without_fills_does_not_read_quotes:{[t]
     r:.mbftest.with_hdb {.qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;2026.09.17D12:00:00;2026.09.17D13:00:00]};
-    .qunit.assertEquals[(count .mbftest.sent;count r;cols r);(1;0;cols .qpipe.source.hdb_demo_markouts.fixture[]);
-        "no fills, no quote query - and an empty table of the right shape"]};
+    .qunit.assertEquals[(count .mbftest.sent;count r`trades;count r`quote);(1;0;0);
+        "no fills, no quote query"];
+    .qunit.assertTrue[.qetl.source.validate[`hdb_demo_markouts;r];"and both inputs still in their contracts' shape"]};
+
+
+/ --- a worker on two inputs (#617) -----------------------------------------
+
+test_a_worker_on_two_inputs_needs_a_transform_that_reads_both:{[t]
+    / demo_deals_passthrough reads one input; this source hands over two.
+    err:@[{.qetl.job.bounded.define[`mbftest_one_input;x]; ""};
+        `source`dataset`width`transform!(`hdb_demo_markouts;`mbftest_ds;1D;`demo_deals_passthrough);{x}];
+    .qunit.assertTrue[err like "*must read source hdb_demo_markouts's inputs trades, quote*";
+        "refused at declaration, naming the inputs it must read"]};
+
+test_each_input_is_checked_against_its_own_contract:{[t]
+    / The transform's quote input lacks ask, which the source's quote contract has.
+    .qetl.transform.define[`mbftest_short_quote;`inputs`output`fn`examples!(
+        `trades`quote!((.qetl.transform.def `hdb_demo_markouts_score)[`inputs]`trades;
+            ([] time:`timestamp$(); sym:`symbol$(); bid:`float$()));
+        .qetl.plant.shape `demo_execution_quality;
+        {[f;q] 0#.qetl.plant.shape `demo_execution_quality};
+        enlist `inputs`expected!(
+            `trades`quote!(0#(.qetl.transform.def `hdb_demo_markouts_score)[`inputs]`trades;
+                ([] time:enlist 2026.09.17D10:00; sym:enlist `EURUSD; bid:enlist 1.1));
+            .qetl.plant.shape `demo_execution_quality))];
+    err:@[{.qetl.job.bounded.define[`mbftest_short;x]; ""};
+        `source`dataset`width`transform!(`hdb_demo_markouts;`mbftest_ds;1D;`mbftest_short_quote);{x}];
+    .testutil.drop_rows[`.qetl.transform.registry;`mbftest_short_quote];
+    .qunit.assertTrue[err like "*does not read source hdb_demo_markouts's contracts: quote: *";
+        "the quote input is held to the quote contract, by name"]};
 
 \d .
