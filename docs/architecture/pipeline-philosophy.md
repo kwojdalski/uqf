@@ -276,6 +276,11 @@ Airflow sensor and the frontend poll --- lives in `core/status.q`
 (`.qetl.status`), not in the adapter, because it is not TorQ plumbing: it is a
 cross-repository contract, and its header names its readers.
 
-*Enforced by* `scripts/gates/check_etl_layering.py`, twice: `core/` may not
-reference a declaring namespace (§9), and nothing under `src/etl/` may reference
-`.qtorq`.
+*Enforced by* `scripts/gates/check_etl_layering.py`, three times: `core/` may
+not reference a declaring namespace (§9), nothing under `src/etl/` may reference
+`.qtorq`, and each TorQ facility `src/` reads has one owner file. Logging
+(`.lg`) is read only in `core/log.q`, connected services (`.servers`) only in
+`core/worker_runtime.q`, and the process name (`.proc`) only in `core/run.q`'s
+`.qetl.run.proc_name`. Every other file goes through those, so where the ETL
+asks TorQ, and what it does when TorQ is absent, is decided once per facility
+(#619).

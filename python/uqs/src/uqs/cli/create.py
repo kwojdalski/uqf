@@ -127,14 +127,15 @@ def new_job(
         ),
     ] = False,
     transport: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--transport",
-            help="How a new backfill source is reached: 'ipc' (a q process), 'odbc', "
-            "or 'local' (an HDB directory on this machine, read from its files)",
-            autocompletion=completion.choices("ipc", "odbc", "local"),
+            help="How a new backfill source is reached - one of the transports "
+            ".qetl.source registers (docs/reference/surfaces/current/transports.csv); "
+            "default: the default transport there, a q process",
+            autocompletion=completion.transports,
         ),
-    ] = "ipc",
+    ] = None,
     period: Annotated[
         str | None,
         typer.Option("--period", help="Timer period: a feed's tick, or an etl's added on_timer"),
@@ -240,7 +241,7 @@ def new_job(
                 "--width": width is not None,
                 "--procname": procname is not None,
                 "--start-with-all": start_with_all,
-                "--transport": transport != "ipc",
+                "--transport": transport is not None,
                 "--period": period is not None,
                 "--poll": poll,
                 "--cursor-fields": cursor_fields is not None,
@@ -256,7 +257,7 @@ def new_job(
     # Options that shape one kind only are refused on the others, not ignored.
     only = {
         "backfill": {
-            "--transport": transport != "ipc",
+            "--transport": transport is not None,
             "--partition": partition is not None,
             "--check": check,
             "--dataset": dataset is not None,

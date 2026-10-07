@@ -18,7 +18,10 @@ The line worth knowing is the one between the first two bands. **No q file under
 `src/` knows TorQ exists** --- that is what lets a worker be tested against a
 recorder instead of a tickerplant --- and exactly one namespace is allowed to,
 `.qtorq` in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build if
-anything under `src/etl/` reaches for it.
+anything under `src/etl/` reaches for it. The core does *read* three of TorQ's
+facilities when they are there - logging, connected services and the process
+name - each from one owner file and with a plain-q fallback, and the same gate
+holds each read to its file.
 
 For the *running* stack --- who connects to whom --- see
 [`architecture/stack.md`](architecture/stack.md), and for ports the generated

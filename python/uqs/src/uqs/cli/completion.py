@@ -24,6 +24,7 @@ from typing import Any
 import typer
 
 from uqs import paths as stack_paths
+from uqs.model import transports as registered_transports
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.profiles import PROFILES
 from uqs.model.registry import DEFAULT_BASE_PORT
@@ -108,6 +109,12 @@ def process_ports(ctx: typer.Context) -> list[tuple[str, str]]:
 @_never_raises
 def profiles(incomplete: str) -> list[str]:
     return _comma_list(PROFILES, incomplete)
+
+
+@_never_raises
+def transports() -> list[str]:
+    """Every transport .qetl.source registers, from the contract surface."""
+    return list(registered_transports.names())
 
 
 @_never_raises

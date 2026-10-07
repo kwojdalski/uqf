@@ -1,0 +1,15 @@
+"name","default","expects","example","query_note"
+"ipc","1","host:port, or host:port:user:password","localhost:5010","/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).
+/ The bounds are arguments to a functional select evaluated on the remote
+/ side, so no caller value is ever spliced into query text. Send it with
+/ .qetl.source.ipc[h;{[from_ts;to_ts] select ...};range_from;range_to], not
+/ h(...) directly, so `uqs backfill --trace` shows the query."
+"odbc","0","an ODBC connection string","DRIVER=<driver>;<driver-specific settings>","/ `h` is an ODBC handle from .qetl.io.odbc.open. Build the SELECT with every
+/ bound through .qetl.io.odbc.literal - never string concatenation of a raw
+/ value - run it with .qetl.io.odbc.run_sql, and return the declared columns
+/ and types (src/etl/sources/duckdb_deals.q's sql_for and adapt)."
+"local","0","the path of an HDB directory on this machine","/path/to/hdb","/ `h` is the HDB directory, read from its files with no process in between.
+/ Send the query with .qetl.source.local[h;{[read;from_ts;to_ts] ...};range_from;range_to]:
+/ read[`table;from_ts;to_ts] returns the whole date partitions the window
+/ touches, symbols decoded against the HDB's own sym file - filter the rows
+/ to [from_ts;to_ts) yourself."

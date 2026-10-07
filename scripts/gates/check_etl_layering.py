@@ -26,6 +26,15 @@ writer used to live there and `backfill_state.q` called it, which is why
 not be loaded. A dependency that has to be guarded against being absent is
 pointing the wrong way, and this stops it coming back.
 
+The third rule is about who reads TorQ (#619). src/ may read TorQ's own
+facilities - that is what runs it - but each one has ONE owner file: logging
+(`.lg`) is src/etl/core/log.q, service discovery (`.servers`) is
+src/etl/core/worker_runtime.q, and process identity (`.proc`) is
+src/etl/core/run.q's `.qetl.run.proc_name`. Every other file goes through
+those. Before, the process name was read four times in three files, each
+with its own fallback, and nothing stopped a fifth. TorQ stays the authority;
+this only says where src/ asks it.
+
 STRING AND COMMENT AWARE, and it has to be. `bounded_worker.q` names
 `.qpipe.job.demo_deals_backfill` inside an error message ("ns must be a namespace symbol such as
 `.qpipe.job.demo_deals_backfill"), which is documentation, not a dependency. A naive search reports
@@ -51,6 +60,17 @@ DECLARING_DIRS = ("sources", "transforms", "workers", "streaming")
 #: The TorQ adapter. Lives in scripts/ because it is the one place TorQ is
 #: allowed; nothing under src/etl/ may reach it.
 ADAPTER_NS = ".qtorq"
+
+#: Each TorQ namespace src/ may read, and the one file allowed to read it.
+TORQ_OWNERS = {
+    ".lg": "src/etl/core/log.q",
+    ".servers": "src/etl/core/worker_runtime.q",
+    ".proc": "src/etl/core/run.q",
+}
+
+#: A reference to one of them: `.lg.l`, `` `.proc ``. Not `.qetl.run.proc_name`
+#: or `.foo.lg.x`, where the name is a segment of another namespace.
+TORQ_RE = re.compile(r"(?<![\w.])(" + "|".join(re.escape(ns) for ns in TORQ_OWNERS) + r")\b")
 
 #: A namespace declaration, e.g. `\d .qpipe.job.demo_deals_backfill`.
 NAMESPACE_RE = re.compile(
@@ -115,6 +135,20 @@ def strip_comments_and_strings(text: str) -> str:
     return "\n".join(out_lines)
 
 
+def torq_reach(root: Path) -> list[str]:
+    """Every read of a TorQ namespace in `root`'s src/ outside its owner file."""
+    hits = []
+    for path in sorted((root / "src").rglob("*.q")):
+        rel = path.relative_to(root).as_posix()
+        code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
+        for lineno, line in enumerate(code.splitlines(), 1):
+            for match in TORQ_RE.finditer(line):
+                ns = match.group(1)
+                if TORQ_OWNERS[ns] != rel:
+                    hits.append(f"{rel}:{lineno}: reads {ns} - only {TORQ_OWNERS[ns]} may")
+    return hits
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="accepted for symmetry")
@@ -161,6 +195,22 @@ def main() -> int:
         )
         return 1
 
+    absent = [owner for owner in TORQ_OWNERS.values() if not (REPO / owner).is_file()]
+    if absent:
+        print(f"error: TorQ owner file(s) missing: {', '.join(absent)}", file=sys.stderr)
+        return 1
+    torq_hits = torq_reach(REPO)
+    if torq_hits:
+        print("src/ reads a TorQ facility outside the file that owns it:", file=sys.stderr)
+        for v in torq_hits:
+            print(f"  {v}", file=sys.stderr)
+        print(
+            "\n#619: go through the owner - .qetl.log for logging, .qetl.job.bounded.runtime\n"
+            "for connected services, .qetl.run.proc_name for this process's name.",
+            file=sys.stderr,
+        )
+        return 1
+
     if violations:
         print("src/etl/core/ must not depend on sources/ or workers/:", file=sys.stderr)
         for v in violations:
@@ -176,7 +226,8 @@ def main() -> int:
 
     print(
         f"check_etl_layering: {len(list(CORE.glob('*.q')))} core file(s) depend on none "
-        f"of the {len(declared)} declaring namespace(s); nothing under src/etl/ calls {ADAPTER_NS}"
+        f"of the {len(declared)} declaring namespace(s); nothing under src/etl/ calls "
+        f"{ADAPTER_NS}; each of {', '.join(TORQ_OWNERS)} is read only by its owner file"
     )
     return 0
 
