@@ -66,6 +66,26 @@ test_every_job_is_registered:{[t]
         `symbol$();
         "each job file registers itself as it loads"]};
 
+/ The job files whose top-level code - run as the file loads - names another
+/ job's namespace. src/etl/init.q loads the directory alphabetically and in
+/ no other order, so such a file aborts or depends on its name sorting
+/ later. Schemas come from .qetl.plant, which loads first (#731).
+/ @param dir a declaration directory
+/ @return `file:line text` strings, one per offending line
+peer_reads_at_load:{[dir]
+    raze {[dir;nm]
+        lines:read0 `$":",dir,"/",string[nm],".q";
+        top:where {[l] (0<count l) and not (first l) in " \t/\\"} each lines;
+        own:".qpipe.job.",string[nm],".";
+        bad:top where {[own;l] (l like "*.qpipe.job.*") and not l like "*",own,"*"}[own] each lines top;
+        bad:bad where not {[l] any l like/: ("*.define[[]*";"*.normalize[[]*";"*.audit.watch[[]*")} each lines bad;
+        {[nm;i;l] string[nm],".q:",string[1+i],": ",l}[nm]'[bad;lines bad]
+      }[dir] each .testutil.etl_declaration_names dir}
+
+test_no_job_reads_a_peer_job_at_load:{[t]
+    .qunit.assertEquals[peer_reads_at_load "src/etl/streaming";();
+        "a job's load-time code reads the plant's schemas, never another job's namespace"]};
+
 / The jobs src/ registered, taken as this file LOADS rather than when a test
 / runs. Every suite loads before any of them runs (.testutil.load_suites),
 / and test jobs - .qpipe.job.nt_k, regtest_feed and friends - register only inside
