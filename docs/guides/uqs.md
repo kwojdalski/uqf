@@ -122,9 +122,9 @@ the pattern, or the shell will try to expand it against your filenames first.
 and options. The sections below cover what `--help` cannot.
 
 `PROCS` is `all` (the default) or one or more process names, each its own word -
-`uqs start posbook1 markout1` - which is what lets TAB complete them. A single
-quoted `"posbook1 markout1"` still works. `--port` sets `KDBBASEPORT` (default
-`6050`, see the port table below). `--export FILE` (on
+`uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
+single quoted `"posbook1 demo_markout1"` still works. `--port` sets
+`KDBBASEPORT` (default `6050`, see the port table below). `--export FILE` (on
 `summary`/`query`/`list`/`config get`) additionally writes the same rows to
 `FILE` as CSV or Parquet, format inferred from the extension; a result that is
 not a table, such as `count t`, is refused.
@@ -346,15 +346,15 @@ on a plain start - and `all` cannot be added. The budget below is checked on the
 whole combined set, so a profile that fits plus names that take it past the cap
 is refused before anything starts. `uqs up` takes the same combination.
 
-  | profile     | leaves                                   | slots                           |
-  | ---         | ---                                      | ---                             |
-  | `default`   | what `start all` runs today              | 13/14                           |
-  | `fx`        | `posbook1`, `markout1`, `fxpositions1`   | 13/14                           |
-  | `arbitrage` | `arbitrage1`, `crossarb1`                | 10/14                           |
-  | `depth`     | `vectorize1`, `cross1`                   | 8/14                            |
-  | `crypto`    | `cryptomock1`                            | 5/14                            |
-  | `essential` | none - the TorQ stack alone (see below)  | 4/14                            |
-  | `all`       | every profile's leaves except `crypto`'s | 19/14 - refused on this licence |
+  | profile     | leaves                                        | slots                           |
+  | ---         | ---                                           | ---                             |
+  | `default`   | what `start all` runs today                   | 13/14                           |
+  | `fx`        | `posbook1`, `demo_markout1`, `fxpositions1`   | 13/14                           |
+  | `arbitrage` | `arbitrage1`, `crossarb1`                     | 10/14                           |
+  | `depth`     | `vectorize1`, `cross1`                        | 8/14                            |
+  | `crypto`    | `cryptomock1`                                 | 5/14                            |
+  | `essential` | none - the TorQ stack alone (see below)       | 4/14                            |
+  | `all`       | every profile's leaves except `crypto`'s      | 19/14 - refused on this licence |
 
 **A profile over the cap is refused**; a positional `start` over it is only
 warned about. `fx` and `arbitrage` each fit and together need sixteen:

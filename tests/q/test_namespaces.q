@@ -197,7 +197,7 @@ test_the_subscriber_processes_are_inside_the_prefix:{[t]
     / Named specifically, because these three are what the general rule above
     / was written for and a regression here would otherwise read as a count.
     declared:distinct declared_namespaces[];
-    .qunit.assertEquals[all `.qpipe.job.cross`.qpipe.job.markout`.qpipe.job.posbook in declared;1b;
+    .qunit.assertEquals[all `.qpipe.job.cross`.qpipe.job.demo_markout`.qpipe.job.posbook in declared;1b;
         "the tickerplant subscriber processes declare their namespaces under .qpipe.job"]};
 
 / Private: the process scripts - the files TorQ starts as a process, as

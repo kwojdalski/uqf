@@ -85,10 +85,10 @@ def test_status_file_name_matches_the_q_writer():
 
 
 def test_reads_a_completed_run(tmp_path):
-    write_status_file(tmp_path, "markout1")
-    status = read_status_file(status_file_path(tmp_path, "markout1"))
+    write_status_file(tmp_path, "demo_markout1")
+    status = read_status_file(status_file_path(tmp_path, "demo_markout1"))
     assert status.worker == "markout_backfill"
-    assert status.instance_id == "markout1"
+    assert status.instance_id == "demo_markout1"
     assert status.state == "completed"
     assert status.error is None
     assert status.terminal

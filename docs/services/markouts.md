@@ -1,14 +1,20 @@
 # Execution quality (markouts)
 
 How good was each fill? A markout compares a fill's price with the market mid a
-short time after it. If you bought and the mid then rose, the fill was good. Two
-processes write markouts, into one table:
+short time after it. If you bought and the mid then rose, the fill was good.
 
-- **`markout1`**, live, scores fills as they stream past.
-- **`hdb_markouts_backfill1`**, bounded, scores a window of fills already in the
-  HDB: the ones `markout1` never saw.
+Two markout paths, for two kinds of fill:
 
-![The live and backfill markout paths: each scores fills with the same function and horizons, and both write execution_quality](../diagrams/markouts.svg)
+- **Real crypto fills**: `crypto_markout1` scores cryptorust's real fills
+  (`crypto_trades`) in basis points into `crypto_execution_quality`. See [Real
+  fills](#real-fills-crypto_markout1) below.
+- **The demo's FX fills**: two processes write `demo_execution_quality`, for the
+  invented pairs the demo's own feeds publish onto `trades` and `quote`:
+  - **`demo_markout1`**, live, scores fills as they stream past.
+  - **`hdb_demo_markouts_backfill1`**, bounded, scores a window of fills already
+    in the HDB: the ones `demo_markout1` never saw.
+
+![The live and backfill markout paths: each scores fills with the same function and horizons, and both write demo_execution_quality](../diagrams/markouts.svg)
 
 ## What both compute
 
@@ -18,14 +24,14 @@ markout is `side × pip_factor × (ref_price − trade_price)`, in pips: positiv
 means the market moved in your favour after the fill.
 
 Both jobs use the same function and the same horizons:
-`.qexec.markout_at_horizons`, with `.qpipe.job.markout.horizons`. The backfill
-reads the horizons at run time, so changing them in `markout.q` changes both
-jobs, and a fill scored by both comes out identical.
+`.qexec.markout_at_horizons`, with `.qpipe.job.demo_markout.horizons`. The
+backfill reads the horizons at run time, so changing them in `demo_markout.q`
+changes both jobs, and a fill scored by both comes out identical.
 
 A fill with no quote after it keeps a row with a null `ref_price` and
 `markout_pips`, rather than being dropped, so the gap shows.
 
-## The table: `execution_quality`
+## The table: `demo_execution_quality`
 
   | column         | meaning                                                        |
   | ---            | ---                                                            |
@@ -41,25 +47,25 @@ The backfill writes keyed on **`sym, trade_time, horizon`**. A fill that both
 jobs scored, or a window the backfill writes twice (a second `--version`), is
 replaced, not counted twice.
 
-## `markout1`, live
+## `demo_markout1`, live
 
-`markout1` (`src/etl/streaming/markout.q`) subscribes to `trades` and `quote` on
-`stp1`. It can't score a fill the moment it arrives, because the quote at
-`trade_time + 10s` doesn't exist yet. So it buffers fills and quotes, and once a
-second it scores the fills whose longest horizon has passed. It publishes the
-rows through `stp1`, and end of day saves them to the HDB.
+`demo_markout1` (`src/etl/streaming/demo_markout.q`) subscribes to `trades` and
+`quote` on `stp1`. It can't score a fill the moment it arrives, because the
+quote at `trade_time + 10s` doesn't exist yet. So it buffers fills and quotes,
+and once a second it scores the fills whose longest horizon has passed. It
+publishes the rows through `stp1`, and end of day saves them to the HDB.
 
 The buffers live in its process. A fill it never saw, because it was down or
 restarting, or because the fill predates it, is never scored by it.
 
-## `hdb_markouts_backfill1`, the backfill
+## `hdb_demo_markouts_backfill1`, the backfill
 
 A bounded job: give it a range, and it scores every fill in the HDB inside it.
 
 ```
 export UQF_SOURCE_CRED_HDB_MARKOUTS=localhost:<hdb1's port>   # 6053 at the default base port
-uqs backfill hdb_markouts_backfill --version v1 --from 2026-09-01 --to 2026-09-30
-uqs logs hdb_markouts_backfill1 -f
+uqs backfill hdb_demo_markouts_backfill --version v1 --from 2026-09-01 --to 2026-09-30
+uqs logs hdb_demo_markouts_backfill1 -f
 ```
 
 Without the variable it runs on its fixture, a small built-in data set. That is
@@ -67,7 +73,7 @@ what tests and `--mode plan`/`--mode dry-run` use. `--trace` shows the two
 queries each window sends to the HDB.
 
 For each window `[from, to)`, one hour wide by default, the source
-`.qpipe.source.hdb_markouts` (`src/etl/sources/hdb_markouts.q`):
+`.qpipe.source.hdb_demo_markouts` (`src/etl/sources/hdb_demo_markouts.q`):
 
 1. reads the fills with `trade_time` in `[from, to)` from the HDB's `trades`;
 2. reads, for the traded pairs, the quotes in `[from, to + 10s)` from `quote`,
@@ -79,10 +85,11 @@ For each window `[from, to)`, one hour wide by default, the source
    returns an empty table;
 3. scores them with the shared function.
 
-The worker (`src/etl/workers/hdb_markouts_backfill.q`) then does what every
+The worker (`src/etl/workers/hdb_demo_markouts_backfill.q`) then does what every
 bounded worker does: - checks the rows (an infinite markout fails the window); -
-writes them into `execution_quality`'s partitions; - records the window in the
-coverage ledger, so a rerun of the same range is idle; - asks the HDB to reload.
+writes them into `demo_execution_quality`'s partitions; - records the window in
+the coverage ledger, so a rerun of the same range is idle; - asks the HDB to
+reload.
 
 ### Why it is built this way
 
@@ -98,3 +105,32 @@ coverage ledger, so a rerun of the same range is idle; - asks the HDB to reload.
   (`duckdb_deals`, `demo_deals`) aren't marked out yet. They store sides as
   `buy`/`sell`, use `rate` rather than `trade_price`, and carry no `pip_factor`,
   so they'd need a mapping step first.
+
+## Real fills: `crypto_markout1`
+
+`crypto_markout1` (`src/etl/streaming/crypto_markout.q`) subscribes to
+`crypto_trades` and `crypto_book`. It scores only real fills: it never reads
+`crypto_sim_fills`, because simulated and real execution are kept apart. Like
+`demo_markout1`, it buffers fills and books and, once a second, scores the fills
+whose 10s horizon has passed.
+
+What differs from the demo job:
+
+- **The reference is the best mid across venues.** At `trade_time + horizon`,
+  each venue's latest top of book counts unless it is more than five seconds old
+  (`.qpipe.job.crypto_markout.max_age`). The highest bid and lowest ask over the
+  venues left give the mid. A venue that went quiet does not set the price.
+- **Basis points, not pips.**
+  `markout_bps = side × 10000 × (ref_price − trade_price) / trade_price`.
+  Positive means the market moved in your favour, as in the demo job.
+- **Both clocks are the plant's.** A fill's `time` and a book's `time` are both
+  this tickerplant's receipt stamps. Real fills are polled from cryptorust, so a
+  fill's time can trail the trade by the poll interval.
+
+A fill with no live book at a horizon keeps its row, with a null `ref_price` and
+`markout_bps`. `crypto_execution_quality` carries `sym`, `venue`, `fill_id`,
+`trade_time`, `horizon`, `side`, `trade_price`, `ref_price` and `markout_bps`.
+
+It does not start with the stack. `uqs start --profile crypto` starts it with
+`cryptomock1`; next to cryptorust's real recorders, start it on its own. There
+is no HDB backfill for it yet.

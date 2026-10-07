@@ -162,6 +162,23 @@ test_the_quality_check_names_a_latency_that_cannot_be:{[t]
     r:.qpipe.job.crypto_market_data_backfill.quality_check .qpipe.transform.crypto_market_data.to_book f;
     .qunit.assertEquals[r`check;enlist `negative_latency;"a running minimum above the sample it bounds"]};
 
+test_the_quality_check_names_a_negative_latency:{[t]
+    f:update latency_ms:-1f from .qpipe.source.crypto_market_data.fixture[] where latency_count=2;
+    r:.qpipe.job.crypto_market_data_backfill.quality_check .qpipe.transform.crypto_market_data.to_book f;
+    .qunit.assertEquals[r`check;enlist `negative_latency;"a sample below zero"]};
+
+/ #734: q orders a null below every number, so `0n<0` and `5f>0n` are both
+/ 1b - and a row with no latency sample failed the window as negative.
+test_a_missing_latency_sample_is_absent_not_negative:{[t]
+    f:update latency_ms:0n, latency_min_ms:0n from .qpipe.source.crypto_market_data.fixture[] where latency_count=2;
+    r:.qpipe.job.crypto_market_data_backfill.quality_check .qpipe.transform.crypto_market_data.to_book f;
+    .qunit.assertEquals[count r;0;"a sample nobody took is not a negative one"]};
+
+test_a_missing_sample_under_a_known_minimum_is_absent_not_negative:{[t]
+    f:update latency_ms:0n from .qpipe.source.crypto_market_data.fixture[] where latency_count=2;
+    r:.qpipe.job.crypto_market_data_backfill.quality_check .qpipe.transform.crypto_market_data.to_book f;
+    .qunit.assertEquals[count r;0;"a running minimum is not above a sample that is not there"]};
+
 test_an_unquoted_level_is_absent_not_wrong:{[t]
     f:update bid_price_1:0n, ask_price_1:0n from .qpipe.source.crypto_market_data.fixture[];
     r:.qpipe.job.crypto_market_data_backfill.quality_check .qpipe.transform.crypto_market_data.to_book f;

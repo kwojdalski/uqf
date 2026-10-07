@@ -68,15 +68,15 @@ latest:select by sym from cross_arbitrage;
 select from latest where active
 ```
 
-  | column                             | meaning                                                                         |
-  | ---                                | ---                                                                             |
-  | `route`                            | the legs the synthetic price was built from, in traversal order                 |
-  | `direct_price` / `synthetic_price` | the two sides being compared, at `size`                                         |
-  | `gross_edge`                       | their difference, in the quote currency per base unit                           |
-  | `gross_profit`                     | `size × gross_edge`                                                             |
-  | `fully_filled`                     | whether the notional can be worked through **every** leg                        |
-  | `skew`                             | how far apart the legs of the route were quoted                                 |
-  | `as_of`                            | the **oldest** leg's timestamp — a synthetic price is as old as its stalest leg |
+  | column                             | meaning                                                                                        |
+  | ---                                | ---                                                                                            |
+  | `route`                            | the legs the synthetic price was built from, in traversal order                                |
+  | `direct_price` / `synthetic_price` | the two sides being compared, at `size`                                                        |
+  | `gross_edge`                       | their difference, in the quote currency per base unit                                          |
+  | `gross_profit`                     | `size × gross_edge`                                                                            |
+  | `fully_filled`                     | whether the notional can be worked through **every** leg                                       |
+  | `skew`                             | how far apart the direct book and the route's legs were quoted                                 |
+  | `as_of`                            | the **oldest** book's timestamp, direct or leg — an opportunity is as old as its stalest price |
 
 ### Two columns to read first
 
@@ -89,9 +89,10 @@ unfillable "profit" is the main way a detector like this lies.
 **`skew`.** A synthetic price multiplies legs quoted at different moments.
 `superbook`'s own expiry does not prevent a two-second-old EURUSD being combined
 with a fresh USDJPY, which manufactures an edge out of nothing but elapsed time.
-Legs further apart than `.qpipe.job.cross_arbitrage.max_skew` (2 seconds) are
-published with `active=0b` and their `skew` filled in --- present so it can be
-seen, rather than dropped.
+Legs further apart than `.qpipe.job.cross_arbitrage.max_skew` are published with
+`active=0b` and their `skew` filled in --- present so it can be seen, rather
+than dropped. The two bounds are separate: `superbook`'s `max_age` limits how
+old any leg can be, `max_skew` how far apart the legs can be.
 
 ## What it does not claim
 

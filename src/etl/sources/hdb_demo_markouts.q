@@ -1,9 +1,9 @@
-/ hdb_markouts.q - our fills, marked out against quotes, from the local HDB (.qpipe.source.hdb_markouts).
+/ hdb_demo_markouts.q - our fills, marked out against quotes, from the local HDB (.qpipe.source.hdb_demo_markouts).
 / .
-/ The live markout job (src/etl/streaming/markout.q) scores fills as they
+/ The live markout job (src/etl/streaming/demo_markout.q) scores fills as they
 / stream past, from buffers that die with its process, so a fill it never
 / saw - it was down, restarting, or the fill predates it - is never marked
-/ out. This source is what hdb_markouts_backfill reads instead: for a window of
+/ out. This source is what hdb_demo_markouts_backfill reads instead: for a window of
 / fills, both of what the HDB holds -
 / .
 /   `trades  the fills the executions job published and end of day saved,
@@ -15,7 +15,7 @@
 /            quiet across the window's start (looked back up to `lookback`)
 / .
 / - scored by the SAME function at the SAME horizons as the live job
-/ (.qexec.markout_at_horizons, .qpipe.job.markout.horizons), so a fill
+/ (.qexec.markout_at_horizons, .qpipe.job.demo_markout.horizons), so a fill
 / scored both ways scores identically.
 / .
 / Why the scoring is in the source and not a transform: a bounded worker's
@@ -31,15 +31,15 @@
 / Live: export UQF_SOURCE_CRED_HDB_MARKOUTS=localhost:<hdb1's port> in the
 / shell `uqs backfill` runs from. Without it, the fixture below is used.
 
-\d .qpipe.source.hdb_markouts
+\d .qpipe.source.hdb_demo_markouts
 
-source_name:`hdb_markouts
+source_name:`hdb_demo_markouts
 
-/ execution_quality's published columns: one row per fill per horizon.
+/ demo_execution_quality's published columns: one row per fill per horizon.
 columns:`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 types:"pspnfff"
 
-target:`execution_quality
+target:`demo_execution_quality
 time_column:`trade_time
 
 / A fill at one horizon. The table carries no fill id, so two fills of one
@@ -53,11 +53,11 @@ tz:`UTC
 / @param deals rows of the HDB's trades: sym time side trade_price pip_factor
 / @param quotes rows of the HDB's quote: sym time bid ask
 / @return one row per fill per horizon, as .qexec.markout_at_horizons
-/ @eg count .qpipe.source.hdb_markouts.score[.qpipe.source.hdb_markouts.raw_fills[];.qpipe.source.hdb_markouts.raw_quotes[]] -> 8
+/ @eg count .qpipe.source.hdb_demo_markouts.score[.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[]] -> 8
 score:{[deals;quotes]
     .qexec.markout_at_horizons[deals;
         select sym, time, mid:0.5*bid+ask from quotes;
-        .qpipe.job.markout.horizons]}
+        .qpipe.job.demo_markout.horizons]}
 
 / A window with no fills: the contract's columns, empty.
 none:([] time:`timestamp$(); sym:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$();
@@ -96,13 +96,13 @@ query:{[h;range_from;range_to]
         inwin:select time, sym, bid, ask from `quote
             where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts, sym in syms;
         `time xasc before,inwin
-      }[distinct deals`sym;lookback];range_from;range_to+max .qpipe.job.markout.horizons];
+      }[distinct deals`sym;lookback];range_from;range_to+max .qpipe.job.demo_markout.horizons];
     score[deals;quotes]}
 
 / Four fills on 2026.09.17: EURUSD both ways, a USDJPY buy, and a GBPUSD
 / fill with no quote after it, so a null markout is part of the fixture.
 / @return the fills, as the HDB's trades holds them
-/ @eg count .qpipe.source.hdb_markouts.raw_fills[] -> 4
+/ @eg count .qpipe.source.hdb_demo_markouts.raw_fills[] -> 4
 raw_fills:{[]
     ([] time:2026.09.17D10:00:00.000000000 2026.09.17D10:00:05.000000000
              2026.09.17D10:00:07.000000000 2026.09.17D23:59:59.000000000;
@@ -113,7 +113,7 @@ raw_fills:{[]
 
 / Quotes around raw_fills, as the HDB's quote holds them.
 / @return quotes on 2026.09.17, sorted by time
-/ @eg count .qpipe.source.hdb_markouts.raw_quotes[] -> 6
+/ @eg count .qpipe.source.hdb_demo_markouts.raw_quotes[] -> 6
 raw_quotes:{[]
     ([] time:2026.09.17D09:59:59.000000000 2026.09.17D10:00:01.000000000
              2026.09.17D10:00:06.500000000 2026.09.17D10:00:07.500000000

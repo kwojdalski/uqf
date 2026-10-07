@@ -60,7 +60,7 @@ def test_a_process_already_typed_is_not_offered_again():
 
 
 def test_process_names_still_complete_after_an_option():
-    assert complete("uqs start posbook1 --port 6050 marko") == ["markout1"]
+    assert complete("uqs start posbook1 --port 6050 demo_m") == ["demo_markout1"]
 
 
 def test_several_processes_reach_the_stack_as_one_space_separated_string(monkeypatch):

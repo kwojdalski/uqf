@@ -42,12 +42,12 @@ def test_rows_are_parsed_with_ports_resolved(tmp_path):
     path = write_csv(
         tmp_path,
         "localhost,{KDBBASEPORT}+1,discovery,discovery1,,1,0,,,x.q,1,,q",
-        "localhost,{KDBBASEPORT}+31,metrics,markout1,,0,0,,,y.q,1,,q",
+        "localhost,{KDBBASEPORT}+31,metrics,demo_markout1,,0,0,,,y.q,1,,q",
     )
     procs = read(path, 6050)
     assert [(p.procname, p.port, p.proctype) for p in procs] == [
         ("discovery1", 6051, "discovery"),
-        ("markout1", 6081, "metrics"),
+        ("demo_markout1", 6081, "metrics"),
     ]
 
 

@@ -8,7 +8,9 @@
 \d .qpipe.job.superbook
 
 publish:.qetl.job.stream.unwired `superbook;
-books:`sym`source xkey .qpipe.job.market_data.market_data
+/ From the plant, not from .qpipe.job.market_data: the plant loads before
+/ every declaration, a peer job does not (#731).
+books:`sym`source xkey .qetl.plant.published `market_data
 superbook:.qetl.plant.published `superbook
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
 max_age:0D00:00:05

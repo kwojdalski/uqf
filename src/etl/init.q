@@ -97,41 +97,31 @@
 / define time, so a worker whose source has not loaded aborts with a bare
 / `.qpipe.source.<name> from inside a declaration that looks fine.
 / .
-/ Within a directory the order is alphabetical, except the names passed as
-/ lead, which load first. Those are the files that read ANOTHER job's table
-/ at load time, to build an empty keyed table from its schema:
-/ .
-/   superbook.q:11        .qpipe.job.market_data.market_data
-/   cross_arbitrage.q:47  .qpipe.job.superbook.superbook
-/ .
-/ Alphabetically superbook sorts AFTER cross_arbitrage, so a plain glob
-/ aborts there. A name in lead with no matching file throws rather than being
-/ ignored - a stale entry that silently does nothing is how an ordering rots.
+/ Within a directory the order is alphabetical, and nothing in a directory
+/ may depend on another file in it at load time. A declaration that needs a
+/ table's schema takes it from .qetl.plant, which loaded above - never from a
+/ peer job's namespace. superbook.q and cross_arbitrage.q once read
+/ .qpipe.job.market_data and .qpipe.job.superbook here, which made this
+/ function take a hand-kept list of files to load first (#731).
 
-etl_load_declarations:{[dir;lead]
-    lead:(),lead;
+etl_load_declarations:{[dir]
     found:key hsym `$dir;
     found:asc found where found like "*.q";
     if[0=count found; '"etl_load_declarations: no .q files under ",dir];
-    leadq:`$string[lead],\:".q";
-    missing:leadq except found;
-    if[count missing;
-        '"etl_load_declarations: ",dir," names ",(", " sv string missing),
-            " first, but no such file"];
-    {system "l ",x} each (dir,"/"),/:string leadq,found except leadq;
+    {system "l ",x} each (dir,"/"),/:string found;
     }
 
-etl_load_declarations["src/etl/sources";`symbol$()];
-etl_load_declarations["src/etl/transforms";`symbol$()];
-etl_load_declarations["src/etl/workers";`symbol$()];
-etl_load_declarations["src/etl/streaming";`market_data`superbook];
+etl_load_declarations "src/etl/sources";
+etl_load_declarations "src/etl/transforms";
+etl_load_declarations "src/etl/workers";
+etl_load_declarations "src/etl/streaming";
 
 / Reactions last: a reaction names the dataset it watches, which a worker above
 / fills. Unlike the four directories above, this one may be absent or hold no q
 / at all - a tree need have no reactions, and `uqs job remove` of the last one
 / leaves the directory empty - so it is loaded only when there is something to
 / load, rather than throwing the way an empty sources/ rightly does.
-if[any (key `:src/etl/reactions) like "*.q"; etl_load_declarations["src/etl/reactions";`symbol$()]];
+if[any (key `:src/etl/reactions) like "*.q"; etl_load_declarations "src/etl/reactions"];
 
 / Local to this file rather than tree API: the load order is init.q's own
 / business, and a helper left in the root namespace is one the enumeration

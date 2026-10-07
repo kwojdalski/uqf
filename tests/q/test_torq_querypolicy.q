@@ -28,7 +28,7 @@ book:`tablename`starttime`endtime`instruments!(`mkt_orderbook;2026.01.01D00:00;2
 refusal:{[p;d] @[{.checkinputs.checkrequest[x;`sym;y];`passed}[p];d;{x}]}
 
 test_every_exposed_table_has_a_policy_for_ordinary_callers:{[t]
-    .qunit.assertEquals[asc exec tablename from shipped where null role;`duckdb_deals`execution_quality`mkt_orderbook;
+    .qunit.assertEquals[asc exec tablename from shipped where null role;`demo_execution_quality`duckdb_deals`mkt_orderbook;
         "the three tables the gateway exposes, each with a default row"]};
 
 test_a_table_without_a_policy_is_refused_with_how_to_get_one:{[t]
@@ -84,16 +84,16 @@ test_an_aggregate_on_a_raw_only_table_is_refused:{[t]
         "querypolicy: mkt_orderbook allows raw and this request is aggregate - drop aggregations*";"raw only"]};
 
 test_a_raw_read_on_an_aggregate_only_table_is_refused:{[t]
-    p:@[policy`execution_quality;`operations;:;enlist`aggregate];
-    d:`tablename`starttime`endtime!(`execution_quality;2026.01.01D00:00;2026.01.01D01:00);
+    p:@[policy`demo_execution_quality;`operations;:;enlist`aggregate];
+    d:`tablename`starttime`endtime!(`demo_execution_quality;2026.01.01D00:00;2026.01.01D01:00);
     .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
-        "querypolicy: execution_quality allows aggregate and this request is raw - send aggregations*";"aggregates only"]};
+        "querypolicy: demo_execution_quality allows aggregate and this request is raw - send aggregations*";"aggregates only"]};
 
 test_only_approved_aggregation_functions_pass_where_a_policy_lists_them:{[t]
-    p:@[policy`execution_quality;`functions;:;`avg`count];
-    d:`tablename`starttime`endtime`aggregations!(`execution_quality;2026.01.01D00:00;2026.01.01D01:00;`avg`max!`markout_pips`markout_pips);
+    p:@[policy`demo_execution_quality;`functions;:;`avg`count];
+    d:`tablename`starttime`endtime`aggregations!(`demo_execution_quality;2026.01.01D00:00;2026.01.01D01:00;`avg`max!`markout_pips`markout_pips);
     .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
-        "querypolicy: execution_quality allows the aggregations avg, count - not max";"max is not on the list"];
+        "querypolicy: demo_execution_quality allows the aggregations avg, count - not max";"max is not on the list"];
     .qunit.assertEquals[refusal[p;@[d;`aggregations;:;enlist[`avg]!enlist`markout_pips]];`passed;"avg is"]};
 
 test_a_parameter_the_policy_cannot_see_into_is_refused:{[t]

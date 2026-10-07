@@ -14,7 +14,7 @@
 / Coverage view - and renaming a persisted table to match
 / a namespace is the tail wagging the dog. A namespace and the table it
 / writes need not share a name; .qpos manages `position` and .qexec writes
-/ `execution_quality` on the same principle.
+/ `demo_execution_quality` on the same principle.
 / .
 / It was `.qcov` until the maintainer pointed out that `scripts/dev/
 / coverage.q` is a completely different module - CODE coverage, `.cov`,

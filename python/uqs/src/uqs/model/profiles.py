@@ -157,9 +157,9 @@ PROFILE_INFRA: dict[str, tuple[str, ...]] = {
 PROFILES: dict[str, tuple[str, ...]] = {
     #: What a `start all` runs today, named so it can be asked about and
     #: diffed. Deliberately NOT the union of the others.
-    "default": ("posbook1", "markout1", "fxpositions1", "fxorderbookfeed1"),
+    "default": ("posbook1", "demo_markout1", "fxpositions1", "fxorderbookfeed1"),
     #: Positions, P&L and execution quality on the FX chain.
-    "fx": ("posbook1", "markout1", "fxpositions1"),
+    "fx": ("posbook1", "demo_markout1", "fxpositions1"),
     #: Cross-source and cross-currency opportunities, three processes deep.
     "arbitrage": ("arbitrage1", "crossarb1"),
     #: The depth-aware book path: a wide feed folded into vector columns, and
@@ -167,7 +167,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "depth": ("vectorize1", "cross1"),
     #: cryptorust's recorders replaced by the in-tree mock. INSTEAD of the
     #: real ones, never alongside - see the module docstring.
-    "crypto": ("cryptomock1",),
+    "crypto": ("cryptomock1", "crypto_markout1"),
     #: No uqf job at all: just ESSENTIAL_INFRA, via PROFILE_INFRA.
     "essential": (),
 }

@@ -123,7 +123,7 @@ bind_fixtures:{[]
     / out of scripts/torq_markout_etl.q as TEXT and re-evaluated, because
     / that file could not be loaded outside TorQ; the job is a src/ file now,
     / so the real table is simply here.
-    `.qpipe.job.markout.pending set .qpipe.job.markout.pending upsert
+    `.qpipe.job.demo_markout.pending set .qpipe.job.demo_markout.pending upsert
         ([] time:2026.01.01D00:00:00.000000000 2026.01.01D00:00:01.000000000;
             sym:`EURUSD`GBPUSD; side:1 -1; trade_price:1.1 1.25;
             size:1000000 500000f; pip_factor:10000 10000);
@@ -184,10 +184,10 @@ assertions:{[] e:examples[]; e where 0<count each e[;3]}
 / tickerplant, a TorQ process, a licensed driver or downloaded market data,
 / none of which a test process has.
 needs_live:([] expr:(
-        ".qtorq.publish[h;`execution_quality;out]";
+        ".qtorq.publish[h;`demo_execution_quality;out]";
         ".qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
         ".qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
-        ".qtorq.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
+        ".qtorq.safe_timer[`demo_markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
         ".qtorq.reload_hdb[]";
         ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]");

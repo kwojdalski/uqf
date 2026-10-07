@@ -48,8 +48,8 @@ These are the library's most-read documentation and its only worked examples.
 They are also, right now, 92 assertions that nothing executes ---
 `grep -rl '@eg' tests/ scripts/` returns nothing. A signature change, a
 return-shape change from wide to keyed, a sign-convention flip, or a
-`col_precedence` reorder silently falsifies them, and the first person to notice
-is a user copying an example that no longer works.
+`apply_col_precedence` reorder silently falsifies them, and the first person to
+notice is a user copying an example that no longer works.
 
 You execute them and report which ones still hold. You do not edit `src/*.q`.
 

@@ -27,8 +27,8 @@ recorder:{[job;t;x]
 
 reset:{[]
     `.sjtest.published set 0#.sjtest.published;
-    `.qpipe.job.markout.pending set 0#.qpipe.job.markout.pending;
-    `.qpipe.job.markout.quote_hist set 0#.qpipe.job.markout.quote_hist;
+    `.qpipe.job.demo_markout.pending set 0#.qpipe.job.demo_markout.pending;
+    `.qpipe.job.demo_markout.quote_hist set 0#.qpipe.job.demo_markout.quote_hist;
     `.qpipe.job.cross.fx_orderbook set 0#.qpipe.job.cross.fx_orderbook;
     `.qpipe.job.cross.crosses set 0#.qpipe.job.cross.crosses;
     `.qpipe.job.cross.unpriced set `symbol$();
@@ -65,6 +65,26 @@ test_every_job_is_registered:{[t]
     .qunit.assertEquals[.testutil.etl_declaration_names["src/etl/streaming"] except .qetl.job.stream.defined[];
         `symbol$();
         "each job file registers itself as it loads"]};
+
+/ The job files whose top-level code - run as the file loads - names another
+/ job's namespace. src/etl/init.q loads the directory alphabetically and in
+/ no other order, so such a file aborts or depends on its name sorting
+/ later. Schemas come from .qetl.plant, which loads first (#731).
+/ @param dir a declaration directory
+/ @return `file:line text` strings, one per offending line
+peer_reads_at_load:{[dir]
+    raze {[dir;nm]
+        lines:read0 `$":",dir,"/",string[nm],".q";
+        top:where {[l] (0<count l) and not (first l) in " \t/\\"} each lines;
+        own:".qpipe.job.",string[nm],".";
+        bad:top where {[own;l] (l like "*.qpipe.job.*") and not l like "*",own,"*"}[own] each lines top;
+        bad:bad where not {[l] any l like/: ("*.define[[]*";"*.normalize[[]*";"*.audit.watch[[]*")} each lines bad;
+        {[nm;i;l] string[nm],".q:",string[1+i],": ",l}[nm]'[bad;lines bad]
+      }[dir] each .testutil.etl_declaration_names dir}
+
+test_no_job_reads_a_peer_job_at_load:{[t]
+    .qunit.assertEquals[peer_reads_at_load "src/etl/streaming";();
+        "a job's load-time code reads the plant's schemas, never another job's namespace"]};
 
 / The jobs src/ registered, taken as this file LOADS rather than when a test
 / runs. Every suite loads before any of them runs (.testutil.load_suites),
@@ -117,18 +137,18 @@ test_a_note_that_is_not_a_string_is_refused:{[t]
         "a note is prose for the process table, so a symbol is refused"]};
 
 test_a_jobs_namespace_is_derived_from_its_name:{[t]
-    .qunit.assertEquals[.qetl.job.stream.namespace `markout;`.qpipe.job.markout;
+    .qunit.assertEquals[.qetl.job.stream.namespace `demo_markout;`.qpipe.job.demo_markout;
         "a job's namespace is .qpipe.job.<job>, not a second name to keep in step"]};
 
 test_the_declaration_names_the_namespace_that_holds_the_job:{[t]
     / Not a tautology with the test above: this one checks the derived name
     / is where the implementation actually is.
-    .qunit.assertEquals[`on_batch in key .qetl.job.stream.def[`markout]`ns;1b;
+    .qunit.assertEquals[`on_batch in key .qetl.job.stream.def[`demo_markout]`ns;1b;
         "the derived namespace holds the job's own handler"]};
 
 test_a_process_finds_its_job_by_name:{[t]
     / How the generic runner knows which job it is.
-    .qunit.assertEquals[.qetl.job.stream.for_procname `markout1;`markout;
+    .qunit.assertEquals[.qetl.job.stream.for_procname `demo_markout1;`demo_markout;
         "the job that claims a process is found by that process's name"]};
 
 test_an_unclaimed_process_is_refused_by_name:{[t]
@@ -151,8 +171,8 @@ test_half_a_timer_is_refused:{[t]
 test_two_jobs_may_not_claim_one_process:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`impostor;x]};
         `procname`subscribe_to`publishes`on_batch!(
-            `markout1;enlist `t;`symbol$();{[t;x] ()});
-        "one process runs one job, so a second claim on markout1 is refused"]};
+            `demo_markout1;enlist `t;`symbol$();{[t;x] ()});
+        "one process runs one job, so a second claim on demo_markout1 is refused"]};
 
 test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
@@ -336,19 +356,19 @@ bad:()
 
 test_markout_buffers_trades_and_quotes_separately:{[t]
     reset[];
-    .qpipe.job.markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qpipe.job.markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `EURUSD;
         bid:enlist 1.0999; ask:enlist 1.1001)];
-    .qunit.assertEquals[(count .qpipe.job.markout.pending;count .qpipe.job.markout.quote_hist);(1;1);
+    .qunit.assertEquals[(count .qpipe.job.demo_markout.pending;count .qpipe.job.demo_markout.quote_hist);(1;1);
         "each batch lands in the buffer its table names"]};
 
 test_markout_ignores_a_pair_this_demo_does_not_trade:{[t]
     / `quote` also carries the vendored starter pack's equity quotes.
     reset[];
-    .qpipe.job.markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `AAPL;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `AAPL;
         bid:enlist 150f; ask:enlist 150.1)];
-    .qunit.assertEquals[count .qpipe.job.markout.quote_hist;0;
+    .qunit.assertEquals[count .qpipe.job.demo_markout.quote_hist;0;
         "a quote outside .qsynth.pairs is not buffered"]};
 
 test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
@@ -356,31 +376,31 @@ test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
     / crucially the fill stays buffered rather than being scored against
     / quotes that have not arrived.
     reset[];
-    .qpipe.job.markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qpipe.job.markout.score_ready[d 1];
-    .qunit.assertEquals[(count .sjtest.published;count .qpipe.job.markout.pending);(0;1);
+    .qpipe.job.demo_markout.score_ready[d 1];
+    .qunit.assertEquals[(count .sjtest.published;count .qpipe.job.demo_markout.pending);(0;1);
         "a fill younger than the longest horizon is neither scored nor dropped"]};
 
 test_markout_scores_and_evicts_a_ready_fill:{[t]
     reset[];
-    .qpipe.job.markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qpipe.job.markout.on_batch[`quote;([] time:d 1 10; sym:`EURUSD`EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:d 1 10; sym:`EURUSD`EURUSD;
         bid:1.1004 1.1009; ask:1.1006 1.1011)];
-    .qpipe.job.markout.score_ready[d 20];
+    .qpipe.job.demo_markout.score_ready[d 20];
     out:last_rows[];
-    .qunit.assertEquals[(count .sjtest.published;count out;count .qpipe.job.markout.pending);(1;2;0);
+    .qunit.assertEquals[(count .sjtest.published;count out;count .qpipe.job.demo_markout.pending);(1;2;0);
         "a fill past its longest horizon is scored at both horizons, published once, and evicted"]};
 
 test_markout_publishes_the_execution_quality_table:{[t]
     reset[];
-    .qpipe.job.markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qpipe.job.markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
-    .qpipe.job.markout.score_ready[d 20];
-    .qunit.assertEquals[first exec tbl from .sjtest.published;`execution_quality;
+    .qpipe.job.demo_markout.score_ready[d 20];
+    .qunit.assertEquals[first exec tbl from .sjtest.published;`demo_execution_quality;
         "the rows are published onto the table the job declares"]};
 
 test_markout_keeps_the_batch_when_publishing_throws:{[t]
@@ -388,13 +408,13 @@ test_markout_keeps_the_batch_when_publishing_throws:{[t]
     / drain-before-publish ordering would lose the batch silently - which is
     / why score_ready evicts only after the publish returns.
     reset[];
-    .qetl.job.stream.wire[`markout;{[t;x] '"tickerplant is down"}];
-    .qpipe.job.markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+    .qetl.job.stream.wire[`demo_markout;{[t;x] '"tickerplant is down"}];
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qpipe.job.markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
-    @[{.qpipe.job.markout.score_ready x};d 20;{x}];
-    .qunit.assertEquals[count .qpipe.job.markout.pending;1;
+    @[{.qpipe.job.demo_markout.score_ready x};d 20;{x}];
+    .qunit.assertEquals[count .qpipe.job.demo_markout.pending;1;
         "a failed publish leaves the fill buffered for the next tick"]};
 
 / --- cross ----------------------------------------------------------------
@@ -1015,6 +1035,39 @@ test_fresh_breaches_is_decidable_without_a_timer:{[t]
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 600;1;
         "and once the throttle period has passed it does again"]};
 
+/ Two books each long 600k EURUSD - 1.2mm across the desk.
+two_books:{[]
+    ([] time:d 1 2; order_id:1 2; sym:`EURUSD`EURUSD; book:`london`newyork;
+        product:`spot`spot; side:1 1; size:600000 600000f; price:1.0850 1.0850;
+        order_status:`filled`filled)}
+
+test_a_limit_on_a_total_is_compared_with_the_total:{[t]
+    / #733: a cap scoped on sym alone was compared with each (sym, book,
+    / product) position, so 600k in each of two books passed a 1mm cap.
+    reset[];
+    .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
+    .qpipe.job.fx_positions.on_batch[`orders;two_books[]];
+    b:.qpipe.job.fx_positions.fresh_breaches d 0;
+    .qunit.assertEquals[count b;1;"1.2mm across both books is over a 1mm cap on the pair"];
+    .testutil.assertApprox[first b`observed;1200000f;1e-9;"observed is the pair's total"];
+    .qunit.assertEquals[first each b`book`product;``;"a breach of a total names no book or product"]};
+
+test_a_breach_of_a_total_is_published:{[t]
+    reset[];
+    .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
+    .qpipe.job.fx_positions.on_batch[`orders;two_books[]];
+    .qpipe.job.fx_positions.on_timer[];
+    .qunit.assertEquals[asc exec tbl from .sjtest.published;`s#`fx_limit_breach`fx_position;
+        "fx_limit_breach takes a total's breach in its usual shape"]};
+
+test_a_null_scope_value_is_refused_at_load:{[t]
+    / A null book matches no position: the cap would police nothing.
+    reset[];
+    .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
+        ([] sym:enlist `EURUSD; book:enlist `; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6);
+        "*book is null on some limit*";
+        "to cap the total across books, the book column is left out"]};
+
 / --- starting a job: .qetl.job.stream.start ------------------------------
 
 / A transport that delivers `replayed` - a list of (table; rows) - as the
@@ -1052,7 +1105,7 @@ test_a_replaying_job_rebuilds_its_state_without_publishing_it_again:{[t]
 
 test_a_job_that_does_not_replay_is_not_asked_to:{[t]
     reset[];
-    .qetl.job.stream.start[`markout;fake_transport[`markout;()]];
+    .qetl.job.stream.start[`demo_markout;fake_transport[`demo_markout;()]];
     .qunit.assertEquals[.sjtest.started`replay;0b;"replay is opt-in"]};
 
 / Publish has to be wired before subscribing: a replay delivers batches

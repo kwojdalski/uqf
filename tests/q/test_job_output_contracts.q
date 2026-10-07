@@ -117,12 +117,12 @@ last_of:{[j] first last exec rows from .sjtest.published where job=j}
 / job -> a niladic function pushing input the job acts on. Each driver
 / runs after .sjtest.reset[], which empties job state and wires every job
 / to .sjtest.recorder.
-drivers:`markout`posbook`vectorize`eq_orderbook`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage!(
-    {[] .qpipe.job.markout.on_batch[`trades;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD; side:enlist 1;
+drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage!(
+    {[] .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD; side:enlist 1;
             trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-        .qpipe.job.markout.on_batch[`quote;([] time:enlist .sjtest.d 1; sym:enlist `EURUSD;
+        .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .sjtest.d 1; sym:enlist `EURUSD;
             bid:enlist 1.1004; ask:enlist 1.1006)];
-        .qpipe.job.markout.score_ready .sjtest.d 20};
+        .qpipe.job.demo_markout.score_ready .sjtest.d 20};
     {[] .qpipe.job.posbook.on_batch[`market_data;.sjtest.a_book[`EURUSD;1.104]];
         .qpipe.job.posbook.on_batch[`executions;.sjtest.an_execution[.sjtest.d 0;`EURUSD;1;1.1;1e6]]};
     {[] .qpipe.job.vectorize.on_batch[`wide_orderbook;.sjtest.wide_row[]]};

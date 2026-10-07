@@ -88,7 +88,7 @@ def test_writing_the_dataset_it_watches_is_refused():
 
 def test_a_name_another_job_holds_is_refused():
     with pytest.raises(UqsError, match="already exists.*namespace"):
-        _plan(name="markout", taken={"markout"})
+        _plan(name="demo_markout", taken={"demo_markout"})
 
 
 def test_the_real_tree_knows_which_datasets_can_trigger():

@@ -726,9 +726,9 @@ a variable called `rebuild` and fails with a value error naming that variable
 instead of anything about the graph.
 
 **When a timer is still right.** This answers "recompute because data arrived".
-It cannot answer "recompute because time passed" --- `markout1` scores a fill
-once a quote at its horizon should exist, and no publication event can tell it
-that. `.qtorq.safe_timer` remains the tool for that question.
+It cannot answer "recompute because time passed" --- `demo_markout1` scores a
+fill once a quote at its horizon should exist, and no publication event can tell
+it that. `.qtorq.safe_timer` remains the tool for that question.
 
 ## Filling one dataset with several workers
 

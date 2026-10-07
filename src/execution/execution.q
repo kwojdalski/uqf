@@ -39,7 +39,7 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 / @param horizons a timespan, or list of timespans, to look ahead from
 /   each trade's time, e.g. 0D00:00:01 0D00:00:10 0D00:01:00 for 1s/10s/1m
 / @return a table with one row per (trade, horizon), columns reordered
-/   by forwards.q's col_precedence (`time`sym leading by default) when
+/   by forwards.q's apply_col_precedence (time_col then sym leading) when
 /   both are present: `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 /   (the target-time column is named per time_col, `time by default, matching
 /   the quotes-table timestamp convention used elsewhere in this
