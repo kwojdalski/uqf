@@ -2051,7 +2051,7 @@ def test_an_unknown_runtime_is_refused(monkeypatch):
     monkeypatch.setenv("UQS_RUNTIME", "uqf")
     said = _refusals(monkeypatch, shared)
     assert runner.invoke(cli.app, ["--runtime", "pure", "list", "fields"]).exit_code == 1
-    assert said == ["--runtime 'pure' is not a runtime - choose one of: uqf, torq"]
+    assert said == ["--runtime 'pure' is not a runtime - choose one of: uqf, torq, crypto, fx"]
 
 
 def test_a_profile_the_torq_runtime_cannot_start_is_refused_naming_what_is_missing(monkeypatch):

@@ -296,13 +296,28 @@ uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
 uqs --runtime torq stop
 ```
 
-  |                | `uqf` (default)                                                         | `torq`                                                            |
-  | ---            | ---                                                                     | ---                                                               |
-  | processes      | the vendored rows, with overlays, plus every pipeline                   | the vendored `process.csv`, unchanged: `feed1` on, `monitor1` off |
-  | tables         | `database.q` plus this tree's (`fx_orderbook`, the crypto mocks, ...)   | the starter pack's `database.q`: `trade`, `quote`, `packets`      |
-  | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     |
-  | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 |
-  | base port      | `6050`                                                                  | `6150`                                                            |
+  |                | `uqf` (default)                                                         | `torq`                                                            | `crypto`                                                                                        | `fx`                                                                                        |
+  | ---            | ---                                                                     | ---                                                               | ---                                                                                             | ---                                                                                         |
+  | processes      | the vendored rows, with overlays, plus every pipeline                   | the vendored `process.csv`, unchanged: `feed1` on, `monitor1` off | the vendored rows, with overlays, plus the `crypto` profile's pipelines and what they depend on | the vendored rows, with overlays, plus the `fx` profile's pipelines and what they depend on |
+  | tables         | `database.q` plus this tree's (`fx_orderbook`, the crypto mocks, ...)   | the starter pack's `database.q`: `trade`, `quote`, `packets`      | `database.q` plus the tables those pipelines read and write                                     | `database.q` plus the tables those pipelines read and write                                 |
+  | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     | as `uqf`                                                                                        | as `uqf`                                                                                    |
+  | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 | `output/uqs-crypto`                                                                             | `output/uqs-fx`                                                                             |
+  | base port      | `6050`                                                                  | `6150`                                                            | `6250`                                                                                          | `6350`                                                                                      |
+
+`crypto` and `fx` are focused stacks: the starter pack, this tree's layers, and
+one profile's pipelines with everything they depend on in the job graph - the
+same walk `uqs start --profile` takes, so the runtime and the profile cannot
+disagree about what the profile needs. Their schemas define only the tables
+those pipelines read and write, so their HDBs hold nothing they never write, and
+they fit the licence's connection cap with room to spare:
+
+```
+uqs --runtime crypto start     # cryptomock1 and crypto_markout1, on 6250
+uqs --runtime crypto list processes
+```
+
+Such a runtime can start only the profiles its processes cover, and refuses the
+others naming what is missing, as `torq` does.
 
 Without the service layer, `torq` has none of the [query
 policies](../architecture/query-policies.md): no data-access API, no `.pm` on

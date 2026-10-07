@@ -100,8 +100,16 @@ def _generated_schema_content(paths: UqsPaths) -> str:
     # published_table: .u.upd onto a table the plant was never told about
     # discards the rows in silence (#287, #288).
     #
+    # A runtime with one profile's pipelines (#760) defines only the tables
+    # those read and write: its HDB holds nothing it never writes.
+    #
     # Definition order among independent table declarations is immaterial to
     # q, so they are sorted for a stable file.
     owned = _table_definitions()
-    definitions = [owned[t] for t in sorted(owned)]
+    # Here, not at the top: runtime_members reads model.dependencies, which
+    # imports this module for _publishers.
+    from uqs.model.runtime_members import plant_tables
+
+    wanted = plant_tables(paths.runtime_declaration)
+    definitions = [owned[t] for t in sorted(owned) if wanted is None or t in wanted]
     return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions)
