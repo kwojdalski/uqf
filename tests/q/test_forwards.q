@@ -1,4 +1,5 @@
-// test_forwards.q - tests for src/pricing/forwards.q. Load src/foundation/rates.q,
+// test_forwards.q - tests for src/pricing/forwards.q and src/pricing/cross.q
+// (.qcross, split out of it in #626). Load src/foundation/rates.q,
 // src/pricing/forwards.q, tests/lib/qunit.q and tests/lib/testutil.q before this
 // file.
 
@@ -512,26 +513,6 @@ test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
     .testutil.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
     .qunit.assertTrue[(r[2]`ref_price)>(r[0]`ref_price);"the +500ms horizon (at t1) sees the higher price after AUDUSD/EURPLN drifted up"]};
 
-test_cross_markout_at_horizons_ts_col_is_configurable:{[t]
-    quotes:mk_ts_quotes_table[::];
-    trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    original:.qfwd.time_col;
-    .qfwd.time_col:`timestamp;
-    r:.qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0D00:00:00;1];
-    .qfwd.time_col:original;
-    / The leading columns derive from time_col (#732). They were a separate
-    / col_precedence:`time`sym, so renaming time_col alone used to leave
-    / `time out of the table and silently switch the reorder off - and this
-    / test asserted that unreordered shape.
-    .qunit.assertEquals[cols r;`timestamp`sym`trade_time`horizon`trade_price`ref_price`markout_pips;"overriding .qfwd.time_col renames the timestamp column, and it still leads"]};
-
-test_apply_col_precedence_follows_a_renamed_time_col:{[t]
-    original:.qfwd.time_col;
-    .qfwd.time_col:`target_time;
-    r:.qfwd.apply_col_precedence ([] px:1 2f; sym:`EURUSD`EURUSD; target_time:2026.01.01D0 2026.01.01D1);
-    .qfwd.time_col:original;
-    .qunit.assertEquals[cols r;`target_time`sym`px;"the renamed timestamp column, then sym, lead"]};
-
 test_cross_markout_at_horizons_col_precedence_orders_ts_then_sym:{[t]
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
@@ -739,13 +720,6 @@ test_cross_markout_decomp_rejects_unsorted_quotes_instead_of_nulling:{[t]
     t1:t0+0D00:00:01;
     wrapper:{[q;t0;t1] .qexec.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
     .qunit.assertThrows[wrapper;unsorted;"cross_markout_decomp: quotes must be sorted*";"quotes rows out of `sym`time xasc order throws immediately, not a silent null"]};
-
-test_apply_col_precedence_leaves_table_unchanged_when_precedence_not_fully_present:{[t]
-    / cross_book_chain_at_sizes-style tables (`size`sym`bid`... - no
-    / timestamp column at all) must never get partially reordered just
-    / because they happen to have a `sym column.
-    t:([] size:1 2; sym:`EURUSD`EURUSD; mid:1.1 1.2);
-    .qunit.assertEquals[.qfwd.apply_col_precedence t;t;"a table with sym but no time column is left completely unchanged"]};
 
 
 / A leg that joins the running chain at its START, not its end, would need

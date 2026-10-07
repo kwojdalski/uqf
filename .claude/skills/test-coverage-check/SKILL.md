@@ -104,10 +104,10 @@ exact-decomposition guarantee (per-leg contributions must sum exactly to the
 actual move) - `aj`-based as-of lookups' sortedness enforcement
 
 **Priority 2 --- HIGH (untested logic that affects reliability)** -
-`require_depth_quotes`-style fail-early validation on every function that takes a
-`quotes`/`trades` table - Rolling `microstructure.q` functions' first-row
-convention (0/null, not garbage) - `time_col` configurability (default behavior
-AND a caller override)
+`require_depth_quotes`-style fail-early validation on every function that takes
+a `quotes`/`trades` table - Rolling `microstructure.q` functions' first-row
+convention (0/null, not garbage) - the fixed markout output columns
+(`.qexec.markout_cols`)
 
 **Priority 3 --- MEDIUM (missing but lower risk)** - Multi-currency-pair / N-leg
 chain edge cases beyond the 2-leg happy path - Determinism (does the test pass

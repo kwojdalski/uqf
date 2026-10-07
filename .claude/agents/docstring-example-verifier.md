@@ -47,9 +47,9 @@ Every public function in `src/*.q` carries a qDoc block ending in one or more
 These are the library's most-read documentation and its only worked examples.
 They are also, right now, 92 assertions that nothing executes ---
 `grep -rl '@eg' tests/ scripts/` returns nothing. A signature change, a
-return-shape change from wide to keyed, a sign-convention flip, or a
-`apply_col_precedence` reorder silently falsifies them, and the first person to
-notice is a user copying an example that no longer works.
+return-shape change from wide to keyed, a sign-convention flip, or a column
+reorder silently falsifies them, and the first person to notice is a user
+copying an example that no longer works.
 
 You execute them and report which ones still hold. You do not edit `src/*.q`.
 

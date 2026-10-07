@@ -83,10 +83,8 @@ Scan for the following, in order of severity:
 - `side`/`pip_factor` sign or scale convention violated: `side` is `1` for a
   buy/long-base-currency, `-1` for a sell; `pip_factor` is caller-supplied
   (never hardcoded to 10000 inside a function, since JPY crosses use 100)
-- An output table that doesn't route through `forwards.q`'s
-  `time_col`/`apply_col_precedence` convention when it has a
-  timestamp/sym-leading shape other functions in this library already
-  standardize on
+- An output table whose timestamp column is not `time`, leading, when it has the
+  time/sym-leading shape the rest of this library standardizes on
 - A public function in `src/*.q` missing a qDoc comment block (`/ @param`,
   `/ @return`, `/ @throws`, `/ @eg`) --- every existing function has one; a new
   one without it is drift

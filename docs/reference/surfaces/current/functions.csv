@@ -584,6 +584,7 @@ qexec,fill_ratio,function,2,num_fills num_quotes
 qexec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,markout,function,4,side trade_price ref_price pip_factor
 qexec,markout_at_horizons,function,3,trades quotes horizons
+qexec,markout_cols,value,,
 qexec,reject_ratio,function,2,num_rejects num_requests
 qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,slippage,function,4,side arrival_price exec_price pip_factor
@@ -614,7 +615,6 @@ qfwd,points_to_outright,function,3,spot points pip_factor
 qfwd,swap_cashflows,function,1,swap
 qfwd,swap_keys,value,,
 qfwd,swap_value,function,4,swap market valuation_date opts
-qfwd,time_col,value,,
 qlimit,evaluate,function,2,measured limits
 qlimit,measure,function,2,book metrics
 qlimit,no_alerts,function,1,

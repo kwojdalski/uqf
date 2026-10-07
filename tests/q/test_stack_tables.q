@@ -71,7 +71,7 @@ test_no_undeclared_table_appears:{[t]
 / --- shapes their consumers depend on ------------------------------------
 
 test_fx_orderbook_matches_the_shape_pricing_expects:{[t]
-    / src/pricing/forwards.q's require_depth_quotes reads these five columns
+    / .qschema.require_depth_quotes reads these five columns
     / off a quotes table, which leads with `time` because the tickerplant's
     / .u.upd requires the first column to be literally `time`. The library
     / demanded `ts` here until that was made one name tree-wide, so a

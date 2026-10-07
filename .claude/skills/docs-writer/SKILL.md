@@ -21,12 +21,12 @@ based on actual code behavior, not assumptions.
 
 Before writing, determine the doc type from `$ARGUMENTS` using this table:
 
-  | If `$ARGUMENTS` mentions…                                                                                             | Doc type                             |
-  | ---                                                                                                                   | ---                                  |
-  | a pricing formula or model (Garman-Kohlhagen, CIRP forwards, VaR, a microstructure feature formula)                   | **Formula / Pricing Model Overview** |
-  | a multi-step flow (cross-book chain resolution, a markout/decomposition workflow, the test suite, doc generation)     | **Workflow / Pipeline**              |
-  | a module or subsystem: `forwards.q`, `execution.q`, `microstructure.q`, the `time_col` config                         | **Component / Architecture**         |
-  | setup, howto, guide, running tests, adding a module                                                                   | **Quick Reference / Guide**          |
+  | If `$ARGUMENTS` mentions…                                                                                               | Doc type                             |
+  | ---                                                                                                                     | ---                                  |
+  | a pricing formula or model (Garman-Kohlhagen, CIRP forwards, VaR, a microstructure feature formula)                     | **Formula / Pricing Model Overview** |
+  | a multi-step flow (cross-book chain resolution, a markout/decomposition workflow, the test suite, doc generation)       | **Workflow / Pipeline**              |
+  | a module or subsystem: `forwards.q`, `cross.q`, `execution.q`, `microstructure.q`                                       | **Component / Architecture**         |
+  | setup, howto, guide, running tests, adding a module                                                                     | **Quick Reference / Guide**          |
 
 ## Step 0 --- Pre-research
 
@@ -188,25 +188,19 @@ q).q<abbrev>.<function>[<args>]
 See `scripts/<relevant_example>.q` for a full worked example with synthetic
 data.
 
-### With configuration overrides
-
-```q
-q).qfwd.time_col:`target_time    / override the default `ts output column name
-q).q<abbrev>.<function>[<args>]
-```
-
 ## Output Structure
 
 Describe the returned table/dict shape, including column precedence
-(`` `ts`sym `` leading, via `apply_col_precedence`) where applicable.
+(`` `time`sym `` leading - a markout's columns are `.qexec.markout_cols`) where
+applicable.
 
 ## Troubleshooting
 
-  | Symptom                               | Likely cause                                                                      | Fix                                                                                 |
-  | ---                                   | ---                                                                               | ---                                                                                 |
+  | Symptom                               | Likely cause                                                                      | Fix                                                                                  |
+  | ---                                   | ---                                                                               | ---                                                                                  |
   | ` 'quotes missing required column `   | table doesn't have all of `` `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes `` | check `require_depth_quotes`'s error message for which column                        |
-  | ` 'not sorted `                       | `quotes` table isn't `` `sym`ts xasc `` before an `aj`-based call                 | sort before calling, or let the function do it (check the specific function's qDoc) |
-  | ...                                   |                                                                                   |                                                                                     |
+  | ` 'not sorted `                       | `quotes` table isn't `` `sym`ts xasc `` before an `aj`-based call                 | sort before calling, or let the function do it (check the specific function's qDoc)  |
+  | ...                                   |                                                                                   |                                                                                      |
 
 ## See Also
 
@@ -216,7 +210,7 @@ Describe the returned table/dict shape, including column precedence
 
 ### Template C — Component / Architecture
 
-Use for: `forwards.q`, `execution.q`, `microstructure.q`, `book.q`, the `time_col` config, or any self-contained subsystem.
+Use for: `forwards.q`, `cross.q`, `execution.q`, `microstructure.q`, `book.q`, or any self-contained subsystem.
 
 ```markdown
 # <Component> Architecture
@@ -256,7 +250,7 @@ Namespace-level config variables this component reads, if any:
 
 | Variable | Default | Description |
 |---|---|---|
-| `.qfwd.time_col` | `` `time `` | output timestamp column name; it and `sym` lead output tables, via `apply_col_precedence` |
+| `.qetl.cfg` key | its default | what it changes |
 
 ## Extension Points
 

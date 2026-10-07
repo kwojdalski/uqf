@@ -23,6 +23,13 @@
 / @eg .qexec.markout[1;1.1000;1.1010;10000]  -> 10f
 markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trade_price)};
 
+/ The columns every markout-at-horizons result has, in order: `time` is the
+/ instant the reference price was read (trade_time + horizon), then the pair.
+/ One fixed shape (#626), so direct and synthetic markouts join with uj and
+/ no library-wide setting can reorder or rename them; a caller that needs
+/ another name renames at its own boundary.
+markout_cols:`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
+
 / Markout at one or more time horizons after each trade, looking up the
 / reference mid itself via an as-of join against a quote table - the
 / table-native companion to markout, for when you have trades and quotes
@@ -38,14 +45,11 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 /   pre-sorted, this sorts its own copy before joining
 / @param horizons a timespan, or list of timespans, to look ahead from
 /   each trade's time, e.g. 0D00:00:01 0D00:00:10 0D00:01:00 for 1s/10s/1m
-/ @return a table with one row per (trade, horizon), columns reordered
-/   by forwards.q's apply_col_precedence (time_col then sym leading) when
-/   both are present: `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
-/   (the target-time column is named per time_col, `time by default, matching
-/   the quotes-table timestamp convention used elsewhere in this
-/   library, e.g. forwards.q's cross_book_at). forwards.q's
-/   cross_markout_at_horizons and cross_impact_at_horizons return these same
-/   columns, so direct and synthetic markouts join with uj
+/ @return a table with one row per (trade, horizon), in markout_cols:
+/   `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips, `time
+/   being trade_time+horizon. cross_markout_at_horizons and
+/   cross_impact_at_horizons below return the same columns, so direct and
+/   synthetic markouts join with uj
 / @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
 /   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
 /   table fails loudly here rather than surfacing as a bare `domain error deep inside aj;
@@ -72,9 +76,7 @@ markout_at_horizons:{[trades;quotes;horizons]
     joined:aj[`sym`time;lookup_tbl;sorted_quotes];
     ref_price:joined`mid;
     markout_pips:markout[exp_trades`side;exp_trades`trade_price;ref_price;exp_trades`pip_factor];
-    col_names:`sym`trade_time`horizon,.qfwd.time_col,`trade_price`ref_price`markout_pips;
-    col_values:(exp_trades`sym;exp_trades`time;exp_horizons;target_time;exp_trades`trade_price;ref_price;markout_pips);
-    .qfwd.apply_col_precedence flip col_names!col_values};
+    flip markout_cols!(target_time;exp_trades`sym;exp_trades`time;exp_horizons;exp_trades`trade_price;ref_price;markout_pips)};
 
 / ------------------------------------------------ CROSS-PAIR MARKOUTS (#626)
 / .
@@ -117,8 +119,7 @@ require_horizons:{[fn_name;horizons]
 /   quoted mid, so this is priced the same way any other cross_book_at
 /   call is, not looked up directly
 / @return a table, one row per horizon, in markout_at_horizons' shape:
-/   `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips (the
-/   target-time column is named per time_col, `time by default) -
+/   `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips  -
 /   ref_price/markout_pips are null for a horizon with no quote yet for
 /   some required leg, rather than throwing
 / @throws error if horizons is not a timespan or list of timespans (a bare
@@ -147,8 +148,7 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
     ref_price:.qcross.cross_ref_price_at[quotes;cross_sym;;ref_size] each target_time;
     markout_pips:.qexec.markout[side;trade_price;ref_price;pip_factor];
     n:count horizons;
-    col_names:`sym`trade_time`horizon,.qfwd.time_col,`trade_price`ref_price`markout_pips;
-    .qfwd.apply_col_precedence flip col_names!(n#cross_sym;n#trade_time;horizons;target_time;n#trade_price;ref_price;markout_pips)};
+    flip markout_cols!(target_time;n#cross_sym;n#trade_time;horizons;n#trade_price;ref_price;markout_pips)};
 
 / Decompose a synthetic cross pair's price move between two times into
 / exact per-leg contributions, by revaluing one leg at a time - in the
@@ -235,10 +235,8 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 / @param ref_size the (typically negligible) size to sweep for
 /   impact_sym's reference price at trade_time and at each horizon
 / @return a table, one row per horizon, in markout_at_horizons' shape:
-/   `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips (the
-/   target-time column is named per time_col, `time by default; sym here is
-/   impact_sym, not traded_sym, and trade_price is impact_sym's baseline
-/   at trade_time) - impact_sym's own price drift, signed by traded_sym's side.
+/   markout_cols (sym here is impact_sym, not traded_sym, and trade_price
+/   is impact_sym's baseline at trade_time) - impact_sym's own price drift, signed by traded_sym's side.
 /   When impact_sym has no quote for some leg at trade_time the baseline is
 /   null, and EVERY markout_pips is null with it - no error: the baseline
 /   comes from cross_ref_price_at, which returns 0n rather than throwing.

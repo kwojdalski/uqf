@@ -75,8 +75,8 @@ deliberately left in camelCase. Never propose work on it.
 - **`src/init.q`** for the module inventory and load order, and the target
   module in full before proposing a function for it. This library reuses its own
   primitives heavily; an idea that duplicates `sweep_price`, `ccy_orient_cross`,
-  `oriented_levels`, `require_depth_quotes` or `apply_col_precedence` instead of
-  calling it is a bad idea wearing a new name.
+  `oriented_levels`, `require_depth_quotes` or `markout_cols` instead of calling
+  it is a bad idea wearing a new name.
 
 ## Where good ideas actually come from, in yield order
 

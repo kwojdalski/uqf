@@ -62,10 +62,9 @@ Commands: ok — fix it | s/skip — skip | done — stop
   throw --- verify each choice is deliberate given how the function is meant to
   be used (a caller that filters `where not null x` vs a caller that should fail
   loud)
-- Output tables that should honor `forwards.q`'s `time_col` convention but don't
-  route through `apply_col_precedence`, producing inconsistent column ordering
-  across functions that otherwise look like a family (`markout_at_horizons`,
-  `cross_markout_at_horizons`, `hit_ratio_by`)
+- Output tables that don't lead with `time` then `sym`, producing inconsistent
+  column ordering across functions that otherwise look like a family
+  (`markout_at_horizons`, `cross_markout_at_horizons`, `hit_ratio_by`)
 - Functions that can return a null result not documented as such in their qDoc
   `@return`/`@throws`
 
@@ -122,7 +121,7 @@ Commands: ok — fix it | s/skip — skip | done — stop
 
    Read enough of each file to understand its interface, not just its surface.
    Look at function signatures, return shapes, naming patterns, and how
-   `quotes`/`side`/`pip_factor`/`time_col` are handled.
+   `quotes`/`side`/`pip_factor`/`time` are handled.
 
 3. For each inconsistency found, record:
    - Category (from the list above)

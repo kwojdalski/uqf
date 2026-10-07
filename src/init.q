@@ -1,5 +1,5 @@
 // init.q - loads every uqf module, each into its own flat namespace (one
-// per file - .qstats, .qccy, .qdcf, .qrates, .qfwd, .qopt, .qrisk, .qpos,
+// per file - .qstats, .qccy, .qdcf, .qrates, .qcross, .qfwd, .qopt, .qrisk, .qpos,
 // .qalloc, .qdesk, .qlimit, .qexec, .qbook, .qmicro, .qdqc, .qexdef - kept
 // single-level throughout, not nested under a shared .q parent.
 // .
@@ -28,23 +28,14 @@
 //      one enumeration that knows this, and every tool that lists
 //      namespaces goes through it.
 //
-//   2. The directories do NOT imply a dependency layering, and it would be
-//      wrong to assume one. The module graph is not acyclic:
-//        pricing/forwards.q   -> .qbook.sweep_price, .qexec.markout
-//        execution/execution.q -> .qfwd.time_col, .qfwd.apply_col_precedence
-//      That is a genuine cycle between pricing/ and execution/, and it
-//      resolves only because q binds names at call time rather than at
-//      definition time. Likewise market_data/dqchecks.q reaches into
-//      .qfwd (pricing), .qmicro (its own group) and .qpos (portfolio), and
-//      market_data/microstructure.q reaches into .qexec and .qfwd.
-//      So load order below is for readability, not correctness - see the
-//      kdb-q-conventions skill, which spells out that q resolves function
-//      names at call time.
-//
-// The one ordering constraint that is real: pricing/forwards.q defines
-// module-level DATA (time_col), not just functions, and
-// execution/execution.q reads it. Still fine at call time, but it is state
-// rather than code, so it is worth knowing about.
+//   2. The library modules form an ACYCLIC graph, and CI holds them to it:
+//      scripts/gates/check_module_deps.py lists every allowed edge between
+//      namespaces and refuses a new one, or a cycle, until the list says so
+//      (#626). Pricing and execution used to depend on each other; now
+//      execution builds on synthetic cross pricing (.qcross), both use the
+//      shared book maths in .qbook, and everything rests on foundation.
+//      Load order below still is not what makes calls resolve - q binds a
+//      name when it is called - but it now matches the dependency order.
 
 \l src/foundation/schema.q
 \l src/foundation/render.q
@@ -53,6 +44,7 @@
 \l src/foundation/daycount.q
 \l src/foundation/calendar.q
 \l src/foundation/rates.q
+\l src/market_data/book.q
 \l src/pricing/cross.q
 \l src/pricing/forwards.q
 \l src/pricing/options.q
@@ -62,7 +54,6 @@
 \l src/portfolio/desk_positions.q
 \l src/portfolio/limits.q
 \l src/execution/execution.q
-\l src/market_data/book.q
 \l src/market_data/microstructure.q
 \l src/market_data/dqchecks.q
 \l src/examples/example_defaults.q

@@ -108,41 +108,6 @@ CROSS_SIZE_MAX_DOUBLINGS:60;
 CROSS_SIZE_REL_TOL:1e-7;
 CROSS_SIZE_MAX_HALVINGS:200;
 
-/ Configurable output column name for the "point in time" a row in
-/ cross_markout_at_horizons/cross_impact_at_horizons refers to - defaults
-/ to `time, which is the timestamp column name EVERYWHERE in this tree:
-/ the quotes shape require_depth_quotes demands, the requests shape
-/ hit_ratio_by demands, and every table the tickerplant carries, whose
-/ first column .u.upd requires to be literally `time.
-/ .
-/ It defaulted to `ts until that was made true. The library used `ts for
-/ its book-shaped tables and `time for its trade-shaped ones - in the same
-/ file, in execution.q - while every published table used `time, so
-/ cross_book_at refused a real `quotes` table outright and callers renamed
-/ on the way in. There is nothing left to rename.
-/ Override before calling if some downstream consumer expects a
-/ different name, e.g. .qfwd.time_col:`timestamp.
-time_col:`time;
-
-/ Private: move the timestamp column (named per time_col) and then sym to
-/ the front of a markout-family output table, if BOTH are present -
-/ otherwise return tbl unchanged. A table missing either one (e.g.
-/ cross_book_chain_at_sizes's `size`sym`... shape, which has no timestamp
-/ column at all) keeps its column order: never a partial reorder.
-/ .
-/ The leading columns are DERIVED from time_col, at call time. They used
-/ to be a second variable, col_precedence:`time`sym, documented as
-/ "update both together" - so renaming time_col alone made `time vanish,
-/ the precedence match fail, and every output silently stop reordering,
-/ with a test asserting exactly that (#732).
-/ @param tbl an unkeyed table
-/ @return tbl with time_col then sym leading, when both are present
-/ @private
-apply_col_precedence:{[tbl]
-    lead:time_col,`sym;
-    if[not all lead in cols tbl; :tbl];
-    (lead,(cols tbl) except lead)#tbl};
-
 / ---------------------------------------------------- BROKEN-DATE FORWARDS
 / .
 / A value date between two quoted tenors is priced by interpolating forward

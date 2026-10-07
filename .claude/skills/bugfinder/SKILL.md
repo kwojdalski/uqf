@@ -56,13 +56,9 @@ Scan for the following, in order of severity:
 
 ### 3. Namespace-Level Config State Misused
 
-- A function that should route its output through
-  `time_col`/`apply_col_precedence` (`forwards.q`'s namespace-level config) but
-  hardcodes `` `time `` or a fixed column order instead, so it silently ignores
-  a caller's configuration change
 - A function reading a config variable's value at the wrong time (e.g. capturing
-  it once at load time instead of at call time, so a later
-  `` .qfwd.time_col:`target_time `` change doesn't take effect)
+  it once at load time instead of at call time, so a later `.qetl.cfg` change
+  doesn't take effect)
 
 ### 4. Silent Wrong-But-Not-Crashing Behavior
 
