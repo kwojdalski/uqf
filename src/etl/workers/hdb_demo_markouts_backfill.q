@@ -14,15 +14,15 @@
 
 / Score fills against quotes at the live job's horizons - the same function,
 / at the same horizons, so a fill scored both ways scores identically.
-/ @param fills rows of the HDB's trades: time sym side trade_price pip_factor
+/ @param fill_rows rows of the HDB's trades: time sym side trade_price pip_factor
 / @param quotes rows of the HDB's quote: time sym bid ask
 / @return one row per fill per horizon, in demo_execution_quality's columns
 / @eg count .qpipe.job.hdb_demo_markouts_backfill.score[.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[]] -> 8
-score:{[fills;quotes]
+score:{[fill_rows;quotes]
     shape:.qetl.plant.shape `demo_execution_quality;
     / No fills, no markouts, whatever the quotes hold.
-    if[0=count fills; :0#shape];
-    out:.qexec.markout_at_horizons[fills;
+    if[0=count fill_rows; :0#shape];
+    out:.qexec.markout_at_horizons[fill_rows;
         select sym, time, mid:0.5*bid+ask from quotes;
         .qpipe.job.demo_markout.horizons];
     cols[shape] xcols out}
@@ -63,7 +63,7 @@ facts:{[batch]
         ([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); pip_factor:`long$());
         ([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$()));
     .qetl.plant.shape `demo_execution_quality;
-    {[fills;quotes] .qpipe.job.hdb_demo_markouts_backfill.score[fills;quotes]};
+    {[fill_rows;quotes] .qpipe.job.hdb_demo_markouts_backfill.score[fill_rows;quotes]};
     (`inputs`expected!(
         `trades`quote!(
             ([] time:2026.09.17D10:00:00 2026.09.17D10:00:05; sym:`EURUSD`EURUSD; side:1 -1;
