@@ -19,9 +19,8 @@ from uqs.interpreter import q_command, q_interpreter
 from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
-from uqs.stack import alive
+from uqs.stack import alive, occupancy
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env
@@ -97,7 +96,7 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     return True
 
 
-def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     """Idempotently set up the writable data dir and generated config, and
     return the full env dict torq.sh should run under.
     """
@@ -177,7 +176,7 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
 def run_torq_sh(
     paths: UqsPaths,
     args: list[str],
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     capture: bool = False,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
@@ -220,16 +219,17 @@ def run_torq_sh(
 def start(
     paths: UqsPaths,
     procs: str = "all",
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     capture: bool = False,
 ):
+    occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["start", procs], base_port=base_port, capture=capture)
 
 
 def stop(
     paths: UqsPaths,
     procs: str = "all",
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     capture: bool = False,
 ):
     return run_torq_sh(paths, ["stop", procs], base_port=base_port, capture=capture)
@@ -238,15 +238,16 @@ def stop(
 def restart(
     paths: UqsPaths,
     procs: str = "all",
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     capture: bool = False,
 ):
+    occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
 
 
 def summary(
     paths: UqsPaths,
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """torq.sh summary's table, without torq.sh: see stack/alive.py for why."""
@@ -257,7 +258,7 @@ def summary(
 def print_procs(
     paths: UqsPaths,
     procs: str = "all",
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     capture: bool = True,
 ):
     return run_torq_sh(paths, ["print", procs], base_port=base_port, capture=capture)

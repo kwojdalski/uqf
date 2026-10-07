@@ -47,6 +47,16 @@ def _paths(root: Path = Path("/repo")) -> UqsPaths:
     )
 
 
+@pytest.fixture(autouse=True)
+def _no_port_check(monkeypatch):
+    """The verbs' torq.sh arguments are what is under test here; the check
+    for another stack on the ports reads `ps` and process.csv, which these
+    stand-in paths do not have. test_occupancy.py covers it."""
+    from uqs.stack import occupancy
+
+    monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a, **_k: None)
+
+
 @pytest.fixture(scope="module")
 def q_port(start_q, tmp_path_factory) -> Any:
     script = tmp_path_factory.mktemp("q") / "schema.q"

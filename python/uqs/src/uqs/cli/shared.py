@@ -158,7 +158,14 @@ def _debug_requested(ctx: typer.Context, flag: bool) -> bool:
     return flag or bool((parent or {}).get("debug")) or _env_log_level() == "DEBUG"
 
 
-PortOpt = Annotated[int, typer.Option("--port", help="KDBBASEPORT - shifts every process's port")]
+PortOpt = Annotated[
+    int | None,
+    typer.Option(
+        "--port",
+        help="KDBBASEPORT - shifts every process's port. Default: the runtime's own "
+        + ", ".join(f"{r.name} {r.base_port}" for r in runtimes.RUNTIMES.values()),
+    ),
+]
 ProcsArg = Annotated[
     list[str] | None,
     typer.Argument(

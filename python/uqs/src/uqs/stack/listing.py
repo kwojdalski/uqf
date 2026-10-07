@@ -14,7 +14,7 @@ from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_by_process
 from uqs.model.jobs import job_rows
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
-from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES
+from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
 from uqs.stack import runtime_profiles
 from uqs.stack.env import build_env
@@ -61,7 +61,7 @@ def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
     return out
 
 
-def _list_processes(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
+def _list_processes(paths: UqsPaths, base_port: int | None) -> list[dict[str, str]]:
     """Every process.csv row, resolved, with the tables it reads and writes.
 
     Inputs and outputs come from the same declarations `uqs summary`'s graph
@@ -196,9 +196,7 @@ LISTABLE_KINDS: dict[str, Any] = {
 }
 
 
-def list_items(
-    paths: UqsPaths, kind: str, base_port: int = DEFAULT_BASE_PORT
-) -> list[dict[str, str]]:
+def list_items(paths: UqsPaths, kind: str, base_port: int | None = None) -> list[dict[str, str]]:
     """List every item of *kind* - 'processes' (procname/proctype/port/
     startwithall, resolved+overridden), 'fields' (process.csv's valid
     column names, for config set), 'overrides' (every process_overrides.csv
@@ -248,7 +246,7 @@ MONITOR_PROCNAME = "monitor1"
 HEARTBEAT_QUERY = "0!.hb.hb"
 
 
-def configured_ports(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+def configured_ports(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     """procname -> the port that process is configured to listen on.
 
     The same resolution `_list_processes` does, keyed for lookup. Every
@@ -260,7 +258,7 @@ def configured_ports(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dic
 
 
 def heartbeat_states(
-    paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT, timeout: int = 0
+    paths: UqsPaths, base_port: int | None = None, timeout: int = 0
 ) -> dict[str, str] | None:
     """procname -> heartbeat state, or None when monitor1 cannot be reached.
 
@@ -290,7 +288,7 @@ def heartbeat_states(
     return _heartbeat_by_procname(rows)
 
 
-def _monitor_port(paths: UqsPaths, base_port: int) -> int:
+def _monitor_port(paths: UqsPaths, base_port: int | None) -> int:
     """monitor1's resolved port, from the registry rather than an assumption."""
     for row in _list_processes(paths, base_port):
         if row["procname"] == MONITOR_PROCNAME:

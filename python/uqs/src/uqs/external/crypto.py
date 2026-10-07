@@ -13,7 +13,6 @@ from pathlib import Path
 
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.procs import get_process_config
 
@@ -101,7 +100,7 @@ def is_crypto_recorder_running(paths: UqsPaths) -> bool:
 
 def start_crypto_recorder(
     paths: UqsPaths,
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     venues: tuple[str, ...] = CRYPTO_RECORDER_DEFAULT_VENUES,
     symbols: tuple[str, ...] = CRYPTO_RECORDER_DEFAULT_SYMBOLS,
     top_n_levels: int = 5,
@@ -226,7 +225,7 @@ def is_crypto_fills_recorder_running(paths: UqsPaths) -> bool:
 
 def start_crypto_fills_recorder(
     paths: UqsPaths,
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     oms_socket_path: str = DEFAULT_OMS_SOCKET_PATH,
     symbol: str = CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
     poll_interval_ms: int = CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,

@@ -43,6 +43,15 @@ class Runtime:
     #: gateway1's access list, DQE's metatable queries and monitor1's
     #: connection budget. Without it the starter pack runs as it ships.
     overlays: bool
+    #: KDBBASEPORT when `--port` is not given: every process listens on it
+    #: plus its offset (scripts/processes/process_ports.csv). Each runtime's
+    #: span of ports is clear of every other's, so two runtimes run side by
+    #: side with no flags (#761); `--port` still moves one anywhere.
+    base_port: int
+
+    def resolve_base_port(self, base_port: int | None) -> int:
+        """KDBBASEPORT: `base_port` when given (`--port`), else this runtime's."""
+        return self.base_port if base_port is None else base_port
 
 
 #: Every runtime, by name. The first is the default.
@@ -62,6 +71,7 @@ RUNTIMES: dict[str, Runtime] = {
             data_dir="uqs",
             pipelines=True,
             overlays=True,
+            base_port=6050,
         ),
         Runtime(
             name="torq",
@@ -69,6 +79,7 @@ RUNTIMES: dict[str, Runtime] = {
             data_dir="uqs-torq",
             pipelines=False,
             overlays=False,
+            base_port=6150,
         ),
     )
 }

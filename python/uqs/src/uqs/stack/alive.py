@@ -29,7 +29,6 @@ import time
 from collections import defaultdict
 
 from uqs.logger import get_logger
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.procs import effective_process_rows, resolve_process_config
@@ -51,7 +50,7 @@ def _local_hosts() -> set[str]:
     return names
 
 
-def _process_rows(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
+def _process_rows(paths: UqsPaths, base_port: int | None) -> list[dict[str, str]]:
     """process.csv as the start line sees it - vendored rows, uqf's, the
     operator's overrides - resolved, without writing anything."""
     env = build_env(paths, base_port=base_port)
@@ -111,7 +110,7 @@ def _listening_ports(pids: list[int], timeout: float | None) -> dict[int, list[s
 
 
 def status_table(
-    paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT, timeout: float | None = None
+    paths: UqsPaths, base_port: int | None = None, timeout: float | None = None
 ) -> str:
     """torq.sh summary's table: every local process, up with pid and port or down."""
     try:
@@ -120,6 +119,7 @@ def status_table(
         raise UqsError(f"listing processes did not finish within {timeout:g}s") from exc
     local = _local_hosts()
     found: list[tuple[str, int | None]] = []
+    base_port = paths.runtime_declaration.resolve_base_port(base_port)  # torq.sh's -stackid
     for row in _process_rows(paths, base_port):
         if row.get("host", "localhost") not in local:
             continue
@@ -137,7 +137,7 @@ def status_table(
     return "\n".join(lines) + "\n"
 
 
-def running(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> set[str]:
+def running(paths: UqsPaths, base_port: int | None = None) -> set[str]:
     """The procnames that are up."""
     return {
         line.split("|")[1].strip()

@@ -39,8 +39,12 @@ from uqs.model.pipeline import (
     PipelineKind,
 )
 from uqs.paths import PROCESS_PORTS_FILE, TABLES_FILE, repo_root
+from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 
-DEFAULT_BASE_PORT = 6050
+#: The default runtime's base port. Every other default is that runtime's
+#: own `base_port`: a `base_port=None` resolves through
+#: Runtime.resolve_base_port, for the runtime the paths were built for.
+DEFAULT_BASE_PORT = RUNTIMES[DEFAULT_RUNTIME].base_port
 
 #: Processes that run no declared job, so nothing in q describes them.
 NON_JOB_PIPELINES: tuple[Pipeline, ...] = (

@@ -29,7 +29,6 @@ from uqs.external.crypto import (
     DEFAULT_OMS_SOCKET_PATH,
 )
 from uqs.logger import configure_logging, get_logger
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, runtime
 from uqs.stack import logs as stack_logs
@@ -62,7 +61,7 @@ def _run(result_fn, *args, **kwargs) -> str:
 
 
 @mcp.tool
-def uqs_start(procs: str = "all", port: int = DEFAULT_BASE_PORT) -> str:
+def uqs_start(procs: str = "all", port: int | None = None) -> str:
     """Start the uqf stack. procs='all' starts every startwithall=1 process
     (including uqf's own fxfeed1); pass a space-separated list of process
     names to start only specific ones.
@@ -71,19 +70,19 @@ def uqs_start(procs: str = "all", port: int = DEFAULT_BASE_PORT) -> str:
 
 
 @mcp.tool
-def uqs_stop(procs: str = "all", port: int = DEFAULT_BASE_PORT) -> str:
+def uqs_stop(procs: str = "all", port: int | None = None) -> str:
     """Stop the uqf stack (all processes, or a space-separated subset)."""
     return _run(runtime.stop, procs, base_port=port)
 
 
 @mcp.tool
-def uqs_restart(procs: str = "all", port: int = DEFAULT_BASE_PORT) -> str:
+def uqs_restart(procs: str = "all", port: int | None = None) -> str:
     """Restart the uqf stack (all processes, or a space-separated subset)."""
     return _run(runtime.restart, procs, base_port=port)
 
 
 @mcp.tool
-def uqs_summary(port: int = DEFAULT_BASE_PORT) -> str:
+def uqs_summary(port: int | None = None) -> str:
     """Status table (up/down, pid, port) for every process in process.csv."""
     return _run(runtime.summary, base_port=port)
 
@@ -118,9 +117,7 @@ def uqs_query(
 
 
 @mcp.tool
-def uqs_get_config(
-    procname: str, port: int = DEFAULT_BASE_PORT, resolve: bool = True
-) -> dict[str, str]:
+def uqs_get_config(procname: str, port: int | None = None, resolve: bool = True) -> dict[str, str]:
     """Return a process's effective process.csv row (vendored/fxfeed1
     values with any uqs_set_config overrides applied on top). With
     resolve=True (the default), ${VAR}/{VAR}+N placeholders (KDBBASEPORT,
@@ -157,7 +154,7 @@ def uqs_list_kinds() -> list[str]:
 
 
 @mcp.tool
-def uqs_list(kind: str = "processes", port: int = DEFAULT_BASE_PORT) -> Any:
+def uqs_list(kind: str = "processes", port: int | None = None) -> Any:
     """List every item of *kind* - call uqs_list_kinds() for the full
     set. 'processes' (procname/proctype/port/startwithall, resolved and
     with overrides applied) is the default; 'fields' lists process.csv's
@@ -172,7 +169,7 @@ def uqs_list(kind: str = "processes", port: int = DEFAULT_BASE_PORT) -> Any:
 
 
 @mcp.tool
-def uqs_print(procs: str = "all", port: int = DEFAULT_BASE_PORT) -> str:
+def uqs_print(procs: str = "all", port: int | None = None) -> str:
     """Show the exact startup command line(s) for procs, without starting
     anything.
     """
@@ -201,7 +198,7 @@ def uqs_crypto_start(
     symbols: str = ",".join(CRYPTO_RECORDER_DEFAULT_SYMBOLS),
     top_n_levels: int = 5,
     interval_ms: int = 1000,
-    port: int = DEFAULT_BASE_PORT,
+    port: int | None = None,
 ) -> str:
     """Build and launch a sibling cryptorust checkout's own
     kdb-market-data-recorder, publishing live venue order books into
@@ -247,7 +244,7 @@ def uqs_crypto_fills_start(
     oms_socket_path: str = DEFAULT_OMS_SOCKET_PATH,
     symbol: str = CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
     poll_interval_ms: int = CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
-    port: int = DEFAULT_BASE_PORT,
+    port: int | None = None,
 ) -> str:
     """Build and launch a sibling cryptorust checkout's own
     kdb-fills-recorder, publishing the market-making bot's SIMULATED
