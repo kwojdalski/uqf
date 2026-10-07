@@ -134,6 +134,20 @@ test_a_flat_position_has_no_break_even_rate:{[t]
     .qunit.assertTrue[null (.qdesk.break_even[b])[`EURUSD]`break_even;
         "nothing is held, so there is no rate to break even at - a null, not a zero that reads as a price"]};
 
+test_a_position_flat_but_for_float_residue_has_no_break_even_rate:{[t]
+    / 0.1 + 0.2 - 0.3 nets to 5.6e-17, not 0 - and was divided into the
+    / quote cash, publishing -7.2e17 for a closed position (#811).
+    b:.qdesk.apply_fills[.qdesk.empty_book[`sym];
+        ([] sym:3#`BTCUSD; side:1 1 -1; size:0.1 0.2 0.3; price:60000 60100 60200f)];
+    .qunit.assertTrue[0f<>(b`BTCUSD)`base_qty;"the residue this test is about is really there"];
+    .qunit.assertTrue[null (.qdesk.break_even[b])[`BTCUSD]`break_even;"a book flat to within float error has no rate"]};
+
+test_a_small_real_position_still_has_a_break_even_rate:{[t]
+    / The tolerance is below any tradeable size, so a genuine millionth is held.
+    b:.qdesk.apply_fills[.qdesk.empty_book[`sym];
+        ([] sym:enlist `BTCUSD; side:enlist 1; size:enlist 1e-6; price:enlist 60000f)];
+    .testutil.assertApprox[(.qdesk.break_even[b])[`BTCUSD]`break_even;60000f;1e-6;"1e-6 BTC bought at 60000 breaks even at 60000"]};
+
 / ------------------------------------------------------ CURRENCY NETTING
 
 test_a_currency_nets_across_the_pairs_that_touch_it:{[t]

@@ -122,11 +122,24 @@ apply_fills:{[book;batch]
 / A flat book (no base left) has no break-even rate, and gets a null
 / rather than a division by zero: 0f%0f is 0n in q, but relying on that
 / would leave a reader guessing whether the zero was a price.
+/ .
+/ "Flat" is within flat_tolerance, not exactly 0f. base_qty is a sum of
+/ floats, and fractional sizes rarely net to an exact zero: buying 0.1 and
+/ 0.2 BTC and selling 0.3 leaves 5.6e-17, and dividing quote cash by that
+/ published a break-even of -7.2e17 for a closed position (#811).
 / @param book a book from apply_fills
 / @return the book with a break_even column added
 / @eg exec break_even from .qdesk.break_even .qdesk.apply_fills[.qdesk.empty_book[`sym];([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; price:enlist 1.085)] -> enlist 1.085
 break_even:{[book]
-    update break_even:?[base_qty=0f; 0n; (neg quote_qty)%base_qty] from book}
+    / A local, not the global by name: inside qSQL KDB-X resolves a bare
+    / global at the ROOT, where no flat_tolerance exists.
+    tol:flat_tolerance;
+    update break_even:?[tol>abs base_qty; 0n; (neg quote_qty)%base_qty] from book}
+
+/ The base quantity below which a book counts as flat. Under the smallest
+/ unit anything here trades in - a satoshi is 1e-8 - so a position this
+/ small is float residue from netting, never a real holding.
+flat_tolerance:1e-9
 
 / Net exposure per currency across a whole book.
 / .
