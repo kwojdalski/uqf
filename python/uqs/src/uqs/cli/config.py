@@ -13,6 +13,7 @@ listing these commands exactly where they were before the split.
 
 from __future__ import annotations
 
+import json
 import shlex
 from typing import Annotated
 
@@ -107,6 +108,9 @@ def list_items(
         bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
     ] = False,
     interactive: InteractiveOpt = False,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the rows as a JSON list, for a script.")
+    ] = False,
 ) -> None:
     """List every item of KIND - run with no argument to see the available
     kinds. Not just processes: 'fields' lists process.csv's valid config set
@@ -126,6 +130,10 @@ def list_items(
         _die(exc)
         return
     items = _sorted_items(items, sort, reverse)
+    if as_json:
+        print(json.dumps(items, indent=2))
+        _export(items, export)
+        return
     table = Table(title=f"{kind} ({len(items)})")
     if items:
         for col in items[0]:

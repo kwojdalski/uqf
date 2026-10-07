@@ -48,6 +48,7 @@ from uqs.cli import graph  # noqa: F401
 from uqs.cli import query  # noqa: F401
 from uqs.cli import inspect  # noqa: F401
 from uqs.cli import config  # noqa: F401
+from uqs.cli import runtime_diff  # noqa: F401
 from uqs.cli import sources  # noqa: F401
 from uqs.cli import create  # noqa: F401
 from uqs.cli import remove  # noqa: F401

@@ -69,7 +69,7 @@ def test_a_runtime_without_overlays_has_no_service_layer(with_probe, tmp_path):
     assert env["UQS_RUNTIME"] == "probe"
 
 
-@pytest.mark.parametrize("command", sorted(shared.UQF_ONLY_COMMANDS))
+@pytest.mark.parametrize("command", sorted(runtimes.UQF_ONLY_COMMANDS))
 def test_a_runtime_without_pipelines_refuses_their_commands_by_its_own_name(
     with_probe, monkeypatch, command
 ):
