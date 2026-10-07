@@ -59,6 +59,10 @@
 / decoration: q says `0n>=0n` is 1b, so a pair the venue quoted on neither
 / side would report as crossed on every row if the test were written the
 / obvious way. A level nobody quoted is absent, not wrong.
+/ .
+/ The latency test excludes them for the same reason: `0n<0` is 1b, and so
+/ is `5f>0n`, so a row carrying no latency sample read as negative_latency
+/ and failed the whole window (#734). A sample nobody took is absent too.
 / @param batch the transformed rows of one window
 / @return a table check/status/detail, one row per offending row; empty when the batch passes
 / @eg .qpipe.job.crypto_market_data_backfill.quality_check[.qpipe.transform.crypto_market_data.example_book[]]  ->  an empty table
@@ -68,7 +72,11 @@ quality_check:{[batch]
     top_ask:first each batch`ask_prices;
     crossed:batch where (not null top_bid) & (not null top_ask) & top_bid>=top_ask;
     bad_trade:select from batch where (not null trade_price) & not (trade_price>0) & (trade_size>0);
-    bad_latency:select from batch where (latency_ms<0) | (latency_min_ms>latency_ms);
+    sample:batch`latency_ms;
+    floor_ms:batch`latency_min_ms;
+    negative_sample:(not null sample) & sample<0;
+    floor_above_sample:(not null floor_ms) & (not null sample) & floor_ms>sample;
+    bad_latency:batch where negative_sample | floor_above_sample;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
         ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each t)
