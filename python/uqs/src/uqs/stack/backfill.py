@@ -16,18 +16,16 @@ reused the last range - the default torq_backfill.q exists to refuse.
 from __future__ import annotations
 
 import json
-import os
 import re
 import socket
 import subprocess
-import time
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runs, runtime
+from uqs.stack.backfill_wait import pid_alive
 
 #: What a flag value may contain. torq.sh builds the start line into a string
 #: and `eval`s it, so anything a shell would interpret - a space, a `;`, a
@@ -240,92 +238,10 @@ def start(
 NO_STATUS_MODES = ("validate", "plan")
 
 
-def _ns_stamp(value: str) -> datetime:
-    """A q timestamp from JSON (nanoseconds, no offset, UTC) as a datetime."""
-    stamp, _, fraction = value.partition(".")
-    return datetime.fromisoformat(f"{stamp}.{(fraction or '0')[:6].ljust(6, '0')}").replace(
-        tzinfo=UTC
-    )
-
-
-def wait_for_outcome(
-    paths: UqsPaths,
-    procname: str,
-    source_version: str,
-    range_from: datetime,
-    range_to: datetime,
-    launched_at: datetime,
-    *,
-    poll_seconds: float = 2.0,
-    sleep: Callable[[float], None] = time.sleep,
-) -> tuple[str, int, str]:
-    """Follow the process's status file to its outcome: (state, exit code, error).
-
-    `uqs backfill` returns once torq.sh has STARTED the process, so its own
-    exit code says only that. This waits for what the worker reports - the
-    same file the Airflow sensor reads, with the sensor's rules: a file for
-    another run (version, range, or written before this launch) is not this
-    one's; `idle`/`completed` exit 0, `failed` 1; and a `starting`/`running`
-    file whose process is gone on this host is `abandoned`, 1, because it
-    will never be written again. The error is the file's own - why a `failed`
-    run failed, e.g. which reactions it left owed (#632) - and "" otherwise.
-    """
-    path = runs.status_dir(paths) / f"airflow_status_{procname}.txt"
-    while True:
-        try:
-            status = json.loads(path.read_text())
-        except OSError, ValueError:
-            status = None
-        if status is not None and _is_this_run(
-            status, source_version, range_from, range_to, launched_at
-        ):
-            state = str(status["state"])
-            if state in ("idle", "completed"):
-                return state, 0, ""
-            if state == "failed":
-                return state, 1, str(status.get("error") or "")
-            if str(status.get("host", "")).lower() == socket.gethostname().lower() and not (
-                _pid_alive(int(status["pid"]))
-            ):
-                return "abandoned", 1, "its process is gone and it never recorded an outcome"
-        sleep(poll_seconds)
-
-
-def _is_this_run(
-    status: dict,
-    source_version: str,
-    range_from: datetime,
-    range_to: datetime,
-    launched_at: datetime,
-) -> bool:
-    try:
-        return (
-            status["source_version"] == source_version
-            and _ns_stamp(status["range_from"]) == range_from.astimezone(UTC)
-            and _ns_stamp(status["range_to"]) == range_to.astimezone(UTC)
-            and _ns_stamp(status["updated_at"]) >= launched_at.astimezone(UTC)
-        )
-    except KeyError, ValueError:
-        return False
-
-
 def checkpoint_path(paths: UqsPaths, worker: str) -> Path:
     """`worker`'s private checkpoint, where `.qetl.job.bounded.state.checkpoint_path`
     writes it: `<worker>.checkpoint` in the status directory."""
     return runs.status_dir(paths) / f"{worker}.checkpoint"
-
-
-def _pid_alive(pid: int) -> bool:
-    """Is `pid` running on this machine? A process owned by another user
-    raises PermissionError, and that one IS running - the reason
-    `.qetl.job.bounded.state.pid_alive` uses `ps -p` rather than `kill -0`."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
 
 
 def _live_holder(lock: Path) -> str | None:
@@ -349,7 +265,7 @@ def _live_holder(lock: Path) -> str | None:
         return "a holder that recorded no pid or host"
     if str(host).lower() != socket.gethostname().lower():
         return f"pid {pid} on {host}"
-    return f"pid {pid}" if _pid_alive(int(pid)) else None
+    return f"pid {pid}" if pid_alive(int(pid)) else None
 
 
 def clear_checkpoint(paths: UqsPaths, worker: str) -> Path | None:

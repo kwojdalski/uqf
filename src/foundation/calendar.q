@@ -156,8 +156,10 @@ pair_terms:{[pair;conventions]
 / The spot date a trade date settles on, and why.
 / .
 / Spot is `spot_lag` joint business days after the trade date (holidays of
-/ both currencies count). The result names the lag, the calendars used and
-/ every business day skipped over on the way.
+/ both currencies count), and always itself a joint business day: a T+0 trade
+/ dated on a weekend or a holiday settles on the next business day, never
+/ before the trade. The result names the lag, the calendars used and every
+/ non-business day skipped over on the way.
 / @param trade_date the trade date
 / @param pair the currency pair, e.g. `EURUSD
 / @param calendars dict currency -> holiday dates; both currencies required

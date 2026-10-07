@@ -125,7 +125,8 @@ Each stage stops the deployment if it fails:
   | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime                                                                                                                                                                                                                                                                    |
   | ports     | nothing else listens on the profile's ports                                                                                                                                                                                                                                                                                                                                                    |
   | start     | `uqs start --profile <profile>` from the new release                                                                                                                                                                                                                                                                                                                                           |
-  | verify    | `scripts/deploy_verify.py`: within `--verify-timeout`, every process the profile resolves to answers `.proc.procname` with its own name over q IPC. Where the quant library is loaded, a forward prices correctly; where the ETL tree is loaded, every transform's examples pass. A profile with pipeline processes must run the ETL check at least once                                       |
+  | verify    | `scripts/deploy_verify.py`: within `--verify-timeout`, every process the profile resolves to answers `.proc.procname` with its own name over q IPC. **Every pipeline process** must pass both the library check (a forward prices correctly) and the ETL check (every transform's examples pass); other processes are checked for whichever they load                                          |
+  | report    | `deploy-report.json` is written into the release **before** activation, and a failed write fails the deployment: the next upgrade reads it to know which processes to stop                                                                                                                                                                                                                     |
   | activate  | `current` moves to the new release in a single rename. The previous release stays where it was                                                                                                                                                                                                                                                                                                 |
 
 The tool prints a report as JSON when it finishes, and leaves it in the release
@@ -139,9 +140,16 @@ Before `start`, nothing on the server has changed apart from a new directory
 under `releases/`, which is kept for inspection.
 
 From `start` on, the new release's processes are stopped. If `--restart` had
-stopped the previous ones, they are started again from the previous release.
-`current` only moves in the activate stage, so it still names the previous
-release. The report's `rollback` field says what was done and whether it worked.
+stopped the previous ones, they are started again from the previous release, and
+that release's own verifier is then run with its own `deploy.env` and profile. A
+start command that returned is not taken as a recovery. `current` only moves in
+the activate stage, so it still names the previous release. The report's
+`rollback` field says what was done, and whether the restored processes
+verified.
+
+What `current` names, and so which release `--restart` stops, is read again once
+the lock is held. A deployment that activated between this run's preflight and
+its lock is seen, and is refused without `--restart`.
 
 ## Deploying as a service user
 

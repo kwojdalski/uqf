@@ -576,6 +576,34 @@ class Deployment:
                 "restart", f"release {previous} has no readable {REPORT} to say what it runs"
             ) from None
 
+    def locked_state(self) -> dict[str, str]:
+        """What the destination holds NOW, read under the lock.
+
+        Preflight's reading is from before the lock: another deployment could
+        have activated between the two, and acting on the stale `current`
+        would stop and roll back the wrong release. So the decisions that
+        depend on it are taken again from this.
+        """
+        out = self.run(
+            "lock",
+            "reading the destination under the lock",
+            f"if [ -L {q(self.current)} ]; then "
+            f'echo "current=$(basename "$(readlink {q(self.current)})")"; fi',
+            f"if [ -e {q(self.releases)}/{q(self.release)} ]; then echo release_exists=yes; fi",
+        )
+        state = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        if state.get("release_exists"):
+            raise DeployError(
+                "lock", f"release {self.release} appeared on the server before the lock was taken"
+            )
+        if state.get("current") and not self.cfg.restart:
+            raise DeployError(
+                "lock",
+                f"{self.cfg.dest} now runs release {state['current']} - "
+                "pass --restart to replace it",
+            )
+        return state
+
     def take_lock(self) -> None:
         owner = f"{datetime.now(_UTC).isoformat(timespec='seconds')} release-pending"
         r = self.remote.run(
@@ -738,17 +766,19 @@ class Deployment:
             timeout=timeout,
         )
 
-    def verify(self, release: str) -> dict:
+    def verify(self, release: str, profile: str | None = None, stage: str = "verify") -> dict:
+        """Run the release's own verifier, from its own environment."""
         r = self.remote.run(
             script(
                 *self.in_release(
                     release,
                     ".venv/bin/python scripts/deploy_verify.py "
-                    f"--profile {q(self.cfg.profile)} --deadline {self.cfg.verify_timeout}",
+                    f"--profile {q(profile or self.cfg.profile)} "
+                    f"--deadline {self.cfg.verify_timeout}",
                 )
             ),
             self.cfg.verify_timeout + 60,
-            "verify",
+            stage,
         )
         lines = [ln for ln in (r.stdout or "").splitlines() if ln.strip()]
         try:
@@ -789,19 +819,25 @@ class Deployment:
             f"python3 -c {q(REPLACE_PY)} {q(self.cfg.dest)}/.current.new {q(self.current)}",
         )
 
-    def write_report(self, release: str | None, report: Report) -> None:
+    def write_report(self, release: str | None, report: Report, *, required: bool = False) -> None:
+        """The report into the release. `required` before activation: the next
+        upgrade reads it to know which processes to stop, so a release without
+        one must never become `current`. Afterwards a failed write is logged."""
         if release is None:
             return
         body = json.dumps(report.as_dict(), indent=2)
         try:
             self.run(
-                report.stage or "report",
+                "report" if required else (report.stage or "report"),
                 "writing the report",
-                f"cat > {q(release)}/{REPORT} <<'DEPLOYREPORT'",
+                f"cat > {q(release)}/{REPORT}.new <<'DEPLOYREPORT'",
                 body,
                 "DEPLOYREPORT",
+                f"python3 -c {q(REPLACE_PY)} {q(release)}/{REPORT}.new {q(release)}/{REPORT}",
             )
         except DeployError as exc:
+            if required:
+                raise DeployError("report", f"could not record the deployment: {exc}") from None
             log(f"could not write the report on the server: {exc}")
 
 
@@ -988,7 +1024,15 @@ def _run(
 ) -> int:
     dep.take_lock()
     release: str | None = None
-    previous = facts.get("current")
+    try:
+        state = dep.locked_state()
+    except DeployError:
+        dep.release_lock()
+        raise
+    previous = state.get("current")
+    if previous != facts.get("current"):
+        log(f"current changed since preflight: now {previous or 'none'}")
+    report.previous_release = previous
     prev_profile: str | None = None
     prev_procs: list[str] = []
     stopped_previous = False
@@ -1024,9 +1068,12 @@ def _run(
         if not result.get("passed"):
             raise DeployError("verify", result.get("reason") or "verification failed")
         report.checks["verify"] = "ok"
-        dep.activate(rid)
+        # Recorded BEFORE activation, and fatal if it cannot be: the next
+        # upgrade reads this report to know what to stop.
         report.status = "deployed"
         report.stage = "done"
+        dep.write_report(release, report, required=True)
+        dep.activate(rid)
     except DeployError as exc:
         report.status = "failed"
         report.stage = exc.stage
@@ -1051,18 +1098,32 @@ def _rollback(dep, release, started, stopped_previous, previous, prev_profile) -
         except DeployError as exc:
             notes.append(f"FAILED to stop the new release's processes: {exc}")
     if stopped_previous and previous and prev_profile:
+        prev_release = f"{dep.releases}/{previous}"
         try:
             dep.uqs(
-                f"{dep.releases}/{previous}",
+                prev_release,
                 "rollback",
                 "restarting the previous processes",
                 "start",
                 "--profile",
                 prev_profile,
             )
-            notes.append(f"restarted release {previous}'s profile {prev_profile}")
         except DeployError as exc:
             notes.append(f"FAILED to restart release {previous}: {exc}")
+        else:
+            # A start command that returned is not a recovery: the previous
+            # release's own verifier, with its own deploy.env, must pass.
+            try:
+                result = dep.verify(prev_release, prev_profile, "rollback")
+            except DeployError as exc:
+                result = {"passed": False, "reason": str(exc)}
+            if result.get("passed"):
+                notes.append(f"restarted and verified release {previous}'s profile {prev_profile}")
+            else:
+                notes.append(
+                    f"FAILED to verify release {previous} after restarting {prev_profile}: "
+                    + str(result.get("reason") or "verification failed")
+                )
     if previous:
         notes.append(f"current still names {previous}")
     return "; ".join(notes) or "nothing to roll back"

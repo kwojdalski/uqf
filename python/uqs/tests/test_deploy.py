@@ -317,13 +317,14 @@ def test_a_failed_upgrade_restores_the_previous_release(tmp_path):
     rules = {
         "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
         "deploy-report.json\n": _done(previous),
+        "readlink": _done("current=OLD\n"),
         "deploy_verify.py --profile": _verified(False, "no answer from rdb1"),
     }
     code, remote, report = _run(tmp_path, rules, args=["--restart"])
     assert code == 1
     assert remote.ran("cd /opt/uqf/releases/OLD") and remote.ran("uqs stop rdb1")
     assert remote.ran("uqs start --profile fx")
-    assert "restarted release OLD" in report["rollback"]
+    assert "FAILED to verify release OLD" in report["rollback"]
     assert "current still names OLD" in report["rollback"]
     assert not remote.ran(".current.new")
 
@@ -562,6 +563,7 @@ def test_a_rollback_uses_the_previous_releases_own_settings(tmp_path):
     rules = {
         "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
         "deploy-report.json\n": _done(previous),
+        "readlink": _done("current=OLD\n"),
         "deploy_verify.py --profile": _verified(False, "no answer"),
     }
     _, remote, _ = _run(tmp_path, rules, args=["--restart"])
@@ -582,3 +584,104 @@ def test_help_states_the_resolution_rules(capsys):
         deploy.parse_args(["--help"])
     shown = " ".join(capsys.readouterr().out.split())
     assert "deploying account's $QHOME" in shown and "never this machine's" in shown
+
+
+# --- hardening: lock, readiness, report, rollback ---------------------------------
+
+
+class SequencedRemote(FakeRemote):
+    """A FakeRemote whose rule for `marker` answers differently on later calls."""
+
+    def __init__(self, rules, marker, answers):
+        super().__init__(rules)
+        self.marker, self.answers = marker, list(answers)
+
+    def run(self, script, timeout, stage, as_login=False):
+        if self.marker in script and self.answers:
+            self.scripts.append((stage, script))
+            return self.answers.pop(0)
+        return super().run(script, timeout, stage, as_login)
+
+
+def test_a_release_activated_meanwhile_without_restart_is_refused_under_the_lock(tmp_path):
+    remote = FakeRemote({**_HEALTHY, "readlink": _done("current=OLD\n")})
+    with pytest.raises(deploy.DeployError, match="now runs release OLD") as err:
+        deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path))), remote, out=io.StringIO())
+    assert err.value.stage == "lock"
+    assert remote.puts == [] and remote.ran("rm -rf /opt/uqf/deploy.lock")
+
+
+def test_with_restart_the_release_current_under_the_lock_is_the_one_stopped(tmp_path):
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb9"}]})
+    rules = {
+        "readlink": _done("current=NEWER\n"),
+        "deploy-report.json\n": _done(previous),
+        "deploy_verify.py --profile": _verified(True),
+    }
+    code, remote, report = _run(tmp_path, rules, args=["--restart"])
+    assert code == 0 and report["previous_release"] == "NEWER"
+    assert remote.ran("cd /opt/uqf/releases/NEWER") and remote.ran("uqs stop rdb9")
+
+
+def test_the_report_is_written_before_activation(tmp_path):
+    code, remote, _ = _run(tmp_path, {"deploy_verify.py --profile": _verified(True)})
+    stages = [st for st, _ in remote.scripts]
+    assert code == 0 and stages.index("report") < stages.index("activate")
+
+
+def test_a_report_that_cannot_be_written_fails_the_deployment_and_never_activates(tmp_path):
+    rules = {
+        "deploy_verify.py --profile": _verified(True),
+        "DEPLOYREPORT": _done(rc=1, stderr="No space left on device"),
+    }
+    code, remote, report = _run(tmp_path, rules)
+    assert code == 1 and report["stage"] == "report"
+    assert not remote.ran(".current.new") and remote.ran("uqs stop all")
+
+
+def test_a_recovered_previous_release_is_verified_with_its_own_verifier(tmp_path):
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    rules = {
+        "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+        "readlink": _done("current=OLD\n"),
+        "deploy-report.json\n": _done(previous),
+    }
+    remote = SequencedRemote(
+        {**_HEALTHY, **rules},
+        "deploy_verify.py --profile",
+        [_verified(False, "no answer from rdb1"), _verified(True)],
+    )
+    out = io.StringIO()
+    code = deploy.deploy(
+        deploy.parse_args(_args(_artifact(tmp_path), "--restart")), remote, out=out
+    )
+    report = json.loads(out.getvalue())
+    assert code == 1 and "restarted and verified release OLD's profile fx" in report["rollback"]
+    check = [s for st, s in remote.scripts if st == "rollback" and "deploy_verify.py" in s]
+    assert check and "cd /opt/uqf/releases/OLD" in check[0] and "--profile fx" in check[0]
+
+
+# --- deploy_verify: every pipeline process is checked ------------------------------
+
+
+def test_a_pipeline_process_missing_its_library_or_etl_fails_even_if_another_passes():
+    answers = {
+        6060: _healthy("posbook1", verify.LIBRARY_EXPECTED, True),
+        6061: _healthy("flow1"),  # a pipeline process with neither loaded
+    }
+    passed, results, why = verify.verify(
+        {"posbook1": 6060, "flow1": 6061}, {"posbook1", "flow1"}, _query(answers), 5
+    )
+    assert not passed and "flow1" in why and "library and ETL" in why
+    assert [r.ok for r in results] == [True, False]
+
+
+def test_a_pipeline_process_with_the_library_but_no_etl_fails():
+    answers = {6060: _healthy("posbook1", verify.LIBRARY_EXPECTED, None)}
+    passed, _, why = verify.verify({"posbook1": 6060}, {"posbook1"}, _query(answers), 5)
+    assert not passed and "ETL check not ok" in why
+
+
+def test_a_non_pipeline_process_without_the_library_still_passes():
+    passed, _, _ = verify.verify({"rdb1": 6052}, {"posbook1"}, _query({6052: _healthy("rdb1")}), 5)
+    assert passed

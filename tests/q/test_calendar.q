@@ -13,6 +13,23 @@ monday_off:{[ccy] @[no_holidays[];ccy;:;enlist 2026.09.21]}
 / T+2 sat/sun conventions for EURUSD with a given roll.
 conventions:{[lag] (enlist `EURUSD)!enlist `spot_lag`roll`eom`weekend!(lag;`modified_following;1b;`sat`sun)}
 
+test_t0_from_a_weekend_settles_on_the_next_business_day:{[t]
+    / #775: Saturday 2026.09.19 is not a spot date.
+    r:.qcal.spot_date[2026.09.19;`EURUSD;no_holidays[];conventions 0];
+    .qunit.assertEquals[r`date;2026.09.21;"Saturday's T+0 settles Monday"];
+    .qunit.assertEquals[r`skipped;enlist 2026.09.20;"Sunday is passed over on the way"]};
+
+test_t0_from_a_holiday_settles_past_it:{[t]
+    / Monday 2026.09.21 off in USD: T+0 on it, and T+0 from the Saturday before.
+    .qunit.assertEquals[.qcal.spot_date[2026.09.21;`EURUSD;monday_off `USD;conventions 0]`date;2026.09.22;
+        "a USD holiday is not a EURUSD spot date"];
+    .qunit.assertEquals[.qcal.spot_date[2026.09.19;`EURUSD;monday_off `EUR;conventions 0]`date;2026.09.22;
+        "nor a EUR one, after a weekend"]};
+
+test_t0_on_a_business_day_is_the_trade_date:{[t]
+    .qunit.assertEquals[.qcal.spot_date[2026.09.18;`EURUSD;no_holidays[];conventions 0]`date;2026.09.18;
+        "a Friday's T+0 is the Friday"]};
+
 test_weekday_maps_date_mod_7:{[t]
     .qunit.assertEquals[.qcal.weekday 2026.09.18 2026.09.19 2026.09.20 2026.09.21;`fri`sat`sun`mon;"Fri, Sat, Sun, Mon"]};
 

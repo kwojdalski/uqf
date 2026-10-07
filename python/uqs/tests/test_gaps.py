@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import os
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
+from uqs.cli import gaps as gaps_cli
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, paths_for_root
 from uqs.stack import uptime
@@ -119,3 +120,34 @@ def test_the_cli_says_when_the_job_was_up_throughout(monkeypatch):
     result = _gaps_cli(monkeypatch, [], ["hdb_demo_markouts_backfill"])
     assert result.exit_code == 0
     assert "up throughout" in result.output
+
+
+def test_a_gap_today_prints_no_command_and_says_when_it_can_be_refilled(monkeypatch):
+    """#770: the HDB writer refuses rows dated today, so no command is advised."""
+    monkeypatch.setattr(gaps_cli, "_utc_today", lambda: date(2026, 9, 13))
+    result = _gaps_cli(monkeypatch, [_HOLE], ["hdb_demo_markouts_backfill"])
+    assert result.exit_code == 0, result.output
+    assert "2026-09-13T10:20:00.000000000" in result.output, "the gap itself is still shown"
+    assert "uqs backfill" not in result.output
+    assert "after end of day" in result.output
+
+
+def test_a_gap_across_midnight_into_today_is_refilled_up_to_midnight(monkeypatch):
+    monkeypatch.setattr(gaps_cli, "_utc_today", lambda: date(2026, 9, 14))
+    hole = {
+        "range_from": "2026-09-13T23:00:00.000000000",
+        "range_to": "2026-09-14T01:00:00.000000000",
+    }
+    result = _gaps_cli(monkeypatch, [hole], ["hdb_demo_markouts_backfill"])
+    assert (
+        "uqs backfill hdb_demo_markouts_backfill --from 2026-09-13T23:00:00 "
+        "--to 2026-09-14T00:00:00 --version <V>"
+    ) in result.output
+    assert "after end of day" in result.output
+
+
+def test_a_gap_before_today_is_advised_whole_and_nothing_is_said_about_today(monkeypatch):
+    monkeypatch.setattr(gaps_cli, "_utc_today", lambda: date(2026, 9, 14))
+    result = _gaps_cli(monkeypatch, [_HOLE], ["hdb_demo_markouts_backfill"])
+    assert "--to 2026-09-13T10:20:00 --version <V>" in result.output
+    assert "after end of day" not in result.output

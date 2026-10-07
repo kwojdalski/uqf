@@ -201,6 +201,51 @@ def test_a_failed_build_leaves_nothing_reusable_and_can_be_retried(tmp_path):
     assert retry.builds == 1
 
 
+def _hangs(argv, **kw):
+    raise peachq.subprocess.TimeoutExpired(argv, kw.get("timeout"))
+
+
+def test_a_fetch_that_times_out_is_an_error_naming_the_commit_not_a_traceback(
+    tmp_path, monkeypatch
+):
+    """#772: the real git_fetch, with git hanging past its limit."""
+    monkeypatch.setattr(peachq.subprocess, "run", _hangs)
+    fake = Fake()
+    with pytest.raises(
+        peachq.PeachQError,
+        match=rf"could not fetch https://example.invalid/peachq@{COMMIT} "
+        r"\(git init timed out after 600s\).*set UQF_PEACHQ to an existing PeachQ binary",
+    ):
+        peachq.resolve(
+            {"XDG_CACHE_HOME": str(tmp_path / "cache")},
+            pin_path=_pin(tmp_path),
+            plat=PLAT,
+            build=fake.build,
+            identify=fake.identify,
+            prerequisites=lambda env: [],
+            log=fake.messages.append,
+        )
+    assert fake.builds == 0
+    root = tmp_path / "cache" / "uqf" / "peachq"
+    assert not [p for p in root.iterdir() if p.is_dir()], "nothing published, no build dir left"
+
+
+def test_a_build_that_times_out_is_an_error_too(tmp_path, monkeypatch):
+    monkeypatch.setattr(peachq.subprocess, "run", _hangs)
+    log = tmp_path / "build.log"
+    with pytest.raises(peachq.PeachQError, match="building PeachQ timed out after 1800s"):
+        peachq.make_build(tmp_path, "q", {}, log)
+
+
+def test_main_reports_a_timeout_as_its_own_message(monkeypatch, capsys):
+    def timed_out():
+        raise peachq.PeachQError("could not fetch x@y (fetch -q timed out after 600s)")
+
+    monkeypatch.setattr(peachq, "resolve", timed_out)
+    assert peachq.main([]) == 1
+    assert "timed out after 600s" in capsys.readouterr().err
+
+
 def test_an_interrupted_build_and_a_damaged_entry_are_rebuilt(tmp_path):
     good = Fake().resolve(tmp_path)
     root = good.parent.parent
