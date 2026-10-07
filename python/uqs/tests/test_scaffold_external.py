@@ -15,6 +15,7 @@ from uqs import cli
 from uqs.external import feeds
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import write
+from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.external import external_feed, external_files
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.remove import plan_removal
@@ -104,7 +105,7 @@ def test_raw_table_is_refused_on_another_kind_and_required_on_external():
 def tree(tmp_path: Path) -> Path:
     shutil.copytree(UQF_ROOT / "src", tmp_path / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", tmp_path / "scripts" / "processes")
-    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, PROFILES_FILE):
+    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, PROFILES_FILE, STACK_PAGE, SHOWCASE_PAGE):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, tmp_path / rel)
     for rel in ("python/uqs/src/uqs/external", "python/uqs/tests"):
@@ -113,7 +114,7 @@ def tree(tmp_path: Path) -> Path:
 
 
 def test_scaffold_then_remove_leaves_the_tree_as_it_was(tree):
-    watched = [TABLES_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST]
+    watched = [TABLES_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, STACK_PAGE, SHOWCASE_PAGE]
     before = {p: (tree / p).read_text() for p in watched}
     write.apply_plan(_plan(), tree)
     assert all((tree / f).is_file() for f in external_files("ws"))

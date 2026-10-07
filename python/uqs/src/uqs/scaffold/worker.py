@@ -13,8 +13,10 @@ import re
 from uqs.paths import SOURCE_DIR, TABLES_FILE, TEST_DIR, WORKER_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
 from uqs.scaffold.columns import Columns, as_columns, nested_declaration, table_definition
+from uqs.scaffold.docs import BACKFILLS, doc_stub_actions
+from uqs.scaffold.example import example_body, example_path
 from uqs.scaffold.jobs import (
-    _STACK_PAGE_NOTE,
+    _DOCS_NOTE,
     _check_name,
     _expected_table_action,
     _nslist_action,
@@ -174,7 +176,15 @@ def bounded_worker(
             "optional: a quality check that fails a window on bad rows - rerun with --check, "
             "or see quality_check in src/etl/workers/demo_deals_backfill.q"
         )
-    notes.append(_STACK_PAGE_NOTE.format(proc=proc))
+    actions.append(
+        FileAction(
+            example_path(name),
+            example_body(name, worker, src, dataset, transport, credential_var(src)),
+        )
+    )
+    notes.append(f"see it run: q {example_path(name).as_posix()} - on the fixture, no stack")
+    actions += doc_stub_actions(proc, BACKFILLS)
+    notes.append(_DOCS_NOTE.format(proc=proc))
     if define_table:
         actions += catalog_actions(dataset, cols, notes)
     return ScaffoldPlan(name=worker, actions=actions, notes=notes)

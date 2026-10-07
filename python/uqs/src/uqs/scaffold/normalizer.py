@@ -26,8 +26,9 @@ from uqs.scaffold.columns import (
     sample_value,
     table_definition,
 )
+from uqs.scaffold.docs import NORMALISERS, doc_stub_actions
 from uqs.scaffold.jobs import (
-    _STACK_PAGE_NOTE,
+    _DOCS_NOTE,
     _check_name,
     _expected_table_action,
     _nslist_action,
@@ -175,7 +176,8 @@ publish:.qetl.job.stream.unwired `{name};
         ),
         _nslist_action(ns),
     ]
-    notes.append(_STACK_PAGE_NOTE.format(proc=proc))
+    actions += doc_stub_actions(proc, NORMALISERS)
+    notes.append(_DOCS_NOTE.format(proc=proc))
     member_actions, member_notes = membership(
         proc,
         profile=profile,

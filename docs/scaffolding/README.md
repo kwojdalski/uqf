@@ -39,9 +39,9 @@ result.
 
 ## What every shape has in common
 
-The four with a process write the same six changes, and the reason each exists
-is the same across shapes. A reaction writes only the first and the last two: it
-has no table.
+The four with a process write the same eight changes, and the reason each exists
+is the same across shapes. A reaction writes only the first and the fifth and
+sixth: it has no table and no process.
 
 ```
 create src/etl/<streaming|sources+workers>/<name>.q   the job itself
@@ -50,7 +50,14 @@ append to tests/q/test_stack_tables.q                 that table's name
 append to scripts/processes/uqs_catalog.q             a SCAFFOLDED description
 create tests/q/test_<name>.q                          a test that FAILS
 append to tests/run_tests.q                           the test's namespace
+append to docs/services/README.md                     a SCAFFOLDED Showcase card
+append to docs/architecture/stack.md                  a SCAFFOLDED comment naming the process
 ```
+
+A backfill also gets `scripts/examples/<name>_example.q`, which runs the worker
+once on its fixture into a throwaway HDB under `build/` - no stack - and exits 1
+unless it published a row. Run it straight after scaffolding:
+`q scripts/examples/<name>_example.q`.
 
 Then it regenerates `docs/man.q` and the process table itself --- you do not run
 those.
@@ -62,12 +69,12 @@ how you get a process that is `up`, heartbeating, and publishing nothing.
 
 **Four things stay yours**, and each is gated so you cannot forget:
 
-  |                              | what fails until you do it                          |
-  | ---                          | ---                                                 |
-  | the handler body             | `test_<name>_is_implemented`                        |
-  | the test                     | the same one — delete it when you write a real test |
-  | the catalog description      | `test_no_scaffold_left.py`                          |
-  | one line of stack-page prose | a pytest check on `docs/architecture/stack.md`      |
+  |                                           | what fails until you do it                          |
+  | ---                                       | ---                                                 |
+  | the handler body                          | `test_<name>_is_implemented`                        |
+  | the test                                  | the same one — delete it when you write a real test |
+  | the catalog description                   | `test_no_scaffold_left.py`                          |
+  | the Showcase card and the stack-page line | `test_no_scaffold_left.py`                          |
 
 A streaming job also lands in **no profile**, so `uqs start --profile` cannot
 reach it. The scaffold says so; `test_profiles.py` fails until it is in one or

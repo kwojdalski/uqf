@@ -15,6 +15,9 @@ process, so no table, profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
 their test, and the raw table the publisher writes - on the same rule as any
 table: only when nothing else mentions it.
+A backfill also loses its worked example under scripts/examples/, and every
+process loses the Showcase card and stack.md comment its scaffold wrote (#713)
+- while they still say SCAFFOLDED. Written prose is left, with a note.
 
 WHAT IT REFUSES. A job whose file carries no SCAFFOLDED marker any more: it
 has been written, and deleting written work is not undoing a scaffold.
@@ -40,6 +43,8 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
 )
+from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
+from uqs.scaffold.example import example_path
 from uqs.scaffold.external import external_files
 from uqs.scaffold.profile import PROFILES_FILE
 
@@ -104,6 +109,10 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             if _source_is_ours(repo_root, source[0], src_file, job_file, force):
                 removal.deletes.append(src_file)
                 gone.add(src_file)
+        example = example_path(job.removesuffix("_backfill"))
+        if (repo_root / example).is_file():
+            removal.deletes.append(example)
+            gone.add(example)
     elif fn == "qetl.job.stream.normalize":
         tables = [job]
     else:
@@ -138,9 +147,13 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
         f"{proc}'s port offset stays in scripts/processes/process_ports.csv, which is append-only "
         "so an offset is never handed to another process"
     )
-    stack_page = repo_root / "docs" / "architecture" / "stack.md"
-    if stack_page.is_file() and proc in stack_page.read_text():
-        removal.notes.append(f"docs/architecture/stack.md names {proc} - remove that by hand")
+    for page in (STACK_PAGE, SHOWCASE_PAGE):
+        _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
+        text = removal.rewrites.get(page) or (
+            (repo_root / page).read_text() if (repo_root / page).is_file() else ""
+        )
+        if re.search(rf"\b{re.escape(proc)}\b", text):
+            removal.notes.append(f"{page} names {proc} - remove that by hand")
     return removal
 
 
