@@ -296,13 +296,14 @@ uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
 uqs --runtime torq stop
 ```
 
-  |                | `uqf` (default)                                                         | `torq`                                                            | `crypto`                                                                                        | `fx`                                                                                        |
-  | ---            | ---                                                                     | ---                                                               | ---                                                                                             | ---                                                                                         |
-  | processes      | the vendored rows, with overlays, plus every pipeline                   | the vendored `process.csv`, unchanged: `feed1` on, `monitor1` off | the vendored rows, with overlays, plus the `crypto` profile's pipelines and what they depend on | the vendored rows, with overlays, plus the `fx` profile's pipelines and what they depend on |
-  | tables         | `database.q` plus this tree's (`fx_orderbook`, the crypto mocks, ...)   | the starter pack's `database.q`: `trade`, `quote`, `packets`      | `database.q` plus the tables those pipelines read and write                                     | `database.q` plus the tables those pipelines read and write                                 |
-  | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     | as `uqf`                                                                                        | as `uqf`                                                                                    |
-  | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 | `output/uqs-crypto`                                                                             | `output/uqs-fx`                                                                             |
-  | base port      | `6050`                                                                  | `6150`                                                            | `6250`                                                                                          | `6350`                                                                                      |
+  |                | `uqf` (default)                                                         | `torq`                                                            | `peachq`            | `crypto`                                                                                        | `fx`                                                                                        |
+  | ---            | ---                                                                     | ---                                                               | ---                 | ---                                                                                             | ---                                                                                         |
+  | processes      | the vendored rows, with overlays, plus every pipeline                   | the vendored `process.csv`, unchanged: `feed1` on, `monitor1` off | as `torq`           | the vendored rows, with overlays, plus the `crypto` profile's pipelines and what they depend on | the vendored rows, with overlays, plus the `fx` profile's pipelines and what they depend on |
+  | tables         | `database.q` plus this tree's (`fx_orderbook`, the crypto mocks, ...)   | the starter pack's `database.q`: `trade`, `quote`, `packets`      | as `torq`           | `database.q` plus the tables those pipelines read and write                                     | `database.q` plus the tables those pipelines read and write                                 |
+  | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     | as `torq`           | as `uqf`                                                                                        | as `uqf`                                                                                    |
+  | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 | `output/uqs-peachq` | `output/uqs-crypto`                                                                             | `output/uqs-fx`                                                                             |
+  | base port      | `6050`                                                                  | `6150`                                                            | `6450`              | `6250`                                                                                          | `6350`                                                                                      |
+  | interpreter    | KDB-X                                                                   | KDB-X                                                             | PeachQ              | KDB-X                                                                                           | KDB-X                                                                                       |
 
 `crypto` and `fx` are focused stacks: the starter pack, this tree's layers, and
 one profile's pipelines with everything they depend on in the job graph - the
@@ -318,6 +319,39 @@ uqs --runtime crypto list processes
 
 Such a runtime can start only the profiles its processes cover, and refuses the
 others naming what is missing, as `torq` does.
+
+`peachq` is `torq`'s stack on [PeachQ](https://github.com/peachq-org/peachq),
+the MIT-licensed q interpreter, rather than KDB-X: the starter pack as it ships,
+with no connection cap and no licence needed. Its binary comes from
+`scripts/peachq.py`: `UQF_PEACHQ` if set, otherwise the pinned build from the
+cache, built into the cache the first time. That stack alone gets
+`UQF_Q_IMPL=peachq` and that `QCMD`. Your shell's own `QCMD` and `PATH` are left
+alone, and `summary` names the interpreter on its first line. KDB-X stays the
+default and the interpreter everything here is verified against.
+
+```
+uqs --runtime peachq start --profile essential
+```
+
+What works today, from a start of `essential` and then `feed1` on PeachQ:
+`discovery1`, `stp1`, `rdb1`, `hdb1`, `gateway1`, `monitor1`, `housekeeping1`,
+`sctp1`, `sortworker1`, `metrics1` and `feed1` come up and answer, and `feed1`'s
+`trade` and `quote` reach `rdb1`. What doesn't, all of it gaps in PeachQ rather
+than in this tree:
+
+- `wdb1` fails to load `wdb.q`: PeachQ has no `.Q.chk`.
+- `sort1` won't start: PeachQ refuses the `-s -2` it is given.
+- `reporter1` fails to load `reporter.q` with `type`.
+- `hdb1` runs, but its partitioned tables aren't defined, so a gateway query
+  that routes to it fails.
+- `monitor1` doesn't exit on `stop`.
+
+So end of day and the HDB don't work on it yet. Treat it as a capture-and-query
+stack for today's data, and check `summary`.
+
+A runtime on PeachQ can't have this tree's pipelines yet. PeachQ can't load the
+nested namespaces the ETL tree is built from (peachq-org/peachq#80), so
+declaring one with `pipelines=True` is refused when `runtimes.py` loads.
 
 Without the service layer, `torq` has none of the [query
 policies](../architecture/query-policies.md): no data-access API, no `.pm` on

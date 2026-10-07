@@ -35,6 +35,7 @@ from uqs.interpreter import interpreter_status
 from uqs.logger import configure_logging
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
+from uqs.stack import env as stack_env
 from uqs.stack import listing, probe, startup
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import (
@@ -209,7 +210,7 @@ def summary(
 
     # Which q runs the fleet and the connection budget that follows (#518):
     # a 20-process fleet is fine on PeachQ and wedged past the cap on KDB-X.
-    status = interpreter_status()
+    status = interpreter_status(stack_env.with_interpreter(paths))
     console.print(listing.interpreter_line(status), style="dim", markup=False)
     if status.problem:
         console.print(f"warning: {status.problem}", style="yellow", markup=False)

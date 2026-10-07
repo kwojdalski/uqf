@@ -74,7 +74,8 @@ from uqs.model.pipeline_edges import (
     VENDORED_PLANT_CLIENTS,
 )
 from uqs.model.registry import PIPELINES
-from uqs.paths import UqsError
+from uqs.paths import UqsError, runtime_from_env
+from uqs.runtimes import RUNTIMES
 
 #: The vendored TorQ processes every profile needs: the plant itself, service
 #: discovery, the databases, the writedown path, the gateway and the
@@ -245,7 +246,8 @@ def licence_limit() -> int | None:
     """
     raw = os.environ.get(LICENCE_CONNECTIONS_ENV, "").strip()
     if not raw:
-        return None if q_impl() == PEACHQ else LICENCE_CONNECTION_LIMIT
+        on_peachq = q_impl() == PEACHQ or RUNTIMES[runtime_from_env()].interpreter == PEACHQ
+        return None if on_peachq else LICENCE_CONNECTION_LIMIT
     try:
         limit = int(raw)
     except ValueError:

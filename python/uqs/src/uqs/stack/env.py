@@ -8,14 +8,22 @@ on nothing but the paths and the port block. Left in runtime it made
 procs -> runtime -> procs a cycle.
 
 Pure: no filesystem writes. bootstrap() calls it and then writes; everything
-else calls it and only reads.
+else calls it and only reads. A runtime on PeachQ also needs its binary, which
+comes from scripts/peachq.py's resolver - its cache, or a build into that cache
+when cold - so that is interpreter_env, which only what starts q calls:
+bootstrap (for torq.sh and setenv.sh) and the HDB filler.
 """
 
 from __future__ import annotations
 
-from uqs.interpreter import q_command
+import functools
+import importlib.util
+import os
+from pathlib import Path
+
+from uqs.interpreter import PEACHQ, Q_IMPL_ENV, Q_INTERPRETER_ENV, q_command
 from uqs.logger import get_logger
-from uqs.paths import UqsPaths
+from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import RUNTIME_ENV
 
 log = get_logger(__name__)
@@ -71,3 +79,36 @@ def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     # back into uqs - see the same runtime this one was built for.
     env[RUNTIME_ENV] = paths.runtime
     return env
+
+
+def interpreter_env(paths: UqsPaths) -> dict[str, str]:
+    """QCMD and UQF_Q_IMPL for a runtime that declares PeachQ (#764), or {}.
+
+    For that runtime's stack only: what torq.sh, the HDB filler and `summary`
+    see for it, never the operator's shell, and nothing goes on PATH. A
+    KDB-X runtime gets {}: the operator's own QCMD stands, as it always has.
+    """
+    if paths.runtime_declaration.interpreter != PEACHQ:
+        return {}
+    return {Q_IMPL_ENV: PEACHQ, Q_INTERPRETER_ENV: str(peachq_binary(paths.scripts_dir))}
+
+
+def with_interpreter(paths: UqsPaths) -> dict[str, str]:
+    """This process's environment with the runtime's interpreter applied."""
+    return {**os.environ, **interpreter_env(paths)}
+
+
+@functools.cache
+def peachq_binary(scripts_dir: Path) -> Path:
+    """The pinned PeachQ build, from scripts/peachq.py: UQF_PEACHQ if set,
+    else the cached build, else a fresh one. That script runs under a bare
+    python3 in CI, so it is loaded by path rather than imported."""
+    spec = importlib.util.spec_from_file_location("uqf_peachq", scripts_dir / "peachq.py")
+    if spec is None or spec.loader is None:  # pragma: no cover - a broken checkout
+        raise UqsError(f"cannot load {scripts_dir / 'peachq.py'}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.resolve()
+    except module.PeachQError as exc:
+        raise UqsError(f"the peachq runtime needs a PeachQ binary: {exc}") from None
