@@ -193,8 +193,10 @@ def run_torq_sh(
     capture: bool = False,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Bootstrap, then run the TorQ launcher with *args* under the generated env:
-    `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER` (stack/launcher.py).
+    """Check the TorQ launcher, bootstrap, then run the launcher with *args*
+    under the generated env: `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER`
+    (stack/launcher.py). A launcher that cannot run is refused before
+    bootstrap writes anything.
 
     `timeout` is seconds to wait before giving up, or None to wait forever -
     which is the right default for `start`/`stop`, whose whole job is to wait
@@ -202,8 +204,11 @@ def run_torq_sh(
     what is going on should not be the thing that hangs, so `summary` sets
     one.
     """
-    overrides = bootstrap(paths, base_port=base_port)
+    # The launcher first: bootstrap writes the data directory, process.csv and
+    # setenv.sh, and a launcher that is going to be refused must not have
+    # had any of that written on its behalf.
     launcher = torq_launcher(paths)
+    overrides = bootstrap(paths, base_port=base_port)
     # subprocess.run's env= *replaces* the environment rather than extending
     # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
     # stop resolving even though they're on PATH in the calling shell.
