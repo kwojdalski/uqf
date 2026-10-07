@@ -17,7 +17,7 @@ from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
 from uqs.stack import runtime_report
-from uqs.stack.env import build_env
+from uqs.stack.env import build_env, with_interpreter
 from uqs.stack.procs import (
     _read_overrides,
     effective_process_rows,
@@ -110,7 +110,7 @@ def _list_env(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     # Which q that QCMD is, beside it (#518): the declaration, and what the
     # binary says when asked. A mismatch is reported, never refused - this
     # command only reads.
-    status = interpreter_status()
+    status = interpreter_status(with_interpreter(paths))
     rows.append({"name": "UQF_Q_IMPL", "value": status.declared})
     rows.append({"name": "q_impl (binary)", "value": _binary_impl(status)})
     if status.problem:

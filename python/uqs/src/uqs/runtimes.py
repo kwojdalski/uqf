@@ -59,6 +59,26 @@ class Runtime:
     #: here that names a process the runtime lacks fails test_profiles,
     #: rather than an operator's start.
     profiles: tuple[str, ...] = ()
+    #: The q implementation the stack runs on: `kdbx`, the reference, or
+    #: `peachq`. A PeachQ runtime gets its binary from scripts/peachq.py and
+    #: UQF_Q_IMPL=peachq for its own stack only - nothing global, nothing on
+    #: PATH - and no licence budget, PeachQ having no connection cap (#764).
+    interpreter: str = "kdbx"
+
+    def __post_init__(self) -> None:
+        if self.interpreter not in ("kdbx", "peachq"):
+            raise ValueError(
+                f"{self.name}: interpreter is kdbx or peachq, not {self.interpreter!r}"
+            )
+        # PeachQ cannot load a nested `\d` namespace (peachq-org/peachq#80,
+        # #511), and the ETL tree is built of them: a pipeline process would
+        # die loading it. Refused here, so the runtime cannot be declared.
+        if self.interpreter == "peachq" and self.pipelines:
+            raise ValueError(
+                f"{self.name}: a PeachQ runtime cannot have this tree's pipelines yet - "
+                "PeachQ cannot load the nested ETL namespaces (peachq-org/peachq#80); "
+                "declare it with pipelines=False"
+            )
 
     def resolve_base_port(self, base_port: int | None) -> int:
         """KDBBASEPORT: `base_port` when given (`--port`), else this runtime's."""
@@ -73,6 +93,9 @@ class Runtime:
 #: torq - the starter pack as it ships, and nothing of this tree's: its own
 #: process.csv, its own database.q (trade, quote, packets), its own feed1.
 #: For seeing TorQ itself, or telling whether a problem is TorQ's or uqf's.
+#:
+#: peachq - torq's stack on PeachQ, the MIT-licensed interpreter: the
+#: starter pack as it ships, with no connection cap and no licence needed.
 #:
 #: crypto, fx - the starter pack with this tree's layers and ONE profile's
 #: pipelines: their processes, the tables they read and write, and an HDB
@@ -98,6 +121,16 @@ RUNTIMES: dict[str, Runtime] = {
             overlays=False,
             base_port=6150,
             profiles=("essential", "feed", "full"),
+        ),
+        Runtime(
+            name="peachq",
+            description="the starter pack as it ships, on PeachQ rather than KDB-X",
+            data_dir="uqs-peachq",
+            pipelines=False,
+            overlays=False,
+            base_port=6450,
+            profiles=("capture",),
+            interpreter="peachq",
         ),
         Runtime(
             name="crypto",

@@ -39,7 +39,7 @@ def with_probe(monkeypatch):
 
 def test_the_default_is_the_first_declared_and_both_runtimes_are_declared():
     assert runtimes.DEFAULT_RUNTIME == "uqf"
-    assert list(runtimes.RUNTIMES) == ["uqf", "torq", "crypto", "fx"]
+    assert list(runtimes.RUNTIMES) == ["uqf", "torq", "peachq", "crypto", "fx"]
     uqf, torq = runtimes.RUNTIMES["uqf"], runtimes.RUNTIMES["torq"]
     assert (uqf.pipelines, uqf.overlays, uqf.data_dir) == (True, True, "uqs")
     assert (torq.pipelines, torq.overlays, torq.data_dir) == (False, False, "uqs-torq")

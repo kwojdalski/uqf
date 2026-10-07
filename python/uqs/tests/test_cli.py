@@ -2062,7 +2062,10 @@ def test_an_unknown_runtime_is_refused(monkeypatch):
     monkeypatch.setenv("UQS_RUNTIME", "uqf")
     said = _refusals(monkeypatch, shared)
     assert runner.invoke(cli.app, ["--runtime", "pure", "list", "fields"]).exit_code == 1
-    assert said == ["--runtime 'pure' is not a runtime - choose one of: uqf, torq, crypto, fx"]
+    from uqs.runtimes import RUNTIMES
+
+    names = ", ".join(RUNTIMES)
+    assert said == [f"--runtime 'pure' is not a runtime - choose one of: {names}"]
 
 
 def _on_torq(monkeypatch) -> list[str]:
