@@ -139,4 +139,60 @@ test_nested_refuses_a_symbol_without_looking_it_up:{[t]
     .qunit.assertThrows[.qetl.plant.nested[`mkt_orderbook;];`bid_prices;
         "nested: mkt_orderbook's element types must be a dictionary*";"refused before `value` could read a variable"]};
 
+/ --- transform inputs are the plant's tables (#817) -----------------------
+/ .
+/ The output side is held to the plant by test_job_output_contracts.q, which
+/ drives every publishing job. This is the input side: a transform input
+/ NAMED after a plant table must be some of that table's columns, with its
+/ types. A job that copied a plant table's schema into its own file (cross.q
+/ did) passed every test while its copy and the plant agreed, and refused
+/ every live batch once the plant gained a column - trapped by TorQ, so the
+/ process looked healthy and published nothing.
+
+/ (transform; input) pairs whose input is named after a plant table, with
+/ what disagrees: columns the plant table lacks, and columns whose type
+/ differs. A nested column declared " " accepts any list, as the transform's
+/ own check does.
+/ @private
+input_disagreements:{[]
+    plant:.qetl.plant.names[];
+    raze {[plant;tr]
+        ins:(.qetl.transform.def tr)`inputs;
+        named:(key ins) where (key ins) in plant;
+        {[tr;ins;n]
+            dm:exec c!t from meta ins n;
+            pm:exec c!t from meta .qetl.plant.shape n;
+            extra:(key dm) except key pm;
+            shared:(key dm) inter key pm;
+            typed:shared where not (" "=dm shared) or (dm shared)=pm shared;
+            $[count[extra]+count typed;
+              enlist `transform`input`not_in_plant`wrong_type!(tr;n;extra;typed);
+              ()]}[tr;ins] each named}[plant] each .qetl.transform.defined[]}
+
+test_every_transform_input_named_after_a_plant_table_is_that_table:{[t]
+    bad:raze .planttest.input_disagreements[];
+    .qunit.assertEquals[count bad;0;
+        "every transform input named after a plant table carries only its columns, with its types: ",.Q.s1 bad]};
+
+test_the_input_scan_found_inputs_to_check:{[t]
+    / Without this the test above passes the day transforms stop being named
+    / after plant tables, having checked nothing.
+    plant:.qetl.plant.names[];
+    named:raze {[plant;tr] k where (k:key (.qetl.transform.def tr)`inputs) in plant}[plant] each .qetl.transform.defined[];
+    .qunit.assertTrue[`fx_orderbook in named;"cross_quotes' fx_orderbook input is among those checked"]};
+
+test_an_input_that_disagrees_with_its_plant_table_is_caught:{[t]
+    .qetl.transform.define[`planttest_stale_copy;`inputs`output`fn`examples!(
+        (enlist `fx_orderbook)!enlist ([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); venue:`symbol$());
+        ([] sym:`symbol$());
+        {[b] select sym from b};
+        enlist `inputs`expected!(
+            (enlist `fx_orderbook)!enlist ([] time:enlist 2026.10.07D10:00:00; sym:enlist `EURUSD;
+                bid_prices:enlist enlist 1.1; venue:enlist `EBS);
+            ([] sym:enlist `EURUSD)))];
+    found:raze .planttest.input_disagreements[];
+    .testutil.drop_rows[`.qetl.transform.registry;`planttest_stale_copy];
+    hit:found where `planttest_stale_copy=found@\:`transform;
+    .qunit.assertEquals[(first hit)`not_in_plant;enlist `venue;"a column the plant table does not carry is named"]};
+
 \d .
