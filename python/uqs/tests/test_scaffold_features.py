@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import create
+from uqs.cli import create, create_backfill
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.paths import UqsError
 from uqs.scaffold import jobs, profile
@@ -106,9 +106,9 @@ def test_a_second_worker_needs_another_partition(tmp_path):
         ".qetl.job.bounded.define[`w;`source`dataset`width`transform`partition!"
         "(`s;`fx;1D;`s_passthrough;`EURUSD)];\n"
     )
-    assert create._workers_filling(tmp_path, "fx", "EURUSD") == ["w"]
-    assert create._workers_filling(tmp_path, "fx", "GBPUSD") == []
-    assert create._workers_filling(tmp_path, "fx") == []
+    assert create_backfill.workers_filling(tmp_path, "fx", "EURUSD") == ["w"]
+    assert create_backfill.workers_filling(tmp_path, "fx", "GBPUSD") == []
+    assert create_backfill.workers_filling(tmp_path, "fx") == []
 
 
 # ------------------------------------------------------------------ profiles

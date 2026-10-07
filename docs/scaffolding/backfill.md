@@ -24,7 +24,11 @@ query comment points at `.qetl.io.odbc` and `src/etl/sources/duckdb_deals.q`.
 `--procname` names the process (default `NAME_backfill1`). `--partition SYM`
 scopes the worker to one slice of its dataset, which is what lets a second
 worker fill the same one, and `--check` adds a quality check that fails a window
-on bad rows --- it throws until written.
+on bad rows --- it throws until written. `--transform derive` replaces the
+default pass-through with a `.qetl.transform.define` from the source's contract
+to the dataset's shape: `derive` throws, and its example's expected output is
+left empty and marked `SCAFFOLDED`, so `.qetl.transform.verify` fails the suite
+until both are written.
 
 ```
 scaffold fxprobe_backfill:

@@ -15,6 +15,7 @@ where being unfinished would break the tree rather than the build - see
 from __future__ import annotations
 
 from uqs.scaffold.columns import TIME_COLUMN, sample_value, type_char
+from uqs.scaffold.transform import worker_transform
 
 #: How a source is reached, as `.qetl.source.transports` lists them. Held to
 #: src/etl/core/source_contract.q by test_scaffold.py.
@@ -207,11 +208,14 @@ def worker_body(
     *,
     partition: str | None = None,
     check: bool = False,
+    transform: str = "passthrough",
 ) -> str:
     """The worker file. `partition` scopes it to one slice of its dataset,
     which is what lets a second worker fill the same dataset; `check` adds a
-    quality check stub."""
+    quality check stub; `transform` is `passthrough` or `derive` - see
+    scaffold/transform.py."""
     check_stub = _CHECK_STUB.format(worker=worker) if check else ""
+    derive_stub, transform_decl, transform_name = worker_transform(transform, worker, src, dataset)
     extra_keys = ("`check" if check else "") + ("`partition" if partition else "")
     extra_values = (f";.qpipe.job.{worker}.quality_check" if check else "") + (
         f";`{partition}" if partition else ""
@@ -230,18 +234,15 @@ def worker_body(
 facts:{{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     (enlist `rows)!enlist count batch}}
-{check_stub}
+{check_stub}{derive_stub}
 \\d .
 
-/ Pass-through until a real transform is needed: the batch is published as
-/ fetched. The example tables are what .qetl.transform checks the shape against.
-.qetl.transform.passthrough[`{src}_passthrough;`batch;0#.qpipe.source.{src}.fixture[];.qpipe.source.{src}.fixture[]];
-
+{transform_decl}
 / `procname` is the process that runs this worker - the process registry is
 / read from this declaration, so there is no entry to add anywhere else.
 .qetl.job.bounded.define[`{worker};
     `source`dataset`width`transform`facts{extra_keys}`procname`note!
-        (`{src};`{dataset};{width};`{src}_passthrough;.qpipe.job.{worker}.facts{extra_values};
+        (`{src};`{dataset};{width};`{transform_name};.qpipe.job.{worker}.facts{extra_values};
          `{proc};
          "SCAFFOLDED: bounded - say what this backfill is for")];
 """

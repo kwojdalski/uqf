@@ -10,12 +10,12 @@ gone.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from uqs.cli import completion
+from uqs.cli.create_backfill import backfill_plan, defined_tables
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import (
@@ -24,44 +24,14 @@ from uqs.cli.shared import (
     app,
     job_app,
 )
-from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import (
-    SOURCE_DIR,
     TABLES_FILE,
-    WORKER_DIR,
     UqsError,
     UqsPaths,
 )
 from uqs.scaffold import columns as columns_mod
-from uqs.scaffold import external, jobs, normalizer, worker
-
-
-def _workers_filling(repo_root: Path, dataset: str, partition: str | None = None) -> list[str]:
-    """Workers that already fill `dataset` in `partition` (None: no partition).
-
-    `.qetl.job.bounded.define` refuses two workers on one dataset AND partition (#60,
-    #185), so a second one on a claimed pair is a tree that no longer LOADS.
-    Caught here, before anything is written, rather than as a bare error from
-    inside a declaration.
-    """
-    found = []
-    for path in sorted((repo_root / WORKER_DIR).glob("*.q")):
-        for fn, name, fields in declaration_calls(path.read_text()):
-            if fn != "qetl.job.bounded.define":
-                continue
-            claimed = symbols(fields["partition"])[:1] if "partition" in fields else ()
-            if symbols(fields.get("dataset", "")) == (dataset,) and claimed == (
-                (partition,) if partition else ()
-            ):
-                found.append(name)
-    return found
-
-
-def _defined_tables(repo_root: Path) -> set[str]:
-    """The plant tables the q file defines, read from the tree being written
-    into rather than the one this package was imported from."""
-    return {m.group(1) for m in _DEFINITION.finditer((repo_root / TABLES_FILE).read_text())}
+from uqs.scaffold import external, jobs, normalizer
 
 
 def _plant_definitions(paths: UqsPaths) -> dict[str, str]:
@@ -83,7 +53,7 @@ def _plant_tables(paths: UqsPaths) -> set[str]:
         if vendored.is_file()
         else set()
     )
-    return _defined_tables(paths.repo_root) | theirs
+    return defined_tables(paths.repo_root) | theirs
 
 
 app.add_typer(job_app, name="job")
@@ -196,6 +166,14 @@ def new_job(
     check: Annotated[
         bool, typer.Option("--check", help="Scaffold a quality check (backfill)")
     ] = False,
+    transform: Annotated[
+        str | None,
+        typer.Option(
+            "--transform",
+            help="passthrough or derive: the transform, and for streaming its handler "
+            "(backfill, streaming)",
+        ),
+    ] = None,
     triggered_by: Annotated[
         str | None,
         typer.Option(
@@ -231,6 +209,11 @@ def new_job(
         uqs job new fx_rates --kind backfill --dataset fx_rates \\
             --columns "sym:symbol, mid:float" --width 1D
 
+    One table in, one out, with the handler written - passthrough or derive:
+
+        uqs job new trades_copy --subscribe-to trades --publishes trades_copy_out \\
+            --columns-from trades --transform passthrough
+
     Polling feed, as steps `uqs stream preview` can run without publishing:
 
         uqs job new rates_feed --publishes rates --columns "sym:symbol, mid:float" --poll
@@ -265,6 +248,7 @@ def new_job(
                 "--unprofiled": unprofiled is not None,
                 "--partition": partition is not None,
                 "--check": check,
+                "--transform": transform is not None,
             },
             dry_run=dry_run,
         )
@@ -287,6 +271,9 @@ def new_job(
         "external": {"--raw-table": raw_table is not None},
         "standing": {"--profile": profile is not None, "--unprofiled": unprofiled is not None},
     }
+    if transform is not None and kind not in ("backfill", "streaming"):
+        _die(UqsError(f"--transform does not apply to --kind {kind}"))
+        return
     for owner, given in only.items():
         fits = kind in (
             ("streaming", "normalizer", "external") if owner == "standing" else (owner,)
@@ -310,43 +297,23 @@ def new_job(
                 unprofiled=unprofiled,
                 poll=poll,
                 cursor=cursor_fields,
+                transform=transform,
+                definitions=_plant_definitions(_paths()) if transform else None,
             )
         elif kind == "backfill":
-            if start_with_all:
-                # A backfill runs a window and exits; `uqs start all` starts
-                # standing processes, and .qetl.job.bounded.define has no such key.
-                _die(UqsError("--start-with-all is for standing jobs, not a backfill - drop it"))
-                return
-            if not dataset:
-                _die(UqsError("--kind backfill needs --dataset: the table it fills"))
-                return
-            claimed = _workers_filling(repo_root, dataset, partition)
-            if claimed:
-                where = f"partition {partition!r}" if partition else "no partition"
-                _die(
-                    UqsError(
-                        f"dataset {dataset!r} is already filled by {', '.join(claimed)} "
-                        f"in {where}, "
-                        "and .qetl.job.bounded.define refuses two workers on one dataset and "
-                        "partition - pick another --dataset, or another --partition"
-                    )
-                )
-                return
-            # An existing source is reused, not rewritten, and an existing
-            # table is not defined twice: a second worker over rows someone
-            # already declared is the common case after the first.
-            plan = worker.bounded_worker(
+            plan = backfill_plan(
+                repo_root,
                 name,
                 dataset,
                 shape,
-                width="1D" if width is None else width,
+                width=width,
                 source=source,
                 procname=procname,
                 transport=transport,
                 partition=partition,
                 check=check,
-                reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
-                define_table=dataset not in _defined_tables(repo_root),
+                transform=transform,
+                start_with_all=start_with_all,
             )
         elif kind == "normalizer":
             if publishes:

@@ -81,6 +81,14 @@ etl, as markout and fx_positions have. For a backfill, `--partition SYM` scopes
 the worker to one slice of its dataset - the only way two workers can fill one
 dataset - and `--check` scaffolds a quality check that throws until written.
 
+`--transform passthrough|derive` scaffolds the transform. For a backfill the
+default is the pass-through; `derive` declares a `.qetl.transform.define` whose
+example fails until `derive` and its expected rows are written. For a streaming
+job reading ONE table and publishing ONE, it also writes the whole `on_batch`
+(routing, `time` dropped, empty batch, publish) and its tests; `passthrough` is
+refused unless both tables have the same shape. Feeds, `--poll`, `--period` and
+several tables in or out are refused - use the custom-handler scaffold there.
+
 To undo a scaffold, `uqs job remove NAME --dry-run` shows everything it would
 take back out, then run it without `--dry-run`. It refuses a job whose
 SCAFFOLDED markers are gone, and keeps any table or source something else still
@@ -216,10 +224,10 @@ some declarations at LOAD time, which no unit test exercises.
 
 Say this back to the user, because it is the part that surprises people:
 
-- **No `\l` line.** `src/etl/init.q` globs its three declaration directories.
-  Only add a name to its `lead` list if your file reads another job's table at
-  load time --- and you will know, because the tree stops loading with a bare
-  `` `.qpipe.job.<name> ``.
+- **No `\l` line.** `src/etl/init.q` globs its declaration directories, in plain
+  alphabetical order. A table's schema at load time comes from `.qetl.plant`,
+  never from another job's namespace - `test_no_job_reads_a_peer_job_at_load`
+  refuses a file that does (#731).
 - **No test registration at all.** `tests/run_tests.q` globs `tests/q/test_*.q`
   for the file, and the scaffold appends the test's NAMESPACE to that file's
   `nsList` (#350). Both halves matter: the list is kept by hand, and a namespace

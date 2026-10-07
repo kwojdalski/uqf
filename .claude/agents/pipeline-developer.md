@@ -59,12 +59,12 @@ without its implementation.
 
 `src/etl/init.q` **globs** the sources, transforms, workers and streaming
 directories rather than listing them, so a new declaration file is loaded the
-moment it exists and there is no `\l` line to add. Two orderings are still
-load-bearing and its header explains both: sources before workers, because
-`.qetl.job.bounded.define` resolves its source at define time; and a short
-`lead` list inside `streaming/` for the jobs that read another job's table at
-load time. A file that needs to be in that list announces itself --- the tree
-stops loading with a bare `` `.qpipe.job.<name> ``.
+moment it exists and there is no `\l` line to add. One ordering is still
+load-bearing and its header explains it: sources before workers, because
+`.qetl.job.bounded.define` resolves its source at define time. Within a
+directory nothing may depend on another file at load time: a job that needs a
+table's schema reads `.qetl.plant`, never another job's namespace, and
+`test_no_job_reads_a_peer_job_at_load` refuses one that does (#731).
 
 `src/init.q` (the quant library) is assumed loaded first. The ETL tree uses its
 namespaces but nothing in `src/foundation/`, `pricing/`, `portfolio/`,

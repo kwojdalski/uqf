@@ -57,9 +57,11 @@ this machine, with no process serving it (see "A source read from local HDB
 files" below), `--procname` names the process, and `--start-with-all` puts a
 streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
 a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
-`--partition`/`--check` shape a backfill. `uqs job remove NAME` undoes a
-scaffold. Where q is installed, `uqs job new` also re-exports the contract
-surface; without it, it prints the command to run.
+`--partition`/`--check` shape a backfill. `--transform passthrough|derive`
+scaffolds the transform - and for a one-in, one-out streaming job its whole
+handler (see [the ETL page](../scaffolding/etl.md)). `uqs job remove NAME`
+undoes a scaffold. Where q is installed, `uqs job new` also re-exports the
+contract surface; without it, it prints the command to run.
 
 The third is a second worker over the second's source: an existing source or
 table is reused, not rewritten. `--columns` is required whenever a new source or
@@ -414,11 +416,11 @@ the detail.
 
 **Nothing, for the load.** A declaration file is loaded the moment it exists.
 
-Two orderings still hold, and the file explains both: directories load sources
+One ordering still holds, and the file explains it: directories load sources
 before workers, because `.qetl.job.bounded.define` looks its source up at define
-time; and within `streaming/` the two jobs that read another job's table at load
-time are named in a `lead` list. Add a file that does the same and you will get
-a bare `` `.qpipe.job.<name> `` on load --- put it in that list.
+time. Within a directory files load alphabetically, so none may read another
+job's table at load time - take a schema from `.qetl.plant` instead, which loads
+first. `test_no_job_reads_a_peer_job_at_load` refuses a job that does.
 
 A test file is loaded by glob too; only its namespace is listed, in
 `tests/run_tests.q`'s `nsList`, and a test fails if one that loaded is missing.
