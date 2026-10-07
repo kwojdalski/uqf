@@ -302,7 +302,7 @@ test_ofi_autocorrelation_known_window:{[t]
     / a perfect 2-point negative relationship -> correlation exactly -1
     .testutil.assertApprox[r 2;-1f;1e-9;"lag-1 correlation over the first full window"]};
 
-/ ---- require_quotes_cols reuse ----
+/ ---- require_depth_quotes reuse ----
 
 test_ofi_rejects_quotes_missing_a_required_column:{[t]
     quotes:mk_ofi_quotes[::];

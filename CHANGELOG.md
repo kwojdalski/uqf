@@ -594,7 +594,7 @@ plus a new timer-driven simulated-data pattern.
 \*\*src/\*.q\*\* - Added `hit_ratio_by` (windowed, grouped, time-bucketed hit
 ratio), the markout family (`cross_markout_at_horizons`, `cross_markout_decomp`,
 `cross_impact_at_horizons`), `cross_size_at_price` (inverse of `cross_book_at`),
-`require_quotes_cols` fail-early validation, and configurable
+`require_depth_quotes` fail-early validation, and configurable
 `ts_col`/`col_precedence` output shaping. Then the whole library's namespace
 split: one flat namespace per file (`.qstats`, `.qccy`, `.qdcf`, `.qrates`,
 `.qfwd`, `.qopt`, `.qrisk`, `.qexec`, `.qbook`, `.qmicro`, `.qex`/`.qdata`)

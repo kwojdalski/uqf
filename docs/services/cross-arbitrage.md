@@ -33,7 +33,7 @@ one idea:
 
 <!-- q-example: transcript -->
 ```q
-q) .qfwd.ccy_shortest_path[`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY except `EURJPY;`EUR;`JPY]
+q) .qcross.ccy_shortest_path[`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY except `EURJPY;`EUR;`JPY]
 `EURUSD`USDJPY
 ```
 

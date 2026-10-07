@@ -41,7 +41,7 @@ Scan for the following, in order of severity:
 - A protected-eval wrapper (`@[f;x;{...}]` / `.[f;x;{...}]`) that catches *all*
   errors, including structural ones (malformed input table, missing column) ---
   not just the legitimate "no data yet" case it was written for. See
-  `forwards.q`'s `require_quotes_cols` for the fix: validate required columns
+  `schema.q`'s `require_depth_quotes` for the fix: validate required columns
   explicitly, before any protected-eval path, so a caller's typo throws instead
   of silently producing null results
 - `0Nf`/`0n` flowing through arithmetic with no guard, silently poisoning a

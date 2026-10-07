@@ -114,7 +114,7 @@ wrong", that is the finding
   differently-shaped entry is refused with a bare `type`. Check each registry
   normalises what it stores
 - Temporal coupling with no structural enforcement --- "call
-  `require_quotes_cols` first", "publish before checkpointing", "replay before
+  `require_depth_quotes` first", "publish before checkpointing", "replay before
   subscribing"
 
 ### 5. Abstraction and composition

@@ -48,11 +48,11 @@ code understands - rather than the vendored pack's generic `quote`/`trade`
 tables. It publishes synthetic depth-aware FX quotes (3 levels per side,
 level-0-first vectors) into a new `fx_orderbook` table:
 `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes - the same shape
-`src/pricing/forwards.q`'s `require_quotes_cols` expects (`ts` there; `time`
+`src/pricing/forwards.q`'s `require_depth_quotes` expects (`ts` there; `time`
 here, since the tickerplant's own `upd` machinery requires the first column
 literally named `time` - rename it back with
 `select ts:time,... from fx_orderbook` before handing rows to
-`.qfwd.cross_book_at`/etc).
+`.qcross.cross_book_at`/etc).
 
 Getting this table into a real, on-disk database took no changes to
 `rdb.q`/`wdb.q`/`hdb.q` at all - the vendored RDB's default `subscribeto:`

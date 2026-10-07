@@ -210,7 +210,7 @@ ccy_exposure:{[pos]
 / exposure report, not an executable price.
 / @param pos a position book (see empty_book)
 / @param quotes a depth-aware quotes table - forwards.q's own
-/   `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes shape (require_quotes_cols),
+/   `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes shape (require_depth_quotes),
 /   sorted `sym`time xasc
 / @param reporting_ccy the currency to convert every leg into, e.g. `USD
 / @param as_of only consider quotes at or before this time
@@ -229,7 +229,7 @@ ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
         / position keeps the flat row, and pricing it at size 0 threw.
         if[0=amount; :0f];
         pair:.qccy.ccy_pair_symbol[ccy;reporting_ccy];
-        mid:first exec mid from .qfwd.cross_book_at[quotes;pair;as_of;enlist abs amount;enlist `mid];
+        mid:first exec mid from .qcross.cross_book_at[quotes;pair;as_of;enlist abs amount;enlist `mid];
         amount*mid};
     update reporting_amount:convert_one[quotes;reporting_ccy;as_of]'[ccy;amount] from exposure};
 

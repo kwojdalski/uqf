@@ -63,7 +63,7 @@ library, deliberately left in its original camelCase, don't touch it.
   a judgement rather than on effort.
 - **The relevant `src/*.q` file in full** before adding a function to it ---
   this library reuses its own primitives heavily (`ccy_orient_cross`,
-  `oriented_levels`, `sweep_price`, `require_quotes_cols`,
+  `oriented_levels`, `sweep_price`, `require_depth_quotes`,
   `apply_col_precedence`); a new function that duplicates one of these instead
   of calling it is the most common mistake here.
 - **`tests/test_<module>.q`** for the existing test pattern in that file (helper
@@ -84,7 +84,7 @@ library, deliberately left in its original camelCase, don't touch it.
 - Route any polynomial evaluation through `.qstats.horner_eval` rather than
   hand-rolling Horner's method.
 - Validate a `quotes`/`trades`-shaped table's required columns up front (see
-  `forwards.q`'s `require_quotes_cols` pattern) *before* any protected-eval
+  `schema.q`'s `require_depth_quotes` pattern) *before* any protected-eval
   (`@[f;x;{...}]`) path, so a caller's structural mistake throws instead of
   silently producing null results.
 - Keep `lower_snake_case` for every new function, parameter, and local variable ---

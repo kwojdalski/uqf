@@ -49,7 +49,7 @@ Commands: ok — fix it | s/skip — skip | done — stop
 - `side` represented as `1`/`-1` in some functions and as a boolean or symbol
   (`` `buy`/`sell ``) in others for the same concept
 - Table-shaped parameters (`quotes`, `trades`, `requests`) validated for
-  required columns in some functions (`require_quotes_cols`) but not validated
+  required columns in some functions (`require_depth_quotes`) but not validated
   at all in sibling functions that make the same assumption
 
 ### 3. Return Types and Return Conventions
@@ -88,7 +88,7 @@ Commands: ok — fix it | s/skip — skip | done — stop
   (` '"fn_name: <specific problem>, got <value>" `), others with a bare,
   unhelpful message --- inconsistent diagnosability
 - Some functions validate inputs and fail early (the established convention,
-  e.g. `require_quotes_cols` called before any protected-eval path), others
+  e.g. `require_depth_quotes` called before any protected-eval path), others
   silently proceed and produce a wrong/null result on bad input
 - Inconsistent choice between throwing an error vs returning a sentinel
   (`0n`/empty table) for the same class of "caller did something invalid"

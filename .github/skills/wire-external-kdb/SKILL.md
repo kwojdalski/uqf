@@ -80,7 +80,7 @@ confirmation before writing it. After writing, run
 uqf's quote consumers want a `quotes` table shaped
 `` `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes ``, each level column a
 level-0-first vector per row, sorted `` `sym`ts xasc `` (see forwards.q's
-`require_quotes_cols`/`leg_book_as_of`, microstructure.q's `quotes_for_sym`).
+`require_depth_quotes`/`leg_book_as_of`, microstructure.q's `quotes_for_sym`).
 Compare that, column by column, against what step 2 actually returned. Common
 real-world mismatches to check for explicitly, and the existing uqf tooling that
 already handles each one (reuse it, don't re-derive it): - **Wide per-level
@@ -116,7 +116,7 @@ are never edited in place, matching this repo's existing convention for
 - Confirm the resulting table passes uqf's own checks: right columns,
   `` ~`sym`ts xasc `` sortedness, non-empty `bid_prices`/`ask_prices` vectors.
 - Feed one real row through an actual uqf function live via `query_q` (e.g.
-  `.qfwd.cross_book_at` or `.qmicro.mid_price`) and sanity-check the result
+  `.qcross.cross_book_at` or `.qmicro.mid_price`) and sanity-check the result
   against what the raw live quote implies - a real number from the real
   database, not a canned example.
 - Report what was actually found (live schema, any reshape applied, any mismatch

@@ -236,7 +236,7 @@ test_ccy_exposure_in_direct_pair_converts_at_the_chains_own_mid:{[t]
     r:.qpos.ccy_exposure_in[b;quotes;`USD;at];
     aud_amount:first exec amount from r where ccy=`AUD;
     aud_reporting:first exec reporting_amount from r where ccy=`AUD;
-    expected_mid:first exec mid from .qfwd.cross_book_at[quotes;`AUDUSD;at;enlist aud_amount;enlist `mid];
+    expected_mid:first exec mid from .qcross.cross_book_at[quotes;`AUDUSD;at;enlist aud_amount;enlist `mid];
     .testutil.assertApprox[aud_reporting;aud_amount*expected_mid;1e-6;"AUD leg converts to USD at AUDUSD's own chain mid"]};
 
 test_ccy_exposure_in_reporting_currency_converts_at_one:{[t]
@@ -259,7 +259,7 @@ test_ccy_exposure_in_chains_through_a_bridge_currency:{[t]
     r:.qpos.ccy_exposure_in[b;quotes;`USD;at];
     pln_amount:first exec amount from r where ccy=`PLN;
     pln_reporting:first exec reporting_amount from r where ccy=`PLN;
-    expected_mid:first exec mid from .qfwd.cross_book_at[quotes;`PLNUSD;at;enlist abs pln_amount;enlist `mid];
+    expected_mid:first exec mid from .qcross.cross_book_at[quotes;`PLNUSD;at;enlist abs pln_amount;enlist `mid];
     .testutil.assertApprox[pln_amount;-2125000f;1e-6;"PLN leg from the EURPLN position, at cost"];
     .testutil.assertApprox[pln_reporting;pln_amount*expected_mid;1e-6;"PLN leg converts to USD by chaining through the EUR bridge"]};
 

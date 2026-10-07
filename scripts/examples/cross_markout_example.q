@@ -88,8 +88,8 @@ horizons:0D00:00:00.001*-500 -300 0 100 300;
 / around it.
 mid_idx:n_ticks div 2;
 trade_time:audusd_ts mid_idx;
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]";()!()];
-trade_price:first .qfwd.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]`mid;
+.qetl.log.dbg[`cross_markout;"running: .qcross.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]";()!()];
+trade_price:first .qcross.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]`mid;
 .qetl.log.info[`cross_markout;"trade_time/trade_price - a synthetic AUDPLN buy at ",.Q.s1[trade_time],": ",.Q.s1[trade_price];()!()];
 
 .qetl.log.dbg[`cross_markout;"running: .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;horizons;1]";()!()];
@@ -116,10 +116,10 @@ decomp:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
 show decomp;
 
 decomp_total:sum decomp`contribution_pips;
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;t0;1]";()!()];
-mid_t0:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t0;1];
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;t1;1]";()!()];
-mid_t1:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t1;1];
+.qetl.log.dbg[`cross_markout;"running: .qcross.cross_ref_price_at[quotes;`AUDPLN;t0;1]";()!()];
+mid_t0:.qcross.cross_ref_price_at[quotes;`AUDPLN;t0;1];
+.qetl.log.dbg[`cross_markout;"running: .qcross.cross_ref_price_at[quotes;`AUDPLN;t1;1]";()!()];
+mid_t1:.qcross.cross_ref_price_at[quotes;`AUDPLN;t1;1];
 actual_total:10000*mid_t1-mid_t0;
 .qetl.log.info[`cross_markout;"decomp_total vs actual_total - ",.Q.s1[decomp_total]," vs ",.Q.s1[actual_total],", must match exactly (this is an exact decomposition, not an approximation)";()!()];
 if[1e-6<abs decomp_total-actual_total;

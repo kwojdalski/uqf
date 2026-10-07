@@ -2,7 +2,7 @@
 / the book looks like (imbalance, microprice, depth, slope, convexity) and
 / how it's moving (order flow imbalance, velocity/acceleration, queue
 / depletion) - built on top of execution.q's sweep_price/vwap and
-/ forwards.q's require_quotes_cols/quotes table shape.
+/ forwards.q's require_depth_quotes/quotes table shape.
 / .
 / PROVENANCE. The formulas were mined from an external equity LOB deep-RL
 / feature catalog built on Databento MBP-10 data, then re-expressed against
@@ -295,16 +295,16 @@ vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     result};
 
 / Private: rows of quotes for one sym, sorted `time xasc, validated to have
-/ every column require_quotes_cols checks - the shared setup every Tier 2
+/ every column require_depth_quotes checks - the shared setup every Tier 2
 / rolling function needs. Named target_sym (not sym) to avoid colliding
 / with the `sym` column inside the qSQL where-clause below (a param named
 / the same as the column it's compared against would make the comparison
 / compare the column to itself, always true) - forwards.q's leg_book_as_of
 / hit this exact bug already and named around it the same way.
-/ @throws error if quotes is missing a required column (see require_quotes_cols)
+/ @throws error if quotes is missing a required column (see require_depth_quotes)
 / @private
 quotes_for_sym:{[fn_name;quotes;target_sym]
-    .qfwd.require_quotes_cols[fn_name;quotes];
+    .qschema.require_depth_quotes[fn_name;quotes];
     `time xasc select from quotes where sym=target_sym};
 
 / First difference of the L0 mid price for one sym's quotes, time-ordered.
@@ -1174,7 +1174,7 @@ stream_update:{[state;batch;config]
     t_out:();
     if[`quotes in key batch;
         if[0=count quote_cols; '"stream_update: batch carries quotes but no quote metric was chosen at stream_init"];
-        .qfwd.require_quotes_cols[`stream_update;batch`quotes];
+        .qschema.require_depth_quotes[`stream_update;batch`quotes];
         r:stream_side["quote";batch`quotes;state`quotes;quote_state0;cfg;stream_quotes_one[;;cfg`window]];
         state[`quotes]:r 0;
         state[`dropped]+:r 1;

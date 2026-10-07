@@ -53,6 +53,7 @@
 \l src/foundation/daycount.q
 \l src/foundation/calendar.q
 \l src/foundation/rates.q
+\l src/pricing/cross.q
 \l src/pricing/forwards.q
 \l src/pricing/options.q
 \l src/portfolio/risk.q

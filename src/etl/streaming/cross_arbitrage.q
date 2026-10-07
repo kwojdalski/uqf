@@ -92,7 +92,7 @@ quotable:{[state]
 / @eg .qpipe.job.cross_arbitrage.route_for[`EURUSD`USDJPY`EURJPY;`EURJPY] -> `EURUSD`USDJPY
 route_for:{[avail;sym]
     legs:.qccy.ccy_pair_legs sym;
-    @[{.qfwd.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
+    @[{.qcross.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
 
 / When each of a set of books was last quoted, and how far apart those
 / moments are. Top-of-book times: those are the levels a small sweep uses,
@@ -149,7 +149,7 @@ opportunity:{[state;avail;sym;size;as_of]
     / symbol is the row you expect. Indexing by a table of keys is the form
     / that takes several, and it preserves the route's order - which matters,
     / because the legs are matched to syms by position.
-    syn:first .qfwd.cross_book_chain_at_sizes[route;
+    syn:first .qcross.cross_book_chain_at_sizes[route;
         leg_book each state ([] sym:route);enlist size;`bid`ask];
     / A route whose ends do not spell this pair is a routing bug, not an
     / opportunity - refuse rather than compare two different markets.

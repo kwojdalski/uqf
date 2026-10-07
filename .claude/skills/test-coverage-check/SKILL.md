@@ -64,7 +64,7 @@ reference value (e.g. Hull's Black-Scholes worked example), a provable identity
 day-count-neutral round trips), or a tight `qunit.assertNear`/tolerance check ---
 not just "didn't throw" - Whether edge cases are covered: empty/null input, zero
 division guards, unsorted-input rejection (`aj`-based lookups), missing-column
-rejection (`require_quotes_cols`), first-row conventions in rolling functions -
+rejection (`require_depth_quotes`), first-row conventions in rolling functions -
 Whether the test suite has been run under KDB-X
 
 ### 3. For each component, assign a status
@@ -104,7 +104,7 @@ exact-decomposition guarantee (per-leg contributions must sum exactly to the
 actual move) - `aj`-based as-of lookups' sortedness enforcement
 
 **Priority 2 --- HIGH (untested logic that affects reliability)** -
-`require_quotes_cols`-style fail-early validation on every function that takes a
+`require_depth_quotes`-style fail-early validation on every function that takes a
 `quotes`/`trades` table - Rolling `microstructure.q` functions' first-row
 convention (0/null, not garbage) - `time_col` configurability (default behavior
 AND a caller override)

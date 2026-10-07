@@ -204,7 +204,7 @@ Describe the returned table/dict shape, including column precedence
 
   | Symptom                               | Likely cause                                                                      | Fix                                                                                 |
   | ---                                   | ---                                                                               | ---                                                                                 |
-  | ` 'quotes missing required column `   | table doesn't have all of `` `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes `` | check `require_quotes_cols`'s error message for which column                        |
+  | ` 'quotes missing required column `   | table doesn't have all of `` `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes `` | check `require_depth_quotes`'s error message for which column                        |
   | ` 'not sorted `                       | `quotes` table isn't `` `sym`ts xasc `` before an `aj`-based call                 | sort before calling, or let the function do it (check the specific function's qDoc) |
   | ...                                   |                                                                                   |                                                                                     |
 
