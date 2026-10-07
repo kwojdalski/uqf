@@ -186,6 +186,7 @@ query:{[h;range_from;range_to] adapt .qetl.io.odbc.run_sql[h;sql_for[range_from;
 / @param tick the price step between levels
 / @param sz the size at every level
 / @return the twenty level values, bid price/size then ask price/size per level
+/ @private
 fixture_levels:{[bid;ask;tick;sz]
     raze {[bid;ask;tick;sz;i] (bid-tick*i;sz;ask+tick*i;sz)}[bid;ask;tick;sz] each til 5}
 

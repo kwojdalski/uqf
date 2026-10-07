@@ -14,6 +14,10 @@
 .man.registerFile:{`.man.files insert `title`author`namespaces`header!(),/:x};
 .man.filetags:([] title:(); tag:(); val:());
 .man.registerFileTag:{`.man.filetags insert `title`tag`val!(),/:x};
+/ Every fullname whose qDoc block carries @private: plumbing, not API. They are
+/ kept out of .man.funcs, and scripts/generate/export_contract_surface.q reads
+/ this list to keep them out of the contract surface (#627).
+.man.private:();
 
 / @eg .man.getDocs[]
 / @return table of format ([] fullname; tag; param; description)
@@ -65,13 +69,16 @@
 / this scan were compared row for row (1008 functions, 2011 arguments, 78
 / files, same order) before the generator was removed:
 /   - a definition is `name:` at column 0 inside a `\d .ns` file, or a
-/     fully qualified `.ns.name:`; names starting `_` are private
+/     fully qualified `.ns.name:`
 /   - a run of definitions with no blank line between them shares the one
 /     comment block above the run
 /   - `/ .` is a blank line inside a comment (a line of only `/` would open a
 /     block comment); a line of only `\` ends the block
-/   - @param, @return, @throws and @eg are tags; a comment line after a tag
-/     continues the last @eg
+/   - @param, @return, @throws, @eg and @private are tags; a comment line
+/     after a tag continues the last @eg
+/   - @private marks plumbing, not API: the name goes to .man.private and is
+/     not registered (#627). It replaced a rule that names starting `_` were
+/     private, which never applied - no q identifier starts with `_`
 /   - an entry with no description and no tag is skipped: registering a name
 /     that says nothing would hide the gap from the very query meant to find it
 / q has no regular expressions, so each pattern is a small parser.
@@ -106,11 +113,11 @@ nsline:{[s]
     nm:(i-st)#st _s; j:skipws[s;i]; $[j=n; nm; ""]}
 / ^\s*/+  ... returns index after the slashes, or -1
 slashes:{[s] i:skipws[s;0]; n:count s; if[not (i<n) and "/"=s i; :-1]; while[(i<n) and "/"=s i; i+:1]; i}
-/ ^\s*/+\s*@(param|return|throws|eg)\b[ \t]*(.*)$   -> (kind;rest), or ()
+/ ^\s*/+\s*@(param|return|throws|eg|private)\b[ \t]*(.*)$   -> (kind;rest), or ()
 tag:{[s]
     i:slashes s; if[i<0; :()]; i:skipws[s;i]; n:count s;
     if[not (i<n) and "@"=s i; :()]; i+:1;
-    kinds:("param";"return";"throws";"eg");
+    kinds:("param";"return";"throws";"eg";"private");
     hit:kinds where {[s;i;k] k~(count k)#i _s}[s;i] each kinds;
     if[0=count hit; :()]; k:first hit; j:i+count k;
     if[(j<n) and wordc s j; :()];
@@ -133,7 +140,7 @@ parsefile:{[path]
             q:qualified line;
             $[count q; [nsthis:q 0; name:q 1; if[not any nss~\:nsthis; nss,:enlist nsthis]];
               [name:funcname line; nsthis:cur]];
-            ok:(0<count name) and (0<count nsthis) and not "_"=first name;
+            ok:(0<count name) and 0<count nsthis;
             if[ok;
                 j:i-1;
                 while[(j>=0) and (0<count funcname ls j) or 0<count qualified ls j; j-:1];
@@ -141,7 +148,7 @@ parsefile:{[path]
                 while[(j>=0) and ("/"=first lstrip ls j) and not "\\"~strip ls j; blk,:enlist ls j; j-:1];
                 blk:reverse blk;
                 if[count blk;
-                    d:`fullname`ns`description`params`returns`throws`examples!(nsthis,".",name;nsthis;"";();"";();());
+                    d:`fullname`ns`description`params`returns`throws`examples`private!(nsthis,".",name;nsthis;"";();"";();();0b);
                     prose:(); seen:0b;
                     k:0;
                     while[k<count blk;
@@ -153,6 +160,7 @@ parsefile:{[path]
                                   d[`params],:enlist (pn;pd)];
                                kind~"return"; d[`returns]:rest;
                                kind~"throws"; d[`throws],:enlist rest;
+                               kind~"private"; d[`private]:1b;
                                d[`examples],:enlist rest]];
                           seen;
                             [body:strip comment raw;
@@ -161,7 +169,7 @@ parsefile:{[path]
                           [body:strip comment raw; prose,:enlist $[body~enlist "."; ""; body]]];
                         k+:1];
                     d[`description]:strip " " sv prose where 0<count each prose;
-                    if[(count d`params) or (count d`returns) or (count d`examples) or (count d`throws) or count d`description;
+                    if[(d`private) or (count d`params) or (count d`returns) or (count d`examples) or (count d`throws) or count d`description;
                         out,:enlist d]]];
             i+:1]];
     (last "/" vs path; nss; out)}
@@ -181,10 +189,15 @@ qfiles:{[dir]
     f:f where f like "*.q";
     f iasc ssr[;"/";"\001"] each f}
 
-/ Register every documented function under dir.
+/ Register every documented function under dir. A function tagged @private is
+/ recorded in .man.private instead, and a file whose every block is private
+/ registers nothing.
 scansrc:{[dir]
     {[f]
         r:parsefile f; docs:r 2;
+        priv:docs where docs@\:`private;
+        .man.private,:priv@\:`fullname;
+        docs:docs where not docs@\:`private;
         if[0=count docs; :()];
         registerFile (r 0;"";"|" sv r 1;header f);
         {[d]

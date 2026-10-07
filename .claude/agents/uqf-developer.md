@@ -75,7 +75,8 @@ library, deliberately left in its original camelCase, don't touch it.
 
 - Every public function gets a qDoc comment block immediately above it, no blank
   line in between: `@param`, `@return`, `@throws` (if it can throw), `@eg`. See
-  any existing function in `src/*.q` for the exact format.
+  any existing function in `src/*.q` for the exact format. A private helper's
+  block ends `/ @private`, which keeps it out of the contract surface.
 - Never write a bare mixed `*`/`+`/`-` chain relying on implicit grouping --- q
   evaluates strictly right-to-left, no operator precedence. Use named
   intermediate variables or explicit parens, even where the right-to-left rule

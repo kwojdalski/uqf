@@ -135,6 +135,7 @@ book_crossed:{[book] book[`bid]>book[`ask]};
 /   flipping (BASE/QUOTE -> QUOTE/BASE) before combining
 / @throws error if sym1 and sym2 share no common currency
 / @eg .qfwd.ccy_orient_cross[`EURUSD;`USDJPY]  -> `cross_sym`invert1`invert2!(`EURJPY;0b;0b)
+/ @private
 ccy_orient_cross:{[sym1;sym2]
     legs1:.qccy.ccy_pair_legs sym1; base1:string legs1`base; quote1:string legs1`quote;
     legs2:.qccy.ccy_pair_legs sym2; base2:string legs2`base; quote2:string legs2`quote;
@@ -190,6 +191,7 @@ invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 / @param book dict `bid_prices`bid_sizes`ask_prices`ask_sizes for this leg
 / @param invert 1b if this leg's convention needs flipping
 / @return (prices;sizes) to pass to sweep_price
+/ @private
 oriented_levels:{[side;book;invert]
     $[side=`ask;
         $[invert; invert_book_depth[book`bid_prices;book`bid_sizes]; (book`ask_prices;book`ask_sizes)];
@@ -205,6 +207,7 @@ oriented_levels:{[side;book;invert]
 / @param invert1 1b if leg 1 needs its convention flipped
 / @param invert2 1b if leg 2 needs its convention flipped
 / @return dict `price`filled_size`fully_filled for this side of the cross
+/ @private
 cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
     lvl1:oriented_levels[side;book1;invert1];
     sweep1:.qexec.sweep_price[lvl1 0;lvl1 1;size];
@@ -225,6 +228,7 @@ cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
 / @param book2 dict `bid_prices`bid_sizes`ask_prices`ask_sizes for leg 2
 / @param size the size to sweep, in leg 1's relevant currency
 / @return one row: dict `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid
+/ @private
 cross_book_at_one_size:{[sym1;book1;sym2;book2;size]
     orient:ccy_orient_cross[sym1;sym2];
     bid_r:cross_sweep_side[book1;book2;`bid;size;orient`invert1;orient`invert2];
@@ -234,6 +238,7 @@ cross_book_at_one_size:{[sym1;book1;sym2;book2;size]
       (size;orient`cross_sym;bid_r`price;bid_r`filled_size;bid_r`fully_filled;ask_r`price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
 
 / Private: the result columns contributed by one requested side.
+/ @private
 side_cols:{[s]
     $[s=`bid; `bid`bid_filled_size`bid_fully_filled;
       s=`ask; `ask`ask_filled_size`ask_fully_filled;
@@ -281,6 +286,7 @@ cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
 / @throws error if syms has fewer than 2 legs, or if two consecutive legs
 /   share no common currency (names the leg index and the two symbols)
 / @eg .qfwd.ccy_orient_chain[`EURUSD`USDJPY`JPYCHF]  -> `cross_sym`inverts!(`EURCHF;000b)
+/ @private
 ccy_orient_chain:{[syms]
     syms:syms,();
     if[(count syms)<2; '"ccy_orient_chain: need at least 2 legs"];
@@ -313,6 +319,7 @@ ccy_orient_chain:{[syms]
 / @param size the size to sweep, in leg 1's relevant currency
 / @param inverts boolean list, one per leg, from ccy_orient_chain
 / @return dict `price`filled_size`fully_filled for this side of the cross
+/ @private
 cross_sweep_chain:{[books;side;size;inverts]
     n:count books;
     lvl0:oriented_levels[side;books 0;inverts 0];
@@ -342,6 +349,7 @@ cross_sweep_chain:{[books;side;size;inverts]
 /   one per leg
 / @param size the size to sweep, in leg 1's relevant currency
 / @return one row: dict `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid
+/ @private
 cross_book_chain_at_one_size:{[syms;books;size]
     orient:ccy_orient_chain[syms];
     bid_r:cross_sweep_chain[books;`bid;size;orient`inverts];
@@ -391,6 +399,7 @@ cross_book_chain_at_sizes:{[syms;books;sizes;sides]
 / inverting, if any, is worked out later by ccy_orient_chain, not here).
 / @param avail_syms currency pair symbols known to be quotable
 / @return table `src`dst`via, one row per direction per pair
+/ @private
 ccy_graph_edges:{[avail_syms]
     legs:.qccy.ccy_pair_legs each avail_syms;
     src_ccy:legs[`base],legs[`quote];
@@ -470,6 +479,7 @@ cross_decomp:{[avail_syms;sym]
 / once up front (aj on unsorted data doesn't error, it silently returns
 / wrong rows), not repeated here on every leg lookup.
 / @throws error if quotes has no row for target_sym at or before as_of
+/ @private
 leg_book_as_of:{[quotes;as_of;target_sym]
     lookup:([] sym:enlist target_sym; time:enlist as_of);
     joined:aj[`sym`time;lookup;quotes];
@@ -481,6 +491,7 @@ leg_book_as_of:{[quotes;as_of;target_sym]
 / size - the 1-leg-chain analogue of cross_book_at_one_size, used by
 / cross_book_at when the requested pair (or its inverse) is quoted
 / directly, with no chaining needed.
+/ @private
 single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
     bid_lvl:oriented_levels[`bid;leg_book;invert];
     ask_lvl:oriented_levels[`ask;leg_book;invert];
@@ -491,6 +502,7 @@ single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
       (size;cross_sym;bid_r`avg_price;bid_r`filled_size;bid_r`fully_filled;ask_r`avg_price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
 
 / Private: like cross_book_chain_at_sizes, but for exactly one leg.
+/ @private
 single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
     rows:single_leg_at_one_size[cross_sym;leg_book;invert;] each sizes;
     want_cols:`size`sym , raze side_cols each sides;
@@ -505,6 +517,7 @@ single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
 / error handling, which exists for the different, genuinely expected
 / case of "no quote yet at this time", not a malformed table.
 / @throws error naming every column in `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes missing from quotes
+/ @private
 require_quotes_cols:{[fn_name;quotes]
     .qschema.require_cols[fn_name;`quotes;quotes;`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes]};
 
@@ -513,6 +526,7 @@ require_quotes_cols:{[fn_name;quotes]
 / would silently become a 500-nanosecond horizon and a plausible markout.
 / Shared with execution.q's markout_at_horizons, which takes the same type.
 / @throws error naming the caller and the type it was given
+/ @private
 require_horizons:{[fn_name;horizons]
     if[not (abs type horizons)=16h;
         '(string fn_name),": horizons must be a timespan or list of timespans, e.g. 0D00:00:01, got type ",string type horizons];
@@ -562,6 +576,7 @@ cross_book_at:{[quotes;sym;as_of;sizes;sides]
 / sweep is fully filled. `bid` side: good means avg_price>=price_limit
 / (selling at proceeds no worse than wanted); `ask` side: good means
 / avg_price<=price_limit (buying at cost no worse than wanted).
+/ @private
 cross_price_ok_at_size:{[quotes;sym;as_of;side;price_limit;size]
     if[size<=0; :1b];
     r:cross_book_at[quotes;sym;as_of;enlist size;enlist side];
@@ -627,6 +642,7 @@ cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
 / some required leg at or before as_of, so a caller sweeping many timestamps
 / (cross_markout_at_horizons, cross_markout_decomp) can null one bad
 / lookup instead of failing the whole batch.
+/ @private
 cross_ref_price_at:{[quotes;sym;as_of;ref_size]
     @[{[quotes;sym;ref_size;as_of] first cross_book_at[quotes;sym;as_of;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];as_of;{0n}]};
 
@@ -659,6 +675,7 @@ time_col:`time;
 / with a test asserting exactly that (#732).
 / @param tbl an unkeyed table
 / @return tbl with time_col then sym leading, when both are present
+/ @private
 apply_col_precedence:{[tbl]
     lead:time_col,`sym;
     if[not all lead in cols tbl; :tbl];
@@ -843,6 +860,7 @@ extrapolations:`none`flat`linear
 
 / Private: refuse a curve that is not a table of strictly increasing
 / value_date with forward_points.
+/ @private
 require_curve:{[curve]
     if[not 98h=type curve; '"forward_at_date: curve must be a table of value_date and forward_points"];
     if[count missing:(`value_date`forward_points) except cols curve;
@@ -917,6 +935,7 @@ forward_at_date:{[spot;curve;value_date;pip_factor;opts]
 swap_keys:`pair`notional`near_date`far_date`near_rate`far_rate`near_side
 
 / Private: refuse malformed swap terms.
+/ @private
 require_swap:{[swap]
     if[not 99h=type swap; '"swap: terms must be a dictionary of ",", " sv string swap_keys];
     if[count missing:swap_keys where not swap_keys in key swap;
@@ -948,6 +967,7 @@ swap_cashflows:{[swap]
 / quote-currency value of the forward at its mark. Under covered interest
 / parity this is the base flow at the base discount factor plus the quote
 / flow at the quote one; this is the one place either is computed.
+/ @private
 leg_pv:{[side;notional;mark;contracted;df]
     edge:mark-contracted;
     per_unit:side*edge;

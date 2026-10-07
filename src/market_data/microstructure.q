@@ -44,6 +44,7 @@
 / @param levels a vector of vectors, one level-0-first vector per row
 / @param level the level index to extract from every row
 / @return a vector, one value per row
+/ @private
 level_at:{[levels;level]
     pick_level:{[level;row] $[level<count row; "f"$row level; 0n]};
     pick_level[level;] each levels};
@@ -52,6 +53,7 @@ level_at:{[levels;level]
 / @param sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to sum
 / @return a vector, one value per row
+/ @private
 sum_levels:{[sizes;n_levels]
     per_level:level_at[sizes;] each til n_levels;
     sum per_level};
@@ -166,6 +168,7 @@ depth_ratio:{[bid_sizes;ask_sizes]
 / n_levels (via execution.q's vwap, concatenating that row's bid and ask
 / prices/sizes over til n_levels) minus the simple L0 mid, divided by the
 / L0 spread.
+/ @private
 vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
     idx:til n_levels;
     vw_mid:.qexec.vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
@@ -198,6 +201,7 @@ vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
 / book looks like - is null rather than 0w. See depth_ratio above: infinity
 / is not null, so it survives a null filter and poisons any aggregate over
 / the series.
+/ @private
 book_slope_one:{[prices;sizes]
     total:sum sizes;
     $[total=0;0n;(first[prices]-last prices)%total]};
@@ -224,6 +228,7 @@ book_slope:{[prices;sizes]
 / Private: book_convexity for a single row - (P0-P1)-(P1-P2), negated for
 / side=`ask. Nulls out a row with fewer than 3 levels rather than
 / indexing out of bounds.
+/ @private
 book_convexity_one:{[prices;side]
     $[3>count prices;
         0n;
@@ -258,6 +263,7 @@ book_convexity:{[prices;side]
 / Private: vamp for a single row - convert notional into a size via each
 / side's own L0 price, sweep each side at that size (execution.q's
 / sweep_price), and average the two avg_price results.
+/ @private
 vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     ask_size_target:notional%first ask_prices;
     bid_size_target:notional%first bid_prices;
@@ -296,6 +302,7 @@ vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
 / compare the column to itself, always true) - forwards.q's leg_book_as_of
 / hit this exact bug already and named around it the same way.
 / @throws error if quotes is missing a required column (see require_quotes_cols)
+/ @private
 quotes_for_sym:{[fn_name;quotes;target_sym]
     .qfwd.require_quotes_cols[fn_name;quotes];
     `time xasc select from quotes where sym=target_sym};
@@ -386,6 +393,7 @@ ofi:{[quotes;target_sym]
 / is filled with positive infinity so it sorts above them. Disappearance
 / therefore drains the previous size on either side, and reappearance adds
 / the new size. Two absent snapshots contribute zero.
+/ @private
 ofi_at_level:{[sub;level]
     bid_px:level_at[sub`bid_prices;level];
     bid_sz:0^level_at[sub`bid_sizes;level];
@@ -601,6 +609,7 @@ cancel_to_trade_ratio:{[tape]
 / @param n a count, per group
 / @return n, or 0n when n is zero
 / @eg .qmicro.undefined_if_zero 0  ->  0n
+/ @private
 undefined_if_zero:{[n] ?[0=n;0n;n]}
 
 cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
@@ -875,6 +884,7 @@ large_trade_volume_share:{[tape;q]
 / .
 / A null or non-positive threshold makes `size<threshold` false for every
 / trade, so both functions would report "no odd lots" rather than erroring.
+/ @private
 require_odd_lot_threshold:{[fn_name;threshold]
     if[not (type threshold) in -5 -6 -7 -8 -9h;
         '(string fn_name),": threshold must be a numeric atom, got type ",string type threshold];
@@ -962,6 +972,7 @@ stream_defaults:`window`window_mode`late!(20;`count;`reject)
 / Private: the population variance of one window of returns. A window of
 / identical returns is exactly 0 - a two-pass variance over floats that
 / are all equal can otherwise come out at 1e-34 rather than 0.
+/ @private
 window_variance:{[w]
     if[all w=first w; :0f];
     centre:avg w;
@@ -990,6 +1001,7 @@ rolling_return_variance:{[quotes;target_sym;window]
 
 / Private: a stream's configuration with defaults filled in, refused when
 / malformed.
+/ @private
 stream_config:{[config]
     c:stream_defaults,$[99h=type config; config; ()!()];
     if[count extra:(key c) except key stream_defaults;
@@ -1003,22 +1015,26 @@ stream_config:{[config]
     @[c;`window;:;`long$w]}
 
 / Private: a sym's quote state before its first row.
+/ @private
 quote_state0:{[]
     `rows`time`bid_px`bid_sz`ask_px`ask_sz`mid`ofi_tail`ret_tail`rolling_ofi`return_variance!(
         0;0Np;0n;0n;0n;0n;0n;`float$();`float$();0n;0n)}
 
 / Private: a sym's trade state before its first trade.
+/ @private
 trade_state0:{[] `trades`time`cum_flow!(0;0Np;0f)}
 
 / Private: the empty per-sym quote state, keyed by sym. A keyed table rather
 / than a dict of dicts: q folds a dict of same-keyed dicts into a table on
 / its own, so this is the shape it would take anyway - stated, and typed.
+/ @private
 quote_states0:{[]
     ([sym:`symbol$()] rows:`long$(); time:`timestamp$(); bid_px:`float$(); bid_sz:`float$();
         ask_px:`float$(); ask_sz:`float$(); mid:`float$(); ofi_tail:(); ret_tail:();
         rolling_ofi:`float$(); return_variance:`float$())}
 
 / Private: the empty per-sym trade state, keyed by sym.
+/ @private
 trade_states0:{[] ([sym:`symbol$()] trades:`long$(); time:`timestamp$(); cum_flow:`float$())}
 
 / Start a stream: an empty, versioned state for the chosen metrics.
@@ -1038,15 +1054,18 @@ stream_init:{[metrics;config]
         stream_version;distinct m;stream_config config;quote_states0[];trade_states0[];0)}
 
 / Private: the late rows of one sym's slice, by its last processed time.
+/ @private
 late_rows:{[last_time;times] $[null last_time; (count times)#0b; times<last_time]}
 
 / Private: refuse a slice that is not sorted by time.
+/ @private
 require_sorted:{[what;times]
     if[not times~asc times;
         '"stream_update: ",what," rows are not sorted by time within a sym"]}
 
 / Private: one sym's quote rows through its state. Returns (state; table of
 / row, ofi, rolling_ofi, return_variance).
+/ @private
 stream_quotes_one:{[st;sub;window]
     n:count sub;
     bid_px:level_at[sub`bid_prices;0];
@@ -1085,6 +1104,7 @@ stream_quotes_one:{[st;sub;window]
 
 / Private: one sym's trade rows through its state. Returns (state; table of
 / row, signed_flow, cum_flow).
+/ @private
 stream_trades_one:{[st;sub]
     signed:`float$sub[`side]*sub`size;
     running:1_sums (st`cum_flow),signed;
@@ -1094,6 +1114,7 @@ stream_trades_one:{[st;sub]
 / Private: split a batch table by sym, apply the late policy against the
 / per-sym state, and run `step` on each sym's accepted rows. Returns
 / (per-sym state; dropped count; output table with sym and time).
+/ @private
 stream_side:{[what;tbl;states;state0;config;step]
     tbl:update row:i from tbl;
     syms:distinct tbl`sym;

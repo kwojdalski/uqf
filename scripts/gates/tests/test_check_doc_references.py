@@ -161,3 +161,33 @@ def test_every_allowed_missing_entry_is_still_needed():
         assert f"{path}|{ref}" in still_firing, (
             f"{path} exempts {ref}, but it no longer fires - delete the exemption"
         )
+
+
+# ------------------------------------------------------------- @private (#627)
+
+
+def test_a_private_helper_exists_though_the_surface_omits_it(scan):
+    """@private takes a helper out of functions.csv, not out of existence:
+    prose explaining it is not a stale reference."""
+    assert "require_quotes_cols" not in cdr.load_surface().get("qfwd", {})
+    problems, _ = scan("`.qfwd.require_quotes_cols` checks the columns first.\n")
+    assert problems == []
+
+
+def test_private_names_follow_the_man_registry_rule(tmp_path):
+    """A tagged block covers the run of definitions under it, and nothing past
+    a blank line or in an untagged block."""
+    (tmp_path / "m.q").write_text(
+        "\\d .qzz\n"
+        "/ Private: two helpers.\n"
+        "/ @private\n"
+        "one:{[] 1}\n"
+        "two:{[] 2}\n"
+        "\n"
+        "three:{[] 3}\n"
+        "/ The API.\n"
+        "four:{[] 4}\n"
+        "/ @private\n"
+        ".qyy.inner.five:{[] 5}\n"
+    )
+    assert cdr.private_names(tmp_path) == {"qzz": {"one", "two"}, "qyy.inner": {"five"}}

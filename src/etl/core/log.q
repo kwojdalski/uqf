@@ -100,12 +100,14 @@ trace:{[on]
 trace_enabled:0b
 
 / Private: is a quiet level switched on, outside TorQ?
+/ @private
 switched:{[level] $[level=`DEBUG; debug_enabled; level=`TRACE; trace_enabled; 1b]}
 
 / Private: render a field dict as space-separated k=v, values via .Q.s1 so a
 / symbol, a timestamp and a string all render unambiguously and a list does
 / not spread across the line. Field ORDER is preserved, so a worker that
 / always logs (worker;window;rows) produces columns a human can scan.
+/ @private
 render:{[fields]
     if[0=count fields; :""];
     " " sv {[k;v] string[k],"=",value1 v}'[key fields;value fields]}
@@ -120,6 +122,7 @@ render:{[fields]
 / maximum for the one call, and put back even if rendering throws.
 / @param v any value
 / @return its q literal, as .Q.s1 spells it
+/ @private
 value1:{[v]
     if[10h=type v; :quoted v];
     c:@[system;"c";{[e] ()}];
@@ -135,6 +138,7 @@ value1:{[v]
 / spells it, without its console-width cut.
 / @param s a string
 / @return the literal, e.g. "\"a\\nb\""
+/ @private
 quoted:{[s]
     esc:{[ch] i:`int$ch;
         $[ch in "\\\""; "\\",ch;
@@ -154,6 +158,7 @@ quoted:{[s]
 / wrong transport, and no error to say so. Caught only by running the layer
 / against TorQ's real .lg definitions and noticing the line had three
 / fields where TorQ's format has six.
+/ @private
 torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 
 / Private: the transport. TorQ's .lg.l when loaded, stdout otherwise.
@@ -162,6 +167,7 @@ torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 / unless debug[] was called, TRACE unless trace[] was, everything else prints.
 / That way a test that asserts "this DEBUG line was not emitted" gets the same
 / answer whether or not torq.q happens to be loaded.
+/ @private
 emit:{[level;id;msg]
     $[torq_loaded[];
         .lg.l[level;`etl;id;id;msg;()!()];
@@ -173,6 +179,7 @@ emit:{[level;id;msg]
 / .
 / Split out so `line` can check BEFORE rendering. Mirrors the transport's own
 / gating: TorQ's outmap when it is loaded, the debug switch when it is not.
+/ @private
 enabled:{[level]
     if[torq_loaded[]; if[not level in key .lg.outmap; register[]]];
     $[torq_loaded[];
@@ -196,6 +203,7 @@ enabled:{[level]
 / "return generic null" - the if body was a no-op, execution fell through,
 / and the rendering happened anyway. The gate read as correct and did
 / nothing. Wrapping the emit has no such ambiguity.
+/ @private
 line:{[level;id;text;fields]
     if[enabled level;
         f:with_scope fields;
@@ -239,6 +247,7 @@ line:{[level;id;text;fields]
 context:()!()
 
 / Private: a line's fields, then whatever context it does not set itself.
+/ @private
 with_scope:{[fields]
     if[0=count context; :fields];
     f:$[0=count fields; ()!(); fields];

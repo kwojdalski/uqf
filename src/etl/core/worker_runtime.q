@@ -118,6 +118,7 @@ backoff_ms:{[pol;attempt]
 / Private: wait, in milliseconds. Zero and negative waits do nothing, which
 / is what lets a test set base_delay_ms to 0 and run at full speed rather
 / than sleeping through its own retry assertions.
+/ @private
 sleep_ms:{[ms] if[ms>0; system"sleep ",string ms%1000]; ms}
 
 / Run a niladic function under the retry policy.
@@ -395,6 +396,7 @@ declare_dependencies:{[worker;procs]
 / .
 / Overridable via connected_override so a test can present a fleet without
 / one.
+/ @private
 connected_override:();
 
 / The proctypes currently reachable in the fleet.

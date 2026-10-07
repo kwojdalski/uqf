@@ -12,6 +12,7 @@
 / @param x a symbol or string
 / @return x as a plain string
 / @eg .qccy.ccy_to_str `EURUSD  -> "EURUSD"
+/ @private
 ccy_to_str:{[x] $[10h=type x; x; string x]};
 
 / True if x is already in canonical CURCUR form: exactly 6 uppercase

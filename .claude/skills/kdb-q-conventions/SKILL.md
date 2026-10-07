@@ -332,6 +332,13 @@ order backwards - see below) by actually downloading `qstudio.jar` and running
   short one - a block that starts directly with `@param` renders with a blank
   "short description" in the generated index (this happened to `d1`/`d2` in
   `options.q` originally; fixed by adding a one-line lead-in).
+- **A helper that is plumbing, not API, ends its block with `/ @private`**
+  (#627), conventionally after a `/ Private: ...` description. `docs/man.q` then
+  leaves it out of the registry and records it in `.man.private`, and the
+  contract surface (`docs/reference/surfaces/current/functions.csv`) omits it,
+  so refactoring it is not a contract change. Its `@eg` lines still run. Tag
+  only what no other module or job file is told to call: a helper a guide tells
+  job authors to use is API, whatever its comment says.
 - A file-level doc block (single-`/` lines, ending in a lone `/ .` line) goes
   **before** the file's `\d .q<abbrev>` line at the top of the file and becomes
   that file's description in the generated docs.
