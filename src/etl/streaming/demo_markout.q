@@ -1,8 +1,13 @@
-/ markout.q - the whole of the markout job (.qpipe.job.markout).
+/ demo_markout.q - the whole of the DEMO markout job (.qpipe.job.demo_markout).
 / .
 / Subscribes to `trades` and `quote`, buffers both, and every second scores
 / the fills old enough to score against the mid at each horizon, publishing
-/ `execution_quality`.
+/ `demo_execution_quality`.
+/ .
+/ DEMO BY NAME (#729). Only the demo's feeds publish `trades` and `quote`,
+/ and it scores the invented market's pairs (.qsynth.pairs) - so it was
+/ `markout` until that read as the stack's markouts. Real fills are marked
+/ out by crypto_markout.q, from crypto_trades against crypto_book.
 / .
 / WHAT IS IN THIS FILE: the schemas, the scoring transform with its examples,
 / the batch handler, the timer body, the job's own buffers, and the
@@ -23,7 +28,7 @@
 / WITHOUT `time`, which .u.upd stamps on receipt (invariant 1).
 / tests/q/test_transform.q holds the two to each other.
 
-\d .qpipe.job.markout
+\d .qpipe.job.demo_markout
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -37,7 +42,7 @@ trades:.qetl.plant.shape `trades
 / `quotes` is the transform's NAME for its quote input, not the plant table
 / `quotes` (the vector book): its rows are plant `quote` ticks, these four columns.
 quotes:.qetl.plant.columns[`quote;`time`sym`bid`ask]
-execution_quality:.qetl.plant.published `execution_quality
+demo_execution_quality:.qetl.plant.published `demo_execution_quality
 
 / ---------------------------------------------------------- THE TRANSFORM
 
@@ -46,7 +51,7 @@ execution_quality:.qetl.plant.published `execution_quality
 / .
 / A fill whose horizon quote never arrived gets a null ref_price and
 / markout_pips rather than being dropped, so a gap shows in
-/ execution_quality instead of vanishing.
+/ demo_execution_quality instead of vanishing.
 / .
 / The empty guard is not tidiness: .qexec.markout_at_horizons throws `type`
 / on zero trades. The job never reached it because its timer returned early
@@ -55,16 +60,16 @@ execution_quality:.qetl.plant.published `execution_quality
 / @param quotes quote ticks, as the batch handler mirrors them
 / @return one row per fill per horizon, in fill order then horizon order
 score_markouts:{[trades;quotes]
-    if[0=count trades; :.qpipe.job.markout.execution_quality];
+    if[0=count trades; :.qpipe.job.demo_markout.demo_execution_quality];
     mids:select sym, time, mid:(bid+ask)%2 from quotes;
-    scored:.qexec.markout_at_horizons[trades;mids;.qpipe.job.markout.horizons];
+    scored:.qexec.markout_at_horizons[trades;mids;.qpipe.job.demo_markout.horizons];
     select sym, trade_time, horizon, trade_price, ref_price, markout_pips from scored}
 
 / --------------------------------------------------------------- THE JOB
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `markout;
+publish:.qetl.job.stream.unwired `demo_markout;
 
 / STATE, two blocks. pending is a queue: every trade not yet old enough to
 / score, drained by on_timer as it scores them. quote_hist is a mirror:
@@ -89,9 +94,9 @@ quote_hist:quotes;
 / @return nothing - this handler publishes nothing itself
 on_batch:{[t;x]
     $[t=`trades;
-        `.qpipe.job.markout.pending insert select time, sym, side, trade_price, size, pip_factor from x where sym in .qsynth.pairs;
+        `.qpipe.job.demo_markout.pending insert select time, sym, side, trade_price, size, pip_factor from x where sym in .qsynth.pairs;
       t=`quote;
-        `.qpipe.job.markout.quote_hist insert select time, sym, bid, ask from x where sym in .qsynth.pairs;
+        `.qpipe.job.demo_markout.quote_hist insert select time, sym, bid, ask from x where sym in .qsynth.pairs;
       ()];
     }
 
@@ -112,18 +117,18 @@ on_batch:{[t;x]
 / @param now the instant to score as of
 / @return nothing
 score_ready:{[now]
-    if[0=count .qpipe.job.markout.pending; :()];
-    mask:.qpipe.job.markout.pending[`time]<=now-.qpipe.job.markout.max_horizon;
-    ready:.qpipe.job.markout.pending where mask;
+    if[0=count .qpipe.job.demo_markout.pending; :()];
+    mask:.qpipe.job.demo_markout.pending[`time]<=now-.qpipe.job.demo_markout.max_horizon;
+    ready:.qpipe.job.demo_markout.pending where mask;
     if[0=count ready; :()];
-    out:.qetl.transform.apply[`execution_quality;`trades`quotes!(ready;.qpipe.job.markout.quote_hist)];
-    .qpipe.job.markout.publish[`execution_quality;out];
-    .qetl.job.stream.evict[`.qpipe.job.markout.pending;mask];
+    out:.qetl.transform.apply[`demo_execution_quality;`trades`quotes!(ready;.qpipe.job.demo_markout.quote_hist)];
+    .qpipe.job.demo_markout.publish[`demo_execution_quality;out];
+    .qetl.job.stream.evict[`.qpipe.job.demo_markout.pending;mask];
     }
 
 / The timer body the runner installs. Reads the clock once and hands it to
 / score_ready, which is the testable half.
-on_timer:{[] .qpipe.job.markout.score_ready .qpipe.job.markout.now[]}
+on_timer:{[] .qpipe.job.demo_markout.score_ready .qpipe.job.demo_markout.now[]}
 
 / The clock, as a function so a test can replace it.
 / .
@@ -145,10 +150,10 @@ now:{[] .z.p}
 
 \d .
 
-.qetl.transform.define[`execution_quality;`inputs`output`fn`examples!(
-    `trades`quotes!(.qpipe.job.markout.trades;.qpipe.job.markout.quotes);
-    .qpipe.job.markout.execution_quality;
-    .qpipe.job.markout.score_markouts;
+.qetl.transform.define[`demo_execution_quality;`inputs`output`fn`examples!(
+    `trades`quotes!(.qpipe.job.demo_markout.trades;.qpipe.job.demo_markout.quotes);
+    .qpipe.job.demo_markout.demo_execution_quality;
+    .qpipe.job.demo_markout.score_markouts;
     / A EURUSD buy that moves 5 then 10 pips in its favour; a USDJPY sell
     / whose single later quote serves both horizons; a GBPUSD buy with no
     / quote at all, which must come out null rather than go missing.
@@ -171,14 +176,14 @@ now:{[] .z.p}
             ref_price:1.1005 1.101 149.95 149.95 0n 0n;
             markout_pips:5 10 5 5 0n 0n)))];
 
-/ Score every second - frequent enough that execution_quality stays close to
+/ Score every second - frequent enough that demo_execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
-.qetl.job.stream.define[`markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
-    `markout1;
+.qetl.job.stream.define[`demo_markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
+    `demo_markout1;
     `trades`quote;
-    enlist `execution_quality;
-    .qpipe.job.markout.on_batch;
+    enlist `demo_execution_quality;
+    .qpipe.job.demo_markout.on_batch;
     0D00:00:01.000;
-    .qpipe.job.markout.on_timer;
+    .qpipe.job.demo_markout.on_timer;
     1b;
     "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two")];

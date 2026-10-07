@@ -39,7 +39,7 @@ test_every_registered_transform_passes_its_examples:{[t]
         "every transform reproduces its expected tables, deterministically, and handles empty input: ",.Q.s1 r]};
 
 test_the_stream_jobs_and_backfill_workers_all_declare_a_transform:{[t]
-    want:`execution_quality`cross_quotes`position`mkt_orderbook`demo_deals_passthrough`demo_events_passthrough;
+    want:`demo_execution_quality`cross_quotes`position`mkt_orderbook`demo_deals_passthrough`demo_events_passthrough;
     .qunit.assertEquals[all want in key .qetl.transform.registry;1b;"each shipped job's transform is registered"]};
 
 / A stream transform's output is published positionally by .u.upd, so its
@@ -52,12 +52,12 @@ test_stream_outputs_match_the_tickerplant_tables:{[t]
         want:delete time from stack nm;
         got:.qetl.transform.output_schema nm;
         $[(cols want)~cols got; (); enlist nm]
-      }[stack] each `execution_quality`position`mkt_orderbook;
+      }[stack] each `demo_execution_quality`position`mkt_orderbook;
     .qunit.assertEquals[count raze bad;0;"each published transform output matches its table, column for column: ",.Q.s1 raze bad]};
 
 stack_tables:{[]
     ls:read0 `$":src/etl/plant_tables.q";
-    nms:`execution_quality`position`mkt_orderbook;
+    nms:`demo_execution_quality`position`mkt_orderbook;
     nms!{[ls;nm] line:first ls where ls like string[nm],":*"; value (1+line?":") _ line}[ls] each nms}
 
 / --- declaring --------------------------------------------------------------

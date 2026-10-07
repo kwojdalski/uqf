@@ -155,8 +155,11 @@ def test_a_source_another_worker_reads_is_kept(tree):
 def test_a_written_job_is_refused_without_force(tree):
     """markout carries no SCAFFOLDED marker: it is real work, not a scaffold."""
     with pytest.raises(UqsError, match="no SCAFFOLDED marker left"):
-        plan_removal(tree, "markout")
-    assert Path("src/etl/streaming/markout.q") in plan_removal(tree, "markout", force=True).deletes
+        plan_removal(tree, "demo_markout")
+    assert (
+        Path("src/etl/streaming/demo_markout.q")
+        in plan_removal(tree, "demo_markout", force=True).deletes
+    )
 
 
 def test_a_name_that_matches_no_job_is_refused(tree):

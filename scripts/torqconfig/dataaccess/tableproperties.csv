@@ -1,4 +1,4 @@
 proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeoffset,rolltimezone,datatimezone,partitionfield
 ,mkt_orderbook,time,sym,sym,,,,
-,execution_quality,time,sym,sym,,,,
+,demo_execution_quality,time,sym,sym,,,,
 ,duckdb_deals,time,sym,sym,,,,

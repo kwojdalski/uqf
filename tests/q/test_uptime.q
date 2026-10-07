@@ -33,9 +33,9 @@ gaps:{[job;a;b] .qetl.uptime.gaps[job;.uptimetest.h a;.uptimetest.h b]}
 / --- recording -------------------------------------------------------------
 
 test_a_session_records_who_and_when_and_is_on_disk:{[t]
-    id:.qetl.uptime.begin `markout;
+    id:.qetl.uptime.begin `demo_markout;
     r:first select from .qetl.uptime.sessions[] where session=id;
-    .qunit.assertEquals[(r`job;r`host;r`pid;(r`started_at)=r`last_seen);(`markout;.z.h;.z.i;1b);
+    .qunit.assertEquals[(r`job;r`host;r`pid;(r`started_at)=r`last_seen);(`demo_markout;.z.h;.z.i;1b);
         "the job, this host and pid, just started"];
     delete etl_stream_uptime from `.;
     .qetl.uptime.attach[];
@@ -45,7 +45,7 @@ test_a_session_records_who_and_when_and_is_on_disk:{[t]
 test_a_beat_moves_only_this_processes_sessions:{[t]
     .uptimetest.session[`posbook;0;1];
     persisted:.qetl.job.bounded.state.durable_set[.qetl.uptime.path[];.qetl.uptime.sessions[]];
-    id:.qetl.uptime.begin `markout;
+    id:.qetl.uptime.begin `demo_markout;
     before:exec first last_seen from .qetl.uptime.sessions[] where session=id;
     system"sleep 0.01";
     .qunit.assertEquals[.qetl.uptime.beat[];1;"one session is this process's"];
@@ -60,41 +60,41 @@ test_a_beat_with_no_session_writes_nothing:{[t]
 / --- gaps ------------------------------------------------------------------
 
 test_a_job_never_up_is_one_gap_the_whole_range:{[t]
-    .qunit.assertEquals[.uptimetest.gaps[`markout;0;24];([] range_from:enlist .uptimetest.h 0; range_to:enlist .uptimetest.h 24);
+    .qunit.assertEquals[.uptimetest.gaps[`demo_markout;0;24];([] range_from:enlist .uptimetest.h 0; range_to:enlist .uptimetest.h 24);
         "no session at all: everything is a gap"]};
 
 test_the_hole_between_two_sessions_is_the_gap:{[t]
-    .uptimetest.session[`markout;0;10];
-    .uptimetest.session[`markout;11;24];
-    .qunit.assertEquals[.uptimetest.gaps[`markout;0;24];([] range_from:enlist .uptimetest.h 10; range_to:enlist .uptimetest.h 11);
+    .uptimetest.session[`demo_markout;0;10];
+    .uptimetest.session[`demo_markout;11;24];
+    .qunit.assertEquals[.uptimetest.gaps[`demo_markout;0;24];([] range_from:enlist .uptimetest.h 10; range_to:enlist .uptimetest.h 11);
         "the hour it was down"]};
 
 test_overlapping_and_touching_sessions_leave_no_gap:{[t]
     / a restart that overlapped the old process, and one that took over exactly at its last beat
-    .uptimetest.session[`markout;0;12];
-    .uptimetest.session[`markout;10;18];
-    .uptimetest.session[`markout;18;24];
-    .qunit.assertEquals[count .uptimetest.gaps[`markout;0;24];0;"up throughout"]};
+    .uptimetest.session[`demo_markout;0;12];
+    .uptimetest.session[`demo_markout;10;18];
+    .uptimetest.session[`demo_markout;18;24];
+    .qunit.assertEquals[count .uptimetest.gaps[`demo_markout;0;24];0;"up throughout"]};
 
 test_the_edges_of_the_range_are_gaps_too:{[t]
-    .uptimetest.session[`markout;2;20];
-    .qunit.assertEquals[.uptimetest.gaps[`markout;0;24];([] range_from:.uptimetest.h 0 20; range_to:.uptimetest.h 2 24);
+    .uptimetest.session[`demo_markout;2;20];
+    .qunit.assertEquals[.uptimetest.gaps[`demo_markout;0;24];([] range_from:.uptimetest.h 0 20; range_to:.uptimetest.h 2 24);
         "before it started, and after its last beat"]};
 
 test_another_jobs_session_closes_nothing:{[t]
     .uptimetest.session[`posbook;0;24];
-    .qunit.assertEquals[count .uptimetest.gaps[`markout;0;24];1;"posbook being up says nothing about markout"]};
+    .qunit.assertEquals[count .uptimetest.gaps[`demo_markout;0;24];1;"posbook being up says nothing about markout"]};
 
 test_a_session_that_never_beat_covers_nothing:{[t]
     / started and died before its first beat: started_at = last_seen
-    .uptimetest.session[`markout;5;5];
-    .qunit.assertEquals[count .uptimetest.gaps[`markout;0;24];1;"a zero-length session is not uptime"]};
+    .uptimetest.session[`demo_markout;5;5];
+    .qunit.assertEquals[count .uptimetest.gaps[`demo_markout;0;24];1;"a zero-length session is not uptime"]};
 
 / --- twins and wiring -------------------------------------------------------
 
 test_a_jobs_twin_is_the_worker_filling_what_it_publishes:{[t]
-    .qunit.assertEquals[.qetl.uptime.twins each `markout`posbook;(enlist `hdb_markouts_backfill;`symbol$());
-        "markout's execution_quality is hdb_markouts_backfill's dataset; posbook has no twin"]};
+    .qunit.assertEquals[.qetl.uptime.twins each `demo_markout`posbook;(enlist `hdb_demo_markouts_backfill;`symbol$());
+        "markout's demo_execution_quality is hdb_demo_markouts_backfill's dataset; posbook has no twin"]};
 
 test_starting_a_job_opens_a_session_and_its_beat_timer:{[t]
 
@@ -104,16 +104,16 @@ test_starting_a_job_opens_a_session_and_its_beat_timer:{[t]
         {[tbls;h;replay] };
         {[n;p;f] .uptimetest.timers,:enlist (n;p)});
     `.uptimetest.timers set ();
-    .qetl.job.stream.start[`markout;tr];
-    .qunit.assertEquals[exec job from .qetl.uptime.sessions[];enlist `markout;"a session, opened once it was subscribed"];
-    .qunit.assertTrue[(`markout_uptime;.qetl.uptime.period) in .uptimetest.timers;"and the timer that beats it"]};
+    .qetl.job.stream.start[`demo_markout;tr];
+    .qunit.assertEquals[exec job from .qetl.uptime.sessions[];enlist `demo_markout;"a session, opened once it was subscribed"];
+    .qunit.assertTrue[(`demo_markout_uptime;.qetl.uptime.period) in .uptimetest.timers;"and the timer that beats it"]};
 
 test_a_session_that_cannot_be_recorded_does_not_stop_the_job:{[t]
     keep:.qetl.uptime.begin;
     .qetl.uptime.begin:{[job] '"disk full"};
     tr:`connect`publisher`subscribe`timer!({[] };{[] {[t;x] }};{[tbls;h;replay] };{[n;p;f] });
-    r:@[.qetl.job.stream.start[`markout;];tr;{[e] `threw}];
+    r:@[.qetl.job.stream.start[`demo_markout;];tr;{[e] `threw}];
     .qetl.uptime.begin:keep;
-    .qunit.assertEquals[r;`markout;"the job starts; the record is an addition, never a precondition"]};
+    .qunit.assertEquals[r;`demo_markout;"the job starts; the record is an addition, never a precondition"]};
 
 \d .

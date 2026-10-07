@@ -52,7 +52,7 @@ describe[`etl_coverage]:
     "Append-only completeness ledger: which [range_from, range_to) window of which dataset is published, at which source_version. A window with rows_published=0 still counts as covered - that is what distinguishes 'ran, found nothing' from 'never ran'";
 describe[`event_tape]:
     "Per-event order/trade tape: add, cancel and trade events with the aggressor side on a trade. A superset of trades, so a tape filtered to action='trade' is trade-shaped. Sorted ascending by time by contract - see docs/architecture/event-tape.md";
-describe[`execution_quality]:
+describe[`demo_execution_quality]:
     "Post-trade markout per fill per horizon; a null markout_pips means no reference quote existed at that horizon, not a zero markout";
 describe[`executions]:
     "Every fill table the stack carries, spelled one way by the executions normalizer: the FX trades and cryptorust's crypto_trades. source_time is the source's own stamp, time the plant's on the normalized row. This is what posbook1 reads";
@@ -139,3 +139,5 @@ surface:{[]
     "One moment of a crypto pair on one venue, replayed out of cryptorust's own recorded DuckDB capture: five book levels a side as vectors, the trade printed alongside them, and both clocks - the venue's source_time and the recorder's local_time, whose difference is the wire lag. The repeatable counterpart to crypto_book, which the same recorder fills live and which carries source_time but not the recorder's local_time";
 .qcat.describe[`trades_copy]:
     "One trade copied out of another kdb+ HDB on this machine by hdb_transfer_backfill, with its notional (price times size, in the quote currency) added on the way - the worked example of moving data from one kdb+ database into another; scripts/examples/hdb_transfer_example.q runs it end to end";
+.qcat.describe[`crypto_execution_quality]:
+    "Post-trade markout per real crypto fill per horizon, in bps against the best mid across venues; a null markout_bps means no venue had a live book at that horizon, not a zero markout";

@@ -127,7 +127,7 @@ def test_a_profile_takes_the_process_and_the_module_still_compiles():
         "pulse1", profile="crypto", unprofiled=None, start_with_all=False, known_profiles=KNOWN
     )
     assert not notes
-    assert '"crypto": ("cryptomock1", "pulse1"),' in _applied(actions)
+    assert '"crypto": ("cryptomock1", "crypto_markout1", "pulse1"),' in _applied(actions)
 
 
 def test_start_with_all_puts_it_in_default_and_says_what_else_to_check():

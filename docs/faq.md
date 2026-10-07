@@ -257,8 +257,8 @@ Each runtime keeps its own data directory, so switching between them never mixes
 their HDBs.
 
 **Profiles are defined once, for the `uqf` runtime.** Every profile except
-`essential` names uqf's own processes (`fx` means `posbook1`, `markout1` and
-`fxpositions1`), which the `torq` runtime doesn't have. So under `torq`:
+`essential` names uqf's own processes (`fx` means `posbook1`, `demo_markout1`
+and `fxpositions1`), which the `torq` runtime doesn't have. So under `torq`:
 
 - `uqs list profiles` shows only the profiles it can start, which today is
   `essential`;

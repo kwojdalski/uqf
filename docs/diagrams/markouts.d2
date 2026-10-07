@@ -3,7 +3,7 @@
 # Rendered by scripts/generate/render_diagrams.py, which CI runs with
 # --check. Embedded from docs/services/markouts.md.
 #
-# WHAT THIS DIAGRAM IS FOR. Two jobs write execution_quality, and the thing
+# WHAT THIS DIAGRAM IS FOR. Two jobs write demo_execution_quality, and the thing
 # worth seeing is what they SHARE: one scoring function and one set of
 # horizons, drawn once in the middle with both paths running through it.
 # That is why a fill scored by both comes out identical, and why the table's
@@ -55,21 +55,21 @@ classes: {
   }
 }
 
-live: "LIVE: markout1" {
+live: "LIVE: demo_markout1" {
   tp: "stp1 publishes\ntrades · quote" { class: store }
   buffer: "buffers fills and quotes in its own process\n(lost if it restarts)\nevery 1s: picks the fills whose\nlongest horizon has passed" { class: job }
   tp -> buffer: "subscribe"
 }
 
-backfill: "BACKFILL: hdb_markouts_backfill1" {
+backfill: "BACKFILL: hdb_demo_markouts_backfill1" {
   hdb: "hdb1 on disk\ntrades · quote" { class: store }
-  query: "source hdb_markouts, one window [from, to)\n1. fills with trade time in [from, to)\n2. quotes in [from, to + 10s)\nno fills: no quote query, empty result" { class: job }
+  query: "source hdb_demo_markouts, one window [from, to)\n1. fills with trade time in [from, to)\n2. quotes in [from, to + 10s)\nno fills: no quote query, empty result" { class: job }
   hdb -> query: "two IPC queries,\nboth shown by --trace" { style.stroke-dash: 4 }
 }
 
-scoring: "SHARED by both - one function, one set of horizons\n.qexec.markout_at_horizons\n.qpipe.job.markout.horizons = 1s, 10s\nref = mid (bid + ask) / 2 at or before trade_time + horizon" { class: shared }
+scoring: "SHARED by both - one function, one set of horizons\n.qexec.markout_at_horizons\n.qpipe.job.demo_markout.horizons = 1s, 10s\nref = mid (bid + ask) / 2 at or before trade_time + horizon" { class: shared }
 
-eq: "execution_quality\ntime · sym · trade_time · horizon\ntrade_price · ref_price · markout_pips\n\nkeyed sym · trade_time · horizon\nsaved to hdb1 at end of day" { class: table }
+eq: "demo_execution_quality\ntime · sym · trade_time · horizon\ntrade_price · ref_price · markout_pips\n\nkeyed sym · trade_time · horizon\nsaved to hdb1 at end of day" { class: table }
 
 live.buffer -> scoring: "scores"
 backfill.query -> scoring: "scores"

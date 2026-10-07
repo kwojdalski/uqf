@@ -347,7 +347,7 @@ crypto_sim_fills:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_
 crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$(); exchange_fill_id:`symbol$())
 
 / The trades shape src/execution/execution.q's markout family consumes
-/ (sym/time/side/trade_price/pip_factor), so markout1 and posbook1 read
+/ (sym/time/side/trade_price/pip_factor), so demo_markout1 and posbook1 read
 / rows off this table with zero reshaping.
 trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$())
 
@@ -355,8 +355,8 @@ trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`flo
 / tickerplant like mkt_orderbook rather than kept as process-private state.
 position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); mark_price:`float$(); unrealized_pnl:`float$(); total_pnl:`float$())
 
-/ markout1's output: per-trade execution quality at each horizon.
-execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
+/ demo_markout1's output: per-trade execution quality at each horizon.
+demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
 
 / executions1's output: every fill table the stack carries, as one. The
 / `executions` normalizer (src/etl/streaming/executions.q) maps `trades` and
@@ -466,3 +466,6 @@ deal_positions:([]time:`timestamp$(); sym:`g#`symbol$(); window:`timestamp$(); n
 
 / hdb_transfer_backfill1's target. <one line: what a row means>
 trades_copy:([]time:`timestamp$(); trade_id:`long$(); sym:`g#`symbol$(); price:`float$(); size:`long$(); side:`symbol$(); notional:`float$())
+
+/ crypto_markout1's output. <one line: what a row means>
+crypto_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); fill_id:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); side:`long$(); trade_price:`float$(); ref_price:`float$(); markout_bps:`float$())

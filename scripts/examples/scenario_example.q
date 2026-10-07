@@ -79,7 +79,7 @@ mk_book_row:{[spot]
     pip_factor:10000 10000 10000);
 .qetl.log.info[`seed;"orders/trades - ",.Q.s1[count trades]," fills, one per pair in ",.Q.s1[pairs];()!()];
 
-/ ==== execution_quality: a real call through markout_at_horizons ====
+/ ==== demo_execution_quality: a real call through markout_at_horizons ====
 / Scoped to EURUSD: mo_quotes is a EURUSD-only mid series, and the function
 / as-of joins each trade against quotes sharing its sym, so an AUDUSD or
 / EURPLN trade would join against nothing. `trades` is exactly the shape it
