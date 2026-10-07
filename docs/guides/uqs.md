@@ -302,8 +302,7 @@ uqs runtime diff uqf torq     # what one has that the other lacks
 what each one's process.csv and schema would hold. It reads the declarations
 rather than starting anything. `runtime diff A B` lists, in each direction, the
 processes, tables, config layers and commands that one runtime has and the other
-doesn't. Both take `--json`. The table below is the prose version; a test holds
-its columns, data directories and base ports to the declarations.
+doesn't. Both take `--json`.
 
   |                | `uqf` (default)                                                         | `torq`                                                            | `crypto`                                                                                        | `fx`                                                                                        |
   | ---            | ---                                                                     | ---                                                               | ---                                                                                             | ---                                                                                         |

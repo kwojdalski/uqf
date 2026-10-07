@@ -1,10 +1,9 @@
-"""`uqs list runtimes` and `uqs runtime diff` (#763), and the guide's runtime
-table held to the declarations it describes."""
+"""`uqs list runtimes` and `uqs runtime diff` (#763). The guide's runtime
+table is held to the declarations by test_runtime_declarations.py."""
 
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -84,29 +83,3 @@ def test_both_commands_print_json(monkeypatch):
     diffed = runner.invoke(cli.app, ["runtime", "diff", "uqf", "torq", "--json"])
     assert diffed.exit_code == 0, diffed.output
     assert set(json.loads(diffed.stdout)) == set(runtime_report.DIFF_SECTIONS)
-
-
-def _guide_table() -> dict[str, list[str]]:
-    """docs/guides/uqs.md's runtime table: row label -> cells, header first."""
-    text = (ROOT / "docs" / "guides" / "uqs.md").read_text()
-    section = text[text.index("### Runtimes") :]
-    lines = [ln.strip() for ln in section.splitlines()]
-    start = next(i for i, ln in enumerate(lines) if ln.startswith("|"))
-    rows = []
-    for ln in lines[start:]:
-        if not ln.startswith("|"):
-            break
-        rows.append([c.strip() for c in ln.strip("|").split("|")])
-    table = {"header": rows[0][1:]}
-    table.update({r[0]: r[1:] for r in rows[2:]})
-    return table
-
-
-def test_the_guides_runtime_table_matches_the_declarations():
-    """The prose rows are the doc's; the columns, data directories and base
-    ports are facts the declarations hold, and are checked against them."""
-    table = _guide_table()
-    names = [re.sub(r"`|\s*\(default\)", "", h) for h in table["header"]]
-    assert names == list(RUNTIMES), "one column per runtime, in declaration order"
-    assert table["data directory"] == [f"`output/{r.data_dir}`" for r in RUNTIMES.values()]
-    assert table["base port"] == [f"`{r.base_port}`" for r in RUNTIMES.values()]
