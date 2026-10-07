@@ -72,6 +72,7 @@ def test_run_torq_sh_extends_the_environment_rather_than_replacing_it(monkeypatc
     """subprocess.run's env= REPLACES the environment. Passing only the
     generated variables would lose PATH, and envsubst, rlwrap and q would
     stop resolving though they are on PATH in the calling shell."""
+    monkeypatch.delenv("UQS_TORQ_LAUNCHER", raising=False)
     seen: dict[str, Any] = {}
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: {"KDBBASEPORT": "7000"})
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, **kw) or "RESULT")
@@ -81,6 +82,49 @@ def test_run_torq_sh_extends_the_environment_rather_than_replacing_it(monkeypatc
     assert seen["env"]["PATH"] == os.environ["PATH"], "the inherited PATH survives"
     assert seen["capture_output"] is True
     assert seen["check"] is False, "a non-zero torq.sh is a result to report, not an exception"
+
+
+def test_run_torq_sh_runs_a_site_launcher_under_the_generated_env(monkeypatch, tmp_path):
+    """UQS_TORQ_LAUNCHER replaces $TORQHOME/torq.sh and nothing else: TORQHOME
+    stays the core, and SETENV/TORQPROCESSES stay the generated ones, so the
+    site's launcher starts this tree's processes."""
+    launcher = tmp_path / "bin" / "torq.sh"
+    launcher.parent.mkdir()
+    launcher.write_text("#!/bin/sh\n")
+    launcher.chmod(0o755)
+    monkeypatch.setenv("UQS_TORQ_LAUNCHER", str(launcher))
+    generated = {
+        "TORQHOME": "/repo/lib/torq",
+        "SETENV": "/repo/output/uqs/setenv.sh",
+        "TORQPROCESSES": "/repo/output/uqs/process.csv",
+    }
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: generated)
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, **kw))
+    runtime.run_torq_sh(_paths(), ["start", "all"])
+    assert seen["cmd"] == [str(launcher), "start", "all"]
+    assert {k: seen["env"][k] for k in generated} == generated
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ("bin/torq.sh", "must be an absolute path"),
+        ("/nonexistent/torq.sh", "is not an executable file"),
+        ("PLAIN", "is not an executable file"),
+    ],
+)
+def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, message):
+    if value == "PLAIN":
+        plain = tmp_path / "torq.sh"
+        plain.write_text("")
+        plain.chmod(0o644)
+        value = str(plain)
+    monkeypatch.setenv("UQS_TORQ_LAUNCHER", value)
+    monkeypatch.setattr(runtime, "bootstrap", lambda *_a, **_k: {})
+    monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: pytest.fail("ran"))
+    with pytest.raises(UqsError, match=f"UQS_TORQ_LAUNCHER=.*{message}"):
+        runtime.run_torq_sh(_paths(), ["summary"])
 
 
 @pytest.mark.parametrize(
