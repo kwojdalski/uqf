@@ -226,11 +226,11 @@ materialise:{[ts] {[t] t set schema t} each ts; ts}
 
 / The order book shape every pricing and execution function in src/ expects:
 / vector-valued price and size columns, one row per (time, sym). Matches
-/ forwards.q's require_quotes_cols exactly, so a row published here is
+/ forwards.q's require_depth_quotes exactly, so a row published here is
 / usable by cross_book_at with no reshaping.
 / .
 / That sentence was FALSE for as long as it stood, and is worth keeping the
-/ history of. require_quotes_cols demanded `ts` while this table led with
+/ history of. require_depth_quotes demanded `ts` while this table led with
 / `time` - which .u.upd requires of every table's first column - so
 / cross_book_at refused a real fx_orderbook table outright, and the claim of "no
 / reshaping" went unchallenged because nothing ever called a pricing
@@ -301,7 +301,7 @@ nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
 databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_px_00:`float$(); bid_sz_00:`long$(); ask_px_00:`float$(); ask_sz_00:`long$(); bid_px_01:`float$(); bid_sz_01:`long$(); ask_px_01:`float$(); ask_sz_01:`long$(); bid_px_02:`float$(); bid_sz_02:`long$(); ask_px_02:`float$(); ask_sz_02:`long$(); bid_px_03:`float$(); bid_sz_03:`long$(); ask_px_03:`float$(); ask_sz_03:`long$(); bid_px_04:`float$(); bid_sz_04:`long$(); ask_px_04:`float$(); ask_sz_04:`long$(); bid_px_05:`float$(); bid_sz_05:`long$(); ask_px_05:`float$(); ask_sz_05:`long$(); bid_px_06:`float$(); bid_sz_06:`long$(); ask_px_06:`float$(); ask_sz_06:`long$(); bid_px_07:`float$(); bid_sz_07:`long$(); ask_px_07:`float$(); ask_sz_07:`long$(); bid_px_08:`float$(); bid_sz_08:`long$(); ask_px_08:`float$(); ask_sz_08:`long$(); bid_px_09:`float$(); bid_sz_09:`long$(); ask_px_09:`float$(); ask_sz_09:`long$())
 
 / The folded book, republished by databento1 - the shape .qbook and
-/ .qfwd.cross_book_at read. Carries `ts_event` as well as `time`: the
+/ .qcross.cross_book_at read. Carries `ts_event` as well as `time`: the
 / tickerplant stamps `time` on receipt, and a book that knew only when it
 / ARRIVED could not tell a stale feed from a fast one.
 eq_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())

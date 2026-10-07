@@ -16,6 +16,7 @@ from uqs.model.jobs import job_rows
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
+from uqs.stack import runtime_profiles
 from uqs.stack.env import build_env
 from uqs.stack.procs import (
     _read_overrides,
@@ -163,13 +164,9 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     """
     rows = []
     slots = profiles.allowance()
-    # The torq runtime lists only the profiles it can start: those whose
-    # every process is in the starter pack's own process.csv.
-    known = {r["procname"] for r in effective_process_rows(paths)} if paths.pure_torq else None
-    for name in sorted(profiles.PROFILES):
+    known = runtime_profiles.known_processes(paths)
+    for name in runtime_profiles.startable_profiles(known):
         resolved = profiles.resolve([name])
-        if known is not None and not set(resolved) <= known:
-            continue
         held = profiles.plant_slots(resolved)
         rows.append(
             {

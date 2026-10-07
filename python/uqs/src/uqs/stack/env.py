@@ -66,7 +66,7 @@ def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         # whatever PATH found while its HDB filler ran another binary (#414).
         "QCMD": q_command(),
     }
-    if paths.pure_torq:
+    if not paths.runtime_declaration.overlays:
         del env["KDBSERVCONFIG"], env["KDBSERVCODE"]
     # Child processes - torq.sh, the frontend's and the MCP server's calls
     # back into uqs - see the same runtime this one was built for.

@@ -15,14 +15,14 @@
 / limit as a gap, the other left it unpoliced.
 / .
 / Every other module in this library throws immediately on a bad input
-/ (require_quotes_cols, ccy_pair_symbol's length checks, ...). This one
+/ (require_depth_quotes, ccy_pair_symbol's length checks, ...). This one
 / never throws for a finding - a crossed book, a stale quote - since the
 / whole point is to surface many problems in one report rather than stop
 / at the first. It still throws for genuinely malformed input (a quotes
 / table missing required columns), same as everywhere else.
 / .
 / Requires microstructure.q (spread_bps, for check_market_data_quality) and
-/ forwards.q (require_quotes_cols) to be loaded first.
+/ forwards.q (require_depth_quotes) to be loaded first.
 
 \d .qdqc
 
@@ -41,7 +41,7 @@
 / guard crypto_market_data_backfill.q's quality_check applies to its own
 / crossed test.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
-/   (see forwards.q's require_quotes_cols) - any row order, needn't be sorted
+/   (see forwards.q's require_depth_quotes) - any row order, needn't be sorted
 / @param max_spread_bps a spread at or below this many bps is `ok; above
 /   it (and non-negative) is `wide
 / @return a table time/sym/spread_bps/status (`ok`, `crossed`, `wide`, or
@@ -52,7 +52,7 @@
 / @throws error if quotes is missing a required column
 / @eg .qdqc.check_market_data_quality[quotes;5]
 check_market_data_quality:{[quotes;max_spread_bps]
-    .qfwd.require_quotes_cols[`check_market_data_quality;quotes];
+    .qschema.require_depth_quotes[`check_market_data_quality;quotes];
     spreads:.qmicro.spread_bps[quotes`bid_prices;quotes`ask_prices];
     / boolean-indexed status vector rather than a nested $[cond;a;b].
     / KDB-X supports a vector cond, so this is now a style choice rather
@@ -85,7 +85,7 @@ check_market_data_quality:{[quotes;max_spread_bps]
 / @throws error if quotes is missing a required column
 / @eg .qdqc.check_stale_quotes[quotes;.z.p;0D00:00:05]
 check_stale_quotes:{[quotes;as_of;max_age]
-    .qfwd.require_quotes_cols[`check_stale_quotes;quotes];
+    .qschema.require_depth_quotes[`check_stale_quotes;quotes];
     / by before from, where after from - the canonical qSQL clause order,
     / kept because a reordered clause reads as a typo to anyone scanning it.
     / Compared through a local, never `where time<=as_of`: this tree's

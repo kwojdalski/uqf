@@ -12,4 +12,5 @@
 / Send the query with .qetl.source.local[h;{[read;from_ts;to_ts] ...};range_from;range_to]:
 / read[`table;from_ts;to_ts] returns the whole date partitions the window
 / touches, symbols decoded against the HDB's own sym file - filter the rows
-/ to [from_ts;to_ts) yourself."
+/ to [from_ts;to_ts) yourself. read[(`table;`col1`col2);from_ts;to_ts] reads
+/ only those columns' files."

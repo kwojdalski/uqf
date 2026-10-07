@@ -96,7 +96,7 @@ test_markout_at_horizons_works_with_unsorted_quotes:{[t]
 test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
     / #625: the two horizon markouts spell their inputs differently - a trades
     / table and `sym`time`mid quotes here; scalars and depth quotes in
-    / .qfwd.cross_markout_at_horizons. On a pair quoted directly they are one
+    / .qexec.cross_markout_at_horizons. On a pair quoted directly they are one
     / calculation, so a mix-up between them shows up here as a wrong number
     / rather than nowhere. Both sides, so a flipped sign convention cannot
     / agree by accident. #413: both take timespan horizons and return the
@@ -112,7 +112,7 @@ test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
         trade:([] sym:enlist `EURUSD; time:enlist t0; side:enlist side; trade_price:enlist 1.1003; pip_factor:enlist 10000);
         horizons:0D00:00:00 0D00:00:01 0D00:00:10;
         by_table:.qexec.markout_at_horizons[trade;mids;horizons];
-        by_scalars:.qfwd.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;horizons;1];
+        by_scalars:.qexec.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;horizons;1];
         .testutil.assertApprox[by_scalars`markout_pips;by_table`markout_pips;1e-9;
             "the same horizons over mids and over depth give the same pips"];
         .qunit.assertEquals[exec c!t from meta by_scalars;exec c!t from meta by_table;
@@ -244,7 +244,7 @@ test_sweep_price_walks_multiple_levels:{[t]
     / all of level 2, and 1M of the 2M available at level 3
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
-    r:.qexec.sweep_price[prices;sizes;3000000];
+    r:.qbook.sweep_price[prices;sizes;3000000];
     .testutil.assertApprox[r`avg_price;1.100233333;1e-6;"blended sweep price across three levels"];
     .testutil.assertApprox[r`worst_price;1.1005;1e-9;"worst (marginal) price is the last level touched"];
     .testutil.assertApprox[r`filled_size;3000000f;1e-9;"filled size matches the requested size"];
@@ -253,7 +253,7 @@ test_sweep_price_walks_multiple_levels:{[t]
 test_sweep_price_fits_inside_first_level:{[t]
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
-    r:.qexec.sweep_price[prices;sizes;500000];
+    r:.qbook.sweep_price[prices;sizes;500000];
     .testutil.assertApprox[r`avg_price;1.1000;1e-9;"size smaller than top level fills entirely at the top price"];
     .testutil.assertApprox[r`worst_price;1.1000;1e-9;"worst price equals the top price when only one level is touched"];
     .qunit.assertTrue[r`fully_filled;"fully filled"]};
@@ -261,7 +261,7 @@ test_sweep_price_fits_inside_first_level:{[t]
 test_sweep_price_exact_level_boundary:{[t]
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
-    r:.qexec.sweep_price[prices;sizes;1000000];
+    r:.qbook.sweep_price[prices;sizes;1000000];
     .testutil.assertApprox[r`avg_price;1.1000;1e-9;"sweeping exactly one level's size stays entirely within that level"];
     .testutil.assertApprox[r`worst_price;1.1000;1e-9;"worst price is still the top level"]};
 
@@ -269,7 +269,7 @@ test_sweep_price_insufficient_liquidity:{[t]
     / total depth is 4M; asking for 5M can only get 4M filled
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
-    r:.qexec.sweep_price[prices;sizes;5000000];
+    r:.qbook.sweep_price[prices;sizes;5000000];
     .testutil.assertApprox[r`filled_size;4000000f;1e-9;"filled size caps at total available depth"];
     .testutil.assertApprox[r`worst_price;1.1005;1e-9;"worst price is the last (deepest) level available"];
     .qunit.assertFalse[r`fully_filled;"not fully filled when requested size exceeds total depth"]};
@@ -279,23 +279,23 @@ test_sweep_price_of_full_depth_equals_vwap:{[t]
     prices:1.1000 1.1002 1.1005 1.1009;
     sizes:1000000 1000000 2000000 1500000;
     total_size:sum sizes;
-    r:.qexec.sweep_price[prices;sizes;total_size];
+    r:.qbook.sweep_price[prices;sizes;total_size];
     .testutil.assertApprox[r`avg_price;.qexec.vwap[prices;sizes];1e-9;"sweeping full depth = vwap of the whole book"]};
 
 test_sweep_price_empty_book_fills_nothing:{[t]
-    r:.qexec.sweep_price[`float$();`float$();1000000];
+    r:.qbook.sweep_price[`float$();`float$();1000000];
     .testutil.assertApprox[r`filled_size;0f;1e-9;"empty book fills nothing"];
     .qunit.assertFalse[r`fully_filled;"empty book cannot be fully filled"];
     .qunit.assertTrue[null r`avg_price;"avg_price is null when nothing filled"];
     .qunit.assertTrue[null r`worst_price;"worst_price is null when nothing filled"]};
 
 test_sweep_price_rejects_non_positive_size:{[t]
-    wrapper:{[x] .qexec.sweep_price[1.10 1.11;100 100;x]};
+    wrapper:{[x] .qbook.sweep_price[1.10 1.11;100 100;x]};
     .qunit.assertError[wrapper;0;"zero size is rejected"];
     .qunit.assertError[wrapper;-5;"negative size is rejected"]};
 
 test_sweep_price_rejects_mismatched_lengths:{[t]
-    wrapper:{[x] .qexec.sweep_price[1.10 1.11;enlist 100;500]};
+    wrapper:{[x] .qbook.sweep_price[1.10 1.11;enlist 100;500]};
     .qunit.assertError[wrapper;::;"mismatched prices/sizes lengths are rejected"]};
 
 / The expanding VWAP's terminal value must be the flat VWAP exactly - that

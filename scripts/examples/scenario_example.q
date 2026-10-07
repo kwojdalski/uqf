@@ -114,7 +114,7 @@ pos_unrealized:{[book;mark_rates;sym] .qpos.unrealized_pnl[book;sym;mark_rates s
 / PLN has no direct USD quote in market_data, so ccy_exposure_in bridges
 / through EUR - the same chaining cross_book_at does for a cross pair.
 / .
-/ NO RENAME ON THE WAY IN, and that is recent. require_quotes_cols demanded
+/ NO RENAME ON THE WAY IN, and that is recent. require_depth_quotes demanded
 / a `ts` column until the timestamp column was made one name across this
 / tree, so this line used to read `select ts:time, ...` and cross_book_at
 / refused a real tickerplant table without it. The columns are selected

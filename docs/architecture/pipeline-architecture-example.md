@@ -122,7 +122,7 @@ called from a query, a notebook or a surface.
 - [`.qrisk`](../../src/portfolio/risk.q),
   [`.qpos.ccy_exposure_in`](../../src/portfolio/positions.q) --- VaR, carry, and
   per-currency exposure revalued into one reporting currency through
-  [`.qfwd`](../../src/pricing/forwards.q)'s cross-rate chaining.
+  [`.qcross`](../../src/pricing/cross.q)'s cross-rate chaining.
 - [`.qmicro`](../../src/market_data/microstructure.q),
   [`.qexec`](../../src/execution/execution.q) --- book pressure, microprice,
   VPIN, markout: over a `fx_orderbook` snapshot series or the [event

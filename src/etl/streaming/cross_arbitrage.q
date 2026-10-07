@@ -92,7 +92,7 @@ quotable:{[state]
 / @eg .qpipe.job.cross_arbitrage.route_for[`EURUSD`USDJPY`EURJPY;`EURJPY] -> `EURUSD`USDJPY
 route_for:{[avail;sym]
     legs:.qccy.ccy_pair_legs sym;
-    @[{.qfwd.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
+    @[{.qcross.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
 
 / When each of a set of books was last quoted, and how far apart those
 / moments are. Top-of-book times: those are the levels a small sweep uses,
@@ -119,7 +119,7 @@ direct_side:{[row;side;size]
         '"direct_side: side must be `bid or `ask, got ",.Q.s1 side];
     prices:$[side=`bid; row`bid_prices; row`ask_prices];
     sizes:$[side=`bid; row`bid_sizes; row`ask_sizes];
-    swept:.qexec.sweep_price[prices;sizes;size];
+    swept:.qbook.sweep_price[prices;sizes;size];
     `price`fully_filled!(swept`avg_price;swept`fully_filled)}
 
 / One pair's status row: the direct book against its synthetic route.
@@ -149,7 +149,7 @@ opportunity:{[state;avail;sym;size;as_of]
     / symbol is the row you expect. Indexing by a table of keys is the form
     / that takes several, and it preserves the route's order - which matters,
     / because the legs are matched to syms by position.
-    syn:first .qfwd.cross_book_chain_at_sizes[route;
+    syn:first .qcross.cross_book_chain_at_sizes[route;
         leg_book each state ([] sym:route);enlist size;`bid`ask];
     / A route whose ends do not spell this pair is a routing bug, not an
     / opportunity - refuse rather than compare two different markets.

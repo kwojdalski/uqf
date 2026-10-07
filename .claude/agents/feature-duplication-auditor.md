@@ -181,7 +181,7 @@ request". It could - the frontend already ran the catalog there - so the copy
 was removed and the gateway now loads `src/etl/core/intervals.q`. A stated
 reason for a duplicate is a claim to check, not a verdict.
 
-**Do not report this one.** `forwards.q` calls `.qexec.sweep_price`
+**Do not report this one.** `forwards.q` calls `.qbook.sweep_price`
 (`src/pricing/forwards.q:207`, `:310`, `:478`) rather than re-walking depth
 itself. Two modules, one implementation, a cross-namespace call. That is reuse,
 and finding it should *raise* your confidence in the tree, not lower it --- say

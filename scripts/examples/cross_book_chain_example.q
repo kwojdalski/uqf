@@ -81,8 +81,8 @@ show quotes;
 sizes:1000000 3000000 5000000;
 as_of:.z.p+1D;
 
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_book_at[quotes;`AUDPLN;as_of;sizes;`bid`ask`mid]";()!()];
-audpln_book:.qfwd.cross_book_at[quotes;`AUDPLN;as_of;sizes;`bid`ask`mid];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_book_at[quotes;`AUDPLN;as_of;sizes;`bid`ask`mid]";()!()];
+audpln_book:.qcross.cross_book_at[quotes;`AUDPLN;as_of;sizes;`bid`ask`mid];
 .qetl.log.info[`cross_book_chain;"audpln_book - synthetic AUDPLN book at ",.Q.s1[count sizes]," sizes, chain found automatically from quotes";()!()];
 show audpln_book;
 
@@ -96,10 +96,10 @@ if[not all audpln_book`ask_fully_filled;
 / cross_book_at also handles a pair that's already directly quoted (no
 / chaining needed at all) and the inverse of a directly quoted pair
 / (USDAUD, when only AUDUSD is in `quotes`) the same way, transparently.
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_book_at[quotes;`AUDUSD;as_of;sizes;`mid]";()!()];
-show .qfwd.cross_book_at[quotes;`AUDUSD;as_of;sizes;`mid];
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid]";()!()];
-show .qfwd.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_book_at[quotes;`AUDUSD;as_of;sizes;`mid]";()!()];
+show .qcross.cross_book_at[quotes;`AUDUSD;as_of;sizes;`mid];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid]";()!()];
+show .qcross.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid];
 
 / ==== the "recipe" on its own: which legs does a pair need? ====
 / cross_decomp is the piece that replaces having to name the chain
@@ -107,30 +107,30 @@ show .qfwd.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid];
 / shortest route between a pair's two currencies. Useful on its own too,
 / e.g. to inspect what a pricing call would do before running it, or to
 / feed a different downstream step than cross_book_chain_at_sizes.
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_decomp[distinct quotes`sym;`AUDPLN]";()!()];
-chain_syms:.qfwd.cross_decomp[distinct quotes`sym;`AUDPLN];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_decomp[distinct quotes`sym;`AUDPLN]";()!()];
+chain_syms:.qcross.cross_decomp[distinct quotes`sym;`AUDPLN];
 .qetl.log.info[`cross_book_chain;"chain_syms - cross_decomp found ",.Q.s1[", " sv string chain_syms];()!()];
 
 / A different pool of available pairs decomposes differently - EURRUB
 / (no direct EUR/RUB market) only needs a single USD bridge, not the
 / 2-hop EUR->USD->PLN route AUDPLN needed above.
 eurusd_usdrub:`EURUSD`USDRUB;
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_decomp[eurusd_usdrub;`EURRUB]";()!()];
-eurrub_chain:.qfwd.cross_decomp[eurusd_usdrub;`EURRUB];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_decomp[eurusd_usdrub;`EURRUB]";()!()];
+eurrub_chain:.qcross.cross_decomp[eurusd_usdrub;`EURRUB];
 .qetl.log.info[`cross_book_chain;"eurrub_chain - with only ",.Q.s1[", " sv string eurusd_usdrub]," available, EURRUB decomposes to ",.Q.s1[", " sv string eurrub_chain];()!()];
 if[not eurrub_chain~`EURUSD`USDRUB;
     .qetl.log.err[`cross_book_chain;"expected EURRUB to decompose to exactly EURUSD, USDRUB";()!()];
     exit 1];
 
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.ccy_orient_chain[chain_syms]";()!()];
-orient:.qfwd.ccy_orient_chain[chain_syms];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.ccy_orient_chain[chain_syms]";()!()];
+orient:.qcross.ccy_orient_chain[chain_syms];
 .qetl.log.info[`cross_book_chain;"orient - chain resolves to ",.Q.s1[orient`cross_sym],", invert flags per leg ",.Q.s1[orient`inverts];()!()];
 show orient;
 
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.leg_book_as_of[quotes;as_of;] each chain_syms";()!()];
-chain_books:.qfwd.leg_book_as_of[quotes;as_of;] each chain_syms;
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_book_chain_at_sizes[chain_syms;chain_books;sizes;`bid`ask`mid]";()!()];
-manual_audpln_book:.qfwd.cross_book_chain_at_sizes[chain_syms;chain_books;sizes;`bid`ask`mid];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.leg_book_as_of[quotes;as_of;] each chain_syms";()!()];
+chain_books:.qcross.leg_book_as_of[quotes;as_of;] each chain_syms;
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_book_chain_at_sizes[chain_syms;chain_books;sizes;`bid`ask`mid]";()!()];
+manual_audpln_book:.qcross.cross_book_chain_at_sizes[chain_syms;chain_books;sizes;`bid`ask`mid];
 .qetl.log.info[`cross_book_chain;"manual_audpln_book - same result, built leg by leg instead of via cross_book_at:";()!()];
 show manual_audpln_book;
 
@@ -157,16 +157,16 @@ query_times:`before_any_tick`at_tick1`between_tick1_and_tick2`at_tick3!(
     tick_ts[0]+0D00:00:00.005;
     tick_ts[2]);
 
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick1;enlist 1000000;`mid]";()!()];
-mid_at_tick1:.qfwd.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick1;enlist 1000000;`mid];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick1;enlist 1000000;`mid]";()!()];
+mid_at_tick1:.qcross.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick1;enlist 1000000;`mid];
 .qetl.log.info[`cross_book_chain;"mid_at_tick1 - queried exactly at tick1's timestamp: ",.Q.s1[first mid_at_tick1`mid];()!()];
 
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_book_at[audusd_ticks;`AUDUSD;query_times`between_tick1_and_tick2;enlist 1000000;`mid]";()!()];
-mid_between:.qfwd.cross_book_at[audusd_ticks;`AUDUSD;query_times`between_tick1_and_tick2;enlist 1000000;`mid];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_book_at[audusd_ticks;`AUDUSD;query_times`between_tick1_and_tick2;enlist 1000000;`mid]";()!()];
+mid_between:.qcross.cross_book_at[audusd_ticks;`AUDUSD;query_times`between_tick1_and_tick2;enlist 1000000;`mid];
 .qetl.log.info[`cross_book_chain;"mid_between - queried 5ms after tick1, before tick2 exists: ",.Q.s1[first mid_between`mid];()!()];
 
-.qetl.log.dbg[`cross_book_chain;"running: .qfwd.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick3;enlist 1000000;`mid]";()!()];
-mid_at_tick3:.qfwd.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick3;enlist 1000000;`mid];
+.qetl.log.dbg[`cross_book_chain;"running: .qcross.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick3;enlist 1000000;`mid]";()!()];
+mid_at_tick3:.qcross.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick3;enlist 1000000;`mid];
 .qetl.log.info[`cross_book_chain;"mid_at_tick3 - queried at tick3's timestamp: ",.Q.s1[first mid_at_tick3`mid];()!()];
 
 if[not mid_at_tick1[`mid]~mid_between`mid;
@@ -179,7 +179,7 @@ if[mid_at_tick1[`mid]~mid_at_tick3`mid;
 
 / querying before any tick exists should error, not silently return
 / something (or, worse, the wrong tick).
-wrapper_no_data:{[q] .qfwd.cross_book_at[q;`AUDUSD;query_times`before_any_tick;enlist 1000000;`mid]};
+wrapper_no_data:{[q] .qcross.cross_book_at[q;`AUDUSD;query_times`before_any_tick;enlist 1000000;`mid]};
 caught:@[wrapper_no_data;audusd_ticks;{[e] e}];
 .qetl.log.info[`cross_book_chain;"querying before any tick exists correctly errors: ",.Q.s1[caught];()!()];
 if[10h<>type caught;

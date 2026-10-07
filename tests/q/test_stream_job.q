@@ -213,7 +213,7 @@ test_the_depth_feed_quotes_three_levels_a_side:{[t]
         "every pair's bid and ask ladder is n_levels deep"]};
 
 test_the_depth_feeds_ladders_are_level_zero_first:{[t]
-    / .qbook and .qfwd.cross_book_at both read level 0 as the touch, so a
+    / .qbook and .qcross.cross_book_at both read level 0 as the touch, so a
     / ladder built outwards-in prices every cross off the wrong level.
     rows:.qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
     bids:first rows 1;

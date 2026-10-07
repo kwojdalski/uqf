@@ -2,7 +2,7 @@
 / .
 / Subscribes to `wide_orderbook` - twenty-two per-level columns, as a venue
 / publishes them - folds each row into one price vector per side, and
-/ publishes `mkt_orderbook`, the book shape .qbook and .qfwd.cross_book_at
+/ publishes `mkt_orderbook`, the book shape .qbook and .qcross.cross_book_at
 / read. It keeps no state: every batch is republished as it arrives.
 / .
 / WHAT IS IN THIS FILE: the wide and folded schemas, the fold transform with

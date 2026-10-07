@@ -285,7 +285,11 @@ exits when the replay is done.
 ### Runtimes
 
 All of the above is the `uqf` runtime, the default. The `torq` runtime is the
-starter pack as it ships, with nothing of this tree's added:
+starter pack as it ships, with nothing of this tree's added. Each runtime is a
+declaration in
+[`python/uqs/src/uqs/runtimes.py`](../../python/uqs/src/uqs/runtimes.py): its
+data directory, whether it has this tree's pipelines, and whether it has this
+tree's overlays on the starter pack. A new runtime is one entry there.
 
 ```
 uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
@@ -316,7 +320,7 @@ and `feed`. So does any profile that needs a uqf process:
 
 ```
 $ uqs --runtime torq start --profile fx
-ERROR    | profile(s) fx needs executions1, fxfeed1, ..., which the torq runtime does not have: it runs the starter pack alone. Use --profile essential, or --runtime uqf for this tree's processes
+ERROR    | profile(s) fx needs executions1, fxfeed1, ..., which the torq runtime does not have - it is the starter pack as it ships: its processes and tables, nothing of uqf's. Use --profile essential, or --runtime uqf for this tree's processes
 ```
 
 ### Profiles

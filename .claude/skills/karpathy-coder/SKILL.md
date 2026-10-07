@@ -47,11 +47,11 @@ Derived from Andrej Karpathy's observations on LLM coding pitfalls.
 - No features beyond what was asked.
 - No abstractions for single-use code.
 - No "flexibility" or "configurability" that wasn't requested --- this library
-  already has one deliberate, explicit precedent for configurability
-  (`.qfwd.time_col`, added because the user asked for it); don't add a second
-  config knob speculatively.
+  removed its one library-wide output knob (a settable timestamp column name,
+  #626) because a setting that reorders every caller's output is a dependency no
+  signature shows; don't add one speculatively.
 - No error handling for scenarios that can't happen --- but do keep this
-  library's established fail-early validation (`require_quotes_cols`-style) for
+  library's established fail-early validation (`require_depth_quotes`-style) for
   scenarios that genuinely can happen (a caller passing a malformed table).
 - If you write 200 lines and it could be 50, rewrite it.
 

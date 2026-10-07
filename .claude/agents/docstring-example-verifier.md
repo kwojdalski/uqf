@@ -47,9 +47,9 @@ Every public function in `src/*.q` carries a qDoc block ending in one or more
 These are the library's most-read documentation and its only worked examples.
 They are also, right now, 92 assertions that nothing executes ---
 `grep -rl '@eg' tests/ scripts/` returns nothing. A signature change, a
-return-shape change from wide to keyed, a sign-convention flip, or a
-`apply_col_precedence` reorder silently falsifies them, and the first person to
-notice is a user copying an example that no longer works.
+return-shape change from wide to keyed, a sign-convention flip, or a column
+reorder silently falsifies them, and the first person to notice is a user
+copying an example that no longer works.
 
 You execute them and report which ones still hold. You do not edit `src/*.q`.
 
@@ -184,7 +184,7 @@ DOCSTRING EXAMPLE AUDIT   (rows below are format illustrations, not findings)
  # | Module:line        | Documented @eg                              | Expected  | Computed    | KDB-X | Verdict        | Proposed test
 ---|--------------------|---------------------------------------------|-----------|-------------|-------|----------------|---------------
  1 | execution.q:23      | .qexec.markout[1;1.1000;1.1010;10000]      | 10f       | 10f         | PASS  | TEST-CANDIDATE | .qexectest.test_markout_doc_eg in tests/q/test_execution.q (paste-ready below)
- 2 | forwards.q:NNN      | .qfwd.cross_book_at[...]                   | (table)   | throws rank | FAIL  | THROWS         | signature gained a 4th param; comment not updated
+ 2 | forwards.q:NNN      | .qcross.cross_book_at[...]                   | (table)   | throws rank | FAIL  | THROWS         | signature gained a 4th param; comment not updated
  3 | microstructure.q:245| .qmicro.vamp[...]                          | 1.1001    | 1.10009999  | PASS  | TEST-CANDIDATE | display artifact, documented value correct
 ```
 

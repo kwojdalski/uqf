@@ -52,7 +52,7 @@ reprice_crosses:{[quotes;as_of]
     q:`sym`time xasc select time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from quotes where time<=as_of;
     if[0=count q; :.qpipe.job.cross.cross_quotes];
     rows:{[q;as_of;pair]
-        r:.[.qfwd.cross_book_at;(q;pair;as_of;enlist .qsynth.size_unit;`bid`ask`mid);{[e] ()}];
+        r:.[.qcross.cross_book_at;(q;pair;as_of;enlist .qsynth.size_unit;`bid`ask`mid);{[e] ()}];
         $[0=count r; .qpipe.job.cross.cross_quotes;
             ([] time:enlist as_of; sym:enlist pair; bid:r`bid; ask:r`ask; mid:r`mid)]
       }[q;as_of] each .qpipe.job.cross.cross_pairs;

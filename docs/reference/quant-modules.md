@@ -6,8 +6,8 @@ conventions every one of them follows. The per-function reference is the
 [`man.q`](../man.q) --- this page is the inventory above that.
 
 Each module loads into its own flat namespace after `src/init.q` - `.qschema`,
-`.qrender`, `.qstats`, `.qccy`, `.qdcf`, `.qcal`, `.qrates`, `.qfwd`, `.qopt`,
-`.qrisk`, `.qpos`, `.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`,
+`.qrender`, `.qstats`, `.qccy`, `.qdcf`, `.qcal`, `.qrates`, `.qcross`, `.qfwd`,
+`.qopt`, `.qrisk`, `.qpos`, `.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`,
 `.qmicro`, `.qdqc`, `.qdata`, `.qexdef`. Kept single-level throughout rather
 than nested under a shared parent (e.g. not `.q.options`). This began as a
 portability constraint and is now a convention the tree keeps: the
@@ -40,15 +40,16 @@ module is *for*.
   | [`foundation/daycount.q`](../../src/foundation/daycount.q)               | `.qdcf`    | day count fractions — dates to the year fraction `t` pricing takes                                                                                      | [tests](../../tests/q/test_daycount.q)       |
   | [`foundation/calendar.q`](../../src/foundation/calendar.q)               | `.qcal`    | FX settlement calendars: joint business days, rolls, spot dates, tenor value dates (caller-supplied holidays; mock data included)                       | [tests](../../tests/q/test_calendar.q)       |
   | [`foundation/rates.q`](../../src/foundation/rates.q)                     | `.qrates`  | discount/growth factors, simple↔continuous conversion                                                                                                   | [tests](../../tests/q/test_rates.q)          |
-  | [`pricing/forwards.q`](../../src/pricing/forwards.q)                     | `.qfwd`    | CIRP forwards and swap points, broken dates, swap cash flows and PV, quote inversion, cross rates, synthetic cross books                                | [tests](../../tests/q/test_forwards.q)       |
+  | [`pricing/cross.q`](../../src/pricing/cross.q)                           | `.qcross`  | synthetic cross pricing: currency-chain discovery, leg-book lookup, depth-aware synthetic books, reference prices                                       | [tests](../../tests/q/test_forwards.q)       |
+  | [`pricing/forwards.q`](../../src/pricing/forwards.q)                     | `.qfwd`    | CIRP forwards and swap points, broken dates, swap cash flows and PV, quote inversion, spot cross rates                                                  | [tests](../../tests/q/test_forwards.q)       |
   | [`pricing/options.q`](../../src/pricing/options.q)                       | `.qopt`    | Garman-Kohlhagen pricing, Greeks, implied vol                                                                                                           | [tests](../../tests/q/test_options.q)        |
   | [`portfolio/risk.q`](../../src/portfolio/risk.q)                         | `.qrisk`   | pip value, P&L, carry, parametric and historical VaR                                                                                                    | [tests](../../tests/q/test_risk.q)           |
   | [`portfolio/positions.q`](../../src/portfolio/positions.q)               | `.qpos`    | weighted-average-cost position tracking, currency exposure, reconciliation                                                                              | [tests](../../tests/q/test_positions.q)      |
   | [`portfolio/allocation.q`](../../src/portfolio/allocation.q)             | `.qalloc`  | P&L attribution: lot matching (FIFO/LIFO/HIFO/weighted), carried positions, as-of books                                                                 | [tests](../../tests/q/test_allocation.q)     |
   | [`portfolio/desk_positions.q`](../../src/portfolio/desk_positions.q)     | `.qdesk`   | net FX exposure along declared dimensions, per-currency netting, break-even rates                                                                       | [tests](../../tests/q/test_desk_positions.q) |
   | [`portfolio/limits.q`](../../src/portfolio/limits.q)                     | `.qlimit`  | risk limits, breach detection, alert throttling                                                                                                         | [tests](../../tests/q/test_limits.q)         |
-  | [`execution/execution.q`](../../src/execution/execution.q)               | `.qexec`   | markouts, effective spread, slippage, fill/reject ratios, empirical fill probability by horizon, VWAP, sweep pricing                                    | [tests](../../tests/q/test_execution.q)      |
-  | [`market_data/book.q`](../../src/market_data/book.q)                     | `.qbook`   | reshapes wide/mis-typed order books into the shape the other modules expect                                                                             | [tests](../../tests/q/test_book.q)           |
+  | [`execution/execution.q`](../../src/execution/execution.q)               | `.qexec`   | markouts (direct and synthetic-cross), cross impact, effective spread, slippage, fill/reject ratios, empirical fill probability by horizon, VWAP        | [tests](../../tests/q/test_execution.q)      |
+  | [`market_data/book.q`](../../src/market_data/book.q)                     | `.qbook`   | reshapes wide/mis-typed order books into the shape the other modules expect; shared book maths (sweep pricing, depth inversion)                         | [tests](../../tests/q/test_book.q)           |
   | [`market_data/microstructure.q`](../../src/market_data/microstructure.q) | `.qmicro`  | LOB signals: book pressure, microprice, order flow imbalance, odd-lot share and imbalance, VAMP; checkpointable streaming OFI, flow and return variance | [tests](../../tests/q/test_microstructure.q) |
   | [`market_data/dqchecks.q`](../../src/market_data/dqchecks.q)             | `.qdqc`    | data-quality checks on quotes, reported rather than thrown; business limits are `.qlimit`'s                                                             | [tests](../../tests/q/test_dqchecks.q)       |
   | [`integrations/data.q`](../../src/integrations/data.q)                   | `.qdata`   | external data access                                                                                                                                    | [tests](../../tests/q/test_data.q)           |
@@ -92,13 +93,24 @@ error in exactly the modules no running job exercises (below). Until then:
   | `trade_price`  | `.qpos.apply_fills`, `.qexec.markout_at_horizons`, `.qalloc`'s trades (`allocation.q:251`); `.qalloc`'s opening lots carry `price` (`allocation.q:267`), a lot's price | `.qdesk.apply_fills` reads a fill's price as `price` (`desk_positions.q:52`)                                                                                                              |
 
 The two horizon markouts are pinned to each other. Both take `horizons` as
-timespans and refuse anything else, and `.qfwd.cross_markout_at_horizons` and
+timespans and refuse anything else, and `.qexec.cross_markout_at_horizons` and
 `cross_impact_at_horizons` return the columns `.qexec.markout_at_horizons` does,
 so direct and synthetic markouts join with `uj` (#413). On a directly quoted
 pair they are one calculation, and
 `test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair`
 (`tests/q/test_execution.q`) feeds the same buy and sell through both. A flipped
 sign or a drift in the result's columns or types fails it.
+
+### What depends on what
+
+The library modules form an acyclic graph, held to it by
+`scripts/gates/check_module_deps.py` in CI (#626): a new edge between
+namespaces, or a cycle, fails until the gate's list of allowed edges says so.
+Execution analytics build on synthetic cross pricing (`.qcross`), both use the
+shared book maths in `.qbook`, and everything rests on foundation (`.qschema`,
+`.qccy`, ...). Every markout-at-horizons result has the same columns,
+`.qexec.markout_cols`, with `time` first: there is no library-wide setting that
+renames or reorders them.
 
 ### Library, not wired
 

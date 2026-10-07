@@ -22,6 +22,8 @@ qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
 qbook,derive_level_groups,function,2,col_names prefix_targets
 qbook,fold_level_columns,function,2,tbl level_groups
+qbook,invert_book_depth,function,2,prices sizes
+qbook,sweep_price,function,3,prices sizes target_size
 qbook,symbolize_columns,function,2,tbl sym_cols
 qcal,add_business_days,function,5,d n ccys calendars weekend
 qcal,add_months,function,2,d n
@@ -43,6 +45,24 @@ qccy,normalize_ccy_pair,function,1,x
 qccy,pip_factor,function,1,pair
 qccy,pip_size,function,1,pair
 qccy,pip_size_by_quote,dict,,
+qcross,CROSS_SIZE_MAX_DOUBLINGS,value,,
+qcross,CROSS_SIZE_MAX_HALVINGS,value,,
+qcross,CROSS_SIZE_REL_TOL,value,,
+qcross,book_crossed,function,1,book
+qcross,ccy_orient_chain,function,1,syms
+qcross,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
+qcross,combine_oriented_books,function,2,book_ab book_bc
+qcross,cross_book,function,4,sym1 book1 sym2 book2
+qcross,cross_book_at,function,5,quotes sym as_of sizes sides
+qcross,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
+qcross,cross_book_chain_at_one_size,function,3,syms books size
+qcross,cross_book_chain_at_sizes,function,4,syms books sizes sides
+qcross,cross_decomp,function,2,avail_syms sym
+qcross,cross_ref_price_at,function,4,quotes sym as_of ref_size
+qcross,cross_size_at_price,function,5,quotes sym as_of side price_limit
+qcross,invert_book,function,1,book
+qcross,leg_book_as_of,function,3,quotes as_of target_sym
+qcross,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qdata,cfg,function,2,k dflt
 qdata,databentoDir,function,1,
 qdata,databentoFile,function,2,sym date
@@ -572,6 +592,9 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
+qexec,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
+qexec,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
+qexec,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_order_time_cols,value,,
 qexec,fill_probability_by,function,5,orders horizons bucket_cols as_of opts
@@ -581,32 +604,17 @@ qexec,fill_ratio,function,2,num_fills num_quotes
 qexec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,markout,function,4,side trade_price ref_price pip_factor
 qexec,markout_at_horizons,function,3,trades quotes horizons
+qexec,markout_cols,value,,
 qexec,reject_ratio,function,2,num_rejects num_requests
 qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,slippage,function,4,side arrival_price exec_price pip_factor
-qexec,sweep_price,function,3,prices sizes target_size
 qexec,venue_quality,function,5,quotes requests trades window config
 qexec,venue_quality_defaults,dict,,
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
-qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
-qfwd,CROSS_SIZE_MAX_HALVINGS,value,,
-qfwd,CROSS_SIZE_REL_TOL,value,,
-qfwd,book_crossed,function,1,book
-qfwd,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
-qfwd,combine_oriented_books,function,2,book_ab book_bc
 qfwd,convert_quotes,function,3,quotes target_conventions opts
-qfwd,cross_book,function,4,sym1 book1 sym2 book2
-qfwd,cross_book_at,function,5,quotes sym as_of sizes sides
-qfwd,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
-qfwd,cross_book_chain_at_sizes,function,4,syms books sizes sides
-qfwd,cross_decomp,function,2,avail_syms sym
-qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
-qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
-qfwd,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
 qfwd,cross_rate,function,2,ab_rate bc_rate
 qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay
-qfwd,cross_size_at_price,function,5,quotes sym as_of side price_limit
 qfwd,extrapolations,value,,
 qfwd,forward_at_date,function,5,spot curve value_date pip_factor opts
 qfwd,fwd_cont,function,4,spot rd rf t
@@ -615,8 +623,6 @@ qfwd,fwd_simple,function,4,spot rd rf t
 qfwd,implied_domestic_rate,function,4,spot fwd rf t
 qfwd,implied_foreign_rate,function,4,spot fwd rd t
 qfwd,inverse_pair,function,1,pair
-qfwd,invert_book,function,1,book
-qfwd,invert_book_depth,function,2,prices sizes
 qfwd,invert_rate,function,1,rate
 qfwd,mock_fwd_curve,table,,
 qfwd,mock_quotes,table,,
@@ -626,7 +632,6 @@ qfwd,points_to_outright,function,3,spot points pip_factor
 qfwd,swap_cashflows,function,1,swap
 qfwd,swap_keys,value,,
 qfwd,swap_value,function,4,swap market valuation_date opts
-qfwd,time_col,value,,
 qlimit,evaluate,function,2,measured limits
 qlimit,measure,function,2,book metrics
 qlimit,no_alerts,function,1,
@@ -1187,7 +1192,9 @@ qrisk,pip_value,function,2,notional pip_factor
 qrisk,pnl,function,4,notional entry_rate exit_rate side
 qrisk,var_historical,function,2,pnl_series confidence
 qrisk,var_parametric,function,4,notional vol t confidence
+qschema,depth_quote_cols,value,,
 qschema,require_cols,function,4,fn_name table_name tbl req
+qschema,require_depth_quotes,function,2,fn_name quotes
 qstats,PI,value,,
 qstats,horner_eval,function,2,coeffs x
 qstats,inv_ncdf,function,1,p

@@ -41,7 +41,7 @@ Scan for the following, in order of severity:
 - A protected-eval wrapper (`@[f;x;{...}]` / `.[f;x;{...}]`) that catches *all*
   errors, including structural ones (malformed input table, missing column) ---
   not just the legitimate "no data yet" case it was written for. See
-  `forwards.q`'s `require_quotes_cols` for the fix: validate required columns
+  `schema.q`'s `require_depth_quotes` for the fix: validate required columns
   explicitly, before any protected-eval path, so a caller's typo throws instead
   of silently producing null results
 - `0Nf`/`0n` flowing through arithmetic with no guard, silently poisoning a
@@ -83,10 +83,8 @@ Scan for the following, in order of severity:
 - `side`/`pip_factor` sign or scale convention violated: `side` is `1` for a
   buy/long-base-currency, `-1` for a sell; `pip_factor` is caller-supplied
   (never hardcoded to 10000 inside a function, since JPY crosses use 100)
-- An output table that doesn't route through `forwards.q`'s
-  `time_col`/`apply_col_precedence` convention when it has a
-  timestamp/sym-leading shape other functions in this library already
-  standardize on
+- An output table whose timestamp column is not `time`, leading, when it has the
+  time/sym-leading shape the rest of this library standardizes on
 - A public function in `src/*.q` missing a qDoc comment block (`/ @param`,
   `/ @return`, `/ @throws`, `/ @eg`) --- every existing function has one; a new
   one without it is drift

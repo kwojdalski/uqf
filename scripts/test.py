@@ -31,7 +31,8 @@ between them:
   q-docs               the ```q blocks in docs/ marked `<!-- q-example: ... -->`,
                        one q process per document. The q lane CI runs on
                        PeachQ, which needs no licence.
-  q-docs-peachq        q-docs again on PeachQ, the binary $UQF_PEACHQ names.
+  q-docs-peachq        q-docs again on PeachQ: $UQF_PEACHQ if set, else the
+                       pinned build, built into the cache on first use.
                        Required beside KDB-X, not instead of it, until the
                        two are compatible enough for one to stand for both.
   q-two-instances      a second kdb+ process is started on the starter
@@ -94,14 +95,20 @@ QHOME = os.environ.get("QHOME", str(Path.home() / ".kx"))
 #: green suite always says which interpreter made it green.
 Q_IMPL_ENV = "UQF_Q_IMPL"
 Q_IMPLS = ("kdbx", "peachq")
-IDENTIFY_SCRIPT = '-1 $[-7h=type @[value;`.pq.load_natives;{0N}];"kdbx";"peachq"];\nexit 0\n'
 
-#: The PeachQ binary for the lanes that run on BOTH interpreters. A second
-#: variable rather than a second meaning of QCMD: QCMD stays the one q every
-#: other lane uses, and this names PeachQ out loud, which is the only way the
-#: tree takes it. There is no default - not ./q either - for the reason QCMD
-#: has none.
-PEACHQ_ENV = "UQF_PEACHQ"
+#: The PeachQ resolver: $UQF_PEACHQ if set, else the pinned build from the
+#: cache, built on first use (scripts/peachq.py). Loaded by path, as this file
+#: is run from anywhere and scripts/ is no package. It hands an absolute path
+#: to the lanes that run on PeachQ and to nothing else: QCMD stays the one q
+#: every other lane uses, and PeachQ is never put on PATH.
+_spec = importlib.util.spec_from_file_location(
+    "uqf_peachq", Path(__file__).resolve().with_name("peachq.py")
+)
+assert _spec and _spec.loader
+peachq = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(peachq)
+IDENTIFY_SCRIPT = peachq.IDENTIFY_SCRIPT
+PEACHQ_ENV = peachq.OVERRIDE_ENV
 
 
 def check_interpreter(env: dict[str, str] | None = None) -> str | None:
@@ -303,18 +310,21 @@ def lane_q_docs_peachq() -> None:
     the doc blocks, and CI, where KDB-X cannot run - and is held to it until
     the two are compatible enough for one to vouch for both. A child process,
     not a call, because Q_CMD and the interpreter check are fixed at import.
+
+    The binary is $UQF_PEACHQ when set, else the pinned build, fetched and
+    built into the cache on first use. Any failure to provide it fails the
+    lane, never skips it: the doc blocks run on PeachQ AND KDB-X until the
+    two are compatible enough for one to stand for both.
     """
-    binary = os.environ.get(PEACHQ_ENV)
-    if not binary:
-        raise SystemExit(
-            f"q-docs-peachq: set {PEACHQ_ENV} to the PeachQ binary. The doc "
-            "blocks run on PeachQ AND KDB-X until the two are compatible "
-            "enough for one to stand for both - see README.md#requirements"
-        )
+    _banner("q-docs-peachq: the q blocks in docs/ on PeachQ")
+    try:
+        binary = peachq.resolve()
+    except peachq.PeachQError as exc:
+        raise SystemExit(f"q-docs-peachq: {exc}") from None
     _run(
         "q-docs-peachq",
         [sys.executable, str(Path(__file__).resolve()), "q-docs"],
-        env={Q_IMPL_ENV: "peachq", "QCMD": binary},
+        env={Q_IMPL_ENV: "peachq", "QCMD": str(binary)},
     )
 
 
@@ -463,8 +473,9 @@ The interpreter comes from $QCMD (default `q` on PATH) and $QHOME (default
 ~/.kx). There is no fallback: see README.md#requirements. PeachQ runs only
 when chosen: UQF_Q_IMPL=peachq with QCMD naming its binary, and the binary is
 checked against that choice before any lane starts. q-docs-peachq is the
-exception that runs on BOTH: KDB-X for the lanes, PeachQ from $UQF_PEACHQ for
-a second run of the doc blocks.
+exception that runs on BOTH: KDB-X for the lanes, PeachQ for a second run of
+the doc blocks - $UQF_PEACHQ if set, else the pinned build from
+scripts/peachq.json, fetched and built into ~/.cache/uqf/peachq on first use.
 """
 
 

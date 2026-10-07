@@ -6,7 +6,7 @@
 / "is missing column(s)", "no such column(s)", "the book has no column(s)",
 / "missing columns" - so no grep found them all and no caller could match on
 / one shape. Only two helpers existed and both were tied to one table:
-/ .qfwd.require_quotes_cols and .qmicro.require_tape. #418.
+/ .qschema.require_depth_quotes and .qmicro.require_tape. #418.
 / .
 / It lives in foundation because every layer above loads foundation first
 / (src/init.q), the ETL tree included - src/etl/init.q assumes src/init.q has
@@ -39,4 +39,17 @@ require_cols:{[fn_name;table_name;tbl;req]
     if[count missing;
         '(string fn_name),": ",(string table_name)," is missing required column(s) ",", " sv string missing];
     }
+/ Refuse a depth-quotes table that lacks a column a depth function reads:
+/ time, sym and the four level vectors. The one shape every function that
+/ prices from a depth book takes - synthetic cross pricing (.qcross), cross
+/ markouts (.qexec), microstructure and the data-quality checks - so it lives
+/ here rather than in any of them (#626).
+/ @param fn_name symbol naming the CALLING function, for the message
+/ @param quotes the depth-quotes table
+/ @return generic null when every column is present
+/ @throws error naming the caller and every missing column
+/ @eg .qschema.require_depth_quotes[`f;([] time:`timestamp$(); sym:`symbol$())]  -> throws
+depth_quote_cols:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+require_depth_quotes:{[fn_name;quotes] require_cols[fn_name;`quotes;quotes;depth_quote_cols]}
+
 \d .

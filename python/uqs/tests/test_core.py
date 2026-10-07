@@ -299,10 +299,10 @@ def test_each_runtime_has_its_own_data_directory(monkeypatch):
     assert stack_paths.paths_for_root(root).torqdata == root / "output" / "uqs"
     monkeypatch.setenv("UQS_RUNTIME", "torq")
     torq = stack_paths.paths_for_root(root)
-    assert (torq.torqdata, torq.runtime, torq.pure_torq) == (
+    assert (torq.torqdata, torq.runtime, torq.runtime_declaration.overlays) == (
         root / "output" / "uqs-torq",
         "torq",
-        True,
+        False,
     )
 
 
