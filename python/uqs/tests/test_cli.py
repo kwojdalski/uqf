@@ -66,6 +66,7 @@ from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import alive, listing, probe, runtime
+from uqs.stack import clean as stack_clean
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
@@ -1111,7 +1112,7 @@ def test_raw_propagates_the_exit_code(monkeypatch):
 
 
 def test_remove_output_delegates(monkeypatch):
-    rec = _patch(monkeypatch, stack_paths, "clean", result=[])
+    rec = _patch(monkeypatch, stack_clean, "clean", result=[])
     assert runner.invoke(cli.app, ["remove", "output"]).exit_code == 0
     assert len(rec.calls) == 1
 
@@ -1128,14 +1129,14 @@ def test_remove_output_delegates(monkeypatch):
 )
 def test_remove_output_passes_its_flags_through(monkeypatch, argv, expected):
     """The flags have to arrive as given - a dropped --dry-run deletes."""
-    rec = _patch(monkeypatch, stack_paths, "clean", result=[])
+    rec = _patch(monkeypatch, stack_clean, "clean", result=[])
     assert runner.invoke(cli.app, ["remove", "output", *argv]).exit_code == 0
     assert rec.calls[-1][1] == expected
 
 
 def test_remove_output_reports_what_it_removed(monkeypatch):
     rec_result = [(Path("/data/logs"), 800), (Path("/data/tplogs"), 200)]
-    _patch(monkeypatch, stack_paths, "clean", result=rec_result)
+    _patch(monkeypatch, stack_clean, "clean", result=rec_result)
     result = runner.invoke(cli.app, ["remove", "output", "--dry-run"])
     assert result.exit_code == 0
     assert "would remove 2 entries" in result.output
