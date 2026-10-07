@@ -25,7 +25,7 @@ VERBS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
-def act(verb: str, done: str, function: str, port: int, row: dict[str, str]) -> str:
+def act(verb: str, done: str, function: str, port: int | None, row: dict[str, str]) -> str:
     """Run one lifecycle verb on the row's process; what to tell the user."""
     procname = row.get("Process", "").strip()
     if not procname:
@@ -38,7 +38,7 @@ def act(verb: str, done: str, function: str, port: int, row: dict[str, str]) -> 
     return f"{done} {procname}"
 
 
-def process_actions(port: int) -> list[RowAction]:
+def process_actions(port: int | None) -> list[RowAction]:
     """The s/x/r actions for a summary on base port `port`."""
     return [
         RowAction(

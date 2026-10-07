@@ -42,7 +42,6 @@ from pathlib import Path
 
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.procs import get_process_config
 
@@ -104,7 +103,7 @@ def start_databento_feed(
         )
 
     stp1 = get_process_config(paths, "stp1")
-    port = stp1.get("port") or (DEFAULT_BASE_PORT)
+    port = stp1.get("port") or paths.runtime_declaration.resolve_base_port(None)
 
     runner = Path(__file__).resolve().parent / "databento_streamer.py"
     cmd = [

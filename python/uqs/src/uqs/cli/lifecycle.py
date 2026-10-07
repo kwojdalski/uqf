@@ -29,20 +29,19 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.model import dependencies, profiles
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import alive, listing, runtime, runtime_profiles
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as procs_model
 
 
-def _running(port: int) -> set[str]:
+def _running(port: int | None) -> set[str]:
     """The processes `summary` reports up. Raises when it cannot say; each
     caller decides what that means for it."""
     return alive.running(_paths(), base_port=port)
 
 
-def _warn_about_unfed_inputs(procs: str, port: int) -> None:
+def _warn_about_unfed_inputs(procs: str, port: int | None) -> None:
     """Say so when what is being started subscribes to a table nothing
     running publishes.
 
@@ -99,7 +98,7 @@ def _note_monitor_coverage() -> None:
         )
 
 
-def _warn_about_connection_cap(procs: str, port: int) -> None:
+def _warn_about_connection_cap(procs: str, port: int | None) -> None:
     """Say so when the fleet this start produces is bigger than the licence
     lets one process hold handles for.
 
@@ -228,7 +227,7 @@ def _reject_unknown(names: str) -> None:
         _die(exc)
 
 
-def _start(names: str, port: int) -> None:
+def _start(names: str, port: int | None) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
@@ -236,7 +235,7 @@ def _start(names: str, port: int) -> None:
     _run_streaming(runtime.start, names, base_port=port)
 
 
-def _start_in_foreground(names: str, port: int) -> None:
+def _start_in_foreground(names: str, port: int | None) -> None:
     """`_start`, minus its ending: _run_streaming always exits the command,
     and `up` has the whole run still to stream after the start returns."""
     _reject_unknown(names)
@@ -251,7 +250,7 @@ def _start_in_foreground(names: str, port: int) -> None:
 @app.command()
 def start(
     procs: ProcsArg = None,
-    port: PortOpt = DEFAULT_BASE_PORT,
+    port: PortOpt = None,
     profile: ProfileOpt = None,
     print_only: Annotated[
         bool,
@@ -280,7 +279,7 @@ LevelOpt = Annotated[
 ]
 
 
-def _procnames_started_by(names: str, port: int) -> list[str]:
+def _procnames_started_by(names: str, port: int | None) -> list[str]:
     """The processes a start of `names` covers: `all` is every startwithall=1
     row, anything else is the names themselves - checked, so a typo fails
     before anything starts rather than as a log nobody ever writes."""
@@ -296,7 +295,7 @@ def _procnames_started_by(names: str, port: int) -> list[str]:
 @app.command()
 def up(
     procs: ProcsArg = None,
-    port: PortOpt = DEFAULT_BASE_PORT,
+    port: PortOpt = None,
     profile: ProfileOpt = None,
     level: LevelOpt = None,
 ) -> None:
@@ -347,7 +346,7 @@ def up(
 
 
 @app.command()
-def stop(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
+def stop(procs: ProcsArg = None, port: PortOpt = None) -> None:
     """Stop every running process (or specific process name(s))."""
     names = _procs(procs)
     _reject_unknown(names)
@@ -355,7 +354,7 @@ def stop(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
 
 
 @app.command()
-def restart(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
+def restart(procs: ProcsArg = None, port: PortOpt = None) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
     names = _procs(procs)
     _reject_unknown(names)
@@ -365,7 +364,7 @@ def restart(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     _run_streaming(runtime.restart, names, base_port=port)
 
 
-def _print_startlines(names: str, port: int) -> None:
+def _print_startlines(names: str, port: int | None) -> None:
     """Print the startup command line(s) for `names`, then exit - `start --print`."""
     _reject_unknown(names)
     try:
@@ -378,7 +377,7 @@ def _print_startlines(names: str, port: int) -> None:
 
 
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-def raw(ctx: typer.Context, port: PortOpt = DEFAULT_BASE_PORT) -> None:
+def raw(ctx: typer.Context, port: PortOpt = None) -> None:
     """Pass any other torq.sh verb straight through, e.g.:
     `raw -- debug rdb1`, `raw -- qcon gateway1 admin:admin`, `raw -- top feed1`.
     """

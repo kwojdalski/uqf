@@ -20,7 +20,6 @@ from __future__ import annotations
 from typing import Any
 
 from uqs.logger import get_logger
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.listing import _list_processes
 from uqs.stack.runtime import query
@@ -93,7 +92,7 @@ def _rows(result: Any) -> list[dict[str, Any]]:
     raise UqsError(f"expected a table from the process, got {type(result).__name__}")
 
 
-def resolve_port(paths: UqsPaths, procname: str, base_port: int = DEFAULT_BASE_PORT) -> int:
+def resolve_port(paths: UqsPaths, procname: str, base_port: int | None = None) -> int:
     """A declared process's resolved port.
 
     From the registry rather than by adding an offset here: the offsets live

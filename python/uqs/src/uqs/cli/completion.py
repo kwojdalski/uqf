@@ -27,7 +27,6 @@ from uqs import paths as stack_paths
 from uqs.model import transports as registered_transports
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.profiles import PROFILES
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.stack import backfill, listing
 
 Candidates = list[str] | list[tuple[str, str]]
@@ -68,7 +67,7 @@ def _typed(ctx: typer.Context, name: str) -> Any:
     return ctx.params.get(name) or (tuple(ctx.args) or None)
 
 
-def _ports(base_port: int) -> dict[str, str]:
+def _ports(base_port: int | None) -> dict[str, str]:
     return listing.configured_ports(stack_paths.default_paths(), base_port=base_port)
 
 
@@ -88,21 +87,21 @@ def procnames(ctx: typer.Context) -> list[str]:
     the plain `start all` does not.
     """
     typed = _typed(ctx, "procs") or ()
-    names = [n for n in _ports(ctx.params.get("port") or DEFAULT_BASE_PORT) if n not in typed]
+    names = [n for n in _ports(ctx.params.get("port")) if n not in typed]
     return names if typed else ["all", *names]
 
 
 @_never_raises
 def procname(ctx: typer.Context) -> list[str]:
     """One process, for commands that take exactly one."""
-    return list(_ports(ctx.params.get("port") or DEFAULT_BASE_PORT))
+    return list(_ports(ctx.params.get("port")))
 
 
 @_never_raises
 def process_ports(ctx: typer.Context) -> list[tuple[str, str]]:
     """A process's port, with the process named beside it - the number is
     what the option takes, the name is what the reader was looking for."""
-    base = ctx.params.get("base_port") or DEFAULT_BASE_PORT
+    base = ctx.params.get("base_port")
     return [(port, name) for name, port in _ports(base).items() if port]
 
 

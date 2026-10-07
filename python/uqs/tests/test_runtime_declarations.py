@@ -26,6 +26,7 @@ PROBE = Runtime(
     data_dir="uqs-probe",
     pipelines=False,
     overlays=False,
+    base_port=6250,
 )
 
 
@@ -116,3 +117,4 @@ def test_the_guide_s_runtime_table_matches_the_declarations():
     ]
     assert header[1:] == expected
     assert body["data directory"] == [f"`output/{r.data_dir}`" for r in runtimes.RUNTIMES.values()]
+    assert body["base port"] == [f"`{r.base_port}`" for r in runtimes.RUNTIMES.values()]

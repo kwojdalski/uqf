@@ -33,7 +33,6 @@ from pathlib import Path
 from uqs.external.kafka_streamer import KAFKA_RAW_TABLE
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsPaths
 from uqs.stack.procs import get_process_config
 
@@ -80,7 +79,7 @@ def start_kafka_feed(
     like it worked while each received half the topic.
     """
     stp1 = get_process_config(paths, "stp1")
-    port = stp1.get("port") or DEFAULT_BASE_PORT
+    port = stp1.get("port") or paths.runtime_declaration.resolve_base_port(None)
 
     runner = Path(__file__).resolve().parent / "kafka_streamer.py"
     cmd = [

@@ -15,14 +15,13 @@ from __future__ import annotations
 
 from uqs.interpreter import q_command
 from uqs.logger import get_logger
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsPaths
 from uqs.runtimes import RUNTIME_ENV
 
 log = get_logger(__name__)
 
 
-def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     """The env vars torq.sh (and process.csv's ${VAR}/{VAR}+N placeholders)
     resolve against - pure, no filesystem writes. bootstrap() calls this and
     also writes it out as setenv.sh; get_process_config() calls this to
@@ -57,7 +56,7 @@ def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         "KDBTPLOG": str(paths.torqdata / "tplogs"),
         "KDBDQCDB": str(paths.torqdata / "dqe" / "dqcdb" / "database"),
         "KDBDQEDB": str(paths.torqdata / "dqe" / "dqedb" / "database"),
-        "KDBBASEPORT": str(base_port),
+        "KDBBASEPORT": str(paths.runtime_declaration.resolve_base_port(base_port)),
         "TORQPROCESSES": str(paths.generated_procs),
         "RLWRAP": "rlwrap",
         "QCON": "qcon",

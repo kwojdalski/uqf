@@ -21,7 +21,6 @@ from string import Template
 
 from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS, _pipeline_rows
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
@@ -334,7 +333,7 @@ def resolve_process_config(row: dict[str, str], env: dict[str, str]) -> dict[str
 def get_process_config(
     paths: UqsPaths,
     procname: str,
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     resolve: bool = True,
 ) -> dict[str, str]:
     """The effective process.csv row for *procname* - vendored/fxfeed1 values

@@ -28,7 +28,6 @@ from uqs.cli.shared import InteractiveOpt, PortOpt, _die, _paths, app, console, 
 from uqs.cli.table_filter import match_row, terms
 from uqs.model import process_graph
 from uqs.model.process_graph import Direction, Node
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, runtime
 
@@ -91,7 +90,7 @@ def rich_trees(trees: list[Node], status: dict[str, str], direction: Direction) 
     return Group(*drawn)
 
 
-def live_status(port: int) -> dict[str, str]:
+def live_status(port: int | None) -> dict[str, str]:
     """{procname: up/down}, as `uqs summary` reads it; empty when the fleet cannot say."""
     paths = _paths()
     try:
@@ -139,7 +138,7 @@ def graph(
         bool,
         typer.Option("--offline", help="Do not ask the fleet what is up; draw the graph alone."),
     ] = False,
-    port: PortOpt = DEFAULT_BASE_PORT,
+    port: PortOpt = None,
     interactive: InteractiveOpt = False,
 ) -> None:
     """Every process and who feeds whom, as a tree, with the tables on each edge.
