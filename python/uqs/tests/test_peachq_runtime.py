@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import shutil
 from pathlib import Path
 
@@ -84,6 +85,8 @@ def test_bootstrap_hands_torq_sh_and_setenv_the_peachq_binary(pinned, monkeypatc
     env = runtime.bootstrap(p)
     assert (env["QCMD"], env["UQF_Q_IMPL"]) == (str(pinned), "peachq")
     assert f'export QCMD="{pinned}"' in p.generated_setenv.read_text()
+    with p.generated_procs.open(newline="") as f:
+        assert {r["qcmd"] for r in csv.DictReader(f)} == {str(pinned)}, "every row runs PeachQ"
 
 
 def test_the_peachq_runtime_is_held_to_no_licence_budget(monkeypatch):
