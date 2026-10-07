@@ -45,6 +45,9 @@ qccy,normalize_ccy_pair,function,1,x
 qccy,pip_factor,function,1,pair
 qccy,pip_size,function,1,pair
 qccy,pip_size_by_quote,dict,,
+qcross,CROSS_SIZE_MAX_DOUBLINGS,value,,
+qcross,CROSS_SIZE_MAX_HALVINGS,value,,
+qcross,CROSS_SIZE_REL_TOL,value,,
 qcross,book_crossed,function,1,book
 qcross,ccy_orient_chain,function,1,syms
 qcross,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
@@ -592,9 +595,6 @@ qexec,venue_quality,function,5,quotes requests trades window config
 qexec,venue_quality_defaults,dict,,
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
-qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
-qfwd,CROSS_SIZE_MAX_HALVINGS,value,,
-qfwd,CROSS_SIZE_REL_TOL,value,,
 qfwd,convert_quotes,function,3,quotes target_conventions opts
 qfwd,cross_rate,function,2,ab_rate bc_rate
 qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay

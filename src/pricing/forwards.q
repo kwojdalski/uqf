@@ -95,19 +95,6 @@ invert_rate:{[rate] 1%rate};
 / @eg .qfwd.cross_rate_shared_base[4.30;1.075]  -> 4f (EURPLN, EURUSD -> USDPLN)
 cross_rate_shared_base:{[rate_ax;rate_ay] cross_rate[rate_ax;invert_rate rate_ay]};
 
-/ Configurable search tuning for cross_size_at_price's two-phase binary
-/ search - max_doublings bounds the initial upper-bound search (a hi of
-/ 2^60 base-currency units is past any realistic tradeable size, so this
-/ is a worst-case cap, not an expected one); rel_tol/max_halvings bound
-/ the bisection phase once a bracket is found (relative, not absolute,
-/ since "close enough" scales with the size itself - 2.5mm needs a much
-/ coarser absolute tolerance than 2.5). Override before calling if your
-/ instrument universe needs a coarser/finer size resolution, e.g.
-/ .qfwd.CROSS_SIZE_REL_TOL:1e-4 for faster, coarser sizing.
-CROSS_SIZE_MAX_DOUBLINGS:60;
-CROSS_SIZE_REL_TOL:1e-7;
-CROSS_SIZE_MAX_HALVINGS:200;
-
 / ---------------------------------------------------- BROKEN-DATE FORWARDS
 / .
 / A value date between two quoted tenors is priced by interpolating forward

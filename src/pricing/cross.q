@@ -467,6 +467,19 @@ cross_price_ok_at_size:{[quotes;sym;as_of;side;price_limit;size]
     fully:first r fully_col;
     fully and $[side=`bid; px>=price_limit; px<=price_limit]};
 
+/ Configurable search tuning for cross_size_at_price's two-phase binary
+/ search - max_doublings bounds the initial upper-bound search (a hi of
+/ 2^60 base-currency units is past any realistic tradeable size, so this
+/ is a worst-case cap, not an expected one); rel_tol/max_halvings bound
+/ the bisection phase once a bracket is found (relative, not absolute,
+/ since "close enough" scales with the size itself - 2.5mm needs a much
+/ coarser absolute tolerance than 2.5). Override before calling if your
+/ instrument universe needs a coarser/finer size resolution, e.g.
+/ .qcross.CROSS_SIZE_REL_TOL:1e-4 for faster, coarser sizing.
+CROSS_SIZE_MAX_DOUBLINGS:60;
+CROSS_SIZE_REL_TOL:1e-7;
+CROSS_SIZE_MAX_HALVINGS:200;
+
 / Largest size (in sym's base currency) tradeable on one side without the
 / average swept price crossing price_limit - the inverse question to
 / cross_book_at's "at this size, what's the price". There is no closed
