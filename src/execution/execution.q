@@ -43,12 +43,17 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 /   both are present: `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 /   (the target-time column is named per time_col, `time by default, matching
 /   the quotes-table timestamp convention used elsewhere in this
-/   library, e.g. forwards.q's cross_book_at/cross_markout_at_horizons)
+/   library, e.g. forwards.q's cross_book_at). forwards.q's
+/   cross_markout_at_horizons and cross_impact_at_horizons return these same
+/   columns, so direct and synthetic markouts join with uj
 / @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
 /   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
-/   table fails loudly here rather than surfacing as a bare `domain error deep inside aj
+/   table fails loudly here rather than surfacing as a bare `domain error deep inside aj;
+/   or if horizons is not a timespan or list of timespans (a bare long would be read
+/   as nanoseconds without complaint)
 / @eg .qexec.markout_at_horizons[markout_trades;mid_quotes;0D00:00:01 0D00:00:10]
 markout_at_horizons:{[trades;quotes;horizons]
+    .qfwd.require_horizons[`markout_at_horizons;horizons];
     .qschema.require_cols[`markout_at_horizons;`trades;trades;`sym`time`side`trade_price`pip_factor];
     .qschema.require_cols[`markout_at_horizons;`quotes;quotes;`sym`time`mid];
     horizon_list:$[0>type horizons; enlist horizons; horizons];

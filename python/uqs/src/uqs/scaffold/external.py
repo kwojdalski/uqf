@@ -32,6 +32,7 @@ from pathlib import Path
 
 from uqs.paths import TABLES_FILE, UqsError
 from uqs.scaffold.columns import Columns, as_columns, nested_declaration, table_definition
+from uqs.scaffold.docs import EXTERNAL
 from uqs.scaffold.jobs import _check_name, _expected_table_action, streaming_job
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
@@ -89,6 +90,7 @@ def external_feed(
         profile=profile,
         unprofiled=unprofiled,
         known_profiles=known_profiles,
+        showcase=EXTERNAL,
     )
     raw = [
         FileAction(

@@ -521,6 +521,17 @@ single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
 require_quotes_cols:{[fn_name;quotes]
     .qschema.require_cols[fn_name;`quotes;quotes;`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes]};
 
+/ Private: refuse horizons that are not a timespan or list of timespans.
+/ A timestamp plus a long is a timestamp, so 500 meant as milliseconds
+/ would silently become a 500-nanosecond horizon and a plausible markout.
+/ Shared with execution.q's markout_at_horizons, which takes the same type.
+/ @throws error naming the caller and the type it was given
+/ @private
+require_horizons:{[fn_name;horizons]
+    if[not (abs type horizons)=16h;
+        '(string fn_name),": horizons must be a timespan or list of timespans, e.g. 0D00:00:01, got type ",string type horizons];
+    }
+
 / Depth-aware synthetic book for any pair, found automatically by chaining
 / together whatever quoted pairs are available in `quotes` - unlike
 / cross_book_chain_at_sizes, you don't need to know or supply the leg
@@ -675,52 +686,57 @@ apply_col_precedence:{[tbl]
 / markout_at_horizons, for pairs with no quoted mid of their own to as-of
 / join against (a synthetic AUDPLN, priced by chaining whatever's in
 / `quotes`, rather than a plain pair already sitting in a `sym`time`mid
-/ quote table). Horizons may be negative (looking backward from the
-/ trade, e.g. -500 for "500ms before") the same way markout_at_horizons'
-/ do; markout sign convention matches execution.q's markout.
+/ quote table). Horizons are timespans, as markout_at_horizons' are, and
+/ the result has its columns, so a direct pair's markouts and a synthetic
+/ pair's join with uj. A horizon may be negative (looking backward from
+/ the trade, e.g. neg 0D00:00:00.5 for "500ms before"); markout sign
+/ convention matches execution.q's markout.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
 / @param sym the pair traded, any format ccy.q's normalize_ccy_pair accepts
 / @param trade_time the trade's own timestamp
 / @param side 1 for a buy, -1 for a sell
 / @param trade_price the execution price
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
-/ @param horizons_ms one or more offsets from trade_time, in
-/   milliseconds - negative looks backward, 0 is at the trade itself,
+/ @param horizons a timespan, or list of timespans, offset from
+/   trade_time - negative looks backward, 0D00:00:00 is at the trade itself,
 /   positive looks forward
 / @param ref_size the (typically negligible) size to sweep for the
 /   reference price at each horizon - a synthetic pair has no single
 /   quoted mid, so this is priced the same way any other cross_book_at
 /   call is, not looked up directly
-/ @return a table, one row per horizon, columns reordered by
-/   apply_col_precedence (time_col then sym leading) when both are present:
-/   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
-/   named per time_col, `time by default) - ref_price/markout_pips are null
-/   for a horizon with no quote yet for some required leg, rather than
-/   throwing
-/ @throws error if quotes is missing a required column, isn't sorted
+/ @return a table, one row per horizon, in markout_at_horizons' shape:
+/   `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips (the
+/   target-time column is named per time_col, `time by default) -
+/   ref_price/markout_pips are null for a horizon with no quote yet for
+/   some required leg, rather than throwing
+/ @throws error if horizons is not a timespan or list of timespans (a bare
+/   long would add nanoseconds to trade_time without complaint), if quotes
+/   is missing a required column, isn't sorted
 /   `sym`time xasc (checked explicitly here rather than left to leak out of
 /   cross_ref_price_at's protective error handling as a misleading null -
 /   see cross_ref_price_at's own comment), or if no chain of pairs
 /   currently in quotes connects sym's two currencies (same check
 /   cross_markout_decomp does, for the same reason - a permanently
 /   unbridgeable sym is a structural problem, not "no quote yet")
-/ @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;-500 -300 0 100 300;1]
-/ @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;enlist -500;1]  -> a single backward-looking horizon, 500ms before the trade
-cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons_ms;ref_size]
+/ @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;0D00:00:00.001*-500 -300 0 100 300;1]
+/ @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;neg 0D00:00:00.5;1]  -> a single backward-looking horizon, 500ms before the trade
+cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons;ref_size]
+    require_horizons[`cross_markout_at_horizons;horizons];
     require_quotes_cols[`cross_markout_at_horizons;quotes];
     if[not quotes~`sym`time xasc quotes;
         '"cross_markout_at_horizons: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
-    horizons_ms:horizons_ms,();
+    horizons:horizons,();
     cross_sym:.qccy.normalize_ccy_pair sym;
     path:cross_decomp[distinct quotes`sym;cross_sym];
     if[0=count path;
         legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_markout_at_horizons: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
-    target_time:trade_time+horizons_ms*1000000;
+    target_time:trade_time+horizons;
     ref_price:cross_ref_price_at[quotes;cross_sym;;ref_size] each target_time;
     markout_pips:.qexec.markout[side;trade_price;ref_price;pip_factor];
-    col_names:`horizon_ms,time_col,`sym`ref_price`markout_pips;
-    apply_col_precedence flip col_names!(horizons_ms;target_time;(count horizons_ms)#cross_sym;ref_price;markout_pips)};
+    n:count horizons;
+    col_names:`sym`trade_time`horizon,time_col,`trade_price`ref_price`markout_pips;
+    apply_col_precedence flip col_names!(n#cross_sym;n#trade_time;horizons;target_time;n#trade_price;ref_price;markout_pips)};
 
 / Decompose a synthetic cross pair's price move between two times into
 / exact per-leg contributions, by revaluing one leg at a time - in the
@@ -801,32 +817,32 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 / @param trade_time the traded pair's own trade timestamp
 / @param side 1 for a buy, -1 for a sell of traded_sym - reused as impact_sym's markout sign convention
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses - applies to impact_sym
-/ @param horizons_ms one or more offsets from trade_time, in
-/   milliseconds - negative looks backward, 0 is at trade_time itself,
+/ @param horizons a timespan, or list of timespans, offset from
+/   trade_time - negative looks backward, 0D00:00:00 is at trade_time itself,
 /   positive looks forward
 / @param ref_size the (typically negligible) size to sweep for
 /   impact_sym's reference price at trade_time and at each horizon
-/ @return a table, one row per horizon, columns reordered by
-/   apply_col_precedence (time_col then sym leading) when both are present:
-/   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
-/   named per time_col, `time by default; sym here is impact_sym, not
-/   traded_sym) - impact_sym's own price drift, signed by traded_sym's side.
+/ @return a table, one row per horizon, in markout_at_horizons' shape:
+/   `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips (the
+/   target-time column is named per time_col, `time by default; sym here is
+/   impact_sym, not traded_sym, and trade_price is impact_sym's baseline
+/   at trade_time) - impact_sym's own price drift, signed by traded_sym's side.
 /   When impact_sym has no quote for some leg at trade_time the baseline is
 /   null, and EVERY markout_pips is null with it - no error: the baseline
 /   comes from cross_ref_price_at, which returns 0n rather than throwing.
 /   ref_price is still filled for each horizon that has a quote
 / @throws error if impact_sym normalizes to the same pair as traded_sym
 /   (nothing to compare against), or for cross_markout_at_horizons' own
-/   checks on impact_sym: quotes missing a required column, quotes not
+/   checks on impact_sym: horizons not timespans, quotes missing a required column, quotes not
 /   sorted `sym`time xasc, or no chain of pairs in quotes connecting
 /   impact_sym's two currencies
-/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;-500 -300 0 100 300;1]
-/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;-1;10000;enlist 300;1]  -> a sell reports the impact pair's own drift with the opposite sign
-cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons_ms;ref_size]
+/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;0D00:00:00.001*-500 -300 0 100 300;1]
+/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;-1;10000;0D00:00:00.3;1]  -> a sell reports the impact pair's own drift with the opposite sign
+cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons;ref_size]
     if[(.qccy.normalize_ccy_pair traded_sym)~.qccy.normalize_ccy_pair impact_sym;
         '"cross_impact_at_horizons: impact_sym must be different from traded_sym"];
     baseline:cross_ref_price_at[quotes;impact_sym;trade_time;ref_size];
-    cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons_ms;ref_size]};
+    cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons;ref_size]};
 
 / ---------------------------------------------------- BROKEN-DATE FORWARDS
 / .

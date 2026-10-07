@@ -12,6 +12,7 @@ from pathlib import Path
 
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, UqsError
 from uqs.scaffold import profile
+from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
 
@@ -59,6 +60,9 @@ def _appended(existing: str, action: FileAction) -> str:
     its terminating semicolon.
 
     test_stack_tables.q: the table belongs at the end of the `expected:` list.
+
+    The Showcase page: a card belongs at the end of its section - see
+    scaffold/docs.py's with_card.
     """
     if action.path == RUN_TESTS_FILE:
         return _with_nslist_entry(existing, action.body)
@@ -66,6 +70,8 @@ def _appended(existing: str, action: FileAction) -> str:
         return _with_expected_table(existing, action.body)
     if action.path == profile.PROFILES_FILE:
         return profile.apply(existing, action)
+    if action.path == SHOWCASE_PAGE:
+        return with_card(existing, action.body, action.anchor)
     return existing.rstrip("\n") + "\n" + action.body
 
 

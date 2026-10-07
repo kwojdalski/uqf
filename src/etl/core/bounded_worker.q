@@ -325,27 +325,42 @@ define:{[worker;decl]
 / Private: the declared transform exists and reads exactly this worker's
 / source.
 / .
-/ One input, and its schema must be the source contract's fields and types.
-/ Checked at declaration so a transform written against a different shape
-/ than the source delivers fails when the worker is defined, not on the
-/ first window of a backfill. A transform taking as_of is refused: a window
-/ has no single instant it is "as of", and choosing one here would be
-/ guessing at what the transform means by it.
+/ A source with one input: the transform reads one input, and its schema must
+/ be the source contract's fields and types. A source with supporting inputs
+/ (#617): the transform reads exactly the source's inputs, by name, and each
+/ input's schema must be that input's contract. Checked at declaration so a
+/ transform written against a different shape than the source delivers fails
+/ when the worker is defined, not on the first window of a backfill. A
+/ transform taking as_of is refused: a window has no single instant it is
+/ "as of", and choosing one here would be guessing at what the transform
+/ means by it.
 / @private
 require_transform:{[worker;cfg]
     who:"define: ",string[worker];
     if[not -11h=type cfg`transform;
         'who,"'s transform must be the name of a .qetl.transform transform"];
     d:.qetl.transform.def cfg`transform;
-    if[not 1=count d`inputs;
+    src:.qetl.source.def cfg`source;
+    several:0<count src`supporting;
+    if[(not several) and not 1=count d`inputs;
         'who,"'s transform ",string[cfg`transform]," must read exactly one input, the fetched batch"];
     if[d`as_of;
         'who,"'s transform ",string[cfg`transform]," takes as_of, which a bounded window cannot supply"];
-    src:.qetl.source.def cfg`source;
     contract:flip (src`columns)!{[c] $[c within "AZ"; (); c$()]} each src`types;
-    p:.qetl.transform.problems[contract;first value d`inputs;0b];
+    if[not several;
+        p:.qetl.transform.problems[contract;first value d`inputs;0b];
+        if[count p;
+            'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
+        :(::)];
+    contracts:((enlist src`table_name)!enlist contract),src`supporting;
+    if[not (asc key d`inputs)~asc key contracts;
+        'who,"'s transform ",string[cfg`transform]," must read source ",string[cfg`source],"'s inputs ",
+         (", " sv string key contracts)," - it reads ",", " sv string key d`inputs];
+    p:raze {[ins;contracts;nm]
+        (string[nm],": "),/:.qetl.transform.problems[contracts nm;ins nm;0b]
+      }[d`inputs;contracts] each key contracts;
     if[count p;
-        'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
+        'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contracts: ","; " sv p];
     }
 
 / Private: the columns on_conflict matches rows by, in the TARGET's names.
@@ -953,7 +968,7 @@ fetch:{[worker;from_ts;to_ts]
          {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts])];
     .qetl.log.dbg[worker;"fetch attempted";
         `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
-            $[`ok~r`state; count r`result; 0N])];
+            $[`ok~r`state; count .qetl.source.primary[cfg`source;r`result]; 0N])];
     if[`failed~r`state; :r];
     .qetl.source.validate[cfg`source;r`result];
     r}
@@ -1274,14 +1289,26 @@ no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 / source returning MORE columns than it declares, and the transform declares
 / exactly the contract - so the extra columns are dropped here, where the
 / contract says what the job reads, rather than refused.
+/ .
+/ A source with supporting inputs hands a dict of tables (#617), and each is
+/ narrowed to its own contract and passed under its own name. The primary
+/ owns the window: when it is empty the window publishes nothing, so the
+/ transform is not run and its declared output comes back empty - supporting
+/ rows alone are context for nothing.
 / @return the transformed batch
 / @throws whatever the transform throws, or a schema refusal from .qetl.transform
 / @private
 transform_batch:{[worker;batch]
     cfg:def worker;
-    columns:(.qetl.source.def cfg`source)`columns;
+    src:.qetl.source.def cfg`source;
     nm:cfg`transform;
-    .qetl.transform.apply[nm;(.qetl.transform.input_names nm)!enlist columns#batch]}
+    if[0=count src`supporting;
+        :.qetl.transform.apply[nm;(.qetl.transform.input_names nm)!enlist (src`columns)#batch]];
+    if[0=count batch src`table_name; :0#.qetl.transform.output_schema nm];
+    sup:key src`supporting;
+    given:((enlist src`table_name)!enlist (src`columns)#batch src`table_name),
+        sup!{[batch;nm;contract] (cols contract)#batch nm}[batch]'[sup;value src`supporting];
+    .qetl.transform.apply[nm;given]}
 
 / Private: one window, end to end - fetch, transform, check, publish, record.
 / .

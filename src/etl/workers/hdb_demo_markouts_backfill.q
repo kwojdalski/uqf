@@ -1,15 +1,31 @@
 / hdb_demo_markouts_backfill.q - mark out a window of our fills from the HDB (.qpipe.job.hdb_demo_markouts_backfill).
 / .
 / The bounded counterpart of the live markout job: for each window, the
-/ hdb_demo_markouts source reads the HDB's fills and quotes and scores them with
-/ the live job's own function and horizons; this writes the rows into the
-/ SAME `demo_execution_quality` table the live job feeds. The target key is
-/ (sym;trade_time;horizon), so writing a window the live job also scored
-/ replaces those rows rather than counting the fills twice.
+/ hdb_demo_markouts source reads the HDB's fills and quotes, this worker's
+/ transform scores them with the live job's own function and horizons, and
+/ the rows land in the SAME `demo_execution_quality` table the live job
+/ feeds. The target key is (sym;trade_time;horizon), so writing a window the
+/ live job also scored replaces those rows rather than counting the fills
+/ twice.
 / .
 / A window is on trade_time - see hdb_demo_markouts.q for why.
 
 \d .qpipe.job.hdb_demo_markouts_backfill
+
+/ Score fills against quotes at the live job's horizons - the same function,
+/ at the same horizons, so a fill scored both ways scores identically.
+/ @param fill_rows rows of the HDB's trades: time sym side trade_price pip_factor
+/ @param quotes rows of the HDB's quote: time sym bid ask
+/ @return one row per fill per horizon, in demo_execution_quality's columns
+/ @eg count .qpipe.job.hdb_demo_markouts_backfill.score[.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[]] -> 8
+score:{[fill_rows;quotes]
+    shape:.qetl.plant.shape `demo_execution_quality;
+    / No fills, no markouts, whatever the quotes hold.
+    if[0=count fill_rows; :0#shape];
+    out:.qexec.markout_at_horizons[fill_rows;
+        select sym, time, mid:0.5*bid+ask from quotes;
+        .qpipe.job.demo_markout.horizons];
+    cols[shape] xcols out}
 
 / A markout is missing only where no quote preceded the horizon - kept, as
 / the live job keeps it, so the gap shows. Anything non-finite is broken.
@@ -34,25 +50,42 @@ facts:{[batch]
 
 \d .
 
-/ The source already delivers demo_execution_quality's columns; this states that
-/ shape, so the contract and the target are checked against each other when
-/ the worker is defined.
-.qetl.transform.define[`markouts_to_execution_quality;`inputs`output`fn`examples!(
-    enlist[`batch]!enlist ([] time:`timestamp$(); sym:`symbol$(); trade_time:`timestamp$();
-        horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$());
+/ The scoring, as a transform of the source's two inputs (#617): the window's
+/ fills and the quotes they are marked against, into demo_execution_quality.
+/ The examples are worked by hand, not by the function they check:
+/   a buy at 10:00:00 @ 1.1001 - 1s: mid 1.1005 at 10:00:01, +4;
+/     10s: the quote at or before 10:00:10 is 10:00:06.5's, mid 1.1007, +6
+/   a sell at 10:00:05 @ 1.1003 - 1s: still 10:00:01's mid 1.1005, -2;
+/     10s: 10:00:12's mid 1.1011, -8
+/ and fills of none score to nothing, however many quotes there are.
+.qetl.transform.define[`hdb_demo_markouts_score;`inputs`output`fn`examples!(
+    `trades`quote!(
+        ([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); pip_factor:`long$());
+        ([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$()));
     .qetl.plant.shape `demo_execution_quality;
-    {[batch] cols[.qetl.plant.shape `demo_execution_quality] xcols batch};
-    enlist `inputs`expected!(
-        enlist[`batch]!enlist ([] time:enlist 2026.09.17D10:00:01; sym:enlist `EURUSD;
-            trade_time:enlist 2026.09.17D10:00:00; horizon:enlist 0D00:00:01;
-            trade_price:enlist 1.1001; ref_price:enlist 1.1005; markout_pips:enlist 4f);
-        ([] time:enlist 2026.09.17D10:00:01; sym:enlist `EURUSD; trade_time:enlist 2026.09.17D10:00:00;
-            horizon:enlist 0D00:00:01; trade_price:enlist 1.1001; ref_price:enlist 1.1005;
-            markout_pips:enlist 4f)))];
+    {[fill_rows;quotes] .qpipe.job.hdb_demo_markouts_backfill.score[fill_rows;quotes]};
+    (`inputs`expected!(
+        `trades`quote!(
+            ([] time:2026.09.17D10:00:00 2026.09.17D10:00:05; sym:`EURUSD`EURUSD; side:1 -1;
+                trade_price:1.1001 1.1003; pip_factor:.qccy.pip_factor `EURUSD`EURUSD);
+            ([] time:2026.09.17D09:59:59 2026.09.17D10:00:01 2026.09.17D10:00:06.5 2026.09.17D10:00:12;
+                sym:4#`EURUSD; bid:1.1000 1.1004 1.1006 1.1010; ask:1.1002 1.1006 1.1008 1.1012));
+        ([] time:2026.09.17D10:00:01 2026.09.17D10:00:10 2026.09.17D10:00:06 2026.09.17D10:00:15;
+            sym:4#`EURUSD;
+            trade_time:2026.09.17D10:00:00 2026.09.17D10:00:00 2026.09.17D10:00:05 2026.09.17D10:00:05;
+            horizon:0D00:00:01 0D00:00:10 0D00:00:01 0D00:00:10;
+            trade_price:1.1001 1.1001 1.1003 1.1003;
+            ref_price:1.1005 1.1007 1.1005 1.1011;
+            markout_pips:4 6 -2 -8f));
+     `inputs`expected!(
+        `trades`quote!(
+            ([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); pip_factor:`long$());
+            ([] time:enlist 2026.09.17D10:00:01; sym:enlist `EURUSD; bid:enlist 1.1004; ask:enlist 1.1006));
+        .qetl.plant.shape `demo_execution_quality)))];
 
 .qetl.job.bounded.define[`hdb_demo_markouts_backfill;
     `source`dataset`width`transform`check`facts`procname`note`target_key!
-    (`hdb_demo_markouts;`demo_execution_quality;0D01:00:00;`markouts_to_execution_quality;
+    (`hdb_demo_markouts;`demo_execution_quality;0D01:00:00;`hdb_demo_markouts_score;
      .qpipe.job.hdb_demo_markouts_backfill.quality_check;.qpipe.job.hdb_demo_markouts_backfill.facts;
      `hdb_demo_markouts_backfill1;
      "bounded: marks out the HDB's fills against its quotes, into demo_execution_quality";

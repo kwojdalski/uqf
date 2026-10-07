@@ -80,6 +80,8 @@ quotes:`sym`time xasc (audusd_q,eurusd_q,eurpln_q);
 show quotes;
 
 / ==== cross_markout_at_horizons: post-trade drift at several offsets ====
+/ Horizons are timespans, as .qexec.markout_at_horizons' are.
+horizons:0D00:00:00.001*-500 -300 0 100 300;
 / Simulate a trade in AUDPLN partway through the tick window, priced at
 / the prevailing mid at that instant (so the 0ms horizon's markout is
 / exactly zero by construction) - then look -500/-300/0/+100/+300ms
@@ -90,14 +92,14 @@ trade_time:audusd_ts mid_idx;
 trade_price:first .qfwd.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]`mid;
 .qetl.log.info[`cross_markout;"trade_time/trade_price - a synthetic AUDPLN buy at ",.Q.s1[trade_time],": ",.Q.s1[trade_price];()!()];
 
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;-500 -300 0 100 300;1]";()!()];
-horizons_r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;-500 -300 0 100 300;1];
+.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;horizons;1]";()!()];
+horizons_r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;horizons;1];
 .qetl.log.info[`cross_markout;"horizons_r - markout at each horizon (negative = before the trade):";()!()];
 show horizons_r;
-if[not (first horizons_r[`time] where horizons_r[`horizon_ms]=0)~trade_time;
+if[not (first horizons_r[`time] where horizons_r[`horizon]=0D00:00:00)~trade_time;
     .qetl.log.err[`cross_markout;"the 0ms horizon should land exactly on trade_time";()!()];
     exit 1];
-if[0.0<>first horizons_r[`markout_pips] where horizons_r[`horizon_ms]=0;
+if[0.0<>first horizons_r[`markout_pips] where horizons_r[`horizon]=0D00:00:00;
     .qetl.log.err[`cross_markout;"the 0ms horizon's markout should be exactly zero by construction (trade_price was set to the mid at that instant)";()!()];
     exit 1];
 
@@ -129,8 +131,8 @@ if[1e-6<abs decomp_total-actual_total;
 / impact question, even though our synthetic EURUSD drift here is
 / unrelated to the EURPLN "trade" (there's no genuine causality in
 / synthetic data - this only demonstrates the mechanism).
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;-500 -300 0 100 300;1]";()!()];
-impact_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;-500 -300 0 100 300;1];
+.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;horizons;1]";()!()];
+impact_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;horizons;1];
 .qetl.log.info[`cross_markout;"impact_r - EURUSD's own drift around the EURPLN trade's timestamps:";()!()];
 show impact_r;
 
