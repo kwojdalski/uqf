@@ -27,6 +27,7 @@ from pathlib import Path
 
 import pytest
 
+from uqs.cli.create_backfill import twin_target
 from uqs.interpreter import q_interpreter
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST
 from uqs.scaffold import jobs, write
@@ -122,6 +123,7 @@ check["streaming derive handler throws not implemented";
 check["backfill derive worker registered"; registered[.qetl.job.bounded.def;`smokebfd_backfill]]
 check["backfill derive transform fails verification until written";
     not all exec passed from .qetl.transform.verify `smokebfd_backfill_transform]
+check["a twin is its streaming job's twin"; `smoketwin_backfill in .qetl.uptime.twins `smokefeed]
 exit 0
 """
 
@@ -215,6 +217,10 @@ def _scaffold_every_kind(root: Path) -> None:
     ]
     for plan in plans:
         write.apply_plan(plan, root)
+    # A twin is planned from the tree, so after the feed it twins is written:
+    # its dataset and columns are read from smokefeed's declaration (#716).
+    dataset, cols = twin_target(root, "smokefeed", None, None, {"smoke_ticks": feed_table})
+    write.apply_plan(backfill.bounded_worker("smoketwin", dataset, cols, define_table=False), root)
 
 
 def test_the_checks_are_all_named():

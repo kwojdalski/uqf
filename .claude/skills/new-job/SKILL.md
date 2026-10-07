@@ -80,6 +80,8 @@ and the canonical row it becomes.
 etl, as markout and fx_positions have. For a backfill, `--partition SYM` scopes
 the worker to one slice of its dataset - the only way two workers can fill one
 dataset - and `--check` scaffolds a quality check that throws until written.
+`--twin-of JOB` makes a backfill a streaming job's twin: its dataset and columns
+are read from JOB's published table, so `uqs gaps JOB` names it with no wiring.
 
 `--transform passthrough|derive` scaffolds the transform. For a backfill the
 default is the pass-through; `derive` declares a `.qetl.transform.define` whose

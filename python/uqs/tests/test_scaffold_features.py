@@ -250,3 +250,43 @@ def test_an_option_for_another_kind_is_refused_by_name(argv, option, monkeypatch
     result = runner.invoke(cli.app, ["job", "new", *argv, "--dry-run"])
     assert result.exit_code == 1
     assert refused and refused[0].startswith(f"{option} does not apply to --kind")
+
+
+# ------------------------------------------------------------------ --twin-of
+
+
+def _plant() -> dict[str, str]:
+    from uqs.model.schemas import _DEFINITION  # noqa: PLC0415
+    from uqs.paths import TABLES_FILE  # noqa: PLC0415
+
+    text = (UQF_ROOT / TABLES_FILE).read_text()
+    return {m.group(1): m.group(0) for m in _DEFINITION.finditer(text)}
+
+
+def test_a_twin_takes_its_jobs_table_and_columns():
+    dataset, cols = create_backfill.twin_target(UQF_ROOT, "crypto_markout", None, None, _plant())
+    assert dataset == "crypto_execution_quality", "the one table crypto_markout publishes"
+    assert [c for c, _ in cols][:2] == ["time", "sym"], "and that table's own columns"
+
+
+def test_a_job_publishing_several_tables_needs_dataset_to_choose():
+    with pytest.raises(UqsError, match="crypto_book, crypto_trades - name the one"):
+        create_backfill.twin_target(UQF_ROOT, "crypto_mock", None, None, _plant())
+    dataset, _ = create_backfill.twin_target(
+        UQF_ROOT, "crypto_mock", "crypto_trades", None, _plant()
+    )
+    assert dataset == "crypto_trades"
+
+
+@pytest.mark.parametrize(
+    ("job", "dataset", "columns", "message"),
+    [
+        ("nope", None, None, "'nope' is not a streaming job"),
+        ("crypto_markout", "trades", None, "trades is not a table crypto_markout publishes"),
+        ("crypto_markout", None, "a:float", "drop --columns"),
+        ("cross", None, None, "publishes nothing"),
+    ],
+)
+def test_a_twin_that_would_not_be_one_is_refused(job, dataset, columns, message):
+    with pytest.raises(UqsError, match=message):
+        create_backfill.twin_target(UQF_ROOT, job, dataset, columns, _plant())
