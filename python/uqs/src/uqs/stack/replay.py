@@ -18,8 +18,8 @@ day nobody asked for. The plant's own start line cannot drift from the plant:
 `-tplogdir`, `-schemafile` and `-stackid` are on it, and `ps` reports them.
 
 That is also where the stack's base port comes from. Every other command
-defaults `--port` to DEFAULT_BASE_PORT and is wrong on a stack that was
-started with another; here the running plant's `-stackid` IS the answer, so
+defaults `--port` to its runtime's base port and is wrong on a stack that
+was started with another; here the running plant's `-stackid` IS the answer, so
 `--port` is only needed when it is being overridden on purpose.
 
 WHAT IS DELIBERATELY NOT DECIDED HERE. `emptytables`, `clean`, `sortafterreplay`
