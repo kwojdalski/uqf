@@ -78,6 +78,9 @@ WHEEL_DIR = f"{RELEASE_DIR}/wheels"
 #: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
 BUNDLE_LEDGER = "src/etl/installed_bundles.json"
 GENERATOR = "scripts/generate/generate_operational_docs.py"
+#: Tracked beyond the allowlist, copied into a staged tree for the generator
+#: to read and rewrite, and never packaged.
+STAGED_EXTRA = ("docs",)
 
 #: What a release is made of: tracked files under these paths, and nothing
 #: else. The three Python packages are all here because uv's workspace lock
@@ -152,9 +155,11 @@ def is_excluded(path: str) -> bool:
     return any(p.search(path) for p in _EXCLUDED)
 
 
-def tracked_files(root: Path, runner: Runner = subprocess.run) -> list[str]:
+def tracked_files(
+    root: Path, runner: Runner = subprocess.run, paths: Sequence[str] = ALLOWLIST
+) -> list[str]:
     r = runner(
-        ["git", "-C", str(root), "ls-files", "-z", "--", *ALLOWLIST],
+        ["git", "-C", str(root), "ls-files", "-z", "--", *paths],
         capture_output=True,
         text=True,
         check=False,
@@ -249,7 +254,9 @@ def stage_bundles(
         if not (folder / "bundle.json").is_file():
             raise ReleaseError("bundle", f"{b} holds no bundle.json - it is not a bundle")
         folders.append(str(folder))
-    for rel in files:
+    # The docs too, though a release never ships them: the generator
+    # rewrites the derived tables in them, and refuses a tree without them.
+    for rel in sorted(set(files) | set(tracked_files(root, runner, STAGED_EXTRA))):
         (staged / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / rel, staged / rel)
     env = dict(os.environ, PYTHONPATH=str(staged / "python" / "uqs" / "src"))

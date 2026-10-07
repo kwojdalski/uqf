@@ -166,7 +166,8 @@ def test_the_real_installer_and_generator_over_a_staged_checkout(tmp_path):
     def runner(argv, **kw):
         if (faked := _python_tools(argv)) is not None:
             return faked
-        return subprocess.run(argv, **kw, check=False)
+        kw.pop("check", None)
+        return subprocess.run(argv, check=False, **kw)
 
     staged = tmp_path / "staged"
     out, record = release.stage_bundles(ROOT, files, [str(b)], staged, runner)
