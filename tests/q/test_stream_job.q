@@ -1015,6 +1015,39 @@ test_fresh_breaches_is_decidable_without_a_timer:{[t]
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 600;1;
         "and once the throttle period has passed it does again"]};
 
+/ Two books each long 600k EURUSD - 1.2mm across the desk.
+two_books:{[]
+    ([] time:d 1 2; order_id:1 2; sym:`EURUSD`EURUSD; book:`london`newyork;
+        product:`spot`spot; side:1 1; size:600000 600000f; price:1.0850 1.0850;
+        order_status:`filled`filled)}
+
+test_a_limit_on_a_total_is_compared_with_the_total:{[t]
+    / #733: a cap scoped on sym alone was compared with each (sym, book,
+    / product) position, so 600k in each of two books passed a 1mm cap.
+    reset[];
+    .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
+    .qpipe.job.fx_positions.on_batch[`orders;two_books[]];
+    b:.qpipe.job.fx_positions.fresh_breaches d 0;
+    .qunit.assertEquals[count b;1;"1.2mm across both books is over a 1mm cap on the pair"];
+    .testutil.assertApprox[first b`observed;1200000f;1e-9;"observed is the pair's total"];
+    .qunit.assertEquals[first each b`book`product;``;"a breach of a total names no book or product"]};
+
+test_a_breach_of_a_total_is_published:{[t]
+    reset[];
+    .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
+    .qpipe.job.fx_positions.on_batch[`orders;two_books[]];
+    .qpipe.job.fx_positions.on_timer[];
+    .qunit.assertEquals[asc exec tbl from .sjtest.published;`s#`fx_limit_breach`fx_position;
+        "fx_limit_breach takes a total's breach in its usual shape"]};
+
+test_a_null_scope_value_is_refused_at_load:{[t]
+    / A null book matches no position: the cap would police nothing.
+    reset[];
+    .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
+        ([] sym:enlist `EURUSD; book:enlist `; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6);
+        "*book is null on some limit*";
+        "to cap the total across books, the book column is left out"]};
+
 / --- starting a job: .qetl.job.stream.start ------------------------------
 
 / A transport that delivers `replayed` - a list of (table; rows) - as the
