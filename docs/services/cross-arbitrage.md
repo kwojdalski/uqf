@@ -89,9 +89,10 @@ unfillable "profit" is the main way a detector like this lies.
 **`skew`.** A synthetic price multiplies legs quoted at different moments.
 `superbook`'s own expiry does not prevent a two-second-old EURUSD being combined
 with a fresh USDJPY, which manufactures an edge out of nothing but elapsed time.
-Legs further apart than `.qpipe.job.cross_arbitrage.max_skew` (2 seconds) are
-published with `active=0b` and their `skew` filled in --- present so it can be
-seen, rather than dropped.
+Legs further apart than `.qpipe.job.cross_arbitrage.max_skew` are published with
+`active=0b` and their `skew` filled in --- present so it can be seen, rather
+than dropped. The two bounds are separate: `superbook`'s `max_age` limits how
+old any leg can be, `max_skew` how far apart the legs can be.
 
 ## What it does not claim
 
