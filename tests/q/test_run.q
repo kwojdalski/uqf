@@ -322,4 +322,26 @@ test_migrate_refuses_a_foreign_ledger:{[t]
     .qunit.assertThrows[{[x] .qetl.run.migrate[]};::;"migrate: etl_runs is neither*";
         "a shape it does not know is not its to rewrite"]};
 
+/ --- process identity: the one read of TorQ's .proc (#619) ----------------
+/ .
+/ .qetl.run.proc_name is the only place src/ reads .proc.procname
+/ (check_etl_layering.py holds it there). Each behaviour is shown in both
+/ hosts: plain q, where .proc does not exist, and a TorQ process.
+
+test_the_process_name_is_null_in_plain_q:{[t]
+    .qunit.assertEquals[.testutil.with_procname[`;{.qetl.run.proc_name[]}];`;
+        "no TorQ, no name - the null symbol, not an error"]};
+
+test_the_process_name_is_torqs_under_torq:{[t]
+    .qunit.assertEquals[.testutil.with_procname[`runtest_proc1;{.qetl.run.proc_name[]}];`runtest_proc1;
+        "TorQ's .proc.procname, read as it is"]};
+
+test_a_status_file_is_named_by_the_worker_in_plain_q:{[t]
+    .qunit.assertEquals[.testutil.with_procname[`;{.qetl.job.bounded.instance `demo_deals_backfill}];
+        `demo_deals_backfill;"without a process name the worker names its own status file"]};
+
+test_a_status_file_is_named_by_the_process_under_torq:{[t]
+    .qunit.assertEquals[.testutil.with_procname[`runtest_proc1;{.qetl.job.bounded.instance `demo_deals_backfill}];
+        `runtest_proc1;"under TorQ the process does, since one process runs one worker (#608)"]};
+
 \d .

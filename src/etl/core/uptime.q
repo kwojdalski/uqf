@@ -72,7 +72,7 @@ begin:{[job]
     id:first 1?0Ng;
     now:.z.p;
     update_shared[{[id;job;now]
-        `etl_stream_uptime insert (id;job;@[value;`.proc.procname;`];.z.h;.z.i;now;now)};
+        `etl_stream_uptime insert (id;job;.qetl.run.proc_name[];.z.h;.z.i;now;now)};
         (id;job;now)];
     `.qetl.uptime.mine set mine,id;
     id}

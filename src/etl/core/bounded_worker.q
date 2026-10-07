@@ -525,7 +525,7 @@ init:{[worker;run_spec]
     / Before the guard below, not inside it: a refusal must write nothing,
     / and the guard's failure path writes the status file - the file this
     / refusal exists to keep the first worker's.
-    claim_process[@[value;`.proc.procname;`];worker];
+    claim_process[.qetl.run.proc_name[];worker];
     / Each init begins the lifecycle afresh, so its first transition checks the
     / status file for a run an earlier process left unfinished.
     write_state[worker;`phase;`];
@@ -582,7 +582,7 @@ claim_process:{[procname;worker]
 / the worker's own name in plain q.
 / @param worker the worker's name
 / @return the instance id naming the status file
-instance:{[worker] p:@[value;`.proc.procname;`]; $[null p; worker; p]}
+instance:{[worker] p:.qetl.run.proc_name[]; $[null p; worker; p]}
 
 / Private: the progress fields the status file carries, zero before the run
 / has made any.
