@@ -754,7 +754,6 @@ qfwd,ccy_graph_edges,function,1,avail_syms
 qfwd,ccy_orient_chain,function,1,syms
 qfwd,ccy_orient_cross,function,2,sym1 sym2
 qfwd,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
-qfwd,col_precedence,value,,
 qfwd,combine_oriented_books,function,2,book_ab book_bc
 qfwd,convert_quotes,function,3,quotes target_conventions opts
 qfwd,cross_book,function,4,sym1 book1 sym2 book2
