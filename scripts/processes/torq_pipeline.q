@@ -120,7 +120,8 @@ check_cycles:0W
 / Says so on stdout before and after, with the time it took: .qetl.log is one of
 / the files being loaded, so it cannot report its own load, and a process
 / that dies here otherwise leaves a log with no line from uqf at all. Then
-/ applies -verbose (see apply_verbose).
+/ applies -verbose (see apply_verbose) and loads the source settings (see
+/ load_source_settings).
 load_uqf:{[]
     t0:.z.p;
     root:getenv`UQF_ROOT;
@@ -133,6 +134,7 @@ load_uqf:{[]
     if[not outcome~`ok; '"qtorq.load_uqf: could not load uqf and its ETL tree: ",outcome];
     -1 string[.z.p]," | qtorq: uqf tree loaded in ",string[elapsed_ms t0],"ms";
     apply_verbose[];
+    load_source_settings[];
     }
 
 / Milliseconds since `t0`, for the timing fields the log lines carry.
@@ -497,5 +499,34 @@ credential_from:{[specific;fallback]
     if[any {not ()~key x} each specific,(); :`source`userpass!(`own;`)];
     if[()~key fallback; :`source`userpass!(`missing;`)];
     `source`userpass!(`adopted;first `$read0 fallback)}
+
+/ The environment variables a sources.csv setting may use as ${VAR}: the
+/ directories uqs gives every process (python/uqs/src/uqs/stack/env.py), so
+/ a local source can say ${KDBHDB} rather than an absolute path that holds on
+/ one machine only. Expanded by .qetl.source when the source connects.
+source_settings_path_vars:`UQF_ROOT`TORQDATA`KDBHDB`KDBWDB
+
+/ Load sources.csv - what each external source connects to (#718) - from
+/ TorQ's own config layers. .proc.getconfigfile picks it as it picks
+/ process.csv, a whole file at a time with no row merging: the application
+/ layer's (KDBAPPCONFIG, operator-owned and gitignored) over the service
+/ layer's (KDBSERVCONFIG, this tree's scripts/torqconfig) over TorQ's base.
+/ uqs's `uqs config sources` selects by the same rule, so both read one file.
+/ .
+/ No file in any layer is not an error: every source then runs as it did
+/ before, on UQF_SOURCE_CRED_<SOURCE> or its fixture. A file that is there
+/ and wrong is, and stops the process before any window is fetched.
+/ Fleet credentials are untouched: .servers.USERPASS stays TorQ's.
+/ @return how many sources the file configures
+/ @throws whatever .qetl.source.read_settings throws for a malformed file
+load_source_settings:{[]
+    / `first`, as torq.q takes process.csv's: getconfig enlists its answer.
+    f:hsym first .proc.getconfigfile "sources.csv";
+    if[()~key f;
+        .qetl.log.info[`qtorq;"no sources.csv in TorQ's config layers - sources use UQF_SOURCE_CRED_<SOURCE> or their fixtures";()!()];
+        :0];
+    n:.qetl.source.load_settings[f;source_settings_path_vars];
+    .qetl.log.info[`qtorq;"source settings loaded";`file`sources!(1_string f;n)];
+    n}
 
 \d .

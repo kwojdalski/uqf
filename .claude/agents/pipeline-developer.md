@@ -133,9 +133,12 @@ Two registry facts that changed under you, and that a job no longer states:
   parameters are refused together**, not one at a time.
 - **Use `etl_test_doubles`** to replace fetch/publish/checkpoint. Doubling the
   edges is not the same as testing the middle.
-- **Source credentials come from the environment only** (`UQF_SOURCE_CRED_*`).
-  No file fallback, no vault. A file fallback is how a credential ends up
-  committed.
+- **Source secrets come from the environment only.** What a source connects to
+  may come from a `sources.csv` row (#718, `.qetl.source.read_settings`), but
+  the row only names the variable a secret is in, via `{secret}` and
+  `secret_env`. A password written inline is refused. `UQF_SOURCE_CRED_*` still
+  wins over a row. File selection is TorQ's (`.qtorq.load_source_settings`),
+  never the ETL core's.
 - **Source queries are parameterised q lambdas, never string concatenation.**
   Where a driver genuinely cannot parameterise (ODBC), there is exactly one
   escape function and everything routes through it.

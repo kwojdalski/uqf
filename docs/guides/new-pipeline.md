@@ -302,11 +302,14 @@ query:{[h;range_from;range_to]
       };range_from;range_to]}
 ```
 
-- **The credential is the directory.** Set `UQF_SOURCE_CRED_<SOURCE>` to the
-  HDB's path. `.qetl.source.local_root` checks it when the worker connects: it
-  must be a directory holding a `sym` file or a date partition. A wrong path
-  **fails the run**; it never falls back to the fixture. As with every
-  transport, only an *unset* variable selects the fixture.
+- **The credential is the directory.** Give the source a `sources.csv` row whose
+  setting is the HDB's path, such as `${KDBHDB}` (see [where a source
+  connects](../reference/pipeline-declarations.md#where-a-source-connects-sourcescsv)),
+  or set `UQF_SOURCE_CRED_<SOURCE>` to it. `.qetl.source.local_root` checks it
+  when the worker connects: it must be a directory holding a `sym` file or a
+  date partition. A wrong path **fails the run**; it never falls back to the
+  fixture. As with every transport, only a source with neither selects the
+  fixture.
 - **`read[table;from_ts;to_ts]`** returns the whole date partitions the window
   touches, with `date` as the first column, as a select from a mapped HDB has
   it. The window's end is exclusive, so a window ending at midnight doesn't read

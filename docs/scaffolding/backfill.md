@@ -56,7 +56,7 @@ scaffold fxprobe_backfill:
   note: write .qpipe.source.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
   note: write .qpipe.source.fxprobe.fixture - deterministic, same contract as the live source
   note: declared columns: time, sym, mid
-  note: a live run reads UQF_SOURCE_CRED_FXPROBE (host:port of the q process to read from); without it the worker runs on the fixture, and warns that it is
+  note: to go live, give fxprobe a row in sources.csv - `uqs config sources stub fxprobe` adds one to fill in (host:port of the q process to read from); UQF_SOURCE_CRED_FXPROBE overrides it for one run. With neither, the worker runs on the fixture, and warns that it is
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
   note: optional: a quality check that fails a window on bad rows (`check`) - see quality_check in src/etl/workers/demo_deals_backfill.q
   note: see it run: q scripts/examples/fxprobe_example.q - on the fixture, no stack
