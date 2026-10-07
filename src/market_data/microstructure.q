@@ -1003,6 +1003,12 @@ rolling_return_variance:{[quotes;target_sym;window]
 / malformed.
 / @private
 stream_config:{[config]
+    / (::) or a dictionary, and nothing else. Anything else used to become the
+    / defaults without a word: `window!enlist 5 is ENUMERATION (type 20), not
+    / a dictionary, and ran every metric over 20 rows while each refusal below
+    / was bypassed (#804).
+    if[not (config~(::)) or 99h=type config;
+        '"stream: config must be (::) for the defaults, or a dictionary such as enlist[`window]!enlist 20 - got type ",string type config];
     c:stream_defaults,$[99h=type config; config; ()!()];
     if[count extra:(key c) except key stream_defaults;
         '"stream: unknown config key(s) ",", " sv string extra];
