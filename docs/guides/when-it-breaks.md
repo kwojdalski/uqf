@@ -25,8 +25,10 @@ The process also told whoever started it:
   failures). `uqs backfill` itself returns as soon as torq.sh has started the
   process, so its exit code says only whether the process started. With `--wait`
   it follows the run to its outcome and exits with that: 0 for `completed` or
-  `idle`, 1 for `failed` or a process that died. Use `--wait` in a script or a
-  scheduler;
+  `idle`, 1 for `failed` or a process that died. That includes a process that
+  died before it recorded anything, for example while loading the tree: once it
+  has had 30 seconds to start and is no longer running, the wait ends and points
+  at `uqs logs`. Use `--wait` in a script or a scheduler;
 - the Airflow sensor fails the task with q's error;
 - the browser's **Backfills** view shows **Failure**.
 

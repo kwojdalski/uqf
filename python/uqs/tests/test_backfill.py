@@ -10,7 +10,7 @@ import json
 import os
 import socket
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from typer.testing import CliRunner
@@ -19,7 +19,7 @@ from uqs import cli
 from uqs import paths as stack_paths
 from uqs.cli import shared
 from uqs.paths import UqsError
-from uqs.stack import backfill, runtime
+from uqs.stack import backfill, backfill_wait, runtime
 
 runner = CliRunner()
 
@@ -431,9 +431,10 @@ def _status(tmp_path, **over) -> None:
     (tmp_path / "airflow_status_deals_backfill1.txt").write_text(json.dumps(body))
 
 
-def _wait(tmp_path, monkeypatch, sleeps=None):
+def _wait(tmp_path, monkeypatch, sleeps=None, now=lambda: _LAUNCH, is_up=lambda: True):
+    """Within the startup grace, with the process up, unless a test says otherwise."""
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
-    return backfill.wait_for_outcome(
+    return backfill_wait.wait_for_outcome(
         stack_paths.default_paths(),
         "deals_backfill1",
         "v1",
@@ -441,7 +442,12 @@ def _wait(tmp_path, monkeypatch, sleeps=None):
         TO,
         _LAUNCH,
         sleep=sleeps if sleeps is not None else (lambda s: None),
+        now=now,
+        is_up=is_up,
     )
+
+
+_LATER = _LAUNCH + backfill_wait.STARTUP_GRACE
 
 
 @pytest.mark.parametrize(("state", "code"), [("completed", 0), ("idle", 0), ("failed", 1)])
@@ -467,6 +473,53 @@ def test_wait_ignores_the_previous_runs_file_until_this_one_writes(tmp_path, mon
     assert len(calls) == 2
 
 
+def test_a_process_that_died_before_writing_any_status_ends_the_wait(tmp_path, monkeypatch):
+    """#768: no status file at all, the grace gone, the process down."""
+    state, code, error = _wait(tmp_path, monkeypatch, now=lambda: _LATER, is_up=lambda: False)
+    assert (state, code) == ("abandoned", 1)
+    assert error.endswith("see `uqs logs deals_backfill1`")
+
+
+def test_a_previous_runs_failure_does_not_hide_a_process_that_died(tmp_path, monkeypatch):
+    """The stale file never matches this run, so it cannot end the wait either."""
+    _status(tmp_path, state="failed", updated_at="2026-10-04T11:00:00.000000000")
+    assert _wait(tmp_path, monkeypatch, now=lambda: _LATER, is_up=lambda: False)[:2] == (
+        "abandoned",
+        1,
+    )
+
+
+def test_a_slow_start_is_not_read_as_a_death(tmp_path, monkeypatch):
+    """Down within the grace is a process still forking, not one that died."""
+    clock = [_LAUNCH]
+    asked = []
+
+    def sleep(_):
+        clock[0] += timedelta(seconds=10)
+        if clock[0] - _LAUNCH >= timedelta(seconds=20):
+            _status(tmp_path, state="completed")
+
+    def is_up():
+        asked.append(1)
+        return False
+
+    assert _wait(tmp_path, monkeypatch, sleep, now=lambda: clock[0], is_up=is_up)[:2] == (
+        "completed",
+        0,
+    )
+    assert asked == [], "never asked while inside the grace"
+
+
+def test_an_outcome_written_just_before_the_process_exited_is_still_read(tmp_path, monkeypatch):
+    """Down, but the file now holds this run's outcome: that, not abandoned."""
+
+    def is_up():
+        _status(tmp_path, state="completed")
+        return False
+
+    assert _wait(tmp_path, monkeypatch, now=lambda: _LATER, is_up=is_up)[:2] == ("completed", 0)
+
+
 def test_wait_reports_a_run_whose_process_died_as_abandoned(tmp_path, monkeypatch):
     proc = subprocess.Popen(["true"])  # noqa: S603, S607
     proc.wait()
@@ -479,7 +532,7 @@ def test_the_command_exits_with_the_runs_outcome_under_wait(monkeypatch):
         backfill, "start", lambda *a, **k: type("Completed", (), {"returncode": 0})()
     )
     owed = "1 reaction(s) owed over 1 window(s) (rebuild_positions)"
-    monkeypatch.setattr(backfill, "wait_for_outcome", lambda *a, **k: ("failed", 1, owed))
+    monkeypatch.setattr(backfill_wait, "wait_for_outcome", lambda *a, **k: ("failed", 1, owed))
     argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait"]
     result = runner.invoke(cli.app, argv)
