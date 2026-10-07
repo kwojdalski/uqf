@@ -422,7 +422,7 @@ defined:{[] (key sources)`name}
 / inputs.
 / @param source a registered source name
 / @return a symbol vector
-/ @eg .qetl.source.input_names `demo_deals  ->  enlist `deals
+/ @eg .qetl.source.input_names `demo_deals  ->  enlist `demo_deals
 input_names:{[source] d:def source; (enlist d`table_name),key d`supporting}
 
 / The primary input of what a source returned: the window's own rows, which
