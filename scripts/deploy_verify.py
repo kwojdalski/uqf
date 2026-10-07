@@ -14,8 +14,10 @@ until a deadline:
               examples pass (.qetl.transform.verify_all) - a synthetic check
               that reads and writes nothing.
 
-A profile with pipeline processes promises ETL, and fails if none of them ran
-the ETL check. The result is one JSON object on stdout, ending in
+Every pipeline process must pass BOTH: it loads the library and the ETL tree
+(.qtorq.load_uqf), so one that answers "not loaded" for either is broken,
+however healthy the rest of the profile is. Other processes are checked where
+they load either. The result is one JSON object on stdout, ending in
 DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED, and the exit code agrees with it.
 Nothing secret is printed: the IPC credentials are the stack's defaults and
 never appear in the output.
@@ -82,6 +84,12 @@ def check_process(proc: ProcessCheck, query: Query) -> ProcessCheck:
         proc.library = f"wrong: {value!r}, expected {LIBRARY_EXPECTED!r}"
     etl = query(ETL_EXPR, proc.port)
     proc.etl = "not loaded" if _is_null(etl) else ("ok" if bool(etl) else "failed")
+    if proc.pipeline:
+        # a pipeline process loads both; "not loaded" is a broken process
+        missing = [c for c, v in (("library", proc.library), ("ETL", proc.etl)) if v != "ok"]
+        proc.ok = not missing
+        proc.error = "" if proc.ok else f"pipeline process: {' and '.join(missing)} check not ok"
+        return proc
     proc.ok = not proc.library.startswith("wrong") and proc.etl != "failed"
     proc.error = "" if proc.ok else "a library or ETL check failed"
     return proc
@@ -128,11 +136,10 @@ def verify(
     unanswered = sorted(pending)
     if unanswered:
         return False, results, f"no answer within {deadline_s:g}s from {', '.join(unanswered)}"
-    bad = [c.process for c in results if not c.ok]
+    bad = [c for c in results if not c.ok]
     if bad:
-        return False, results, f"checks failed on {', '.join(bad)}"
-    if pipelines & set(expected) and not any(c.etl == "ok" for c in results):
-        return False, results, "the profile has pipeline processes, but none ran the ETL check"
+        detail = "; ".join(f"{c.process}: {c.error}" for c in bad)
+        return False, results, f"checks failed on {detail}"
     return True, results, ""
 
 
