@@ -302,12 +302,23 @@ mint:{[]
     hex:raze string md5 raze string (.z.h;.z.i;.z.p;.z.n);
     "G"$ "-" sv (0 8 12 16 20) _ hex}
 
-/ Private: this process's TorQ name, or the null symbol outside TorQ.
+/ This process's TorQ name, or the null symbol outside TorQ.
+/ .
+/ THE ONE READ OF TorQ's PROCESS IDENTITY in src/ (#619). A run record, an
+/ uptime session, the status file's instance and the one-worker-per-process
+/ claim all name the process, and each used to read .proc.procname itself.
+/ TorQ stays the authority - this only reads it - and the fallback is decided
+/ here once: outside TorQ there is no name, so the null symbol. What a caller
+/ does with a null is its own policy (the status file falls back to the
+/ worker's name; the claim is skipped). check_etl_layering.py refuses a
+/ .proc. reference anywhere else in src/.
 / .
 / Read through a protected eval because .proc is TorQ's and this file is unit
 / tested outside a TorQ process, where .proc does not exist at all. An
 / unwrapped read would make every test here depend on a running stack - the
 / same wrapping .qetl.job.bounded.runtime does for .servers.SERVERS.
+/ @return TorQ's .proc.procname, or ` outside TorQ
+/ @eg .qetl.run.proc_name[]  ->  ` (plain q)
 proc_name:{[] @[value;`.proc.procname;`]}
 
 / Private: d's value at k, or `fallback` when d has no k. Presence by `in key`

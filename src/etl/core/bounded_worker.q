@@ -540,7 +540,7 @@ init:{[worker;run_spec]
     / Before the guard below, not inside it: a refusal must write nothing,
     / and the guard's failure path writes the status file - the file this
     / refusal exists to keep the first worker's.
-    claim_process[@[value;`.proc.procname;`];worker];
+    claim_process[.qetl.run.proc_name[];worker];
     / Each init begins the lifecycle afresh, so its first transition checks the
     / status file for a run an earlier process left unfinished.
     write_state[worker;`phase;`];
@@ -597,7 +597,7 @@ claim_process:{[procname;worker]
 / the worker's own name in plain q.
 / @param worker the worker's name
 / @return the instance id naming the status file
-instance:{[worker] p:@[value;`.proc.procname;`]; $[null p; worker; p]}
+instance:{[worker] p:.qetl.run.proc_name[]; $[null p; worker; p]}
 
 / Private: the progress fields the status file carries, zero before the run
 / has made any.
@@ -815,13 +815,11 @@ init_body:{[worker;run_spec]
     / `transport`, not `var`: var is a q builtin (variance).
     live:.qetl.source.has_credentials cfg`source;
     if[not live;
-        transport:(.qetl.source.def cfg`source)`transport;
+        tr:.qetl.source.for_source cfg`source;
         .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so a machine-specific path or a password stays out of this repository and off the command line";
             `variable`expects`example!(
                 .qetl.source.credential_var cfg`source;
-                $[`odbc~transport; "an ODBC connection string";
-                  `local~transport; "the path of an HDB directory on this machine";
-                  "host:port, or host:port:user:password"];
+                tr`expects;
                 .qetl.source.credential_example cfg`source)]];
     write_state[worker;`handle;$[live; connect worker; 0Ni]];
 
@@ -836,18 +834,16 @@ init_body:{[worker;run_spec]
 / Private: open the live connection. Separate from init so the failure is
 / attributable, and so a test can exercise init without one.
 / .
-/ The source's transport picks the opener: an ipc credential is host:port,
-/ an odbc credential is a connection string, a local credential is an HDB
-/ directory's path - validated here, so a wrong path fails the run rather
+/ The source's transport opens it - .qetl.source.transport's `open`: an ipc
+/ credential is host:port, an odbc one a connection string, a local one an
+/ HDB directory's path, validated there so a wrong path fails the run rather
 / than quietly reading the fixture.
 connect:{[worker]
     source:(def worker)`source;
     cred:.qetl.source.require_credentials source;
     transport:(.qetl.source.def source)`transport;
     .qetl.log.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
-    opener:$[`odbc~transport; {.qetl.io.odbc.open x};
-      `local~transport; .qetl.source.local_root;
-      {hopen (hsym `$":",x;5000j)}];
+    opener:(.qetl.source.transport_def transport)`open;
     @[opener;cred;{[source;e] '.qetl.job.bounded.connect_error[source;e]}[source]]}
 
 / The error connect throws when it cannot reach a source.
@@ -1540,11 +1536,9 @@ publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last
 / release_lock is a no-op when not held.
 cleanup:{[worker]
     h:read_state[worker;`handle];
-    transport:(.qetl.source.def (def worker)`source)`transport;
-    / A local source's "handle" is its directory: nothing to close.
-    closer:$[`odbc~transport; .qetl.io.odbc.close;
-      `local~transport; {[h] ::};
-      {[h] @[hclose;h;::]}];
+    / The transport's `close`: hclose, the ODBC close, or for a local source's
+    / directory nothing at all.
+    closer:(.qetl.source.for_source (def worker)`source)`close;
     if[not null h; closer h; write_state[worker;`handle;0Ni]];
     .qetl.job.bounded.state.release_lock worker}
 
