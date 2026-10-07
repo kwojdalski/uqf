@@ -109,23 +109,111 @@
 / somebody wrote, which validate_live can then be run against.
 required_declarations:`source`table_name`target`time_column`row_key`columns`types`query`fixture`tz
 
-/ How a source is reached - the one OPTIONAL declaration.
+/ ------------------------------------------------------------- TRANSPORTS
 / .
-/   ipc   a q process: the credential is host:port, opened with hopen, and
-/         the query callback calls the handle with a lambda. The default,
-/         because every source before ODBC was one.
-/   odbc  anything with an ODBC driver: the credential is the connection
-/         string, opened with .qetl.io.odbc.open, and the query callback builds SQL
-/         through .qetl.io.odbc's one escape function.
-/   local a kdb+ HDB directory on THIS machine, read from its files with no
-/         process in between: the credential is the directory's path, the
-/         "handle" is that directory as a file symbol, and the query callback
-/         reads through .qetl.source.local - see the LOCAL section below.
+/ How a source is reached - the one OPTIONAL declaration - and everything that
+/ differs by it, in ONE place (#616). Each transport is one row: how to open a
+/ credential into a handle, how to close it, how to read a table's metadata,
+/ and the words an operator and the scaffold need. A worker connecting, a
+/ worker cleaning up, validate_live and the credential hint all DISPATCH
+/ through the row; none of them branches on a transport's name, so a missed
+/ branch can no longer fall through to ipc in silence. Adding `local` touched
+/ fourteen files and missed one of those branches (#615); adding a transport
+/ now is its implementation, one register_transport, a contract-surface
+/ refresh and tests.
 / .
-/ A source's transport decides how .qetl.job.bounded.connect opens a handle and how
-/ cleanup closes one, so it belongs to the source rather than the worker: two
-/ workers over one source cannot disagree about how to reach it.
-transports:`ipc`odbc`local
+/ A KEYED TABLE declared with its columns, not a dictionary of dictionaries -
+/ that collapses into a table on the first entry (#512).
+/ .
+/ THE CONTRACTS, the same for every transport:
+/ .
+/   open[credential]       a string in, a handle out - an ipc handle, an ODBC
+/                          handle, or for `local` the HDB root as a file
+/                          symbol. Throws when the credential cannot be opened.
+/   close[handle]          releases it; (::) - a no-op for a local root.
+/   metadata[handle;table] the table's columns as ([] c:symbols; t:chars), one
+/                          row per column, `t` the q type character. One shape
+/                          however it is read: a q process answers with its
+/                          own meta, an HDB from its files, an ODBC database
+/                          from an empty SELECT through the driver.
+/   expects                what the credential IS, for an operator.
+/   example                a credential of that shape. A source's own
+/                          credential_example declaration wins over it.
+/   query_note             how a source's query reaches it, for the scaffold.
+transport:([name:`symbol$()] open:(); close:(); metadata:(); expects:(); example:(); query_note:())
+
+/ The fields a transport registers, and their kinds.
+transport_fields:`open`close`metadata`expects`example`query_note
+transport_functions:`open`close`metadata
+
+/ Register a transport, or refuse naming what is wrong.
+/ @param name the transport, as a symbol
+/ @param decl a dict of every one of transport_fields
+/ @return name
+/ @throws error naming a missing or unknown field, a non-function operation,
+/   or a non-string description
+register_transport:{[name;decl]
+    who:"register_transport: ",string name;
+    if[not -11h=type name; '"register_transport: a transport's name is a symbol"];
+    if[not 99h=type decl; 'who,": the declaration must be a dictionary of ",", " sv string transport_fields];
+    missing:transport_fields except key decl;
+    if[count missing; 'who," is missing ",", " sv string missing];
+    unknown:(key decl) except transport_fields;
+    if[count unknown; 'who," declares ",(", " sv string unknown),", which a transport does not take"];
+    notfn:transport_functions where not {(type x) within 100 112h} each decl transport_functions;
+    if[count notfn; 'who,": ",(", " sv string notfn)," must be function(s)"];
+    words:transport_fields except transport_functions;
+    notstr:words where not 10h=type each decl words;
+    if[count notstr; 'who,": ",(", " sv string notstr)," must be string(s)"];
+    `.qetl.source.transport upsert (name,decl transport_fields);
+    name}
+
+/ Every registered transport's name.
+/ @return a symbol vector
+/ @eg .qetl.source.transports[]  ->  `ipc`odbc`local
+transports:{[] (key transport)`name}
+
+/ A transport's row, or a refusal naming it and the ones there are - before
+/ anything is opened or dispatched.
+/ @param name the transport
+/ @return dict of transport_fields
+/ @throws error naming an unknown transport
+transport_def:{[name]
+    if[not name in transports[];
+        '"transport ",string[name]," is not registered - the transports are ",", " sv string transports[]];
+    transport name}
+
+/ A source's transport row.
+/ @param source a registered source
+/ @return dict of transport_fields
+for_source:{[source] transport_def (def source)`transport}
+
+register_transport[`ipc;transport_fields!(
+    {[cred] hopen (hsym `$":",cred;5000j)};
+    {[h] @[hclose;h;::]; (::)};
+    {[h;table_name] select c, t from 0!h({0!meta x};table_name)};
+    "host:port, or host:port:user:password";
+    "localhost:5010";
+    "/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).\n/ The bounds are arguments to a functional select evaluated on the remote\n/ side, so no caller value is ever spliced into query text. Send it with\n/ .qetl.source.ipc[h;{[from_ts;to_ts] select ...};range_from;range_to], not\n/ h(...) directly, so `uqs backfill --trace` shows the query.")];
+
+register_transport[`odbc;transport_fields!(
+    {[cred] .qetl.io.odbc.open cred};
+    {[h] .qetl.io.odbc.close h};
+    / The table name is a declaration symbol, as in .qetl.io.odbc.window_query;
+    / WHERE 1=0 asks the driver for the columns and types and no rows.
+    {[h;table_name] select c, t from 0!meta .qetl.io.odbc.run_sql[h;"SELECT * FROM ",string[table_name]," WHERE 1=0"]};
+    "an ODBC connection string";
+    "DRIVER=<driver>;<driver-specific settings>";
+    "/ `h` is an ODBC handle from .qetl.io.odbc.open. Build the SELECT with every\n/ bound through .qetl.io.odbc.literal - never string concatenation of a raw\n/ value - run it with .qetl.io.odbc.run_sql, and return the declared columns\n/ and types (src/etl/sources/duckdb_deals.q's sql_for and adapt).")];
+
+register_transport[`local;transport_fields!(
+    {[cred] .qetl.source.local_root cred};
+    {[h] (::)};
+    {[h;table_name] select c, t from 0!meta .qetl.source.local_latest[h;table_name]};
+    "the path of an HDB directory on this machine";
+    "/path/to/hdb";
+    "/ `h` is the HDB directory, read from its files with no process in between.\n/ Send the query with .qetl.source.local[h;{[read;from_ts;to_ts] ...};range_from;range_to]:\n/ read[`table;from_ts;to_ts] returns the whole date partitions the window\n/ touches, symbols decoded against the HDB's own sym file - filter the rows\n/ to [from_ts;to_ts) yourself.")];
+
 default_transport:`ipc
 
 / The optional declarations, and what a source that omits one stores.
@@ -248,8 +336,8 @@ define:{[source;decl]
         '"define: ",string[source],"'s time_column ",string[decl`time_column],
          " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently"];
     tr:$[`transport in key decl; decl`transport; default_transport];
-    if[not tr in transports;
-        '"define: ",string[source],"'s transport must be one of ",(", " sv string transports)];
+    if[not tr in transports[];
+        '"define: ",string[source],"'s transport must be one of ",(", " sv string transports[])];
     / Every declaration is stored with every column: a key no column holds
     / would have nowhere to go, so it is refused by name rather than dropped.
     decl[`transport]:tr;
@@ -379,9 +467,7 @@ validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
 / @param h an open handle to the external source
 validate_live:{[source;h]
     decl:def source;
-    reader:$[`local~decl`transport;
-        {[handle;table_name] 0!meta local_latest[handle;table_name]}[h];
-        {[handle;table_name] handle({0!meta x};table_name)}[h]];
+    reader:(transport_def decl`transport)[`metadata][h;];
     m:@[reader;decl`table_name;
         {[table_name;err] '"validate_live: cannot read metadata for ",string[table_name]," (",err,")"}[decl`table_name;]];
     present:exec c from m;
@@ -454,9 +540,7 @@ credential_example:{[source]
     d:def source;
     ex:$[`credential_example in key d; d`credential_example; ""];
     if[0<count ex; :ex];
-    $[`odbc~d`transport; "DRIVER=<driver>;<driver-specific settings>";
-      `local~d`transport; "/path/to/hdb";
-      "localhost:5010"]}
+    (transport_def d`transport)`example}
 
 / ---------------------------------------------------------------- ZONES
 

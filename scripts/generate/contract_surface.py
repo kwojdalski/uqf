@@ -185,7 +185,18 @@ def build_surface() -> dict[str, Any]:
 #: One file per relation. The surface is four relations once flattened, and
 #: one wide file with a `kind` discriminator and mostly-empty cells would be
 #: worse than the JSON it replaces.
-FILES = ("functions.csv", "table_columns.csv", "processes.csv", "variables.csv", "meta.csv")
+FILES = (
+    "functions.csv",
+    "table_columns.csv",
+    "processes.csv",
+    "variables.csv",
+    "transports.csv",
+    "meta.csv",
+)
+
+#: transports.csv's columns. `query_note` is multi-line q comment text, which is
+#: why that file is written QUOTE_ALL.
+TRANSPORT_FIELDS = ["name", "default", "expects", "example", "query_note"]
 
 #: Lists live in one cell, space-separated. Safe because no q identifier,
 #: table name or parameter name contains a space - asserted by
@@ -264,6 +275,19 @@ def write_surface(out_dir: Path, surface: dict[str, Any]) -> None:
         [{"name": v} for v in sorted(surface.get("variables", []))],
     )
 
+    # How a source is reached (#616): read by the scaffold and the CLI, so
+    # Python keeps no list of its own. In registration order, which is the
+    # order q reports them in.
+    _write_csv(
+        out_dir / "transports.csv",
+        TRANSPORT_FIELDS,
+        [
+            {**{f: t[f] for f in TRANSPORT_FIELDS}, "default": "1" if t["default"] else "0"}
+            for t in surface.get("transports", [])
+        ],
+        quoting=csv.QUOTE_ALL,
+    )
+
     # Provenance has nowhere else to go: CSV has no comment syntax, and
     # dropping it would lose which interpreter produced the export.
     _write_csv(
@@ -322,6 +346,9 @@ def read_surface(in_dir: Path) -> dict[str, Any]:
     ]
 
     meta = {row["key"]: row["value"] for row in _read_csv(in_dir / "meta.csv")}
+    transports = [
+        {**row, "default": row["default"] == "1"} for row in _read_csv(in_dir / "transports.csv")
+    ]
 
     return {
         "functions": functions,
@@ -329,6 +356,7 @@ def read_surface(in_dir: Path) -> dict[str, Any]:
         "namespaces": sorted(functions),
         "processes": processes,
         "tables": tables,
+        "transports": transports,
         "variables": [row["name"] for row in _read_csv(in_dir / "variables.csv")],
     }
 
@@ -434,6 +462,17 @@ def diff_surfaces(a: dict[str, Any], b: dict[str, Any], a_name: str, b_name: str
     if eb - ea:
         lines.append(f"\n## Environment variables only in {b_name}")
         lines += [f"  {v}" for v in sorted(eb - ea)]
+
+    xa = {t["name"]: t for t in a.get("transports", [])}
+    xb = {t["name"]: t for t in b.get("transports", [])}
+    for name in sorted(set(xa) | set(xb)):
+        if name not in xa:
+            lines.append(f"\n## Transport only in {b_name}: {name}")
+        elif name not in xb:
+            lines.append(f"\n## Transport only in {a_name}: {name}")
+        elif xa[name] != xb[name]:
+            fields = [f for f in xa[name] if xa[name][f] != xb[name].get(f)]
+            lines.append(f"\n## Transport differs: {name} ({', '.join(fields)})")
 
     return lines
 

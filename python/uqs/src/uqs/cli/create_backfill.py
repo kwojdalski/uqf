@@ -54,7 +54,7 @@ def backfill_plan(
     width: str | None,
     source: str | None,
     procname: str | None,
-    transport: str,
+    transport: str | None,
     partition: str | None,
     check: bool,
     transform: str | None,

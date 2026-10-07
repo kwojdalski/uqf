@@ -483,6 +483,7 @@ qetl.source,default_transport,value,,
 qetl.source,define,function,2,source decl
 qetl.source,defined,function,1,
 qetl.source,fetch_window,function,4,source h range_from range_to
+qetl.source,for_source,function,1,source
 qetl.source,has_credentials,function,1,source
 qetl.source,ipc,function,4,h f range_from range_to
 qetl.source,ipc_call,function,3,h f args
@@ -494,12 +495,17 @@ qetl.source,local_read,function,4,root table from_ts to_ts
 qetl.source,local_root,function,1,path
 qetl.source,local_to_utc,function,2,tz ts
 qetl.source,optional_declarations,dict,,
+qetl.source,register_transport,function,2,name decl
 qetl.source,require_credentials,function,1,source
 qetl.source,require_zone_table,function,1,tz
 qetl.source,required_declarations,value,,
 qetl.source,row_key,function,1,source
 qetl.source,sources,dict,,
-qetl.source,transports,value,,
+qetl.source,transport,dict,,
+qetl.source,transport_def,function,1,name
+qetl.source,transport_fields,value,,
+qetl.source,transport_functions,value,,
+qetl.source,transports,function,1,
 qetl.source,utc_to_local,function,2,tz ts
 qetl.source,validate,function,2,source tbl
 qetl.source,validate_fixture,function,1,source
