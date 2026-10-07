@@ -156,6 +156,11 @@ Two things to know about the answer:
   last beat, recorded once a minute (`.qetl.uptime.period`), so a gap can start
   up to a minute before the job really stopped. Refilling a little extra costs
   nothing: covered windows are skipped.
+- **Today can't be refilled until end of day.** A backfill can't write rows
+  dated today: those belong to the tickerplant until end of day, and the HDB
+  writer refuses them. So the commands stop at today's UTC midnight. A gap that
+  lies entirely in today gets no command, and `uqs gaps` says to run it again
+  after end of day.
 
 Runs from before uptime was recorded have no sessions, and `uqs gaps` reports
 the whole range as down. For those, the log still tells you: the gap runs from
