@@ -86,6 +86,13 @@ def runtime_from_env() -> str:
     return name
 
 
+def torq_log_stem(procname: str, stream: str) -> str:
+    """The stem TorQ names a process's logs with: `<stream>_<procname>`, as
+    the alias `<stem>.log` and each dated roll `<stem>_<stamp>.log`. Named
+    once, here, for every reader of those files (#819)."""
+    return f"{stream}_{procname}"
+
+
 @dataclass(frozen=True)
 class UqsPaths:
     repo_root: Path
@@ -100,6 +107,22 @@ class UqsPaths:
     def runtime_declaration(self) -> Runtime:
         """What this runtime composes - read a field, never test the name."""
         return RUNTIMES[self.runtime]
+
+    @property
+    def log_dir(self) -> Path:
+        """Where every process's logs are: what stack/env.py tells TorQ as
+        KDBLOG, and where uqs, the feeds and the checks read them (#819)."""
+        return self.torqdata / "logs"
+
+    @property
+    def hdb_dir(self) -> Path:
+        """The HDB root: what stack/env.py tells TorQ as KDBHDB."""
+        return self.torqdata / "hdb"
+
+    def torq_log(self, procname: str, stream: str) -> Path:
+        """TorQ's current log for `procname` - `out` or `err` - the alias it
+        repoints on each roll, so reading it follows the live file."""
+        return self.log_dir / f"{torq_log_stem(procname, stream)}.log"
 
     @property
     def generated_procs(self) -> Path:

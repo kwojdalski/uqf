@@ -56,7 +56,7 @@ DEFAULT_GROUP = "uqf-kafka-flow"
 
 def _process(paths: UqsPaths) -> DetachedProcess:
     return DetachedProcess(
-        "the kafka feed", paths.kafka_feed_pid_path, paths.torqdata / "logs" / "kafka_feed.log"
+        "the kafka feed", paths.kafka_feed_pid_path, paths.log_dir / "kafka_feed.log"
     )
 
 
