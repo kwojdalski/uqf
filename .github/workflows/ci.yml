@@ -137,6 +137,12 @@ jobs:
         # file reaching the wrong way would break it with every test green.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_etl_layering.py --check
+      - name: Check the q library's module graph is acyclic and reviewed
+        # Every edge between library namespaces is listed in the gate (#626):
+        # a new one, a stale one or a cycle fails, so a cross-module
+        # dependency is a reviewed line rather than an invisible one.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/gates/check_module_deps.py
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
         # tree knows what happens to those without a gate - docs/man.q once
