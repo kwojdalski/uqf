@@ -16,13 +16,20 @@ Parametrised over PROFILES, so a profile added tomorrow is covered today.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from uqs.interpreter import Q_IMPL_ENV
 from uqs.model import dependencies, profiles
+from uqs.model import infra as infra_sets
 from uqs.model.pipeline import PipelineKind
 from uqs.model.registry import PIPELINES
-from uqs.paths import UqsError
+from uqs.paths import UqsError, paths_for_root
+from uqs.runtimes import RUNTIMES
+from uqs.stack import procs
+
+ROOT = Path(__file__).resolve().parents[3]
 
 PROCNAMES = {pipeline.procname for pipeline in PIPELINES}
 NAMES = sorted(profiles.PROFILES)
@@ -75,7 +82,7 @@ def test_every_leaf_is_a_process_that_exists(name):
 @pytest.mark.parametrize("name", NAMES)
 def test_every_profile_names_at_least_one_leaf(name):
     """Or is an infrastructure-only profile, which says so in PROFILE_INFRA."""
-    assert profiles.PROFILES[name] or name in profiles.PROFILE_INFRA, f"profile {name} is empty"
+    assert profiles.PROFILES[name] or name in infra_sets.PROFILE_INFRA, f"profile {name} is empty"
 
 
 def test_default_resolves_to_exactly_what_start_all_runs_today():
@@ -96,7 +103,7 @@ def test_the_core_infrastructure_is_in_every_profile():
     All of CORE_INFRA, unless the profile names a smaller set of its own."""
     for name in NAMES:
         resolved = profiles.resolve([name])
-        infra = profiles.PROFILE_INFRA.get(name, profiles.CORE_INFRA)
+        infra = infra_sets.PROFILE_INFRA.get(name, infra_sets.CORE_INFRA)
         assert set(infra) <= set(resolved)
         assert "stp1" in resolved, "the tickerplant is not optional"
 
@@ -105,13 +112,13 @@ def test_a_profile_s_own_infrastructure_reaches_the_start_list():
     """essential adds reporter1 and tpreplay1, which CORE_INFRA does not have.
     `infrastructure` used to keep only CORE_INFRA's names, so a process a
     profile added beyond it was dropped without a word."""
-    for name, infra in profiles.PROFILE_INFRA.items():
+    for name, infra in infra_sets.PROFILE_INFRA.items():
         assert set(infra) <= set(profiles.infrastructure([name])), name
 
 
 def test_core_processes_come_first_and_a_profile_s_extras_after():
     started = profiles.infrastructure(["essential"])
-    core = tuple(p for p in started if p in profiles.CORE_INFRA)
+    core = tuple(p for p in started if p in infra_sets.CORE_INFRA)
     assert started[: len(core)] == core
     assert started[len(core) :] == ("reporter1", "tpreplay1")
 
@@ -153,7 +160,7 @@ def test_composing_essential_with_a_job_profile_is_the_union():
 def test_core_infrastructure_leads_the_resolved_list():
     """Order changes nothing for torq.sh; it makes the printed list readable."""
     resolved = profiles.resolve(["fx"])
-    assert resolved[: len(profiles.CORE_INFRA)] == profiles.CORE_INFRA
+    assert resolved[: len(infra_sets.CORE_INFRA)] == infra_sets.CORE_INFRA
 
 
 # ------------------------------------------------- the closure's own behaviour
@@ -191,7 +198,7 @@ def test_only_the_listed_vendored_processes_hold_a_slot():
     """Most of CORE_INFRA opens no plant handle - the gateway queries the
     databases, discovery is registered WITH, and stp1 IS the plant. Counting
     them all put a five-slot profile over a fourteen-slot budget."""
-    assert profiles.plant_slots(profiles.CORE_INFRA) == len(profiles.VENDORED_PLANT_CLIENTS)
+    assert profiles.plant_slots(infra_sets.CORE_INFRA) == len(profiles.VENDORED_PLANT_CLIENTS)
 
 
 # ----------------------------------------------------------------- composition
@@ -325,3 +332,24 @@ def test_no_exemption_is_stale():
         assert procname in procnames, f"{procname} is exempted and does not exist"
         assert procname not in reached, f"{procname} is exempted and a profile reaches it"
         assert reason.strip(), f"{procname} is exempted with no reason"
+
+
+@pytest.mark.parametrize(
+    ("runtime", "profile"),
+    [(r.name, p) for r in RUNTIMES.values() for p in r.profiles],
+)
+def test_every_declared_profile_starts_only_processes_its_runtime_has(runtime, profile):
+    """#765: checked when declared, not filtered when listed - a profile that
+    names a process its runtime lacks fails here, not an operator's start."""
+    have = set(procs.list_process_names(paths_for_root(ROOT, runtime)))
+    missing = set(profiles.resolve([profile])) - have
+    assert not missing, f"{profile} on {runtime} needs {sorted(missing)}"
+
+
+def test_every_profile_is_declared_by_some_runtime():
+    declared = {p for r in RUNTIMES.values() for p in r.profiles}
+    assert set(profiles.PROFILES) <= declared
+
+
+def test_the_torq_feed_profile_is_essential_with_the_starter_packs_feed():
+    assert profiles.resolve(["feed"]) == (*profiles.resolve(["essential"]), "feed1")

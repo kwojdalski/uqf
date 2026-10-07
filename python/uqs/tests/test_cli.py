@@ -2068,7 +2068,7 @@ def test_an_unknown_runtime_is_refused(monkeypatch):
     assert said == [f"--runtime 'pure' is not a runtime - choose one of: {names}"]
 
 
-def test_a_profile_the_torq_runtime_cannot_start_is_refused_naming_what_is_missing(monkeypatch):
+def _on_torq(monkeypatch) -> list[str]:
     @dataclass
     class _TorqPaths(_Paths):
         runtime: str = "torq"
@@ -2079,10 +2079,22 @@ def test_a_profile_the_torq_runtime_cannot_start_is_refused_naming_what_is_missi
         "list_process_names",
         lambda _p: list(profiles.resolve(["essential"])),
     )
-    said = _refusals(monkeypatch, lifecycle)
+    return _refusals(monkeypatch, lifecycle)
+
+
+def test_a_profile_the_torq_runtime_does_not_declare_is_refused_naming_its_own(monkeypatch):
+    said = _on_torq(monkeypatch)
     assert runner.invoke(cli.app, ["start", "--profile", "fx"]).exit_code == 1
-    assert "which the torq runtime does not have" in said[0]
-    assert said[0].endswith("Use --profile essential, or --runtime uqf for this tree's processes")
+    assert said == [
+        "profile(s) fx are not declared for the torq runtime - "
+        "its profiles are essential, feed, full, or --runtime uqf"
+    ]
+
+
+def test_a_name_beside_a_profile_that_the_runtime_lacks_is_refused(monkeypatch):
+    said = _on_torq(monkeypatch)
+    assert runner.invoke(cli.app, ["start", "--profile", "essential", "fxfeed1"]).exit_code == 1
+    assert "needs fxfeed1, which the torq runtime does not have" in said[0]
 
 
 @pytest.mark.parametrize("gone", ["clean", "clear-checkpoint"])

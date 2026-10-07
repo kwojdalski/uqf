@@ -187,6 +187,7 @@ def _resolve_profiles(names: str, extra: list[str] | None = None) -> str:
     try:
         if added:
             procs_model.assert_known_procnames(_paths(), " ".join(added))
+        runtime_profiles.refuse_undeclared(_paths(), wanted)
         resolved = profiles.resolve(wanted)
         members = resolved + tuple(name for name in added if name not in resolved)
         what = f"profile(s) {', '.join(sorted(wanted))}" + (

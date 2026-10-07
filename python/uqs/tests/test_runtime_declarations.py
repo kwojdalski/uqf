@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from uqs import cli, runtimes
 from uqs import paths as stack_paths
 from uqs.cli import shared
+from uqs.paths import UqsError
 from uqs.runtimes import Runtime
 from uqs.stack import runtime_profiles
 from uqs.stack.env import build_env
@@ -85,18 +86,23 @@ def test_a_runtime_without_pipelines_refuses_their_commands_by_its_own_name(
     assert "the probe runtime has none of this tree's pipelines" in said[0]
 
 
-def test_a_runtime_with_every_pipeline_can_start_every_profile():
+def test_every_runtime_declares_profiles_that_exist():
     from uqs.model import profiles
 
-    assert runtime_profiles.startable_profiles(None) == sorted(profiles.PROFILES)
+    for runtime in runtimes.RUNTIMES.values():
+        assert runtime.profiles, f"{runtime.name} declares no profile"
+        assert set(runtime.profiles) <= set(profiles.PROFILES), runtime.name
 
 
-def test_a_runtime_can_start_only_the_profiles_its_processes_cover():
-    from uqs.model import profiles
-
-    essential = set(profiles.resolve(["essential"]))
-    assert runtime_profiles.startable_profiles(essential) == ["essential"]
-    assert runtime_profiles.startable_profiles(set()) == []
+def test_a_profile_its_runtime_does_not_declare_is_refused_naming_its_own():
+    torq = stack_paths.paths_for_root(Path("/repo"), "torq")
+    with pytest.raises(
+        UqsError,
+        match="profile\\(s\\) fx are not declared for the torq runtime - "
+        "its profiles are essential, feed, full, or --runtime uqf",
+    ):
+        runtime_profiles.refuse_undeclared(torq, ["essential", "fx"])
+    runtime_profiles.refuse_undeclared(torq, ["feed"])
 
 
 def test_the_guide_s_runtime_table_matches_the_declarations():

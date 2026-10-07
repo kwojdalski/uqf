@@ -317,8 +317,21 @@ uqs --runtime crypto start     # cryptomock1 and crypto_markout1, on 6250
 uqs --runtime crypto list processes
 ```
 
-Such a runtime can start only the profiles its processes cover, and refuses the
-others naming what is missing, as `torq` does.
+Each runtime declares its own profiles (`profiles` in `runtimes.py`).
+`--profile` takes only those, `list profiles` shows only those, and any other is
+refused, naming the runtime's own:
+
+  | runtime  | profiles                                                                                                      |
+  | ---      | ---                                                                                                           |
+  | `uqf`    | `all`, `arbitrage`, `crypto`, `default`, `depth`, `essential`, `fx`                                           |
+  | `torq`   | `essential`; `feed`, which is `essential` plus `feed1`; `full`, the starter pack's default fleet plus `feed1` |
+  | `peachq` | `capture`, what runs on PeachQ today (below)                                                                  |
+  | `crypto` | `crypto`, `essential`                                                                                         |
+  | `fx`     | `essential`, `fx`                                                                                             |
+
+A test resolves every declared profile against its runtime's processes. A
+profile that names a process its runtime doesn't have fails that test, not your
+start.
 
 `peachq` is `torq`'s stack on [PeachQ](https://github.com/peachq-org/peachq),
 the MIT-licensed q interpreter, rather than KDB-X: the starter pack as it ships,
@@ -330,14 +343,14 @@ alone, and `summary` names the interpreter on its first line. KDB-X stays the
 default and the interpreter everything here is verified against.
 
 ```
-uqs --runtime peachq start --profile essential
+uqs --runtime peachq start --profile capture
 ```
 
-What works today, from a start of `essential` and then `feed1` on PeachQ:
-`discovery1`, `stp1`, `rdb1`, `hdb1`, `gateway1`, `monitor1`, `housekeeping1`,
-`sctp1`, `sortworker1`, `metrics1` and `feed1` come up and answer, and `feed1`'s
-`trade` and `quote` reach `rdb1`. What doesn't, all of it gaps in PeachQ rather
-than in this tree:
+Its one profile, `capture`, is what runs on PeachQ today: `discovery1`, `stp1`,
+`rdb1`, `hdb1`, `gateway1`, `housekeeping1`, `sctp1`, `sortworker1`, `metrics1`
+and `feed1`. Started that way here, every one came up and answered, `feed1`'s
+`trade` and `quote` reached `rdb1`, and `stop` stopped them all. It leaves out
+the processes that hit PeachQ gaps, none of them in this tree:
 
 - `wdb1` fails to load `wdb.q`: PeachQ has no `.Q.chk`.
 - `sort1` won't start: PeachQ refuses the `-s -2` it is given.
@@ -346,8 +359,8 @@ than in this tree:
   that routes to it fails.
 - `monitor1` doesn't exit on `stop`.
 
-So end of day and the HDB don't work on it yet. Treat it as a capture-and-query
-stack for today's data, and check `summary`.
+So end of day and the HDB don't work on it yet. It is a capture-and-query stack
+for today's data.
 
 A runtime on PeachQ can't have this tree's pipelines yet. PeachQ can't load the
 nested namespaces the ETL tree is built from (peachq-org/peachq#80), so
@@ -376,16 +389,15 @@ ERROR    | the torq runtime's stack (base port 6050) is already using ports this
 
 `uqs summary` names the runtime and base port it is reporting on in its title.
 
-On `torq`, `list processes` shows the 23 starter-pack processes and
-`list profiles` shows only `essential`, the one profile whose processes all ship
-with the starter pack. `essential` leaves out `feed1`, so it runs with no data
-coming in; plain `start` includes it. Commands that work only on this tree's
-pipelines refuse, with the reason: `graph`, `backfill`, `gaps`, `run`, `stream`
-and `feed`. So does any profile that needs a uqf process:
+On `torq`, `list processes` shows the 23 starter-pack processes. `essential`
+leaves out `feed1`, so nothing publishes; `feed` adds it, so `trade` and `quote`
+come in. Commands that work only on this tree's pipelines refuse, with the
+reason: `graph`, `backfill`, `gaps`, `run`, `stream` and `feed`. So does a
+profile `torq` doesn't declare:
 
 ```
 $ uqs --runtime torq start --profile fx
-ERROR    | profile(s) fx needs executions1, fxfeed1, ..., which the torq runtime does not have - it is the starter pack as it ships: its processes and tables, nothing of uqf's. Use --profile essential, or --runtime uqf for this tree's processes
+ERROR    | profile(s) fx are not declared for the torq runtime - its profiles are essential, feed, full, or --runtime uqf
 ```
 
 ### Profiles

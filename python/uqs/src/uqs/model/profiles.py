@@ -67,6 +67,7 @@ from uqs.model.dependencies import (
     inputs_by_process,
     producers_by_table,
 )
+from uqs.model.infra import CORE_INFRA, PROFILE_INFRA
 from uqs.model.pipeline import PipelineKind
 from uqs.model.pipeline_edges import (
     INBOUND_RESERVE,
@@ -76,79 +77,6 @@ from uqs.model.pipeline_edges import (
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, runtime_from_env
 from uqs.runtimes import RUNTIMES
-
-#: The vendored TorQ processes every profile needs: the plant itself, service
-#: discovery, the databases, the writedown path, the gateway and the
-#: monitoring that makes `summary`'s Heartbeat column answer.
-#:
-#: Taken from the vendored rows that start by default today rather than
-#: chosen afresh, so a profile start produces the same infrastructure a
-#: `start all` does and nothing moves underneath this change. Four of these
-#: hold a plant slot (VENDORED_PLANT_CLIENTS); the rest do not subscribe.
-CORE_INFRA: tuple[str, ...] = (
-    "discovery1",
-    "stp1",
-    "rdb1",
-    "hdb1",
-    "hdb2",
-    "wdb1",
-    "sort1",
-    "sortworker1",
-    "sortworker2",
-    "gateway1",
-    "monitor1",
-    "housekeeping1",
-    "sctp1",
-    "metrics1",
-)
-
-#: The TorQ stack with nothing of uqf's on top: capture (discovery, the plant
-#: and the chained plant), store (rdb, the intraday writedown, the sort and
-#: one worker, hdb1), query (the gateway), keep an eye on it (monitor,
-#: metrics, housekeeping, reporter) and replay (tpreplay1). CORE_INFRA less
-#: its second hdb and second sort worker - one of each is enough for a stack
-#: nothing of uqf's runs on - plus the two below that no other profile starts.
-#:
-#: THE SORT PROCESSES. At end of day wdb1 hands its intraday writedown to
-#: sort1, which sorts it into the HDB with sortworker1. With no sort
-#: process, TorQ's wdb logs "no sortandreload process detected" as an ERROR
-#: every evening and sorts on wdb1 itself (informsortandreload in
-#: lib/torq/code/processes/wdb.q).
-#:
-#: PLANT SLOTS: four. rdb1, wdb1, sctp1 and metrics1 subscribe. reporter1
-#: holds handles to the gateway, the rdb and the hdb (CONNECTIONS in
-#: lib/torq/config/settings/reporter.q), not to the plant - but those count
-#: against each of THEIR licence caps, which is why the starter pack ships it
-#: off on the community licence.
-#:
-#: tpreplay1 STARTS AND EXITS. It is the one-shot replay `uqs data replay`
-#: aims with a log, a schema and an HDB on its start line. Started from a
-#: profile it has none of them, and tickerlogreplay.q exits at startup
-#: (.err.exitifnull on schemafile and hdbdir) - before it reads or empties
-#: anything. So it shows as down once started, and that is it working.
-ESSENTIAL_INFRA: tuple[str, ...] = (
-    "discovery1",
-    "stp1",
-    "rdb1",
-    "hdb1",
-    "wdb1",
-    "sort1",
-    "sortworker1",
-    "gateway1",
-    "monitor1",
-    "housekeeping1",
-    "sctp1",
-    "metrics1",
-    "reporter1",
-    "tpreplay1",
-)
-
-#: Profiles that start an infrastructure set other than CORE_INFRA, and
-#: which. Every other profile starts all of CORE_INFRA. Composed profiles take
-#: the union, so `essential,fx` is the full infrastructure `fx` needs.
-PROFILE_INFRA: dict[str, tuple[str, ...]] = {
-    "essential": ESSENTIAL_INFRA,
-}
 
 #: What each profile is FOR, keyed by name, valued by the leaves it wants.
 #:
@@ -171,6 +99,14 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "crypto": ("cryptomock1", "crypto_markout1"),
     #: No uqf job at all: just ESSENTIAL_INFRA, via PROFILE_INFRA.
     "essential": (),
+    #: The starter pack with its own demo feed: essential plus feed1, so the
+    #: torq runtime has trade and quote coming in (model/infra.py).
+    "feed": (),
+    #: Every process the starter pack starts by default, and monitor1.
+    "full": (),
+    #: The starter pack's processes that run on PeachQ, with feed1: the
+    #: peachq runtime's profile (model/infra.py).
+    "capture": (),
 }
 
 #: Profiles `all` leaves out, and why. An exemption carries its reason, the

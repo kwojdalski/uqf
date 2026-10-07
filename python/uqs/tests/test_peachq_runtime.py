@@ -43,6 +43,15 @@ def test_the_peachq_runtime_is_the_starter_pack_alone_on_peachq():
     assert all(r.interpreter == "kdbx" for r in RUNTIMES.values() if r.name != "peachq")
 
 
+def test_the_peachq_runtime_starts_only_what_runs_on_peachq():
+    """capture leaves out each process that dies on PeachQ today."""
+    from uqs.model.infra import CAPTURE_INFRA
+
+    assert RUNTIMES["peachq"].profiles == ("capture",)
+    assert not {"wdb1", "sort1", "reporter1", "monitor1"} & set(CAPTURE_INFRA)
+    assert "feed1" in CAPTURE_INFRA, "so trade and quote come in"
+
+
 def test_only_the_peachq_runtime_gets_an_interpreter_of_its_own(pinned):
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "torq")) == {}
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "peachq")) == {
