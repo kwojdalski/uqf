@@ -93,10 +93,13 @@ def _paths(settings: Settings):
     if settings.stack_root is None:
         return stack_paths.default_paths()
     root = settings.stack_root
-    if not (root / "lib" / "torq" / "torq.sh").is_file():
+    # uqs's own test of a root, not lib/torq/torq.sh: a deployed release ships
+    # no lib/ and uses an external TorQ, and was refused by that marker while
+    # uqs ran it fine (#802). The launcher is checked where it is run.
+    if not stack_paths.is_repo_root(root):
         raise ValidationFailed(
             f"UQF_FRONTEND_STACK_ROOT={root} does not look like the repository: "
-            "lib/torq/torq.sh is not there"
+            f"it holds no {stack_paths.root_markers_text()}"
         )
     return stack_paths.paths_for_root(root)
 

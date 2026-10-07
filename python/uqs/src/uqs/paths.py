@@ -188,6 +188,19 @@ class UqsPaths:
 _ROOT_MARKERS = (ETL_DIR, PACKAGE_DIR)
 
 
+def is_repo_root(candidate: Path) -> bool:
+    """Does `candidate` hold this tree - both _ROOT_MARKERS? A deployed
+    release does as well as a checkout, though it ships no lib/torq. The one
+    test of a stack root: repo_root searches with it, and the frontend checks
+    UQF_FRONTEND_STACK_ROOT with it rather than with its own marker (#802)."""
+    return all((candidate / marker).is_dir() for marker in _ROOT_MARKERS)
+
+
+def root_markers_text() -> str:
+    """The markers, for a refusal that has to say what was looked for."""
+    return " and ".join(str(m) for m in _ROOT_MARKERS)
+
+
 def repo_root() -> Path:
     """This repository's root, found by searching upward for a marker.
 
@@ -212,11 +225,10 @@ def repo_root() -> Path:
     """
     here = Path(__file__).resolve()
     for candidate in (here, *here.parents):
-        if all((candidate / marker).is_dir() for marker in _ROOT_MARKERS):
+        if is_repo_root(candidate):
             return candidate
     raise UqsError(
-        f"cannot find the repository root above {here}: no parent holds both "
-        + " and ".join(str(m) for m in _ROOT_MARKERS)
+        f"cannot find the repository root above {here}: no parent holds both " + root_markers_text()
     )
 
 
