@@ -86,8 +86,27 @@ FEED_INFRA: tuple[str, ...] = (*ESSENTIAL_INFRA, "feed1")
 #: whole default fleet, with the feed uqf would replace.
 FULL_INFRA: tuple[str, ...] = (*CORE_INFRA, "feed1")
 
+#: What the starter pack runs on PeachQ today, and nothing that dies there:
+#: the plant, the rdb, the hdb, the gateway, housekeeping, the chained plant,
+#: metrics and feed1, so trade and quote come in. Left out, each for a PeachQ
+#: gap (docs/guides/uqs.md#runtimes): wdb1 (no .Q.chk), sort1 (refuses
+#: -s -2), reporter1 (`type` loading reporter.q), monitor1 (ignores stop).
+CAPTURE_INFRA: tuple[str, ...] = (
+    "discovery1",
+    "stp1",
+    "rdb1",
+    "hdb1",
+    "gateway1",
+    "housekeeping1",
+    "sctp1",
+    "sortworker1",
+    "metrics1",
+    "feed1",
+)
+
 PROFILE_INFRA: dict[str, tuple[str, ...]] = {
     "essential": ESSENTIAL_INFRA,
     "feed": FEED_INFRA,
     "full": FULL_INFRA,
+    "capture": CAPTURE_INFRA,
 }

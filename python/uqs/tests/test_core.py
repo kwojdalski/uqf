@@ -456,6 +456,19 @@ def test_the_shipped_query_policy_files_exist_where_the_gateway_looks():
         assert (root / name).is_file(), name
 
 
+def test_the_generated_process_csv_defers_qcmd_q_to_qcmd(fake_paths: UqsPaths, monkeypatch):
+    """torq.sh uses $QCMD only for an empty qcmd, so a row saying `q` ran
+    PATH's q whatever QCMD named (#764). `q` is emptied; anything else stays."""
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    stack_procs.set_process_config(fake_paths, "discovery1", "qcmd", "/opt/kdbx/q")
+    runtime.bootstrap(fake_paths)
+    with fake_paths.generated_procs.open(newline="") as f:
+        qcmds = {r["procname"]: r["qcmd"] for r in csv.DictReader(f)}
+    assert qcmds["stp1"] == "", "the vendored `q` defers to $QCMD"
+    assert qcmds["fxfeed1"] == "", "and so does a pipeline row's"
+    assert qcmds["discovery1"] == "/opt/kdbx/q", "an explicit command is kept"
+
+
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 

@@ -23,7 +23,7 @@ from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive, occupancy
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
-from uqs.stack.env import build_env
+from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.procs import check_carriable, effective_process_rows, gateway_access_lines
 
 log = get_logger(__name__)
@@ -62,10 +62,12 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     if not script.is_file():  # pragma: no cover - a broken checkout
         log.warning("HDB partition filler not found at {}", script)
         return False
-    q = q_interpreter()
+    env = with_interpreter(paths)
+    q = q_interpreter(env)
     if q is None:
         log.warning(
-            "HDB partition filler skipped: no q interpreter ({!r} is not runnable)", q_command()
+            "HDB partition filler skipped: no q interpreter ({!r} is not runnable)",
+            q_command(env),
         )
         return False
     result = subprocess.run(
@@ -114,7 +116,13 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     # Extend (never edit in place) the vendored process.csv with uqf's own
     # extra processes (fxfeed1) and any process_overrides.csv fields set via
     # set_process_config()/`config set`/uqs_set_config.
-    rows = effective_process_rows(paths)
+    # A row's `qcmd` of `q` is TorQ's own default spelled out, and torq.sh
+    # uses $QCMD only for an EMPTY qcmd - so every row saying `q` ran PATH's
+    # q whatever QCMD named, and a PeachQ runtime started KDB-X (#764).
+    # Emptied, torq.sh falls back to $QCMD, which is `q` when unset.
+    rows = [
+        {**r, "qcmd": "" if r["qcmd"] == "q" else r["qcmd"]} for r in effective_process_rows(paths)
+    ]
     check_carriable(rows)
     with paths.generated_procs.open("w", newline="") as f:
         # torq.sh's own field lookups are a naive awk -F, parse expecting
@@ -163,6 +171,8 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     fill_hdb_partitions(paths)
 
     env = build_env(paths, base_port=base_port)
+    # A runtime on PeachQ starts its processes, and only its own, on PeachQ.
+    env.update(interpreter_env(paths))
 
     # torq.sh unconditionally sources $SETENV (defaulting to lib/torq/setenv.sh,
     # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's
