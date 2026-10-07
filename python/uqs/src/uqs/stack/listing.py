@@ -16,6 +16,7 @@ from uqs.model.jobs import job_rows
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
+from uqs.stack import runtime_report
 from uqs.stack.env import build_env, with_interpreter
 from uqs.stack.procs import (
     _read_overrides,
@@ -187,6 +188,7 @@ LISTABLE_KINDS: dict[str, Any] = {
     "jobs": _list_jobs,
     "processes": _list_processes,
     "profiles": _list_profiles,
+    "runtimes": runtime_report.list_runtimes,
     "fields": _list_fields,
     "overrides": _list_overrides,
     "env": _list_env,

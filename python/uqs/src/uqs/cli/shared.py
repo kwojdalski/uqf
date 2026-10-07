@@ -80,20 +80,6 @@ def _env_log_level() -> str:
     return DEFAULT_LOG_LEVEL
 
 
-#: Commands that work only on this tree's own pipelines, and what each needs
-#: that a runtime without them (`pipelines=False`, such as torq) does not
-#: have. Refused there with the reason, rather than left to fail against
-#: processes and tables that do not exist.
-UQF_ONLY_COMMANDS: dict[str, str] = {
-    "backfill": "runs this tree's bounded workers",
-    "gaps": "reads this tree's streaming jobs' coverage",
-    "graph": "draws this tree's pipeline declarations",
-    "run": "reads this tree's run ledger",
-    "stream": "previews this tree's streaming jobs",
-    "feed": "publishes this tree's tables into the plant",
-}
-
-
 @app.callback()
 def _configure(
     ctx: typer.Context,
@@ -131,10 +117,11 @@ def _configure(
     except UqsError as exc:
         _die(exc)
         return
-    if not declared.pipelines and ctx.invoked_subcommand in UQF_ONLY_COMMANDS:
+    needs = runtimes.UQF_ONLY_COMMANDS.get(ctx.invoked_subcommand or "")
+    if not declared.pipelines and needs:
         _die(
             UqsError(
-                f"`uqs {ctx.invoked_subcommand}` {UQF_ONLY_COMMANDS[ctx.invoked_subcommand]}; "
+                f"`uqs {ctx.invoked_subcommand}` {needs}; "
                 f"the {declared.name} runtime has none of this tree's pipelines. "
                 f"Use --runtime {runtimes.DEFAULT_RUNTIME}"
             )

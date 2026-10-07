@@ -33,8 +33,8 @@ class Runtime:
     #: one runtime wrote holds tables another does not declare.
     data_dir: str
     #: This tree's pipelines are processes in the stack, their tables are in
-    #: its schema, and the commands that work on them (UQF_ONLY_COMMANDS in
-    #: cli/shared.py) run. Profiles are defined against the full set, so a
+    #: its schema, and the commands that work on them (UQF_ONLY_COMMANDS
+    #: below) run. Profiles are defined against the full set, so a
     #: runtime without it checks each profile's processes before a start.
     pipelines: bool
     #: This tree's layers over the vendored processes: the row overlays and
@@ -155,3 +155,17 @@ RUNTIMES: dict[str, Runtime] = {
     )
 }
 DEFAULT_RUNTIME = next(iter(RUNTIMES))
+
+
+#: Commands that work only on this tree's own pipelines, and what each needs
+#: that a runtime without them (`pipelines=False`, such as torq) does not
+#: have. Refused there with the reason, rather than left to fail against
+#: processes and tables that do not exist.
+UQF_ONLY_COMMANDS: dict[str, str] = {
+    "backfill": "runs this tree's bounded workers",
+    "gaps": "reads this tree's streaming jobs' coverage",
+    "graph": "draws this tree's pipeline declarations",
+    "run": "reads this tree's run ledger",
+    "stream": "previews this tree's streaming jobs",
+    "feed": "publishes this tree's tables into the plant",
+}
