@@ -167,6 +167,14 @@ def new_job(
     check: Annotated[
         bool, typer.Option("--check", help="Scaffold a quality check (backfill)")
     ] = False,
+    twin_of: Annotated[
+        str | None,
+        typer.Option(
+            "--twin-of",
+            help="A streaming job whose published table this backfill refills - the dataset "
+            "and columns are taken from it, and `uqs gaps JOB` then names this worker (backfill)",
+        ),
+    ] = None,
     transform: Annotated[
         str | None,
         typer.Option(
@@ -250,6 +258,7 @@ def new_job(
                 "--partition": partition is not None,
                 "--check": check,
                 "--transform": transform is not None,
+                "--twin-of": twin_of is not None,
             },
             dry_run=dry_run,
         )
@@ -263,6 +272,7 @@ def new_job(
             "--dataset": dataset is not None,
             "--source": source is not None,
             "--width": width is not None,
+            "--twin-of": twin_of is not None,
         },
         "streaming": {
             "--period": period is not None,
@@ -315,6 +325,8 @@ def new_job(
                 check=check,
                 transform=transform,
                 start_with_all=start_with_all,
+                twin_of=twin_of,
+                definitions=_plant_definitions(_paths()) if twin_of else None,
             )
         elif kind == "normalizer":
             if publishes:

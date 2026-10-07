@@ -30,6 +30,17 @@ to the dataset's shape: `derive` throws, and its example's expected output is
 left empty and marked `SCAFFOLDED`, so `.qetl.transform.verify` fails the suite
 until both are written.
 
+`--twin-of JOB` scaffolds a streaming job's backfill **twin**: a worker that
+refills the table the job publishes, which is what `uqs gaps JOB` looks for. The
+dataset and columns are taken from the job's declaration and the plant's
+definition rather than given, so the twin writes the right table by
+construction. `--columns` is refused, and so is a `--dataset` the job does not
+publish. A job that publishes several tables needs `--dataset` to pick one.
+
+```
+uqs job new crypto_markout_hist --kind backfill --twin-of crypto_markout
+```
+
 ```
 scaffold fxprobe_backfill:
   create src/etl/sources/fxprobe.q (60 lines)
