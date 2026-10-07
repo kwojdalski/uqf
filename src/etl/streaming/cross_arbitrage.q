@@ -38,8 +38,14 @@ publish:.qetl.job.stream.unwired `cross_arbitrage;
 notional:1000000f
 
 / How far apart the legs of one synthetic route may be quoted and still be
-/ treated as one price. Two seconds is superbook's own expiry window; a
-/ route is only as fresh as its stalest leg.
+/ treated as one price - a route is only as fresh as its stalest leg.
+/ .
+/ A RELATIVE bound, independent of superbook's max_age, which is an
+/ ABSOLUTE one: max_age drops any level older than itself, max_skew limits
+/ how far apart the surviving legs are. This comment used to call two
+/ seconds "superbook's own expiry window" while max_age was five: nothing
+/ ties the two values together, and neither should be read as the other
+/ (#730).
 max_skew:0D00:00:02
 
 / Latest superbook snapshot per pair. Keyed, so a new snapshot replaces
