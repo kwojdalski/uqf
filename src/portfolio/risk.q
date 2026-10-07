@@ -69,14 +69,25 @@ var_parametric:{[notional;vol;t;confidence]
 / This docstring previously promised "a positive loss estimate", which the
 / function has never guaranteed (bugfinder, #182). The sentence was wrong,
 / not the arithmetic.
-/ @param pnl_series a list of historical P&L outcomes
+/ .
+/ NULL OUTCOMES ARE DROPPED, not ranked. q's `asc` sorts nulls first, ahead
+/ of the worst real loss, and counting them in n moved the percentile: three
+/ nulls in a 100-point series overstated a 95% VaR of 45 as 48, and six or
+/ more made it null - which a `var>limit` check reads as within the limit
+/ (#807). A null is an outcome nobody measured (markout_at_horizons reports
+/ one wherever no quote preceded the horizon), so it has no place in the
+/ distribution. A series with no outcome left is refused.
+/ @param pnl_series a list of historical P&L outcomes; nulls are ignored
 / @param confidence one-tailed confidence level, e.g. 0.95 or 0.99
 / @return the loss at that percentile, in the same units as pnl_series -
 /   negative when the percentile outcome is a gain
+/ @throws error when pnl_series holds no non-null outcome
 / @eg .qrisk.var_historical[-100+til 200;0.95]  -> 90 (5th percentile of a 200-outcome series)
 var_historical:{[pnl_series;confidence]
-    n:count pnl_series;
-    sorted:asc pnl_series;
+    outcomes:pnl_series where not null pnl_series;
+    if[0=count outcomes; '"var_historical: no non-null P&L outcome to take a percentile of"];
+    n:count outcomes;
+    sorted:asc outcomes;
     / The epsilon is for floating point: (1-0.9)*10 is 0.9999999999999998,
     / and floor of that picked the worst outcome instead of the next one.
     raw_idx:floor 1e-9+(1-confidence)*n;
