@@ -108,7 +108,15 @@ alerts:.qlimit.no_alerts[];
 / Load a limits table, refusing a malformed one at load rather than at the
 / first breach - a limits table that polices nothing looks exactly like a
 / quiet day.
-/ @param limits the limits table, scoped on sym, book and product
+/ .
+/ The SCOPE is the table's dimension columns: all of sym, book and product
+/ to police each position, fewer to police a total - a table of sym alone
+/ caps each pair across every book. fresh_breaches rolls the book up to
+/ that scope before comparing. It used to compare per position whatever
+/ the scope, so a sym cap of 10mm passed 6mm in each of two books (#733).
+/ A NULL scope value is refused for the same reason: a null book matches
+/ no position, and to mean "every book" the column is left out instead.
+/ @param limits the limits table, scoped on some of sym, book and product
 / @return the number of limits loaded
 / @throws error naming a malformed limit, or a scope column that is not one of this book's dimensions
 / @eg .qpipe.job.fx_positions.load_limits[([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6; severity:enlist `hard)] -> 1
@@ -124,6 +132,11 @@ load_limits:{[limits]
     if[count stray;
         '"load_limits: ",(", " sv string stray)," is not a dimension of this book, so a limit carrying it would be scoped on something no position has - the dimensions are ",
          ", " sv string .qpipe.job.fx_positions.dimensions];
+    if[0=count scope;
+        '"load_limits: a limit needs at least one of ",(", " sv string .qpipe.job.fx_positions.dimensions)," to say what it caps"];
+    blank:scope where {[limits;c] any null limits c}[limits] each scope;
+    if[count blank;
+        '"load_limits: ",(", " sv string blank)," is null on some limit, which matches no position - leave the column out to cap the total across it"];
     `.qpipe.job.fx_positions.limits set limits;
     count limits}
 
@@ -154,8 +167,15 @@ on_batch:{[t;x]
 / @return the breaches to publish, possibly none
 fresh_breaches:{[now]
     if[0=count .qpipe.job.fx_positions.limits; :0#.qpipe.job.fx_positions.fx_limit_breach];
-    measured:.qlimit.measure[.qpipe.job.fx_positions.book;.qpipe.job.fx_positions.policed];
+    / Measured at the limits' own scope: a cap on a total is compared with
+    / the total, not with each position under it.
+    scope:.qlimit.scope_cols .qpipe.job.fx_positions.limits;
+    rolled:.qdesk.rollup[.qpipe.job.fx_positions.book;scope];
+    measured:.qlimit.measure[rolled;.qpipe.job.fx_positions.policed];
     breaches:.qlimit.evaluate[measured;.qpipe.job.fx_positions.limits];
+    / A breach always names every dimension, null where it covers them all,
+    / so fx_limit_breach keeps one shape and the throttle one identity.
+    breaches:{[t;c] $[c in cols t; t; ![t;();0b;(enlist c)!enlist enlist `]]}/[breaches;.qpipe.job.fx_positions.dimensions];
     r:.qlimit.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
     `.qpipe.job.fx_positions.alerts set r`state;
     r`alerts}
