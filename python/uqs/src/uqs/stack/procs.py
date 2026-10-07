@@ -21,6 +21,7 @@ from string import Template
 
 from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS, _pipeline_rows
+from uqs.model.runtime_members import pipeline_procnames
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
@@ -182,7 +183,8 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
                     "${TORQAPPHOME}/database.q", "${TORQDATA}/database.q"
                 )
     if declared.pipelines:
-        rows.extend(_pipeline_rows())
+        members = pipeline_procnames(declared)
+        rows.extend(r for r in _pipeline_rows() if members is None or r["procname"] in members)
     return rows
 
 
