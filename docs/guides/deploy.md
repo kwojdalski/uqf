@@ -26,15 +26,32 @@ anything:
   `~/.ssh/config` and known hosts. The tool runs `ssh` and `scp` in batch mode,
   so a missing key or an unknown host key fails instead of prompting. It never
   turns host-key checking off.
+
 - `uv`, with the Python the artifact was built for (3.14 by default) where
   `uv python find` sees it, and `python3`, `bash`, `tar` and `timeout`. The
   server's OS, architecture and Python must match the artifact's manifest.
-- A licensed q. Pass `--qcmd` and `--qhome` unless `q` on the server's `PATH`
-  already finds its licence.
+
+- A licensed q. `--qhome` and `--qcmd` are optional. Without them, the values
+  are resolved on the server, in the environment of the account that deploys:
+  the `--remote-user`'s login environment, or else the ssh login's. Your own
+  machine's values are never used (#782):
+
+  | Setting | First                 | Otherwise                                               |
+  | ---     | ---                   | ---                                                     |
+  | QHOME   | `--qhome`             | that account's `$QHOME`; refused if unset               |
+  | QCMD    | `--qcmd`              | that account's `$QCMD`, else `q` on that account's PATH |
+
+  QCMD must be an executable name or an absolute path, not a command with
+  arguments, so `rlwrap q` is refused. Preflight runs a script with the resolved
+  pair. It then writes the values into the release's `deploy.env`, so the smoke
+  test, start, verification and rollback all use what was checked. The dry run
+  shows each value and where it came from.
+
 - An existing TorQ (`--torq-home`, holding `torq.q` and `torq.sh`) and starter
   pack (`--torq-app-home`, holding `database.q` and `appconfig/process.csv`).
   Without these flags the release would need its own `lib/`, which the tool does
   not ship.
+
 - `envsubst` and `rlwrap`, which `torq.sh` needs.
 
 The server needs no access to PyPI. Every Python dependency arrives as a wheel

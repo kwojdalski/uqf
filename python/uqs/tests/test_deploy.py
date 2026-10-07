@@ -37,7 +37,10 @@ ARGS = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
 BASE = ["--artifact", "dist/uqf-x.tar.gz", *ARGS]
 
 #: What a healthy server says about itself in preflight.
-SERVER = "os=Linux\narch=x86_64\npython=3.14\n"
+SERVER = (
+    "os=Linux\narch=x86_64\npython=3.14\n"
+    "qhome=/opt/kx home\nqhome_from=svc's QHOME\nqcmd=/opt/kx home/bin/q\nqcmd_from=svc's QCMD\n"
+)
 
 
 def _done(stdout: str = "", rc: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
@@ -155,7 +158,7 @@ def test_ssh_keeps_host_key_checking_and_never_prompts():
 def test_every_value_reaches_the_remote_shell_quoted():
     cfg = deploy.parse_args([*BASE, "--qcmd", "/opt/kx/bin/q", "--qhome", "/opt/kx"])
     text = deploy.Deployment(cfg, FakeRemote()).preflight_script()
-    assert "dest=/opt/uqf\n" in text and "qcmd=/opt/kx/bin/q\n" in text
+    assert "dest=/opt/uqf\n" in text and "qcmd_flag=/opt/kx/bin/q\n" in text
     assert deploy.q("a b;c") == "'a b;c'"
 
 
@@ -431,8 +434,8 @@ def test_a_remote_user_that_is_not_an_account_name_is_refused(user):
         deploy.parse_args([*BASE, f"--remote-user={user}"])
 
 
-def test_without_a_remote_user_ssh_runs_the_script_as_the_login():
-    assert deploy.Remote("deploy@uqf-server", 5).ssh_argv()[-1] == "bash -s"
+def test_without_a_remote_user_ssh_runs_the_script_in_the_logins_own_login_shell():
+    assert deploy.Remote("deploy@uqf-server", 5).ssh_argv()[-1] == "bash -l -s"
 
 
 def test_with_a_remote_user_every_step_runs_through_non_interactive_sudo():
@@ -501,3 +504,81 @@ def test_a_dry_run_as_a_service_user_says_who_does_what(tmp_path):
     )
     assert "every step below as svc (sudo -n -iu svc)" in shown
     assert "private upload directory" in shown
+
+
+# --- QHOME and QCMD from the deploying account (#782) ----------------------------
+
+
+def test_q_flags_are_optional_and_may_hold_spaces():
+    cfg = deploy.parse_args(BASE)
+    assert cfg.qcmd is None and cfg.qhome is None
+    cfg = deploy.parse_args([*BASE, "--qhome", "/opt/kx home", "--qcmd", "/opt/kx home/bin/q"])
+    assert (cfg.qhome, cfg.qcmd) == ("/opt/kx home", "/opt/kx home/bin/q")
+
+
+@pytest.mark.parametrize("value", ["bin/q", "/opt/../q", "/opt/kx\nq"])
+def test_an_explicit_q_path_must_be_absolute_and_plain(value):
+    with pytest.raises(deploy.DeployError, match="--qcmd"):
+        deploy.parse_args([*BASE, "--qcmd", value])
+
+
+def test_the_local_environment_never_reaches_the_server(monkeypatch):
+    monkeypatch.setenv("QHOME", "/home/me/local-kx")
+    monkeypatch.setenv("QCMD", "/home/me/local-kx/q")
+    text = deploy.Deployment(deploy.parse_args(BASE), FakeRemote()).preflight_script()
+    assert "local-kx" not in text
+    assert "qhome_flag=''\n" in text and "qcmd_flag=''\n" in text
+
+
+def test_explicit_flags_reach_preflight_quoted():
+    cfg = deploy.parse_args([*BASE, "--qhome", "/opt/kx home"])
+    text = deploy.Deployment(cfg, FakeRemote()).preflight_script()
+    assert "qhome_flag='/opt/kx home'\n" in text and "qcmd_flag=''\n" in text
+
+
+def test_preflight_resolves_from_the_deploying_accounts_environment():
+    text = deploy.Deployment(deploy.parse_args(BASE), FakeRemote()).preflight_script()
+    assert 'elif [ -n "${QHOME:-}" ]' in text and 'elif [ -n "${QCMD:-}" ]' in text
+    assert 'command -v -- "$qcmd_want"' in text and "pass --qhome" in text
+
+
+def test_the_resolved_q_is_what_the_release_runs_with(tmp_path):
+    _, remote, _ = _run(tmp_path, {"deploy_verify.py --profile": _verified(True)})
+    prepare = next(s for stage, s in remote.scripts if stage == "prepare")
+    assert "export QHOME='/opt/kx home'" in prepare
+    assert "export QCMD='/opt/kx home/bin/q'" in prepare
+    smoke = next(s for stage, s in remote.scripts if stage == "smoke")
+    assert "source ./deploy.env" in smoke and '"$QCMD" scripts/deploy_smoke.q' in smoke
+
+
+def test_a_preflight_that_reports_no_q_is_refused(tmp_path):
+    remote = FakeRemote({"uv python find": _done("os=Linux\narch=x86_64\npython=3.14\n")})
+    with pytest.raises(deploy.DeployError, match="did not report the q"):
+        deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path))), remote)
+
+
+def test_a_rollback_uses_the_previous_releases_own_settings(tmp_path):
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    rules = {
+        "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+        "deploy-report.json\n": _done(previous),
+        "deploy_verify.py --profile": _verified(False, "no answer"),
+    }
+    _, remote, _ = _run(tmp_path, rules, args=["--restart"])
+    restart = next(s for st, s in remote.scripts if st == "rollback" and "start --profile fx" in s)
+    assert "cd /opt/uqf/releases/OLD\nsource ./deploy.env" in restart
+
+
+def test_the_dry_run_names_where_each_q_setting_came_from(tmp_path):
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    out = io.StringIO()
+    deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path), "--dry-run")), remote, out=out)
+    assert "QHOME=/opt/kx home (svc's QHOME)" in out.getvalue()
+    assert "resolved and run once in preflight" in out.getvalue()
+
+
+def test_help_states_the_resolution_rules(capsys):
+    with pytest.raises(SystemExit):
+        deploy.parse_args(["--help"])
+    shown = " ".join(capsys.readouterr().out.split())
+    assert "deploying account's $QHOME" in shown and "never this machine's" in shown

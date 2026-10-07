@@ -56,6 +56,20 @@ Layout under --dest:
     staging/<id>/         the archive while it is checked; removed after
     deploy.lock/          held while a deployment runs; serialises them
 
+WHICH q (#782). --qhome and --qcmd are optional and resolved ON THE SERVER,
+in the environment of the account that deploys - the --remote-user's login
+environment, or the ssh login's - never from this machine's:
+
+    QHOME   --qhome, else that account's $QHOME, else refused (pass --qhome)
+    QCMD    --qcmd, else that account's $QCMD, else `q` on that account's PATH
+
+QCMD is an executable name or an absolute path, never a command with
+arguments. Preflight resolves both, runs a script with them, and writes them
+into the release's deploy.env, so the smoke test, start, verification and
+any later rollback of this release use exactly what was checked; a rollback
+to the previous release uses that release's own deploy.env. Only those two
+values are read from the remote environment.
+
 Nothing here disables host-key checking or reads a secret: ssh and scp run
 with the operator's own configuration, in batch mode so a missing key fails
 rather than prompts.
@@ -195,6 +209,17 @@ def _absolute(name: str, value: str | None) -> str | None:
     return value.rstrip("/") or "/"
 
 
+def _q_path(name: str, value: str | None) -> str | None:
+    """An explicit --qcmd/--qhome: absolute, and spaces allowed - it is quoted
+    everywhere it goes. No `..`, and no control characters."""
+    if value is None:
+        return None
+    parts = value.split("/")
+    if not value.startswith("/") or ".." in parts or any(ord(ch) < 32 for ch in value):
+        raise DeployError("arguments", f"{name} {value!r} must be an absolute path")
+    return value.rstrip("/") or "/"
+
+
 def _required_absolute(name: str, value: str) -> str:
     path = _absolute(name, value)
     assert path is not None  # _absolute returns None only for None
@@ -218,8 +243,16 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     p.add_argument("--profile", required=True, help="the uqs profile to start, e.g. essential")
     p.add_argument("--torq-home", help="an existing TorQ on the server (TORQHOME)")
     p.add_argument("--torq-app-home", help="an existing finance starter pack (TORQAPPHOME)")
-    p.add_argument("--qcmd", help="the q binary on the server (QCMD); default: q on PATH")
-    p.add_argument("--qhome", help="QHOME on the server, where q finds its licence")
+    p.add_argument(
+        "--qcmd",
+        help="the q executable on the server, an absolute path. Default: the deploying "
+        "account's $QCMD there, else q on that account's PATH - never this machine's",
+    )
+    p.add_argument(
+        "--qhome",
+        help="QHOME on the server, where q finds its licence. Default: the deploying "
+        "account's $QHOME there; refused when that is unset too",
+    )
     p.add_argument("--data-dir", help="runtime data directory; default: <dest>/shared/data")
     p.add_argument("--dry-run", action="store_true", help="change nothing; show what would run")
     p.add_argument(
@@ -257,8 +290,8 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         profile=a.profile,
         torq_home=_absolute("--torq-home", a.torq_home),
         torq_app_home=_absolute("--torq-app-home", a.torq_app_home),
-        qcmd=_absolute("--qcmd", a.qcmd),
-        qhome=_absolute("--qhome", a.qhome),
+        qcmd=_q_path("--qcmd", a.qcmd),
+        qhome=_q_path("--qhome", a.qhome),
         data_dir=_absolute("--data-dir", a.data_dir),
         dry_run=a.dry_run,
         restart=a.restart,
@@ -304,8 +337,12 @@ class Remote:
         """
         if self.remote_user and not as_login:
             command = f"sudo -n -iu {q(self.remote_user)} bash -s"
-        else:
+        elif self.remote_user:
+            # the upload steps: plain, they read nothing from the environment
             command = "bash -s"
+        else:
+            # a login shell, like sudo -i: the account's own QHOME, QCMD, PATH
+            command = "bash -l -s"
         return ["ssh", *self.options, self.host, command]
 
     def run(
@@ -394,6 +431,8 @@ class Deployment:
         self.target = target or {"os": "linux", "arch": "x86_64", "python": "3.14"}
         #: the release id being deployed, to refuse one already on the server
         self.release = release
+        #: QCMD and QHOME as preflight resolved and checked them on the server
+        self.q_env: dict[str, str] = {}
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -445,8 +484,8 @@ class Deployment:
         pairs = [
             ("TORQHOME", c.torq_home),
             ("TORQAPPHOME", c.torq_app_home),
-            ("QCMD", c.qcmd),
-            ("QHOME", c.qhome),
+            ("QCMD", self.q_env.get("QCMD", c.qcmd)),
+            ("QHOME", self.q_env.get("QHOME", c.qhome)),
             ("UQS_DATA_ROOT", c.data_root),
             ("UQS_RUNTIME", "uqf"),
             # the release installs from its own wheels; nothing after that
@@ -465,8 +504,8 @@ class Deployment:
         c = self.cfg
         values = {
             "dest": c.dest,
-            "qcmd": c.qcmd or "q",
-            "qhome": c.qhome or "",
+            "qcmd_flag": c.qcmd or "",
+            "qhome_flag": c.qhome or "",
             "torq_home": c.torq_home or "",
             "torq_app_home": c.torq_app_home or "",
             "data": c.data_root,
@@ -494,6 +533,9 @@ class Deployment:
             raise DeployError(
                 "preflight", "the artifact cannot run on this server: " + "; ".join(problems)
             )
+        if not facts.get("qcmd") or not facts.get("qhome"):
+            raise DeployError("preflight", "preflight did not report the q it resolved")
+        self.q_env = {"QCMD": facts["qcmd"], "QHOME": facts["qhome"]}
         if facts.get("data") == "absent" and not self.cfg.init_data:
             raise DeployError(
                 "preflight",
@@ -678,7 +720,7 @@ class Deployment:
             "the offline smoke test",
             *self.in_release(
                 release,
-                f'timeout {self.cfg.smoke_timeout} "${{QCMD:-q}}" scripts/deploy_smoke.q -q',
+                f'timeout {self.cfg.smoke_timeout} "$QCMD" scripts/deploy_smoke.q -q',
             ),
             timeout=self.cfg.smoke_timeout + 30,
         )
@@ -787,15 +829,48 @@ echo "arch=$(uname -m)"
 for tool in bash envsubst rlwrap tar timeout python3; do
   command -v "$tool" >/dev/null || fail "$tool is not on PATH - the release needs it"
 done
-if [ -n "$qhome" ]; then export QHOME="$qhome"; fi
-command -v "$qcmd" >/dev/null || fail "q is not runnable: $qcmd"
+me=$(id -un)
+# QHOME: --qhome, else this account's own $QHOME - never the caller's.
+if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--qhome"
+elif [ -n "${QHOME:-}" ]; then qhome_eff=$QHOME; qhome_from="$me's QHOME"
+else fail "QHOME is not set for $me and --qhome was not given -" \
+  "pass --qhome <the directory q finds its licence in>"
+fi
+test -d "$qhome_eff" || fail "QHOME $qhome_eff ($qhome_from) is not a directory"
+# QCMD: --qcmd, else $QCMD, else q on this account's PATH. A name or a path,
+# never a command line: it is run as one word, quoted.
+if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--qcmd"
+elif [ -n "${QCMD:-}" ]; then qcmd_want=$QCMD; qcmd_from="$me's QCMD"
+else qcmd_want=q; qcmd_from="q on $me's PATH"
+fi
+case "$qcmd_want" in
+  /*) test -f "$qcmd_want" && test -x "$qcmd_want" ||
+        fail "QCMD $qcmd_want ($qcmd_from) is not an executable file"
+      qcmd_eff=$qcmd_want;;
+  */*) fail "QCMD $qcmd_want ($qcmd_from) is a relative path - give an absolute one";;
+  *[[:space:]]*) fail "QCMD '$qcmd_want' ($qcmd_from) is not an executable name -" \
+                   "a command with arguments is not supported; pass --qcmd";;
+  *) qcmd_eff=$(command -v -- "$qcmd_want") ||
+       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --qcmd"
+     case "$qcmd_eff" in
+       /*) ;;
+       *) fail "QCMD $qcmd_want ($qcmd_from) is a shell alias or function, not an executable";;
+     esac;;
+esac
+case "$qhome_eff$qcmd_eff" in *$'\n'*) fail "QHOME or QCMD holds a newline";; esac
+export QHOME="$qhome_eff"
+echo "qhome=$qhome_eff"
+echo "qhome_from=$qhome_from"
+echo "qcmd=$qcmd_eff"
+echo "qcmd_from=$qcmd_from"
 probe=$(mktemp -d)
 printf '%s\n' '-1 "DEPLOY_Q_OK"; exit 0' > "$probe/probe.q"
-out=$(timeout "$probe_timeout" "$qcmd" "$probe/probe.q" -q 2>&1 || true)
+out=$(timeout "$probe_timeout" "$qcmd_eff" "$probe/probe.q" -q 2>&1 || true)
 rm -rf "$probe"
 case "$out" in
   *DEPLOY_Q_OK*) ;;
-  *) fail "q did not run a script - is it licensed (QHOME)? $(echo "$out" | tail -3)";;
+  *) fail "$qcmd_eff did not run a script with QHOME=$qhome_eff - is it licensed?" \
+          "$(echo "$out" | tail -3)";;
 esac
 if [ -n "$torq_home" ]; then
   for f in torq.q torq.sh; do test -f "$torq_home/$f" || fail "no $f in $torq_home"; done
@@ -835,6 +910,10 @@ def plan(
             if cfg.remote_user
             else f"ssh/scp and every step as {cfg.host}"
         ),
+        "q         "
+        + f"QHOME={facts.get('qhome', '?')} ({facts.get('qhome_from', '?')}), "
+        + f"QCMD={facts.get('qcmd', '?')} ({facts.get('qcmd_from', '?')}) - "
+        + "resolved and run once in preflight",
         "lock      " + f"mkdir {dep.lock}",
         "transfer  "
         + (
