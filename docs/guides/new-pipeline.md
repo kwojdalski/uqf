@@ -102,16 +102,20 @@ that drive every publishing job fail on the throwing driver.
 Nothing else in the q suite needs an edit: the scaffold adds the new table to
 `expected` and your test's namespace to `nsList` itself.
 
-`uv run pytest python/uqs` fails twice:
+`uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists, by
+`path:line`, every placeholder still marked `SCAFFOLDED` - the handler, the
+test, the driver, the job's `note`, for a new table its desk catalog
+description, and the process's card in the [Services -
+Showcase](../services/README.md) and its comment in
+[`docs/architecture/stack.md`](../architecture/stack.md). That list is the to-do
+list; each line clears when its placeholder is replaced and the marker deleted
+with it. Name the process in `stack.md`'s list when you delete its comment:
+`test_the_prose_architecture_doc_is_consistent_with_the_registry` fails
+otherwise.
 
-1. `test_no_scaffold_left.py` lists, by `path:line`, every placeholder still
-   marked `SCAFFOLDED` - the handler, the test, the driver, the job's `note`,
-   and for a new table its desk catalog description. That list is the to-do
-   list; each line clears when its placeholder is replaced and the marker
-   deleted with it.
-2. `test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
-   [`docs/architecture/stack.md`](../architecture/stack.md) name the new process -
-   authored prose, so the one step with no placeholder.
+A backfill also gets a worked example, `scripts/examples/<name>_example.q`: it
+runs the worker once on its fixture into a throwaway HDB and shows what it
+published, with no stack running.
 
 A new table's desk catalog entry is written for you: a SCAFFOLDED line in
 [`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q). The description is

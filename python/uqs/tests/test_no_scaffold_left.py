@@ -22,9 +22,9 @@ from uqs.paths import repo_root
 #: they - and the tests of those templates - are the only files allowed it.
 MARKER = "SCAFFOLDED"
 
-#: Where a scaffold writes, relative to the repository root. Not `docs/`: the
-#: only files it touches there are generated, and the guides that explain the
-#: marker have to be able to name it.
+#: Where a scaffold writes, relative to the repository root. Not all of
+#: `docs/`: the guides that explain the marker have to be able to name it, so
+#: the two pages a scaffold writes into are listed one by one below.
 #:
 #: `python/uqf_frontend` was here while the desk catalog was two CSVs in that
 #: package. The catalog's authored half is scripts/processes/uqs_catalog.q
@@ -32,6 +32,11 @@ MARKER = "SCAFFOLDED"
 #: the frontend at all - so listing it would be scanning a tree this tool no
 #: longer touches.
 SCANNED = ("src", "tests", "scripts")
+
+#: The two authored pages a scaffold writes a placeholder into (#713): a new
+#: process's Showcase card and its stack.md comment - scaffold/docs.py. Named
+#: one by one rather than adding `docs`, for the reason above.
+SCANNED_FILES = ("docs/architecture/stack.md", "docs/services/README.md")
 
 #: What may mention the marker without being a placeholder: the templates
 #: that write it, their tests, runtime output nothing reviews, and the
@@ -43,18 +48,19 @@ SUFFIXES = {".q", ".py", ".md", ".csv"}
 
 
 def scaffold_left(root: Path) -> list[str]:
-    """Every `path:line` under SCANNED still carrying MARKER, in path order."""
+    """Every `path:line` under SCANNED or in SCANNED_FILES still carrying MARKER."""
     found: list[str] = []
-    for top in SCANNED:
-        for path in sorted((root / top).rglob("*")):
-            rel = path.relative_to(root).as_posix()
-            if path.suffix not in SUFFIXES or not path.is_file():
-                continue
-            if any(rel == e or rel.startswith(e + "/") for e in EXEMPT):
-                continue
-            for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
-                if MARKER in line:
-                    found.append(f"{rel}:{n}")
+    paths = [p for top in SCANNED for p in sorted((root / top).rglob("*"))]
+    paths += [root / f for f in SCANNED_FILES]
+    for path in paths:
+        rel = path.relative_to(root).as_posix()
+        if path.suffix not in SUFFIXES or not path.is_file():
+            continue
+        if any(rel == e or rel.startswith(e + "/") for e in EXEMPT):
+            continue
+        for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+            if MARKER in line:
+                found.append(f"{rel}:{n}")
     return found
 
 
@@ -76,5 +82,7 @@ def test_the_guard_finds_a_placeholder_and_ignores_the_templates(tmp_path: Path)
     (tmp_path / "scripts" / "output" / "x.md").write_text("SCAFFOLDED")
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "guide.md").write_text("the SCAFFOLDED marker, explained")
+    (tmp_path / "docs" / "services").mkdir()
+    (tmp_path / "docs" / "services" / "README.md").write_text("**`x1` · SCAFFOLDED: a few**\n")
     (tmp_path / "src" / "etl" / "img.svg").write_text("SCAFFOLDED")
-    assert scaffold_left(tmp_path) == ["src/etl/j.q:2"]
+    assert scaffold_left(tmp_path) == ["src/etl/j.q:2", "docs/services/README.md:1"]
