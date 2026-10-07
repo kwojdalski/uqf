@@ -224,10 +224,10 @@ some declarations at LOAD time, which no unit test exercises.
 
 Say this back to the user, because it is the part that surprises people:
 
-- **No `\l` line.** `src/etl/init.q` globs its three declaration directories.
-  Only add a name to its `lead` list if your file reads another job's table at
-  load time --- and you will know, because the tree stops loading with a bare
-  `` `.qpipe.job.<name> ``.
+- **No `\l` line.** `src/etl/init.q` globs its declaration directories, in plain
+  alphabetical order. A table's schema at load time comes from `.qetl.plant`,
+  never from another job's namespace - `test_no_job_reads_a_peer_job_at_load`
+  refuses a file that does (#731).
 - **No test registration at all.** `tests/run_tests.q` globs `tests/q/test_*.q`
   for the file, and the scaffold appends the test's NAMESPACE to that file's
   `nsList` (#350). Both halves matter: the list is kept by hand, and a namespace
