@@ -203,4 +203,14 @@ test_each_input_is_checked_against_its_own_contract:{[t]
     .qunit.assertTrue[err like "*does not read source hdb_demo_markouts's contracts: quote: *";
         "the quote input is held to the quote contract, by name"]};
 
+/ The window's facts, on the fixture's scored rows. facts counted distinct
+/ fills with `flip` in front of the take, and `distinct` of a dictionary
+/ throws 'type - logged as "facts function failed" on every window, which
+/ no test looked at until .wruntest's runs did.
+test_the_facts_describe_a_scored_window:{[t]
+    b:.qpipe.job.hdb_demo_markouts_backfill.score[.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[]];
+    f:.qpipe.job.hdb_demo_markouts_backfill.facts b;
+    .qunit.assertEquals[f`scored_fills`horizons`unpriced;4 2 2;
+        "four fills, two horizons, and the unpriced rows counted"]};
+
 \d .

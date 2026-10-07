@@ -45,7 +45,7 @@ quality_check:{[batch]
 / @return fills scored, horizons, and rows with no reference quote
 facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
-    `scored_fills`horizons`unpriced!(count distinct flip `sym`trade_time#batch;
+    `scored_fills`horizons`unpriced!(count distinct `sym`trade_time#batch;
         count distinct batch`horizon; sum "j"$null batch`markout_pips)}
 
 \d .

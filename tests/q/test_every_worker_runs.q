@@ -58,7 +58,9 @@ prepare:{[w]
     .qetl.job.bounded.state.release_lock w;
     .qetl.job.bounded.state.clear_checkpoint w;
     (cfg`dataset) set 0#(.qetl.transform.def cfg`transform)`output;
-    ts:(src`fixture)[] src`time_column;
+    / The primary input's rows: a source with supporting inputs returns them
+    / all from its fixture as a dict of name -> table (#617).
+    ts:(.qetl.source.primary[cfg`source;(src`fixture)[]]) src`time_column;
     `source_version`range_from`range_to!(`wrunv1;min ts;(max ts)+cfg`width)}
 
 / Call one of a worker's stamped methods.
