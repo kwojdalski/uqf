@@ -980,7 +980,13 @@ fetch:{[worker;from_ts;to_ts]
     .qetl.source.validate[cfg`source;r`result];
     r}
 
-/ Publish a window's rows into the source's declared target.
+/ Publish a window's rows into the worker's dataset.
+/ .
+/ The dataset, not the source's `target` (#769): coverage, reactions, the run
+/ ledger and the job graph are all keyed on the dataset, so the rows must land
+/ there too. A source's target is only the dataset its first worker is named
+/ after - every shipped worker fills it - and a second worker over the same
+/ source with a dataset of its own fills that, not the first one's table.
 / .
 / Returns the row count, which finish_window records as rows_published. Zero
 / is legal and meaningful: an empty window is positive evidence the
@@ -991,7 +997,7 @@ publish:{[worker;batch]
     w:read_state[worker;`last_window];
     opts:`on_conflict`row_key`time_column`range_from`range_to!
         (on_conflict worker;cfg`target_key;src`time_column;w`range_from;w`range_to);
-    .qetl.io.write_keyed[.qetl.io.for_cfg cfg;src`target;batch;opts]}
+    .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}
 
 / The conflict strategy this run writes under: the operator's override when
 / one is set - on_conflict in config, UQF_ON_CONFLICT, or `uqs backfill
@@ -1053,8 +1059,7 @@ run:{[worker]
 recover_unfinished:{[worker]
     if[not .qetl.job.bounded.runtime.allows`finish_store; :0];
     s:spec worker;
-    n:.qetl.io.recover[.qetl.io.for_cfg def worker;(.qetl.source.def (def worker)`source)`target;
-        s`range_from;s`range_to];
+    n:.qetl.io.recover[.qetl.io.for_cfg def worker;(def worker)`dataset;s`range_from;s`range_to];
     if[n>0;
         .qetl.log.warn[worker;"found partitions an earlier run wrote and never finished - finishing them with this run";
             enlist[`partitions]!enlist n]];

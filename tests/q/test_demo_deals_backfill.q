@@ -784,6 +784,27 @@ test_a_workers_own_publish_is_kept_and_reached_by_run:{[t]
     .qunit.assertEquals[count value `demo_deals;0;
         "and none through the shell's, which would have written the source's target"]};
 
+/ #769: a second worker over a source, with a dataset of its own, fills that
+/ dataset - its rows and its coverage both - and leaves the source's target,
+/ the first worker's table, alone. Rows used to go to the target while
+/ coverage was recorded for the dataset, so the dataset read as complete and
+/ held nothing.
+test_a_worker_with_its_own_dataset_writes_its_rows_and_coverage_there:{[t]
+    .qetl.job.bounded.state.release_lock `own_dataset_worker;
+    .qetl.job.bounded.state.clear_checkpoint `own_dataset_worker;
+    `ddbftest_own_ds set 0#.qpipe.source.demo_deals.fixture[];
+    .qetl.job.bounded.define[`own_dataset_worker;
+        `source`dataset`width`transform!(`demo_deals;`ddbftest_own_ds;1D;`demo_deals_passthrough)];
+    .qpipe.job.own_dataset_worker.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qpipe.job.own_dataset_worker.run[];
+    .qpipe.job.own_dataset_worker.cleanup[];
+    .testutil.drop_rows[`.qetl.job.bounded.worker_cfg;`own_dataset_worker];
+    .qunit.assertEquals[r`state;`completed;"the run completes"];
+    .qunit.assertEquals[count value `ddbftest_own_ds;3;"every window's rows land in the worker's dataset"];
+    .qunit.assertEquals[count value `demo_deals;0;"and none in the source's target, another worker's table"];
+    .qunit.assertEquals[distinct exec dataset from etl_coverage;enlist `ddbftest_own_ds;
+        "the coverage names the table the rows are in"]};
+
 / A reload re-runs the worker's define. The names it stamped the first time
 / are left alone, so the run specification of a worker already initialised
 / is not reset to nulls under it.

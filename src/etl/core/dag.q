@@ -13,8 +13,8 @@
 / and outputs, so none of them is asked to restate anything:
 / .
 /   .qetl.job.bounded.worker_cfg     bounded workers. Input is the source's remote `table_name`,
-/                   output is its `target` - both already on the .qetl.source
-/                   declaration, reachable from the worker's `source`.
+/                   reachable from the worker's `source`; output is the
+/                   worker's own `dataset`, the table it writes (#769).
 /   .qetl.job.continuous.feeds    continuous feeders. Output is the dataset they feed;
 /                   their input is external by definition (a live feed).
 /   .qetl.job.stream.jobs   streaming jobs, normalizers among them. Input is
@@ -293,10 +293,11 @@ to_json:{[]
 / Register every bounded worker from .qetl.job.bounded.worker_cfg, deriving its inputs and
 / outputs from the source declaration it already names.
 / .
-/ A worker reads the source's remote `table_name` and writes its `target`, so
-/ neither has to be restated on the worker - which is the whole point: a
+/ A worker reads the source's remote `table_name` and writes its `dataset`, so
+/ its input is not restated on the worker - which is the whole point: a
 / worker that declared its own inputs could disagree with the source it
-/ actually reads.
+/ actually reads. Its output is the dataset because that is where publish
+/ writes and what coverage records (#769).
 / A node naming a table that lives on an EXTERNAL source, as "table@source".
 / .
 / A table's identity in this graph is (location, name), not name - and the
@@ -326,7 +327,7 @@ adopt_workers:{[]
         cfg:.qetl.job.bounded.def w;
         d:.qetl.source.def cfg`source;
         register[w;`kind`inputs`outputs!
-            (`bounded; external_ref[cfg`source;d`table_name]; d`target)]
+            (`bounded; external_ref[cfg`source;d`table_name]; cfg`dataset)]
       } each ws;
     ws}
 

@@ -254,7 +254,7 @@ test_workers_are_adopted_from_their_own_declarations:{[t]
 / ``\`@<source>`` - a value no adoption can produce - and the test failed
 / saying the graph was wrong when the graph was right. A missing key must
 / fail as a missing key.
-test_an_adopted_worker_reads_its_sources_table_and_writes_its_target:{[t]
+test_an_adopted_worker_reads_its_sources_table_and_writes_its_dataset:{[t]
     .qetl.dag.adopt_workers[];
     workers:.qetl.job.bounded.defined[];
     .qunit.assertTrue[0<count workers;"there are adopted workers to check"];
@@ -266,8 +266,8 @@ test_an_adopted_worker_reads_its_sources_table_and_writes_its_target:{[t]
                 " fails, a rename reached the contract and not this test"];
         d:.qetl.dag.def w;
         .qunit.assertEquals[(d`inputs;d`outputs);
-            ((),.qetl.dag.external_ref[cfg`source;src`table_name];(),src`target);
-            string[w]," reads its source's table (source-qualified) and writes its target"]
+            ((),.qetl.dag.external_ref[cfg`source;src`table_name];(),cfg`dataset);
+            string[w]," reads its source's table (source-qualified) and writes its dataset (#769)"]
      } each workers;};
 
 / --- the real graph ------------------------------------------------------
