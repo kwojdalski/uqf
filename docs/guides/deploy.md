@@ -126,6 +126,52 @@ stopped the previous ones, they are started again from the previous release.
 `current` only moves in the activate stage, so it still names the previous
 release. The report's `rollback` field says what was done and whether it worked.
 
+## Deploying as a service user
+
+On many servers the account you log in as is not the one that owns and runs uqf;
+an operator would `sudo su - svc` by hand. `--remote-user` does that step
+non-interactively (#780):
+
+```bash
+python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \
+  --host deploy@uqf-server --remote-user svc \
+  --dest /srv/uqf --torq-home /opt/torq ... --profile essential --dry-run
+```
+
+- **ssh and scp** still log in as the `--host` user.
+
+- **Every deployment step** runs as `svc` through `sudo -n -iu svc bash -s`.
+  That covers preflight, prepare, smoke, start, verify, activate and rollback.
+  - `-n` means a rule that would ask for a password fails at once, instead of
+    hanging.
+  - `-i` is a login shell, so q, uv, Python, TorQ, permissions and ports are
+    checked in `svc`'s own environment.
+  - Settings cross sudo inside the script, never through the login user's
+    environment.
+
+- **Before anything changes**, preflight runs `sudo -n -iu svc id -un` and
+  refuses unless it answers `svc`. The preflight script also checks it is
+  running as `svc`.
+
+- **The archive** cannot be written by scp as `svc`, so:
+  1. scp uploads it as the login user into a private `mktemp -d` directory (mode
+     0700);
+  2. a single `sudo -n -u svc -- python3 ...` call has `svc` write a new file in
+     its own staging from stdin;
+  3. the upload directory is removed whether the deployment succeeds or fails.
+
+  Nothing is made world-readable, and nothing is `chown`ed. Existing runtime
+  data keeps its ownership.
+
+The login user needs a sudo rule that runs commands as `svc` without a password,
+for example in `/etc/sudoers.d/uqf`:
+
+```
+deploy ALL=(svc) NOPASSWD: ALL
+```
+
+Keep `--dest` outside the existing TorQ installation, and owned by `svc`.
+
 ## On the server
 
 ```

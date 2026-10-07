@@ -50,10 +50,16 @@ class FakeRemote:
     def __init__(self, rules: dict[str, subprocess.CompletedProcess] | None = None):
         self.rules = rules or {}
         self.scripts: list[tuple[str, str]] = []
+        #: the scripts run as the ssh login user rather than the service user
+        self.login: list[str] = []
         self.puts: list[str] = []
 
-    def run(self, script: str, timeout: int, stage: str) -> subprocess.CompletedProcess:
+    def run(
+        self, script: str, timeout: int, stage: str, as_login: bool = False
+    ) -> subprocess.CompletedProcess:
         self.scripts.append((stage, script))
+        if as_login:
+            self.login.append(script)
         for marker, result in self.rules.items():
             if marker in script:
                 return result
@@ -398,3 +404,100 @@ def test_a_wrong_library_answer_fails():
 
 def test_busy_ports_are_the_ones_something_listens_on():
     assert verify.busy_ports({"a": 1, "b": 2}, lambda port: port == 2) == {"b": 2}
+
+
+# --- a service user through sudo (#780) ----------------------------------------
+
+UPLOAD = "/tmp/uqf-upload.Ab12Cd"
+_AS_SVC = {
+    "sudo -n -iu svc id -un": _done("svc\n"),
+    "mktemp -d /tmp/uqf-upload": _done(UPLOAD + "\n"),
+    "uv python find": _done("user=svc\n" + SERVER + "data=present\n"),
+}
+
+
+def _run_as(tmp_path, rules=(), args=()):
+    remote = FakeRemote({**_AS_SVC, **_HEALTHY, **dict(rules)})
+    remote.rules["uv python find"] = dict(rules).get("uv python find", _AS_SVC["uv python find"])
+    out = io.StringIO()
+    cfg = deploy.parse_args(_args(_artifact(tmp_path), "--remote-user", "svc", *args))
+    code = deploy.deploy(cfg, remote, out=out)
+    return code, remote, out.getvalue()
+
+
+@pytest.mark.parametrize("user", ["root;id", "Svc", "-n", "a b", "x" * 40, "svc$"])
+def test_a_remote_user_that_is_not_an_account_name_is_refused(user):
+    with pytest.raises(deploy.DeployError, match="--remote-user"):
+        deploy.parse_args([*BASE, f"--remote-user={user}"])
+
+
+def test_without_a_remote_user_ssh_runs_the_script_as_the_login():
+    assert deploy.Remote("deploy@uqf-server", 5).ssh_argv()[-1] == "bash -s"
+
+
+def test_with_a_remote_user_every_step_runs_through_non_interactive_sudo():
+    remote = deploy.Remote("deploy@uqf-server", 5, remote_user="svc")
+    assert remote.ssh_argv()[-2:] == ["deploy@uqf-server", "sudo -n -iu svc bash -s"]
+    assert remote.ssh_argv(as_login=True)[-1] == "bash -s"
+
+
+def test_a_missing_sudo_rule_fails_before_anything_changes(tmp_path):
+    rules = {"sudo -n -iu svc id -un": _done(rc=1, stderr="sudo: a password is required")}
+    with pytest.raises(deploy.DeployError, match="without a password") as err:
+        _run_as(tmp_path, rules)
+    assert err.value.stage == "preflight"
+
+
+def test_sudo_landing_in_another_account_is_refused(tmp_path):
+    with pytest.raises(deploy.DeployError, match="runs as root, not svc"):
+        _run_as(tmp_path, {"sudo -n -iu svc id -un": _done("root\n")})
+
+
+def test_preflight_checks_the_identity_it_runs_as(tmp_path):
+    facts = _done("user=deploy\n" + SERVER + "data=present\n")
+    with pytest.raises(deploy.DeployError, match="run as deploy, not svc"):
+        _run_as(tmp_path, {"uv python find": facts})
+
+
+def test_the_archive_reaches_the_service_user_through_a_private_upload(tmp_path):
+    code, remote, _ = _run_as(tmp_path, {"deploy_verify.py --profile": _verified(True)})
+    assert code == 0
+    assert remote.puts == [f"{UPLOAD}/uqf-20261007T000000Z-0123456789ab.tar.gz"]
+    handoff = next(s for s in remote.login if "handing" in s or "sudo -n -u svc" in s)
+    assert "sudo -n -u svc -- python3 -c" in handoff and "'xb'" in handoff
+    assert f"< {UPLOAD}/uqf-" in handoff
+    assert not any("chmod" in s or "chown" in s for _, s in remote.scripts)
+    assert any(f"rm -rf {UPLOAD}" in s for s in remote.login)
+
+
+def test_the_upload_is_removed_when_the_handoff_fails(tmp_path):
+    rules = {"sudo -n -u svc --": _done(rc=1, stderr="sudo: not allowed")}
+    code, remote, _ = _run_as(tmp_path, rules)
+    assert code == 1
+    assert any(f"rm -rf {UPLOAD}" in s for s in remote.login)
+
+
+def test_only_the_upload_steps_run_as_the_login_user(tmp_path):
+    _, remote, _ = _run_as(tmp_path, {"deploy_verify.py --profile": _verified(True)})
+    for s in remote.login:
+        assert any(m in s for m in ("id -un", "mktemp -d", "sudo -n -u svc --", "rm -rf /tmp/"))
+    service = [s for _, s in remote.scripts if s not in remote.login]
+    assert any("uqs start --profile essential" in s for s in service)
+    assert any(".current.new" in s for s in service)
+
+
+def test_settings_cross_sudo_inside_the_script_not_the_environment(tmp_path):
+    _, remote, _ = _run_as(tmp_path, {"deploy_verify.py --profile": _verified(True)})
+    pre = next(s for st, s in remote.scripts if st == "preflight" and "uv python find" in s)
+    assert "dest=/opt/uqf\n" in pre and "expected_user=svc\n" in pre
+
+
+def test_a_dry_run_as_a_service_user_says_who_does_what(tmp_path):
+    code, remote, shown = _run_as(tmp_path, args=["--dry-run"])
+    assert (
+        code == 0
+        and remote.puts == []
+        and remote.login == ["set -euo pipefail\nsudo -n -iu svc id -un\n"]
+    )
+    assert "every step below as svc (sudo -n -iu svc)" in shown
+    assert "private upload directory" in shown
