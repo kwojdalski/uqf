@@ -60,6 +60,18 @@ Nothing here disables host-key checking or reads a secret: ssh and scp run
 with the operator's own configuration, in batch mode so a missing key fails
 rather than prompts.
 
+A SERVICE USER (#780). With --remote-user svc, ssh and scp still log in as
+the --host user, but every deployment step runs as svc through
+`sudo -n -iu svc bash -s` - non-interactive, so a sudo that would ask for a
+password fails instead of hanging, and a login shell, so q, uv, TorQ and the
+ports are checked in svc's own environment. Settings cross sudo inside the
+script, never through the login user's environment. scp cannot write as svc,
+so the archive lands in a private mktemp directory of the login user's, and
+one narrowly scoped sudo call - svc writing a new file from stdin - copies it
+into svc's staging; nothing is made world-readable or re-owned. The upload
+directory is removed whether the deployment succeeds or fails. Preflight
+proves the sudo rule and the effective identity before anything changes.
+
 Standard library only, like scripts/peachq.py: no package to install first,
 and parseable by Python 3.10 - it runs under the operator's own python3.
 """
@@ -95,6 +107,9 @@ SHARED_CONFIG = ("scripts/torqconfig/permissions/gateway_users.csv",)
 #: rename (os.replace) - portable where `mv -T` and `sha256sum` are not.
 SHA256_PY = "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())"
 REPLACE_PY = "import os,sys; os.replace(sys.argv[1], sys.argv[2])"
+#: stdin into a file that must not exist yet ("xb"), as whoever runs it: the
+#: one thing the service user does with the login user's upload.
+WRITE_NEW_PY = "import shutil,sys; shutil.copyfileobj(sys.stdin.buffer, open(sys.argv[1], 'xb'))"
 
 REPORT = "deploy-report.json"
 SMOKE_MARKER = "DEPLOY_SMOKE_OK"
@@ -102,6 +117,8 @@ VERIFY_MARKER = "DEPLOY_VERIFY_OK"
 
 _DEST = re.compile(r"/[A-Za-z0-9._/-]*[A-Za-z0-9._-]")
 _HOST = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._@-]*")
+#: A POSIX-portable account name, as useradd accepts by default.
+_USER = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 _PROFILE = re.compile(r"[a-z][a-z0-9_]*")
 _SECRETISH = re.compile(r"(?i)\b(pwd|password|passwd|secret|token|api_?key)\s*[=:]\s*\S+")
 
@@ -148,6 +165,7 @@ class Config:
     dest: str
     profile: str
     artifact: str = ""
+    remote_user: str | None = None
     torq_home: str | None = None
     torq_app_home: str | None = None
     qcmd: str | None = None
@@ -191,6 +209,11 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         "--artifact", required=True, help="the release to deploy, from scripts/build_release.py"
     )
     p.add_argument("--host", required=True, help="ssh destination, as your ssh config knows it")
+    p.add_argument(
+        "--remote-user",
+        help="run the deployment as this account through `sudo -n -iu`; ssh and scp stay "
+        "the --host login",
+    )
     p.add_argument("--dest", required=True, help="absolute directory on the server")
     p.add_argument("--profile", required=True, help="the uqs profile to start, e.g. essential")
     p.add_argument("--torq-home", help="an existing TorQ on the server (TORQHOME)")
@@ -216,6 +239,8 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     a = p.parse_args(argv)
     if not _HOST.fullmatch(a.host):
         raise DeployError("arguments", f"--host {a.host!r} is not an ssh destination")
+    if a.remote_user is not None and not _USER.fullmatch(a.remote_user):
+        raise DeployError("arguments", f"--remote-user {a.remote_user!r} is not an account name")
     if not _PROFILE.fullmatch(a.profile):
         raise DeployError("arguments", f"--profile {a.profile!r} is not a profile name")
     for name in ("connect_timeout", "command_timeout", "smoke_timeout", "verify_timeout"):
@@ -228,6 +253,7 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         host=a.host,
         dest=dest,
         artifact=a.artifact,
+        remote_user=a.remote_user,
         profile=a.profile,
         torq_home=_absolute("--torq-home", a.torq_home),
         torq_app_home=_absolute("--torq-app-home", a.torq_app_home),
@@ -258,18 +284,36 @@ class Remote:
     is fixed - every value is quoted inside the script with shlex.quote.
     """
 
-    def __init__(self, host: str, connect_timeout: int, runner: Runner = subprocess.run) -> None:
+    def __init__(
+        self,
+        host: str,
+        connect_timeout: int,
+        runner: Runner = subprocess.run,
+        remote_user: str | None = None,
+    ) -> None:
         self.host = host
+        self.remote_user = remote_user
         self.options = ["-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}"]
         self.runner = runner
 
-    def ssh_argv(self) -> list[str]:
-        return ["ssh", *self.options, self.host, "bash -s"]
+    def ssh_argv(self, as_login: bool = False) -> list[str]:
+        """ssh's argv: the script as the service user, unless `as_login`.
 
-    def run(self, script: str, timeout: int, stage: str) -> subprocess.CompletedProcess:
+        The one string the login shell parses is fixed apart from the account
+        name, which parse_args validated and which is quoted anyway.
+        """
+        if self.remote_user and not as_login:
+            command = f"sudo -n -iu {q(self.remote_user)} bash -s"
+        else:
+            command = "bash -s"
+        return ["ssh", *self.options, self.host, command]
+
+    def run(
+        self, script: str, timeout: int, stage: str, as_login: bool = False
+    ) -> subprocess.CompletedProcess:
         try:
             return self.runner(
-                self.ssh_argv(),
+                self.ssh_argv(as_login),
                 input=script,
                 capture_output=True,
                 text=True,
@@ -362,6 +406,39 @@ class Deployment:
         r = self.remote.run(script(*lines), timeout or self.cfg.command_timeout, stage)
         return _checked(r, stage, what)
 
+    def run_as_login(self, stage: str, what: str, *lines: str) -> str:
+        """A step that must run as the ssh login user, not the service user."""
+        r = self.remote.run(script(*lines), self.cfg.command_timeout, stage, as_login=True)
+        return _checked(r, stage, what)
+
+    def check_sudo(self) -> None:
+        """--remote-user only: sudo -n works for that account, and lands in it.
+
+        Read-only, and first: a missing sudo rule fails here, naming the rule
+        an administrator would add, rather than half-way through a deployment.
+        """
+        user = self.cfg.remote_user
+        if not user:
+            return
+        r = self.remote.run(
+            script(f"sudo -n -iu {q(user)} id -un"),
+            self.cfg.command_timeout,
+            "preflight",
+            as_login=True,
+        )
+        if r.returncode:
+            raise DeployError(
+                "preflight",
+                f"the login user on {self.cfg.host} cannot run commands as {user} through "
+                f"`sudo -n -iu {user}` without a password: "
+                + redact((r.stderr or r.stdout or "").strip()[-300:]),
+            )
+        got = (r.stdout or "").strip().splitlines()[-1:] or [""]
+        if got[0] != user:
+            raise DeployError(
+                "preflight", f"`sudo -n -iu {user}` runs as {got[0] or 'nobody'}, not {user}"
+            )
+
     def env_lines(self) -> list[str]:
         """deploy.env: the external TorQ, q and the stable data directory."""
         c = self.cfg
@@ -398,6 +475,7 @@ class Deployment:
             "probe_timeout": str(c.smoke_timeout),
             "python": self.target["python"],
             "release_dir": f"{self.releases}/{self.release}" if self.release else "",
+            "expected_user": c.remote_user or "",
         }
         return script(*(f"{k}={q(v)}" for k, v in values.items())) + PREFLIGHT
 
@@ -405,6 +483,12 @@ class Deployment:
         r = self.remote.run(self.preflight_script(), self.cfg.command_timeout, "preflight")
         out = _checked(r, "preflight", "the preflight checks")
         facts = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        if self.cfg.remote_user and facts.get("user") != self.cfg.remote_user:
+            raise DeployError(
+                "preflight",
+                f"the deployment steps run as {facts.get('user') or 'an unknown user'}, "
+                f"not {self.cfg.remote_user}",
+            )
         problems = build_release.compatible(self.target, facts)
         if problems:
             raise DeployError(
@@ -482,6 +566,48 @@ class Deployment:
         except DeployError as exc:
             log(f"could not release {self.lock}: {exc}")
 
+    def upload(self, pkg: build_release.Artifact, staging: str) -> str:
+        """The archive into `staging`, as the service user; its path there.
+
+        Without --remote-user, scp writes it straight in. With one, scp can
+        only write as the login user: into a private directory of its own
+        (mktemp -d is mode 0700), from which svc copies it with a single
+        sudo call that creates a NEW file and reads the bytes from stdin -
+        no chmod, no chown, nothing anyone else can read. The upload
+        directory goes in `finally`, whatever happened.
+        """
+        remote_archive = f"{staging}/{pkg.path.name}"
+        user = self.cfg.remote_user
+        if not user:
+            self.remote.put(pkg.path, remote_archive, self.cfg.command_timeout, "transfer")
+            return remote_archive
+        upload = (
+            self.run_as_login(
+                "transfer",
+                "creating a private upload directory",
+                "mktemp -d /tmp/uqf-upload.XXXXXX",
+            )
+            .strip()
+            .splitlines()[-1]
+        )
+        if not upload.startswith("/tmp/uqf-upload."):
+            raise DeployError("transfer", f"mktemp returned {upload!r}, not an upload directory")
+        try:
+            uploaded = f"{upload}/{pkg.path.name}"
+            self.remote.put(pkg.path, uploaded, self.cfg.command_timeout, "transfer")
+            self.run_as_login(
+                "transfer",
+                f"handing the archive to {user}",
+                f"sudo -n -u {q(user)} -- python3 -c {q(WRITE_NEW_PY)} {q(remote_archive)} "
+                f"< {q(uploaded)}",
+            )
+        finally:
+            try:
+                self.run_as_login("cleanup", "removing the upload directory", f"rm -rf {q(upload)}")
+            except DeployError as exc:
+                log(f"could not remove the upload directory {upload}: {exc}")
+        return remote_archive
+
     def transfer(self, pkg: build_release.Artifact, rid: str) -> str:
         staging = f"{self.cfg.dest}/staging/{rid}"
         release = f"{self.releases}/{rid}"
@@ -490,8 +616,7 @@ class Deployment:
             "creating the staging directory",
             f"mkdir -p {q(staging)} {q(self.releases)}",
         )
-        remote_archive = f"{staging}/{pkg.path.name}"
-        self.remote.put(pkg.path, remote_archive, self.cfg.command_timeout, "transfer")
+        remote_archive = self.upload(pkg, staging)
         self.run(
             "transfer",
             "checking the archive and extracting it",
@@ -644,6 +769,10 @@ class Deployment:
 #: back on stdout as name=value lines.
 PREFLIGHT = r"""
 fail() { echo "$*" >&2; exit 1; }
+echo "user=$(id -un)"
+if [ -n "$expected_user" ] && [ "$(id -un)" != "$expected_user" ]; then
+  fail "running as $(id -un), not $expected_user"
+fi
 if [ -e "$dest" ]; then
   test -w "$dest" || fail "destination $dest is not writable"
 else
@@ -699,9 +828,21 @@ def plan(
     release = f"{dep.releases}/{rid}"
     exported = ", ".join(line.split("=", 1)[0].removeprefix("export ") for line in dep.env_lines())
     steps = [
+        "identity  "
+        + (
+            f"ssh/scp as {cfg.host}; every step below as {cfg.remote_user} "
+            f"(sudo -n -iu {cfg.remote_user})"
+            if cfg.remote_user
+            else f"ssh/scp and every step as {cfg.host}"
+        ),
         "lock      " + f"mkdir {dep.lock}",
         "transfer  "
-        + f"scp {pkg.path.name} {cfg.host}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})",
+        + (
+            f"scp {pkg.path.name} to a private upload directory, then {cfg.remote_user} "
+            f"copies it into {cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
+            if cfg.remote_user
+            else f"scp {pkg.path.name} {cfg.host}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
+        ),
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "
         + f"{pkg.manifest['python']['wheels']} wheels",
@@ -747,7 +888,8 @@ def deploy(cfg: Config, remote: Remote, *, root: Path = ROOT, out=sys.stdout) ->
         profile=cfg.profile,
     )
 
-    log(f"preflight on {cfg.host}")
+    log(f"preflight on {cfg.host}" + (f" as {cfg.remote_user}" if cfg.remote_user else ""))
+    dep.check_sudo()
     facts = dep.preflight()
     report.previous_release = facts.get("current")
     if cfg.dry_run:
@@ -850,7 +992,7 @@ def _rollback(dep, release, started, stopped_previous, previous, prev_profile) -
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         cfg = parse_args(argv)
-        return deploy(cfg, Remote(cfg.host, cfg.connect_timeout))
+        return deploy(cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user))
     except DeployError as exc:
         log(f"FAILED at {exc.stage}: {exc}")
         return 1
