@@ -163,15 +163,15 @@ test_ccy_orient_cross_rejects_no_shared_currency:{[t]
     .qunit.assertError[wrapper;::;"no shared currency is rejected"]};
 
 test_invert_book_depth_known:{[t]
-    r:.qfwd.invert_book_depth[1.1000 1.1002;1000000 1000000];
+    r:.qbook.invert_book_depth[1.1000 1.1002;1000000 1000000];
     .testutil.assertApprox[first r;0.9090909 0.9089256;1e-6;"prices invert elementwise, staying best-first"];
     .testutil.assertApprox[last r;1100000 1100200;1e-6;"sizes rescale into the new base currency"]};
 
 test_invert_book_depth_round_trip:{[t]
     prices:1.2500 1.2503 1.2505;
     sizes:2000000 1500000 3000000;
-    once:.qfwd.invert_book_depth[prices;sizes];
-    twice:.qfwd.invert_book_depth[once 0;once 1];
+    once:.qbook.invert_book_depth[prices;sizes];
+    twice:.qbook.invert_book_depth[once 0;once 1];
     .testutil.assertApprox[twice 0;prices;1e-6;"inverting twice restores prices"];
     .testutil.assertApprox[twice 1;sizes;1e-3;"inverting twice restores sizes"]};
 

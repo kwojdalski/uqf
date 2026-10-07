@@ -119,7 +119,7 @@ direct_side:{[row;side;size]
         '"direct_side: side must be `bid or `ask, got ",.Q.s1 side];
     prices:$[side=`bid; row`bid_prices; row`ask_prices];
     sizes:$[side=`bid; row`bid_sizes; row`ask_sizes];
-    swept:.qexec.sweep_price[prices;sizes;size];
+    swept:.qbook.sweep_price[prices;sizes;size];
     `price`fully_filled!(swept`avg_price;swept`fully_filled)}
 
 / One pair's status row: the direct book against its synthetic route.

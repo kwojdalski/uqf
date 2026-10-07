@@ -171,18 +171,6 @@ cross_book:{[sym1;book1;sym2;book2]
     combined:combine_oriented_books[oriented1;oriented2];
     `sym`bid`ask!(orient`cross_sym;combined`bid;combined`ask)};
 
-/ Invert a multi-level depth ladder: BASE/QUOTE -> QUOTE/BASE. Prices
-/ invert elementwise (order stays best-first automatically: inverting a
-/ monotonic ladder reverses its sense exactly the way flipping ask<->bid
-/ requires). Sizes rescale into the new base currency - a level of size
-/ BASE units at price QUOTE/BASE is worth size*price QUOTE units, which
-/ become the new base currency's size.
-/ @param prices level prices, best-first
-/ @param sizes level sizes in the ladder's own base currency, aligned to prices
-/ @return (invertedPrices;rescaledSizes), still best-first
-/ @eg .qfwd.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200f)
-invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
-
 / Private: the (prices;sizes) to sweep for one leg, for one side of the
 / final cross. If this leg doesn't need inverting, that's just its own
 / same-named side; if it does, it's the *other* original side, inverted
@@ -194,8 +182,8 @@ invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 / @private
 oriented_levels:{[side;book;invert]
     $[side=`ask;
-        $[invert; invert_book_depth[book`bid_prices;book`bid_sizes]; (book`ask_prices;book`ask_sizes)];
-        $[invert; invert_book_depth[book`ask_prices;book`ask_sizes]; (book`bid_prices;book`bid_sizes)]]};
+        $[invert; .qbook.invert_book_depth[book`bid_prices;book`bid_sizes]; (book`ask_prices;book`ask_sizes)];
+        $[invert; .qbook.invert_book_depth[book`ask_prices;book`ask_sizes]; (book`bid_prices;book`bid_sizes)]]};
 
 / Private: sweep one side of a 2-leg cross at one size, converting the
 / notional hop-by-hop - leg 2 is swept at the amount of the shared/bridge
@@ -210,11 +198,11 @@ oriented_levels:{[side;book;invert]
 / @private
 cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
     lvl1:oriented_levels[side;book1;invert1];
-    sweep1:.qexec.sweep_price[lvl1 0;lvl1 1;size];
+    sweep1:.qbook.sweep_price[lvl1 0;lvl1 1;size];
     bridge_notional:sweep1[`filled_size]*sweep1[`avg_price];
     lvl2:oriented_levels[side;book2;invert2];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
-    sweep2:$[bridge_notional>0; .qexec.sweep_price[lvl2 0;lvl2 1;bridge_notional]; empty_sweep];
+    sweep2:$[bridge_notional>0; .qbook.sweep_price[lvl2 0;lvl2 1;bridge_notional]; empty_sweep];
     price:sweep1[`avg_price]*sweep2[`avg_price];
     fully_filled:sweep1[`fully_filled] and sweep2[`fully_filled];
     `price`filled_size`fully_filled!(price;sweep1[`filled_size];fully_filled)};
@@ -323,7 +311,7 @@ ccy_orient_chain:{[syms]
 cross_sweep_chain:{[books;side;size;inverts]
     n:count books;
     lvl0:oriented_levels[side;books 0;inverts 0];
-    sweep0:.qexec.sweep_price[lvl0 0;lvl0 1;size];
+    sweep0:.qbook.sweep_price[lvl0 0;lvl0 1;size];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
     acc:sweep0;
     price:sweep0[`avg_price];
@@ -333,7 +321,7 @@ cross_sweep_chain:{[books;side;size;inverts]
     while[i<n;
         bridge_notional:acc[`filled_size]*acc[`avg_price];
         lvl:oriented_levels[side;books i;inverts i];
-        sweep_i:$[bridge_notional>0; .qexec.sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
+        sweep_i:$[bridge_notional>0; .qbook.sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
         price*:sweep_i[`avg_price];
         fully_filled:fully_filled and sweep_i[`fully_filled];
         acc:sweep_i;
@@ -495,8 +483,8 @@ leg_book_as_of:{[quotes;as_of;target_sym]
 single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
     bid_lvl:oriented_levels[`bid;leg_book;invert];
     ask_lvl:oriented_levels[`ask;leg_book;invert];
-    bid_r:.qexec.sweep_price[bid_lvl 0;bid_lvl 1;size];
-    ask_r:.qexec.sweep_price[ask_lvl 0;ask_lvl 1;size];
+    bid_r:.qbook.sweep_price[bid_lvl 0;bid_lvl 1;size];
+    ask_r:.qbook.sweep_price[ask_lvl 0;ask_lvl 1;size];
     mid_price:0.5*bid_r[`avg_price]+ask_r[`avg_price];
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;cross_sym;bid_r`avg_price;bid_r`filled_size;bid_r`fully_filled;ask_r`avg_price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
@@ -1021,7 +1009,7 @@ swap_value:{[swap;market;valuation_date;opts]
 / .
 / A batch of quotes moved from one pair convention to its inverse (EURUSD to
 / USDEUR), composing the primitives above: invert_book's side swap for scalar
-/ bid/ask, invert_book_depth's size rescaling for ladders, and for forward
+/ bid/ask, .qbook.invert_book_depth's size rescaling for ladders, and for forward
 / points a trip through the OUTRIGHT - 1/F minus 1/S, in the target's pips -
 / never a negation of the source points, which is wrong whenever F is not S.
 
@@ -1075,8 +1063,8 @@ convert_quotes:{[quotes;target_conventions;opts]
             out:.[out;(w;`bid_size);:;old_ask_size*old_ask];
             out:.[out;(w;`ask_size);:;old_bid_size*old_bid]]];
     if[all `bid_prices`bid_sizes`ask_prices`ask_sizes in c;
-        new_bids:invert_book_depth'[out[w;`ask_prices];out[w;`ask_sizes]];
-        new_asks:invert_book_depth'[out[w;`bid_prices];out[w;`bid_sizes]];
+        new_bids:.qbook.invert_book_depth'[out[w;`ask_prices];out[w;`ask_sizes]];
+        new_asks:.qbook.invert_book_depth'[out[w;`bid_prices];out[w;`bid_sizes]];
         out:.[out;(w;`bid_prices);:;new_bids[;0]];
         out:.[out;(w;`bid_sizes);:;new_bids[;1]];
         out:.[out;(w;`ask_prices);:;new_asks[;0]];

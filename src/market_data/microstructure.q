@@ -267,8 +267,8 @@ book_convexity:{[prices;side]
 vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     ask_size_target:notional%first ask_prices;
     bid_size_target:notional%first bid_prices;
-    buy_leg:.qexec.sweep_price[ask_prices;ask_sizes;ask_size_target];
-    sell_leg:.qexec.sweep_price[bid_prices;bid_sizes;bid_size_target];
+    buy_leg:.qbook.sweep_price[ask_prices;ask_sizes;ask_size_target];
+    sell_leg:.qbook.sweep_price[bid_prices;bid_sizes;bid_size_target];
     0.5*(buy_leg`avg_price)+sell_leg`avg_price};
 
 / VAMP (volume-adjusted mid price): convert notional into a size via each

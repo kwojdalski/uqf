@@ -30,7 +30,7 @@
 //
 //   2. The directories do NOT imply a dependency layering, and it would be
 //      wrong to assume one. The module graph is not acyclic:
-//        pricing/forwards.q   -> .qexec.sweep_price, .qexec.markout
+//        pricing/forwards.q   -> .qbook.sweep_price, .qexec.markout
 //        execution/execution.q -> .qfwd.time_col, .qfwd.apply_col_precedence
 //      That is a genuine cycle between pricing/ and execution/, and it
 //      resolves only because q binds names at call time rather than at

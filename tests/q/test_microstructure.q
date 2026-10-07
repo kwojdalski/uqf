@@ -122,8 +122,8 @@ test_vamp_matches_two_explicit_sweep_price_calls:{[t]
     notional:500000;
     ask_size_target:notional%1.1002;
     bid_size_target:notional%1.1000;
-    buy_leg:.qexec.sweep_price[1.1002 1.1004;1000000 1000000;ask_size_target];
-    sell_leg:.qexec.sweep_price[1.1000 1.0998;1000000 1000000;bid_size_target];
+    buy_leg:.qbook.sweep_price[1.1002 1.1004;1000000 1000000;ask_size_target];
+    sell_leg:.qbook.sweep_price[1.1000 1.0998;1000000 1000000;bid_size_target];
     expected:0.5*(buy_leg`avg_price)+sell_leg`avg_price;
     r:.qmicro.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
     .testutil.assertApprox[first r;expected;1e-9;"vamp matches averaging two direct sweep_price legs"]};

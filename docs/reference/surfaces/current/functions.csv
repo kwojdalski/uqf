@@ -22,6 +22,8 @@ qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
 qbook,derive_level_groups,function,2,col_names prefix_targets
 qbook,fold_level_columns,function,2,tbl level_groups
+qbook,invert_book_depth,function,2,prices sizes
+qbook,sweep_price,function,3,prices sizes target_size
 qbook,symbolize_columns,function,2,tbl sym_cols
 qcal,add_business_days,function,5,d n ccys calendars weekend
 qcal,add_months,function,2,d n
@@ -567,7 +569,6 @@ qexec,markout_at_horizons,function,3,trades quotes horizons
 qexec,reject_ratio,function,2,num_rejects num_requests
 qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,slippage,function,4,side arrival_price exec_price pip_factor
-qexec,sweep_price,function,3,prices sizes target_size
 qexec,venue_quality,function,5,quotes requests trades window config
 qexec,venue_quality_defaults,dict,,
 qexec,vwap,function,2,prices sizes
@@ -599,7 +600,6 @@ qfwd,implied_domestic_rate,function,4,spot fwd rf t
 qfwd,implied_foreign_rate,function,4,spot fwd rd t
 qfwd,inverse_pair,function,1,pair
 qfwd,invert_book,function,1,book
-qfwd,invert_book_depth,function,2,prices sizes
 qfwd,invert_rate,function,1,rate
 qfwd,mock_fwd_curve,table,,
 qfwd,mock_quotes,table,,

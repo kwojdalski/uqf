@@ -572,37 +572,4 @@ vwap_expanding:{[prices;sizes]
     total_sizes:sums sizes;
     weighted_sums%total_sizes};
 
-/ Walk a stack of order book levels to price a sweep of target_size: the
-/ blended price you'd get consuming best-to-worst levels until target_size
-/ is filled or the book runs out. Pass the ask side (best/lowest price
-/ first) to price a buy/sweep-the-offer, or the bid side (best/highest
-/ price first) to price a sell/sweep-the-bid - this function doesn't care
-/ which side it is, only that prices/sizes are already ordered best-first.
-/ @param prices level prices, best (most aggressive) first
-/ @param sizes level sizes, same length as prices, aligned to the same levels
-/ @param target_size the size you want to sweep
-/ @return dict `avg_price`worst_price`filled_size`fully_filled - avg_price is
-/   the size-weighted blended execution price (null if nothing filled),
-/   worst_price is the price of the last level touched (the marginal fill,
-/   null if nothing filled), filled_size is how much actually filled (may
-/   be less than target_size if the book doesn't have enough depth), and
-/   fully_filled is 1b iff filled_size>=target_size
-/ @throws error if target_size is not positive, or prices/sizes differ in length
-/ @eg .qexec.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled!(1.100233;1.1005;3000000;1b)
-sweep_price:{[prices;sizes;target_size]
-    if[target_size<=0; '"sweep_price: size must be positive"];
-    if[(count prices)<>count sizes; '"sweep_price: prices and sizes must be the same length"];
-    cum_size:sums sizes;
-    prior_cum:cum_size-sizes;
-    capped_cum:target_size&cum_size;
-    raw_consumed:capped_cum-prior_cum;
-    consumed:0|raw_consumed;
-    filled_size:sum consumed;
-    notional:sum consumed*prices;
-    avg_price:$[filled_size>0; notional%filled_size; 0n];
-    touched_idx:where consumed>0;
-    worst_price:$[count touched_idx; prices last touched_idx; 0n];
-    fully_filled:filled_size>=target_size;
-    `avg_price`worst_price`filled_size`fully_filled!(avg_price;worst_price;filled_size;fully_filled)};
-
 \d .
