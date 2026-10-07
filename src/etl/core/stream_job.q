@@ -92,7 +92,7 @@ namespace:{[job] ` sv job_root,job}
 / @throws error naming every missing or malformed field at once
 define:{[job;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
-    if[job in key @[value;`.qetl.job.bounded.worker_cfg;{()}];
+    if[job in @[{.qetl.job.bounded.defined[]};::;{[e] `symbol$()}];
         '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
     decl[`ns]:namespace job;

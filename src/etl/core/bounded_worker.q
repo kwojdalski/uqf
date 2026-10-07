@@ -61,7 +61,23 @@
 / name - so `cfg[worker]:...` inside define would have written to the
 / parameter and left this registry silently empty. Not `cfgs` either, which
 / it was: a pluralised contraction is not a word.
-worker_cfg:(`symbol$())!();
+/ .
+/ A KEYED TABLE declared with its columns (#512), not a dictionary of
+/ dictionaries: that collapses into a table on the first entry, depends on
+/ every config having one key set, and on PeachQ throws on the second row.
+/ Every config still has one key set - normalised gives each optional key its
+/ default - but now the table is declared rather than emergent. The typed
+/ columns hold what define validates to one type; the general ones hold a
+/ function, a dictionary, a vector or (::). A row is .qetl.job.bounded.def;
+/ the names are .qetl.job.bounded.defined.
+worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
+    transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:())
+
+/ Every defined worker's name.
+/ @return a symbol vector, empty when no worker has been defined
+/ @eg .qetl.job.bounded.defined[]
+defined:{[] (key worker_cfg)`name}
 
 / `transform` is REQUIRED, not optional like `check`. A check is a guard a
 / worker may honestly have no use for; a transform is the job itself. A
@@ -203,8 +219,14 @@ define:{[worker;decl]
     / methods rather than from define naming the key.
     if[`ns in key decl;
         '"define: ",string[worker],"'s namespace is derived - .qpipe.job.",string[worker]," - not configured; drop the ns key"];
+    / A key no column holds would have nowhere to go: refused by name, where
+    / the collapsed dictionary this was refused it with a bare 'mismatch.
+    unknown:(key decl) except cols value worker_cfg;
+    if[count unknown;
+        '"define: ",string[worker]," declares ",(", " sv string unknown),
+         ", which a worker does not take - the keys are ",", " sv string cols value worker_cfg];
     decl[`ns]:namespace worker;
-    if[not 16h=abs type decl`width;
+    if[not -16h=type decl`width;
         '"define: ",string[worker],"'s width must be a timespan, e.g. 1D"];
     if[not (decl`width)>0D00:00;
         '"define: ",string[worker],"'s width must be positive - a zero width plans infinitely many empty windows"];
@@ -276,8 +298,8 @@ define:{[worker;decl]
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
     / worker as the claimant.
-    clash:(key worker_cfg) where ((value worker_cfg)[;`dataset]=decl`dataset)
-                           and (value worker_cfg)[;`partition]=part;
+    ds:decl`dataset;
+    clash:exec name from worker_cfg where dataset=ds, partition=part;
     clash:clash except worker;
     if[count clash;
         '"define: ",string[worker]," declares dataset ",string[decl`dataset],
@@ -291,7 +313,8 @@ define:{[worker;decl]
          " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
 
     / Normalise to the full key set before storing - see optional_cfg.
-    worker_cfg[worker]:normalised decl;
+    stored:normalised decl;
+    `.qetl.job.bounded.worker_cfg upsert (worker,stored cols value worker_cfg);
     / Last, so a refused declaration leaves no half-stamped namespace behind.
     inherit[worker;decl`ns];
     worker}
@@ -433,7 +456,7 @@ normalised:{[cfg]
 / @throws error naming the worker when define was never called for it
 / @eg .qetl.job.bounded.def `demo_deals_backfill
 def:{[worker]
-    if[not worker in key worker_cfg;
+    if[not worker in defined[];
         '"def: ",string[worker]," has no configuration - call .qetl.job.bounded.define first"];
     worker_cfg worker}
 

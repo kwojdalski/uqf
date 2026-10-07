@@ -191,7 +191,7 @@ on_worker:{[dataset;worker;spec_fn]
 / @eg `demo_deals in .qetl.reaction.fillable[]  ->  1b
 fillable:{[]
     if[not `worker_cfg in key `.qetl.job.bounded; :`$()];
-    (),distinct {x`dataset} each value .qetl.job.bounded.worker_cfg}
+    exec distinct dataset from .qetl.job.bounded.worker_cfg}
 
 / Private: refuse a dataset no bounded worker fills. Here, beneath all three
 / ways to register, and not only in `uqs job new --triggered-by`: a reaction
@@ -266,7 +266,7 @@ dag_consumers:{[dataset]
 /   (dataset~reaction names whose output is a claim)
 audit:{[]
     reacting:key reactions;
-    datasets:distinct reacting,$[`jobs in key @[value;`.qetl.dag;{()}]; raze {(.qetl.dag.def x)`outputs} each key .qetl.dag.jobs; `$()];
+    datasets:distinct reacting,$[`jobs in key @[value;`.qetl.dag;{()}]; raze {(.qetl.dag.def x)`outputs} each .qetl.dag.defined[]; `$()];
     / Empty in the healthy case - every dataset has a reaction - where
     / (!). flip () is a 'type; so the empty dict is built, not derived.
     pairs:{[d] (d;dag_consumers d)} each datasets where 0=count each for_dataset each datasets;

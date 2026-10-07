@@ -46,9 +46,9 @@ test_the_root_namespace_is_not_recognised:{[t]
         "the root has no empty-symbol back-reference, so it answers 0b"]};
 
 test_an_ordinary_dictionary_is_not_a_namespace:{[t]
-    / .qetl.job.bounded.worker_cfg is a symbol-keyed dictionary that is NOT a namespace,
-    / which is the case the empty-symbol test exists to separate.
-    .qunit.assertEquals[.qns.is_namespace .qetl.job.bounded.worker_cfg;0b;
+    / .qetl.job.stream.procnames is a symbol-keyed dictionary that is NOT a
+    / namespace, which is the case the empty-symbol test exists to separate.
+    .qunit.assertEquals[.qns.is_namespace .qetl.job.stream.procnames;0b;
         "a symbol-keyed dictionary with no empty key is not a namespace"]};
 
 test_a_char_keyed_dictionary_is_not_a_namespace:{[t]

@@ -58,8 +58,7 @@ setUp_sources:{[]
     }
 
 drop_sources:{[]
-    mine:`tz_london`tz_summer where `tz_london`tz_summer in key .qetl.source.sources;
-    if[count mine; .qetl.source.sources:mine _ .qetl.source.sources];
+    .testutil.drop_rows[`.qetl.source.sources;`tz_london`tz_summer];
     }
 
 / --- the z->p cast bug class -------------------------------------

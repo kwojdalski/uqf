@@ -40,9 +40,17 @@
 
 / ------------------------------------------------------------- REGISTRY
 
-/ job -> spec dict. A dictionary rather than a table so a spec can hold
-/ variable-length symbol vectors without nesting rules getting in the way.
-jobs:(`symbol$())!();
+/ job -> spec, as a KEYED TABLE declared with its columns (#512). It was a
+/ dictionary of dictionaries, which q collapses into a table on the first
+/ entry anyway - and on PeachQ, refuses a second row added by key. inputs and
+/ outputs are general columns, because each holds a symbol VECTOR of its own
+/ length. A row is .qetl.dag.def; the names are .qetl.dag.defined.
+jobs:([name:`symbol$()] kind:`symbol$(); inputs:(); outputs:())
+
+/ Every registered job's name.
+/ @return a symbol vector, empty when nothing has registered
+/ @eg .qetl.dag.defined[]
+defined:{[] (key jobs)`name}
 
 / The keys every spec must carry. `kind` is descriptive rather than
 / behavioural - nothing branches on it - but it is what lets a viz tool
@@ -79,25 +87,25 @@ register:{[job;decl]
     if[not (decl`kind) in kinds;
         '"register: ",string[job],"'s kind ",string[decl`kind]," is not one of ",
          ", " sv string kinds];
-    jobs[job]:`kind`inputs`outputs!(decl`kind; `$(); `$());
-    jobs[job;`inputs]:(),decl`inputs;
-    jobs[job;`outputs]:(),decl`outputs;
+    / Edges stored as symbol VECTORS whatever shape they arrived in, so count
+    / means the number of tables - see .regtest's edge normalisation test.
+    `.qetl.dag.jobs upsert (job;decl`kind;(`symbol$()),decl`inputs;(`symbol$()),decl`outputs);
     job}
 
 / A job's spec, or a refusal naming it.
 / @throws error when the job was never registered
 def:{[job]
-    if[not job in key jobs;
+    if[not job in defined[];
         '"def: ",string[job]," is not a registered job"];
     jobs job}
 
 / Forget every registration. For tests, and for rebuilding the graph after
 / the underlying registries change.
-reset:{[] jobs::(`symbol$())!(); ()}
+reset:{[] jobs::0#jobs; ()}
 
 / The registry as a table, for reading rather than for lookup.
 registry:{[]
-    js:asc key jobs;
+    js:asc defined[];
     ([] job:js;
         kind:{(def x)`kind} each js;
         inputs:{(def x)`inputs} each js;
@@ -107,10 +115,10 @@ registry:{[]
 
 / Which jobs write this table? Empty means nothing here produces it, which
 / makes it an external input rather than an error.
-producers:{[table_name] js:key jobs; js where {[t;j] t in (def j)`outputs}[table_name] each js}
+producers:{[table_name] js:defined[]; js where {[t;j] t in (def j)`outputs}[table_name] each js}
 
 / Which jobs read this table?
-consumers:{[table_name] js:key jobs; js where {[t;j] t in (def j)`inputs}[table_name] each js}
+consumers:{[table_name] js:defined[]; js where {[t;j] t in (def j)`inputs}[table_name] each js}
 
 / Private: the empty edge table, so every return path has one shape.
 no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
@@ -121,7 +129,7 @@ no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
 / drawing shows where data ENTERS the system rather than silently omitting
 / it. Dropping those rows would make an unconnected job look like a root.
 edges:{[]
-    js:key jobs;
+    js:defined[];
     if[0=count js; :no_edges[]];
     e:raze {[j]
         ins:(def j)`inputs;
@@ -137,12 +145,12 @@ edges:{[]
 
 / Tables read by some job and written by none - where data enters.
 external_inputs:{[]
-    ins:distinct raze {(def x)`inputs} each key jobs;
+    ins:distinct raze {(def x)`inputs} each defined[];
     ins where 0=count each producers each ins}
 
 / Tables written by some job and read by none - where data comes to rest.
 sinks:{[]
-    outs:distinct raze {(def x)`outputs} each key jobs;
+    outs:distinct raze {(def x)`outputs} each defined[];
     outs where 0=count each consumers each outs}
 
 / Private: job-level dependency pairs, with external entry points dropped -
@@ -162,7 +170,7 @@ job_edges:{[] distinct select upstream, downstream from edges[] where not null u
 / @throws error naming every job in the cycle
 topological:{[]
     e:job_edges[];
-    remaining:key jobs;
+    remaining:defined[];
     order:`$();
     while[count remaining;
         blocked:distinct exec downstream from e where upstream in remaining,
@@ -177,7 +185,7 @@ topological:{[]
 / The same order, grouped into parallel-safe layers.
 layers:{[]
     e:job_edges[];
-    remaining:key jobs;
+    remaining:defined[];
     out:();
     while[count remaining;
         blocked:distinct exec downstream from e where upstream in remaining,
@@ -251,10 +259,10 @@ d2:{[]
                 safe_id[r`upstream]," -> ",safe_id[r`downstream],": ",string r`tbl]
           }[asserted] each e;
     / A job with no edges at all would otherwise not appear.
-    lonely:key[jobs] where {[j] 0=count ?[edges[];enlist (or;(=;`upstream;enlist j);
-                                                            (=;`downstream;enlist j));0b;()]} each key jobs;
+    lonely:defined[] where {[j] 0=count ?[edges[];enlist (or;(=;`upstream;enlist j);
+                                                            (=;`downstream;enlist j));0b;()]} each defined[];
     lines,:{safe_id[x],": \"",string[x],"\""} each lonely;
-    lines,:{safe_id[x],".style.stroke-dash: 3"} each asserted inter key jobs;
+    lines,:{safe_id[x],".style.stroke-dash: 3"} each asserted inter defined[];
     "\n" sv lines}
 
 / The jobs in the graph whose outputs were ASSERTED rather than derived: the
@@ -309,9 +317,9 @@ external_ref:{[source;table_name] `$(string table_name),"@",string source}
 / @eg .qetl.dag.adopt_workers[]
 adopt_workers:{[]
     if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
-    ws:key .qetl.job.bounded.worker_cfg;
+    ws:.qetl.job.bounded.defined[];
     {[w]
-        cfg:.qetl.job.bounded.worker_cfg w;
+        cfg:.qetl.job.bounded.def w;
         d:.qetl.source.def cfg`source;
         register[w;`kind`inputs`outputs!
             (`bounded; external_ref[cfg`source;d`table_name]; d`target)]

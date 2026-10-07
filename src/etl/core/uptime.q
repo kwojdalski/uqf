@@ -112,7 +112,7 @@ gaps:{[job;range_from;range_to]
 / @eg .qetl.uptime.twins `demo_markout  ->  ,`hdb_demo_markouts_backfill
 twins:{[job]
     out:(),(.qetl.job.stream.def job)`publishes;
-    workers:key .qetl.job.bounded.worker_cfg;
+    workers:.qetl.job.bounded.defined[];
     workers where {[out;w] ((.qetl.job.bounded.def w)`dataset) in out}[out] each workers}
 
 / Load what earlier processes recorded. Called by a reader that starts cold

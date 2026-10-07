@@ -561,11 +561,11 @@ test_a_real_run_after_a_dry_run_does_everything:{[t]
 / worker publishes nulls and records the window as covered.
 test_a_contract_breaking_source_fails_the_window:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    orig:.qetl.source.sources[`demo_deals]`fixture;
-    .qetl.source.sources[`demo_deals]:@[.qetl.source.sources`demo_deals;`fixture;:;
+    orig:(.qetl.source.def `demo_deals)`fixture;
+    .testutil.set_field[`.qetl.source.sources;`demo_deals;`fixture;
         {([] deal_time:enlist .ddbftest.d 1; sym:enlist `EURUSD)}];
     r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`err!(`threw;x)}];
-    .qetl.source.sources[`demo_deals]:@[.qetl.source.sources`demo_deals;`fixture;:;orig];
+    .testutil.set_field[`.qetl.source.sources;`demo_deals;`fixture;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
 / --- the source query runs under the retry policy -----------------------
@@ -574,8 +574,8 @@ test_a_contract_breaking_source_fails_the_window:{[t]
 / fixture is called inside .qetl.source.fetch_window, exactly where a live
 / source's query is, so a throwing fixture is a throwing query.
 swap_fixture:{[f]
-    orig:.qetl.source.sources[`demo_deals]`fixture;
-    .qetl.source.sources[`demo_deals]:@[.qetl.source.sources`demo_deals;`fixture;:;f];
+    orig:(.qetl.source.def `demo_deals)`fixture;
+    .testutil.set_field[`.qetl.source.sources;`demo_deals;`fixture;f];
     orig}
 
 / The query used to run BEFORE with_retry was entered: fetch applied its
@@ -788,7 +788,7 @@ test_a_workers_own_publish_is_kept_and_reached_by_run:{[t]
     .qpipe.job.overriding_worker.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qpipe.job.overriding_worker.run[];
     .qpipe.job.overriding_worker.cleanup[];
-    .qetl.job.bounded.worker_cfg:(enlist `overriding_worker) _ .qetl.job.bounded.worker_cfg;
+    .testutil.drop_rows[`.qetl.job.bounded.worker_cfg;`overriding_worker];
     .qunit.assertEquals[r`state;`completed;"the run completes through the override"];
     .qunit.assertEquals[count .ddbftest.seen;3;"every window's rows went through the worker's own publish"];
     .qunit.assertEquals[count value `demo_deals;0;
@@ -868,14 +868,14 @@ test_the_clash_error_reads_as_a_sentence:{[t]
 / uqs derives its process registry from these declarations, so the
 / procname a worker declares is the process it runs as.
 test_a_worker_runs_as_the_procname_it_declares:{[t]
-    .qunit.assertEquals[(.qetl.job.bounded.worker_cfg `demo_deals_backfill)`procname;`deals_backfill1;
+    .qunit.assertEquals[(.qetl.job.bounded.def `demo_deals_backfill)`procname;`deals_backfill1;
         "demo_deals_backfill declares deals_backfill1, its process name before the registry was derived"]};
 
 test_a_worker_declaring_no_procname_runs_as_its_name_and_1:{[t]
     .qetl.job.bounded.define[`noproc_slice;
         `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`NOPROC)];
-    cfg:.qetl.job.bounded.worker_cfg `noproc_slice;
-    .qetl.job.bounded.worker_cfg:(enlist `noproc_slice) _ .qetl.job.bounded.worker_cfg;
+    cfg:.qetl.job.bounded.def `noproc_slice;
+    .testutil.drop_rows[`.qetl.job.bounded.worker_cfg;`noproc_slice];
     .qunit.assertEquals[(cfg`procname;cfg`note);(`noproc_slice1;"");
         "an undeclared procname defaults to <worker>1 and an undeclared note to empty"]};
 
@@ -899,7 +899,7 @@ test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
             `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY)];
         `usdjpy_slice;
         "two partitions of one dataset are two distinguishable claims, so both register"];
-    .qetl.job.bounded.worker_cfg:(`eurusd_slice`usdjpy_slice) _ .qetl.job.bounded.worker_cfg;};
+    .testutil.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice`usdjpy_slice];};
 
 / The refusal has to survive the new dimension: same dataset, same partition,
 / different worker is the case that was always wrong and still is.
@@ -908,7 +908,7 @@ test_two_workers_may_not_claim_one_partition_of_a_dataset:{[t]
         `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     err:@[{.qetl.job.bounded.define[`another_eurusd_slice;x]; ""};
         `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD);{x}];
-    .qetl.job.bounded.worker_cfg:(enlist `eurusd_slice) _ .qetl.job.bounded.worker_cfg;
+    .testutil.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice];
     .qunit.assertEquals[err like "*eurusd_slice*";1b;
         "the second claim on one dataset AND partition is refused, naming the holder"]};
 
@@ -923,7 +923,7 @@ test_a_declared_partition_is_stored_as_given:{[t]
     .qetl.job.bounded.define[`eurusd_slice;
         `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     r:.qetl.job.bounded.partition_of `eurusd_slice;
-    .qetl.job.bounded.worker_cfg:(enlist `eurusd_slice) _ .qetl.job.bounded.worker_cfg;
+    .testutil.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice];
     .qunit.assertEquals[r;`EURUSD;"the declared partition is what coverage will be recorded under"]};
 
 test_a_non_symbol_partition_is_refused:{[t]
@@ -946,8 +946,7 @@ test_a_worker_may_redeclare_itself:{[t]
 / the PAIR now: checking datasets alone would fail the day a dataset is
 / deliberately split across workers, which is the thing #185 set out to allow.
 test_the_two_shipped_workers_claim_distinct_dataset_partitions:{[t]
-    c:value .qetl.job.bounded.worker_cfg;
-    claims:flip (c[;`dataset];c[;`partition]);
+    claims:flip value exec dataset, partition from .qetl.job.bounded.worker_cfg;
     .qunit.assertEquals[count[claims];count distinct claims;
         "every registered worker owns its dataset and partition alone"]};
 
@@ -1041,17 +1040,17 @@ double_notional:{[]
 / Same shape as with_transform below, for the whole dictionary rather than one
 / field.
 with_declaration_restored:{[f]
-    orig:.qetl.job.bounded.worker_cfg[`demo_deals_backfill];
+    orig:.qetl.job.bounded.def `demo_deals_backfill;
     r:@[f;::;{(`threw;x)}];
-    .qetl.job.bounded.worker_cfg[`demo_deals_backfill]:orig;
+    .testutil.put_row[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;orig];
     r};
 
 with_transform:{[nm;f]
     orig:.qetl.job.bounded.def[`demo_deals_backfill]`transform;
-    .qetl.job.bounded.worker_cfg[`demo_deals_backfill;`transform]:nm;
+    .testutil.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`transform;nm];
     r:@[f;::;{(`threw;x)}];
-    .qetl.job.bounded.worker_cfg[`demo_deals_backfill;`transform]:orig;
-    .qetl.transform.registry:(`ddbftest_double`ddbftest_throws) _ .qetl.transform.registry;
+    .testutil.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`transform;orig];
+    .testutil.drop_rows[`.qetl.transform.registry;`ddbftest_double`ddbftest_throws];
     r};
 
 test_the_published_rows_are_the_transform_output:{[t]
@@ -1065,8 +1064,8 @@ test_the_published_rows_are_the_transform_output:{[t]
         "what reaches the target is the transform's output, not the fetched batch"]};
 
 test_a_throwing_transform_fails_the_window_and_publishes_nothing:{[t]
-    .qetl.transform.registry[`ddbftest_throws]:.qetl.transform.registry`demo_deals_passthrough;
-    .qetl.transform.registry[`ddbftest_throws;`fn]:{[batch] '"boom"};
+    .testutil.put_row[`.qetl.transform.registry;`ddbftest_throws;.qetl.transform.def `demo_deals_passthrough];
+    .testutil.set_field[`.qetl.transform.registry;`ddbftest_throws;`fn;{[batch] '"boom"}];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`xf2;1;4]];
     r:.ddbftest.with_transform[`ddbftest_throws;{.qpipe.job.demo_deals_backfill.run[]}];
     .qunit.assertEquals[(r`windows_failed;count value `demo_deals;
@@ -1083,7 +1082,7 @@ test_a_transform_that_does_not_read_the_source_contract_is_refused:{[t]
     .qetl.transform.passthrough[`ddbftest_wrong_shape;`batch;([] sym:`symbol$(); px:`float$());([] sym:enlist `EURUSD; px:enlist 1.1)];
     err:@[{.qetl.job.bounded.define[`wrong_shape;x]; ""};
         `source`dataset`width`transform!(`demo_deals;`wrong_shape_ds;1D;`ddbftest_wrong_shape);{x}];
-    .qetl.transform.registry:(enlist `ddbftest_wrong_shape) _ .qetl.transform.registry;
+    .testutil.drop_rows[`.qetl.transform.registry;`ddbftest_wrong_shape];
     .qunit.assertEquals[err like "*does not read source demo_deals*";1b;
         "a transform written against another shape fails at declaration, not on the first window"]};
 
@@ -1103,9 +1102,9 @@ bad_fixture:{[]
 
 with_bad_fixture:{[f]
     orig:(.qetl.source.def[`demo_deals])`fixture;
-    .qetl.source.sources[`demo_deals;`fixture]:{[] .ddbftest.bad_fixture[]};
+    .testutil.set_field[`.qetl.source.sources;`demo_deals;`fixture;{[] .ddbftest.bad_fixture[]}];
     r:@[f;::;{(`threw;x)}];
-    .qetl.source.sources[`demo_deals;`fixture]:orig;
+    .testutil.set_field[`.qetl.source.sources;`demo_deals;`fixture;orig];
     r};
 
 test_the_check_passes_the_real_fixture:{[t]

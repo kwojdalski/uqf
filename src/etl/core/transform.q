@@ -47,8 +47,23 @@
 
 \d .qetl.transform
 
-/ name -> declaration.
-registry:(`symbol$())!();
+/ name -> declaration, as a KEYED TABLE declared with its columns (#512).
+/ .
+/ It was a dictionary of dictionaries, which q silently collapses into a table
+/ on the first entry - correct here only because define writes the same five
+/ keys every time, and refused on PeachQ, where adding a row by key to a
+/ collapsed dictionary throws. Declared, nothing depends on the collapse.
+/ .
+/ The general columns hold dictionaries, tables and functions; as_of is typed,
+/ so a row's default is a boolean false rather than whatever the first
+/ registration happened to store. A row is .qetl.transform.def; the names are
+/ .qetl.transform.defined.
+registry:([name:`symbol$()] inputs:(); output:(); fn:(); examples:(); as_of:`boolean$())
+
+/ Every registered transform's name.
+/ @return a symbol vector, empty when nothing has registered
+/ @eg .qetl.transform.defined[]
+defined:{[] (key registry)`name}
 
 required_keys:`inputs`output`fn`examples
 
@@ -166,7 +181,8 @@ define:{[name;decl]
     check_example[name;ins;decl`output;clock] each exs;
     if[not any {[e] any 0<count each value e`inputs} each exs;
         'who,"'s examples are all empty - at least one must carry rows"];
-    registry[name]:`inputs`output`fn`examples`as_of!(ins;decl`output;fn;exs;clock);
+    / upsert, so a second define of one name replaces its row
+    `.qetl.transform.registry upsert (name;ins;decl`output;fn;exs;clock);
     name}
 
 / Private: an example is well-formed against its transform's declaration.
@@ -209,7 +225,7 @@ passthrough:{[name;input_name;schema;rows]
 / A transform's declaration, or an error naming it.
 / @throws error when no such transform is registered
 def:{[name]
-    if[not name in key registry;
+    if[not name in defined[];
         '"transform ",string[name]," is not registered - declare it with .qetl.transform.define"];
     registry name}
 
@@ -305,7 +321,7 @@ verify_example:{[name;d;ex]
 / Verify every registered transform.
 / @return table of transform, example, passed, detail
 verify_all:{[]
-    raze {[name] update transform:name from verify name} each key registry}
+    raze {[name] update transform:name from verify name} each defined[]}
 
 / Verify one transform, or throw naming the first failure.
 / @throws error naming the transform, the example and why it failed

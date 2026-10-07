@@ -27,9 +27,9 @@ good_example:{[] enlist `inputs`expected!(enlist[`quotes]!enlist .xftest.two_quo
 / transform passes" test sees only the shipped ones.
 shipped:`symbol$()
 
-beforeNamespace_remember:{[] `.xftest.shipped set key .qetl.transform.registry;}
+beforeNamespace_remember:{[] `.xftest.shipped set .qetl.transform.defined[];}
 
-tearDown_forget:{[] .qetl.transform.registry:(.xftest.shipped) # .qetl.transform.registry;}
+tearDown_forget:{[] .testutil.drop_rows[`.qetl.transform.registry;.qetl.transform.defined[] except .xftest.shipped];}
 
 / --- every registered transform -------------------------------------------
 
@@ -40,7 +40,7 @@ test_every_registered_transform_passes_its_examples:{[t]
 
 test_the_stream_jobs_and_backfill_workers_all_declare_a_transform:{[t]
     want:`demo_execution_quality`cross_quotes`position`mkt_orderbook`demo_deals_passthrough`demo_events_passthrough;
-    .qunit.assertEquals[all want in key .qetl.transform.registry;1b;"each shipped job's transform is registered"]};
+    .qunit.assertEquals[all want in .qetl.transform.defined[];1b;"each shipped job's transform is registered"]};
 
 / A stream transform's output is published positionally by .u.upd, so its
 / columns must be the tickerplant table's, in order, minus the `time` .u.upd
@@ -119,7 +119,7 @@ test_apply_refuses_a_missing_input:{[t]
 
 test_apply_refuses_output_columns_out_of_order:{[t]
     .qetl.transform.define[`xf_mid;.xftest.decl[.xftest.mid_fn;.xftest.good_example[]]];
-    .qetl.transform.registry[`xf_mid;`fn]:{[q] select mid:(bid+ask)%2, sym from q};
+    .testutil.set_field[`.qetl.transform.registry;`xf_mid;`fn;{[q] select mid:(bid+ask)%2, sym from q}];
     .qunit.assertError[{.qetl.transform.apply[`xf_mid;x]};enlist[`quotes]!enlist .xftest.two_quotes;
         ".u.upd publishes columns positionally, so order is part of the output schema"]};
 
@@ -197,7 +197,7 @@ test_a_passthrough_returns_its_input:{[t]
 / the transform mutate a global, so the rebuild has to agree with folding
 / the same fills through .qpos directly.
 test_next_book_matches_folding_the_fills_through_qpos:{[t]
-    ex:first .qetl.transform.registry[`position;`examples];
+    ex:first (.qetl.transform.def `position)`examples;
     i:ex`inputs;
     out:.qetl.transform.apply[`position;i];
     book:.qpipe.job.posbook.next_book[i`book;out];
