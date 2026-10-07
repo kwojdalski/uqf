@@ -16,7 +16,6 @@ from uqs.model.jobs import job_rows
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
-from uqs.stack import runtime_profiles
 from uqs.stack.env import build_env
 from uqs.stack.procs import (
     _read_overrides,
@@ -164,8 +163,7 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     """
     rows = []
     slots = profiles.allowance()
-    known = runtime_profiles.known_processes(paths)
-    for name in runtime_profiles.startable_profiles(known):
+    for name in paths.runtime_declaration.profiles:
         resolved = profiles.resolve([name])
         held = profiles.plant_slots(resolved)
         rows.append(

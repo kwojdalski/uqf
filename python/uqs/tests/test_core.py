@@ -361,8 +361,8 @@ def test_the_torq_runtime_bootstraps_on_the_vendored_schema(fake_paths: UqsPaths
     assert not fake_paths.torqdata.exists(), "the default runtime's data is untouched"
 
 
-def test_the_torq_runtime_lists_only_the_profiles_it_can_start(fake_paths: UqsPaths):
-    from uqs.model.profiles import ESSENTIAL_INFRA
+def test_the_torq_runtime_lists_its_own_profiles(fake_paths: UqsPaths):
+    from uqs.model.infra import ESSENTIAL_INFRA
 
     vendored = fake_paths.torqapphome / "appconfig" / "process.csv"
     vendored.write_text(
@@ -370,7 +370,7 @@ def test_the_torq_runtime_lists_only_the_profiles_it_can_start(fake_paths: UqsPa
         + "".join(f"localhost,1,x,{name},,1,0,,,x.q,1,,q\n" for name in ESSENTIAL_INFRA)
     )
     listed = [row["profile"] for row in listing.LISTABLE_KINDS["profiles"](_torq(fake_paths), 6050)]
-    assert listed == ["essential"], "every other profile needs a uqf process"
+    assert listed == ["essential", "feed", "full"], "torq's own profiles, not uqf's filtered"
 
 
 def test_bootstrap_writes_gateway1_an_access_list_with_the_ordinary_users(
