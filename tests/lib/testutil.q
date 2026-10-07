@@ -207,4 +207,21 @@ put_row:{[reg;name;row] reg upsert (enlist[`name]!enlist name),row;}
 / @param v the value
 set_field:{[reg;name;col;v] put_row[reg;name;@[(get reg) name;col;:;v]]}
 
+/ ------------------------------------------------------ TorQ PROCESS NAME
+/ .
+/ Run f as if hosted by a TorQ process named p - or, with p null, as plain q
+/ with no TorQ name at all - then put .proc back as it was, absent included.
+/ .qetl.run.proc_name is src/'s one read of it (#619), so this is how a test
+/ shows a behaviour in both hosts.
+/ @param p the process name, or ` for no TorQ
+/ @param f a niladic function
+/ @return f's result, or (`threw;error)
+with_procname:{[p;f]
+    had:@[{`procname in key x};`.proc;0b];
+    old:$[had; .proc.procname; `];
+    $[null p; if[had; ![`.proc;();0b;enlist `procname]]; `.proc.procname set p];
+    r:@[f;::;{(`threw;x)}];
+    $[had; `.proc.procname set old; @[{![`.proc;();0b;enlist `procname]};::;::]];
+    r}
+
 \d .

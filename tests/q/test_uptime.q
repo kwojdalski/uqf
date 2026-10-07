@@ -116,4 +116,16 @@ test_a_session_that_cannot_be_recorded_does_not_stop_the_job:{[t]
     .qetl.uptime.begin:keep;
     .qunit.assertEquals[r;`demo_markout;"the job starts; the record is an addition, never a precondition"]};
 
+/ --- the process a session names (#619) -------------------------------------
+
+test_a_session_names_no_process_in_plain_q:{[t]
+    id:.testutil.with_procname[`;{.qetl.uptime.begin `demo_markout}];
+    .qunit.assertEquals[exec first process from .qetl.uptime.sessions[] where session=id;`;
+        "outside TorQ there is no process name to record"]};
+
+test_a_session_names_torqs_process_under_torq:{[t]
+    id:.testutil.with_procname[`uptimetest_proc1;{.qetl.uptime.begin `demo_markout}];
+    .qunit.assertEquals[exec first process from .qetl.uptime.sessions[] where session=id;`uptimetest_proc1;
+        "under TorQ the session records the process TorQ named"]};
+
 \d .

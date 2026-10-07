@@ -213,6 +213,28 @@ line:{[level;id;text;fields]
 / Set by with_context around a piece of work and restored when it ends,
 / whether it returned or threw, so one worker's or window's context can
 / never leak into the next.
+/ .
+/ WHAT IS INSIDE A SCOPE, AND WHAT IS NOT
+/ .
+/ The context is one process global, not a property of the code that set
+/ it. A line gets whatever fields are set when it is logged, which means
+/ every call made while with_context's work is on the stack, whoever wrote
+/ that call:
+/ .
+/   - A reaction fired from the write path IS inside. notify_published runs
+/     synchronously from window_body, so a reaction's lines carry the
+/     publishing window's worker, run and range_from/range_to, even though
+/     the reaction is not part of that window. The reaction's own fields win
+/     on a clash, so it can set its own `worker` field to override.
+/     Reactions replayed at the start of a run (replay_reactions) run before
+/     any window opens, so they carry none of these fields.
+/   - Timers (.z.ts) and IPC handlers (.z.pg, .z.ps) are NOT inside. q runs
+/     one thing at a time, and the event loop that calls them does not turn
+/     while a window is on the stack (sleep_ms blocks in the shell, it does
+/     not yield), so they run between windows and see the context as it
+/     was outside. Anything added later that yields to the event loop in
+/     the middle of a scope would break this: a handler it let run would
+/     inherit the window's fields.
 
 context:()!()
 
@@ -248,6 +270,13 @@ with_context:{[ctx;f;args]
 
 / Number one outgoing request, so its sent, returned and failed lines carry
 / the same `request` and two requests in one window stay apart.
+/ .
+/ The count is per process, starts at 1 in each one, and is never
+/ persisted. In logs merged from several processes, `request` identifies a
+/ request only together with the process that logged it, and the process
+/ comes from the log file (out_<procname>.log), not from the line itself.
+/ emit passes the worker id in TorQ's proc slot, and the stdout fallback
+/ writes no process at all.
 / @return the next request number in this process
 request_seq:0
 next_request:{[] request_seq::request_seq+1; request_seq}
