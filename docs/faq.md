@@ -257,15 +257,13 @@ There are four runtimes:
 Each runtime keeps its own data directory, so switching between them never mixes
 their HDBs, and its own ports, so two can run at once.
 
-**Profiles are defined once, for the `uqf` runtime.** Every profile except
-`essential` names uqf's own processes (`fx` means `posbook1`, `demo_markout1`
-and `fxpositions1`), which the `torq` runtime doesn't have, and `crypto` and
-`fx` have only some of. So under `torq`:
-
-- `uqs list profiles` shows only the profiles it can start, which today is
-  `essential`;
-- `uqs start --profile fx` is refused, naming the processes the runtime lacks,
-  rather than starting part of the set.
+**Each runtime declares its own profiles** (#765): the ones it can start, and
+only those. `uqs --runtime torq list profiles` lists the starter pack's, and
+`uqs list profiles` the uqf runtime's, each naming what it starts. A profile
+another runtime declares is refused by name -
+`uqs --runtime torq start --profile fx` says which profiles torq has - rather
+than starting part of the set, and a test holds every runtime's profiles to the
+processes that runtime has.
 
 `uqs list profiles` also shows each profile's connection cost against your
 licence's cap: a profile can fit on its own and not fit combined with another.
