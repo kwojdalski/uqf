@@ -51,6 +51,12 @@ from pathlib import Path
 
 PIN_FILE = Path(__file__).resolve().with_name("peachq.json")
 OVERRIDE_ENV = "UQF_PEACHQ"
+
+#: How long one git step, and the whole build, may run. A fetch that hangs -
+#: a proxy that accepts the connection and never answers - must end as an
+#: error that says so, not as a traceback (#772).
+FETCH_TIMEOUT = 600
+BUILD_TIMEOUT = 1800
 CACHE_ENV = "XDG_CACHE_HOME"
 
 #: Asks a binary which q it is. scripts/test.py takes it from here, and
@@ -190,9 +196,21 @@ def git_fetch(src: Path, repository: str, commit: str, log: Path) -> str:
     ]
     with log.open("a") as out:
         for argv in steps:
-            if subprocess.run(argv, stdout=out, stderr=out, env=env, timeout=600).returncode:
+            # The git subcommand - `git init`, `git fetch` - whichever its position.
+            step = "git " + next(a for a in argv[1:] if a not in ("-C", str(src)))
+            try:
+                code = subprocess.run(
+                    argv, stdout=out, stderr=out, env=env, timeout=FETCH_TIMEOUT
+                ).returncode
+            except subprocess.TimeoutExpired:
                 raise PeachQError(
-                    f"could not fetch {repository}@{commit} ({' '.join(argv[3:5])} failed). "
+                    f"could not fetch {repository}@{commit} ({step} timed out after "
+                    f"{FETCH_TIMEOUT}s). A proxy or network that never answers? Details: {log}. "
+                    f"To skip the build, set {OVERRIDE_ENV} to an existing PeachQ binary"
+                ) from None
+            if code:
+                raise PeachQError(
+                    f"could not fetch {repository}@{commit} ({step} failed). "
                     f"Offline, or the commit is gone upstream? Details: {log}"
                 )
     head = subprocess.run(
@@ -206,7 +224,15 @@ def make_build(src: Path, target: str, options: Mapping[str, str], log: Path) ->
     argv = ["make", "-C", str(src), f"-j{os.cpu_count() or 2}", target]
     argv += [f"{k}={v}" for k, v in sorted(options.items())]
     with log.open("a") as out:
-        code = subprocess.run(argv, stdout=out, stderr=out, check=False).returncode
+        try:
+            code = subprocess.run(
+                argv, stdout=out, stderr=out, check=False, timeout=BUILD_TIMEOUT
+            ).returncode
+        except subprocess.TimeoutExpired:
+            raise PeachQError(
+                f"building PeachQ timed out after {BUILD_TIMEOUT}s; log: {log}. "
+                f"To skip the build, set {OVERRIDE_ENV} to an existing PeachQ binary"
+            ) from None
     if code:
         tail = "\n".join(log.read_text(errors="replace").splitlines()[-20:])
         raise PeachQError(f"building PeachQ failed (make exit {code}); log: {log}\n{tail}")
