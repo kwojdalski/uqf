@@ -69,8 +69,11 @@ if[count undeclared:wanted except declared;
 parts:{[root]
     entries:key root;
     d:asc "D"$string entries where entries like "[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]";
-    / d^bound is the bound, or d itself when it is null: no bound on that side.
-    d where (d>=d^first_date) and d<=d^last_date}
+    / An absent bound is an infinite one, atom with atom: `vector^atom` is
+    / 'nyi on KDB-X, so the d^bound this used to be refused every seed there.
+    lo:-0Wd^first_date;
+    hi:0Wd^last_date;
+    d where (d>=lo) and d<=hi}
 
 / A source column's values, with an enumerated one decoded against the
 / SOURCE's domain file - loaded fresh each time, because .Q.en below
