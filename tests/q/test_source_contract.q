@@ -31,6 +31,8 @@ decl:{[]
 setUp_clean:{[]
     .testutil.drop_rows[`.qetl.source.sources;`t];
     setenv[`UQF_SOURCE_CRED_T;""];
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
+    .qetl.source.clear_settings[];
     }
 
 / --- registration validates immediately ---------------------------
@@ -267,8 +269,7 @@ test_an_uncoercible_declared_type_is_refused:{[t]
 test_the_credential_variable_is_mechanical:{[t]
     .qunit.assertEquals[.qetl.source.credential_var `demo_deals;"UQF_SOURCE_CRED_DEMO_DEALS";"an operator can guess the variable name"]};
 
-/ Environment only. There is deliberately no file and no vault fallback: a
-/ file fallback is how a credential ends up committed.
+/ With no sources.csv row either, the error names the variable to set.
 test_an_absent_credential_is_refused_by_name:{[t]
     err:@[{.qetl.source.require_credentials x; ""};`demo_deals;{x}];
     .qunit.assertEquals[err like "*UQF_SOURCE_CRED_DEMO_DEALS*";1b;"the error names the variable to set, which is all the operator needs"]};
@@ -281,6 +282,82 @@ test_a_configured_credential_is_returned:{[t]
 
 test_has_credentials_does_not_throw:{[t]
     .qunit.assertEquals[.qetl.source.has_credentials `demo_deals;0b;"choosing between the live and fixture paths must not require catching"]};
+
+/ --- configured settings: sources.csv (#718) -----------------------
+
+settings_header:"source,transport,setting,secret_env"
+
+/ A sources.csv in a fresh directory: the header, then `rows`.
+settings_file:{[rows]
+    f:hsym `$(first system"mktemp -d"),"/sources.csv";
+    f 0: enlist[.srctest.settings_header],rows;
+    f}
+
+test_a_header_alone_configures_nothing:{[t]
+    .qunit.assertEquals[.qetl.source.load_settings[.srctest.settings_file ();`symbol$()];0;"the tree's own file is a header"];
+    .qunit.assertEquals[.qetl.source.has_credentials `demo_deals;0b;"so an unconfigured demo source stays on its fixture"]};
+
+test_a_row_configures_its_source_without_a_variable:{[t]
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,localhost:5010,";`symbol$()];
+    .qunit.assertEquals[.qetl.source.credential_origin `demo_deals;`settings;"the row is where the credential comes from"];
+    .qunit.assertEquals[.qetl.source.require_credentials `demo_deals;"localhost:5010";"no per-source variable is needed"]};
+
+test_the_environment_override_wins_over_a_row:{[t]
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,localhost:5010,";`symbol$()];
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;"otherhost:6000"];
+    got:.qetl.source.require_credentials `demo_deals;
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
+    .qunit.assertEquals[got;"otherhost:6000";"an explicit UQF_SOURCE_CRED_<SOURCE> beats the file"]};
+
+test_a_permitted_path_variable_is_expanded:{[t]
+    setenv[`SRCTEST_HOST;"db1"];
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,${SRCTEST_HOST}:5010,";`SRCTEST_HOST];
+    got:.qetl.source.require_credentials `demo_deals;
+    setenv[`SRCTEST_HOST;""];
+    .qunit.assertEquals[got;"db1:5010";"a variable the loader allows is expanded when the source connects"]};
+
+test_an_unlisted_path_variable_is_refused:{[t]
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,${HOME}:5010,";`SRCTEST_HOST];
+    .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*${HOME} is not a path it may use*";"only the variables the loader names are expanded"]};
+
+test_a_secret_comes_from_the_variable_the_row_names:{[t]
+    setenv[`SRCTEST_PWD;"s3cret"];
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,db1:5010:svc:{secret},SRCTEST_PWD";`symbol$()];
+    got:.qetl.source.require_credentials `demo_deals;
+    setenv[`SRCTEST_PWD;""];
+    .qunit.assertEquals[got;"db1:5010:svc:s3cret";"{secret} is filled from the environment when the source connects"]};
+
+/ A configured source is live, so a row that cannot resolve fails the run
+/ instead of quietly reading the fixture.
+test_an_unset_secret_variable_fails_rather_than_selecting_the_fixture:{[t]
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,db1:5010:svc:{secret},SRCTEST_PWD";`symbol$()];
+    .qunit.assertEquals[.qetl.source.has_credentials `demo_deals;1b;"a configured source is never a fixture run"];
+    .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*SRCTEST_PWD, is not set*";"the variable is named, never a value"]};
+
+test_a_scaffolded_stub_is_refused:{[t]
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,",.qetl.source.settings_stub,",";`symbol$()];
+    .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*still the scaffold's stub*";"an unfinished stub cannot pass for a setting"]};
+
+test_a_transport_the_source_does_not_declare_is_refused:{[t]
+    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,odbc,DRIVER=x,";`symbol$()];
+    .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*says transport odbc, but the source declares ipc*";"an incompatible setting is named"]};
+
+test_an_inline_secret_is_refused_when_the_file_is_read:{[t]
+    f:.srctest.settings_file enlist "demo_deals,odbc,DRIVER=x;PWD=hunter2,";
+    .qunit.assertThrows[.qetl.source.read_settings;f;"*holds a secret inline*";"a password in the file is refused"]};
+
+test_a_secret_column_is_refused:{[t]
+    f:hsym `$(first system"mktemp -d"),"/sources.csv";
+    f 0: ("source,transport,setting,secret_env,password";"demo_deals,ipc,h:1,,x");
+    .qunit.assertThrows[.qetl.source.read_settings;f;"*password is not a column*";"the file has no place for a secret"]};
+
+test_a_duplicated_source_is_refused_naming_its_lines:{[t]
+    f:.srctest.settings_file ("demo_deals,ipc,h:1,";"demo_deals,ipc,h:2,");
+    .qunit.assertThrows[.qetl.source.read_settings;f;"*demo_deals has more than one row - lines 2, 3*";"no implicit choice between two rows"]};
+
+test_a_row_missing_its_setting_is_refused:{[t]
+    f:.srctest.settings_file enlist "demo_deals,ipc,,";
+    .qunit.assertThrows[.qetl.source.read_settings;f;"*line 2 needs a source, a transport and a setting*";"a missing field is named with its line"]};
 
 / --- where a source's declaration lives (.qpipe.source) --------------------------
 

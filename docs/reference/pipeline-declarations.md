@@ -79,8 +79,65 @@ file as `.qetl.source.define[source_name; ...]`.
   | `transport`   | no       | `` `ipc ``, `` `odbc `` or `` `local ``        | how the credential is opened. `ipc` (default): `host:port`, opened with `hopen`. `odbc`: a connection string, opened with `.qetl.io.odbc.open`. `local`: an HDB directory's path, checked by `.qetl.source.local_root` and read from its files through `.qetl.source.local`                                                                                                                                                                                                        | anything else                                                                                  |
   | `supporting`  | no       | dict: input name -> empty typed table          | further inputs the source hands its worker beside the primary one (#617), each with its contract. With it, `query` and `fixture` return a dict: `table_name` -> the window's rows, and each supporting name -> its rows. Only the primary is cut to the window and counted; a supporting input is context, validated against its contract but never windowed, and a live check reads its metadata by its name. The worker's transform must then read exactly these inputs, by name | not a dict of tables, names `table_name`, or declared by a source whose `tz` is not `` `UTC `` |
 
-The credential is read from the environment variable `UQF_SOURCE_CRED_` plus the
-source name upper-cased, and from nowhere else.
+## Where a source connects: `sources.csv`
+
+What a live source connects to comes from `sources.csv`, one row per source
+(#718). The file is TorQ configuration, so TorQ picks it the way it picks
+`process.csv`, with `.proc.getconfigfile`. It takes the first of these that
+exists, and the file it picks replaces the others whole:
+
+  | layer       | file                                                       | owner                                                   |
+  | ---         | ---                                                        | ---                                                     |
+  | application | `$KDBAPPCONFIG/sources.csv`                                | the operator; gitignored, machine-specific              |
+  | service     | `$KDBSERVCONFIG/sources.csv` (`scripts/torqconfig/`)       | this tree; a header and no rows                         |
+  | base        | `$KDBCONFIG/sources.csv`                                   | TorQ; there is none                                     |
+
+Its columns are exactly `source,transport,setting,secret_env`:
+
+- `transport` must match the source's declaration.
+- `setting` is the string the transport's `open` takes. That's a directory for
+  `local`, `host:port` for `ipc`, or a connection string for `odbc`.
+- A setting may use `${UQF_ROOT}`, `${TORQDATA}`, `${KDBHDB}` and `${KDBWDB}`
+  (`.qtorq.source_settings_path_vars`).
+- A secret is never written in the file. The setting says `{secret}`, and
+  `secret_env` names the environment variable to fill it from when the source
+  connects.
+
+```csv
+source,transport,setting,secret_env
+hdb_transfer,local,${KDBHDB},
+duckdb_deals,odbc,DRIVER=DuckDB;Database=/data/deals.duckdb;access_mode=READ_ONLY,
+upstream_trades,ipc,db1:5010:svc:{secret},UPSTREAM_TRADES_PWD
+```
+
+`.qtorq.load_source_settings` reads the file when a TorQ process loads the tree.
+A process with no file runs every source as before.
+
+**These stop the process before any window is fetched:**
+
+- a malformed file: a column missing or extra, a row with no source, transport
+  or setting, an unknown transport, a source listed twice, or a password written
+  inline;
+- a row that cannot resolve when its source connects: the `SCAFFOLDED` stub, a
+  transport the source doesn't declare, a `${VAR}` outside the list, or an unset
+  `secret_env`. `uqs backfill --mode validate` checks these too.
+
+**A row makes its source live.** A broken row fails the run; it never falls back
+to the fixture.
+
+**Overrides.** `UQF_SOURCE_CRED_` plus the source name upper-cased, when set,
+wins over the row, for CI, containers and one-off runs. A plain q process that
+loads no settings file reads only that variable.
+
+**Commands.** `uqs config sources` shows the file the stack reads and, for each
+row, where its credential comes from and what would stop it resolving. Secrets
+show only as set or not set. `uqs config sources stub SOURCE` adds a
+`SCAFFOLDED` row to the application layer's file, first copying the file the
+stack reads now, so no row it had is hidden. It never changes a row that is
+already there.
+
+Fleet credentials are separate: kdb+ IPC between the stack's own processes still
+uses TorQ's `passwords/` files and `.servers.USERPASS`.
 
 ## Transform --- `.qetl.transform.define`
 

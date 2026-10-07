@@ -253,6 +253,10 @@ run:{[]
   -1 string[.z.p]," | torq_backfill: uqf tree loaded in ",string[`long$(.z.p-t0)%1000000],"ms";
  }[getenv[`UQF_ROOT]];
 
+/ What each external source connects to, from TorQ's config layers (#718).
+/ Before any worker runs, so a malformed sources.csv stops the process here.
+.qtorq.load_source_settings[];
+
 / DEBUG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.
 if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];

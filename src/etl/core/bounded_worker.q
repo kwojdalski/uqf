@@ -752,17 +752,23 @@ check_static:{[worker;run_spec]
 
 / The validate mode: is this a run that could start? Checks the declaration,
 / the contract, the fixture, the range and the conflict strategy, and reports
-/ whether a credential is configured - without using it. Reads no ledger,
+/ whether a credential is configured - without using it, though a sources.csv
+/ row must resolve. Reads no ledger,
 / takes no lock, opens no source and writes nothing, so it is safe anywhere,
 / CI included.
 / @param worker the worker's name
 / @param run_spec dict of source_version, range_from, range_to
 / @return dict describing the run that would start
-/ @throws whatever check_static throws - the first thing wrong with the run
+/ @throws whatever check_static throws - the first thing wrong with the run -
+/   or resolve_setting, for a source configured by a broken row
 validate:{[worker;run_spec]
     cfg:def worker;
     s:check_static[worker;run_spec];
     src:.qetl.source.def cfg`source;
+    / A configured row is checked here too - a stub, a transport mismatch or
+    / an unset secret variable - so validate catches what init would. Its
+    / result may hold a secret, so it is dropped.
+    if[`settings~.qetl.source.credential_origin cfg`source; .qetl.source.resolve_setting cfg`source];
     s,`state`worker`source`target`dataset`width`windows`on_conflict`live!
         (`validated;worker;cfg`source;src`target;cfg`dataset;cfg`width;
          count .qetl.job.bounded.runtime.windows[s`range_from;s`range_to;cfg`width];
@@ -832,9 +838,10 @@ init_body:{[worker;run_spec]
     live:.qetl.source.has_credentials cfg`source;
     if[not live;
         tr:.qetl.source.for_source cfg`source;
-        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so a machine-specific path or a password stays out of this repository and off the command line";
-            `variable`expects`example!(
+        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: give the source a row in sources.csv (`uqs config sources` shows which file is read), or export the variable below in the shell you run `uqs backfill` from, then run it again. A secret is only ever read from the environment - a row names its variable - so a password stays out of this repository and off the command line";
+            `variable`settings_row`expects`example!(
                 .qetl.source.credential_var cfg`source;
+                "," sv (string cfg`source;string (.qetl.source.def cfg`source)`transport;.qetl.source.credential_example cfg`source;"");
                 tr`expects;
                 .qetl.source.credential_example cfg`source)]];
     write_state[worker;`handle;$[live; connect worker; 0Ni]];

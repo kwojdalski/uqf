@@ -158,8 +158,10 @@ def bounded_worker(
             " (see src/etl/core/source_contract.q)",
             f"write .qpipe.source.{src}.fixture - deterministic, same contract as the live source",
             f"declared columns: {', '.join(c for c, _ in cols)}",
-            f"a live run reads {credential_var(src)} ({transports.get(transport).expects}); "
-            "without it the worker runs on the fixture, and warns that it is",
+            f"to go live, give {src} a row in sources.csv - `uqs config sources stub {src}` "
+            f"adds one to fill in ({transports.get(transport).expects}); "
+            f"{credential_var(src)} overrides it for one run. "
+            "With neither, the worker runs on the fixture, and warns that it is",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
     if transform == "derive":

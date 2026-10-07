@@ -70,9 +70,11 @@ Re-running **is** the resume. Coverage records only the windows that published,
 so the same command fetches only what is still missing. Any window that did not
 publish is fetched again.
 
-- A **wrong credential** is reported by name. The log names the
-  `UQF_SOURCE_CRED_<SOURCE>` variable, and a source with no credential runs on
-  its fixture, with a WARNING saying so.
+- A **wrong credential** is reported by name. The error names the `sources.csv`
+  file and row, or the `UQF_SOURCE_CRED_<SOURCE>` variable, that configured it.
+  A source with neither runs on its fixture, with a WARNING saying so.
+  `uqs config sources` shows which file the stack reads and what each row still
+  lacks.
 - A **lock left by a killed run** is broken by the next run when its pid is gone
   on the same host. A lock held by a live process, or by another host, is
   refused with the holder's name.
