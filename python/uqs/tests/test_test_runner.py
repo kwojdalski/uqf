@@ -67,21 +67,26 @@ def test_the_smoke_options_are_refused_for_another_lane(ran):
     assert ran == []
 
 
-def test_q_docs_peachq_refuses_without_the_binary_rather_than_skipping(ran, monkeypatch):
-    """PeachQ is required beside KDB-X, so an unset UQF_PEACHQ fails the lane."""
-    monkeypatch.delenv(runner.PEACHQ_ENV, raising=False)
-    with pytest.raises(SystemExit, match=runner.PEACHQ_ENV):
+def test_q_docs_peachq_fails_rather_than_skips_when_peachq_cannot_be_had(ran, monkeypatch):
+    """PeachQ is required beside KDB-X, so a resolver failure fails the lane."""
+
+    def unavailable():
+        raise runner.peachq.PeachQError("offline, and the cache is cold")
+
+    monkeypatch.setattr(runner.peachq, "resolve", unavailable)
+    with pytest.raises(SystemExit, match="q-docs-peachq: offline"):
         runner.main(["q-docs-peachq"])
 
 
 def test_q_docs_peachq_reruns_q_docs_declared_as_peachq(monkeypatch):
     """The child is told it is PeachQ, so the interpreter check refuses a
-    UQF_PEACHQ that names a KDB-X binary."""
+    binary that is not; the resolved path reaches that lane and no other."""
     calls = []
     monkeypatch.setattr(runner, "check_interpreter", lambda env=None: None)
     monkeypatch.setattr(runner, "_run", lambda lane, argv, *, env=None: calls.append((argv, env)))
-    monkeypatch.setenv(runner.PEACHQ_ENV, "/opt/peachq/q")
+    monkeypatch.setattr(runner.peachq, "resolve", lambda: Path("/cache/peachq/q"))
     assert runner.main(["q-docs-peachq"]) == 0
     [(argv, env)] = calls
     assert argv[1:] == [str(SCRIPT), "q-docs"]
-    assert env == {runner.Q_IMPL_ENV: "peachq", "QCMD": "/opt/peachq/q"}
+    assert env == {runner.Q_IMPL_ENV: "peachq", "QCMD": "/cache/peachq/q"}
+    assert runner.Q_CMD != "/cache/peachq/q", "the global QCMD is left alone"

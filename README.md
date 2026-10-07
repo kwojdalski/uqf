@@ -89,16 +89,34 @@ KDB-X stays the reference.
 
 **For now, committing needs both.** PeachQ already runs part of this tree: the q
 code blocks in `docs/`, in the commit hook and in CI, where KDB-X cannot be
-licensed. So the `q-docs-peachq` hook runs those blocks a second time on PeachQ,
-from the binary `UQF_PEACHQ` names, and fails when it is unset. This does not
-replace the KDB-X run. It is there as well, until the two interpreters are
-compatible enough for one to stand for both. A block that cannot run on PeachQ
-yet is marked `kdbx-only` with the reason (the markers are defined in
-[`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
+licensed. So the `q-docs-peachq` hook runs those blocks a second time on PeachQ.
+This does not replace the KDB-X run. It is there as well, until the two
+interpreters are compatible enough for one to stand for both. A block that
+cannot run on PeachQ yet is marked `kdbx-only` with the reason (the markers are
+defined in [`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
 
-```
-export UQF_PEACHQ=/path/to/peachq/q    # e.g. in your shell profile
-```
+You do not install PeachQ for this. The lane takes the commit pinned in
+[`scripts/peachq.json`](scripts/peachq.json) - the pin CI builds too - and on
+first use fetches it, checks the checkout is that commit, builds it and caches
+the binary. That needs `git`, `make`, a C compiler and the network once, and
+takes about a minute; every later run reuses the cache offline:
+
+- **Cache:** `${XDG_CACHE_HOME:-~/.cache}/uqf/peachq/`, one entry per commit,
+  platform and build options, so moving the pin builds a new one. Delete the
+  directory to force a rebuild.
+- **Platforms:** Linux x86-64 (built with CI's portable `x86-64-v2` floor) and
+  macOS arm64 (`-march=native`, since the cache never leaves the machine).
+  Anywhere else the lane fails, naming the platform.
+- **Override:** `UQF_PEACHQ=/path/to/peachq/q` uses that binary instead, and
+  nothing is built. It must be PeachQ: an override that is missing or turns out
+  to be KDB-X fails, with no fallback to the pinned build.
+- **Directly:** `python3 scripts/peachq.py` prints the binary's path, building
+  it if needed.
+
+PeachQ is never put on `PATH` and never becomes `QCMD`: only the lanes that run
+on it are given its path, and KDB-X stays the interpreter everything else uses.
+Two runs starting together build once; a failed or interrupted build leaves
+nothing behind that a later run would trust, and the next run retries.
 
 What PeachQ buys is scale: it has no connection licence, so the community
 edition's 16-connection cap does not apply. On `UQF_Q_IMPL=peachq` a start is
