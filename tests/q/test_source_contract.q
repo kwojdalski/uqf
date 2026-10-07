@@ -346,6 +346,13 @@ test_an_inline_secret_is_refused_when_the_file_is_read:{[t]
     f:.srctest.settings_file enlist "demo_deals,odbc,DRIVER=x;PWD=hunter2,";
     .qunit.assertThrows[.qetl.source.read_settings;f;"*holds a secret inline*";"a password in the file is refused"]};
 
+test_a_refusal_names_the_rows_own_line_past_blank_lines:{[t]
+    / The bad row is line 5 of the file, after two blank lines. Numbered from
+    / the lines kept, it was reported as line 3 - a blank line (#803).
+    f:hsym `$(first system"mktemp -d"),"/sources.csv";
+    f 0: (.srctest.settings_header;"demo_deals,ipc,localhost:5010,";"";"";"hdb_x,bogus,somewhere,");
+    .qunit.assertThrows[.qetl.source.read_settings;f;"*line 5's transport bogus is not one of*";"the row's own line"]};
+
 test_a_secret_column_is_refused:{[t]
     f:hsym `$(first system"mktemp -d"),"/sources.csv";
     f 0: ("source,transport,setting,secret_env,password";"demo_deals,ipc,h:1,,x");

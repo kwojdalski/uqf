@@ -683,7 +683,11 @@ read_settings:{[path]
     who:"source settings ",src_file;
     if[()~key p; 'who,": no such file"];
     raw:read0 p;
-    lines:raw where 0<count each trim each raw;
+    / Blank lines are skipped, but every message names the row's line IN THE
+    / FILE: numbering what was kept put each row after a blank line one line
+    / early, so an error pointed at the blank line itself (#803).
+    keep:where 0<count each trim each raw;
+    lines:raw keep;
     if[0=count lines; 'who,": empty - it needs a header, ",", " sv string settings_cols];
     hdr:`$trim each "," vs first lines;
     if[count missing:settings_cols except hdr; 'who,": its header lacks ",", " sv string missing];
@@ -695,7 +699,7 @@ read_settings:{[path]
         [cells:("****";",") 0: 1 _ lines;
          flip settings_cols!(`$trim each cells 0;`$trim each cells 1;trim each cells 2;`$trim each cells 3)]];
     t:update origin:(count t)#enlist src_file from t;
-    line_no:2+til count t;
+    line_no:1+1_keep;
     if[count bad:where (null t`source) or (null t`transport) or 0=count each t`setting;
         'who,": line ",(string line_no first bad)," needs a source, a transport and a setting"];
     if[count bad:where not (t`transport) in transports[];
