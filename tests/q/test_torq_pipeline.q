@@ -241,6 +241,31 @@ test_a_password_file_of_its_own_stands:{[t]
     c:.qtorq.credential_from[(own;`:/no/such/backfilldeals1.txt);fb];
     .qunit.assertEquals[c;`source`userpass!(`own;`);"a deployment's own file is not overridden"]};
 
+/ load_source_settings asks TorQ which sources.csv its config layers select
+/ (.proc.getconfigfile) and loads it (#718). TorQ is stood in for here: the
+/ function is one call to the layer lookup and one to .qetl.source, and only
+/ the lookup needs a TorQ process.
+with_config_file:{[path;f]
+    had:`getconfigfile in key `.proc;
+    old:$[had; .proc.getconfigfile; ::];
+    .proc.getconfigfile:{[path;name] enlist path}[path];
+    r:@[f;::;{[e] (`threw;e)}];
+    .qetl.source.clear_settings[];
+    $[had; .proc.getconfigfile:old; ![`.proc;();0b;enlist `getconfigfile]];
+    r}
+
+test_load_source_settings_loads_the_file_the_config_layers_select:{[t]
+    f:hsym `$(first system"mktemp -d"),"/sources.csv";
+    f 0: ("source,transport,setting,secret_env";"demo_deals,ipc,localhost:5010,");
+    / Two statements, not (load[];configured[]): a list's items evaluate right
+    / to left, so that would ask what is configured before anything loaded.
+    r:.pipetest.with_config_file[f;{n:.qtorq.load_source_settings[]; (n;.qetl.source.configured[])}];
+    .qunit.assertEquals[r;(1;enlist `demo_deals);"one source configured, from the selected file"]};
+
+test_load_source_settings_with_no_file_in_any_layer_configures_nothing:{[t]
+    r:.pipetest.with_config_file[`:/no/such/dir/sources.csv;{.qtorq.load_source_settings[]}];
+    .qunit.assertEquals[r;0;"no file is not an error: every source runs as before"]};
+
 test_no_fallback_to_adopt_is_reported_not_guessed:{[t]
     .qunit.assertEquals[.qtorq.credential_from[();`:/no/such/metrics.txt];`source`userpass!(`missing;`);
         "missing, so the caller warns rather than connecting as torquser"]};
