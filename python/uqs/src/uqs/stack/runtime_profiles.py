@@ -10,6 +10,7 @@ the runtime lacks, rather than starting part of the set.
 from __future__ import annotations
 
 from uqs.model import profiles
+from uqs.model.runtime_members import pipeline_procnames
 from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import DEFAULT_RUNTIME
 from uqs.stack import procs
@@ -24,7 +25,7 @@ def startable_profiles(known: set[str] | None) -> list[str]:
 
 def known_processes(paths: UqsPaths) -> set[str] | None:
     """The runtime's processes, or `None` when it has every pipeline."""
-    if paths.runtime_declaration.pipelines:
+    if pipeline_procnames(paths.runtime_declaration) is None:
         return None
     return set(procs.list_process_names(paths))
 

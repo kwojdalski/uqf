@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import csv
 
+from uqs.model.runtime_members import plant_tables
 from uqs.paths import UqsPaths
 
 #: The vendored file's columns, in its order.
@@ -62,7 +63,15 @@ def dqe_config_rows(paths: UqsPaths) -> list[dict[str, str]]:
     if vendored.is_file():
         with vendored.open(newline="") as f:
             rows = list(csv.DictReader(f))
-    return [*rows, *(dict(row) for row in UQF_DQE_ROWS)]
+    # A runtime without a metatable's table (#760) leaves its row out: DQE
+    # would otherwise query a table that runtime's HDB never holds.
+    wanted = plant_tables(paths.runtime_declaration)
+    ours = [
+        dict(row)
+        for row in UQF_DQE_ROWS
+        if wanted is None or any(f";`{table};" in row["params"] for table in wanted)
+    ]
+    return [*rows, *ours]
 
 
 def write_dqe_config(paths: UqsPaths) -> None:
