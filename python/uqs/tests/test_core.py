@@ -255,6 +255,38 @@ def test_set_process_config_persists_and_is_read_back(fake_paths: UqsPaths):
     assert "9999" not in vendored
 
 
+@pytest.mark.parametrize("value", ["-pairs EURUSD,USDJPY", 'say "hi"', "a\nb", "a\rb"])
+def test_set_process_config_refuses_what_torq_sh_would_split(fake_paths: UqsPaths, value):
+    """torq.sh reads process.csv with awk -F, - a quoted comma still splits."""
+    with pytest.raises(
+        UqsError, match=r"discovery1\.extras value .* contains a comma, quote or newline"
+    ):
+        stack_procs.set_process_config(fake_paths, "discovery1", "extras", value)
+    assert not fake_paths.overrides_path.exists(), "nothing written"
+
+
+def test_a_list_separated_by_spaces_is_still_accepted(fake_paths: UqsPaths):
+    stack_procs.set_process_config(fake_paths, "discovery1", "extras", "-pairs EURUSD USDJPY")
+    assert (
+        stack_procs.get_process_config(fake_paths, "discovery1")["extras"] == "-pairs EURUSD USDJPY"
+    )
+
+
+def test_bootstrap_refuses_an_override_on_disk_torq_sh_would_split(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """Written before the setter refused one: named at bootstrap, not found as
+    a start whose qcmd is the second half of extras."""
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_paths.overrides_path.parent.mkdir(parents=True)
+    fake_paths.overrides_path.write_text(
+        'procname,field,value\nfxfeed1,extras,"-pairs EURUSD,USDJPY"\n'
+    )
+    with pytest.raises(UqsError, match=r"fxfeed1\.extras value '-pairs EURUSD,USDJPY'"):
+        runtime.bootstrap(fake_paths)
+    assert not fake_paths.generated_procs.exists(), "no process.csv torq.sh would misread"
+
+
 def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
     fake_paths: UqsPaths, monkeypatch
 ):

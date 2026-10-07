@@ -927,6 +927,17 @@ def test_config_set_reports_what_it_wrote(monkeypatch):
     assert rec.args[1:] == ("rdb1", "startwithall", "1")
 
 
+def test_config_set_refuses_a_comma_before_writing(monkeypatch):
+    """#777: refused by the real setter, so nothing reaches the overrides file."""
+    monkeypatch.setattr(stack_procs, "list_process_names", lambda _p: ["fxfeed1"])
+    write = _patch(monkeypatch, stack_procs, "_write_overrides")
+    result = runner.invoke(
+        cli.app, ["config", "set", "fxfeed1", "extras", "--", "-pairs EURUSD,USDJPY"]
+    )
+    assert result.exit_code == 1
+    assert write.calls == []
+
+
 def test_config_set_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, stack_procs, "set_process_config", raises=UqsError("unknown field"))
     assert runner.invoke(cli.app, ["config", "set", "rdb1", "nope", "1"]).exit_code == 1

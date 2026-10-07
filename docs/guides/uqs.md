@@ -639,6 +639,18 @@ Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `qcmd`. A change takes effect on the next `start`/`restart` of that process (the
 running process itself isn't touched).
 
+A value with a comma, a double quote or a newline is refused. `torq.sh` reads
+`process.csv` by splitting each line on commas with `awk`, so it can't carry a
+quoted comma: the rest of the value would land in the next column. To pass a
+list, separate it with spaces:
+
+```
+uqs config set fxfeed1 extras -- "-pairs EURUSD USDJPY"
+```
+
+An override like that already in the file stops the next command, and the error
+names the process and field.
+
 ### What sources connect to
 
 `config sources` shows the `sources.csv` the stack reads: the first of TorQ's
