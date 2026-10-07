@@ -150,7 +150,8 @@ Two registry facts that changed under you, and that a job no longer states:
 - Every public function gets a qDoc block immediately above it --- no blank line
   between --- with `@param`, `@return`, `@throws` if it can throw, and `@eg`.
   `docs/man.q` reads these when it loads (`.man.scansrc`), so there is nothing
-  to regenerate or commit.
+  to regenerate or commit. A private helper's block ends `/ @private`, which
+  keeps it out of the registry and the contract surface.
 - `lower_snake_case` throughout. Framework modules nest under `.qetl`;
   declarations live under `.qpipe.source`, `.qpipe.transform` and `.qpipe.job`.
   Both job modes share `.qpipe.job.<name>` and must have unique names. Shared

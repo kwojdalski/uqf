@@ -132,13 +132,16 @@ So after scaffolding, the tree is in a known state:
 - `src/etl/init.q` still LOADS --- the one thing the scaffold never breaks
 - `q tests/run_tests.q` fails on your stub, which is where the work starts -
   and, for a job that subscribes and publishes, on its `contract_driver` too
-- `uv run pytest python/` fails on
-  `test_the_prose_architecture_doc_is_consistent_with_the_registry`: name the
-  new process in `docs/architecture/stack.md`. That file is authored prose, so
-  the scaffold cannot write it.
 - `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
-  the to-do list: the handler, the test, the job's `note`, and the two below.
+  the to-do list: the handler, the test, the job's `note`, the process's card in
+  `docs/services/README.md` and its comment in `docs/architecture/stack.md`
+  (name the process in that page's list when you delete it -
+  `test_the_prose_architecture_doc_is_consistent_with_the_registry` checks), and
+  the two below.
+- A backfill's `scripts/examples/<name>_example.q` runs the worker on its
+  fixture into a throwaway HDB, no stack: `q scripts/examples/<name>_example.q`
+  is the first check that it publishes at all. The q-scripts lane runs it.
 - A new streaming job or normalizer is in **no profile** unless you said which:
   `--profile NAME` adds it to one in `python/uqs/src/uqs/model/profiles.py`, and
   `--unprofiled "REASON"` exempts it in `UNPROFILED`. Ask the user which - it is

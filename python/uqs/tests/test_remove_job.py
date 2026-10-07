@@ -19,22 +19,31 @@ import pytest
 from uqs.paths import CATALOG_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
+from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.reaction import reaction
 from uqs.scaffold.remove import plan_removal
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 #: Every file a scaffold appends to or a removal edits.
-_TRACKED = (TABLES_FILE, CATALOG_FILE, STACK_TABLES_TEST, RUN_TESTS_FILE, PROFILES_FILE)
+_TRACKED = (
+    TABLES_FILE,
+    CATALOG_FILE,
+    STACK_TABLES_TEST,
+    RUN_TESTS_FILE,
+    PROFILES_FILE,
+    STACK_PAGE,
+    SHOWCASE_PAGE,
+)
 
 
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
     """A copy of what scaffolding and removal touch: src/, the plant's q files,
-    the two test lists and profiles.py."""
+    the two test lists, profiles.py and the two doc pages a process is named on."""
     shutil.copytree(UQF_ROOT / "src", tmp_path / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", tmp_path / "scripts" / "processes")
-    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, PROFILES_FILE):
+    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, PROFILES_FILE, STACK_PAGE, SHOWCASE_PAGE):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, tmp_path / rel)
     return tmp_path
@@ -48,6 +57,7 @@ def _snapshot(root: Path) -> dict[Path, str]:
         "src/etl/sources",
         "src/etl/reactions",
         "tests/q",
+        "scripts/examples",
     ):
         files.update({p.relative_to(root): p.read_text() for p in (root / d).glob("*.q")})
     return files

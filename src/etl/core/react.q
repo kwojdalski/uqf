@@ -76,6 +76,7 @@ reactions:(`symbol$())!();
 / .
 / `outputs` is what this reaction writes and `derived` says where that claim
 / came from - see `on` and `on_worker`.
+/ @private
 no_reactions:{[] ([] name:`symbol$(); handler:(); outputs:(); derived:`boolean$())}
 
 / How far a chain of reactions may travel before it is refused.
@@ -123,6 +124,7 @@ on:{[dataset;nm;handler]
 / with the wrong shape would otherwise fail only when the upstream job next
 / ran, which may be hours later and is attributed to that job rather than to
 / this wiring.
+/ @private
 require_handler:{[dataset;nm;handler]
     if[not -11h=type dataset; '"on: dataset must be a symbol"];
     if[not -11h=type nm; '"on: name must be a symbol"];
@@ -196,6 +198,7 @@ fillable:{[]
 / Private: refuse a dataset no bounded worker fills. Here, beneath all three
 / ways to register, and not only in `uqs job new --triggered-by`: a reaction
 / written or edited by hand must be refused just the same (#531).
+/ @private
 require_fillable:{[dataset;nm]
     if[not dataset in fillable[];
         '"on: ",string[nm]," watches ",string[dataset],
@@ -204,6 +207,7 @@ require_fillable:{[dataset;nm]
     }
 
 / Private: store one reaction, replacing any of the same name.
+/ @private
 register:{[dataset;nm;handler;outputs;derived]
     require_fillable[dataset;nm];
     existing:$[dataset in key reactions; reactions dataset; no_reactions[]];
@@ -313,6 +317,7 @@ history:empty_history[]
 history_limit:1000
 
 / Private: record one reaction's outcome - in `history`, and durably.
+/ @private
 record:{[dataset;name;depth;range_from;range_to;outcome;detail]
     `.qetl.reaction.history set neg[history_limit] sublist history,
         ([] at:enlist .z.p; dataset:enlist dataset; name:enlist name; depth:enlist depth;
@@ -356,6 +361,7 @@ outcomes:{[]
 
 / Private: append one outcome, read-modify-write under its own mutex - the
 / same pattern as the coverage and run ledgers.
+/ @private
 persist_outcome:{[row]
     .qetl.job.bounded.state.with_file_lock[`etl_reactions;
         {[row] .qetl.job.bounded.state.durable_set[outcomes_path[];outcomes[],enlist cols[empty_outcomes[]]!row]};
@@ -410,6 +416,7 @@ notify:{[dataset;range_from;range_to] enqueue[dataset;range_from;range_to;0;();(
 
 / Private: queue one notification and, unless a drain is already running,
 / drain the queue.
+/ @private
 enqueue:{[dataset;range_from;range_to;depth;rows;io]
     queue,:([] dataset:enlist dataset; range_from:enlist range_from;
               range_to:enlist range_to; depth:enlist depth; rows:enlist rows; io:enlist io);
@@ -425,6 +432,7 @@ enqueue:{[dataset;range_from;range_to;depth;rows;io]
 / once per drain, so A -> B -> A settles instead of spinning. It is per-drain
 / rather than global on purpose - the same range published again later is a
 / new event and must fire again.
+/ @private
 drain:{[]
     `.qetl.reaction.draining set 1b;
     done:();
@@ -444,6 +452,7 @@ drain:{[]
     ran}
 
 / Private: run every reaction registered for one queued item.
+/ @private
 dispatch:{[item]
     rs:for_dataset item`dataset;
     if[0=count rs; :0];
@@ -464,6 +473,7 @@ dispatch:{[item]
 / depth+1, which is how max_depth bounds a chain. `depth_now` is a global
 / rather than an argument because a handler calls .qetl.job.bounded / .qetl.reaction.notify
 / through the ordinary path and cannot be asked to thread a depth through.
+/ @private
 depth_now:0
 
 / What the publication being reacted to published, while its reactions run.
@@ -500,6 +510,7 @@ run_one:{[item;nm;h]
 / Protected for the same reason .qetl.job.bounded.begin_run is: several minimal loaders
 / pull in part of the tree, and a reaction must degrade to an unlogged
 / failure rather than an error inside an error handler.
+/ @private
 log_failure:{[item;nm;e]
     @[{.qetl.log.err[`qetl.reaction;"reaction failed";
         `dataset`reaction`range_from`range_to`error!
@@ -623,6 +634,7 @@ write:{[target;row_key;rows]
 / they publish. Not on a dry run, which fires no reaction at all.
 / @param worker the worker's name
 / @return how many windows were announced again
+/ @private
 replay_reactions:{[worker]
     owed:owed_reactions worker;
     ws:distinct select range_from, range_to from owed;
@@ -651,6 +663,7 @@ owed_reactions:{[worker]
 / Private: the error a run that leaves reactions owed ends `partial with.
 / @param owed owed_reactions' table, not empty
 / @return the message, naming the reactions and how many windows they owe
+/ @private
 owed_error:{[owed]
     string[count owed]," reaction(s) owed over ",string[count distinct select range_from, range_to from owed],
     " window(s) (",(", " sv string distinct owed`name),
@@ -660,6 +673,7 @@ owed_error:{[owed]
 / fetch and transform. A window that cannot be fetched or transformed is
 / logged and left owed, for the next run.
 / @return 1 when announced, else 0
+/ @private
 replay_window:{[worker;w]
     cfg:def worker;
     f:own[worker;`fetch][w`range_from;w`range_to];

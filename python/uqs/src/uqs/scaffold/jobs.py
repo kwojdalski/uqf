@@ -43,6 +43,7 @@ from uqs.scaffold.columns import (
     nested_declaration,
     table_definition,
 )
+from uqs.scaffold.docs import ANALYTICS, FEEDS, doc_stub_actions
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
@@ -86,10 +87,14 @@ def _nslist_action(namespace: str) -> FileAction:
     return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode=WriteMode.APPEND)
 
 
-#: The registry consequences no generator writes, because both are authored
-#: prose for a person to read. Each has a test that fails until it is written,
-#: and a note here is what stops that failure being a surprise.
-_STACK_PAGE_NOTE = "name {proc} in docs/architecture/stack.md - authored prose, checked by pytest"
+#: The documentation no generator writes, because both pages are authored
+#: prose. The scaffold writes a SCAFFOLDED placeholder into each
+#: (scaffold/docs.py), test_no_scaffold_left.py fails until both are replaced,
+#: and this note is what stops that failure being a surprise.
+_DOCS_NOTE = (
+    "describe {proc}: replace its SCAFFOLDED card in docs/services/README.md and its "
+    "SCAFFOLDED comment in docs/architecture/stack.md"
+)
 
 
 def _expected_table_action(table: str) -> FileAction:
@@ -170,6 +175,7 @@ def streaming_job(
     cursor: str | None = None,
     transform: str | None = None,
     definitions: dict[str, str] | None = None,
+    showcase: str | None = None,
 ) -> ScaffoldPlan:
     """Plan a new streaming job: the q file, its table and its test.
 
@@ -205,6 +211,10 @@ def streaming_job(
     `transform` (`passthrough` or `derive`) writes the handler too, for one
     table in and one out - see scaffold/transform.py. `definitions` maps each
     plant table to its q definition, which that needs for the tables' shapes.
+
+    `showcase` is the Services - Showcase section the process's placeholder
+    card goes in: Feeds for a feed and Analytics otherwise, unless the caller
+    knows better (an external source's job) - see scaffold/docs.py.
     """
     _check_name(name, "job name")
     if period is not None:
@@ -374,7 +384,8 @@ publish:.qetl.job.stream.unwired `{name};
         )
     else:
         notes.append(f"the handler forwards {subscribe_to[0]} to {pubs[0]} as written")
-    notes.append(_STACK_PAGE_NOTE.format(proc=proc))
+    actions += doc_stub_actions(proc, showcase or (FEEDS if is_feed else ANALYTICS))
+    notes.append(_DOCS_NOTE.format(proc=proc))
     member_actions, member_notes = membership(
         proc,
         profile=profile,

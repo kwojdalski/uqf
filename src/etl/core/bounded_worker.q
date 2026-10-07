@@ -111,6 +111,7 @@ namespace:{[worker] ` sv worker_root,worker}
 / ------------------------------------------------------- INHERITANCE
 
 / Private: a run's progress before it has made any.
+/ @private
 no_progress:`windows_planned`windows_completed`windows_failed`rows_published`cursor`reactions_owed!(0;0;0;0;0Np;0)
 
 / The globals every worker starts with. The first three are the contract's
@@ -136,6 +137,7 @@ inherited_methods:.qetl.job.bounded.state.bounded_worker_methods,`spec`run`clean
 / at the prompt still shows. A real lambda rather than a projection for
 / that readability, and because the niladic ones - run[], cleanup[] - have
 / no projection form: a projection with every argument supplied is a call.
+/ @private
 delegate:{[worker;nm]
     / value of the NAME is the function; value of the function is its
     / parse tree, whose second element is the parameter list.
@@ -149,6 +151,7 @@ delegate:{[worker;nm]
 / that defined its own `publish` before calling define keeps it. It is also
 / what makes a reload safe - a worker file re-runs its own define, and the
 / state its previous run left behind is not reset under it.
+/ @private
 inherit:{[worker;ns]
     have:.qetl.job.bounded.state.ns_names ns;
     globals:(key initial_state) except have;
@@ -322,26 +325,42 @@ define:{[worker;decl]
 / Private: the declared transform exists and reads exactly this worker's
 / source.
 / .
-/ One input, and its schema must be the source contract's fields and types.
-/ Checked at declaration so a transform written against a different shape
-/ than the source delivers fails when the worker is defined, not on the
-/ first window of a backfill. A transform taking as_of is refused: a window
-/ has no single instant it is "as of", and choosing one here would be
-/ guessing at what the transform means by it.
+/ A source with one input: the transform reads one input, and its schema must
+/ be the source contract's fields and types. A source with supporting inputs
+/ (#617): the transform reads exactly the source's inputs, by name, and each
+/ input's schema must be that input's contract. Checked at declaration so a
+/ transform written against a different shape than the source delivers fails
+/ when the worker is defined, not on the first window of a backfill. A
+/ transform taking as_of is refused: a window has no single instant it is
+/ "as of", and choosing one here would be guessing at what the transform
+/ means by it.
+/ @private
 require_transform:{[worker;cfg]
     who:"define: ",string[worker];
     if[not -11h=type cfg`transform;
         'who,"'s transform must be the name of a .qetl.transform transform"];
     d:.qetl.transform.def cfg`transform;
-    if[not 1=count d`inputs;
+    src:.qetl.source.def cfg`source;
+    several:0<count src`supporting;
+    if[(not several) and not 1=count d`inputs;
         'who,"'s transform ",string[cfg`transform]," must read exactly one input, the fetched batch"];
     if[d`as_of;
         'who,"'s transform ",string[cfg`transform]," takes as_of, which a bounded window cannot supply"];
-    src:.qetl.source.def cfg`source;
     contract:flip (src`columns)!{[c] $[c within "AZ"; (); c$()]} each src`types;
-    p:.qetl.transform.problems[contract;first value d`inputs;0b];
+    if[not several;
+        p:.qetl.transform.problems[contract;first value d`inputs;0b];
+        if[count p;
+            'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
+        :(::)];
+    contracts:((enlist src`table_name)!enlist contract),src`supporting;
+    if[not (asc key d`inputs)~asc key contracts;
+        'who,"'s transform ",string[cfg`transform]," must read source ",string[cfg`source],"'s inputs ",
+         (", " sv string key contracts)," - it reads ",", " sv string key d`inputs];
+    p:raze {[ins;contracts;nm]
+        (string[nm],": "),/:.qetl.transform.problems[contracts nm;ins nm;0b]
+      }[d`inputs;contracts] each key contracts;
     if[count p;
-        'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
+        'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contracts: ","; " sv p];
     }
 
 / Private: the columns on_conflict matches rows by, in the TARGET's names.
@@ -355,6 +374,7 @@ require_transform:{[worker;cfg]
 / output columns: checked here, so a key the transform drops fails the
 / declaration rather than every window with an error that only names a column.
 / @return the target key as a symbol vector
+/ @private
 require_target_key:{[worker;decl]
     k:$[`target_key in key decl; decl`target_key; .qetl.source.row_key decl`source];
     if[not 11h=abs type k;
@@ -441,6 +461,7 @@ spec_from_flags:{[opts]
         `source_version`range_from`range_to!(version_from_flags[opts;worker];from_ts;to_ts))}
 
 / Private: a config carrying every optional key, absent ones as (::).
+/ @private
 normalised:{[cfg]
     missing:optional_cfg where not optional_cfg in key cfg;
     if[0=count missing; :cfg];
@@ -481,6 +502,7 @@ partition_of:{[worker] (def worker)`partition}
 / load time and aborts the rest of the file - leaving .qetl.job.bounded half-populated
 / while the enclosing script carries on. Seventh reserved-name collision in
 / this repository, after desc, tables, sv, load, var and save.
+/ @private
 read_state:{[worker;nm] value ` sv ((def worker)`ns),nm}
 write_state:{[worker;nm;v] (` sv ((def worker)`ns),nm) set v}
 
@@ -489,6 +511,7 @@ write_state:{[worker;nm;v] (` sv ((def worker)`ns),nm) set v}
 / the shell's plan, fetch and publish directly; that is what makes an
 / override take effect, and the delegate calls back into the shell's
 / function by its full name, so there is no loop.
+/ @private
 own:{[worker;nm] read_state[worker;nm]}
 
 / The worker's current run specification.
@@ -556,6 +579,7 @@ process_worker:`
 / @return the worker's name
 / @throws error naming both workers when the process already belongs to
 /   another one
+/ @private
 claim_process:{[procname;worker]
     if[null procname; :worker];
     held:.qetl.job.bounded.process_worker;
@@ -582,12 +606,14 @@ claim_process:{[procname;worker]
 / the worker's own name in plain q.
 / @param worker the worker's name
 / @return the instance id naming the status file
+/ @private
 instance:{[worker] p:.qetl.run.proc_name[]; $[null p; worker; p]}
 
 / Private: the progress fields the status file carries, zero before the run
 / has made any.
 / @param worker the worker's name
 / @return dict of cursor, rows_published, windows_completed and reactions_owed
+/ @private
 progress_now:{[worker]
     d:`cursor`rows_published`windows_completed`reactions_owed!(0Np;0;0;0);
     p:@[read_state[worker;];`progress;{[e] ()!()}];
@@ -618,6 +644,7 @@ phases:([phase:`ready`running`idle`completed`partial`failed]
 
 / Private: where each phase may go next. ` is a worker before init. Any phase
 / may fail; a finished run may only begin again, through `ready.
+/ @private
 phase_edges:(!). flip (
     (`;          `ready`failed);
     (`ready;     `running`failed);
@@ -646,6 +673,7 @@ phase_edges:(!). flip (
 / @param err the error, "" unless `to` is `partial or `failed
 / @return the new phase
 / @throws error naming both phases when the move is not in phase_edges
+/ @private
 advance_phase:{[worker;to;err]
     was:read_state[worker;`phase];
     if[not to in phase_edges was;
@@ -679,6 +707,7 @@ advance_phase:{[worker;to;err]
 
 / Private: record a run an earlier process never finished as failed.
 / @param worker the worker's name
+/ @private
 record_orphan:{[worker]
     id:instance worker;
     if[(.qetl.status.previous_state id) in `starting`running;
@@ -688,6 +717,7 @@ record_orphan:{[worker]
 / Private: fail the worker's run, never throwing - it runs on the error path.
 / @param worker the worker's name
 / @param e the error, as caught
+/ @private
 fail_run:{[worker;e]
     msg:$[10h=type e; e; -11h=type e; string e; .Q.s1 e];
     @[{[a] advance_phase . a};(worker;`failed;$[count msg; msg; "failed"]);
@@ -700,6 +730,7 @@ fail_run:{[worker;e]
 / @param worker the worker's name
 / @param run_spec dict of source_version, range_from, range_to
 / @return the run specification, as stored
+/ @private
 check_static:{[worker;run_spec]
     cfg:def worker;
     write_state[worker;`source_version;run_spec`source_version];
@@ -823,6 +854,7 @@ init_body:{[worker;run_spec]
 / credential is host:port, an odbc one a connection string, a local one an
 / HDB directory's path, validated there so a wrong path fails the run rather
 / than quietly reading the fixture.
+/ @private
 connect:{[worker]
     source:(def worker)`source;
     cred:.qetl.source.require_credentials source;
@@ -936,7 +968,7 @@ fetch:{[worker;from_ts;to_ts]
          {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts])];
     .qetl.log.dbg[worker;"fetch attempted";
         `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
-            $[`ok~r`state; count r`result; 0N])];
+            $[`ok~r`state; count .qetl.source.primary[cfg`source;r`result]; 0N])];
     if[`failed~r`state; :r];
     .qetl.source.validate[cfg`source;r`result];
     r}
@@ -1010,6 +1042,7 @@ run:{[worker]
 / files, because the to-do list the killed run held died with it. Not on a
 / dry run, which changes nothing on disk.
 / @return how many partitions were queued
+/ @private
 recover_unfinished:{[worker]
     if[not .qetl.job.bounded.runtime.allows`finish_store; :0];
     s:spec worker;
@@ -1024,6 +1057,7 @@ recover_unfinished:{[worker]
 / run wrote nothing, so a store has nothing to finish - and an HDB writer's
 / finish asks the HDB to reload, which a rehearsal must not.
 / @param worker the worker's name
+/ @private
 finish_store:{[worker]
     if[.qetl.job.bounded.runtime.allows`finish_store; .qetl.io.finish .qetl.io.for_cfg def worker]}
 
@@ -1161,6 +1195,7 @@ exit_code:{[state] $[state in `completed`idle`validated`planned; 0i; 1i]}
 / It records what the run was asked to do - dataset, source_version, range
 / and window width - the same columns for every worker, so etl_runs reads as
 / one table of every backfill.
+/ @private
 begin_run:{[worker]
     / Not on a dry run: a rehearsal's row in etl_runs reads as a run.
     if[not .qetl.job.bounded.runtime.allows`record_run; :(::)];
@@ -1187,16 +1222,19 @@ begin_run:{[worker]
 / none to close, (0b;error) when the close failed, for advance_phase to act
 / on (#675). A close that failed silently left the file `completed and the
 / row `running for good.
+/ @private
 end_run:{[state;counts]
     if[not .qetl.job.bounded.runtime.allows`record_run; :(1b;"")];
     .[{.qetl.run.finish[x;y]; (1b;"")};(state;counts);{[e] (0b;$[10h=type e; e; .Q.s1 e])}]}
 
 / Private: the counts the worker's progress holds, as end_run records them.
+/ @private
 run_totals:{[worker]
     p:read_state[worker;`progress];
     run_counts[p`windows_planned;p`windows_completed;p`windows_failed;p`rows_published]}
 
 / Private: a run's counts, as end_run records them.
+/ @private
 run_counts:{[planned;completed;failed;rows]
     `windows_planned`windows_completed`windows_failed`rows_published!(planned;completed;failed;rows)}
 
@@ -1224,6 +1262,7 @@ run_counts:{[planned;completed;failed;rows]
 / @return a table of failures, empty when the batch is acceptable
 / @throws error when a declared check is not callable, or returns a
 /   non-table, naming the worker
+/ @private
 run_check:{[worker;batch]
     cfg:def worker;
     if[not `check in key cfg; :no_failures[]];
@@ -1239,7 +1278,9 @@ run_check:{[worker;batch]
         '"run_check: ",string[worker],"'s check must return a table of failures - an empty one means the batch passed"];
     r}
 
-/ Private: the empty failure table, so every path returns one shape.
+/ The empty failure table, so every path returns one shape - and what a
+/ worker's quality check returns when a batch passes (docs/guides/new-pipeline.md).
+/ @return an empty table of check, status and detail
 no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 
 / Private: run the worker's transform over one fetched batch.
@@ -1248,13 +1289,26 @@ no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 / source returning MORE columns than it declares, and the transform declares
 / exactly the contract - so the extra columns are dropped here, where the
 / contract says what the job reads, rather than refused.
+/ .
+/ A source with supporting inputs hands a dict of tables (#617), and each is
+/ narrowed to its own contract and passed under its own name. The primary
+/ owns the window: when it is empty the window publishes nothing, so the
+/ transform is not run and its declared output comes back empty - supporting
+/ rows alone are context for nothing.
 / @return the transformed batch
 / @throws whatever the transform throws, or a schema refusal from .qetl.transform
+/ @private
 transform_batch:{[worker;batch]
     cfg:def worker;
-    columns:(.qetl.source.def cfg`source)`columns;
+    src:.qetl.source.def cfg`source;
     nm:cfg`transform;
-    .qetl.transform.apply[nm;(.qetl.transform.input_names nm)!enlist columns#batch]}
+    if[0=count src`supporting;
+        :.qetl.transform.apply[nm;(.qetl.transform.input_names nm)!enlist (src`columns)#batch]];
+    if[0=count batch src`table_name; :0#.qetl.transform.output_schema nm];
+    sup:key src`supporting;
+    given:((enlist src`table_name)!enlist (src`columns)#batch src`table_name),
+        sup!{[batch;nm;contract] (cols contract)#batch nm}[batch]'[sup;value src`supporting];
+    .qetl.transform.apply[nm;given]}
 
 / Private: one window, end to end - fetch, transform, check, publish, record.
 / .
@@ -1265,6 +1319,7 @@ transform_batch:{[worker;batch]
 / @param w a row carrying range_from and range_to
 / @return 1b when the window completed, 0b when it failed and the run
 /   should continue with the next one
+/ @private
 do_window:{[worker;w]
     / Everything logged while this window runs - the fetch, its requests,
     / the transform, a sidecar's own stages, the write - carries the run,
@@ -1286,6 +1341,7 @@ do_window:{[worker;w]
 / @param worker the worker's name
 / @param w the window, a dict of range_from and range_to
 / @return 1b when the window was published, 0b when it failed
+/ @private
 window_body:{[worker;w]
     cfg:def worker;
     .qetl.log.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
@@ -1337,6 +1393,7 @@ window_body:{[worker;w]
 
 / Private: a stage's failure - the message window_failed logs, and the fields
 / it logs after the window's range.
+/ @private
 failed_with:{[s;message;fields] @[s;`failed;:;`message`fields!(message;fields)]}
 
 / Private: the one failure path for a window.
@@ -1347,6 +1404,7 @@ failed_with:{[s;message;fields] @[s;`failed;:;`message`fields!(message;fields)]}
 / the window and the stage's own fields is what makes "which windows failed
 / and why" answerable from the log rather than from a debugger.
 / @return 0b, do_window's answer for a failed window
+/ @private
 window_failed:{[worker;w;f]
     .qetl.log.err[worker;f`message;(`range_from`range_to!(w`range_from;w`range_to)),f`fields];
     write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
@@ -1355,6 +1413,7 @@ window_failed:{[worker;w;f]
 / Private: FETCH the window from the source, through the worker's own fetch so
 / an override still applies. A fetch that gave up carries its classified kind
 / and the attempts it made.
+/ @private
 stage_fetch:{[worker;s]
     w:s`window;
     f:own[worker;`fetch][w`range_from;w`range_to];
@@ -1365,6 +1424,7 @@ stage_fetch:{[worker;s]
 / Private: TRANSFORM, between fetch and the quality gate, so the gate judges
 / the rows that will actually be published. A throwing transform fails the
 / window like a failed fetch.
+/ @private
 stage_transform:{[worker;s]
     out:@[transform_batch[worker;];s`batch;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
@@ -1383,6 +1443,7 @@ stage_transform:{[worker;s]
 / work redone, never data lost and never a gap silently marked complete. A
 / check that is not a function, or returns no table, still throws: that is
 / the worker's bug, not the window's data.
+/ @private
 stage_check:{[worker;s]
     bad:run_check[worker;s`batch];
     if[count bad;
@@ -1404,6 +1465,7 @@ stage_check:{[worker;s]
 / fails THIS window and the run goes on. It used to end the run. A write that
 / got partway is safe to repeat under the default `upsert, which is what
 / makes failing just the window sound.
+/ @private
 stage_publish:{[worker;s]
     cfg:s`cfg; w:s`window;
     write_state[worker;`last_batch;s`batch];
@@ -1418,6 +1480,7 @@ stage_publish:{[worker;s]
 / {[worker;s]} over the window's state - `cfg, `window, and what the stages
 / before it added - and returns that state with its own result added, or
 / failed_with's failure. Defined after them, because it holds their values.
+/ @private
 window_stages:`fetch`transform`check`publish!(stage_fetch;stage_transform;stage_check;stage_publish)
 
 / Private: attach this window's metadata to the materialisation.
@@ -1441,6 +1504,7 @@ window_stages:`fetch`transform`check`publish!(stage_fetch;stage_transform;stage_
 / The whole call is protected for the same reason begin_run is: run.q may not
 / be loaded under a minimal loader, and metadata is an addition rather than a
 / precondition.
+/ @private
 record_facts:{[worker;cfg;w;batch;r]
     framework:`rows`source_version`dry_run!
         (r`rows_published;(spec worker)`source_version;r`dry_run);
@@ -1484,6 +1548,7 @@ record_facts:{[worker;cfg;w;batch;r]
 / reason; this is the same invariant on the bounded path, which had a plain
 / assignment. One comparison, and the asymmetry is gone.
 / @throws error when the cursor would stand still or move backwards
+/ @private
 advanced_to:{[worker;current;next_cursor]
     if[(not null current) and not next_cursor>current;
         '"cursor for ",string[worker]," would move from ",string[current],
@@ -1501,6 +1566,7 @@ advanced_to:{[worker;current;next_cursor]
 / correctly, and failed on the first publish with a bare `'match` naming
 / nothing. Eighth reserved-name class here, and the first that is
 / punctuation rather than a word.
+/ @private
 publish_pending:{[worker] publish_last_batch[worker;]}
 
 publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last_batch]}

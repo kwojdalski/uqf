@@ -32,6 +32,8 @@ from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.columns import definition_columns, parse_columns, table_definition
+from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
+from uqs.scaffold.example import example_path
 from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.reaction import reaction
 
@@ -142,12 +144,13 @@ def _status_dir(env: dict[str, str], root: Path) -> dict[str, str]:
 
 def _copy_of_the_tree(root: Path) -> None:
     """What loading and scaffolding touch: src/, the plant's q files, the
-    vendored database.q the plant registry reads quote and trade from, and the
-    two test lists a scaffold appends to. Not the whole repository."""
+    vendored database.q the plant registry reads quote and trade from, the
+    two test lists and the two doc pages a scaffold appends to. Not the whole
+    repository."""
     shutil.copytree(UQF_ROOT / "src", root / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", root / "scripts" / "processes")
     vendored = Path("lib/torq-finance-starter-pack/database.q")
-    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, vendored):
+    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, vendored, STACK_PAGE, SHOWCASE_PAGE):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, root / rel)
 
@@ -245,3 +248,35 @@ def test_every_scaffolded_kind_loads_and_registers(tmp_path):
     failed = [label for label in LABELS if reported.get(label) == "FAILED"]
     assert not missing, f"checks that never ran: {missing}\n{tail}"
     assert not failed, f"checks that failed: {failed}\n{tail}"
+
+
+@pytest.mark.parametrize("transport", ["ipc", "local"])
+def test_a_scaffolded_backfill_example_runs_straight_away(tmp_path, transport):
+    """#713's acceptance: `uqs job new X --kind backfill`, then
+    `q scripts/examples/X_example.q` publishes the fixture into an HDB.
+
+    Straight after scaffolding, with nothing written: the fixture is a real
+    row and a passthrough worker publishes it, so the example must exit 0.
+    A `local` source's query is still the stub, so it takes the fixture path
+    too and says so.
+    """
+    qbin, env = _kdbx()
+    _copy_of_the_tree(tmp_path)
+    write.apply_plan(
+        backfill.bounded_worker("smokeex", "smoke_ex", "sym:symbol, px:float", transport=transport),
+        tmp_path,
+    )
+    result = subprocess.run(
+        [qbin, example_path("smokeex").as_posix(), "-q"],
+        cwd=tmp_path,
+        env=_status_dir(env, tmp_path),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=TIMEOUT_SECONDS,
+        text=True,
+    )
+    tail = "\n".join((result.stdout + result.stderr).splitlines()[-25:])
+    assert result.returncode == 0, f"the scaffolded example did not run:\n{tail}"
+    assert "ok    at least one row was written" in result.stdout, tail
+    assert "ok    every published row is on disk" in result.stdout, tail
+    assert ("query is still the scaffold's stub" in result.stdout) == (transport == "local"), tail

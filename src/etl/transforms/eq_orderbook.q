@@ -14,6 +14,7 @@ book:([] time:`timestamp$(); sym:`symbol$(); action:`symbol$(); side:`symbol$();
 
 / Private: one side and quantity's ten level columns, as a vector per row.
 / `flip` over the columns rather than `each` over rows: one pass per column.
+/ @private
 fold:{[batch;prefix] flip batch `$prefix,/:.qpipe.source.databento_mbp10.levels}
 
 / Fold Databento's per-level columns into level-0-first vectors.

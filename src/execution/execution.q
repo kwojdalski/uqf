@@ -43,12 +43,17 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 /   both are present: `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 /   (the target-time column is named per time_col, `time by default, matching
 /   the quotes-table timestamp convention used elsewhere in this
-/   library, e.g. forwards.q's cross_book_at/cross_markout_at_horizons)
+/   library, e.g. forwards.q's cross_book_at). forwards.q's
+/   cross_markout_at_horizons and cross_impact_at_horizons return these same
+/   columns, so direct and synthetic markouts join with uj
 / @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
 /   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
-/   table fails loudly here rather than surfacing as a bare `domain error deep inside aj
+/   table fails loudly here rather than surfacing as a bare `domain error deep inside aj;
+/   or if horizons is not a timespan or list of timespans (a bare long would be read
+/   as nanoseconds without complaint)
 / @eg .qexec.markout_at_horizons[markout_trades;mid_quotes;0D00:00:01 0D00:00:10]
 markout_at_horizons:{[trades;quotes;horizons]
+    .qfwd.require_horizons[`markout_at_horizons;horizons];
     .qschema.require_cols[`markout_at_horizons;`trades;trades;`sym`time`side`trade_price`pip_factor];
     .qschema.require_cols[`markout_at_horizons;`quotes;quotes;`sym`time`mid];
     horizon_list:$[0>type horizons; enlist horizons; horizons];
@@ -326,6 +331,7 @@ fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
     by_names xasc r};
 
 / Private: refuse fill_probability_by's arguments, naming what is wrong.
+/ @private
 fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
     if[not .Q.qt orders; '"fill_probability_by: orders must be a table"];
     .qschema.require_cols[`fill_probability_by;`orders;0!orders;distinct fill_order_time_cols,bucket_cols];
@@ -356,6 +362,7 @@ fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
 / @param horizon_end submit_time + horizon
 / @param known_by the last instant this order's state is known at
 / @return a symbol vector, one per row
+/ @private
 fill_outcome:{[event_time;cancel_time;horizon_end;known_by]
     seen_event:(not null event_time) and event_time<=known_by;
     filled:seen_event and event_time<=horizon_end;
@@ -367,6 +374,7 @@ fill_outcome:{[event_time;cancel_time;horizon_end;known_by]
 / Private: one target's outcomes as rows to be counted - the grouping
 / columns, the target, and a 0/1 long per outcome, so a grouped sum of each
 / is its count.
+/ @private
 fill_outcome_rows:{[grouping;tgt;outcome]
     flip grouping,`target`fill_count`failure_count`cancelled_count`censored_count!(
         (count outcome)#tgt;
@@ -377,6 +385,7 @@ fill_outcome_rows:{[grouping;tgt;outcome]
 
 / Private: fill_probability_by's opts, resolved against the defaults.
 / @throws error naming an unknown key, an unknown cancel_policy or a bad min_count
+/ @private
 fill_probability_opts:{[opts]
     if[(::)~opts; :fill_probability_defaults];
     if[not 99h=type opts;
@@ -398,6 +407,7 @@ fill_probability_opts:{[opts]
 / Refused rather than scored, because each of these is a data bug upstream
 / and any estimate built over it would be quietly wrong: a fill before its
 / order existed, or a full fill with no first fill.
+/ @private
 fill_probability_require_consistent:{[orders]
     s:orders`submit_time;
     if[any null s; '"fill_probability_by: every order needs a submit_time"];
@@ -490,6 +500,7 @@ venue_quality:{[quotes;requests;trades;window;config]
     '"venue_quality: not implemented yet (#338) - the contract is fixed, the computation is not"};
 
 / Private: refuse venue_quality's tables and window, naming what is wrong.
+/ @private
 venue_quality_require_args:{[quotes;requests;trades;window]
     if[not .Q.qt quotes; '"venue_quality: quotes must be a table"];
     if[not .Q.qt requests; '"venue_quality: requests must be a table"];
@@ -503,6 +514,7 @@ venue_quality_require_args:{[quotes;requests;trades;window]
 
 / Private: venue_quality's config, checked and resolved against the defaults.
 / @throws error naming a missing or unknown key, or a value of the wrong kind
+/ @private
 venue_quality_config:{[config]
     if[not 99h=type config;
         '"venue_quality: config must be a dictionary with at least as_of and horizons"];

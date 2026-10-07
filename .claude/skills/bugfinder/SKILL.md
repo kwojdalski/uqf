@@ -97,7 +97,7 @@ Scan for the following, in order of severity:
 - `microstructure.q` rolling functions (`ofi`, `mid_price_velocity`,
   `queue_depletion_rate`, etc.) that don't apply the documented "first row is
   0/null" convention, or apply it to the wrong row
-- `horizons_ms` boundary handling in `cross_markout_at_horizons` --- a `0`
+- `horizons` boundary handling in `cross_markout_at_horizons` --- a `0D00:00:00`
   horizon should land exactly on `trade_time`, not one tick off
 - `aj` as-of lookups against a table that isn't actually sorted the way the join
   assumes --- verify the sortedness check (`` quotes~`sym`ts xasc quotes ``) is

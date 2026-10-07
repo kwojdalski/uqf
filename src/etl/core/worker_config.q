@@ -54,6 +54,7 @@ sources:`env`overrides`yaml`default
 
 / Private: per-source lookup tables, populated by `set_layers`. Kept separate
 / rather than merged eagerly so `explain` below can report provenance.
+/ @private
 env_values:(`symbol$())!();
 override_values:(`symbol$())!();
 yaml_values:(`symbol$())!();
@@ -82,10 +83,12 @@ set_layers:{[overrides;yaml;defaults]
 / Private: the environment variable name for a config key. UQF_BACKFILL_FROM
 / for `backfill_from, so the mapping is mechanical and an operator can guess
 / it without reading this file.
+/ @private
 env_name:{[k] "UQF_",upper string k}
 
 / Private: raw string value for a key from one named source, or "" when the
 / source does not carry it.
+/ @private
 raw_from:{[source;k]
     $[source=`env;      getenv `$env_name k;
       source=`overrides; $[k in key override_values; override_values k; ""];
@@ -162,6 +165,7 @@ raw:{[k] (),last explain k}
 errors:();
 
 / Private: record a problem and return a null of the right type.
+/ @private
 note:{[msg;null_value] errors,:enlist msg; null_value}
 
 / A required timestamp, e.g. a backfill window bound.

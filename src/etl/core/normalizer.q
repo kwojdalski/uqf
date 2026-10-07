@@ -90,6 +90,7 @@ define:{[name;decl]
     name}
 
 / Private: one source's transform, held to the canonical output.
+/ @private
 check_source:{[who;out;src;xf]
     if[not xf in .qetl.transform.defined[];
         'who,": source ",string[src]," maps through transform ",string[xf],", which is not registered - a mapping is a declared transform, so its examples are verified"];
@@ -146,6 +147,7 @@ normalize:{[name;src;batch]
 / A batch on a table that is not a source is dropped rather than refused:
 / the plant delivers only what was subscribed to, so this can only happen
 / from a test or a hand call, and neither should take the job down.
+/ @private
 dispatch:{[name;t;x]
     if[not t in key def[name]`input; :()];
     if[0=count x; :()];

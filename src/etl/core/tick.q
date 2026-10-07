@@ -129,12 +129,14 @@ unsubscribe:{[sink]
 / A function (100-112h) or an INTEGER HANDLE - applying a negative handle
 / to a message is q's own async send, so a real subscriber and a test
 / recorder are called by identical code.
+/ @private
 can_send:{[sink] ((type sink) within 100 112h) or (type sink) in -6 -7h}
 
 / ------------------------------------------------------------- PUBLISHING
 
 / Private: refuse a batch that a tickerplant cannot carry, naming the rule
 / it breaks. See the header for why each of these is a rule.
+/ @private
 require_batch:{[t;x]
     if[99h=type x;
         '"publish: ",string[t]," was given a KEYED table - a tickerplant appends, and upserting by key would silently drop ticks"];
@@ -198,12 +200,14 @@ publish:{[t;x]
 / Private: build a table from a declared schema's column names and a list
 / of column vectors, so a plant that was told its schema can hand
 / subscribers a table rather than a bare list.
+/ @private
 learn:{[table_name;stamped]
     if[not table_name in key schemas;
         '"publish: ",string[table_name]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qetl.tick.schema first"];
     flip (cols schemas table_name)!stamped}
 
 / Private: send one batch to every sink subscribed to that table.
+/ @private
 fan_out:{[name;batch]
     / `where tbl=name`, never `where tbl=tbl`: inside a qSQL clause the
     / column shadows a same-named parameter, so the second spelling
@@ -248,6 +252,7 @@ open_log:{[dir;name;dt]
 / A plant with no log still publishes - that is the shape a test wants,
 / and a service that genuinely does not need recovery should be able to
 / say so by not opening one, rather than by writing to /dev/null.
+/ @private
 record:{[msg]
     if[null log_handle; :0];
     log_handle enlist msg;

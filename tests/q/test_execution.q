@@ -95,11 +95,12 @@ test_markout_at_horizons_works_with_unsorted_quotes:{[t]
 
 test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
     / #625: the two horizon markouts spell their inputs differently - a trades
-    / table, `sym`time`mid quotes and timespan horizons here; scalars, depth
-    / quotes and horizons_ms in .qfwd.cross_markout_at_horizons. On a pair
-    / quoted directly they are one calculation, so a mix-up between them shows
-    / up here as a wrong number rather than nowhere. Both sides, so a flipped
-    / sign convention cannot agree by accident.
+    / table and `sym`time`mid quotes here; scalars and depth quotes in
+    / .qfwd.cross_markout_at_horizons. On a pair quoted directly they are one
+    / calculation, so a mix-up between them shows up here as a wrong number
+    / rather than nowhere. Both sides, so a flipped sign convention cannot
+    / agree by accident. #413: both take timespan horizons and return the
+    / same columns and types, so direct and synthetic markouts join with uj.
     t0:2026.01.01D10:00:00.000000000;
     times:t0+0D00:00:01*0 1 10;
     bids:1.1000 1.1004 1.0990;
@@ -109,12 +110,24 @@ test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
     mids:([] sym:3#`EURUSD; time:times; mid:0.5*bids+asks);
     {[t0;depth;mids;side]
         trade:([] sym:enlist `EURUSD; time:enlist t0; side:enlist side; trade_price:enlist 1.1003; pip_factor:enlist 10000);
-        by_table:exec markout_pips from .qexec.markout_at_horizons[trade;mids;0D00:00:00 0D00:00:01 0D00:00:10];
-        by_scalars:exec markout_pips from .qfwd.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;0 1000 10000;1];
-        .testutil.assertApprox[by_scalars;by_table;1e-9;
-            "timespan horizons over mids and the same horizons in ms over depth give the same pips"]
+        horizons:0D00:00:00 0D00:00:01 0D00:00:10;
+        by_table:.qexec.markout_at_horizons[trade;mids;horizons];
+        by_scalars:.qfwd.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;horizons;1];
+        .testutil.assertApprox[by_scalars`markout_pips;by_table`markout_pips;1e-9;
+            "the same horizons over mids and over depth give the same pips"];
+        .qunit.assertEquals[exec c!t from meta by_scalars;exec c!t from meta by_table;
+            "the same columns, in the same order, of the same types"];
+        .qunit.assertEquals[count by_table uj by_scalars;6;"so the two join with uj, no renaming"]
         }[t0;depth;mids] each 1 -1;
     }
+
+test_markout_at_horizons_refuses_horizons_that_are_not_timespans:{[t]
+    / #413: a timestamp plus a long is a timestamp, so 500 meant as ms used
+    / to become a 500ns horizon and a plausible-looking markout.
+    trades:([] sym:enlist `EURUSD; time:enlist 2026.01.01D10:00:00; side:enlist 1; trade_price:enlist 1.1; pip_factor:enlist 10000);
+    quotes:([] sym:enlist `EURUSD; time:enlist 2026.01.01D10:00:00; mid:enlist 1.1);
+    .qunit.assertThrows[{.qexec.markout_at_horizons[x;y;500 1000]}[trades];quotes;
+        "markout_at_horizons: horizons must be a timespan or list of timespans*";"a long is refused, not read as nanoseconds"]};
 
 test_markout_at_horizons_rejects_trades_missing_a_required_column:{[t]
     trades:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; side:enlist 1; trade_price:enlist 1.1000);

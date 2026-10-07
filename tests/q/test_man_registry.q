@@ -149,7 +149,8 @@ test_documentation_coverage_does_not_regress:{[t]
         if[(string full) like ".qpipe.job.*"; ks:ks except `publish];
         ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
         string ` sv/: full,/:ks} each nss;
-    undocumented:public where not public in documented;
+    / A function tagged @private is plumbing, deliberately not registered (#627).
+    undocumented:public where not public in documented,.man.private;
     .qunit.assertTrue[12>=count undocumented;
         "public functions without a qDoc block have not increased - see the count in the failure"]};
 
@@ -161,5 +162,42 @@ test_the_registry_is_not_a_token_sample:{[t]
     / above the 78 that prompted this.
     .qunit.assertTrue[300<=count .man.funcs;
         "the registry covers the bulk of the library, not a fraction of it"]};
+
+
+/ --- @private (#627) --------------------------------------------------------
+
+/ Private: is the string `s` one of the strings in `l`?
+has:{[l;s] any l~\:s}
+
+test_a_private_helper_is_not_registered:{[t]
+    / .qfwd.require_quotes_cols is plumbing every cross-book function calls.
+    .qunit.assertTrue[.mantest.has[.man.private;".qfwd.require_quotes_cols"];"it is recorded as private"];
+    .qunit.assertFalse[.mantest.has[registered[];".qfwd.require_quotes_cols"];"and is not in the registry"]};
+
+test_an_untagged_public_function_is_still_registered:{[t]
+    .qunit.assertTrue[.mantest.has[registered[];".qfwd.cross_book_at"];"API stays in the registry"];
+    .qunit.assertFalse[.mantest.has[.man.private;".qfwd.cross_book_at"];"and is not private"]};
+
+test_every_private_name_exists:{[t]
+    / A tag left on a block whose function was renamed would name nothing.
+    missing:.man.private where not resolves each .man.private;
+    .qunit.assertEquals[missing;();"every @private name resolves in a loaded namespace"]};
+
+/ A file with one public and one private function, read by the same parser.
+private_probe:{[]
+    f:"build/mantest_private_probe.q";
+    system"mkdir -p build";
+    (hsym `$f) 0: ("\\d .mantestprobe";"/ Public: the API.";"/ @return 1";"api:{[] 1}";"";
+        "/ Private: plumbing.";"/ @eg .mantestprobe.helper[]";"/ @private";"helper:{[] 2}";"\\d .");
+    r:.man.parsefile f;
+    hdel hsym `$f;
+    r 2}
+
+test_the_parser_reads_the_private_tag:{[t]
+    docs:.mantest.private_probe[];
+    .qunit.assertEquals[docs@\:`fullname;(".mantestprobe.api";".mantestprobe.helper");"both blocks are read"];
+    .qunit.assertEquals[docs@\:`private;01b;"only the tagged one is private"];
+    .qunit.assertEquals[(last docs)`examples;enlist ".mantestprobe.helper[]";
+        "@private is a tag, not a continuation of the @eg above it"]};
 
 \d .

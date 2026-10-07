@@ -15,6 +15,10 @@ process, so no table, profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
 their test, and the raw table the publisher writes - on the same rule as any
 table: only when nothing else mentions it.
+A backfill also loses the worked example its scaffold generated under
+scripts/examples/, and every process the Showcase card and stack.md comment
+its scaffold wrote (#713) - while they still say SCAFFOLDED. A hand-written
+example and written prose are left, and the reference report lists them.
 
 WHAT IT REFUSES. A job whose file carries no SCAFFOLDED marker any more: it
 has been written, and deleting written work is not undoing a scaffold.
@@ -46,6 +50,8 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
 )
+from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
+from uqs.scaffold.example import GENERATED_BY, example_path
 from uqs.scaffold.external import external_files
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.references import Reference, stale_references
@@ -132,6 +138,12 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
                 # NAME is the source's name too: another worker reads it, so
                 # its mentions are that worker's.
                 kept.add(source[0])
+        # Only the example a scaffold generated; a hand-written one is the
+        # reference report's to list.
+        example = example_path(job.removesuffix("_backfill"))
+        if (repo_root / example).is_file() and GENERATED_BY in (repo_root / example).read_text():
+            removal.deletes.append(example)
+            gone.add(example)
     elif fn == "qetl.job.stream.normalize":
         tables = [job]
     else:
@@ -168,6 +180,10 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
         f"{proc}'s port offset stays in scripts/processes/process_ports.csv, which is append-only "
         "so an offset is never handed to another process"
     )
+    # The stubs a scaffold wrote go while they still say SCAFFOLDED; anything
+    # else that names the process is listed by the reference report below.
+    for page in (STACK_PAGE, SHOWCASE_PAGE):
+        _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
     return _with_references(removal, repo_root, names - kept)
 
 
