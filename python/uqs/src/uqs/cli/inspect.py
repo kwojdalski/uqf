@@ -26,7 +26,6 @@ from uqs.cli.shared import (
     data_app,
     log,
 )
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import runtime
 
@@ -109,7 +108,9 @@ def schema(
             autocompletion=completion.process_ports,
         ),
     ] = None,
-    base_port: Annotated[int, typer.Option(help="stack base port")] = DEFAULT_BASE_PORT,
+    base_port: Annotated[
+        int | None, typer.Option(help="stack base port (default: the runtime's)")
+    ] = None,
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",

@@ -246,19 +246,21 @@ They answer two different questions:
 
 The runtime defines the menu; a profile is one order from it.
 
-There are two runtimes:
+There are four runtimes:
 
   | Runtime             | What exists                                                                                                                              |
   | ---                 | ---                                                                                                                                      |
   | `uqf` (the default) | the TorQ starter pack plus everything this repository adds: its pipelines and tables, and its overlays and config layers                 |
   | `torq`              | the starter pack exactly as it ships, with nothing of uqf's. Use it to see TorQ itself, or to tell whether a problem is TorQ's or uqf's. |
+  | `crypto`, `fx`      | the starter pack and uqf's layers, with only one profile's pipelines and the tables they use: a focused stack with an HDB of its own     |
 
 Each runtime keeps its own data directory, so switching between them never mixes
-their HDBs.
+their HDBs, and its own ports, so two can run at once.
 
 **Profiles are defined once, for the `uqf` runtime.** Every profile except
 `essential` names uqf's own processes (`fx` means `posbook1`, `demo_markout1`
-and `fxpositions1`), which the `torq` runtime doesn't have. So under `torq`:
+and `fxpositions1`), which the `torq` runtime doesn't have, and `crypto` and
+`fx` have only some of. So under `torq`:
 
 - `uqs list profiles` shows only the profiles it can start, which today is
   `essential`;

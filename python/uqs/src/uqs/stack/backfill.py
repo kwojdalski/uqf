@@ -25,7 +25,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES
+from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runs, runtime
 
@@ -213,7 +213,7 @@ def start(
     source_version: str,
     range_from: datetime,
     range_to: datetime,
-    base_port: int = DEFAULT_BASE_PORT,
+    base_port: int | None = None,
     *,
     verbose: bool = False,
     trace: bool = False,

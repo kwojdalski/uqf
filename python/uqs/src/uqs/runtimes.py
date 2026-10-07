@@ -43,6 +43,21 @@ class Runtime:
     #: gateway1's access list, DQE's metatable queries and monitor1's
     #: connection budget. Without it the starter pack runs as it ships.
     overlays: bool
+    #: KDBBASEPORT when `--port` is not given: every process listens on it
+    #: plus its offset (scripts/processes/process_ports.csv). Each runtime's
+    #: span of ports is clear of every other's, so two runtimes run side by
+    #: side with no flags (#761); `--port` still moves one anywhere.
+    base_port: int
+    #: Which of this tree's pipelines a runtime with `pipelines` has: None
+    #: for every one, or a profile's name for that profile's processes and
+    #: everything they depend on in the job graph (model/runtime_members.py).
+    #: The subset is derived, never listed, so a dependency added to a job
+    #: joins every runtime that includes the job (#760).
+    profile: str | None = None
+
+    def resolve_base_port(self, base_port: int | None) -> int:
+        """KDBBASEPORT: `base_port` when given (`--port`), else this runtime's."""
+        return self.base_port if base_port is None else base_port
 
 
 #: Every runtime, by name. The first is the default.
@@ -53,6 +68,11 @@ class Runtime:
 #: torq - the starter pack as it ships, and nothing of this tree's: its own
 #: process.csv, its own database.q (trade, quote, packets), its own feed1.
 #: For seeing TorQ itself, or telling whether a problem is TorQ's or uqf's.
+#:
+#: crypto, fx - the starter pack with this tree's layers and ONE profile's
+#: pipelines: their processes, the tables they read and write, and an HDB
+#: of their own. A focused stack that fits the licence's connection cap
+#: with room to spare and holds no table it never writes.
 RUNTIMES: dict[str, Runtime] = {
     runtime.name: runtime
     for runtime in (
@@ -62,6 +82,7 @@ RUNTIMES: dict[str, Runtime] = {
             data_dir="uqs",
             pipelines=True,
             overlays=True,
+            base_port=6050,
         ),
         Runtime(
             name="torq",
@@ -69,6 +90,25 @@ RUNTIMES: dict[str, Runtime] = {
             data_dir="uqs-torq",
             pipelines=False,
             overlays=False,
+            base_port=6150,
+        ),
+        Runtime(
+            name="crypto",
+            description="the starter pack plus the crypto profile's pipelines and their tables",
+            data_dir="uqs-crypto",
+            pipelines=True,
+            overlays=True,
+            base_port=6250,
+            profile="crypto",
+        ),
+        Runtime(
+            name="fx",
+            description="the starter pack plus the fx profile's pipelines and their tables",
+            data_dir="uqs-fx",
+            pipelines=True,
+            overlays=True,
+            base_port=6350,
+            profile="fx",
         ),
     )
 }

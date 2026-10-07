@@ -34,7 +34,6 @@ from uqs.cli.summary_table import gather, render
 from uqs.interpreter import interpreter_status
 from uqs.logger import configure_logging
 from uqs.model import dependencies, profiles
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, probe, startup
 from uqs.stack import procs as stack_procs
@@ -103,7 +102,7 @@ def _note_monitor_coverage() -> None:
 @app.command()
 def summary(
     ctx: typer.Context,
-    port: PortOpt = DEFAULT_BASE_PORT,
+    port: PortOpt = None,
     export: ExportOpt = None,
     columns: Annotated[
         str | None,
@@ -198,6 +197,8 @@ def summary(
     # sorted on - which may be a graph or probe column left out of the table.
     needed = [*chosen, *([sort_column] if sort_column else [])]
     try:
+        # Resolved once, here: the title names the port the rows came from.
+        port = _paths().runtime_declaration.resolve_base_port(port)
         gathered = gather(port, needed, timeout, probe_timeout, sort_column, reverse)
     except UqsError as exc:
         _die(exc)

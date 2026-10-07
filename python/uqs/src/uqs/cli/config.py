@@ -34,7 +34,6 @@ from uqs.cli.shared import (
     app,
     console,
 )
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing
 from uqs.stack import logs as stack_logs
@@ -58,7 +57,7 @@ app.add_typer(config_app, name="config")
 def config_get(
     procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
     field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
-    port: PortOpt = DEFAULT_BASE_PORT,
+    port: PortOpt = None,
     raw: Annotated[
         bool, typer.Option("--raw", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
     ] = False,
@@ -94,7 +93,7 @@ def list_items(
             autocompletion=completion.list_kinds,
         ),
     ] = None,
-    port: PortOpt = DEFAULT_BASE_PORT,
+    port: PortOpt = None,
     export: ExportOpt = None,
     sort: Annotated[
         str | None,

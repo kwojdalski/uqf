@@ -36,7 +36,7 @@ class Gathered:
 
 
 def gather(
-    port: int,
+    port: int | None,
     needed: list[str],
     timeout: float,
     probe_timeout: float,
@@ -126,9 +126,12 @@ def gather(
     return Gathered(result, rows, heartbeats, silent)
 
 
-def render(rows: list[dict[str, str]], chosen: list[str], port: int) -> Table:
-    """The rows as the coloured Rich table `summary` prints."""
-    table = Table(title=f"uqs summary (base port {port})")
+def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> Table:
+    """The rows as the coloured Rich table `summary` prints, titled with
+    the runtime and base port they describe."""
+    declared = _paths().runtime_declaration
+    base = declared.resolve_base_port(port)
+    table = Table(title=f"uqs summary ({declared.name} runtime, base port {base})")
     for col in chosen:
         # The graph cells are pre-wrapped at their commas by graph_cell, so
         # Rich must not wrap them again at whatever width is left over - that

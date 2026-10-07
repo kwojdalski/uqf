@@ -15,7 +15,6 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app, console
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 
@@ -69,7 +68,7 @@ def backfill(
             autocompletion=completion.choices(*stack_backfill.MODES),
         ),
     ] = None,
-    port: PortOpt = DEFAULT_BASE_PORT,
+    port: PortOpt = None,
     debug: Annotated[
         bool,
         typer.Option(

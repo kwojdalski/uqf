@@ -20,7 +20,6 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli.shared import ExportOpt, _die, _export, _paths, app, console, log
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import alive, listing, runtime
 from uqs.stack import gateway as stack_gateway
@@ -60,7 +59,7 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
 _LOCAL_HOSTS = ("localhost", "127.0.0.1")
 
 
-def _proc_port(procname: str, base_port: int) -> int:
+def _proc_port(procname: str, base_port: int | None) -> int:
     """The port `procname` listens on in the stack at `base_port`, refusing a
     process that is not declared or not running.
 
@@ -143,8 +142,9 @@ def query(
         ),
     ] = None,
     base_port: Annotated[
-        int, typer.Option(help="stack base port --proc is resolved against")
-    ] = DEFAULT_BASE_PORT,
+        int | None,
+        typer.Option(help="stack base port --proc is resolved against (default: the runtime's)"),
+    ] = None,
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",

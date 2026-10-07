@@ -34,7 +34,6 @@ from uqs.external.crypto import (
     DEFAULT_OMS_SOCKET_PATH,
 )
 from uqs.external.feeds import ExternalFeed, discover
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 
 feed_app = typer.Typer(
@@ -85,7 +84,7 @@ def _start_kafka(o: dict[str, Any]) -> str:
 def _start_crypto(o: dict[str, Any]) -> str:
     pid = crypto.start_crypto_recorder(
         _paths(),
-        base_port=_or(o["port"], DEFAULT_BASE_PORT),
+        base_port=o["port"],
         venues=_list_or(o["venues"], CRYPTO_RECORDER_DEFAULT_VENUES),
         symbols=_list_or(o["symbols"], CRYPTO_RECORDER_DEFAULT_SYMBOLS),
         top_n_levels=_or(o["top_n_levels"], 5),
@@ -97,7 +96,7 @@ def _start_crypto(o: dict[str, Any]) -> str:
 def _start_crypto_fills(o: dict[str, Any]) -> str:
     pid = crypto.start_crypto_fills_recorder(
         _paths(),
-        base_port=_or(o["port"], DEFAULT_BASE_PORT),
+        base_port=o["port"],
         oms_socket_path=_or(o["oms_socket_path"], DEFAULT_OMS_SOCKET_PATH),
         symbol=_or(o["symbol"], CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL),
         poll_interval_ms=_or(o["poll_interval_ms"], CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS),

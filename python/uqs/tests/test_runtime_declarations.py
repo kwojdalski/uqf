@@ -26,6 +26,7 @@ PROBE = Runtime(
     data_dir="uqs-probe",
     pipelines=False,
     overlays=False,
+    base_port=6250,
 )
 
 
@@ -37,7 +38,7 @@ def with_probe(monkeypatch):
 
 def test_the_default_is_the_first_declared_and_both_runtimes_are_declared():
     assert runtimes.DEFAULT_RUNTIME == "uqf"
-    assert list(runtimes.RUNTIMES) == ["uqf", "torq"]
+    assert list(runtimes.RUNTIMES) == ["uqf", "torq", "crypto", "fx"]
     uqf, torq = runtimes.RUNTIMES["uqf"], runtimes.RUNTIMES["torq"]
     assert (uqf.pipelines, uqf.overlays, uqf.data_dir) == (True, True, "uqs")
     assert (torq.pipelines, torq.overlays, torq.data_dir) == (False, False, "uqs-torq")
@@ -116,3 +117,4 @@ def test_the_guide_s_runtime_table_matches_the_declarations():
     ]
     assert header[1:] == expected
     assert body["data directory"] == [f"`output/{r.data_dir}`" for r in runtimes.RUNTIMES.values()]
+    assert body["base port"] == [f"`{r.base_port}`" for r in runtimes.RUNTIMES.values()]

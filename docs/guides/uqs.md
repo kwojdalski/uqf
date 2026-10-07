@@ -124,10 +124,10 @@ and options. The sections below cover what `--help` cannot.
 `PROCS` is `all` (the default) or one or more process names, each its own word -
 `uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
 single quoted `"posbook1 demo_markout1"` still works. `--port` sets
-`KDBBASEPORT` (default `6050`, see the port table below). `--export FILE` (on
-`summary`/`query`/`list`/`config get`) additionally writes the same rows to
-`FILE` as CSV or Parquet, format inferred from the extension; a result that is
-not a table, such as `count t`, is refused.
+`KDBBASEPORT` (default: the runtime's own base port, `6050` for `uqf`; see the
+port table below). `--export FILE` (on `summary`/`query`/`list`/`config get`)
+additionally writes the same rows to `FILE` as CSV or Parquet, format inferred
+from the extension; a result that is not a table, such as `count t`, is refused.
 
 ### Cleaning up
 
@@ -296,20 +296,51 @@ uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
 uqs --runtime torq stop
 ```
 
-  |                | `uqf` (default)                                                         | `torq`                                                            |
-  | ---            | ---                                                                     | ---                                                               |
-  | processes      | the vendored rows, with overlays, plus every pipeline                   | the vendored `process.csv`, unchanged: `feed1` on, `monitor1` off |
-  | tables         | `database.q` plus this tree's (`fx_orderbook`, the crypto mocks, ...)   | the starter pack's `database.q`: `trade`, `quote`, `packets`      |
-  | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     |
-  | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 |
+  |                | `uqf` (default)                                                         | `torq`                                                            | `crypto`                                                                                        | `fx`                                                                                        |
+  | ---            | ---                                                                     | ---                                                               | ---                                                                                             | ---                                                                                         |
+  | processes      | the vendored rows, with overlays, plus every pipeline                   | the vendored `process.csv`, unchanged: `feed1` on, `monitor1` off | the vendored rows, with overlays, plus the `crypto` profile's pipelines and what they depend on | the vendored rows, with overlays, plus the `fx` profile's pipelines and what they depend on |
+  | tables         | `database.q` plus this tree's (`fx_orderbook`, the crypto mocks, ...)   | the starter pack's `database.q`: `trade`, `quote`, `packets`      | `database.q` plus the tables those pipelines read and write                                     | `database.q` plus the tables those pipelines read and write                                 |
+  | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     | as `uqf`                                                                                        | as `uqf`                                                                                    |
+  | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 | `output/uqs-crypto`                                                                             | `output/uqs-fx`                                                                             |
+  | base port      | `6050`                                                                  | `6150`                                                            | `6250`                                                                                          | `6350`                                                                                      |
+
+`crypto` and `fx` are focused stacks: the starter pack, this tree's layers, and
+one profile's pipelines with everything they depend on in the job graph - the
+same walk `uqs start --profile` takes, so the runtime and the profile cannot
+disagree about what the profile needs. Their schemas define only the tables
+those pipelines read and write, so their HDBs hold nothing they never write, and
+they fit the licence's connection cap with room to spare:
+
+```
+uqs --runtime crypto start     # cryptomock1 and crypto_markout1, on 6250
+uqs --runtime crypto list processes
+```
+
+Such a runtime can start only the profiles its processes cover, and refuses the
+others naming what is missing, as `torq` does.
 
 Without the service layer, `torq` has none of the [query
 policies](../architecture/query-policies.md): no data-access API, no `.pm` on
 the gateway, and the starter pack's access list everywhere.
 
 Each runtime keeps its own data directory, because an HDB one runtime wrote
-holds tables the other does not declare. They share ports, so run one at a time,
-or give the second its own with `--port`.
+holds tables the other does not declare. Each also has its own base port, and
+the spans of ports the runtimes' processes use do not overlap, so `uqs start`
+and `uqs --runtime torq start` run side by side with no flags. That is the
+quickest way to tell whether a problem is TorQ's or this tree's: the same query
+against both at once. `--port` still moves either anywhere.
+
+Before starting, `start` and `restart` check whether another stack already holds
+a port they need: another runtime, the same runtime on another `--port`, or a
+stack from another checkout of this repository. If one does, the command refuses
+before anything starts, naming the stack and how to stop it:
+
+```
+$ uqs start
+ERROR    | the torq runtime's stack (base port 6050) is already using ports this start needs: stp1 :6050 (pid 4242), ... Stop it with `uqs --runtime torq stop --port 6050`, or start this one elsewhere with --port.
+```
+
+`uqs summary` names the runtime and base port it is reporting on in its title.
 
 On `torq`, `list processes` shows the 23 starter-pack processes and
 `list profiles` shows only `essential`, the one profile whose processes all ship
@@ -564,7 +595,8 @@ uqs config set monitor1 startwithall 0
 
 ### Default ports
 
-Base `6050`, override with `--port <n>`. The vendored infrastructure:
+Base `6050` for the `uqf` runtime (`6150` for `torq`), override with
+`--port <n>`. The vendored infrastructure:
 
   | Port        | Process       | Role                                                     |
   | ---         | ---           | ---                                                      |
