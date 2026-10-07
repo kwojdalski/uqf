@@ -146,16 +146,6 @@ test_a_second_run_publishes_nothing_further:{[t]
 
 / --- one bounded worker per TorQ process (#608) ---------------------------
 
-/ Run f with .proc.procname set to p, as TorQ would, then put .proc back as
-/ it was - absent included, which is what it is in plain q. Returns f's
-/ result, or (`threw;error).
-with_procname:{[p;f]
-    had:@[{`procname in key x};`.proc;0b];
-    old:$[had; .proc.procname; `];
-    `.proc.procname set p;
-    r:@[f;::;{(`threw;x)}];
-    $[had; `.proc.procname set old; ![`.proc;();0b;enlist `procname]];
-    r}
 
 status_path:{[instance] hsym `$(.qetl.status.status_dir[]),"/airflow_status_",string[instance],".txt"}
 
@@ -166,7 +156,7 @@ test_a_second_worker_is_refused_in_one_torq_process:{[t]
     saved:.qetl.job.bounded.process_worker;
     .qetl.job.bounded.process_worker:`another_backfill;
     @[hdel;.ddbftest.status_path`ddbftest_proc;::];
-    r:.ddbftest.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
+    r:.testutil.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
     .qetl.job.bounded.process_worker:saved;
     .qunit.assertEquals[first r;`threw;"a second worker's init is refused"];
     .qunit.assertTrue[r[1] like "*demo_deals_backfill refused - process ddbftest_proc already runs another_backfill*";
@@ -177,7 +167,7 @@ test_a_second_worker_is_refused_in_one_torq_process:{[t]
 test_a_worker_initialising_under_torq_claims_its_process:{[t]
     saved:.qetl.job.bounded.process_worker;
     .qetl.job.bounded.process_worker:`;
-    r:.ddbftest.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
+    r:.testutil.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
     got:.qetl.job.bounded.process_worker;
     .qetl.job.bounded.process_worker:saved;
     .qunit.assertEquals[(r;got);(.ddbftest.spec_for[`v1;1;4];`demo_deals_backfill);
