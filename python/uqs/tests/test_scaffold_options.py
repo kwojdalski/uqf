@@ -4,9 +4,11 @@ Each option is read back the way the tree reads it - through the reader the
 process registry is built from - rather than by searching the generated text,
 so an option that wrote something the registry does not see fails here.
 
-The two Python spellings of q facts in scaffold/templates.py (the transports
-and the credential variable) are held to the q file they mirror, the same way
-test_q_names.py holds every q name the Python sends.
+The transports come from the contract surface (#616), and are held to the q
+registry that surface is generated from; the credential variable, the one
+Python spelling of a q fact left in scaffold/templates.py, is held to the q
+file it mirrors, the same way test_q_names.py holds every q name the Python
+sends.
 """
 
 from __future__ import annotations
@@ -18,13 +20,14 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
+from uqs.model import transports
 from uqs.model.declarations import read_file_text
 from uqs.paths import UqsError
 from uqs.scaffold import jobs
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.columns import definition_columns, parse_columns
 from uqs.scaffold.normalizer import normalizer
-from uqs.scaffold.templates import TRANSPORTS, credential_var
+from uqs.scaffold.templates import credential_var
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 SOURCE_CONTRACT_Q = UQF_ROOT / "src" / "etl" / "core" / "source_contract.q"
@@ -118,7 +121,7 @@ def test_a_local_source_declares_its_transport_and_a_directory_example():
         backfill.bounded_worker("fx", "fx_rates", "px:float", transport="local"), "sources/fx.q"
     )
     assert "transport:`local" in body
-    assert 'credential_example:"SCAFFOLDED: e.g. /data/hdb"' in body, "a path, not a DSN"
+    assert 'credential_example:"SCAFFOLDED: e.g. /path/to/hdb"' in body, "a path, not a DSN"
     assert ".qetl.source.local[h;" in body, "the query comment is the local one"
 
 
@@ -148,11 +151,23 @@ def test_a_worker_is_pointed_at_a_quality_check():
 # ------------------------------------------------- held to the q they restate
 
 
-def test_the_transports_are_the_ones_q_accepts():
-    line = next(
-        ln for ln in SOURCE_CONTRACT_Q.read_text().splitlines() if ln.startswith("transports:")
-    )
-    assert tuple(re.findall(r"`(\w+)", line)) == TRANSPORTS
+def test_the_transports_are_the_ones_q_registers():
+    """The surface's list is generated from these calls; this catches a
+    registration added without re-exporting the surface."""
+    registered = re.findall(r"^register_transport\[`(\w+);", SOURCE_CONTRACT_Q.read_text(), re.M)
+    assert transports.names() == tuple(registered)
+    assert transports.default() == "ipc"
+
+
+@pytest.mark.parametrize("name", transports.names())
+def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
+    t = transports.get(name)
+    plan = backfill.bounded_worker("fx", "fx_rates", "px:float", transport=name)
+    body = _body(plan, "sources/fx.q")
+    assert t.query_note.splitlines()[0] in body, "the transport's query guidance"
+    if not t.default:
+        assert f'credential_example:"SCAFFOLDED: e.g. {t.example}"' in body
+    assert any(t.expects in n for n in plan.notes), "and what its credential is"
 
 
 def test_the_credential_variable_is_spelled_as_q_spells_it():

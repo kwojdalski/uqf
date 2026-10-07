@@ -136,12 +136,20 @@ table_schemas:{[]
 / `generated_by` is recorded so a stale export is identifiable; there is
 / deliberately no timestamp, because a timestamp makes every export differ
 / from every other and destroys the diff this file exists to enable.
+/ The transports .qetl.source registers - names and the words the scaffold and
+/ the CLI need, never the operations (#616). Python reads these from the
+/ committed surface rather than keeping its own list.
+transports:{[]
+    {[d;r] `name`default`expects`example`query_note!(string r`name;d~r`name;r`expects;r`example;r`query_note)
+      }[.qetl.source.default_transport] each 0!.qetl.source.transport}
+
 surface:{[]
-    `generated_by`namespaces`functions`tables!(
+    `generated_by`namespaces`functions`tables`transports!(
         "scripts/generate/export_contract_surface.q";
         string own_namespaces[];
         functions[];
-        table_schemas[])}
+        table_schemas[];
+        transports[])}
 
 \d .
 

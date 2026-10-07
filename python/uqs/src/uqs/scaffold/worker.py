@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 
+from uqs.model import transports
 from uqs.paths import SOURCE_DIR, TABLES_FILE, TEST_DIR, WORKER_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
 from uqs.scaffold.columns import Columns, as_columns, nested_declaration, table_definition
@@ -22,8 +23,6 @@ from uqs.scaffold.jobs import (
 )
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.templates import (
-    CREDENTIAL_SHAPES,
-    TRANSPORTS,
     credential_var,
     source_body,
     test_stub,
@@ -45,7 +44,7 @@ def bounded_worker(
     *,
     reuse_source: bool = False,
     define_table: bool = True,
-    transport: str = "ipc",
+    transport: str | None = None,
     partition: str | None = None,
     check: bool = False,
     transform: str = "passthrough",
@@ -103,14 +102,13 @@ def bounded_worker(
             f"--columns has nothing to shape: source {src!r} and table {dataset!r} both "
             "exist already - drop --columns"
         )
-    if transport not in TRANSPORTS:
-        raise UqsError(
-            f"--transport must be one of {', '.join(sorted(TRANSPORTS))}, not {transport!r}"
-        )
-    if reuse_source and transport != "ipc":
+    if reuse_source and transport is not None:
         raise UqsError(
             f"--transport shapes a new source, and {src!r} exists already - drop --transport"
         )
+    # Refused here, by name, before anything is planned: an unknown transport
+    # would otherwise reach .qetl.source.define and fail the tree's load.
+    transport = transports.get(transport or transports.default()).name
     cols = as_columns(columns) if columns else []
 
     actions: list[FileAction] = []
@@ -158,7 +156,7 @@ def bounded_worker(
             " (see src/etl/core/source_contract.q)",
             f"write .qpipe.source.{src}.fixture - deterministic, same contract as the live source",
             f"declared columns: {', '.join(c for c, _ in cols)}",
-            f"a live run reads {credential_var(src)} ({CREDENTIAL_SHAPES[transport]}); "
+            f"a live run reads {credential_var(src)} ({transports.get(transport).expects}); "
             "without it the worker runs on the fixture, and warns that it is",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
