@@ -26,6 +26,16 @@ WHAT IS IN IT:
                 the revision, whether the tree was dirty, the target OS,
                 architecture and Python, and every member's sha256.
 
+SIDECAR BUNDLES (#800), only when --bundle is given. The tracked files are
+copied into a staging directory, each bundle is installed THERE by the uqs
+bundle installer (`uqs job install`'s, in uqs.stack.bundle_build), the derived
+files are regenerated there, and the release is packaged from that staged
+tree - so the checkout is never touched, and every hash in the manifest is of
+a file as installed. The manifest then gains `bundles`: each bundle's version,
+revision, installed files with their hashes, and its jobs' identities - with
+every streaming job's dependency closure, which deploy.py --jobs starts. No
+--bundle, no staging, and the artifact is built exactly as before.
+
 The builder needs uv (to export the lock and build the uqs wheel) and the
 network (to fetch dependency wheels); it needs no SSH access and no
 deployment credentials, so CI can run it. It never runs on the server.
@@ -42,6 +52,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -64,6 +75,9 @@ MANIFEST = "RELEASE_MANIFEST.json"
 RELEASE_DIR = ".release"
 REQUIREMENTS = f"{RELEASE_DIR}/requirements.txt"
 WHEEL_DIR = f"{RELEASE_DIR}/wheels"
+#: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
+BUNDLE_LEDGER = "src/etl/installed_bundles.json"
+GENERATOR = "scripts/generate/generate_operational_docs.py"
 
 #: What a release is made of: tracked files under these paths, and nothing
 #: else. The three Python packages are all here because uv's workspace lock
@@ -86,6 +100,7 @@ ALLOWLIST = (
 EXCLUDED_PATTERNS = (
     r"(^|/)\.env($|\.)(?!example$)",
     r"(^|/)\.envrc$",
+    r"\.env$",
     r"(^|/)\.venv/",
     r"(^|/)node_modules/",
     r"(^|/)__pycache__/",
@@ -201,6 +216,82 @@ class Target:
         }
 
 
+# ---------------------------------------------------------------- bundles
+
+
+def _staged_files(staged: Path) -> list[str]:
+    """Every file under the allowlist in a staged tree, minus the excluded."""
+    found = []
+    for path in staged.rglob("*"):
+        rel = path.relative_to(staged).as_posix()
+        allowed = any(rel == a or rel.startswith(f"{a}/") for a in ALLOWLIST)
+        if path.is_file() and allowed and not is_excluded(rel):
+            found.append(rel)
+    return sorted(found)
+
+
+def stage_bundles(
+    root: Path,
+    files: list[str],
+    bundles: Sequence[str],
+    staged: Path,
+    runner: Runner = subprocess.run,
+) -> tuple[list[str], dict]:
+    """Install `bundles` into a copy of the tree under `staged`; return the
+    staged tree's files and the manifest's `bundles` record.
+
+    The uqs installer runs from `root`'s environment but imports uqs from the
+    STAGED tree (PYTHONPATH), so the tree it finds and writes is the copy.
+    """
+    folders = []
+    for b in bundles:
+        folder = Path(b).resolve()
+        if not (folder / "bundle.json").is_file():
+            raise ReleaseError("bundle", f"{b} holds no bundle.json - it is not a bundle")
+        folders.append(str(folder))
+    for rel in files:
+        (staged / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / rel, staged / rel)
+    env = dict(os.environ, PYTHONPATH=str(staged / "python" / "uqs" / "src"))
+    # The staged tree carries no lib/ (a release never does): the generator
+    # reads the vendored process table from the checkout's, as a deployed
+    # release reads the server's - unless the builder named its own.
+    env.setdefault("TORQHOME", str(root / "lib" / "torq"))
+    env.setdefault("TORQAPPHOME", str(root / "lib" / "torq-finance-starter-pack"))
+    python = ["uv", "run", "--frozen", "--quiet", "--project", str(root), "python"]
+
+    def step(what: str, *argv: str) -> str:
+        try:
+            r = runner([*python, *argv], cwd=staged, env=env, capture_output=True, text=True)
+        except OSError as exc:
+            raise ReleaseError("bundle", f"{what}: could not run uv: {exc}") from None
+        if r.returncode:
+            tail = "\n".join((r.stderr or r.stdout or "").strip().splitlines()[-15:])
+            raise ReleaseError("bundle", f"{what} failed (exit {r.returncode}):\n{tail}")
+        return r.stdout
+
+    record = json.loads(
+        step("installing the bundles", "-m", "uqs.stack.bundle_build", "install", *folders)
+    )
+    step("regenerating the derived files", str(staged / GENERATOR))
+    streaming = [
+        job["procname"]
+        for entry in record.values()
+        for job in entry["jobs"]
+        if job["kind"] == "streaming"
+    ]
+    if streaming:
+        needs = json.loads(
+            step("resolving the jobs' dependencies", "-m", "uqs.stack.bundle_build", "needs",
+                 *streaming)
+        )  # fmt: skip
+        for entry in record.values():
+            for job in entry["jobs"]:
+                if job["kind"] == "streaming":
+                    job["needs"] = needs[job["procname"]]
+    return _staged_files(staged), record
+
+
 # ------------------------------------------------------------ Python bits
 
 
@@ -299,10 +390,12 @@ def build_artifact(
     files: list[str],
     target: Target,
     python_dir: Path,
+    bundles: dict | None = None,
 ) -> Artifact:
     """The archive, its .sha256 and its manifest, written into `out_dir`.
 
-    `python_dir` holds requirements.txt and wheels/, from python_payload.
+    `python_dir` holds requirements.txt and wheels/, from python_payload;
+    `root` is the checkout, or the staged tree when bundles were installed.
     """
     members: dict[str, Path] = {f: root / f for f in files}
     members[REQUIREMENTS] = python_dir / "requirements.txt"
@@ -325,6 +418,8 @@ def build_artifact(
         },
         "files": {name: _sha256(path) for name, path in sorted(members.items())},
     }
+    if bundles:
+        manifest["bundles"] = bundles
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"uqf-{rid}.tar.gz"
     with tarfile.open(path, "w:gz") as tar:
@@ -451,6 +546,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--allow-dirty", action="store_true", help="build uncommitted changes (recorded)"
     )
+    p.add_argument(
+        "--bundle",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="a sidecar bundle (a folder with bundle.json) to install into the release; repeatable",
+    )
     a = p.parse_args(argv)
     if a.python is not None and not _PYTHON.fullmatch(a.python):
         raise ReleaseError("arguments", f"--python {a.python!r} must be major.minor, e.g. 3.14")
@@ -474,18 +576,24 @@ def build(
     rid = release_id(rev)
     files = tracked_files(root, runner)
     with tempfile.TemporaryDirectory() as tmp:
+        tree, record = root, None
+        if a.bundle:
+            tree = Path(tmp) / "tree"
+            log(f"installing {len(a.bundle)} bundle(s) into a staged tree")
+            files, record = stage_bundles(root, files, a.bundle, tree, runner)
         log(f"Python {target.python} wheels for linux/{target.arch}")
-        python_payload(root, Path(tmp), target, runner)
+        python_payload(root, Path(tmp) / "python", target, runner)
         log(f"packaging {len(files)} files")
         artifact = build_artifact(
-            root,
+            tree,
             Path(a.output),
             rid=rid,
             rev=rev,
             dirty=dirty,
             files=files,
             target=target,
-            python_dir=Path(tmp),
+            python_dir=Path(tmp) / "python",
+            bundles=record,
         )
     print(artifact.path, file=out)
     return artifact

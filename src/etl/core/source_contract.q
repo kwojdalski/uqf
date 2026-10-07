@@ -805,6 +805,27 @@ require_credentials:{[source]
 / must fail on it, not quietly read the fixture.
 has_credentials:{[source] not `none~credential_origin source}
 
+/ Must every source be live? UQS_REQUIRE_LIVE_SOURCES=1 - what a deployment's
+/ --live writes into its deploy.env (#800) - turns a missing credential from
+/ the declared way to run on the fixture into a refusal: a server meant to
+/ read real data must never publish synthetic rows, or record their windows
+/ as covered, because one credential was not provisioned.
+/ Compared as a symbol: getenv returns a string, and "1" is a char atom.
+/ @return 1b when UQS_REQUIRE_LIVE_SOURCES is 1, else 0b
+/ @eg .qetl.source.live_required[]  ->  0b
+live_required:{[] `1~`$getenv `UQS_REQUIRE_LIVE_SOURCES}
+
+/ Refuse to read `source`'s fixture when every source must be live; return
+/ quietly otherwise. Called where a missing credential would select the
+/ fixture: a bounded worker's init, and a polling feed's tick.
+/ @param who the caller, leading the message
+/ @param source the source that has no credential
+/ @throws error naming the source and its variable, when live_required[]
+refuse_fixture:{[who;source]
+    if[live_required[];
+        'who,": ",string[source]," has no credential and UQS_REQUIRE_LIVE_SOURCES=1 - refusing its fixture. Set ",
+         credential_var[source],", or give it a row in sources.csv"]}
+
 / What this source's credential looks like, for an operator who has not set
 / one. The source's own `credential_example` when it declared one, and
 / otherwise the most that can be said from its transport alone.

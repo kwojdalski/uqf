@@ -20,13 +20,14 @@ from rich.table import Table
 from rich.text import Text
 
 from uqs.checks.traced_queries import untraced_lines
-from uqs.cli import completion
+from uqs.cli import completion, install_bundle
 from uqs.cli.create import _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
 from uqs.cli.shared import _die, _paths, console, job_app
 from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import UqsError
+from uqs.stack import bundles
 from uqs.stack import install as stack_install
 from uqs.stack.install import Item, Kind, Mode, Status
 
@@ -238,9 +239,18 @@ def install_jobs(
         uqs job install ../sidecars
 
         uqs job install ../sidecars --mode symlink --yes
+
+    A folder holding bundle.json is a BUNDLE: its jobs plus the plant tables,
+    catalog entries and process overrides they need, installed together as
+    copies, idempotently - see docs/guides/sidecar-bundles.md.
+
+        uqs job install ../piggybank-bundle --yes
     """
     repo_root = _paths().repo_root
     sidecar = sidecar.resolve()
+    if bundles.is_bundle(sidecar):
+        install_bundle.install(sidecar, repo_root, mode=mode, dry_run=dry_run, yes=yes)
+        return
     try:
         items = stack_install.plan(sidecar, repo_root)
     except (FileNotFoundError, UqsError) as exc:

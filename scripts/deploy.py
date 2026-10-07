@@ -42,6 +42,23 @@ THE STAGES, in order, each stopping the deployment when it fails:
   activate   `current` moves to the new release in one rename. The previous
              release stays where it was.
 
+SIDECAR JOBS (#800). An artifact built with build_release.py --bundle
+carries each bundle's jobs, and its manifest names them. A deployment starts
+none of them unless asked: --jobs piggy_spread,mw_quotes starts those
+streaming jobs, and every uqf process each one needs (the closure recorded at
+build time), beside the profile - the profile is never assumed to include
+them. A bounded worker is installed and never run: naming one in --jobs is
+refused, and a backfill is its own deliberate `uqs backfill` afterwards. The
+plan (--dry-run) prints the resolved process list; verification checks those
+processes and that the tickerplant carries every bundle table.
+
+--live writes UQS_REQUIRE_LIVE_SOURCES=1 into deploy.env, so a source with no
+credential is REFUSED rather than read as its fixture - no synthetic row, and
+no coverage recorded for it - and verification proves the pipeline processes
+saw the setting. Credentials stay on the server, outside the artifact: in
+each source's environment variable, or a sources.csv the server keeps (see
+docs/guides/sidecar-bundles.md).
+
 A failure after the previous deployment was stopped stops the new one's
 processes and starts the previous ones again; `current` is only ever moved
 by activate, so it still names the previous release. The report says what
@@ -115,7 +132,17 @@ _UTC = timezone.utc  # noqa: UP017
 
 #: Files an operator keeps on the server and every release links in, by their
 #: path in the repository. Absent ones are simply not linked.
-SHARED_CONFIG = ("scripts/torqconfig/permissions/gateway_users.csv",)
+SHARED_CONFIG = (
+    "scripts/torqconfig/permissions/gateway_users.csv",
+    # which source connects to what; a row names a secret's variable, never
+    # the secret (#718)
+    "scripts/torqconfig/sources.csv",
+)
+#: The server's credentials, as NAME=VALUE lines, in shared/config/. Never in
+#: an artifact: deploy.env sources it, so every process uqs starts inherits the
+#: variables a sources.csv row names, and nothing prints them. Refused when
+#: anyone but its owner may read it.
+SECRETS = "secrets.env"
 
 #: One-liners run with the server's python3: a file's sha256, and an atomic
 #: rename (os.replace) - portable where `mv -T` and `sha256sum` are not.
@@ -134,6 +161,7 @@ _HOST = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._@-]*")
 #: A POSIX-portable account name, as useradd accepts by default.
 _USER = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 _PROFILE = re.compile(r"[a-z][a-z0-9_]*")
+_JOB = re.compile(r"[a-z][a-z0-9_]*")
 _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 #: What deploy.env sets itself, so --launcher-env may not: TorQ's own core
 #: and generated configuration, q, and uqs's variables.
@@ -194,6 +222,8 @@ class Config:
     dry_run: bool = False
     restart: bool = False
     init_data: bool = False
+    jobs: tuple[str, ...] = ()
+    live: bool = False
     connect_timeout: int = 10
     command_timeout: int = 900
     smoke_timeout: int = 120
@@ -301,6 +331,18 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         action="store_true",
         help="create the runtime data directory if it does not exist yet",
     )
+    p.add_argument(
+        "--jobs",
+        default="",
+        metavar="NAME,...",
+        help="sidecar streaming jobs to start beside the profile, with what they need; "
+        "from the artifact's bundles (build_release.py --bundle)",
+    )
+    p.add_argument(
+        "--live",
+        action="store_true",
+        help="refuse a source with no credential instead of reading its fixture",
+    )
     p.add_argument("--connect-timeout", type=int, default=10, help="ssh/scp, seconds")
     p.add_argument("--command-timeout", type=int, default=900, help="each remote step, seconds")
     p.add_argument("--smoke-timeout", type=int, default=120, help="the offline check, seconds")
@@ -315,6 +357,10 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     for name in ("connect_timeout", "command_timeout", "smoke_timeout", "verify_timeout"):
         if getattr(a, name) <= 0:
             raise DeployError("arguments", f"--{name.replace('_', '-')} must be positive")
+    jobs = tuple(dict.fromkeys(j.strip() for j in a.jobs.split(",") if j.strip()))
+    for job in jobs:
+        if not _JOB.fullmatch(job):
+            raise DeployError("arguments", f"--jobs {job!r} is not a job name")
     dest = _required_absolute("--dest", a.dest)
     if dest == "/":
         raise DeployError("arguments", "--dest must not be /")
@@ -334,11 +380,86 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         dry_run=a.dry_run,
         restart=a.restart,
         init_data=a.init_data,
+        jobs=jobs,
+        live=a.live,
         connect_timeout=a.connect_timeout,
         command_timeout=a.command_timeout,
         smoke_timeout=a.smoke_timeout,
         verify_timeout=a.verify_timeout,
     )
+
+
+# ------------------------------------------------------------ sidecar jobs
+
+
+@dataclass
+class Selection:
+    """What --jobs resolves to against the artifact's bundles."""
+
+    #: the streaming jobs asked for
+    jobs: list[str] = field(default_factory=list)
+    #: their processes and every uqf process they need, beside the profile
+    processes: list[str] = field(default_factory=list)
+    #: every bundle's plant tables, which stp1 must carry
+    tables: list[str] = field(default_factory=list)
+    #: bounded workers the artifact installs and the deployment never runs
+    workers: list[str] = field(default_factory=list)
+    #: name -> version and revision, for the report
+    bundles: dict[str, dict] = field(default_factory=dict)
+
+
+def select_jobs(manifest: dict, wanted: Sequence[str]) -> Selection:
+    """The processes --jobs starts, or a refusal naming what can be chosen."""
+    bundles = manifest.get("bundles") or {}
+    if wanted and not bundles:
+        raise DeployError(
+            "arguments",
+            "--jobs selects sidecar jobs, and this artifact carries no bundle - "
+            "build it with build_release.py --bundle",
+        )
+    found: dict[str, dict] = {}
+    sel = Selection()
+    for name, entry in sorted(bundles.items()):
+        sel.bundles[name] = {"version": entry.get("version"), "revision": entry.get("revision")}
+        sel.tables += entry.get("tables", [])
+        for job in entry.get("jobs", []):
+            if "name" not in job:
+                continue
+            found[job["name"]] = job
+            if job["kind"] == "worker":
+                sel.workers.append(job["name"])
+    streaming = sorted(n for n, j in found.items() if j["kind"] == "streaming")
+    for name in wanted:
+        job = found.get(name)
+        if job is None:
+            raise DeployError(
+                "arguments",
+                f"--jobs {name}: no such sidecar job in this artifact - its streaming jobs are "
+                + (", ".join(streaming) or "none"),
+            )
+        if job["kind"] != "streaming":
+            raise DeployError(
+                "arguments",
+                f"--jobs {name} is a bounded worker: a deployment installs it and never runs "
+                f"it - run `uqs backfill {name}` from the release when you mean to",
+            )
+        sel.jobs.append(name)
+        sel.processes += [job["procname"], *job.get("needs", [])]
+    sel.processes = list(dict.fromkeys(sel.processes))
+    return sel
+
+
+def _verify_flags(sel: Selection, live: bool) -> str:
+    """deploy_verify.py's flags for a selection; empty without one, so a
+    release from before #800 is verified exactly as it always was."""
+    flags = ""
+    if sel.processes:
+        flags += " --procs " + " ".join(q(p) for p in sel.processes)
+    if sel.tables:
+        flags += " --tables " + " ".join(q(t) for t in sel.tables)
+    if live:
+        flags += " --live"
+    return flags
 
 
 # ------------------------------------------------------------------ remote
@@ -448,6 +569,11 @@ class Report:
     processes: list[dict] = field(default_factory=list)
     checks: dict[str, str] = field(default_factory=dict)
     rollback: str = "not needed"
+    #: --jobs, the processes they added beside the profile, and the bundles
+    jobs: list[str] = field(default_factory=list)
+    extra_processes: list[str] = field(default_factory=list)
+    bundles: dict[str, dict] = field(default_factory=dict)
+    live: bool = False
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
@@ -471,6 +597,8 @@ class Deployment:
         self.release = release
         #: QCMD and QHOME as preflight resolved and checked them on the server
         self.q_env: dict[str, str] = {}
+        #: what --jobs resolved to against the artifact's bundles
+        self.selection = Selection()
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -526,6 +654,8 @@ class Deployment:
             ("QHOME", self.q_env.get("QHOME", c.qhome)),
             ("UQS_DATA_ROOT", c.data_root),
             ("UQS_RUNTIME", "uqf"),
+            # a source with no credential is refused, never read as its fixture
+            ("UQS_REQUIRE_LIVE_SOURCES", "1" if c.live else None),
             # the release installs from its own wheels; nothing after that
             # may reach for an index either
             ("UV_OFFLINE", "1"),
@@ -608,7 +738,7 @@ class Deployment:
             )
         return facts
 
-    def previous_processes(self, previous: str) -> tuple[str, list[str]]:
+    def previous_processes(self, previous: str) -> tuple[str, list[str], list[str]]:
         out = self.run(
             "restart",
             "reading the previous deployment's report",
@@ -616,7 +746,8 @@ class Deployment:
         )
         try:
             prev = json.loads(out)
-            return prev["profile"], [p["process"] for p in prev["processes"]]
+            procs = [p["process"] for p in prev["processes"]]
+            return prev["profile"], procs, list(prev.get("extra_processes", []))
         except _UNREADABLE_REPORT:
             raise DeployError(
                 "restart", f"release {previous} has no readable {REPORT} to say what it runs"
@@ -751,11 +882,16 @@ class Deployment:
     def prepare(self, release: str, pkg: build_release.Artifact) -> None:
         c = self.cfg
         py = pkg.manifest["python"]
+        secrets = f"{self.shared_config}/{SECRETS}"
         lines = [
             f"cd {q(release)}",
             "cat > deploy.env <<'DEPLOYENV'",
             *self.env_lines(),
+            f"if [ -f {q(secrets)} ]; then set -a; . {q(secrets)}; set +a; fi",
             "DEPLOYENV",
+            f'if [ -f {q(secrets)} ] && [ -n "$(find {q(secrets)} -perm /077)" ]; then',
+            f"  echo {q(f'{secrets} may be read by others - make it owner-only')} >&2; exit 1",
+            "fi",
         ]
         if c.init_data:
             lines.append(f"mkdir -p {q(c.data_root)}")
@@ -812,15 +948,23 @@ class Deployment:
             timeout=timeout,
         )
 
-    def verify(self, release: str, profile: str | None = None, stage: str = "verify") -> dict:
+    def verify(
+        self,
+        release: str,
+        profile: str | None = None,
+        stage: str = "verify",
+        flags: str | None = None,
+    ) -> dict:
         """Run the release's own verifier, from its own environment."""
+        if flags is None:
+            flags = _verify_flags(self.selection, self.cfg.live)
         r = self.remote.run(
             script(
                 *self.in_release(
                     release,
                     ".venv/bin/python scripts/deploy_verify.py "
                     f"--profile {q(profile or self.cfg.profile)} "
-                    f"--deadline {self.cfg.verify_timeout}",
+                    f"--deadline {self.cfg.verify_timeout}{flags}",
                 )
             ),
             self.cfg.verify_timeout + 60,
@@ -841,7 +985,8 @@ class Deployment:
                 *self.in_release(
                     release,
                     ".venv/bin/python scripts/deploy_verify.py "
-                    f"--profile {q(self.cfg.profile)} --ports-free",
+                    f"--profile {q(self.cfg.profile)} --ports-free"
+                    + _verify_flags(Selection(processes=self.selection.processes), False),
                 )
             ),
             self.cfg.command_timeout,
@@ -991,6 +1136,7 @@ def plan(
         else "nothing running to replace"
     )
     release = f"{dep.releases}/{rid}"
+    sel = dep.selection
     exported = ", ".join(line.split("=", 1)[0].removeprefix("export ") for line in dep.env_lines())
     steps = [
         "identity  "
@@ -1021,9 +1167,10 @@ def plan(
         "smoke     " + f"q scripts/deploy_smoke.q (timeout {cfg.smoke_timeout}s)",
         "restart   " + restart,
         "ports     " + f"scripts/deploy_verify.py --profile {cfg.profile} --ports-free",
-        "start     " + f"uqs start --profile {cfg.profile}",
+        "start     " + " ".join(["uqs start --profile", cfg.profile, *sel.processes]),
         "verify    "
-        + f"scripts/deploy_verify.py --profile {cfg.profile} --deadline {cfg.verify_timeout}",
+        + f"scripts/deploy_verify.py --profile {cfg.profile} --deadline {cfg.verify_timeout}"
+        + _verify_flags(sel, cfg.live),
         "activate  " + f"{dep.current} -> releases/{rid}",
     ]
     size = pkg.path.stat().st_size
@@ -1040,10 +1187,34 @@ def plan(
             f"data: {cfg.data_root} ({facts.get('data', 'unknown')}"
             + (", created by --init-data" if facts.get("data") == "absent" else "")
             + ")",
+            *_selection_lines(sel, cfg.live),
             "planned:",
             *[f"  {s}" for s in steps],
         ]
     )
+
+
+def _selection_lines(sel: Selection, live: bool) -> list[str]:
+    """The bundles, the jobs and the processes they add, for the plan."""
+    lines = [
+        f"bundle: {name} {b['version']}"
+        + (f" ({b['revision']['commit'][:12]})" if b.get("revision") else " (no revision)")
+        for name, b in sel.bundles.items()
+    ]
+    if sel.jobs:
+        lines.append(
+            f"jobs: {', '.join(sel.jobs)} -> beside the profile: {' '.join(sel.processes)}"
+        )
+    elif sel.bundles:
+        lines.append("jobs: none selected (--jobs) - no sidecar job starts")
+    if sel.workers:
+        lines.append(f"workers installed, never run: {', '.join(sel.workers)}")
+    lines.append(
+        "sources: "
+        + ("live only - a missing credential is refused (--live)" if live else "a source with "
+           "no credential reads its fixture (pass --live to refuse instead)")
+    )  # fmt: skip
+    return lines
 
 
 def deploy(cfg: Config, remote: Remote, *, root: Path = ROOT, out=sys.stdout) -> int:
@@ -1051,6 +1222,7 @@ def deploy(cfg: Config, remote: Remote, *, root: Path = ROOT, out=sys.stdout) ->
     pkg = load_artifact(cfg.artifact)
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], root, rid)
+    dep.selection = select_jobs(pkg.manifest, cfg.jobs)
     report = Report(
         release=rid,
         revision=pkg.manifest["revision"],
@@ -1058,6 +1230,10 @@ def deploy(cfg: Config, remote: Remote, *, root: Path = ROOT, out=sys.stdout) ->
         host=cfg.host,
         dest=cfg.dest,
         profile=cfg.profile,
+        jobs=dep.selection.jobs,
+        extra_processes=dep.selection.processes,
+        bundles=dep.selection.bundles,
+        live=cfg.live,
     )
 
     log(f"preflight on {cfg.host}" + (f" as {cfg.remote_user}" if cfg.remote_user else ""))
@@ -1092,6 +1268,7 @@ def _run(
     report.previous_release = previous
     prev_profile: str | None = None
     prev_procs: list[str] = []
+    prev_extra: list[str] = []
     stopped_previous = False
     started = False
     try:
@@ -1103,7 +1280,7 @@ def _run(
         dep.smoke(release)
         report.checks["smoke"] = "ok"
         if previous:
-            prev_profile, prev_procs = dep.previous_processes(previous)
+            prev_profile, prev_procs, prev_extra = dep.previous_processes(previous)
             log(f"stopping release {previous}'s processes")
             # Set before the stop, not after: a stop that fails part-way has
             # still taken some of them down, and rollback must start them.
@@ -1118,7 +1295,15 @@ def _run(
         dep.ports_free(release)
         log(f"starting profile {cfg.profile}")
         started = True
-        dep.uqs(release, "start", "starting the profile", "start", "--profile", cfg.profile)
+        dep.uqs(
+            release,
+            "start",
+            "starting the profile",
+            "start",
+            "--profile",
+            cfg.profile,
+            *dep.selection.processes,
+        )
         log(f"verifying every process answers (up to {cfg.verify_timeout}s)")
         result = dep.verify(release)
         report.processes = result.get("processes", [])
@@ -1136,7 +1321,9 @@ def _run(
         report.stage = exc.stage
         report.error = str(exc)
         log(f"FAILED at {exc.stage}: {exc}")
-        report.rollback = _rollback(dep, release, started, stopped_previous, previous, prev_profile)
+        report.rollback = _rollback(
+            dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
+        )
     finally:
         dep.write_report(release, report)
         dep.discard_staging(rid)
@@ -1145,8 +1332,10 @@ def _run(
     return 0 if report.status == "deployed" else 1
 
 
-def _rollback(dep, release, started, stopped_previous, previous, prev_profile) -> str:
-    """Stop what the failed release started, and bring the previous one back."""
+def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
+    """Stop what the failed release started, and bring the previous one back:
+    its profile and the sidecar processes it ran beside it (`prev`)."""
+    prev_profile, prev_extra = prev
     notes = []
     if started and release:
         try:
@@ -1164,6 +1353,7 @@ def _rollback(dep, release, started, stopped_previous, previous, prev_profile) -
                 "start",
                 "--profile",
                 prev_profile,
+                *prev_extra,
             )
         except DeployError as exc:
             notes.append(f"FAILED to restart release {previous}: {exc}")
@@ -1171,7 +1361,8 @@ def _rollback(dep, release, started, stopped_previous, previous, prev_profile) -
             # A start command that returned is not a recovery: the previous
             # release's own verifier, with its own deploy.env, must pass.
             try:
-                result = dep.verify(prev_release, prev_profile, "rollback")
+                flags = _verify_flags(Selection(processes=prev_extra), False)
+                result = dep.verify(prev_release, prev_profile, "rollback", flags)
             except DeployError as exc:
                 result = {"passed": False, "reason": str(exc)}
             if result.get("passed"):

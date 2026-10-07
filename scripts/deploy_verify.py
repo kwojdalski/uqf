@@ -22,6 +22,13 @@ DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED, and the exit code agrees with it.
 Nothing secret is printed: the IPC credentials are the stack's defaults and
 never appear in the output.
 
+A deployment that selected sidecar jobs (#800) adds `--procs`, the jobs'
+processes and their dependency closure, checked exactly like the profile's;
+`--tables`, the bundles' plant tables, which the tickerplant (stp1) must
+carry; and with `--live`, every pipeline process must report that it refuses
+a source's fixture (.qetl.source.live_required) - proof the deployment's
+setting reached the processes, rather than a hope that it did.
+
 `--ports-free` asks only whether something already listens on the profile's
 ports - deploy.py runs it just before it starts the profile, so a port held
 by anything else fails the deployment before a process can wedge on it.
@@ -48,6 +55,10 @@ LIBRARY_EXPR = "@[{.qfwd.fwd_simple[1.1;0.05;0.02;1f]};::;0n]"
 LIBRARY_EXPECTED = 1.1323529411764708
 #: 1b or 0b where the ETL tree is loaded; 0N where it is not.
 ETL_EXPR = "@[{all exec passed from .qetl.transform.verify_all[]};::;0N]"
+#: 1b where a missing credential is refused rather than read as the fixture.
+LIVE_EXPR = "@[{.qetl.source.live_required[]};::;0N]"
+#: The process that must carry every plant table.
+PLANT = "stp1"
 
 Query = Callable[[str, int], object]
 
@@ -66,7 +77,18 @@ class ProcessCheck:
     error: str = ""
 
 
-def check_process(proc: ProcessCheck, query: Query) -> ProcessCheck:
+def missing_tables_expr(tables: list[str]) -> str:
+    """q for the `tables` the process does not define, shown with -3!."""
+    return "-3!((),`" + "`".join(tables) + ") except tables[]"
+
+
+def missing_tables(answer: object) -> str:
+    """'' when the answer to missing_tables_expr names nothing, else the names."""
+    text = str(answer)
+    return "" if text in ("`symbol$()", "0#`") else text
+
+
+def check_process(proc: ProcessCheck, query: Query, live: bool = False) -> ProcessCheck:
     """Ask one process who it is and, where it has them, the library and ETL
     checks. Raises when it does not answer, so the caller retries it."""
     name = str(query(IDENTITY_EXPR, proc.port))
@@ -87,6 +109,10 @@ def check_process(proc: ProcessCheck, query: Query) -> ProcessCheck:
     if proc.pipeline:
         # a pipeline process loads both; "not loaded" is a broken process
         missing = [c for c, v in (("library", proc.library), ("ETL", proc.etl)) if v != "ok"]
+        if live:
+            required = query(LIVE_EXPR, proc.port)
+            if _is_null(required) or not bool(required):
+                missing.append("live-sources")
         proc.ok = not missing
         proc.error = "" if proc.ok else f"pipeline process: {' and '.join(missing)} check not ok"
         return proc
@@ -113,6 +139,8 @@ def verify(
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     poll_s: float = 2.0,
+    tables: list[str] | None = None,
+    live: bool = False,
 ) -> tuple[bool, list[ProcessCheck], str]:
     """(passed, one check per process, why it failed or "")."""
     checks = {
@@ -124,7 +152,7 @@ def verify(
     while pending:
         for name in sorted(pending):
             try:
-                check_process(checks[name], query)
+                check_process(checks[name], query, live)
             except Exception as exc:  # noqa: BLE001 - not answering yet; retried until the deadline
                 checks[name].error = f"no answer: {type(exc).__name__}"
                 continue
@@ -140,6 +168,15 @@ def verify(
     if bad:
         detail = "; ".join(f"{c.process}: {c.error}" for c in bad)
         return False, results, f"checks failed on {detail}"
+    if tables:
+        if PLANT not in checks:
+            return False, results, f"tables {', '.join(tables)} need {PLANT}, which is not started"
+        try:
+            gone = missing_tables(query(missing_tables_expr(tables), checks[PLANT].port))
+        except Exception as exc:  # noqa: BLE001 - reported, not raised
+            return False, results, f"{PLANT} did not list its tables: {type(exc).__name__}"
+        if gone:
+            return False, results, f"{PLANT} does not carry the bundle table(s) {gone}"
     return True, results, ""
 
 
@@ -156,13 +193,16 @@ def _listening(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
-def _expected(profile: str, base_port: int | None) -> tuple[dict[str, int], set[str]]:
+def _expected(
+    profile: str, base_port: int | None, procs: list[str] | None = None
+) -> tuple[dict[str, int], set[str]]:
     from uqs.model import profiles
     from uqs.model.registry import PIPELINES
     from uqs.paths import default_paths
     from uqs.stack import listing
 
-    names = profiles.resolve([profile])
+    resolved = profiles.resolve([profile])
+    names = resolved + tuple(p for p in dict.fromkeys(procs or ()) if p not in resolved)
     ports = listing.configured_ports(default_paths(), base_port=base_port)
     missing = [n for n in names if n not in ports]
     if missing:
@@ -176,6 +216,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--deadline", type=float, default=180.0, help="seconds")
     parser.add_argument("--query-timeout", type=int, default=5, help="seconds per query")
     parser.add_argument("--port", type=int, default=None, help="the stack's base port")
+    parser.add_argument("--procs", nargs="*", default=[], help="processes beyond the profile")
+    parser.add_argument("--tables", nargs="*", default=[], help="tables stp1 must carry")
+    parser.add_argument("--live", action="store_true", help="fixtures must be refused")
     parser.add_argument(
         "--ports-free",
         action="store_true",
@@ -183,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    expected, pipelines = _expected(args.profile, args.port)
+    expected, pipelines = _expected(args.profile, args.port, args.procs)
     if args.ports_free:
         busy = busy_ports(expected, _listening)
         print(json.dumps({"profile": args.profile, "busy": busy}))
@@ -195,7 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     def query(expr: str, port: int) -> object:
         return runtime.query(expr, port, timeout=args.query_timeout)
 
-    passed, results, why = verify(expected, pipelines, query, args.deadline)
+    passed, results, why = verify(
+        expected, pipelines, query, args.deadline, tables=args.tables, live=args.live
+    )
     print(
         json.dumps(
             {
