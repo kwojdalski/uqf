@@ -87,12 +87,11 @@ def test_a_dqe_metatable_on_a_table_the_runtime_lacks_is_left_out():
     assert metatables("crypto") == []
 
 
-def test_a_subset_runtime_can_start_only_the_profiles_it_covers():
-    crypto = runtime_profiles.known_processes(_paths("crypto"))
-    assert crypto is not None
-    startable = runtime_profiles.startable_profiles(crypto)
-    assert "crypto" in startable and "essential" in startable
-    assert "fx" not in startable
+def test_a_subset_runtime_starts_only_the_profiles_it_declares():
+    crypto = _paths("crypto")
+    assert set(crypto.runtime_declaration.profiles) == {"crypto", "essential"}
+    with pytest.raises(UqsError, match="fx are not declared for the crypto runtime"):
+        runtime_profiles.refuse_undeclared(crypto, ["fx"])
 
 
 def test_the_plant_s_clients_fit_the_licence_with_room_to_spare():

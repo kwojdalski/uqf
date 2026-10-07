@@ -354,6 +354,33 @@ def get_process_config(
     return row
 
 
+#: Characters torq.sh cannot carry in a process.csv field: it splits lines
+#: with `awk -F,`, so a comma starts a new field however csv quoted it, the
+#: quote stays literal, and a newline starts a row it miscounts (#777).
+UNCARRIABLE = ',"\n\r'
+
+
+def _refuse_uncarriable(procname: str, field: str, value: str) -> None:
+    if any(ch in value for ch in UNCARRIABLE):
+        raise UqsError(
+            f"{procname}.{field} value {value!r} contains a comma, quote or newline - "
+            "torq.sh splits process.csv on commas with awk and cannot quote one; "
+            "separate the parts with spaces instead (e.g. -pairs EURUSD USDJPY)"
+        )
+
+
+def check_carriable(rows: list[dict[str, str]]) -> None:
+    """Refuse a process.csv torq.sh would misread, naming the field.
+
+    For an override already on disk, written before set_process_config
+    refused one: found here, at bootstrap, it fails by name instead of as a
+    start whose qcmd is the second half of `extras`.
+    """
+    for row in rows:
+        for field, value in row.items():
+            _refuse_uncarriable(row["procname"], field, value or "")
+
+
 def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -> None:
     """Persist a process.csv field override for *procname*, applied by every
     later bootstrap() (i.e. every start/stop/summary/... call) until
@@ -364,6 +391,7 @@ def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -
         raise UqsError(f"unknown process.csv field {field!r} - {sorted(PROCESS_CSV_FIELDS)}")
     if procname not in list_process_names(paths):
         raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
+    _refuse_uncarriable(procname, field, value)
 
     overrides = _read_overrides(paths)
     overrides.setdefault(procname, {})[field] = value

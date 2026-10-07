@@ -24,7 +24,7 @@ from uqs.stack import alive, occupancy
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env
-from uqs.stack.procs import effective_process_rows, gateway_access_lines
+from uqs.stack.procs import check_carriable, effective_process_rows, gateway_access_lines
 
 log = get_logger(__name__)
 
@@ -115,6 +115,7 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     # extra processes (fxfeed1) and any process_overrides.csv fields set via
     # set_process_config()/`config set`/uqs_set_config.
     rows = effective_process_rows(paths)
+    check_carriable(rows)
     with paths.generated_procs.open("w", newline="") as f:
         # torq.sh's own field lookups are a naive awk -F, parse expecting
         # plain \n line endings, like the vendored csv itself - csv module's

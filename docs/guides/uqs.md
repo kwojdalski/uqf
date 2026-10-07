@@ -325,8 +325,20 @@ uqs --runtime crypto start     # cryptomock1 and crypto_markout1, on 6250
 uqs --runtime crypto list processes
 ```
 
-Such a runtime can start only the profiles its processes cover, and refuses the
-others naming what is missing, as `torq` does.
+Each runtime declares its own profiles (`profiles` in `runtimes.py`).
+`--profile` takes only those, `list profiles` shows only those, and any other is
+refused, naming the runtime's own:
+
+  | runtime  | profiles                                                                                                      |
+  | ---      | ---                                                                                                           |
+  | `uqf`    | `all`, `arbitrage`, `crypto`, `default`, `depth`, `essential`, `fx`                                           |
+  | `torq`   | `essential`; `feed`, which is `essential` plus `feed1`; `full`, the starter pack's default fleet plus `feed1` |
+  | `crypto` | `crypto`, `essential`                                                                                         |
+  | `fx`     | `essential`, `fx`                                                                                             |
+
+A test resolves every declared profile against its runtime's processes. A
+profile that names a process its runtime doesn't have fails that test, not your
+start.
 
 Without the service layer, `torq` has none of the [query
 policies](../architecture/query-policies.md): no data-access API, no `.pm` on
@@ -351,16 +363,15 @@ ERROR    | the torq runtime's stack (base port 6050) is already using ports this
 
 `uqs summary` names the runtime and base port it is reporting on in its title.
 
-On `torq`, `list processes` shows the 23 starter-pack processes and
-`list profiles` shows only `essential`, the one profile whose processes all ship
-with the starter pack. `essential` leaves out `feed1`, so it runs with no data
-coming in; plain `start` includes it. Commands that work only on this tree's
-pipelines refuse, with the reason: `graph`, `backfill`, `gaps`, `run`, `stream`
-and `feed`. So does any profile that needs a uqf process:
+On `torq`, `list processes` shows the 23 starter-pack processes. `essential`
+leaves out `feed1`, so nothing publishes; `feed` adds it, so `trade` and `quote`
+come in. Commands that work only on this tree's pipelines refuse, with the
+reason: `graph`, `backfill`, `gaps`, `run`, `stream` and `feed`. So does a
+profile `torq` doesn't declare:
 
 ```
 $ uqs --runtime torq start --profile fx
-ERROR    | profile(s) fx needs executions1, fxfeed1, ..., which the torq runtime does not have - it is the starter pack as it ships: its processes and tables, nothing of uqf's. Use --profile essential, or --runtime uqf for this tree's processes
+ERROR    | profile(s) fx are not declared for the torq runtime - its profiles are essential, feed, full, or --runtime uqf
 ```
 
 ### Profiles
@@ -647,6 +658,18 @@ Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`, `extras`,
 `qcmd`. A change takes effect on the next `start`/`restart` of that process (the
 running process itself isn't touched).
+
+A value with a comma, a double quote or a newline is refused. `torq.sh` reads
+`process.csv` by splitting each line on commas with `awk`, so it can't carry a
+quoted comma: the rest of the value would land in the next column. To pass a
+list, separate it with spaces:
+
+```
+uqs config set fxfeed1 extras -- "-pairs EURUSD USDJPY"
+```
+
+An override like that already in the file stops the next command, and the error
+names the process and field.
 
 ### What sources connect to
 
