@@ -96,7 +96,7 @@ test_markout_at_horizons_works_with_unsorted_quotes:{[t]
 test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
     / #625: the two horizon markouts spell their inputs differently - a trades
     / table and `sym`time`mid quotes here; scalars and depth quotes in
-    / .qfwd.cross_markout_at_horizons. On a pair quoted directly they are one
+    / .qexec.cross_markout_at_horizons. On a pair quoted directly they are one
     / calculation, so a mix-up between them shows up here as a wrong number
     / rather than nowhere. Both sides, so a flipped sign convention cannot
     / agree by accident. #413: both take timespan horizons and return the
@@ -112,7 +112,7 @@ test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
         trade:([] sym:enlist `EURUSD; time:enlist t0; side:enlist side; trade_price:enlist 1.1003; pip_factor:enlist 10000);
         horizons:0D00:00:00 0D00:00:01 0D00:00:10;
         by_table:.qexec.markout_at_horizons[trade;mids;horizons];
-        by_scalars:.qfwd.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;horizons;1];
+        by_scalars:.qexec.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;horizons;1];
         .testutil.assertApprox[by_scalars`markout_pips;by_table`markout_pips;1e-9;
             "the same horizons over mids and over depth give the same pips"];
         .qunit.assertEquals[exec c!t from meta by_scalars;exec c!t from meta by_table;

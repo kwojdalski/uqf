@@ -46,15 +46,20 @@ qccy,pip_factor,function,1,pair
 qccy,pip_size,function,1,pair
 qccy,pip_size_by_quote,dict,,
 qcross,book_crossed,function,1,book
+qcross,ccy_orient_chain,function,1,syms
 qcross,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
 qcross,combine_oriented_books,function,2,book_ab book_bc
 qcross,cross_book,function,4,sym1 book1 sym2 book2
 qcross,cross_book_at,function,5,quotes sym as_of sizes sides
 qcross,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
+qcross,cross_book_chain_at_one_size,function,3,syms books size
 qcross,cross_book_chain_at_sizes,function,4,syms books sizes sides
 qcross,cross_decomp,function,2,avail_syms sym
+qcross,cross_ref_price_at,function,4,quotes sym as_of ref_size
 qcross,cross_size_at_price,function,5,quotes sym as_of side price_limit
 qcross,invert_book,function,1,book
+qcross,leg_book_as_of,function,3,quotes as_of target_sym
+qcross,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qdata,cfg,function,2,k dflt
 qdata,databentoDir,function,1,
 qdata,databentoFile,function,2,sym date
@@ -567,6 +572,9 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
+qexec,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
+qexec,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
+qexec,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_order_time_cols,value,,
 qexec,fill_probability_by,function,5,orders horizons bucket_cols as_of opts
@@ -587,9 +595,6 @@ qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
 qfwd,CROSS_SIZE_MAX_HALVINGS,value,,
 qfwd,CROSS_SIZE_REL_TOL,value,,
 qfwd,convert_quotes,function,3,quotes target_conventions opts
-qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
-qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
-qfwd,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
 qfwd,cross_rate,function,2,ab_rate bc_rate
 qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay
 qfwd,extrapolations,value,,

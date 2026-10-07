@@ -92,7 +92,7 @@ error in exactly the modules no running job exercises (below). Until then:
   | `trade_price`  | `.qpos.apply_fills`, `.qexec.markout_at_horizons`, `.qalloc`'s trades (`allocation.q:251`); `.qalloc`'s opening lots carry `price` (`allocation.q:267`), a lot's price | `.qdesk.apply_fills` reads a fill's price as `price` (`desk_positions.q:52`)                                                                                                              |
 
 The two horizon markouts are pinned to each other. Both take `horizons` as
-timespans and refuse anything else, and `.qfwd.cross_markout_at_horizons` and
+timespans and refuse anything else, and `.qexec.cross_markout_at_horizons` and
 `cross_impact_at_horizons` return the columns `.qexec.markout_at_horizons` does,
 so direct and synthetic markouts join with `uj` (#413). On a directly quoted
 pair they are one calculation, and

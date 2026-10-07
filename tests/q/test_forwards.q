@@ -506,7 +506,7 @@ test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;0D00:00:00.001*-500 0 500;1];
+    r:.qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;0D00:00:00.001*-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
     .qunit.assertEquals[r[0]`time;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
     .testutil.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
@@ -517,7 +517,7 @@ test_cross_markout_at_horizons_ts_col_is_configurable:{[t]
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
     original:.qfwd.time_col;
     .qfwd.time_col:`timestamp;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0D00:00:00;1];
+    r:.qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0D00:00:00;1];
     .qfwd.time_col:original;
     / The leading columns derive from time_col (#732). They were a separate
     / col_precedence:`time`sym, so renaming time_col alone used to leave
@@ -535,7 +535,7 @@ test_apply_col_precedence_follows_a_renamed_time_col:{[t]
 test_cross_markout_at_horizons_col_precedence_orders_ts_then_sym:{[t]
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0D00:00:00;1];
+    r:.qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0D00:00:00;1];
     .qunit.assertEquals[cols r;`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips;"markout_at_horizons' columns, time and sym leading"];
     .qunit.assertEquals[first r`sym;`AUDPLN;"sym is the (normalized) traded pair"]};
 
@@ -544,13 +544,13 @@ test_cross_markout_at_horizons_refuses_horizons_that_are_not_timespans:{[t]
     / nanoseconds without complaint, so it is refused by name.
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5600;10000;-500 0 500;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qexec.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5600;10000;-500 0 500;1]}[;trade_time];
     .qunit.assertThrows[wrapper;quotes;"cross_markout_at_horizons: horizons must be a timespan or list of timespans*";"milliseconds as longs are refused"]};
 
 test_cross_impact_at_horizons_reports_its_baseline_as_trade_price:{[t]
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.500;
-    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;0D00:00:00 0D00:00:00.5;1];
+    r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;0D00:00:00 0D00:00:00.5;1];
     baseline:.qcross.cross_ref_price_at[quotes;`AUDUSD;trade_time;1];
     .qunit.assertEquals[r`trade_price;2#baseline;"trade_price is the impact pair's own price at trade_time"];
     .qunit.assertEquals[r`trade_time;2#trade_time;"and trade_time is the traded pair's trade"]};
@@ -559,7 +559,7 @@ test_cross_markout_at_horizons_nulls_out_of_range_horizon_instead_of_erroring:{[
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist neg 0D00:00:10;1];
+    r:.qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist neg 0D00:00:10;1];
     .qunit.assertTrue[null first r`ref_price;"a horizon before any quote exists nulls out rather than throwing"];
     .qunit.assertTrue[null first r`markout_pips;"markout_pips is null alongside the null ref_price"]};
 
@@ -567,7 +567,7 @@ test_cross_markout_decomp_sums_exactly_to_the_total_move:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    decomp:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
+    decomp:.qexec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
     total_from_decomp:sum decomp`contribution_pips;
     mid_t0:.qcross.cross_ref_price_at[quotes;`AUDPLN;t0;1];
     mid_t1:.qcross.cross_ref_price_at[quotes;`AUDPLN;t1;1];
@@ -578,7 +578,7 @@ test_cross_markout_decomp_flat_leg_contributes_zero:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    decomp:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
+    decomp:.qexec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
     eurusd_row:first select from decomp where leg=`EURUSD;
     .testutil.assertApprox[eurusd_row`contribution_pips;0f;1e-6;"EURUSD didn't move between t0 and t1, so it contributes exactly zero"]};
 
@@ -590,7 +590,7 @@ test_cross_markout_decomp_reprices_bridge_depth:{[t]
         bid_sizes:(enlist 100f;enlist 100f;1 100f;1 100f);
         ask_prices:(enlist 1.1;enlist 1.2;150 151f;150 151f);
         ask_sizes:(enlist 100f;enlist 100f;1 100f;1 100f));
-    r:.qfwd.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
+    r:.qexec.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
     / EURUSD's move increases the USDJPY sweep from 1.1 to 1.2 USD.
     / Cross bid/ask: 165/165.1 -> 180/180.2, so mid moves 15.05.
     .testutil.assertApprox[r`contribution_pips;1505 0f;1e-9;"EURUSD's contribution includes its effect on the bridge sweep; the unchanged USDJPY book contributes zero"];
@@ -606,7 +606,7 @@ test_cross_markout_decomp_attributes_spread_moves_with_flat_leg_mids:{[t]
         bid_sizes:4#enlist enlist 1000000f;
         ask_prices:enlist each 1.2 1.3 151 152f;
         ask_sizes:4#enlist enlist 1000000f);
-    r:.qfwd.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
+    r:.qexec.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
     .qunit.assertEquals[r`price_t0;r`price_t1;"both descriptive leg mids remain unchanged"];
     / Full-book midpoint: 165.1 -> 165.2 after EURUSD -> 165.4 after USDJPY.
     .testutil.assertApprox[r`contribution_pips;10 20f;1e-9;"spread changes affect the cross mid despite unchanged standalone leg mids"];
@@ -620,11 +620,11 @@ test_cross_markout_decomp_prices_inverted_single_leg_book:{[t]
         bid_sizes:2#enlist enlist 1000000f;
         ask_prices:enlist each 1.2 1.3;
         ask_sizes:2#enlist enlist 1000000f);
-    r:.qfwd.cross_markout_decomp[quotes;"usd/eur";t0;t1;10000;1];
+    r:.qexec.cross_markout_decomp[quotes;"usd/eur";t0;t1;10000;1];
     expected:10000*((110%117)-(11%12));
     .testutil.assertApprox[first r`contribution_pips;expected;1e-9;"USDEUR uses the midpoint of inverted bid and ask, not the reciprocal EURUSD midpoint"];
     .qunit.assertEquals[r`invert;enlist 1b;"the direct quote is inverted for USDEUR"];
-    direct:.qfwd.cross_markout_decomp[quotes;`EURUSD;t0;t1;10000;1];
+    direct:.qexec.cross_markout_decomp[quotes;`EURUSD;t0;t1;10000;1];
     .testutil.assertApprox[first direct`contribution_pips;0f;1e-9;"the directly quoted EURUSD midpoint is unchanged"]};
 
 test_cross_markout_decomp_missing_endpoint_quotes_null_attribution:{[t]
@@ -632,17 +632,17 @@ test_cross_markout_decomp_missing_endpoint_quotes_null_attribution:{[t]
     t1:t0+0D00:00:01;
     quotes:mk_ts_quotes_table[::];
     quotes:delete from quotes where sym=`EURUSD,time=t0;
-    r:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
+    r:.qexec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
     .qunit.assertTrue[all null r`contribution_pips;"an unavailable t0 leg makes the cross attribution undefined"];
     .qunit.assertTrue[any null r`price_t0;"the missing historical leg retains a null descriptive price"];
-    reverse_r:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t1;t0;10000;1];
+    reverse_r:.qexec.cross_markout_decomp[quotes;`AUDPLN;t1;t0;10000;1];
     .qunit.assertTrue[all null reverse_r`contribution_pips;"an unavailable t1 leg also makes attribution undefined"]};
 
 test_cross_markout_decomp_rejects_unreachable_pair:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    wrapper:{[q;t0;t1] .qfwd.cross_markout_decomp[q;`AUDJPY;t0;t1;10000;1]}[;t0;t1];
+    wrapper:{[q;t0;t1] .qexec.cross_markout_decomp[q;`AUDJPY;t0;t1;10000;1]}[;t0;t1];
     .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
 
 test_cross_impact_at_horizons_reports_a_different_pairs_own_drift:{[t]
@@ -654,7 +654,7 @@ test_cross_impact_at_horizons_reports_a_different_pairs_own_drift:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;0D00:00:00.001*-500 0 500;1];
+    r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;0D00:00:00.001*-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
     .testutil.assertApprox[r[0]`markout_pips;0f;1e-6;"no drift yet at/before the trade's own baseline time"];
     .testutil.assertApprox[r[2]`markout_pips;10f;1e-6;"AUDUSD's genuine 10-pip drift by t1 shows up as +10 for a buy"]};
@@ -663,22 +663,22 @@ test_cross_impact_at_horizons_side_flips_the_sign:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    buy_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0D00:00:00.5;1];
-    sell_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;-1;10000;enlist 0D00:00:00.5;1];
+    buy_r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0D00:00:00.5;1];
+    sell_r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;-1;10000;enlist 0D00:00:00.5;1];
     .testutil.assertApprox[first buy_r`markout_pips;neg first sell_r`markout_pips;1e-6;"selling reports the same drift with the opposite sign"]};
 
 test_cross_impact_at_horizons_rejects_same_pair:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0D00:00:00;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qexec.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertThrows[wrapper;quotes;"cross_impact_at_horizons: impact_sym must be different*";"impact_sym the same as traded_sym is rejected"]};
 
 test_cross_impact_at_horizons_sym_column_is_impact_sym_not_traded_sym:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0D00:00:00;1];
+    r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0D00:00:00;1];
     .qunit.assertEquals[first r`sym;`AUDUSD;"the sym column reports the impact pair, not the traded one"]};
 
 test_cross_book_at_rejects_quotes_missing_a_column:{[t]
@@ -695,7 +695,7 @@ test_cross_markout_at_horizons_rejects_quotes_missing_a_column_instead_of_nullin
     quotes:mk_ts_quotes_table[::];
     bad:delete ask_prices from quotes;
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0D00:00:00;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qexec.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertError[wrapper;bad;"a quotes table missing a required column throws immediately, not a silent null"]};
 
 test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
@@ -706,7 +706,7 @@ test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
     / null, indistinguishable from the benign case. See issue #6.
     unsorted:reverse mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0D00:00:00;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qexec.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertThrows[wrapper;unsorted;"cross_markout_at_horizons: quotes must be sorted*";"quotes rows out of `sym`time xasc order throws immediately, not a silent null"]};
 
 test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
@@ -719,7 +719,7 @@ test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
     / (test_cross_markout_decomp_rejects_unreachable_pair). See issue #25.
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0D00:00:00;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qexec.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertThrows[wrapper;quotes;"cross_markout_at_horizons: no chain*";"no chain of available pairs connects AUD and JPY"]};
 
 test_cross_markout_decomp_rejects_quotes_missing_a_column:{[t]
@@ -727,7 +727,7 @@ test_cross_markout_decomp_rejects_quotes_missing_a_column:{[t]
     bad:delete ask_prices from quotes;
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    wrapper:{[q;t0;t1] .qfwd.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
+    wrapper:{[q;t0;t1] .qexec.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
     .qunit.assertThrows[wrapper;bad;"cross_markout_decomp: quotes is missing required column(s) ask_prices";"a quotes table missing a required column is rejected immediately"]};
 
 test_cross_markout_decomp_rejects_unsorted_quotes_instead_of_nulling:{[t]
@@ -737,7 +737,7 @@ test_cross_markout_decomp_rejects_unsorted_quotes_instead_of_nulling:{[t]
     unsorted:reverse mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    wrapper:{[q;t0;t1] .qfwd.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
+    wrapper:{[q;t0;t1] .qexec.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
     .qunit.assertThrows[wrapper;unsorted;"cross_markout_decomp: quotes must be sorted*";"quotes rows out of `sym`time xasc order throws immediately, not a silent null"]};
 
 test_apply_col_precedence_leaves_table_unchanged_when_precedence_not_fully_present:{[t]

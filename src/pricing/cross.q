@@ -178,7 +178,7 @@ cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
     want_cols:`size`sym , raze side_cols each sides;
     want_cols#rows};
 
-/ Private: like ccy_orient_cross, but resolves orientation across an
+/ Like ccy_orient_cross, but resolves orientation across an
 / arbitrary chain of N>=2 currency pairs instead of just two - walks the
 / legs in order, threading the running cross symbol forward via repeated
 / calls to ccy_orient_cross. Each leg after the first must join the chain
@@ -196,7 +196,6 @@ cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
 / @throws error if syms has fewer than 2 legs, or if two consecutive legs
 /   share no common currency (names the leg index and the two symbols)
 / @eg .qcross.ccy_orient_chain[`EURUSD`USDJPY`JPYCHF]  -> `cross_sym`inverts!(`EURCHF;000b)
-/ @private
 ccy_orient_chain:{[syms]
     syms:syms,();
     if[(count syms)<2; '"ccy_orient_chain: need at least 2 legs"];
@@ -250,7 +249,7 @@ cross_sweep_chain:{[books;side;size;inverts]
         i+:1];
     `price`filled_size`fully_filled!(price;filled_size;fully_filled)};
 
-/ Private: bid, ask and mid for an N-leg cross at a single size. mid is
+/ Bid, ask and mid for an N-leg cross at a single size. mid is
 / the average of the swept cross bid and the swept cross ask at that
 / size (not a separate sweep of its own) - same convention as
 / cross_book_at_one_size.
@@ -259,7 +258,6 @@ cross_sweep_chain:{[books;side;size;inverts]
 /   one per leg
 / @param size the size to sweep, in leg 1's relevant currency
 / @return one row: dict `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid
-/ @private
 cross_book_chain_at_one_size:{[syms;books;size]
     orient:ccy_orient_chain[syms];
     bid_r:cross_sweep_chain[books;`bid;size;orient`inverts];
@@ -383,13 +381,12 @@ cross_decomp:{[avail_syms;sym]
     legs:.qccy.ccy_pair_legs .qccy.normalize_ccy_pair sym;
     ccy_shortest_path[avail_syms;legs`base;legs`quote]};
 
-/ Private: one symbol's book, as of a given time, pulled out of a quotes
+/ One symbol's book, as of a given time, pulled out of a quotes
 / table via an as-of join (aj) - the most recent row at or before as_of.
 / Requires quotes already sorted `sym`time xasc - cross_book_at checks that
 / once up front (aj on unsorted data doesn't error, it silently returns
 / wrong rows), not repeated here on every leg lookup.
 / @throws error if quotes has no row for target_sym at or before as_of
-/ @private
 leg_book_as_of:{[quotes;as_of;target_sym]
     lookup:([] sym:enlist target_sym; time:enlist as_of);
     joined:aj[`sym`time;lookup;quotes];
@@ -397,11 +394,10 @@ leg_book_as_of:{[quotes;as_of;target_sym]
         '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string as_of];
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(first joined`bid_prices;first joined`bid_sizes;first joined`ask_prices;first joined`ask_sizes)};
 
-/ Private: bid, ask and mid for a single already-available leg at one
+/ Bid, ask and mid for a single already-available leg at one
 / size - the 1-leg-chain analogue of cross_book_at_one_size, used by
 / cross_book_at when the requested pair (or its inverse) is quoted
 / directly, with no chaining needed.
-/ @private
 single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
     bid_lvl:oriented_levels[`bid;leg_book;invert];
     ask_lvl:oriented_levels[`ask;leg_book;invert];
@@ -508,14 +504,13 @@ cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
         halvings+:1];
     lo};
 
-/ Private: cross_book_at's mid for sym at as_of, at a caller-chosen
+/ Cross_book_at's mid for sym at as_of, at a caller-chosen
 / (typically negligible, top-of-book-ish) size - used wherever a "price
 / at a point in time" is needed for a synthetic pair with no quoted mid
 / of its own. Nulls out rather than throwing if no quote exists yet for
 / some required leg at or before as_of, so a caller sweeping many timestamps
 / (cross_markout_at_horizons, cross_markout_decomp) can null one bad
 / lookup instead of failing the whole batch.
-/ @private
 cross_ref_price_at:{[quotes;sym;as_of;ref_size]
     @[{[quotes;sym;ref_size;as_of] first cross_book_at[quotes;sym;as_of;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];as_of;{0n}]};
 
