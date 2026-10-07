@@ -65,6 +65,12 @@ _ARCH_ALIASES = {"aarch64": "arm64", "amd64": "x86_64"}
 
 Log = Callable[[str], None]
 
+#: Named tuples rather than `except (A, B):` inline: ruff-format targets 3.14,
+#: where it drops those parentheses (PEP 758), and this file runs under the
+#: bare python3 a CI runner or a laptop has, which may be older.
+_PROBE_FAILURES = (OSError, subprocess.TimeoutExpired)
+_UNREADABLE = (OSError, ValueError)
+
 
 class PeachQError(Exception):
     """PeachQ could not be provided; the message says why and what to do."""
@@ -163,7 +169,7 @@ def identify(binary: Path | str) -> str:
                 timeout=30,
                 check=False,
             )
-        except OSError, subprocess.TimeoutExpired:
+        except _PROBE_FAILURES:
             return ""
     return (result.stdout.strip().splitlines()[-1:] or [""])[0]
 
@@ -227,7 +233,7 @@ def _valid_entry(entry: Path, manifest: dict, identify: Callable[[Path | str], s
     binary = entry / "q"
     try:
         recorded = json.loads((entry / "manifest.json").read_text())
-    except OSError, ValueError:
+    except _UNREADABLE:
         return False
     return recorded == manifest and os.access(binary, os.X_OK) and identify(binary) == "peachq"
 

@@ -94,6 +94,15 @@ class Fake:
         )
 
 
+def test_the_resolver_parses_on_the_oldest_python_it_runs_under():
+    """scripts/ runs under a bare python3, not the workspace's 3.14: syntax
+    only 3.14 accepts (an unparenthesised `except A, B:`) broke CI once."""
+    import ast
+
+    for script in (SCRIPT, ROOT / "scripts" / "test.py"):
+        ast.parse(script.read_text(), feature_version=(3, 10))
+
+
 def test_the_shipped_pin_is_a_full_commit_with_options_per_platform():
     pin = peachq.load_pin()
     assert re.fullmatch(r"[0-9a-f]{40}", pin["commit"])
