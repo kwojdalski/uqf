@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 import typer
@@ -12,6 +13,29 @@ from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs as stack_runs
 from uqs.stack import uptime as stack_uptime
+
+
+def _utc_today() -> date:
+    return datetime.now(UTC).date()
+
+
+def refillable(holes: list[dict], today: date) -> tuple[list[dict], bool]:
+    """The part of each gap a backfill can refill, and whether any was cut.
+
+    A backfill writes through the HDB writer, which refuses a row dated today
+    or later: today belongs to the tickerplant and end of day (#770). So each
+    gap is clipped to today's UTC midnight, and one lying wholly in today is
+    dropped. The ledger's timestamps are ISO strings of one width, so they
+    order as strings.
+    """
+    midnight = f"{today.isoformat()}T00:00:00.000000000"
+    kept = [
+        {**hole, "range_to": min(str(hole["range_to"]), midnight)}
+        for hole in holes
+        if str(hole["range_from"]) < midnight
+    ]
+    cut = len(kept) < len(holes) or any(str(h["range_to"]) > midnight for h in holes)
+    return kept, cut
 
 
 @app.command()
@@ -60,17 +84,25 @@ def gaps(
             "refilled from here"
         )
         return
-    console.print("\n[bold]refill[/] - re-running is idempotent: covered windows are skipped")
-    for worker in twins:
+    advised, cut = refillable(holes, _utc_today())
+    if advised:
+        console.print("\n[bold]refill[/] - re-running is idempotent: covered windows are skipped")
+    for worker in twins if advised else ():
         try:
             version = f" --version {stack_backfill.resolve_version(worker, None)}"
         except UqsError:
             # No declared default: the source release is the operator's to
             # name, so it is shown as one to fill in, not guessed.
             version = " --version <V>"
-        for hole in holes:
+        for hole in advised:
             command = (
                 f"uqs backfill {worker} --from {stack_runs._as_bound(str(hole['range_from']))} "
                 f"--to {stack_runs._as_bound(str(hole['range_to']))}{version}"
             )
             console.print(f"  {command}", soft_wrap=True)
+    if cut:
+        console.print(
+            "[yellow]today's part of these gaps is not refillable yet[/]: a backfill cannot "
+            "write rows dated today, which belong to the tickerplant until end of day. "
+            "Run this same `uqs gaps` command after end of day for its refill."
+        )

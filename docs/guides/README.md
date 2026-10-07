@@ -12,7 +12,7 @@ understood and a [reference](../reference/) page to be consulted.
   | [`when-it-breaks.md`](when-it-breaks.md) | a backfill that failed partway, or a streaming job that died: finding the cause and recovering                 |
   | [`metatables.md`](metatables.md)         | partition profiling over an HDB                                                                                |
   | [`config-audit.md`](config-audit.md)     | recording runtime configuration changes, and joining them to who made them                                     |
-  | [`deploy.md`](deploy.md)                 | deploying to a server with an existing TorQ, verifying it, and rolling back                                    |
+  | [`deploy.md`](deploy.md)                 | building a release artifact, deploying it to a server with an existing TorQ, verifying it, and rolling back    |
 
 Choosing the *shape* of a new job, rather than walking one end to end, is
 [`scaffolding/`](../scaffolding/). What one running service does is

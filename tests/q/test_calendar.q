@@ -112,4 +112,13 @@ test_mock_data_spot_skips_the_mock_jpy_holiday:{[t]
     .qunit.assertEquals[.qcal.spot_date[2026.09.18;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions]`date;2026.09.22;
         "mock EUR and USD do not"]};
 
+/ T+0 from a weekend or a holiday rolled forward (#775): with a lag of 0 no
+/ day is counted, and the trade date used to come back as its own spot.
+test_t_plus_0_from_a_weekend_or_holiday_rolls_forward:{[t]
+    sat:.qcal.spot_date[2026.09.19;`EURUSD;no_holidays[];conventions 0];
+    hol:.qcal.spot_date[2026.09.21;`EURUSD;monday_off `USD;conventions 0];
+    biz:.qcal.spot_date[2026.09.22;`EURUSD;no_holidays[];conventions 0];
+    .qunit.assertEquals[(sat`date;hol`date;biz`date);2026.09.21 2026.09.22 2026.09.22;
+        "Saturday to Monday, a USD holiday Monday to Tuesday, a business day stays put"]};
+
 \d .

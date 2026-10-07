@@ -1,26 +1,36 @@
-"""deploy.py - put this tree on a Linux server that already runs TorQ, and
-prove it works before calling it deployed (#773).
+"""deploy.py - put a uqf release on a Linux server that already runs TorQ,
+and prove it works before calling it deployed (#773, #778).
 
-    python3 scripts/deploy.py --host uqf-server --dest /opt/uqf \\
+    python3 scripts/build_release.py --output dist/
+    python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \\
+        --host uqf-server --dest /opt/uqf \\
         --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \\
         --qcmd /opt/kx/bin/q --qhome /opt/kx --profile essential --dry-run
 
+BUILDING IS NOT DEPLOYING. scripts/build_release.py makes the artifact once -
+the tree, the uqs wheel and every pinned dependency's wheel, and a manifest
+of the target and every member's sha256 - and this deploys that same file to
+as many servers as it is pointed at. The artifact is checked whole here,
+against its .sha256 and its manifest, before anything touches the server.
+
 THE STAGES, in order, each stopping the deployment when it fails:
 
-  preflight  ssh works; the destination is writable; uv and Python 3.14 are
-             there; q runs and is licensed; the TorQ and starter-pack trees
+  artifact   the archive matches its .sha256, and every member its manifest
+             hash, with nothing missing or extra.
+  preflight  ssh works; the destination is writable; uv and the release's
+             Python are there; the OS, architecture and Python match what the
+             artifact was built for; q runs and is licensed; the TorQ and starter-pack trees
              hold what torq.sh needs; envsubst and rlwrap are on PATH; the
              runtime data directory exists (or --init-data was given); and a
              deployment already there is only replaced with --restart.
-  package    an allowlist of tracked files - source and configuration, never
-             lib/, secrets, environments, data or logs - in a tar.gz with a
-             manifest of the revision and every file's sha256.
   transfer   scp into a staging directory of its own; the checksum is checked
              ON THE SERVER before anything is extracted.
-  prepare    releases/<id>/ gets a release-local .venv from the committed
-             uv.lock, and a deploy.env naming the external TorQ, q and the
-             stable data directory (UQS_DATA_ROOT) - the ports this profile
-             listens on are checked free.
+  prepare    releases/<id>/ gets a release-local .venv installed OFFLINE
+             from the artifact's own wheels - hashes required, no index, no
+             download - and a deploy.env naming the external TorQ, q and the
+             stable data directory (UQS_DATA_ROOT), with UV_OFFLINE=1 so
+             nothing later fetches either. The ports this profile listens on
+             are checked free.
   smoke      scripts/deploy_smoke.q: the quant library loads and computes known
              numbers. Needs its success marker AND exit 0, within a timeout.
   restart    with --restart, the previous deployment's processes stop - their
@@ -46,9 +56,35 @@ Layout under --dest:
     staging/<id>/         the archive while it is checked; removed after
     deploy.lock/          held while a deployment runs; serialises them
 
+WHICH q (#782). --qhome and --qcmd are optional and resolved ON THE SERVER,
+in the environment of the account that deploys - the --remote-user's login
+environment, or the ssh login's - never from this machine's:
+
+    QHOME   --qhome, else that account's $QHOME, else refused (pass --qhome)
+    QCMD    --qcmd, else that account's $QCMD, else `q` on that account's PATH
+
+QCMD is an executable name or an absolute path, never a command with
+arguments. Preflight resolves both, runs a script with them, and writes them
+into the release's deploy.env, so the smoke test, start, verification and
+any later rollback of this release use exactly what was checked; a rollback
+to the previous release uses that release's own deploy.env. Only those two
+values are read from the remote environment.
+
 Nothing here disables host-key checking or reads a secret: ssh and scp run
 with the operator's own configuration, in batch mode so a missing key fails
 rather than prompts.
+
+A SERVICE USER (#780). With --remote-user svc, ssh and scp still log in as
+the --host user, but every deployment step runs as svc through
+`sudo -n -iu svc bash -s` - non-interactive, so a sudo that would ask for a
+password fails instead of hanging, and a login shell, so q, uv, TorQ and the
+ports are checked in svc's own environment. Settings cross sudo inside the
+script, never through the login user's environment. scp cannot write as svc,
+so the archive lands in a private mktemp directory of the login user's, and
+one narrowly scoped sudo call - svc writing a new file from stdin - copies it
+into svc's staging; nothing is made world-readable or re-owned. The upload
+directory is removed whether the deployment succeeds or fails. Preflight
+proves the sudo rule and the effective identity before anything changes.
 
 Standard library only, like scripts/peachq.py: no package to install first,
 and parseable by Python 3.10 - it runs under the operator's own python3.
@@ -57,59 +93,25 @@ and parseable by Python 3.10 - it runs under the operator's own python3.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import io
 import json
 import re
 import shlex
 import subprocess
 import sys
-import tarfile
-import tempfile
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# beside this file, found once its directory is on the path; ty resolves
+# imports from the package roots only
+import build_release  # noqa: E402  # ty: ignore[unresolved-import]
+
 ROOT = Path(__file__).resolve().parents[1]
 
 #: timezone.utc, not datetime.UTC: UTC is 3.11+, and this runs under 3.10 too.
 _UTC = timezone.utc  # noqa: UP017
-
-#: What a release is made of: tracked files under these paths, and nothing
-#: else. The three Python packages are all here because uv's workspace lock
-#: needs every member's pyproject to resolve, though only uqs is installed.
-ALLOWLIST = (
-    "pyproject.toml",
-    "uv.lock",
-    "src",
-    "scripts",
-    "python/uqs",
-    "python/uqf_frontend",
-    "python/uqf_airflow_provider",
-)
-
-#: Never shipped, even when tracked under the allowlist: secrets and
-#: secret-bearing configuration, environments, data, logs and generated
-#: output. gateway_users.csv holds the demo gateway passwords; a server that
-#: wants ordinary gateway users supplies its own in shared/config/ (see
-#: SHARED_CONFIG), and uqs runs without one.
-EXCLUDED_PATTERNS = (
-    r"(^|/)\.env($|\.)(?!example$)",
-    r"(^|/)\.envrc$",
-    r"(^|/)\.venv/",
-    r"(^|/)node_modules/",
-    r"(^|/)__pycache__/",
-    r"(^|/)output/",
-    r"(^|/)tests/",
-    r"\.(lic|pem|key|log|pyc)$",
-    r"(^|/)id_(rsa|ed25519|ecdsa)",
-    r"(^|/)passwords/",
-    r"^scripts/torqconfig/permissions/gateway_users\.csv$",
-    r"^lib/",
-)
-_EXCLUDED = [re.compile(p) for p in EXCLUDED_PATTERNS]
 
 #: Files an operator keeps on the server and every release links in, by their
 #: path in the repository. Absent ones are simply not linked.
@@ -119,14 +121,18 @@ SHARED_CONFIG = ("scripts/torqconfig/permissions/gateway_users.csv",)
 #: rename (os.replace) - portable where `mv -T` and `sha256sum` are not.
 SHA256_PY = "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())"
 REPLACE_PY = "import os,sys; os.replace(sys.argv[1], sys.argv[2])"
+#: stdin into a file that must not exist yet ("xb"), as whoever runs it: the
+#: one thing the service user does with the login user's upload.
+WRITE_NEW_PY = "import shutil,sys; shutil.copyfileobj(sys.stdin.buffer, open(sys.argv[1], 'xb'))"
 
-MANIFEST = "DEPLOY_MANIFEST.json"
 REPORT = "deploy-report.json"
 SMOKE_MARKER = "DEPLOY_SMOKE_OK"
 VERIFY_MARKER = "DEPLOY_VERIFY_OK"
 
 _DEST = re.compile(r"/[A-Za-z0-9._/-]*[A-Za-z0-9._-]")
 _HOST = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._@-]*")
+#: A POSIX-portable account name, as useradd accepts by default.
+_USER = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 _PROFILE = re.compile(r"[a-z][a-z0-9_]*")
 _SECRETISH = re.compile(r"(?i)\b(pwd|password|passwd|secret|token|api_?key)\s*[=:]\s*\S+")
 
@@ -147,6 +153,14 @@ class DeployError(Exception):
         self.stage = stage
 
 
+def load_artifact(path: str) -> build_release.Artifact:
+    """The artifact, checked whole (build_release.read_artifact), or why not."""
+    try:
+        return build_release.read_artifact(Path(path))
+    except build_release.ReleaseError as exc:
+        raise DeployError(exc.stage, str(exc)) from None
+
+
 def redact(text: str) -> str:
     """`text` with anything shaped like a secret assignment masked."""
     return _SECRETISH.sub(lambda m: f"{m.group(1)}=<redacted>", text)
@@ -164,6 +178,8 @@ class Config:
     host: str
     dest: str
     profile: str
+    artifact: str = ""
+    remote_user: str | None = None
     torq_home: str | None = None
     torq_app_home: str | None = None
     qcmd: str | None = None
@@ -172,7 +188,6 @@ class Config:
     dry_run: bool = False
     restart: bool = False
     init_data: bool = False
-    allow_dirty: bool = False
     connect_timeout: int = 10
     command_timeout: int = 900
     smoke_timeout: int = 120
@@ -194,6 +209,17 @@ def _absolute(name: str, value: str | None) -> str | None:
     return value.rstrip("/") or "/"
 
 
+def _q_path(name: str, value: str | None) -> str | None:
+    """An explicit --qcmd/--qhome: absolute, and spaces allowed - it is quoted
+    everywhere it goes. No `..`, and no control characters."""
+    if value is None:
+        return None
+    parts = value.split("/")
+    if not value.startswith("/") or ".." in parts or any(ord(ch) < 32 for ch in value):
+        raise DeployError("arguments", f"{name} {value!r} must be an absolute path")
+    return value.rstrip("/") or "/"
+
+
 def _required_absolute(name: str, value: str) -> str:
     path = _absolute(name, value)
     assert path is not None  # _absolute returns None only for None
@@ -204,13 +230,29 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     p = argparse.ArgumentParser(
         prog="deploy.py", description="Deploy uqf onto a server with an existing TorQ."
     )
+    p.add_argument(
+        "--artifact", required=True, help="the release to deploy, from scripts/build_release.py"
+    )
     p.add_argument("--host", required=True, help="ssh destination, as your ssh config knows it")
+    p.add_argument(
+        "--remote-user",
+        help="run the deployment as this account through `sudo -n -iu`; ssh and scp stay "
+        "the --host login",
+    )
     p.add_argument("--dest", required=True, help="absolute directory on the server")
     p.add_argument("--profile", required=True, help="the uqs profile to start, e.g. essential")
     p.add_argument("--torq-home", help="an existing TorQ on the server (TORQHOME)")
     p.add_argument("--torq-app-home", help="an existing finance starter pack (TORQAPPHOME)")
-    p.add_argument("--qcmd", help="the q binary on the server (QCMD); default: q on PATH")
-    p.add_argument("--qhome", help="QHOME on the server, where q finds its licence")
+    p.add_argument(
+        "--qcmd",
+        help="the q executable on the server, an absolute path. Default: the deploying "
+        "account's $QCMD there, else q on that account's PATH - never this machine's",
+    )
+    p.add_argument(
+        "--qhome",
+        help="QHOME on the server, where q finds its licence. Default: the deploying "
+        "account's $QHOME there; refused when that is unset too",
+    )
     p.add_argument("--data-dir", help="runtime data directory; default: <dest>/shared/data")
     p.add_argument("--dry-run", action="store_true", help="change nothing; show what would run")
     p.add_argument(
@@ -223,9 +265,6 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         action="store_true",
         help="create the runtime data directory if it does not exist yet",
     )
-    p.add_argument(
-        "--allow-dirty", action="store_true", help="deploy uncommitted changes (recorded)"
-    )
     p.add_argument("--connect-timeout", type=int, default=10, help="ssh/scp, seconds")
     p.add_argument("--command-timeout", type=int, default=900, help="each remote step, seconds")
     p.add_argument("--smoke-timeout", type=int, default=120, help="the offline check, seconds")
@@ -233,6 +272,8 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     a = p.parse_args(argv)
     if not _HOST.fullmatch(a.host):
         raise DeployError("arguments", f"--host {a.host!r} is not an ssh destination")
+    if a.remote_user is not None and not _USER.fullmatch(a.remote_user):
+        raise DeployError("arguments", f"--remote-user {a.remote_user!r} is not an account name")
     if not _PROFILE.fullmatch(a.profile):
         raise DeployError("arguments", f"--profile {a.profile!r} is not a profile name")
     for name in ("connect_timeout", "command_timeout", "smoke_timeout", "verify_timeout"):
@@ -244,16 +285,17 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     return Config(
         host=a.host,
         dest=dest,
+        artifact=a.artifact,
+        remote_user=a.remote_user,
         profile=a.profile,
         torq_home=_absolute("--torq-home", a.torq_home),
         torq_app_home=_absolute("--torq-app-home", a.torq_app_home),
-        qcmd=_absolute("--qcmd", a.qcmd),
-        qhome=_absolute("--qhome", a.qhome),
+        qcmd=_q_path("--qcmd", a.qcmd),
+        qhome=_q_path("--qhome", a.qhome),
         data_dir=_absolute("--data-dir", a.data_dir),
         dry_run=a.dry_run,
         restart=a.restart,
         init_data=a.init_data,
-        allow_dirty=a.allow_dirty,
         connect_timeout=a.connect_timeout,
         command_timeout=a.command_timeout,
         smoke_timeout=a.smoke_timeout,
@@ -275,18 +317,40 @@ class Remote:
     is fixed - every value is quoted inside the script with shlex.quote.
     """
 
-    def __init__(self, host: str, connect_timeout: int, runner: Runner = subprocess.run) -> None:
+    def __init__(
+        self,
+        host: str,
+        connect_timeout: int,
+        runner: Runner = subprocess.run,
+        remote_user: str | None = None,
+    ) -> None:
         self.host = host
+        self.remote_user = remote_user
         self.options = ["-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}"]
         self.runner = runner
 
-    def ssh_argv(self) -> list[str]:
-        return ["ssh", *self.options, self.host, "bash -s"]
+    def ssh_argv(self, as_login: bool = False) -> list[str]:
+        """ssh's argv: the script as the service user, unless `as_login`.
 
-    def run(self, script: str, timeout: int, stage: str) -> subprocess.CompletedProcess:
+        The one string the login shell parses is fixed apart from the account
+        name, which parse_args validated and which is quoted anyway.
+        """
+        if self.remote_user and not as_login:
+            command = f"sudo -n -iu {q(self.remote_user)} bash -s"
+        elif self.remote_user:
+            # the upload steps: plain, they read nothing from the environment
+            command = "bash -s"
+        else:
+            # a login shell, like sudo -i: the account's own QHOME, QCMD, PATH
+            command = "bash -l -s"
+        return ["ssh", *self.options, self.host, command]
+
+    def run(
+        self, script: str, timeout: int, stage: str, as_login: bool = False
+    ) -> subprocess.CompletedProcess:
         try:
             return self.runner(
-                self.ssh_argv(),
+                self.ssh_argv(as_login),
                 input=script,
                 capture_output=True,
                 text=True,
@@ -328,81 +392,6 @@ def _checked(r: subprocess.CompletedProcess, stage: str, what: str) -> str:
     return r.stdout
 
 
-# ----------------------------------------------------------------- package
-
-
-def is_excluded(path: str) -> bool:
-    return any(p.search(path) for p in _EXCLUDED)
-
-
-def tracked_files(root: Path, runner: Runner = subprocess.run) -> list[str]:
-    r = runner(
-        ["git", "-C", str(root), "ls-files", "-z", "--", *ALLOWLIST],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if r.returncode:
-        raise DeployError("package", f"git ls-files failed: {r.stderr.strip()}")
-    return sorted(f for f in r.stdout.split("\0") if f and not is_excluded(f))
-
-
-def revision(root: Path, runner: Runner = subprocess.run) -> tuple[str, bool]:
-    head = runner(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
-    )
-    status = runner(
-        ["git", "-C", str(root), "status", "--porcelain", "--", *ALLOWLIST],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if head.returncode or status.returncode:
-        raise DeployError(
-            "package", "this is not a git checkout - a release must name its revision"
-        )
-    return head.stdout.strip(), bool(status.stdout.strip())
-
-
-def release_id(rev: str, now: datetime | None = None) -> str:
-    stamp = (now or datetime.now(_UTC)).strftime("%Y%m%dT%H%M%SZ")
-    return f"{stamp}-{rev[:12]}"
-
-
-@dataclass
-class Package:
-    path: Path
-    sha256: str
-    manifest: dict
-    files: list[str]
-
-
-def build_package(
-    root: Path, out_dir: Path, rid: str, rev: str, dirty: bool, files: list[str]
-) -> Package:
-    hashes = {}
-    for f in files:
-        hashes[f] = hashlib.sha256((root / f).read_bytes()).hexdigest()
-    manifest = {
-        "release": rid,
-        "revision": rev,
-        "dirty": dirty,
-        "created_at": datetime.now(_UTC).isoformat(timespec="seconds"),
-        "files": hashes,
-    }
-    path = out_dir / f"uqf-{rid}.tar.gz"
-    with tarfile.open(path, "w:gz") as tar:
-        for f in files:
-            tar.add(root / f, arcname=f, recursive=False)
-        data = json.dumps(manifest, indent=2, sort_keys=True).encode()
-        info = tarfile.TarInfo(MANIFEST)
-        info.size = len(data)
-        info.mtime = int(time.time())
-        tar.addfile(info, io.BytesIO(data))
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return Package(path=path, sha256=digest, manifest=manifest, files=files)
-
-
 # --------------------------------------------------------------- the steps
 
 
@@ -427,10 +416,23 @@ class Report:
 
 
 class Deployment:
-    def __init__(self, cfg: Config, remote: Remote, root: Path = ROOT) -> None:
+    def __init__(
+        self,
+        cfg: Config,
+        remote: Remote,
+        target: dict | None = None,
+        root: Path = ROOT,
+        release: str = "",
+    ) -> None:
         self.cfg = cfg
         self.remote = remote
         self.root = root
+        #: what the artifact was built for: os, arch, python
+        self.target = target or {"os": "linux", "arch": "x86_64", "python": "3.14"}
+        #: the release id being deployed, to refuse one already on the server
+        self.release = release
+        #: QCMD and QHOME as preflight resolved and checked them on the server
+        self.q_env: dict[str, str] = {}
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -443,16 +445,52 @@ class Deployment:
         r = self.remote.run(script(*lines), timeout or self.cfg.command_timeout, stage)
         return _checked(r, stage, what)
 
+    def run_as_login(self, stage: str, what: str, *lines: str) -> str:
+        """A step that must run as the ssh login user, not the service user."""
+        r = self.remote.run(script(*lines), self.cfg.command_timeout, stage, as_login=True)
+        return _checked(r, stage, what)
+
+    def check_sudo(self) -> None:
+        """--remote-user only: sudo -n works for that account, and lands in it.
+
+        Read-only, and first: a missing sudo rule fails here, naming the rule
+        an administrator would add, rather than half-way through a deployment.
+        """
+        user = self.cfg.remote_user
+        if not user:
+            return
+        r = self.remote.run(
+            script(f"sudo -n -iu {q(user)} id -un"),
+            self.cfg.command_timeout,
+            "preflight",
+            as_login=True,
+        )
+        if r.returncode:
+            raise DeployError(
+                "preflight",
+                f"the login user on {self.cfg.host} cannot run commands as {user} through "
+                f"`sudo -n -iu {user}` without a password: "
+                + redact((r.stderr or r.stdout or "").strip()[-300:]),
+            )
+        got = (r.stdout or "").strip().splitlines()[-1:] or [""]
+        if got[0] != user:
+            raise DeployError(
+                "preflight", f"`sudo -n -iu {user}` runs as {got[0] or 'nobody'}, not {user}"
+            )
+
     def env_lines(self) -> list[str]:
         """deploy.env: the external TorQ, q and the stable data directory."""
         c = self.cfg
         pairs = [
             ("TORQHOME", c.torq_home),
             ("TORQAPPHOME", c.torq_app_home),
-            ("QCMD", c.qcmd),
-            ("QHOME", c.qhome),
+            ("QCMD", self.q_env.get("QCMD", c.qcmd)),
+            ("QHOME", self.q_env.get("QHOME", c.qhome)),
             ("UQS_DATA_ROOT", c.data_root),
             ("UQS_RUNTIME", "uqf"),
+            # the release installs from its own wheels; nothing after that
+            # may reach for an index either
+            ("UV_OFFLINE", "1"),
         ]
         return [f"export {k}={q(v)}" for k, v in pairs if v]
 
@@ -466,14 +504,17 @@ class Deployment:
         c = self.cfg
         values = {
             "dest": c.dest,
-            "qcmd": c.qcmd or "q",
-            "qhome": c.qhome or "",
+            "qcmd_flag": c.qcmd or "",
+            "qhome_flag": c.qhome or "",
             "torq_home": c.torq_home or "",
             "torq_app_home": c.torq_app_home or "",
             "data": c.data_root,
             "current": self.current,
             "lock": self.lock,
             "probe_timeout": str(c.smoke_timeout),
+            "python": self.target["python"],
+            "release_dir": f"{self.releases}/{self.release}" if self.release else "",
+            "expected_user": c.remote_user or "",
         }
         return script(*(f"{k}={q(v)}" for k, v in values.items())) + PREFLIGHT
 
@@ -481,11 +522,31 @@ class Deployment:
         r = self.remote.run(self.preflight_script(), self.cfg.command_timeout, "preflight")
         out = _checked(r, "preflight", "the preflight checks")
         facts = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        if self.cfg.remote_user and facts.get("user") != self.cfg.remote_user:
+            raise DeployError(
+                "preflight",
+                f"the deployment steps run as {facts.get('user') or 'an unknown user'}, "
+                f"not {self.cfg.remote_user}",
+            )
+        problems = build_release.compatible(self.target, facts)
+        if problems:
+            raise DeployError(
+                "preflight", "the artifact cannot run on this server: " + "; ".join(problems)
+            )
+        if not facts.get("qcmd") or not facts.get("qhome"):
+            raise DeployError("preflight", "preflight did not report the q it resolved")
+        self.q_env = {"QCMD": facts["qcmd"], "QHOME": facts["qhome"]}
         if facts.get("data") == "absent" and not self.cfg.init_data:
             raise DeployError(
                 "preflight",
                 f"the runtime data directory {self.cfg.data_root} does not exist - pass "
                 "--init-data to create it (it is never created implicitly)",
+            )
+        if facts.get("release_exists"):
+            raise DeployError(
+                "preflight",
+                f"release {self.release} is already on {self.cfg.host} under {self.releases} - "
+                "an artifact is deployed to a destination once; build a new one to redeploy",
             )
         if facts.get("current") and not self.cfg.restart:
             raise DeployError(
@@ -547,7 +608,49 @@ class Deployment:
         except DeployError as exc:
             log(f"could not release {self.lock}: {exc}")
 
-    def transfer(self, pkg: Package, rid: str) -> str:
+    def upload(self, pkg: build_release.Artifact, staging: str) -> str:
+        """The archive into `staging`, as the service user; its path there.
+
+        Without --remote-user, scp writes it straight in. With one, scp can
+        only write as the login user: into a private directory of its own
+        (mktemp -d is mode 0700), from which svc copies it with a single
+        sudo call that creates a NEW file and reads the bytes from stdin -
+        no chmod, no chown, nothing anyone else can read. The upload
+        directory goes in `finally`, whatever happened.
+        """
+        remote_archive = f"{staging}/{pkg.path.name}"
+        user = self.cfg.remote_user
+        if not user:
+            self.remote.put(pkg.path, remote_archive, self.cfg.command_timeout, "transfer")
+            return remote_archive
+        upload = (
+            self.run_as_login(
+                "transfer",
+                "creating a private upload directory",
+                "mktemp -d /tmp/uqf-upload.XXXXXX",
+            )
+            .strip()
+            .splitlines()[-1]
+        )
+        if not upload.startswith("/tmp/uqf-upload."):
+            raise DeployError("transfer", f"mktemp returned {upload!r}, not an upload directory")
+        try:
+            uploaded = f"{upload}/{pkg.path.name}"
+            self.remote.put(pkg.path, uploaded, self.cfg.command_timeout, "transfer")
+            self.run_as_login(
+                "transfer",
+                f"handing the archive to {user}",
+                f"sudo -n -u {q(user)} -- python3 -c {q(WRITE_NEW_PY)} {q(remote_archive)} "
+                f"< {q(uploaded)}",
+            )
+        finally:
+            try:
+                self.run_as_login("cleanup", "removing the upload directory", f"rm -rf {q(upload)}")
+            except DeployError as exc:
+                log(f"could not remove the upload directory {upload}: {exc}")
+        return remote_archive
+
+    def transfer(self, pkg: build_release.Artifact, rid: str) -> str:
         staging = f"{self.cfg.dest}/staging/{rid}"
         release = f"{self.releases}/{rid}"
         self.run(
@@ -555,8 +658,7 @@ class Deployment:
             "creating the staging directory",
             f"mkdir -p {q(staging)} {q(self.releases)}",
         )
-        remote_archive = f"{staging}/{pkg.path.name}"
-        self.remote.put(pkg.path, remote_archive, self.cfg.command_timeout, "transfer")
+        remote_archive = self.upload(pkg, staging)
         self.run(
             "transfer",
             "checking the archive and extracting it",
@@ -572,8 +674,9 @@ class Deployment:
         )
         return release
 
-    def prepare(self, release: str) -> None:
+    def prepare(self, release: str, pkg: build_release.Artifact) -> None:
         c = self.cfg
+        py = pkg.manifest["python"]
         lines = [
             f"cd {q(release)}",
             "cat > deploy.env <<'DEPLOYENV'",
@@ -590,8 +693,26 @@ class Deployment:
                 f"if [ -f {q(src)} ]; then mkdir -p {q(str(Path(rel).parent))}; "
                 f"ln -sfn {q(src)} {q(rel)}; fi"
             )
-        lines.append("uv sync --locked --no-dev --package uqs --quiet")
-        self.run("prepare", "creating the release's Python environment", *lines)
+        # OFFLINE, from the artifact's wheels: the dependencies with their
+        # locked hashes required, then uqs itself, which the lock does not pin
+        offline = ["--quiet", "--offline", "--no-index", "--python", ".venv/bin/python"]
+        lines += [
+            "export UV_OFFLINE=1",
+            f"uv venv --quiet --python {q(self.target['python'])} .venv",
+            " ".join(
+                [
+                    "uv pip install",
+                    *offline,
+                    "--find-links",
+                    q(py["wheel_dir"]),
+                    "--require-hashes",
+                    "-r",
+                    q(py["requirements"]),
+                ]
+            ),
+            " ".join(["uv pip install", *offline, "--no-deps", q(py["app_wheel"])]),
+        ]
+        self.run("prepare", "installing the release's Python environment offline", *lines)
 
     def smoke(self, release: str) -> None:
         out = self.run(
@@ -599,7 +720,7 @@ class Deployment:
             "the offline smoke test",
             *self.in_release(
                 release,
-                f'timeout {self.cfg.smoke_timeout} "${{QCMD:-q}}" scripts/deploy_smoke.q -q',
+                f'timeout {self.cfg.smoke_timeout} "$QCMD" scripts/deploy_smoke.q -q',
             ),
             timeout=self.cfg.smoke_timeout + 30,
         )
@@ -613,7 +734,7 @@ class Deployment:
         return self.run(
             stage,
             what,
-            *self.in_release(release, f"uv run --frozen --quiet uqs {argv}"),
+            *self.in_release(release, f".venv/bin/uqs {argv}"),
             timeout=timeout,
         )
 
@@ -622,7 +743,7 @@ class Deployment:
             script(
                 *self.in_release(
                     release,
-                    "uv run --frozen --quiet python scripts/deploy_verify.py "
+                    ".venv/bin/python scripts/deploy_verify.py "
                     f"--profile {q(self.cfg.profile)} --deadline {self.cfg.verify_timeout}",
                 )
             ),
@@ -643,7 +764,7 @@ class Deployment:
             script(
                 *self.in_release(
                     release,
-                    "uv run --frozen --quiet python scripts/deploy_verify.py "
+                    ".venv/bin/python scripts/deploy_verify.py "
                     f"--profile {q(self.cfg.profile)} --ports-free",
                 )
             ),
@@ -690,25 +811,66 @@ class Deployment:
 #: back on stdout as name=value lines.
 PREFLIGHT = r"""
 fail() { echo "$*" >&2; exit 1; }
+echo "user=$(id -un)"
+if [ -n "$expected_user" ] && [ "$(id -un)" != "$expected_user" ]; then
+  fail "running as $(id -un), not $expected_user"
+fi
 if [ -e "$dest" ]; then
   test -w "$dest" || fail "destination $dest is not writable"
 else
   test -w "$(dirname "$dest")" || fail "cannot create $dest: its parent is not writable"
 fi
 command -v uv >/dev/null || fail "uv is not on PATH"
-uv python find '>=3.14' >/dev/null 2>&1 || fail "uv finds no Python 3.14"
+py=$(uv python find "$python" 2>/dev/null) ||
+  fail "uv finds no Python $python - the release's wheels need it"
+echo "python=$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+echo "os=$(uname -s)"
+echo "arch=$(uname -m)"
 for tool in bash envsubst rlwrap tar timeout python3; do
   command -v "$tool" >/dev/null || fail "$tool is not on PATH - the release needs it"
 done
-if [ -n "$qhome" ]; then export QHOME="$qhome"; fi
-command -v "$qcmd" >/dev/null || fail "q is not runnable: $qcmd"
+me=$(id -un)
+# QHOME: --qhome, else this account's own $QHOME - never the caller's.
+if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--qhome"
+elif [ -n "${QHOME:-}" ]; then qhome_eff=$QHOME; qhome_from="$me's QHOME"
+else fail "QHOME is not set for $me and --qhome was not given -" \
+  "pass --qhome <the directory q finds its licence in>"
+fi
+test -d "$qhome_eff" || fail "QHOME $qhome_eff ($qhome_from) is not a directory"
+# QCMD: --qcmd, else $QCMD, else q on this account's PATH. A name or a path,
+# never a command line: it is run as one word, quoted.
+if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--qcmd"
+elif [ -n "${QCMD:-}" ]; then qcmd_want=$QCMD; qcmd_from="$me's QCMD"
+else qcmd_want=q; qcmd_from="q on $me's PATH"
+fi
+case "$qcmd_want" in
+  /*) test -f "$qcmd_want" && test -x "$qcmd_want" ||
+        fail "QCMD $qcmd_want ($qcmd_from) is not an executable file"
+      qcmd_eff=$qcmd_want;;
+  */*) fail "QCMD $qcmd_want ($qcmd_from) is a relative path - give an absolute one";;
+  *[[:space:]]*) fail "QCMD '$qcmd_want' ($qcmd_from) is not an executable name -" \
+                   "a command with arguments is not supported; pass --qcmd";;
+  *) qcmd_eff=$(command -v -- "$qcmd_want") ||
+       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --qcmd"
+     case "$qcmd_eff" in
+       /*) ;;
+       *) fail "QCMD $qcmd_want ($qcmd_from) is a shell alias or function, not an executable";;
+     esac;;
+esac
+case "$qhome_eff$qcmd_eff" in *$'\n'*) fail "QHOME or QCMD holds a newline";; esac
+export QHOME="$qhome_eff"
+echo "qhome=$qhome_eff"
+echo "qhome_from=$qhome_from"
+echo "qcmd=$qcmd_eff"
+echo "qcmd_from=$qcmd_from"
 probe=$(mktemp -d)
 printf '%s\n' '-1 "DEPLOY_Q_OK"; exit 0' > "$probe/probe.q"
-out=$(timeout "$probe_timeout" "$qcmd" "$probe/probe.q" -q 2>&1 || true)
+out=$(timeout "$probe_timeout" "$qcmd_eff" "$probe/probe.q" -q 2>&1 || true)
 rm -rf "$probe"
 case "$out" in
   *DEPLOY_Q_OK*) ;;
-  *) fail "q did not run a script - is it licensed (QHOME)? $(echo "$out" | tail -3)";;
+  *) fail "$qcmd_eff did not run a script with QHOME=$qhome_eff - is it licensed?" \
+          "$(echo "$out" | tail -3)";;
 esac
 if [ -n "$torq_home" ]; then
   for f in torq.q torq.sh; do test -f "$torq_home/$f" || fail "no $f in $torq_home"; done
@@ -720,6 +882,7 @@ if [ -n "$torq_app_home" ]; then
 fi
 if [ -d "$data" ]; then echo "data=present"; else echo "data=absent"; fi
 if [ -L "$current" ]; then echo "current=$(basename "$(readlink "$current")")"; fi
+if [ -n "$release_dir" ] && [ -e "$release_dir" ]; then echo "release_exists=yes"; fi
 if [ -d "$lock" ]; then echo "locked=$(cat "$lock/owner" 2>/dev/null || echo unknown)"; fi
 """
 
@@ -727,7 +890,9 @@ if [ -d "$lock" ]; then echo "locked=$(cat "$lock/owner" 2>/dev/null || echo unk
 # ------------------------------------------------------------------ driver
 
 
-def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deployment) -> str:
+def plan(
+    cfg: Config, pkg: build_release.Artifact, rid: str, facts: dict[str, str], dep: Deployment
+) -> str:
     """What --dry-run shows: the payload, the commands, the planned restart."""
     previous = facts.get("current")
     restart = (
@@ -738,10 +903,28 @@ def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deploy
     release = f"{dep.releases}/{rid}"
     exported = ", ".join(line.split("=", 1)[0].removeprefix("export ") for line in dep.env_lines())
     steps = [
+        "identity  "
+        + (
+            f"ssh/scp as {cfg.host}; every step below as {cfg.remote_user} "
+            f"(sudo -n -iu {cfg.remote_user})"
+            if cfg.remote_user
+            else f"ssh/scp and every step as {cfg.host}"
+        ),
+        "q         "
+        + f"QHOME={facts.get('qhome', '?')} ({facts.get('qhome_from', '?')}), "
+        + f"QCMD={facts.get('qcmd', '?')} ({facts.get('qcmd_from', '?')}) - "
+        + "resolved and run once in preflight",
         "lock      " + f"mkdir {dep.lock}",
         "transfer  "
-        + f"scp {pkg.path.name} {cfg.host}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})",
-        "prepare   " + f"{release}: deploy.env ({exported}); uv sync --locked",
+        + (
+            f"scp {pkg.path.name} to a private upload directory, then {cfg.remote_user} "
+            f"copies it into {cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
+            if cfg.remote_user
+            else f"scp {pkg.path.name} {cfg.host}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
+        ),
+        "prepare   "
+        + f"{release}: deploy.env ({exported}); offline install of "
+        + f"{pkg.manifest['python']['wheels']} wheels",
         "smoke     " + f"q scripts/deploy_smoke.q (timeout {cfg.smoke_timeout}s)",
         "restart   " + restart,
         "ports     " + f"scripts/deploy_verify.py --profile {cfg.profile} --ports-free",
@@ -751,11 +934,16 @@ def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deploy
         "activate  " + f"{dep.current} -> releases/{rid}",
     ]
     size = pkg.path.stat().st_size
+    t = pkg.manifest["target"]
     return "\n".join(
         [
             f"release {rid}: revision {pkg.manifest['revision']}"
             + (" (with uncommitted changes)" if pkg.manifest["dirty"] else ""),
-            f"payload: {len(pkg.files)} files, {size} bytes compressed, sha256 {pkg.sha256}",
+            f"artifact: {pkg.path.name}, {len(pkg.files)} files, {size} bytes compressed, "
+            f"sha256 {pkg.sha256}",
+            f"target: {t['os']}/{t['arch']}, Python {t['python']} - "
+            f"the server reports {facts.get('os', '?')}/{facts.get('arch', '?')}, "
+            f"Python {facts.get('python', '?')}",
             f"data: {cfg.data_root} ({facts.get('data', 'unknown')}"
             + (", created by --init-data" if facts.get("data") == "absent" else "")
             + ")",
@@ -765,40 +953,38 @@ def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deploy
     )
 
 
-def deploy(
-    cfg: Config,
-    remote: Remote,
-    *,
-    root: Path = ROOT,
-    git: Runner = subprocess.run,
-    out=sys.stdout,
-) -> int:
-    dep = Deployment(cfg, remote, root)
-    rev, dirty = revision(root, git)
-    if dirty and not cfg.allow_dirty:
-        raise DeployError(
-            "package", "the tree has uncommitted changes - commit them, or pass --allow-dirty"
-        )
-    rid = release_id(rev)
+def deploy(cfg: Config, remote: Remote, *, root: Path = ROOT, out=sys.stdout) -> int:
+    log(f"checking {cfg.artifact}")
+    pkg = load_artifact(cfg.artifact)
+    rid = pkg.release
+    dep = Deployment(cfg, remote, pkg.manifest["target"], root, rid)
     report = Report(
-        release=rid, revision=rev, dirty=dirty, host=cfg.host, dest=cfg.dest, profile=cfg.profile
+        release=rid,
+        revision=pkg.manifest["revision"],
+        dirty=pkg.manifest["dirty"],
+        host=cfg.host,
+        dest=cfg.dest,
+        profile=cfg.profile,
     )
 
-    log(f"preflight on {cfg.host}")
+    log(f"preflight on {cfg.host}" + (f" as {cfg.remote_user}" if cfg.remote_user else ""))
+    dep.check_sudo()
     facts = dep.preflight()
     report.previous_release = facts.get("current")
-
-    with tempfile.TemporaryDirectory() as tmp:
-        log("packaging")
-        pkg = build_package(root, Path(tmp), rid, rev, dirty, tracked_files(root, git))
-        if cfg.dry_run:
-            print(plan(cfg, pkg, rid, facts, dep), file=out)
-            return 0
-        return _run(dep, cfg, pkg, rid, report, facts, out)
+    if cfg.dry_run:
+        print(plan(cfg, pkg, rid, facts, dep), file=out)
+        return 0
+    return _run(dep, cfg, pkg, rid, report, facts, out)
 
 
 def _run(
-    dep: Deployment, cfg: Config, pkg: Package, rid: str, report: Report, facts: dict, out
+    dep: Deployment,
+    cfg: Config,
+    pkg: build_release.Artifact,
+    rid: str,
+    report: Report,
+    facts: dict,
+    out,
 ) -> int:
     dep.take_lock()
     release: str | None = None
@@ -811,7 +997,7 @@ def _run(
         log(f"transferring release {rid}")
         release = dep.transfer(pkg, rid)
         log("preparing the release environment")
-        dep.prepare(release)
+        dep.prepare(release, pkg)
         log("offline smoke test")
         dep.smoke(release)
         report.checks["smoke"] = "ok"
@@ -885,7 +1071,7 @@ def _rollback(dep, release, started, stopped_previous, previous, prev_profile) -
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         cfg = parse_args(argv)
-        return deploy(cfg, Remote(cfg.host, cfg.connect_timeout))
+        return deploy(cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user))
     except DeployError as exc:
         log(f"FAILED at {exc.stage}: {exc}")
         return 1

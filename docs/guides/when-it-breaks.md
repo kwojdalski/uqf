@@ -25,8 +25,10 @@ The process also told whoever started it:
   failures). `uqs backfill` itself returns as soon as torq.sh has started the
   process, so its exit code says only whether the process started. With `--wait`
   it follows the run to its outcome and exits with that: 0 for `completed` or
-  `idle`, 1 for `failed` or a process that died. Use `--wait` in a script or a
-  scheduler;
+  `idle`, 1 for `failed` or a process that died. That includes a process that
+  died before it recorded anything, for example while loading the tree: once it
+  has had 30 seconds to start and is no longer running, the wait ends and points
+  at `uqs logs`. Use `--wait` in a script or a scheduler;
 - the Airflow sensor fails the task with q's error;
 - the browser's **Backfills** view shows **Failure**.
 
@@ -154,6 +156,11 @@ Two things to know about the answer:
   last beat, recorded once a minute (`.qetl.uptime.period`), so a gap can start
   up to a minute before the job really stopped. Refilling a little extra costs
   nothing: covered windows are skipped.
+- **Today can't be refilled until end of day.** A backfill can't write rows
+  dated today: those belong to the tickerplant until end of day, and the HDB
+  writer refuses them. So the commands stop at today's UTC midnight. A gap that
+  lies entirely in today gets no command, and `uqs gaps` says to run it again
+  after end of day.
 
 Runs from before uptime was recorded have no sessions, and `uqs gaps` reports
 the whole range as down. For those, the log still tells you: the gap runs from

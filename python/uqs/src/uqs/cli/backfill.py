@@ -17,6 +17,7 @@ from uqs.cli import completion
 from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app, console
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
+from uqs.stack import backfill_wait as stack_backfill_wait
 
 _BOUND_HELP = (
     "A date or datetime: 2026-09-13, 2026-09-13T06:00, 2026-09-13T06:00+02:00, "
@@ -148,8 +149,8 @@ def backfill(
         console.print(
             f"[dim]waiting for {procname}'s outcome (Ctrl-C stops waiting, not the run)[/]"
         )
-        state, code, error = stack_backfill.wait_for_outcome(
-            paths, procname, resolved, bound_from, bound_to, launched_at
+        state, code, error = stack_backfill_wait.wait_for_outcome(
+            paths, procname, resolved, bound_from, bound_to, launched_at, base_port=port
         )
     except UqsError as exc:
         _die(exc)

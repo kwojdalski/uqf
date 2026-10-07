@@ -170,9 +170,11 @@ pair_terms:{[pair;conventions]
 / @eg (.qcal.spot_date[2026.09.18;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions])`date  -> 2026.09.22
 spot_date:{[trade_date;pair;calendars;conventions]
     c:pair_terms[pair;conventions];
-    / `following, not the pair's roll: spot never settles before the trade.
-    / A no-op for a lag of 1 or more, whose every counted day is a business day.
-    settle:adjust[add_business_days[trade_date;c`spot_lag;c`ccys;calendars;c`weekend];`following;c`ccys;calendars;c`weekend];
+    counted:add_business_days[trade_date;c`spot_lag;c`ccys;calendars;c`weekend];
+    / T+0 counts no days, so a weekend or holiday trade date would be its own
+    / spot: roll it forward. Never back - spot does not settle before the
+    / trade. A lag of 1 or more already ends on a business day, unchanged.
+    settle:adjust[counted;`following;c`ccys;calendars;c`weekend];
     between:trade_date+1+til 0|settle-trade_date;
     skipped:between where not is_business_day[between;c`ccys;calendars;c`weekend];
     `date`trade_date`pair`spot_lag`calendars`skipped!(settle;trade_date;c`pair;c`spot_lag;c`ccys;skipped)}
