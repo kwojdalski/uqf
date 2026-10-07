@@ -742,8 +742,8 @@ credential_origin:{[source]
 / @param txt the setting
 / @return the setting with every ${VAR} expanded
 expand_path_vars:{[who;txt]
-    while[0<count at:txt ss "${";
-        b:first at;
+    while[0<count hits:txt ss "${";
+        b:first hits;
         e:b+(b _ txt)?"}";
         if[e>=count txt; 'who,": an unclosed ${ in its setting"];
         nm:`$(b+2)_e#txt;
