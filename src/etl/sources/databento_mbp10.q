@@ -67,6 +67,7 @@ transport:`odbc
 credential_example:"DRIVER=DuckDB;Database=/path/databento.duckdb;access_mode=READ_ONLY"
 
 / Private: the SQL expression selecting each field, in `columns` order.
+/ @private
 select_list:{[]
     exprs:{[f]
         s:string f;
@@ -76,6 +77,7 @@ select_list:{[]
     ", " sv exprs}
 
 / Private: the driver's table in the declared types.
+/ @private
 adapt:{[raw]
     t:update ts_event:1970.01.01D00:00+ts_event from raw;
     t:@[t;`symbol`action`side;{`$x}];
@@ -97,6 +99,7 @@ query:{[h;range_from;range_to]
 
 / Private: one fixture row's ten levels, flattened in level_fields order.
 / Prices step one cent away from the touch per level, sizes by 100.
+/ @private
 fixture_levels:{[bid;ask;sz] raze {[bid;ask;sz;i] (bid-0.01*i;sz+100*i;ask+0.01*i;sz+100*i)}[bid;ask;sz] each til 10}
 
 / Four records for two symbols, taken from the shape of the real data: an

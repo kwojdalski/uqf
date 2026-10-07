@@ -74,6 +74,7 @@ hdb:{[root;partition_col]
         flush_hdb[root;];finish_hdb[root;];recover_hdb[root;;;])}
 
 / Private: append one window into its date partitions.
+/ @private
 write_hdb:{[root;partition_col;target;batch]
     if[0=count batch; :0];
     data:.Q.en[root;hdb_rows[partition_col;target;batch]];
@@ -93,6 +94,7 @@ write_hdb:{[root;partition_col;target;batch]
 
 / Private: the batch with the plant's `time` column, refused when it cannot
 / be partitioned or would land in the tickerplant's dates.
+/ @private
 hdb_rows:{[partition_col;target;batch]
     if[not any (`time;partition_col) in cols batch;
         '"hdb: ",string[target],"'s batch has neither time nor ",string[partition_col]," to partition by"];
@@ -122,6 +124,7 @@ hdb_rows:{[partition_col;target;batch]
 / .
 / Resolved for every date BEFORE any is written, so a `fail on the third
 / date leaves the first two untouched rather than half a window written.
+/ @private
 write_hdb_keyed:{[root;partition_col;target;batch;opts]
     strategy:require_strategy opts`on_conflict;
     if[`append=strategy; :write_hdb[root;partition_col;target;batch]];
@@ -174,17 +177,21 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
 
 / Private: the staging area for `root`, as a path string.
 / @param root the HDB root, a file symbol
+/ @private
 staging:{[root] (1_string root),".staging"}
 
 / Private: one (date; table) under the staging area's `new or `old.
+/ @private
 staged:{[root;kind;d;t] (staging root),"/",string[kind],"/",string[d],"/",string t}
 
 / Private: a partition's table directory, as a path string - through .Q.par,
 / so a segmented HDB's par.txt is honoured.
+/ @private
 part_path:{[root;d;t] 1_string .Q.par[root;d;t]}
 
 / Private: write one date's resolved table into the staging area.
 / @return the staged path
+/ @private
 stage:{[root;d;t;rows]
     p:staged[root;`new;d;t];
     system"rm -rf ",p;
@@ -193,6 +200,7 @@ stage:{[root;d;t;rows]
     p}
 
 / Private: rename a staged table into its partition, retiring the old one.
+/ @private
 swap:{[root;d;t]
     live:part_path[root;d;t];
     old:staged[root;`old;d;t];
@@ -221,6 +229,7 @@ swap:{[root;d;t]
 / @param root the HDB root
 / @param target the table to sweep
 / @return how many tables were restored
+/ @private
 sweep_staging:{[root;target]
     s:staging root;
     if[()~key hsym `$s; :0];
@@ -248,6 +257,7 @@ sweep_staging:{[root;target]
 / never covered, which the next run writes again. recover then queues it for
 / finishing.
 / @return 1b when it repaired something
+/ @private
 repair_torn:{[root;d;t]
     base:part_path[root;d;t];
     if[()~key hsym `$base,"/.d"; :0b];
@@ -263,6 +273,7 @@ repair_torn:{[root;d;t]
 / @param root the HDB directory
 / @param todo a table of dt and tbl
 / @return how many partitions were finished
+/ @private
 finish_parts:{[root;todo]
     {[root;d;t]
         base:string .Q.par[root;d;t];
@@ -283,6 +294,7 @@ finish_parts:{[root;todo]
 / table without sym; write_hdb takes p# OFF when it appends. So a partition
 / with neither was written and never finished. One with neither column has
 / nothing to judge by and reads as finished, as does one that does not exist.
+/ @private
 is_finished:{[root;d;t]
     base:string .Q.par[root;d;t];
     if[()~key hsym `$base,"/.d"; :1b];
@@ -293,6 +305,7 @@ is_finished:{[root;d;t]
 
 / Private: queue the partitions of `target` in [range_from;range_to) that
 / were written and never finished, for the next finish.
+/ @private
 recover_hdb:{[root;target;from_ts;to_ts]
     if[not from_ts<to_ts; :0];
     / First what a killed keyed write left in staging, so the partitions read
@@ -311,11 +324,13 @@ recover_hdb:{[root;target;from_ts;to_ts]
     count ds}
 
 / Private: every partition this root was written to.
+/ @private
 finish_hdb:{[root;ignored]
     finish_parts[root;distinct select dt, tbl from touched where hdb_root=root]}
 
 / Private: the partitions of this root dated wholly before `upto`, and how
 / many of its partitions are still open after them.
+/ @private
 flush_hdb:{[root;upto]
     n:finish_parts[root;distinct select dt, tbl from touched where hdb_root=root, dt<`date$upto];
     `finished`pending!(n;count distinct select dt, tbl from touched where hdb_root=root)}

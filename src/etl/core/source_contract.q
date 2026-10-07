@@ -468,6 +468,7 @@ def:{[source]
 / means an empty table validates the same way a populated one does - which
 / matters because a fixture may legitimately be empty, and a source may
 / legitimately return no rows for a window.
+/ @private
 type_chars:{[tbl] exec t from 0!meta tbl}
 
 column_names:{[tbl] exec c from 0!meta tbl}
@@ -500,6 +501,7 @@ validate:{[source;tbl]
 / every missing field and every type mismatch at once. `what` is "" for a
 / source's only input, or "'s input <name>" for one of several. A type of
 / " " - a general column in a supporting input's contract - accepts any.
+/ @private
 check_table:{[source;what;columns;types;tbl]
     present:column_names tbl;
     chars:type_chars tbl;
@@ -523,6 +525,7 @@ check_table:{[source;what;columns;types;tbl]
 
 / Private: validate what a source with supporting inputs returned - a dict
 / holding exactly its inputs, each satisfying its own contract.
+/ @private
 validate_inputs:{[source;decl;given]
     names:(enlist decl`table_name),key decl`supporting;
     if[not 99h=type given;
@@ -709,10 +712,12 @@ require_zone_table:{[tz]
 
 / Private: the offsets this zone has ever used. At most 8 in tzdata, so the
 / candidate search in local_to_utc is cheap and fully vectorised.
+/ @private
 offsets_for:{[tz] distinct exec adjustment from zone_table where timezoneID=tz}
 
 / Private: the offset in effect at each UTC instant. Unambiguous by
 / construction - every UTC instant has exactly one offset.
+/ @private
 offset_at:{[tz;ts]
     exec adjustment from aj[`timezoneID`gmtDateTime;
         ([] timezoneID:(count ts)#tz; gmtDateTime:ts);
@@ -786,6 +791,7 @@ local_to_utc:{[tz;ts]
 / row - a backfill window can hold millions.
 / @return a list, one ragged entry per input row: 1 instant normally, 0 in a
 /   spring-forward gap, 2 in an autumn repeated hour
+/ @private
 local_candidates:{[tz;tsv]
     offs:offsets_for tz;
     if[0=count offs;
@@ -796,6 +802,7 @@ local_candidates:{[tz;tsv]
 
 / Private: the two error texts, shared by local_to_utc and narrow_to_utc so
 / the two paths cannot explain the same failure differently.
+/ @private
 nonexistent_message:{[tz;bad]
     "local time ",(-3!bad)," does not exist in ",string[tz],
     " - it falls in a spring-forward gap, so no UTC instant maps to it. Either the ",
@@ -916,6 +923,7 @@ ipc_call:{[h;f;args] traced_ipc[h;f;args;enlist[`args]!enlist args]}
 / Private: send `f` with `args` over `h`, logging it at TRACE with `shown`
 / beside the call - before it is sent, and with the rows and milliseconds,
 / or the error, when it comes back. With TRACE off it is just sent.
+/ @private
 traced_ipc:{[h;f;args;shown]
     msg:enlist[f],args;
     if[not .qetl.log.enabled`TRACE; :h msg];
@@ -938,6 +946,7 @@ traced_ipc:{[h;f;args;shown]
 / @param f the function sent
 / @return its text
 / @eg count .qetl.source.call_text {[a;b] a+b} -> 11
+/ @private
 call_text:{[f] $[100h=type f; string f; .qetl.log.value1 f]}
 
 / ---------------------------------------------------------------- LOCAL
@@ -995,6 +1004,7 @@ local_dates:{[root;d0;d1]
 / @param c the column's name, for the error
 / @param v the column as read: an enumeration
 / @return the column as plain symbols
+/ @private
 local_decode:{[root;c;v]
     dom:key v;
     f:` sv root,dom;
@@ -1010,6 +1020,7 @@ local_decode:{[root;c;v]
 / partition's `date` first (as a select from a mapped HDB has it), every
 / enumerated column decoded against its own domain's file. Empty list when
 / that date has no such table.
+/ @private
 local_partition:{[root;table;d]
     base:string .Q.par[root;d;table];
     if[()~key hsym `$base,"/.d"; :()];
@@ -1164,6 +1175,7 @@ bound_padding:1D
 / .
 / So: pad the bounds, fetch a superset, and narrow exactly in UTC afterwards
 / where the arithmetic is unambiguous.
+/ @private
 source_bounds:{[decl;range_from;range_to]
     tz:decl`tz;
     if[`UTC~tz; :(range_from;range_to)];
@@ -1197,6 +1209,7 @@ source_bounds:{[decl;range_from;range_to]
 /     There is no instant to compare against a range, and a source emitting a
 /     wall-clock time its own calendar never had means the declared zone is
 /     wrong - which is a contract breach, not a windowing question.
+/ @private
 narrow_to_utc:{[decl;tbl;range_from;range_to]
     tz:decl`tz;
     if[`UTC~tz; :tbl];
@@ -1222,6 +1235,7 @@ narrow_to_utc:{[decl;tbl;range_from;range_to]
 / Functional select (`?[t;where;0b;()]`) rather than qSQL, because the column
 / name is a variable: `select from t where time_column>=from_ts` would compare
 / the literal symbol, not the column it names.
+/ @private
 window_fixture:{[decl;range_from;range_to]
     t:(decl`fixture)[];
     if[0=count decl`supporting; :window_rows[decl;t;range_from;range_to]];
@@ -1233,6 +1247,7 @@ window_fixture:{[decl;range_from;range_to]
     @[t;decl`table_name;window_rows[decl;;range_from;range_to]]}
 
 / Private: one table's rows inside [range_from;range_to) on time_column.
+/ @private
 window_rows:{[decl;t;range_from;range_to]
     f:decl`time_column;
     if[not f in column_names t;

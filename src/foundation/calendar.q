@@ -48,6 +48,7 @@ weekday:{[d] weekdays (`long$d) mod 7}
 / @param ccys the currencies, a symbol list
 / @param calendars dict currency -> holiday dates
 / @return every holiday date of every currency, as one list
+/ @private
 holidays_of:{[ccys;calendars]
     if[not 99h=type calendars; '"calendar: calendars must be a dictionary of currency -> holiday dates"];
     if[count missing:ccys where not ccys in key calendars;
@@ -135,6 +136,7 @@ month_end_business_day:{[d;ccys;calendars;weekend]
 / Private: a pair's two currencies and its conventions, refusing what is
 / missing or malformed.
 / @return dict ccys, spot_lag, roll, eom, weekend
+/ @private
 pair_terms:{[pair;conventions]
     if[not 99h=type conventions; '"calendar: conventions must be a dictionary of pair -> conventions"];
     p:.qccy.normalize_ccy_pair pair;
@@ -172,6 +174,7 @@ spot_date:{[trade_date;pair;calendars;conventions]
     `date`trade_date`pair`spot_lag`calendars`skipped!(settle;trade_date;c`pair;c`spot_lag;c`ccys;skipped)}
 
 / Private: a tenor symbol such as `3D`1W`2M`1Y as (count;unit).
+/ @private
 tenor_parts:{[tenor]
     s:string tenor;
     unit:last s;

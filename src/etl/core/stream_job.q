@@ -65,6 +65,7 @@ required_declarations:`ns`procname`subscribe_to`publishes
 / Refusing those would mean the seam only accepted the one shape nobody
 / writes. 100-112h covers lambdas, operators, projections, compositions and
 / q's own iterators.
+/ @private
 is_callable:{[v] (type v) within 100 112h}
 
 / The namespace every job instance lives under, as .qpipe.job.<job>.
@@ -294,6 +295,7 @@ subscriptions:{[job]
 / Private: the job's on_batch, logging a failure with its table before
 / re-raising it, so the error still reaches the caller and is also in this
 / process's own log, where someone asking "why is my output empty" looks.
+/ @private
 guarded:{[job;f;t;x]
     .[f;(t;x);{[job;t;e] .[{.qetl.log.err[x;y;z]};(job;"on_batch failed";`table`error!(t;e));::]; 'e}[job;t]]}
 

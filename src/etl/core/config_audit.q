@@ -98,6 +98,7 @@ render:{[name] shown @[get;name;{.qetl.cfg.audit.UNDEF}]}
 / Private: what an undefined name reads as. Not the symbol `undefined, which
 / a watched global may legitimately hold - a change to that value was not
 / recorded, and a defined `undefined showed as "(undefined)".
+/ @private
 UNDEF:(enlist `.qetl.cfg.audit.UNDEF)!enlist (::)
 
 / Private: a value as the old/new columns show it - in full up to the widest
@@ -105,6 +106,7 @@ UNDEF:(enlist `.qetl.cfg.audit.UNDEF)!enlist (::)
 / max_render. Display only: changes are detected on the values.
 / @param v a value, or UNDEF
 / @return its rendering
+/ @private
 shown:{[v] $[v~UNDEF; "(undefined)"; max_render sublist .qetl.log.value1 v]}
 
 / The longest rendering recorded. A watched name is meant to be a scalar or

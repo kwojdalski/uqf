@@ -32,6 +32,7 @@
 / ------------------------------------------------------- AVAILABILITY
 
 / Private: has the ODBC library been loaded into this process?
+/ @private
 loaded:{[] @[{`open in key x};`.odbc;{0b}]}
 
 / Load KX's ODBC client, once, and report whether it is usable.
@@ -94,6 +95,7 @@ require_available:{[]
 / .
 / Backslash FIRST, or escaping the quotes would then double the backslashes
 / this very function adds.
+/ @private
 escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 
 / A q value as a SQL literal.

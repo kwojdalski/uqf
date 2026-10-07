@@ -51,6 +51,11 @@ SOURCE OF TRUTH
 current by ``contract_surface.py check``. Reading it rather than launching q
 keeps this gate fast enough for a pre-commit hook; the cost is that a stale
 surface would make this check wrong, which is why that gate runs too.
+
+A function tagged ``@private`` (#627) is not in the surface - it is plumbing,
+and its refactors are not contract changes - but it exists, and prose may
+explain it. Those names are read from ``src/`` by the rule docs/man.q applies
+(``private_names``), and count as existing with no rank to check calls against.
 """
 
 from __future__ import annotations
@@ -172,6 +177,45 @@ def load_surface() -> dict[str, dict[str, dict]]:
     return out
 
 
+_NSLINE = re.compile(r"^\\d\s+((?:\.[A-Za-z][A-Za-z0-9_]*)+)\s*$")
+_DEF = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*:")
+_QDEF = re.compile(r"^((?:\.[A-Za-z][A-Za-z0-9_]*){2,})\s*:")
+_PRIVATE = re.compile(r"^\s*/+\s*@private\b")
+
+
+def private_names(root: Path = REPO / "src") -> dict[str, set[str]]:
+    """{namespace: {name}} for every definition whose qDoc block says @private.
+
+    docs/man.q's rule, kept exactly: a definition is `name:` at column 0 in a
+    `\\d .ns` file or a qualified `.ns.name:`; a run of definitions with no
+    blank line between them shares the comment block above the run.
+    """
+    out: dict[str, set[str]] = {}
+    for path in sorted(root.rglob("*.q")):
+        lines = path.read_text(errors="replace").splitlines()
+        cur = ""
+        defs: list[tuple[int, str, str]] = []
+        for i, line in enumerate(lines):
+            if m := _NSLINE.match(line):
+                cur = m.group(1)
+            elif m := _QDEF.match(line):
+                ns, _, name = m.group(1).rpartition(".")
+                defs.append((i, ns, name))
+            elif (m := _DEF.match(line)) and cur:
+                defs.append((i, cur, m.group(1)))
+        at = {i for i, _, _ in defs}
+        for i, ns, name in defs:
+            j = i - 1
+            while j >= 0 and j in at:
+                j -= 1
+            while j >= 0 and lines[j].lstrip().startswith("/") and lines[j].strip() != "\\":
+                if _PRIVATE.match(lines[j]):
+                    out.setdefault(ns.lstrip("."), set()).add(name)
+                    break
+                j -= 1
+    return out
+
+
 def doc_files() -> list[Path]:
     """Every living documentation file, in a stable order."""
     out: list[Path] = []
@@ -208,6 +252,11 @@ def check() -> tuple[list[str], dict[str, int]]:
     less than its passing line implies.
     """
     surface = load_surface()
+    for ns, names in private_names().items():
+        for name in names:
+            surface.setdefault(ns, {}).setdefault(
+                name, {"name": name, "kind": "private", "rank": None}
+            )
     # A module reference such as .qetl.cfg is a namespace, not a missing
     # function named cfg on .qetl. Include container ancestors too.
     namespaces = {

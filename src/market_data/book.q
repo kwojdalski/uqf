@@ -37,16 +37,19 @@ fold_level_columns:{[tbl;level_groups]
 / Private: true if s starts with prefix - a plain substring compare, not
 / `like`, since `like`'s "_" wildcard would misfire on prefixes such as
 / "bid_px_".
+/ @private
 starts_with:{[prefix;s]
     prefix_len:count prefix;
     (prefix_len<=count s) and prefix~prefix_len#s};
 
 / Private: true if s is non-empty and every character is a decimal digit.
+/ @private
 all_digit_string:{[s] (0<count s) and all s in "0123456789"};
 
 / Private: the ordered source columns for one (prefix;target_col) naming
 / rule - see derive_level_groups.
 / @throws error if the matched levels aren't a contiguous 0..N-1 run
+/ @private
 sorted_source_cols_for_prefix:{[col_names;col_strs;prefix_target]
     prefix:prefix_target 0;
     prefix_len:count prefix;
@@ -129,6 +132,7 @@ symbolize_columns:{[tbl;sym_cols]
 / char vectors (type 10h each), not a symbol column. The column as a
 / whole is type 0h (a general list of char vectors), not 10h itself -
 / same gotcha as ccy_to_str.
+/ @private
 is_string_column:{[tbl;col] (count tbl col) and all 10h=type each tbl col};
 
 / Candidate identifier-like string columns that are LIKELY mis-typed and

@@ -1,67 +1,43 @@
 namespace,name,kind,rank,params
 qalloc,all_rows,function,1,t
 qalloc,allocate,function,2,trades opts
-qalloc,append_lot,function,2,lots lot
-qalloc,bucket,function,5,m bys kv seed sub
 qalloc,by_cols,function,1,d
 qalloc,by_trade,function,1,matches
 qalloc,def,function,1,name
 qalloc,default_opts,dict,,
 qalloc,define,function,2,name decl
 qalloc,defined,function,1,
-qalloc,key_table,function,2,t bys
-qalloc,merge_lot,function,2,lots lot
 qalloc,methods,dict,,
-qalloc,new_lots,function,1,trades
-qalloc,new_matches,function,1,trades
-qalloc,normalised_opts,function,1,opts
-qalloc,pick_first,function,1,lots
-qalloc,pick_highest,function,1,lots
-qalloc,pick_last,function,1,lots
-qalloc,pick_lowest,function,1,lots
 qalloc,position,function,2,lots group_cols
 qalloc,position_at,function,3,trades opts ts
-qalloc,prepared,function,2,trades bys
-qalloc,prepared_opening,function,2,opening bys
 qalloc,require_method,function,1,decl
 qalloc,required,value,,
 qalloc,required_cols,value,,
 qalloc,required_lot_cols,value,,
 qalloc,residual,function,2,trades opts
 qalloc,run,function,2,trades opts
-qalloc,seed_lots,function,3,trades opening ix
-qalloc,step,function,3,m state row
 qalloc,summary,function,2,matches group_cols
 qalloc,unrealised,function,2,lots marks
-qalloc,with_by,function,3,out kv bys
-qbook,all_digit_string,function,1,s
 qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
 qbook,derive_level_groups,function,2,col_names prefix_targets
 qbook,fold_level_columns,function,2,tbl level_groups
-qbook,is_string_column,function,2,tbl col
-qbook,sorted_source_cols_for_prefix,function,3,col_names col_strs prefix_target
-qbook,starts_with,function,2,prefix s
 qbook,symbolize_columns,function,2,tbl sym_cols
 qcal,add_business_days,function,5,d n ccys calendars weekend
 qcal,add_months,function,2,d n
 qcal,adjust,function,5,d roll ccys calendars weekend
 qcal,convention_keys,value,,
 qcal,forward_date,function,5,spot_date tenor pair calendars conventions
-qcal,holidays_of,function,2,ccys calendars
 qcal,is_business_day,function,4,d ccys calendars weekend
 qcal,mock_calendars,dict,,
 qcal,mock_conventions,dict,,
 qcal,month_end_business_day,function,4,d ccys calendars weekend
-qcal,pair_terms,function,2,pair conventions
 qcal,rolls,value,,
 qcal,spot_date,function,4,trade_date pair calendars conventions
-qcal,tenor_parts,function,1,tenor
 qcal,weekday,function,1,d
 qcal,weekdays,value,,
 qccy,ccy_pair_legs,function,1,pair
 qccy,ccy_pair_symbol,function,2,base quote
-qccy,ccy_to_str,function,1,x
 qccy,is_ccy_pair,function,1,x
 qccy,normalize_ccy_pair,function,1,x
 qccy,pip_factor,function,1,pair
@@ -74,7 +50,6 @@ qdata,env,dict,,
 qdata,getBySymbolDate,function,2,sym date
 qdata,parseEnv,function,1,file
 qdata,pqModule,function,1,
-qdata,pqm,value,,
 qdcf,dcf_30e_360,function,2,d1 d2
 qdcf,dcf_act_360,function,2,d1 d2
 qdcf,dcf_act_365,function,2,d1 d2
@@ -90,9 +65,6 @@ qdqc,check_market_data_quality,function,2,quotes max_spread_bps
 qdqc,check_stale_quotes,function,3,quotes as_of max_age
 qdqc,summarize_checks,function,1,named_checks
 qetl.cfg,audit,dict,,
-qetl.cfg,default_values,dict,,
-qetl.cfg,env_name,function,1,k
-qetl.cfg,env_values,dict,,
 qetl.cfg,errors,value,,
 qetl.cfg,explain,function,1,k
 qetl.cfg,falsy,value,,
@@ -100,18 +72,13 @@ qetl.cfg,get_flag,function,1,k
 qetl.cfg,get_positive,function,1,k
 qetl.cfg,get_symbol,function,1,k
 qetl.cfg,get_timestamp,function,1,k
-qetl.cfg,note,function,2,msg null_value
-qetl.cfg,override_values,dict,,
 qetl.cfg,raw,function,1,k
-qetl.cfg,raw_from,function,2,source k
 qetl.cfg,require_valid,function,1,
 qetl.cfg,reset,function,1,
 qetl.cfg,set_layers,function,3,overrides yaml defaults
 qetl.cfg,set_override,function,2,k v
 qetl.cfg,sources,value,,
 qetl.cfg,truthy,value,,
-qetl.cfg,yaml_values,dict,,
-qetl.cfg.audit,UNDEF,dict,,
 qetl.cfg.audit,config_change,table,,
 qetl.cfg.audit,forget,function,1,
 qetl.cfg.audit,max_render,value,,
@@ -121,7 +88,6 @@ qetl.cfg.audit,poll,function,2,owner as_of
 qetl.cfg.audit,poll_and_publish,function,1,
 qetl.cfg.audit,render,function,1,name
 qetl.cfg.audit,seen,dict,,
-qetl.cfg.audit,shown,function,1,v
 qetl.cfg.audit,watch,function,2,owner names
 qetl.cfg.audit,watched,dict,,
 qetl.cfg.audit,watching,function,1,owner
@@ -140,7 +106,6 @@ qetl.coerce,utc_offset,function,1,str
 qetl.coverage,attach,function,1,
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
-qetl.coverage,current_run,function,1,
 qetl.coverage,gaps,function,3,from_ts to_ts covered
 qetl.coverage,history,function,3,ds part version
 qetl.coverage,init_ledger,function,1,
@@ -148,7 +113,6 @@ qetl.coverage,intervals,function,4,ds part version as_of
 qetl.coverage,is_covered,function,6,ds part version as_of from_ts to_ts
 qetl.coverage,ledger,function,1,
 qetl.coverage,ledger_path,function,1,
-qetl.coverage,lock_path,function,1,
 qetl.coverage,materialisations_of,function,1,id
 qetl.coverage,missing,function,6,ds part version as_of from_ts to_ts
 qetl.coverage,persist,function,1,
@@ -160,8 +124,6 @@ qetl.coverage,schema,value,,
 qetl.coverage,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
 qetl.coverage,still_current,value,,
 qetl.coverage,supersede,function,5,ds part version from_ts to_ts
-qetl.coverage,supersede_locked,function,5,ds part version from_ts to_ts
-qetl.coverage,valid_at,function,4,ds part version as_of
 qetl.coverage,with_lock,function,2,f args
 qetl.dag,adopt_all,function,1,
 qetl.dag,adopt_feeders,function,1,
@@ -177,12 +139,9 @@ qetl.dag,defined,function,1,
 qetl.dag,edges,function,1,
 qetl.dag,external_inputs,function,1,
 qetl.dag,external_ref,function,2,source table_name
-qetl.dag,id_chars,value,,
-qetl.dag,job_edges,function,1,
 qetl.dag,jobs,dict,,
 qetl.dag,kinds,value,,
 qetl.dag,layers,function,1,
-qetl.dag,no_edges,function,1,
 qetl.dag,producers,function,1,table_name
 qetl.dag,reaction_edges,function,1,
 qetl.dag,reaction_job,function,2,dataset name
@@ -191,7 +150,6 @@ qetl.dag,register_pipelines,function,1,
 qetl.dag,registry,function,1,
 qetl.dag,required_spec,value,,
 qetl.dag,reset,function,1,
-qetl.dag,safe_id,function,1,s
 qetl.dag,sinks,function,1,
 qetl.dag,to_json,function,1,
 qetl.dag,topological,function,1,
@@ -206,150 +164,83 @@ qetl.hb,never_started,function,1,
 qetl.hb,report,function,1,
 qetl.hb,require_schema,function,1,
 qetl.hb,stale,function,1,max_age
-qetl.io,callable,function,1,v
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
 qetl.io,discard,dict,,
 qetl.io,due,function,4,state status now interval
 qetl.io,finish,function,1,mgr
-qetl.io,finish_hdb,function,2,root ignored
-qetl.io,finish_parts,function,2,root todo
-qetl.io,first_seen,function,1,k
 qetl.io,flush,function,2,mgr upto
-qetl.io,flush_hdb,function,2,root upto
 qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
-qetl.io,hdb_rows,function,3,partition_col target batch
-qetl.io,is_finished,function,3,root d t
-qetl.io,last_seen,function,1,k
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
 qetl.io,optional,value,,
-qetl.io,part_path,function,3,root d t
-qetl.io,plain,function,1,t
-qetl.io,ready,function,2,mgr status
 qetl.io,recover,function,4,mgr target range_from range_to
-qetl.io,recover_hdb,function,4,root target from_ts to_ts
-qetl.io,repair_torn,function,3,root d t
 qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
-qetl.io,stage,function,4,root d t rows
-qetl.io,staged,function,4,root kind d t
-qetl.io,staging,function,1,root
 qetl.io,strategies,value,,
-qetl.io,swap,function,3,root d t
-qetl.io,sweep_staging,function,2,root target
 qetl.io,touched,table,,
 qetl.io,write,function,3,mgr target batch
-qetl.io,write_discard,function,2,target batch
-qetl.io,write_hdb,function,4,root partition_col target batch
-qetl.io,write_hdb_keyed,function,5,root partition_col target batch opts
 qetl.io,write_keyed,function,4,mgr target batch opts
-qetl.io,write_memory,function,2,target batch
-qetl.io,write_memory_keyed,function,3,target batch opts
 qetl.io.odbc,available,function,1,
 qetl.io.odbc,build_connection_string,function,5,host port database user password
 qetl.io.odbc,close,function,1,h
 qetl.io.odbc,duckdb_timestamp,function,1,ts
-qetl.io.odbc,escape_text,function,1,s
 qetl.io.odbc,literal,function,1,v
-qetl.io.odbc,loaded,function,1,
 qetl.io.odbc,open,function,1,conn
 qetl.io.odbc,require_available,function,1,
 qetl.io.odbc,run_sql,function,2,h sql
 qetl.io.odbc,table_names,function,1,h
 qetl.io.odbc,window_query,function,6,h table_name time_column columns range_from range_to
 qetl.io.odbc,with_connection,function,2,conn f
-qetl.job.bounded,advance_phase,function,3,worker to err
-qetl.job.bounded,advanced_to,function,3,worker current next_cursor
-qetl.job.bounded,begin_run,function,1,worker
-qetl.job.bounded,check_static,function,2,worker run_spec
 qetl.job.bounded,checkpoint,function,2,worker cursor
-qetl.job.bounded,claim_process,function,2,procname worker
 qetl.job.bounded,cleanup,function,1,worker
-qetl.job.bounded,connect,function,1,worker
 qetl.job.bounded,connect_error,function,2,source e
 qetl.job.bounded,def,function,1,worker
 qetl.job.bounded,default_version,function,1,worker
 qetl.job.bounded,define,function,2,worker decl
 qetl.job.bounded,defined,function,1,
-qetl.job.bounded,delegate,function,2,worker nm
-qetl.job.bounded,do_window,function,2,worker w
 qetl.job.bounded,empty_windows,function,1,
-qetl.job.bounded,end_run,function,2,state counts
 qetl.job.bounded,exit_code,function,1,state
-qetl.job.bounded,fail_run,function,2,worker e
-qetl.job.bounded,failed_with,function,3,s message fields
 qetl.job.bounded,fetch,function,3,worker from_ts to_ts
-qetl.job.bounded,finish_store,function,1,worker
-qetl.job.bounded,inherit,function,2,worker ns
 qetl.job.bounded,inherited_methods,value,,
 qetl.job.bounded,init,function,2,worker run_spec
 qetl.job.bounded,init_body,function,2,worker run_spec
 qetl.job.bounded,initial_state,dict,,
-qetl.job.bounded,instance,function,1,worker
 qetl.job.bounded,namespace,function,1,worker
 qetl.job.bounded,no_failures,function,1,
-qetl.job.bounded,no_progress,dict,,
-qetl.job.bounded,normalised,function,1,cfg
 qetl.job.bounded,on_conflict,function,1,worker
 qetl.job.bounded,optional_cfg,value,,
-qetl.job.bounded,owed_error,function,1,owed
 qetl.job.bounded,owed_reactions,function,1,worker
-qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
-qetl.job.bounded,phase_edges,dict,,
 qetl.job.bounded,phases,dict,,
 qetl.job.bounded,plan,function,2,worker cursor
 qetl.job.bounded,plan_only,function,2,worker run_spec
 qetl.job.bounded,process_worker,value,,
-qetl.job.bounded,progress_now,function,1,worker
 qetl.job.bounded,publish,function,2,worker batch
 qetl.job.bounded,publish_last_batch,function,2,worker unused
-qetl.job.bounded,publish_pending,function,1,worker
-qetl.job.bounded,read_state,function,2,worker nm
-qetl.job.bounded,record_facts,function,5,worker cfg w batch r
-qetl.job.bounded,record_orphan,function,1,worker
-qetl.job.bounded,recover_unfinished,function,1,worker
-qetl.job.bounded,replay_reactions,function,1,worker
-qetl.job.bounded,replay_window,function,2,worker w
 qetl.job.bounded,require_flags,function,1,opts
-qetl.job.bounded,require_target_key,function,2,worker decl
-qetl.job.bounded,require_transform,function,2,worker cfg
 qetl.job.bounded,required_cfg,value,,
 qetl.job.bounded,required_flags,value,,
 qetl.job.bounded,run,function,1,worker
 qetl.job.bounded,run_body,function,1,worker
-qetl.job.bounded,run_check,function,2,worker batch
-qetl.job.bounded,run_counts,function,4,planned completed failed rows
-qetl.job.bounded,run_totals,function,1,worker
 qetl.job.bounded,runtime,dict,,
 qetl.job.bounded,spec,function,1,worker
 qetl.job.bounded,spec_from_flags,function,1,opts
-qetl.job.bounded,stage_check,function,2,worker s
-qetl.job.bounded,stage_fetch,function,2,worker s
-qetl.job.bounded,stage_publish,function,2,worker s
-qetl.job.bounded,stage_transform,function,2,worker s
 qetl.job.bounded,state,dict,,
-qetl.job.bounded,transform_batch,function,2,worker batch
 qetl.job.bounded,unpartitioned,value,,
 qetl.job.bounded,validate,function,2,worker run_spec
 qetl.job.bounded,version_from_flags,function,2,opts worker
-qetl.job.bounded,window_body,function,2,worker w
-qetl.job.bounded,window_failed,function,3,worker w f
-qetl.job.bounded,window_stages,dict,,
 qetl.job.bounded,worker_cfg,dict,,
 qetl.job.bounded,worker_root,value,,
-qetl.job.bounded,write_state,function,3,worker nm v
 qetl.job.bounded.runtime,airflow_owned,value,,
 qetl.job.bounded.runtime,allows,function,1,effect
 qetl.job.bounded.runtime,backoff_ms,function,2,pol attempt
 qetl.job.bounded.runtime,classify,function,1,err
 qetl.job.bounded.runtime,commit,function,4,dry effect action args
 qetl.job.bounded.runtime,connected,function,1,
-qetl.job.bounded.runtime,connected_override,value,,
 qetl.job.bounded.runtime,data_patterns,value,,
 qetl.job.bounded.runtime,declare_dependencies,function,2,worker procs
 qetl.job.bounded.runtime,declared_dependencies,dict,,
@@ -367,7 +258,6 @@ qetl.job.bounded.runtime,require_dependencies,function,1,worker
 qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
 qetl.job.bounded.runtime,retry_boundary,value,,
 qetl.job.bounded.runtime,retryable,function,1,err
-qetl.job.bounded.runtime,sleep_ms,function,1,ms
 qetl.job.bounded.runtime,suppressed_in_dry_run,value,,
 qetl.job.bounded.runtime,transport_patterns,value,,
 qetl.job.bounded.runtime,windows,function,3,from_ts to_ts width
@@ -383,7 +273,6 @@ qetl.job.bounded.state,durable_get,function,1,path
 qetl.job.bounded.state,durable_lines,function,2,path lines
 qetl.job.bounded.state,durable_read,function,3,who path reader
 qetl.job.bounded.state,durable_remove,function,1,path
-qetl.job.bounded.state,durable_replace,function,2,path write
 qetl.job.bounded.state,durable_set,function,2,path v
 qetl.job.bounded.state,fail,function,4,worker spec progress err
 qetl.job.bounded.state,file_lock_path,function,1,name
@@ -393,11 +282,9 @@ qetl.job.bounded.state,lock_dir,function,1,
 qetl.job.bounded.state,lock_held,function,1,worker
 qetl.job.bounded.state,lock_is_stale,function,1,path
 qetl.job.bounded.state,lock_path,function,1,worker
-qetl.job.bounded.state,ns_names,function,1,ns
 qetl.job.bounded.state,owner_desc,function,1,path
 qetl.job.bounded.state,owner_file,function,1,path
 qetl.job.bounded.state,pid_alive,function,1,pid
-qetl.job.bounded.state,read_json_dict,function,1,path
 qetl.job.bounded.state,read_owner,function,1,path
 qetl.job.bounded.state,register,function,2,worker ns
 qetl.job.bounded.state,registered,function,1,
@@ -424,48 +311,34 @@ qetl.job.continuous,poll_once,function,4,worker fetch_page publish_page next_cur
 qetl.job.continuous,register_feeder,function,2,worker dataset
 qetl.job.continuous,save_cursor,function,2,worker cursor
 qetl.job.continuous,save_cursor_value,function,2,worker cursor
-qetl.job.stream,contract_failures,function,2,t rows
 qetl.job.stream,cursor_name,function,1,job
 qetl.job.stream,cursor_ops,function,1,job
 qetl.job.stream,def,function,1,job
-qetl.job.stream,default_advances,function,2,current proposed
 qetl.job.stream,define,function,2,job decl
 qetl.job.stream,defined,function,1,
 qetl.job.stream,drain,function,2,table_name mask
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
-qetl.job.stream,guarded,function,4,job f t x
-qetl.job.stream,in_window,function,3,job window page
-qetl.job.stream,is_callable,function,1,v
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
-qetl.job.stream,liveness,function,1,job
 qetl.job.stream,namespace,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
-qetl.job.stream,outputs,function,2,job out
-qetl.job.stream,poll_declared,function,2,job decl
 qetl.job.stream,poll_keys,value,,
 qetl.job.stream,preview,function,2,job n
-qetl.job.stream,preview_page,function,3,job n span
 qetl.job.stream,preview_recent,function,3,job n span
 qetl.job.stream,procnames,dict,,
-qetl.job.stream,recent_window,function,2,job span
 qetl.job.stream,replaying,value,,
 qetl.job.stream,required_declarations,value,,
-qetl.job.stream,run_preview,function,3,job n span
 qetl.job.stream,start,function,2,job tr
-qetl.job.stream,start_cursor_of,function,1,job
 qetl.job.stream,subscriptions,function,1,job
 qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
-qetl.job.stream.normalizer,check_source,function,4,who out src xf
 qetl.job.stream.normalizer,def,function,1,name
 qetl.job.stream.normalizer,define,function,2,name decl
 qetl.job.stream.normalizer,defined,function,1,
-qetl.job.stream.normalizer,dispatch,function,3,name t x
 qetl.job.stream.normalizer,normalize,function,3,name src batch
 qetl.job.stream.normalizer,registry,dict,,
 qetl.job.stream.normalizer,required_keys,value,,
@@ -473,33 +346,23 @@ qetl.log,context,dict,,
 qetl.log,dbg,function,3,id text fields
 qetl.log,debug,function,1,on
 qetl.log,debug_enabled,value,,
-qetl.log,emit,function,3,level id msg
-qetl.log,enabled,function,1,level
 qetl.log,err,function,3,id text fields
 qetl.log,info,function,3,id text fields
 qetl.log,levels,value,,
-qetl.log,line,function,4,level id text fields
 qetl.log,next_request,function,1,
 qetl.log,quiet,value,,
-qetl.log,quoted,function,1,s
 qetl.log,register,function,1,
-qetl.log,render,function,1,fields
 qetl.log,request_seq,value,,
-qetl.log,switched,function,1,level
-qetl.log,torq_loaded,function,1,
 qetl.log,torq_names,dict,,
 qetl.log,trace,function,1,on
 qetl.log,trace_enabled,value,,
 qetl.log,trc,function,3,id text fields
-qetl.log,value1,function,1,v
 qetl.log,warn,function,3,id text fields
 qetl.log,with_context,function,3,ctx f args
-qetl.log,with_scope,function,1,fields
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
 qetl.plant,ccy_exposure,table,,
 qetl.plant,client_flow,table,,
-qetl.plant,column_problems,function,7,table_name declared n c want got vals
 qetl.plant,columns,function,2,t cs
 qetl.plant,config_change,table,,
 qetl.plant,connections,table,,
@@ -548,22 +411,16 @@ qetl.plant,vendored,value,,
 qetl.plant,wide_orderbook,table,,
 qetl.reaction,audit,function,1,
 qetl.reaction,dag_consumers,function,1,dataset
-qetl.reaction,depth_now,value,,
-qetl.reaction,dispatch,function,1,item
-qetl.reaction,drain,function,1,
 qetl.reaction,draining,value,,
 qetl.reaction,empty_history,function,1,
 qetl.reaction,empty_outcomes,function,1,
 qetl.reaction,empty_queue,function,1,
-qetl.reaction,enqueue,function,6,dataset range_from range_to depth rows io
 qetl.reaction,fillable,function,1,
 qetl.reaction,for_dataset,function,1,dataset
 qetl.reaction,history,table,,
 qetl.reaction,history_limit,value,,
 qetl.reaction,io_now,value,,
-qetl.reaction,log_failure,function,3,item nm e
 qetl.reaction,max_depth,value,,
-qetl.reaction,no_reactions,function,1,
 qetl.reaction,notify,function,3,dataset range_from range_to
 qetl.reaction,notify_from_here,function,3,dataset range_from range_to
 qetl.reaction,notify_published,function,5,dataset range_from range_to rows io
@@ -575,21 +432,15 @@ qetl.reaction,on_writing,function,4,dataset nm outputs handler
 qetl.reaction,outcomes,function,1,
 qetl.reaction,outcomes_path,function,1,
 qetl.reaction,pending,function,5,ds part version from_ts to_ts
-qetl.reaction,persist_outcome,function,1,row
 qetl.reaction,published,function,1,
 qetl.reaction,queue,table,,
 qetl.reaction,reactions,dict,,
-qetl.reaction,record,function,7,dataset name depth range_from range_to outcome detail
-qetl.reaction,register,function,5,dataset nm handler outputs derived
-qetl.reaction,require_fillable,function,2,dataset nm
-qetl.reaction,require_handler,function,3,dataset nm handler
 qetl.reaction,reset,function,1,
 qetl.reaction,reset_outcomes,function,1,
 qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
 qetl.reaction,window_now,value,,
 qetl.reaction,write,function,3,target row_key rows
-qetl.run,as_text,function,1,v
 qetl.run,attach,function,1,
 qetl.run,begin,function,2,worker spec
 qetl.run,current,function,1,
@@ -597,7 +448,6 @@ qetl.run,current_run,value,,
 qetl.run,facts_about,function,3,dataset range_from range_to
 qetl.run,facts_of,function,1,id
 qetl.run,finish,function,2,status counts
-qetl.run,given,function,3,d k fallback
 qetl.run,history,function,1,
 qetl.run,in_flight,value,,
 qetl.run,init_meta,function,1,
@@ -620,12 +470,9 @@ qetl.run,require_run_schema,function,1,
 qetl.run,run_schema,value,,
 qetl.run,runs,function,1,
 qetl.run,table_path,function,1,name
-qetl.run,under_lock,function,2,f args
 qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,bound_padding,value,,
-qetl.source,call_text,function,1,f
-qetl.source,check_table,function,5,source what columns types tbl
 qetl.source,coerce,function,2,source tbl
 qetl.source,coercers,dict,,
 qetl.source,column_names,function,1,tbl
@@ -643,18 +490,11 @@ qetl.source,ipc,function,4,h f range_from range_to
 qetl.source,ipc_call,function,3,h f args
 qetl.source,load_zone_table,function,1,path
 qetl.source,local,function,4,root f range_from range_to
-qetl.source,local_candidates,function,2,tz tsv
 qetl.source,local_dates,function,3,root d0 d1
-qetl.source,local_decode,function,3,root c v
 qetl.source,local_latest,function,2,root table
-qetl.source,local_partition,function,3,root table d
 qetl.source,local_read,function,4,root table from_ts to_ts
 qetl.source,local_root,function,1,path
 qetl.source,local_to_utc,function,2,tz ts
-qetl.source,narrow_to_utc,function,4,decl tbl range_from range_to
-qetl.source,nonexistent_message,function,2,tz bad
-qetl.source,offset_at,function,2,tz ts
-qetl.source,offsets_for,function,1,tz
 qetl.source,optional_declarations,dict,,
 qetl.source,primary,function,2,source fetched
 qetl.source,register_transport,function,2,name decl
@@ -662,22 +502,16 @@ qetl.source,require_credentials,function,1,source
 qetl.source,require_zone_table,function,1,tz
 qetl.source,required_declarations,value,,
 qetl.source,row_key,function,1,source
-qetl.source,source_bounds,function,3,decl range_from range_to
 qetl.source,sources,dict,,
-qetl.source,traced_ipc,function,4,h f args shown
 qetl.source,transport,dict,,
 qetl.source,transport_def,function,1,name
 qetl.source,transport_fields,value,,
 qetl.source,transport_functions,value,,
 qetl.source,transports,function,1,
-qetl.source,type_chars,function,1,tbl
 qetl.source,utc_to_local,function,2,tz ts
 qetl.source,validate,function,2,source tbl
 qetl.source,validate_fixture,function,1,source
-qetl.source,validate_inputs,function,3,source decl given
 qetl.source,validate_live,function,2,source h
-qetl.source,window_fixture,function,3,decl range_from range_to
-qetl.source,window_rows,function,4,decl t range_from range_to
 qetl.source,zone_names,value,,
 qetl.source,zone_table,table,,
 qetl.status,legal_transitions,dict,,
@@ -686,17 +520,12 @@ qetl.status,require_transition,function,2,from_state to
 qetl.status,status_dir,function,1,
 qetl.status,status_states,value,,
 qetl.status,write_status,function,6,worker instance_id state spec progress err
-qetl.tick,can_send,function,1,sink
-qetl.tick,fan_out,function,2,name batch
-qetl.tick,learn,function,2,table_name stamped
 qetl.tick,log_handle,value,,
 qetl.tick,log_path,value,,
 qetl.tick,msg_count,value,,
 qetl.tick,open_log,function,3,dir name dt
 qetl.tick,publish,function,2,t x
-qetl.tick,record,function,1,msg
 qetl.tick,replay,function,2,path handler
-qetl.tick,require_batch,function,2,t x
 qetl.tick,reset,function,1,
 qetl.tick,schema,function,2,table_name empty
 qetl.tick,schemas,dict,,
@@ -705,48 +534,32 @@ qetl.tick,subscribers,table,,
 qetl.tick,unsubscribe,function,1,sink
 qetl.transform,apply,function,2,name given
 qetl.transform,apply_as_of,function,3,name given as_of
-qetl.transform,check_example,function,5,name ins output clock ex
-qetl.transform,col_equal,function,3,typ e a
-qetl.transform,col_types,function,1,tbl
 qetl.transform,def,function,1,name
 qetl.transform,define,function,2,name decl
 qetl.transform,defined,function,1,
-qetl.transform,differences,function,2,expected actual
 qetl.transform,float_tolerance,value,,
 qetl.transform,input_names,function,1,name
 qetl.transform,output_schema,function,1,name
 qetl.transform,passthrough,function,4,name input_name schema rows
-qetl.transform,problems,function,3,schema tbl ordered
 qetl.transform,registry,dict,,
 qetl.transform,require_verified,function,1,name
 qetl.transform,required_keys,value,,
-qetl.transform,run,function,4,name d given extra
-qetl.transform,type_ok,function,3,declared actual n
 qetl.transform,verify,function,1,name
 qetl.transform,verify_all,function,1,
-qetl.transform,verify_example,function,3,name d ex
 qetl.uptime,attach,function,1,
 qetl.uptime,beat,function,1,
 qetl.uptime,begin,function,1,job
 qetl.uptime,gaps,function,3,job range_from range_to
 qetl.uptime,init_table,function,1,
 qetl.uptime,mine,value,,
-qetl.uptime,path,function,1,
 qetl.uptime,period,value,,
-qetl.uptime,reload,function,1,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
-qetl.uptime,update_shared,function,2,f args
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_order_time_cols,value,,
-qexec,fill_outcome,function,4,event_time cancel_time horizon_end known_by
-qexec,fill_outcome_rows,function,3,grouping tgt outcome
 qexec,fill_probability_by,function,5,orders horizons bucket_cols as_of opts
 qexec,fill_probability_cols,value,,
 qexec,fill_probability_defaults,dict,,
-qexec,fill_probability_opts,function,1,opts
-qexec,fill_probability_require_args,function,4,orders hs bucket_cols as_of
-qexec,fill_probability_require_consistent,function,1,orders
 qexec,fill_ratio,function,2,num_fills num_quotes
 qexec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,markout,function,4,side trade_price ref_price pip_factor
@@ -756,39 +569,27 @@ qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_
 qexec,slippage,function,4,side arrival_price exec_price pip_factor
 qexec,sweep_price,function,3,prices sizes target_size
 qexec,venue_quality,function,5,quotes requests trades window config
-qexec,venue_quality_config,function,1,config
 qexec,venue_quality_defaults,dict,,
-qexec,venue_quality_require_args,function,4,quotes requests trades window
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
 qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
 qfwd,CROSS_SIZE_MAX_HALVINGS,value,,
 qfwd,CROSS_SIZE_REL_TOL,value,,
-qfwd,apply_col_precedence,function,1,tbl
 qfwd,book_crossed,function,1,book
-qfwd,ccy_graph_edges,function,1,avail_syms
-qfwd,ccy_orient_chain,function,1,syms
-qfwd,ccy_orient_cross,function,2,sym1 sym2
 qfwd,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
 qfwd,combine_oriented_books,function,2,book_ab book_bc
 qfwd,convert_quotes,function,3,quotes target_conventions opts
 qfwd,cross_book,function,4,sym1 book1 sym2 book2
 qfwd,cross_book_at,function,5,quotes sym as_of sizes sides
-qfwd,cross_book_at_one_size,function,5,sym1 book1 sym2 book2 size
 qfwd,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
-qfwd,cross_book_chain_at_one_size,function,3,syms books size
 qfwd,cross_book_chain_at_sizes,function,4,syms books sizes sides
 qfwd,cross_decomp,function,2,avail_syms sym
 qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
 qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
 qfwd,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
-qfwd,cross_price_ok_at_size,function,6,quotes sym as_of side price_limit size
 qfwd,cross_rate,function,2,ab_rate bc_rate
 qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay
-qfwd,cross_ref_price_at,function,4,quotes sym as_of ref_size
 qfwd,cross_size_at_price,function,5,quotes sym as_of side price_limit
-qfwd,cross_sweep_chain,function,4,books side size inverts
-qfwd,cross_sweep_side,function,6,book1 book2 side size invert1 invert2
 qfwd,extrapolations,value,,
 qfwd,forward_at_date,function,5,spot curve value_date pip_factor opts
 qfwd,fwd_cont,function,4,spot rd rf t
@@ -800,27 +601,16 @@ qfwd,inverse_pair,function,1,pair
 qfwd,invert_book,function,1,book
 qfwd,invert_book_depth,function,2,prices sizes
 qfwd,invert_rate,function,1,rate
-qfwd,leg_book_as_of,function,3,quotes as_of target_sym
-qfwd,leg_pv,function,5,side notional mark contracted df
 qfwd,mock_fwd_curve,table,,
 qfwd,mock_quotes,table,,
 qfwd,mock_swap,dict,,
 qfwd,mock_swap_market,dict,,
-qfwd,oriented_levels,function,3,side book invert
 qfwd,points_to_outright,function,3,spot points pip_factor
-qfwd,require_curve,function,1,curve
-qfwd,require_horizons,function,2,fn_name horizons
-qfwd,require_quotes_cols,function,2,fn_name quotes
-qfwd,require_swap,function,1,swap
-qfwd,side_cols,function,1,s
-qfwd,single_leg_at_one_size,function,4,cross_sym leg_book invert size
-qfwd,single_leg_at_sizes,function,5,cross_sym leg_book invert sizes sides
 qfwd,swap_cashflows,function,1,swap
 qfwd,swap_keys,value,,
 qfwd,swap_value,function,4,swap market valuation_date opts
 qfwd,time_col,value,,
 qlimit,evaluate,function,2,measured limits
-qlimit,identity,function,1,scopes
 qlimit,measure,function,2,book metrics
 qlimit,no_alerts,function,1,
 qlimit,non_scope_cols,value,,
@@ -831,23 +621,17 @@ qlimit,scope_cols,function,1,limits
 qlimit,throttle,function,4,state breaches now period
 qlimit,unmatched_limits,function,2,measured limits
 qmeta,collect,function,2,spec partitions
-qmeta,collect_partition,function,4,spec part observed_at definition_id
 qmeta,count_bad,function,2,violations row_count
 qmeta,definition,function,4,tab partition_col group_cols aggregates
 qmeta,fingerprint,function,1,spec
 qmeta,prefix,value,,
 qmeta,profile,function,3,time_cols null_cols rules
 qmeta,reconcile,function,5,metatable dates ds part version
-qmeta,reconcile_date,function,3,claims observed day
 qmeta,refresh,function,3,current spec partitions
 qmeta,require_name,function,1,name
-qmeta,require_request,function,2,spec partitions
-qmeta,time_bound,function,2,direction values
 qmicro,book_convexity,function,2,prices side
-qmicro,book_convexity_one,function,2,prices side
 qmicro,book_pressure_at_level,function,3,bid_sizes ask_sizes level
 qmicro,book_slope,function,2,prices sizes
-qmicro,book_slope_one,function,2,prices sizes
 qmicro,cancel_to_trade_ratio,function,1,tape
 qmicro,cancel_to_trade_ratio_by,function,3,tape bucket_size group_cols
 qmicro,cumulative_trade_flow,function,1,tape
@@ -857,8 +641,6 @@ qmicro,inter_event_time,function,2,quotes target_sym
 qmicro,large_trade_ratio,function,2,tape q
 qmicro,large_trade_threshold,function,2,tape q
 qmicro,large_trade_volume_share,function,2,tape q
-qmicro,late_rows,function,2,last_time times
-qmicro,level_at,function,2,levels level
 qmicro,microprice,function,4,bid_prices bid_sizes ask_prices ask_sizes
 qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_sizes
 qmicro,mid_price,function,2,bid_prices ask_prices
@@ -867,52 +649,33 @@ qmicro,mid_price_velocity,function,2,quotes target_sym
 qmicro,odd_lot_imbalance,function,2,tape threshold
 qmicro,odd_lot_trade_ratio,function,2,tape threshold
 qmicro,ofi,function,2,quotes target_sym
-qmicro,ofi_at_level,function,2,sub level
 qmicro,ofi_autocorrelation,function,2,ofi_series window
 qmicro,ofi_multilevel,function,3,quotes target_sym n_levels
 qmicro,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
 qmicro,queue_depletion_rate,function,3,quotes target_sym side
-qmicro,quote_state0,function,1,
-qmicro,quote_states0,function,1,
-qmicro,quotes_for_sym,function,3,fn_name quotes target_sym
-qmicro,require_odd_lot_threshold,function,2,fn_name threshold
-qmicro,require_sorted,function,2,what times
 qmicro,require_tape,function,1,tape
 qmicro,rolling_ofi,function,2,ofi_series window
 qmicro,rolling_return_variance,function,3,quotes target_sym window
 qmicro,signed_trade_flow,function,1,tape
 qmicro,spread_bps,function,2,bid_prices ask_prices
 qmicro,spread_ratio,function,3,quotes target_sym window
-qmicro,stream_config,function,1,config
 qmicro,stream_defaults,dict,,
 qmicro,stream_init,function,2,metrics config
 qmicro,stream_metrics,value,,
 qmicro,stream_quote_metrics,value,,
-qmicro,stream_quotes_one,function,3,st sub window
 qmicro,stream_reset,function,2,state syms
-qmicro,stream_side,function,6,what tbl states state0 config step
 qmicro,stream_snapshot,function,1,state
 qmicro,stream_tape_metrics,value,,
-qmicro,stream_trades_one,function,2,st sub
 qmicro,stream_update,function,3,state batch config
 qmicro,stream_version,value,,
-qmicro,sum_levels,function,2,sizes n_levels
 qmicro,tape_actions,value,,
 qmicro,tape_cols,value,,
 qmicro,trade_arrival_rate,function,1,tape
 qmicro,trade_arrival_rate_by,function,3,tape bucket_size group_cols
-qmicro,trade_state0,function,1,
-qmicro,trade_states0,function,1,
-qmicro,undefined_if_zero,function,1,n
 qmicro,vamp,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
-qmicro,vamp_one,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
 qmicro,volume_buckets,function,2,tape bucket_volume
 qmicro,vpin,function,3,tape bucket_volume n_buckets
 qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
-qmicro,vwmp_skew_one,function,5,n_levels bid_prices bid_sizes ask_prices ask_sizes
-qmicro,window_variance,function,1,w
-qns,children,function,1,ns
-qns,descend,function,1,ns
 qns,functional,function,1,
 qns,is_namespace,function,1,v
 qns,owned,function,1,
@@ -924,9 +687,7 @@ qopt,IMPLIED_VOL_MAX_ITER,value,,
 qopt,IMPLIED_VOL_PRICE_TOL,value,,
 qopt,IMPLIED_VOL_SIGMA_FLOOR,value,,
 qopt,IMPLIED_VOL_VEGA_FLOOR,value,,
-qopt,bisect_vol,function,7,price s k rd rf t is_call
 qopt,d1,function,6,s k rd rf sigma t
-qopt,d1_d2,function,6,s k rd rf sigma t
 qopt,d2,function,6,s k rd rf sigma t
 qopt,gk_call,function,6,s k rd rf sigma t
 qopt,gk_delta,function,7,s k rd rf sigma t is_call
@@ -1011,7 +772,6 @@ qpipe.job.crypto_markout,top_of_book,function,1,books
 qpipe.job.crypto_mock,beta_draw,function,2,a b
 qpipe.job.crypto_mock,book_rows,function,1,mkt
 qpipe.job.crypto_mock,decide,function,3,row horizon draws
-qpipe.job.crypto_mock,draws,function,1,
 qpipe.job.crypto_mock,drift_toxicity,function,1,toxicity
 qpipe.job.crypto_mock,fill_alpha,value,,
 qpipe.job.crypto_mock,fill_beta,value,,
@@ -1027,10 +787,8 @@ qpipe.job.crypto_mock,max_fill_fraction,value,,
 qpipe.job.crypto_mock,mid0,value,,
 qpipe.job.crypto_mock,n_levels,value,,
 qpipe.job.crypto_mock,n_market,value,,
-qpipe.job.crypto_mock,next_id,function,1,venue
 qpipe.job.crypto_mock,on_timer,function,1,
 qpipe.job.crypto_mock,publish,value,,
-qpipe.job.crypto_mock,publish_fills,function,2,horizon row
 qpipe.job.crypto_mock,quote_ccy,function,1,s
 qpipe.job.crypto_mock,quote_share,value,,
 qpipe.job.crypto_mock,quote_size,value,,
@@ -1213,15 +971,11 @@ qpipe.job.hdb_transfer_backfill,run,function,1,
 qpipe.job.hdb_transfer_backfill,source_version,value,,
 qpipe.job.hdb_transfer_backfill,spec,function,1,
 qpipe.job.hdb_transfer_backfill,with_notional,function,1,batch
-qpipe.job.kafka_flow,above_high_water,function,1,rows
-qpipe.job.kafka_flow,advance,function,1,rows
-qpipe.job.kafka_flow,first_per_coordinate,function,1,rows
 qpipe.job.kafka_flow,held,table,,
 qpipe.job.kafka_flow,high_water,dict,,
 qpipe.job.kafka_flow,on_batch,function,2,t x
 qpipe.job.kafka_flow,on_replayed,function,1,
 qpipe.job.kafka_flow,publish,value,,
-qpipe.job.kafka_flow,publish_fresh,function,1,rows
 qpipe.job.market_data,crypto_book,table,,
 qpipe.job.market_data,from_crypto_book,function,1,batch
 qpipe.job.market_data,from_fx_orderbook,function,1,batch
@@ -1292,7 +1046,6 @@ qpipe.source.crypto_market_data,columns,value,,
 qpipe.source.crypto_market_data,credential_example,value,,
 qpipe.source.crypto_market_data,epoch_ms_bound,function,1,ts
 qpipe.source.crypto_market_data,fixture,function,1,
-qpipe.source.crypto_market_data,fixture_levels,function,4,bid ask tick sz
 qpipe.source.crypto_market_data,level_fields,value,,
 qpipe.source.crypto_market_data,levels,value,,
 qpipe.source.crypto_market_data,query,function,3,h range_from range_to
@@ -1306,16 +1059,13 @@ qpipe.source.crypto_market_data,time_column,value,,
 qpipe.source.crypto_market_data,transport,value,,
 qpipe.source.crypto_market_data,types,value,,
 qpipe.source.crypto_market_data,tz,value,,
-qpipe.source.databento_mbp10,adapt,function,1,raw
 qpipe.source.databento_mbp10,columns,value,,
 qpipe.source.databento_mbp10,credential_example,value,,
 qpipe.source.databento_mbp10,fixture,function,1,
-qpipe.source.databento_mbp10,fixture_levels,function,3,bid ask sz
 qpipe.source.databento_mbp10,level_fields,value,,
 qpipe.source.databento_mbp10,levels,value,,
 qpipe.source.databento_mbp10,query,function,3,h range_from range_to
 qpipe.source.databento_mbp10,row_key,value,,
-qpipe.source.databento_mbp10,select_list,function,1,
 qpipe.source.databento_mbp10,source_name,value,,
 qpipe.source.databento_mbp10,table_name,value,,
 qpipe.source.databento_mbp10,target,value,,
@@ -1396,7 +1146,6 @@ qpipe.transform.crypto_market_data,to_book,function,1,batch
 qpipe.transform.eq_orderbook,book,table,,
 qpipe.transform.eq_orderbook,contract,table,,
 qpipe.transform.eq_orderbook,example_book,function,1,
-qpipe.transform.eq_orderbook,fold,function,2,batch prefix
 qpipe.transform.eq_orderbook,to_book,function,1,batch
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades

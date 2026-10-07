@@ -48,9 +48,11 @@ init_table:{[]
 sessions:{[] init_table[]; value `etl_stream_uptime}
 
 / Private: where the table is kept.
+/ @private
 path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_stream_uptime"}
 
 / Private: replace the in-memory table with what is on disk, if anything is.
+/ @private
 reload:{[]
     init_table[];
     p:path[];
@@ -59,6 +61,7 @@ reload:{[]
 
 / Private: read, change and write back under this table's own lock, so two
 / processes beating at once cannot each write over the other's row.
+/ @private
 update_shared:{[f;args]
     .qetl.job.bounded.state.with_file_lock[`etl_stream_uptime;
         {[f;args] reload[]; r:f . args; .qetl.job.bounded.state.durable_set[path[];sessions[]]; r};

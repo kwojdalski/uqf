@@ -19,6 +19,7 @@
 / @param t year fraction to expiry
 / @return (d1;d2)
 / @eg .qopt.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784 -0.0348547
+/ @private
 d1_d2:{[s;k;rd;rf;sigma;t]
     log_moneyness:log[s%k];
     variance_adj:0.5*sigma*sigma;
@@ -329,6 +330,7 @@ BISECT_VOL_MAX_ITER:200;
 / @eg .qopt.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.09999999
 /   (0.1 to the eye. The residual is the bisection's own tolerance, so the
 /   exact digits are a property of BISECT_VOL_TOL rather than of the option)
+/ @private
 bisect_vol:{[price;s;k;rd;rf;t;is_call]
     lo:BISECT_VOL_LO; hi:BISECT_VOL_HI;
     / A price no volatility in [lo;hi] produces - below intrinsic, or above

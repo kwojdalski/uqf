@@ -63,6 +63,7 @@ optional:`write_keyed`finish`flush`recover`on_ready
 
 / Private: can this value be called? A lambda, or a projection over one -
 / the HDB writer's functions are projections over its root and column.
+/ @private
 callable:{[v] (type v) within 100 112h}
 
 / Refuse a manager that is not one, naming what is wrong.
@@ -130,13 +131,16 @@ require_strategy:{[strategy]
     strategy}
 
 / Private: true at the first occurrence of each row of `k`, a table of keys.
+/ @private
 first_seen:{[k] (til count k)=k?k}
 
 / Private: true at the last occurrence of each row of `k`.
+/ @private
 last_seen:{[k] n:count k; (til n)=(n-1)-(reverse k)?k}
 
 / Private: the attributes off every column, so a table built from pieces of
 / a p#sym partition can be written back - finish sorts it and puts p# back.
+/ @private
 plain:{[t] c:cols t; a:c where not null attr each t c; $[count a; @[t;a;`#]; t]}
 
 / What `existing` becomes when `batch` is written into it under `strategy`.
@@ -189,12 +193,14 @@ resolve:{[strategy;existing;batch;opts]
 / Backtick form (`target set / insert), because inside \d .qetl.io a bare name
 / resolves to .qetl.io.<name> rather than the root table - the trap materialisation.q
 / documents at length, and the reason every write here is explicit.
+/ @private
 write_memory:{[target;batch]
     if[not target in tables `.; target set 0#batch];
     target insert batch;
     count batch}
 
 / Private: write a batch under opts`on_conflict - the table as resolve says.
+/ @private
 write_memory_keyed:{[target;batch;opts]
     existing:$[target in tables `.; value target; 0#batch];
     / The range is the window's; a transformed batch may carry the plant's
@@ -213,6 +219,7 @@ write_memory_keyed:{[target;batch;opts]
 memory:`write`write_keyed!(write_memory;write_memory_keyed)
 
 / Private: count the rows and write nothing.
+/ @private
 write_discard:{[target;batch] count batch}
 
 / Writes nothing, reports what it would have written.
@@ -341,6 +348,7 @@ due:{[state;status;now;interval]
 / Private: tell the deployment what is finished. Its failure is logged and
 / swallowed: the rows are already written, and a reload that failed is no
 / reason to fail the run that wrote them.
+/ @private
 ready:{[mgr;status]
     if[not `on_ready in key mgr; :(::)];
     @[mgr`on_ready;status;{[e] .[{.qetl.log.err[x;y;z]};(`qetl.io;"on_ready failed";enlist[`error]!enlist e);::]}]}

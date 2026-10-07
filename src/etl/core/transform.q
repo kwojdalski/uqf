@@ -77,6 +77,7 @@ float_tolerance:1e-9
 / ----------------------------------------------------------------- SCHEMA
 
 / Private: column -> meta type character.
+/ @private
 col_types:{[tbl] exec c!t from meta tbl}
 
 / Private: the problems stopping `tbl` from matching a declared schema, as
@@ -90,6 +91,7 @@ col_types:{[tbl] exec c!t from meta tbl}
 / @param tbl the table to check
 / @param ordered 1b when column order must match too (outputs)
 / @return list of strings, empty when tbl conforms
+/ @private
 problems:{[schema;tbl;ordered]
     if[not 98h=type tbl;
         :enlist "expected an unkeyed table, got type ",string type tbl];
@@ -110,6 +112,7 @@ problems:{[schema;tbl;ordered]
         ()]}
 
 / Private: does an actual meta type satisfy a declared one?
+/ @private
 type_ok:{[declared;actual;n]
     if[declared=actual; :1b];
     if[declared=" "; :1b];
@@ -121,6 +124,7 @@ type_ok:{[declared;actual;n]
 / they match. Row order is significant: a deterministic transform returns
 / its rows in a deterministic order, and a consumer that publishes them
 / sees that order.
+/ @private
 differences:{[expected;actual]
     if[not (count expected)=count actual;
         :enlist "expected ",string[count expected]," row(s), got ",string count actual];
@@ -138,6 +142,7 @@ differences:{[expected;actual]
         ": expected ",(.qrender.full expected[c] row),", got ",.qrender.full actual[c] row}
 
 / Private: one column's values equal, with float tolerance.
+/ @private
 col_equal:{[typ;e;a]
     if[not typ in "fe"; :e~a];
     all (null[e]=null a) and (null e) or float_tolerance>=abs e-a}
@@ -186,6 +191,7 @@ define:{[name;decl]
     name}
 
 / Private: an example is well-formed against its transform's declaration.
+/ @private
 check_example:{[name;ins;output;clock;ex]
     who:"define: transform ",string[name];
     if[not 99h=type ex; 'who,"'s examples must be dictionaries of inputs and expected"];
@@ -267,6 +273,7 @@ apply_as_of:{[name;given;as_of]
     run[name;d;given;enlist as_of]}
 
 / Private: check inputs, call, check the output.
+/ @private
 run:{[name;d;given;extra]
     ins:d`inputs;
     if[not (99h=type given) and (asc key given)~asc key ins;
@@ -304,6 +311,7 @@ verify:{[name]
         detail:rows[;1])}
 
 / Private: (passed; detail) for one example.
+/ @private
 verify_example:{[name;d;ex]
     call:$[d`as_of;
         {[name;ex;x] apply_as_of[name;ex`inputs;ex`as_of]}[name;ex];
