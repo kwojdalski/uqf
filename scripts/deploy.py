@@ -1,26 +1,36 @@
-"""deploy.py - put this tree on a Linux server that already runs TorQ, and
-prove it works before calling it deployed (#773).
+"""deploy.py - put a uqf release on a Linux server that already runs TorQ,
+and prove it works before calling it deployed (#773, #778).
 
-    python3 scripts/deploy.py --host uqf-server --dest /opt/uqf \\
+    python3 scripts/build_release.py --output dist/
+    python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \\
+        --host uqf-server --dest /opt/uqf \\
         --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \\
         --qcmd /opt/kx/bin/q --qhome /opt/kx --profile essential --dry-run
 
+BUILDING IS NOT DEPLOYING. scripts/build_release.py makes the artifact once -
+the tree, the uqs wheel and every pinned dependency's wheel, and a manifest
+of the target and every member's sha256 - and this deploys that same file to
+as many servers as it is pointed at. The artifact is checked whole here,
+against its .sha256 and its manifest, before anything touches the server.
+
 THE STAGES, in order, each stopping the deployment when it fails:
 
-  preflight  ssh works; the destination is writable; uv and Python 3.14 are
-             there; q runs and is licensed; the TorQ and starter-pack trees
+  artifact   the archive matches its .sha256, and every member its manifest
+             hash, with nothing missing or extra.
+  preflight  ssh works; the destination is writable; uv and the release's
+             Python are there; the OS, architecture and Python match what the
+             artifact was built for; q runs and is licensed; the TorQ and starter-pack trees
              hold what torq.sh needs; envsubst and rlwrap are on PATH; the
              runtime data directory exists (or --init-data was given); and a
              deployment already there is only replaced with --restart.
-  package    an allowlist of tracked files - source and configuration, never
-             lib/, secrets, environments, data or logs - in a tar.gz with a
-             manifest of the revision and every file's sha256.
   transfer   scp into a staging directory of its own; the checksum is checked
              ON THE SERVER before anything is extracted.
-  prepare    releases/<id>/ gets a release-local .venv from the committed
-             uv.lock, and a deploy.env naming the external TorQ, q and the
-             stable data directory (UQS_DATA_ROOT) - the ports this profile
-             listens on are checked free.
+  prepare    releases/<id>/ gets a release-local .venv installed OFFLINE
+             from the artifact's own wheels - hashes required, no index, no
+             download - and a deploy.env naming the external TorQ, q and the
+             stable data directory (UQS_DATA_ROOT), with UV_OFFLINE=1 so
+             nothing later fetches either. The ports this profile listens on
+             are checked free.
   smoke      scripts/deploy_smoke.q: the quant library loads and computes known
              numbers. Needs its success marker AND exit 0, within a timeout.
   restart    with --restart, the previous deployment's processes stop - their
@@ -57,59 +67,25 @@ and parseable by Python 3.10 - it runs under the operator's own python3.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import io
 import json
 import re
 import shlex
 import subprocess
 import sys
-import tarfile
-import tempfile
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# beside this file, found once its directory is on the path; ty resolves
+# imports from the package roots only
+import build_release  # noqa: E402  # ty: ignore[unresolved-import]
+
 ROOT = Path(__file__).resolve().parents[1]
 
 #: timezone.utc, not datetime.UTC: UTC is 3.11+, and this runs under 3.10 too.
 _UTC = timezone.utc  # noqa: UP017
-
-#: What a release is made of: tracked files under these paths, and nothing
-#: else. The three Python packages are all here because uv's workspace lock
-#: needs every member's pyproject to resolve, though only uqs is installed.
-ALLOWLIST = (
-    "pyproject.toml",
-    "uv.lock",
-    "src",
-    "scripts",
-    "python/uqs",
-    "python/uqf_frontend",
-    "python/uqf_airflow_provider",
-)
-
-#: Never shipped, even when tracked under the allowlist: secrets and
-#: secret-bearing configuration, environments, data, logs and generated
-#: output. gateway_users.csv holds the demo gateway passwords; a server that
-#: wants ordinary gateway users supplies its own in shared/config/ (see
-#: SHARED_CONFIG), and uqs runs without one.
-EXCLUDED_PATTERNS = (
-    r"(^|/)\.env($|\.)(?!example$)",
-    r"(^|/)\.envrc$",
-    r"(^|/)\.venv/",
-    r"(^|/)node_modules/",
-    r"(^|/)__pycache__/",
-    r"(^|/)output/",
-    r"(^|/)tests/",
-    r"\.(lic|pem|key|log|pyc)$",
-    r"(^|/)id_(rsa|ed25519|ecdsa)",
-    r"(^|/)passwords/",
-    r"^scripts/torqconfig/permissions/gateway_users\.csv$",
-    r"^lib/",
-)
-_EXCLUDED = [re.compile(p) for p in EXCLUDED_PATTERNS]
 
 #: Files an operator keeps on the server and every release links in, by their
 #: path in the repository. Absent ones are simply not linked.
@@ -120,7 +96,6 @@ SHARED_CONFIG = ("scripts/torqconfig/permissions/gateway_users.csv",)
 SHA256_PY = "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())"
 REPLACE_PY = "import os,sys; os.replace(sys.argv[1], sys.argv[2])"
 
-MANIFEST = "DEPLOY_MANIFEST.json"
 REPORT = "deploy-report.json"
 SMOKE_MARKER = "DEPLOY_SMOKE_OK"
 VERIFY_MARKER = "DEPLOY_VERIFY_OK"
@@ -147,6 +122,14 @@ class DeployError(Exception):
         self.stage = stage
 
 
+def load_artifact(path: str) -> build_release.Artifact:
+    """The artifact, checked whole (build_release.read_artifact), or why not."""
+    try:
+        return build_release.read_artifact(Path(path))
+    except build_release.ReleaseError as exc:
+        raise DeployError(exc.stage, str(exc)) from None
+
+
 def redact(text: str) -> str:
     """`text` with anything shaped like a secret assignment masked."""
     return _SECRETISH.sub(lambda m: f"{m.group(1)}=<redacted>", text)
@@ -164,6 +147,7 @@ class Config:
     host: str
     dest: str
     profile: str
+    artifact: str = ""
     torq_home: str | None = None
     torq_app_home: str | None = None
     qcmd: str | None = None
@@ -172,7 +156,6 @@ class Config:
     dry_run: bool = False
     restart: bool = False
     init_data: bool = False
-    allow_dirty: bool = False
     connect_timeout: int = 10
     command_timeout: int = 900
     smoke_timeout: int = 120
@@ -204,6 +187,9 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     p = argparse.ArgumentParser(
         prog="deploy.py", description="Deploy uqf onto a server with an existing TorQ."
     )
+    p.add_argument(
+        "--artifact", required=True, help="the release to deploy, from scripts/build_release.py"
+    )
     p.add_argument("--host", required=True, help="ssh destination, as your ssh config knows it")
     p.add_argument("--dest", required=True, help="absolute directory on the server")
     p.add_argument("--profile", required=True, help="the uqs profile to start, e.g. essential")
@@ -223,9 +209,6 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         action="store_true",
         help="create the runtime data directory if it does not exist yet",
     )
-    p.add_argument(
-        "--allow-dirty", action="store_true", help="deploy uncommitted changes (recorded)"
-    )
     p.add_argument("--connect-timeout", type=int, default=10, help="ssh/scp, seconds")
     p.add_argument("--command-timeout", type=int, default=900, help="each remote step, seconds")
     p.add_argument("--smoke-timeout", type=int, default=120, help="the offline check, seconds")
@@ -244,6 +227,7 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     return Config(
         host=a.host,
         dest=dest,
+        artifact=a.artifact,
         profile=a.profile,
         torq_home=_absolute("--torq-home", a.torq_home),
         torq_app_home=_absolute("--torq-app-home", a.torq_app_home),
@@ -253,7 +237,6 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         dry_run=a.dry_run,
         restart=a.restart,
         init_data=a.init_data,
-        allow_dirty=a.allow_dirty,
         connect_timeout=a.connect_timeout,
         command_timeout=a.command_timeout,
         smoke_timeout=a.smoke_timeout,
@@ -328,81 +311,6 @@ def _checked(r: subprocess.CompletedProcess, stage: str, what: str) -> str:
     return r.stdout
 
 
-# ----------------------------------------------------------------- package
-
-
-def is_excluded(path: str) -> bool:
-    return any(p.search(path) for p in _EXCLUDED)
-
-
-def tracked_files(root: Path, runner: Runner = subprocess.run) -> list[str]:
-    r = runner(
-        ["git", "-C", str(root), "ls-files", "-z", "--", *ALLOWLIST],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if r.returncode:
-        raise DeployError("package", f"git ls-files failed: {r.stderr.strip()}")
-    return sorted(f for f in r.stdout.split("\0") if f and not is_excluded(f))
-
-
-def revision(root: Path, runner: Runner = subprocess.run) -> tuple[str, bool]:
-    head = runner(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
-    )
-    status = runner(
-        ["git", "-C", str(root), "status", "--porcelain", "--", *ALLOWLIST],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if head.returncode or status.returncode:
-        raise DeployError(
-            "package", "this is not a git checkout - a release must name its revision"
-        )
-    return head.stdout.strip(), bool(status.stdout.strip())
-
-
-def release_id(rev: str, now: datetime | None = None) -> str:
-    stamp = (now or datetime.now(_UTC)).strftime("%Y%m%dT%H%M%SZ")
-    return f"{stamp}-{rev[:12]}"
-
-
-@dataclass
-class Package:
-    path: Path
-    sha256: str
-    manifest: dict
-    files: list[str]
-
-
-def build_package(
-    root: Path, out_dir: Path, rid: str, rev: str, dirty: bool, files: list[str]
-) -> Package:
-    hashes = {}
-    for f in files:
-        hashes[f] = hashlib.sha256((root / f).read_bytes()).hexdigest()
-    manifest = {
-        "release": rid,
-        "revision": rev,
-        "dirty": dirty,
-        "created_at": datetime.now(_UTC).isoformat(timespec="seconds"),
-        "files": hashes,
-    }
-    path = out_dir / f"uqf-{rid}.tar.gz"
-    with tarfile.open(path, "w:gz") as tar:
-        for f in files:
-            tar.add(root / f, arcname=f, recursive=False)
-        data = json.dumps(manifest, indent=2, sort_keys=True).encode()
-        info = tarfile.TarInfo(MANIFEST)
-        info.size = len(data)
-        info.mtime = int(time.time())
-        tar.addfile(info, io.BytesIO(data))
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return Package(path=path, sha256=digest, manifest=manifest, files=files)
-
-
 # --------------------------------------------------------------- the steps
 
 
@@ -427,10 +335,21 @@ class Report:
 
 
 class Deployment:
-    def __init__(self, cfg: Config, remote: Remote, root: Path = ROOT) -> None:
+    def __init__(
+        self,
+        cfg: Config,
+        remote: Remote,
+        target: dict | None = None,
+        root: Path = ROOT,
+        release: str = "",
+    ) -> None:
         self.cfg = cfg
         self.remote = remote
         self.root = root
+        #: what the artifact was built for: os, arch, python
+        self.target = target or {"os": "linux", "arch": "x86_64", "python": "3.14"}
+        #: the release id being deployed, to refuse one already on the server
+        self.release = release
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -453,6 +372,9 @@ class Deployment:
             ("QHOME", c.qhome),
             ("UQS_DATA_ROOT", c.data_root),
             ("UQS_RUNTIME", "uqf"),
+            # the release installs from its own wheels; nothing after that
+            # may reach for an index either
+            ("UV_OFFLINE", "1"),
         ]
         return [f"export {k}={q(v)}" for k, v in pairs if v]
 
@@ -474,6 +396,8 @@ class Deployment:
             "current": self.current,
             "lock": self.lock,
             "probe_timeout": str(c.smoke_timeout),
+            "python": self.target["python"],
+            "release_dir": f"{self.releases}/{self.release}" if self.release else "",
         }
         return script(*(f"{k}={q(v)}" for k, v in values.items())) + PREFLIGHT
 
@@ -481,11 +405,22 @@ class Deployment:
         r = self.remote.run(self.preflight_script(), self.cfg.command_timeout, "preflight")
         out = _checked(r, "preflight", "the preflight checks")
         facts = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        problems = build_release.compatible(self.target, facts)
+        if problems:
+            raise DeployError(
+                "preflight", "the artifact cannot run on this server: " + "; ".join(problems)
+            )
         if facts.get("data") == "absent" and not self.cfg.init_data:
             raise DeployError(
                 "preflight",
                 f"the runtime data directory {self.cfg.data_root} does not exist - pass "
                 "--init-data to create it (it is never created implicitly)",
+            )
+        if facts.get("release_exists"):
+            raise DeployError(
+                "preflight",
+                f"release {self.release} is already on {self.cfg.host} under {self.releases} - "
+                "an artifact is deployed to a destination once; build a new one to redeploy",
             )
         if facts.get("current") and not self.cfg.restart:
             raise DeployError(
@@ -547,7 +482,7 @@ class Deployment:
         except DeployError as exc:
             log(f"could not release {self.lock}: {exc}")
 
-    def transfer(self, pkg: Package, rid: str) -> str:
+    def transfer(self, pkg: build_release.Artifact, rid: str) -> str:
         staging = f"{self.cfg.dest}/staging/{rid}"
         release = f"{self.releases}/{rid}"
         self.run(
@@ -572,8 +507,9 @@ class Deployment:
         )
         return release
 
-    def prepare(self, release: str) -> None:
+    def prepare(self, release: str, pkg: build_release.Artifact) -> None:
         c = self.cfg
+        py = pkg.manifest["python"]
         lines = [
             f"cd {q(release)}",
             "cat > deploy.env <<'DEPLOYENV'",
@@ -590,8 +526,26 @@ class Deployment:
                 f"if [ -f {q(src)} ]; then mkdir -p {q(str(Path(rel).parent))}; "
                 f"ln -sfn {q(src)} {q(rel)}; fi"
             )
-        lines.append("uv sync --locked --no-dev --package uqs --quiet")
-        self.run("prepare", "creating the release's Python environment", *lines)
+        # OFFLINE, from the artifact's wheels: the dependencies with their
+        # locked hashes required, then uqs itself, which the lock does not pin
+        offline = ["--quiet", "--offline", "--no-index", "--python", ".venv/bin/python"]
+        lines += [
+            "export UV_OFFLINE=1",
+            f"uv venv --quiet --python {q(self.target['python'])} .venv",
+            " ".join(
+                [
+                    "uv pip install",
+                    *offline,
+                    "--find-links",
+                    q(py["wheel_dir"]),
+                    "--require-hashes",
+                    "-r",
+                    q(py["requirements"]),
+                ]
+            ),
+            " ".join(["uv pip install", *offline, "--no-deps", q(py["app_wheel"])]),
+        ]
+        self.run("prepare", "installing the release's Python environment offline", *lines)
 
     def smoke(self, release: str) -> None:
         out = self.run(
@@ -613,7 +567,7 @@ class Deployment:
         return self.run(
             stage,
             what,
-            *self.in_release(release, f"uv run --frozen --quiet uqs {argv}"),
+            *self.in_release(release, f".venv/bin/uqs {argv}"),
             timeout=timeout,
         )
 
@@ -622,7 +576,7 @@ class Deployment:
             script(
                 *self.in_release(
                     release,
-                    "uv run --frozen --quiet python scripts/deploy_verify.py "
+                    ".venv/bin/python scripts/deploy_verify.py "
                     f"--profile {q(self.cfg.profile)} --deadline {self.cfg.verify_timeout}",
                 )
             ),
@@ -643,7 +597,7 @@ class Deployment:
             script(
                 *self.in_release(
                     release,
-                    "uv run --frozen --quiet python scripts/deploy_verify.py "
+                    ".venv/bin/python scripts/deploy_verify.py "
                     f"--profile {q(self.cfg.profile)} --ports-free",
                 )
             ),
@@ -696,7 +650,11 @@ else
   test -w "$(dirname "$dest")" || fail "cannot create $dest: its parent is not writable"
 fi
 command -v uv >/dev/null || fail "uv is not on PATH"
-uv python find '>=3.14' >/dev/null 2>&1 || fail "uv finds no Python 3.14"
+py=$(uv python find "$python" 2>/dev/null) ||
+  fail "uv finds no Python $python - the release's wheels need it"
+echo "python=$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+echo "os=$(uname -s)"
+echo "arch=$(uname -m)"
 for tool in bash envsubst rlwrap tar timeout python3; do
   command -v "$tool" >/dev/null || fail "$tool is not on PATH - the release needs it"
 done
@@ -720,6 +678,7 @@ if [ -n "$torq_app_home" ]; then
 fi
 if [ -d "$data" ]; then echo "data=present"; else echo "data=absent"; fi
 if [ -L "$current" ]; then echo "current=$(basename "$(readlink "$current")")"; fi
+if [ -n "$release_dir" ] && [ -e "$release_dir" ]; then echo "release_exists=yes"; fi
 if [ -d "$lock" ]; then echo "locked=$(cat "$lock/owner" 2>/dev/null || echo unknown)"; fi
 """
 
@@ -727,7 +686,9 @@ if [ -d "$lock" ]; then echo "locked=$(cat "$lock/owner" 2>/dev/null || echo unk
 # ------------------------------------------------------------------ driver
 
 
-def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deployment) -> str:
+def plan(
+    cfg: Config, pkg: build_release.Artifact, rid: str, facts: dict[str, str], dep: Deployment
+) -> str:
     """What --dry-run shows: the payload, the commands, the planned restart."""
     previous = facts.get("current")
     restart = (
@@ -741,7 +702,9 @@ def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deploy
         "lock      " + f"mkdir {dep.lock}",
         "transfer  "
         + f"scp {pkg.path.name} {cfg.host}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})",
-        "prepare   " + f"{release}: deploy.env ({exported}); uv sync --locked",
+        "prepare   "
+        + f"{release}: deploy.env ({exported}); offline install of "
+        + f"{pkg.manifest['python']['wheels']} wheels",
         "smoke     " + f"q scripts/deploy_smoke.q (timeout {cfg.smoke_timeout}s)",
         "restart   " + restart,
         "ports     " + f"scripts/deploy_verify.py --profile {cfg.profile} --ports-free",
@@ -751,11 +714,16 @@ def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deploy
         "activate  " + f"{dep.current} -> releases/{rid}",
     ]
     size = pkg.path.stat().st_size
+    t = pkg.manifest["target"]
     return "\n".join(
         [
             f"release {rid}: revision {pkg.manifest['revision']}"
             + (" (with uncommitted changes)" if pkg.manifest["dirty"] else ""),
-            f"payload: {len(pkg.files)} files, {size} bytes compressed, sha256 {pkg.sha256}",
+            f"artifact: {pkg.path.name}, {len(pkg.files)} files, {size} bytes compressed, "
+            f"sha256 {pkg.sha256}",
+            f"target: {t['os']}/{t['arch']}, Python {t['python']} - "
+            f"the server reports {facts.get('os', '?')}/{facts.get('arch', '?')}, "
+            f"Python {facts.get('python', '?')}",
             f"data: {cfg.data_root} ({facts.get('data', 'unknown')}"
             + (", created by --init-data" if facts.get("data") == "absent" else "")
             + ")",
@@ -765,40 +733,37 @@ def plan(cfg: Config, pkg: Package, rid: str, facts: dict[str, str], dep: Deploy
     )
 
 
-def deploy(
-    cfg: Config,
-    remote: Remote,
-    *,
-    root: Path = ROOT,
-    git: Runner = subprocess.run,
-    out=sys.stdout,
-) -> int:
-    dep = Deployment(cfg, remote, root)
-    rev, dirty = revision(root, git)
-    if dirty and not cfg.allow_dirty:
-        raise DeployError(
-            "package", "the tree has uncommitted changes - commit them, or pass --allow-dirty"
-        )
-    rid = release_id(rev)
+def deploy(cfg: Config, remote: Remote, *, root: Path = ROOT, out=sys.stdout) -> int:
+    log(f"checking {cfg.artifact}")
+    pkg = load_artifact(cfg.artifact)
+    rid = pkg.release
+    dep = Deployment(cfg, remote, pkg.manifest["target"], root, rid)
     report = Report(
-        release=rid, revision=rev, dirty=dirty, host=cfg.host, dest=cfg.dest, profile=cfg.profile
+        release=rid,
+        revision=pkg.manifest["revision"],
+        dirty=pkg.manifest["dirty"],
+        host=cfg.host,
+        dest=cfg.dest,
+        profile=cfg.profile,
     )
 
     log(f"preflight on {cfg.host}")
     facts = dep.preflight()
     report.previous_release = facts.get("current")
-
-    with tempfile.TemporaryDirectory() as tmp:
-        log("packaging")
-        pkg = build_package(root, Path(tmp), rid, rev, dirty, tracked_files(root, git))
-        if cfg.dry_run:
-            print(plan(cfg, pkg, rid, facts, dep), file=out)
-            return 0
-        return _run(dep, cfg, pkg, rid, report, facts, out)
+    if cfg.dry_run:
+        print(plan(cfg, pkg, rid, facts, dep), file=out)
+        return 0
+    return _run(dep, cfg, pkg, rid, report, facts, out)
 
 
 def _run(
-    dep: Deployment, cfg: Config, pkg: Package, rid: str, report: Report, facts: dict, out
+    dep: Deployment,
+    cfg: Config,
+    pkg: build_release.Artifact,
+    rid: str,
+    report: Report,
+    facts: dict,
+    out,
 ) -> int:
     dep.take_lock()
     release: str | None = None
@@ -811,7 +776,7 @@ def _run(
         log(f"transferring release {rid}")
         release = dep.transfer(pkg, rid)
         log("preparing the release environment")
-        dep.prepare(release)
+        dep.prepare(release, pkg)
         log("offline smoke test")
         dep.smoke(release)
         report.checks["smoke"] = "ok"
