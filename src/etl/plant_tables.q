@@ -206,7 +206,11 @@ adopt_vendored:{[path]
     {[d] i:d?":"; (` sv `.qetl.plant,`$i#d) set value (i+1)_d; `$i#d} each defs}
 
 / The vendored tables' names, so a caller can tell them from this tree's own.
-vendored:adopt_vendored "lib/torq-finance-starter-pack/database.q";
+/ The starter pack is $TORQAPPHOME's when that is set - uqs sets it for every
+/ process it starts, and a deployment points it at an existing install that
+/ the release does not ship (#773) - and the vendored copy otherwise.
+vendored:adopt_vendored $[count getenv`TORQAPPHOME; getenv[`TORQAPPHOME],"/database.q";
+    "lib/torq-finance-starter-pack/database.q"];
 
 / This tree's own plant tables: every one except the vendored three.
 / @return the table names

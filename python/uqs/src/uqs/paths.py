@@ -7,7 +7,6 @@ rather than recomputing paths, so a relocated demo is one change here."""
 from __future__ import annotations
 
 import os
-import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -161,7 +160,9 @@ class UqsPaths:
 
 #: Directories that together identify this repository's root and nothing else.
 #: Both, because either alone is a plausible name inside some other tree.
-_ROOT_MARKERS = (Path("lib") / "torq", ETL_DIR)
+#: Not lib/torq: a deployed release uses an external TorQ (TORQHOME) and does
+#: not ship the vendored one (#773), and it is still this repository.
+_ROOT_MARKERS = (ETL_DIR, PACKAGE_DIR)
 
 
 def repo_root() -> Path:
@@ -196,6 +197,38 @@ def repo_root() -> Path:
     )
 
 
+#: The variables that move what a deployment keeps outside its release (#773):
+#: an existing TorQ, an existing finance starter pack, and the runtime data -
+#: HDB, tickerplant logs, status - which must survive every release. TorQ's
+#: own names for the first two, which torq.sh and every process already read.
+TORQHOME_ENV = "TORQHOME"
+TORQAPPHOME_ENV = "TORQAPPHOME"
+DATA_ROOT_ENV = "UQS_DATA_ROOT"
+
+
+def _configured_dir(var: str, marker: str | None, what: str) -> Path | None:
+    """The directory `var` names, or None when it is unset.
+
+    Set but wrong is refused, never ignored: falling back to the bundled
+    tree would start a stack on a TorQ, or a data directory, nobody chose.
+    """
+    raw = os.environ.get(var, "").strip()
+    if not raw:
+        return None
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        raise UqsError(f"{var}={raw!r} must be an absolute path to {what}")
+    if not path.is_dir():
+        raise UqsError(
+            f"{var}={raw!r} is not a directory - it should be {what}; unset it to use the default"
+        )
+    if marker is not None and not (path / marker).is_file():
+        raise UqsError(
+            f"{var}={raw!r} has no {marker}, so it is not {what}; unset it to use the default"
+        )
+    return path
+
+
 def paths_for_root(root: Path, runtime: str | None = None) -> UqsPaths:
     """Every path the stack uses, for a repository checked out at `root`.
 
@@ -205,17 +238,27 @@ def paths_for_root(root: Path, runtime: str | None = None) -> UqsPaths:
 
     `runtime` defaults to UQS_RUNTIME's. Each has its own data directory,
     its declaration's `data_dir`: one runtime's HDB holds tables another lacks.
+
+    TORQHOME and TORQAPPHOME, when set, name an existing TorQ and starter
+    pack in place of the vendored lib/ trees; UQS_DATA_ROOT, when set, holds
+    each runtime's data directory in place of the checkout's output/ - so a
+    deployed release keeps its data outside itself (#773). Everything else
+    reads these paths, so the launcher, the generated environment and the
+    prerequisite checks follow them without a branch of their own.
     """
     runtime = runtime or runtime_from_env()
     if runtime not in RUNTIMES:
         raise UqsError(f"{runtime!r} is not a runtime - choose one of: {', '.join(RUNTIMES)}")
+    torqhome = _configured_dir(TORQHOME_ENV, "torq.q", "a TorQ installation")
+    torqapphome = _configured_dir(TORQAPPHOME_ENV, "database.q", "a TorQ finance starter pack")
+    data_root = _configured_dir(DATA_ROOT_ENV, None, "the directory runtime data lives in")
     return UqsPaths(
         repo_root=root,
-        torqhome=root / "lib" / "torq",
-        torqapphome=root / "lib" / "torq-finance-starter-pack",
+        torqhome=torqhome or root / "lib" / "torq",
+        torqapphome=torqapphome or root / "lib" / "torq-finance-starter-pack",
         # output/, with everything else the repository generates at runtime -
         # not scripts/output/, where it used to live beside the source.
-        torqdata=root / "output" / RUNTIMES[runtime].data_dir,
+        torqdata=(data_root or root / "output") / RUNTIMES[runtime].data_dir,
         scripts_dir=root / "scripts",
         orchestrator_dir=root / PACKAGE_DIR,
         runtime=runtime,
@@ -290,11 +333,14 @@ def check_data_dir_was_migrated(paths: UqsPaths) -> None:
 def check_prerequisites(paths: UqsPaths) -> None:
     check_data_dir_was_migrated(paths)
     if not (paths.torqhome / "torq.q").is_file():
-        raise UqsError(f"{paths.torqhome} not found or missing torq.q - is lib/torq vendored?")
+        raise UqsError(
+            f"{paths.torqhome} not found or missing torq.q - is lib/torq vendored, "
+            f"or {TORQHOME_ENV} set to a TorQ installation?"
+        )
     if not (paths.torqapphome / "database.q").is_file():
         raise UqsError(
             f"{paths.torqapphome} not found or missing database.q - "
-            "is lib/torq-finance-starter-pack vendored?"
+            f"is lib/torq-finance-starter-pack vendored, or {TORQAPPHOME_ENV} set to one?"
         )
     for tool in ("envsubst", "rlwrap"):
         if shutil.which(tool) is None:
@@ -302,98 +348,3 @@ def check_prerequisites(paths: UqsPaths) -> None:
                 f"'{tool}' not found on PATH - torq.sh needs it "
                 "(macOS: brew install gettext rlwrap)"
             )
-
-
-#: One entry `clean` would remove: its path, and the bytes it holds.
-CleanTarget = tuple[Path, int]
-
-
-def _entry_size(entry: Path) -> int:
-    """Bytes under `entry`, following no symlinks and raising on nothing.
-
-    A file that vanishes mid-walk (a live stack rotating a log) contributes
-    zero rather than failing the whole listing - the size is here to tell an
-    operator how much is about to go, not to be an audited total.
-    """
-    if entry.is_file() or entry.is_symlink():
-        try:
-            return entry.lstat().st_size
-        except OSError:
-            return 0
-    total = 0
-    for child in entry.rglob("*"):
-        try:
-            if child.is_file() and not child.is_symlink():
-                total += child.lstat().st_size
-        except OSError:
-            continue
-    return total
-
-
-def clean_targets(paths: UqsPaths, match: str | None = None) -> list[CleanTarget]:
-    """What `clean` would remove, deepest-matching-first, with sizes.
-
-    Without `match` this is the whole data directory as a single entry, which
-    is what `clean` has always removed. With one, the tree is walked top-down
-    and each path is tested as a POSIX-style path RELATIVE to the data
-    directory (`logs`, `logs/out_rdb1.log`), so the pattern reads the way the
-    operator sees the tree rather than against an absolute path whose prefix
-    is different on every machine.
-
-    A directory that matches is taken whole and not descended into: matching
-    `^logs$` means the operator asked for the logs, not for a list of 937
-    files that happens to be the same thing. A directory that does not match
-    is descended, so `logs/out_rdb1` can be reached without naming `logs`.
-
-    `re.search`, not `re.fullmatch`: `--match logs` should find the logs.
-    Anchor with `^`/`$` to be exact.
-    """
-    root = paths.torqdata
-    if not root.exists():
-        return []
-    if match is None:
-        return [(root, _entry_size(root))]
-    try:
-        pattern = re.compile(match)
-    except re.error as exc:
-        raise UqsError(f"--match is not a valid regular expression: {exc}") from exc
-
-    found: list[CleanTarget] = []
-
-    def walk(directory: Path) -> None:
-        for entry in sorted(directory.iterdir()):
-            relative = entry.relative_to(root).as_posix()
-            if pattern.search(relative):
-                found.append((entry, _entry_size(entry)))
-            elif entry.is_dir() and not entry.is_symlink():
-                walk(entry)
-
-    walk(root)
-    return found
-
-
-def clean(paths: UqsPaths, match: str | None = None, dry_run: bool = False) -> list[CleanTarget]:
-    """Remove the data directory, or the parts of it `match` selects.
-
-    Returns what was removed - or, with `dry_run`, what would have been, having
-    removed nothing. The caller reports; this decides and acts, so that the
-    listing a dry run shows is produced by the same walk that the real
-    removal uses and cannot describe a different set.
-    """
-    targets = clean_targets(paths, match)
-    if not targets:
-        if match is not None:
-            log.info("nothing under {} matches {!r}", paths.torqdata, match)
-        else:
-            log.info("{} does not exist, nothing to clean", paths.torqdata)
-        return []
-    for entry, _size in targets:
-        if dry_run:
-            log.info("would remove {}", entry)
-            continue
-        log.info("Removing {}", entry)
-        if entry.is_dir() and not entry.is_symlink():
-            shutil.rmtree(entry)
-        else:
-            entry.unlink(missing_ok=True)
-    return targets

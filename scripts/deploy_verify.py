@@ -1,0 +1,207 @@
+"""deploy_verify.py - is a deployed profile actually up? (#773)
+
+scripts/deploy.py runs this ON THE SERVER, inside the release's own
+environment, after `uqs start --profile ...` has returned. A start command
+that returned says only that torq.sh launched something; a deployment
+succeeds when every process the profile promises answers. So for each one,
+until a deadline:
+
+  identity  - `.proc.procname` over q IPC is that process's own name, so the
+              port is held by the process meant and not a leftover;
+  library   - where the quant library is loaded (the pipeline processes,
+              through .qtorq.load_uqf), a known forward comes back right;
+  ETL       - where the ETL tree is loaded, every registered transform's own
+              examples pass (.qetl.transform.verify_all) - a synthetic check
+              that reads and writes nothing.
+
+A profile with pipeline processes promises ETL, and fails if none of them ran
+the ETL check. The result is one JSON object on stdout, ending in
+DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED, and the exit code agrees with it.
+Nothing secret is printed: the IPC credentials are the stack's defaults and
+never appear in the output.
+
+`--ports-free` asks only whether something already listens on the profile's
+ports - deploy.py runs it just before it starts the profile, so a port held
+by anything else fails the deployment before a process can wedge on it.
+
+Usage (from the release root):
+    uv run --frozen python scripts/deploy_verify.py --profile essential --deadline 180
+    uv run --frozen python scripts/deploy_verify.py --profile essential --ports-free
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
+
+OK_MARKER = "DEPLOY_VERIFY_OK"
+FAILED_MARKER = "DEPLOY_VERIFY_FAILED"
+
+IDENTITY_EXPR = ".proc.procname"
+#: The same forward deploy_smoke.q checks offline; 0n where no library is loaded.
+LIBRARY_EXPR = "@[{.qfwd.fwd_simple[1.1;0.05;0.02;1f]};::;0n]"
+LIBRARY_EXPECTED = 1.1323529411764708
+#: 1b or 0b where the ETL tree is loaded; 0N where it is not.
+ETL_EXPR = "@[{all exec passed from .qetl.transform.verify_all[]};::;0N]"
+
+Query = Callable[[str, int], object]
+
+
+@dataclass
+class ProcessCheck:
+    """What one process answered."""
+
+    process: str
+    port: int
+    pipeline: bool
+    identity: str = ""
+    library: str = "not checked"
+    etl: str = "not checked"
+    ok: bool = False
+    error: str = ""
+
+
+def check_process(proc: ProcessCheck, query: Query) -> ProcessCheck:
+    """Ask one process who it is and, where it has them, the library and ETL
+    checks. Raises when it does not answer, so the caller retries it."""
+    name = str(query(IDENTITY_EXPR, proc.port))
+    proc.identity = name
+    if name != proc.process:
+        proc.error = f"port {proc.port} answered as {name!r}, not {proc.process}"
+        proc.ok = False
+        return proc
+    value = query(LIBRARY_EXPR, proc.port)
+    if _is_null(value):
+        proc.library = "not loaded"
+    elif isinstance(value, (int, float)) and abs(value - LIBRARY_EXPECTED) < 1e-6:
+        proc.library = "ok"
+    else:
+        proc.library = f"wrong: {value!r}, expected {LIBRARY_EXPECTED!r}"
+    etl = query(ETL_EXPR, proc.port)
+    proc.etl = "not loaded" if _is_null(etl) else ("ok" if bool(etl) else "failed")
+    proc.ok = not proc.library.startswith("wrong") and proc.etl != "failed"
+    proc.error = "" if proc.ok else "a library or ETL check failed"
+    return proc
+
+
+def _is_null(value: object) -> bool:
+    if value is None:
+        return True
+    try:
+        return value != value  # NaN, q's float null
+    except Exception:  # noqa: BLE001 - an exotic object is not a null
+        return False
+
+
+def verify(
+    expected: dict[str, int],
+    pipelines: set[str],
+    query: Query,
+    deadline_s: float,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    poll_s: float = 2.0,
+) -> tuple[bool, list[ProcessCheck], str]:
+    """(passed, one check per process, why it failed or "")."""
+    checks = {
+        name: ProcessCheck(process=name, port=port, pipeline=name in pipelines)
+        for name, port in expected.items()
+    }
+    pending = set(checks)
+    end = clock() + deadline_s
+    while pending:
+        for name in sorted(pending):
+            try:
+                check_process(checks[name], query)
+            except Exception as exc:  # noqa: BLE001 - not answering yet; retried until the deadline
+                checks[name].error = f"no answer: {type(exc).__name__}"
+                continue
+            pending.discard(name)
+        if not pending or clock() >= end:
+            break
+        sleep(poll_s)
+    results = [checks[name] for name in expected]
+    unanswered = sorted(pending)
+    if unanswered:
+        return False, results, f"no answer within {deadline_s:g}s from {', '.join(unanswered)}"
+    bad = [c.process for c in results if not c.ok]
+    if bad:
+        return False, results, f"checks failed on {', '.join(bad)}"
+    if pipelines & set(expected) and not any(c.etl == "ok" for c in results):
+        return False, results, "the profile has pipeline processes, but none ran the ETL check"
+    return True, results, ""
+
+
+def busy_ports(expected: dict[str, int], connect: Callable[[int], bool]) -> dict[str, int]:
+    """The profile's processes whose port something already listens on."""
+    return {name: port for name, port in expected.items() if connect(port)}
+
+
+def _listening(port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _expected(profile: str, base_port: int | None) -> tuple[dict[str, int], set[str]]:
+    from uqs.model import profiles
+    from uqs.model.registry import PIPELINES
+    from uqs.paths import default_paths
+    from uqs.stack import listing
+
+    names = profiles.resolve([profile])
+    ports = listing.configured_ports(default_paths(), base_port=base_port)
+    missing = [n for n in names if n not in ports]
+    if missing:
+        raise SystemExit(f"{FAILED_MARKER}: no port for {', '.join(missing)}")
+    return {n: int(ports[n]) for n in names}, {p.procname for p in PIPELINES}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--profile", required=True)
+    parser.add_argument("--deadline", type=float, default=180.0, help="seconds")
+    parser.add_argument("--query-timeout", type=int, default=5, help="seconds per query")
+    parser.add_argument("--port", type=int, default=None, help="the stack's base port")
+    parser.add_argument(
+        "--ports-free",
+        action="store_true",
+        help="only check that nothing listens on the profile's ports yet",
+    )
+    args = parser.parse_args(argv)
+
+    expected, pipelines = _expected(args.profile, args.port)
+    if args.ports_free:
+        busy = busy_ports(expected, _listening)
+        print(json.dumps({"profile": args.profile, "busy": busy}))
+        print(FAILED_MARKER if busy else OK_MARKER)
+        return 1 if busy else 0
+
+    from uqs.stack import runtime
+
+    def query(expr: str, port: int) -> object:
+        return runtime.query(expr, port, timeout=args.query_timeout)
+
+    passed, results, why = verify(expected, pipelines, query, args.deadline)
+    print(
+        json.dumps(
+            {
+                "profile": args.profile,
+                "passed": passed,
+                "reason": why,
+                "processes": [asdict(r) for r in results],
+            }
+        )
+    )
+    print(OK_MARKER if passed else FAILED_MARKER)
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

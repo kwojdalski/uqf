@@ -30,6 +30,7 @@ from uqs.external.crypto import (
 )
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError
+from uqs.stack import clean as stack_clean
 from uqs.stack import listing, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
@@ -92,7 +93,7 @@ def uqs_clean() -> str:
     """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample
     data). Stop the demo first - this does not stop running processes.
     """
-    stack_paths.clean(stack_paths.default_paths())
+    stack_clean.clean(stack_paths.default_paths())
     return "cleaned output/uqs/"
 
 

@@ -17,11 +17,11 @@ from typing import Annotated
 
 import typer
 
-from uqs import paths as stack_paths
 from uqs.cli import completion
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
+from uqs.stack import clean as stack_clean
 
 remove_app = typer.Typer(
     no_args_is_help=True,
@@ -67,7 +67,7 @@ def remove_output(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     doing first for anything but a full wipe, because this is not reversible.
     """
     try:
-        targets = stack_paths.clean(_paths(), match=match, dry_run=dry_run)
+        targets = stack_clean.clean(_paths(), match=match, dry_run=dry_run)
     except UqsError as exc:
         _die(exc)
         return
