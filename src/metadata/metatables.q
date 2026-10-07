@@ -56,6 +56,7 @@ definition:{[tab;partition_col;group_cols;aggregates]
     `table`partition_col`group_cols`aggregates!(tab;partition_col;group_cols;aggregates)};
 
 / Private: validate a definition against current source metadata and normalize partitions.
+/ @private
 require_request:{[spec;partitions]
     if[not 99h=type spec;'"metatables: definition must be a dictionary"];
     fields:`table`partition_col`group_cols`aggregates;
@@ -86,6 +87,7 @@ fingerprint:{[spec]
     "G"$"-" sv 0 8 12 16 20 cut raze string md5 "c"$-8!spec};
 
 / Private: query a single partition; preserve typed empty grouped results.
+/ @private
 collect_partition:{[spec;part;observed_at;definition_id]
     grouping:spec`group_cols;
     by_expr:$[count grouping;grouping!grouping;0b];
@@ -137,6 +139,7 @@ refresh:{[current;spec;partitions]
 / Private: reconcile one date against the current coverage claims.
 / A window counts towards a date only when it lies wholly inside that day; one
 / that crosses midnight cannot be split, so its rows cannot be attributed.
+/ @private
 reconcile_date:{[claims;observed;day]
     start:`timestamp$day;
     end:`timestamp$day+1;
@@ -194,6 +197,7 @@ reconcile:{[metatable;dates;ds;part;version]
     reconcile_date[claims;observed;]each distinct dates};
 
 / Private: temporal bounds preserve typed nulls for empty/all-null slices.
+/ @private
 time_bound:{[direction;values]
     if[not (type values) in 12 13 14 15 16 17 18 19h;
         '"metatables: time range columns must be temporal vectors"];

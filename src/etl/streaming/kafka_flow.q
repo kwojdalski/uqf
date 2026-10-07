@@ -84,6 +84,7 @@ held:.qetl.plant.published `kafka_client_flow
 / record and `0 > 0` drops it.
 / @param rows a batch, carrying `partition` and `offset`
 / @return the rows whose offset is above their partition's mark
+/ @private
 above_high_water:{[rows]
     rows where rows[`offset] > .qpipe.job.kafka_flow.high_water rows`partition}
 
@@ -97,6 +98,7 @@ above_high_water:{[rows]
 / key order, not batch order, and the batch's own order is the topic's.
 / @param rows a batch, carrying `partition` and `offset`
 / @return the rows, with any repeated (partition;offset) reduced to its first
+/ @private
 first_per_coordinate:{[rows]
     rows asc value {first each group flip (x`partition;x`offset)}[rows]}
 
@@ -108,6 +110,7 @@ first_per_coordinate:{[rows]
 / duplicate this job exists to stop.
 / @param rows the batch about to be published
 / @return nothing - it updates `high_water` in place
+/ @private
 advance:{[rows]
     m:exec max offset by partition from rows;
     hw:.qpipe.job.kafka_flow.high_water;
@@ -146,6 +149,7 @@ on_batch:{[t;x]
 / PUBLISH FIRST. Raising the marks before publishing meant a publish that
 / threw left them raised over rows that never went out, so a redelivery
 / was dropped as already seen.
+/ @private
 publish_fresh:{[rows]
     fresh:.qpipe.job.kafka_flow.first_per_coordinate .qpipe.job.kafka_flow.above_high_water rows;
     if[0=count fresh; :0];

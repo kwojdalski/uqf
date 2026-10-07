@@ -36,6 +36,7 @@ is_namespace:{[v]
     ` in key v}
 
 / Private: the namespaces DIRECTLY under one, fully qualified.
+/ @private
 children:{[ns]
     d:@[value;ns;{[e] (::)}];
     if[not is_namespace d; :`symbol$()];
@@ -45,6 +46,7 @@ children:{[ns]
 
 / Private: a namespace and, recursively, everything nested under it.
 / Depth-first, the parent before its children.
+/ @private
 descend:{[ns] ns,raze descend each children ns}
 
 / Every namespace this tree owns, leaves and containers alike, fully

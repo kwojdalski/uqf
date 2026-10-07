@@ -143,6 +143,7 @@ defined:{[] exec name from key methods}
 / Private: the ordinary lot-opening rule - a new lot on the end of the
 / queue, keeping every fill's own price. Everything except weighted uses
 / this; they differ only in which end `pick reaches into.
+/ @private
 append_lot:{[lots;lot] lots,enlist lot}
 
 / Private: weighted-average lot-opening - fold the fill into the single
@@ -154,6 +155,7 @@ append_lot:{[lots;lot] lots,enlist lot}
 / better answer: weighted average has destroyed the distinction the id
 / would name. Under this method open_id labels the lot, not a unique trade
 / - which is the whole reason fifo and lifo exist.
+/ @private
 merge_lot:{[lots;lot]
     if[0=count lots; :enlist lot];
     open_lot:last lots;
@@ -162,16 +164,20 @@ merge_lot:{[lots;lot]
     (-1_lots),enlist @[open_lot;`qty`price;:;(total;weighted)]}
 
 / Private: pick the oldest open lot (fifo).
+/ @private
 pick_first:{[lots] 0}
 
 / Private: pick the newest open lot (lifo).
+/ @private
 pick_last:{[lots] count[lots]-1}
 
 / Private: pick the highest-priced open lot (hifo). For a long book that is
 / highest-cost-first, the convention that realises the smallest gain.
+/ @private
 pick_highest:{[lots] p:lots`price; first where p=max p}
 
 / Private: pick the lowest-priced open lot (lofo), hifo's mirror.
+/ @private
 pick_lowest:{[lots] p:lots`price; first where p=min p}
 
 define[`fifo;     `open`pick`why!(append_lot; pick_first;   "oldest open lot first")];
@@ -227,6 +233,7 @@ default_opts:`method`by`universe`where`opening`asof!(`fifo; enlist `sym; all_row
 / `by is normalised to a vector for .qetl.source.define's reason: storing one
 / shape means no consumer downstream has to decide whether a single-column
 / bucket needs enlisting.
+/ @private
 normalised_opts:{[opts]
     o:$[-11h=type opts; (enlist `method)!enlist opts;
         99h=type opts; opts;
@@ -255,6 +262,7 @@ required_cols:`time`sym`side`size`trade_price
 / trade_id is the row index of the table AS SUPPLIED when the caller has
 / not provided one, assigned before any filtering or sorting so that an id
 / in the ledger still points at a row of the table the caller passed in.
+/ @private
 prepared:{[trades;bys]
     if[not 98h=type trades; '"allocate: trades must be a table"];
     .qschema.require_cols[`allocate;`trades;trades;distinct required_cols,bys];
@@ -268,6 +276,7 @@ required_lot_cols:`qty`price`side
 
 / Private: check a carried-in lot table, and give back an empty one when
 / the caller passed nothing.
+/ @private
 prepared_opening:{[opening;bys]
     if[(::)~opening; :()];
     if[not 98h=type opening; '"allocate: opening must be a table of lots"];
@@ -291,11 +300,13 @@ prepared_opening:{[opening;bys]
 / table's own, so no assumption is made about how a desk spells a
 / timestamp. qty and price are pinned to float - a fill of integer size
 / still averages to a fraction.
+/ @private
 new_lots:{[trades]
     ([] trade_id:0#trades`trade_id; time:0#trades`time; qty:`float$();
         price:`float$(); side:0#trades`side)}
 
 / Private: an empty match ledger, typed from the trades table the same way.
+/ @private
 new_matches:{[trades]
     ([] open_id:0#trades`trade_id; open_time:0#trades`time; open_side:0#trades`side;
         close_id:0#trades`trade_id; close_time:0#trades`time; qty:`float$();
@@ -312,6 +323,7 @@ new_matches:{[trades]
 / Every lot in a bucket shares a side - you cannot be long and short the
 / same thing at once here - so checking the first lot's side decides
 / whether this trade closes or opens.
+/ @private
 step:{[m;state;row]
     lots:state`lots;
     out:state`matches;
@@ -339,6 +351,7 @@ step:{[m;state;row]
 / Takes the values rather than reading them off the trades, because a
 / bucket can exist in `opening and have no trades at all - a position
 / carried in and not touched today still has to appear in the residual.
+/ @private
 with_by:{[out;kv;bys]
     n:count out;
     / Joined as column dictionaries, not `out ,' flip bys!...`: for an EMPTY
@@ -354,6 +367,7 @@ with_by:{[out;kv;bys]
 / not a list of dicts you can look a row up in - so the single- and
 / multi-column cases stopped being one code path. As a table both cases
 / are: find each row's key in the distinct keys, group on the answer.
+/ @private
 key_table:{[t;bys] ?[t;();0b;bys!bys]}
 
 / Private: the seed lot queue for one bucket - the carried-in position,
@@ -362,6 +376,7 @@ key_table:{[t;bys] ?[t;();0b;bys!bys]}
 / definition). Opening lots sit at the FRONT of the queue: they are the
 / oldest thing in it, so fifo reaches them first and lifo reaches them
 / last, exactly as if their trades had been in the table.
+/ @private
 seed_lots:{[trades;opening;ix]
     empty:new_lots trades;
     if[0=count ix; :empty];
@@ -376,6 +391,7 @@ seed_lots:{[trades;opening;ix]
         qty:"f"$rows`qty; price:"f"$rows`price; side:rows`side)}
 
 / Private: match one bucket, returning its ledger and its leftover lots.
+/ @private
 bucket:{[m;bys;kv;seed;sub]
     st:(step[m])/[`lots`matches!(seed; new_matches sub); sub];
     `matches`residual!(with_by[st`matches;kv;bys]; with_by[st`lots;kv;bys])}

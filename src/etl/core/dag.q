@@ -121,6 +121,7 @@ producers:{[table_name] js:defined[]; js where {[t;j] t in (def j)`outputs}[tabl
 consumers:{[table_name] js:defined[]; js where {[t;j] t in (def j)`inputs}[table_name] each js}
 
 / Private: the empty edge table, so every return path has one shape.
+/ @private
 no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
 
 / Every edge in the graph, one row per (producer; table; consumer).
@@ -155,6 +156,7 @@ sinks:{[]
 
 / Private: job-level dependency pairs, with external entry points dropped -
 / a null upstream is not a job and cannot be waited on.
+/ @private
 job_edges:{[] distinct select upstream, downstream from edges[] where not null upstream}
 
 / ----------------------------------------------------------- ORDERING
@@ -200,6 +202,7 @@ layers:{[]
 / ----------------------------------------------------------- RENDERING
 
 / Private: the characters a d2 node id may contain.
+/ @private
 id_chars:.Q.a,.Q.A,.Q.n,"_"
 
 / Private: a d2-safe node id - every other character becomes "_".
@@ -215,6 +218,7 @@ id_chars:.Q.a,.Q.A,.Q.n,"_"
 / reference to `b` nested inside `a`. So a job named with a dot would not
 / fail to render, it would render as a different graph - which is the worse
 / of the two failures, and the reason this allow-list is not relaxed.
+/ @private
 safe_id:{[s] c:string s; @[c;where not c in id_chars;:;"_"]}
 
 / A d2 diagram of the whole graph, as a newline-joined string.

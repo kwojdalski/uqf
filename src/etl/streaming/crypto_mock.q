@@ -220,6 +220,7 @@ decide:{[row;horizon;draws]
     out}
 
 / Private: the draws for one market row.
+/ @private
 draws:{[]
     (rand[1f]<.qpipe.job.crypto_mock.quote_share; rand 1f; rand 1f;
         .qpipe.job.crypto_mock.beta_draw[.qpipe.job.crypto_mock.fill_alpha;.qpipe.job.crypto_mock.fill_beta];
@@ -227,12 +228,14 @@ draws:{[]
 
 / Private: issue the next fill id for a venue - `<venue>-<n>`, unique
 / within a run the way an exchange's are unique within a venue.
+/ @private
 next_id:{[venue]
     n:1+.qpipe.job.crypto_mock.last_id venue;
     .qpipe.job.crypto_mock.last_id[venue]:n;
     `$string[venue],"-",string n}
 
 / Private: publish every fill decided for one market row.
+/ @private
 publish_fills:{[horizon;row]
     decided:.qpipe.job.crypto_mock.decide[row;horizon;.qpipe.job.crypto_mock.draws[]];
     {[row;f]

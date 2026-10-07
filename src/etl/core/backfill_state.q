@@ -35,6 +35,7 @@ bounded_workers:(`symbol$())!`symbol$()
 / namespace does not exist. Wrapped because `key` on an absent namespace
 / throws rather than returning empty, and a missing namespace is a contract
 / violation we want reported by name rather than as a bare error.
+/ @private
 ns_names:{[ns] @[{key x};ns;`symbol$()]}
 
 / Register a bounded worker. Does NOT validate - require_contract does that,
@@ -383,6 +384,7 @@ durable_lines:{[path;lines] durable_replace[path;{[lines;tmp] (hsym `$tmp) 0: li
 / Private: write through `write[tmp]` beside `path`, keep the current file as
 / `<path>.bak`, then rename the new one into place - durable_set's protocol,
 / whatever the file format.
+/ @private
 durable_replace:{[path;write]
     tmp:path,".tmp";
     write tmp;
@@ -440,6 +442,7 @@ durable_read:{[who;path;reader]
 / an empty file, half an object, or valid JSON that is not an object. A
 / durable_read reader: the old readers returned ()!() here, which every
 / caller then read as "nothing saved".
+/ @private
 read_json_dict:{[path]
     raw:raze read0 hsym `$path;
     if[0=count raw; '"empty file"];

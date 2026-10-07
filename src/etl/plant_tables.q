@@ -169,6 +169,7 @@ problems:{[table_name;rows]
     raze column_problems[table_name;declared;count rows]'[cols want;wt cols want;gt cols want;rows cols want]}
 
 / Private: one column's problems, for `problems`.
+/ @private
 column_problems:{[table_name;declared;n;c;want;got;vals]
     name:string[table_name],".",string c;
     if[not want=" ";

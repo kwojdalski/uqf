@@ -218,6 +218,7 @@ throttle:{[state;breaches;now;period]
 / spelling of it do not collide, and so a null scope value renders as
 / something rather than as an empty string indistinguishable from another
 / column's.
+/ @private
 identity:{[scopes] `$ {"|" sv .Q.s1 each value x} each scopes}
 
 \d .

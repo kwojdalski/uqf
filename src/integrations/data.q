@@ -63,6 +63,7 @@ databentoFile:{[sym;date]
 / doc block rather than between it and the definition: a qDoc block belongs to
 / whatever follows it, so sitting in the middle made the docs describe `pqm`
 / while their own @eg named `pqModule`.
+/ @private
 pqm:(::);
 
 / KX's official pq module (github kx.com KDB-X distribution), loaded and

@@ -268,6 +268,7 @@ ledger_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_coverage"}
 / worker) and deliberately REFUSES rather than waits. A ledger write is a
 / short critical section several workers legitimately contend for, so that
 / one waits - see .qetl.job.bounded.state.with_file_lock.
+/ @private
 lock_path:{[] .qetl.job.bounded.state.file_lock_path `etl_coverage}
 
 / Run `f . args` holding this ledger's mutex.
@@ -323,6 +324,7 @@ reload:{[]
 / @[f;::;e] rather than .[f;();e]: applying a niladic through the dot form
 / passes no argument list q can match, and the error handler swallows the
 / resulting rank error instead of the failure it was written for.
+/ @private
 current_run:{[] @[{.qetl.run.current[]};::;0Ng]}
 
 / Stage a completion event for one completed bounded window.
@@ -399,6 +401,7 @@ stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_pub
 / unpartitioned sentinel ` sees only unpartitioned rows. That is what makes
 / "no read unions across partitions" a property of the code rather than a
 / rule someone has to keep.
+/ @private
 valid_at:{[ds;part;version;as_of]
     init_ledger[];
     select range_from, range_to from ledger[]
@@ -544,6 +547,7 @@ supersede:{[ds;part;version;from_ts;to_ts]
 / Private: the supersession itself, with the lock already held and the ledger
 / already reloaded. Split out so the locked wrapper above reads as what it is
 / rather than burying the interval algebra inside a lambda.
+/ @private
 supersede_locked:{[ds;part;version;from_ts;to_ts]
     now:.z.p;
     / `cur` is a LOCAL copy of still_current, not the namespace global.

@@ -21,6 +21,8 @@
 \l src/init.q
 \l src/integrations/data.q
 \l src/etl/init.q
+/ For .man.private: the names whose qDoc block says @private (#627).
+\l docs/man.q
 
 \d .surface
 
@@ -52,13 +54,15 @@ param_names:{[v] $[is_lambda v; (value v)1; `$()]}
 
 / Every exported name in one namespace, with what can be said about it.
 / .
-/ Leading-underscore and empty names are dropped: the empty symbol appears in
-/ `key` for a namespace and is not a function.
+/ Empty names are dropped: the empty symbol appears in `key` for a namespace
+/ and is not a function. So is every name tagged @private (#627) - plumbing,
+/ whose refactors are not contract changes. That replaced a rule dropping
+/ names that start `_`, which no q identifier can.
 namespace_surface:{[ns]
     full:` sv `,ns;
     names:key full;
     names:names where not names in `;
-    names:names where not (string names) like "_*";
+    names:names where not (` sv/: full,/:names) in `$.man.private;
     names:asc names;
     {[full;nm]
         v:@[{value ` sv x,y}[full];nm;{(::)}];

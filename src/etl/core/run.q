@@ -237,6 +237,7 @@ reload:{[]
 / Its OWN mutex, not .qetl.coverage's: these are different tables, and guarding one
 / with another's lock would serialise writes that never contend while
 / leaving the pair that do unprotected the moment someone changed either.
+/ @private
 under_lock:{[f;args] .qetl.job.bounded.state.with_file_lock[`etl_runs;f;args]}
 
 / ---------------------------------------------------------------- IDENTITY
@@ -324,6 +325,7 @@ proc_name:{[] @[value;`.proc.procname;`]}
 / Private: d's value at k, or `fallback` when d has no k. Presence by `in key`
 / rather than by indexing, because what a dictionary returns for an absent key
 / depends on its value list's prototype.
+/ @private
 given:{[d;k;fallback] $[k in key d; d k; fallback]}
 
 / Upgrade a run ledger written before the range and counts columns.
@@ -434,6 +436,7 @@ release:{[]
 / backtick is noise to every reader of this column.
 / .qrender.full, not -3!: run facts are PERSISTED, and -3! cut them at the
 / console width (#605).
+/ @private
 as_text:{[v] $[10h=type v; v; -11h=type v; string v; .qrender.full v]}
 
 / Attach metadata to one materialisation.
