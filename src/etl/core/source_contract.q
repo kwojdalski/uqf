@@ -220,7 +220,39 @@ default_transport:`ipc
 / credential_example's empty string is what .qetl.source.credential_example
 / reads as "not declared" - it was a null borrowed from whichever source
 / registered first, when this registry was a collapsed dictionary.
-optional_declarations:`transport`credential_example!(default_transport;"")
+/ supporting's empty dict is a source with one input, as every source was
+/ before #617 - see SUPPORTING INPUTS below.
+optional_declarations:`transport`credential_example`supporting!(default_transport;"";()!())
+
+/ ---------------------------------------------------- SUPPORTING INPUTS
+/ .
+/ A source can hand a worker more than one table (#617). A markout needs the
+/ window's fills AND the quotes they are marked against; before this, the
+/ only place to join them was the source's query, where the transform gates
+/ never saw the scoring and the fixture path skipped it.
+/ .
+/ `supporting` names the extra inputs, each with its CONTRACT - an empty
+/ table of the columns and types it must carry - keyed by the name the
+/ transform reads it under, which is also the table name a live check reads
+/ metadata from:
+/ .
+/   supporting:enlist[`quote]!enlist ([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$())
+/ .
+/ With it, query and fixture return a DICTIONARY: the source's own
+/ table_name -> the window's rows, plus each supporting name -> its rows.
+/ The roles are not symmetric, and the asymmetry is the point:
+/ .
+/   - the PRIMARY input (table_name, contract `columns`/`types`) owns the
+/     window. Only it is cut to [range_from;range_to) on time_column, only
+/     its rows are counted, and a window whose primary is empty publishes
+/     nothing whatever the supporting inputs hold.
+/   - a SUPPORTING input is context. Its rows may lie outside the window -
+/     the quote a fill is priced against can predate the window and the one
+/     at its last horizon can follow it - so it is validated, never windowed.
+/ .
+/ A zoned source cannot declare supporting inputs: only the primary's
+/ time_column is converted to UTC, so a supporting table would be read in
+/ the wrong clock with nothing to say so.
 
 / name -> declaration, as a KEYED TABLE declared with its columns (#512).
 / .
@@ -234,7 +266,7 @@ optional_declarations:`transport`credential_example!(default_transport;"")
 / the declaration it always did.
 sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
-    tz:`symbol$(); transport:`symbol$(); credential_example:())
+    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:())
 
 / Register an external source table.
 / .
@@ -335,6 +367,20 @@ define:{[source;decl]
         / long form lives in the comment above rather than in the message.
         '"define: ",string[source],"'s time_column ",string[decl`time_column],
          " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently"];
+    sup:$[`supporting in key decl; decl`supporting; ()!()];
+    if[not 99h=type sup;
+        '"define: ",string[source],"'s supporting must be a dict of input name -> empty table, that input's contract"];
+    if[count sup;
+        if[not 11h=type key sup;
+            '"define: ",string[source],"'s supporting must be keyed by input name, as symbols"];
+        if[not all 98h=type each value sup;
+            '"define: ",string[source],"'s supporting inputs must each be a table - an empty one, its contract"];
+        if[(decl`table_name) in key sup;
+            '"define: ",string[source],"'s supporting names ",string[decl`table_name],
+             ", its own table_name - the primary input is described by columns and types"];
+        if[not `UTC~decl`tz;
+            '"define: ",string[source]," is ",string[decl`tz],
+             " and declares supporting inputs - only the primary is converted to UTC, so they need tz `UTC"]];
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports[];
         '"define: ",string[source],"'s transport must be one of ",(", " sv string transports[])];
@@ -371,6 +417,22 @@ define:{[source;decl]
 / @eg .qetl.source.defined[]
 defined:{[] (key sources)`name}
 
+/ The inputs a source hands its worker, primary first: its table_name, then
+/ each supporting input's name. One name for a source with no supporting
+/ inputs.
+/ @param source a registered source name
+/ @return a symbol vector
+/ @eg .qetl.source.input_names `demo_deals  ->  enlist `deals
+input_names:{[source] d:def source; (enlist d`table_name),key d`supporting}
+
+/ The primary input of what a source returned: the window's own rows, which
+/ are counted and which own the window. The batch itself for a source with
+/ one input; its table_name entry for one with supporting inputs.
+/ @param source a registered source name
+/ @param fetched what the source's query or fixture returned
+/ @return a table
+primary:{[source;fetched] d:def source; $[count d`supporting; fetched d`table_name; fetched]}
+
 / The column(s) identifying a row uniquely, always as a vector.
 / .
 / Exported so a future dedupe or restatement path has one place to ask,
@@ -389,7 +451,8 @@ row_key:{[source] (),(def source)`row_key}
 / key.
 / @param source the registered source's name, as a symbol
 / @return the declaration dict (source, table, target, time_column, row_key,
-/   columns, types, query, fixture, tz)
+/   columns, types, query, fixture, tz, transport, credential_example,
+/   supporting)
 / @throws error naming the source when it was never registered
 / @eg .qetl.source.def `demo_deals
 def:{[source]
@@ -420,31 +483,60 @@ column_names:{[tbl] exec c from 0!meta tbl}
 / addition an outage; a source LOSING a declared column, or changing its
 / type, is precisely the silent breakage worth failing on - a missing column
 / reads as a null in most q code rather than as an error.
+/ A source with supporting inputs returns a dict of tables, and each is held
+/ to its own contract - see SUPPORTING INPUTS.
 / @param source a registered source name
-/ @param tbl a table to check
+/ @param tbl a table to check, or a dict of input name -> table
 / @return 1b when the table satisfies the declaration
 / @throws error naming every missing field and every type mismatch at once
 validate:{[source;tbl]
     decl:def source;
+    if[count decl`supporting; :validate_inputs[source;decl;tbl]];
+    check_table[source;"";decl`columns;decl`types;tbl];
+    .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
+    1b}
+
+/ Private: refuse `tbl` unless it carries `columns` with `types`, naming
+/ every missing field and every type mismatch at once. `what` is "" for a
+/ source's only input, or "'s input <name>" for one of several. A type of
+/ " " - a general column in a supporting input's contract - accepts any.
+check_table:{[source;what;columns;types;tbl]
     present:column_names tbl;
     chars:type_chars tbl;
-    missing:decl[`columns] where not decl[`columns] in present;
+    missing:columns where not columns in present;
     / Report missing columns AND type mismatches together. Reporting only the
     / first class means fixing the columns, re-running, and only then
     / learning the types are wrong too.
-    checkable:decl[`columns] where decl[`columns] in present;
-    expected:decl[`types] decl[`columns]?checkable;
+    checkable:columns where columns in present;
+    expected:types columns?checkable;
     actual:chars present?checkable;
-    wrong:checkable where not expected=actual;
+    bad:not (expected=actual) or expected=" ";
+    wrong:checkable where bad;
     if[count missing,wrong;
-        '"validate: ",string[source]," does not satisfy its contract",
+        '"validate: ",string[source],what," does not satisfy its contract",
          $[count missing; " - missing field(s): ",", " sv string missing; ""],
          $[count wrong;
             " - type mismatch on ",", " sv {x[0]," (expected ",x[1],", got ",x[2],")"} each
-                flip (string wrong;enlist each expected where not expected=actual;
-                      enlist each actual where not expected=actual);
+                flip (string wrong;enlist each expected where bad;enlist each actual where bad);
             ""]];
-    .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
+    }
+
+/ Private: validate what a source with supporting inputs returned - a dict
+/ holding exactly its inputs, each satisfying its own contract.
+validate_inputs:{[source;decl;given]
+    names:(enlist decl`table_name),key decl`supporting;
+    if[not 99h=type given;
+        '"validate: ",string[source]," declares supporting input(s), so it must return a dict of ",
+         (", " sv string names)," - got type ",string type given];
+    if[not (asc key given)~asc names;
+        '"validate: ",string[source]," must return input(s) ",(", " sv string names),
+         " - got ",", " sv string key given];
+    check_table[source;"'s input ",string decl`table_name;decl`columns;decl`types;given decl`table_name];
+    {[source;given;nm;contract]
+        check_table[source;"'s input ",string nm;cols contract;type_chars contract;given nm]
+      }[source;given]'[key decl`supporting;value decl`supporting];
+    .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";
+        `rows`inputs!(count given decl`table_name;names));::];
     1b}
 
 / Validate a source's own fixture against the same contract as live data.
@@ -481,6 +573,20 @@ validate_live:{[source;h]
     wrong:checkable where not expected=actual;
     if[count wrong;
         '"validate_live: ",string[decl`table_name]," type mismatch on ",", " sv string wrong];
+    / Each supporting input is read by its own name, against its contract.
+    {[reader;nm;contract]
+        m:@[reader;nm;{[nm;err] '"validate_live: cannot read metadata for ",string[nm]," (",err,")"}[nm;]];
+        have:exec c from m;
+        want:cols contract;
+        absent:want where not want in have;
+        if[count absent;
+            '"validate_live: supporting input ",string[nm]," is missing ",", " sv string absent];
+        want_t:type_chars contract;
+        have_t:(exec t from m) have?want;
+        off:want where not (want_t=have_t) or want_t=" ";
+        if[count off;
+            '"validate_live: supporting input ",string[nm]," type mismatch on ",", " sv string off]
+      }[reader]'[key decl`supporting;value decl`supporting];
     1b}
 
 / ---------------------------------------------------------- CREDENTIALS
@@ -1030,7 +1136,8 @@ fetch_window:{[source;h;range_from;range_to]
     / fetched vs kept differ only for a zoned source, whose bounds are padded:
     / the difference is the neighbouring windows' rows, dropped on purpose.
     .[{.qetl.log.dbg[x;y;z]};(source;"fetched";
-        `path`fetched`kept`ms!(page 0;count page 1;count out;`long$(.z.p-t0)%1000000));::];
+        `path`fetched`kept`ms!(page 0;count primary[source;page 1];count primary[source;out];
+            `long$(.z.p-t0)%1000000));::];
     (page 0;out)}
 
 / How far to widen a non-UTC source's window, in its own clock.
@@ -1117,6 +1224,16 @@ narrow_to_utc:{[decl;tbl;range_from;range_to]
 / the literal symbol, not the column it names.
 window_fixture:{[decl;range_from;range_to]
     t:(decl`fixture)[];
+    if[0=count decl`supporting; :window_rows[decl;t;range_from;range_to]];
+    / Only the primary owns the window; supporting rows are context and may
+    / lie outside it.
+    if[not 99h=type t;
+        '"window_fixture: ",string[decl`source],"'s fixture must return a dict of its inputs - it declares supporting input(s) ",
+         ", " sv string key decl`supporting];
+    @[t;decl`table_name;window_rows[decl;;range_from;range_to]]}
+
+/ Private: one table's rows inside [range_from;range_to) on time_column.
+window_rows:{[decl;t;range_from;range_to]
     f:decl`time_column;
     if[not f in column_names t;
         '"window_fixture: ",string[decl`source],"'s fixture has no ",string[f],

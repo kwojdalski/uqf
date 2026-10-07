@@ -63,7 +63,7 @@ restarting, or because the fill predates it, is never scored by it.
 A bounded job: give it a range, and it scores every fill in the HDB inside it.
 
 ```
-export UQF_SOURCE_CRED_HDB_MARKOUTS=localhost:<hdb1's port>   # 6053 at the default base port
+export UQF_SOURCE_CRED_HDB_DEMO_MARKOUTS=localhost:<hdb1's port>   # 6053 at the default base port
 uqs backfill hdb_demo_markouts_backfill --version v1 --from 2026-09-01 --to 2026-09-30
 uqs logs hdb_demo_markouts_backfill1 -f
 ```
@@ -75,31 +75,35 @@ queries each window sends to the HDB.
 For each window `[from, to)`, one hour wide by default, the source
 `.qpipe.source.hdb_demo_markouts` (`src/etl/sources/hdb_demo_markouts.q`):
 
-1. reads the fills with `trade_time` in `[from, to)` from the HDB's `trades`;
+1. reads the fills with their `time` in `[from, to)` from the HDB's `trades`;
 2. reads, for the traded pairs, the quotes in `[from, to + 10s)` from `quote`,
    so the last fill's 10s horizon has its quote, **and each pair's last quote
    before `from`**, looking back up to 7 days (`lookback`). Without that, a fill
    early in a window whose latest quote predates the window had nothing to be
    priced against. It scored null, and the target key then replaced the live
-   job's correct row with that null. A window with no fills skips this query and
-   returns an empty table;
-3. scores them with the shared function.
+   job's correct row with that null. A window with no fills skips this query;
+3. hands both over raw: `trades` as the primary input, which owns the window,
+   and `quote` as a supporting input.
 
-The worker (`src/etl/workers/hdb_demo_markouts_backfill.q`) then does what every
-bounded worker does: - checks the rows (an infinite markout fails the window); -
-writes them into `demo_execution_quality`'s partitions; - records the window in
-the coverage ledger, so a rerun of the same range is idle; - asks the HDB to
-reload.
+The worker (`src/etl/workers/hdb_demo_markouts_backfill.q`) scores them in its
+transform, `hdb_demo_markouts_score`, with the shared function - no fills, no
+rows, whatever quotes there are. Then it does what every bounded worker does: -
+checks the rows (an infinite markout fails the window); - writes them into
+`demo_execution_quality`'s partitions; - records the window in the coverage
+ledger, so a rerun of the same range is idle; - asks the HDB to reload.
 
 ### Why it is built this way
 
-- **The scoring is in the source, not a transform.** A bounded worker's
-  transform reads exactly one input, its source's rows (`require_transform`),
-  and a markout needs two tables. The source's `query` runs in the backfill
-  process; only its two selects run on the HDB, which doesn't load the uqf
-  library.
-- **Windows are cut on `trade_time`.** A fill at 10:59:58 in the 10:00-11:00
-  window keeps its 10s markout, even though that lands after 11:00.
+- **The scoring is the worker's transform, not the source's query** (#617). A
+  source can hand over a supporting input beside its primary one, so the fills
+  and the quotes arrive as two named tables and the markout is a transform whose
+  hand-worked examples run in the q suite. Which quotes a window needs - the
+  lookback before it, the longest horizon after it - is still the source's,
+  because that is fetching. Only the two selects run on the HDB, which doesn't
+  load the uqf library.
+- **Windows are cut on the fill's time, the rows' `trade_time`.** A fill at
+  10:59:58 in the 10:00-11:00 window keeps its 10s markout, even though that
+  lands after 11:00.
 - **It reads `trades`, our fills.** They are already in the shape the markout
   needs: a signed `side`, `trade_price` and `pip_factor`. The deal tables
   (`duckdb_deals`, `demo_deals`) aren't marked out yet. They store sides as
