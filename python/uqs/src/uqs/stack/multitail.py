@@ -46,16 +46,15 @@ def multitail_command(
     if lines < 0:
         raise UqsError(f"--lines must not be negative, not {lines}")
     procnames = resolve_procnames(paths, procs)
-    log_dir = paths.torqdata / "logs"
     files = [
-        log_dir / f"{kind}_{name}.log"
+        paths.torq_log(name, kind)
         for name in procnames
         for kind in MULTITAIL_STREAMS[stream]
-        if (log_dir / f"{kind}_{name}.log").is_file()
+        if paths.torq_log(name, kind).is_file()
     ]
     if not files:
         raise UqsError(
-            f"no {stream} log files found for {procnames} under {log_dir} "
+            f"no {stream} log files found for {procnames} under {paths.log_dir} "
             "- has the demo been started at least once?"
         )
     # Stacked panes are multitail's default, and it REFUSES `-s 1` ("must

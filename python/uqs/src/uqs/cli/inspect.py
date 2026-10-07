@@ -52,7 +52,7 @@ def hdb_check(
     actually short. Reads the filesystem, so it needs no running stack.
     """
     paths = _paths()
-    hdb_root = paths.torqdata / "hdb"
+    hdb_root = paths.hdb_dir
     if not hdb_root.is_dir():
         console.print(f"[yellow]no HDB at {hdb_root}[/] - nothing to check")
         return

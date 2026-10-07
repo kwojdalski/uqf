@@ -35,6 +35,7 @@ from pathlib import Path
 from uqs.logger import get_logger
 from uqs.model.plant_schema import _publishers
 from uqs.model.registry import PIPELINES
+from uqs.paths import torq_log_stem
 
 log = get_logger(__name__)
 
@@ -116,7 +117,7 @@ def error_log_path(logs_dir: Path, procname: str) -> Path:
     The alias, not the dated file: `err_<proc>.log` is a symlink TorQ
     repoints on each roll, so reading it follows the current one.
     """
-    return logs_dir / f"err_{procname}.log"
+    return logs_dir / f"{torq_log_stem(procname, 'err')}.log"
 
 
 def error_log_sizes(logs_dir: Path, procnames: set[str]) -> dict[str, int]:

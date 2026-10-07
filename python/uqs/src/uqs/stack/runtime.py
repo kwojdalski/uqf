@@ -57,7 +57,7 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     It is reported and stepped over; `uqs data hdb-check` says the same
     thing on demand, and the smoke lane says it about a running stack.
     """
-    hdb_root = paths.torqdata / "hdb"
+    hdb_root = paths.hdb_dir
     if not hdb_root.is_dir():
         return False
     script = paths.scripts_dir / FILL_HDB_SCRIPT
@@ -106,10 +106,10 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     """
     check_prerequisites(paths)
 
-    if not (paths.torqdata / "hdb").is_dir():
+    if not paths.hdb_dir.is_dir():
         log.info("Bootstrapping {} (first run) - copying sample hdb/dqe data...", paths.torqdata)
         paths.torqdata.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(paths.torqapphome / "hdb", paths.torqdata / "hdb")
+        shutil.copytree(paths.torqapphome / "hdb", paths.hdb_dir)
         shutil.copytree(paths.torqapphome / "dqe", paths.torqdata / "dqe")
 
     for sub in ("logs", "tplogs", "wdbhdb"):
