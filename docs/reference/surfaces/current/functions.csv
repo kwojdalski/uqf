@@ -79,6 +79,7 @@ qdesk,break_even,function,1,book
 qdesk,ccy_exposure,function,2,book group_cols
 qdesk,dimensions,function,1,book
 qdesk,empty_book,function,1,dims
+qdesk,flat_tolerance,value,,
 qdesk,required_cols,value,,
 qdesk,rollup,function,2,book group_cols
 qdqc,check_market_data_quality,function,2,quotes max_spread_bps
