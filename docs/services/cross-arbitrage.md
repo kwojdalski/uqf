@@ -68,15 +68,15 @@ latest:select by sym from cross_arbitrage;
 select from latest where active
 ```
 
-  | column                             | meaning                                                                         |
-  | ---                                | ---                                                                             |
-  | `route`                            | the legs the synthetic price was built from, in traversal order                 |
-  | `direct_price` / `synthetic_price` | the two sides being compared, at `size`                                         |
-  | `gross_edge`                       | their difference, in the quote currency per base unit                           |
-  | `gross_profit`                     | `size × gross_edge`                                                             |
-  | `fully_filled`                     | whether the notional can be worked through **every** leg                        |
-  | `skew`                             | how far apart the legs of the route were quoted                                 |
-  | `as_of`                            | the **oldest** leg's timestamp — a synthetic price is as old as its stalest leg |
+  | column                             | meaning                                                                                        |
+  | ---                                | ---                                                                                            |
+  | `route`                            | the legs the synthetic price was built from, in traversal order                                |
+  | `direct_price` / `synthetic_price` | the two sides being compared, at `size`                                                        |
+  | `gross_edge`                       | their difference, in the quote currency per base unit                                          |
+  | `gross_profit`                     | `size × gross_edge`                                                                            |
+  | `fully_filled`                     | whether the notional can be worked through **every** leg                                       |
+  | `skew`                             | how far apart the direct book and the route's legs were quoted                                 |
+  | `as_of`                            | the **oldest** book's timestamp, direct or leg — an opportunity is as old as its stalest price |
 
 ### Two columns to read first
 

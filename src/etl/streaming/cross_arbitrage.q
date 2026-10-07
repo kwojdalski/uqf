@@ -22,11 +22,12 @@
 / .
 / STALENESS IS PART OF THE ANSWER. A synthetic price mixes legs quoted at
 / different moments, and superbook's own expiry does not stop a two-second
-/ old EURUSD being multiplied by a fresh USDJPY. The spread between the
-/ oldest and newest leg is measured, published as `skew`, and an
-/ opportunity whose legs are further apart than max_skew is reported
-/ inactive - present in the output, so it can be seen, rather than
-/ silently dropped.
+/ old EURUSD being multiplied by a fresh USDJPY, nor a stale direct EURJPY
+/ being compared with fresh legs. The spread between the oldest and newest
+/ book compared - every leg and the direct pair - is published as `skew`,
+/ and an opportunity whose books are further apart than max_skew is
+/ reported inactive - present in the output, so it can be seen, rather
+/ than silently dropped.
 
 \d .qpipe.job.cross_arbitrage
 
@@ -85,11 +86,12 @@ route_for:{[avail;sym]
     legs:.qccy.ccy_pair_legs sym;
     @[{.qfwd.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
 
-/ When each leg of a route was last quoted, and how far apart those moments
-/ are. Top-of-book times: those are the levels a small sweep uses, and the
-/ deeper ones are no fresher.
+/ When each of a set of books was last quoted, and how far apart those
+/ moments are. Top-of-book times: those are the levels a small sweep uses,
+/ and the deeper ones are no fresher. opportunity passes the direct pair
+/ along with its route's legs, since every price compared counts.
 / @param state the keyed book state
-/ @param route the route's legs
+/ @param route the books to time - the direct pair and its route's legs
 / @return dict `as_of`skew - the OLDEST leg time, and oldest-to-newest
 / @eg .qpipe.job.cross_arbitrage.leg_times[`sym xkey 0#.qpipe.job.superbook.superbook;`symbol$()] -> `as_of`skew!(0Np;0Nn)
 leg_times:{[state;route]
@@ -129,7 +131,11 @@ opportunity:{[state;avail;sym;size;as_of]
     idle:(sym;as_of;0b;`;`symbol$();0n;0n;size;0n;0n;0b;0Nn);
     route:route_for[avail;sym];
     if[0=count route; :idle];
-    times:leg_times[state;route];
+    / The direct book is timed with the route: it is one side of the
+    / comparison, so a stale direct quote against fresh legs is the same
+    / two-moments price as one stale leg. Timing the route alone published a
+    / direct book seconds old as an active edge with skew 0 (#727).
+    times:leg_times[state;sym,route];
     / `state ([] sym:route)`, not `state route`: a keyed table indexed by a
     / symbol VECTOR is a 'length, even though the same table indexed by one
     / symbol is the row you expect. Indexing by a table of keys is the form
