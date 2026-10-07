@@ -712,6 +712,19 @@ Every line logged while a window runs carries its `worker`, `run` and
 traces add a `request` number shared by that request's `sent`, `returned` and
 `failed` lines.
 
+Two limits apply when grouping lines by these fields:
+
+- **A reaction's lines carry the window that fired it.** Reactions run
+  synchronously when a window publishes, so their lines carry that window's
+  `worker`, `run` and range unless the reaction sets those fields itself.
+  Reactions replayed at the start of a run carry none of them. Timers and IPC
+  handlers never run in the middle of a window, so they never pick up its
+  fields.
+- **`request` restarts at 1 in every process.** When reading logs from more
+  than one process, identify a request by its process and `request` together.
+  The process is given by the log file (`out_<procname>.log`), not by a field
+  on the line.
+
 ### CLI's own logging
 
 `logs --level` filters what the *q processes* wrote. `--debug` shows what `uqs`
