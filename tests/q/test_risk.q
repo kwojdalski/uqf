@@ -66,6 +66,19 @@ test_var_historical_is_negative_when_the_percentile_is_a_gain:{[t]
     .testutil.assertApprox[.qrisk.var_historical[pnl_series;0.95];-110f;1e-9;
         "a series that never loses at the 5th percentile reports a negative loss, not zero"]};
 
+test_var_historical_ignores_null_outcomes:{[t]
+    / asc sorts nulls first, so they stood in for the worst losses (#807).
+    p:`float$-50+til 100;
+    .qunit.assertEquals[.qrisk.var_historical[p;0.95];45f;"the clean series"];
+    .qunit.assertEquals[.qrisk.var_historical[p,3#0n;0.95];45f;"three nulls no longer overstate it as 48"];
+    .qunit.assertEquals[.qrisk.var_historical[(6#0n),p;0.95];45f;"six or more no longer make it null"]};
+
+test_var_historical_refuses_a_series_with_no_outcome:{[t]
+    .qunit.assertThrows[.qrisk.var_historical[;0.95];3#0n;
+        "var_historical: no non-null P&L outcome*";"all null"];
+    .qunit.assertThrows[.qrisk.var_historical[;0.95];`float$();
+        "var_historical: no non-null P&L outcome*";"empty"]};
+
 test_var_historical99:{[t]
     pnl_series:-100+til 200;
     .testutil.assertApprox[.qrisk.var_historical[pnl_series;0.99];98f;1e-9;"1st percentile of a known series"]};

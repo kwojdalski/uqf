@@ -256,6 +256,20 @@ repos:
         # env scan over both for variables.
         files: '\.(q|py)$|^scripts/processes/'
 
+      - id: q-facts
+        name: Check uqs's generated q facts match the q tree
+        # uqs runs without q, so the q values it needs (conflict strategies,
+        # run modes, log levels, ledger columns) are generated into
+        # python/uqs/src/uqs/generated/q_facts.py from the loaded tree - not
+        # hand-copied and regex-pinned one by one (#818). KDB-X only, like the
+        # contract surface: it FAILS without an interpreter rather than
+        # skipping. To accept an intended change:
+        #   uv run python scripts/generate/q_facts.py
+        entry: uv run python scripts/generate/q_facts.py --check
+        language: system
+        pass_filenames: false
+        files: '\.q$|^python/uqs/src/uqs/generated/|^scripts/generate/(q_facts\.py|export_q_facts\.q)$'
+
       - id: q-coverage
         name: Check every function a test should reach is reached
         entry: bash

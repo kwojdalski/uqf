@@ -280,8 +280,13 @@ swap_value:{[swap;market;valuation_date;opts]
 / .
 / Columns converted when present: bid, ask (with bid_size, ask_size in the
 / source base currency); bid_prices, bid_sizes, ask_prices, ask_sizes
-/ (ladders, best first); spot with fwd_points. A row whose sym's target is
-/ itself passes unchanged. Every row gains source_sym and inverted.
+/ (ladders, best first); spot, alone or with fwd_points. A row whose sym's
+/ target is itself passes unchanged. Every row gains source_sym and inverted.
+/ .
+/ A `mid` column is refused when any row inverts: 1%mid is not the mid of
+/ the inverted book, and passing it through unconverted labelled a USDEUR
+/ row with EURUSD's price, which is what `spot` without `fwd_points` used to
+/ do too (#806). Recompute it from the converted bid and ask.
 / @param quotes table with sym and the columns above
 / @param target_conventions dict source pair -> target pair: itself, or its
 /   inverse (legs swapped)
@@ -289,8 +294,8 @@ swap_value:{[swap;market;valuation_date;opts]
 /   carries fwd_points, for every source and target pair; (::) otherwise
 / @return the table in target conventions, with source_sym and inverted
 / @throws error for a sym with no target, a target that is neither the pair
-/   nor its inverse, half a size pair, points without spot, or a missing
-/   pip factor
+/   nor its inverse, half a size pair, points without spot, a mid column on
+/   an inverted row, or a missing pip factor
 / @eg raze value exec bid,ask from .qfwd.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::]  -> 0.4 0.5
 convert_quotes:{[quotes;target_conventions;opts]
     if[not 98h=type quotes; '"convert_quotes: quotes must be an unkeyed table with a sym column"];
@@ -311,6 +316,8 @@ convert_quotes:{[quotes;target_conventions;opts]
         pf:opts`pip_factors;
         if[count gone:(distinct srcs,targets) where not (distinct srcs,targets) in key pf;
             '"convert_quotes: no pip factor for ",", " sv string gone]];
+    if[(`mid in c) and any flips;
+        '"convert_quotes: mid has no rule for an inverted pair - drop it, or recompute it from the converted bid and ask"];
     flip_of:srcs!flips;
     target_of:srcs!targets;
     out:update source_sym:sym, inverted:flip_of sym from quotes;
@@ -332,15 +339,15 @@ convert_quotes:{[quotes;target_conventions;opts]
         out:.[out;(w;`bid_sizes);:;new_bids[;1]];
         out:.[out;(w;`ask_prices);:;new_asks[;0]];
         out:.[out;(w;`ask_sizes);:;new_asks[;1]]];
+    / spot inverts whether or not points ride on it. The points need the
+    / source spot, so it is read once, before either column changes.
+    if[`spot in c; old_spot:out[w;`spot]];
     if[`fwd_points in c;
         src_pf:pf out[w;`source_sym];
         tgt_pf:pf out[w;`sym];
-        old_spot:out[w;`spot];
         outright:points_to_outright'[old_spot;out[w;`fwd_points];src_pf];
-        new_spot:1%old_spot;
-        new_outright:1%outright;
-        out:.[out;(w;`spot);:;new_spot];
-        out:.[out;(w;`fwd_points);:;fwd_points'[new_outright;new_spot;tgt_pf]]];
+        out:.[out;(w;`fwd_points);:;fwd_points'[1%outright;1%old_spot;tgt_pf]]];
+    if[`spot in c; out:.[out;(w;`spot);:;1%old_spot]];
     out}
 
 / The inverse of a pair: its legs swapped.

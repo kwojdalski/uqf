@@ -67,7 +67,7 @@ def _process(paths: UqsPaths) -> DetachedProcess:
     return DetachedProcess(
         "the databento feed",
         paths.databento_feed_pid_path,
-        paths.torqdata / "logs" / "databento_feed.log",
+        paths.log_dir / "databento_feed.log",
     )
 
 

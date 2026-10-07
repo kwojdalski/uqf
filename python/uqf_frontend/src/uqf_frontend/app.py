@@ -8,6 +8,7 @@ poll-only, so a socket would add a moving part without adding liveness.
 from __future__ import annotations
 
 import datetime as dt
+import typing
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -60,6 +61,7 @@ from uqf_frontend.models import (
     ProcessHealthOut,
     QueryRequest,
     QueryResponse,
+    RunState,
     TableInfo,
     UsageResponse,
     WorkerConfigRequest,
@@ -522,7 +524,9 @@ def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
     return WorkerStatusOut(
         worker=s.worker,
         instance_id=s.instance_id,
-        state=s.state,
+        # status.read_status_file refuses a state outside STATES, which
+        # test_status.py holds equal to RunState - so this is one, as typed.
+        state=typing.cast(RunState, s.state),
         source_version=s.source_version,
         range_from=s.range_from,
         range_to=s.range_to,

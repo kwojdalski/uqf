@@ -6,6 +6,16 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+#: Where a query reads: today's session, completed partitions, or both. One
+#: name for the request and the response, which api.ts mirrors as `Tier`.
+Tier = Literal["rdb", "hdb", "both"]
+
+#: A worker's state, as src/etl/core/status.q writes it - status.STATES, which
+#: tests/test_status.py holds to q's legal_transitions. A Literal rather than a
+#: str so the browser's `RunState` is held to it word for word (#820): typed
+#: as a string, a state q added fell through the browser to "In progress".
+RunState = Literal["starting", "running", "idle", "completed", "failed"]
+
 
 class Filter(BaseModel):
     """One validated predicate. ``value`` stays ``Any`` here on purpose: the
@@ -46,7 +56,7 @@ class QueryRequest(BaseModel):
     table: str = Field(min_length=1)
     filters: list[Filter] = Field(default_factory=list, max_length=16)
     limit: int = Field(default=1000, ge=1)
-    tier: Literal["rdb", "hdb", "both"] = Field(
+    tier: Tier = Field(
         default="both",
         description="rdb = today's session, hdb = completed partitions, both = razed. "
         "hdb is expected to be slower",
@@ -57,7 +67,7 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     poll_seconds: int
     table: str
-    tier: str
+    tier: Tier
     rows: list[dict[str, Any]]
     row_count: int
     truncated: bool = Field(
@@ -188,7 +198,7 @@ class FleetHealthResponse(BaseModel):
 class WorkerStatusOut(BaseModel):
     worker: str
     instance_id: str
-    state: str
+    state: RunState
     source_version: str
     range_from: str
     range_to: str

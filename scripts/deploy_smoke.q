@@ -13,7 +13,7 @@
 / .
 / Run from the release root: q scripts/deploy_smoke.q -q
 
-\d .deploysmoke
+\d .qdeploysmoke
 
 / One check: within 1e-6 of the expected value, or say which and how far off.
 / @param name what is checked
@@ -38,7 +38,7 @@ checks:{[]
 \d .
 
 @[system;"l src/init.q";{[e] -2 "DEPLOY_SMOKE_FAILED: could not load the quant library: ",e; exit 1}];
-.deploysmoke.results:@[.deploysmoke.checks;::;{[e] -2 "DEPLOY_SMOKE_FAILED: a check threw: ",e; exit 1}];
-if[not all .deploysmoke.results; exit 1];
+.qdeploysmoke.results:@[.qdeploysmoke.checks;::;{[e] -2 "DEPLOY_SMOKE_FAILED: a check threw: ",e; exit 1}];
+if[not all .qdeploysmoke.results; exit 1];
 -1 "DEPLOY_SMOKE_OK";
 exit 0

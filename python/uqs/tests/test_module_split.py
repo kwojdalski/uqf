@@ -117,13 +117,17 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: nothing else, which test_the_leaves_stay_leaves holds it to - and so is
 #: `runtimes`, which imports nothing at all.
 LEAVES = {"paths", "logger", "interpreter", "runtimes"}
+#: `generated` sits under everything: modules written from the q tree
+#: (uqs.generated.q_facts, #818), which import nothing from this package -
+#: so any layer may read them and none of them can close a cycle.
 ALLOWED_IMPORTS = {
-    "model": set(),
-    "stack": {"model"},
-    "external": {"model", "stack"},
-    "checks": {"model", "stack"},
-    "scaffold": {"model", "stack"},
-    "cli": {"model", "stack", "scaffold", "external", "checks"},
+    "generated": set(),
+    "model": {"generated"},
+    "stack": {"generated", "model"},
+    "external": {"generated", "model", "stack"},
+    "checks": {"generated", "model", "stack"},
+    "scaffold": {"generated", "model", "stack"},
+    "cli": {"generated", "model", "stack", "scaffold", "external", "checks"},
 }
 
 _IMPORT = re.compile(r"^\s*(?:from|import) uqs(?:\.(\w+))?(?: import ([\w, ]+))?", re.M)

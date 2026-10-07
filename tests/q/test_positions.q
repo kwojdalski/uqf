@@ -206,6 +206,43 @@ test_ccy_exposure_nets_across_pairs_sharing_a_currency:{[t]
     .testutil.assertApprox[first exec amount from exposure where ccy=`EUR;1000000f;1e-9;"EUR leg from the EURAUD position"];
     .testutil.assertApprox[first exec amount from exposure where ccy=`USD;-325000f;1e-6;"USD leg from the AUDUSD position"]};
 
+test_ccy_exposure_counts_realised_pnl_in_the_quote_currency:{[t]
+    / Bought 1mm EURUSD at 1.10, sold half at 1.11: the open half is +EUR 500k
+    / and -USD 550k at cost, and the half sold back brought in USD 555k - net
+    / USD cash is -545,000, not the open leg's -550,000 (#805).
+    b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.10;1];
+    b:.qpos.apply_fill[b;`EURUSD;500000;1.11;-1];
+    exposure:.qpos.ccy_exposure[b];
+    .testutil.assertApprox[first exec amount from exposure where ccy=`EUR;500000f;1e-6;"EUR is the open half"];
+    .testutil.assertApprox[first exec amount from exposure where ccy=`USD;-545000f;1e-6;"USD includes the 5,000 realised: -1,100,000 + 555,000"]};
+
+test_ccy_exposure_of_a_book_closed_at_a_profit_is_its_realised_cash:{[t]
+    / Flat again after selling the rest at 1.12: no open position, but the
+    / book made 15,000 USD, and that is USD it holds.
+    b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.10;1];
+    b:.qpos.apply_fill[b;`EURUSD;500000;1.11;-1];
+    b:.qpos.apply_fill[b;`EURUSD;500000;1.12;-1];
+    exposure:.qpos.ccy_exposure[b];
+    .testutil.assertApprox[first exec amount from exposure where ccy=`EUR;0f;1e-6;"no EUR left once flat"];
+    .testutil.assertApprox[first exec amount from exposure where ccy=`USD;15000f;1e-6;"the realised 15,000 USD stays an exposure"]};
+
+test_ccy_exposure_agrees_with_the_desk_book_on_the_same_fills:{[t]
+    / Two books, one question: the average-cost book here and .qdesk's netted
+    / cash book must report the same exposure per currency for the same fills,
+    / part way through and once flat.
+    deals:([] sym:`EURUSD`USDJPY`EURUSD`USDJPY`EURUSD; side:1 -1 -1 1 -1;
+        size:1000000 2000000 500000 2000000 500000f; price:1.10 150.0 1.11 149.5 1.12);
+    times:2026.10.07D10:00:00+0D00:00:01*til count deals;
+    pos_trades:update trade_price:price, time:times from deals;
+    agree:{[pos_trades;deals;n]
+        p:.qpos.ccy_exposure .qpos.apply_fills[.qpos.empty_book[];n#pos_trades];
+        d:.qdesk.ccy_exposure[.qdesk.apply_fills[.qdesk.empty_book[`sym];n#deals];()];
+        pe:exec ccy!amount from p;
+        de:exec ccy!amount from d;
+        .qunit.assertEquals[asc key pe;asc key de;"the same currencies after ",string[n]," fill(s)"];
+        .testutil.assertApprox[pe asc key pe;de asc key pe;1e-6;"the same amount per currency after ",string[n]," fill(s)"]};
+    agree[pos_trades;deals;] each 1+til count deals};
+
 / Shared 3-pair quotes table (AUDUSD, EURUSD, EURPLN), mirroring
 / test_forwards.q's mk_quotes_table fixture - PLN is only quoted against
 / EUR here, so converting a PLN exposure into USD forces

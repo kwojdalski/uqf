@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from uqf_frontend import control
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
+from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.gateway import FakeGateway
 
 
@@ -499,3 +500,22 @@ class _FakePaths:
 
         self.repo_root = Path(".").resolve()
         self.scripts_dir = self.repo_root / "scripts"
+
+
+def test_a_deployed_release_is_accepted_as_the_stack_root(tmp_path):
+    """A release ships no lib/ and runs an external TorQ (#773, #796). It holds
+    uqs's own root markers, so the frontend accepts it as uqs does - it used to
+    refuse it for lacking lib/torq/torq.sh (#802)."""
+    from uqs import paths as stack_paths
+
+    for marker in (stack_paths.ETL_DIR, stack_paths.PACKAGE_DIR):
+        (tmp_path / marker).mkdir(parents=True)
+    assert not (tmp_path / "lib").exists()
+    assert control._paths(Settings(stack_root=tmp_path)).repo_root == tmp_path
+
+
+def test_a_stack_root_without_the_tree_is_refused_naming_what_is_missing(tmp_path):
+    with pytest.raises(
+        ValidationFailed, match="does not look like the repository: it holds no src/etl"
+    ):
+        control._paths(Settings(stack_root=tmp_path))

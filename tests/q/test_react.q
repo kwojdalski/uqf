@@ -423,4 +423,25 @@ test_an_idle_run_that_still_owes_is_partial:{[t]
     .qunit.assertEquals[(r`state;r`windows_completed;r`reactions_owed);(`partial;0;3);
         "no window to run, three reactions still owed"]};
 
+/ An unreadable reaction ledger is not "nothing owed" (#808): the guard used
+/ to trap the read error into an empty table, so the second run below ended
+/ `idle over a dataset nobody could say was current. Both generations are
+/ damaged: durable_get falls back to `.bak`, so one bad file alone is read
+/ from the other and is not this case.
+test_an_unreadable_reaction_ledger_fails_the_run_rather_than_reading_idle:{[t]
+    .rxtest.fresh_deals[];
+    .rxtest.run_deals[`rx8;.rxtest.recorder`bad];
+    path:.qetl.reaction.outcomes_path[];
+    {(hsym `$x) 1: 0x00010203} each (path;path,".bak");
+    r:@[.rxtest.run_deals[`rx8;];.rxtest.recorder`bad;{[e] `threw`error!(1b;e)}];
+    .qetl.reaction.reset_outcomes[];
+    @[hdel;hsym `$path,".bak";::];
+    .qetl.job.bounded.state.release_lock `demo_deals_backfill;
+    state:$[`state in key r; r`state; `threw];
+    .qunit.assertFalse[state in `idle`completed;"the run does not read as a success"];
+    w:`demo_deals_backfill;
+    st:.j.k first read0 hsym `$(.qetl.status.status_dir[]),"/airflow_status_",string[.qetl.job.bounded.instance w],".txt";
+    .qunit.assertEquals[st`state;"failed";"the status file reads failed"];
+    .qunit.assertTrue[(st`error) like "*cannot tell which reactions demo_deals_backfill owes*";"and says the reaction ledger is why"]};
+
 \d .

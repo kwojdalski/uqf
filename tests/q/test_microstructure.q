@@ -602,6 +602,21 @@ test_stream_refuses_unknown_metrics_and_time_windows:{[t]
     .qunit.assertThrows[.qmicro.stream_init[;::];`vpin;"stream_init: unknown metric(s) vpin*";"vpin is not streamed"];
     .qunit.assertThrows[.qmicro.stream_init[`ofi;];(enlist `window_mode)!enlist `time;"stream: window_mode must be `count*";"no time window yet"]};
 
+test_stream_refuses_a_config_that_is_not_a_dictionary:{[t]
+    / Each of these used to run on the default 20-row window (#804).
+    msg:"stream: config must be (::) for the defaults, or a dictionary*";
+    / `window!enlist 5 is ENUMERATION (type 20), the case #804 found. KDB-X
+    / refuses it with the message above; PeachQ throws 'window first, the
+    / moment the value is used (its enumeration domain names no variable).
+    / Either way it is REFUSED rather than run on the default 20-row window,
+    / which is what this asserts - the message is checked on the two cases
+    / below, which read the same on both interpreters.
+    r:@[.qmicro.stream_init[`ofi;];`window!enlist 5;{[e] e}];
+    .qunit.assertEquals[type r;10h;"`window!enlist 5 is refused, not run on the defaults"];
+    .qunit.assertThrows[.qmicro.stream_init[`ofi;];5;msg;"a bare window"];
+    .qunit.assertThrows[.qmicro.stream_init[`ofi;];`windw;msg;"a symbol"];
+    .qunit.assertEquals[(.qmicro.stream_init[`ofi;::])[`config;`window];20;"(::) still gives the defaults"]};
+
 test_stream_snapshot_reports_each_sym:{[t]
     q:st_quotes[];
     st:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 0;

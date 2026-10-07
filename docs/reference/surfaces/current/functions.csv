@@ -79,6 +79,7 @@ qdesk,break_even,function,1,book
 qdesk,ccy_exposure,function,2,book group_cols
 qdesk,dimensions,function,1,book
 qdesk,empty_book,function,1,dims
+qdesk,flat_tolerance,value,,
 qdesk,required_cols,value,,
 qdesk,rollup,function,2,book group_cols
 qdqc,check_market_data_quality,function,2,quotes max_spread_bps
@@ -1009,6 +1010,7 @@ qpipe.job.market_data,market_data,table,,
 qpipe.job.market_data,on_batch,value,,
 qpipe.job.market_data,publish,value,,
 qpipe.job.market_data,quote,table,,
+qpipe.job.posbook,as_trades,function,1,x
 qpipe.job.posbook,book,dict,,
 qpipe.job.posbook,book_mids,function,1,x
 qpipe.job.posbook,executions,table,,

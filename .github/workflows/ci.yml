@@ -74,7 +74,7 @@ jobs:
           if command -v "${QCMD:-q}" >/dev/null; then
             echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "SKIP=$SKIP,q-tests,q-coverage,contract-surface" >> "$GITHUB_ENV"
+            echo "SKIP=$SKIP,q-tests,q-coverage,contract-surface,q-facts" >> "$GITHUB_ENV"
             echo "::warning::No q interpreter on this runner. The full qUnit suite, the coverage gate and q-dependent Python IPC tests are not exercised here; static q checks still run, and the portable qUnit suites run on PeachQ further down."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
             echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q and scripts/test.py q-coverage locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"

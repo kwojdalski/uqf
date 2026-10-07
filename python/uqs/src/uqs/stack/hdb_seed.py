@@ -39,7 +39,7 @@ def seed(
     """
     if target.runtime == source.runtime:
         raise UqsError(f"--from {source.runtime} is the runtime being seeded - name another")
-    src_hdb, dst_hdb = source.torqdata / "hdb", target.torqdata / "hdb"
+    src_hdb, dst_hdb = source.hdb_dir, target.hdb_dir
     if not src_hdb.is_dir():
         raise UqsError(
             f"the {source.runtime} runtime has no HDB at {src_hdb} - start it once, "

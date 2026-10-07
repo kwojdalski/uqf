@@ -69,8 +69,11 @@ if[count undeclared:wanted except declared;
 parts:{[root]
     entries:key root;
     d:asc "D"$string entries where entries like "[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]";
-    / d^bound is the bound, or d itself when it is null: no bound on that side.
-    d where (d>=d^first_date) and d<=d^last_date}
+    / An absent bound is an infinite one, atom with atom: `vector^atom` is
+    / 'nyi on KDB-X, so the d^bound this used to be refused every seed there.
+    lo:-0Wd^first_date;
+    hi:0Wd^last_date;
+    d where (d>=lo) and d<=hi}
 
 / A source column's values, with an enumerated one decoded against the
 / SOURCE's domain file - loaded fresh each time, because .Q.en below
@@ -116,10 +119,27 @@ skipped:0;
     } each parts src_root;
 
 / A symbol vector enumerated against the TARGET's sym file, extending the
-/ file with any symbol it lacks: .Q.en's work, by hand (see the header).
+/ file with any symbol it lacks.
+/ .
+/ Through the file's own enumeration (`:root/sym?v) where the interpreter has
+/ it: KDB-X appends there under the file's lock, as .Q.en does, so a seed into
+/ a RUNNING target cannot lose the symbols its end of day or a backfill
+/ appends meanwhile. Reading the file, appending in memory and writing it all
+/ back - the by-hand path - overwrote any appended between the get and the
+/ set, leaving their partitions pointing past the end of sym (#799).
+/ .
+/ PeachQ has no file `?` ('nyi, see the header), and only there does this
+/ fall back to the by-hand path - on that 'nyi alone, any other error is
+/ raised. PeachQ's .Q.en does not enumerate against the file at all, so
+/ nothing there appends to it under a lock for the by-hand path to race.
 enumerate:{[root;v]
     if[not 11h=type v; :v];
     file:` sv root,`sym;
+    @[{[file;v] file?v}[file];v;{[file;v;e] $[e~"nyi"; enumerate_by_hand[file;v]; 'e]}[file;v]]}
+
+/ Private: read the whole sym file, append the symbols it lacks, write it
+/ back, cast. Only for an interpreter without file `?` - see enumerate.
+enumerate_by_hand:{[file;v]
     `sym set @[get;file;`symbol$()];
     if[count new:(distinct v) except sym; `sym set sym,new; file set sym];
     `sym$v}

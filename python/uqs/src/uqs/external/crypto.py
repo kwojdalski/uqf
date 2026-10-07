@@ -90,7 +90,7 @@ def _recorder(paths: UqsPaths) -> DetachedProcess:
     return DetachedProcess(
         "crypto recorder",
         paths.crypto_recorder_pid_path,
-        paths.torqdata / "logs" / "crypto_recorder.log",
+        paths.log_dir / "crypto_recorder.log",
     )
 
 
@@ -215,7 +215,7 @@ def _fills_recorder(paths: UqsPaths) -> DetachedProcess:
     return DetachedProcess(
         "crypto fills recorder",
         paths.crypto_fills_recorder_pid_path,
-        paths.torqdata / "logs" / "crypto_fills_recorder.log",
+        paths.log_dir / "crypto_fills_recorder.log",
     )
 
 

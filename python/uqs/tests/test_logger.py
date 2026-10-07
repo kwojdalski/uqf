@@ -19,7 +19,6 @@ import sys
 import threading
 import time
 from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -30,6 +29,7 @@ from loguru import logger
 # tell the logger's module of the same name from it.
 from uqs.logger import core as logcore
 from uqs.logger import floats
+from uqs.paths import UqsPaths
 from uqs.stack import logs
 
 if TYPE_CHECKING:
@@ -337,7 +337,15 @@ def _paths_with_logs(tmp_path: Path, monkeypatch, lines: dict[str, list[str]]):
     for name, content in lines.items():
         (log_dir / name).write_text("".join(f"{line}\n" for line in content))
     monkeypatch.setattr(logs, "list_process_names", lambda paths: ["rdb1", "hdb1"])
-    return SimpleNamespace(torqdata=tmp_path)
+    # A real UqsPaths, so the log layout comes from where uqs names it.
+    return UqsPaths(
+        repo_root=tmp_path,
+        torqhome=tmp_path / "torq",
+        torqapphome=tmp_path / "app",
+        torqdata=tmp_path,
+        scripts_dir=tmp_path / "scripts",
+        orchestrator_dir=tmp_path / "orch",
+    )
 
 
 LINE_INF = "2026.08.22D14:21:10.644413000|host|rdb|rdb1|INFO|init|started"
