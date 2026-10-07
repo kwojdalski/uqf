@@ -22,6 +22,7 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+from uqs.generated import q_facts
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runs, runtime
@@ -38,15 +39,17 @@ _SAFE_VALUE = re.compile(r"[A-Za-z0-9_.:-]+")
 _TORQ_SH_WORDS = ("csv", "extras")
 
 #: What a write may do with a row whose row_key is already there - the
-#: strategies .qetl.io.resolve knows. A worker declares its own (upsert unless
-#: it says otherwise); `--on-conflict` overrides it for one run.
-ON_CONFLICT = ("upsert", "replace", "ignore", "append", "fail")
+#: strategies .qetl.io.resolve knows, read from q (uqs.generated.q_facts). A
+#: worker declares its own (upsert unless it says otherwise); `--on-conflict`
+#: overrides it for one run.
+ON_CONFLICT = q_facts.IO_STRATEGIES
 
-#: What a run may do - .qetl.job.bounded.runtime.modes, spelled as the CLI
-#: takes them. Each opens and writes strictly more than the one before:
-#: validate reads only configuration and code, plan adds the local ledgers
-#: read-only, dry-run adds the source, run adds every write.
-MODES = ("validate", "plan", "dry-run", "run")
+#: What a run may do - .qetl.job.bounded.runtime.modes, read from q and
+#: spelled as the CLI takes them (dry_run is dry-run). Each opens and writes
+#: strictly more than the one before: validate reads only configuration and
+#: code, plan adds the local ledgers read-only, dry-run adds the source, run
+#: adds every write.
+MODES = tuple(mode.replace("_", "-") for mode in q_facts.RUN_MODES)
 
 
 def backfill_workers() -> dict[str, str]:
