@@ -81,8 +81,9 @@ def _env_log_level() -> str:
 
 
 #: Commands that work only on this tree's own pipelines, and what each needs
-#: that the torq runtime does not have. Refused there with the reason, rather
-#: than left to fail against processes and tables that do not exist.
+#: that a runtime without them (`pipelines=False`, such as torq) does not
+#: have. Refused there with the reason, rather than left to fail against
+#: processes and tables that do not exist.
 UQF_ONLY_COMMANDS: dict[str, str] = {
     "backfill": "runs this tree's bounded workers",
     "gaps": "reads this tree's streaming jobs' coverage",
@@ -106,7 +107,7 @@ def _configure(
             "--runtime",
             help=(
                 "Which stack to build and run: "
-                + "; ".join(f"{k} - {v}" for k, v in runtimes.RUNTIMES.items())
+                + "; ".join(f"{k} - {v.description}" for k, v in runtimes.RUNTIMES.items())
                 + f". Same as {runtimes.RUNTIME_ENV}=<name>, and wins over it."
             ),
             autocompletion=lambda: list(runtimes.RUNTIMES),
@@ -126,15 +127,16 @@ def _configure(
             )
         os.environ[runtimes.RUNTIME_ENV] = runtime_name
     try:
-        pure_torq = stack_paths.runtime_from_env() != runtimes.DEFAULT_RUNTIME
+        declared = runtimes.RUNTIMES[stack_paths.runtime_from_env()]
     except UqsError as exc:
         _die(exc)
         return
-    if pure_torq and ctx.invoked_subcommand in UQF_ONLY_COMMANDS:
+    if not declared.pipelines and ctx.invoked_subcommand in UQF_ONLY_COMMANDS:
         _die(
             UqsError(
                 f"`uqs {ctx.invoked_subcommand}` {UQF_ONLY_COMMANDS[ctx.invoked_subcommand]}; "
-                "the torq runtime runs the starter pack alone. Use --runtime uqf"
+                f"the {declared.name} runtime has none of this tree's pipelines. "
+                f"Use --runtime {runtimes.DEFAULT_RUNTIME}"
             )
         )
     # main() has already configured logging from the environment so that

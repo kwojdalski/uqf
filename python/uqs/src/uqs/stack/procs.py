@@ -158,31 +158,32 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
     vendored_procs = paths.torqapphome / "appconfig" / "process.csv"
     with vendored_procs.open(newline="") as f:
         rows = list(csv.DictReader(f))
-    # The torq runtime is the starter pack as it ships: its rows, unchanged -
-    # feed1 on, monitor1 off, stp1 on the vendored database.q, no pipelines.
-    if paths.pure_torq:
-        return rows
-    appended = _pipeline_rows()
-    for row in rows:
-        if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
-            row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
-        if row["procname"] in VENDORED_LOAD_OVERLAY:
-            before, after = VENDORED_LOAD_OVERLAY[row["procname"]]
-            row["load"] = " ".join(x for x in (*before, row["load"], *after) if x)
-        if row["proctype"] in DATAACCESS_PROCTYPES:
-            row["extras"] = " ".join(x for x in (row["extras"], DATAACCESS_EXTRAS) if x)
-        if row["procname"] in GATEWAY_ACCESS_OVERLAY:
-            row["U"] = GATEWAY_ACCESS_OVERLAY[row["procname"]]
-    for row in rows:
-        # stp1 loads its schema via -schemafile in `extras`; point it at the
-        # generated copy (vendored database.q + uqf's own `fx_orderbook` table -
-        # see _generated_schema_content()) instead of the vendored file
-        # itself, same never-edit-the-vendored-tree approach as process.csv.
-        if row["procname"] == "stp1":
-            row["extras"] = row["extras"].replace(
-                "${TORQAPPHOME}/database.q", "${TORQDATA}/database.q"
-            )
-    rows.extend(appended)
+    # Without overlays the vendored rows run as shipped - feed1 on, monitor1
+    # off, stp1 on the vendored database.q - and without pipelines nothing is
+    # appended: the torq runtime has neither.
+    declared = paths.runtime_declaration
+    if declared.overlays:
+        for row in rows:
+            if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
+                row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
+            if row["procname"] in VENDORED_LOAD_OVERLAY:
+                before, after = VENDORED_LOAD_OVERLAY[row["procname"]]
+                row["load"] = " ".join(x for x in (*before, row["load"], *after) if x)
+            if row["proctype"] in DATAACCESS_PROCTYPES:
+                row["extras"] = " ".join(x for x in (row["extras"], DATAACCESS_EXTRAS) if x)
+            if row["procname"] in GATEWAY_ACCESS_OVERLAY:
+                row["U"] = GATEWAY_ACCESS_OVERLAY[row["procname"]]
+        for row in rows:
+            # stp1 loads its schema via -schemafile in `extras`; point it at the
+            # generated copy (vendored database.q + uqf's own `fx_orderbook` table -
+            # see _generated_schema_content()) instead of the vendored file
+            # itself, same never-edit-the-vendored-tree approach as process.csv.
+            if row["procname"] == "stp1":
+                row["extras"] = row["extras"].replace(
+                    "${TORQAPPHOME}/database.q", "${TORQDATA}/database.q"
+                )
+    if declared.pipelines:
+        rows.extend(_pipeline_rows())
     return rows
 
 
@@ -201,7 +202,7 @@ def effective_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
     """
     overrides = _read_overrides(paths)
     rows = [{**row, **overrides.get(row["procname"], {})} for row in _composed_rows(paths)]
-    if paths.pure_torq:
+    if not paths.runtime_declaration.overlays:
         # monitor1 subscribes to the vendored list, as the starter pack ships
         # it: the budget below exists for this tree's extra subscriptions.
         return rows
