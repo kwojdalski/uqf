@@ -12,7 +12,6 @@ import io
 import json
 import subprocess
 import sys
-import tarfile
 from pathlib import Path
 
 import pytest
@@ -32,8 +31,13 @@ def _load(name: str, file: str):
 
 deploy = _load("uqf_deploy_under_test", "deploy.py")
 verify = _load("uqf_deploy_verify_under_test", "deploy_verify.py")
+release = deploy.build_release
 
-BASE = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
+ARGS = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
+BASE = ["--artifact", "dist/uqf-x.tar.gz", *ARGS]
+
+#: What a healthy server says about itself in preflight.
+SERVER = "os=Linux\narch=x86_64\npython=3.14\n"
 
 
 def _done(stdout: str = "", rc: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
@@ -68,25 +72,34 @@ def _verified(passed: bool, reason: str = "") -> subprocess.CompletedProcess:
     return _done(json.dumps(body) + "\n" + marker + "\n", rc=0 if passed else 1)
 
 
-def _git(files: list[str], dirty: str = ""):
-    def runner(argv, **_):
-        if "ls-files" in argv:
-            return _done("\0".join(files) + "\0")
-        if "rev-parse" in argv:
-            return _done("0123456789abcdef0123456789abcdef01234567\n")
-        if "status" in argv:
-            return _done(dirty)
-        raise AssertionError(argv)
-
-    return runner
-
-
-def _tree(tmp_path: Path) -> tuple[Path, list[str]]:
+def _artifact(tmp_path: Path, **target) -> Path:
+    """A small real artifact: three files, a requirements file and two wheels."""
+    root = tmp_path / "tree"
     files = ["pyproject.toml", "src/init.q", "scripts/deploy_smoke.q"]
     for f in files:
-        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / f).write_text(f"content of {f}\n")
-    return tmp_path, files
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(f"content of {f}\n")
+    py = tmp_path / "py"
+    (py / "wheels").mkdir(parents=True)
+    (py / "requirements.txt").write_text("rich==15.0.0 --hash=sha256:00\n")
+    (py / "wheels" / "uqs-0.1.0-py3-none-any.whl").write_bytes(b"uqs")
+    (py / "wheels" / "rich-15.0.0-py3-none-any.whl").write_bytes(b"rich")
+    t = release.Target(**{"os": "linux", "arch": "x86_64", "python": "3.14", **target})
+    art = release.build_artifact(
+        root,
+        tmp_path / "dist",
+        rid="20261007T000000Z-0123456789ab",
+        rev="0123456789abcdef",
+        dirty=False,
+        files=files,
+        target=t,
+        python_dir=py,
+    )
+    return art.path
+
+
+def _args(path: Path, *extra: str) -> list[str]:
+    return ["--artifact", str(path), *ARGS, *extra]
 
 
 def test_deploy_parses_on_the_oldest_python_it_runs_under():
@@ -112,14 +125,18 @@ def test_the_required_arguments_are_host_dest_and_profile():
 )
 def test_a_destination_that_is_not_a_plain_absolute_path_is_refused(dest):
     with pytest.raises(deploy.DeployError, match="--dest"):
-        deploy.parse_args(["--host", "h", "--dest", dest, "--profile", "essential"])
+        deploy.parse_args(
+            ["--artifact", "a", "--host", "h", "--dest", dest, "--profile", "essential"]
+        )
 
 
 @pytest.mark.parametrize("host", ["-oProxyCommand=evil", "a b", "h;x"])
 def test_a_host_that_could_be_read_as_an_option_is_refused(host):
     with pytest.raises(deploy.DeployError, match="--host"):
         # --host=VALUE: argparse alone would refuse "--host -o..." as a missing value.
-        deploy.parse_args([f"--host={host}", "--dest", "/opt/uqf", "--profile", "essential"])
+        deploy.parse_args(
+            ["--artifact", "a", f"--host={host}", "--dest", "/opt/uqf", "--profile", "essential"]
+        )
 
 
 def test_ssh_keeps_host_key_checking_and_never_prompts():
@@ -150,106 +167,100 @@ def test_secrets_are_masked_in_anything_printed():
     assert "hunter2" not in deploy.redact("DRIVER=x;PWD=hunter2 and password: s3cret")
 
 
-# --- packaging ----------------------------------------------------------------
+# --- the artifact -------------------------------------------------------------
+
+
+def test_the_artifact_is_required():
+    with pytest.raises(SystemExit):
+        deploy.parse_args(ARGS)
+
+
+def test_a_tampered_artifact_is_refused_before_the_server_is_touched(tmp_path):
+    path = _artifact(tmp_path)
+    Path(f"{path}.sha256").write_text("0" * 64 + f"  {path.name}\n")
+    remote = FakeRemote()
+    with pytest.raises(deploy.DeployError, match="does not match") as err:
+        deploy.deploy(deploy.parse_args(_args(path)), remote)
+    assert err.value.stage == "artifact" and remote.scripts == []
 
 
 @pytest.mark.parametrize(
-    "path",
+    ("facts", "said"),
     [
-        ".envrc",
-        "python/uqs/.env",
-        "lib/torq/torq.q",
-        "output/uqs/hdb/sym",
-        "scripts/torqconfig/permissions/gateway_users.csv",
-        "python/uqs/tests/test_x.py",
-        "src/x.log",
-        "keys/id_ed25519",
-        "k4.lic",
+        ("os=Darwin\narch=x86_64\npython=3.14\n", "not linux"),
+        ("os=Linux\narch=aarch64\npython=3.14\n", "built for x86_64"),
+        ("os=Linux\narch=x86_64\npython=3.13\n", "wheels are for 3.14"),
     ],
 )
-def test_secrets_data_and_external_trees_are_never_packaged(path):
-    assert deploy.is_excluded(path)
+def test_a_server_the_artifact_was_not_built_for_is_refused(tmp_path, facts, said):
+    remote = FakeRemote({"uv python find": _done(facts + "data=present\n")})
+    with pytest.raises(deploy.DeployError, match=said) as err:
+        deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path))), remote)
+    assert err.value.stage == "preflight"
 
 
-@pytest.mark.parametrize(
-    "path", ["src/init.q", "uv.lock", "scripts/deploy_smoke.q", "python/uqs/pyproject.toml"]
-)
-def test_source_and_configuration_are_packaged(path):
-    assert not deploy.is_excluded(path)
+def test_an_artifact_already_on_the_server_is_refused_in_preflight(tmp_path):
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\nrelease_exists=yes\n")})
+    with pytest.raises(deploy.DeployError, match="already on uqf-server") as err:
+        deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path))), remote)
+    assert err.value.stage == "preflight" and "/opt/uqf/releases/2026" in remote.scripts[0][1]
 
 
-def test_only_tracked_files_under_the_allowlist_are_listed():
-    files = deploy.tracked_files(ROOT, _git(["src/init.q", ".envrc", "lib/torq/torq.q"]))
-    assert files == ["src/init.q"]
+def test_amd64_is_x86_64():
+    target = {"os": "linux", "arch": "x86_64", "python": "3.14"}
+    assert release.compatible(target, {"os": "Linux", "arch": "amd64", "python": "3.14"}) == []
 
 
-def test_the_package_carries_a_manifest_of_its_revision_and_file_hashes(tmp_path):
-    root, files = _tree(tmp_path / "tree")
-    out = tmp_path / "out"
-    out.mkdir()
-    pkg = deploy.build_package(root, out, "20261007T000000Z-0123", "0123", False, files)
-    with tarfile.open(pkg.path) as tar:
-        names = tar.getnames()
-        member = tar.extractfile(deploy.MANIFEST)
-        assert member is not None
-        manifest = json.load(member)
-    assert sorted(names) == sorted([*files, deploy.MANIFEST])
-    assert manifest["revision"] == "0123" and set(manifest["files"]) == set(files)
-    assert len(pkg.sha256) == 64
-
-
-def test_uncommitted_changes_are_refused_unless_allowed(tmp_path):
-    root, files = _tree(tmp_path)
-    cfg = deploy.parse_args(BASE)
-    with pytest.raises(deploy.DeployError, match="uncommitted"):
-        deploy.deploy(cfg, FakeRemote(), root=root, git=_git(files, dirty=" M src/init.q"))
+def test_preflight_asks_uv_for_the_artifacts_python(tmp_path):
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path, python="3.14"), "--dry-run")), remote)
+    assert (
+        "python=3.14\n" in remote.scripts[0][1]
+        and 'uv python find "$python"' in remote.scripts[0][1]
+    )
 
 
 # --- preflight and dry run ---------------------------------------------------
 
 
 def test_a_missing_data_directory_needs_init_data(tmp_path):
-    root, files = _tree(tmp_path)
-    remote = FakeRemote({"uv python find": _done("data=absent\n")})
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=absent\n")})
     with pytest.raises(deploy.DeployError, match="--init-data"):
-        deploy.deploy(deploy.parse_args(BASE), remote, root=root, git=_git(files))
+        deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path))), remote)
 
 
 def test_replacing_a_deployment_needs_restart(tmp_path):
-    root, files = _tree(tmp_path)
-    remote = FakeRemote({"uv python find": _done("data=present\ncurrent=OLD\n")})
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\ncurrent=OLD\n")})
     with pytest.raises(deploy.DeployError, match="--restart"):
-        deploy.deploy(deploy.parse_args(BASE), remote, root=root, git=_git(files))
+        deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path))), remote)
 
 
 def test_a_dry_run_changes_nothing_and_shows_the_plan(tmp_path):
-    root, files = _tree(tmp_path)
-    remote = FakeRemote({"uv python find": _done("data=present\ncurrent=OLD\n")})
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\ncurrent=OLD\n")})
     out = io.StringIO()
-    cfg = deploy.parse_args([*BASE, "--dry-run", "--restart"])
-    assert deploy.deploy(cfg, remote, root=root, git=_git(files), out=out) == 0
+    cfg = deploy.parse_args(_args(_artifact(tmp_path), "--dry-run", "--restart"))
+    assert deploy.deploy(cfg, remote, out=out) == 0
     assert [stage for stage, _ in remote.scripts] == ["preflight"]
     assert remote.puts == []
     shown = out.getvalue()
-    assert "payload: 3 files" in shown and "stop release OLD's processes" in shown
+    # three tree files, the requirements and two wheels
+    assert "6 files" in shown and "stop release OLD's processes" in shown
+    assert "offline install of 2 wheels" in shown and "linux/x86_64, Python 3.14" in shown
 
 
 # --- the full run ---------------------------------------------------------------
 
 _HEALTHY = {
-    "uv python find": _done("data=present\n"),
+    "uv python find": _done(SERVER + "data=present\n"),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
 }
 
 
 def _run(tmp_path, rules, args=()):
-    root, files = _tree(tmp_path)
     remote = FakeRemote({**_HEALTHY, **rules})
     out = io.StringIO()
-    code = deploy.deploy(
-        deploy.parse_args([*BASE, *args]), remote, root=root, git=_git(files), out=out
-    )
+    code = deploy.deploy(deploy.parse_args(_args(_artifact(tmp_path), *args)), remote, out=out)
     return code, remote, json.loads(out.getvalue())
 
 
@@ -259,6 +270,16 @@ def test_a_healthy_deployment_activates_only_after_verification(tmp_path):
     stages = [stage for stage, _ in remote.scripts]
     assert stages.index("verify") < stages.index("activate")
     assert remote.ran(".current.new") and remote.ran("rm -rf /opt/uqf/deploy.lock")
+
+
+def test_the_release_environment_installs_offline_from_the_artifacts_wheels(tmp_path):
+    _, remote, _ = _run(tmp_path, {"deploy_verify.py --profile": _verified(True)})
+    prepare = next(s for stage, s in remote.scripts if stage == "prepare")
+    assert "export UV_OFFLINE=1" in prepare and "uv sync" not in prepare
+    assert "--no-index" in prepare and "--require-hashes -r .release/requirements.txt" in prepare
+    assert "--no-deps .release/wheels/uqs-0.1.0-py3-none-any.whl" in prepare
+    assert "uv venv --quiet --python 3.14 .venv" in prepare
+    assert not remote.ran("uv run")
 
 
 def test_the_archive_is_checked_on_the_server_before_extraction(tmp_path):
@@ -285,7 +306,7 @@ def test_failed_verification_stops_the_new_processes_and_never_activates(tmp_pat
 def test_a_failed_upgrade_restores_the_previous_release(tmp_path):
     previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
     rules = {
-        "uv python find": _done("data=present\ncurrent=OLD\n"),
+        "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
         "deploy-report.json\n": _done(previous),
         "deploy_verify.py --profile": _verified(False, "no answer from rdb1"),
     }
