@@ -139,6 +139,24 @@ test_the_as_of_is_the_oldest_leg_not_the_newest:{[t]
     r:eurjpy .qpipe.job.cross_arbitrage.evaluate[state;1e6;t0];
     .qunit.assertEquals[r`as_of;t0-0D00:00:01;"a synthetic price is as old as its stalest leg"]};
 
+/ #727: skew timed the route's legs and never the direct book, so a direct
+/ quote seconds old against fresh legs was published active with skew 0.
+test_a_stale_direct_book_against_fresh_legs_is_not_active:{[t]
+    state:(legs[]) upsert one row[`EURJPY;164.80;164.90;1e9;t0-0D00:00:04];
+    r:eurjpy .qpipe.job.cross_arbitrage.evaluate[state;1e6;t0];
+    .qunit.assertEquals[r`active;0b;"a direct quote four seconds older than its legs is not one price with them"];
+    .qunit.assertEquals[r`skew;0D00:00:04;"and the direct book's age is in the skew"];
+    .qunit.assertEquals[r`as_of;t0-0D00:00:04;"and in the as_of"]};
+
+test_fresh_direct_book_against_equally_stale_legs_is_not_active:{[t]
+    / The legs agree with each other, so timing them alone read skew 0.
+    old:t0-0D00:00:04;
+    state:(one row[`EURUSD;eurusd 0;eurusd 1;1e9;old]) upsert one row[`USDJPY;usdjpy 0;usdjpy 1;1e11;old];
+    state:state upsert one row[`EURJPY;164.80;164.90;1e9;t0];
+    r:eurjpy .qpipe.job.cross_arbitrage.evaluate[state;1e6;t0];
+    .qunit.assertEquals[r`active;0b;"legs that agree with each other but not with the direct book are not one price"];
+    .qunit.assertEquals[r`skew;0D00:00:04;"the gap to the direct book is the skew"]};
+
 / --- size -----------------------------------------------------------------
 
 test_a_thin_middle_leg_marks_the_edge_unfillable:{[t]
