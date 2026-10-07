@@ -685,3 +685,138 @@ def test_a_pipeline_process_with_the_library_but_no_etl_fails():
 def test_a_non_pipeline_process_without_the_library_still_passes():
     passed, _, _ = verify.verify({"rdb1": 6052}, {"posbook1"}, _query({6052: _healthy("rdb1")}), 5)
     assert passed
+
+
+# --- a site-managed TorQ launcher outside TORQHOME ------------------------------
+
+SITE = [
+    "--torq-home",
+    "/opt/site/torq/core/current",
+    "--torq-app-home",
+    "/opt/site/torq/TorQApp",
+    "--torq-launcher",
+    "/opt/site/torq/bin/torq.sh",
+]
+
+
+def _torq_checks(text: str) -> str:
+    """PREFLIGHT's TorQ checks alone, so they can run without q or uv."""
+    start = text.index('if [ -n "$torq_launcher" ]')
+    return text[start : text.index('if [ -n "$torq_app_home" ]')]
+
+
+def _run_torq_checks(torq_home: Path, launcher: str) -> subprocess.CompletedProcess:
+    body = f"torq_home={torq_home}\ntorq_launcher={launcher}\n"
+    body += 'fail() { echo "$*" >&2; exit 1; }\n' + _torq_checks(deploy.PREFLIGHT) + "echo ok\n"
+    return subprocess.run(["bash", "-c", body], capture_output=True, text=True, check=False)
+
+
+def test_the_launcher_and_its_variables_parse():
+    cfg = deploy.parse_args([*BASE, *SITE, "--launcher-env", "KDBDB_ORG=uqf desk"])
+    assert cfg.torq_launcher == "/opt/site/torq/bin/torq.sh"
+    assert cfg.launcher_env == {"KDBDB_ORG": "uqf desk"}
+
+
+@pytest.mark.parametrize("value", ["bin/torq.sh", "torq.sh", "/opt/../torq.sh", "/opt/t q.sh"])
+def test_a_launcher_that_is_not_a_plain_absolute_path_is_refused(value):
+    with pytest.raises(deploy.DeployError, match="--torq-launcher .* must be an absolute path"):
+        deploy.parse_args([*BASE, "--torq-launcher", value])
+
+
+@pytest.mark.parametrize(
+    ("item", "message"),
+    [
+        ("TORQHOME=/x", "set by the deployment itself"),
+        ("SETENV=/x", "set by the deployment itself"),
+        ("TORQPROCESSES=/x", "set by the deployment itself"),
+        ("UQS_DATA_ROOT=/x", "set by the deployment itself"),
+        ("KDBDB_ORG", "must be NAME=VALUE"),
+        ("1BAD=x", "must be NAME=VALUE"),
+        ("KDBDB_ORG=a\nb", "control character"),
+    ],
+)
+def test_a_launcher_variable_the_deployment_owns_or_cannot_carry_is_refused(item, message):
+    with pytest.raises(deploy.DeployError, match=message):
+        deploy.parse_args([*BASE, *SITE, "--launcher-env", item])
+
+
+def test_the_launcher_reaches_preflight():
+    text = deploy.Deployment(deploy.parse_args([*BASE, *SITE]), FakeRemote()).preflight_script()
+    assert "torq_launcher=/opt/site/torq/bin/torq.sh\n" in text
+    assert "torq_home=/opt/site/torq/core/current\n" in text
+
+
+def test_preflight_accepts_a_core_without_torq_sh_given_an_executable_launcher(tmp_path):
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "torq.q").write_text("")
+    launcher = tmp_path / "bin" / "torq.sh"
+    launcher.parent.mkdir()
+    launcher.write_text("#!/bin/sh\n")
+    launcher.chmod(0o755)
+    r = _run_torq_checks(core, str(launcher))
+    assert (r.returncode, r.stdout) == (0, "ok\n"), r.stderr
+
+
+def test_preflight_refuses_a_missing_or_non_executable_launcher(tmp_path):
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "torq.q").write_text("")
+    r = _run_torq_checks(core, str(tmp_path / "absent.sh"))
+    assert r.returncode == 1 and "no TorQ launcher" in r.stderr
+    plain = tmp_path / "torq.sh"
+    plain.write_text("#!/bin/sh\n")
+    plain.chmod(0o644)
+    r = _run_torq_checks(core, str(plain))
+    assert r.returncode == 1 and "is not executable" in r.stderr
+
+
+def test_preflight_still_wants_torq_q_in_the_core_and_torq_sh_without_a_launcher(tmp_path):
+    core = tmp_path / "core"
+    core.mkdir()
+    r = _run_torq_checks(core, "")
+    assert r.returncode == 1 and f"no torq.q in {core}" in r.stderr
+    (core / "torq.q").write_text("")
+    r = _run_torq_checks(core, "")
+    assert r.returncode == 1 and "no torq.sh" in r.stderr and "--torq-launcher" in r.stderr
+    (core / "torq.sh").write_text("")
+    assert _run_torq_checks(core, "").returncode == 0
+
+
+def test_the_release_environment_carries_the_launcher_and_owns_its_data():
+    cfg = deploy.parse_args([*BASE, *SITE, "--launcher-env", "KDBDB_ORG=uqf"])
+    lines = deploy.Deployment(cfg, FakeRemote()).env_lines()
+    assert "export TORQHOME=/opt/site/torq/core/current" in lines
+    assert "export UQS_TORQ_LAUNCHER=/opt/site/torq/bin/torq.sh" in lines
+    assert "export TORQDATAHOME=/opt/uqf/shared/data" in lines
+    assert "export KDBDB_ORG=uqf" in lines
+
+
+def test_a_launcher_variable_can_name_its_own_data_directory():
+    cfg = deploy.parse_args([*BASE, *SITE, "--launcher-env", "TORQDATAHOME=/srv/torqdata"])
+    lines = deploy.Deployment(cfg, FakeRemote()).env_lines()
+    assert [ln for ln in lines if "TORQDATAHOME" in ln] == ["export TORQDATAHOME=/srv/torqdata"]
+
+
+def test_without_a_launcher_the_release_environment_is_unchanged():
+    lines = deploy.Deployment(deploy.parse_args(BASE), FakeRemote()).env_lines()
+    assert not [ln for ln in lines if "LAUNCHER" in ln or "TORQDATAHOME" in ln]
+
+
+def test_every_stage_runs_the_launcher_its_release_persisted(tmp_path):
+    _, remote, _ = _run(tmp_path, {"deploy_verify.py --profile": _verified(True)}, args=SITE)
+    prepare = next(s for stage, s in remote.scripts if stage == "prepare")
+    assert "export UQS_TORQ_LAUNCHER=/opt/site/torq/bin/torq.sh" in prepare
+    for stage in ("start", "verify"):
+        ran = [s for st, s in remote.scripts if st == stage]
+        assert ran and all("source ./deploy.env" in s for s in ran), stage
+
+
+def test_the_dry_run_names_the_launcher(tmp_path):
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    out = io.StringIO()
+    argv = _args(_artifact(tmp_path), *SITE, "--dry-run")
+    deploy.deploy(deploy.parse_args(argv), remote, out=out)
+    shown = out.getvalue()
+    assert "TORQHOME=/opt/site/torq/core/current, launcher /opt/site/torq/bin/torq.sh" in shown
+    assert "UQS_TORQ_LAUNCHER" in shown and "TORQDATAHOME" in shown

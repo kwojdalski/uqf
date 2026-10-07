@@ -24,6 +24,7 @@ from uqs.stack import alive, occupancy
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
+from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import check_carriable, effective_process_rows, gateway_access_lines
 
 log = get_logger(__name__)
@@ -191,7 +192,8 @@ def run_torq_sh(
     capture: bool = False,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Bootstrap, then run lib/torq/torq.sh with *args* under the generated env.
+    """Bootstrap, then run the TorQ launcher with *args* under the generated env:
+    `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER` (stack/launcher.py).
 
     `timeout` is seconds to wait before giving up, or None to wait forever -
     which is the right default for `start`/`stop`, whose whole job is to wait
@@ -200,11 +202,12 @@ def run_torq_sh(
     one.
     """
     overrides = bootstrap(paths, base_port=base_port)
+    launcher = torq_launcher(paths)
     # subprocess.run's env= *replaces* the environment rather than extending
     # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
     # stop resolving even though they're on PATH in the calling shell.
     env = {**os.environ, **overrides}
-    cmd = [str(paths.torqhome / "torq.sh"), *args]
+    cmd = [str(launcher), *args]
     log.debug("running: {} (timeout={})", " ".join(cmd), timeout)
     try:
         return subprocess.run(

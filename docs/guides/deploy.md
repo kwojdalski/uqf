@@ -47,10 +47,10 @@ anything:
   test, start, verification and rollback all use what was checked. The dry run
   shows each value and where it came from.
 
-- An existing TorQ (`--torq-home`, holding `torq.q` and `torq.sh`) and starter
-  pack (`--torq-app-home`, holding `database.q` and `appconfig/process.csv`).
-  Without these flags the release would need its own `lib/`, which the tool does
-  not ship.
+- An existing TorQ (`--torq-home`, holding `torq.q` and `torq.sh`, or only
+  `torq.q` with `--torq-launcher`, below) and starter pack (`--torq-app-home`,
+  holding `database.q` and `appconfig/process.csv`). Without these flags the
+  release would need its own `lib/`, which the tool does not ship.
 
 - `envsubst` and `rlwrap`, which `torq.sh` needs.
 
@@ -196,6 +196,44 @@ deploy ALL=(svc) NOPASSWD: ALL
 ```
 
 Keep `--dest` outside the existing TorQ installation, and owned by `svc`.
+
+## A site-managed TorQ launcher
+
+Some servers keep TorQ's pieces apart: the core in one directory, a launcher the
+site manages in another, and the starter pack in a third. The launcher is used
+as supplied. `--torq-launcher` names it, and `--torq-home` still names the core:
+
+```bash
+python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \
+  --host svc@uqf-server --dest /opt/site/uqf \
+  --torq-home /opt/site/torq/core/current \
+  --torq-app-home /opt/site/torq/TorQApp \
+  --torq-launcher /opt/site/torq/bin/torq.sh \
+  --launcher-env KDBDB_ORG=uqf \
+  --qcmd /opt/site/torq/bin/q.sh --qhome /opt/site/q \
+  --profile default --init-data --dry-run
+```
+
+- **Preflight** requires `torq.q` in `--torq-home`, but not `torq.sh`. The
+  launcher must be an absolute path to an executable file. A relative, missing
+  or non-executable launcher is refused before anything changes.
+
+- **deploy.env** records the launcher as `UQS_TORQ_LAUNCHER`. `uqs` runs it in
+  place of `$TORQHOME/torq.sh`, with TORQHOME still the core and the generated
+  `SETENV` and `TORQPROCESSES`, so the launcher starts this release's processes.
+  Start, stop, verification and rollback each source their release's own
+  `deploy.env`, so each uses the launcher that release was checked with.
+
+- **The launcher's own variables** are the deployment's, not the operator's
+  shell's. `TORQDATAHOME` is set to the runtime data directory, so the launcher
+  cannot fall back to shared site data. Anything else it reads, such as
+  `KDBDB_ORG`, goes in a repeatable `--launcher-env NAME=VALUE`. That flag also
+  overrides `TORQDATAHOME`. It refuses the names the deployment sets itself:
+  `TORQHOME`, `TORQAPPHOME`, `SETENV`, `TORQPROCESSES`, `QCMD`, `QHOME` and
+  `UQS_*`.
+
+- **Nothing in the TorQ installation changes.** It is not uploaded, written to,
+  symlinked into or re-permissioned.
 
 ## On the server
 

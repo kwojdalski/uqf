@@ -134,6 +134,10 @@ _HOST = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._@-]*")
 #: A POSIX-portable account name, as useradd accepts by default.
 _USER = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 _PROFILE = re.compile(r"[a-z][a-z0-9_]*")
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+#: What deploy.env sets itself, so --launcher-env may not: TorQ's own core
+#: and generated configuration, q, and uqs's variables.
+_DEPLOY_OWNED = frozenset({"TORQHOME", "TORQAPPHOME", "SETENV", "TORQPROCESSES", "QCMD", "QHOME"})
 _SECRETISH = re.compile(r"(?i)\b(pwd|password|passwd|secret|token|api_?key)\s*[=:]\s*\S+")
 
 
@@ -182,6 +186,8 @@ class Config:
     remote_user: str | None = None
     torq_home: str | None = None
     torq_app_home: str | None = None
+    torq_launcher: str | None = None
+    launcher_env: dict[str, str] = field(default_factory=dict)
     qcmd: str | None = None
     qhome: str | None = None
     data_dir: str | None = None
@@ -220,6 +226,23 @@ def _q_path(name: str, value: str | None) -> str | None:
     return value.rstrip("/") or "/"
 
 
+def _launcher_env(values: Sequence[str]) -> dict[str, str]:
+    """--launcher-env NAME=VALUE, for a site launcher's own variables. A name
+    deploy.env already sets, or one uqs reads, is refused rather than allowed
+    to quietly win or lose."""
+    env: dict[str, str] = {}
+    for item in values:
+        name, sep, value = item.partition("=")
+        if not sep or not _ENV_NAME.fullmatch(name):
+            raise DeployError("arguments", f"--launcher-env {item!r} must be NAME=VALUE")
+        if name in _DEPLOY_OWNED or name.startswith("UQS_"):
+            raise DeployError("arguments", f"--launcher-env {name} is set by the deployment itself")
+        if any(ord(ch) < 32 for ch in value):
+            raise DeployError("arguments", f"--launcher-env {name} has a control character")
+        env[name] = value
+    return env
+
+
 def _required_absolute(name: str, value: str) -> str:
     path = _absolute(name, value)
     assert path is not None  # _absolute returns None only for None
@@ -243,6 +266,19 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
     p.add_argument("--profile", required=True, help="the uqs profile to start, e.g. essential")
     p.add_argument("--torq-home", help="an existing TorQ on the server (TORQHOME)")
     p.add_argument("--torq-app-home", help="an existing finance starter pack (TORQAPPHOME)")
+    p.add_argument(
+        "--torq-launcher",
+        help="a site's own TorQ launcher, an absolute path, run instead of "
+        "<torq-home>/torq.sh; TORQHOME still names the core holding torq.q",
+    )
+    p.add_argument(
+        "--launcher-env",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="a variable the site launcher reads, persisted in deploy.env; repeatable. "
+        "TORQDATAHOME defaults to the runtime data directory when --torq-launcher is given",
+    )
     p.add_argument(
         "--qcmd",
         help="the q executable on the server, an absolute path. Default: the deploying "
@@ -290,6 +326,8 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         profile=a.profile,
         torq_home=_absolute("--torq-home", a.torq_home),
         torq_app_home=_absolute("--torq-app-home", a.torq_app_home),
+        torq_launcher=_absolute("--torq-launcher", a.torq_launcher),
+        launcher_env=_launcher_env(a.launcher_env),
         qcmd=_q_path("--qcmd", a.qcmd),
         qhome=_q_path("--qhome", a.qhome),
         data_dir=_absolute("--data-dir", a.data_dir),
@@ -492,6 +530,13 @@ class Deployment:
             # may reach for an index either
             ("UV_OFFLINE", "1"),
         ]
+        if c.torq_launcher:
+            # the site launcher's own data variable is the deployment's, so it
+            # cannot fall back to shared site data from whoever's shell
+            launcher = {"TORQDATAHOME": c.data_root, **c.launcher_env}
+            pairs += [("UQS_TORQ_LAUNCHER", c.torq_launcher), *launcher.items()]
+        else:
+            pairs += list(c.launcher_env.items())
         return [f"export {k}={q(v)}" for k, v in pairs if v]
 
     def in_release(self, release_dir: str, *lines: str) -> list[str]:
@@ -508,6 +553,7 @@ class Deployment:
             "qhome_flag": c.qhome or "",
             "torq_home": c.torq_home or "",
             "torq_app_home": c.torq_app_home or "",
+            "torq_launcher": c.torq_launcher or "",
             "data": c.data_root,
             "current": self.current,
             "lock": self.lock,
@@ -908,8 +954,16 @@ case "$out" in
   *) fail "$qcmd_eff did not run a script with QHOME=$qhome_eff - is it licensed?" \
           "$(echo "$out" | tail -3)";;
 esac
+if [ -n "$torq_launcher" ]; then
+  test -f "$torq_launcher" || fail "no TorQ launcher $torq_launcher"
+  test -x "$torq_launcher" || fail "the TorQ launcher $torq_launcher is not executable"
+fi
 if [ -n "$torq_home" ]; then
-  for f in torq.q torq.sh; do test -f "$torq_home/$f" || fail "no $f in $torq_home"; done
+  test -f "$torq_home/torq.q" || fail "no torq.q in $torq_home"
+  if [ -z "$torq_launcher" ]; then
+    test -f "$torq_home/torq.sh" || fail "no torq.sh in $torq_home - pass --torq-launcher" \
+      "if this site keeps its launcher elsewhere"
+  fi
 fi
 if [ -n "$torq_app_home" ]; then
   for f in database.q appconfig/process.csv; do
@@ -950,6 +1004,9 @@ def plan(
         + f"QHOME={facts.get('qhome', '?')} ({facts.get('qhome_from', '?')}), "
         + f"QCMD={facts.get('qcmd', '?')} ({facts.get('qcmd_from', '?')}) - "
         + "resolved and run once in preflight",
+        "torq      "
+        + f"TORQHOME={cfg.torq_home or '(vendored)'}, launcher "
+        + (cfg.torq_launcher or "$TORQHOME/torq.sh"),
         "lock      " + f"mkdir {dep.lock}",
         "transfer  "
         + (
