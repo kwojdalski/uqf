@@ -644,12 +644,18 @@ qetl.source,ipc_call,function,3,h f args
 qetl.source,load_zone_table,function,1,path
 qetl.source,local,function,4,root f range_from range_to
 qetl.source,local_candidates,function,2,tz tsv
+qetl.source,local_check_layout,function,1,seg
+qetl.source,local_columns,function,4,root base cs n
 qetl.source,local_dates,function,3,root d0 d1
 qetl.source,local_decode,function,3,root c v
 qetl.source,local_latest,function,2,root table
-qetl.source,local_partition,function,3,root table d
+qetl.source,local_latest_part,function,2,root table
+qetl.source,local_meta,function,2,root table
+qetl.source,local_partition,function,5,root table want n part
+qetl.source,local_parts,function,3,root d0 d1
 qetl.source,local_read,function,4,root table from_ts to_ts
 qetl.source,local_root,function,1,path
+qetl.source,local_segments,function,1,root
 qetl.source,local_to_utc,function,2,tz ts
 qetl.source,narrow_to_utc,function,4,decl tbl range_from range_to
 qetl.source,nonexistent_message,function,2,tz bad
