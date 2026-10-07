@@ -53,7 +53,7 @@ job_app = typer.Typer(
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Move written data into the HDB and check its shape: replay, hdb-check.",
+    help="Move written data into the HDB and check its shape: replay, seed, hdb-check.",
 )
 
 DEFAULT_LOG_LEVEL = "INFO"

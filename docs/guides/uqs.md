@@ -339,6 +339,24 @@ A test resolves every declared profile against its runtime's processes. A
 profile that names a process its runtime doesn't have fails that test, not your
 start.
 
+A new runtime's HDB holds only the starter pack's two sample partitions. To
+compare it with `uqf` on the same history, copy `uqf`'s partitions of the tables
+both declare:
+
+```
+uqs --runtime torq data seed --from uqf                       # every table torq declares
+uqs --runtime torq data seed --from uqf --tables trade,quote --dates 2026-09-01..2026-09-30
+```
+
+Each symbol column is re-enumerated against the target's sym file. A plain copy
+of the partition directories would decode, in the target, to whatever its sym
+file holds at the source's indices: plausible values, all wrong. The source is
+only read. Everything is checked before anything is written, so a table the
+target doesn't declare, or a column whose type differs from its declaration, is
+refused by name with the target untouched. A partition the target already holds
+is skipped unless `--overwrite`. Afterwards the target's partitions are filled
+as at bootstrap, and a running HDB sees them once restarted.
+
 Without the service layer, `torq` has none of the [query
 policies](../architecture/query-policies.md): no data-access API, no `.pm` on
 the gateway, and the starter pack's access list everywhere.
