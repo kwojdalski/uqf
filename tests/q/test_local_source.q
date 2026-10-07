@@ -225,4 +225,71 @@ test_a_failing_local_query_is_traced_and_rethrown:{[t]
     .qunit.assertEquals[(lines[;2];.loctest.err);(("query sent";"query failed");"bad query");
         "the failure is traced under its request, and the caller still gets the error"]};
 
+
+/ --- layouts, columns and metadata (#621) ------------------------------------
+
+/ A segmented HDB: the sym file at the root, par.txt naming two segments
+/ relative to it, 2026.09.17 in seg1 and 2026.09.18 in seg2.
+segdir:{[] "build/test-local-seg"}
+build_segmented:{[]
+    d:.loctest.segdir[];
+    system"rm -rf ",d; system"mkdir -p ",d,"/seg1 ",d,"/seg2";
+    (hsym `$d,"/sym") set `USDJPY`EURUSD;
+    (hsym `$d,"/par.txt") 0: ("seg1";"seg2");
+    {[d;seg;dt;ix;px] (hsym `$d,"/",seg,"/",string[dt],"/trades/") set
+        ([] time:dt+0D10:00 0D11:00; sym:`sym!ix; px:px)}[d]'[
+        ("seg1";"seg2");2026.09.17 2026.09.18;(1 0;0 1);(1.1 150.;151. 1.2)];
+    hsym `$d}
+
+test_a_segmented_hdb_is_read_across_its_segments:{[t]
+    .loctest.build_segmented[];
+    root:.qetl.source.local_root .loctest.segdir[];
+    r:.qetl.source.local_read[root;`trades;2026.09.17D00:00;2026.09.19D00:00];
+    .qunit.assertEquals[(.qetl.source.local_dates[root;-0Wd;0Wd];exec sym from r);
+        (2026.09.17 2026.09.18;`EURUSD`USDJPY`USDJPY`EURUSD);
+        "both segments' partitions, decoded against the root's own sym file"]};
+
+test_a_missing_segment_is_refused_by_name:{[t]
+    .loctest.build_segmented[];
+    (hsym `$.loctest.segdir[],"/par.txt") 0: ("seg1";"seg2";"seg3");
+    .qunit.assertThrows[.qetl.source.local_root;.loctest.segdir[];"*does not exist or cannot be read*";
+        "a segment par.txt names but the disk does not have fails at connect, not as no data"]};
+
+test_a_month_partitioned_hdb_is_refused_by_name:{[t]
+    d:"build/test-local-month";
+    system"rm -rf ",d; system"mkdir -p ",d;
+    (hsym `$d,"/sym") set enlist `EURUSD;
+    (hsym `$d,"/2026.09/trades/") set ([] time:enlist 2026.09.17D10:00; px:enlist 1.1);
+    .qunit.assertThrows[.qetl.source.local_root;d;"*partitioned by month*";
+        "month partitions were skipped in silence; now the real cause is named"]};
+
+test_an_int_partitioned_hdb_is_refused_by_name:{[t]
+    d:"build/test-local-int";
+    system"rm -rf ",d; system"mkdir -p ",d;
+    (hsym `$d,"/sym") set enlist `EURUSD;
+    (hsym `$d,"/7/trades/") set ([] time:enlist 2026.09.17D10:00; px:enlist 1.1);
+    .qunit.assertThrows[.qetl.source.local_root;d;"*year or int*";"an int partition is refused too"]};
+
+test_a_read_of_named_columns_reads_only_their_files:{[t]
+    / px's file is gone from one partition: a whole read fails on it, a read
+    / that does not ask for px never opens it.
+    hdel hsym `$.loctest.dir[],"/2026.09.17/trades/px";
+    r:.qetl.source.local_read[.loctest.root;(`trades;`time`sym);2026.09.17D00:00;2026.09.18D00:00];
+    .qunit.assertEquals[(cols r;exec sym from r);(`date`time`sym;`EURUSD`USDJPY);
+        "the requested columns, decoded, and the partition's date"]};
+
+test_a_requested_column_the_table_lacks_is_refused:{[t]
+    .qunit.assertThrows[{.qetl.source.local_read[.loctest.root;(`trades;`time`qty);x;x+1D]};2026.09.17D00:00;
+        "*has no column(s) qty*";"a missing column is named, not read as nulls"]};
+
+test_metadata_decodes_one_row_not_the_partition:{[t]
+    / The sym file now holds one entry: enough for the first row of the newest
+    / partition (position 0), too few to decode all of it (positions 0 1).
+    (hsym `$.loctest.dir[],"/sym") set enlist `USDJPY;
+    .qunit.assertThrows[{.qetl.source.local_latest[x;`trades]};.loctest.root;"*needs 2 entries*";
+        "a whole-partition read decodes every row"];
+    .qunit.assertEquals[.qetl.source.local_meta[.loctest.root;`trades];
+        ([] c:`date`time`sym`px; t:"dpsf");
+        "the columns and types come from the .d file and one decoded row"]};
+
 \d .

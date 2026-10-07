@@ -492,8 +492,11 @@ qetl.source,load_zone_table,function,1,path
 qetl.source,local,function,4,root f range_from range_to
 qetl.source,local_dates,function,3,root d0 d1
 qetl.source,local_latest,function,2,root table
+qetl.source,local_meta,function,2,root table
+qetl.source,local_parts,function,3,root d0 d1
 qetl.source,local_read,function,4,root table from_ts to_ts
 qetl.source,local_root,function,1,path
+qetl.source,local_segments,function,1,root
 qetl.source,local_to_utc,function,2,tz ts
 qetl.source,optional_declarations,dict,,
 qetl.source,primary,function,2,source fetched

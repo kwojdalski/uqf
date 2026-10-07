@@ -93,3 +93,30 @@ The source needs a `trades` table with `time`, `trade_id`, `sym`, `price`,
 `size` and `side`. Change the query's `select`, the source's `columns`, and the
 table in `plant_tables.q` together for a different shape. The source contract
 refuses a mismatch by name.
+
+## What the `local` transport reads, and when to use IPC instead
+
+`local` is a lightweight reader for HDB files on this machine, for ad hoc
+analysis, one-off transfers and bounded backfills. No process serves the files,
+and nothing is loaded into the worker: the source's symbols are decoded against
+the source HDB's own domain files, never the destination's.
+
+- **Layouts.** Date partitions directly under the root, or across the segments a
+  `par.txt` names (a segmented HDB), with the `sym` file at the root. A relative
+  segment is taken from the root, as kdb+ does. A segment that is missing or
+  unreadable fails at connect, naming it. An HDB partitioned by month, year or
+  int is refused with a message that says so, rather than read as empty.
+- **Columns.** ``read[`trades;from;to]`` reads every column file of each
+  partition. ``read[(`trades;`time`sym`price);from;to]`` reads only those. A
+  requested column the table lacks is refused by name.
+- **Cost.** A window reads every partition it touches *whole* and the query
+  filters the rows afterwards, so an hourly backfill over one day reads that
+  day's partition 24 times. Checking a source's schema (`validate_live`) reads
+  the newest partition's `.d` file and decodes only one row.
+- **Attributes.** What a read returns is decoded and razed, so `p#`, `s#` and
+  `g#` from disk are not kept.
+
+**When to prefer IPC.** If you query a large HDB repeatedly and selectively
+(many narrow windows, filters the partition layout can't serve), run an HDB
+process over it and use an `ipc` source. That process can apply the filters
+itself and keep the data mapped between queries.
