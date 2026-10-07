@@ -506,7 +506,7 @@ test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;-500 0 500;1];
+    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;0D00:00:00.001*-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
     .qunit.assertEquals[r[0]`time;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
     .testutil.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
@@ -517,13 +517,13 @@ test_cross_markout_at_horizons_ts_col_is_configurable:{[t]
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
     original:.qfwd.time_col;
     .qfwd.time_col:`timestamp;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
+    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0D00:00:00;1];
     .qfwd.time_col:original;
     / The leading columns derive from time_col (#732). They were a separate
     / col_precedence:`time`sym, so renaming time_col alone used to leave
     / `time out of the table and silently switch the reorder off - and this
     / test asserted that unreordered shape.
-    .qunit.assertEquals[cols r;`timestamp`sym`horizon_ms`ref_price`markout_pips;"overriding .qfwd.time_col renames the timestamp column, and it still leads"]};
+    .qunit.assertEquals[cols r;`timestamp`sym`trade_time`horizon`trade_price`ref_price`markout_pips;"overriding .qfwd.time_col renames the timestamp column, and it still leads"]};
 
 test_apply_col_precedence_follows_a_renamed_time_col:{[t]
     original:.qfwd.time_col;
@@ -535,15 +535,31 @@ test_apply_col_precedence_follows_a_renamed_time_col:{[t]
 test_cross_markout_at_horizons_col_precedence_orders_ts_then_sym:{[t]
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
-    .qunit.assertEquals[cols r;`time`sym`horizon_ms`ref_price`markout_pips;"time and sym lead, by default col_precedence"];
+    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0D00:00:00;1];
+    .qunit.assertEquals[cols r;`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips;"markout_at_horizons' columns, time and sym leading"];
     .qunit.assertEquals[first r`sym;`AUDPLN;"sym is the (normalized) traded pair"]};
+
+test_cross_markout_at_horizons_refuses_horizons_that_are_not_timespans:{[t]
+    / #413: these took milliseconds as longs. A long now would be read as
+    / nanoseconds without complaint, so it is refused by name.
+    quotes:mk_ts_quotes_table[::];
+    trade_time:2026.01.01D00:00:00.500;
+    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5600;10000;-500 0 500;1]}[;trade_time];
+    .qunit.assertThrows[wrapper;quotes;"cross_markout_at_horizons: horizons must be a timespan or list of timespans*";"milliseconds as longs are refused"]};
+
+test_cross_impact_at_horizons_reports_its_baseline_as_trade_price:{[t]
+    quotes:mk_ts_quotes_table[::];
+    trade_time:2026.01.01D00:00:00.500;
+    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;0D00:00:00 0D00:00:00.5;1];
+    baseline:.qfwd.cross_ref_price_at[quotes;`AUDUSD;trade_time;1];
+    .qunit.assertEquals[r`trade_price;2#baseline;"trade_price is the impact pair's own price at trade_time"];
+    .qunit.assertEquals[r`trade_time;2#trade_time;"and trade_time is the traded pair's trade"]};
 
 test_cross_markout_at_horizons_nulls_out_of_range_horizon_instead_of_erroring:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist -10000;1];
+    r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist neg 0D00:00:10;1];
     .qunit.assertTrue[null first r`ref_price;"a horizon before any quote exists nulls out rather than throwing"];
     .qunit.assertTrue[null first r`markout_pips;"markout_pips is null alongside the null ref_price"]};
 
@@ -638,7 +654,7 @@ test_cross_impact_at_horizons_reports_a_different_pairs_own_drift:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;-500 0 500;1];
+    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;0D00:00:00.001*-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
     .testutil.assertApprox[r[0]`markout_pips;0f;1e-6;"no drift yet at/before the trade's own baseline time"];
     .testutil.assertApprox[r[2]`markout_pips;10f;1e-6;"AUDUSD's genuine 10-pip drift by t1 shows up as +10 for a buy"]};
@@ -647,22 +663,22 @@ test_cross_impact_at_horizons_side_flips_the_sign:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    buy_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 500;1];
-    sell_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;-1;10000;enlist 500;1];
+    buy_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0D00:00:00.5;1];
+    sell_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;-1;10000;enlist 0D00:00:00.5;1];
     .testutil.assertApprox[first buy_r`markout_pips;neg first sell_r`markout_pips;1e-6;"selling reports the same drift with the opposite sign"]};
 
 test_cross_impact_at_horizons_rejects_same_pair:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0;1]}[;trade_time];
-    .qunit.assertError[wrapper;quotes;"impact_sym the same as traded_sym is rejected"]};
+    wrapper:{[q;trade_time] .qfwd.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0D00:00:00;1]}[;trade_time];
+    .qunit.assertThrows[wrapper;quotes;"cross_impact_at_horizons: impact_sym must be different*";"impact_sym the same as traded_sym is rejected"]};
 
 test_cross_impact_at_horizons_sym_column_is_impact_sym_not_traded_sym:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0;1];
+    r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0D00:00:00;1];
     .qunit.assertEquals[first r`sym;`AUDUSD;"the sym column reports the impact pair, not the traded one"]};
 
 test_cross_book_at_rejects_quotes_missing_a_column:{[t]
@@ -679,7 +695,7 @@ test_cross_markout_at_horizons_rejects_quotes_missing_a_column_instead_of_nullin
     quotes:mk_ts_quotes_table[::];
     bad:delete ask_prices from quotes;
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertError[wrapper;bad;"a quotes table missing a required column throws immediately, not a silent null"]};
 
 test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
@@ -690,7 +706,7 @@ test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
     / null, indistinguishable from the benign case. See issue #6.
     unsorted:reverse mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertThrows[wrapper;unsorted;"cross_markout_at_horizons: quotes must be sorted*";"quotes rows out of `sym`time xasc order throws immediately, not a silent null"]};
 
 test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
@@ -703,7 +719,7 @@ test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
     / (test_cross_markout_decomp_rejects_unreachable_pair). See issue #25.
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0;1]}[;trade_time];
+    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertThrows[wrapper;quotes;"cross_markout_at_horizons: no chain*";"no chain of available pairs connects AUD and JPY"]};
 
 test_cross_markout_decomp_rejects_quotes_missing_a_column:{[t]

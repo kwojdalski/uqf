@@ -774,8 +774,8 @@ qfwd,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
 qfwd,cross_book_chain_at_one_size,function,3,syms books size
 qfwd,cross_book_chain_at_sizes,function,4,syms books sizes sides
 qfwd,cross_decomp,function,2,avail_syms sym
-qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons_ms ref_size
-qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons_ms ref_size
+qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
+qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
 qfwd,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
 qfwd,cross_price_ok_at_size,function,6,quotes sym as_of side price_limit size
 qfwd,cross_rate,function,2,ab_rate bc_rate
@@ -804,6 +804,7 @@ qfwd,mock_swap_market,dict,,
 qfwd,oriented_levels,function,3,side book invert
 qfwd,points_to_outright,function,3,spot points pip_factor
 qfwd,require_curve,function,1,curve
+qfwd,require_horizons,function,2,fn_name horizons
 qfwd,require_quotes_cols,function,2,fn_name quotes
 qfwd,require_swap,function,1,swap
 qfwd,side_cols,function,1,s

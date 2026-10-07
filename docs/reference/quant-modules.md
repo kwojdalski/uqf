@@ -88,15 +88,17 @@ error in exactly the modules no running job exercises (below). Until then:
   | ---            | ---                                                                                                                                                                    | ---                                                                                                                                                                                       |
   | `side` first   | `.qexec.markout`, `eff_spread`, `slippage` (`execution.q:24,82,92`)                                                                                                    | `.qrisk.pnl` (`risk.q:22`) and `.qpos.apply_fill` (`positions.q:46`) take it last                                                                                                         |
   | `side` is ±1   | `.qexec`, `.qrisk`, `.qpos`, `.qalloc`, `.qdesk`                                                                                                                       | `.qfwd`'s cross-book functions take `` `bid ``/`` `ask `` as `side` (`cross_sweep_side`, `forwards.q:208`) - `book_side` by the rule above                                                |
-  | timespans      | `.qexec.markout_at_horizons` (`execution.q:51`)                                                                                                                        | `.qfwd.cross_markout_at_horizons` and `cross_impact_at_horizons` take `horizons_ms` longs (`forwards.q:694,803`). Which of the two is right is #413's decision                            |
   | argument order | `.qmicro.vwmp_skew` takes `n_levels` last (`microstructure.q:186`)                                                                                                     | `vwmp_skew_one` takes it first (`microstructure.q:169`)                                                                                                                                   |
   | `trade_price`  | `.qpos.apply_fills`, `.qexec.markout_at_horizons`, `.qalloc`'s trades (`allocation.q:251`); `.qalloc`'s opening lots carry `price` (`allocation.q:267`), a lot's price | `.qdesk.apply_fills` reads a fill's price as `price` (`desk_positions.q:52`)                                                                                                              |
 
-The two horizon markouts are pinned to each other: on a directly quoted pair
-they are one calculation, and
+The two horizon markouts are pinned to each other. Both take `horizons` as
+timespans and refuse anything else, and `.qfwd.cross_markout_at_horizons` and
+`cross_impact_at_horizons` return the columns `.qexec.markout_at_horizons` does,
+so direct and synthetic markouts join with `uj` (#413). On a directly quoted
+pair they are one calculation, and
 `test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair`
 (`tests/q/test_execution.q`) feeds the same buy and sell through both. A flipped
-sign or a horizon passed in the wrong unit fails it.
+sign or a drift in the result's columns or types fails it.
 
 ### Library, not wired
 
