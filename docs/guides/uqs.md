@@ -430,9 +430,9 @@ ERROR    | profile(s) fx are not declared for the torq runtime - its profiles ar
 
 `start all` is one answer to "what should be running", and on this licence it is
 nearly the only one you can afford. Fourteen tickerplant slots are available
-(sixteen on the licence, two held back for ad-hoc handles) and the default start
-holds **thirteen**. The arbitrage chain needs four, so it cannot run until
-something stops.
+(sixteen on the licence, two held back for ad-hoc handles), and the table below
+says what each profile holds of them - so which profiles fit, and which only fit
+alone.
 
 A profile names the processes you actually came for; everything they read is
 derived from the same dependency graph `summary`'s **Depends on** column uses:
@@ -453,29 +453,37 @@ on a plain start - and `all` cannot be added. The budget below is checked on the
 whole combined set, so a profile that fits plus names that take it past the cap
 is refused before anything starts. `uqs up` takes the same combination.
 
-  | profile     | leaves                                        | slots                           |
-  | ---         | ---                                           | ---                             |
-  | `default`   | what `start all` runs today                   | 13/14                           |
-  | `fx`        | `posbook1`, `demo_markout1`, `fxpositions1`   | 13/14                           |
-  | `arbitrage` | `arbitrage1`, `crossarb1`                     | 10/14                           |
-  | `depth`     | `vectorize1`, `cross1`                        | 8/14                            |
-  | `crypto`    | `cryptomock1`                                 | 5/14                            |
-  | `essential` | none - the TorQ stack alone (see below)       | 4/14                            |
-  | `all`       | every profile's leaves except `crypto`'s      | 19/14 - refused on this licence |
+The uqf runtime's profiles, against the community licence's fourteen slots
+(`uqs list profiles` reports the same against this machine's licence):
+
+<!-- BEGIN GENERATED profile table - scripts/generate/generate_operational_docs.py; CI runs it with --check, so edit the profiles, not this table -->
+
+  | profile     | leaves                                                                                                             | processes | plant slots          |
+  | ---         | ---                                                                                                                | ---       | ---                  |
+  | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `demo_markout1`, `fxorderbookfeed1`, `fxpositions1`, `posbook1`, `vectorize1` | 29        | 19/14 - over the cap |
+  | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                          | 20        | 10/14                |
+  | `crypto`    | `cryptomock1`, `crypto_markout1`                                                                                   | 16        | 6/14                 |
+  | `default`   | `posbook1`, `demo_markout1`, `fxpositions1`, `fxorderbookfeed1`                                                    | 23        | 13/14                |
+  | `depth`     | `vectorize1`, `cross1`                                                                                             | 18        | 8/14                 |
+  | `essential` | none - the TorQ stack alone                                                                                        | 14        | 4/14                 |
+  | `fx`        | `posbook1`, `demo_markout1`, `fxpositions1`                                                                        | 23        | 13/14                |
+
+<!-- END GENERATED profile table -->
 
 **A profile over the cap is refused**; a positional `start` over it is only
-warned about. `fx` and `arbitrage` each fit and together need sixteen:
+warned about. Two profiles that each fit can be over the cap together - `fx` and
+`arbitrage` are - and the refusal says by how much:
 
 ```
 $ uqs start --profile fx,arbitrage
-profile(s) arbitrage, fx need 16 tickerplant connections, and only 14 are
+profile(s) arbitrage, fx need … tickerplant connections, and only 14 are
 available (16 on this licence, 2 held back for ad-hoc handles). ...
 ```
 
 **`all` needs a larger licence, and says so.** It is every standing set at once -
 the union of the other profiles' leaves, derived so a new leaf joins it
-automatically - and that holds nineteen plant connections, more than the
-community licence has. On that licence it is refused like any profile over the
+automatically - and that holds more plant connections than the community licence
+has (see the table). On that licence it is refused like any profile over the
 cap. On a q licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
 is held to - `--profile`, `uqs list profiles`' `fits` column and the
@@ -489,20 +497,18 @@ stops at a table fed from outside the stack: `fx` needs `crypto_book` but does
 not start `cryptomock1`, which replaces cryptorust's recorder rather than
 joining it.
 
-**`essential` is the TorQ stack with nothing on top**: `discovery1`, `stp1`,
-`rdb1`, `hdb1`, `wdb1`, `sort1`, `sortworker1`, `gateway1`, `monitor1`,
-`housekeeping1`, `sctp1`, `metrics1`, `reporter1` and `tpreplay1` - fourteen
-processes, four plant slots (`rdb1`, `wdb1`, `sctp1` and `metrics1` subscribe).
-That is the infrastructure every other profile starts less its second HDB
-(`hdb2`) and second sort worker (`sortworker2`), plus `reporter1` and
-`tpreplay1`, which only `essential` starts. At end of day `wdb1` hands its
-writedown to `sort1`, which sorts it into the HDB with `sortworker1`, so `wdb1`
-stays free. `reporter1` holds no plant slot, but it does open handles to
-`gateway1`, `rdb1` and `hdb1`. `tpreplay1` starts and exits: it is the one-shot
-replay [`data replay`](#replaying-a-tickerplant-log) aims with a log, a schema
-and an HDB, and started without them it exits at startup, before it reads or
-empties anything - so expect it shown down. Composing `essential` with a job
-profile - `--profile essential,fx` - starts both sets.
+**`essential` is the TorQ stack with nothing on top** - `uqs list profiles`
+names what it resolves to, and the table above what it holds. It is the
+infrastructure every other profile starts less its second HDB (`hdb2`) and
+second sort worker (`sortworker2`), plus `reporter1` and `tpreplay1`, which only
+`essential` starts. At end of day `wdb1` hands its writedown to `sort1`, which
+sorts it into the HDB with `sortworker1`, so `wdb1` stays free. `reporter1`
+holds no plant slot, but it does open handles to `gateway1`, `rdb1` and `hdb1`.
+`tpreplay1` starts and exits: it is the one-shot replay
+[`data replay`](#replaying-a-tickerplant-log) aims with a log, a schema and an
+HDB, and started without them it exits at startup, before it reads or empties
+anything - so expect it shown down. Composing `essential` with a job profile -
+`--profile essential,fx` - starts both sets.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.
