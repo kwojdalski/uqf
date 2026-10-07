@@ -281,7 +281,9 @@ sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`sym
 / @param source a name for this source, e.g. `deals_analogue
 / @param decl a dict carrying every name in required_declarations:
 /   table   - the external table name, as a symbol
-/   target  - the local table it lands in, as a symbol
+/   target  - the local table it lands in, as a symbol: the dataset its
+/             worker is named after. A worker writes its OWN dataset (#769),
+/             so a second worker over this source fills a table of its own
 /   time_column - the column the window is taken on, as a symbol
 /   row_key - the column(s) identifying a row uniquely, as a symbol vector
 /   columns  - the columns this adapter READS, as a symbol vector
