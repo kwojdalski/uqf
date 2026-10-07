@@ -44,7 +44,9 @@ max_skew:0D00:00:02
 
 / Latest superbook snapshot per pair. Keyed, so a new snapshot replaces
 / rather than accumulates - and never published directly (invariant 2).
-books:`sym xkey 0#.qpipe.job.superbook.superbook
+/ From the plant, not from .qpipe.job.superbook, so this file does not have
+/ to load after superbook.q (#731).
+books:`sym xkey .qetl.plant.published `superbook
 
 cross_arbitrage:.qetl.plant.published `cross_arbitrage
 
