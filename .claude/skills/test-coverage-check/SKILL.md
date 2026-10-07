@@ -106,8 +106,8 @@ actual move) - `aj`-based as-of lookups' sortedness enforcement
 **Priority 2 --- HIGH (untested logic that affects reliability)** -
 `require_quotes_cols`-style fail-early validation on every function that takes a
 `quotes`/`trades` table - Rolling `microstructure.q` functions' first-row
-convention (0/null, not garbage) - `time_col`/`col_precedence` configurability
-(default behavior AND a caller override)
+convention (0/null, not garbage) - `time_col` configurability (default behavior
+AND a caller override)
 
 **Priority 3 --- MEDIUM (missing but lower risk)** - Multi-currency-pair / N-leg
 chain edge cases beyond the 2-leg happy path - Determinism (does the test pass

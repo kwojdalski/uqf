@@ -104,9 +104,9 @@ wrong", that is the finding
 
 - High fan-in *and* volatile is the highest-risk combination --- find those in
   `.qetl.transform`, `.qetl.coverage` and `forwards.q`'s orientation helpers
-- Namespace-level mutable config (`.qfwd.time_col`, `.qfwd.col_precedence`,
-  `.qetl.cfg` layers) is global state: is it read at call time or captured once,
-  and is its blast radius contained?
+- Namespace-level mutable config (`.qfwd.time_col`, `.qetl.cfg` layers) is
+  global state: is it read at call time or captured once, and is its blast
+  radius contained?
 - Registries (`.qetl.source.sources`, `.qetl.transform.registry`,
   `.qetl.job.stream.jobs`, `.qetl.job.stream.normalizer.registry`, `.qetl.io`,
   `.qalloc.methods`) are shared mutable state too. Same shape, same trap: q

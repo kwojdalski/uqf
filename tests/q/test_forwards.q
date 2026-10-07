@@ -519,11 +519,18 @@ test_cross_markout_at_horizons_ts_col_is_configurable:{[t]
     .qfwd.time_col:`timestamp;
     r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
     .qfwd.time_col:original;
-    / col_precedence (`time`sym) is independent of time_col, so with time_col
-    / overridden away from `time, `time is no longer a column at all - the
-    / precedence match fails entirely and apply_col_precedence leaves the
-    / column order exactly as originally built, unreordered.
-    .qunit.assertEquals[cols r;`horizon_ms`timestamp`sym`ref_price`markout_pips;"overriding .qfwd.time_col renames the timestamp column and disables col_precedence's reorder (it no longer matches)"]};
+    / The leading columns derive from time_col (#732). They were a separate
+    / col_precedence:`time`sym, so renaming time_col alone used to leave
+    / `time out of the table and silently switch the reorder off - and this
+    / test asserted that unreordered shape.
+    .qunit.assertEquals[cols r;`timestamp`sym`horizon_ms`ref_price`markout_pips;"overriding .qfwd.time_col renames the timestamp column, and it still leads"]};
+
+test_apply_col_precedence_follows_a_renamed_time_col:{[t]
+    original:.qfwd.time_col;
+    .qfwd.time_col:`target_time;
+    r:.qfwd.apply_col_precedence ([] px:1 2f; sym:`EURUSD`EURUSD; target_time:2026.01.01D0 2026.01.01D1);
+    .qfwd.time_col:original;
+    .qunit.assertEquals[cols r;`target_time`sym`px;"the renamed timestamp column, then sym, lead"]};
 
 test_cross_markout_at_horizons_col_precedence_orders_ts_then_sym:{[t]
     quotes:mk_ts_quotes_table[::];

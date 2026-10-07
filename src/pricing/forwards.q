@@ -636,24 +636,23 @@ cross_ref_price_at:{[quotes;sym;as_of;ref_size]
 / different name, e.g. .qfwd.time_col:`timestamp.
 time_col:`time;
 
-/ Configurable column-ordering "precedence" for markout-family output
-/ tables that have both a timestamp column (named per time_col) and a sym
-/ column: those lead, in this order, whenever BOTH are present - `time
-/ then `sym by default. A table missing either one (e.g.
-/ cross_book_chain_at_sizes's `size`sym`... shape, which has no
-/ timestamp column at all) is left in its existing column order -
-/ apply_col_precedence only ever reorders when every precedence column
-/ is actually there, never a partial reorder. This is independent from
-/ time_col, not derived from it - update both together if you rename the
-/ timestamp column, or reordering will silently stop matching.
-col_precedence:`time`sym;
-
-/ Private: move col_precedence's columns to the front of tbl, in that
-/ order, if every one of them is present in tbl - otherwise returns tbl
-/ unchanged.
+/ Private: move the timestamp column (named per time_col) and then sym to
+/ the front of a markout-family output table, if BOTH are present -
+/ otherwise return tbl unchanged. A table missing either one (e.g.
+/ cross_book_chain_at_sizes's `size`sym`... shape, which has no timestamp
+/ column at all) keeps its column order: never a partial reorder.
+/ .
+/ The leading columns are DERIVED from time_col, at call time. They used
+/ to be a second variable, col_precedence:`time`sym, documented as
+/ "update both together" - so renaming time_col alone made `time vanish,
+/ the precedence match fail, and every output silently stop reordering,
+/ with a test asserting exactly that (#732).
+/ @param tbl an unkeyed table
+/ @return tbl with time_col then sym leading, when both are present
 apply_col_precedence:{[tbl]
-    if[not all col_precedence in cols tbl; :tbl];
-    (col_precedence,(cols tbl) except col_precedence)#tbl};
+    lead:time_col,`sym;
+    if[not all lead in cols tbl; :tbl];
+    (lead,(cols tbl) except lead)#tbl};
 
 / Markout at one or more horizons around a single trade on a synthetic
 / cross pair - the cross_book_at-based analogue of execution.q's
@@ -677,7 +676,7 @@ apply_col_precedence:{[tbl]
 /   quoted mid, so this is priced the same way any other cross_book_at
 /   call is, not looked up directly
 / @return a table, one row per horizon, columns reordered by
-/   col_precedence (`time`sym leading by default) when both are present:
+/   apply_col_precedence (time_col then sym leading) when both are present:
 /   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
 /   named per time_col, `time by default) - ref_price/markout_pips are null
 /   for a horizon with no quote yet for some required leg, rather than
@@ -792,7 +791,7 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 / @param ref_size the (typically negligible) size to sweep for
 /   impact_sym's reference price at trade_time and at each horizon
 / @return a table, one row per horizon, columns reordered by
-/   col_precedence (`time`sym leading by default) when both are present:
+/   apply_col_precedence (time_col then sym leading) when both are present:
 /   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
 /   named per time_col, `time by default; sym here is impact_sym, not
 /   traded_sym) - impact_sym's own price drift, signed by traded_sym's side.

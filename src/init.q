@@ -42,7 +42,7 @@
 //      names at call time.
 //
 // The one ordering constraint that is real: pricing/forwards.q defines
-// module-level DATA (time_col, col_precedence), not just functions, and
+// module-level DATA (time_col), not just functions, and
 // execution/execution.q reads it. Still fine at call time, but it is state
 // rather than code, so it is worth knowing about.
 
