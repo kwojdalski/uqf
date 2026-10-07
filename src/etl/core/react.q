@@ -18,7 +18,7 @@
 / range it covered in hand. Nothing polls and nothing can be missed.
 / .
 / A timer is still right for the OTHER question, which is not this one:
-/ markout1 recomputes when enough TIME has passed rather than when data
+/ demo_markout1 recomputes when enough TIME has passed rather than when data
 / arrived, and no publication event can tell it that.
 / .
 / WHAT A REACTION IS, AND WHAT IT DELIBERATELY IS NOT

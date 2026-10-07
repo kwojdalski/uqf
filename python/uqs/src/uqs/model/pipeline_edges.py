@@ -32,7 +32,7 @@ from uqs.paths import repo_root as find_repo_root
 # so these three patterns read the edges back out of the q scripts:
 #
 #   .sub.subscribe[`trades`quote;...]        direct subscribe
-#   .qtorq.subscribe_etl[`markout;`trades`quote]  subscribe via the library
+#   .qtorq.subscribe_etl[`demo_markout;`trades`quote]  subscribe via the library
 #   h (`.u.upd;`position;...)                publish directly
 #   .qtorq.publish[h;`position;...]          publish via the library
 #

@@ -88,9 +88,10 @@ arbitrage chain, which takes the FX books only. Profile `fx`.
 and crypto, because it reads the normalisers rather than each market. Publishes
 `position`. Profile `fx`.
 
-**`markout1` · execution quality** --- each fill against the mid one and ten
-seconds later: did the price move for or against the trade? Reads `trades` and
-`quote`, publishes `execution_quality`. Profile `fx`. [Details](markouts.md)
+**`demo_markout1` · execution quality** --- each fill against the mid one and
+ten seconds later: did the price move for or against the trade? Reads `trades`
+and `quote`, publishes `demo_execution_quality`. Profile `fx`.
+[Details](markouts.md)
 
 **`fxpositions1` · exposure and limits** --- net exposure by symbol, book and
 product from the order flow, with a breach row whenever a limit is crossed.
@@ -142,9 +143,9 @@ folded with the same transform `databento1` applies live.
 crypto books and trades replayed from DuckDB, an hour at a time.
 [Details](crypto-recorder.md)
 
-**`hdb_markouts_backfill1` · markouts from history** --- the HDB's fills marked
-out against its quotes, into `execution_quality`. It refills what `markout1`
-missed while it was down; `uqs gaps markout` names those holes.
+**`hdb_demo_markouts_backfill1` · markouts from history** --- the HDB's fills
+marked out against its quotes, into `demo_execution_quality`. It refills what
+`demo_markout1` missed while it was down; `uqs gaps markout` names those holes.
 [Details](markouts.md)
 
 **`hdb_transfer_backfill1` · one kdb+ database into another** --- trades read

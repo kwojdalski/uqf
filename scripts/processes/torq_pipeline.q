@@ -368,11 +368,11 @@ install_period_handlers:{[]
 / only way a pipeline in this demo should send data.
 / @param h the publish handle (passed explicitly, never read from a global -
 /   see invariant 5)
-/ @param t the destination table name, e.g. `execution_quality
+/ @param t the destination table name, e.g. `demo_execution_quality
 / @param x a table, keyed table, a dict (of atoms for one row, or of
 /   vectors for many), or a list of column vectors in the table's own order
 / @return the number of rows published
-/ @eg .qtorq.publish[h;`execution_quality;out]
+/ @eg .qtorq.publish[h;`demo_execution_quality;out]
 / @eg .qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]
 / @eg .qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]
 publish:{[h;t;x]
@@ -409,7 +409,7 @@ publish:{[h;t;x]
 / @param f the fully-qualified name of the niladic function to run
 / @param timer_desc the description .timer.repeat shows
 / @return the generated wrapper's name
-/ @eg .qtorq.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;"Run the markout streaming job"]
+/ @eg .qtorq.safe_timer[`demo_markout;0D00:00:01.000;`.qproc.stream.tick;"Run the markout streaming job"]
 safe_timer:{[name;interval;f;timer_desc]
     wrapper:`$".qtorq.tick_",string name;
     / `value` the lambda EXPRESSION only, then `set` the name - not

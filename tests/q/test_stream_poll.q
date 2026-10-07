@@ -157,7 +157,7 @@ test_a_cursor_that_would_not_advance_is_invalid:{[t]
     .qunit.assertEquals[(r`state;r`advances);(`invalid;0b);"a run would refuse this cursor, so the preview says so"]};
 
 test_a_subscriber_cannot_be_previewed:{[t]
-    .qunit.assertThrows[{.qetl.job.stream.preview[`markout;5]};::;"*subscribes to*";
+    .qunit.assertThrows[{.qetl.job.stream.preview[`demo_markout;5]};::;"*subscribes to*";
         "its input comes from the plant - there is no page to fetch"]};
 
 test_a_feed_without_poll_cannot_be_previewed:{[t]

@@ -139,8 +139,8 @@ uqs gaps <job> --from <start> --to <end>
 It lists each stretch of the range when the job was not up. For a job with a
 bounded "twin" (a backfill worker filling the table the job publishes), it then
 prints the backfill command that refills each gap. For markouts the twin is
-`hdb_markouts_backfill` (see [markouts](../services/markouts.md)). A job with no
-twin cannot be refilled from here, and `uqs gaps` says so.
+`hdb_demo_markouts_backfill` (see [markouts](../services/markouts.md)). A job
+with no twin cannot be refilled from here, and `uqs gaps` says so.
 
 Two things to know about the answer:
 

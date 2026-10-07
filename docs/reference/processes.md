@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **27 uqf processes** — 50 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **28 uqf processes** — 51 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -23,7 +23,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `tap1` | 6078 | etl | `processes/torq_tap.q` | — | _chosen at runtime_ | — |
 | `fxtradesfeed1` | 6079 | feed | `processes/torq_stream.q` | `trades` | — | `trades` |
 | `posbook1` | 6080 | etl | `processes/torq_stream.q` | `position` | `executions`, `market_data` | `position` |
-| `markout1` | 6081 | etl | `processes/torq_stream.q` | `execution_quality` | `trades`, `quote` | `execution_quality` |
+| `demo_markout1` | 6081 | etl | `processes/torq_stream.q` | `demo_execution_quality` | `trades`, `quote` | `demo_execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `events_backfill1` | 6083 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `databento1` | 6084 | etl | `processes/torq_stream.q` | `eq_orderbook` | `databento_mbp10` | `eq_orderbook` |
@@ -40,8 +40,9 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | `client_flow` | `kafka_client_flow` | `client_flow` |
 | `crypto_market_data_backfill1` | 6098 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `hdb_markouts_backfill1` | 6099 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `hdb_demo_markouts_backfill1` | 6099 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_transfer_backfill1` | 6100 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `crypto_markout1` | 6101 | etl | `processes/torq_stream.q` | `crypto_execution_quality` | `crypto_trades`, `crypto_book` | `crypto_execution_quality` |
 
 ### Why a row deviates from the defaults
 
@@ -51,7 +52,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`vectorize1`** — the other half of the widefeed1 pair: nothing subscribes to mkt_orderbook, so this branch of the graph is self-contained. See widefeed1
 - **`tap1`** — diagnostic subscriber - started on demand, not with the whole stack
 - **`posbook1`** — reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job
-- **`markout1`** — compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two
+- **`demo_markout1`** — compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two
 - **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
 - **`events_backfill1`** — bounded: see deals_backfill1
 - **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (external/databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler
@@ -68,8 +69,9 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`duckdb_deals_backfill1`** — bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time
 - **`kafka_flow1`** — deduplicates client FX flow consumed off a Kafka topic, on the (partition;offset) the record carries. The raw rows are published by an EXTERNAL Python consumer (external/kafka_feed.py) - a q process cannot hold a Kafka subscription - so kafka_client_flow has a schema row but no producer in this list. That is why it does not start with the stack: on a default start nothing publishes the table it subscribes to, and it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer
 - **`crypto_market_data_backfill1`** — bounded: replays cryptorust's recorded crypto book and trade capture from a DuckDB file over ODBC, an hour at a time
-- **`hdb_markouts_backfill1`** — bounded: marks out the HDB's fills against its quotes, into execution_quality
+- **`hdb_demo_markouts_backfill1`** — bounded: marks out the HDB's fills against its quotes, into demo_execution_quality
 - **`hdb_transfer_backfill1`** — bounded - copies trades from a kdb+ HDB on this machine into trades_copy, adding notional; the HDB-to-HDB example
+- **`crypto_markout1`** — markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock
 
 ## Tables these processes publish
 
@@ -80,9 +82,10 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `config_change` | `plant_tables.q` | `crossarb1`, `superbook1` |
 | `cross_arbitrage` | `plant_tables.q` | `crossarb1` |
 | `crypto_book` | `plant_tables.q` | `cryptomock1` |
+| `crypto_execution_quality` | `plant_tables.q` | `crypto_markout1` |
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
+| `demo_execution_quality` | `plant_tables.q` | `demo_markout1` |
 | `eq_orderbook` | `plant_tables.q` | `databento1` |
-| `execution_quality` | `plant_tables.q` | `markout1` |
 | `executions` | `plant_tables.q` | `executions1` |
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |

@@ -43,7 +43,7 @@ from uqf_airflow_provider.status_reader import MalformedStatusFile, status_file_
 from uqf_airflow_provider.translate import PokeOutcome
 
 WORKER = "markout_backfill"
-INSTANCE = "markout1"
+INSTANCE = "demo_markout1"
 
 
 #: The run every test's sensor waits for, and every file's default spec.

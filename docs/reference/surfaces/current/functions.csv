@@ -503,16 +503,17 @@ qetl.plant,config_change,table,,
 qetl.plant,connections,table,,
 qetl.plant,cross_arbitrage,table,,
 qetl.plant,crypto_book,table,,
+qetl.plant,crypto_execution_quality,table,,
 qetl.plant,crypto_market_data,table,,
 qetl.plant,crypto_sim_fills,table,,
 qetl.plant,crypto_trades,table,,
 qetl.plant,databento_mbp10,table,,
 qetl.plant,deal_positions,table,,
+qetl.plant,demo_execution_quality,table,,
 qetl.plant,duckdb_deals,table,,
 qetl.plant,economic_calendar,table,,
 qetl.plant,elements,dict,,
 qetl.plant,eq_orderbook,table,,
-qetl.plant,execution_quality,table,,
 qetl.plant,executions,table,,
 qetl.plant,fx_limit_breach,table,,
 qetl.plant,fx_orderbook,table,,
@@ -975,6 +976,22 @@ qpipe.job.crypto_market_data_backfill,range_to,value,,
 qpipe.job.crypto_market_data_backfill,run,function,1,
 qpipe.job.crypto_market_data_backfill,source_version,value,,
 qpipe.job.crypto_market_data_backfill,spec,function,1,
+qpipe.job.crypto_markout,best_mid,function,3,tob targets max_age
+qpipe.job.crypto_markout,book_hist,table,,
+qpipe.job.crypto_markout,books,table,,
+qpipe.job.crypto_markout,crypto_execution_quality,table,,
+qpipe.job.crypto_markout,horizons,value,,
+qpipe.job.crypto_markout,max_age,value,,
+qpipe.job.crypto_markout,max_horizon,value,,
+qpipe.job.crypto_markout,now,function,1,
+qpipe.job.crypto_markout,on_batch,function,2,t x
+qpipe.job.crypto_markout,on_timer,function,1,
+qpipe.job.crypto_markout,pending,table,,
+qpipe.job.crypto_markout,publish,value,,
+qpipe.job.crypto_markout,real_fills,table,,
+qpipe.job.crypto_markout,score_markouts,function,2,real_fills books
+qpipe.job.crypto_markout,score_ready,function,1,now
+qpipe.job.crypto_markout,top_of_book,function,1,books
 qpipe.job.crypto_mock,beta_draw,function,2,a b
 qpipe.job.crypto_mock,book_rows,function,1,mkt
 qpipe.job.crypto_mock,decide,function,3,row horizon draws
@@ -1042,6 +1059,19 @@ qpipe.job.demo_events_backfill,range_to,value,,
 qpipe.job.demo_events_backfill,run,function,1,
 qpipe.job.demo_events_backfill,source_version,value,,
 qpipe.job.demo_events_backfill,spec,function,1,
+qpipe.job.demo_markout,demo_execution_quality,table,,
+qpipe.job.demo_markout,horizons,value,,
+qpipe.job.demo_markout,max_horizon,value,,
+qpipe.job.demo_markout,now,function,1,
+qpipe.job.demo_markout,on_batch,function,2,t x
+qpipe.job.demo_markout,on_timer,function,1,
+qpipe.job.demo_markout,pending,table,,
+qpipe.job.demo_markout,publish,value,,
+qpipe.job.demo_markout,quote_hist,table,,
+qpipe.job.demo_markout,quotes,table,,
+qpipe.job.demo_markout,score_markouts,function,2,trades quotes
+qpipe.job.demo_markout,score_ready,function,1,now
+qpipe.job.demo_markout,trades,table,,
 qpipe.job.duckdb_deals_backfill,checkpoint,function,1,cursor
 qpipe.job.duckdb_deals_backfill,cleanup,function,1,
 qpipe.job.duckdb_deals_backfill,facts,function,1,batch
@@ -1130,24 +1160,24 @@ qpipe.job.fx_trades_feed,pip_factor,value,,
 qpipe.job.fx_trades_feed,publish,value,,
 qpipe.job.fx_trades_feed,sizes,value,,
 qpipe.job.fx_trades_feed,spot,value,,
-qpipe.job.hdb_markouts_backfill,checkpoint,function,1,cursor
-qpipe.job.hdb_markouts_backfill,cleanup,function,1,
-qpipe.job.hdb_markouts_backfill,facts,function,1,batch
-qpipe.job.hdb_markouts_backfill,fetch,function,2,from_ts to_ts
-qpipe.job.hdb_markouts_backfill,handle,value,,
-qpipe.job.hdb_markouts_backfill,init,function,1,run_spec
-qpipe.job.hdb_markouts_backfill,last_batch,value,,
-qpipe.job.hdb_markouts_backfill,last_window,dict,,
-qpipe.job.hdb_markouts_backfill,phase,value,,
-qpipe.job.hdb_markouts_backfill,plan,function,1,cursor
-qpipe.job.hdb_markouts_backfill,progress,dict,,
-qpipe.job.hdb_markouts_backfill,publish,function,1,batch
-qpipe.job.hdb_markouts_backfill,quality_check,function,1,batch
-qpipe.job.hdb_markouts_backfill,range_from,value,,
-qpipe.job.hdb_markouts_backfill,range_to,value,,
-qpipe.job.hdb_markouts_backfill,run,function,1,
-qpipe.job.hdb_markouts_backfill,source_version,value,,
-qpipe.job.hdb_markouts_backfill,spec,function,1,
+qpipe.job.hdb_demo_markouts_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_demo_markouts_backfill,cleanup,function,1,
+qpipe.job.hdb_demo_markouts_backfill,facts,function,1,batch
+qpipe.job.hdb_demo_markouts_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_demo_markouts_backfill,handle,value,,
+qpipe.job.hdb_demo_markouts_backfill,init,function,1,run_spec
+qpipe.job.hdb_demo_markouts_backfill,last_batch,value,,
+qpipe.job.hdb_demo_markouts_backfill,last_window,dict,,
+qpipe.job.hdb_demo_markouts_backfill,phase,value,,
+qpipe.job.hdb_demo_markouts_backfill,plan,function,1,cursor
+qpipe.job.hdb_demo_markouts_backfill,progress,dict,,
+qpipe.job.hdb_demo_markouts_backfill,publish,function,1,batch
+qpipe.job.hdb_demo_markouts_backfill,quality_check,function,1,batch
+qpipe.job.hdb_demo_markouts_backfill,range_from,value,,
+qpipe.job.hdb_demo_markouts_backfill,range_to,value,,
+qpipe.job.hdb_demo_markouts_backfill,run,function,1,
+qpipe.job.hdb_demo_markouts_backfill,source_version,value,,
+qpipe.job.hdb_demo_markouts_backfill,spec,function,1,
 qpipe.job.hdb_transfer_backfill,checkpoint,function,1,cursor
 qpipe.job.hdb_transfer_backfill,cleanup,function,1,
 qpipe.job.hdb_transfer_backfill,facts,function,1,batch
@@ -1184,19 +1214,6 @@ qpipe.job.market_data,market_data,table,,
 qpipe.job.market_data,on_batch,value,,
 qpipe.job.market_data,publish,value,,
 qpipe.job.market_data,quote,table,,
-qpipe.job.markout,execution_quality,table,,
-qpipe.job.markout,horizons,value,,
-qpipe.job.markout,max_horizon,value,,
-qpipe.job.markout,now,function,1,
-qpipe.job.markout,on_batch,function,2,t x
-qpipe.job.markout,on_timer,function,1,
-qpipe.job.markout,pending,table,,
-qpipe.job.markout,publish,value,,
-qpipe.job.markout,quote_hist,table,,
-qpipe.job.markout,quotes,table,,
-qpipe.job.markout,score_markouts,function,2,trades quotes
-qpipe.job.markout,score_ready,function,1,now
-qpipe.job.markout,trades,table,,
 qpipe.job.posbook,book,dict,,
 qpipe.job.posbook,book_mids,function,1,x
 qpipe.job.posbook,executions,table,,
@@ -1321,20 +1338,20 @@ qpipe.source.duckdb_deals,time_column,value,,
 qpipe.source.duckdb_deals,transport,value,,
 qpipe.source.duckdb_deals,types,value,,
 qpipe.source.duckdb_deals,tz,value,,
-qpipe.source.hdb_markouts,columns,value,,
-qpipe.source.hdb_markouts,fixture,function,1,
-qpipe.source.hdb_markouts,lookback,value,,
-qpipe.source.hdb_markouts,none,table,,
-qpipe.source.hdb_markouts,query,function,3,h range_from range_to
-qpipe.source.hdb_markouts,raw_fills,function,1,
-qpipe.source.hdb_markouts,raw_quotes,function,1,
-qpipe.source.hdb_markouts,row_key,value,,
-qpipe.source.hdb_markouts,score,function,2,deals quotes
-qpipe.source.hdb_markouts,source_name,value,,
-qpipe.source.hdb_markouts,target,value,,
-qpipe.source.hdb_markouts,time_column,value,,
-qpipe.source.hdb_markouts,types,value,,
-qpipe.source.hdb_markouts,tz,value,,
+qpipe.source.hdb_demo_markouts,columns,value,,
+qpipe.source.hdb_demo_markouts,fixture,function,1,
+qpipe.source.hdb_demo_markouts,lookback,value,,
+qpipe.source.hdb_demo_markouts,none,table,,
+qpipe.source.hdb_demo_markouts,query,function,3,h range_from range_to
+qpipe.source.hdb_demo_markouts,raw_fills,function,1,
+qpipe.source.hdb_demo_markouts,raw_quotes,function,1,
+qpipe.source.hdb_demo_markouts,row_key,value,,
+qpipe.source.hdb_demo_markouts,score,function,2,deals quotes
+qpipe.source.hdb_demo_markouts,source_name,value,,
+qpipe.source.hdb_demo_markouts,target,value,,
+qpipe.source.hdb_demo_markouts,time_column,value,,
+qpipe.source.hdb_demo_markouts,types,value,,
+qpipe.source.hdb_demo_markouts,tz,value,,
 qpipe.source.hdb_transfer,columns,value,,
 qpipe.source.hdb_transfer,credential_example,value,,
 qpipe.source.hdb_transfer,fixture,function,1,

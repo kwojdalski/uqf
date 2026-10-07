@@ -3,7 +3,7 @@
 The trees come from model/process_graph.py; this draws them. Each process is
 coloured by whether it is up - the same status `uqs summary` reads - unless
 `--offline` skips asking, and each edge is labelled with the tables it
-carries, so a reader sees not just that markout1 needs the plant but which
+carries, so a reader sees not just that demo_markout1 needs the plant but which
 of its tables.
 
 Without `--interactive` the trees print once, as Rich trees, so the view

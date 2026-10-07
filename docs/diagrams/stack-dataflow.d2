@@ -105,7 +105,7 @@ crypto_trades: "crypto_trades\ntime · sym · venue · side · trade_price · si
 
 mkt_orderbook: "mkt_orderbook\ntime · sym · bid/ask_prices" { class: table }
 position: "position\nqty · avg_price · realized_pnl\nmark_price · unrealized_pnl · total_pnl" { class: table }
-execution_quality: "execution_quality\ntrade_time · horizon\ntrade_price · ref_price · markout_pips" { class: table }
+demo_execution_quality: "demo_execution_quality\ntrade_time · horizon\ntrade_price · ref_price · markout_pips" { class: table }
 cross_quotes: "cross_quotes\nnever written to stp1 —\nlives in cross1's memory" { class: private }
 
 databento_mbp10: "databento_mbp10\nDatabento's own columns,\nten levels each side" { class: table }
@@ -125,7 +125,7 @@ cross1: "cross1\n.qfwd.cross_book_at" { class: job }
 vectorize1: "vectorize1\n.qbook.book_from_wide_levels" { class: job }
 posbook1: "posbook1\n.qpos.apply_fill + .qrisk.pnl" { class: job }
 executions1: "executions1\nnormalizer: every fill\ntable as one" { class: job }
-markout1: "markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
+demo_markout1: "demo_markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
 fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets FILLED orders, on a timer" { class: job }
 marketdata1: "marketdata1\nnormalizer" { class: job }
 superbook1: "superbook1\n.qpipe.job.superbook merge\nacross sources" { class: job }
@@ -167,9 +167,9 @@ executions -> posbook1: "subscribe"
 market_data -> posbook1: "mark to level-0 mid"
 posbook1 -> position: "republish"
 
-trades -> markout1: "subscribe, buffered"
-quote -> markout1: "buffered"
-markout1 -> execution_quality: "republish"
+trades -> demo_markout1: "subscribe, buffered"
+quote -> demo_markout1: "buffered"
+demo_markout1 -> demo_execution_quality: "republish"
 
 orders -> fxpositions1: "subscribe"
 fxpositions1 -> fx_position: "republish"
@@ -203,7 +203,7 @@ crypto_trades -> storage
 executions -> storage
 mkt_orderbook -> storage
 position -> storage
-execution_quality -> storage
+demo_execution_quality -> storage
 databento_mbp10 -> storage
 eq_orderbook -> storage
 orders -> storage
