@@ -128,10 +128,11 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         writer.writeheader()
         writer.writerows(rows)
 
-    # The torq runtime's schema is the starter pack's own, copied so the HDB
-    # filler below and `uqs` read it from the one place either runtime keeps
-    # it. Its gateway1 keeps the vendored access list, so there is none to write.
-    if paths.pure_torq:
+    # Without overlays (the torq runtime) the schema is the starter pack's
+    # own, copied so the HDB filler below and `uqs` read it from the one place
+    # every runtime keeps it. Its gateway1 keeps the vendored access list, so
+    # there is none to write.
+    if not paths.runtime_declaration.overlays:
         shutil.copyfile(paths.torqapphome / "database.q", paths.generated_schema)
     else:
         # gateway1's access list: the vendored one plus the ordinary users the

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.logger import get_logger
-from uqs.runtimes import DEFAULT_RUNTIME, RUNTIME_ENV, RUNTIMES
+from uqs.runtimes import DEFAULT_RUNTIME, RUNTIME_ENV, RUNTIMES, Runtime
 
 log = get_logger(__name__)
 
@@ -98,8 +98,9 @@ class UqsPaths:
     runtime: str = DEFAULT_RUNTIME  #: which of RUNTIMES bootstrap composes
 
     @property
-    def pure_torq(self) -> bool:  # the starter pack alone, nothing of uqf's
-        return self.runtime == "torq"
+    def runtime_declaration(self) -> Runtime:
+        """What this runtime composes - read a field, never test the name."""
+        return RUNTIMES[self.runtime]
 
     @property
     def generated_procs(self) -> Path:
@@ -202,20 +203,19 @@ def paths_for_root(root: Path, runtime: str | None = None) -> UqsPaths:
     copy for a configured root, which is how a move of the data directory
     would have left the frontend starting and stopping a stack in the old one.
 
-    `runtime` defaults to UQS_RUNTIME's. Any other than the default gets its
-    own output/uqs-<runtime>: one runtime's HDB holds tables another lacks.
+    `runtime` defaults to UQS_RUNTIME's. Each has its own data directory,
+    its declaration's `data_dir`: one runtime's HDB holds tables another lacks.
     """
     runtime = runtime or runtime_from_env()
     if runtime not in RUNTIMES:
         raise UqsError(f"{runtime!r} is not a runtime - choose one of: {', '.join(RUNTIMES)}")
-    data = "uqs" if runtime == DEFAULT_RUNTIME else f"uqs-{runtime}"
     return UqsPaths(
         repo_root=root,
         torqhome=root / "lib" / "torq",
         torqapphome=root / "lib" / "torq-finance-starter-pack",
         # output/, with everything else the repository generates at runtime -
         # not scripts/output/, where it used to live beside the source.
-        torqdata=root / "output" / data,
+        torqdata=root / "output" / RUNTIMES[runtime].data_dir,
         scripts_dir=root / "scripts",
         orchestrator_dir=root / PACKAGE_DIR,
         runtime=runtime,

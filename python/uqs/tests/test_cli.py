@@ -42,7 +42,7 @@ from typer.testing import CliRunner
 # The CLI is a package of command families now (see cli/entry.py): the `cli`
 # package itself still exposes the assembled `app` and `main`, and each
 # command's own helpers live in the family module that registers it.
-from uqs import cli
+from uqs import cli, runtimes
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
 from uqs.cli import (
@@ -62,6 +62,7 @@ from uqs.external.crypto import (
     CRYPTO_REAL_FILLS_RECORDER_TABLE,
     CRYPTO_RECORDER_DEFAULT_VENUES,
 )
+from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import alive, listing, probe, runtime
@@ -119,7 +120,10 @@ class _Paths:
 
     torqdata: str = "TORQDATA"
     runtime: str = "uqf"
-    pure_torq: bool = False
+
+    @property
+    def runtime_declaration(self) -> runtimes.Runtime:
+        return runtimes.RUNTIMES[self.runtime]
 
 
 @pytest.fixture(autouse=True)
@@ -2053,11 +2057,12 @@ def test_a_profile_the_torq_runtime_cannot_start_is_refused_naming_what_is_missi
     @dataclass
     class _TorqPaths(_Paths):
         runtime: str = "torq"
-        pure_torq: bool = True
 
     monkeypatch.setattr(lifecycle, "_paths", _TorqPaths)
     monkeypatch.setattr(
-        lifecycle.procs_model, "list_process_names", lambda _p: ["discovery1", "stp1"]
+        lifecycle.procs_model,
+        "list_process_names",
+        lambda _p: list(profiles.resolve(["essential"])),
     )
     said = _refusals(monkeypatch, lifecycle)
     assert runner.invoke(cli.app, ["start", "--profile", "fx"]).exit_code == 1
