@@ -24,8 +24,9 @@ from uqs.stack import alive, occupancy
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
+from uqs.stack.gateway_access import gateway_access_lines
 from uqs.stack.launcher import torq_launcher
-from uqs.stack.procs import check_carriable, effective_process_rows, gateway_access_lines
+from uqs.stack.procs import check_carriable, effective_process_rows
 
 log = get_logger(__name__)
 
@@ -117,13 +118,13 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     # Extend (never edit in place) the vendored process.csv with uqf's own
     # extra processes (fxfeed1) and any process_overrides.csv fields set via
     # set_process_config()/`config set`/uqs_set_config.
-    # A row's `qcmd` of `q` is TorQ's own default spelled out, and torq.sh
-    # uses $QCMD only for an EMPTY qcmd - so every row saying `q` ran PATH's
-    # q whatever QCMD named, and a PeachQ runtime started KDB-X (#764).
-    # Emptied, torq.sh falls back to $QCMD, which is `q` when unset.
-    rows = [
-        {**r, "qcmd": "" if r["qcmd"] == "q" else r["qcmd"]} for r in effective_process_rows(paths)
-    ]
+    # Each row TorQ leaves to its default interpreter - an empty qcmd, or `q`
+    # spelled out, as the starter pack and the pipeline rows both do - names
+    # the configured one: QCMD, or the runtime's own (#764). torq.sh prefers
+    # a row's qcmd to $QCMD, so a row saying `q` ran PATH's q whatever QCMD
+    # named, and a site launcher need not fall back to $QCMD at all. An
+    # operator's override still wins, even one to bare `q`.
+    rows = effective_process_rows(paths, default_qcmd=q_command(with_interpreter(paths)))
     check_carriable(rows)
     with paths.generated_procs.open("w", newline="") as f:
         # torq.sh's own field lookups are a naive awk -F, parse expecting

@@ -456,17 +456,74 @@ def test_the_shipped_query_policy_files_exist_where_the_gateway_looks():
         assert (root / name).is_file(), name
 
 
-def test_the_generated_process_csv_defers_qcmd_q_to_qcmd(fake_paths: UqsPaths, monkeypatch):
-    """torq.sh uses $QCMD only for an empty qcmd, so a row saying `q` ran
-    PATH's q whatever QCMD named (#764). `q` is emptied; anything else stays."""
+def _generated_qcmds(fake_paths: UqsPaths, monkeypatch, qcmd: str | None) -> dict[str, str]:
+    """Bootstrap over a vendored process.csv whose rows spell the default
+    interpreter every way TorQ allows, plus one custom one; the qcmd column
+    of what it generates, by procname."""
     monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    if qcmd is None:
+        monkeypatch.delenv("QCMD", raising=False)
+    else:
+        monkeypatch.setenv("QCMD", qcmd)
+    vendored = fake_paths.torqapphome / "appconfig" / "process.csv"
+    vendored.write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,1,discovery,discovery1,,1,0,,,discovery.q,1,,q\n"
+        "localhost,2,segmentedtickerplant,stp1,,1,0,,,stp.q,1,,\n"
+        "localhost,3,rdb,rdb1,,1,1,,,rdb.q,1,,/opt/custom/q\n"
+        "localhost,4,hdb,hdb1,,1,1,,,hdb.q,1,,q\n"
+    )
+    before = vendored.read_text()
+    runtime.bootstrap(fake_paths)
+    assert vendored.read_text() == before, "the starter pack's own csv is never edited"
+    with fake_paths.generated_procs.open(newline="") as f:
+        return {r["procname"]: r["qcmd"] for r in csv.DictReader(f)}
+
+
+def test_the_generated_process_csv_names_the_configured_interpreter(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """torq.sh prefers a row's qcmd to $QCMD, so a row saying `q` ran PATH's
+    q whatever QCMD named: a deployment's wrapper validated in preflight was
+    never what started the fleet. Every default row now names QCMD itself."""
+    qcmds = _generated_qcmds(fake_paths, monkeypatch, "/opt/site/torq/bin/q.sh")
+    assert qcmds["discovery1"] == "/opt/site/torq/bin/q.sh", "a vendored `q`"
+    assert qcmds["stp1"] == "/opt/site/torq/bin/q.sh", "an empty qcmd"
+    assert qcmds["fxfeed1"] == "/opt/site/torq/bin/q.sh", "a pipeline row's `q`"
+    assert qcmds["rdb1"] == "/opt/custom/q", "a custom interpreter is kept"
+
+
+def test_without_qcmd_default_rows_still_run_q(fake_paths: UqsPaths, monkeypatch):
+    qcmds = _generated_qcmds(fake_paths, monkeypatch, None)
+    assert {qcmds[p] for p in ("discovery1", "stp1", "hdb1", "fxfeed1")} == {"q"}
+    assert qcmds["rdb1"] == "/opt/custom/q"
+
+
+def test_an_operators_qcmd_override_beats_the_global_one(fake_paths: UqsPaths, monkeypatch):
+    """Applied after the default is resolved - so one to bare `q` is kept too."""
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    (fake_paths.torqapphome / "appconfig" / "process.csv").write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,1,discovery,discovery1,,1,0,,,discovery.q,1,,q\n"
+        "localhost,4,hdb,hdb1,,1,1,,,hdb.q,1,,q\n"
+    )
     stack_procs.set_process_config(fake_paths, "discovery1", "qcmd", "/opt/kdbx/q")
+    stack_procs.set_process_config(fake_paths, "hdb1", "qcmd", "q")
+    monkeypatch.setenv("QCMD", "/opt/site/torq/bin/q.sh")
     runtime.bootstrap(fake_paths)
     with fake_paths.generated_procs.open(newline="") as f:
-        qcmds = {r["procname"]: r["qcmd"] for r in csv.DictReader(f)}
-    assert qcmds["stp1"] == "", "the vendored `q` defers to $QCMD"
-    assert qcmds["fxfeed1"] == "", "and so does a pipeline row's"
-    assert qcmds["discovery1"] == "/opt/kdbx/q", "an explicit command is kept"
+        got = {r["procname"]: r["qcmd"] for r in csv.DictReader(f)}
+    assert got["discovery1"] == "/opt/kdbx/q"
+    assert got["hdb1"] == "q", "an intentional override to bare q"
+    assert got["fxfeed1"] == "/opt/site/torq/bin/q.sh"
+
+
+def test_the_exported_qcmd_agrees_with_the_generated_rows(fake_paths: UqsPaths, monkeypatch):
+    qcmds = _generated_qcmds(fake_paths, monkeypatch, "/opt/site/torq/bin/q.sh")
+    from uqs.interpreter import q_command
+
+    env = {**os.environ, **runtime.bootstrap(fake_paths)}
+    assert q_command(env) == qcmds["discovery1"] == "/opt/site/torq/bin/q.sh"
 
 
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPaths, monkeypatch):

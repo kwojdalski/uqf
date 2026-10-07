@@ -115,35 +115,11 @@ DATAACCESS_EXTRAS = "-dataaccess ${UQF_SCRIPTS}/torqconfig/dataaccess/tableprope
 
 #: gateway1's access list (the `U` column, q's `-U`): the vendored one plus
 #: the ordinary users of scripts/torqconfig/permissions/gateway_users.csv,
-#: written by bootstrap (gateway_access_lines). Only gateway1's: an ordinary
+#: written by bootstrap (stack/gateway_access.py). Only gateway1's: an ordinary
 #: user can log in at the gateway, where .pm holds them to getdata and its
 #: policies, and nowhere else - rdb1 and hdb1 still take the vendored list,
 #: so going round the gateway is refused at login.
 GATEWAY_ACCESS_OVERLAY = {"gateway1": "${TORQDATA}/gateway_accesslist.txt"}
-
-
-def gateway_users(paths: UqsPaths) -> list[dict[str, str]]:
-    """The ordinary gateway users, with their passwords and roles."""
-    users = paths.scripts_dir / "torqconfig" / "permissions" / "gateway_users.csv"
-    if not users.is_file():
-        return []
-    with users.open(newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def gateway_access_lines(paths: UqsPaths) -> list[str]:
-    """gateway1's access list: every vendored login, then each ordinary user.
-
-    An ordinary user already in the vendored list is not repeated - and is
-    still held to their role, which handlers/pmusers.q checks by name.
-    """
-    vendored = paths.torqapphome / "appconfig" / "passwords" / "accesslist.txt"
-    lines = [line.strip() for line in vendored.read_text().splitlines() if line.strip()]
-    known = {line.split(":", 1)[0] for line in lines}
-    lines += [
-        f"{u['user']}:{u['password']}" for u in gateway_users(paths) if u["user"] not in known
-    ]
-    return lines
 
 
 def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
@@ -188,7 +164,21 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
     return rows
 
 
-def effective_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
+def _defaulted(paths: UqsPaths, default_qcmd: str | None) -> list[dict[str, str]]:
+    """The composed rows, each default interpreter - a missing or empty qcmd,
+    or TorQ's own `q` spelled out - set to *default_qcmd* when one is given.
+    Before the overrides, so an operator's, even to bare `q`, still wins."""
+    rows = _composed_rows(paths)
+    if default_qcmd is None:
+        return rows
+    return [
+        {**r, "qcmd": default_qcmd if (r.get("qcmd") or "q") == "q" else r["qcmd"]} for r in rows
+    ]
+
+
+def effective_process_rows(
+    paths: UqsPaths, default_qcmd: str | None = None
+) -> list[dict[str, str]]:
     """process.csv as torq.sh starts from it - THE one place it is composed.
 
     The vendored rows with their overlays, the pipelines appended, then the
@@ -202,7 +192,9 @@ def effective_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
     monitor1's own `extras` still wins outright, as it always did.
     """
     overrides = _read_overrides(paths)
-    rows = [{**row, **overrides.get(row["procname"], {})} for row in _composed_rows(paths)]
+    rows = [
+        {**row, **overrides.get(row["procname"], {})} for row in _defaulted(paths, default_qcmd)
+    ]
     if not paths.runtime_declaration.overlays:
         # monitor1 subscribes to the vendored list, as the starter pack ships
         # it: the budget below exists for this tree's extra subscriptions.
