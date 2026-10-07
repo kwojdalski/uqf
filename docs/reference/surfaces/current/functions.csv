@@ -1007,6 +1007,7 @@ qpipe.job.market_data,market_data,table,,
 qpipe.job.market_data,on_batch,value,,
 qpipe.job.market_data,publish,value,,
 qpipe.job.market_data,quote,table,,
+qpipe.job.posbook,as_trades,function,1,x
 qpipe.job.posbook,book,dict,,
 qpipe.job.posbook,book_mids,function,1,x
 qpipe.job.posbook,executions,table,,
