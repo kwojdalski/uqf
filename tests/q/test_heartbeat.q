@@ -125,7 +125,7 @@ test_stale_cannot_report_a_worker_that_never_beat:{[t]
 test_never_started_comes_from_the_worker_registry:{[t]
     / Derived from .qetl.job.bounded.worker_cfg rather than a second list, so a worker cannot
     / go unmonitored by being forgotten here.
-    ws:key .qetl.job.bounded.worker_cfg;
+    ws:.qetl.job.bounded.defined[];
     .qunit.assertEquals[asc .qetl.hb.never_started[];asc ws;
         "with no beats recorded, every registered worker is not-yet-started"]};
 

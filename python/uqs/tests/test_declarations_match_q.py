@@ -46,10 +46,10 @@ _DUMP = """
 s:{[j] d:.qetl.job.stream.def j;
     `procname`subscribe_to`publishes!(d`procname;(),d`subscribe_to;(),d`publishes)
   } each key .qetl.job.stream.jobs;
-b:{[w] c:.qetl.job.bounded.worker_cfg w;
+b:{[w] c:.qetl.job.bounded.def w;
     `procname`dataset`source_version!(c`procname;c`dataset;c`source_version)
-  } each key .qetl.job.bounded.worker_cfg;
--1 .j.j `stream`bounded!((key .qetl.job.stream.jobs)!s;(key .qetl.job.bounded.worker_cfg)!b);
+  } each .qetl.job.bounded.defined[];
+-1 .j.j `stream`bounded!((key .qetl.job.stream.jobs)!s;(.qetl.job.bounded.defined[])!b);
 exit 0
 """
 

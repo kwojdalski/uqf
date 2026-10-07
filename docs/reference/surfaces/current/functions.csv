@@ -173,6 +173,7 @@ qetl.dag,asserted_jobs,function,1,
 qetl.dag,consumers,function,1,table_name
 qetl.dag,d2,function,1,
 qetl.dag,def,function,1,job
+qetl.dag,defined,function,1,
 qetl.dag,edges,function,1,
 qetl.dag,external_inputs,function,1,
 qetl.dag,external_ref,function,2,source table_name
@@ -273,6 +274,7 @@ qetl.job.bounded,connect_error,function,2,source e
 qetl.job.bounded,def,function,1,worker
 qetl.job.bounded,default_version,function,1,worker
 qetl.job.bounded,define,function,2,worker decl
+qetl.job.bounded,defined,function,1,
 qetl.job.bounded,delegate,function,2,worker nm
 qetl.job.bounded,do_window,function,2,worker w
 qetl.job.bounded,empty_windows,function,1,
@@ -650,6 +652,7 @@ qetl.source,narrow_to_utc,function,4,decl tbl range_from range_to
 qetl.source,nonexistent_message,function,2,tz bad
 qetl.source,offset_at,function,2,tz ts
 qetl.source,offsets_for,function,1,tz
+qetl.source,optional_declarations,dict,,
 qetl.source,require_credentials,function,1,source
 qetl.source,require_zone_table,function,1,tz
 qetl.source,required_declarations,value,,
@@ -696,6 +699,7 @@ qetl.transform,col_equal,function,3,typ e a
 qetl.transform,col_types,function,1,tbl
 qetl.transform,def,function,1,name
 qetl.transform,define,function,2,name decl
+qetl.transform,defined,function,1,
 qetl.transform,differences,function,2,expected actual
 qetl.transform,float_tolerance,value,,
 qetl.transform,input_names,function,1,name

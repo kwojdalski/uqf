@@ -154,7 +154,7 @@ has_beaten:{[worker] worker in exec worker from report[]}
 / same reason .qetl.dag adopts rather than asking anyone to re-declare.
 never_started:{[]
     if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
-    ws:key .qetl.job.bounded.worker_cfg;
+    ws:.qetl.job.bounded.defined[];
     ws where not has_beaten each ws}
 
 \d .

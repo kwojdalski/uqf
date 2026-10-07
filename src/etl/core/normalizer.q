@@ -91,7 +91,7 @@ define:{[name;decl]
 
 / Private: one source's transform, held to the canonical output.
 check_source:{[who;out;src;xf]
-    if[not xf in key .qetl.transform.registry;
+    if[not xf in .qetl.transform.defined[];
         'who,": source ",string[src]," maps through transform ",string[xf],", which is not registered - a mapping is a declared transform, so its examples are verified"];
     d:.qetl.transform.def xf;
     if[1<>count d`inputs;

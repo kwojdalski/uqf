@@ -180,4 +180,31 @@ captured_log:{[trace;f]
     .qetl.log.line:keep; .qetl.log.trace was;
     .testutil.lines}
 
+/ ------------------------------------------------- KEYED-TABLE REGISTRIES
+/ .
+/ .qetl.transform.registry, .qetl.source.sources, .qetl.job.bounded.worker_cfg
+/ and .qetl.dag.jobs are keyed tables keyed on `name` (#512), as
+/ .qalloc.methods is. A test that swaps a row in or out cannot use the
+/ dictionary idioms it once did - `k _ reg`, `reg[k]:row`, `reg[k;col]:v` all
+/ throw on a keyed table - so it goes through these, which keep the registry
+/ declared rather than rebuilding it.
+
+/ Drop rows from a registry by name; a name it does not hold is ignored.
+/ @param reg the registry's global name, e.g. `.qetl.source.sources
+/ @param names the names to drop
+drop_rows:{[reg;names] ![reg;enlist (in;`name;enlist (),names);0b;`symbol$()];}
+
+/ Store `row` under `name`, replacing any row already there.
+/ @param reg the registry's global name
+/ @param name the key
+/ @param row the row, as the registry's def returns it
+put_row:{[reg;name;row] reg upsert (enlist[`name]!enlist name),row;}
+
+/ Set one field of one row, leaving the rest of the row as it was.
+/ @param reg the registry's global name
+/ @param name the key of a row the registry holds
+/ @param col the column
+/ @param v the value
+set_field:{[reg;name;col;v] put_row[reg;name;@[(get reg) name;col;:;v]]}
+
 \d .

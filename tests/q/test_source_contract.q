@@ -22,14 +22,14 @@ decl:{[]
 
 / Remove only THIS suite's own test source, never the whole registry.
 / .
-/ `.qetl.source.sources:(`symbol$())!()` was the first version, and it wiped the
+/ `.qetl.source.sources:0#.qetl.source.sources` was the first version, and it wiped the
 / demo source that src/etl/sources/demo_deals.q registers at load - so every
 / test in .ddbftest then failed at init with "demo_deals is not a registered
 / source". A suite that destroys shared state it did not create passes in
 / isolation and breaks whatever runs after it, which is the same
 / cross-suite leak the coverage-ledger reset helper exists to prevent.
 setUp_clean:{[]
-    if[`t in key .qetl.source.sources; .qetl.source.sources:(enlist `t) _ .qetl.source.sources];
+    .testutil.drop_rows[`.qetl.source.sources;`t];
     setenv[`UQF_SOURCE_CRED_T;""];
     }
 

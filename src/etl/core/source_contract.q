@@ -128,8 +128,25 @@ required_declarations:`source`table_name`target`time_column`row_key`columns`type
 transports:`ipc`odbc`local
 default_transport:`ipc
 
-/ source -> its declaration dict.
-sources:(`symbol$())!();
+/ The optional declarations, and what a source that omits one stores.
+/ credential_example's empty string is what .qetl.source.credential_example
+/ reads as "not declared" - it was a null borrowed from whichever source
+/ registered first, when this registry was a collapsed dictionary.
+optional_declarations:`transport`credential_example!(default_transport;"")
+
+/ name -> declaration, as a KEYED TABLE declared with its columns (#512).
+/ .
+/ A dictionary of dictionaries collapses into a table on its first entry, and
+/ then a narrower declaration silently gains a null for the key it lacked: it
+/ is how half the tree's sources came to carry a null credential_example. On
+/ PeachQ adding the second row throws. Declared, every column has its type or
+/ is general, and every optional one its default, before any source arrives.
+/ .
+/ `source` stays a column beside the `name` key, so .qetl.source.def returns
+/ the declaration it always did.
+sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`symbol$();
+    time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
+    tz:`symbol$(); transport:`symbol$(); credential_example:())
 
 / Register an external source table.
 / .
@@ -233,10 +250,14 @@ define:{[source;decl]
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports;
         '"define: ",string[source],"'s transport must be one of ",(", " sv string transports)];
-    / Stored on EVERY declaration, declared or not: `sources` holds dicts, and
-    / a key present on one and absent on another stops later assignments
-    / fitting - the shape .qetl.job.bounded's optional_cfg normalisation exists for.
+    / Every declaration is stored with every column: a key no column holds
+    / would have nowhere to go, so it is refused by name rather than dropped.
     decl[`transport]:tr;
+    unknown:(key decl) except required_declarations,key optional_declarations;
+    if[count unknown;
+        '"define: ",string[source]," declares ",(", " sv string unknown),
+         ", which a source does not take - the declarations are ",
+         ", " sv string (required_declarations,key optional_declarations)];
     / Store row_key NORMALISED to a vector, always.
     / .
     / Two reasons, and the second is not obvious. Semantically it means no
@@ -245,7 +266,10 @@ define:{[source;decl]
     / one stored declaration's row_key is an atom and another's is a vector,
     / because the dict's value list has already settled on a shape. Storing
     / one shape keeps every declaration mutually assignable.
-    sources[source]:@[decl;`row_key;:;key_cols];
+    / columns and types to vectors too: one field's atom would otherwise type
+    / a general column on the first registration and refuse the next one.
+    decl:optional_declarations,@[decl;`row_key`columns`types;:;(key_cols;(),decl`columns;(),decl`types)];
+    `.qetl.source.sources upsert (source,decl cols value sources);
     .[{.qetl.log.dbg[x;y;z]};(source;"source registered";
         `columns`time_column`tz`transport`row_key!(decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
@@ -257,7 +281,7 @@ define:{[source;decl]
 / registration, with no core change.
 / @return a symbol vector, empty when nothing has registered yet
 / @eg .qetl.source.defined[]
-defined:{[] key sources}
+defined:{[] (key sources)`name}
 
 / The column(s) identifying a row uniquely, always as a vector.
 / .
@@ -281,7 +305,7 @@ row_key:{[source] (),(def source)`row_key}
 / @throws error naming the source when it was never registered
 / @eg .qetl.source.def `demo_deals
 def:{[source]
-    if[not source in key sources;
+    if[not source in defined[];
         '"def: ",string[source]," is not a registered source - sources register centrally, so an unregistered source is a wiring bug rather than a lookup miss"];
     sources source}
 

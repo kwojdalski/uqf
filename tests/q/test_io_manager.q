@@ -567,8 +567,10 @@ test_a_worker_declaring_a_new_optional_key_can_register:{[t]
         "a worker declaring an optional key registers regardless of order"]};
 
 test_every_registered_config_has_the_same_keys:{[t]
-    / The invariant that keeps the table coercion harmless.
-    ks:key each value .qetl.job.bounded.worker_cfg;
+    / The registry is a declared keyed table (#512), so its columns are one
+    / key set by construction; what this holds is that def hands every worker
+    / that one set, optional keys and all.
+    ks:{key .qetl.job.bounded.def x} each .qetl.job.bounded.defined[];
     .qunit.assertEquals[count distinct ks;1;
         "every config carries the same key set, so the registry's shape is stable"]};
 

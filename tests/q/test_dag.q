@@ -256,10 +256,10 @@ test_workers_are_adopted_from_their_own_declarations:{[t]
 / fail as a missing key.
 test_an_adopted_worker_reads_its_sources_table_and_writes_its_target:{[t]
     .qetl.dag.adopt_workers[];
-    workers:key .qetl.job.bounded.worker_cfg;
+    workers:.qetl.job.bounded.defined[];
     .qunit.assertTrue[0<count workers;"there are adopted workers to check"];
     {[w]
-        cfg:.qetl.job.bounded.worker_cfg w;
+        cfg:.qetl.job.bounded.def w;
         src:.qetl.source.def cfg`source;
         .qunit.assertTrue[all `table_name`target in key src;
             "source ",string[cfg`source]," declares table_name and target - if this",
@@ -315,14 +315,14 @@ test_a_normalizer_is_its_own_kind:{[t]
 / as an edgeless `stream` node beside the real `bounded` one.
 test_no_backfill_appears_a_second_time_under_its_process_name:{[t]
     .qetl.dag.adopt_all[];
-    procs:{(.qetl.job.bounded.def x)`procname} each key .qetl.job.bounded.worker_cfg;
-    .qunit.assertEquals[procs inter key .qetl.dag.jobs;`symbol$();
+    procs:{(.qetl.job.bounded.def x)`procname} each .qetl.job.bounded.defined[];
+    .qunit.assertEquals[procs inter .qetl.dag.defined[];`symbol$();
         "a bounded worker is one node, named by worker, never also by its process"]};
 
 test_no_streaming_job_appears_under_its_process_name:{[t]
     .qetl.dag.adopt_all[];
     procs:{(.qetl.job.stream.def x)`procname} each .qetl.job.stream.defined[];
-    .qunit.assertEquals[procs inter key .qetl.dag.jobs;`symbol$();
+    .qunit.assertEquals[procs inter .qetl.dag.defined[];`symbol$();
         "a streaming job is named by job, the identity every other node uses"]};
 
 / What adopting from q buys: a job q has declared is in the graph with no
