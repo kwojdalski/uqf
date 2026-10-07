@@ -102,6 +102,24 @@ check["reaction handler throws not implemented";
 .qetl.dag.adopt_reactions[];
 check["reaction is the job-graph producer of what it writes";
     .qetl.dag.reaction_job[`smoke_hist;`smokerx] in .qetl.dag.producers `smoke_rx_out]
+got:()
+.qetl.job.stream.wire[`smokepass;{[t;x] `got set got,enlist (t;x)}]
+ticks:{[job] update time:2026.01.01D00:00:00.000000000 from (get ` sv `.qpipe.job,job,`fixture)[]}
+check["passthrough forwards its input to its output";
+    {.qpipe.job.smokepass.on_batch[`smoke_ticks;ticks `smokepass];
+     ((enlist `smoke_echo)~got[;0]) and .qpipe.job.smokepass.fixture[]~first got[;1]}[]]
+check["passthrough refuses a table it does not subscribe to";
+    @[{.qpipe.job.smokepass.on_batch[`smoke_other;ticks `smokepass]; 0b};::;
+        {[e] e like "*subscribes to*"}]]
+check["passthrough transform verifies as scaffolded";
+    all exec passed from .qetl.transform.verify `smokepass_passthrough]
+check["streaming derive transform fails verification until written";
+    not all exec passed from .qetl.transform.verify `smokederive_derive]
+check["streaming derive handler throws not implemented";
+    unwritten {.qpipe.job.smokederive.on_batch[`smoke_ticks;ticks `smokederive]}]
+check["backfill derive worker registered"; registered[.qetl.job.bounded.def;`smokebfd_backfill]]
+check["backfill derive transform fails verification until written";
+    not all exec passed from .qetl.transform.verify `smokebfd_backfill_transform]
 exit 0
 """
 
@@ -157,6 +175,28 @@ def _scaffold_every_kind(root: Path) -> None:
             known_tables={"smoke_ticks"},
         ),
         backfill.bounded_worker("smokebf", "smoke_hist", "sym:symbol, px:float"),
+        backfill.bounded_worker(
+            "smokebfd", "smoke_bfd", "sym:symbol, px:float", transform="derive"
+        ),
+        # One table in, one out: the two --transform modes of a streaming job.
+        jobs.streaming_job(
+            "smokepass",
+            ["smoke_ticks"],
+            "smoke_echo",
+            _FEED_COLUMNS,
+            known_tables={"smoke_ticks"},
+            transform="passthrough",
+            definitions={"smoke_ticks": feed_table},
+        ),
+        jobs.streaming_job(
+            "smokederive",
+            ["smoke_ticks"],
+            "smoke_derived",
+            "sym:symbol, n:long",
+            known_tables={"smoke_ticks"},
+            transform="derive",
+            definitions={"smoke_ticks": feed_table},
+        ),
         backfill.bounded_worker("smokedb", "smoke_db", "sym:symbol, amt:float", transport="odbc"),
         backfill.bounded_worker(
             "smokelocal", "smoke_local", "sym:symbol, amt:float", transport="local"

@@ -29,6 +29,7 @@ from uqs.scaffold.templates import (
     test_stub,
     worker_body,
 )
+from uqs.scaffold.transform import check_mode
 
 #: A partition is a q symbol: `EURUSD, `binance_spot.
 _PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
@@ -47,6 +48,7 @@ def bounded_worker(
     transport: str = "ipc",
     partition: str | None = None,
     check: bool = False,
+    transform: str = "passthrough",
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker and its test.
 
@@ -70,7 +72,12 @@ def bounded_worker(
     kept per (dataset, partition), so it is the only way two workers can fill
     one dataset. `check` scaffolds a quality check that fails a window on bad
     rows - most of the tree's workers declare one.
+
+    `transform` is `passthrough` (the batch published as fetched) or `derive`
+    (a `.qetl.transform.define` whose example fails until it is written) - see
+    scaffold/transform.py.
     """
+    check_mode(transform)
     _check_name(name, "worker name")
     src = source or name
     _check_name(src, "source name")
@@ -114,7 +121,16 @@ def bounded_worker(
     actions.append(
         FileAction(
             WORKER_DIR / f"{worker}.q",
-            worker_body(worker, src, dataset, width, proc, partition=partition, check=check),
+            worker_body(
+                worker,
+                src,
+                dataset,
+                width,
+                proc,
+                partition=partition,
+                check=check,
+                transform=transform,
+            ),
         )
     )
     if define_table:
@@ -146,6 +162,11 @@ def bounded_worker(
             "without it the worker runs on the fixture, and warns that it is",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
+    if transform == "derive":
+        notes.append(
+            f"write .qpipe.job.{worker}.derive and the expected rows of its example in "
+            f"{worker}_transform - .qetl.transform.verify fails the suite until both are"
+        )
     if check:
         notes.append(f"write .qpipe.job.{worker}.quality_check - every window fails until you do")
     else:

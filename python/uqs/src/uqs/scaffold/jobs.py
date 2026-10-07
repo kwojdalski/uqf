@@ -36,10 +36,23 @@ from uqs.paths import (
 )
 from uqs.scaffold import poll as poll_steps
 from uqs.scaffold.catalog import catalog_actions
-from uqs.scaffold.columns import Columns, as_columns, nested_declaration, table_definition
+from uqs.scaffold.columns import (
+    Columns,
+    as_columns,
+    definition_columns,
+    nested_declaration,
+    table_definition,
+)
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
+from uqs.scaffold.transform import (
+    check_passthrough_shapes,
+    check_streaming,
+    streaming_test,
+    streaming_transform,
+    without_time,
+)
 
 #: The layout comes from `paths`, which is the one place that knows it - see
 #: its own docstring. `scaffold` previously spelled all seven here, including
@@ -125,6 +138,21 @@ def start_with_all_field(start_with_all: bool) -> tuple[str, str]:
     return ("`start_with_all", "\n    1b;") if start_with_all else ("", "")
 
 
+def _transform_shapes(
+    sub: str, pub: str, columns: Columns | None, definitions: dict[str, str] | None
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """`sub`'s and `pub`'s columns without `time`: `pub`'s from --columns when
+    the scaffold defines it, else from the plant like `sub`'s."""
+    defs = definitions or {}
+    if sub not in defs:
+        raise UqsError(f"--transform needs {sub}'s shape, and no plant table definition was found")
+    if columns:
+        return without_time(definition_columns(defs[sub])), without_time(as_columns(columns))
+    if pub not in defs:
+        raise UqsError(f"--transform needs {pub}'s shape: give --columns, or publish a plant table")
+    return without_time(definition_columns(defs[sub])), without_time(definition_columns(defs[pub]))
+
+
 def streaming_job(
     name: str,
     subscribe_to: list[str],
@@ -140,6 +168,8 @@ def streaming_job(
     known_profiles: Iterable[str] | None = None,
     poll: bool = False,
     cursor: str | None = None,
+    transform: str | None = None,
+    definitions: dict[str, str] | None = None,
 ) -> ScaffoldPlan:
     """Plan a new streaming job: the q file, its table and its test.
 
@@ -171,6 +201,10 @@ def streaming_job(
     `poll` scaffolds a feed as polling steps instead of one on_timer, so it
     can be previewed; `cursor` names the fields of a compound cursor - see
     scaffold/poll.py.
+
+    `transform` (`passthrough` or `derive`) writes the handler too, for one
+    table in and one out - see scaffold/transform.py. `definitions` maps each
+    plant table to its q definition, which that needs for the tables' shapes.
     """
     _check_name(name, "job name")
     if period is not None:
@@ -240,6 +274,16 @@ def streaming_job(
         written = ("fetch", "normalize") if fields else ("fetch", "normalize", "next_cursor")
         handlers = [(h, "") for h in written]
         scaffolded = ""
+    after_ns = ""
+    if transform is not None:
+        check_streaming(name, transform, subscribe_to, pubs, poll=poll, period=period)
+        in_cols, out_cols = _transform_shapes(subscribe_to[0], pubs[0], columns, definitions)
+        if transform == "passthrough":
+            check_passthrough_shapes(subscribe_to[0], pubs[0], in_cols, out_cols)
+        stubs, after_ns, xf = streaming_transform(
+            name, transform, subscribe_to[0], pubs[0], in_cols
+        )
+        scaffolded = ""
     swa_key, swa_value = start_with_all_field(start_with_all)
 
     reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribe_to)
@@ -261,7 +305,7 @@ publish:.qetl.job.stream.unwired `{name};
 {scaffolded}{stubs}
 
 \\d .
-
+{after_ns}
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
@@ -311,17 +355,25 @@ publish:.qetl.job.stream.unwired `{name};
         )
 
     ns = test_namespace(name)
-    actions.append(
-        FileAction(
-            TEST_DIR / f"test_{name}.q",
-            test_stub(name, ns, f"the {name} streaming job", driver=bool(subscribe_to and pubs)),
-        )
+    test_body = (
+        test_stub(name, ns, f"the {name} streaming job", driver=bool(subscribe_to and pubs))
+        if transform is None
+        else streaming_test(name, ns, transform, subscribe_to[0], pubs[0])
     )
+    actions.append(FileAction(TEST_DIR / f"test_{name}.q", test_body))
     actions.append(_nslist_action(ns))
-    notes.append(
-        f"implement {', '.join(f'.qpipe.job.{name}.{h}' for h, _ in handlers)}, "
-        "then replace the scaffolded test"
-    )
+    if transform is None:
+        notes.append(
+            f"implement {', '.join(f'.qpipe.job.{name}.{h}' for h, _ in handlers)}, "
+            "then replace the scaffolded test"
+        )
+    elif transform == "derive":
+        notes.append(
+            f"write .qpipe.job.{name}.derive and the expected rows of {xf}'s example - "
+            "the generated tests fail until both are"
+        )
+    else:
+        notes.append(f"the handler forwards {subscribe_to[0]} to {pubs[0]} as written")
     notes.append(_STACK_PAGE_NOTE.format(proc=proc))
     member_actions, member_notes = membership(
         proc,

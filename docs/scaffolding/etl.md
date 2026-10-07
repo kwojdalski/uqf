@@ -74,6 +74,36 @@ why `` `time _ batch `` appears in this tree's history as a bug worth naming: it
 is `_` the drop operator applied to a symbol and a table, which throws `'type`
 on every batch. The process stays `up` and consumes nothing.
 
+## One table in, one out: `--transform`
+
+When the job only forwards or reshapes one table, the scaffold can write the
+handler too:
+
+```
+uqs job new trades_echo --subscribe-to trades --publishes trades_copy \
+    --columns-from trades --transform passthrough
+uqs job new trades_notional --subscribe-to trades --publishes notional \
+    --columns "sym:symbol, notional:float" --transform derive
+```
+
+Both write an `on_batch` that accepts only the subscribed table (another one is
+an error, never forwarded), drops the plant's `time`, applies a
+`.qetl.transform` and publishes the result; an empty batch publishes nothing.
+The generated test file covers that routing, the empty batch and what reaches
+the published table, plus the `contract_driver`.
+
+- `passthrough` publishes the rows unchanged through
+  `.qetl.transform.passthrough`, so it is refused unless both tables have the
+  same columns and types, `time` aside. Its tests pass as written.
+- `derive` declares a `.qetl.transform.define` from the input's shape to the
+  output's, with a fixture row as its example and an EMPTY expected output
+  marked `SCAFFOLDED`. The file loads; `derive` throws and the example fails
+  `.qetl.transform.verify` until you write both.
+
+Only one subscribed and one published table, and no `--period`: a join, a buffer
+or a timer is the job's own logic, so `--transform` refuses them, as it refuses
+a feed. Without `--transform` you get the custom handler above.
+
 ## Rules
 
 **Never call `.u.upd`.** Call `publish`. The runner wires it to the plant, a

@@ -57,9 +57,11 @@ this machine, with no process serving it (see "A source read from local HDB
 files" below), `--procname` names the process, and `--start-with-all` puts a
 streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
 a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
-`--partition`/`--check` shape a backfill. `uqs job remove NAME` undoes a
-scaffold. Where q is installed, `uqs job new` also re-exports the contract
-surface; without it, it prints the command to run.
+`--partition`/`--check` shape a backfill. `--transform passthrough|derive`
+scaffolds the transform - and for a one-in, one-out streaming job its whole
+handler (see [the ETL page](../scaffolding/etl.md)). `uqs job remove NAME`
+undoes a scaffold. Where q is installed, `uqs job new` also re-exports the
+contract surface; without it, it prints the command to run.
 
 The third is a second worker over the second's source: an existing source or
 table is reused, not rewritten. `--columns` is required whenever a new source or

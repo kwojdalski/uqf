@@ -81,6 +81,14 @@ etl, as markout and fx_positions have. For a backfill, `--partition SYM` scopes
 the worker to one slice of its dataset - the only way two workers can fill one
 dataset - and `--check` scaffolds a quality check that throws until written.
 
+`--transform passthrough|derive` scaffolds the transform. For a backfill the
+default is the pass-through; `derive` declares a `.qetl.transform.define` whose
+example fails until `derive` and its expected rows are written. For a streaming
+job reading ONE table and publishing ONE, it also writes the whole `on_batch`
+(routing, `time` dropped, empty batch, publish) and its tests; `passthrough` is
+refused unless both tables have the same shape. Feeds, `--poll`, `--period` and
+several tables in or out are refused - use the custom-handler scaffold there.
+
 To undo a scaffold, `uqs job remove NAME --dry-run` shows everything it would
 take back out, then run it without `--dry-run`. It refuses a job whose
 SCAFFOLDED markers are gone, and keeps any table or source something else still
