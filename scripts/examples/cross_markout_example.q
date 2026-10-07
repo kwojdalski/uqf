@@ -88,12 +88,12 @@ horizons:0D00:00:00.001*-500 -300 0 100 300;
 / around it.
 mid_idx:n_ticks div 2;
 trade_time:audusd_ts mid_idx;
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]";()!()];
-trade_price:first .qfwd.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]`mid;
+.qetl.log.dbg[`cross_markout;"running: .qcross.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]";()!()];
+trade_price:first .qcross.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist `mid]`mid;
 .qetl.log.info[`cross_markout;"trade_time/trade_price - a synthetic AUDPLN buy at ",.Q.s1[trade_time],": ",.Q.s1[trade_price];()!()];
 
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;horizons;1]";()!()];
-horizons_r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;horizons;1];
+.qetl.log.dbg[`cross_markout;"running: .qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;horizons;1]";()!()];
+horizons_r:.qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;horizons;1];
 .qetl.log.info[`cross_markout;"horizons_r - markout at each horizon (negative = before the trade):";()!()];
 show horizons_r;
 if[not (first horizons_r[`time] where horizons_r[`horizon]=0D00:00:00)~trade_time;
@@ -110,16 +110,16 @@ if[0.0<>first horizons_r[`markout_pips] where horizons_r[`horizon]=0D00:00:00;
 / jittered by mk_timestamps, so they aren't aligned to a shared grid.
 t0:max (first audusd_ts;first eurusd_ts;first eurpln_ts);
 t1:min (last audusd_ts;last eurusd_ts;last eurpln_ts);
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]";()!()];
-decomp:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
+.qetl.log.dbg[`cross_markout;"running: .qexec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]";()!()];
+decomp:.qexec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
 .qetl.log.info[`cross_markout;"decomp - AUDPLN's total move over the window, split by leg:";()!()];
 show decomp;
 
 decomp_total:sum decomp`contribution_pips;
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;t0;1]";()!()];
-mid_t0:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t0;1];
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;t1;1]";()!()];
-mid_t1:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t1;1];
+.qetl.log.dbg[`cross_markout;"running: .qcross.cross_ref_price_at[quotes;`AUDPLN;t0;1]";()!()];
+mid_t0:.qcross.cross_ref_price_at[quotes;`AUDPLN;t0;1];
+.qetl.log.dbg[`cross_markout;"running: .qcross.cross_ref_price_at[quotes;`AUDPLN;t1;1]";()!()];
+mid_t1:.qcross.cross_ref_price_at[quotes;`AUDPLN;t1;1];
 actual_total:10000*mid_t1-mid_t0;
 .qetl.log.info[`cross_markout;"decomp_total vs actual_total - ",.Q.s1[decomp_total]," vs ",.Q.s1[actual_total],", must match exactly (this is an exact decomposition, not an approximation)";()!()];
 if[1e-6<abs decomp_total-actual_total;
@@ -131,8 +131,8 @@ if[1e-6<abs decomp_total-actual_total;
 / impact question, even though our synthetic EURUSD drift here is
 / unrelated to the EURPLN "trade" (there's no genuine causality in
 / synthetic data - this only demonstrates the mechanism).
-.qetl.log.dbg[`cross_markout;"running: .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;horizons;1]";()!()];
-impact_r:.qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;horizons;1];
+.qetl.log.dbg[`cross_markout;"running: .qexec.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;horizons;1]";()!()];
+impact_r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;horizons;1];
 .qetl.log.info[`cross_markout;"impact_r - EURUSD's own drift around the EURPLN trade's timestamps:";()!()];
 show impact_r;
 

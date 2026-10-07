@@ -24,16 +24,15 @@ Neither needs the other, and stopping one leaves the other running.
 
 ## Algorithm
 
-The arithmetic is not written in this job. `src/pricing/forwards.q` already
-walks depth across an arbitrary chain of legs, converting the notional hop by
-hop, and marks a shortfall when a middle leg cannot carry it. What is left is
-one idea:
+The arithmetic is not written in this job. `src/pricing/cross.q` already walks
+depth across an arbitrary chain of legs, converting the notional hop by hop, and
+marks a shortfall when a middle leg cannot carry it. What is left is one idea:
 
 > the shortest path **excluding the direct leg** is the synthetic route
 
 <!-- q-example: transcript -->
 ```q
-q) .qfwd.ccy_shortest_path[`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY except `EURJPY;`EUR;`JPY]
+q) .qcross.ccy_shortest_path[`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY except `EURJPY;`EUR;`JPY]
 `EURUSD`USDJPY
 ```
 

@@ -169,8 +169,8 @@ def test_every_allowed_missing_entry_is_still_needed():
 def test_a_private_helper_exists_though_the_surface_omits_it(scan):
     """@private takes a helper out of functions.csv, not out of existence:
     prose explaining it is not a stale reference."""
-    assert "require_quotes_cols" not in cdr.load_surface().get("qfwd", {})
-    problems, _ = scan("`.qfwd.require_quotes_cols` checks the columns first.\n")
+    assert "side_cols" not in cdr.load_surface().get("qcross", {})
+    problems, _ = scan("`.qcross.side_cols` names the columns a side reads.\n")
     assert problems == []
 
 

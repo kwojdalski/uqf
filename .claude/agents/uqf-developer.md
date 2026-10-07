@@ -31,13 +31,11 @@ helpers (`ncdf`, `npdf`, `inv_ncdf`), `horner_eval` (the one place polynomial
 evaluation happens) - `ccy.q` --- CURCUR pair symbol convention,
 validation/normalization - `daycount.q` --- ACT/360, ACT/365, 30E/360 → year
 fraction `t` - `rates.q` --- simple/continuous growth and discount factor
-conversions - `forwards.q` --- the largest module: CIRP forwards, synthetic
-cross-rate order books, N-leg cross-book chaining (`ccy_shortest_path`,
-`cross_decomp`, `cross_book_at`), the markout family
-(`cross_markout_at_horizons`, `cross_markout_decomp`,
-`cross_impact_at_horizons`), and the `time_col` output-shape config -
-`options.q` --- Garman-Kohlhagen pricing, Greeks, implied vol - `risk.q` --- pip
-value, P&L, carry, parametric/historical VaR - `execution.q` ---
+conversions - `cross.q` (`.qcross`) --- synthetic cross pricing: cross-rate
+order books, N-leg cross-book chaining (`ccy_shortest_path`, `cross_decomp`,
+`cross_book_at`) - `forwards.q` --- CIRP forwards, broken dates, swaps, quote
+conversion - `options.q` --- Garman-Kohlhagen pricing, Greeks, implied vol -
+`risk.q` --- pip value, P&L, carry, parametric/historical VaR - `execution.q` ---
 `markout`/`markout_at_horizons`, `eff_spread`, `slippage`,
 `fill_ratio`/`reject_ratio`, `hit_ratio_by`, `vwap`, `sweep_price` - `book.q` ---
 reshapes wide/mis-typed order book tables into the vector-column shape
@@ -63,9 +61,9 @@ library, deliberately left in its original camelCase, don't touch it.
   a judgement rather than on effort.
 - **The relevant `src/*.q` file in full** before adding a function to it ---
   this library reuses its own primitives heavily (`ccy_orient_cross`,
-  `oriented_levels`, `sweep_price`, `require_quotes_cols`,
-  `apply_col_precedence`); a new function that duplicates one of these instead
-  of calling it is the most common mistake here.
+  `oriented_levels`, `sweep_price`, `require_depth_quotes`, `markout_cols`); a
+  new function that duplicates one of these instead of calling it is the most
+  common mistake here.
 - **`tests/test_<module>.q`** for the existing test pattern in that file (helper
   builders like `mk_quotes_table`, the `.{module}test` namespace,
   `test*`-prefixed functions) before adding new tests --- match the established
@@ -84,7 +82,7 @@ library, deliberately left in its original camelCase, don't touch it.
 - Route any polynomial evaluation through `.qstats.horner_eval` rather than
   hand-rolling Horner's method.
 - Validate a `quotes`/`trades`-shaped table's required columns up front (see
-  `forwards.q`'s `require_quotes_cols` pattern) *before* any protected-eval
+  `schema.q`'s `require_depth_quotes` pattern) *before* any protected-eval
   (`@[f;x;{...}]`) path, so a caller's structural mistake throws instead of
   silently producing null results.
 - Keep `lower_snake_case` for every new function, parameter, and local variable ---
@@ -114,9 +112,11 @@ library, deliberately left in its original camelCase, don't touch it.
   only for a legitimate "no data yet" case --- that class of bug (a malformed
   table producing null results with no error) has bitten this codebase before.
 - Don't hardcode `pip_factor` or a fixed output column name inside a function
-  body --- `pip_factor` is always caller-supplied, and output
-  timestamp/column-order conventions route through `.qfwd.time_col` and
-  `.qfwd.apply_col_precedence`.
+  body --- `pip_factor` is always caller-supplied, and the output timestamp
+  column is `time`, leading (a markout's columns are `.qexec.markout_cols`).
+- Respect the module graph: `scripts/gates/check_module_deps.py` lists the
+  allowed edges between namespaces (#626). A new cross-module call is a new
+  edge, added to that list in the same change.
 - If adding a module, wire it into `src/init.q` in correct dependency order and
   add a matching `tests/test_<module>.q` wired into `tests/run_tests.q` --- a
   module that loads but isn't tested isn't finished.

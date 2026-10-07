@@ -158,8 +158,8 @@ book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(row`bid_prices;row`bid_sizes;ro
 .qetl.log.dbg[`reshape_wide_order_book;"book - row 0's book dict, forwards.q's sweep_price/cross_book shape:";()!()];
 show book;
 
-.qetl.log.dbg[`reshape_wide_order_book;"running: .qexec.sweep_price[book`ask_prices;book`ask_sizes;250]";()!()];
-sweep_result:.qexec.sweep_price[book`ask_prices;book`ask_sizes;250];
+.qetl.log.dbg[`reshape_wide_order_book;"running: .qbook.sweep_price[book`ask_prices;book`ask_sizes;250]";()!()];
+sweep_result:.qbook.sweep_price[book`ask_prices;book`ask_sizes;250];
 .qetl.log.info[`reshape_wide_order_book;"sweep_result - swept 250 units against row 0's ask side: avg_price=",.Q.s1[sweep_result`avg_price]," filled_size=",.Q.s1[sweep_result`filled_size]," fully_filled=",.Q.s1[sweep_result`fully_filled];()!()];
 show sweep_result;
 if[not sweep_result`fully_filled;

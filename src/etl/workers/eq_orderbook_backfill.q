@@ -4,7 +4,7 @@
 / A declaration over the generic shell (#124), over the first ODBC source.
 / Its transform is the first in this tree that changes the shape of what it
 / fetched: Databento's forty per-level columns fold into four level-0-first
-/ vectors, the book shape .qfwd.cross_book_at and .qbook already read.
+/ vectors, the book shape .qcross.cross_book_at and .qbook already read.
 / .
 / Windows are ten minutes. The opening ten minutes of 2026-02-25 alone is
 / 778,176 rows across six symbols, fetched in about ten seconds over ODBC

@@ -170,13 +170,13 @@ test_the_registry_is_not_a_token_sample:{[t]
 has:{[l;s] any l~\:s}
 
 test_a_private_helper_is_not_registered:{[t]
-    / .qfwd.require_quotes_cols is plumbing every cross-book function calls.
-    .qunit.assertTrue[.mantest.has[.man.private;".qfwd.require_quotes_cols"];"it is recorded as private"];
-    .qunit.assertFalse[.mantest.has[registered[];".qfwd.require_quotes_cols"];"and is not in the registry"]};
+    / .qcross.side_cols is plumbing the depth-pricing functions share.
+    .qunit.assertTrue[.mantest.has[.man.private;".qcross.side_cols"];"it is recorded as private"];
+    .qunit.assertFalse[.mantest.has[registered[];".qcross.side_cols"];"and is not in the registry"]};
 
 test_an_untagged_public_function_is_still_registered:{[t]
-    .qunit.assertTrue[.mantest.has[registered[];".qfwd.cross_book_at"];"API stays in the registry"];
-    .qunit.assertFalse[.mantest.has[.man.private;".qfwd.cross_book_at"];"and is not private"]};
+    .qunit.assertTrue[.mantest.has[registered[];".qcross.cross_book_at"];"API stays in the registry"];
+    .qunit.assertFalse[.mantest.has[.man.private;".qcross.cross_book_at"];"and is not private"]};
 
 test_every_private_name_exists:{[t]
     / A tag left on a block whose function was renamed would name nothing.

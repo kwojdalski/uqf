@@ -1,4 +1,4 @@
-// test_dqchecks.q - tests for src/market_data/dqchecks.q. Load src/pricing/forwards.q,
+// test_dqchecks.q - tests for src/market_data/dqchecks.q. Load src/foundation/schema.q,
 // src/market_data/microstructure.q, src/market_data/dqchecks.q, tests/lib/qunit.q and
 // tests/lib/testutil.q before this file.
 

@@ -169,8 +169,8 @@ show first_row_per_pair;
 
 sweep_by_pair:{[t;pair]
     row:t pair;
-    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qexec.sweep_price[row`ask_prices;row`ask_sizes;250] for pair ",.Q.s1[pair];()!()];
-    result:.qexec.sweep_price[row`ask_prices;row`ask_sizes;250];
+    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.sweep_price[row`ask_prices;row`ask_sizes;250] for pair ",.Q.s1[pair];()!()];
+    result:.qbook.sweep_price[row`ask_prices;row`ask_sizes;250];
     result,enlist[`sym]!enlist pair}[first_row_per_pair;] each exec sym from first_row_per_pair;
 .qetl.log.info[`reshape_wide_order_book_multi_pair;"sweep_by_pair - swept 250 units against each pair's ask side (",.Q.s1[count sweep_by_pair]," pairs)";()!()];
 show sweep_by_pair;
