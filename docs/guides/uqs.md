@@ -294,7 +294,16 @@ tree's overlays on the starter pack. A new runtime is one entry there.
 ```
 uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
 uqs --runtime torq stop
+uqs list runtimes             # each one: processes, tables, layers, data, ports, what is up
+uqs runtime diff uqf torq     # what one has that the other lacks
 ```
+
+`list runtimes` marks the default runtime and the one selected now, and counts
+what each one's process.csv and schema would hold. It reads the declarations
+rather than starting anything. `runtime diff A B` lists, in each direction, the
+processes, tables, config layers and commands that one runtime has and the other
+doesn't. Both take `--json`. The table below is the prose version; a test holds
+its columns, data directories and base ports to the declarations.
 
   |                | `uqf` (default)                                                         | `torq`                                                            | `crypto`                                                                                        | `fx`                                                                                        |
   | ---            | ---                                                                     | ---                                                               | ---                                                                                             | ---                                                                                         |
