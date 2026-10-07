@@ -156,8 +156,10 @@ pair_terms:{[pair;conventions]
 / The spot date a trade date settles on, and why.
 / .
 / Spot is `spot_lag` joint business days after the trade date (holidays of
-/ both currencies count). The result names the lag, the calendars used and
-/ every business day skipped over on the way.
+/ both currencies count), and always itself a joint business day: a T+0 trade
+/ dated on a weekend or a holiday settles on the next business day, never
+/ before the trade. The result names the lag, the calendars used and every
+/ non-business day skipped over on the way.
 / @param trade_date the trade date
 / @param pair the currency pair, e.g. `EURUSD
 / @param calendars dict currency -> holiday dates; both currencies required
@@ -168,7 +170,9 @@ pair_terms:{[pair;conventions]
 / @eg (.qcal.spot_date[2026.09.18;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions])`date  -> 2026.09.22
 spot_date:{[trade_date;pair;calendars;conventions]
     c:pair_terms[pair;conventions];
-    settle:add_business_days[trade_date;c`spot_lag;c`ccys;calendars;c`weekend];
+    / `following, not the pair's roll: spot never settles before the trade.
+    / A no-op for a lag of 1 or more, whose every counted day is a business day.
+    settle:adjust[add_business_days[trade_date;c`spot_lag;c`ccys;calendars;c`weekend];`following;c`ccys;calendars;c`weekend];
     between:trade_date+1+til 0|settle-trade_date;
     skipped:between where not is_business_day[between;c`ccys;calendars;c`weekend];
     `date`trade_date`pair`spot_lag`calendars`skipped!(settle;trade_date;c`pair;c`spot_lag;c`ccys;skipped)}
