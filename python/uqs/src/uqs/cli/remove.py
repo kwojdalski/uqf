@@ -32,6 +32,14 @@ def remove_job(
         ),
     ] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask before removing")] = False,
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict",
+            help="Refuse while anything else in the tree still names the job, its process, "
+            "its source or its tables",
+        ),
+    ] = False,
 ) -> None:
     """Undo a scaffold: the job's files, its table, and every line uqs job new added.
 
@@ -39,6 +47,10 @@ def remove_job(
     and a backfill's source is kept when another worker reads it. A job whose
     SCAFFOLDED markers are gone has been written, and is refused without
     --force.
+
+    Every other line that still names what goes - an example, a docs page, a
+    diagram - is listed with its line number and left alone; --strict refuses
+    while any remain.
 
         uqs job remove fx_rates --dry-run
     """
@@ -50,7 +62,17 @@ def remove_job(
         return
     console.print(removal.render())
     if dry_run:
+        if strict and removal.references:
+            console.print("[yellow]--strict would refuse: the lines above still name it[/]")
         console.print("[dim]--dry-run: nothing removed[/]")
+        return
+    if strict and removal.references:
+        _die(
+            UqsError(
+                f"--strict: {len(removal.references)} line(s) outside this removal still name "
+                f"{removal.name} - edit them, then run it again"
+            )
+        )
         return
     if not yes and not typer.confirm("Remove these?", default=False):
         console.print("nothing removed")

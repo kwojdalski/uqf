@@ -31,6 +31,12 @@ from pathlib import Path
 EXAMPLES_DIR = Path("scripts/examples")
 
 
+#: The line every generated example carries. `uqs job remove` deletes an
+#: example only while it does: a hand-written one (hdb_transfer's) is reported,
+#: never deleted.
+GENERATED_BY = "Written by `uqs job new"
+
+
 def example_path(name: str) -> Path:
     """The example script for job `name` - also what `uqs job remove` deletes."""
     return EXAMPLES_DIR / f"{name}_example.q"

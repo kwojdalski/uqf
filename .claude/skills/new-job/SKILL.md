@@ -92,7 +92,9 @@ several tables in or out are refused - use the custom-handler scaffold there.
 To undo a scaffold, `uqs job remove NAME --dry-run` shows everything it would
 take back out, then run it without `--dry-run`. It refuses a job whose
 SCAFFOLDED markers are gone, and keeps any table or source something else still
-uses.
+uses. It also lists every other line that still names the job (an example, a
+docs page, a diagram) - those are yours to edit - and `--strict` refuses while
+any remain.
 
 `--procname` names the process (default `NAME1`, or `NAME_backfill1`), and
 `--start-with-all` puts a streaming job or normalizer in `uqs start all`. Leave

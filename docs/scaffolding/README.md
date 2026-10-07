@@ -123,6 +123,11 @@ To take a scaffold back out - a typo in the name, a wrong shape - run
 from the tree, keeps any table or source another job still uses, and refuses a
 job that has been written (its SCAFFOLDED markers are gone) unless `--force`.
 
+It only knows the files a scaffold writes, so it also lists, with line numbers,
+every other line that still names the job, its process, or a source or table it
+removes - an example script, a docs page, a diagram, another suite's test. Those
+it leaves alone; `--strict` refuses to remove anything while any remain.
+
 ## After you run it
 
 The order that gives the shortest feedback loop, from [the new-job

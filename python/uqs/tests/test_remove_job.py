@@ -183,3 +183,81 @@ def test_nothing_is_touched_until_apply(tree):
     scaffolded = _snapshot(tree)
     plan_removal(tree, "pulse")
     assert _snapshot(tree) == scaffolded != before
+
+
+# ------------------------------------------------ what still names it (#717)
+
+
+def _referenced(removal) -> set[str]:
+    return {str(r.path) for r in removal.references}
+
+
+def test_a_fresh_scaffold_leaves_nothing_naming_it(tree):
+    """Every file a scaffold writes is one the removal edits or deletes, so a
+    job nobody has built on is reported clean - the rewritten files are
+    searched in their NEW text, not as they are on disk."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    assert plan_removal(tree, "pulse").references == []
+
+
+def test_an_example_and_a_docs_page_naming_it_are_listed(tree):
+    """The acceptance case: hdb_transfer has an example script and a docs page,
+    which --force would otherwise have left stale."""
+    for rel in ("scripts/examples/hdb_transfer_example.q", "docs/scaffolding/hdb-transfer.md"):
+        (tree / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(UQF_ROOT / rel, tree / rel)
+    removal = plan_removal(tree, "hdb_transfer", force=True)
+    assert {
+        "scripts/examples/hdb_transfer_example.q",
+        "docs/scaffolding/hdb-transfer.md",
+    } <= _referenced(removal)
+    assert all(r.line > 0 for r in removal.references), "each with its line number"
+    assert "still named in" in removal.render()
+
+
+def test_what_the_removal_keeps_is_not_reported(tree):
+    """A table another job reads is kept, so its other mentions are why it
+    stays - not something left behind."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job(
+            "pulse_reader", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}
+        ),
+        tree,
+    )
+    removal = plan_removal(tree, "pulse")
+    assert "src/etl/streaming/pulse_reader.q" not in _referenced(removal)
+
+
+def test_a_name_inside_a_longer_one_is_not_a_reference(tree):
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    (tree / "docs").mkdir(exist_ok=True)
+    (tree / "docs" / "note.md").write_text("pulsed and pulse_extra are other things\n")
+    assert plan_removal(tree, "pulse").references == []
+    (tree / "docs" / "note.md").write_text("see pulse1\n")
+    assert _referenced(plan_removal(tree, "pulse")) == {"docs/note.md"}, "its process is named"
+
+
+def test_strict_refuses_and_dry_run_only_says_it_would(tree, monkeypatch):
+    from typer.testing import CliRunner
+
+    from uqs import cli
+    from uqs.cli import remove as remove_cli
+
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    (tree / "docs").mkdir(exist_ok=True)
+    (tree / "docs" / "note.md").write_text("the pulse job\n")
+    monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())
+    refused: list[str] = []
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(remove_cli, "_die", record)
+    runner = CliRunner()
+    shown = runner.invoke(cli.app, ["job", "remove", "pulse", "--dry-run", "--strict"])
+    assert shown.exit_code == 0 and "--strict would refuse" in shown.output
+    result = runner.invoke(cli.app, ["job", "remove", "pulse", "--strict", "--yes"])
+    assert result.exit_code == 1 and refused and "1 line(s)" in refused[0]
+    assert (tree / "src/etl/streaming/pulse.q").is_file(), "and nothing was removed"

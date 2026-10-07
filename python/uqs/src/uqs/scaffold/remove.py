@@ -15,13 +15,20 @@ process, so no table, profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
 their test, and the raw table the publisher writes - on the same rule as any
 table: only when nothing else mentions it.
-A backfill also loses its worked example under scripts/examples/, and every
-process loses the Showcase card and stack.md comment its scaffold wrote (#713)
-- while they still say SCAFFOLDED. Written prose is left, with a note.
+A backfill also loses the worked example its scaffold generated under
+scripts/examples/, and every process the Showcase card and stack.md comment
+its scaffold wrote (#713) - while they still say SCAFFOLDED. A hand-written
+example and written prose are left, and the reference report lists them.
 
 WHAT IT REFUSES. A job whose file carries no SCAFFOLDED marker any more: it
 has been written, and deleting written work is not undoing a scaffold.
 `--force` overrides that, and nothing else.
+
+WHAT IT REPORTS (#717). Every line elsewhere in the tree that still names
+what it removes - an example script, a docs page, a diagram, another suite's
+test - with its line number, because it knows only the files a scaffold
+writes. `uqs job remove --strict` refuses while any remain. See
+scaffold/references.py.
 """
 
 from __future__ import annotations
@@ -44,9 +51,10 @@ from uqs.paths import (
     UqsError,
 )
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
-from uqs.scaffold.example import example_path
+from uqs.scaffold.example import GENERATED_BY, example_path
 from uqs.scaffold.external import external_files
 from uqs.scaffold.profile import PROFILES_FILE
+from uqs.scaffold.references import Reference, stale_references
 
 MARKER = "SCAFFOLDED"
 _DECLARES = ("qetl.job.stream.define", "qetl.job.stream.normalize", "qetl.job.bounded.define")
@@ -69,12 +77,20 @@ class Removal:
     deletes: list[Path] = field(default_factory=list)
     rewrites: dict[Path, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    #: Lines outside these edits that still name what goes - left as they are.
+    references: list[Reference] = field(default_factory=list)
 
     def render(self) -> str:
         lines = [f"remove {self.name}:"]
         lines += [f"  delete {p}" for p in self.deletes]
         lines += [f"  edit {p}" for p in self.rewrites]
         lines += [f"  note: {n}" for n in self.notes]
+        if self.references:
+            lines.append(
+                f"  still named in {len(self.references)} line(s) this does not edit "
+                "- remove or rewrite them by hand:"
+            )
+            lines += [f"    {r.render()}" for r in self.references]
         return "\n".join(lines)
 
     def apply(self, repo_root: Path) -> None:
@@ -94,12 +110,20 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             "only undoes a scaffold. Pass --force to remove it anyway"
         )
     if job_file.parent == REACTION_DIR:
-        return _reaction_removal(repo_root, name, job_file)
+        removal = _reaction_removal(repo_root, name, job_file)
+        return _with_references(removal, repo_root, {name})
     fn, job, fields = _declaration(job_file, text)
     proc = (symbols(fields.get("procname", "")) or (f"{job}1",))[0]
     removal = Removal(job)
     removal.deletes.append(job_file)
     gone = {job_file}
+    # Everything this takes away, by name: the argument as given (a backfill's
+    # NAME, its worker being NAME_backfill), the job and its process. The
+    # source and the tables join below only if they go too.
+    names = {name, job, proc}
+    # What stays, by name. A feed is usually named after its table, and when
+    # that table is kept, every mention of the name is a use of the table.
+    kept: set[str] = set()
 
     if fn == "qetl.job.bounded.define":
         tables = list(symbols(fields.get("dataset", ""))[:1])
@@ -109,8 +133,15 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             if _source_is_ours(repo_root, source[0], src_file, job_file, force):
                 removal.deletes.append(src_file)
                 gone.add(src_file)
+                names.add(source[0])
+            else:
+                # NAME is the source's name too: another worker reads it, so
+                # its mentions are that worker's.
+                kept.add(source[0])
+        # Only the example a scaffold generated; a hand-written one is the
+        # reference report's to list.
         example = example_path(job.removesuffix("_backfill"))
-        if (repo_root / example).is_file():
+        if (repo_root / example).is_file() and GENERATED_BY in (repo_root / example).read_text():
             removal.deletes.append(example)
             gone.add(example)
     elif fn == "qetl.job.stream.normalize":
@@ -131,7 +162,9 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     for table in tables:
         if _mentioned_elsewhere(repo_root, table, gone):
             removal.notes.append(f"kept table {table}: something else in the tree uses it")
+            kept.add(table)
             continue
+        names.add(table)
         _edit(removal, repo_root, TABLES_FILE, lambda t, tb=table: _drop_definition(t, tb))
         _edit(
             removal,
@@ -147,13 +180,16 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
         f"{proc}'s port offset stays in scripts/processes/process_ports.csv, which is append-only "
         "so an offset is never handed to another process"
     )
+    # The stubs a scaffold wrote go while they still say SCAFFOLDED; anything
+    # else that names the process is listed by the reference report below.
     for page in (STACK_PAGE, SHOWCASE_PAGE):
         _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
-        text = removal.rewrites.get(page) or (
-            (repo_root / page).read_text() if (repo_root / page).is_file() else ""
-        )
-        if re.search(rf"\b{re.escape(proc)}\b", text):
-            removal.notes.append(f"{page} names {proc} - remove that by hand")
+    return _with_references(removal, repo_root, names - kept)
+
+
+def _with_references(removal: Removal, repo_root: Path, names: set[str]) -> Removal:
+    """`removal`, with every line its edits leave still naming one of `names`."""
+    removal.references = stale_references(repo_root, names, removal.deletes, removal.rewrites)
     return removal
 
 
