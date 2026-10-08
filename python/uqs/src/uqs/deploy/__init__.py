@@ -39,13 +39,16 @@ THE STAGES, in order, each stopping the deployment when it fails:
              nothing later fetches either. The ports this profile listens on
              are checked free.
   smoke      scripts/deploy_smoke.q: the quant library loads and computes known
-             numbers. Needs its success marker AND exit 0, within a timeout.
+             numbers, then the started processes' declarations load - theirs
+             alone - against the server's starter-pack schema (#902). Needs
+             its success marker AND exit 0, within a timeout.
   restart    with --restart, the previous deployment's processes stop - their
              replacements take the same ports, so v1 has downtime.
   start      `uqs start --profile <profile>` from the new release.
-  verify     `uqs deploy verify`: every process the profile promises
-             answers over q IPC as itself, and the library and ETL checks
-             pass where they are loaded, before a deadline.
+  verify     `uqs deploy verify`: every process the profile promises, bar a
+             one-shot that exits by design (tpreplay1), answers over q IPC
+             as itself, and the library and ETL checks pass where they are
+             loaded, before a deadline.
   activate   `current` moves to the new release in one rename. The previous
              release stays where it was.
 

@@ -42,7 +42,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 
-from uqs.model import profiles
+from uqs.model import infra, profiles
 from uqs.model.registry import PIPELINES
 from uqs.paths import default_paths
 from uqs.stack import listing, runtime
@@ -197,6 +197,9 @@ def _expected(
 ) -> tuple[dict[str, int], set[str]]:
     resolved = profiles.resolve([profile])
     names = resolved + tuple(p for p in dict.fromkeys(procs or ()) if p not in resolved)
+    # A one-shot process exits once started; waiting for it to answer would
+    # fail every deployment of a profile that starts one.
+    names = tuple(n for n in names if n not in infra.ONE_SHOT)
     ports = listing.configured_ports(default_paths(), base_port=base_port)
     missing = [n for n in names if n not in ports]
     if missing:

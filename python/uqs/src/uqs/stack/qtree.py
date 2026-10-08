@@ -64,6 +64,8 @@ SHOWN = 10
 #: where - the file and line - which is what an operator needs to see.
 PROBE = f'system"l src/init.q";\nsystem"l src/etl/init.q";\n-1 "{SENTINEL}";\nexit 0\n'
 PROBE_TIMEOUT = 300.0
+#: The schema the probe loads against (see probe).
+VENDORED_SCHEMA = Path("lib") / "torq-finance-starter-pack" / "database.q"
 
 
 def is_flattened(paths: UqsPaths) -> bool:
@@ -153,9 +155,17 @@ def check(root: Path, extra: Mapping[str, str] | None = None) -> dict[str, int]:
 
 def probe(tree: Path, qcmd: str, env: Mapping[str, str], timeout: float = PROBE_TIMEOUT) -> None:
     """Load the tree as a pipeline process does, on `qcmd`; refuse unless it
-    prints SENTINEL. Run from the tree, as every loader here is."""
+    prints SENTINEL. Run from the tree, as every loader here is.
+
+    Against the vendored starter pack's schema when the tree has it, not
+    $TORQAPPHOME's: the probe proves the CONVERSION, which loads every
+    declaration, and a managed schema without the demo's tables cannot load
+    them all by design. Each process checks its own jobs against the
+    deployment's schema when it starts (src/etl/core/declaration_load.q, #902)."""
     script = tree / ".uqs_qtree_probe.q"
     script.write_text(PROBE)
+    if (tree / VENDORED_SCHEMA).is_file():
+        env = {k: v for k, v in env.items() if k != "TORQAPPHOME"}
     try:
         r = subprocess.run(
             [qcmd, script.name, "-q"],
