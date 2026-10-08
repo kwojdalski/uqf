@@ -37,6 +37,15 @@ from collections.abc import Mapping
 from pathlib import Path
 from types import ModuleType
 
+from uqs.interpreter import (
+    KDBX,
+    loads_nested_contexts,
+    nested_contexts_problem,
+    q_command,
+    q_impl,
+    q_interpreter,
+    q_version,
+)
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 
@@ -70,6 +79,34 @@ VENDORED_SCHEMA = Path("lib") / "torq-finance-starter-pack" / "database.q"
 
 def is_flattened(paths: UqsPaths) -> bool:
     return paths.runtime_declaration.q_tree == "flattened"
+
+
+def refuse_unloadable(paths: UqsPaths, env: Mapping[str, str]) -> None:
+    """Refuse to start a stack whose q cannot load the tree it is given (#882).
+
+    The tree as written uses nested working contexts. A KDB-X runtime loading
+    it, on a q older than 5.0, would start processes that die on the first
+    nested `\\d` with the failure only in their logs - the same q that deploy's
+    preflight refuses. A flattened runtime loads a converted tree, and a
+    PeachQ one is refused pipelines by its declaration (runtimes.py), so
+    neither is asked here. Nor is an unanswered version: no evidence, no
+    refusal. `env` is the runtime's own (stack/env.with_interpreter): this
+    module cannot import it, env importing this one."""
+    if is_flattened(paths) or q_impl(env) != KDBX:
+        return
+    q = q_interpreter(env)
+    if q is None:
+        return  # torq.sh refuses a missing q itself, in its own words
+    version = q_version(str(q))
+    if loads_nested_contexts(KDBX, version) is False:
+        raise UqsError(
+            nested_contexts_problem(
+                f"{q_command(env)} ({q})",
+                version,
+                "set QCMD to KDB-X 5.0 or later, or start a runtime whose q_tree is "
+                "flattened. Nothing was started",
+            )
+        )
 
 
 def tree_dir(paths: UqsPaths) -> Path:

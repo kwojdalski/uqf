@@ -15,6 +15,7 @@ that the binary really is what was declared, in both directions.
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import subprocess
@@ -47,6 +48,60 @@ Q_IMPLS = (KDBX, PEACHQ)
 #: scripts/test.py restates it, being run by a python3 that cannot import uqs;
 #: test_interpreter.py holds the two equal.
 IDENTIFY_SCRIPT = '-1 $[-7h=type @[value;`.pq.load_natives;{0N}];"kdbx";"peachq"];\nexit 0\n'
+
+
+#: The first kdb+ major whose q loads a nested working context (`\d .a.b`),
+#: which this tree is written in (#882). An older kdb+ - 4.0 is a supported
+#: deployment target since #861 - and PeachQ (peachq-org/peachq#80) load only
+#: a tree scripts/portable/flatten_contexts.py has converted. THE one answer
+#: to "can this q load the tree as written?": deploy's preflight
+#: (deploy/artifact.compatible) and a local start (stack/qtree) both ask it.
+NESTED_CONTEXTS_SINCE = 5
+
+#: A q script printing its kdb+ version, .z.K.
+VERSION_SCRIPT = "-1 string .z.K;\nexit 0\n"
+
+
+def loads_nested_contexts(impl: str, version: str) -> bool | None:
+    """Can a q of implementation `impl` reporting `.z.K` = `version` load this
+    tree as written? None when `version` says nothing - an unparsable answer
+    is not evidence either way, and is never a reason to refuse."""
+    if impl == PEACHQ:
+        return False
+    major = version.strip().split(".")[0]
+    if not major.isdigit():
+        return None
+    return int(major) >= NESTED_CONTEXTS_SINCE
+
+
+def nested_contexts_problem(who: str, version: str, remedy: str) -> str:
+    """Why `who`'s q cannot load the tree as written, and what to do."""
+    return (
+        f"{who} is kdb+ {version}, which has no nested contexts "
+        f"(they arrived in {NESTED_CONTEXTS_SINCE}.0) - {remedy}"
+    )
+
+
+@functools.cache
+def q_version(q: str, timeout: float = 30.0) -> str:
+    """The binary `q`'s `.z.K`, by asking it; "" when it does not answer.
+    Once per binary per process."""
+    with tempfile.TemporaryDirectory() as tmp:
+        script = Path(tmp) / "version.q"
+        script.write_text(VERSION_SCRIPT)
+        try:
+            r = subprocess.run(
+                [q, str(script), "-q"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except OSError, subprocess.TimeoutExpired:
+            return ""
+    lines = r.stdout.strip().splitlines()
+    return lines[-1].strip() if lines else ""
 
 
 def q_impl(env: Mapping[str, str] | None = None) -> str:

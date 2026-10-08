@@ -73,9 +73,18 @@ if ! have "$qcmd"; then
     MISSING+=("q ($qcmd) - install KDB-X, or set QCMD (and QHOME) to your q")
 else
     limit=""; if have timeout; then limit="timeout 20"; fi
-    out="$(printf '%s\n' '-1 "UQF_Q_OK";exit 0' | $limit "$qcmd" -q 2>/dev/null || true)"
+    out="$(printf '%s\n' '-1 "UQF_Q_OK ",string .z.K;exit 0' | $limit "$qcmd" -q 2>/dev/null || true)"
     if [[ "$out" != *UQF_Q_OK* ]]; then
         MISSING+=("q ($qcmd) does not run a script - check QHOME and its licence")
+    else
+        # The tree as written uses nested working contexts, which kdb+ has
+        # only from 5.0 (uqs.interpreter.NESTED_CONTEXTS_SINCE, which
+        # test_interpreter.py holds this to): `uqs start` refuses an older q
+        # unless the runtime loads a flattened tree (#882).
+        qversion="${out##*UQF_Q_OK }"; qversion="${qversion%%[!0-9.]*}"
+        if [[ "${qversion%%.*}" =~ ^[0-9]+$ ]] && (( ${qversion%%.*} < 5 )); then
+            MISSING+=("q ($qcmd) is kdb+ $qversion, which has no nested contexts - use KDB-X 5.0 or later")
+        fi
     fi
 fi
 # uqs refuses to start the fleet without these two (uqs.paths.check_prerequisites).
