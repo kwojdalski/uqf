@@ -7,7 +7,8 @@
 / source_time preserves their ORIGINAL plant timestamp, before normalization;
 / crypto_book carries the venue's own, and that is what source_time holds.
 / .
-/ FX FROM quote AND fx_orderbook, CRYPTO FROM crypto_book. The one path from a
+/ FX FROM quote AND fx_orderbook, CRYPTO FROM crypto_book, and each row says
+/ which in `market` (#886): the mapping knows, so it records it. The one path from a
 / vendor's book to a standard shape: posbook1 marks positions to the level-0
 / mid of these rows, and superbook1 merges the FX ones by pair. A separate
 / `marks` normalizer used to compute that mid from quote and crypto_book on
@@ -28,7 +29,7 @@ crypto_book:.qetl.plant.shape `crypto_book
 / @eg count .qpipe.job.market_data.from_quote[.qpipe.job.market_data.quote] -> 0
 from_quote:{[batch]
     fx:batch where .qccy.is_ccy_pair each batch`sym;
-    select sym, source:src, source_time:time,
+    select sym, source:src, market:`fx, source_time:time,
         bid_prices:enlist each bid, bid_sizes:enlist each `float$bsize,
         ask_prices:enlist each ask, ask_sizes:enlist each `float$asize from fx}
 
@@ -40,7 +41,7 @@ from_quote:{[batch]
 / @eg count .qpipe.job.market_data.from_fx_orderbook[.qpipe.job.market_data.fx_orderbook] -> 0
 from_fx_orderbook:{[batch]
     fx:batch where .qccy.is_ccy_pair each batch`sym;
-    select sym, source:`UQFDEPTH, source_time:time,
+    select sym, source:`UQFDEPTH, market:`fx, source_time:time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from fx}
 
 / A crypto venue's ladder, already level-0-first, with the venue as source.
@@ -48,13 +49,14 @@ from_fx_orderbook:{[batch]
 / source_time is crypto_book's `source_time` - the VENUE's stamp - never its
 / `time`, the plant's receipt stamp: a row replayed or backfilled hours later
 / must not claim the venue quoted it when the plant happened to receive it.
-/ No FX filter: a crypto sym (BTC-USDT) is not a currency pair, and that is
-/ how superbook tells the two apart.
+/ No FX filter, and `market` is `crypto by construction: the mapping knows
+/ which market it reads, so no reader downstream guesses it from how a sym
+/ is spelled (#886) - a venue spelling a pair XBTEUR stays crypto.
 / @param batch crypto_book rows
 / @return complete market_data snapshots, one per venue and sym
 / @eg count .qpipe.job.market_data.from_crypto_book[.qpipe.job.market_data.crypto_book] -> 0
 from_crypto_book:{[batch]
-    select sym, source:venue, source_time,
+    select sym, source:venue, market:`crypto, source_time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from batch}
 
 \d .
@@ -67,7 +69,7 @@ from_crypto_book:{[batch]
         (enlist `quote)!enlist ([] time:enlist 2026.09.19D10:00:00.000000000;
             sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.2;
             bsize:enlist 1000; asize:enlist 2000; src:enlist `LP_A);
-        ([] sym:enlist `EURUSD; source:enlist `LP_A;
+        ([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx;
             source_time:enlist 2026.09.19D10:00:00.000000000;
             bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1000f;
             ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 2000f)))];
@@ -80,7 +82,7 @@ from_crypto_book:{[batch]
         (enlist `fx_orderbook)!enlist ([] time:enlist 2026.09.19D10:00:00.000000000;
             sym:enlist `EURUSD; bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1000 2000f;
             ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f);
-        ([] sym:enlist `EURUSD; source:enlist `UQFDEPTH;
+        ([] sym:enlist `EURUSD; source:enlist `UQFDEPTH; market:enlist `fx;
             source_time:enlist 2026.09.19D10:00:00.000000000;
             bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1000 2000f;
             ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f)))];
@@ -95,7 +97,7 @@ from_crypto_book:{[batch]
             venue:enlist `binance_spot; sym:enlist `$"BTC-USDT";
             bid_prices:enlist 61999 61998f; bid_sizes:enlist 0.5 1f;
             ask_prices:enlist 62001 62002f; ask_sizes:enlist 0.5 1f);
-        ([] sym:enlist `$"BTC-USDT"; source:enlist `binance_spot;
+        ([] sym:enlist `$"BTC-USDT"; source:enlist `binance_spot; market:enlist `crypto;
             source_time:enlist 2026.09.17D10:00:01.000000000;
             bid_prices:enlist 61999 61998f; bid_sizes:enlist 0.5 1f;
             ask_prices:enlist 62001 62002f; ask_sizes:enlist 0.5 1f)))];

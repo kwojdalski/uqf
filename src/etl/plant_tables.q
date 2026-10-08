@@ -251,7 +251,7 @@ nested[`fx_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 / Every venue's book, FX and crypto, with its source and original timestamp
 / kept across normalization. posbook1 marks to its level-0 mids; superbook1
 / merges the FX ones.
-market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / Complete per-pair snapshots; level provenance stays aligned with prices and sizes.

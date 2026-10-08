@@ -46,8 +46,8 @@ replace_books:{[state;batch;as_of]
     problems:.qetl.transform.problems[.qpipe.job.market_data.market_data;rows;1b];
     if[count problems; '"superbook: ","; " sv problems];
     if[any null rows`source_time; '"superbook: source_time must not be null"];
-    if[(any null rows`source) or not all .qccy.is_ccy_pair each rows`sym;
-        '"superbook: a canonical FX pair and non-null source are required"];
+    if[(any null rows`source) or not all `fx=rows`market;
+        '"superbook: FX rows (market `fx) with a non-null source are required"];
     i:0;
     while[i<count rows;
         row:rows i;
@@ -119,16 +119,18 @@ refresh:{[as_of]
     if[count rows; .qpipe.job.superbook.publish[`superbook;rows]];
     }
 
-/ The FX rows of a market_data batch: those whose sym is a currency pair.
+/ The FX rows of a market_data batch: those its mapping stamped `fx.
 / .
 / market_data also carries crypto venues' books (crypto_book), for posbook's
 / marks. Merging those by sym across venues is a different product - crypto
 / cross-venue arbitrage - and a decision of its own, so for now this book
-/ stays the FX one it always was.
+/ stays the FX one it always was. Read from `market`, which the normalizer
+/ records, never from how a sym is spelled: a crypto venue spelling a pair
+/ XBTEUR would pass a six-letter test and land in the FX graph (#886).
 / @param x market_data rows
-/ @return the rows whose sym is a currency pair
-/ @eg count .qpipe.job.superbook.fx_only ([] sym:`EURUSD,`$"BTC-USDT")  ->  1
-fx_only:{[x] x where .qccy.is_ccy_pair each x`sym}
+/ @return the rows whose market is `fx
+/ @eg count .qpipe.job.superbook.fx_only ([] sym:`EURUSD`XBTEUR; market:`fx`crypto)  ->  1
+fx_only:{[x] x where `fx=x`market}
 
 / Consume a canonical market_data batch and publish the recomputed books.
 / @param t incoming table name

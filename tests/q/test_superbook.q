@@ -3,7 +3,7 @@
 
 d:{[n] 2026.09.19D10:00:00.000000000+n*0D00:00:01}
 empty:{[] `sym`source xkey 0#.qpipe.job.market_data.market_data}
-fixtures:{[] ([] sym:`EURUSD`EURUSD; source:`LP_A`LP_B; source_time:d 0 0;
+fixtures:{[] ([] sym:`EURUSD`EURUSD; source:`LP_A`LP_B; market:`fx`fx; source_time:d 0 0;
     bid_prices:(1.101 1.098;1.099 1.097); bid_sizes:(100 200f;500 600f);
     ask_prices:(1.103 1.104;1.100 1.102); ask_sizes:(200 300f;60 70f))}
 state:{[] .qpipe.job.superbook.replace_books[empty[];fixtures[];d 0]}
@@ -181,7 +181,7 @@ test_a_crypto_venues_book_never_enters_the_fx_superbook:{[t]
     `.qpipe.job.superbook.books set empty[];
     `.sbtest.published set 0#published;
     .qetl.job.stream.wire[`superbook;record];
-    crypto:update sym:`$"BTC-USDT", source:`binance_spot, source_time:.z.p from fixtures[];
+    crypto:update sym:`$"BTC-USDT", source:`binance_spot, market:`crypto, source_time:.z.p from fixtures[];
     .qpipe.job.superbook.on_batch[`market_data;crypto,update source_time:.z.p from fixtures[]];
     .qunit.assertEquals[exec distinct sym from 0!.qpipe.job.superbook.books;enlist `EURUSD;
         "only the currency pair's books are kept"];
@@ -226,5 +226,24 @@ afterNamespace_restore:{[]
     `.qpipe.job.superbook.books set empty[];
     {.qetl.job.stream.wire[x;.qetl.job.stream.unwired x]} each `market_data`superbook`arbitrage;
     }
+
+
+test_a_crypto_pair_spelled_like_a_currency_pair_stays_out:{[t]
+    / The trap #886 names: a venue spelling a crypto pair as six capitals
+    / (XBTEUR) passes .qccy.is_ccy_pair, and used to be classified FX by its
+    / spelling. The normalizer stamps `market` from the mapping, which knows.
+    `.qpipe.job.superbook.books set empty[];
+    `.sbtest.published set 0#published;
+    .qetl.job.stream.wire[`superbook;record];
+    kraken:update sym:`XBTEUR, source:`kraken, market:`crypto, source_time:.z.p from fixtures[];
+    .qunit.assertTrue[all .qccy.is_ccy_pair each kraken`sym;"XBTEUR does look like a currency pair"];
+    .qpipe.job.superbook.on_batch[`market_data;kraken,update source_time:.z.p from fixtures[]];
+    .qunit.assertEquals[exec distinct sym from 0!.qpipe.job.superbook.books;enlist `EURUSD;
+        "the crypto book stays out of the FX superbook, however it is spelled"]};
+
+test_replace_books_refuses_a_row_that_is_not_fx:{[t]
+    .qunit.assertThrows[{.qpipe.job.superbook.replace_books[.sbtest.empty[];x;.sbtest.d 0]};
+        update market:`crypto from fixtures[];
+        "*FX rows (market `fx)*";"a crypto row handed straight to the merge is refused"]};
 
 \d .
