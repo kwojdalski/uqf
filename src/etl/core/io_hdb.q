@@ -52,6 +52,18 @@
 / manager's on_ready does it, set by scripts/processes/torq_backfill.q.
 / .
 / Not safe to run beside end-of-day: both append to the HDB's sym file.
+/ .
+/ ON PEACHQ. PeachQ cannot upsert onto a splayed table on disk, so write
+/ rewrites a partition it appends to whole. It has no on-disk attributes and
+/ no .Q.chk, so there finish
+/ sorts each partition and does neither: no p#sym, no s#time, no filling of
+/ missing tables - uqs's bootstrap fills those from the schema instead
+/ (scripts/gates/fill_hdb_partitions.q). With no attribute to read, a
+/ partition counts as finished when it is in finish's order.
+
+/ Is this PeachQ? The one test this tree uses for it, as uqs's own
+/ (python/uqs/src/uqs/interpreter.py): PeachQ defines .pq.load_natives.
+on_peachq:not -7h=type @[value;`.pq.load_natives;{0N}]
 
 / Partitions written and not yet finished: root, date, table.
 touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())
@@ -86,11 +98,23 @@ write_hdb:{[root;partition_col;target;batch]
         / A partition a previous run finished carries p#sym; appending out of
         / order to it is not safe, so the attribute comes off here and
         / finish sorts and puts it back.
-        if[`sym in existing; @[part;`sym;`#]];
-        $[()~existing; part set rows; part upsert rows];
+        if[(`sym in existing) and not on_peachq; @[part;`sym;`#]];
+        / PeachQ cannot upsert onto a splayed table on disk ('type), so there
+        / the partition is read back and written again whole.
+        $[()~existing; part set rows;
+          on_peachq; part set .Q.en[root] t,(cols t:read_part part)#rows;
+          part upsert rows];
         `.qetl.io.touched upsert (root;d;target);
         }[root;target;data;days] each distinct days;
     count batch}
+
+/ Private: a partition on disk as a table, symbols decoded - what PeachQ
+/ appends to by writing the partition again whole.
+/ @private
+read_part:{[part]
+    base:-1_string part;
+    c:get hsym `$base,"/.d";
+    flip c!{[base;x] v:get hsym `$base,"/",string x; $[type[v] within 20 76h; value v; v]}[base] each c}
 
 / Private: the batch with the plant's `time` column, refused when it cannot
 / be partitioned or would land in the tickerplant's dates.
@@ -275,15 +299,17 @@ repair_torn:{[root;d;t]
 / @return how many partitions were finished
 / @private
 finish_parts:{[root;todo]
+    / Nothing to finish: and PeachQ throws 'nyi on each-both over empty lists.
+    if[0=count todo; :0];
     {[root;d;t]
         base:string .Q.par[root;d;t];
         part:hsym `$base,"/";
         c:get hsym `$base,"/.d";
         order:(`sym`time inter c);
         if[count order; order xasc part];
-        if[`sym in c; @[part;`sym;`p#]];
+        if[(`sym in c) and not on_peachq; @[part;`sym;`p#]];
         }[root]'[todo`dt;todo`tbl];
-    if[count todo; .Q.chk root];
+    if[not on_peachq; .Q.chk root];
     `.qetl.io.touched set touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
 
@@ -299,9 +325,19 @@ is_finished:{[root;d;t]
     base:string .Q.par[root;d;t];
     if[()~key hsym `$base,"/.d"; :1b];
     c:get hsym `$base,"/.d";
+    if[on_peachq; :in_order[base;c]];
     $[`sym in c; `p=attr get hsym `$base,"/sym";
       `time in c; `s=attr get hsym `$base,"/time";
       1b]}
+
+/ Private: is the partition at `base` in finish's order - sym, then time?
+/ How PeachQ, which keeps no attribute, tells a finished partition.
+/ @private
+in_order:{[base;c]
+    order:`sym`time inter c;
+    if[0=count order; :1b];
+    t:flip order!{[base;x] get hsym `$base,"/",string x}[base] each order;
+    t~order xasc t}
 
 / Private: queue the partitions of `target` in [range_from;range_to) that
 / were written and never finished, for the next finish.

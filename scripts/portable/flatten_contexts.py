@@ -682,7 +682,8 @@ def _statements(toks: list[Tok]) -> list[tuple[int, int]]:
     one system line, and runs to the next."""
     begins = ("name", "num", "str", "sym", "op", "sys", "tail")
     starts = [i for i, t in enumerate(toks) if t.col == 0 and t.kind in begins]
-    return list(zip(starts, starts[1:] + [len(toks)], strict=True))
+    # A file of comments alone has no statement, and nothing to pair.
+    return list(zip(starts, [*starts[1:], len(toks)][: len(starts)], strict=True))
 
 
 def _contexts(toks: list[Tok]) -> Iterable[tuple[int, int, str]]:

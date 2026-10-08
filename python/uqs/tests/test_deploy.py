@@ -979,3 +979,22 @@ def test_without_soak_there_is_no_wait(tmp_path, monkeypatch):
 def test_soak_must_be_positive():
     with pytest.raises(DeployError, match="--soak must be positive"):
         parse_args([*BASE, "--soak", "0"])
+
+
+# --- the lock's heartbeat (#867) --------------------------------------------------
+
+
+def test_the_lock_beats_between_stages(tmp_path):
+    _, remote, _ = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    beats = [i for i, (_, s) in enumerate(remote.scripts) if "/heartbeat; fi" in s]
+    stages = [stage for stage, _ in remote.scripts]
+    assert len(beats) >= 5, "after transfer, prepare and smoke, and around verify"
+    assert stages.index("transfer") < beats[0] and beats[-1] < stages.index("activate")
+
+
+def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
+    held = _done(
+        SERVER + "data=present\nlocked=2026-10-08 push OLD by ops@h pid 7, last beat 9s ago\n"
+    )
+    with pytest.raises(DeployError, match=r"last beat 9s ago\)\. If it died, --break-lock"):
+        driver.deploy(parse_args(_args(_artifact(tmp_path))), FakeRemote({"uv python find": held}))

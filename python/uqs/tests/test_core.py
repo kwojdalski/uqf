@@ -433,7 +433,7 @@ def test_dataaccess_is_on_for_every_gateway_rdb_and_hdb_and_only_gateway1_takes_
         "localhost,4,discovery,discovery1,${A}/accesslist.txt,1,0,,,${KDBCODE}/processes/discovery.q,1,,q\n"
     )
     rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
-    tables = "-dataaccess ${UQF_SCRIPTS}/torqconfig/dataaccess/tableproperties.csv"
+    tables = "-dataaccess ${TORQDATA}/tableproperties.csv"
     assert rows["rdb1"]["extras"] == tables
     assert rows["hdb2"]["extras"] == f"-x 1 {tables}", "appended to what the row already passes"
     assert rows["gateway1"]["extras"] == tables
@@ -463,6 +463,9 @@ def _generated_qcmds(fake_paths: UqsPaths, monkeypatch, qcmd: str | None) -> dic
     monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
     if qcmd is None:
         monkeypatch.delenv("QCMD", raising=False)
+        # Without QCMD there is no PeachQ to name: a run on PeachQ (CI's lane)
+        # sets UQF_Q_IMPL, which refuses an unset QCMD.
+        monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     else:
         monkeypatch.setenv("QCMD", qcmd)
     vendored = fake_paths.torqapphome / "appconfig" / "process.csv"

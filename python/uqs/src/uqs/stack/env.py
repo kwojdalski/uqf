@@ -25,6 +25,7 @@ from uqs.interpreter import PEACHQ, Q_IMPL_ENV, Q_INTERPRETER_ENV, q_command
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import RUNTIME_ENV
+from uqs.stack import qtree
 
 log = get_logger(__name__)
 
@@ -39,22 +40,28 @@ def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     layer is this tree's, and without it TorQ loads its own config and the
     starter pack's, as shipped.
     """
+    # A flattened runtime's processes load the converted copy (stack/qtree.py)
+    # wherever they would have loaded this tree's q: the code roots and both
+    # service layers, which are q too. Named here whether or not it is built
+    # yet - bootstrap builds it before anything starts.
+    code = qtree.code_root(paths)
+    scripts = code / "scripts" if qtree.is_flattened(paths) else paths.scripts_dir
     env = {
         "TORQHOME": str(paths.torqhome),
         "TORQAPPHOME": str(paths.torqapphome),
         "TORQDATA": str(paths.torqdata),
-        "UQF_SCRIPTS": str(paths.scripts_dir),
-        "UQF_ROOT": str(paths.repo_root),
+        "UQF_SCRIPTS": str(scripts),
+        "UQF_ROOT": str(code),
         "KDBCONFIG": str(paths.torqhome / "config"),
         "KDBCODE": str(paths.torqhome / "code"),
         "KDBAPPCONFIG": str(paths.torqapphome / "appconfig"),
         # One file: settings/default.q, which every TorQ process loads and
         # which names TorQ's log levels the way .qetl.log does (see it).
-        "KDBSERVCONFIG": str(paths.scripts_dir / "torqconfig"),
+        "KDBSERVCONFIG": str(scripts / "torqconfig"),
         # handlers/loadpassword.q: TorQ's credential loader drops the base
         # passwords/ files once KDBSERVCONFIG adds a third config layer, so
         # this replaces it, loaded straight after trackservers.q (see it).
-        "KDBSERVCODE": str(paths.scripts_dir / "torqcode"),
+        "KDBSERVCODE": str(scripts / "torqcode"),
         "KDBAPPCODE": str(paths.torqapphome / "code"),
         "KDBLIB": str(paths.torqhome / "lib"),
         "KDBTESTS": str(paths.torqhome / "tests"),

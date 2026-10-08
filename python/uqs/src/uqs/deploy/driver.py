@@ -192,10 +192,13 @@ def _run(
     try:
         log.info("transferring release {}", rid)
         release = dep.transfer(pkg, rid)
+        dep.beat()
         log.info("preparing the release environment")
         dep.prepare(release, pkg)
+        dep.beat()
         log.info("offline smoke test")
         dep.smoke(release)
+        dep.beat()
         report.checks["smoke"] = "ok"
         if previous:
             prev_profile, prev_procs, prev_extra = dep.previous_processes(previous)
@@ -210,6 +213,7 @@ def _run(
                 "stop",
                 *prev_procs,
             )
+        dep.beat()
         dep.ports_free(release)
         log.info("starting profile {}", cfg.profile)
         started = True
@@ -222,8 +226,10 @@ def _run(
             cfg.profile,
             *dep.selection.processes,
         )
+        dep.beat()
         log.info("verifying every process answers (up to {}s)", cfg.verify_timeout)
         result = dep.verify(release)
+        dep.beat()
         report.processes = result.get("processes", [])
         if not result.get("passed"):
             raise DeployError("verify", result.get("reason") or "verification failed")
@@ -231,6 +237,7 @@ def _run(
         if cfg.live_check:
             log.info("checking {} live, before activation", ", ".join(cfg.live_check))
             dep.live_check(release)
+            dep.beat()
             report.checks["live-check"] = "ok"
         if cfg.soak:
             log.info("soaking for {}s: every streaming job must beat, none failing", cfg.soak)

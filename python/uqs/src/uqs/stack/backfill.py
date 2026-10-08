@@ -25,7 +25,7 @@ from pathlib import Path
 from uqs.generated import q_facts
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import runs, runtime
+from uqs.stack import capabilities, runs, runtime
 from uqs.stack.backfill_wait import pid_alive
 
 #: What a flag value may contain. torq.sh builds the start line into a string
@@ -222,6 +222,9 @@ def start(
     mode: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Start the process that runs `worker`, over [range_from, range_to)."""
+    # Before anything starts: a PeachQ runtime refuses a worker its
+    # interpreter cannot run, rather than letting it fail mid-run.
+    capabilities.refuse_unsupported(paths, worker, mode)
     procname = procname_for(worker)
     flags = backfill_flags(
         worker,

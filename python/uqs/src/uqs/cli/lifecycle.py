@@ -31,7 +31,7 @@ from uqs.cli.shared import (
 )
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
-from uqs.stack import alive, listing, runtime, runtime_profiles
+from uqs.stack import alive, listing, runtime, start_policy
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as procs_model
 
@@ -158,49 +158,13 @@ ProfileOpt = Annotated[
 
 def _resolve_profiles(names: str, extra: list[str] | None = None) -> str:
     """The space-separated process list `names` stands for, plus `extra`
-    process names, or exit.
-
-    A REFUSAL where a positional start only warns, and the asymmetry is
-    deliberate. A positional start is an operator naming processes they chose;
-    over the cap is their call, and several orderings that exceed it briefly
-    are legitimate. A profile is a set THIS TREE defined and named, so one
-    that cannot run is this tree's mistake to report - not theirs to discover
-    when the plant resets a handle and the process wedges while reporting
-    `up`.
-
-    `extra` is processes named beside the profile (`--profile essential
-    vectorize1`). They join the set as named - no closure over their inputs,
-    which `_warn_about_unfed_inputs` reports instead - after the profile's own
-    members, without duplicates. The budget is checked on the whole set: a
-    profile that fits plus names that do not is still a start that wedges.
-    """
-    wanted = [name.strip() for name in names.split(",") if name.strip()]
-    if not wanted:
-        _die(UqsError("--profile needs at least one name"))
-    added = list(dict.fromkeys(extra or []))
-    if "all" in added:
-        _die(
-            UqsError(
-                "--profile cannot be combined with `all` - `all` is every "
-                "startwithall=1 process already; name the processes to add instead"
-            )
-        )
+    process names, or exit - refused by stack.start_policy, which every
+    front end shares (#887); only the summary line is the CLI's."""
     try:
-        if added:
-            procs_model.assert_known_procnames(_paths(), " ".join(added))
-        runtime_profiles.refuse_undeclared(_paths(), wanted)
-        resolved = profiles.resolve(wanted)
-        members = resolved + tuple(name for name in added if name not in resolved)
-        what = f"profile(s) {', '.join(sorted(wanted))}" + (
-            f" with {', '.join(added)}" if added else ""
-        )
-        problem = profiles.over_budget_procs(members, what)
-        runtime_profiles.refuse_what_the_runtime_lacks(_paths(), members, what)
+        members, what = start_policy.resolve_profiles(_paths(), names, extra or [])
     except UqsError as exc:
         _die(exc)
         raise  # unreachable: _die exits. Keeps the type checker honest.
-    if problem:
-        _die(UqsError(problem))
     console.print(
         f"[dim]{what}: {len(members)} process(es), "
         f"{profiles.plant_slots(members)}/{profiles.allowance() or 'no cap'} plant slots[/]"

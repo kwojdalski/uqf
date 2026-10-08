@@ -64,20 +64,36 @@ class Runtime:
     #: UQF_Q_IMPL=peachq for its own stack only - nothing global, nothing on
     #: PATH - and no licence budget, PeachQ having no connection cap (#764).
     interpreter: str = "kdbx"
+    #: Which q the stack's processes load. `source` is this tree as written.
+    #: `flattened` is a copy bootstrap prepares under the runtime's data
+    #: directory, converted by scripts/portable/flatten_contexts.py so it
+    #: needs no nested `\d` - the one thing that keeps the ETL tree off
+    #: PeachQ (stack/qtree.py). The checkout itself is never rewritten.
+    q_tree: str = "source"
+    #: Not yet supported: listed and runnable, said to be experimental
+    #: wherever the runtime is shown, and refused nothing it can do.
+    experimental: bool = False
 
     def __post_init__(self) -> None:
         if self.interpreter not in ("kdbx", "peachq"):
             raise ValueError(
                 f"{self.name}: interpreter is kdbx or peachq, not {self.interpreter!r}"
             )
+        if self.q_tree not in ("source", "flattened"):
+            raise ValueError(f"{self.name}: q_tree is source or flattened, not {self.q_tree!r}")
         # PeachQ cannot load a nested `\d` namespace (peachq-org/peachq#80,
         # #511), and the ETL tree is built of them: a pipeline process would
-        # die loading it. Refused here, so the runtime cannot be declared.
-        if self.interpreter == "peachq" and self.pipelines:
+        # die loading the source. Only the flattened tree can carry them, and
+        # only as an experiment, until a full fleet is proven there.
+        if self.interpreter == "peachq" and self.pipelines and self.q_tree != "flattened":
             raise ValueError(
-                f"{self.name}: a PeachQ runtime cannot have this tree's pipelines yet - "
+                f"{self.name}: a PeachQ runtime cannot load this tree's pipelines as written - "
                 "PeachQ cannot load the nested ETL namespaces (peachq-org/peachq#80); "
-                "declare it with pipelines=False"
+                "declare it with pipelines=False, or with q_tree='flattened'"
+            )
+        if self.interpreter == "peachq" and self.pipelines and not self.experimental:
+            raise ValueError(
+                f"{self.name}: pipelines on PeachQ are experimental - declare experimental=True"
             )
 
     def resolve_base_port(self, base_port: int | None) -> int:
@@ -101,6 +117,11 @@ class Runtime:
 #: pipelines: their processes, the tables they read and write, and an HDB
 #: of their own. A focused stack that fits the licence's connection cap
 #: with room to spare and holds no table it never writes.
+#:
+#: peachq-etl - EXPERIMENTAL: peachq's capture stack with this tree's layers
+#: and the sidecar bundles declared for it (stack/runtime_bundles.py), their
+#: jobs and what they depend on, loaded from a flattened copy of the q tree.
+#: No uqf pipeline of its own: a bundle's jobs are what it is for.
 RUNTIMES: dict[str, Runtime] = {
     runtime.name: runtime
     for runtime in (
@@ -151,6 +172,20 @@ RUNTIMES: dict[str, Runtime] = {
             base_port=6350,
             profile="fx",
             profiles=("essential", "fx"),
+        ),
+        Runtime(
+            name="peachq-etl",
+            description="EXPERIMENTAL: peachq's capture stack plus its declared sidecar "
+            "bundles' jobs, on PeachQ, from a flattened copy of the q tree",
+            data_dir="uqs-peachq-etl",
+            pipelines=True,
+            overlays=True,
+            base_port=6550,
+            profile="capture",
+            profiles=("capture",),
+            interpreter="peachq",
+            q_tree="flattened",
+            experimental=True,
         ),
     )
 }
