@@ -239,7 +239,9 @@ anyway; the budget is in [running the stack](guides/uqs.md).
 They answer two different questions:
 
 - **A runtime is which stack exists**: which processes and tables are defined at
-  all. You choose it with `uqs --runtime NAME` or `UQS_RUNTIME`.
+  all, its [sidecar
+  bundles](guides/sidecar-bundles.md#bundles-a-runtime-declares) included. You
+  choose it with `uqs --runtime NAME` or `UQS_RUNTIME`.
 - **A profile is which part of that stack to start.** You name the processes you
   came for, and `uqs` adds what they depend on and the infrastructure they need.
   You choose it with `uqs start --profile NAME`.

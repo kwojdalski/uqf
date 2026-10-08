@@ -99,10 +99,7 @@ Credentials never enter an artifact. On the server, put them in
 - `secrets.env`: the `NAME=VALUE` lines for those variables. `deploy.env`
   sources it, and a deployment refuses it if others can read it.
 
-ODBC sources also need unixODBC, the source's driver and KX's `odbc.k` where q
-can load it, with `LD_LIBRARY_PATH` set on Linux (see [KX's ODBC
-client](https://code.kx.com/q/interfaces/q-client-for-odbc/)). On macOS,
-`scripts/dev/odbc_rosetta.sh setup` builds the x86_64 setup KX's library needs.
+ODBC sources also need a driver set up: see [ODBC](odbc.md).
 
 ## Fixtures and real connections
 

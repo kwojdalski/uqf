@@ -33,6 +33,23 @@ format:
 :::::
 :::
 
+## More than TorQ {.smaller}
+
+TorQ runs the processes. Everything else here is uqf:
+
+  | Layer          | What it is                                                                                    | Where                                          |
+  | ---            | ---                                                                                           | ---                                            |
+  | orchestration  | streaming and bounded jobs, job DAG, coverage ledger, run ids, IO managers, source contracts  | `src/etl/core/`                                |
+  | quant library  | FX rates, day counts, calendars, forwards, options, cross rates, risk, positions, limits      | `src/foundation/` · `pricing/` · `portfolio/`  |
+  | market data    | order books, microstructure, data-quality checks, execution metrics                           | `src/market_data/` · `execution/`              |
+  | operations     | `uqs` CLI, generated config, profiles, runtimes, an MCP server                                | `python/uqs/`                                  |
+  | deployment     | versioned releases with sidecar bundles, verification and rollback                            | `uqs deploy`                                   |
+  | catalog and UI | table catalog (`.qcat`), browser application                                                  | `scripts/processes/` · `web/`                  |
+
+  : {tbl-colwidths="[14,62,24]"}
+
+The quant library loads without TorQ: it's plain q, tested in plain q.
+
 ## The whole system {.smaller}
 
 ![](../diagrams/repo-overview.svg){.r-stretch}
