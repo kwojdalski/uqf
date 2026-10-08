@@ -6,6 +6,7 @@ fake that records every script, as in test_deploy.py.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
 from typer.testing import CliRunner
@@ -236,7 +237,8 @@ def test_no_health_skips_the_verifier():
 
 def test_the_cli_is_registered():
     result = CliRunner().invoke(cli.app, ["deploy", "status", "--help"])
-    assert result.exit_code == 0 and "--json" in result.output
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)  # CI renders help in colour
+    assert result.exit_code == 0 and "--json" in plain
 
 
 def test_the_cli_prints_json_and_exits_1_only_when_health_fails(monkeypatch):
