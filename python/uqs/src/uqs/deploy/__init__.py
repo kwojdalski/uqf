@@ -2,7 +2,7 @@
 verify` (#773, #778, #835). Put a uqf release on a Linux server that already
 runs TorQ, and prove it works before calling it deployed.
 
-    uqs deploy build --output dist/
+    uqs deploy build
     uqs deploy push dist/uqf-<release>.tar.gz \\
         --host uqf-server --dest /opt/uqf \\
         --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \\

@@ -61,11 +61,12 @@ inside the artifact.
 ## Building a release
 
 ```bash
-uqs deploy build --output dist/
+uqs deploy build
 ```
 
-This writes three files, named after the release, which is the UTC build time
-and the first 12 characters of the revision:
+This writes three files into `dist/` at the repository root (`--output DIR` puts
+them elsewhere), named after the release, which is the UTC build time and the
+first 12 characters of the revision:
 
   | File                               | What it is                                                                       |
   | ---                                | ---                                                                              |

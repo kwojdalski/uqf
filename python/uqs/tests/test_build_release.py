@@ -275,3 +275,13 @@ def test_an_expected_checksum_is_enforced(tmp_path):
     art, _ = _build(tmp_path)
     with pytest.raises(artifact.ReleaseError, match="not 00"):
         artifact.read_artifact(art.path, expected_sha256="00")
+
+
+def test_the_artifact_goes_to_dist_at_the_repository_root_by_default(tmp_path):
+    """dist/ is gitignored at the root and excluded from every release, so a
+    build never packages an earlier build's output."""
+    root = tmp_path / "tree"
+    tools, _ = _tools(_tree(root))
+    art = _built([], root=root, runner=tools)
+    assert art.path.parent == root / "dist"
+    assert payload.is_excluded("dist/" + art.path.name)

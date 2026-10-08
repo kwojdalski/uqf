@@ -92,7 +92,7 @@ Every refusal comes before anything is written:
 ## Building a release with bundles
 
 ```bash
-uqs deploy build --output dist/ \
+uqs deploy build \
   --bundle ../piggybank --bundle ../marketwarehouse
 ```
 
