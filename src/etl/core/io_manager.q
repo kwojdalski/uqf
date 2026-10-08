@@ -260,7 +260,7 @@ for_cfg:{[cfg]
     if[not `io in key cfg; :default];
     m:cfg`io;
     if[(::)~m; :default];
-    require_manager m;
+    require_manager[m];
     m}
 
 / Write one batch through a manager.
@@ -284,7 +284,7 @@ write:{[mgr;target;batch] (mgr`write)[target;batch]}
 / @return the rows written
 / @eg .qetl.io.write_keyed[.qetl.io.discard;`t;([] id:1 2);`on_conflict`row_key!(`upsert;`id)]  ->  2
 write_keyed:{[mgr;target;batch;opts]
-    strategy:require_strategy opts`on_conflict;
+    strategy:require_strategy[opts`on_conflict];
     $[`write_keyed in key mgr; (mgr`write_keyed)[target;batch;opts];
       `append=strategy; (mgr`write)[target;batch];
       '"write_keyed: this io manager can only append - declare on_conflict `append, or give it a write_keyed"]}

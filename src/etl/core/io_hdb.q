@@ -102,7 +102,7 @@ write_hdb:{[root;partition_col;target;batch]
         / PeachQ cannot upsert onto a splayed table on disk ('type), so there
         / the partition is read back and written again whole.
         $[()~existing; part set rows;
-          on_peachq; part set .Q.en[root] t,(cols t:read_part part)#rows;
+          on_peachq; part set .Q.en[root] t,(cols t:read_part[part])#rows;
           part upsert rows];
         `.qetl.io.touched upsert (root;d;target);
         }[root;target;data;days] each distinct days;
@@ -206,7 +206,7 @@ staging:{[root] (1_string root),".staging"}
 
 / Private: one (date; table) under the staging area's `new or `old.
 / @private
-staged:{[root;kind;d;t] (staging root),"/",string[kind],"/",string[d],"/",string t}
+staged:{[root;kind;d;t] (staging[root]),"/",string[kind],"/",string[d],"/",string t}
 
 / Private: a partition's table directory, as a path string - through .Q.par,
 / so a segmented HDB's par.txt is honoured.
@@ -229,7 +229,7 @@ swap:{[root;d;t]
     live:part_path[root;d;t];
     old:staged[root;`old;d;t];
     system"rm -rf ",old;
-    system"mkdir -p ",(staging root),"/old/",string d;
+    system"mkdir -p ",(staging[root]),"/old/",string d;
     / The date directory, whatever its segment: the live path less its table.
     system"mkdir -p ",(neg 1+count string t)_live;
     if[not ()~key hsym `$live; system"mv ",live," ",old];
@@ -255,7 +255,7 @@ swap:{[root;d;t]
 / @return how many tables were restored
 / @private
 sweep_staging:{[root;target]
-    s:staging root;
+    s:staging[root];
     if[()~key hsym `$s; :0];
     under:{[s;kind] $[()~key hsym `$s,"/",kind; `symbol$(); key hsym `$s,"/",kind]}[s];
     {[s;target;d] system"rm -rf ",s,"/new/",string[d],"/",string target}[s;target] each under "new";

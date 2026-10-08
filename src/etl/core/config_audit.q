@@ -80,7 +80,7 @@ watch:{[owner;names]
     / `already`, not `prior`: `prior` is a q keyword, and assigning to one
     / inside a lambda fails at LOAD time - the same trap torq_pipeline.q
     / documents for `desc` and `tables`.
-    already:watching owner;
+    already:watching[owner];
     .qetl.cfg.audit.watched[owner]:distinct already,names;
     watched owner}
 
@@ -124,7 +124,7 @@ max_render:200
 / @return the change rows, empty when nothing moved
 / @eg count .qetl.cfg.audit.poll[`nothing_declares_this;2026.09.19D12:00:00.0] -> 0
 poll:{[owner;as_of]
-    names:watching owner;
+    names:watching[owner];
     if[0=count names; :0#config_change];
     rows:0#config_change;
     i:0;
@@ -133,7 +133,7 @@ poll:{[owner;as_of]
         now:@[get;name;{.qetl.cfg.audit.UNDEF}];
         fresh:not name in key seen;
         if[fresh or not now~seen name;
-            rows:rows upsert (owner;name;$[fresh; ""; shown seen name];shown now;as_of);
+            rows:rows upsert (owner;name;$[fresh; ""; shown[seen name]];shown[now];as_of);
             / fully qualified, for watch's reason
             .qetl.cfg.audit.seen[name]:now];
         i+:1];

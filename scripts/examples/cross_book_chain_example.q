@@ -57,8 +57,8 @@ mk_timestamps:{[n;start_ts]
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
     .qetl.log.dbg[`cross_book_chain;"running: .qstats.inv_ncdf p";()!()];
-    z:.qstats.inv_ncdf p;
-    gaps:min_gap|mean_gap+std_gap*z;
+    shock:.qstats.inv_ncdf p;
+    gaps:min_gap|mean_gap+std_gap*shock;
     start_ts+sums gaps};
 
 / A quotes table - time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes,

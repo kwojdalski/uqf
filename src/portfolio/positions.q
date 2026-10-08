@@ -233,7 +233,7 @@ ccy_exposure:{[pos]
 /   available pairs connecting it to reporting_ccy in quotes
 / @eg .qpos.ccy_exposure_in[b;quotes;`USD;.z.p]
 ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
-    exposure:ccy_exposure pos;
+    exposure:ccy_exposure[pos];
     convert_one:{[quotes;reporting_ccy;as_of;ccy;amount]
         if[ccy=reporting_ccy; :amount];
         / Nothing to convert, and nothing to sweep: a book that closed a

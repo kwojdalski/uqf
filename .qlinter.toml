@@ -7,4 +7,14 @@ exclude = ["lib/torq/", ".claude/worktrees/"]
 # file that mixes naming styles - but this tree's q is snake_case beside
 # TorQ's and q's own camelCase (.proc.procname, .u.upd, .z.ts), so nearly
 # every file touching either is flagged for a choice it did not make.
-ignore = ["QS010"]
+# QS001 (underscore-in-name) flags every name containing `_`, because `_` is
+# also q's drop operator - but snake_case is this tree's naming convention.
+ignore = ["QS001", "QS010"]
+
+[per-file-ignores]
+# These tests build legacy datetimes on purpose, to show the precision trap
+# and to prove a datetime column is refused.
+"tests/q/test_time_zone.q" = ["QP002"]
+"tests/q/test_execution.q" = ["QP002"]
+# TimeStored's qunit, vendored: kept as upstream wrote it.
+"tests/lib/qunit.q" = ["QF017", "QL001", "QS003"]

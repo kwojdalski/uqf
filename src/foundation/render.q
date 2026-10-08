@@ -22,7 +22,7 @@
 / @return its q literal, as .Q.s1 spells it
 / @eg count .qrender.full 300#"a"  ->  302
 full:{[v]
-    if[10h=type v; :quoted v];
+    if[10h=type v; :quoted[v]];
     c:@[system;"c";{[e] ()}];
     if[2<>count c; :.Q.s1 v];
     @[system;"c ",string[c 0]," 2000";::];

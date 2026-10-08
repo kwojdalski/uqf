@@ -107,18 +107,18 @@ reset:{[] jobs::0#jobs; ()}
 registry:{[]
     js:asc defined[];
     ([] job:js;
-        kind:{(def x)`kind} each js;
-        inputs:{(def x)`inputs} each js;
-        outputs:{(def x)`outputs} each js)}
+        kind:{(def[x])`kind} each js;
+        inputs:{(def[x])`inputs} each js;
+        outputs:{(def[x])`outputs} each js)}
 
 / ---------------------------------------------------------------- GRAPH
 
 / Which jobs write this table? Empty means nothing here produces it, which
 / makes it an external input rather than an error.
-producers:{[table_name] js:defined[]; js where {[t;j] t in (def j)`outputs}[table_name] each js}
+producers:{[table_name] js:defined[]; js where {[t;j] t in (def[j])`outputs}[table_name] each js}
 
 / Which jobs read this table?
-consumers:{[table_name] js:defined[]; js where {[t;j] t in (def j)`inputs}[table_name] each js}
+consumers:{[table_name] js:defined[]; js where {[t;j] t in (def[j])`inputs}[table_name] each js}
 
 / Private: the empty edge table, so every return path has one shape.
 / @private
@@ -133,10 +133,10 @@ edges:{[]
     js:defined[];
     if[0=count js; :no_edges[]];
     e:raze {[j]
-        ins:(def j)`inputs;
+        ins:(def[j])`inputs;
         if[0=count ins; :no_edges[]];
         raze {[j;t]
-            ps:producers t;
+            ps:producers[t];
             $[0=count ps;
               ([] upstream:enlist `; tbl:enlist t; downstream:enlist j);
               ([] upstream:ps; tbl:count[ps]#t; downstream:count[ps]#j)]
@@ -146,12 +146,12 @@ edges:{[]
 
 / Tables read by some job and written by none - where data enters.
 external_inputs:{[]
-    ins:distinct raze {(def x)`inputs} each defined[];
+    ins:distinct raze {(def[x])`inputs} each defined[];
     ins where 0=count each producers each ins}
 
 / Tables written by some job and read by none - where data comes to rest.
 sinks:{[]
-    outs:distinct raze {(def x)`outputs} each defined[];
+    outs:distinct raze {(def[x])`outputs} each defined[];
     outs where 0=count each consumers each outs}
 
 / Private: job-level dependency pairs, with external entry points dropped -
@@ -256,7 +256,7 @@ d2:{[]
     lines,:{"ext_",safe_id[x],": \"",string[x],"\" { shape: cylinder }"} each ext;
     lines,:distinct
         {[asserted;r] $[null r`upstream;
-                "ext_",safe_id[r`tbl]," -> ",safe_id r`downstream;
+                "ext_",safe_id[r`tbl]," -> ",safe_id[r`downstream];
               r[`upstream] in asserted;
                 safe_id[r`upstream]," -> ",safe_id[r`downstream],": ",string[r`tbl],
                     " (asserted) {style.stroke-dash: 3}";

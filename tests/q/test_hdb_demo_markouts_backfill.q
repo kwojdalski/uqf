@@ -71,7 +71,7 @@ test_the_scoring_is_a_verified_transform:{[t]
 
 test_no_fills_score_to_nothing_whatever_the_quotes_hold:{[t]
     inputs:@[.qpipe.source.hdb_demo_markouts.fixture[];`trades;0#];
-    .qunit.assertEquals[.mbftest.scored inputs;0#.qetl.plant.shape `demo_execution_quality;
+    .qunit.assertEquals[.mbftest.scored[inputs];0#.qetl.plant.shape `demo_execution_quality;
         "the primary input owns the window: quotes alone publish nothing"]};
 
 test_the_fixture_is_cut_to_the_window_but_its_quotes_are_not:{[t]
@@ -142,7 +142,7 @@ test_the_live_path_scores_exactly_as_the_fixture_does:{[t]
     / must score to the same table.
     r:.mbftest.with_hdb {.qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;.mbftest.day[]0;.mbftest.day[]1]};
     .qunit.assertTrue[.qetl.source.validate[`hdb_demo_markouts;r];"the live inputs satisfy both contracts"];
-    .qunit.assertEquals[.mbftest.scored r;.mbftest.scored_fixture[];"live and fixture agree"]};
+    .qunit.assertEquals[.mbftest.scored[r];.mbftest.scored_fixture[];"live and fixture agree"]};
 
 test_a_fill_early_in_a_window_is_priced_by_the_quote_before_it:{[t]
     / The quote live at 10:00:03 was set at 09:59:50 - before the window.

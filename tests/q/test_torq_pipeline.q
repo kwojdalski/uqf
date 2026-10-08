@@ -26,7 +26,7 @@
 plant:{[known] {[known;query] $[query~"tables[]"; known; '"unexpected query: ",query]}[known]}
 
 test_a_declared_table_the_plant_defines_is_accepted:{[t]
-    h:plant `trades`quote`fx_position;
+    h:plant[`trades`quote`fx_position];
     .qunit.assertEquals[.qtorq.assert_publishable[h;`fx_position`quote];
         `fx_position`quote;
         "the declared tables are handed back unchanged, so the call can sit in a chain"]};
@@ -36,19 +36,19 @@ test_a_declared_table_the_plant_defines_is_accepted:{[t]
 / plus posbook would have failed to start on an assertion written to
 / protect them. Caught by this test before it reached a process.
 test_one_declared_table_is_an_atom_not_a_one_element_list:{[t]
-    h:plant `trades`quote`fx_position;
+    h:plant[`trades`quote`fx_position];
     .qunit.assertEquals[.qtorq.assert_publishable[h;`fx_position];
         `fx_position;
         "an atom is accepted and handed back as it came"]};
 
 test_every_declared_table_is_checked_not_just_the_first:{[t]
-    h:plant `trades`quote`fx_position;
+    h:plant[`trades`quote`fx_position];
     .qunit.assertThrows[{.qtorq.assert_publishable[x;`fx_position`fx_limit_breach]};h;
         "*fx_limit_breach*";
         "the second of two declared tables is missing and must be named"]};
 
 test_the_refusal_names_every_missing_table_not_only_one:{[t]
-    h:plant `trades`quote;
+    h:plant[`trades`quote];
     .qunit.assertThrows[{.qtorq.assert_publishable[x;`fx_position`fx_limit_breach]};h;
         "*fx_position, fx_limit_breach*";
         "both missing tables are listed, so one restart fixes both"]};
@@ -56,7 +56,7 @@ test_the_refusal_names_every_missing_table_not_only_one:{[t]
 / The regression, stated as itself: fxpositions1's two tables against a
 / plant carrying the nineteen a generated database.q used to define.
 test_the_fx_positions_pair_against_a_plant_that_forgot_them:{[t]
-    h:plant `crypto_book`crypto_trades`eq_orderbook`demo_execution_quality`executions`mkt_orderbook`orders`position`quote`quotes`trade`trades`wide_orderbook;
+    h:plant[`crypto_book`crypto_trades`eq_orderbook`demo_execution_quality`executions`mkt_orderbook`orders`position`quote`quotes`trade`trades`wide_orderbook];
     .qunit.assertThrows[{.qtorq.assert_publishable[x;`fx_position`fx_limit_breach]};h;
         "*discarded without an error*";
         "the message says what happens to the rows, not just that a table is absent"]};

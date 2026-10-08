@@ -91,7 +91,7 @@ unpriced:`symbol$();
 on_batch:{[t;x]
     if[not t=`fx_orderbook; :()];
     `.qpipe.job.cross.fx_orderbook insert x;
-    .qpipe.job.cross.reprice .qpipe.job.cross.now[];
+    .qpipe.job.cross.reprice[.qpipe.job.cross.now[]];
     }
 
 / Reprice from the current mirror as of `now`, append, and log any pair that

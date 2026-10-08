@@ -188,7 +188,7 @@ transport_def:{[name]
 / A source's transport row.
 / @param source a registered source
 / @return dict of transport_fields
-for_source:{[source] transport_def (def source)`transport}
+for_source:{[source] transport_def (def[source])`transport}
 
 register_transport[`ipc;transport_fields!(
     {[cred] hopen (hsym `$":",cred;5000j)};
@@ -427,7 +427,7 @@ defined:{[] (key sources)`name}
 / @param source a registered source name
 / @return a symbol vector
 / @eg .qetl.source.input_names `demo_deals  ->  enlist `demo_deals
-input_names:{[source] d:def source; (enlist d`table_name),key d`supporting}
+input_names:{[source] d:def[source]; (enlist d`table_name),key d`supporting}
 
 / The primary input of what a source returned: the window's own rows, which
 / are counted and which own the window. The batch itself for a source with
@@ -435,7 +435,7 @@ input_names:{[source] d:def source; (enlist d`table_name),key d`supporting}
 / @param source a registered source name
 / @param fetched what the source's query or fixture returned
 / @return a table
-primary:{[source;fetched] d:def source; $[count d`supporting; fetched d`table_name; fetched]}
+primary:{[source;fetched] d:def[source]; $[count d`supporting; fetched d`table_name; fetched]}
 
 / The column(s) identifying a row uniquely, always as a vector.
 / .
@@ -445,7 +445,7 @@ primary:{[source;fetched] d:def source; $[count d`supporting; fetched d`table_na
 / Stored normalised by `define`, so this is already a vector - the `(),`
 / is belt-and-braces for a declaration written directly into `sources` by a
 / test rather than through register.
-row_key:{[source] (),(def source)`row_key}
+row_key:{[source] (),(def[source])`row_key}
 
 / One source's full declaration, or a refusal naming it.
 / .
@@ -495,7 +495,7 @@ column_names:{[tbl] exec c from 0!meta tbl}
 / @return 1b when the table satisfies the declaration
 / @throws error naming every missing field and every type mismatch at once
 validate:{[source;tbl]
-    decl:def source;
+    decl:def[source];
     if[count decl`supporting; :validate_inputs[source;decl;tbl]];
     check_table[source;"";decl`columns;decl`types;tbl];
     .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
@@ -507,8 +507,8 @@ validate:{[source;tbl]
 / " " - a general column in a supporting input's contract - accepts any.
 / @private
 check_table:{[source;what;columns;types;tbl]
-    present:column_names tbl;
-    chars:type_chars tbl;
+    present:column_names[tbl];
+    chars:type_chars[tbl];
     missing:columns where not columns in present;
     / Report missing columns AND type mismatches together. Reporting only the
     / first class means fixing the columns, re-running, and only then
@@ -540,7 +540,7 @@ validate_inputs:{[source;decl;given]
          " - got ",", " sv string key given];
     check_table[source;"'s input ",string decl`table_name;decl`columns;decl`types;given decl`table_name];
     {[source;given;nm;contract]
-        check_table[source;"'s input ",string nm;cols contract;type_chars contract;given nm]
+        check_table[source;"'s input ",string nm;cols contract;type_chars[contract];given nm]
       }[source;given]'[key decl`supporting;value decl`supporting];
     .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";
         `rows`inputs!(count given decl`table_name;names));::];
@@ -564,8 +564,8 @@ validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
 / @param source a registered source name
 / @param h an open handle to the external source
 validate_live:{[source;h]
-    decl:def source;
-    reader:(transport_def decl`transport)[`metadata][h;];
+    decl:def[source];
+    reader:(transport_def[decl`transport])[`metadata][h;];
     m:@[reader;decl`table_name;
         {[table_name;err] '"validate_live: cannot read metadata for ",string[table_name]," (",err,")"}[decl`table_name;]];
     present:exec c from m;
@@ -588,7 +588,7 @@ validate_live:{[source;h]
         absent:want where not want in have;
         if[count absent;
             '"validate_live: supporting input ",string[nm]," is missing ",", " sv string absent];
-        want_t:type_chars contract;
+        want_t:type_chars[contract];
         have_t:(exec t from m) have?want;
         off:want where not (want_t=have_t) or want_t=" ";
         if[count off;
@@ -717,7 +717,7 @@ read_settings:{[path]
 / @return how many sources it configures
 / @throws whatever read_settings throws
 load_settings:{[path;path_vars]
-    t:read_settings path;
+    t:read_settings[path];
     `.qetl.source.settings set t;
     `.qetl.source.settings_path_vars set (),path_vars;
     .[{.qetl.log.dbg[x;y;z]};(`source_settings;"settings loaded";`file`sources!(first exec origin from 0!t;count t));::];
@@ -738,7 +738,7 @@ configured:{[] exec source from 0!settings}
 / @param source a source name
 / @return `env, `settings or `none
 credential_origin:{[source]
-    $[0<count getenv `$credential_var source; `env;
+    $[0<count getenv `$credential_var[source]; `env;
       source in configured[]; `settings;
       `none]}
 
@@ -770,7 +770,7 @@ resolve_setting:{[source]
     r:settings source;
     who:"source ",(string source)," in ",r`origin;
     if[settings_stub~r`setting; 'who," is still the scaffold's stub - write its setting, or delete the row to run on the fixture"];
-    tr:(def source)`transport;
+    tr:(def[source])`transport;
     if[not tr~r`transport; 'who," says transport ",(string r`transport),", but the source declares ",string tr];
     txt:expand_path_vars[who;r`setting];
     uses:0<count txt ss secret_placeholder;
@@ -794,20 +794,20 @@ resolve_setting:{[source]
 / parameter - check_q_traps.py now covers both.
 require_credentials:{[source]
     def source;
-    env_var:credential_var source;
+    env_var:credential_var[source];
     v:getenv `$env_var;
-    origin:credential_origin source;
+    origin:credential_origin[source];
     / Where it came from - never the value, which may be a credential.
     .[{.qetl.log.dbg[x;y;z]};(source;"credential lookup";`var`present`origin!(env_var;0<count v;origin));::];
     if[`env~origin; :v];
-    if[`settings~origin; :resolve_setting source];
+    if[`settings~origin; :resolve_setting[source]];
     '"require_credentials: ",string[source]," has no credential - set ",env_var,
      ", or give it a row in sources.csv. Nothing secret lives in this repository"}
 
 / Is a credential available? For deciding between the live and fixture paths
 / without throwing. A configured row counts even if it is wrong: that run
 / must fail on it, not quietly read the fixture.
-has_credentials:{[source] not `none~credential_origin source}
+has_credentials:{[source] not `none~credential_origin[source]}
 
 / Must every source be live? UQS_REQUIRE_LIVE_SOURCES=1 - what a deployment's
 / --live writes into its deploy.env (#800) - turns a missing credential from
@@ -846,10 +846,10 @@ refuse_fixture:{[who;source]
 / that never declared it, and an empty string is what "did not declare" looks
 / like from here.
 credential_example:{[source]
-    d:def source;
+    d:def[source];
     ex:$[`credential_example in key d; d`credential_example; ""];
     if[0<count ex; :ex];
-    (transport_def d`transport)`example}
+    (transport_def[d`transport])`example}
 
 / ---------------------------------------------------------------- ZONES
 
@@ -994,7 +994,7 @@ local_to_utc:{[tz;ts]
 /   spring-forward gap, 2 in an autumn repeated hour
 / @private
 local_candidates:{[tz;tsv]
-    offs:offsets_for tz;
+    offs:offsets_for[tz];
     if[0=count offs;
         '"local_candidates: no offsets for zone ",string tz];
     cands:tsv -\: offs;
@@ -1064,8 +1064,8 @@ coercers:(!). flip (
 / @return dict of `table (coerced) and `failures (field -> count)
 / @throws error when a declared type has no coercer
 coerce:{[source;tbl]
-    decl:def source;
-    present:column_names tbl;
+    decl:def[source];
+    present:column_names[tbl];
     columns:decl[`columns] where decl[`columns] in present;
     chars:(decl`types) (decl`columns)?columns;
     unknown:distinct chars where not chars in key coercers;
@@ -1251,11 +1251,11 @@ local_check_layout:{[seg]
 / @param d1 last date, inclusive
 / @return a table of date and dir, the partition directory as a file symbol
 local_parts:{[root;d0;d1]
-    segs:local_segments root;
+    segs:local_segments[root];
     local_check_layout each segs;
     t:raze {[seg]
         k:key seg;
-        ds:`date$"D"$string k;
+        ds:"D"$string k;
         ok:where not null ds;
         ([] date:ds ok; dir:{` sv x,y}[seg] each k ok)} each segs;
     `date xasc select from t where date within (d0;d1)}
@@ -1435,7 +1435,7 @@ local:{[root;f;range_from;range_to]
 / has to know about zones. See source_bounds and narrow_to_utc.
 fetch_window:{[source;h;range_from;range_to]
     t0:.z.p;
-    decl:def source;
+    decl:def[source];
     bounds:source_bounds[decl;range_from;range_to];
     .[{.qetl.log.dbg[x;y;z]};(source;"fetching";
         `path`range_from`range_to`source_from`source_to`tz!
@@ -1479,7 +1479,7 @@ bound_padding:1D
 source_bounds:{[decl;range_from;range_to]
     tz:decl`tz;
     if[`UTC~tz; :(range_from;range_to)];
-    require_zone_table tz;
+    require_zone_table[tz];
     (utc_to_local[tz;range_from-bound_padding];
      utc_to_local[tz;range_to+bound_padding])}
 

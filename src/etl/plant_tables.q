@@ -66,14 +66,14 @@ schema:{[t]
 / @param t the table's name, as a symbol
 / @return the empty table, time first, no attributes
 / @eg attr (.qetl.plant.shape `quote)`sym  ->  `
-shape:{[t] s:schema t; @[s;cols s;`#]}
+shape:{[t] s:schema[t]; @[s;cols s;`#]}
 
 / A plant table's shape without `time`: what a job publishes, since the
 / tickerplant stamps `time` itself (.u.upd, and .qetl.tick the same).
 / @param t the table's name, as a symbol
 / @return the empty table, without its time column
 / @eg `time in cols .qetl.plant.published `quote  ->  0b
-published:{[t] (cols[s] except `time)#s:shape t}
+published:{[t] (cols[s] except `time)#s:shape[t]}
 
 / Some of a plant table's columns, in the order given: the shape of a job
 / that reads only what it uses. A column the plant table does not carry is
@@ -84,7 +84,7 @@ published:{[t] (cols[s] except `time)#s:shape t}
 / @throws error naming a column the table does not carry
 / @eg cols .qetl.plant.columns[`quote;`time`sym`bid`ask]  ->  `time`sym`bid`ask
 columns:{[t;cs]
-    s:shape t;
+    s:shape[t];
     if[count bad:cs where not cs in cols s;
         '"plant: ",string[t]," carries no ",(", " sv string bad)," - its schema is ",
             $[t in vendored; vendored_path; "src/etl/plant_tables.q"]];
@@ -129,7 +129,7 @@ nested:{[table_name;types]
         '"nested: ",string[table_name],"'s element types must be a dictionary of column -> type character, e.g. `bid_prices`ask_prices!\"FF\""];
     if[not 10h=type value types;
         '"nested: ",string[table_name],"'s element types must be type characters, e.g. `bid_prices`ask_prices!\"FF\" - one column needs enlist: (enlist `route)!enlist \"S\""];
-    ok:nested_columns table_name;
+    ok:nested_columns[table_name];
     if[count bad:(key types) except ok;
         '"nested: ",string[table_name]," has no nested column ",(", " sv string bad),
          " - nested columns are the ones declared as (): ",$[count ok; ", " sv string ok; "it has none"]];
@@ -160,7 +160,7 @@ undeclared:{[]
 / @throws error when the plant carries no such table
 / @eg .qetl.plant.problems[`mkt_orderbook;.qetl.plant.published `mkt_orderbook]  ->  ()
 problems:{[table_name;rows]
-    want:published table_name;
+    want:published[table_name];
     rows:0!rows;
     if[not (cols want)~cols rows;
         :enlist string[table_name]," has columns ",(" " sv string cols rows),
@@ -215,7 +215,7 @@ adopt_vendored:{[path]
 / from: on a deployment that is a managed install's, not this tree's (#902).
 vendored_path:$[count getenv`TORQAPPHOME; getenv[`TORQAPPHOME],"/database.q";
     "lib/torq-finance-starter-pack/database.q"];
-vendored:adopt_vendored vendored_path;
+vendored:adopt_vendored[vendored_path];
 
 / This tree's own plant tables: every one except the vendored three.
 / @return the table names

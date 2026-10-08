@@ -439,7 +439,7 @@ reseed:{[from_;to_]
 / .
 / @param fn the function to execute under instrumentation
 / @param params its argument list (enlist a single argument)
-/ @param settings a dictionary of context/functions/ignoreFunctions/
+/ @param settings a dictionary of functions/ignoreFunctions/
 /   namespaces/ignoreNamespaces; any subset, any order
 / @return a table name/iterations/lineIterations/blockIterations/lines/
 /   blocks/text, one row per instrumented function
@@ -491,7 +491,6 @@ run:{[fn;params;settings]
     / And every copy of them that a registry took before now.
     instrumented:value each names;
     reseed[value originals;instrumented];
-    ctx:$[`context in key settings; settings`context; `.];
     / THE ENTRY POINT NEEDS SUBSTITUTING, and missing this makes the whole
     / report read zero. `fn` is a VALUE, captured by the caller before
     / anything was instrumented, so calling it runs the original even though

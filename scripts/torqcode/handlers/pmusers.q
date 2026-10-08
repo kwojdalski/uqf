@@ -56,7 +56,7 @@ if[@[value;`.pm.enabled;0b];
     userspath:hsym`$getenv[`KDBSERVCONFIG],"/permissions/",string[.proc.proctype],"_users.csv";
     setupusers[
         accesslogins hsym`$getenv[`KDBAPPCONFIG],"/passwords/accesslist.txt";
-        $[()~key userspath;flip`user`password`role!(`symbol$();();`symbol$());policylogins userspath]];
+        $[()~key userspath;flip`user`password`role!(`symbol$();();`symbol$());policylogins[userspath]]];
     .lg.o[`pmusers;"permissions on: ",string[count .pm.user]," users, roles ",", "sv string exec distinct role from .pm.userrole]]
 
 \d .

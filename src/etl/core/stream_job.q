@@ -96,7 +96,7 @@ define:{[job;decl]
     if[job in @[{.qetl.job.bounded.defined[]};::;{[e] `symbol$()}];
         '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
-    decl[`ns]:namespace job;
+    decl[`ns]:namespace[job];
     missing:required_declarations where not required_declarations in key decl;
     if[count missing;
         '"define: ",string[job]," is missing ",", " sv string missing];
@@ -289,7 +289,7 @@ transport_keys:`connect`publisher`subscribe`timer
 / @param job the job's name
 / @return the tables, as a symbol list
 subscriptions:{[job]
-    d:def job;
+    d:def[job];
     distinct (),(d`subscribe_to),$[`restore_from in key d; d`restore_from; `symbol$()]}
 
 / Private: the job's on_batch, counting every batch in .qetl.stream_health
@@ -332,9 +332,9 @@ guarded:{[job;f;t;x]
 start:{[job;tr]
     missing:transport_keys where not transport_keys in key tr;
     if[count missing; '"start: the transport is missing ",", " sv string missing];
-    d:def job;
+    d:def[job];
     replay:$[`replay in key d; d`replay; 0b];
-    tbls:subscriptions job;
+    tbls:subscriptions[job];
     .[{.qetl.log.info[x;y;z]};(job;"starting streaming job";
         `subscribe_to`publishes`replay`timer!(tbls;d`publishes;replay;
             $[`period in key d; d`period; 0Nn]));::];

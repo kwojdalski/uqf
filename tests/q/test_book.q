@@ -85,7 +85,7 @@ test_candidate_symbol_columns_flags_allowlisted_and_low_cardinality:{[t]
 test_candidate_symbol_columns_does_not_mutate_table:{[t]
     src:([] sym:("EURUSD";"EURUSD"); n:1 2);
     before:src;
-    candidates:.qbook.candidate_symbol_columns[src;enlist `sym;0.5];
+    .qbook.candidate_symbol_columns[src;enlist `sym;0.5];
     .qunit.assertEquals[src;before;"detection is read-only, the source table is unchanged"]};
 
 test_book_from_wide_levels_composes_fold_then_symbolize:{[t]

@@ -212,14 +212,14 @@ test_with_file_lock_still_takes_a_mutex_a_dead_process_left:{[t]
 durable_path:{[nm] "build/test-status/",nm}
 
 test_durable_set_round_trips_exact_types:{[t]
-    p:durable_path "dur_roundtrip";
+    p:durable_path["dur_roundtrip"];
     v:([] a:1 2j; ts:(.z.p;0Wp); g:2?0Ng);
     .qetl.job.bounded.state.durable_set[p;v];
     .qunit.assertEquals[.qetl.job.bounded.state.durable_get p;v;"types, the 0Wp sentinel and guids survive"];
     .qunit.assertTrue[()~key hsym `$p,".tmp";"no temporary file is left behind"]};
 
 test_durable_set_keeps_the_previous_generation:{[t]
-    p:durable_path "dur_generations";
+    p:durable_path["dur_generations"];
     system"rm -f ",p," ",p,".bak";
     .qetl.job.bounded.state.durable_set[p;([] a:enlist 1)];
     .qetl.job.bounded.state.durable_set[p;([] a:1 2)];
@@ -227,7 +227,7 @@ test_durable_set_keeps_the_previous_generation:{[t]
 
 / What `set` straight onto the ledger used to leave after a crash mid-write.
 test_a_truncated_file_falls_back_to_its_previous_generation:{[t]
-    p:durable_path "dur_truncated";
+    p:durable_path["dur_truncated"];
     .qetl.job.bounded.state.durable_set[p;([] a:enlist 1)];
     .qetl.job.bounded.state.durable_set[p;([] a:1 2 3)];
     system"printf 'garbage' > ",p;
@@ -235,13 +235,13 @@ test_a_truncated_file_falls_back_to_its_previous_generation:{[t]
         "an unreadable file is replaced by the last good generation, not an error for every reader"]};
 
 test_neither_readable_is_refused_naming_both:{[t]
-    p:durable_path "dur_both_bad";
+    p:durable_path["dur_both_bad"];
     system"printf 'garbage' > ",p,"; printf 'garbage' > ",p,".bak";
     e:.qunit.assertThrows[.qetl.job.bounded.state.durable_get;p;"durable_get: *";"no silent empty ledger"];
     .qunit.assertTrue[e like "*and so is its .bak*";"and it says the fallback failed too"]};
 
 test_durable_lines_keeps_text_and_the_previous_generation:{[t]
-    p:durable_path "dur_lines";
+    p:durable_path["dur_lines"];
     .qetl.job.bounded.state.durable_remove p;
     .qetl.job.bounded.state.durable_lines[p;enlist "first"];
     .qetl.job.bounded.state.durable_lines[p;("second";"line")];
@@ -250,7 +250,7 @@ test_durable_lines_keeps_text_and_the_previous_generation:{[t]
     .qunit.assertTrue[()~key hsym `$p,".tmp";"no temporary file is left behind"]};
 
 test_durable_remove_takes_the_previous_generation_with_it:{[t]
-    p:durable_path "dur_remove";
+    p:durable_path["dur_remove"];
     .qetl.job.bounded.state.durable_set[p;1];
     .qetl.job.bounded.state.durable_set[p;2];
     .qetl.job.bounded.state.durable_remove p;
@@ -269,7 +269,7 @@ test_a_truncated_checkpoint_resumes_from_the_previous_one:{[t]
     .qetl.job.bounded.state.clear_checkpoint w;
     .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.02D00:00:00.000000000];
     .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.03D00:00:00.000000000];
-    truncate_checkpoint w;
+    truncate_checkpoint[w];
     .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[w;ckpt_spec];2026.09.02D00:00:00.000000000;
         "an earlier cursor of the same run: one window done again, not the whole run"]};
 
@@ -277,7 +277,7 @@ test_an_unreadable_checkpoint_with_nothing_before_it_is_refused:{[t]
     w:`ckpt_unreadable;
     .qetl.job.bounded.state.clear_checkpoint w;
     .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.02D00:00:00.000000000];
-    truncate_checkpoint w;
+    truncate_checkpoint[w];
     e:.qunit.assertThrows[.qetl.job.bounded.state.load_checkpoint[w;];ckpt_spec;"load_checkpoint: *";
         "refused, never a quiet restart from the beginning"];
     .qunit.assertTrue[e like "*uqs remove checkpoint ckpt_unreadable*";"and it says how to start over"]};

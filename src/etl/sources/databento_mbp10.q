@@ -95,7 +95,7 @@ query:{[h;range_from;range_to]
         " WHERE ts_event >= ",.qetl.io.odbc.duckdb_timestamp[range_from],
         " AND ts_event < ",.qetl.io.odbc.duckdb_timestamp[range_to],
         " ORDER BY symbol, ts_event, sequence";
-    adapt .qetl.io.odbc.run_sql[h;sql]}
+    adapt[.qetl.io.odbc.run_sql[h;sql]]}
 
 / Private: one fixture row's ten levels, flattened in level_fields order.
 / Prices step one cent away from the touch per level, sizes by 100.

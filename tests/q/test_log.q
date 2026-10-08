@@ -181,7 +181,7 @@ test_with_context_returns_what_the_work_returns:{[t]
 
 test_a_long_string_field_is_not_cut_at_the_console_width:{[t]
     s:500#"select x from t where s=1 ";
-    r:.qetl.log.render enlist[`statement]!enlist s;
+    r:.qetl.log.render[enlist[`statement]!enlist s];
     .qunit.assertEquals[(count r;r like "*..");(count["statement="]+502;0b);
         "all 500 characters, quoted, and no trailing .."]};
 
@@ -197,7 +197,7 @@ test_a_long_list_field_gets_the_widest_console:{[t]
 
 test_rendering_puts_the_console_width_back:{[t]
     c:system"c";
-    .qetl.log.render `a`b!(til 1000;"x");
+    .qetl.log.render[`a`b!(til 1000;"x")];
     .qunit.assertEquals[system"c";c;"the widened console is restored after rendering"]};
 
 / --- lazy rendering -----------------------------------------

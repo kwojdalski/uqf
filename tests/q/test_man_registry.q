@@ -63,15 +63,15 @@ test_every_documented_argument_belongs_to_a_registered_function:{[t]
 
 test_the_resolver_rejects_a_name_nothing_defines:{[t]
     / A resolver nobody has seen say no might be saying yes to everything.
-    .qunit.assertEquals[resolves ".qopt.no_such_function";0b;
+    .qunit.assertEquals[resolves[".qopt.no_such_function"];0b;
         "a name in a real namespace that nothing defines does not resolve"]};
 
 test_the_resolver_rejects_an_unknown_namespace:{[t]
-    .qunit.assertEquals[resolves ".qnosuchns.anything";0b;
+    .qunit.assertEquals[resolves[".qnosuchns.anything"];0b;
         "a name in a namespace that does not exist does not resolve"]};
 
 test_the_resolver_accepts_a_name_that_does_exist:{[t]
-    .qunit.assertEquals[resolves ".qopt.d1";1b;
+    .qunit.assertEquals[resolves[".qopt.d1"];1b;
         "the resolver is a pass-through on a name that is genuinely defined"]};
 
 / --- coverage ------------------------------------------------------------

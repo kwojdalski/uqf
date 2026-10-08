@@ -86,7 +86,7 @@ classify:{[err]
       `data]}
 
 / Is this error worth another attempt in this process?
-retryable:{[err] `transport~classify err}
+retryable:{[err] `transport~classify[err]}
 
 / ------------------------------------------------------------ RETRYING
 
@@ -146,7 +146,7 @@ with_retry:{[pol;f]
             {@[{(`ok;x[])};x;{(`err;x)}]};enlist f];
         if[`ok~first outcome;
             :`state`kind`attempts`result`error!(`ok;`none;attempt;last outcome;"")];
-        kind:classify last outcome;
+        kind:classify[last outcome];
         .[{.qetl.log.dbg[x;y;z]};(`qetl.job.bounded.runtime;"attempt failed";
             `attempt`of`kind`error!(attempt;cap;kind;last outcome));::];
         if[kind=`data;
@@ -156,7 +156,7 @@ with_retry:{[pol;f]
         wait:backoff_ms[pol;attempt];
         .[{.qetl.log.warn[x;y;z]};(`qetl.job.bounded.runtime;"retrying after a transport error";
             `attempt`of`backoff_ms`error!(attempt;cap;wait;last outcome));::];
-        sleep_ms wait;
+        sleep_ms[wait];
         attempt+:1];
     `state`kind`attempts`result`error!(`failed;`transport;cap;::;last outcome)}
 

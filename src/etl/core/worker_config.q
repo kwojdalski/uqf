@@ -90,7 +90,7 @@ env_name:{[k] "UQF_",upper string k}
 / source does not carry it.
 / @private
 raw_from:{[source;k]
-    $[source=`env;      getenv `$env_name k;
+    $[source=`env;      getenv `$env_name[k];
       source=`overrides; $[k in key override_values; override_values k; ""];
       source=`yaml;      $[k in key yaml_values; yaml_values k; ""];
       source=`default;   $[k in key default_values; default_values k; ""];
@@ -147,7 +147,7 @@ set_override:{[k;v]
         -10h=type v; enlist v;
         '"qetl.cfg.set_override: the value must be a string or symbol"];
     override_values::override_values,(enlist k)!enlist v;
-    explain k}
+    explain[k]}
 
 / Raw string value for a key, honouring the precedence order.
 / .
@@ -175,7 +175,7 @@ note:{[msg;null_value] errors,:enlist msg; null_value}
 / date-only value is midnight here, unlike in to_timestamp: a window bound
 / legitimately is a day, where a row's event time never is.
 get_timestamp:{[k]
-    v:raw k;
+    v:raw[k];
     $[0=count v; note["missing required setting ",string[k]," (",env_name[k]," or config)";0Np];
       null p:$[.qetl.coerce.is_date_only v; .qetl.coerce.to_date_as_midnight v; .qetl.coerce.to_timestamp v];
         note["setting ",string[k]," is not a timestamp: ",v;0Np];
@@ -183,7 +183,7 @@ get_timestamp:{[k]
 
 / A required positive long, e.g. a row cap.
 get_positive:{[k]
-    v:raw k;
+    v:raw[k];
     $[0=count v; note["missing required setting ",string[k];0Nj];
       null j:"J"$v; note["setting ",string[k]," is not an integer: ",v;0Nj];
       j<=0; note["setting ",string[k]," must be positive, got ",v;0Nj];
@@ -191,7 +191,7 @@ get_positive:{[k]
 
 / A required symbol, e.g. a source_version.
 get_symbol:{[k]
-    v:raw k;
+    v:raw[k];
     $[0=count v; note["missing required setting ",string[k];`];
       `$v]}
 

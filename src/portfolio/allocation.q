@@ -378,7 +378,7 @@ key_table:{[t;bys] ?[t;();0b;bys!bys]}
 / last, exactly as if their trades had been in the table.
 / @private
 seed_lots:{[trades;opening;ix]
-    empty:new_lots trades;
+    empty:new_lots[trades];
     if[0=count ix; :empty];
     rows:opening ix;
     n:count rows;
@@ -393,7 +393,7 @@ seed_lots:{[trades;opening;ix]
 / Private: match one bucket, returning its ledger and its leftover lots.
 / @private
 bucket:{[m;bys;kv;seed;sub]
-    st:(step[m])/[`lots`matches!(seed; new_matches sub); sub];
+    st:(step[m])/[`lots`matches!(seed; new_matches[sub]); sub];
     `matches`residual!(with_by[st`matches;kv;bys]; with_by[st`lots;kv;bys])}
 
 / Attribute realised P&L to trades, and report what is still open.
@@ -407,8 +407,8 @@ bucket:{[m;bys;kv;seed;sub]
 / @throws error on a missing column, an unknown option, or an unregistered method
 / @eg count .qalloc.run[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo]`matches -> 1
 run:{[trades;opts]
-    o:normalised_opts opts;
-    m:def o`method;
+    o:normalised_opts[opts];
+    m:def[o`method];
     bys:o`by;
     trades:prepared[trades;bys];
     opening:prepared_opening[o`opening;bys];
@@ -429,8 +429,8 @@ run:{[trades;opts]
             seed_lots[trades;opening;where oid=j];
             trades where tid=j]}[m;bys;trades;opening;ks;tid;oid] each til count ks;
     empty_kv:bys!first each 0#/:trades bys;
-    matches:$[count res; raze res[;`matches]; with_by[new_matches trades;empty_kv;bys]];
-    residual:$[count res; raze res[;`residual]; with_by[new_lots trades;empty_kv;bys]];
+    matches:$[count res; raze res[;`matches]; with_by[new_matches[trades];empty_kv;bys]];
+    residual:$[count res; raze res[;`residual]; with_by[new_lots[trades];empty_kv;bys]];
     matches:update pnl:.qrisk.pnl[qty;open_price;close_price;open_side] from matches;
     `matches`residual!((o`where) `close_time xasc matches; residual)}
 
@@ -487,7 +487,7 @@ position:{[lots;group_cols]
 / @return a book, as position returns one
 / @eg exec first qty from .qalloc.position_at[([] time:2026.01.01D09:00:00 2026.01.01D11:00:00; sym:2#`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo;2026.01.01D10:00:00] -> 1000000f
 position_at:{[trades;opts;ts]
-    o:normalised_opts opts;
+    o:normalised_opts[opts];
     position[residual[trades;@[o;`asof;:;ts]]; o`by]}
 
 / -------------------------------------------------------------- ROLLUPS

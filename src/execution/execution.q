@@ -474,12 +474,12 @@ fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
     bucket_cols:(),bucket_cols;
     hs:(),horizons;
     fill_probability_require_args[orders;hs;bucket_cols;as_of];
-    o:fill_probability_opts opts;
+    o:fill_probability_opts[opts];
     orders:0!orders;
     / Orders that existed at as_of. A later order is not censored, it is
     / not there yet.
     existing:select from orders where submit_time<=as_of;
-    fill_probability_require_consistent existing;
+    fill_probability_require_consistent[existing];
     / One row per (order, horizon), order-major.
     n:count existing;
     m:count hs;
@@ -674,7 +674,7 @@ venue_quality_defaults:`stale_after`min_count`weights`normalise!(0D00:00:05;30;:
 /   "not implemented" until #338 is built
 venue_quality:{[quotes;requests;trades;window;config]
     venue_quality_require_args[quotes;requests;trades;window];
-    venue_quality_config config;
+    venue_quality_config[config];
     '"venue_quality: not implemented yet (#338) - the contract is fixed, the computation is not"};
 
 / Private: refuse venue_quality's tables and window, naming what is wrong.

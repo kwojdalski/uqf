@@ -86,8 +86,8 @@ mk_timestamps:{[n;start_ts]
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
     .qetl.log.dbg[`reshape_wide_order_book;"running: .qstats.inv_ncdf p";()!()];
-    z:.qstats.inv_ncdf p;
-    gaps:min_gap|mean_gap+std_gap*z;
+    shock:.qstats.inv_ncdf p;
+    gaps:min_gap|mean_gap+std_gap*shock;
     start_ts+sums gaps};
 time:mk_timestamps[n_rows;.z.p];
 

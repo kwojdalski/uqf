@@ -39,7 +39,7 @@ position_book:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_p
 / through the same select: a column the plant renames fails here, at load,
 / rather than in a trapped error on every batch (#817).
 as_trades:{[x] select time:source_time, sym, side, trade_price:price, size from x}
-position_trades:as_trades .qetl.plant.shape `executions
+position_trades:as_trades[.qetl.plant.shape `executions]
 position_mids:([] sym:`symbol$(); mid:`float$())
 position:.qetl.plant.published `position
 
@@ -144,12 +144,12 @@ on_batch:{[t;x]
     $[t=`executions;
         [out:.qetl.transform.apply[`position;`book`trades`mids!(
             0!.qpipe.job.posbook.book;
-            .qpipe.job.posbook.as_trades x;
+            .qpipe.job.posbook.as_trades[x];
             ([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid))];
          `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.next_book[0!.qpipe.job.posbook.book;out];
          .qpipe.job.posbook.publish[`position;out]];
       t=`market_data;
-        [m:.qpipe.job.posbook.book_mids x;
+        [m:.qpipe.job.posbook.book_mids[x];
          .qpipe.job.posbook.last_mid[m`sym]:m`mid];
       ()];
     }

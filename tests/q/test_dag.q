@@ -117,8 +117,8 @@ test_layers_group_jobs_that_can_run_together:{[t]
     .qetl.dag.register[`feed_a;`kind`inputs`outputs!(`stream;`$();`ta)];
     .qetl.dag.register[`feed_b;`kind`inputs`outputs!(`stream;`$();`tb)];
     .qetl.dag.register[`join;`kind`inputs`outputs!(`stream;`ta`tb;`tc)];
-    l:.qetl.dag.layers[];
-    .qunit.assertEquals[(count l;count first l;count last l);(2;2;1);
+    ls:.qetl.dag.layers[];
+    .qunit.assertEquals[(count ls;count first ls;count last ls);(2;2;1);
         "two independent roots share a layer, and their consumer follows"]};
 
 test_a_cycle_is_refused_and_names_the_jobs:{[t]
@@ -280,7 +280,7 @@ test_the_real_graph_is_acyclic:{[t]
     / among both workers. Correctly, given what it had been told.
     / .
     / A graph nobody has ordered is a graph whose model has not been tested.
-    r:.qetl.dag.adopt_all[];
+    .qetl.dag.adopt_all[];
     .qunit.assertTrue[0<count .qetl.dag.topological[];
         "the whole shipped job graph orders, so it is genuinely a DAG"]};
 

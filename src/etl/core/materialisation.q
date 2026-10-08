@@ -371,18 +371,6 @@ stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_pub
 
 / ------------------------------------------------------------------ READ
 
-/ Every coverage interval for one dataset at one source release.
-/ .
-/ source_version is a required parameter rather than an optional filter,
-/ because consumers must filter on it and an optional filter is
-/ one a caller forgets. Intervals from other versions are not returned, so
-/ they cannot be merged into this answer.
-/ @param dataset the dataset to report on
-/ @param source_version the release to report for
-/ @return a table of composed intervals
-/ Parameters are ds/version, not dataset/source_version: those are column
-/ names, and `where dataset=dataset` compares the column to itself and
-/ matches every row. Same trap as gaps above.
 / Private: the coverage claims that were true AT `as_of`.
 / .
 / A row is valid from when it was recorded until it was superseded, so the
@@ -410,8 +398,19 @@ valid_at:{[ds;part;version;as_of]
 
 / The composed intervals covered for a dataset and source_version, as
 / understood at `as_of`.
+/ .
+/ source_version is a required parameter rather than an optional filter,
+/ because consumers must filter on it and an optional filter is
+/ one a caller forgets. Intervals from other versions are not returned, so
+/ they cannot be merged into this answer.
+/ @param ds the dataset to report on
+/ @param part the slice to report on, or ` for an unpartitioned dataset
+/ @param version the source release to report for
 / @param as_of the instant to answer as of; .z.p for "now"
-/ @param partition the slice to report on, or ` for an unpartitioned dataset
+/ @return a table of composed intervals
+/ Parameters are ds/version, not dataset/source_version: those are column
+/ names, and `where dataset=dataset` compares the column to itself and
+/ matches every row. Same trap as gaps above.
 / @eg .qetl.coverage.intervals[`demo_deals;`;`v1;.z.p]
 intervals:{[ds;part;version;as_of]
     compose valid_at[ds;part;version;as_of]}

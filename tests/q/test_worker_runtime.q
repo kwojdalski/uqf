@@ -83,32 +83,32 @@ test_the_policy_falls_back_to_the_defaults:{[t]
 / --- retrying ------------------------------------------------------------
 
 test_a_successful_attempt_does_not_retry:{[t]
-    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast 3;{42}];
+    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast[3];{42}];
     .qunit.assertEquals[(r`state;r`attempts;r`result);(`ok;1;42);"success on the first attempt costs one attempt"]};
 
 / The point of retrying at all: a transient failure followed by a success.
 test_a_transport_failure_retries_and_can_succeed:{[t]
     `.wrttest.calls set 0;
-    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast 3;
+    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast[3];
         {.wrttest.calls+:1; if[.wrttest.calls<3;'"connection reset"]; `recovered}];
     .qunit.assertEquals[(r`state;r`attempts;r`result);(`ok;3;`recovered);"two transient failures then a success, in three attempts"]};
 
 test_retries_are_bounded:{[t]
     `.wrttest.calls set 0;
-    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast 3;{.wrttest.calls+:1; '"connection refused"}];
+    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast[3];{.wrttest.calls+:1; '"connection refused"}];
     .qunit.assertEquals[(r`state;r`kind;.wrttest.calls);(`failed;`transport;3);"exhausting the policy stops, rather than retrying forever"]};
 
 / As a behavioural assertion: the attempt function is called
 / exactly ONCE for a data failure, however many attempts the policy allows.
 test_a_data_failure_is_not_retried_at_all:{[t]
     `.wrttest.calls set 0;
-    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast 5;{.wrttest.calls+:1; '"type error on column px"}];
+    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast[5];{.wrttest.calls+:1; '"type error on column px"}];
     .qunit.assertEquals[(r`state;r`kind;.wrttest.calls);(`failed;`data;1);"a deterministic failure is attempted once, not five times"]};
 
 / Exhaustion is terminal for the window - with_retry returns a failed
 / state rather than throwing, so the caller decides to move on.
 test_exhaustion_returns_a_failed_state_rather_than_throwing:{[t]
-    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast 2;{'"connection reset"}];
+    r:.qetl.job.bounded.runtime.with_retry[.wrttest.fast[2];{'"connection reset"}];
     .qunit.assertEquals[(r`state;0<count r`error);(`failed;1b);"a terminal failure carries its error rather than unwinding the caller"]};
 
 / --- the authority split ------------------------------------------
@@ -193,8 +193,8 @@ test_an_effect_off_the_list_cannot_be_asked_about:{[t]
 test_a_dry_run_publishes_no_coverage_at_all:{[t]
     setenv[`UQF_DRY_RUN;"true"];
     r:.qetl.job.bounded.runtime.finish_window[`w;`markouts;`;
-        `source_version`range_from`range_to!(`v1;.wrttest.d 1;.wrttest.d 2);
-        .wrttest.d 1;.wrttest.d 2;{1000}];
+        `source_version`range_from`range_to!(`v1;.wrttest.d[1];.wrttest.d[2]);
+        .wrttest.d[1];.wrttest.d[2];{1000}];
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[(r`dry_run;r`rows_published;count value `etl_coverage);(1b;0;0);"a diagnostic run leaves the ledger untouched"]};
 
@@ -202,44 +202,44 @@ test_a_dry_run_writes_no_checkpoint:{[t]
     .qetl.job.bounded.state.clear_checkpoint `dryworker;
     setenv[`UQF_DRY_RUN;"true"];
     .qetl.job.bounded.runtime.finish_window[`dryworker;`markouts;`;
-        `source_version`range_from`range_to!(`v1;.wrttest.d 1;.wrttest.d 2);
-        .wrttest.d 1;.wrttest.d 2;{5}];
+        `source_version`range_from`range_to!(`v1;.wrttest.d[1];.wrttest.d[2]);
+        .wrttest.d[1];.wrttest.d[2];{5}];
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[
-        .qetl.job.bounded.state.load_checkpoint[`dryworker;`source_version`range_from`range_to!(`v1;.wrttest.d 1;.wrttest.d 2)];
+        .qetl.job.bounded.state.load_checkpoint[`dryworker;`source_version`range_from`range_to!(`v1;.wrttest.d[1];.wrttest.d[2])];
         0Np;
         "no resumable state survives a diagnostic run"]};
 
 test_a_real_run_publishes_all_three:{[t]
     .qetl.job.bounded.state.clear_checkpoint `realworker;
-    spec:`source_version`range_from`range_to!(`v1;.wrttest.d 1;.wrttest.d 2);
-    r:.qetl.job.bounded.runtime.finish_window[`realworker;`markouts;`;spec;.wrttest.d 1;.wrttest.d 2;{7}];
+    spec:`source_version`range_from`range_to!(`v1;.wrttest.d[1];.wrttest.d[2]);
+    r:.qetl.job.bounded.runtime.finish_window[`realworker;`markouts;`;spec;.wrttest.d[1];.wrttest.d[2];{7}];
     .qunit.assertEquals[
         (r`rows_published;count value `etl_coverage;.qetl.job.bounded.state.load_checkpoint[`realworker;spec]);
-        (7;1;.wrttest.d 2);
+        (7;1;.wrttest.d[2]);
         "rows, one coverage row, and a cursor at the window's end"]};
 
 / --- coverage skipping -------------------------------------------
 
 test_an_uncovered_window_needs_fetching:{[t]
-    .qunit.assertEquals[.qetl.job.bounded.runtime.needs_fetch[`markouts;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"nothing published means there is work to do"]};
+    .qunit.assertEquals[.qetl.job.bounded.runtime.needs_fetch[`markouts;`;`v1;.z.p;.wrttest.d[1];.wrttest.d[2]];1b;"nothing published means there is work to do"]};
 
 test_a_covered_window_is_skipped:{[t]
-    .qetl.coverage.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
-    .qunit.assertEquals[.qetl.job.bounded.runtime.needs_fetch[`markouts;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];0b;"a retry does not re-fetch a published window"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.wrttest.d[1];.wrttest.d[2];10];
+    .qunit.assertEquals[.qetl.job.bounded.runtime.needs_fetch[`markouts;`;`v1;.z.p;.wrttest.d[1];.wrttest.d[2]];0b;"a retry does not re-fetch a published window"]};
 
 / No merging across versions, in the direction that matters: a version bump exists precisely to
 / force re-extraction, so v1 coverage must not suppress a v2 fetch.
 test_coverage_at_one_version_does_not_skip_another:{[t]
-    .qetl.coverage.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
-    .qunit.assertEquals[.qetl.job.bounded.runtime.needs_fetch[`markouts;`;`v2;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"a source_version bump forces the re-fetch it exists to force"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.wrttest.d[1];.wrttest.d[2];10];
+    .qunit.assertEquals[.qetl.job.bounded.runtime.needs_fetch[`markouts;`;`v2;.z.p;.wrttest.d[1];.wrttest.d[2]];1b;"a source_version bump forces the re-fetch it exists to force"]};
 
 / A retry after a partial run should redo only what is missing, not the
 / whole range.
 test_a_partial_run_leaves_only_the_gap_to_redo:{[t]
-    .qetl.coverage.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
-    gap:.qetl.job.bounded.runtime.remaining[`markouts;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 4];
-    .qunit.assertEquals[(count gap;first gap`range_from);(1;.wrttest.d 2);"the retry resumes at the boundary, not at the start"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.wrttest.d[1];.wrttest.d[2];10];
+    gap:.qetl.job.bounded.runtime.remaining[`markouts;`;`v1;.z.p;.wrttest.d[1];.wrttest.d[4]];
+    .qunit.assertEquals[(count gap;first gap`range_from);(1;.wrttest.d[2]);"the retry resumes at the boundary, not at the start"]};
 
 / --- dependencies ------------------------------------------------
 
@@ -271,11 +271,11 @@ test_every_missing_dependency_is_named_at_once:{[t]
 / about its INPUT. Computing markouts over a range whose trades are missing
 / would record coverage asserting the work was done.
 test_an_unpublished_upstream_blocks_the_run:{[t]
-    .qunit.assertError[{.qetl.job.bounded.runtime.require_upstream[`trades;`;`v1;.z.p;x 0;x 1]};(.wrttest.d 1;.wrttest.d 2);"a coverage precondition is checked before the run, not assumed"]};
+    .qunit.assertError[{.qetl.job.bounded.runtime.require_upstream[`trades;`;`v1;.z.p;x 0;x 1]};(.wrttest.d[1];.wrttest.d[2]);"a coverage precondition is checked before the run, not assumed"]};
 
 test_a_published_upstream_admits_the_run:{[t]
-    .qetl.coverage.stage_completion[`trades;`;`v1;.wrttest.d 1;.wrttest.d 2;500];
-    .qunit.assertEquals[.qetl.job.bounded.runtime.require_upstream[`trades;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"a fully published upstream lets the run proceed"]};
+    .qetl.coverage.stage_completion[`trades;`;`v1;.wrttest.d[1];.wrttest.d[2];500];
+    .qunit.assertEquals[.qetl.job.bounded.runtime.require_upstream[`trades;`;`v1;.z.p;.wrttest.d[1];.wrttest.d[2]];1b;"a fully published upstream lets the run proceed"]};
 
 / ---------------------------------------------------------------------------
 / Inherited delegators: every worker, not two of them

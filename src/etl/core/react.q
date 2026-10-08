@@ -103,7 +103,7 @@ max_depth:8
 / graph can tell which edges were checked and which were promised. Use
 / `on_worker` where the answer IS derivable.
 / @param dataset the dataset whose publication fires this, as a symbol
-/ @param name a name for this reaction, unique per dataset
+/ @param nm a name for this reaction, unique per dataset
 / @param handler a function taking (dataset; range_from; range_to)
 / @return the reaction's name
 / @throws error when the handler is not a 3-argument function, or when no
@@ -273,7 +273,7 @@ audit:{[]
     datasets:distinct reacting,$[`jobs in key @[value;`.qetl.dag;{()}]; raze {(.qetl.dag.def x)`outputs} each .qetl.dag.defined[]; `$()];
     / Empty in the healthy case - every dataset has a reaction - where
     / (!). flip () is a 'type; so the empty dict is built, not derived.
-    pairs:{[d] (d;dag_consumers d)} each datasets where 0=count each for_dataset each datasets;
+    pairs:{[d] (d;dag_consumers[d])} each datasets where 0=count each for_dataset each datasets;
     unwired:$[count pairs; (!). flip pairs; (`symbol$())!()];
     undeclared:reacting where 0=count each dag_consumers each reacting;
     / `count each value unwired` on an EMPTY dict throws 'type - value of an
@@ -282,7 +282,7 @@ audit:{[]
     / empty symbol vector.
     wired_keys:(key unwired) where 0<count each dag_consumers each key unwired;
     asserted:raze {[ds]
-        rs:.qetl.reaction.for_dataset ds;
+        rs:.qetl.reaction.for_dataset[ds];
         bad:select from rs where not derived, 0<count each outputs;
         {[ds;nm] `$(string ds),"~",string nm}[ds] each bad`name
       } each reacting;
@@ -380,7 +380,7 @@ persist_outcome:{[row]
 / @eg .qetl.reaction.pending[`demo_deals;`;`v1;2026.09.11D00:00;2026.09.13D00:00]
 pending:{[ds;part;version;from_ts;to_ts]
     none:([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$());
-    rs:for_dataset ds;
+    rs:for_dataset[ds];
     if[0=count rs; :none];
     .qetl.coverage.init_ledger[];
     now:.z.p;
@@ -447,14 +447,14 @@ drain:{[]
         / cascade rather than on a repeat.
         if[not any done~\:k;
             done,:enlist k;
-            ran+:dispatch item]];
+            ran+:dispatch[item]]];
     `.qetl.reaction.draining set 0b;
     ran}
 
 / Private: run every reaction registered for one queued item.
 / @private
 dispatch:{[item]
-    rs:for_dataset item`dataset;
+    rs:for_dataset[item`dataset];
     if[0=count rs; :0];
     if[item[`depth]>=max_depth;
         {[item;nm] record[item`dataset;nm;item`depth;item`range_from;item`range_to;`refused;
@@ -636,7 +636,7 @@ write:{[target;row_key;rows]
 / @return how many windows were announced again
 / @private
 replay_reactions:{[worker]
-    owed:owed_reactions worker;
+    owed:owed_reactions[worker];
     ws:distinct select range_from, range_to from owed;
     if[0=count ws; :0];
     .qetl.log.warn[worker;"re-firing reactions for windows covered without a successful reaction";

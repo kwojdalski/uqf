@@ -87,7 +87,7 @@ test_every_worker_runs_to_completion_on_its_fixture:{[t]
     / that completed zero windows would satisfy a weaker assertion while
     / proving the lifecycle never started.
     results:{[w]
-        spec:.wruntest.prepare w;
+        spec:.wruntest.prepare[w];
         .wruntest.call[w;`init][spec];
         r:.wruntest.call[w;`run][];
         (w;r`state;0<r`windows_completed;0<r`rows_published)} each .wruntest.workers[];
@@ -100,7 +100,7 @@ test_every_worker_reports_its_spec_after_init:{[t]
     / check that the two agree - and it enters the stamped delegator, which a
     / structural test cannot.
     bad:{[w]
-        spec:.wruntest.prepare w;
+        spec:.wruntest.prepare[w];
         .wruntest.call[w;`init][spec];
         $[(.wruntest.call[w;`spec][])~spec; (); enlist w]} each .wruntest.workers[];
     .qunit.assertEquals[count raze bad;0;
@@ -110,7 +110,7 @@ test_a_second_run_is_idle_for_every_worker:{[t]
     / Coverage is recorded, so a repeat of the same range has nothing to do.
     / This is retry-safety stated once for every worker rather than per worker.
     bad:{[w]
-        spec:.wruntest.prepare w;
+        spec:.wruntest.prepare[w];
         .wruntest.call[w;`init][spec];
         .wruntest.call[w;`run][];
         .wruntest.call[w;`cleanup][];
@@ -127,7 +127,7 @@ test_a_dry_run_publishes_nothing_for_every_worker:{[t]
     setenv[`UQF_DRY_RUN;"true"];
     bad:{[w]
         cfg:.qetl.job.bounded.def w;
-        spec:.wruntest.prepare w;
+        spec:.wruntest.prepare[w];
         .wruntest.call[w;`init][spec];
         .wruntest.call[w;`run][];
         $[0=count value cfg`dataset; (); enlist (w;count value cfg`dataset)]
@@ -161,12 +161,12 @@ test_a_dry_run_leaves_everything_durable_as_it_was:{[t]
     .qetl.run.attach[];
     setenv[`UQF_MODE;"dry_run"];
     bad:{[w]
-        spec:.wruntest.prepare w;
-        before:.wruntest.durable w;
+        spec:.wruntest.prepare[w];
+        before:.wruntest.durable[w];
         .wruntest.call[w;`init][spec];
         r:.wruntest.call[w;`run][];
-        after:.wruntest.durable w;
-        st:.wruntest.status w;
+        after:.wruntest.durable[w];
+        st:.wruntest.status[w];
         $[(before~after) and (r[`windows_completed]>0) and `completed~st`state; (); enlist (w;before;after;st`state)]
         } each .wruntest.workers[];
     setenv[`UQF_MODE;""];
@@ -179,11 +179,11 @@ test_a_dry_run_leaves_everything_durable_as_it_was:{[t]
 test_validate_and_plan_touch_nothing_and_plan_what_a_run_does:{[t]
     .qetl.run.attach[];
     bad:{[w]
-        spec:.wruntest.prepare w;
-        before:.wruntest.durable w;
+        spec:.wruntest.prepare[w];
+        before:.wruntest.durable[w];
         v:.qetl.job.bounded.validate[w;spec];
         p:.qetl.job.bounded.plan_only[w;spec];
-        after:.wruntest.durable w;
+        after:.wruntest.durable[w];
         .wruntest.call[w;`init][spec];
         r:.wruntest.call[w;`run][];
         .wruntest.call[w;`cleanup][];
@@ -206,13 +206,13 @@ status:{[w]
 / Airflow's sensor waited on a file no worker wrote.
 test_a_run_reports_completed_then_idle_in_the_status_file:{[t]
     bad:{[w]
-        spec:.wruntest.prepare w;
+        spec:.wruntest.prepare[w];
         .wruntest.call[w;`init][spec];
         .wruntest.call[w;`run][];
-        first_run:.wruntest.status w;
+        first_run:.wruntest.status[w];
         .wruntest.call[w;`init][spec];
         .wruntest.call[w;`run][];
-        second:.wruntest.status w;
+        second:.wruntest.status[w];
         ok:(`completed~first_run`state) and (0<first_run`rows_published) and `idle~second`state;
         $[ok; (); enlist (w;first_run`state;second`state)]} each .wruntest.workers[];
     .qunit.assertEquals[count raze bad;0;"each worker's status file reads completed, then idle for a covered range"]};
@@ -222,7 +222,7 @@ test_a_run_reports_completed_then_idle_in_the_status_file:{[t]
 / starts, rather than refusing to start at all.
 test_a_run_after_a_crash_records_the_crash_then_starts:{[t]
     w:first .wruntest.workers[];
-    spec:.wruntest.prepare w;
+    spec:.wruntest.prepare[w];
     / Whatever an earlier test left, `failed is always writable and may be
     / followed by `starting - so this sets up the crash from any state.
     .qetl.status.write_status[w;.qetl.job.bounded.instance w;`failed;spec;
@@ -232,20 +232,20 @@ test_a_run_after_a_crash_records_the_crash_then_starts:{[t]
     .qetl.status.write_status[w;.qetl.job.bounded.instance w;`running;spec;
         `cursor`rows_published`windows_completed!(0Np;0;0);""];
     .wruntest.call[w;`init][spec];
-    .qunit.assertEquals[(.wruntest.status w)`state;`starting;"the new run starts after the orphaned one is recorded as failed"]};
+    .qunit.assertEquals[(.wruntest.status[w])`state;`starting;"the new run starts after the orphaned one is recorded as failed"]};
 
 / A run that throws reports `failed` with the error, so the sensor fails the
 / task instead of waiting for it.
 test_a_run_that_throws_reports_failed_with_its_error:{[t]
     w:first .wruntest.workers[];
-    spec:.wruntest.prepare w;
+    spec:.wruntest.prepare[w];
     .wruntest.call[w;`init][spec];
     ns:.qetl.job.bounded.def[w]`ns;
     saved:value ` sv ns,`plan;
     (` sv ns,`plan) set {[cursor] '"boom in plan"};
     r:@[{.wruntest.call[x;`run][]};w;{x}];
     (` sv ns,`plan) set saved;
-    st:.wruntest.status w;
+    st:.wruntest.status[w];
     .qunit.assertEquals[(r;st`state;st`error);("boom in plan";`failed;"boom in plan");"the throw is re-raised and recorded"]};
 
 test_every_worker_checkpoints_through_its_own_delegator:{[t]
@@ -254,7 +254,7 @@ test_every_worker_checkpoints_through_its_own_delegator:{[t]
     / why it stays uncovered by the lifecycle test above. Calling it is also
     / the only way to prove the delegator writes where the shell reads.
     bad:{[w]
-        spec:.wruntest.prepare w;
+        spec:.wruntest.prepare[w];
         .wruntest.call[w;`init][spec];
         cursor:spec`range_from;
         .wruntest.call[w;`checkpoint][cursor];

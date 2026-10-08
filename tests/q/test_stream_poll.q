@@ -14,7 +14,7 @@
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
 / The upstream a test feed polls: three rows, one a day.
-upstream:([] ts:d 1 2 3; v:1.5 2.5 3.5)
+upstream:([] ts:d[1 2 3]; v:1.5 2.5 3.5)
 
 / What the feeds publish, and whether their close ran.
 sent:([] tbl:`symbol$(); n:`long$())
@@ -61,7 +61,7 @@ cursor_file_exists:{[job] 0<count key hsym `$.qetl.job.continuous.cursor_path jo
 
 test_preview_reports_the_page_it_would_publish:{[t]
     r:.qetl.job.stream.preview[`spt_feed;2];
-    .qunit.assertEquals[r`state`fetched`next_cursor`advances`live;(`previewed;3;d 3;1b;`unknown);
+    .qunit.assertEquals[r`state`fetched`next_cursor`advances`live;(`previewed;3;d[3];1b;`unknown);
         "one page of three rows, a cursor it would move to, and no source named to judge liveness by"];
     .qunit.assertEquals[(r`rows;count each r`sample);(enlist[`spt_out]!enlist 3;enlist[`spt_out]!enlist 2);
         "every row counted, a sample of two"]};
@@ -72,17 +72,17 @@ test_preview_publishes_nothing:{[t]
 
 test_preview_writes_no_cursor:{[t]
     .qetl.job.stream.preview[`spt_feed;5];
-    .qunit.assertEquals[(.streampolltest.cursor_file_exists `spt_feed;null .qetl.job.continuous.load_cursor `spt_feed);01b;
+    .qunit.assertEquals[(.streampolltest.cursor_file_exists[`spt_feed];null .qetl.job.continuous.load_cursor `spt_feed);01b;
         "no cursor file appears, so a run still starts where it would have"]};
 
 test_preview_leaves_a_saved_cursor_alone:{[t]
-    .qetl.job.continuous.save_cursor[`spt_feed;d 1];
+    .qetl.job.continuous.save_cursor[`spt_feed;d[1]];
     r:.qetl.job.stream.preview[`spt_feed;5];
-    .qunit.assertEquals[(r`cursor;r`fetched;.qetl.job.continuous.load_cursor `spt_feed);(d 1;2;d 1);
+    .qunit.assertEquals[(r`cursor;r`fetched;.qetl.job.continuous.load_cursor `spt_feed);(d[1];2;d[1]);
         "it reads from the saved cursor and leaves it where it was"]};
 
 test_an_empty_page_is_idle:{[t]
-    .qetl.job.continuous.save_cursor[`spt_feed;d 3];
+    .qetl.job.continuous.save_cursor[`spt_feed;d[3]];
     r:.qetl.job.stream.preview[`spt_feed;5];
     .qunit.assertEquals[r`state`fetched`advances;(`idle;0;0b);"nothing new is idle, not a failure"]};
 
@@ -142,10 +142,10 @@ test_the_timer_publishes_a_page_that_fits:{[t]
 test_a_traced_fetch_names_its_job_and_cursor:{[t]
     .streampolltest.declare[`spt_quote;`spt_out;{[page] select ts, v from page};
         {[cursor] .qetl.source.ipc_call[{value x};.streampolltest.after;enlist cursor]}];
-    .qetl.job.continuous.save_cursor[`spt_quote;.streampolltest.d 1];
+    .qetl.job.continuous.save_cursor[`spt_quote;.streampolltest.d[1]];
     lines:.testutil.captured_log[1b] {.qetl.job.stream.preview[`spt_quote;5]};
     sent:first lines[;3] where lines[;2]~\:"query sent";
-    .qunit.assertEquals[(sent`job;sent`cursor;sent`args);(`spt_quote;.streampolltest.d 1;enlist .streampolltest.d 1);
+    .qunit.assertEquals[(sent`job;sent`cursor;sent`args);(`spt_quote;.streampolltest.d[1];enlist .streampolltest.d 1);
         "the query, the job that sent it and the cursor it fetched after"]};
 
 test_a_cursor_that_would_not_advance_is_invalid:{[t]
@@ -169,11 +169,11 @@ test_a_feed_without_poll_cannot_be_previewed:{[t]
 test_a_tick_publishes_then_advances:{[t]
     r:.qetl.job.stream.tick `spt_feed;
     .qunit.assertEquals[(r`state;r`rows;exec sum n from .streampolltest.sent;.qetl.job.continuous.load_cursor `spt_feed);
-        (`published;3;3;d 3);"three rows published and the cursor moved past them"]};
+        (`published;3;3;d[3]);"three rows published and the cursor moved past them"]};
 
 test_the_generated_timer_ticks:{[t]
     (.qetl.job.stream.def[`spt_feed]`on_timer)[];
-    .qunit.assertEquals[.qetl.job.continuous.load_cursor `spt_feed;d 3;"on_timer is the tick"]};
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `spt_feed;d[3];"on_timer is the tick"]};
 
 test_after_a_tick_the_preview_is_idle:{[t]
     .qetl.job.stream.tick `spt_feed;
@@ -187,7 +187,7 @@ poll_decl:{[extra]
 
 test_define_refuses_poll_with_on_timer:{[t]
     .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};
-        .streampolltest.poll_decl enlist[`on_timer]!enlist {[] ::};"*both poll and on_timer*";
+        .streampolltest.poll_decl[enlist[`on_timer]!enlist {[] ::}];"*both poll and on_timer*";
         "the timer is built from poll, so a second one would be ignored or doubled"]};
 
 test_define_refuses_poll_without_period:{[t]
@@ -195,12 +195,12 @@ test_define_refuses_poll_without_period:{[t]
         `period _ .streampolltest.poll_decl ()!();"*without period*";"how often is part of the declaration"]};
 
 test_define_refuses_a_poll_missing_a_step:{[t]
-    d:.streampolltest.poll_decl ()!();
+    d:.streampolltest.poll_decl[()!()];
     d[`poll]:`next_cursor _ d`poll;
     .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};d;"*missing next_cursor";"each step is named"]};
 
 test_define_refuses_poll_on_a_subscriber:{[t]
-    d:.streampolltest.poll_decl ()!();
+    d:.streampolltest.poll_decl[()!()];
     d[`subscribe_to]:enlist `quote;
     .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};d;"*declares poll and subscribes*";
         "a polling job fetches its own input"]};
@@ -209,7 +209,7 @@ test_define_refuses_poll_on_a_subscriber:{[t]
 
 / Three rows share a timestamp: a page of two cannot be acknowledged by a
 / time alone, so the cursor is the row's position.
-book:([] time:d 1 1 1 2; securityId:`a`b`c`a; priceBookType:`x`x`x`x; v:1 2 3 4f)
+book:([] time:d[1 1 1 2]; securityId:`a`b`c`a; priceBookType:`x`x`x`x; v:1 2 3 4f)
 fields:`time`securityId`priceBookType
 
 / The page of two after `cursor`, in the source's sort order.
@@ -237,7 +237,7 @@ test_a_compound_cursor_pages_through_rows_sharing_a_timestamp:{[t]
     mid:.qetl.job.continuous.load_cursor_value `spt_compound;
     .qetl.job.stream.tick `spt_compound;
     .qunit.assertEquals[(mid;exec sum n from .streampolltest.sent);
-        (.streampolltest.fields!(d 1;`b;`x);4);
+        (.streampolltest.fields!(d[1];`b;`x);4);
         "the first page stops at b inside one timestamp, the second takes c and the next day - every row once"]};
 
 test_a_compound_cursor_keeps_its_tie_breakers:{[t]
@@ -252,7 +252,7 @@ test_a_compound_preview_leaves_the_cursor_file_alone:{[t]
     before:.qetl.job.continuous.load_cursor_value `spt_compound;
     r:.qetl.job.stream.preview[`spt_compound;5];
     .qunit.assertEquals[(r`state;r`fetched;r`next_cursor;.qetl.job.continuous.load_cursor_value `spt_compound);
-        (`previewed;2;.streampolltest.fields!(d 2;`a;`x);before);
+        (`previewed;2;.streampolltest.fields!(d[2];`a;`x);before);
         "it proposes the next position and the saved one is untouched"]};
 
 test_a_failed_publish_saves_no_compound_cursor:{[t]
@@ -270,7 +270,7 @@ test_a_compound_cursor_that_does_not_advance_is_refused_in_both_modes:{[t]
         "the preview reports it, and the timer refused before publishing anything"]};
 
 test_define_refuses_half_a_custom_cursor:{[t]
-    d:.streampolltest.poll_decl ()!();
+    d:.streampolltest.poll_decl[()!()];
     d[`poll]:d[`poll],enlist[`load]!enlist .qetl.job.continuous.load_cursor_value;
     .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};d;"*load, save and advances together*";
         "a cursor loaded one way and saved another drifts"]};
@@ -320,18 +320,18 @@ test_a_recent_preview_leaves_the_saved_cursor_alone:{[t]
 test_a_recent_preview_writes_no_cursor:{[t]
     recent_feed ()!();
     .qetl.job.stream.preview_recent[`spt_quote;5;0D00:00:07];
-    .qunit.assertEquals[.streampolltest.cursor_file_exists `spt_quote;0b;"no cursor file appears"]};
+    .qunit.assertEquals[.streampolltest.cursor_file_exists[`spt_quote];0b;"no cursor file appears"]};
 
 test_live_polling_is_unchanged_after_a_recent_preview:{[t]
     .qetl.job.stream.preview_recent[`spt_feed;5;0D00:00:07];
     r:.qetl.job.stream.tick `spt_feed;
-    .qunit.assertEquals[(r`rows;.qetl.job.continuous.load_cursor `spt_feed);(3;d 3);
+    .qunit.assertEquals[(r`rows;.qetl.job.continuous.load_cursor `spt_feed);(3;d[3]);
         "the next tick still starts from no cursor and takes every row"]};
 
 test_without_last_a_preview_is_the_next_page:{[t]
-    .qetl.job.continuous.save_cursor[`spt_feed;d 1];
+    .qetl.job.continuous.save_cursor[`spt_feed;d[1]];
     r:.qetl.job.stream.preview[`spt_feed;5];
-    .qunit.assertEquals[(r`mode;r`cursor;r`fetched;`window in key r);(`next_page;d 1;2;0b);
+    .qunit.assertEquals[(r`mode;r`cursor;r`fetched;`window in key r);(`next_page;d[1];2;0b);
         "the saved cursor, as before, and no window"]};
 
 test_a_full_page_says_the_window_may_hold_more:{[t]
@@ -372,7 +372,7 @@ test_a_compound_feed_without_start_cursor_is_refused:{[t]
 test_a_compound_window_keeps_its_tie_breakers:{[t]
     .streampolltest.compound .qetl.job.continuous.lexically_after .streampolltest.fields;
     start:{[instant] .streampolltest.fields!(instant;`;`)};
-    w:`from`to`start_cursor`end_cursor!(d 1;d 2;start d 1;start d 2);
+    w:`from`to`start_cursor`end_cursor!(d[1];d[2];start d 1;start d 2);
     kept:.streampolltest.book where .qetl.job.stream.in_window[`spt_compound;w;.streampolltest.book];
     .qunit.assertEquals[kept`securityId;`a`b`c;"all three rows at the start's time, none at the end's"]};
 
@@ -392,12 +392,12 @@ test_a_compound_feed_with_start_cursor_previews_recent_data:{[t]
         "the feed's own start cursor; the fixture book is long past, so the window is empty"]};
 
 test_define_refuses_a_bad_page_limit:{[t]
-    decl:.streampolltest.poll_decl ()!();
+    decl:.streampolltest.poll_decl[()!()];
     decl[`poll;`page_limit]:0;
     .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};decl;"*page_limit must be a positive long*";"zero is no limit"]};
 
 test_define_refuses_a_start_cursor_that_is_not_a_function:{[t]
-    decl:.streampolltest.poll_decl ()!();
+    decl:.streampolltest.poll_decl[()!()];
     decl[`poll;`start_cursor]:`now;
     .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};decl;"*start_cursor must be functions";"a step, like the others"]};
 

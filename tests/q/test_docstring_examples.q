@@ -227,7 +227,7 @@ classify:{[r]
     if[(r 3) like "throws*"; :$[first @[{(1b;value x)};r 2;{(0b;x)}]; `mismatch; `pass]];
     ev:@[{(1b;value x)};r 2;{(0b;x)}];
     if[not ev 0; :`error];
-    forms:distinct (r 3; strip_gloss r 3);
+    forms:distinct (r 3; strip_gloss[r 3]);
     if[any matches[ev 1] each forms; :`pass];
     / Not a value at all: neither form parses, so this is prose after the
     / arrow rather than a claim that can be checked.
@@ -300,8 +300,8 @@ test_assertions_are_found_at_all:{[t]
 / data.q - "...while their own @eg named `pqModule`." - became an example
 / whose code was "named `pqModule`.".
 test_prose_mentioning_eg_is_not_an_example:{[t]
-    .qunit.assertEquals[is_tag "/ while their own @eg named `pqModule`.";0b;"prose is not a tag"];
-    .qunit.assertEquals[is_tag "/ @eg .qfwd.fwd_cont[1.1;0.02;0.01;0.5]";1b;"the tag is"]};
+    .qunit.assertEquals[is_tag["/ while their own @eg named `pqModule`."];0b;"prose is not a tag"];
+    .qunit.assertEquals[is_tag["/ @eg .qfwd.fwd_cont[1.1;0.02;0.01;0.5]"];1b;"the tag is"]};
 
 / Reading the tag line alone cut multi-line examples off mid-bracket, so
 / they failed to parse and were reported as broken rather than half-read.
@@ -313,15 +313,15 @@ test_a_multi_line_example_is_read_whole:{[t]
     .qunit.assertEquals[r 2;".qetl.log.info[`w;\"msg\"; `a`b!(1;2)]";"both lines, joined, and nothing after"]};
 
 test_a_tag_line_is_not_a_continuation:{[t]
-    .qunit.assertEquals[is_continuation "/ @return the total";0b;"a following tag ends the example"];
-    .qunit.assertEquals[is_continuation "/ .";0b;"a paragraph break ends it"];
-    .qunit.assertEquals[is_continuation "/   ready:x where mask;";1b;"an indented comment continues it"]};
+    .qunit.assertEquals[is_continuation["/ @return the total"];0b;"a following tag ends the example"];
+    .qunit.assertEquals[is_continuation["/ ."];0b;"a paragraph break ends it"];
+    .qunit.assertEquals[is_continuation["/   ready:x where mask;"];1b;"an indented comment continues it"]};
 
 / `-> throws` documents a refusal. It was scored as prose, so an example
 / documenting a guard went on passing after the guard was deleted.
 test_a_documented_throw_passes_only_by_throwing:{[t]
-    .qunit.assertEquals[classify ("f";1;"'\"boom\"";"throws");`pass;"it threw, as documented"];
-    .qunit.assertEquals[classify ("f";1;"1+1";"throws");`mismatch;"it did not, which is now a failure"]};
+    .qunit.assertEquals[classify[("f";1;"'\"boom\"";"throws")];`pass;"it threw, as documented"];
+    .qunit.assertEquals[classify[("f";1;"1+1";"throws")];`mismatch;"it did not, which is now a failure"]};
 
 / Every allowance has to name an example that exists - the full two-sided
 / check (listed but runs) needs a separate process, in run_examples.q.

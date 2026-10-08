@@ -31,8 +31,8 @@ uqf_names:`INF`WARN`ERR!`INFO`WARNING`ERROR
 / Private: a level as it is written. A name not in the map passes through.
 uqf_level:{[level] level^uqf_names level}
 
-format:{[f;loglevel;proctype;proc;id;message] f[uqf_level loglevel;proctype;proc;id;message]}[format]
-publish:{[f;loglevel;proctype;proc;id;message] f[uqf_level loglevel;proctype;proc;id;message]}[publish]
+format:{[f;loglevel;proctype;proc;id;message] f[uqf_level[loglevel];proctype;proc;id;message]}[format]
+publish:{[f;loglevel;proctype;proc;id;message] f[uqf_level[loglevel];proctype;proc;id;message]}[publish]
 
 / publish checks pubmap with the name it is given, now the renamed one, so the
 / renamed names route exactly as TorQ routes the originals.

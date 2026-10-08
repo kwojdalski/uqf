@@ -39,7 +39,7 @@ reset:{[]
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey 0#.qpipe.job.fx_positions.desk_book;
     `.qpipe.job.fx_positions.limits set 0#.qpipe.job.fx_positions.limits;
     `.qpipe.job.fx_positions.alerts set .qlimit.no_alerts[];
-    {.qetl.job.stream.wire[x;.sjtest.recorder x]} each .qetl.job.stream.defined[];
+    {.qetl.job.stream.wire[x;.sjtest.recorder[x]]} each .qetl.job.stream.defined[];
     }
 
 / The rows of the last publication. The `rows` column holds each batch as
@@ -83,7 +83,7 @@ peer_reads_at_load:{[dir]
       }[dir] each .testutil.etl_declaration_names dir}
 
 test_no_job_reads_a_peer_job_at_load:{[t]
-    .qunit.assertEquals[peer_reads_at_load "src/etl/streaming";();
+    .qunit.assertEquals[peer_reads_at_load["src/etl/streaming"];();
         "a job's load-time code reads the plant's schemas, never another job's namespace"]};
 
 / The jobs src/ registered, taken as this file LOADS rather than when a test
@@ -289,12 +289,12 @@ columns_are_lists:{[batch]
 test_every_feed_publishes_columns_that_are_lists:{[t]
     / Invariant 3, the one that actually bites: `enlist` omitted from a row
     / builder is invisible until a plant takes the row count from it.
-    bad:();
+    `.sjtest.bad set ();
     {[job]
         reset[];
         (.qetl.job.stream.def[job]`on_timer)[];
         {[job;cell]
-            problem:.sjtest.columns_are_lists cell;
+            problem:.sjtest.columns_are_lists[cell];
             if[count problem; `.sjtest.bad set .sjtest.bad,enlist string[job],": ",problem]
           }[job] each first each exec rows from .sjtest.published
       } each feeds[];
@@ -305,7 +305,7 @@ test_no_feed_sends_its_own_time:{[t]
     / refusing it (#266), so a feed that sends one is silently corrected
     / and would never be caught at runtime. That makes this the invariant
     / with the least live protection, not the most.
-    bad:();
+    `.sjtest.bad set ();
     {[job]
         reset[];
         (.qetl.job.stream.def[job]`on_timer)[];
@@ -324,7 +324,7 @@ test_no_feed_sends_its_own_time:{[t]
 test_no_feed_publishes_a_keyed_table:{[t]
     / Invariant 2. A plant appends; upserting by key drops the ticks that
     / make a log a log.
-    bad:();
+    `.sjtest.bad set ();
     {[job]
         reset[];
         (.qetl.job.stream.def[job]`on_timer)[];
@@ -336,7 +336,7 @@ test_no_feed_publishes_a_keyed_table:{[t]
 
 test_the_invariant_check_catches_an_atom_column:{[t]
     / The check must fail on the shape it exists for, or it is decoration.
-    .qunit.assertEquals[.sjtest.columns_are_lists (enlist `EURUSD;enlist 1.085);"";
+    .qunit.assertEquals[.sjtest.columns_are_lists[(enlist `EURUSD;enlist 1.085)];"";
         "one-element vectors are fine"];
     .qunit.assertTrue[0<count .sjtest.columns_are_lists (`EURUSD;1.085);
         "bare atoms are caught"];
@@ -378,7 +378,7 @@ test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
     reset[];
     .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qpipe.job.demo_markout.score_ready[d 1];
+    .qpipe.job.demo_markout.score_ready[d[1]];
     .qunit.assertEquals[(count .sjtest.published;count .qpipe.job.demo_markout.pending);(0;1);
         "a fill younger than the longest horizon is neither scored nor dropped"]};
 
@@ -386,9 +386,9 @@ test_markout_scores_and_evicts_a_ready_fill:{[t]
     reset[];
     .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:d 1 10; sym:`EURUSD`EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:d[1 10]; sym:`EURUSD`EURUSD;
         bid:1.1004 1.1009; ask:1.1006 1.1011)];
-    .qpipe.job.demo_markout.score_ready[d 20];
+    .qpipe.job.demo_markout.score_ready[d[20]];
     out:last_rows[];
     .qunit.assertEquals[(count .sjtest.published;count out;count .qpipe.job.demo_markout.pending);(1;2;0);
         "a fill past its longest horizon is scored at both horizons, published once, and evicted"]};
@@ -399,7 +399,7 @@ test_markout_publishes_the_execution_quality_table:{[t]
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
-    .qpipe.job.demo_markout.score_ready[d 20];
+    .qpipe.job.demo_markout.score_ready[d[20]];
     .qunit.assertEquals[first exec tbl from .sjtest.published;`demo_execution_quality;
         "the rows are published onto the table the job declares"]};
 
@@ -413,7 +413,7 @@ test_markout_keeps_the_batch_when_publishing_throws:{[t]
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
-    @[{.qpipe.job.demo_markout.score_ready x};d 20;{x}];
+    @[{.qpipe.job.demo_markout.score_ready x};d[20];{x}];
     .qunit.assertEquals[count .qpipe.job.demo_markout.pending;1;
         "a failed publish leaves the fill buffered for the next tick"]};
 
@@ -426,16 +426,16 @@ quote_row:{[ts;sym;bid;ask]
 
 test_cross_mirrors_its_quotes:{[t]
     reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`EURUSD;1.1;1.1002]];
     .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;1;"the batch lands in the mirror"]};
 
 test_cross_reprices_a_pair_it_can_chain:{[t]
     / EURUSD and USDJPY quoted -> EURJPY is buildable; the other three
     / declared crosses are not, and are left out rather than published null.
     reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`EURUSD;1.1;1.1002]];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`USDJPY;150f;150.02]];
-    out:.qpipe.job.cross.reprice[d 1];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`USDJPY;150f;150.02]];
+    out:.qpipe.job.cross.reprice[d[1]];
     .qunit.assertEquals[out`sym;enlist `EURJPY;
         "only the cross whose legs are quoted comes out"]};
 
@@ -458,10 +458,10 @@ test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
     / The mirror is fed directly: on_batch reprices on its own, which would
     / spend the first warning before it could be observed.
     reset[];
-    `.qpipe.job.cross.fx_orderbook insert quote_row[d 0;`EURUSD;1.1;1.1002];
+    `.qpipe.job.cross.fx_orderbook insert quote_row[d[0];`EURUSD;1.1;1.1002];
     first_lines:logged[`cross;{.qpipe.job.cross.reprice d 1}];
     again:logged[`cross;{.qpipe.job.cross.reprice d 1}];
-    `.qpipe.job.cross.fx_orderbook insert quote_row[d 0;`USDJPY;150f;150.02];
+    `.qpipe.job.cross.fx_orderbook insert quote_row[d[0];`USDJPY;150f;150.02];
     fixed:logged[`cross;{.qpipe.job.cross.reprice d 1}];
     .qunit.assertEquals[first_lines[;0];enlist `WARNING;"a newly unpriced set warns"];
     .qunit.assertEquals[again[;0];enlist `DEBUG;"the same set again is only DEBUG"];
@@ -474,8 +474,8 @@ test_cross_accumulates_rather_than_publishing:{[t]
     / a test that saw rows on the recorder would mean the job had started
     / publishing without declaring it.
     reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`EURUSD;1.1;1.1002]];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`USDJPY;150f;150.02]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`USDJPY;150f;150.02]];
     .qunit.assertEquals[(0<count .qpipe.job.cross.crosses;count .sjtest.published);(1b;0);
         "the crosses stay in the process and nothing is published"]};
 
@@ -501,7 +501,7 @@ a_book:{[s;mid] ([] time:enlist d 0; sym:enlist s; source:enlist `UQFFX; source_
 test_posbook_marks_a_fill_against_the_last_mid:{[t]
     reset[];
     .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]];
+    .qpipe.job.posbook.on_batch[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]];
     out:last_rows[];
     .qunit.assertEquals[out[`mark_price];enlist 1.104;
         "the fill is marked to the last mid seen for its sym"]};
@@ -510,14 +510,14 @@ test_posbook_carries_the_book_between_batches:{[t]
     / The book is process state rebuilt from each batch's output - the one
     / thing a transform test cannot check, because the transform is pure.
     reset[];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d 1;`EURUSD;-1;1.105;4e5]];
+    .qpipe.job.posbook.on_batch[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]];
+    .qpipe.job.posbook.on_batch[`executions;an_execution[d[1];`EURUSD;-1;1.105;4e5]];
     .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 6e5;
         "the second batch applies to the book the first one left"]};
 
 test_posbook_publishes_one_row_per_fill:{[t]
     reset[];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6],an_execution[d 1;`USDJPY;-1;150f;1e6]];
+    .qpipe.job.posbook.on_batch[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6],an_execution[d[1];`USDJPY;-1;150f;1e6]];
     .qunit.assertEquals[count last_rows[];2;
         "every fill in the batch produces a position row"]};
 
@@ -770,12 +770,12 @@ fx_fill:{[s;side;price;size]
 / A market_data mapping that went back to reading `time` would produce a
 / book dated d 0 instead of d[0]-0D00:00:02, and say so here.
 crypto_book_row:{[s;bid;ask]
-    ([] time:enlist d 0; source_time:enlist (d 0)-0D00:00:02; venue:enlist `binance_spot; sym:enlist s;
+    ([] time:enlist d 0; source_time:enlist (d[0])-0D00:00:02; venue:enlist `binance_spot; sym:enlist s;
         bid_prices:enlist bid; bid_sizes:enlist 3#0.5; ask_prices:enlist ask; ask_sizes:enlist 3#0.5)}
 
 / Deliver a normalizer's published rows to posbook the way the plant would:
 / as a table with `time` stamped in front.
-to_posbook:{[t;x] .qpipe.job.posbook.on_batch[t;`time xcols update time:.sjtest.d 0 from x]; count x}
+to_posbook:{[t;x] .qpipe.job.posbook.on_batch[t;`time xcols update time:.sjtest.d[0] from x]; count x}
 
 test_the_executions_normalizer_spells_both_fill_tables_one_way:{[t]
     reset[];
@@ -824,7 +824,7 @@ test_the_mock_reaches_posbook_through_both_normalizers:{[t]
     / The mock's rows, delivered the way the plant would deliver them, run
     / through executions and market_data and land in the one book.
     reset[];
-    as_table:{[cols_after_time;r] update time:.sjtest.d 0 from flip cols_after_time!r};
+    as_table:{[cols_after_time;r] update time:.sjtest.d[0] from flip cols_after_time!r};
     .qetl.job.stream.wire[`crypto_mock;{[as_table;tbl;r]
         norm:$[tbl=`crypto_book;`market_data;`executions];
         .sjtest.to_posbook[norm;.qetl.job.stream.normalizer.normalize[norm;tbl;`time xcols as_table[
@@ -1037,7 +1037,7 @@ test_fresh_breaches_is_decidable_without_a_timer:{[t]
 
 / Two books each long 600k EURUSD - 1.2mm across the desk.
 two_books:{[]
-    ([] time:d 1 2; order_id:1 2; sym:`EURUSD`EURUSD; book:`london`newyork;
+    ([] time:d[1 2]; order_id:1 2; sym:`EURUSD`EURUSD; book:`london`newyork;
         product:`spot`spot; side:1 1; size:600000 600000f; price:1.0850 1.0850;
         order_status:`filled`filled)}
 
@@ -1092,14 +1092,14 @@ test_a_replaying_job_rebuilds_its_state_without_publishing_it_again:{[t]
     reset[];
     / posbook marks to market_data's level-0 mid since #703 (no marks normalizer)
     replayed:((`market_data;a_book[`EURUSD;1.104]);
-         (`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]);
-         (`executions;an_execution[d 1;`EURUSD;1;1.11;1e6]));
+         (`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]);
+         (`executions;an_execution[d[1];`EURUSD;1;1.11;1e6]));
     .qetl.job.stream.start[`posbook;fake_transport[`posbook;replayed]];
     .qunit.assertEquals[count .sjtest.published;0;"what the replay recomputed was published before the restart"];
     .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 2e6;"the book is back"];
     .qunit.assertEquals[(.sjtest.started`replay;all .sjtest.started`seen_replaying;.qetl.job.stream.replaying);(1b;1b;0b);
         "replay was asked for, `replaying` was set throughout it, and cleared after"];
-    .sjtest.live[`executions;an_execution[d 2;`EURUSD;-1;1.12;5e5]];
+    .sjtest.live[`executions;an_execution[d[2];`EURUSD;-1;1.12;5e5]];
     .qunit.assertEquals[exec qty from last_rows[];enlist 1.5e6;
         "the first live fill builds on the rebuilt book - not -500k from flat"]};
 
@@ -1115,7 +1115,7 @@ test_publish_is_wired_before_the_subscription_delivers:{[t]
     reset[];
     .qpipe.job.posbook.publish:.qetl.job.stream.unwired `posbook;
     .qetl.job.stream.start[`posbook;fake_transport[`posbook;()]];
-    .sjtest.live[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]];
+    .sjtest.live[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]];
     .qunit.assertEquals[count .sjtest.published;1;"the live batch published through the transport"]};
 
 test_a_transport_missing_a_step_is_refused:{[t]

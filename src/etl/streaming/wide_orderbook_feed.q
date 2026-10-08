@@ -48,7 +48,7 @@ tick_rows:{[mids]
 / Walk every pair's mid, then publish the tick built from it.
 on_timer:{[]
     `.qpipe.job.wide_orderbook_feed.spot set .qsynth.drift_one each .qpipe.job.wide_orderbook_feed.spot;
-    .qpipe.job.wide_orderbook_feed.publish[`wide_orderbook;.qpipe.job.wide_orderbook_feed.tick_rows .qpipe.job.wide_orderbook_feed.spot];
+    .qpipe.job.wide_orderbook_feed.publish[`wide_orderbook;.qpipe.job.wide_orderbook_feed.tick_rows[.qpipe.job.wide_orderbook_feed.spot]];
     }
 
 \d .

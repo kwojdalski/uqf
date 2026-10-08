@@ -14,7 +14,7 @@
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
 spec_for:{[version;from_n;to_n]
-    `source_version`range_from`range_to!(version;.duckdb_dealsbftest.d from_n;.duckdb_dealsbftest.d to_n)}
+    `source_version`range_from`range_to!(version;.duckdb_dealsbftest.d[from_n];.duckdb_dealsbftest.d[to_n])}
 
 / What KX's ODBC client returns for sql_for's statement: epoch_ns(deal_time)
 / as a long, the text columns as strings.
@@ -52,17 +52,17 @@ test_a_bound_keeps_its_nanoseconds:{[t]
         "a long through .qetl.io.odbc.literal, because its timestamp form drops the sub-second part"]};
 
 test_the_window_is_half_open:{[t]
-    sql:.qpipe.source.duckdb_deals.sql_for[.duckdb_dealsbftest.d 1;.duckdb_dealsbftest.d 2];
+    sql:.qpipe.source.duckdb_deals.sql_for[.duckdb_dealsbftest.d[1];.duckdb_dealsbftest.d[2]];
     .qunit.assertTrue[sql like "* WHERE deal_time >= make_timestamp_ns(1789084800000000000) AND deal_time < make_timestamp_ns(1789171200000000000) *";
         ">= the lower bound and < the upper, so a deal on a boundary is fetched once"]};
 
 test_a_window_is_ordered:{[t]
-    sql:.qpipe.source.duckdb_deals.sql_for[.duckdb_dealsbftest.d 1;.duckdb_dealsbftest.d 2];
+    sql:.qpipe.source.duckdb_deals.sql_for[.duckdb_dealsbftest.d[1];.duckdb_dealsbftest.d[2]];
     .qunit.assertTrue[sql like "* ORDER BY deal_time, deal_id";
         "the same window is the same table on every fetch"]};
 
 test_the_select_list_is_the_contract_in_order:{[t]
-    sql:.qpipe.source.duckdb_deals.sql_for[.duckdb_dealsbftest.d 1;.duckdb_dealsbftest.d 2];
+    sql:.qpipe.source.duckdb_deals.sql_for[.duckdb_dealsbftest.d[1];.duckdb_dealsbftest.d[2]];
     .qunit.assertTrue[sql like "SELECT epoch_ns(deal_time) AS deal_time, deal_id, sym, side, notional, rate FROM deals *";
         "deal_time read as epoch nanoseconds - the driver would return a millisecond datetime"]};
 
@@ -123,7 +123,7 @@ test_a_full_run_lands_every_fixture_deal_once:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qpipe.job.duckdb_deals_backfill.init[.duckdb_dealsbftest.spec_for[`v1;1;6]];
     .qpipe.job.duckdb_deals_backfill.run[];
-    .qunit.assertTrue[.qetl.coverage.is_covered[`duckdb_deals;`;`v1;.z.p;.duckdb_dealsbftest.d 1;.duckdb_dealsbftest.d 6];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`duckdb_deals;`;`v1;.z.p;.duckdb_dealsbftest.d[1];.duckdb_dealsbftest.d[6]];
         "the five windows compose into the requested range"]};
 
 test_a_second_run_is_idle:{[t]

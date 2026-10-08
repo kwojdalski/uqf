@@ -900,7 +900,7 @@ require_odd_lot_threshold:{[fn_name;threshold]
 / @eg .qmicro.odd_lot_trade_ratio[tape;1e6]
 odd_lot_trade_ratio:{[tape;threshold]
     require_odd_lot_threshold[`odd_lot_trade_ratio;threshold];
-    require_tape tape;
+    require_tape[tape];
     sizes:exec size from tape where action=`trade;
     if[0=count sizes; :0n];
     (sum sizes<threshold)%count sizes};
@@ -919,7 +919,7 @@ odd_lot_trade_ratio:{[tape;threshold]
 / @eg .qmicro.odd_lot_imbalance[tape;1e6]
 odd_lot_imbalance:{[tape;threshold]
     require_odd_lot_threshold[`odd_lot_imbalance;threshold];
-    require_tape tape;
+    require_tape[tape];
     odd:select side, size from tape where action=`trade, size<threshold;
     total:sum odd`size;
     if[0=total; :0n];
@@ -996,7 +996,7 @@ rolling_return_variance:{[quotes;target_sym;window]
     log_mid:log mid_price[sub`bid_prices;sub`ask_prices];
     rets:@[deltas log_mid;0;:;0n];
     n:count rets;
-    var_at:{[rets;window;i] $[i<window; 0n; window_variance rets (1+i-window)+til window]};
+    var_at:{[rets;window;i] $[i<window; 0n; window_variance[rets (1+i-window)+til window]]};
     var_at[rets;window;] each til n}
 
 / Private: a stream's configuration with defaults filled in, refused when
@@ -1057,7 +1057,7 @@ stream_init:{[metrics;config]
     if[count bad:m except stream_metrics;
         '"stream_init: unknown metric(s) ",(", " sv string bad)," - expected some of ",", " sv string stream_metrics];
     `version`metrics`config`quotes`trades`dropped!(
-        stream_version;distinct m;stream_config config;quote_states0[];trade_states0[];0)}
+        stream_version;distinct m;stream_config[config];quote_states0[];trade_states0[];0)}
 
 / Private: the late rows of one sym's slice, by its last processed time.
 / @private
@@ -1100,7 +1100,7 @@ stream_quotes_one:{[st;sub;window]
         i:first_row+k;
         if[i<window; :0n];
         pos:offset+k;
-        window_variance ret_hist (1+pos-window)+til window};
+        window_variance[ret_hist (1+pos-window)+til window]};
     variance:var_at[ret_hist;window;offset;first_row;] each til n;
     keep:neg window-1;
     new_st:`rows`time`bid_px`bid_sz`ask_px`ask_sz`mid`ofi_tail`ret_tail`rolling_ofi`return_variance!(
@@ -1169,7 +1169,7 @@ stream_update:{[state;batch;config]
     if[not 99h=type state; '"stream_update: state must come from stream_init or stream_update"];
     if[not (state`version)~stream_version;
         '"stream_update: state is version ",(.Q.s1 state`version),", this code reads version ",string stream_version];
-    cfg:stream_config config;
+    cfg:stream_config[config];
     if[not cfg~state`config;
         '"stream_update: config differs from the one this stream started with - a changed window would mix two metrics in one state"];
     if[not 99h=type batch; '"stream_update: batch must be a dict of `quotes and/or `tape tables"];
@@ -1187,7 +1187,7 @@ stream_update:{[state;batch;config]
         q_out:$[98h=type r 2; (`row`sym`time,quote_cols)#r 2; r 2]];
     if[`tape in key batch;
         if[not `signed_trade_flow in metrics; '"stream_update: batch carries a tape but signed_trade_flow was not chosen at stream_init"];
-        require_tape batch`tape;
+        require_tape[batch`tape];
         trades:select from batch`tape where action=`trade;
         r:stream_side["trade";trades;state`trades;trade_state0;cfg;stream_trades_one];
         state[`trades]:r 0;

@@ -95,4 +95,4 @@ transport:{[job]
 / Every plant subscriber needs these at ROOT - see .qtorq's own header.
 .qtorq.install_period_handlers[];
 
-{[job] .qetl.job.stream.start[job;.qproc.stream.transport job]} .qproc.stream.which_job[];
+{[job] .qetl.job.stream.start[job;.qproc.stream.transport[job]]} .qproc.stream.which_job[];
