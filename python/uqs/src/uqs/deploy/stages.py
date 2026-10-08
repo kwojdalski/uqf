@@ -83,6 +83,11 @@ class Report:
     extra_processes: list[str] = field(default_factory=list)
     bundles: dict[str, dict] = field(default_factory=dict)
     live: bool = False
+    #: an upgrade's outage (#871): when the previous release's processes began
+    #: to stop, when the new ones verified, and the seconds between. None
+    #: when nothing was replaced.
+    downtime: dict | None = None
+
     #: --soak's verdict and duration, and each streaming job's, when it ran (#869)
     soak: dict | None = None
 
