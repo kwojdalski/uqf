@@ -32,11 +32,10 @@
 
 / ------------------------------------------------------------- THE SHAPES
 
-/ The horizons each fill is scored at. Here rather than in the runner,
-/ because they decide what the transform outputs; the timer body reads
-/ max_horizon to decide when a fill is old enough to score.
-horizons:0D00:00:01 0D00:00:10
-max_horizon:max horizons
+/ The horizons, and the scoring itself, live in the shared transform
+/ (src/etl/transforms/demo_markouts.q, #884): hdb_demo_markouts_backfill
+/ re-derives this job's rows and replaces them, so the two must compute
+/ them one way. The timer reads max_horizon from there.
 
 trades:.qetl.plant.shape `trades
 / `quotes` is the transform's NAME for its quote input, not the plant table
@@ -46,23 +45,14 @@ demo_execution_quality:.qetl.plant.published `demo_execution_quality
 
 / ---------------------------------------------------------- THE TRANSFORM
 
-/ Score each fill's post-trade markout at every horizon, against the mid of
-/ the latest quote at or before trade_time+horizon.
-/ .
-/ A fill whose horizon quote never arrived gets a null ref_price and
-/ markout_pips rather than being dropped, so a gap shows in
-/ demo_execution_quality instead of vanishing.
-/ .
-/ The empty guard is not tidiness: .qexec.markout_at_horizons throws `type`
-/ on zero trades. The job never reached it because its timer returned early
-/ on an empty buffer - the transform's empty-input check found it.
+/ Score each fill at every horizon with the shared transform, published
+/ WITHOUT `time`: the plant stamps receipt time (invariant 1). That is the
+/ only thing this job adapts - its twin writes trade_time+horizon instead.
 / @param trades fills, as the batch handler buffers them
 / @param quotes quote ticks, as the batch handler mirrors them
 / @return one row per fill per horizon, in fill order then horizon order
 score_markouts:{[trades;quotes]
-    if[0=count trades; :.qpipe.job.demo_markout.demo_execution_quality];
-    mids:select sym, time, mid:(bid+ask)%2 from quotes;
-    scored:.qexec.markout_at_horizons[trades;mids;.qpipe.job.demo_markout.horizons];
+    scored:.qpipe.transform.demo_markouts.score[trades;quotes];
     select sym, trade_time, horizon, trade_price, ref_price, markout_pips from scored}
 
 / --------------------------------------------------------------- THE JOB
@@ -118,7 +108,7 @@ on_batch:{[t;x]
 / @return nothing
 score_ready:{[now]
     if[0=count .qpipe.job.demo_markout.pending; :()];
-    mask:.qpipe.job.demo_markout.pending[`time]<=now-.qpipe.job.demo_markout.max_horizon;
+    mask:.qpipe.job.demo_markout.pending[`time]<=now-.qpipe.transform.demo_markouts.max_horizon;
     ready:.qpipe.job.demo_markout.pending where mask;
     if[0=count ready; :()];
     out:.qetl.transform.apply[`demo_execution_quality;`trades`quotes!(ready;.qpipe.job.demo_markout.quote_hist)];

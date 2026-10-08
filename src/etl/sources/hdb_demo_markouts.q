@@ -89,7 +89,7 @@ query:{[h;range_from;range_to]
         inwin:select time, sym, bid, ask from `quote
             where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts, sym in syms;
         `time xasc before,inwin
-      }[distinct deals`sym;lookback];range_from;range_to+max .qpipe.job.demo_markout.horizons];
+      }[distinct deals`sym;lookback];range_from;range_to+.qpipe.transform.demo_markouts.max_horizon];
     `trades`quote!(deals;quotes)}
 
 / Four fills on 2026.09.17: EURUSD both ways, a USDJPY buy, and a GBPUSD

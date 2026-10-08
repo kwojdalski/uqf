@@ -2,7 +2,8 @@
 / .
 / The bounded counterpart of the live markout job: for each window, the
 / hdb_demo_markouts source reads the HDB's fills and quotes, this worker's
-/ transform scores them with the live job's own function and horizons, and
+/ transform scores them with the transform the live job applies
+/ (src/etl/transforms/demo_markouts.q, #884), and
 / the rows land in the SAME `demo_execution_quality` table the live job
 / feeds. The target key is (sym;trade_time;horizon), so writing a window the
 / live job also scored replaces those rows rather than counting the fills
@@ -12,20 +13,15 @@
 
 \d .qpipe.job.hdb_demo_markouts_backfill
 
-/ Score fills against quotes at the live job's horizons - the same function,
-/ at the same horizons, so a fill scored both ways scores identically.
+/ Score fills against quotes with the shared transform the live job uses,
+/ so a fill scored both ways scores identically - tests/q/test_twins.q
+/ holds the two to each other. Kept: `time`, trade_time+horizon, which the
+/ live job leaves for the plant to stamp; a backfill has no receipt time.
 / @param fill_rows rows of the HDB's trades: time sym side trade_price pip_factor
 / @param quotes rows of the HDB's quote: time sym bid ask
 / @return one row per fill per horizon, in demo_execution_quality's columns
 / @eg count .qpipe.job.hdb_demo_markouts_backfill.score[.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[]] -> 8
-score:{[fill_rows;quotes]
-    shape:.qetl.plant.shape `demo_execution_quality;
-    / No fills, no markouts, whatever the quotes hold.
-    if[0=count fill_rows; :0#shape];
-    out:.qexec.markout_at_horizons[fill_rows;
-        select sym, time, mid:0.5*bid+ask from quotes;
-        .qpipe.job.demo_markout.horizons];
-    cols[shape] xcols out}
+score:{[fill_rows;quotes] .qpipe.transform.demo_markouts.score[fill_rows;quotes]}
 
 / A markout is missing only where no quote preceded the horizon - kept, as
 / the live job keeps it, so the gap shows. Anything non-finite is broken.

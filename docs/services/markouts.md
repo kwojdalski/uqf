@@ -24,9 +24,11 @@ markout is `side × pip_factor × (ref_price − trade_price)`, in pips: positiv
 means the market moved in your favour after the fill.
 
 Both jobs use the same function and the same horizons:
-`.qexec.markout_at_horizons`, with `.qpipe.job.demo_markout.horizons`. The
-backfill reads the horizons at run time, so changing them in `demo_markout.q`
-changes both jobs, and a fill scored by both comes out identical.
+`.qexec.markout_at_horizons`, through `.qpipe.transform.demo_markouts.score`
+(one function both jobs call), with `.qpipe.transform.demo_markouts.horizons`.
+The backfill reads the horizons at run time, so changing them in
+`demo_markout.q` changes both jobs, and a fill scored by both comes out
+identical.
 
 A fill with no quote after it keeps a row with a null `ref_price` and
 `markout_pips`, rather than being dropped, so the gap shows.
