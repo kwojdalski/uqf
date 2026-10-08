@@ -36,6 +36,8 @@
 / not, and do not.
 
 \l src/init.q
+/ Only the -job's declarations and what they reach (#902); all of them without one.
+if[`job in key .Q.opt .z.x; .qetl.load.only:`$(.Q.opt .z.x)`job];
 \l src/etl/init.q
 
 \d .qproc.standalone

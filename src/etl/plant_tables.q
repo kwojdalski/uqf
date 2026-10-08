@@ -55,7 +55,8 @@ names:{[] (key `.qetl.plant) where 98h=type each get each ` sv' `.qetl.plant,'ke
 / @eg cols .qetl.plant.schema `quote
 schema:{[t]
     if[not t in names[];
-        '"plant: no table ",string[t]," - define it in src/etl/plant_tables.q, where every plant table's schema is written"];
+        '"plant: no table ",string[t]," - neither src/etl/plant_tables.q nor the starter-pack schema ",
+            vendored_path," defines it"];
     0#get ` sv `.qetl.plant,t}
 
 / A plant table's shape as a job holds it: the schema without its storage
@@ -85,7 +86,8 @@ published:{[t] (cols[s] except `time)#s:shape t}
 columns:{[t;cs]
     s:shape t;
     if[count bad:cs where not cs in cols s;
-        '"plant: ",string[t]," carries no ",", " sv string bad];
+        '"plant: ",string[t]," carries no ",(", " sv string bad)," - its schema is ",
+            $[t in vendored; vendored_path; "src/etl/plant_tables.q"]];
     cs#s}
 
 / ------------------------------------------------------ NESTED COLUMNS
@@ -209,8 +211,11 @@ adopt_vendored:{[path]
 / The starter pack is $TORQAPPHOME's when that is set - uqs sets it for every
 / process it starts, and a deployment points it at an existing install that
 / the release does not ship (#773) - and the vendored copy otherwise.
-vendored:adopt_vendored $[count getenv`TORQAPPHOME; getenv[`TORQAPPHOME],"/database.q";
+/ vendored_path is kept so an error can name the schema a table was missing
+/ from: on a deployment that is a managed install's, not this tree's (#902).
+vendored_path:$[count getenv`TORQAPPHOME; getenv[`TORQAPPHOME],"/database.q";
     "lib/torq-finance-starter-pack/database.q"];
+vendored:adopt_vendored vendored_path;
 
 / This tree's own plant tables: every one except the vendored three.
 / @return the table names

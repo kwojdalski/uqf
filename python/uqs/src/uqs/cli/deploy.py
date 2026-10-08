@@ -282,6 +282,22 @@ def push(
             help="Whose GitHub releases a tag ARTIFACT names; default: this checkout's origin",
         ),
     ] = None,
+    soak: Annotated[
+        int | None,
+        typer.Option(
+            "--soak",
+            metavar="SECONDS",
+            help="After verify, let data flow this long; then a streaming job that is "
+            "failing, or never beat, rolls the deployment back before activation",
+        ),
+    ] = None,
+    break_lock: Annotated[
+        bool,
+        typer.Option(
+            "--break-lock",
+            help="Remove a deploy lock whose holder stopped beating; refused while it beats",
+        ),
+    ] = False,
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())

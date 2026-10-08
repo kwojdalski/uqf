@@ -3,6 +3,7 @@ raw table, and the q job that reshapes it - written, found, and removed."""
 
 from __future__ import annotations
 
+import ast
 import shutil
 import sys
 import types
@@ -13,10 +14,10 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.external import feeds
-from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
+from uqs.paths import CATALOG_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
-from uqs.scaffold.external import external_feed, external_files
+from uqs.scaffold.external import DEPENDENCIES_FILE, external_feed, external_files, with_producer
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.remove import plan_removal
 
@@ -105,7 +106,14 @@ def test_raw_table_is_refused_on_another_kind_and_required_on_external():
 def tree(tmp_path: Path) -> Path:
     shutil.copytree(UQF_ROOT / "src", tmp_path / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", tmp_path / "scripts" / "processes")
-    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, PROFILES_FILE, STACK_PAGE, SHOWCASE_PAGE):
+    for rel in (
+        RUN_TESTS_FILE,
+        STACK_TABLES_TEST,
+        PROFILES_FILE,
+        STACK_PAGE,
+        SHOWCASE_PAGE,
+        DEPENDENCIES_FILE,
+    ):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, tmp_path / rel)
     for rel in ("python/uqs/src/uqs/external", "python/uqs/tests"):
@@ -114,7 +122,15 @@ def tree(tmp_path: Path) -> Path:
 
 
 def test_scaffold_then_remove_leaves_the_tree_as_it_was(tree):
-    watched = [TABLES_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, STACK_PAGE, SHOWCASE_PAGE]
+    watched = [
+        TABLES_FILE,
+        RUN_TESTS_FILE,
+        STACK_TABLES_TEST,
+        STACK_PAGE,
+        SHOWCASE_PAGE,
+        CATALOG_FILE,
+        DEPENDENCIES_FILE,
+    ]
     before = {p: (tree / p).read_text() for p in watched}
     write.apply_plan(_plan(), tree)
     assert all((tree / f).is_file() for f in external_files("ws"))
@@ -122,4 +138,37 @@ def test_scaffold_then_remove_leaves_the_tree_as_it_was(tree):
     assert not any((tree / f).exists() for f in external_files("ws")), "the Python pair goes"
     assert not (tree / "src/etl/streaming/ws.q").exists()
     after = {p: (tree / p).read_text() for p in watched}
-    assert after == before, "both tables, the expected list and nsList restored"
+    assert after == before, "tables, lists, catalog and EXTERNAL_PRODUCERS restored"
+
+
+def _producers(text: str) -> dict[str, str]:
+    """EXTERNAL_PRODUCERS as dependencies.py's text defines it."""
+    for node in ast.parse(text).body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and getattr(node.target, "id", "") == "EXTERNAL_PRODUCERS"
+        ):
+            assert node.value is not None
+            return ast.literal_eval(node.value)
+    raise AssertionError("no EXTERNAL_PRODUCERS")
+
+
+def test_a_scaffolded_feed_names_its_raw_table_where_the_stack_looks(tree):
+    """#888: the raw table is fed from outside the stack, and the two places
+    that must say so - EXTERNAL_PRODUCERS, which `uqs start` and
+    test_dependencies read, and the catalog, which test_catalog.q reads - do,
+    without a hand edit."""
+    before = _producers((tree / DEPENDENCIES_FILE).read_text())
+    write.apply_plan(_plan(), tree)
+    after = _producers((tree / DEPENDENCIES_FILE).read_text())
+    assert after == {**before, "ws_raw": "the external ws feed (`uqs feed start ws`)"}
+    catalog = (tree / CATALOG_FILE).read_text()
+    assert ".qcat.hidden[`ws_raw]:" in catalog and ".qcat.describe[`ws_quotes]" in catalog
+
+
+def test_a_producer_goes_inside_the_dict_or_not_at_all():
+    text = (UQF_ROOT / DEPENDENCIES_FILE).read_text()
+    entry = '    "x_raw": "the external x feed (`uqs feed start x`)",\n'
+    assert _producers(with_producer(text, entry))["x_raw"].startswith("the external x feed")
+    with pytest.raises(UqsError, match="EXTERNAL_PRODUCERS"):
+        with_producer("x = 1\n", entry)

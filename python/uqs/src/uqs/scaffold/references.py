@@ -38,6 +38,7 @@ _SKIP_DIRS = {
 #: Files the removal regenerates or deliberately keeps naming the job.
 _SKIP_FILES = {
     Path("src/etl/generated/pipeline_dag.q"),
+    Path("src/etl/generated/load_plan.q"),
     Path("docs/reference/processes.md"),
     Path("scripts/processes/process_ports.csv"),
 }

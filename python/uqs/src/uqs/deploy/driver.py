@@ -10,7 +10,7 @@ from uqs.deploy import fetch
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.remote import Transport
-from uqs.deploy.selection import Selection, select_jobs, verify_args
+from uqs.deploy.selection import Selection, select_jobs, smoke_args, verify_args
 from uqs.deploy.stages import Deployment, Report
 from uqs.logger import get_logger
 from uqs.paths import repo_root
@@ -55,7 +55,9 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "
         + f"{pkg.manifest['python']['wheels']} wheels",
-        "smoke     " + f"q scripts/deploy_smoke.q (timeout {cfg.smoke_timeout}s)",
+        "smoke     "
+        + " ".join(["q scripts/deploy_smoke.q", *smoke_args(cfg.profile, sel)])
+        + f" (timeout {cfg.smoke_timeout}s)",
         "restart   " + restart,
         "ports     "
         + " ".join(
@@ -80,6 +82,14 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
                 + (f" (ODBC from {cfg.odbc_home})" if cfg.odbc_home else "")
             ]
             if cfg.live_check
+            else []
+        ),
+        *(
+            [
+                f"soak      {cfg.soak}s of data, then every started streaming job must have "
+                "beaten with no batch failing (stream_health)"
+            ]
+            if cfg.soak
             else []
         ),
         "activate  " + f"{dep.current} -> releases/{rid}",
@@ -193,10 +203,13 @@ def _run(
     try:
         log.info("transferring release {}", rid)
         release = dep.transfer(pkg, rid)
+        dep.beat()
         log.info("preparing the release environment")
         dep.prepare(release, pkg)
+        dep.beat()
         log.info("offline smoke test")
         dep.smoke(release)
+        dep.beat()
         report.checks["smoke"] = "ok"
         if previous:
             prev_profile, prev_procs, prev_extra = dep.previous_processes(previous)
@@ -211,6 +224,7 @@ def _run(
                 "stop",
                 *prev_procs,
             )
+        dep.beat()
         dep.ports_free(release)
         log.info("starting profile {}", cfg.profile)
         started = True
@@ -223,8 +237,10 @@ def _run(
             cfg.profile,
             *dep.selection.processes,
         )
+        dep.beat()
         log.info("verifying every process answers (up to {}s)", cfg.verify_timeout)
         result = dep.verify(release)
+        dep.beat()
         report.processes = result.get("processes", [])
         if not result.get("passed"):
             raise DeployError("verify", result.get("reason") or "verification failed")
@@ -232,7 +248,14 @@ def _run(
         if cfg.live_check:
             log.info("checking {} live, before activation", ", ".join(cfg.live_check))
             dep.live_check(release)
+            dep.beat()
             report.checks["live-check"] = "ok"
+        if cfg.soak:
+            log.info("soaking for {}s: every streaming job must beat, none failing", cfg.soak)
+            report.soak = dep.soak(release, [p["process"] for p in report.processes])
+            if not report.soak["passed"]:
+                raise DeployError("soak", report.soak["reason"])
+            report.checks["soak"] = "ok"
         # Recorded BEFORE activation, and fatal if it cannot be: the next
         # upgrade reads this report to know what to stop.
         report.status = "deployed"

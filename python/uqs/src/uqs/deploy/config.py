@@ -110,6 +110,12 @@ class Config:
     #: owner/name whose releases a tag ARTIFACT names; default: origin's
     release_repo: str | None = None
 
+    #: seconds to let data flow after verify, then require every started
+    #: streaming job to have beaten and none to be failing (#869); None skips it
+    soak: int | None = None
+    #: remove a deploy lock whose holder has stopped beating (#867)
+    break_lock: bool = False
+
     @property
     def data_root(self) -> str:
         return self.data_dir or f"{self.dest}/shared/data"
@@ -188,6 +194,8 @@ def make_config(
     verify_timeout: int = 180,
     allow_dirty: bool = False,
     release_repo: str | None = None,
+    soak: int | None = None,
+    break_lock: bool = False,
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
@@ -219,6 +227,8 @@ def make_config(
         r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", release_repo
     ):
         raise DeployError("arguments", f"--release-repo {release_repo!r} is not OWNER/NAME")
+    if soak is not None and soak <= 0:
+        raise DeployError("arguments", "--soak must be positive")
     path = _required_absolute("--dest", dest)
     if path == "/":
         raise DeployError("arguments", "--dest must not be /")
@@ -249,4 +259,6 @@ def make_config(
         verify_timeout=verify_timeout,
         allow_dirty=allow_dirty,
         release_repo=release_repo,
+        soak=soak,
+        break_lock=break_lock,
     )

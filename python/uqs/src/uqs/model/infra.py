@@ -74,6 +74,10 @@ ESSENTIAL_INFRA: tuple[str, ...] = (
     "tpreplay1",
 )
 
+#: Processes that start, do their one job and exit (tpreplay1, above). A
+#: readiness check must not wait for them to answer: down is them working (#902).
+ONE_SHOT: frozenset[str] = frozenset({"tpreplay1"})
+
 #: Profiles that start an infrastructure set other than CORE_INFRA, and
 #: which. Every other profile starts all of CORE_INFRA. Composed profiles take
 #: the union, so `essential,fx` is the full infrastructure `fx` needs.
