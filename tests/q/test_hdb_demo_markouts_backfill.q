@@ -45,16 +45,16 @@ tearDown_release:{[] .qpipe.job.hdb_demo_markouts_backfill.cleanup[];}
 
 test_every_fill_is_scored_at_every_live_horizon:{[t]
     f:.mbftest.scored_fixture[];
-    .qunit.assertEquals[(count f;asc distinct f`horizon);(4*count .qpipe.job.demo_markout.horizons;asc .qpipe.job.demo_markout.horizons);
+    .qunit.assertEquals[(count f;asc distinct f`horizon);(4*count .qpipe.transform.demo_markouts.horizons;asc .qpipe.transform.demo_markouts.horizons);
         "four fills, each at the live job's horizons"]};
 
-test_the_horizons_are_the_live_jobs_not_a_copy:{[t]
-    / Change the live job's horizons and the backfill follows - the two
-    / cannot drift apart.
-    keep:.qpipe.job.demo_markout.horizons;
-    .qpipe.job.demo_markout.horizons:enlist 0D00:00:01;
+test_the_horizons_are_the_shared_transforms_not_a_copy:{[t]
+    / Change the shared transform's horizons and the backfill follows - the
+    / live job reads the same ones, so the two cannot drift apart (#884).
+    keep:.qpipe.transform.demo_markouts.horizons;
+    .qpipe.transform.demo_markouts.horizons:enlist 0D00:00:01;
     n:count .mbftest.scored_fixture[];
-    .qpipe.job.demo_markout.horizons:keep;
+    .qpipe.transform.demo_markouts.horizons:keep;
     .qunit.assertEquals[n;4;"one horizon, one row per fill"]};
 
 test_a_markout_is_the_live_functions_answer:{[t]
@@ -132,7 +132,7 @@ test_a_window_sends_two_queries_reading_quotes_past_its_end:{[t]
     r:.mbftest.with_hdb {.qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;.mbftest.w 0;.mbftest.w 1]};
     .qunit.assertEquals[count .mbftest.sent;2;"one query for the fills, one for the quotes"];
     .qunit.assertEquals[.mbftest.sent 0;w;"fills over the window itself"];
-    .qunit.assertEquals[.mbftest.sent 1;(w 0;(w 1)+max .qpipe.job.demo_markout.horizons);
+    .qunit.assertEquals[.mbftest.sent 1;(w 0;(w 1)+.qpipe.transform.demo_markouts.max_horizon);
         "quotes on to the window's end plus the longest horizon"];
     .qunit.assertEquals[key r;`trades`quote;"both inputs, raw - the scoring is the transform's"];
     .qunit.assertEquals[count .mbftest.scored r;6;"the window's three fills, scored at both horizons"]};

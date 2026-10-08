@@ -878,8 +878,6 @@ qpipe.job.demo_events_backfill,run,function,1,
 qpipe.job.demo_events_backfill,source_version,value,,
 qpipe.job.demo_events_backfill,spec,function,1,
 qpipe.job.demo_markout,demo_execution_quality,table,,
-qpipe.job.demo_markout,horizons,value,,
-qpipe.job.demo_markout,max_horizon,value,,
 qpipe.job.demo_markout,now,function,1,
 qpipe.job.demo_markout,on_batch,function,2,t x
 qpipe.job.demo_markout,on_timer,function,1,
@@ -1190,6 +1188,9 @@ qpipe.transform.crypto_market_data,contract,table,,
 qpipe.transform.crypto_market_data,example_book,function,1,
 qpipe.transform.crypto_market_data,fold,function,2,batch prefix
 qpipe.transform.crypto_market_data,to_book,function,1,batch
+qpipe.transform.demo_markouts,horizons,value,,
+qpipe.transform.demo_markouts,max_horizon,value,,
+qpipe.transform.demo_markouts,score,function,2,fill_rows quotes
 qpipe.transform.eq_orderbook,book,table,,
 qpipe.transform.eq_orderbook,contract,table,,
 qpipe.transform.eq_orderbook,example_book,function,1,

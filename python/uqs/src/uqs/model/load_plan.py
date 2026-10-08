@@ -16,7 +16,8 @@ READ AS TEXT, like the registry (model/declarations.py): resolving what a
 process needs must not run the declarations whose failure this exists to
 avoid. A reference is any of
 
-  - `.qpipe.job.<name>` or `.qpipe.source.<name>`, outside a comment;
+  - `.qpipe.job.<name>`, `.qpipe.source.<name>` or `.qpipe.transform.<name>`
+    (a shared transform's namespace, #884), outside a comment;
   - `.qetl.transform.apply[`X` (and its variants), or a declared `transform`;
   - a worker's declared `source`;
 
@@ -54,8 +55,8 @@ DIRS = ("sources", "transforms", "workers", "streaming", "reactions")
 ETL = Path("src") / "etl"
 PLAN_FILE = ETL / "generated" / "load_plan.q"
 
-_NAMESPACE = re.compile(r"^\\d\s+\.qpipe\.(job|source)\.(\w+)\s*$", re.MULTILINE)
-_QPIPE_REF = re.compile(r"\.qpipe\.(job|source)\.([a-zA-Z_]\w*)")
+_NAMESPACE = re.compile(r"^\\d\s+\.qpipe\.(job|source|transform)\.(\w+)\s*$", re.MULTILINE)
+_QPIPE_REF = re.compile(r"\.qpipe\.(job|source|transform)\.([a-zA-Z_]\w*)")
 _TRANSFORM_DEF = re.compile(r"\.qetl\.transform\.define\[\s*`(\w+)")
 _TRANSFORM_USE = re.compile(r"\.qetl\.transform\.\w+\[\s*`(\w+)")
 _SOURCE_DEF = re.compile(r"\.qetl\.source\.define\[\s*`(\w+)")

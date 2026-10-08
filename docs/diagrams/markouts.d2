@@ -67,7 +67,7 @@ backfill: "BACKFILL: hdb_demo_markouts_backfill1" {
   hdb -> query: "two IPC queries,\nboth shown by --trace" { style.stroke-dash: 4 }
 }
 
-scoring: "SHARED by both - one function, one set of horizons\n.qexec.markout_at_horizons\n.qpipe.job.demo_markout.horizons = 1s, 10s\nref = mid (bid + ask) / 2 at or before trade_time + horizon" { class: shared }
+scoring: "SHARED by both - one function, one set of horizons\n.qexec.markout_at_horizons\n.qpipe.transform.demo_markouts.score\nhorizons = 1s, 10s\nref = mid (bid + ask) / 2 at or before trade_time + horizon" { class: shared }
 
 eq: "demo_execution_quality\ntime · sym · trade_time · horizon\ntrade_price · ref_price · markout_pips\n\nkeyed sym · trade_time · horizon\nsaved to hdb1 at end of day" { class: table }
 
