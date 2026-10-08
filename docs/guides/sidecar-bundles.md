@@ -1,179 +1,93 @@
 # Sidecar bundles
 
-Jobs kept outside this repository, such as a desk's own feeds and backfills,
-reach a server as a **bundle**: a versioned folder holding the jobs and the tree
-additions they need. One installer puts a bundle into a checkout
-(`uqs job install`) or into a release (`uqs deploy build --bundle`). A
-deployment then starts only the jobs you name (`uqs deploy push --jobs`).
+A **bundle** is a versioned folder of jobs kept outside this repository, plus
+the plant tables, catalog entries and process overrides they need. The same
+installer puts it into a checkout (`uqs job install`) or a release
+(`uqs deploy build --bundle`). A deployment starts only the jobs you name.
+Bundles are installed as copies, so a release runs on a clean server with no
+workstation or Git checkout behind it.
 
-A bundle does not need the workstation it came from, a Git checkout or any
-links. It is installed as copies, and a release built with it runs on a clean
-server.
-
-## What a bundle holds
+## Layout
 
 ```
 piggybank/
   bundle.json              {"name": "piggybank", "version": "1.4.0"}
-  piggybank_source.q       a source (.qetl.source.define)
-  piggybank_backfill.q     a bounded worker (.qetl.job.bounded.define)
-  piggybank_quotes.q       a streaming job (.qetl.job.stream.define)
-  tables.q                 optional: plant tables and nested-column contracts
-  catalog.q                optional: catalog descriptions of those tables
-  process_overrides.csv    optional: process.csv fields for the bundle's processes
-  test_piggybank.q         reported, never installed
+  *.q                      sources, workers and streaming jobs
+  tables.q                 optional: plant tables and nested[...] contracts
+  catalog.q                optional: .qcat.describe entries for those tables
+  process_overrides.csv    optional: procname,field,value for its own processes
 ```
 
-Each `.q` file is placed by what it declares, in `src/etl/sources`,
-`src/etl/workers` or `src/etl/streaming`, as for a plain sidecar folder. Other
-files are never read, so a `.env`, a log or a data file beside the jobs stays
-out of the tree.
+Each `.q` file is placed by what it declares, as `uqs job install` does for any
+folder. `test_*.q` and every non-`.q` file (`.env`, logs, data) stay out of the
+tree. `tables.q` takes one `name:([]...)` or `nested[...]` line per entry, and
+`catalog.q` must describe every table it defines.
 
-`bundle.json` takes `name` (lower_snake_case), `version` and an optional
-`description`. An unknown key is refused.
-
-`tables.q` holds one definition per line, in the form `src/etl/plant_tables.q`
-uses. A `nested[...]` line must follow the table it describes:
-
-```q
-/ piggybank's quotes
-pb_quote:([]time:`timestamp$();sym:`symbol$();bid_px:();ask_px:())
-nested[`pb_quote;`bid_px`ask_px!"FF"];
-```
-
-`catalog.q` must describe every table `tables.q` defines, fully qualified:
-
-```q
-.qcat.describe[`pb_quote]:
-    "one piggybank quote: five levels a side, as vectors";
-```
-
-`process_overrides.csv` may set fields only for the bundle's own streaming
-processes, and never `procname` or `port`:
-
-```
-procname,field,value
-pb_quotes1,startwithall,0
-```
-
-## Installing into a checkout
+## Install into a checkout
 
 ```bash
-uqs job install ../piggybank --dry-run    # the plan, nothing written
+uqs job install ../piggybank --dry-run   # the plan
 uqs job install ../piggybank --yes
 ```
 
-The jobs are copied into place. The table, catalog and override additions go
-into `src/etl/plant_tables.q`, `scripts/processes/uqs_catalog.q` and
-`python/uqs/process_overrides.csv`, each bundle's lines between
-`/ BEGIN bundle piggybank` and `/ END bundle piggybank`.
-`src/etl/installed_bundles.json` records the version, the revision (when the
-bundle is a Git checkout), every installed file with its sha256, the job
-identities, the tables and the overrides. The derived files are regenerated
-afterwards.
+The additions go between `/ BEGIN bundle <name>` and `/ END bundle <name>` in
+`plant_tables.q`, `uqs_catalog.q` and `process_overrides.csv`.
+`src/etl/installed_bundles.json` records what each bundle installed.
+Reinstalling is idempotent, and an upgrade replaces only the bundle's own files.
+A conflict with the tree or another bundle is refused before anything is
+written.
 
-Installing again is idempotent. The bundle's own block is replaced, not
-appended, and an unchanged bundle changes nothing. An upgrade replaces the files
-the bundle installed before, and removes those it no longer ships.
-
-Every refusal comes before anything is written:
-
-- a job file the bundle did not install, or one another bundle installed;
-- a job name the tree already declares;
-- a table the tree already defines, or a table described twice;
-- a bundle table with no catalog description;
-- an override for a process that is not the bundle's own, or one an operator
-  already set to a different value;
-- a `tables.q` line that is not a definition, `nested[...]` or a `/ ` comment. A
-  line of only `/` would open a q block comment in the tree file.
-
-`--mode symlink` is refused for a bundle.
-
-## Building a release with bundles
+## Build and deploy
 
 ```bash
-uqs deploy build \
-  --bundle ../piggybank --bundle ../marketwarehouse
-```
-
-The tracked files are copied into a staging directory, and each bundle is
-installed there by the same installer. The derived files, such as the port lock
-and the pipeline DAG, are regenerated there. The release is packaged from that
-staged tree, so the checkout is never changed. Every hash in the manifest is of
-an installed file.
-
-The manifest gains `bundles`. For each bundle it holds the version, the
-revision, the installed files, the tables, the overrides and the jobs. Each
-streaming job also has `needs`, its dependency closure: every uqf process it
-needs, itself included. Without `--bundle`, nothing is staged and the artifact
-is built as before.
-
-## Deploying selected jobs
-
-A deployment starts no sidecar job unless asked, and never assumes a profile
-includes one:
-
-```bash
-uqs deploy push dist/uqf-<release>.tar.gz \
-  --host uqf-server --dest /opt/uqf \
+uqs deploy build --bundle ../piggybank
+uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \
-  --profile essential --jobs pb_quotes,mw_quotes --live --dry-run
+  --profile essential --jobs pb_quotes --live --dry-run
 ```
 
-`--jobs` names streaming jobs from the artifact's bundles. Each job's `needs`
-starts beside the profile: `uqs start --profile essential pb_quotes1 ...`.
-`--dry-run` prints the bundles with their revisions, the selected jobs, the
-resolved process list, and the workers that are installed but not run.
+- **`--jobs`** names streaming jobs from the artifact's bundles. Each starts
+  beside the profile with the processes it depends on, and `--dry-run` prints
+  the resolved list. Without `--jobs`, no sidecar job starts.
 
-Naming a bounded worker is refused. A deployment installs workers and never runs
-them, so installing one cannot start a backfill.
+- **Workers are installed, never run.** Naming one in `--jobs` is refused. A
+  backfill is a separate, deliberate step:
 
-Verification checks the added processes like the profile's own: each must answer
-with its own name. It also checks that `stp1` carries every bundle table. It
-reads and writes no source data. A failure stops activation, and an upgrade
-rolls back to the previous release's profile and the sidecar processes it ran
-(`extra_processes` in its `deploy-report.json`), then checks those again. The
-report records `jobs`, `extra_processes`, `bundles` with their revisions, and
-`live`, never a secret.
+  ```bash
+  ssh uqf-server 'cd /opt/uqf/current && source ./deploy.env && \
+    .venv/bin/uqs backfill pb_backfill --version v1 --from 2026-09-01 --to 2026-09-02'
+  ```
 
-A backfill is its own deliberate step afterwards, from the deployed release:
+- **Verification** checks that the added processes answer as themselves and that
+  `stp1` carries the bundle tables. Failure blocks activation, and rollback
+  restores the previous release's processes.
 
-```bash
-ssh uqf-server 'cd /opt/uqf/current && source ./deploy.env && \
-  .venv/bin/uqs backfill pb_backfill --version v1 --from 2026-09-01 --to 2026-09-02'
-```
+## Credentials and ODBC
 
-## Credentials on the server
+Credentials never enter an artifact. On the server, put them in
+`<dest>/shared/config/`:
 
-Credentials never enter an artifact. `uqs deploy build` excludes `.env`,
-`*.env`, `.envrc`, keys and licences. A bundle installs only its job files and
-its three addition files.
+- `scripts/torqconfig/sources.csv`: what each source connects to, naming the
+  variable that holds any secret (`uqs config sources`);
+- `secrets.env`: the `NAME=VALUE` lines for those variables. `deploy.env`
+  sources it, and a deployment refuses it if others can read it.
 
-On the server, two files in `<dest>/shared/config/` are linked or loaded into
-every release:
+ODBC sources also need unixODBC, the source's driver and KX's `odbc.k` where q
+can load it, with `LD_LIBRARY_PATH` set on Linux (see [KX's ODBC
+client](https://code.kx.com/q/interfaces/q-client-for-odbc/)). On macOS,
+`scripts/dev/odbc_rosetta.sh setup` builds the x86_64 setup KX's library needs.
 
-- `scripts/torqconfig/sources.csv` says which source connects to what. A row
-  holds a setting and, when that setting needs a secret, the *name* of the
-  variable holding it (see `uqs config sources`).
-- `secrets.env` holds the `NAME=VALUE` lines those variables need. `deploy.env`
-  sources it, so every process `uqs` starts inherits them and nothing prints
-  them. The deployment refuses a `secrets.env` that anyone but its owner may
-  read.
+## Fixtures and real connections
 
-With `--live`, `deploy.env` exports `UQS_REQUIRE_LIVE_SOURCES=1`. A source with
-no credential is then refused, not read as its fixture. A bounded worker fails
-at init, before taking its lock or reading a row, and a polling feed publishes
-nothing. So a missing credential cannot publish fixture rows or record fixture
-windows as covered. Verification checks that every pipeline process reports
-`.qetl.source.live_required[]` as `1b`.
+- **Fixture runs.** The q suites, and any source run without a credential, read
+  the source's declared fixture. They prove the code, not the connection.
+- **`--live`.** A deployment with `--live` refuses a source with no credential
+  instead of falling back to its fixture, so fixture rows are never published as
+  real ones.
+- **Real connection check.**
+  `python3 scripts/test.py smoke --targets HOST:PORT --tables TABLE:COL,COL`
+  checks that each live source answers and its tables still have those columns.
+  It is never part of ordinary CI.
 
-Without `--live`, a source with no credential runs on its fixture, as it does in
-a demo stack. That is the explicit test mode, and it shares the deployment's
-data directory, so keep it to a test destination of its own.
-
-## What is not done
-
-- Existing data is not migrated, and no external database is connected to at
-  build or deploy time. Connections are made only when a job runs.
-- Network access and driver checks against a live source are each job's own,
-  when it connects. A deployment does not probe sources.
+Not done by a deployment: data migration, automatic backfills, or probing
+sources before a job connects.

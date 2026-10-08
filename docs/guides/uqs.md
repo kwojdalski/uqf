@@ -962,9 +962,11 @@ with the reason:
 The wizard asks **copy** or **symlink**. A copy is a snapshot the tree owns:
 edit the sidecar and install again. A symlink keeps the sidecar the source of
 truth - edits are live on the next start - but moving or deleting the sidecar
-breaks the tree. A file already in place and identical is left alone; one that
-differs is replaced only if you agree, or with `--overwrite` (`--yes` alone
-keeps it).
+breaks the tree, so it suits a development checkout only. To ship jobs to a
+server, give the folder a `bundle.json`: see [sidecar
+bundles](sidecar-bundles.md). A file already in place and identical is left
+alone; one that differs is replaced only if you agree, or with `--overwrite`
+(`--yes` alone keeps it).
 
 **Every query must be one `--trace` can see.** A polling feed or a backfill
 source that calls its handle directly, as `h(...)`, `h@...` or `h"select ..."`,

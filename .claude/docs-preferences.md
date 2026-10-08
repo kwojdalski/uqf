@@ -200,6 +200,14 @@ what is, not how future documents must be filed.
 
 ## Scope
 
+**Concise over complete.** Update what is stale and add as little as possible: a
+short operational guide with one example per workflow, linking to references
+instead of restating them. Implementation detail belongs in the code.
+
+> *2026-10-08.* Asked, for the deployment and sidecar docs (#846): "add as
+> little as possible, I don't want to have too much in docs, be concise".
+> `sidecar-bundles.md` went from 179 lines to about 90 with the same facts.
+
 **Continuous integration is ours, not the reader's.** How CI runs, which gates
 it applies and why are maintainer concerns; the documentation is for people
 running and building on the stack. How to run the tests locally belongs in the
