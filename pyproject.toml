@@ -165,4 +165,6 @@ testpaths = [
     # The repository gates' own tests, beside the gates (scripts/gates/):
     # they test no package, so they live in none (#637).
     "scripts/gates/tests",
+    # scripts/portable/'s converter, tested beside it for the same reason.
+    "scripts/portable/tests",
 ]
