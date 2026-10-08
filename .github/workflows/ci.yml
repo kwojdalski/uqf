@@ -17,7 +17,7 @@ jobs:
   checks:
     name: Repository checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       # uv run inside the hooks must use the committed resolution.
       UV_LOCKED: "true"
@@ -229,6 +229,25 @@ jobs:
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         timeout-minutes: 10
         run: UQF_PEACHQ="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
+      - name: Install what a PeachQ stack needs
+        # torq.sh needs envsubst and rlwrap (uqs's prerequisite check refuses a
+        # start without them); the PeachQ runtime's whole-stack test below
+        # starts one.
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
+        run: sudo apt-get install -y --no-install-recommends gettext-base rlwrap
+      - name: Run the Python tests that need a q, on PeachQ (blocking)
+        # Without KDB-X, every Python test that starts a q skips in the hooks
+        # above. With PeachQ as the q they run, held to
+        # python/peachq_known_gaps.txt both ways (python/conftest.py), as the
+        # q suite is to its own list: a failure not listed fails the build, and
+        # so does a listed test that passes. UQF_PEACHQ_STACK_TEST also starts
+        # a PeachQ stack from a copy of the tree (test_peachq_pipelines.py).
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
+        timeout-minutes: 10
+        env:
+          UQF_Q_IMPL: peachq
+          UQF_PEACHQ_STACK_TEST: "1"
+        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q python
 
   web:
     name: Browser application
