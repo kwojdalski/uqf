@@ -155,24 +155,43 @@ uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
 
 Each stage stops the deployment if it fails:
 
-  | Stage     | What happens                                                                                                                                                                                                                                                                                                                                                                                   |
-  | ---       | ---                                                                                                                                                                                                                                                                                                                                                                                            |
-  | artifact  | the archive matches its `.sha256`, and every member matches the checksum its manifest lists, with nothing missing or extra. This runs before anything reaches the server                                                                                                                                                                                                                       |
-  | preflight | ssh works and the destination is writable; uv, the release's Python, q (it must run a script), the TorQ trees and the launcher's tools are there; the server's OS, architecture and Python match the artifact's target; the release is not already there; the data directory exists or `--init-data` was given; another deployment there needs `--restart`; no other deployment holds the lock |
-  | transfer  | `scp` into `staging/<release>/`; the archive's sha256 is checked **on the server** before it is extracted into `releases/<release>/`                                                                                                                                                                                                                                                           |
-  | prepare   | `releases/<release>/deploy.env` (below), and a release-local `.venv` installed **offline** from the artifact's wheels: the dependencies with their locked hashes required, then `uqs` itself. `UV_OFFLINE=1` stays set, so nothing later fetches either                                                                                                                                        |
-  | smoke     | `scripts/deploy_smoke.q` loads the quant library and checks known numbers. It must print `DEPLOY_SMOKE_OK` and exit 0 within `--smoke-timeout`                                                                                                                                                                                                                                                 |
-  | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime                                                                                                                                                                                                                                                                    |
-  | ports     | nothing else listens on the profile's ports                                                                                                                                                                                                                                                                                                                                                    |
-  | start     | `uqs start --profile <profile>` from the new release                                                                                                                                                                                                                                                                                                                                           |
-  | verify    | `uqs deploy verify`: within `--verify-timeout`, every process the profile resolves to answers `.proc.procname` with its own name over q IPC. **Every pipeline process** must pass both the library check (a forward prices correctly) and the ETL check (every transform's examples pass); other processes are checked for whichever they load                                                 |
-  | report    | `deploy-report.json` is written into the release **before** activation, and a failed write fails the deployment: the next upgrade reads it to know which processes to stop                                                                                                                                                                                                                     |
-  | activate  | `current` moves to the new release in a single rename. The previous release stays where it was                                                                                                                                                                                                                                                                                                 |
+  | Stage     | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+  | ---       | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | artifact  | the archive matches its `.sha256`, and every member matches the checksum its manifest lists, with nothing missing or extra. This runs before anything reaches the server                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | preflight | ssh works and the destination is writable; uv, the release's Python, q (it must run a script), the TorQ trees and the launcher's tools are there; the server's OS, architecture and Python match the artifact's target; the release is not already there; the data directory exists or `--init-data` was given; another deployment there needs `--restart`; no other deployment holds the lock                                                                                                                                                                                                                            |
+  | transfer  | `scp` into `staging/<release>/`; the archive's sha256 is checked **on the server** before it is extracted into `releases/<release>/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+  | prepare   | `releases/<release>/deploy.env` (below), and a release-local `.venv` installed **offline** from the artifact's wheels: the dependencies with their locked hashes required, then `uqs` itself. `UV_OFFLINE=1` stays set, so nothing later fetches either                                                                                                                                                                                                                                                                                                                                                                   |
+  | smoke     | `scripts/deploy_smoke.q` loads the quant library and checks known numbers, then loads the declarations of the processes the deployment starts (theirs only) against the server's `$TORQAPPHOME/database.q`, so a job whose table that schema lacks fails here, naming the job, table and schema path. It must print `DEPLOY_SMOKE_OK` and exit 0 within `--smoke-timeout`                                                                                                                                                                                                                                                 |
+  | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+  | ports     | nothing else listens on the profile's ports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+  | start     | `uqs start --profile <profile>` from the new release                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+  | verify    | `uqs deploy verify`: within `--verify-timeout`, every process the profile resolves to, except a one-shot that exits by design (`tpreplay1`), answers `.proc.procname` with its own name over q IPC. **Every pipeline process** must pass both the library check (a forward prices correctly) and the ETL check (every transform's examples pass); other processes are checked for whichever they load                                                                                                                                                                                                                     |
+  | report    | `deploy-report.json` is written into the release **before** activation, and a failed write fails the deployment: the next upgrade reads it to know which processes to stop                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+  | activate  | `current` moves to the new release in a single rename. The previous release stays where it was                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 The tool prints a report as JSON when it finishes, and leaves it in the release
 as `deploy-report.json`. The report names the release, the source revision, each
 process and what it answered, the stage that failed if one did, and, separately,
 how the rollback went. Any unsuccessful deployment exits 1.
+
+## Soaking before activation
+
+Verification proves each process answers. It does not prove a streaming job
+processes what arrives: a job whose every batch throws still answers, and still
+verifies. `--soak SECONDS` waits that long after verification, and the live
+check, while data flows. It then reads each started streaming job's
+`stream_health` record (#832) on the server, using the release's own code:
+
+```bash
+uqs deploy push dist/uqf-<release>.tar.gz ... --profile essential --soak 120
+```
+
+A job fails the soak if it reports `failing`, or if it has written no record
+since the soak began, judged on the server's clock. Either fails the deployment
+at stage `soak`, before `current` moves, and the usual rollback runs.
+Infrastructure processes and bounded workers are not judged: neither has
+batches. The report records the soak's length, its verdict, and each job's. Make
+the soak longer than the jobs' `period`, so every job has beaten at least once.
 
 ## When something fails
 
@@ -386,6 +405,24 @@ nesting flattened blocks again wherever every name keeps its meaning (#859).
 - A single build-and-deploy command, or the Kafka and Databento feed handlers,
   which still start through `uv run`.
 
-A deployment that died while holding the lock leaves `deploy.lock/` behind. The
-next run refuses and names it. Remove the directory by hand once you are sure
-nothing is running.
+## A deployment that died holding the lock
+
+A push, a rollback or a prune holds `deploy.lock/` while it runs. It records
+what it is doing, its release, and the user, host and pid that started it. It
+also keeps a heartbeat on the server's clock, refreshed between stages. One
+killed mid-run leaves the lock behind. The next run refuses it, naming the
+holder and how long ago it last beat. Preflight and `uqs deploy status` show the
+same.
+
+`--break-lock` on `push` or `rollback` removes the lock, but only once its
+holder is gone. It is refused while either of these holds:
+
+- **The heartbeat is fresh.** The holder records how long it may go between
+  beats, from its own longest step: `--command-timeout`, by default, plus a
+  minute.
+- **The holder is alive here.** Its pid is still running, and this is the
+  machine it ran on.
+
+When it does break a lock, it says what it broke and why, then takes the lock
+itself. A lock written before this recorded no limit, so it is held to the
+current run's limit instead.

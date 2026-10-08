@@ -21,6 +21,7 @@ from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive, gateway_access, occupancy, qtree
+from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
@@ -239,31 +240,21 @@ def run_torq_sh(
         ) from exc
 
 
-def start(
-    paths: UqsPaths,
-    procs: str = "all",
-    base_port: int | None = None,
-    capture: bool = False,
-):
+def start(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False):
+    stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
     occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["start", procs], base_port=base_port, capture=capture)
 
 
-def stop(
-    paths: UqsPaths,
-    procs: str = "all",
-    base_port: int | None = None,
-    capture: bool = False,
-):
+def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False):
+    stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
     return run_torq_sh(paths, ["stop", procs], base_port=base_port, capture=capture)
 
 
 def restart(
-    paths: UqsPaths,
-    procs: str = "all",
-    base_port: int | None = None,
-    capture: bool = False,
+    paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False
 ):
+    stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
     occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
 

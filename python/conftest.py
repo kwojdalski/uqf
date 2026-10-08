@@ -22,6 +22,32 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+#: Tests that cannot pass with PeachQ as the q, each with why: strict xfails
+#: when UQF_Q_IMPL=peachq, so a listed test that passes fails the run too.
+PEACHQ_GAPS = REPO_ROOT / "python" / "peachq_known_gaps.txt"
+
+
+def peachq_gaps() -> dict[str, str]:
+    """{nodeid: reason} from PEACHQ_GAPS."""
+    gaps: dict[str, str] = {}
+    for line in PEACHQ_GAPS.read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            nodeid, _, reason = line.partition("  # ")
+            gaps[nodeid.strip()] = reason.strip()
+    return gaps
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """On PeachQ, hold each listed test to failing: CI's PeachQ lane runs every
+    Python test with PeachQ as the q, and this list is what keeps it blocking."""
+    if os.environ.get("UQF_Q_IMPL") != "peachq":
+        return
+    gaps = peachq_gaps()
+    for item in items:
+        if item.nodeid in gaps:
+            item.add_marker(pytest.mark.xfail(reason=f"PeachQ: {gaps[item.nodeid]}", strict=True))
+
+
 def find_q_binary() -> tuple[str, dict[str, str]]:
     """The q interpreter, by the rule scripts/test.py applies.
 

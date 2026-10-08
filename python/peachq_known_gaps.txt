@@ -1,0 +1,51 @@
+# Python tests that cannot pass with PeachQ as the q, each with why.
+#
+# python/conftest.py marks every test listed here as a strict xfail when
+# UQF_Q_IMPL=peachq, as CI's PeachQ lane runs it. A listed test that now
+# passes fails the run, as an unlisted one that fails does - so this list
+# only shrinks, like tests/q/peachq_known_gaps.txt. Format: `nodeid  # reason`.
+
+python/uqs/tests/test_columns.py::test_every_type_agrees_with_q  # PeachQ result differs: a column type's q literal does not read back as the type KDB-X gives it
+
+python/uqs/tests/test_contract_surface.py::test_the_committed_baseline_matches_this_tree  # the q exporter loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_contract_surface.py::test_the_export_is_deterministic  # the q exporter loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_declarations_match_q.py::test_the_parser_reads_every_job_the_way_q_loads_it  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[cross_book_chain_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[cross_markout_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[hdb_transfer_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[reshape_wide_order_book_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[reshape_wide_order_book_multi_pair_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[scenario_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[timer_replay_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_example_scripts.py::test_the_etl_tree_loads_outside_the_test_harness  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_fill_hdb_columns.py::test_the_query_fails_before_the_repair  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
+python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_is_idempotent  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
+python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_makes_the_query_run  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
+
+python/uqs/tests/test_gaps.py::test_a_job_with_no_sessions_is_down_for_the_whole_range  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_gaps.py::test_the_hole_between_two_sessions_and_the_twin_that_refills_it  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_live_check.py::test_a_real_source_is_checked_end_to_end  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_runs.py::test_a_run_records_what_it_was_asked_and_what_it_did  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_a_run_that_never_finished_has_no_counts  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_audit_of_a_window_nothing_published_is_empty  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_audit_puts_both_runs_facts_about_one_window_side_by_side  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_bad_arguments_are_refused_before_q_sees_them[<lambda>-not a run id]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_bad_arguments_are_refused_before_q_sees_them[<lambda>-not a dataset name]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_bad_arguments_are_refused_before_q_sees_them[<lambda>-no status directory]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_list_is_every_run_newest_first  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_migrate_upgrades_a_ledger_from_before_the_range_and_counts  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_show_gives_one_run_and_its_facts  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_runs.py::test_status_finds_the_run_that_never_finished  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_scaffold_loads.py::test_a_scaffolded_backfill_example_runs_straight_away[ipc]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_scaffold_loads.py::test_a_scaffolded_backfill_example_runs_straight_away[local]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_scaffold_loads.py::test_every_scaffolded_kind_loads_and_registers  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_stream_health.py::test_q_writes_what_this_reads  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
+python/uqs/tests/test_trace_render.py::test_what_q_writes_decodes_back_to_the_original  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
