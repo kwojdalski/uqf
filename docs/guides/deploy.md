@@ -274,6 +274,23 @@ the starter pack's logins. To give it ordinary users, put your own file at
 `/opt/uqf/shared/config/scripts/torqconfig/permissions/gateway_users.csv`, and
 every release links it in.
 
+## A server on kdb+ 4.0
+
+kdb+ 4.0 has no nested working contexts (`\d .qetl.status`), and this tree uses
+them. `scripts/portable/flatten_contexts.py` writes a copy that runs each nested
+block at the root, with every name it means written out in full (#856):
+
+```bash
+python3 scripts/portable/flatten_contexts.py src --out build/portable --dry-run
+python3 scripts/portable/flatten_contexts.py src --out build/portable \
+  --check scripts/portable/checks/status_intervals.q --q /path/to/kdb4/q
+```
+
+It refuses what it cannot rewrite with certainty, naming the file and line, and
+then writes nothing. Its JSON report lists the files, contexts, refusals and
+check results. A converted tree is not proof that a release runs on 4.0: only a
+`--check` on that interpreter is. `uqs deploy build` does not run it.
+
 ## Not in v1
 
 - Installing q, TorQ or licences.
