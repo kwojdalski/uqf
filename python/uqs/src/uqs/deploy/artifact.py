@@ -48,6 +48,7 @@ class Target:
     os: str
     arch: str
     python: str
+    q: str | None = None  # the kdb+ the q was converted for (#861); None: as written
 
     @property
     def platforms(self) -> tuple[str, ...]:
@@ -59,6 +60,7 @@ class Target:
             "arch": self.arch,
             "python": self.python,
             "platforms": list(self.platforms),
+            **({"q": self.q} if self.q else {}),
         }
 
 
@@ -165,8 +167,8 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
 def compatible(target: dict, facts: dict[str, str]) -> list[str]:
     """Why a server cannot run a release built for `target`; empty when it can.
 
-    `facts` are what the server reported: os (uname -s), arch (uname -m) and
-    python (the major.minor uv finds there).
+    `facts` are what the server reported: os (uname -s), arch (uname -m),
+    python (the major.minor uv finds there) and qversion (its q's .z.K).
     """
     problems = []
     os_name = facts.get("os", "").lower()
@@ -177,6 +179,12 @@ def compatible(target: dict, facts: dict[str, str]) -> list[str]:
         problems.append(
             f"the server is {facts.get('arch') or 'an unknown architecture'}, "
             f"the release is built for {target['arch']}"
+        )
+    major = facts.get("qversion", "").split(".")[0]
+    if major.isdigit() and int(major) < 5 and target.get("q") is None:
+        problems.append(
+            f"the server's q is kdb+ {facts['qversion']}, which has no nested contexts, and "
+            "the release's q is as written - build it with `uqs deploy build --q-target 4.0`"
         )
     if facts.get("python") != target["python"]:
         problems.append(

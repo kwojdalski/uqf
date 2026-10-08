@@ -81,6 +81,29 @@ def build(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print the resolved bundle composition; build nothing")
     ] = False,
+    q_target: Annotated[
+        str | None,
+        typer.Option(
+            "--q-target",
+            help="Convert the release's q for this kdb+ - 4.0 has no nested contexts. "
+            "Only the artifact changes, never the checkout",
+        ),
+    ] = None,
+    q_exclude: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--q-exclude",
+            metavar="PATTERN",
+            help="With --q-target: a folder, file or glob to ship as written; repeatable",
+        ),
+    ] = None,
+    allow_computed_names: Annotated[
+        bool,
+        typer.Option(
+            "--allow-computed-names",
+            help="With --q-target: accept a load-time lookup of a computed name, with a warning",
+        ),
+    ] = False,
 ) -> None:
     """Build a release artifact once, for `uqs deploy push` to put on any number of servers.
 
@@ -105,6 +128,9 @@ def build(
             allow_dirty=allow_dirty,
             bundles=bundle or (),
             runtime=runtime,
+            q_target=q_target,
+            q_exclude=q_exclude or (),
+            allow_computed_names=allow_computed_names,
         )
     except ReleaseError as exc:
         _failed("uqs deploy build", exc.stage, exc)
