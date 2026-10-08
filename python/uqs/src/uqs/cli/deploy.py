@@ -262,6 +262,14 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    keep: Annotated[
+        int | None,
+        typer.Option(
+            "--keep",
+            min=0,
+            help="After activating, remove all but the newest N releases (`uqs deploy prune`)",
+        ),
+    ] = None,
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())

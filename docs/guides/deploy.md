@@ -195,6 +195,29 @@ and moves `current` only once the target's own verifier passes. A target that
 does not verify is stopped, and the current release's processes are started and
 verified again, so the server ends where it began. Nothing is deleted.
 
+## Removing old releases
+
+Every push leaves its release, with its own offline `.venv`, in `releases/`.
+`uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock:
+
+```bash
+uqs deploy prune --host uqf-server --dest /opt/uqf --keep 3 --dry-run
+uqs deploy prune --host uqf-server --dest /opt/uqf --keep 3
+```
+
+Three releases are never removed, whatever `--keep` is, even 0:
+
+- the one `current` names;
+- the one a rollback would return to: the release `current`'s report says it
+  replaced;
+- any whose report still says `running`, from a push that died part-way.
+
+It prints what stayed and why, what went, and the bytes freed. Only a directory
+named like a release id is ever removed. `--dry-run` lists the removals and
+removes nothing. `uqs deploy push --keep N` prunes the same way once the new
+release is current, while it still holds the lock. If that prune fails, the
+deployment still counts as a success, and its report records the failure.
+
 ## Deploying as a service user
 
 On many servers the account you log in as is not the one that owns and runs uqf;
@@ -349,7 +372,6 @@ nesting flattened blocks again wherever every name keeps its meaning (#859).
 - Migrations.
 - Frontend builds.
 - Zero-downtime upgrades.
-- Deleting old releases.
 - A single build-and-deploy command, or the Kafka and Databento feed handlers,
   which still start through `uv run`.
 

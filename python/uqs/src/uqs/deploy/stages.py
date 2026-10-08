@@ -50,6 +50,8 @@ class Report:
     extra_processes: list[str] = field(default_factory=list)
     bundles: dict[str, dict] = field(default_factory=dict)
     live: bool = False
+    #: what --keep removed after activation (#866), when it was given
+    pruned: dict | None = None
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
