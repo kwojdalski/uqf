@@ -134,14 +134,16 @@ it (e.g. `src/foundation/stats.q`).
   | **KDB-X**                                             | everything in `src/`, `scripts/` and `tests/`                                                                                                                                                                        | preferred — see [above](#requirements) for what else may work    |
   | **[uv](https://docs.astral.sh/uv/)**                  | the Python packages and every `uqs` command                                                                                                                                                                          | yes, for the fleet                                               |
   | **`qcon`**                                            | attaching a console to a running process: `uqs query --port <p>` with no expression                                                                                                                                  | no - only that command                                           |
-  | **`rlwrap`**                                          | line editing and history inside `qcon`                                                                                                                                                                               | no - `qcon` runs without it                                      |
+  | **`rlwrap`**                                          | `torq.sh` debug starts and `qcon`; `uqs start` refuses to run without it, as with `envsubst`                                                                                                                         | yes, for the fleet                                               |
   | **`multitail`**                                       | `uqs logs --multitail`: following process logs one pane per file                                                                                                                                                     | no - `uqs logs -f` follows the same files merged into one stream |
   | **Node**                                              | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares                                                                  | no - only for `web/`                                             |
   | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor. `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.2.0 --locked`; it reads this repo's `[tool.q-lint]` exclusions                 | no - never needed to build, test or run                          |
 
-`scripts/dev/install.sh` installs what is missing - `direnv`, `envsubst`,
-`rlwrap` and `pre-commit`, plus `multitail` and `qlinter` with `--all` - through
-brew or apt, then puts `uqs` on your PATH.
+**Setup is `./install.sh`.** It checks these first, says how to install anything
+missing (it never runs sudo), then puts `uqs` on your PATH. `--dev` also syncs
+the Python workspace and installs the pre-commit hooks, `--web` builds `web/`,
+and `--check` only checks. TLS verification stays on: behind a re-signing proxy,
+set `SSL_CERT_FILE` (uv) and `NODE_EXTRA_CA_CERTS` (npm) to your CA.
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q` and
