@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import sys
+import time
+from datetime import UTC, datetime
 
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
@@ -196,6 +198,7 @@ def _run(
         log.warning("current changed since preflight: now {}", previous or "none")
     report.previous_release = previous
     prev_profile: str | None = None
+    outage = 0.0
     prev_procs: list[str] = []
     prev_extra: list[str] = []
     stopped_previous = False
@@ -217,6 +220,10 @@ def _run(
             # Set before the stop, not after: a stop that fails part-way has
             # still taken some of them down, and rollback must start them.
             stopped_previous = True
+            # The outage starts here: clients of the old processes lose them
+            # as the stop runs, and get the new ones once they verify.
+            outage = time.monotonic()
+            report.downtime = {"stopped_at": _now(), "verified_at": None, "seconds": None}
             dep.uqs(
                 f"{dep.releases}/{previous}",
                 "restart",
@@ -245,6 +252,11 @@ def _run(
         if not result.get("passed"):
             raise DeployError("verify", result.get("reason") or "verification failed")
         report.checks["verify"] = "ok"
+        if report.downtime is not None:
+            report.downtime["verified_at"] = _now()
+            report.downtime["seconds"] = round(time.monotonic() - outage, 1)
+            log.info("downtime: {}s from stopping {} to {} verified", report.downtime["seconds"],
+                     previous, rid)  # fmt: skip
         if cfg.live_check:
             log.info("checking {} live, before activation", ", ".join(cfg.live_check))
             dep.live_check(release)
@@ -290,6 +302,10 @@ def _prune_after(dep: Deployment, keep: int) -> dict:
     except DeployError as exc:
         log.warning("the deployment succeeded, but pruning old releases failed: {}", exc)
         return {"prune": "failed", "error": redact(str(exc))}
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:

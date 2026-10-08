@@ -963,6 +963,44 @@ def test_without_keep_nothing_is_pruned(tmp_path):
     assert report["pruned"] is None and not any(st == "prune" for st, _ in remote.scripts)
 
 
+# --- an upgrade's downtime (#871) -------------------------------------------------
+
+
+def _upgrade(tmp_path, monkeypatch, verifies: bool):
+    from uqs.deploy import driver as driver_mod
+
+    clock = iter([100.0, 142.5])
+    monkeypatch.setattr(driver_mod.time, "monotonic", lambda: next(clock))
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    rules = {
+        "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+        "deploy-report.json\n": _done(previous),
+        "readlink": _done("current=OLD\n"),
+        "uqs deploy verify --profile essential": _verified(verifies),
+        "uqs deploy verify --profile fx": _verified(True),
+    }
+    return _run(tmp_path, rules, args=["--restart"])
+
+
+def test_an_upgrade_records_its_downtime_from_the_stop_to_the_new_release_verified(
+    tmp_path, monkeypatch
+):
+    code, _, report = _upgrade(tmp_path, monkeypatch, verifies=True)
+    assert code == 0 and report["downtime"]["seconds"] == 42.5
+    assert report["downtime"]["stopped_at"] <= report["downtime"]["verified_at"]
+
+
+def test_a_failed_upgrade_records_when_the_outage_began_and_no_end(tmp_path, monkeypatch):
+    code, _, report = _upgrade(tmp_path, monkeypatch, verifies=False)
+    assert code == 1 and report["downtime"]["stopped_at"]
+    assert (report["downtime"]["verified_at"], report["downtime"]["seconds"]) == (None, None)
+
+
+def test_a_first_deployment_replaces_nothing_and_has_no_downtime(tmp_path):
+    _, _, report = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    assert report["downtime"] is None
+
+
 # --- --soak (#869) ----------------------------------------------------------------
 
 
