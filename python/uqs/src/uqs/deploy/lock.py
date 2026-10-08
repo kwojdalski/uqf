@@ -56,6 +56,8 @@ def stale_after(cfg: Config) -> int:
         cfg.verify_timeout + 60,
         cfg.smoke_timeout + 30,
         cfg.live_check_timeout + 60,
+        # --soak sleeps, then reads the jobs' health with no beat between (#869)
+        (cfg.soak or 0) + cfg.command_timeout,
     )
     return max(steps) + MARGIN
 

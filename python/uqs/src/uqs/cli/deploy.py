@@ -270,6 +270,15 @@ def push(
             help="After activating, remove all but the newest N releases (`uqs deploy prune`)",
         ),
     ] = None,
+    soak: Annotated[
+        int | None,
+        typer.Option(
+            "--soak",
+            metavar="SECONDS",
+            help="After verify, let data flow this long; then a streaming job that is "
+            "failing, or never beat, rolls the deployment back before activation",
+        ),
+    ] = None,
     break_lock: Annotated[
         bool,
         typer.Option(

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -147,4 +148,5 @@ def test_the_command_refuses_a_negative_keep():
     r = CliRunner().invoke(
         cli.app, ["deploy", "prune", "--host", "h", "--dest", "/d", "--keep", "-1"]
     )
-    assert r.exit_code != 0 and "--keep" in r.output
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", r.output)  # CI renders usage errors in colour
+    assert r.exit_code != 0 and "--keep" in plain
