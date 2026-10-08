@@ -195,6 +195,7 @@ qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
+qetl.io,on_peachq,value,,
 qetl.io,optional,value,,
 qetl.io,recover,function,4,mgr target range_from range_to
 qetl.io,require_manager,function,1,mgr
@@ -367,6 +368,14 @@ qetl.livecheck,check,function,2,source window
 qetl.livecheck,redact,function,2,text cred
 qetl.livecheck,secret_keys,value,,
 qetl.livecheck,tls_off,dict,,
+qetl.load,declarations,function,1,dirs
+qetl.load,declares,dict,,
+qetl.load,dir_files,function,1,dir
+qetl.load,files,function,1,names
+qetl.load,jobs,dict,,
+qetl.load,one,function,1,f
+qetl.load,order,value,,
+qetl.load,procs,dict,,
 qetl.log,context,dict,,
 qetl.log,dbg,function,3,id text fields
 qetl.log,debug,function,1,on
@@ -433,6 +442,7 @@ qetl.plant,trades,table,,
 qetl.plant,trades_copy,table,,
 qetl.plant,undeclared,function,1,
 qetl.plant,vendored,value,,
+qetl.plant,vendored_path,value,,
 qetl.plant,wide_orderbook,table,,
 qetl.reaction,audit,function,1,
 qetl.reaction,dag_consumers,function,1,dataset

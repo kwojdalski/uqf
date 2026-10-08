@@ -17,6 +17,21 @@ NAME_40 = "uqf-20261008T120500Z-0123456789ab.tar.gz"
 BASE = "https://github.com/acme/uqf/releases/download/v1.4.0"
 
 
+@pytest.fixture(autouse=True)
+def _no_enclosing_repository(monkeypatch):
+    """Run git here as if from a shell, not from inside a git hook.
+
+    `git commit` exports GIT_DIR, GIT_INDEX_FILE and friends to its hooks, and
+    the pre-commit Python tests run there: every `git -C <tmp>` below would
+    then act on THIS checkout - origin_repo read kwojdalski/uqf instead of the
+    temporary repository's origin, and `remote add` failed. CI runs the hooks
+    outside a commit, so only a local commit ever saw it."""
+    import os
+
+    for name in [n for n in os.environ if n.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+
+
 def _web(**pages: bytes):
     seen: list[str] = []
 

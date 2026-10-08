@@ -45,12 +45,10 @@ package = false
 # exclusion list, so nobody has to remember `--exclude` for the vendored tree
 # or for the agent worktrees nested inside the repository.
 [tool.q-lint]
+# Read by the qlinter CI pins (v0.2.0, .github/workflows/ci.yml), which
+# accepts only `exclude` here. Newer releases read .qlinter.toml instead,
+# which repeats this list - test_check_q_traps.py holds the two equal.
 exclude = ["lib/torq/", ".claude/worktrees/"]
-# Rules this tree does not apply. QS010 (mixed-naming-convention) flags a file
-# that mixes naming styles - but this tree's q is snake_case beside TorQ's and
-# q's own camelCase (.proc.procname, .u.upd, .z.ts), so nearly every file that
-# touches either would be flagged for a choice it did not make.
-ignore = ["QS010"]
 
 [tool.uv.workspace]
 members = [
