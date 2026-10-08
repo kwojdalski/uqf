@@ -32,6 +32,7 @@ setUp_clean:{[]
     .testutil.drop_rows[`.qetl.source.sources;`t];
     setenv[`UQF_SOURCE_CRED_T;""];
     setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
+    setenv[`UQS_REQUIRE_LIVE_SOURCES;""];
     .qetl.source.clear_settings[];
     }
 
@@ -282,6 +283,21 @@ test_a_configured_credential_is_returned:{[t]
 
 test_has_credentials_does_not_throw:{[t]
     .qunit.assertEquals[.qetl.source.has_credentials `demo_deals;0b;"choosing between the live and fixture paths must not require catching"]};
+
+/ --- live only: a deployment's --live (#800) ------------------------
+
+test_live_is_not_required_by_default:{[t]
+    .qunit.assertEquals[.qetl.source.live_required[];0b;"unset, a missing credential still means the fixture"];
+    .qunit.assertEquals[@[{.qetl.source.refuse_fixture["init";x]; 1b};`demo_deals;{0b}];1b;"and refusing the fixture is a no-op"]};
+
+test_only_1_requires_live:{[t]
+    setenv[`UQS_REQUIRE_LIVE_SOURCES;"yes"];
+    .qunit.assertEquals[.qetl.source.live_required[];0b;"the setting is 1, nothing looser"]};
+
+test_a_required_live_source_refuses_its_fixture:{[t]
+    setenv[`UQS_REQUIRE_LIVE_SOURCES;"1"];
+    .qunit.assertEquals[.qetl.source.live_required[];1b;"1 requires every source to be live"];
+    .qunit.assertThrows[.qetl.source.refuse_fixture["init";];`demo_deals;"init: demo_deals has no credential and UQS_REQUIRE_LIVE_SOURCES=1 - refusing its fixture. Set UQF_SOURCE_CRED_DEMO_DEALS*";"the refusal names the source and the variable to set"]};
 
 / --- configured settings: sources.csv (#718) -----------------------
 

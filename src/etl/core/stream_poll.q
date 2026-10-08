@@ -160,6 +160,9 @@ cursor_ops:{[job]
 tick:{[job]
     d:def job;
     p:d`poll;
+    / A deployment's --live (#800): a feed whose source has no credential
+    / publishes nothing, rather than its fixture.
+    if[`fixture~liveness job; .qetl.source.refuse_fixture["tick: ",string job;p`source]];
     ops:cursor_ops job;
     name:cursor_name job;
     current:ops[`load] name;

@@ -809,6 +809,10 @@ init_body:{[worker;run_spec]
     .qetl.hb.attach[];
     advance_phase[worker;`ready;""];
 
+    / A deployment's --live (#800): no credential is refused here, before the
+    / lock is taken or a row is read, rather than run on the fixture below.
+    if[not .qetl.source.has_credentials cfg`source; .qetl.source.refuse_fixture["init";cfg`source]];
+
     .qetl.job.bounded.state.acquire_lock worker;
 
     / Live only when a credential is configured. An absent credential is an
