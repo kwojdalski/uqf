@@ -12,14 +12,7 @@ python/uqs/tests/test_contract_surface.py::test_the_export_is_deterministic  # t
 
 python/uqs/tests/test_declarations_match_q.py::test_the_parser_reads_every_job_the_way_q_loads_it  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
-python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[cross_book_chain_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[cross_markout_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[hdb_transfer_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[reshape_wide_order_book_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[reshape_wide_order_book_multi_pair_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[scenario_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_example_scripts.py::test_example_script_runs_clean[timer_replay_example.q]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_example_scripts.py::test_the_etl_tree_loads_outside_the_test_harness  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_etl_standalone_load.py::test_the_etl_tree_loads_outside_the_test_harness  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
 python/uqs/tests/test_fill_hdb_columns.py::test_the_query_fails_before_the_repair  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_is_idempotent  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)

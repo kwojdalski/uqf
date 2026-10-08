@@ -164,21 +164,44 @@ class LaneFailed(Exception):
         self.code = code
 
 
-def _run(lane: str, argv: list[str], *, env: dict[str, str] | None = None) -> None:
-    """Run a command, inheriting stdio so test output streams as it happens."""
+def _run(
+    lane: str,
+    argv: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    timeout: float | None = None,
+) -> None:
+    """Run a command, streaming its output as it happens.
+
+    stdin is /dev/null for every lane: a q script that ends without `exit`
+    would otherwise stop at the q prompt and wait for a terminal - forever,
+    when run from one (#891). With it, q exits at the end of the script.
+    `timeout` bounds a lane whose process might wait on something else."""
     # QCMD passed on, so a lane that starts its own q processes
     # (q-backfill-process, q-two-instances) starts the same interpreter.
     merged = {**os.environ, "QHOME": QHOME, "QCMD": Q_CMD, **(env or {})}
-    result = subprocess.run(argv, cwd=REPO, env=merged, check=False)
+    try:
+        result = subprocess.run(
+            argv, cwd=REPO, env=merged, stdin=subprocess.DEVNULL, timeout=timeout, check=False
+        )
+    except subprocess.TimeoutExpired:
+        print(f"{lane}: still running after {timeout:g}s - stopped", flush=True)
+        raise LaneFailed(lane, 124) from None
     if result.returncode != 0:
         raise LaneFailed(lane, result.returncode)
 
 
-def _q(lane: str, script: str, *args: str, env: dict[str, str] | None = None) -> None:
+def _q(
+    lane: str,
+    script: str,
+    *args: str,
+    env: dict[str, str] | None = None,
+    timeout: float | None = None,
+) -> None:
     q = shutil.which(Q_CMD)
     if q is None:
         raise LaneFailed(lane, 127)
-    _run(lane, [q, script, *args], env=env)
+    _run(lane, [q, script, *args], env=env, timeout=timeout)
 
 
 def _banner(text: str) -> None:
@@ -251,8 +274,18 @@ def lane_q_examples() -> None:
         _q("q-examples", "tests/q/run_examples.q", env={"UQF_STATUS_DIR": statusdir})
 
 
+#: The slowest example takes well under a second; one still running after this
+#: is waiting on something - a timer, a connection - and a hung lane is not a
+#: useful way to say so.
+EXAMPLE_TIMEOUT = 120
+
+
 def lane_q_scripts() -> None:
     """Every worked example under scripts/examples/, each in its own process.
+
+    The ONE runner of the examples (#891): a pytest module used to run them
+    as well, with its own glob (`*_example.q`) and its own process handling,
+    so a fix to either never reached the other.
 
     These are scripts a reader runs by hand to see the library work end to
     end, and until this lane existed NOTHING ran them - five of them, none
@@ -281,7 +314,12 @@ def lane_q_scripts() -> None:
         raise SystemExit("q-scripts: no examples found under scripts/examples/")
     for script in scripts:
         with tempfile.TemporaryDirectory() as statusdir:
-            _q(f"q-scripts:{script.stem}", str(script), env={"UQF_STATUS_DIR": statusdir})
+            _q(
+                f"q-scripts:{script.stem}",
+                str(script),
+                env={"UQF_STATUS_DIR": statusdir},
+                timeout=EXAMPLE_TIMEOUT,
+            )
 
 
 def lane_q_docs() -> None:
