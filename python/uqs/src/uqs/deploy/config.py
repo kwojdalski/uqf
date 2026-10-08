@@ -110,6 +110,12 @@ class Config:
     #: owner/name whose releases a tag ARTIFACT names; default: origin's
     release_repo: str | None = None
 
+    #: fill the shared HDB's missing tables and columns in prepare (#870)
+    fix_hdb: bool = False
+
+    #: after activation, keep the newest this many releases (#866); None keeps all
+    keep: int | None = None
+
     #: seconds to let data flow after verify, then require every started
     #: streaming job to have beaten and none to be failing (#869); None skips it
     soak: int | None = None
@@ -194,6 +200,8 @@ def make_config(
     verify_timeout: int = 180,
     allow_dirty: bool = False,
     release_repo: str | None = None,
+    fix_hdb: bool = False,
+    keep: int | None = None,
     soak: int | None = None,
     break_lock: bool = False,
 ) -> Config:
@@ -227,6 +235,8 @@ def make_config(
         r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", release_repo
     ):
         raise DeployError("arguments", f"--release-repo {release_repo!r} is not OWNER/NAME")
+    if keep is not None and keep < 0:
+        raise DeployError("arguments", "--keep must be 0 or more")
     if soak is not None and soak <= 0:
         raise DeployError("arguments", "--soak must be positive")
     path = _required_absolute("--dest", dest)
@@ -259,6 +269,8 @@ def make_config(
         verify_timeout=verify_timeout,
         allow_dirty=allow_dirty,
         release_repo=release_repo,
+        fix_hdb=fix_hdb,
+        keep=keep,
         soak=soak,
         break_lock=break_lock,
     )

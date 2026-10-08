@@ -282,6 +282,22 @@ def push(
             help="Whose GitHub releases a tag ARTIFACT names; default: this checkout's origin",
         ),
     ] = None,
+    fix_hdb: Annotated[
+        bool,
+        typer.Option(
+            "--fix-hdb",
+            help="Fill the shared HDB's partitions that lack a table or column this release "
+            "declares (additive); without it they are refused. A changed type always is",
+        ),
+    ] = False,
+    keep: Annotated[
+        int | None,
+        typer.Option(
+            "--keep",
+            min=0,
+            help="After activating, remove all but the newest N releases (`uqs deploy prune`)",
+        ),
+    ] = None,
     soak: Annotated[
         int | None,
         typer.Option(

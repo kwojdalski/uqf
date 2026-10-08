@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import json
 import sys
+import time
+from datetime import UTC, datetime
 
-from uqs.deploy import fetch
+from uqs.deploy import fetch, hdb
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
+from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
 from uqs.deploy.selection import Selection, select_jobs, smoke_args, verify_args
 from uqs.deploy.stages import Deployment, Report
@@ -55,6 +58,7 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "
         + f"{pkg.manifest['python']['wheels']} wheels",
+        "hdb       " + facts.get("hdb", "not judged"),
         "smoke     "
         + " ".join(["q scripts/deploy_smoke.q", *smoke_args(cfg.profile, sel)])
         + f" (timeout {cfg.smoke_timeout}s)",
@@ -93,6 +97,14 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
             else []
         ),
         "activate  " + f"{dep.current} -> releases/{rid}",
+        *(
+            [
+                f"prune     all but the newest {cfg.keep} releases - never current, the one "
+                "a rollback returns to, or one still running"
+            ]
+            if cfg.keep is not None
+            else []
+        ),
     ]
     size = pkg.path.stat().st_size
     t = pkg.manifest["target"]
@@ -170,6 +182,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
     facts = dep.preflight()
     report.previous_release = facts.get("current")
     if cfg.dry_run:
+        facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
         print(plan(cfg, pkg, rid, facts, dep), file=out)
         return 0
     return _run(dep, cfg, pkg, rid, report, facts, out)
@@ -196,6 +209,7 @@ def _run(
         log.warning("current changed since preflight: now {}", previous or "none")
     report.previous_release = previous
     prev_profile: str | None = None
+    outage = 0.0
     prev_procs: list[str] = []
     prev_extra: list[str] = []
     stopped_previous = False
@@ -207,6 +221,9 @@ def _run(
         log.info("preparing the release environment")
         dep.prepare(release, pkg)
         dep.beat()
+        log.info("checking the shared HDB against the release's schema")
+        report.hdb = hdb.check(dep, release)
+        dep.beat()
         log.info("offline smoke test")
         dep.smoke(release)
         dep.beat()
@@ -217,6 +234,10 @@ def _run(
             # Set before the stop, not after: a stop that fails part-way has
             # still taken some of them down, and rollback must start them.
             stopped_previous = True
+            # The outage starts here: clients of the old processes lose them
+            # as the stop runs, and get the new ones once they verify.
+            outage = time.monotonic()
+            report.downtime = {"stopped_at": _now(), "verified_at": None, "seconds": None}
             dep.uqs(
                 f"{dep.releases}/{previous}",
                 "restart",
@@ -245,6 +266,11 @@ def _run(
         if not result.get("passed"):
             raise DeployError("verify", result.get("reason") or "verification failed")
         report.checks["verify"] = "ok"
+        if report.downtime is not None:
+            report.downtime["verified_at"] = _now()
+            report.downtime["seconds"] = round(time.monotonic() - outage, 1)
+            log.info("downtime: {}s from stopping {} to {} verified", report.downtime["seconds"],
+                     previous, rid)  # fmt: skip
         if cfg.live_check:
             log.info("checking {} live, before activation", ", ".join(cfg.live_check))
             dep.live_check(release)
@@ -262,6 +288,9 @@ def _run(
         report.stage = "done"
         dep.write_report(release, report, required=True)
         dep.activate(rid)
+        if cfg.keep is not None:
+            dep.beat()
+            report.pruned = _prune_after(dep, cfg.keep)
     except DeployError as exc:
         report.status = "failed"
         report.stage = exc.stage
@@ -276,6 +305,21 @@ def _run(
         dep.release_lock()
     print(json.dumps(report.as_dict(), indent=2), file=out)
     return 0 if report.status == "deployed" else 1
+
+
+def _prune_after(dep: Deployment, keep: int) -> dict:
+    """--keep, once the release is current and the lock still held. The
+    deployment has succeeded by then, so a prune that fails is reported, not
+    rolled back."""
+    try:
+        return prune_locked(dep, keep)
+    except DeployError as exc:
+        log.warning("the deployment succeeded, but pruning old releases failed: {}", exc)
+        return {"prune": "failed", "error": redact(str(exc))}
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:

@@ -24,9 +24,13 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python" / "uqs" / "src"))
 
 from uqs import paths as stack_paths  # noqa: E402
-from uqs.checks import hdb_shape, stack_smoke  # noqa: E402
+from uqs.checks import stack_smoke  # noqa: E402
 from uqs.model.registry import DEFAULT_BASE_PORT  # noqa: E402
-from uqs.stack import listing, runtime  # noqa: E402
+from uqs.stack import (  # noqa: E402
+    hdb_shape,  # noqa: E402
+    listing,
+    runtime,
+)
 
 #: How long to let the stack run before looking. The feeds publish on
 #: sub-second timers and the slowest consumer chain is three deep, so this

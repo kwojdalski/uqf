@@ -264,6 +264,8 @@ def test_a_dry_run_changes_nothing_and_shows_the_plan(tmp_path):
 _HEALTHY = {
     "uv python find": _done(SERVER + "data=present\n"),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
+    # a server with no HDB yet: nothing for the release's hdb-check to judge (#870)
+    "uqs data hdb-check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
 }
 
@@ -947,6 +949,82 @@ def test_a_dirty_artifact_is_refused_before_the_server_is_touched(tmp_path):
     assert remote.scripts == []
 
 
+# --- --keep: prune after activation (#866) ----------------------------------------
+
+
+def _listing(*releases: str, current: str) -> subprocess.CompletedProcess:
+    rows = [{"release": r, "bytes": 10, "status": "deployed"} for r in releases]
+    return _done(json.dumps({"current": current, "releases": rows}) + "\n")
+
+
+def test_keep_prunes_after_activation_under_the_same_lock(tmp_path):
+    old = ["20261001T000000Z-000000000001", "20261002T000000Z-000000000002"]
+    rules = {
+        "uqs deploy verify --profile": _verified(True),
+        "import json, os, sys": _listing(*old, "20261007T000000Z-0123456789ab", current="x"),
+    }
+    code, remote, report = _run(tmp_path, rules, args=["--keep", "1"])
+    assert code == 0 and report["pruned"]["removed"] == old
+    stages = [stage for stage, _ in remote.scripts]
+    assert stages.index("activate") < stages.index("prune") < len(stages) - 1
+    assert stages[-1] == "lock", "the lock goes last, after the prune"
+    between = remote.scripts[stages.index("activate") + 1 : stages.index("prune")]
+    assert any("/heartbeat; fi" in s for _, s in between), "each may take command_timeout"
+
+
+def test_a_failed_prune_does_not_undo_a_deployment_that_succeeded(tmp_path):
+    rules = {
+        "uqs deploy verify --profile": _verified(True),
+        "import json, os, sys": _done("", rc=1),
+    }
+    code, _, report = _run(tmp_path, rules, args=["--keep", "1"])
+    assert code == 0 and report["status"] == "deployed"
+    assert report["pruned"]["prune"] == "failed"
+
+
+def test_without_keep_nothing_is_pruned(tmp_path):
+    _, remote, report = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    assert report["pruned"] is None and not any(st == "prune" for st, _ in remote.scripts)
+
+
+# --- an upgrade's downtime (#871) -------------------------------------------------
+
+
+def _upgrade(tmp_path, monkeypatch, verifies: bool):
+    from uqs.deploy import driver as driver_mod
+
+    clock = iter([100.0, 142.5])
+    monkeypatch.setattr(driver_mod.time, "monotonic", lambda: next(clock))
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    rules = {
+        "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+        "deploy-report.json\n": _done(previous),
+        "readlink": _done("current=OLD\n"),
+        "uqs deploy verify --profile essential": _verified(verifies),
+        "uqs deploy verify --profile fx": _verified(True),
+    }
+    return _run(tmp_path, rules, args=["--restart"])
+
+
+def test_an_upgrade_records_its_downtime_from_the_stop_to_the_new_release_verified(
+    tmp_path, monkeypatch
+):
+    code, _, report = _upgrade(tmp_path, monkeypatch, verifies=True)
+    assert code == 0 and report["downtime"]["seconds"] == 42.5
+    assert report["downtime"]["stopped_at"] <= report["downtime"]["verified_at"]
+
+
+def test_a_failed_upgrade_records_when_the_outage_began_and_no_end(tmp_path, monkeypatch):
+    code, _, report = _upgrade(tmp_path, monkeypatch, verifies=False)
+    assert code == 1 and report["downtime"]["stopped_at"]
+    assert (report["downtime"]["verified_at"], report["downtime"]["seconds"]) == (None, None)
+
+
+def test_a_first_deployment_replaces_nothing_and_has_no_downtime(tmp_path):
+    _, _, report = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    assert report["downtime"] is None
+
+
 # --- --soak (#869) ----------------------------------------------------------------
 
 
@@ -1012,6 +1090,14 @@ def test_the_lock_beats_between_stages(tmp_path):
     stages = [stage for stage, _ in remote.scripts]
     assert len(beats) >= 5, "after transfer, prepare and smoke, and around verify"
     assert stages.index("transfer") < beats[0] and beats[-1] < stages.index("activate")
+
+
+def test_the_lock_beats_between_prepare_and_the_hdb_check(tmp_path):
+    _, remote, _ = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    stages = [stage for stage, _ in remote.scripts]
+    last_prepare = len(stages) - 1 - stages[::-1].index("prepare")
+    between = remote.scripts[last_prepare + 1 : stages.index("hdb")]
+    assert any("/heartbeat; fi" in s for _, s in between), "each may take command_timeout"
 
 
 def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
