@@ -41,7 +41,9 @@ def test_an_unknown_interpreter_is_refused():
 def test_the_peachq_runtime_is_the_starter_pack_alone_on_peachq():
     p = RUNTIMES["peachq"]
     assert (p.interpreter, p.pipelines, p.overlays) == ("peachq", False, False)
-    assert all(r.interpreter == "kdbx" for r in RUNTIMES.values() if r.name != "peachq")
+    on_peachq = {r.name for r in RUNTIMES.values() if r.interpreter == "peachq"}
+    assert on_peachq == {"peachq", "peachq-etl"}, "only these two, and peachq-etl is experimental"
+    assert RUNTIMES["peachq-etl"].experimental
 
 
 def test_the_peachq_runtime_starts_only_what_runs_on_peachq():

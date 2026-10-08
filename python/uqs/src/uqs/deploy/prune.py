@@ -133,7 +133,7 @@ def prune(
     """Remove the server's releases beyond the newest `keep`, under the lock."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
-    dep.take_lock()
+    dep.take_lock("prune")
     try:
         result = prune_locked(dep, keep, dry_run)
     finally:

@@ -4,10 +4,10 @@ run as, what preflight finds, what the destination holds, and the lock."""
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 
 from uqs.deploy.artifact import compatible
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
+from uqs.deploy.lock import Lock
 from uqs.deploy.remote import Transport, _checked, q, script
 from uqs.deploy.selection import Selection
 from uqs.logger import get_logger
@@ -39,6 +39,7 @@ class Server:
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
         self.lock = f"{d}/deploy.lock"
+        self.locker = Lock(cfg, remote, self.lock)
         self.shared_config = f"{d}/shared/config"
 
     # ------- remote helpers
@@ -169,12 +170,14 @@ class Server:
                 f"{self.cfg.dest} already runs release {facts['current']} - pass --restart to "
                 "stop its processes and replace it",
             )
-        if facts.get("locked"):
+        if facts.get("locked") and not self.cfg.break_lock:
             raise DeployError(
                 "preflight",
-                f"another deployment holds {self.lock} ({facts['locked']}); if it died, "
-                "remove that directory by hand",
+                f"another deployment holds {self.lock} ({facts['locked']}). If it died, "
+                "--break-lock removes it - refused while its holder still beats",
             )
+        if facts.get("locked"):
+            log.warning("{} is held ({}); --break-lock will try it", self.lock, facts["locked"])
         return facts
 
     def previous_processes(self, previous: str) -> tuple[str, list[str], list[str]]:
@@ -220,20 +223,14 @@ class Server:
             )
         return state
 
-    def take_lock(self) -> None:
-        owner = f"{datetime.now(UTC).isoformat(timespec='seconds')} release-pending"
-        r = self.remote.run(
-            script(
-                f"mkdir -p {q(self.cfg.dest)}",
-                f"mkdir {q(self.lock)} 2>/dev/null || {{ echo held >&2; exit 3; }}",
-                f"printf '%s\\n' {q(owner)} > {q(self.lock)}/owner",
-            ),
-            self.cfg.command_timeout,
-            "lock",
-        )
-        if r.returncode == 3:
-            raise DeployError("lock", f"another deployment holds {self.lock}")
-        _checked(r, "lock", "taking the deployment lock")
+    def take_lock(self, command: str = "push") -> None:
+        """Hold deploy.lock, recording who holds it (uqs.deploy.lock); with
+        --break-lock, first remove one whose holder has stopped beating."""
+        self.locker.take(command, self.release)
+
+    def beat(self) -> None:
+        """Tell a later reader the lock's holder is alive: between stages."""
+        self.locker.beat()
 
     def discard_staging(self, rid: str) -> None:
         """The staging directory goes whatever happened; the release stays."""
@@ -345,5 +342,9 @@ fi
 if [ -d "$data" ]; then echo "data=present"; else echo "data=absent"; fi
 if [ -L "$current" ]; then echo "current=$(basename "$(readlink "$current")")"; fi
 if [ -n "$release_dir" ] && [ -e "$release_dir" ]; then echo "release_exists=yes"; fi
-if [ -d "$lock" ]; then echo "locked=$(cat "$lock/owner" 2>/dev/null || echo unknown)"; fi
+if [ -d "$lock" ]; then
+  hb=$(cat "$lock/heartbeat" 2>/dev/null || stat -c %Y "$lock" 2>/dev/null || true)
+  case "$hb" in ''|*[!0-9]*) age=unknown;; *) age=$(( $(date +%s) - hb ));; esac
+  echo "locked=$(head -n 1 "$lock/owner" 2>/dev/null || echo unknown), last beat ${age}s ago"
+fi
 """

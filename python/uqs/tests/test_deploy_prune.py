@@ -107,6 +107,11 @@ def test_the_lock_is_held_from_before_the_listing_until_after_the_removal(dest):
     assert not (dest / "deploy.lock").exists(), "and released"
 
 
+def test_the_lock_names_prune_as_its_holder(dest):
+    _, _, remote = _prune(dest, 0)
+    assert "command=prune" in remote.scripts[0][1]
+
+
 def test_a_held_lock_refuses_and_removes_nothing(dest):
     (dest / "deploy.lock").mkdir()
     before = _left(dest)

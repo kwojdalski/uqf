@@ -501,6 +501,13 @@ class _FakePaths:
         self.repo_root = Path(".").resolve()
         self.scripts_dir = self.repo_root / "scripts"
 
+    @property
+    def runtime_declaration(self):
+        """The default runtime: a backfill asks it which interpreter it runs."""
+        from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
+
+        return RUNTIMES[DEFAULT_RUNTIME]
+
 
 def test_a_deployed_release_is_accepted_as_the_stack_root(tmp_path):
     """A release ships no lib/ and runs an external TorQ (#773, #796). It holds

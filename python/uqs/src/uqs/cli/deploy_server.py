@@ -93,6 +93,13 @@ def rollback_cmd(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    break_lock: Annotated[
+        bool,
+        typer.Option(
+            "--break-lock",
+            help="Remove a deploy lock whose holder stopped beating; refused while it beats",
+        ),
+    ] = False,
 ) -> None:
     """Put a server back on an earlier release: stop current's processes, start
     and verify the target's, then move `current`. A target that fails to verify
@@ -107,6 +114,7 @@ def rollback_cmd(
             connect_timeout,
             command_timeout=command_timeout,
             verify_timeout=verify_timeout,
+            break_lock=break_lock,
         )
         code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
     except config.DeployError as exc:

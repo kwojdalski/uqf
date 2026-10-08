@@ -89,7 +89,7 @@ def rollback(
     Returns 0 when the target is running, verified and `current`."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
-    dep.take_lock()
+    dep.take_lock("rollback")
     try:
         current = _current(dep)
         if not current:
@@ -116,8 +116,10 @@ def rollback(
         log.info("stopping release {}'s processes", current)
         dep.uqs(f"{dep.releases}/{current}", "rollback", "stopping the current processes",
                 "stop", *now["processes"] or ["all"])  # fmt: skip
+        dep.beat()
         log.info("starting release {}'s profile {}", target, then["profile"])
         result = _start_and_verify(dep, target, then, f"release {target}")
+        dep.beat()
         if not result.get("passed"):
             reason = result.get("reason") or "verification failed"
             log.error("release {} did not verify: {}; restoring {}", target, reason, current)
