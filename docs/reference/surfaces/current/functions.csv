@@ -1043,7 +1043,9 @@ qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_mids,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
+qpipe.job.rebuild_positions,as_fills,function,1,deals
 qpipe.job.rebuild_positions,handler,function,3,dataset range_from range_to
+qpipe.job.rebuild_positions,side_sign,dict,,
 qpipe.job.superbook,books,dict,,
 qpipe.job.superbook,fx_only,function,1,x
 qpipe.job.superbook,levels,function,2,prices sizes
