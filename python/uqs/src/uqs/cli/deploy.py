@@ -39,7 +39,12 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 
 @deploy_app.command("build")
 def build(
-    output: Annotated[Path, typer.Option("--output", help="Directory to write the artifact into")],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output", help="Directory to write the artifact into; default: dist/ at the repo root"
+        ),
+    ] = None,
     arch: Annotated[
         str, typer.Option("--arch", help=f"The servers' architecture: {', '.join(PLATFORMS)}")
     ] = "x86_64",

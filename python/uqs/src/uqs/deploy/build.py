@@ -1,9 +1,10 @@
 """`uqs deploy build`: a versioned uqf release artifact, built once, for
 `uqs deploy push` to put on any number of servers (#778, #835).
 
-    uqs deploy build --output dist/
+    uqs deploy build
 
-writes, for the committed revision, the archive, its .sha256 and its manifest
+writes into dist/ at the repository root (or --output), for the committed
+revision, the archive, its .sha256 and its manifest
 (uqs.deploy.artifact). <release> is the UTC build time and the first 12
 characters of the revision.
 
@@ -248,8 +249,13 @@ def build_artifact(
     return Artifact(path=path, sha256=digest, manifest=manifest)
 
 
+#: Where an artifact goes unless --output says otherwise: the Python convention,
+#: gitignored at the root, and excluded from every release (payload.EXCLUDED).
+DEFAULT_OUTPUT = "dist"
+
+
 def build(
-    output: Path | str,
+    output: Path | str | None = None,
     *,
     arch: str = "x86_64",
     python: str | None = None,
@@ -258,9 +264,10 @@ def build(
     root: Path | None = None,
     runner: Runner = subprocess.run,
 ) -> Artifact:
-    """Build the artifact for the checkout at `root` into `output`."""
+    """Build the artifact for the checkout at `root` into `output`, by
+    default `root`/dist."""
     root = root or repo_root()
-    output = Path(output)
+    output = Path(output) if output is not None else root / DEFAULT_OUTPUT
     if arch not in PLATFORMS:
         raise ReleaseError("arguments", f"--arch {arch!r} must be one of {', '.join(PLATFORMS)}")
     if python is not None and not _PYTHON.fullmatch(python):
