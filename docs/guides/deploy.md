@@ -158,6 +158,22 @@ What `current` names, and so which release `--restart` stops, is read again once
 the lock is held. A deployment that activated between this run's preflight and
 its lock is seen, and is refused without `--restart`.
 
+## Rolling back
+
+To put a server back on an earlier release after it has activated:
+
+```bash
+uqs deploy rollback --host uqf-server --dest /opt/uqf --dry-run
+uqs deploy rollback --host uqf-server --dest /opt/uqf
+```
+
+It returns to the release the current one replaced, as the current release's
+report records it, or to `--to RELEASE`. Under the deploy lock it stops the
+current release's processes, starts the target's from the target's own release,
+and moves `current` only once the target's own verifier passes. A target that
+does not verify is stopped, and the current release's processes are started and
+verified again, so the server ends where it began. Nothing is deleted.
+
 ## Deploying as a service user
 
 On many servers the account you log in as is not the one that owns and runs uqf;
