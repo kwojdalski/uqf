@@ -353,6 +353,24 @@ nesting flattened blocks again wherever every name keeps its meaning (#859).
 - A single build-and-deploy command, or the Kafka and Databento feed handlers,
   which still start through `uv run`.
 
-A deployment that died while holding the lock leaves `deploy.lock/` behind. The
-next run refuses and names it. Remove the directory by hand once you are sure
-nothing is running.
+## A deployment that died holding the lock
+
+A push, a rollback or a prune holds `deploy.lock/` while it runs. It records
+what it is doing, its release, and the user, host and pid that started it. It
+also keeps a heartbeat on the server's clock, refreshed between stages. One
+killed mid-run leaves the lock behind. The next run refuses it, naming the
+holder and how long ago it last beat. Preflight and `uqs deploy status` show the
+same.
+
+`--break-lock` on `push` or `rollback` removes the lock, but only once its
+holder is gone. It is refused while either of these holds:
+
+- **The heartbeat is fresh.** The holder records how long it may go between
+  beats, from its own longest step: `--command-timeout`, by default, plus a
+  minute.
+- **The holder is alive here.** Its pid is still running, and this is the
+  machine it ran on.
+
+When it does break a lock, it says what it broke and why, then takes the lock
+itself. A lock written before this recorded no limit, so it is held to the
+current run's limit instead.
