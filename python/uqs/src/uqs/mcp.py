@@ -3,9 +3,12 @@
 demo (see docs/guides/uqs.md) as MCP tools, so an MCP client (e.g. Claude)
 can start/stop/query/configure it without shelling out.
 
-Shares its bootstrapping/config logic with the `uqs` Typer CLI - both
-front ends call the same functions in uqs's model/, stack/ and
-external/ modules, so they can't drift apart.
+Shares its bootstrapping/config logic with the `uqs` Typer CLI and the
+browser's control API. What a start may start is refused below all three,
+in stack/ (stack.runtime and stack.start_policy, #887), so a misspelt name
+or an unrunnable profile is refused here exactly as `uqs start` refuses it.
+The CLI's advisory warnings (unfed inputs, the connection cap for named
+processes) are its own: they are how it tells an operator, not refusals.
 
 Run (stdio transport, the default - point an MCP client's server command
 at this):
@@ -31,7 +34,7 @@ from uqs.external.crypto import (
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError
 from uqs.stack import clean as stack_clean
-from uqs.stack import listing, runtime
+from uqs.stack import listing, runtime, start_policy
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
 from uqs.stack.envfiles import load_repo_env_files
@@ -62,11 +65,22 @@ def _run(result_fn, *args, **kwargs) -> str:
 
 
 @mcp.tool
-def uqs_start(procs: str = "all", port: int | None = None) -> str:
+def uqs_start(procs: str = "all", port: int | None = None, profile: str | None = None) -> str:
     """Start the uqf stack. procs='all' starts every startwithall=1 process
     (including uqf's own fxfeed1); pass a space-separated list of process
-    names to start only specific ones.
+    names to start only specific ones. profile names comma-separated start
+    sets (`uqs list profiles`); procs given with it are added to the set.
     """
+    if profile is not None:
+        try:
+            members, _ = start_policy.resolve_profiles(
+                stack_paths.default_paths(),
+                profile,
+                [] if procs.strip() == "all" else procs.split(),
+            )
+        except UqsError as exc:
+            return f"ERROR: {exc}"
+        procs = " ".join(members)
     return _run(runtime.start, procs, base_port=port)
 
 
