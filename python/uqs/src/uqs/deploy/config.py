@@ -105,6 +105,11 @@ class Config:
     command_timeout: int = 900
     smoke_timeout: int = 120
     verify_timeout: int = 180
+    #: deploy an artifact built from uncommitted changes (#872)
+    allow_dirty: bool = False
+    #: owner/name whose releases a tag ARTIFACT names; default: origin's
+    release_repo: str | None = None
+
     #: fill the shared HDB's missing tables and columns in prepare (#870)
     fix_hdb: bool = False
 
@@ -193,6 +198,8 @@ def make_config(
     command_timeout: int = 900,
     smoke_timeout: int = 120,
     verify_timeout: int = 180,
+    allow_dirty: bool = False,
+    release_repo: str | None = None,
     fix_hdb: bool = False,
     keep: int | None = None,
     soak: int | None = None,
@@ -224,6 +231,10 @@ def make_config(
     for source in checked:
         if not _JOB.fullmatch(source):
             raise DeployError("arguments", f"--live-check {source!r} is not a source name")
+    if release_repo is not None and not re.fullmatch(
+        r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", release_repo
+    ):
+        raise DeployError("arguments", f"--release-repo {release_repo!r} is not OWNER/NAME")
     if keep is not None and keep < 0:
         raise DeployError("arguments", "--keep must be 0 or more")
     if soak is not None and soak <= 0:
@@ -256,6 +267,8 @@ def make_config(
         command_timeout=command_timeout,
         smoke_timeout=smoke_timeout,
         verify_timeout=verify_timeout,
+        allow_dirty=allow_dirty,
+        release_repo=release_repo,
         fix_hdb=fix_hdb,
         keep=keep,
         soak=soak,

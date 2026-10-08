@@ -1,0 +1,80 @@
+name: Release
+
+# Release artifacts are built HERE, never on a laptop (#872): after the same
+# checks as every push (ci.yml, called below), from the tagged commit, and
+# attached to a GitHub Release with each one's .sha256 and .manifest.json.
+# `uqs deploy push <tag>` downloads one and checks it against its published
+# .sha256 before anything touches a server.
+#
+# Two artifacts per release: the plain one, and one whose q is converted for
+# kdb+ 4.0 (`--q-target 4.0`, #861). push refuses to choose between them by
+# tag, so a release carrying both is deployed by URL.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing tag to build and publish"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    # An artifact exists only for a revision that passed ci.yml.
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      issues: read
+
+  build:
+    name: Build and publish the release artifacts
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      UV_LOCKED: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install workspace dependencies
+        run: uv sync --locked
+      - name: Build the artifacts
+        # Never --allow-dirty: a clean checkout of the tag is the point, and
+        # `uqs deploy build` refuses uncommitted changes without it.
+        run: |
+          set -euo pipefail
+          uv run uqs deploy build --output dist
+          uv run uqs deploy build --output dist --q-target 4.0
+          ls -l dist
+      - name: Publish them on the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "$TAG" \
+              --notes "Built by CI from $(git rev-parse HEAD) after its checks passed."
+          fi
+          gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 dist/*.manifest.json --clobber
+          {
+            echo "### Release $TAG"
+            for f in dist/*.tar.gz; do echo "- \`$(basename "$f")\` sha256 \`$(cut -d' ' -f1 "$f.sha256")\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"

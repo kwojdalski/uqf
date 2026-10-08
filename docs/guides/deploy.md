@@ -99,6 +99,29 @@ Pass `--arch aarch64` or `--python 3.14` for others. Uncommitted changes are
 refused unless you pass `--allow-dirty`, which the manifest records. Building
 needs `uv`, and network access to fetch the wheels.
 
+## Artifacts built by CI
+
+`.github/workflows/release.yml` builds the artifacts for a tag `v*`, or for a
+tag given to its manual run. It builds them only after `ci.yml`'s checks pass on
+that commit, and never with `--allow-dirty`. Each release gets two: the plain
+artifact, and one with its q converted for kdb+ 4.0 (`--q-target 4.0`). Each
+comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
+
+```bash
+uqs deploy push v1.4.0 --host uqf-server --dest /opt/uqf ... --dry-run
+uqs deploy push https://github.com/<owner>/uqf/releases/download/v1.4.0/uqf-<release>.tar.gz ...
+```
+
+- **By tag.** The release's assets are found through the GitHub API, in
+  `--release-repo OWNER/NAME`, or else in this checkout's `origin`. A release
+  carrying two artifacts is refused by tag, and the error names both URLs.
+- **The download.** The archive and its published `.sha256` go into
+  `~/.cache/uqf/releases/`. They are then checked exactly as a local artifact
+  is, before anything reaches the server. A token in `GH_TOKEN` or
+  `GITHUB_TOKEN` is sent for a private repository.
+- **Dirty artifacts.** `push` refuses an artifact built from uncommitted changes
+  (`dirty: true`) unless given `--allow-dirty`.
+
 ## A first deployment
 
 Show the plan first. `--dry-run` checks the artifact and runs only the read-only

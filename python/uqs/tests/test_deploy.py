@@ -90,7 +90,7 @@ def _verified(passed: bool, reason: str = "") -> subprocess.CompletedProcess:
     return _done(json.dumps(body) + "\n" + marker + "\n", rc=0 if passed else 1)
 
 
-def _artifact(tmp_path: Path, **target) -> Path:
+def _artifact(tmp_path: Path, dirty: bool = False, **target) -> Path:
     """A small real artifact: three files, a requirements file and two wheels."""
     root = tmp_path / "tree"
     files = ["pyproject.toml", "src/init.q", "scripts/deploy_smoke.q"]
@@ -108,7 +108,7 @@ def _artifact(tmp_path: Path, **target) -> Path:
         tmp_path / "dist",
         rid="20261007T000000Z-0123456789ab",
         rev="0123456789abcdef",
-        dirty=False,
+        dirty=dirty,
         files=files,
         target=t,
         python_dir=py,
@@ -925,6 +925,28 @@ def _run_with_facts(tmp_path, facts, q):
 def test_preflight_asks_the_servers_q_for_its_version():
     assert '-1 "DEPLOY_Q_OK ",string .z.K' in PREFLIGHT
     assert 'echo "qversion=$qversion"' in PREFLIGHT
+
+
+# --- an artifact CI built, by URL or tag; a dirty one refused (#872) -------------
+
+
+def test_a_dirty_artifact_is_refused_unless_allowed(tmp_path):
+    path = _artifact(tmp_path, dirty=True)
+    with pytest.raises(DeployError, match=r"uncommitted changes \(dirty: true\).*--allow-dirty"):
+        driver.deploy(parse_args(_args(path, "--dry-run")), FakeRemote(), out=io.StringIO())
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    out = io.StringIO()
+    assert (
+        driver.deploy(parse_args(_args(path, "--dry-run", "--allow-dirty")), remote, out=out) == 0
+    )
+    assert "(with uncommitted changes)" in out.getvalue()
+
+
+def test_a_dirty_artifact_is_refused_before_the_server_is_touched(tmp_path):
+    remote = FakeRemote()
+    with pytest.raises(DeployError):
+        driver.deploy(parse_args(_args(_artifact(tmp_path, dirty=True))), remote)
+    assert remote.scripts == []
 
 
 # --- --keep: prune after activation (#866) ----------------------------------------

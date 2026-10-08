@@ -8,7 +8,7 @@ import sys
 import time
 from datetime import UTC, datetime
 
-from uqs.deploy import hdb
+from uqs.deploy import fetch, hdb
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.prune import prune_locked
@@ -16,6 +16,7 @@ from uqs.deploy.remote import Transport
 from uqs.deploy.selection import Selection, select_jobs, smoke_args, verify_args
 from uqs.deploy.stages import Deployment, Report
 from uqs.logger import get_logger
+from uqs.paths import repo_root
 
 log = get_logger(__name__)
 
@@ -150,8 +151,15 @@ def _selection_lines(sel: Selection, live: bool) -> list[str]:
 
 
 def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
-    log.info("checking {}", cfg.artifact)
-    pkg = load_artifact(cfg.artifact)
+    local = fetch.resolve(cfg.artifact, repo=cfg.release_repo, root=repo_root())
+    log.info("checking {}", local)
+    pkg = load_artifact(local)
+    if pkg.manifest["dirty"] and not cfg.allow_dirty:
+        raise DeployError(
+            "artifact",
+            f"{pkg.path.name} was built from uncommitted changes (dirty: true) - deploy one "
+            "built from a commit, ideally by CI, or pass --allow-dirty",
+        )
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
     dep.selection = select_jobs(pkg.manifest, cfg.jobs)
