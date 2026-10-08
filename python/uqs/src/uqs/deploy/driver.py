@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
+from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
 from uqs.deploy.selection import Selection, select_jobs, smoke_args, verify_args
 from uqs.deploy.stages import Deployment, Report
@@ -93,6 +94,14 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
             else []
         ),
         "activate  " + f"{dep.current} -> releases/{rid}",
+        *(
+            [
+                f"prune     all but the newest {cfg.keep} releases - never current, the one "
+                "a rollback returns to, or one still running"
+            ]
+            if cfg.keep is not None
+            else []
+        ),
     ]
     size = pkg.path.stat().st_size
     t = pkg.manifest["target"]
@@ -265,6 +274,9 @@ def _run(
         report.stage = "done"
         dep.write_report(release, report, required=True)
         dep.activate(rid)
+        if cfg.keep is not None:
+            dep.beat()
+            report.pruned = _prune_after(dep, cfg.keep)
     except DeployError as exc:
         report.status = "failed"
         report.stage = exc.stage
@@ -279,6 +291,17 @@ def _run(
         dep.release_lock()
     print(json.dumps(report.as_dict(), indent=2), file=out)
     return 0 if report.status == "deployed" else 1
+
+
+def _prune_after(dep: Deployment, keep: int) -> dict:
+    """--keep, once the release is current and the lock still held. The
+    deployment has succeeded by then, so a prune that fails is reported, not
+    rolled back."""
+    try:
+        return prune_locked(dep, keep)
+    except DeployError as exc:
+        log.warning("the deployment succeeded, but pruning old releases failed: {}", exc)
+        return {"prune": "failed", "error": redact(str(exc))}
 
 
 def _now() -> str:
