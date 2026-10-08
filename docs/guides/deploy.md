@@ -291,6 +291,9 @@ then writes nothing. Its JSON report lists the files, contexts, refusals and
 check results. A converted tree is not proof that a release runs on 4.0: only a
 `--check` on that interpreter is. `uqs deploy build` does not run it.
 
+`--exclude PATTERN` leaves a folder, file or glob out (still read, never
+written), `--diff` prints each change, and `--debug` logs every rewrite and why.
+
 `--target 5.0` goes the other way, nesting flattened blocks again wherever every
 name keeps its meaning (#859). Anything else stays flat, which 5.0 also runs.
 

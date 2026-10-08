@@ -70,7 +70,10 @@ the target interpreter is evidence that the result works.
 from __future__ import annotations
 
 import argparse
+import difflib
+import fnmatch
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -643,9 +646,15 @@ class FileResult:
     qualified: int = 0
     loads: list[dict] = field(default_factory=list)
     nested: list[dict] = field(default_factory=list)  # blocks the 5.0 target rebuilt
+    #: every rewrite, for --debug: line, column, before, after, why
+    decisions: list[dict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     warnings: list[Finding] = field(default_factory=list)
     refusals: list[Finding] = field(default_factory=list)
+
+
+def _decision(t: Tok, after: str, why: str) -> dict:
+    return {"line": t.line, "column": t.col + 1, "before": t.text, "after": after, "why": why}
 
 
 def _context_of(cmd: str) -> str | None:
@@ -852,8 +861,13 @@ class Converter:
             for use in st.uses:
                 leaf = self._short(st, use, ctx)
                 if leaf is not None:
+                    t = toks[use.idx]
+                    res.decisions.append(_decision(t, leaf, f"binds the same inside {ctx}"))
                     out[use.idx] = leaf
                     shortened += 1
+        res.decisions.append(
+            _decision(toks[head], f"\\d {ctx}", "its definitions all belong there")
+        )
         out[head] = f"\\d {ctx}"
         res.nested.append(
             {
@@ -932,6 +946,7 @@ class Converter:
                 {"line": t.line, "context": new or "(query)", "nested": _nested(new)}
             )
             if self.target == "4.0" and _nested(new):
+                res.decisions.append(_decision(t, "\\d .", "4.0 has no nested contexts"))
                 out[idx] = "\\d ."
             return
         parts = t.text.split(None, 1)
@@ -1041,6 +1056,10 @@ class Converter:
             res.refusals.append(Finding(res.path, t.line, t.col, code, reason))
 
         def qualify() -> None:
+            verb = {"assign": "defines", "gassign": "assigns", "ref": "refers to"}.get(
+                use.role, "amends"
+            )
+            res.decisions.append(_decision(t, f"{ctx}.{name}", f"{verb} a global of {ctx}"))
             out[use.idx] = f"{ctx}.{name}"
             res.qualified += 1
 
@@ -1115,12 +1134,25 @@ def _vendored(rel: Path) -> bool:
     return any(rel.as_posix().startswith(v) for v in VENDORED)
 
 
+def _excluded(rel: str, patterns: Sequence[str]) -> bool:
+    """`rel` matches an --exclude: a folder or file path, or a glob, all
+    relative to the root (`tests`, `src/etl/streaming/`, `*/test_*.q`)."""
+    for pat in patterns:
+        bare = pat.strip().rstrip("/").removeprefix("./")
+        if not bare:
+            continue
+        if rel == bare or rel.startswith(bare + "/") or fnmatch.fnmatch(rel, bare):
+            return True
+    return False
+
+
 def select_inputs(
-    root: Path, paths: Sequence[str], include_vendored: bool
-) -> tuple[list[Path], list[str]]:
-    """The .q files to convert, and why any named path was refused. A
-    directory gives the files git does not ignore; a file named explicitly is
-    taken even if git ignores it, so a local bundle can be selected."""
+    root: Path, paths: Sequence[str], include_vendored: bool, exclude: Sequence[str] = ()
+) -> tuple[list[Path], list[Path], list[str]]:
+    """The .q files to convert, the ones --exclude holds back, and why any
+    named path was refused. A directory gives the files git does not
+    ignore; a file named explicitly is taken even if git ignores it, so a
+    local bundle can be selected - unless --exclude matches it, which wins."""
     chosen: set[Path] = set()
     problems: list[str] = []
     for raw in paths:
@@ -1143,7 +1175,8 @@ def select_inputs(
             if f.suffix == ".q" and f.is_file():
                 if include_vendored or not _vendored(f.relative_to(root)):
                     chosen.add(f)
-    return sorted(chosen), problems
+    held = {f for f in chosen if _excluded(f.relative_to(root).as_posix(), exclude)}
+    return sorted(chosen - held), sorted(held), problems
 
 
 # --------------------------------------------------------------------- run
@@ -1193,6 +1226,55 @@ def _publish(stage: Path, out: Path) -> None:
         stage.rename(out)
 
 
+def _logger(debug: bool, quiet: bool) -> logging.Logger:
+    """Progress on stderr, so stdout stays the JSON report: a summary by
+    default, every decision with --debug, nothing but problems with --quiet."""
+    log = logging.getLogger("flatten_contexts")
+    log.handlers.clear()
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(levelname)-7s %(message)s"))
+    log.addHandler(handler)
+    log.propagate = False
+    log.setLevel(logging.DEBUG if debug else logging.WARNING if quiet else logging.INFO)
+    return log
+
+
+def _log_file(log: logging.Logger, r: FileResult) -> None:
+    for d in r.decisions:
+        log.debug(
+            "%s:%d:%d %s -> %s (%s)",
+            r.path,
+            d["line"],
+            d["column"],
+            d["before"],
+            d["after"],
+            d["why"],
+        )
+    for note in r.notes:
+        log.debug("%s: %s", r.path, note)
+    for w in r.warnings:
+        log.warning("%s:%d:%d %s: %s", r.path, w.line, w.col + 1, w.code, w.reason)
+    for x in r.refusals:
+        log.error("%s:%d:%d %s: %s", r.path, x.line, x.col + 1, x.code, x.reason)
+    log.debug("%s: %s", r.path, r.action)
+
+
+def _summarise(log: logging.Logger, report: dict) -> None:
+    for problem in report["problems"]:
+        log.error("%s", problem)
+    actions = [f["action"] for f in report["files"]]
+    log.info(
+        "%s: %d transformed, %d unchanged, %d excluded, %d refusal(s), %d warning(s)%s",
+        report["status"],
+        actions.count("transformed"),
+        actions.count("unchanged"),
+        len(report["excluded"]),
+        len(report["refusals"]),
+        len(report["warnings"]),
+        " - dry run, nothing written" if report["dry_run"] else "",
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("paths", nargs="+", help="q files or directories to convert")
@@ -1205,6 +1287,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--root", default=str(REPO), help="paths are kept relative to this")
     ap.add_argument("--dry-run", action="store_true", help="report only; write nothing")
+    ap.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help="a folder, file or glob under the root to leave out of the conversion; still read, "
+        "so its definitions inform the rest; repeatable",
+    )
+    ap.add_argument("--diff", action="store_true", help="print a unified diff of each change")
+    ap.add_argument("--debug", action="store_true", help="log every rewrite and why, on stderr")
+    ap.add_argument("--quiet", action="store_true", help="no summary on stderr")
     ap.add_argument("--force", action="store_true", help="replace an existing, non-empty --out")
     ap.add_argument("--include-vendored", action="store_true", help=f"also convert {VENDORED}")
     ap.add_argument(
@@ -1221,9 +1314,10 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    log = _logger(args.debug, args.quiet)
     root = Path(args.root).resolve()
     out = Path(args.out).resolve()
-    files, problems = select_inputs(root, args.paths, args.include_vendored)
+    files, held, problems = select_inputs(root, args.paths, args.include_vendored, args.exclude)
     inputs = [Path(p).resolve() for p in args.paths]
     if any(out == i or out.is_relative_to(i) or i.is_relative_to(out) for i in [root, *inputs]):
         problems.append(f"--out {args.out} overlaps the root or the inputs")
@@ -1233,14 +1327,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         problems.append("--dry-run writes nothing, so it takes no --report; read stdout")
 
     conv = Converter(args.target, args.allow_computed_names)
-    rels = {f: f.relative_to(root).as_posix() for f in files}
-    texts = {f: f.read_text(encoding="utf-8") for f in files}
-    for f in files:
+    rels = {f: f.relative_to(root).as_posix() for f in [*files, *held]}
+    texts = {f: f.read_text(encoding="utf-8") for f in [*files, *held]}
+    for f in [*files, *held]:
+        # An excluded file is read, never converted: what it defines still
+        # decides whether a name elsewhere is ambiguous.
         conv.collect(rels[f], texts[f])
     conv.propagate()
     results = [conv.convert(rels[f], texts[f]) for f in files]
+    for f in held:
+        log.debug("excluded %s", rels[f])
+    for r, f in zip(results, files, strict=True):
+        _log_file(log, r)
+        if args.diff and r.action == "transformed":
+            sys.stderr.writelines(
+                difflib.unified_diff(
+                    texts[f].splitlines(keepends=True),
+                    r.output.splitlines(keepends=True),
+                    f"a/{r.path}",
+                    f"b/{r.path}",
+                )
+            )
 
-    selected = set(rels.values())
+    selected = {rels[f] for f in files}
     report: dict = {
         "target": args.target,
         "claim": CLAIMS[args.target],
@@ -1248,6 +1357,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "out": str(out),
         "dry_run": args.dry_run,
         "problems": problems,
+        "excluded": [rels[f] for f in held],
         "files": [
             {
                 "path": r.path,
@@ -1257,6 +1367,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "qualified": r.qualified,
                 "nested": r.nested,
                 "notes": r.notes,
+                "decisions": r.decisions,
             }
             for r in results
         ],
@@ -1293,6 +1404,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if stage.exists():
                 shutil.rmtree(stage)
     report["status"] = ("ok", "refused", "validation-failed")[status]
+    _summarise(log, report)
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.report and not args.dry_run:
         Path(args.report).write_text(text, encoding="utf-8")

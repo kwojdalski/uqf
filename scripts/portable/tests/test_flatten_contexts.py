@@ -425,7 +425,7 @@ def _tree(root: Path, files: dict[str, str]) -> None:
 
 def _run(root: Path, *args: str, capsys) -> tuple[int, dict]:
     """main() on paths relative to root, as a caller in root would pass them."""
-    flags_with_values = {"--out", "--check", "--q", "--report", "--target", "--root"}
+    flags_with_values = {"--out", "--check", "--q", "--report", "--target", "--root", "--exclude"}
     argv, take = [], False
     for a in args:
         if take or a.startswith("-"):
@@ -842,3 +842,109 @@ def test_the_5_0_report_names_the_rebuilt_contexts(tmp_path, capsys):
     ]
     assert report["namespace_mappings"] == {"src/m.q": [".m.n"]}
     assert (tmp_path / "out" / "src" / "m.q").read_text() == "\\d .m.n\nf:{g x}\ng:{x}\n\\d .\n"
+
+
+def test_exclude_leaves_folders_and_globs_out(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(
+        src,
+        {
+            **GOOD,
+            "tests/t.q": "\\d .a.b\n`v set 1\n",  # would be refused
+            "src/gen/x.q": "\\d .g.h\nf:{x}\n",
+            "src/test_y.q": "\\d .y.z\nf:{x}\n",
+        },
+    )
+    code, report = _run(
+        src,
+        ".",
+        "--out",
+        str(tmp_path / "out"),
+        "--exclude",
+        "tests",
+        "--exclude",
+        "src/gen/",
+        "--exclude",
+        "*/test_*.q",
+        capsys=capsys,
+    )
+    assert (code, report["status"]) == (0, "ok"), report["refusals"]
+    assert report["excluded"] == ["src/gen/x.q", "src/test_y.q", "tests/t.q"]
+    assert {f["path"] for f in report["files"]} == {"src/m.q", "src/lib.q"}
+    assert not (tmp_path / "out" / "tests").exists()
+    assert not (tmp_path / "out" / "src" / "gen").exists()
+
+
+def test_an_excluded_file_still_informs_the_others(tmp_path, capsys):
+    # `lim` is the context's global in the excluded file, so the qSQL phrase
+    # naming it in the converted one is still ambiguous - and still refused.
+    src = tmp_path / "repo"
+    _tree(
+        src,
+        {
+            "src/a.q": "\\d .a.b\nf:{select from t where px>lim}\n",
+            "src/held.q": "\\d .a.b\nlim:1\n",
+        },
+    )
+    code, report = _run(
+        src, "src", "--out", str(tmp_path / "out"), "--exclude", "src/held.q", capsys=capsys
+    )
+    assert code == 1 and [r["code"] for r in report["refusals"]] == ["ambiguous-qsql"]
+
+
+def test_an_explicitly_named_file_is_still_excluded(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, GOOD)
+    code, report = _run(
+        src,
+        "src/m.q",
+        "--out",
+        str(tmp_path / "out"),
+        "--exclude",
+        "src/m.q",
+        "--dry-run",
+        capsys=capsys,
+    )
+    assert code == 0 and report["files"] == [] and report["excluded"] == ["src/m.q"]
+
+
+def test_diff_debug_and_the_summary_go_to_stderr(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, GOOD)
+    code = fc.main(
+        [
+            "--root",
+            str(src),
+            str(src / "src"),
+            "--out",
+            str(tmp_path / "out"),
+            "--dry-run",
+            "--diff",
+            "--debug",
+        ]
+    )
+    cap = capsys.readouterr()
+    assert code == 0 and json.loads(cap.out)["status"] == "ok"
+    assert "--- a/src/m.q\n+++ b/src/m.q\n" in cap.err
+    assert "\n-f:{g x}\n" in cap.err and "\n+.m.n.f:{.m.n.g x}\n" in cap.err
+    assert "src/m.q:3:6 k -> .m.n.k (refers to a global of .m.n)" in cap.err
+    assert "1 transformed, 1 unchanged, 0 excluded" in cap.err and "dry run" in cap.err
+    report = json.loads(cap.out)
+    m = next(f for f in report["files"] if f["path"] == "src/m.q")
+    assert {
+        "line": 1,
+        "column": 1,
+        "before": "\\d .m.n",
+        "after": "\\d .",
+        "why": "4.0 has no nested contexts",
+    } in m["decisions"]
+
+
+def test_quiet_prints_nothing_but_the_report(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, GOOD)
+    fc.main(
+        ["--root", str(src), str(src / "src"), "--out", str(tmp_path / "o"), "--dry-run", "--quiet"]
+    )
+    cap = capsys.readouterr()
+    assert cap.err == "" and json.loads(cap.out)["status"] == "ok"
