@@ -115,13 +115,16 @@ def test_run_torq_sh_runs_a_site_launcher_under_the_generated_env(monkeypatch, t
     ],
 )
 def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, message):
+    """Refused BEFORE bootstrap: bootstrap writes the data directory, the
+    generated process.csv and setenv.sh, and a start that is going to be
+    refused must not have written any of them first."""
     if value == "PLAIN":
         plain = tmp_path / "torq.sh"
         plain.write_text("")
         plain.chmod(0o644)
         value = str(plain)
     monkeypatch.setenv("UQS_TORQ_LAUNCHER", value)
-    monkeypatch.setattr(runtime, "bootstrap", lambda *_a, **_k: {})
+    monkeypatch.setattr(runtime, "bootstrap", lambda *_a, **_k: pytest.fail("bootstrapped"))
     monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: pytest.fail("ran"))
     with pytest.raises(UqsError, match=f"UQS_TORQ_LAUNCHER=.*{message}"):
         runtime.run_torq_sh(_paths(), ["summary"])

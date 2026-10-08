@@ -189,7 +189,11 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
     def refuse(paths, base_port):
         raise UqsError("lib/torq not vendored")
 
-    monkeypatch.setattr(stack_paths, "default_paths", lambda: SimpleNamespace())
+    # torqhome: the launcher is resolved before bootstrap runs, from TORQHOME.
+    monkeypatch.delenv("UQS_TORQ_LAUNCHER", raising=False)
+    monkeypatch.setattr(
+        stack_paths, "default_paths", lambda: SimpleNamespace(torqhome=Path("/repo/lib/torq"))
+    )
     monkeypatch.setattr(runtime, "bootstrap", refuse)
     with pytest.raises(ValidationFailed, match="not vendored"):
         control.start_backfill(Settings(enable_writes=True), **_backfill_args())
