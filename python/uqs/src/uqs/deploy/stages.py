@@ -83,6 +83,9 @@ class Report:
     extra_processes: list[str] = field(default_factory=list)
     bundles: dict[str, dict] = field(default_factory=dict)
     live: bool = False
+    #: the shared HDB against this release's schema, and what was filled (#870)
+    hdb: dict | None = None
+
     #: what --keep removed after activation (#866), when it was given
     pruned: dict | None = None
 

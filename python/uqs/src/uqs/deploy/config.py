@@ -105,6 +105,9 @@ class Config:
     command_timeout: int = 900
     smoke_timeout: int = 120
     verify_timeout: int = 180
+    #: fill the shared HDB's missing tables and columns in prepare (#870)
+    fix_hdb: bool = False
+
     #: after activation, keep the newest this many releases (#866); None keeps all
     keep: int | None = None
 
@@ -190,6 +193,7 @@ def make_config(
     command_timeout: int = 900,
     smoke_timeout: int = 120,
     verify_timeout: int = 180,
+    fix_hdb: bool = False,
     keep: int | None = None,
     soak: int | None = None,
     break_lock: bool = False,
@@ -252,6 +256,7 @@ def make_config(
         command_timeout=command_timeout,
         smoke_timeout=smoke_timeout,
         verify_timeout=verify_timeout,
+        fix_hdb=fix_hdb,
         keep=keep,
         soak=soak,
         break_lock=break_lock,

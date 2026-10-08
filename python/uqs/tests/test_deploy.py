@@ -264,6 +264,8 @@ def test_a_dry_run_changes_nothing_and_shows_the_plan(tmp_path):
 _HEALTHY = {
     "uv python find": _done(SERVER + "data=present\n"),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
+    # a server with no HDB yet: nothing for the release's hdb-check to judge (#870)
+    "uqs data hdb-check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
 }
 
@@ -1066,6 +1068,14 @@ def test_the_lock_beats_between_stages(tmp_path):
     stages = [stage for stage, _ in remote.scripts]
     assert len(beats) >= 5, "after transfer, prepare and smoke, and around verify"
     assert stages.index("transfer") < beats[0] and beats[-1] < stages.index("activate")
+
+
+def test_the_lock_beats_between_prepare_and_the_hdb_check(tmp_path):
+    _, remote, _ = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    stages = [stage for stage, _ in remote.scripts]
+    last_prepare = len(stages) - 1 - stages[::-1].index("prepare")
+    between = remote.scripts[last_prepare + 1 : stages.index("hdb")]
+    assert any("/heartbeat; fi" in s for _, s in between), "each may take command_timeout"
 
 
 def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
