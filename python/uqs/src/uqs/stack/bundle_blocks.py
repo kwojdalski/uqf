@@ -10,6 +10,8 @@ text is a line comment, where a line of only `/` would open a block comment.
 
 from __future__ import annotations
 
+import re
+
 from uqs.paths import UqsError
 
 
@@ -30,6 +32,15 @@ def _span(lines: list[str], name: str, what: str) -> tuple[int, int] | None:
     if len(starts) != 1 or len(ends) != 1 or ends[0] < starts[0]:
         raise BundleError(f"{what}: bundle {name}'s BEGIN/END markers are damaged - fix by hand")
     return starts[0], ends[0]
+
+
+#: A block's opening line, as _markers writes it.
+BEGIN_LINE = re.compile(r"^/ BEGIN bundle (\S+)\s*$", re.M)
+
+
+def block_names(text: str) -> list[str]:
+    """The bundles with a block in `text`, in the order they appear."""
+    return BEGIN_LINE.findall(text)
 
 
 def without_block(text: str, name: str, what: str) -> str:
