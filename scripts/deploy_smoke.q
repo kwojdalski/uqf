@@ -11,7 +11,15 @@
 / and the reason on stderr, and exits 1. deploy.py requires the marker AND the
 / exit code, so a q that dies quietly part-way cannot pass.
 / .
-/ Run from the release root: q scripts/deploy_smoke.q -q
+/ THEN THE ETL COMPOSITION (#902), when -procs names the processes the
+/ deployment will start: their declarations, and only theirs, are loaded
+/ against this server's starter-pack schema ($TORQAPPHOME/database.q) - the
+/ load each of those processes does at startup. A job whose table that schema
+/ lacks fails here, naming the job, the table and the schema's path, before
+/ anything is stopped or started. Names that run no declared job (rdb1,
+/ tpreplay1, ...) load nothing and are passed over.
+/ .
+/ Run from the release root: q scripts/deploy_smoke.q -q [-procs p1 p2 ...]
 
 \d .qdeploysmoke
 
@@ -40,5 +48,10 @@ checks:{[]
 @[system;"l src/init.q";{[e] -2 "DEPLOY_SMOKE_FAILED: could not load the quant library: ",e; exit 1}];
 .qdeploysmoke.results:@[.qdeploysmoke.checks;::;{[e] -2 "DEPLOY_SMOKE_FAILED: a check threw: ",e; exit 1}];
 if[not all .qdeploysmoke.results; exit 1];
+if[`procs in key .Q.opt .z.x;
+    system"l src/etl/generated/load_plan.q";
+    .qetl.load.only:p where (p:`$(.Q.opt .z.x)`procs) in key .qetl.load.procs;
+    @[system;"l src/etl/init.q";{[e] -2 "DEPLOY_SMOKE_FAILED: the ETL composition does not load: ",e; exit 1}];
+    -1 "deploy smoke: ETL composition loaded for ",$[count .qetl.load.only;", " sv string .qetl.load.only;"no job (infrastructure only)"]];
 -1 "DEPLOY_SMOKE_OK";
 exit 0

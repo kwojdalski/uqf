@@ -458,7 +458,7 @@ def stack_copy(tmp_path: Path):
             check=False,
         )
 
-    yield repo, bundle, uqs
+    yield repo, bundle, uqs, env
     for proc in ("all", "feed1", "synthfeed1"):
         uqs("stop", proc)
 
@@ -466,7 +466,7 @@ def stack_copy(tmp_path: Path):
 @needs_peachq
 @pytest.mark.skipif(not STACK, reason="UQF_PEACHQ_STACK_TEST=1 starts a PeachQ stack")
 def test_a_bundles_jobs_run_on_peachq(stack_copy):
-    repo, bundle, uqs = stack_copy
+    repo, bundle, uqs, _env = stack_copy
     ledger = repo / "src" / "etl" / "installed_bundles.json"
     dry = uqs("runtime", "prepare", "--bundle", str(bundle), "--dry-run")
     assert dry.returncode == 0, dry.stdout + dry.stderr
@@ -513,3 +513,60 @@ def test_a_bundles_jobs_run_on_peachq(stack_copy):
         [PEACHQ, str(read), "-q"], capture_output=True, text=True, timeout=60, check=False
     ).stdout.splitlines()
     assert written == ["1 2 3 4 5", "101 102 103 104 105f"], "yesterday's partition, in order"
+
+
+#: The starter pack's own tables, which a managed TorQ install need not have.
+DEMO_TABLES = ("quote", "trade", "packets")
+
+
+@needs_peachq
+@pytest.mark.skipif(not STACK, reason="UQF_PEACHQ_STACK_TEST=1 starts a PeachQ stack")
+def test_a_sidecar_runs_against_a_managed_schema_without_the_demo_tables(stack_copy, tmp_path):
+    """#902: every process used to load every declaration, so the demo's
+    market_data - which asks for `quote` at load time - stopped a sidecar from
+    starting against a schema without it. Now the sidecar loads its own."""
+    repo, bundle, uqs, env = stack_copy
+    managed = tmp_path / "managed-starter-pack"
+    shutil.copytree(REPO / "lib" / "torq-finance-starter-pack", managed, symlinks=True)
+    schema = managed / "database.q"
+    schema.write_text(
+        "".join(
+            line
+            for line in schema.read_text().splitlines(keepends=True)
+            if not line.startswith(tuple(f"{t}:" for t in DEMO_TABLES))
+        )
+    )
+    env["TORQAPPHOME"] = str(managed)
+    prep = uqs("runtime", "prepare", "--bundle", str(bundle))
+    assert prep.returncode == 0, prep.stdout + prep.stderr
+    plan = (repo / "src" / "etl" / "generated" / "load_plan.q").read_text()
+    assert '.qetl.load.procs[`synthfeed1]:enlist "src/etl/streaming/synth_feed.q"' in plan
+
+    started = uqs("start", "discovery1", "stp1", "rdb1", "synthfeed1")
+    assert started.returncode == 0, started.stdout + started.stderr
+    rows = ""
+    for _ in range(30):
+        rows = uqs("query", "exec seq from synth_tape", "--port", "6552", timeout=30).stdout
+        if "1 2 3 4 5" in rows:
+            break
+        time.sleep(1)
+    assert "1 2 3 4 5" in rows, f"the RDB holds {rows!r}"
+    px = uqs("query", "exec px from synth_tape", "--port", "6552", timeout=30).stdout
+    assert "101 102 103 104 105" in px
+    # The deploy smoke over this composition, on the tree it started from,
+    # passes; one that needs quote fails, naming it.
+    tree = repo / "output" / "uqs-peachq-etl" / "qtree"
+    smoke = [PEACHQ, "scripts/deploy_smoke.q", "-q", "-procs", "rdb1", "synthfeed1"]
+    ok = subprocess.run(smoke, cwd=tree, env=env, capture_output=True, text=True, timeout=120)
+    assert "DEPLOY_SMOKE_OK" in ok.stdout, ok.stdout + ok.stderr
+    assert "synthfeed1" in ok.stdout
+    bad = subprocess.run(
+        [*smoke, "superbook1"], cwd=tree, env=env, capture_output=True, text=True, timeout=120
+    )
+    assert "DEPLOY_SMOKE_OK" not in bad.stdout
+    assert "no table quote" in bad.stderr and str(schema) in bad.stderr, bad.stderr
+
+    # Nothing unselected was started, and no worker ran.
+    assert not (
+        repo / "output" / "uqs-peachq-etl" / "status" / "airflow_status_synthhist1.txt"
+    ).exists()
