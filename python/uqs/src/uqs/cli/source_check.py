@@ -36,7 +36,7 @@ def sources_check(
         Path | None,
         typer.Option(
             "--odbc-home",
-            envvar="UQS_ODBC_HOME",
+            envvar=odbc_home.ODBC_HOME_ENV,
             help="A private ODBC setup (uqs odbc install) whose current version to load",
         ),
     ] = None,

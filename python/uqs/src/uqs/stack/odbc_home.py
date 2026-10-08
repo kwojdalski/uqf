@@ -52,6 +52,9 @@ from pathlib import Path, PurePosixPath
 
 from uqs.paths import UqsError
 
+#: The variable naming the ODBC home, for `--home` and `--odbc-home`.
+ODBC_HOME_ENV = "UQS_ODBC_HOME"
+
 APPROVED = "approved_packages.csv"
 MANIFEST = "package.json"
 ENV_FILE = "env.sh"

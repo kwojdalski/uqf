@@ -26,7 +26,7 @@ app.add_typer(odbc_app, name="odbc")
 
 Home = Annotated[
     Path,
-    typer.Option("--home", envvar="UQS_ODBC_HOME", help="The ODBC home directory"),
+    typer.Option("--home", envvar=odbc_home.ODBC_HOME_ENV, help="The ODBC home directory"),
 ]
 
 
