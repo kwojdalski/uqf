@@ -45,6 +45,9 @@ package = false
 # exclusion list, so nobody has to remember `--exclude` for the vendored tree
 # or for the agent worktrees nested inside the repository.
 [tool.q-lint]
+# Read by the qlinter CI pins (v0.2.0, .github/workflows/ci.yml), which
+# accepts only `exclude` here. Newer releases read .qlinter.toml instead,
+# which repeats this list - test_check_q_traps.py holds the two equal.
 exclude = ["lib/torq/", ".claude/worktrees/"]
 
 [tool.uv.workspace]
