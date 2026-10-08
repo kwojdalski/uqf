@@ -89,6 +89,17 @@ nErr:sum res[`status]=`error;
 -1 (string nTotal)," tests: ",(string nPass)," passed, ",(string nFail)," failed, ",(string nErr)," errored";
 -1 "============================================================";
 
+/ The failures as data, for a lane that holds them to a list
+/ (scripts/portable/full_suite.py, the PeachQ lane): one line per test that
+/ did not pass - name, status and why, tab-separated - in the file
+/ UQF_TEST_FAILURES names. Written before the exit below, and empty when
+/ every test passed.
+if[count getenv `UQF_TEST_FAILURES;
+    bad:select name,status,detail:{$[x=`error; y; z]}'[status;result;msg] from res where status<>`pass;
+    flat:{ssr[ssr[x;"\n";" "];"\t";" "]};
+    lines:{[flat;r] "\t" sv (string r`name;string r`status;flat $[10h=type d:r`detail; d; -3!d])}[flat] each bad;
+    (hsym `$getenv `UQF_TEST_FAILURES) 0: $[count lines; lines; enlist ""]];
+
 if[(nFail+nErr)>0;
     -1 "";
     -1 "Failures/errors:";

@@ -30,7 +30,7 @@ Reading the book needs no handle of your own --- `--port` is the one
 `uqs summary` shows for it (`KDBBASEPORT`+39, so 6089 on a default stack):
 
 ```bash
-uqs query --port 6089 "0!.qpipe.job.fx_positions.book"
+uqs query --port 6089 "0!.qpipe.job.fx_positions.positions"
 uqs query --port 6089 "select from fx_limit_breach"
 uqs query --port 6089                    # an interactive qcon session
 ```
@@ -54,7 +54,7 @@ Then, from any q session:
 
 ```q
 h:hopen `::5011
-h"0!.qpipe.job.fx_positions.book"
+h"0!.qpipe.job.fx_positions.positions"
 ```
 
 `lib/torq` is never loaded on any of these. Neither path is the "real" one: a

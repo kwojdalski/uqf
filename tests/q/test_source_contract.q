@@ -487,10 +487,10 @@ bare_from_names:{[file] bare_from_in read0 ` sv `:src/etl/sources,file}
 / A source written the way the live path needs, and the same source written
 / the way that fails - as literal text, so the reader is exercised without a
 / file existing anywhere.
-ok_source:("\\d .qpipe.source.probe";"query:{[h;a;b]";
+ok_source:("\\d .probe";"query:{[h;a;b]";
     "    h({[f;t] select time from `trade where time>=f};a;b)}";
     "fixture:{[] ([] time:`timestamp$())}")
-bare_source:("\\d .qpipe.source.probe";"query:{[h;a;b]";
+bare_source:("\\d .probe";"query:{[h;a;b]";
     "    h({[f;t] select time from trade where time>=f};a;b)}";
     "fixture:{[] ([] time:`timestamp$())}")
 

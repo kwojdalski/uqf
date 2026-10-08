@@ -14,7 +14,7 @@ setUp_fresh:{[]
     system"rm -rf ",.uptimetest.dir;
     system"mkdir -p ",.uptimetest.dir;
     delete etl_stream_uptime from `.;
-    `.qetl.uptime.mine set `guid$();
+    `.qetl.uptime.mine set 0#0Ng;
     `.qetl.uptime.failed_seen set (`symbol$())!`long$();
     delete from `.qetl.stream_health.batches;
     }
@@ -22,7 +22,7 @@ setUp_fresh:{[]
 tearDown_fresh:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     delete etl_stream_uptime from `.;
-    `.qetl.uptime.mine set `guid$();
+    `.qetl.uptime.mine set 0#0Ng;
     `.qetl.uptime.failed_seen set (`symbol$())!`long$();
     delete from `.qetl.stream_health.batches;
     }

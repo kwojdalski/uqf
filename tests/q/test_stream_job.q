@@ -36,7 +36,7 @@ reset:{[]
     `.qpipe.job.posbook.book set 1!0#.qpipe.job.posbook.position_book;
     `.qpipe.job.posbook.last_mid set (`symbol$())!`float$();
     `.qpipe.job.crypto_mock.last_id set .qpipe.job.crypto_mock.venues!(count .qpipe.job.crypto_mock.venues)#0;
-    `.qpipe.job.fx_positions.book set `sym`book`product xkey 0#.qpipe.job.fx_positions.desk_book;
+    `.qpipe.job.fx_positions.positions set `sym`book`product xkey 0#.qpipe.job.fx_positions.desk_book;
     `.qpipe.job.fx_positions.limits set 0#.qpipe.job.fx_positions.limits;
     `.qpipe.job.fx_positions.alerts set .qlimit.no_alerts[];
     {.qetl.job.stream.wire[x;.sjtest.recorder x]} each .qetl.job.stream.defined[];
@@ -888,22 +888,22 @@ orders_batch:{[]
 test_positions_net_only_filled_orders:{[t]
     reset[];
     .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
-    .qunit.assertEquals[count .qpipe.job.fx_positions.book;2;
+    .qunit.assertEquals[count .qpipe.job.fx_positions.positions;2;
         "two positions - the cancelled 5mm buy is not one of them"];
-    .testutil.assertApprox[.qpipe.job.fx_positions.book[`EURUSD`london`spot]`base_qty;600000f;1e-9;
+    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;600000f;1e-9;
         "and it did not move london's, which is 1mm bought less 400k sold"]};
 
 test_positions_keep_the_books_apart:{[t]
     reset[];
     .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
-    .testutil.assertApprox[.qpipe.job.fx_positions.book[`EURUSD`newyork`spot]`base_qty;250000f;1e-9;
+    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`newyork`spot]`base_qty;250000f;1e-9;
         "newyork's fill is its own position, not netted into london's"]};
 
 test_positions_ignore_a_table_they_did_not_subscribe_to:{[t]
     reset[];
     .qpipe.job.fx_positions.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD;
         side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qunit.assertEmpty[.qpipe.job.fx_positions.book;"a batch on another table moves nothing"]};
+    .qunit.assertEmpty[.qpipe.job.fx_positions.positions;"a batch on another table moves nothing"]};
 
 test_positions_accumulate_across_batches:{[t]
     reset[];
@@ -912,7 +912,7 @@ test_positions_accumulate_across_batches:{[t]
         sym:enlist `EURUSD; book:enlist `london; product:enlist `spot;
         side:enlist 1; size:enlist 400000f; price:enlist 1.0870;
         order_status:enlist `filled)];
-    .testutil.assertApprox[.qpipe.job.fx_positions.book[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
+    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
         "the second batch is added to the book, not substituted for it"]};
 
 test_the_book_changes_before_anything_is_published:{[t]
@@ -921,7 +921,7 @@ test_the_book_changes_before_anything_is_published:{[t]
     reset[];
     .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
     .qunit.assertEmpty[.sjtest.published;"the batch handler publishes nothing at all"];
-    .qunit.assertEquals[count .qpipe.job.fx_positions.book;2;"while the book has already moved"]};
+    .qunit.assertEquals[count .qpipe.job.fx_positions.positions;2;"while the book has already moved"]};
 
 / --- the snapshot ---------------------------------------------------------
 

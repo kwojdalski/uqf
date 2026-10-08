@@ -153,7 +153,7 @@ init_ledger:{[]
             source_version:`symbol$();
             range_from:`timestamp$(); range_to:`timestamp$();
             rows_published:`long$(); recorded_at:`timestamp$();
-            superseded_at:`timestamp$(); run_id:`guid$())];
+            superseded_at:`timestamp$(); run_id:0#0Ng)];
     `etl_coverage}
 
 / The root ledger table. Exists so no read below names `etl_coverage` bare -

@@ -35,13 +35,13 @@
 period:0D00:01:00
 
 / The sessions THIS process opened, which are the only ones it beats.
-mine:`guid$()
+mine:0#0Ng
 
 / Create the root table if it is absent, and return its name.
 / Backtick form: inside \d .qetl.uptime a bare name resolves to this namespace.
 init_table:{[]
     if[not `etl_stream_uptime in tables `.;
-        `etl_stream_uptime set ([] session:`guid$(); job:`symbol$(); process:`symbol$();
+        `etl_stream_uptime set ([] session:0#0Ng; job:`symbol$(); process:`symbol$();
             host:`symbol$(); pid:`int$(); started_at:`timestamp$(); last_seen:`timestamp$())];
     `etl_stream_uptime}
 

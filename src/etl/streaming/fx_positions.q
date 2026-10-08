@@ -80,7 +80,7 @@ publish:.qetl.job.stream.unwired `fx_positions;
 
 / The running book, keyed on its dimensions. Only ever changed through
 / net_orders, which has expected tables.
-book:`sym`book`product xkey desk_book;
+positions:`sym`book`product xkey desk_book;
 
 / The desk's limits. Empty until something loads them - a service with no
 / limits reports positions and polices nothing, which is a legitimate way
@@ -152,9 +152,9 @@ on_batch:{[t;x]
     if[not t=`orders; :()];
     if[0=count x; :()];
     updated:.qetl.transform.apply[`fx_positions;`book`orders!(
-        0!.qpipe.job.fx_positions.book;
+        0!.qpipe.job.fx_positions.positions;
         select time, order_id, sym, book, product, side, size, price, order_status from x)];
-    `.qpipe.job.fx_positions.book set `sym`book`product xkey updated;
+    `.qpipe.job.fx_positions.positions set `sym`book`product xkey updated;
     }
 
 / The breaches this book is in, as of now, after throttling.
@@ -170,7 +170,7 @@ fresh_breaches:{[now]
     / Measured at the limits' own scope: a cap on a total is compared with
     / the total, not with each position under it.
     scope:.qlimit.scope_cols .qpipe.job.fx_positions.limits;
-    rolled:.qdesk.rollup[.qpipe.job.fx_positions.book;scope];
+    rolled:.qdesk.rollup[.qpipe.job.fx_positions.positions;scope];
     measured:.qlimit.measure[rolled;.qpipe.job.fx_positions.policed];
     breaches:.qlimit.evaluate[measured;.qpipe.job.fx_positions.limits];
     / A breach always names every dimension, null where it covers them all,
@@ -189,7 +189,7 @@ fresh_breaches:{[now]
 / product) and a desk has hundreds, not millions.
 / @return nothing
 on_timer:{[]
-    snapshot:0!.qdesk.break_even .qpipe.job.fx_positions.book;
+    snapshot:0!.qdesk.break_even .qpipe.job.fx_positions.positions;
     if[count snapshot;
         .qpipe.job.fx_positions.publish[`fx_position;
             select sym, book, product, base_qty, quote_qty, fill_count, break_even from snapshot]];
