@@ -627,6 +627,15 @@ table.
 The probe is the handshake, not a query, so no q code runs on the process.
 `--probe-timeout 0` skips it.
 
+### Batches column
+
+A streaming job whose batch handler throws keeps its PID, its heartbeat and its
+handshake: the transport traps the error, and the job drops the batch. `Batches`
+says what each job's batches did since its last uptime beat (once a minute):
+`ok`, `failing (N)` with N its failed batches so far, or `-` for a process that
+runs no streaming job. A failing job is also named under the table with its last
+error, and `uqs gaps <job>` lists the span it dropped.
+
 ### summary --timeout
 
 `summary` gets **one budget for the whole command** (120s by default): listing

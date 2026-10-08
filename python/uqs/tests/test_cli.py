@@ -65,7 +65,7 @@ from uqs.external.crypto import (
 from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import alive, listing, probe, runtime
+from uqs.stack import alive, listing, probe, runtime, stream_health
 from uqs.stack import clean as stack_clean
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
@@ -368,12 +368,21 @@ def test_a_refusal_exits_one_rather_than_raising(monkeypatch, command):
 # ---------------------------------------------------------------- summary
 
 
-def _summary_ok(monkeypatch, *, rows=None, returncode=0):
+@pytest.fixture(autouse=True)
+def _no_stream_health(monkeypatch):
+    """summary's Batches column reads stream_health files from the status
+    directory; no test here has one unless it says so (_summary_ok's health)."""
+    monkeypatch.setattr(stream_health, "read", lambda paths: {})
+
+
+def _summary_ok(monkeypatch, *, rows=None, returncode=0, health=None):
     _patch(monkeypatch, runtime, "summary", result=Completed(returncode=returncode, stdout="raw"))
     _patch(monkeypatch, listing, "configured_ports", result={})
     _patch(monkeypatch, listing, "heartbeat_states", result={})
     # The Responds probe opens a real socket to every up row's port.
     _patch(monkeypatch, probe, "probe_all", result={})
+    if health:
+        _patch(monkeypatch, stream_health, "read", result=health)
     rows = rows if rows is not None else []
     _patch(monkeypatch, listing, "summary_rows", result=rows)
 
@@ -455,6 +464,31 @@ def test_summary_shows_the_graph_by_default(monkeypatch):
         assert column in flat
 
 
+def test_a_job_dropping_batches_is_failing_though_up_and_heartbeat_ok(monkeypatch):
+    """The transport traps a throwing batch handler, so Status and Heartbeat
+    both look healthy; Batches and the note under the table say otherwise
+    (#832)."""
+    monkeypatch.setenv("COLUMNS", "220")
+    record = {
+        "job": "cross",
+        "process": "cross1",
+        "pid": 42,
+        "failing": True,
+        "failed": 7,
+        "last_error": "stale shape",
+        "last_failure_at": "2026.10.08D10:00:00",
+    }
+    _summary_ok(monkeypatch, rows=[_row(Process="cross1")], health={"cross1": record})
+    result = runner.invoke(cli.app, ["summary"])
+    flat = " ".join(result.stdout.split())
+    assert "failing (7)" in flat
+    assert "1 streaming job(s) failed a batch since their last beat" in flat
+    assert (
+        "cross (cross1), last at 2026.10.08D10:00:00: stale shape - "
+        "`uqs gaps cross` shows the span it dropped" in flat
+    )
+
+
 def test_a_process_that_does_not_answer_is_shown_and_named(monkeypatch):
     """Up by PID but silent when asked - the case Status cannot show."""
     monkeypatch.setenv("COLUMNS", "220")
@@ -483,7 +517,7 @@ def test_probe_timeout_zero_skips_the_probe(monkeypatch):
 def test_columns_status_gives_back_the_narrow_table(monkeypatch):
     """The escape hatch for an 80-column terminal, and the reason showing the
     graph by default is safe."""
-    narrow = [*SUMMARY_COLUMNS, "Responds"]
+    narrow = [*SUMMARY_COLUMNS, "Responds", "Batches"]
     assert summary_columns.resolve_columns("status") == narrow
     assert summary_columns.resolve_columns("STATUS") == narrow
 

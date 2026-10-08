@@ -231,7 +231,14 @@ SUMMARY_GRAPH_COLUMNS = ("Depends on", "Inputs", "Outputs")
 #: columns, and for the same reason.
 SUMMARY_PROBE_COLUMNS = ("Responds",)
 
-SUMMARY_ALL_COLUMNS = SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS + SUMMARY_GRAPH_COLUMNS
+#: Whether each streaming job's batches are failing - a third question beside
+#: Status (a process exists) and Heartbeat (it answers its monitor): a job
+#: whose every batch throws passes both. See stack/stream_health.py.
+SUMMARY_BATCH_COLUMNS = ("Batches",)
+
+SUMMARY_ALL_COLUMNS = (
+    SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS + SUMMARY_BATCH_COLUMNS + SUMMARY_GRAPH_COLUMNS
+)
 
 #: The process that aggregates heartbeats. TorQ's `monitor.q` is the only
 #: process type that calls `.hb.storeheartbeat`, so `.hb.hb` is populated there

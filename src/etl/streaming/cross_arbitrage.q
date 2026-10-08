@@ -197,8 +197,8 @@ on_batch:{[t;x]
     if[0=count x; :()];
     / `![...;enlist `time]`, not `` `time _ batch ``: `_` drops a key from a
     / DICT, and on a table it is a 'type - which TorQ traps into the error
-    / log, so the process stays up, keeps reporting healthy, and silently
-    / does nothing on every batch. Guarded on presence because the same job
+    / log, so the process stays up and drops every batch (shown only as
+    / `failing` in uqs summary's Batches column, #832). Guarded on presence because the same job
     / runs under run_stream.q, where the plant has not stamped a `time`.
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
     `.qpipe.job.cross_arbitrage.books upsert `sym xkey rows;

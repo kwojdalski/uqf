@@ -69,6 +69,7 @@
 \l src/etl/core/transform.q
 \l src/etl/core/source_contract.q
 \l src/etl/core/bounded_worker.q
+\l src/etl/core/stream_health.q
 \l src/etl/core/uptime.q
 \l src/etl/core/stream_job.q
 \l src/etl/core/stream_poll.q

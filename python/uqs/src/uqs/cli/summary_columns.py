@@ -10,7 +10,12 @@ from __future__ import annotations
 
 from uqs.cli.shared import _die
 from uqs.paths import UqsError
-from uqs.stack.listing import SUMMARY_ALL_COLUMNS, SUMMARY_COLUMNS, SUMMARY_PROBE_COLUMNS
+from uqs.stack.listing import (
+    SUMMARY_ALL_COLUMNS,
+    SUMMARY_BATCH_COLUMNS,
+    SUMMARY_COLUMNS,
+    SUMMARY_PROBE_COLUMNS,
+)
 
 
 def resolve_columns(requested: str | None) -> list[str]:
@@ -29,7 +34,7 @@ def resolve_columns(requested: str | None) -> list[str]:
     if requested.strip().lower() == "all":
         return list(SUMMARY_ALL_COLUMNS)
     if requested.strip().lower() == "status":
-        return list(SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS)
+        return list(SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS + SUMMARY_BATCH_COLUMNS)
     wanted = [c.strip() for c in requested.split(",") if c.strip()]
     known = {c.lower(): c for c in SUMMARY_ALL_COLUMNS}
     resolved, unknown = [], []

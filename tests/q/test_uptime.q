@@ -15,12 +15,16 @@ setUp_fresh:{[]
     system"mkdir -p ",.uptimetest.dir;
     delete etl_stream_uptime from `.;
     `.qetl.uptime.mine set `guid$();
+    `.qetl.uptime.failed_seen set (`symbol$())!`long$();
+    delete from `.qetl.stream_health.batches;
     }
 
 tearDown_fresh:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     delete etl_stream_uptime from `.;
     `.qetl.uptime.mine set `guid$();
+    `.qetl.uptime.failed_seen set (`symbol$())!`long$();
+    delete from `.qetl.stream_health.batches;
     }
 
 / A session that ran from hour a to hour b.
@@ -127,5 +131,60 @@ test_a_session_names_torqs_process_under_torq:{[t]
     id:.testutil.with_procname[`uptimetest_proc1;{.qetl.uptime.begin `demo_markout}];
     .qunit.assertEquals[exec first process from .qetl.uptime.sessions[] where session=id;`uptimetest_proc1;
         "under TorQ the session records the process TorQ named"]};
+
+/ --- failing batches (#832) ------------------------------------------------
+
+/ A batch handler that always throws, as a job with a stale input shape does.
+throws:{[t;x] '"stale shape"}
+
+test_the_guard_counts_every_batch_and_keeps_the_last_failure:{[t]
+    g:.qetl.job.stream.guarded[`uptimetest_job];
+    g[{[t;x] count x};`tbl;til 3];
+    r:@[g[.uptimetest.throws;`tbl];til 3;{x}];
+    h:.qetl.stream_health.of `uptimetest_job;
+    .qunit.assertEquals[r;"stale shape";"the failure still reaches the caller"];
+    .qunit.assertEquals[(h`ok;h`failed;h`last_error);(1;1;`$"stale shape");
+        "one handled, one failed, and why"];
+    .qunit.assertFalse[null h`last_failure_at;"and when"]};
+
+test_a_failed_batch_ends_the_session_and_becomes_a_gap:{[t]
+    id:.qetl.uptime.begin `demo_markout;
+    system"sleep 0.01";
+    .qetl.uptime.beat[];
+    last_ok:exec first last_seen from .qetl.uptime.sessions[] where session=id;
+    @[.qetl.job.stream.guarded[`demo_markout;.uptimetest.throws;`tbl];();::];
+    system"sleep 0.01";
+    .qetl.uptime.beat[];
+    failed_beat:max exec last_seen from .qetl.uptime.sessions[];
+    system"sleep 0.01";
+    .qetl.uptime.beat[];
+    s:.qetl.uptime.sessions[];
+    .qunit.assertEquals[exec first last_seen from s where session=id;last_ok;
+        "the session that saw the failure stops at its last healthy beat"];
+    holes:.qetl.uptime.gaps[`demo_markout;exec min started_at from s;exec max last_seen from s];
+    .qunit.assertEquals[holes;([] range_from:enlist last_ok; range_to:enlist failed_beat);
+        "the span with the failed batch is a gap, and the healthy beat after it is not"]};
+
+test_a_job_that_keeps_failing_keeps_one_empty_session:{[t]
+    .qetl.uptime.begin `demo_markout;
+    do[3;
+        @[.qetl.job.stream.guarded[`demo_markout;.uptimetest.throws;`tbl];();::];
+        system"sleep 0.01";
+        .qetl.uptime.beat[]];
+    s:select from .qetl.uptime.sessions[] where job=`demo_markout;
+    .qunit.assertEquals[count s;1;"one row, moved on each beat - not one per failed beat"];
+    .qunit.assertEquals[exec first last_seen=started_at from s;1b;"and it claims no time up"]};
+
+test_each_beat_writes_whether_the_job_is_failing:{[t]
+    .qetl.uptime.begin `demo_markout;
+    @[.qetl.job.stream.guarded[`demo_markout;.uptimetest.throws;`tbl];();::];
+    .qetl.uptime.beat[];
+    file:hsym `$.uptimetest.dir,"/stream_health_demo_markout.txt";
+    got:.j.k first read0 file;
+    .qunit.assertEquals[(got`failing;got`failed;got`last_error;`$got`process);
+        (1b;1f;"stale shape";.qetl.run.proc_name[]);"failing, with the count and why, for uqs summary"];
+    .qetl.job.stream.guarded[`demo_markout;{[t;x] x};`tbl;()];
+    .qetl.uptime.beat[];
+    .qunit.assertFalse[(.j.k first read0 file)`failing;"a beat with no failure since clears it"]};
 
 \d .
