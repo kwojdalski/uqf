@@ -42,6 +42,11 @@ Q_NAME = re.compile(r"(?<![\w.])\.(q[a-z]+(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
 
 #: `\d .qetl.cfg` switches namespace; `\d .` switches back to root.
 _D_LINE = re.compile(r"^\\d\s+\.([\w.]*)\s*$")
+#: The same switch as a statement - `system "d .qunit";`, how the vendored
+#: tests/lib/qunit.q enters its namespace. Unread, a file that names .qunit
+#: (the test harness wraps .qunit.runTest, #834) made qunit look like one of
+#: ours whose every function was missing.
+_SYSTEM_D = re.compile(r'^system\s*"d\s+\.([\w.]*)"\s*;?\s*$')
 
 #: A definition at column 0: `name:` in the current namespace, or a
 #: fully-qualified `.ns.name:` anywhere. Indented lines are bodies.
@@ -59,7 +64,7 @@ def q_definitions() -> set[str]:
     for path in Q_SOURCES:
         ns = ""
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            if m := _D_LINE.match(line):
+            if m := _D_LINE.match(line) or _SYSTEM_D.match(line):
                 ns = m.group(1)
                 continue
             if not (m := _DEF.match(line)):
