@@ -71,6 +71,6 @@ fixture:{[]
 / Register on load, so the declaration and the implementation cannot drift.
 .qetl.source.define[source_name;
     `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
-    (source_name;`trades_copy;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
+    (source_name;`trades;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
 
 \d .
