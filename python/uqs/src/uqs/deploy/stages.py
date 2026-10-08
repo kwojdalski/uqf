@@ -24,7 +24,7 @@ from uqs.deploy.config import (
     redact,
 )
 from uqs.deploy.remote import q, script
-from uqs.deploy.selection import Selection, verify_command
+from uqs.deploy.selection import Selection, smoke_args, verify_command
 from uqs.deploy.server import Server
 from uqs.logger import get_logger
 
@@ -215,7 +215,8 @@ class Deployment(Server):
             "the offline smoke test",
             *self.in_release(
                 release,
-                f'timeout {self.cfg.smoke_timeout} "$QCMD" scripts/deploy_smoke.q -q',
+                f'timeout {self.cfg.smoke_timeout} "$QCMD" scripts/deploy_smoke.q -q '
+                + " ".join(q(a) for a in smoke_args(self.cfg.profile, self.selection)),
             ),
             timeout=self.cfg.smoke_timeout + 30,
         )

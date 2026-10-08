@@ -22,8 +22,9 @@
 / process, which is what keeps them under test and in docs/man.q.
 
 / SOURCE: pull in uqf's own src/init.q and the ETL tree, which is where the
-/ job declarations live.
-.qtorq.load_uqf[];
+/ job declarations live - only this process's, the job `-job` names or the
+/ ones its procname runs (#902), so a job it does not run cannot stop it.
+.qtorq.load_uqf $[`job in key o:.Q.opt .z.x; `$first o`job; .proc.procname];
 
 \d .qproc.stream
 

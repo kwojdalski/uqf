@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from uqs.deploy.config import DeployError
 from uqs.deploy.remote import q
+from uqs.model import profiles
 
 
 @dataclass
@@ -65,6 +66,14 @@ def select_jobs(manifest: dict, wanted: Sequence[str]) -> Selection:
         sel.processes += [job["procname"], *job.get("needs", [])]
     sel.processes = list(dict.fromkeys(sel.processes))
     return sel
+
+
+def smoke_args(profile: str, sel: Selection) -> list[str]:
+    """deploy_smoke.q's flags: every process the deployment starts, so the
+    smoke loads exactly their declarations against the server's schema (#902).
+    The smoke passes over the names that run no declared job."""
+    procs = profiles.resolve(n for n in profile.split(",") if n)
+    return ["-procs", *dict.fromkeys([*procs, *sel.processes])]
 
 
 #: A release from before #835 carries scripts/deploy_verify.py and no

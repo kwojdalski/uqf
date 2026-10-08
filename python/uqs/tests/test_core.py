@@ -1274,7 +1274,7 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
 
 def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
     """scripts/processes/torq_pipeline.q must come FIRST in the load column: the
-    pipeline script calls .qtorq.load_uqf[] at top level, and TorQ's
+    pipeline script calls .qtorq.load_uqf at top level, and TorQ's
     .proc.reloadf each loads -load's files in the order given.
     """
     markout = BY_NAME["demo_markout1"]

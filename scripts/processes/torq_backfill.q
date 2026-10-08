@@ -248,6 +248,9 @@ run:{[]
   -1 string[.z.p]," | torq_backfill: loading uqf tree from ",uqfroot;
   system"cd ",uqfroot;
   system"l src/init.q";
+  / Only -worker's declarations and what they reach (#902): a worker never
+  / loads, let alone backfills, another.
+  if[`worker in key o:.Q.opt .z.x; .qetl.load.only:`$o`worker];
   system"l src/etl/init.q";
   system"cd ",cwd;
   -1 string[.z.p]," | torq_backfill: uqf tree loaded in ",string[`long$(.z.p-t0)%1000000],"ms";
