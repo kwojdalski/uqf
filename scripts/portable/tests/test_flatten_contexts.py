@@ -246,6 +246,99 @@ def test_the_status_and_interval_modules_convert_without_refusal():
     assert "merged:.qetl.coverage.compose covered;" in gaps
 
 
+# ------------------------------------------------------- back to 5.0
+
+
+def nested(text: str) -> fc.FileResult:
+    res = one(text, target="5.0")
+    assert not res.refusals, [r.as_dict() for r in res.refusals]
+    return res
+
+
+def test_the_5_0_target_restores_the_issues_example():
+    src = "\\d .example.inner\noffset:2\nadd:{[amount] amount+offset}\n\\d .\n"
+    flat = converted(src)
+    back = nested(flat)
+    assert back.output == src
+    assert back.nested == [
+        {"line": 1, "context": ".example.inner", "statements": 2, "shortened": 3}
+    ]
+
+
+def test_a_name_is_shortened_only_where_it_binds_the_same():
+    flat = (
+        "\\d .\n"
+        ".a.b.k:1\n"
+        ".a.b.p:{[k] k+.a.b.k}\n"  # bare, it would be the parameter
+        ".a.b.i:{x+.a.b.x}\n"  # bare, it would be the implicit argument
+        ".a.b.s:{.a.b.k:2}\n"  # bare, the assignment would make it local
+        ".a.b.q:{select from .a.b.t where px>.a.b.k}\n"  # bare, it could be a column
+        ".a.b.g:{.a.b.n::1; .a.b.c+:1; .a.b.k}\n"
+        "\\d .\n"
+    )
+    assert nested(flat).output.splitlines() == [
+        "\\d .a.b",
+        "k:1",
+        "p:{[k] k+.a.b.k}",
+        "i:{x+.a.b.x}",
+        "s:{.a.b.k:2}",
+        "q:{select from t where px>.a.b.k}",
+        "g:{n::1; c+:1; k}",
+        "\\d .",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("flat", "why"),
+    [
+        ("\\d .\n.a.b.f:{g x}\n\\d .\n", "`g` (line 2) means the root's, and would mean .a.b.g"),
+        ("\\d .\n.a.b.f:{x}\ny:1\n\\d .\n", None),
+        ("\\d .\n.a.b.f:{x}\n.a.c.g:{x}\n\\d .\n", "it defines in .a.b, .a.c"),
+        ("\\d .\n.a.b.v:get `w\n\\d .\n", "get `w (line 2) runs while the file loads"),
+        (
+            "\\d .\nr:1\n.a.b.f:{select from t where px>r}\n\\d .\n",
+            None,
+        ),
+        ("\\d .\n.a.b.f:{x}\n\\l other.q\n", None),  # ends at \\l, not \\d
+        ("\\d .\n.a.b.f:{x}\n", None),  # ends with the file
+        ("\\d .\n.a.f:{x}\n\\d .\n", None),  # single-level: never nested
+    ],
+)
+def test_a_block_that_would_change_meaning_stays_flat(flat, why):
+    res = nested(flat)
+    assert (res.output, res.action, res.nested) == (flat, "unchanged", [])
+    if why is not None:
+        assert any(why in note for note in res.notes), res.notes
+
+
+def test_nesting_is_idempotent_and_leaves_native_contexts_alone():
+    native = "\\d .a.b\nf:{g x}\n\\d .\n"
+    assert nested(native).output == native
+    flat = "\\d .\n.a.b.f:{.a.b.g x}\n\\d .\n"
+    once = nested(flat).output
+    assert once == native and nested(once).output == once
+
+
+def test_every_binding_survives_the_round_trip_through_5_0():
+    """For every q file in the tree, 4.0 -> 5.0 -> 4.0 gives exactly the 4.0
+    output - and since the 4.0 output names every binding explicitly, that is
+    every binding preserved. The original files through 5.0 likewise."""
+    files = subprocess.run(
+        ["git", "-C", str(REPO), "ls-files", "*.q"], capture_output=True, text=True, check=True
+    ).stdout.split()
+    originals = {
+        p: (REPO / p).read_text(encoding="utf-8") for p in files if not p.startswith("lib/")
+    }
+    flat = {p: r.output for p, r in convert(originals, allow=True).items() if not r.refusals}
+    assert len(flat) > 200
+    renested = convert(flat, target="5.0")
+    assert sum(1 for r in renested.values() if r.nested) > 20
+    again = convert({p: r.output for p, r in renested.items()}, allow=True)
+    assert [p for p in flat if again[p].output != flat[p]] == []
+    direct = convert(originals, target="5.0")
+    assert [p for p, r in direct.items() if r.output != originals[p]] == []
+
+
 # ------------------------------------------------------------- refusals
 
 
@@ -332,7 +425,7 @@ def _tree(root: Path, files: dict[str, str]) -> None:
 
 def _run(root: Path, *args: str, capsys) -> tuple[int, dict]:
     """main() on paths relative to root, as a caller in root would pass them."""
-    flags_with_values = {"--out", "--check", "--q", "--report", "--target", "--root"}
+    flags_with_values = {"--out", "--check", "--q", "--report", "--target", "--root", "--exclude"}
     argv, take = [], False
     for a in args:
         if take or a.startswith("-"):
@@ -645,6 +738,7 @@ def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_p
     trees = {"converted": converted(FIXTURES[fixture])}
     if nested_ok:
         trees["original"] = FIXTURES[fixture]
+        trees["renested"] = nested(trees["converted"]).output
     for name, text in trees.items():
         d = tmp_path / name
         d.mkdir()
@@ -734,3 +828,123 @@ def test_bindings_agree_with_qs_own_parser(interp, tmp_path):
         if ours - theirs or theirs - ours - cols:
             disagree.append((rel, line, sorted(ours - theirs), sorted(theirs - ours - cols)))
     assert not disagree
+
+
+def test_the_5_0_report_names_the_rebuilt_contexts(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, {"src/m.q": "\\d .\n.m.n.f:{.m.n.g x}\n.m.n.g:{x}\n\\d .\n"})
+    code, report = _run(
+        src, "src", "--out", str(tmp_path / "out"), "--target", "5.0", capsys=capsys
+    )
+    assert code == 0 and "nested again" in report["claim"]
+    assert report["files"][0]["nested"] == [
+        {"line": 1, "context": ".m.n", "statements": 2, "shortened": 3}
+    ]
+    assert report["namespace_mappings"] == {"src/m.q": [".m.n"]}
+    assert (tmp_path / "out" / "src" / "m.q").read_text() == "\\d .m.n\nf:{g x}\ng:{x}\n\\d .\n"
+
+
+def test_exclude_leaves_folders_and_globs_out(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(
+        src,
+        {
+            **GOOD,
+            "tests/t.q": "\\d .a.b\n`v set 1\n",  # would be refused
+            "src/gen/x.q": "\\d .g.h\nf:{x}\n",
+            "src/test_y.q": "\\d .y.z\nf:{x}\n",
+        },
+    )
+    code, report = _run(
+        src,
+        ".",
+        "--out",
+        str(tmp_path / "out"),
+        "--exclude",
+        "tests",
+        "--exclude",
+        "src/gen/",
+        "--exclude",
+        "*/test_*.q",
+        capsys=capsys,
+    )
+    assert (code, report["status"]) == (0, "ok"), report["refusals"]
+    assert report["excluded"] == ["src/gen/x.q", "src/test_y.q", "tests/t.q"]
+    assert {f["path"] for f in report["files"]} == {"src/m.q", "src/lib.q"}
+    assert not (tmp_path / "out" / "tests").exists()
+    assert not (tmp_path / "out" / "src" / "gen").exists()
+
+
+def test_an_excluded_file_still_informs_the_others(tmp_path, capsys):
+    # `lim` is the context's global in the excluded file, so the qSQL phrase
+    # naming it in the converted one is still ambiguous - and still refused.
+    src = tmp_path / "repo"
+    _tree(
+        src,
+        {
+            "src/a.q": "\\d .a.b\nf:{select from t where px>lim}\n",
+            "src/held.q": "\\d .a.b\nlim:1\n",
+        },
+    )
+    code, report = _run(
+        src, "src", "--out", str(tmp_path / "out"), "--exclude", "src/held.q", capsys=capsys
+    )
+    assert code == 1 and [r["code"] for r in report["refusals"]] == ["ambiguous-qsql"]
+
+
+def test_an_explicitly_named_file_is_still_excluded(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, GOOD)
+    code, report = _run(
+        src,
+        "src/m.q",
+        "--out",
+        str(tmp_path / "out"),
+        "--exclude",
+        "src/m.q",
+        "--dry-run",
+        capsys=capsys,
+    )
+    assert code == 0 and report["files"] == [] and report["excluded"] == ["src/m.q"]
+
+
+def test_diff_debug_and_the_summary_go_to_stderr(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, GOOD)
+    code = fc.main(
+        [
+            "--root",
+            str(src),
+            str(src / "src"),
+            "--out",
+            str(tmp_path / "out"),
+            "--dry-run",
+            "--diff",
+            "--debug",
+        ]
+    )
+    cap = capsys.readouterr()
+    assert code == 0 and json.loads(cap.out)["status"] == "ok"
+    assert "--- a/src/m.q\n+++ b/src/m.q\n" in cap.err
+    assert "\n-f:{g x}\n" in cap.err and "\n+.m.n.f:{.m.n.g x}\n" in cap.err
+    assert "src/m.q:3:6 k -> .m.n.k (refers to a global of .m.n)" in cap.err
+    assert "1 transformed, 1 unchanged, 0 excluded" in cap.err and "dry run" in cap.err
+    report = json.loads(cap.out)
+    m = next(f for f in report["files"] if f["path"] == "src/m.q")
+    assert {
+        "line": 1,
+        "column": 1,
+        "before": "\\d .m.n",
+        "after": "\\d .",
+        "why": "4.0 has no nested contexts",
+    } in m["decisions"]
+
+
+def test_quiet_prints_nothing_but_the_report(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, GOOD)
+    fc.main(
+        ["--root", str(src), str(src / "src"), "--out", str(tmp_path / "o"), "--dry-run", "--quiet"]
+    )
+    cap = capsys.readouterr()
+    assert cap.err == "" and json.loads(cap.out)["status"] == "ok"
