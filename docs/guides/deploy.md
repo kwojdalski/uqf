@@ -158,6 +158,27 @@ What `current` names, and so which release `--restart` stops, is read again once
 the lock is held. A deployment that activated between this run's preflight and
 its lock is seen, and is refused without `--restart`.
 
+## Checking a server
+
+What a server runs, without ssh-ing in:
+
+```bash
+uqs deploy status --host uqf-server --dest /opt/uqf
+uqs deploy status --host uqf-server --dest /opt/uqf --json   # to script against
+```
+
+It reports `current` and the release it replaced (revision, build time, dirty or
+not, runtime, kdb+ target, bundles) and how many other releases are kept; the
+last deployment, which is the newest release whether or not it activated - so a
+failed push shows here with its stage, error and rollback outcome; whether
+`current`'s processes answer its own verifier within `--health-timeout` (default
+10 seconds; `--no-health` skips it); the streaming jobs whose batches are
+failing; and whether the deploy lock is held, and by whom.
+
+It is read-only and never takes the lock, so it is safe during a push. It exits
+1 when the health check fails, 0 otherwise. The `--json` keys are stable: its
+`format` changes when one is renamed or removed, not when one is added.
+
 ## Rolling back
 
 To put a server back on an earlier release after it has activated:

@@ -59,6 +59,7 @@ from uqs.cli import install  # noqa: F401
 from uqs.cli import external  # noqa: F401
 from uqs.cli import odbc  # noqa: F401
 from uqs.cli import deploy  # noqa: F401
+from uqs.cli import deploy_server  # noqa: F401
 
 # isort: on
 from uqs.cli.shared import _env_log_level, app
