@@ -45,6 +45,9 @@ STACK_TABLES_TEST = TEST_DIR / "test_stack_tables.q"
 
 PROCESS_SCRIPTS_DIR = Path("scripts/processes")
 TABLES_FILE = ETL_DIR / "plant_tables.q"
+#: What each installed sidecar bundle put in the tree, and which runtimes it
+#: is in (stack/bundles.py writes it; model/runtime_members.py reads it).
+BUNDLE_LEDGER = ETL_DIR / "installed_bundles.json"
 
 #: The desk catalog's authored half: what each table is for, and which are
 #: deliberately not browsable. Loaded by gateway1 (VENDORED_LOAD_OVERLAY in

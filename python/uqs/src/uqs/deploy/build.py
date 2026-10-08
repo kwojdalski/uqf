@@ -67,6 +67,7 @@ from uqs.deploy.artifact import (
 )
 from uqs.deploy.payload import ALLOWLIST, Runner, is_excluded, python_payload, tracked_files
 from uqs.paths import repo_root
+from uqs.runtimes import DEFAULT_RUNTIME
 
 #: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
 BUNDLE_LEDGER = "src/etl/installed_bundles.json"
@@ -135,6 +136,7 @@ def stage_bundles(
     bundles: Sequence[str],
     staged: Path,
     runner: Runner = subprocess.run,
+    runtime: str = DEFAULT_RUNTIME,
 ) -> tuple[list[str], dict]:
     """Install `bundles` into a copy of the tree under `staged`; return the
     staged tree's files and the manifest's `bundles` record.
@@ -172,7 +174,10 @@ def stage_bundles(
         return r.stdout
 
     record = json.loads(
-        step("installing the bundles", "-m", "uqs.stack.bundle_build", "install", *folders)
+        step(
+            "installing the bundles",
+            *("-m", "uqs.stack.bundle_build", "install", "--runtime", runtime, *folders),
+        )
     )
     step("regenerating the derived files", str(staged / GENERATOR))
     streaming = [
@@ -204,6 +209,7 @@ def build_artifact(
     target: Target,
     python_dir: Path,
     bundles: dict | None = None,
+    runtime: str | None = None,
 ) -> Artifact:
     """The archive, its .sha256 and its manifest, written into `out_dir`.
 
@@ -233,6 +239,9 @@ def build_artifact(
     }
     if bundles:
         manifest["bundles"] = bundles
+    if runtime:
+        # the runtime the release runs (#852), whose bundles it carries
+        manifest["runtime"] = runtime
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"uqf-{rid}.tar.gz"
     with tarfile.open(path, "w:gz") as tar:
@@ -263,10 +272,17 @@ def build(
     bundles: Sequence[str] = (),
     root: Path | None = None,
     runner: Runner = subprocess.run,
+    runtime: str | None = None,
 ) -> Artifact:
     """Build the artifact for the checkout at `root` into `output`, by
-    default `root`/dist."""
+    default `root`/dist.
+
+    Its bundles are `runtime`'s composition (#852): the bundles
+    runtime_bundles.json declares for it, plus `bundles` - resolved by the same
+    stack.runtime_bundles.resolve as `uqs runtime prepare`."""
     root = root or repo_root()
+    runtime = runtime or DEFAULT_RUNTIME
+    members = composition_members(runtime, root, bundles)
     output = Path(output) if output is not None else root / DEFAULT_OUTPUT
     if arch not in PLATFORMS:
         raise ReleaseError("arguments", f"--arch {arch!r} must be one of {', '.join(PLATFORMS)}")
@@ -282,10 +298,13 @@ def build(
     files = tracked_files(root, runner)
     with tempfile.TemporaryDirectory() as tmp:
         tree, record = root, None
-        if bundles:
+        if members:
             tree = Path(tmp) / "tree"
-            log(f"installing {len(bundles)} bundle(s) into a staged tree")
-            files, record = stage_bundles(root, files, bundles, tree, runner)
+            log(f"installing {len(members)} bundle(s) for runtime {runtime} into a staged tree")
+            folders = [str(m.bundle.root) for m in members]
+            files, record = stage_bundles(root, files, folders, tree, runner, runtime)
+            for m in members:
+                record[m.bundle.name]["source"] = m.source
         log(f"Python {target.python} wheels for linux/{target.arch}")
         python_payload(root, Path(tmp) / "python", target, runner)
         log(f"packaging {len(files)} files")
@@ -299,4 +318,17 @@ def build(
             target=target,
             python_dir=Path(tmp) / "python",
             bundles=record,
+            runtime=runtime if (members or runtime != DEFAULT_RUNTIME) else None,
         )
+
+
+def composition_members(runtime: str, root: Path, bundles: Sequence[str] = ()) -> list:
+    """`runtime`'s bundles, declared and explicit, or the refusal as a
+    ReleaseError - before anything is copied or built."""
+    from uqs.stack import runtime_bundles
+    from uqs.stack.bundle_blocks import BundleError
+
+    try:
+        return runtime_bundles.resolve(runtime, root, [Path(b) for b in bundles])
+    except BundleError as exc:
+        raise ReleaseError("bundle", str(exc)) from None

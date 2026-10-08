@@ -129,6 +129,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
     dep.selection = select_jobs(pkg.manifest, cfg.jobs)
+    dep.runtime = pkg.manifest.get("runtime", dep.runtime)
     report = Report(
         release=rid,
         revision=pkg.manifest["revision"],
