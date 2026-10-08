@@ -463,6 +463,9 @@ def _generated_qcmds(fake_paths: UqsPaths, monkeypatch, qcmd: str | None) -> dic
     monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
     if qcmd is None:
         monkeypatch.delenv("QCMD", raising=False)
+        # Without QCMD there is no PeachQ to name: a run on PeachQ (CI's lane)
+        # sets UQF_Q_IMPL, which refuses an unset QCMD.
+        monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     else:
         monkeypatch.setenv("QCMD", qcmd)
     vendored = fake_paths.torqapphome / "appconfig" / "process.csv"

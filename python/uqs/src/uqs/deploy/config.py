@@ -105,6 +105,8 @@ class Config:
     command_timeout: int = 900
     smoke_timeout: int = 120
     verify_timeout: int = 180
+    #: remove a deploy lock whose holder has stopped beating (#867)
+    break_lock: bool = False
 
     @property
     def data_root(self) -> str:
@@ -182,6 +184,7 @@ def make_config(
     command_timeout: int = 900,
     smoke_timeout: int = 120,
     verify_timeout: int = 180,
+    break_lock: bool = False,
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
@@ -237,4 +240,5 @@ def make_config(
         command_timeout=command_timeout,
         smoke_timeout=smoke_timeout,
         verify_timeout=verify_timeout,
+        break_lock=break_lock,
     )

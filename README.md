@@ -103,6 +103,13 @@ with why, in [`tests/q/peachq_known_gaps.txt`](tests/q/peachq_known_gaps.txt). A
 failure not on that list fails CI, and so does a listed test that passes, so the
 list only shrinks.
 
+**So do the Python tests that need a q.** Without KDB-X they skip. CI runs the
+Python suites again with PeachQ as the q (`UQF_Q_IMPL=peachq`, `QCMD=<PeachQ>`).
+The tests that cannot pass there are listed in
+[`python/peachq_known_gaps.txt`](python/peachq_known_gaps.txt) and held to it
+the same way: [`python/conftest.py`](python/conftest.py) marks each one a strict
+xfail.
+
 You do not install PeachQ for this. The lane takes the commit pinned in
 [`scripts/peachq.json`](scripts/peachq.json) - the pin CI builds too - and on
 first use fetches it, checks the checkout is that commit, builds it and caches

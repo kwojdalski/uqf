@@ -52,7 +52,7 @@ from uqs.paths import (
 )
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
 from uqs.scaffold.example import GENERATED_BY, example_path
-from uqs.scaffold.external import external_files
+from uqs.scaffold.external import DEPENDENCIES_FILE, external_files, without_producer
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.references import Reference, stale_references
 
@@ -155,7 +155,15 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
         if py_files:
             removal.deletes += py_files
             gone |= set(py_files)
-            tables = list(symbols(fields.get("subscribe_to", ""))) + tables
+            raw = list(symbols(fields.get("subscribe_to", "")))
+            tables = raw + tables
+            for table in raw:
+                _edit(
+                    removal,
+                    repo_root,
+                    DEPENDENCIES_FILE,
+                    lambda t, tb=table: without_producer(t, tb),
+                )
 
     gone |= _remove_test(removal, repo_root, job)
 
@@ -307,15 +315,17 @@ def _drop_definition(text: str, table: str) -> str:
 
 
 def _drop_catalog(text: str, table: str) -> str:
-    """`text` without `table`'s `.qcat.describe` entry and its continuation lines."""
-    lines = text.splitlines(keepends=True)
-    head = f".qcat.describe[`{table}]:"
-    for i, line in enumerate(lines):
-        if line.startswith(head):
-            end = i + 1
-            while end < len(lines) and lines[end][:1] in (" ", "\t"):
-                end += 1
-            return "".join(lines[:i] + lines[end:])
+    """`text` without `table`'s `.qcat.describe` and `.qcat.hidden` entries and
+    their continuation lines."""
+    for head in (f".qcat.describe[`{table}]:", f".qcat.hidden[`{table}]:"):
+        lines = text.splitlines(keepends=True)
+        for i, line in enumerate(lines):
+            if line.startswith(head):
+                end = i + 1
+                while end < len(lines) and lines[end][:1] in (" ", "\t"):
+                    end += 1
+                text = "".join(lines[:i] + lines[end:])
+                break
     return text
 
 

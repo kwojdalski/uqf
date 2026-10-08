@@ -1093,7 +1093,9 @@ server command at:
 uv run uqs-mcp
 ```
 
-(stdio transport). `uqs_query` returns row dicts for a table.
+(stdio transport). `uqs_query` returns row dicts for a table. `uqs_start` takes
+a `profile` too, and refuses what `uqs start` refuses: an unknown process or an
+unrunnable profile.
 
 ## Other commands
 

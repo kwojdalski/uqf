@@ -262,6 +262,13 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    break_lock: Annotated[
+        bool,
+        typer.Option(
+            "--break-lock",
+            help="Remove a deploy lock whose holder stopped beating; refused while it beats",
+        ),
+    ] = False,
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())
