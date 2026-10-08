@@ -84,8 +84,7 @@ UQF_Q_IMPL=peachq QCMD=/path/to/peachq/q scripts/test.py q-unit
 be PeachQ. `scripts/test.py` also asks the binary which implementation it is
 before any lane runs, and refuses a mismatch either way: a PeachQ binary without
 the opt-in, or a KDB-X one declared as PeachQ. A green run therefore always says
-which interpreter made it green. What passes on PeachQ is not verified here;
-KDB-X stays the reference.
+which interpreter made it green. KDB-X stays the reference.
 
 **For now, committing needs both.** PeachQ already runs part of this tree: the q
 code blocks in `docs/`, in the commit hook and in CI, where KDB-X cannot be
@@ -94,6 +93,15 @@ This does not replace the KDB-X run. It is there as well, until the two
 interpreters are compatible enough for one to stand for both. A block that
 cannot run on PeachQ yet is marked `kdbx-only` with the reason (the markers are
 defined in [`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
+
+**The whole suite runs on PeachQ in CI, flattened.** PeachQ rejects nested
+contexts (`\d .a.b`), so `scripts/test.py q-unit-peachq` first writes a copy of
+`src/`, `scripts/` and `tests/` without them
+([`scripts/portable/flatten_contexts.py`](scripts/portable/flatten_contexts.py)),
+then runs every suite on it. The tests that cannot pass there are listed, each
+with why, in [`tests/q/peachq_known_gaps.txt`](tests/q/peachq_known_gaps.txt). A
+failure not on that list fails CI, and so does a listed test that passes, so the
+list only shrinks.
 
 You do not install PeachQ for this. The lane takes the commit pinned in
 [`scripts/peachq.json`](scripts/peachq.json) - the pin CI builds too - and on

@@ -219,31 +219,16 @@ jobs:
         # so with `kdbx-only: REASON` rather than being unmarked.
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         run: UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-docs
-      - name: Run the portable qUnit suites on PeachQ (blocking)
-        # The q tests CI can hold a merge to. This runner has no KDB-X, so the
-        # full suite cannot block here, and PeachQ cannot load the ETL tree
-        # yet (#511). tests/q/portable_suites.txt lists the suites that need
-        # only the quant library and pass on PeachQ as well as KDB-X; a
-        # regression in any of them fails the build.
+      - name: Run the whole qUnit suite on PeachQ, flattened (blocking)
+        # The q tests CI can hold a merge to. This runner has no KDB-X, and
+        # PeachQ rejects nested contexts, so scripts/portable/full_suite.py
+        # flattens a copy of the tree first (#856) and runs every suite on it.
+        # The result is held to tests/q/peachq_known_gaps.txt both ways: a
+        # failure not listed fails the build, and so does a listed test that
+        # now passes - the list only shrinks (#863).
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
-        timeout-minutes: 8
-        run: UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-unit-portable
-      - name: Run the qUnit suite on PeachQ (informational)
-        # Not a verdict on the tree - KDB-X is the verified interpreter - but
-        # the one measure CI can take of how far PeachQ and the suite agree.
-        # Never fails the build; the step summary says how it went. The part
-        # of it that does block is the portable step above.
-        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
-        continue-on-error: true
-        timeout-minutes: 8
-        shell: bash
-        run: |
-          if UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-unit; then
-            echo "qUnit on PeachQ: passed." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "qUnit on PeachQ: failed (informational - KDB-X is the verified interpreter)." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+        timeout-minutes: 10
+        run: UQF_PEACHQ="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
 
   web:
     name: Browser application

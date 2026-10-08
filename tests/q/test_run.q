@@ -264,7 +264,7 @@ test_require_run_schema_accepts_the_table_it_describes:{[t]
 test_require_run_schema_rejects_a_foreign_table:{[t]
     / The case the guard exists for: a ledger some other process built to a
     / different shape, whose reads here would silently return nulls.
-    `etl_runs set ([] run_id:`guid$(); worker:`symbol$());
+    `etl_runs set ([] run_id:0#0Ng; worker:`symbol$());
     .qunit.assertError[{[x] .qetl.run.require_run_schema[]};::;"is missing"]};
 
 / --- what a run was asked to do, and what it did ----------------------------

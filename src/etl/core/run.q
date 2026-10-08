@@ -112,7 +112,7 @@ in_flight:`running
 / @eg .qetl.run.init_runs[]
 init_runs:{[]
     if[not `etl_runs in tables `.;
-        `etl_runs set ([] run_id:`guid$(); worker:`symbol$(); process:`symbol$();
+        `etl_runs set ([] run_id:0#0Ng; worker:`symbol$(); process:`symbol$();
             host:`symbol$(); pid:`int$(); started_at:`timestamp$();
             ended_at:`timestamp$(); status:`symbol$();
             dataset:`symbol$(); source_version:`symbol$(); range_from:`timestamp$();
@@ -125,7 +125,7 @@ init_runs:{[]
 / @eg .qetl.run.init_meta[]
 init_meta:{[]
     if[not `etl_run_meta in tables `.;
-        `etl_run_meta set ([] run_id:`guid$(); dataset:`symbol$();
+        `etl_run_meta set ([] run_id:0#0Ng; dataset:`symbol$();
             range_from:`timestamp$(); range_to:`timestamp$();
             label:`symbol$(); text:(); recorded_at:`timestamp$())];
     `etl_run_meta}

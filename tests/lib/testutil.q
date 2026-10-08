@@ -41,7 +41,7 @@ foreign_coverage_ledger:{[]
     ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
         range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$();
-        superseded_at:`timestamp$(); run_id:`guid$())};
+        superseded_at:`timestamp$(); run_id:0#0Ng)};
 
 reset_coverage_ledger:{[]
     ![`.;();0b;enlist `etl_coverage];
