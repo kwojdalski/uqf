@@ -1,4 +1,4 @@
-"""scripts/build_release.py (#778): the artifact deploy.py puts on servers.
+"""`uqs deploy build` (#778, #835): the artifact `uqs deploy push` puts on servers.
 
 uv, pip and git are replaced by fakes, so what is packaged, what the manifest
 promises and what read_artifact refuses are tested without a network.
@@ -6,26 +6,37 @@ promises and what read_artifact refuses are tested without a network.
 
 from __future__ import annotations
 
-import ast
-import importlib.util
 import io
 import json
 import subprocess
-import sys
 import tarfile
 from pathlib import Path
 
 import pytest
+from typer.main import get_group
+
+from uqs.cli.deploy import deploy_app
+from uqs.deploy import artifact, payload
+from uqs.deploy import build as release_build
 
 ROOT = Path(__file__).resolve().parents[3]
 
-_spec = importlib.util.spec_from_file_location(
-    "uqf_build_release_under_test", ROOT / "scripts" / "build_release.py"
-)
-assert _spec and _spec.loader
-release = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = release
-_spec.loader.exec_module(release)
+
+_CLI = get_group(deploy_app)
+
+
+def _built(argv: list[str], **kwargs):
+    """`uqs deploy build` on `argv`: parsed by the command's own options."""
+    p = _CLI.commands["build"].make_context("build", list(argv)).params
+    return release_build.build(
+        p["output"],
+        arch=p["arch"],
+        python=p["python"],
+        allow_dirty=p["allow_dirty"],
+        bundles=p["bundle"] or (),
+        **kwargs,
+    )
+
 
 REV = "0123456789abcdef0123456789abcdef01234567"
 
@@ -77,14 +88,8 @@ def _build(tmp_path: Path, *extra: str, dirty: str = "", fail: str | None = None
     root = tmp_path / "tree"
     files = _tree(root)
     tools, calls = _tools(files, dirty=dirty, fail=fail)
-    art = release.build(
-        ["--output", str(tmp_path / "dist"), *extra], root=root, runner=tools, out=io.StringIO()
-    )
+    art = _built(["--output", str(tmp_path / "dist"), *extra], root=root, runner=tools)
     return art, calls
-
-
-def test_build_release_parses_on_the_oldest_python_it_runs_under():
-    ast.parse((ROOT / "scripts" / "build_release.py").read_text(), feature_version=(3, 10))
 
 
 # --- what is packaged ---------------------------------------------------------
@@ -109,7 +114,7 @@ def test_build_release_parses_on_the_oldest_python_it_runs_under():
     ],
 )
 def test_secrets_licences_data_and_external_trees_are_never_packaged(path):
-    assert release.is_excluded(path)
+    assert payload.is_excluded(path)
 
 
 @pytest.mark.parametrize(
@@ -123,16 +128,16 @@ def test_secrets_licences_data_and_external_trees_are_never_packaged(path):
     ],
 )
 def test_source_and_configuration_are_packaged(path):
-    assert not release.is_excluded(path)
+    assert not payload.is_excluded(path)
 
 
 def test_only_tracked_files_under_the_allowlist_are_listed():
-    files = release.tracked_files(ROOT, _tools(["src/init.q", ".envrc", "lib/torq/torq.q"])[0])
+    files = payload.tracked_files(ROOT, _tools(["src/init.q", ".envrc", "lib/torq/torq.q"])[0])
     assert files == ["src/init.q"]
 
 
 def test_uncommitted_changes_are_refused_unless_allowed(tmp_path):
-    with pytest.raises(release.ReleaseError, match="uncommitted"):
+    with pytest.raises(artifact.ReleaseError, match="uncommitted"):
         _build(tmp_path, dirty=" M src/init.q")
     art, _ = _build(tmp_path, "--allow-dirty", dirty=" M src/init.q")
     assert art.manifest["dirty"] is True
@@ -150,7 +155,7 @@ def test_the_artifact_keeps_the_repository_layout_and_ships_its_wheels(tmp_path)
         ".release/requirements.txt",
         ".release/wheels/uqs-0.1.0-py3-none-any.whl",
         ".release/wheels/rich-15.0.0-py3-none-any.whl",
-        release.MANIFEST,
+        artifact.MANIFEST,
     } <= names
 
 
@@ -183,15 +188,15 @@ def test_dependency_wheels_are_binary_only_for_the_target_from_the_frozen_lock(t
 
 
 def test_a_failed_wheel_download_fails_the_build_naming_the_step(tmp_path):
-    with pytest.raises(release.ReleaseError, match="fetching the dependency wheels") as err:
+    with pytest.raises(artifact.ReleaseError, match="fetching the dependency wheels") as err:
         _build(tmp_path, fail="download")
     assert err.value.stage == "python"
     assert not (tmp_path / "dist").exists() or not list((tmp_path / "dist").glob("*.tar.gz"))
 
 
 def test_a_malformed_python_version_is_refused():
-    with pytest.raises(release.ReleaseError, match="major.minor"):
-        release.parse_args(["--output", "dist", "--python", "3"])
+    with pytest.raises(artifact.ReleaseError, match="major.minor"):
+        _built(["--output", "dist", "--python", "3"])
 
 
 def test_the_builder_needs_no_ssh(tmp_path):
@@ -204,7 +209,7 @@ def test_the_builder_needs_no_ssh(tmp_path):
 
 def test_a_built_artifact_reads_back_whole(tmp_path):
     art, _ = _build(tmp_path)
-    back = release.read_artifact(art.path)
+    back = artifact.read_artifact(art.path)
     assert back.sha256 == art.sha256 and back.manifest == art.manifest
 
 
@@ -212,8 +217,8 @@ def test_an_archive_that_does_not_match_its_checksum_file_is_refused(tmp_path):
     art, _ = _build(tmp_path)
     with art.path.open("ab") as f:
         f.write(b"x")
-    with pytest.raises(release.ReleaseError, match="does not match"):
-        release.read_artifact(art.path)
+    with pytest.raises(artifact.ReleaseError, match="does not match"):
+        artifact.read_artifact(art.path)
 
 
 def _rewrite(
@@ -257,16 +262,16 @@ def _rewrite(
         ({"change": ("src/init.q", b"tampered")}, "does not match its manifest checksum"),
         ({"add": ("../escape", b"x")}, "not a relative path"),
         ({"symlink": "src/link"}, "not a regular file"),
-        ({"drop": release.MANIFEST}, "carries no"),
+        ({"drop": artifact.MANIFEST}, "carries no"),
     ],
 )
 def test_an_artifact_that_differs_from_its_manifest_is_refused(tmp_path, kwargs, said):
     art, _ = _build(tmp_path)
-    with pytest.raises(release.ReleaseError, match=said):
-        release.read_artifact(_rewrite(art, **kwargs))
+    with pytest.raises(artifact.ReleaseError, match=said):
+        artifact.read_artifact(_rewrite(art, **kwargs))
 
 
 def test_an_expected_checksum_is_enforced(tmp_path):
     art, _ = _build(tmp_path)
-    with pytest.raises(release.ReleaseError, match="not 00"):
-        release.read_artifact(art.path, expected_sha256="00")
+    with pytest.raises(artifact.ReleaseError, match="not 00"):
+        artifact.read_artifact(art.path, expected_sha256="00")

@@ -1,6 +1,6 @@
-"""deploy_verify.py - is a deployed profile actually up? (#773)
+"""`uqs deploy verify`: is a deployed profile actually up? (#773, #835)
 
-scripts/deploy.py runs this ON THE SERVER, inside the release's own
+`uqs deploy push` runs this ON THE SERVER, from the release's own
 environment, after `uqs start --profile ...` has returned. A start command
 that returned says only that torq.sh launched something; a deployment
 succeeds when every process the profile promises answers. So for each one,
@@ -17,10 +17,10 @@ until a deadline:
 Every pipeline process must pass BOTH: it loads the library and the ETL tree
 (.qtorq.load_uqf), so one that answers "not loaded" for either is broken,
 however healthy the rest of the profile is. Other processes are checked where
-they load either. The result is one JSON object on stdout, ending in
-DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED, and the exit code agrees with it.
-Nothing secret is printed: the IPC credentials are the stack's defaults and
-never appear in the output.
+they load either. The result is one JSON object on stdout, then
+DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED on the last line, and the exit code
+agrees with it. Nothing secret is printed: the IPC credentials are the
+stack's defaults and never appear in the output.
 
 A deployment that selected sidecar jobs (#800) adds `--procs`, the jobs'
 processes and their dependency closure, checked exactly like the profile's;
@@ -30,21 +30,22 @@ a source's fixture (.qetl.source.live_required) - proof the deployment's
 setting reached the processes, rather than a hope that it did.
 
 `--ports-free` asks only whether something already listens on the profile's
-ports - deploy.py runs it just before it starts the profile, so a port held
-by anything else fails the deployment before a process can wedge on it.
-
-Usage (from the release root):
-    uv run --frozen python scripts/deploy_verify.py --profile essential --deadline 180
-    uv run --frozen python scripts/deploy_verify.py --profile essential --ports-free
+ports - push runs it just before it starts the profile, so a port held by
+anything else fails the deployment before a process can wedge on it.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
+import socket
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+
+from uqs.model import profiles
+from uqs.model.registry import PIPELINES
+from uqs.paths import default_paths
+from uqs.stack import listing, runtime
 
 OK_MARKER = "DEPLOY_VERIFY_OK"
 FAILED_MARKER = "DEPLOY_VERIFY_FAILED"
@@ -186,8 +187,6 @@ def busy_ports(expected: dict[str, int], connect: Callable[[int], bool]) -> dict
 
 
 def _listening(port: int) -> bool:
-    import socket
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(1.0)
         return sock.connect_ex(("127.0.0.1", port)) == 0
@@ -196,11 +195,6 @@ def _listening(port: int) -> bool:
 def _expected(
     profile: str, base_port: int | None, procs: list[str] | None = None
 ) -> tuple[dict[str, int], set[str]]:
-    from uqs.model import profiles
-    from uqs.model.registry import PIPELINES
-    from uqs.paths import default_paths
-    from uqs.stack import listing
-
     resolved = profiles.resolve([profile])
     names = resolved + tuple(p for p in dict.fromkeys(procs or ()) if p not in resolved)
     ports = listing.configured_ports(default_paths(), base_port=base_port)
@@ -210,50 +204,37 @@ def _expected(
     return {n: int(ports[n]) for n in names}, {p.procname for p in PIPELINES}
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--profile", required=True)
-    parser.add_argument("--deadline", type=float, default=180.0, help="seconds")
-    parser.add_argument("--query-timeout", type=int, default=5, help="seconds per query")
-    parser.add_argument("--port", type=int, default=None, help="the stack's base port")
-    parser.add_argument("--procs", nargs="*", default=[], help="processes beyond the profile")
-    parser.add_argument("--tables", nargs="*", default=[], help="tables stp1 must carry")
-    parser.add_argument("--live", action="store_true", help="fixtures must be refused")
-    parser.add_argument(
-        "--ports-free",
-        action="store_true",
-        help="only check that nothing listens on the profile's ports yet",
-    )
-    args = parser.parse_args(argv)
-
-    expected, pipelines = _expected(args.profile, args.port, args.procs)
-    if args.ports_free:
+def run(
+    profile: str,
+    *,
+    deadline: float = 180.0,
+    query_timeout: int = 5,
+    port: int | None = None,
+    procs: list[str] | None = None,
+    tables: list[str] | None = None,
+    live: bool = False,
+    ports_free: bool = False,
+) -> int:
+    """Check the profile, print the result and its marker; the exit code."""
+    expected, pipelines = _expected(profile, port, procs)
+    if ports_free:
         busy = busy_ports(expected, _listening)
-        print(json.dumps({"profile": args.profile, "busy": busy}))
+        print(json.dumps({"profile": profile, "busy": busy}))
         print(FAILED_MARKER if busy else OK_MARKER)
         return 1 if busy else 0
 
-    from uqs.stack import runtime
-
     def query(expr: str, port: int) -> object:
-        return runtime.query(expr, port, timeout=args.query_timeout)
+        return runtime.query(expr, port, timeout=query_timeout)
 
     passed, results, why = verify(
-        expected, pipelines, query, args.deadline, tables=args.tables, live=args.live
+        expected, pipelines, query, deadline, tables=tables or [], live=live
     )
-    print(
-        json.dumps(
-            {
-                "profile": args.profile,
-                "passed": passed,
-                "reason": why,
-                "processes": [asdict(r) for r in results],
-            }
-        )
-    )
+    report = {
+        "profile": profile,
+        "passed": passed,
+        "reason": why,
+        "processes": [asdict(r) for r in results],
+    }
+    print(json.dumps(report))
     print(OK_MARKER if passed else FAILED_MARKER)
     return 0 if passed else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

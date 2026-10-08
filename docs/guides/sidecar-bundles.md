@@ -3,8 +3,8 @@
 Jobs kept outside this repository, such as a desk's own feeds and backfills,
 reach a server as a **bundle**: a versioned folder holding the jobs and the tree
 additions they need. One installer puts a bundle into a checkout
-(`uqs job install`) or into a release (`build_release.py --bundle`). A
-deployment then starts only the jobs you name (`deploy.py --jobs`).
+(`uqs job install`) or into a release (`uqs deploy build --bundle`). A
+deployment then starts only the jobs you name (`uqs deploy push --jobs`).
 
 A bundle does not need the workstation it came from, a Git checkout or any
 links. It is installed as copies, and a release built with it runs on a clean
@@ -92,7 +92,7 @@ Every refusal comes before anything is written:
 ## Building a release with bundles
 
 ```bash
-python3 scripts/build_release.py --output dist/ \
+uqs deploy build --output dist/ \
   --bundle ../piggybank --bundle ../marketwarehouse
 ```
 
@@ -114,7 +114,7 @@ A deployment starts no sidecar job unless asked, and never assumes a profile
 includes one:
 
 ```bash
-python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \
+uqs deploy push dist/uqf-<release>.tar.gz \
   --host uqf-server --dest /opt/uqf \
   --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \
   --profile essential --jobs pb_quotes,mw_quotes --live --dry-run
@@ -145,7 +145,7 @@ ssh uqf-server 'cd /opt/uqf/current && source ./deploy.env && \
 
 ## Credentials on the server
 
-Credentials never enter an artifact. `build_release.py` excludes `.env`,
+Credentials never enter an artifact. `uqs deploy build` excludes `.env`,
 `*.env`, `.envrc`, keys and licences. A bundle installs only its job files and
 its three addition files.
 

@@ -107,9 +107,9 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 
 #: What each folder is allowed to import from, and nothing else. The order is
 #: the layering: `model/` is what the stack declares, `stack/` is the fleet
-#: that runs, `external/` and `checks/` act on a running fleet, and `cli/` and
-#: `scaffold/` are front ends, which import what they use from where it is
-#: defined.
+#: that runs, `external/` and `checks/` act on a running fleet, `deploy/` puts
+#: a release of it on a server, and `cli/` and `scaffold/` are front ends,
+#: which import what they use from where it is defined.
 #:
 #: `paths` and `logger` are omitted from every list because everything may
 #: import them: they are leaves that import nothing from this package, so they
@@ -127,7 +127,8 @@ ALLOWED_IMPORTS = {
     "external": {"generated", "model", "stack"},
     "checks": {"generated", "model", "stack"},
     "scaffold": {"generated", "model", "stack"},
-    "cli": {"generated", "model", "stack", "scaffold", "external", "checks"},
+    "deploy": {"generated", "model", "stack"},
+    "cli": {"generated", "model", "stack", "scaffold", "external", "checks", "deploy"},
 }
 
 _IMPORT = re.compile(r"^\s*(?:from|import) uqs(?:\.(\w+))?(?: import ([\w, ]+))?", re.M)

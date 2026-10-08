@@ -1,4 +1,4 @@
-"""`python -m uqs.stack.bundle_build`: the two steps scripts/build_release.py
+"""`python -m uqs.stack.bundle_build`: the two steps `uqs deploy build`
 runs inside a STAGED copy of the tree when a release carries bundles (#800).
 
     install <bundle>...   install each bundle into the tree this package sits

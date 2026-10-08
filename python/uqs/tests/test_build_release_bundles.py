@@ -1,4 +1,4 @@
-"""scripts/build_release.py --bundle (#800): sidecar bundles installed into a
+"""`uqs deploy build --bundle` (#800): sidecar bundles installed into a
 staged copy of the tree and packaged from it.
 
 The fake-tool tests check the plumbing; the last test runs the real uqs
@@ -8,25 +8,37 @@ network steps (the dependency wheels) faked.
 
 from __future__ import annotations
 
-import importlib.util
-import io
 import json
 import subprocess
-import sys
 import tarfile
 from pathlib import Path
 
 import pytest
+from typer.main import get_group
+
+from uqs.cli.deploy import deploy_app
+from uqs.deploy import artifact, payload
+from uqs.deploy import build as release_build
+from uqs.stack import bundles
 
 ROOT = Path(__file__).resolve().parents[3]
 
-_spec = importlib.util.spec_from_file_location(
-    "uqf_build_release_bundles_under_test", ROOT / "scripts" / "build_release.py"
-)
-assert _spec and _spec.loader
-release = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = release
-_spec.loader.exec_module(release)
+
+_CLI = get_group(deploy_app)
+
+
+def _built(argv: list[str], **kwargs):
+    """`uqs deploy build` on `argv`: parsed by the command's own options."""
+    p = _CLI.commands["build"].make_context("build", list(argv)).params
+    return release_build.build(
+        p["output"],
+        arch=p["arch"],
+        python=p["python"],
+        allow_dirty=p["allow_dirty"],
+        bundles=p["bundle"] or (),
+        **kwargs,
+    )
+
 
 REV = "0123456789abcdef0123456789abcdef01234567"
 JOB = "src/etl/streaming/piggy_spread.q"
@@ -68,12 +80,12 @@ def _tools(files: list[str], fail_install: bool = False):
                 return _done(rc=1, stderr="bundle_build: table quote is already defined")
             (staged / JOB).parent.mkdir(parents=True, exist_ok=True)
             (staged / JOB).write_text("/ the job\n")
-            (staged / release.BUNDLE_LEDGER).write_text("{}\n")
+            (staged / bundles.LEDGER.as_posix()).write_text("{}\n")
             jobs = [{"kind": "streaming", "name": "piggy_spread", "procname": "piggy_spread1"}]
             return _done(json.dumps({"piggybank": {"version": "1.0.0", "jobs": jobs}}))
         if "needs" in argv:
             return _done(json.dumps({"piggy_spread1": ["piggy_spread1", "fxfeed1"]}))
-        if argv[-1].endswith(release.GENERATOR):
+        if argv[-1].endswith(release_build.GENERATOR):
             return _done()
         raise AssertionError(argv)
 
@@ -99,9 +111,7 @@ def _bundle(tmp_path: Path) -> Path:
 def _build(tmp_path: Path, *extra: str, fail_install: bool = False):
     root = tmp_path / "tree"
     tools, calls = _tools(_tree(root), fail_install)
-    art = release.build(
-        ["--output", str(tmp_path / "dist"), *extra], root=root, runner=tools, out=io.StringIO()
-    )
+    art = _built(["--output", str(tmp_path / "dist"), *extra], root=root, runner=tools)
     return art, calls, root
 
 
@@ -115,7 +125,7 @@ def test_a_bundle_is_installed_into_a_staged_tree_and_recorded(tmp_path):
     art, calls, root = _build(tmp_path, "--bundle", str(_bundle(tmp_path)))
     with tarfile.open(art.path) as tar:
         names = set(tar.getnames())
-    assert {JOB, release.BUNDLE_LEDGER, "src/init.q"} <= names
+    assert {JOB, bundles.LEDGER.as_posix(), "src/init.q"} <= names
     assert JOB in art.manifest["files"]
     job = art.manifest["bundles"]["piggybank"]["jobs"][0]
     assert job["needs"] == ["piggy_spread1", "fxfeed1"]
@@ -133,12 +143,12 @@ def test_a_bundle_is_installed_into_a_staged_tree_and_recorded(tmp_path):
 
 def test_a_folder_without_a_manifest_is_refused(tmp_path):
     (tmp_path / "loose").mkdir()
-    with pytest.raises(release.ReleaseError, match="holds no bundle.json"):
+    with pytest.raises(artifact.ReleaseError, match="holds no bundle.json"):
         _build(tmp_path, "--bundle", str(tmp_path / "loose"))
 
 
 def test_an_installer_refusal_fails_the_build_with_its_reason(tmp_path):
-    with pytest.raises(release.ReleaseError, match="quote is already defined"):
+    with pytest.raises(artifact.ReleaseError, match="quote is already defined"):
         _build(tmp_path, "--bundle", str(_bundle(tmp_path)), fail_install=True)
     assert not (tmp_path / "dist").exists() or not list((tmp_path / "dist").iterdir())
 
@@ -161,7 +171,7 @@ def test_the_real_installer_and_generator_over_a_staged_checkout(tmp_path):
     (b / "piggy_spread.q").write_text(STREAM)
     (b / "tables.q").write_text("piggy_quote:([]time:`timestamp$();sym:`symbol$())\n")
     (b / "catalog.q").write_text('.qcat.describe[`piggy_quote]:"quotes, for the piggybank";\n')
-    files = release.tracked_files(ROOT)
+    files = payload.tracked_files(ROOT)
 
     def runner(argv, **kw):
         if (faked := _python_tools(argv)) is not None:
@@ -170,8 +180,8 @@ def test_the_real_installer_and_generator_over_a_staged_checkout(tmp_path):
         return subprocess.run(argv, check=False, **kw)
 
     staged = tmp_path / "staged"
-    out, record = release.stage_bundles(ROOT, files, [str(b)], staged, runner)
-    assert JOB in out and release.BUNDLE_LEDGER in out
+    out, record = release_build.stage_bundles(ROOT, files, [str(b)], staged, runner)
+    assert JOB in out and bundles.LEDGER.as_posix() in out
     entry = record["piggybank"]
     assert entry["tables"] == ["piggy_quote"]
     (job,) = entry["jobs"]
