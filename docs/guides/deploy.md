@@ -160,6 +160,25 @@ compares a listing of the server's HDB with the tables and columns
 `uqs deploy build` recorded in the manifest, and says what `--fix-hdb` would
 fill. Column types need q, so they are checked in prepare.
 
+## Soaking before activation
+
+Verification proves each process answers. It does not prove a streaming job
+processes what arrives: a job whose every batch throws still answers, and still
+verifies. `--soak SECONDS` waits that long after verification, and the live
+check, while data flows. It then reads each started streaming job's
+`stream_health` record (#832) on the server, using the release's own code:
+
+```bash
+uqs deploy push dist/uqf-<release>.tar.gz ... --profile essential --soak 120
+```
+
+A job fails the soak if it reports `failing`, or if it has written no record
+since the soak began, judged on the server's clock. Either fails the deployment
+at stage `soak`, before `current` moves, and the usual rollback runs.
+Infrastructure processes and bounded workers are not judged: neither has
+batches. The report records the soak's length, its verdict, and each job's. Make
+the soak longer than the jobs' `period`, so every job has beaten at least once.
+
 ## When something fails
 
 Before `start`, nothing on the server has changed apart from a new directory

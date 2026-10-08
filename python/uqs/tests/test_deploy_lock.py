@@ -83,6 +83,11 @@ def test_the_limit_is_the_holders_longest_step_and_some():
     assert lock.stale_after(cfg) == 900 + lock.MARGIN
 
 
+def test_a_long_soak_does_not_make_its_own_lock_look_dead():
+    cfg = make_config(artifact="", host="h", dest="/d", profile="p", command_timeout=900, soak=1800)
+    assert lock.stale_after(cfg) == 1800 + 900 + lock.MARGIN
+
+
 # ------------------------------------------------------- on a real directory
 
 
