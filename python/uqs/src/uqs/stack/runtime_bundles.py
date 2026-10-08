@@ -115,6 +115,17 @@ def plan_all(members: list[Member], root: Path) -> list[bundles.Plan]:
     return plans
 
 
+def planned_q(plans: list[bundles.Plan], root: Path) -> dict[str, str]:
+    """Each q file the plans would install, by its path in the tree: what a
+    dry run converts beside the tree, before anything is written."""
+    return {
+        str(i.destination.relative_to(root)): i.source.read_text(encoding="utf-8")
+        for p in plans
+        for i in p.jobs
+        if i.destination is not None and i.destination.suffix == ".q"
+    }
+
+
 def prepare(runtime: str, members: list[Member], root: Path) -> dict[str, dict]:
     """Install `members` into the tree for `runtime`, and take `runtime` off
     every installed bundle it no longer declares. Nothing is uninstalled -

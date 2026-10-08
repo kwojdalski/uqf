@@ -30,7 +30,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
-from uqs.paths import TABLES_FILE, UqsError
+from uqs.paths import CATALOG_FILE, TABLES_FILE, UqsError
 from uqs.scaffold.columns import Columns, as_columns, nested_declaration, table_definition
 from uqs.scaffold.docs import EXTERNAL
 from uqs.scaffold.jobs import _check_name, _expected_table_action, streaming_job
@@ -38,6 +38,11 @@ from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
 EXTERNAL_DIR = "python/uqs/src/uqs/external"
 PY_TEST_DIR = "python/uqs/tests"
+#: Where the stack learns that a table is fed from outside it (#888): without
+#: an entry, every start of the new job warns that nothing feeds its input,
+#: and test_dependencies refuses the tree.
+DEPENDENCIES_FILE = Path("python/uqs/src/uqs/model/dependencies.py")
+PRODUCERS_HEAD = "EXTERNAL_PRODUCERS: dict[str, str] = {"
 
 
 def external_files(name: str) -> list[str]:
@@ -100,6 +105,17 @@ def external_feed(
             mode=WriteMode.APPEND,
         ),
         _expected_table_action(raw_table),
+        # The raw table is the job's input, not something a desk browses:
+        # hidden from the catalog, with the reason - which is true by
+        # construction, so there is nothing to fill in.
+        FileAction(
+            CATALOG_FILE,
+            f".qcat.hidden[`{raw_table}]:\n"
+            f'    "the RAW {name} records, published by {name}_streamer.py outside q and '
+            f'read only by {name}, which reshapes them into {publishes}";\n',
+            mode=WriteMode.APPEND,
+        ),
+        FileAction(DEPENDENCIES_FILE, producer_entry(name, raw_table), mode=WriteMode.APPEND),
     ]
     python = [
         FileAction(Path(f"{EXTERNAL_DIR}/{name}_streamer.py"), _streamer(name, raw_table, fields)),
@@ -113,6 +129,33 @@ def external_feed(
         *job.notes,
     ]
     return ScaffoldPlan(name=name, actions=raw + python + job.actions, notes=notes)
+
+
+def producer_entry(name: str, raw_table: str) -> str:
+    """The EXTERNAL_PRODUCERS line naming `raw_table`'s outside publisher."""
+    return f'    "{raw_table}": "the external {name} feed (`uqs feed start {name}`)",\n'
+
+
+def with_producer(existing: str, entry: str) -> str:
+    """dependencies.py with `entry` as the last item of EXTERNAL_PRODUCERS.
+
+    Refuses rather than guesses when the dict is not where it was: an entry
+    appended at the end of the module would be a syntax error, or a second
+    dictionary nothing reads."""
+    lines = existing.splitlines(keepends=True)
+    heads = [i for i, line in enumerate(lines) if line.startswith(PRODUCERS_HEAD)]
+    if len(heads) != 1:
+        raise UqsError(f"{DEPENDENCIES_FILE} has no single `{PRODUCERS_HEAD}` - add it by hand")
+    end = next((i for i in range(heads[0] + 1, len(lines)) if lines[i].rstrip() == "}"), None)
+    if end is None:
+        raise UqsError(f"{DEPENDENCIES_FILE}: EXTERNAL_PRODUCERS has no closing `}}` line")
+    return "".join(lines[:end] + [entry] + lines[end:])
+
+
+def without_producer(existing: str, raw_table: str) -> str:
+    """dependencies.py without `raw_table`'s one-line EXTERNAL_PRODUCERS entry."""
+    head = f'    "{raw_table}": "the external '
+    return "".join(line for line in existing.splitlines(keepends=True) if not line.startswith(head))
 
 
 def _streamer(name: str, raw_table: str, fields: list[str]) -> str:

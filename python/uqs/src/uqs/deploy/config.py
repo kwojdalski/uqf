@@ -107,6 +107,8 @@ class Config:
     verify_timeout: int = 180
     #: fill the shared HDB's missing tables and columns in prepare (#870)
     fix_hdb: bool = False
+    #: remove a deploy lock whose holder has stopped beating (#867)
+    break_lock: bool = False
 
     @property
     def data_root(self) -> str:
@@ -185,6 +187,7 @@ def make_config(
     smoke_timeout: int = 120,
     verify_timeout: int = 180,
     fix_hdb: bool = False,
+    break_lock: bool = False,
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
@@ -241,4 +244,5 @@ def make_config(
         smoke_timeout=smoke_timeout,
         verify_timeout=verify_timeout,
         fix_hdb=fix_hdb,
+        break_lock=break_lock,
     )

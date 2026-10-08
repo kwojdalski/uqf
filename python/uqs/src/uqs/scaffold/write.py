@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, UqsError
-from uqs.scaffold import profile
+from uqs.scaffold import external, profile
 from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
@@ -72,6 +72,8 @@ def _appended(existing: str, action: FileAction) -> str:
         return profile.apply(existing, action)
     if action.path == SHOWCASE_PAGE:
         return with_card(existing, action.body, action.anchor)
+    if action.path == external.DEPENDENCIES_FILE:
+        return external.with_producer(existing, action.body)
     return existing.rstrip("\n") + "\n" + action.body
 
 

@@ -115,3 +115,87 @@ ODBC sources also need a driver set up: see [ODBC](odbc.md).
 
 Not done by a deployment: data migration, automatic backfills, or probing
 sources before a job connects.
+
+## PeachQ
+
+`peachq-etl` is an **experimental** runtime: PeachQ's capture stack with this
+tree's layers, plus the bundles declared for it. It has no uqf pipelines of its
+own. The `peachq` runtime is unchanged and still runs the capture stack only.
+
+```bash
+export UQF_PEACHQ=/path/to/peachq/q
+uqs --runtime peachq-etl runtime prepare --bundle ../synthpq --dry-run
+uqs --runtime peachq-etl runtime prepare --bundle ../synthpq
+uqs --runtime peachq-etl start --profile capture
+uqs --runtime peachq-etl start synthfeed1
+```
+
+Bundles are declared and installed as for any other runtime, through
+`runtime_bundles.json` or `--bundle`, with the same installer. The ledger
+records `peachq-etl` as each one's runtime, so the jobs join no other runtime.
+
+### The converted q tree
+
+PeachQ cannot load nested `\d` contexts, and the ETL tree uses them. So the
+processes do not load the checkout. They load a copy in
+`output/uqs-peachq-etl/qtree`:
+
+- **What it holds.** `src/` and `scripts/` from the checkout, installed bundle
+  jobs included. Each q file is rewritten by
+  `scripts/portable/flatten_contexts.py`, the converter that
+  `uqs deploy build --q-target 4.0` uses. `UQF_ROOT`, `UQF_SCRIPTS` and both
+  service layers point at the copy.
+- **When it is built.** Every `start`, before anything starts. A dry run of
+  `runtime prepare` converts the tree and the bundles' files in memory and
+  writes nothing.
+- **When it is refused.** If any place cannot be converted with certainty, the
+  error names its file and line. The copy must also load `src/init.q` and
+  `src/etl/init.q` on PeachQ and print a sentinel. q exits 0 whatever happens
+  while it loads, so only the sentinel counts.
+- **Publishing.** The copy is built beside the published tree and swapped in by
+  rename. A failed preparation leaves the previous tree as it was, records the
+  reason in `qtree-failed.json`, and starts nothing. `qtree.json` records what
+  was converted.
+- **Rebuilding.** An unchanged checkout reuses the tree. `stop` and `summary`
+  never rebuild it.
+- **What is never written.** The checkout and the vendored TorQ trees.
+
+### What runs, and what is refused
+
+Verified by `test_peachq_pipelines.py`:
+
+- the capture stack: discovery, the tickerplants, rdb1, hdb1 and gateway1;
+- a bundle's streaming job publishing into rdb1;
+- a bundle's bounded worker writing into the HDB, with its run status and
+  coverage recorded.
+
+PeachQ cannot upsert onto a partition on disk, set an attribute there, or run
+`.Q.chk`. So on PeachQ, `src/etl/core/io_hdb.q` works differently:
+
+- **Appending.** It rewrites a partition whole, rather than upserting onto it.
+- **Finishing.** It sorts each partition by sym, then time, but sets no `p#sym`
+  and runs no `.Q.chk`. uqs's bootstrap fills in missing tables from the schema
+  instead.
+- **Telling a partition is finished.** With no attribute to read, a partition
+  counts as finished when it is in that order.
+
+KDB-X does exactly what it did before.
+
+Before a backfill starts on `peachq-etl`, uqs asks the PeachQ binary what it
+supports. Today that is one thing: whether it can load a shared library (`2:`).
+A worker whose source uses ODBC needs a driver, which is a shared library, so it
+is refused on a build that cannot load one, naming the reason. The pinned build
+(`scripts/peachq.py`) can; a static download cannot. `--mode validate` and
+`plan` open no source, so they need nothing.
+
+Bounded workers still never start on their own. Installing, preparing and
+starting the stack run no backfill.
+
+Not yet proven on PeachQ:
+
+- the rest of the ETL tree's sources and jobs;
+- end-of-day, keyed rewrites (`--on-conflict replace`) and the other HDB
+  operations still listed in `tests/q/peachq_known_gaps.txt`;
+- `uqs deploy` of this runtime.
+
+`UQF_PEACHQ_STACK_TEST=1` runs the whole-stack test. It needs the 6550 ports.

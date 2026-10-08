@@ -925,3 +925,30 @@ def _run_with_facts(tmp_path, facts, q):
 def test_preflight_asks_the_servers_q_for_its_version():
     assert '-1 "DEPLOY_Q_OK ",string .z.K' in PREFLIGHT
     assert 'echo "qversion=$qversion"' in PREFLIGHT
+
+
+# --- the lock's heartbeat (#867) --------------------------------------------------
+
+
+def test_the_lock_beats_between_stages(tmp_path):
+    _, remote, _ = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    beats = [i for i, (_, s) in enumerate(remote.scripts) if "/heartbeat; fi" in s]
+    stages = [stage for stage, _ in remote.scripts]
+    assert len(beats) >= 5, "after transfer, prepare and smoke, and around verify"
+    assert stages.index("transfer") < beats[0] and beats[-1] < stages.index("activate")
+
+
+def test_the_lock_beats_between_prepare_and_the_hdb_check(tmp_path):
+    _, remote, _ = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    stages = [stage for stage, _ in remote.scripts]
+    last_prepare = len(stages) - 1 - stages[::-1].index("prepare")
+    between = remote.scripts[last_prepare + 1 : stages.index("hdb")]
+    assert any("/heartbeat; fi" in s for _, s in between), "each may take command_timeout"
+
+
+def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
+    held = _done(
+        SERVER + "data=present\nlocked=2026-10-08 push OLD by ops@h pid 7, last beat 9s ago\n"
+    )
+    with pytest.raises(DeployError, match=r"last beat 9s ago\)\. If it died, --break-lock"):
+        driver.deploy(parse_args(_args(_artifact(tmp_path))), FakeRemote({"uv python find": held}))

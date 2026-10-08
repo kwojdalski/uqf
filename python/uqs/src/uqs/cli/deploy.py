@@ -270,6 +270,13 @@ def push(
             "declares (additive); without it they are refused. A changed type always is",
         ),
     ] = False,
+    break_lock: Annotated[
+        bool,
+        typer.Option(
+            "--break-lock",
+            help="Remove a deploy lock whose holder stopped beating; refused while it beats",
+        ),
+    ] = False,
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())
