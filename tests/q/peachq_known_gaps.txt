@@ -17,31 +17,25 @@
 .dagtest.test_d2_names_each_edge_with_its_table  # PeachQ 'type where KDB-X accepts the same code
 
 .ddbftest.test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished  # PeachQ 'type where KDB-X accepts the same code
+.ddbftest.test_a_dry_rerun_repairs_nothing  # PeachQ result differs: with no attribute to read, a partition written in sym-then-time order already is what finish leaves, so it counts as finished
 
 .egtest.test_no_documented_example_is_wrong  # PeachQ result differs: every @eg that states a value states the value the code returns
 .egtest.test_the_wrong_ones_are_named_not_merely_counted  # PeachQ result differs: a failing example is reported by file and line
 
 .evttest.test_undefined_if_zero_is_the_guard_and_only_the_guard  # PeachQ result differs: vectorised, because a functional select hands it one value per group
 
-.iotest.test_a_failing_on_ready_does_not_fail_the_flush  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
 .iotest.test_a_keyed_write_leaves_nothing_in_staging  # PeachQ result differs: the partition is written and the staging area is empty again
 .iotest.test_a_table_without_sym_is_judged_by_its_sorted_time  # PeachQ 'io: reading or rewriting a partitioned HDB on disk
-.iotest.test_a_written_partition_is_unfinished_and_a_finished_one_is_not  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_finish_after_flush_does_only_what_flush_left  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_flush_finishes_only_the_days_wholly_behind_it  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_hdb_append_still_duplicates  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_hdb_appends_a_second_window  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_hdb_appends_to_a_finished_partition  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
+.iotest.test_finish_after_flush_does_only_what_flush_left  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_flush_finishes_only_the_days_wholly_behind_it  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_hdb_appends_to_a_finished_partition  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
 .iotest.test_hdb_finish_fills_a_partition_missing_a_table  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_hdb_finish_forgets_what_it_finished  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_hdb_finish_sorts_and_attributes  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_hdb_keyed_writes_are_finished_like_any_other  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
+.iotest.test_hdb_finish_sorts_and_attributes  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_hdb_keyed_writes_are_finished_like_any_other  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
 .iotest.test_hdb_replace_clears_a_day_the_source_has_emptied  # PeachQ 'corrupt: reading or rewriting a partitioned HDB on disk
-.iotest.test_on_ready_hears_every_flush_and_the_finish  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
 .iotest.test_recover_finds_what_a_lost_process_wrote_and_finish_repairs_it  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_recover_leaves_finished_partitions_alone  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_recover_restores_a_table_swapped_out_and_never_replaced  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
 .iotest.test_recover_trims_a_torn_append  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
+.iotest.test_recover_looks_only_inside_the_range  # PeachQ result differs: with no attribute to read, a partition written in sym-then-time order already is what finish leaves, so it counts as finished
 
 .jobouttest.test_a_column_list_is_held_to_count_and_types  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .jobouttest.test_a_wrong_type_is_caught  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
@@ -65,8 +59,6 @@
 
 .nstest.test_the_subscriber_processes_are_inside_the_prefix  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
-.rebuild_positionsrxtest.test_under_the_hdb_io_manager_a_second_release_replaces  # PeachQ 'type where KDB-X accepts the same code
-.rebuild_positionsrxtest.test_under_the_hdb_io_manager_positions_land_in_the_hdb  # PeachQ 'io: reading or rewriting a partitioned HDB on disk
 
 .regtest.test_the_trap_is_real_and_has_two_halves  # PeachQ 'type where KDB-X accepts the same code
 

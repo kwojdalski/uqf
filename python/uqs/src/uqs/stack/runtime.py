@@ -20,11 +20,10 @@ from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
-from uqs.stack import alive, occupancy
+from uqs.stack import alive, gateway_access, occupancy, qtree
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
-from uqs.stack.gateway_access import gateway_access_lines
 from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import check_carriable, effective_process_rows
 
@@ -145,9 +144,9 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     if not paths.runtime_declaration.overlays:
         shutil.copyfile(paths.torqapphome / "database.q", paths.generated_schema)
     else:
-        # gateway1's access list: the vendored one plus the ordinary users the
-        # query policy applies to (procs.GATEWAY_ACCESS_OVERLAY points it here).
-        paths.generated_gateway_access.write_text("\n".join(gateway_access_lines(paths)) + "\n")
+        # gateway1's access list, and the data-access table list the rdbs,
+        # hdbs and gateways are started with (stack/gateway_access.py).
+        gateway_access.write(paths)
 
         # Same extend-never-edit approach as process.csv above, for stp1's
         # -schemafile (see _generated_schema_content/_composed_rows).
@@ -213,6 +212,10 @@ def run_torq_sh(
     # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
     # stop resolving even though they're on PATH in the calling shell.
     env = {**os.environ, **overrides}
+    if qtree.is_flattened(paths) and args[:1] == ["start"]:
+        # What a start loads, converted and proven first - refused before
+        # anything starts. stop and summary leave the published tree alone.
+        qtree.prepare(paths, q_command(env), env)
     cmd = [str(launcher), *args]
     log.debug("running: {} (timeout={})", " ".join(cmd), timeout)
     try:

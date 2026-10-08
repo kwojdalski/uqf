@@ -17,7 +17,8 @@ from rich.table import Table
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import _die, _paths, console
-from uqs.stack import runtime_bundles
+from uqs.paths import UqsError
+from uqs.stack import qtree, runtime_bundles
 from uqs.stack.bundle_blocks import BundleError
 
 
@@ -44,7 +45,15 @@ def prepare(
     try:
         members = runtime_bundles.resolve(runtime, paths.repo_root, bundle or [])
         plans = runtime_bundles.plan_all(members, paths.repo_root)
-    except BundleError as exc:
+        # A flattened runtime loads a converted copy (stack/qtree.py): the
+        # bundles' q is converted with the tree, in memory, before anything
+        # is installed - so a refusal fails a dry run too, and writes nothing.
+        converted = (
+            qtree.check(paths.repo_root, runtime_bundles.planned_q(plans, paths.repo_root))
+            if qtree.is_flattened(paths)
+            else None
+        )
+    except (BundleError, UqsError) as exc:
         _die(exc)
         return
     table = Table(title=f"runtime {runtime}", title_justify="left", header_style="bold cyan")
@@ -60,6 +69,11 @@ def prepare(
             ", ".join(plan.tables) or "-",
         )
     console.print(table if members else f"[dim]runtime {runtime} declares no bundles[/]")
+    if converted is not None:
+        console.print(
+            f"[dim]q tree: {converted['q_files']} q file(s) convert for PeachQ, "
+            f"{converted['transformed']} rewritten; `start` builds and checks the tree[/]"
+        )
     if dry_run:
         console.print("[dim]--dry-run: nothing written[/]")
         return
