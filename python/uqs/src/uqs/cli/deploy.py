@@ -139,7 +139,13 @@ def build(
 
 @deploy_app.command("push")
 def push(
-    artifact: Annotated[str, typer.Argument(help="The release, from `uqs deploy build`")],
+    artifact: Annotated[
+        str,
+        typer.Argument(
+            help="The release: a file from `uqs deploy build`, an https:// URL to one, or "
+            "a release tag CI published (.github/workflows/release.yml)"
+        ),
+    ],
     host: Annotated[
         str, typer.Option("--host", help="ssh destination, as your ssh config knows it")
     ],
@@ -262,6 +268,20 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    allow_dirty: Annotated[
+        bool,
+        typer.Option(
+            "--allow-dirty", help="Deploy an artifact built from uncommitted changes (refused)"
+        ),
+    ] = False,
+    release_repo: Annotated[
+        str | None,
+        typer.Option(
+            "--release-repo",
+            metavar="OWNER/NAME",
+            help="Whose GitHub releases a tag ARTIFACT names; default: this checkout's origin",
+        ),
+    ] = None,
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())
