@@ -42,7 +42,7 @@ MARGIN = 60
 #: Prints nothing when there is no lock.
 INFO = r"""
 if [ -d {lock} ]; then
-  cat {lock}/owner 2>/dev/null | tail -n +2
+  {{ cat {lock}/owner 2>/dev/null || true; }} | tail -n +2
   hb=$(cat {lock}/heartbeat 2>/dev/null || stat -c %Y {lock} 2>/dev/null || true)
   case "$hb" in ''|*[!0-9]*) echo "age=unknown";; *) echo "age=$(( $(date +%s) - hb ))";; esac
 fi

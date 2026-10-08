@@ -86,6 +86,14 @@ class Report:
     #: the shared HDB against this release's schema, and what was filled (#870)
     hdb: dict | None = None
 
+    #: what --keep removed after activation (#866), when it was given
+    pruned: dict | None = None
+
+    #: an upgrade's outage (#871): when the previous release's processes began
+    #: to stop, when the new ones verified, and the seconds between. None
+    #: when nothing was replaced.
+    downtime: dict | None = None
+
     #: --soak's verdict and duration, and each streaming job's, when it ran (#869)
     soak: dict | None = None
 
