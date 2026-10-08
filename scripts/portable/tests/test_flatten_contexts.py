@@ -69,6 +69,12 @@ def test_the_issues_example():
     )
 
 
+@pytest.mark.parametrize("text", ["", "/ a comment, and nothing else\n", "\n\n"])
+def test_a_file_with_no_statement_converts_to_itself(text):
+    r = one(text)
+    assert (r.refusals, r.output if r.action == "transformed" else text) == ([], text)
+
+
 def test_globals_and_cross_function_calls_are_qualified():
     src = "\\d .a.b\nf:{x+1}\ng:{f f x}\nh:{[v] g[v]+k}\n"
     assert converted(src) == (

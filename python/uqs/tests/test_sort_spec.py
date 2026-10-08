@@ -40,7 +40,10 @@ IO_MANAGER_SPEC = (("p", "sym", "1"), ("", "time", "1"))
 
 #: The code that applies IO_MANAGER_SPEC. Held here so a change to the IO
 #: manager's sort fails this test too, not only a change to sort.csv.
-IO_MANAGER_CODE = ("order:(`sym`time inter c);", "if[`sym in c; @[part;`sym;`p#]];")
+IO_MANAGER_CODE = (
+    "order:(`sym`time inter c);",
+    "if[(`sym in c) and not on_peachq; @[part;`sym;`p#]];",
+)
 
 Spec = tuple[tuple[str, str, str], ...]
 

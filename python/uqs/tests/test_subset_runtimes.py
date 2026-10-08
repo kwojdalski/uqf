@@ -19,7 +19,9 @@ from uqs.stack.dqe import dqe_config_rows
 from uqs.stack.procs import effective_process_rows
 
 REPO = Path(stack_paths.__file__).resolve().parents[4]
-SUBSETS = [r for r in runtimes.RUNTIMES.values() if r.profile is not None]
+#: Runtimes of one profile's own pipelines. peachq-etl names a profile too, but
+#: one with no pipeline: its jobs are its bundles' (test_peachq_pipelines.py).
+SUBSETS = [r for r in runtimes.RUNTIMES.values() if r.profile and profiles.PROFILES[r.profile]]
 PIPELINE_NAMES = {p.procname for p in PIPELINES}
 
 
