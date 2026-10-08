@@ -210,6 +210,7 @@ def build_artifact(
     bundles: dict | None = None,
     runtime: str | None = None,
     portable: dict | None = None,
+    hdb_shape: dict[str, list[str]] | None = None,
 ) -> Artifact:
     """The archive, its .sha256 and its manifest, written into `out_dir`.
 
@@ -245,6 +246,10 @@ def build_artifact(
     if portable:
         # what was converted for the server's kdb+ (#861); target["q"] says which
         manifest["portable"] = portable
+    if hdb_shape:
+        # the tables and columns this release declares, for a dry run to judge
+        # the server's HDB by before any of the release is there (#870)
+        manifest["hdb_shape"] = hdb_shape
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"uqf-{rid}.tar.gz"
     with tarfile.open(path, "w:gz") as tar:
@@ -343,7 +348,23 @@ def build(
             bundles=record,
             runtime=runtime if (members or runtime != DEFAULT_RUNTIME) else None,
             portable=converted,
+            hdb_shape=declared_shape(tree, runtime),
         )
+
+
+def declared_shape(tree: Path, runtime: str) -> dict[str, list[str]] | None:
+    """{table: columns} the release's schema declares, or None - with a
+    warning - when it cannot be composed here; push then judges the HDB in
+    prepare only."""
+    from uqs.paths import UqsError, paths_for_root
+    from uqs.stack import hdb_shape
+    from uqs.stack.hdb_types import declared_schema
+
+    try:
+        return hdb_shape.declared_columns(declared_schema(paths_for_root(tree, runtime)))
+    except (UqsError, OSError) as exc:
+        log.warning("the manifest records no hdb_shape: {}", exc)
+        return None
 
 
 def composition_members(runtime: str, root: Path, bundles: Sequence[str] = ()) -> list:

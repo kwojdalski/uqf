@@ -118,6 +118,15 @@ def test_a_held_lock_is_refused_naming_its_holder(tmp_path):
         _server(dest).take_lock()
 
 
+def test_a_lock_with_no_owner_file_is_refused_not_unreadable(tmp_path):
+    """A lock taken before #867, or by a holder that died between its mkdir
+    and its owner record: the directory alone, read under pipefail."""
+    dest = tmp_path / "uqf"
+    (dest / "deploy.lock").mkdir(parents=True)
+    with pytest.raises(DeployError, match="another deployment holds.*--break-lock"):
+        _server(dest).take_lock()
+
+
 def test_break_lock_refuses_a_holder_that_still_beats(tmp_path):
     dest = tmp_path / "uqf"
     _held(dest, age=10)

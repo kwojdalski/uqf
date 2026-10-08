@@ -200,10 +200,10 @@ and nothing in the framework assumes old rows are gone.
 **Schema change is half covered.** A column or table *added* to the schema
 reaches older partitions: `uqs data hdb-check` reports a partition missing one,
 and `--fix` fills it
-([`checks/hdb_shape.py`](../../python/uqs/src/uqs/checks/hdb_shape.py)). A
-column whose *type* changes, or that is *renamed*, has no path: older partitions
-keep the old shape, and a query across both fails. Today that means a new column
-or a new table rather than a change in place.
+([`stack/hdb_shape.py`](../../python/uqs/src/uqs/stack/hdb_shape.py)). A column
+whose *type* changes, or that is *renamed*, has no path: older partitions keep
+the old shape, and a query across both fails. Today that means a new column or a
+new table rather than a change in place.
 
 ## 8. Authority is split, and written down
 

@@ -22,7 +22,7 @@ import typer
 
 from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, targets, verify
+from uqs.deploy import config, driver, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import configure_logging, get_logger
@@ -148,7 +148,13 @@ def _on_command_line(ctx: typer.Context, name: str) -> bool:
 @deploy_app.command("push")
 def push(
     ctx: typer.Context,
-    artifact: Annotated[str, typer.Argument(help="The release, from `uqs deploy build`")],
+    artifact: Annotated[
+        str,
+        typer.Argument(
+            help="The release: a file from `uqs deploy build`, an https:// URL to one, or "
+            "a release tag CI published (.github/workflows/release.yml)"
+        ),
+    ],
     host: Annotated[
         str | None,
         typer.Option("--host", help="ssh destination, as your ssh config knows it"),
@@ -283,6 +289,36 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    allow_dirty: Annotated[
+        bool,
+        typer.Option(
+            "--allow-dirty", help="Deploy an artifact built from uncommitted changes (refused)"
+        ),
+    ] = False,
+    release_repo: Annotated[
+        str | None,
+        typer.Option(
+            "--release-repo",
+            metavar="OWNER/NAME",
+            help="Whose GitHub releases a tag ARTIFACT names; default: this checkout's origin",
+        ),
+    ] = None,
+    fix_hdb: Annotated[
+        bool,
+        typer.Option(
+            "--fix-hdb",
+            help="Fill the shared HDB's partitions that lack a table or column this release "
+            "declares (additive); without it they are refused. A changed type always is",
+        ),
+    ] = False,
+    keep: Annotated[
+        int | None,
+        typer.Option(
+            "--keep",
+            min=0,
+            help="After activating, remove all but the newest N releases (`uqs deploy prune`)",
+        ),
+    ] = None,
     soak: Annotated[
         int | None,
         typer.Option(
@@ -330,39 +366,4 @@ def push(
                 break
     except config.DeployError as exc:
         _failed("uqs deploy push", exc.stage, exc)
-    raise typer.Exit(code=code)
-
-
-@deploy_app.command("verify")
-def verify_cmd(
-    profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
-    deadline: Annotated[float, typer.Option("--deadline", help="Seconds")] = 180.0,
-    query_timeout: Annotated[int, typer.Option("--query-timeout", help="Seconds per query")] = 5,
-    port: Annotated[int | None, typer.Option("--port", help="The stack's base port")] = None,
-    procs: Annotated[
-        str,
-        typer.Option("--procs", metavar="NAME,...", help="Processes beyond the profile"),
-    ] = "",
-    tables: Annotated[
-        str, typer.Option("--tables", metavar="NAME,...", help="Tables stp1 must carry")
-    ] = "",
-    live: Annotated[bool, typer.Option("--live", help="Fixtures must be refused")] = False,
-    ports_free: Annotated[
-        bool,
-        typer.Option(
-            "--ports-free", help="Only check that nothing listens on the profile's ports yet"
-        ),
-    ] = False,
-) -> None:
-    """Run on the server, from a release: does every process the profile promises answer?"""
-    code = verify.run(
-        profile,
-        deadline=deadline,
-        query_timeout=query_timeout,
-        port=port,
-        procs=[p for p in procs.split(",") if p],
-        tables=[t for t in tables.split(",") if t],
-        live=live,
-        ports_free=ports_free,
-    )
     raise typer.Exit(code=code)

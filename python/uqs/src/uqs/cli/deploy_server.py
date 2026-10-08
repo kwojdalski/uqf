@@ -1,21 +1,19 @@
-"""`uqs deploy status` and `uqs deploy rollback`: commands about a server that
-already runs a release, beside cli/deploy.py's build, push and verify, which
-make and install one. Both read what the server's own pushes recorded."""
+"""`uqs deploy status`, `rollback`, `prune` and `verify`: commands about a
+server that already runs a release, beside cli/deploy.py's build and push,
+which make and install one. status, rollback and prune read what the server's
+own pushes recorded; verify runs ON the server, from inside a release."""
 
 from __future__ import annotations
 
 import json
-import re
 from typing import Annotated
 
 import typer
 
 from uqs.cli.deploy import _failed, deploy_app
-from uqs.deploy import config, rollback, status
+from uqs.deploy import config, prune, rollback, status, verify
+from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
-
-#: A release id as `uqs deploy build` names one: UTC build time, then the revision.
-RELEASE_ID = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{12}")
 
 Host = Annotated[str, typer.Option("--host", help="ssh destination, as your ssh config knows it")]
 Dest = Annotated[str, typer.Option("--dest", help="Absolute directory on the server")]
@@ -121,4 +119,70 @@ def rollback_cmd(
         code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
     except config.DeployError as exc:
         _failed("uqs deploy rollback", exc.stage, exc)
+    raise typer.Exit(code=code)
+
+
+@deploy_app.command("prune")
+def prune_cmd(
+    host: Host,
+    dest: Dest,
+    keep: Annotated[
+        int, typer.Option("--keep", min=0, help="How many of the newest releases to keep")
+    ],
+    remote_user: RemoteUser = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="List what would be removed; remove nothing")
+    ] = False,
+    connect_timeout: ConnectTimeout = 10,
+    command_timeout: Annotated[
+        int, typer.Option("--command-timeout", help="Each remote step, seconds")
+    ] = 900,
+) -> None:
+    """Remove the oldest releases beyond the newest --keep, under the deploy lock.
+
+    Never removes the release `current` names, the one a rollback would return
+    to, or one whose push is still running - whatever --keep is. Prints what
+    stayed and why, what went, and the bytes freed."""
+    try:
+        cfg, remote = _server(
+            host, dest, remote_user, connect_timeout, command_timeout=command_timeout
+        )
+        code = prune.prune(cfg, remote, keep=keep, dry_run=dry_run)
+    except config.DeployError as exc:
+        _failed("uqs deploy prune", exc.stage, exc)
+    raise typer.Exit(code=code)
+
+
+@deploy_app.command("verify")
+def verify_cmd(
+    profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
+    deadline: Annotated[float, typer.Option("--deadline", help="Seconds")] = 180.0,
+    query_timeout: Annotated[int, typer.Option("--query-timeout", help="Seconds per query")] = 5,
+    port: Annotated[int | None, typer.Option("--port", help="The stack's base port")] = None,
+    procs: Annotated[
+        str,
+        typer.Option("--procs", metavar="NAME,...", help="Processes beyond the profile"),
+    ] = "",
+    tables: Annotated[
+        str, typer.Option("--tables", metavar="NAME,...", help="Tables stp1 must carry")
+    ] = "",
+    live: Annotated[bool, typer.Option("--live", help="Fixtures must be refused")] = False,
+    ports_free: Annotated[
+        bool,
+        typer.Option(
+            "--ports-free", help="Only check that nothing listens on the profile's ports yet"
+        ),
+    ] = False,
+) -> None:
+    """Run on the server, from a release: does every process the profile promises answer?"""
+    code = verify.run(
+        profile,
+        deadline=deadline,
+        query_timeout=query_timeout,
+        port=port,
+        procs=[p for p in procs.split(",") if p],
+        tables=[t for t in tables.split(",") if t],
+        live=live,
+        ports_free=ports_free,
+    )
     raise typer.Exit(code=code)

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from uqs.checks import hdb_shape
+from uqs.stack import hdb_shape
 
 SCHEMA = """\
 quote:([]time:`timestamp$(); sym:`symbol$(); bid:`float$())
