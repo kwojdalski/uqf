@@ -176,7 +176,7 @@ q).qexec.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 and the ETL processes - with generated configuration:
 
 ```
-uv sync
+./install.sh                  # once: checks prerequisites, puts uqs on PATH
 uv run uqs start all
 uv run uqs summary            # up/down, pid, port and heartbeat per process
 uv run uqs query "count fx_orderbook" --port 6052   # 6052 = base port + 2 = rdb1
