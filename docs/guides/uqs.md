@@ -27,7 +27,7 @@ draws the topology.
 ## Quick start
 
 ```
-scripts/dev/install.sh     # once: the required tools, and `uqs` on your PATH
+./install.sh               # once: checks prerequisites, puts `uqs` on your PATH
 uqs start all              # every startwithall=1 process
 uqs summary                # status table
 uqs stop all               # stop everything
@@ -1087,9 +1087,10 @@ through to `lib/torq/torq.sh`.
 
 ## Installing
 
-`scripts/dev/install.sh` runs `uv tool install --force --editable python/uqs`,
-first removing any install registered under a former package name, then checks
-that `uqs` runs. It is idempotent.
+`./install.sh` checks the prerequisites, then runs
+`uv tool install --force --editable python/uqs`, first removing any install
+registered under a former package name, and checks that `uqs` runs. It is
+idempotent; `./install.sh --help` lists `--dev`, `--web` and `--check`.
 
 Editable means every source edit is live at once. The console script and the
 package path are written at install time, though, so after a package rename or

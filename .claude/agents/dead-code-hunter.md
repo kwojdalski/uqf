@@ -137,10 +137,10 @@ The two in this tree, both tested:
   and bootstrap regenerates its contents on every command, so a missed rename
   starts cleanly against an empty HDB and every historical query returns no
   rows.
-- `FORMER_NAMES` in `scripts/dev/install.sh`. It UNINSTALLS the old
-  distributions rather than supporting them; `uv tool install` will not replace
-  a tool registered under another name, so the old one goes on owning `uqs` on
-  PATH and the install appears to succeed while the command stays broken.
+- `FORMER_NAMES` in `install.sh`. It UNINSTALLS the old distributions rather
+  than supporting them; `uv tool install` will not replace a tool registered
+  under another name, so the old one goes on owning `uqs` on PATH and the
+  install appears to succeed while the command stays broken.
 
 Both would be findings if they made the old name work. Neither does.
 
