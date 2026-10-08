@@ -80,6 +80,14 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
             if cfg.live_check
             else []
         ),
+        *(
+            [
+                f"soak      {cfg.soak}s of data, then every started streaming job must have "
+                "beaten with no batch failing (stream_health)"
+            ]
+            if cfg.soak
+            else []
+        ),
         "activate  " + f"{dep.current} -> releases/{rid}",
     ]
     size = pkg.path.stat().st_size
@@ -224,6 +232,12 @@ def _run(
             log.info("checking {} live, before activation", ", ".join(cfg.live_check))
             dep.live_check(release)
             report.checks["live-check"] = "ok"
+        if cfg.soak:
+            log.info("soaking for {}s: every streaming job must beat, none failing", cfg.soak)
+            report.soak = dep.soak(release, [p["process"] for p in report.processes])
+            if not report.soak["passed"]:
+                raise DeployError("soak", report.soak["reason"])
+            report.checks["soak"] = "ok"
         # Recorded BEFORE activation, and fatal if it cannot be: the next
         # upgrade reads this report to know what to stop.
         report.status = "deployed"

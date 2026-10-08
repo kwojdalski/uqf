@@ -262,6 +262,15 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    soak: Annotated[
+        int | None,
+        typer.Option(
+            "--soak",
+            metavar="SECONDS",
+            help="After verify, let data flow this long; then a streaming job that is "
+            "failing, or never beat, rolls the deployment back before activation",
+        ),
+    ] = None,
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())

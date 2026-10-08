@@ -105,6 +105,9 @@ class Config:
     command_timeout: int = 900
     smoke_timeout: int = 120
     verify_timeout: int = 180
+    #: seconds to let data flow after verify, then require every started
+    #: streaming job to have beaten and none to be failing (#869); None skips it
+    soak: int | None = None
 
     @property
     def data_root(self) -> str:
@@ -182,6 +185,7 @@ def make_config(
     command_timeout: int = 900,
     smoke_timeout: int = 120,
     verify_timeout: int = 180,
+    soak: int | None = None,
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
@@ -209,6 +213,8 @@ def make_config(
     for source in checked:
         if not _JOB.fullmatch(source):
             raise DeployError("arguments", f"--live-check {source!r} is not a source name")
+    if soak is not None and soak <= 0:
+        raise DeployError("arguments", "--soak must be positive")
     path = _required_absolute("--dest", dest)
     if path == "/":
         raise DeployError("arguments", "--dest must not be /")
@@ -237,4 +243,5 @@ def make_config(
         command_timeout=command_timeout,
         smoke_timeout=smoke_timeout,
         verify_timeout=verify_timeout,
+        soak=soak,
     )
