@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Puts this repository's console commands on your PATH, so they work without a
-# `uv run --project ...` prefix. Currently one: `uqs`, the stack orchestrator
-# (python/uqs, [project.scripts]).
+# Installs the tools this repository needs (direnv, envsubst, rlwrap,
+# pre-commit; `--all` adds multitail and qlinter), then puts this repository's
+# console commands on your PATH, so they work without a `uv run --project ...`
+# prefix. Currently one: `uqs`, the stack orchestrator (python/uqs,
+# [project.scripts]).
 #
 # Idempotent - re-run it after pulling, after adding an entry point, or any
 # time `uqs` starts behaving like an older copy of itself.
@@ -61,6 +63,90 @@ uv() {
         --allow-insecure-host files.pythonhosted.org \
         "$@"
 }
+
+# ------------------------------------------------------------------- tools
+#
+# The tools this repository needs besides uv, each installed only when it is
+# missing from PATH: system ones through brew (macOS) or apt (Debian, Ubuntu,
+# WSL), pre-commit as a uv tool at the version CI pins. `--all` adds the
+# optional ones. See the README's "Also needed, by component" for what each
+# is for.
+
+ALL=0
+for arg in "$@"; do
+    case "$arg" in
+        --all) ALL=1 ;;
+        -h|--help) echo "usage: $0 [--all]   (--all: also multitail and qlinter)"; exit 0 ;;
+        *) echo "error: unknown argument '$arg'" >&2; exit 2 ;;
+    esac
+done
+
+#: command  apt package  brew package
+REQUIRED_TOOLS=(
+    "direnv direnv direnv"         # loads .envrc
+    "envsubst gettext-base gettext" # torq.sh
+    "rlwrap rlwrap rlwrap"         # torq.sh, qcon
+)
+OPTIONAL_TOOLS=(
+    "multitail multitail multitail" # uqs logs --multitail
+)
+PRE_COMMIT="pre-commit==4.6.2"     # .github/workflows/ci.yml runs this version
+QLINT_VERSION="v0.2.0"             # and pins this qlinter: the q-traps rules match it
+
+pkg_install() {
+    local apt_pkg="$1" brew_pkg="$2"
+    if command -v brew >/dev/null 2>&1; then
+        brew install "$brew_pkg"
+    elif command -v apt-get >/dev/null 2>&1; then
+        local sudo=""
+        if [[ "$(id -u)" -ne 0 ]]; then sudo="sudo"; fi
+        if [[ -z "${APT_UPDATED:-}" ]]; then
+            $sudo apt-get update -qq
+            APT_UPDATED=1
+        fi
+        $sudo apt-get install -y -qq "$apt_pkg"
+    else
+        echo "error: no brew or apt-get - install '$apt_pkg' yourself" >&2
+        return 1
+    fi
+}
+
+tools=("${REQUIRED_TOOLS[@]}")
+if [[ "$ALL" -eq 1 ]]; then tools+=("${OPTIONAL_TOOLS[@]}"); fi
+for entry in "${tools[@]}"; do
+    read -r cmd apt_pkg brew_pkg <<<"$entry"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        echo "ok: $cmd"
+    else
+        echo "installing $cmd"
+        pkg_install "$apt_pkg" "$brew_pkg"
+        if [[ "$cmd" == direnv ]]; then DIRENV_NEW=1; fi
+    fi
+done
+
+if command -v pre-commit >/dev/null 2>&1; then
+    echo "ok: pre-commit"
+else
+    echo "installing $PRE_COMMIT"
+    uv tool install "$PRE_COMMIT"
+fi
+
+if [[ "$ALL" -eq 1 ]]; then
+    if command -v qlinter >/dev/null 2>&1; then
+        echo "ok: qlinter"
+    elif command -v cargo >/dev/null 2>&1; then
+        echo "installing qlinter"
+        cargo install --git https://github.com/kwojdalski/q-lint --tag "$QLINT_VERSION" --locked
+    else
+        echo "skipped: qlinter needs cargo (https://rustup.rs)" >&2
+    fi
+fi
+
+if [[ -n "${DIRENV_NEW:-}" ]]; then
+    echo "direnv: add 'eval \"\$(direnv hook bash)\"' (or zsh) to your shell rc, then 'direnv allow' here"
+fi
+
+# ---------------------------------------------------------------------- uqs
 
 if [[ ! -f "$PACKAGE/pyproject.toml" ]]; then
     echo "error: $PACKAGE/pyproject.toml not found under $REPO." >&2

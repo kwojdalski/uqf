@@ -27,7 +27,7 @@ draws the topology.
 ## Quick start
 
 ```
-scripts/dev/install.sh     # once: puts `uqs` on your PATH, editable
+scripts/dev/install.sh     # once: the required tools, and `uqs` on your PATH
 uqs start all              # every startwithall=1 process
 uqs summary                # status table
 uqs stop all               # stop everything
