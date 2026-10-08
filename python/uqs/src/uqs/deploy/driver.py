@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import sys
 
+from uqs.deploy import hdb
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.remote import Transport
@@ -53,6 +54,7 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "
         + f"{pkg.manifest['python']['wheels']} wheels",
+        "hdb       " + facts.get("hdb", "not judged"),
         "smoke     " + f"q scripts/deploy_smoke.q (timeout {cfg.smoke_timeout}s)",
         "restart   " + restart,
         "ports     "
@@ -151,6 +153,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
     facts = dep.preflight()
     report.previous_release = facts.get("current")
     if cfg.dry_run:
+        facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
         print(plan(cfg, pkg, rid, facts, dep), file=out)
         return 0
     return _run(dep, cfg, pkg, rid, report, facts, out)
@@ -186,6 +189,8 @@ def _run(
         release = dep.transfer(pkg, rid)
         log.info("preparing the release environment")
         dep.prepare(release, pkg)
+        log.info("checking the shared HDB against the release's schema")
+        report.hdb = hdb.check(dep, release)
         log.info("offline smoke test")
         dep.smoke(release)
         report.checks["smoke"] = "ok"

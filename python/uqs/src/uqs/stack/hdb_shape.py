@@ -89,6 +89,45 @@ def declared_tables(generated_schema: str) -> set[str]:
     return set(_DEFINITION.findall(generated_schema))
 
 
+#: An HDB's shape as `listing` reads it: {partition: {table: its columns}}.
+Listing = dict[str, dict[str, list[str]]]
+
+
+def listing(hdb_root: Path) -> Listing:
+    """Every partition, the tables it holds and each one's columns (by
+    table_columns' rule) - all `gaps` and `column_gaps` need, as data. A
+    deployment builds the same thing on the server (deploy/hdb.py), and
+    shape_gaps judges either."""
+    return {
+        name: {
+            entry.name: sorted(table_columns(entry))
+            for entry in (hdb_root / name).iterdir()
+            if entry.is_dir()
+        }
+        for name in partitions(hdb_root)
+    }
+
+
+def shape_gaps(
+    found: Listing, declared: dict[str, list[str]]
+) -> tuple[dict[str, set[str]], dict[str, dict[str, set[str]]]]:
+    """(missing tables, missing columns) of a listing against the declared
+    tables and columns - `gaps` and `column_gaps`, on data rather than a
+    directory. A table or a column nobody declares is history, never a gap."""
+    tables: dict[str, set[str]] = {}
+    columns: dict[str, dict[str, set[str]]] = {}
+    for name in sorted(found):
+        held = found[name]
+        missing = set(declared) - set(held)
+        if missing:
+            tables[name] = missing
+        short = {t: set(c) - set(held[t]) for t, c in declared.items() if t in held}
+        short = {t: m for t, m in short.items() if m}
+        if short:
+            columns[name] = short
+    return tables, columns
+
+
 def gaps(hdb_root: Path, expected: set[str]) -> dict[str, set[str]]:
     """{partition: the expected tables it does not hold}.
 
@@ -97,13 +136,7 @@ def gaps(hdb_root: Path, expected: set[str]) -> dict[str, set[str]]:
     publishing is history, not a fault, and deleting history is not this
     check's business.
     """
-    short: dict[str, set[str]] = {}
-    for name in partitions(hdb_root):
-        present = {entry.name for entry in (hdb_root / name).iterdir() if entry.is_dir()}
-        missing = expected - present
-        if missing:
-            short[name] = missing
-    return short
+    return shape_gaps(listing(hdb_root), dict.fromkeys(expected, []))[0]
 
 
 def describe(short: dict[str, set[str]]) -> str:
@@ -183,19 +216,7 @@ def column_gaps(hdb_root: Path, declared: dict[str, list[str]]) -> dict[str, dic
     A column on disk that nothing declares is NOT reported, for the same
     reason `gaps` ignores an undeclared table: it is history.
     """
-    short: dict[str, dict[str, set[str]]] = {}
-    for name in partitions(hdb_root):
-        by_table: dict[str, set[str]] = {}
-        for table, columns in declared.items():
-            table_dir = hdb_root / name / table
-            if not table_dir.is_dir():
-                continue
-            missing = set(columns) - table_columns(table_dir)
-            if missing:
-                by_table[table] = missing
-        if by_table:
-            short[name] = by_table
-    return short
+    return shape_gaps(listing(hdb_root), declared)[1]
 
 
 def describe_columns(short: dict[str, dict[str, set[str]]]) -> str:

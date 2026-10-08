@@ -6,18 +6,22 @@ cli/lifecycle.py for why the split is shaped this way.
 
 from __future__ import annotations
 
+import json
+import tempfile
+from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.table import Table
 
 from uqs import paths as stack_paths
-from uqs.checks import hdb_shape, schema_view
+from uqs.checks import schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
+    _die,
     _export,
     _paths,
     _show,
@@ -27,7 +31,7 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.paths import UqsError
-from uqs.stack import runtime
+from uqs.stack import hdb_shape, hdb_types, runtime
 
 #: How often `schema -i` re-reads the process: often enough to watch a table
 #: fill as a feed publishes, rarely enough that a few IPC queries a tick stay
@@ -41,32 +45,63 @@ def hdb_check(
         bool,
         typer.Option("--fix", help="write the missing empty tables, not just report them"),
     ] = False,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="print the findings as JSON, to script against")
+    ] = False,
 ) -> None:
     """Report HDB partitions missing a declared table or column, the cause
-    behind "./2015.01.07/arbitrage. OS reports: No such file or directory".
+    behind "./2015.01.07/arbitrage. OS reports: No such file or directory",
+    and columns stored as another type than the schema declares.
 
     A partitioned kdb+ database needs every table in every partition, and
     every one of those tables to hold the same columns. Either gap fails the
     whole query rather than returning an empty result - and the table-level
     one names whichever table sorts first, not the partition that is
-    actually short. Reads the filesystem, so it needs no running stack.
+    actually short. Judged against the schema this runtime declares, written
+    fresh, so a release not yet started is checked by its own declarations.
+    Missing tables and columns read the filesystem; types need q (#870).
     """
     paths = _paths()
     hdb_root = paths.hdb_dir
     if not hdb_root.is_dir():
-        console.print(f"[yellow]no HDB at {hdb_root}[/] - nothing to check")
+        if as_json:
+            print(json.dumps({"hdb": str(hdb_root), "present": False}))
+        else:
+            console.print(f"[yellow]no HDB at {hdb_root}[/] - nothing to check")
         return
+    schema = hdb_types.declared_schema(paths)
     if fix:
+        # what bootstrap writes, so the filler fills from THIS release's schema
+        paths.generated_schema.parent.mkdir(parents=True, exist_ok=True)
+        paths.generated_schema.write_text(schema)
         runtime.fill_hdb_partitions(paths)
-    schema = paths.generated_schema.read_text()
     expected = hdb_shape.declared_tables(schema)
-    short = hdb_shape.gaps(hdb_root, expected)
-    # Columns are checked even when tables are missing, because --fix repairs
-    # both in one pass and a reader who fixes only what the first report named
-    # would run the command twice to reach the same place.
-    thin = hdb_shape.column_gaps(hdb_root, hdb_shape.declared_columns(schema))
-
-    if not short and not thin:
+    short, thin = hdb_shape.shape_gaps(
+        hdb_shape.listing(hdb_root), hdb_shape.declared_columns(schema)
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        schema_file = Path(tmp) / "database.q"
+        schema_file.write_text(schema)
+        try:
+            changed = hdb_types.type_changes(paths, schema_file)
+        except UqsError as exc:
+            _die(exc)
+            return
+    if as_json:
+        print(json.dumps({
+            "hdb": str(hdb_root),
+            "present": True,
+            "missing_tables": {p: sorted(t) for p, t in short.items()},
+            "missing_columns": {p: {t: sorted(c) for t, c in by.items()} for p, by in thin.items()},
+            "types_checked": changed is not None,
+            "type_changes": changed or [],
+        }, indent=2))  # fmt: skip
+        if short or thin or changed:
+            raise typer.Exit(code=1)
+        return
+    if changed is None:
+        console.print("[dim]column types not checked: no q interpreter[/]")
+    if not short and not thin and not changed:
         console.print(
             f"[green]{hdb_shape.describe(short)}, "
             f"and every declared column[/] ({len(expected)} tables)"
@@ -76,6 +111,11 @@ def hdb_check(
         console.print(f"[yellow]{hdb_shape.describe(short)}[/]")
     if thin:
         console.print(f"[yellow]{hdb_shape.describe_columns(thin)}[/]")
+    for c in changed or []:
+        console.print(
+            f"[red]{c['partition']} {c['table']}.{c['column']}: stored as {c['on_disk']}, "
+            f"declared {c['declared']}[/] - a migration, never filled"
+        )
     console.print(
         "\n[dim]`uqs data hdb-check --fix` writes an empty copy of each missing "
         "table, and each missing column as its declared type's null. Additive: an "

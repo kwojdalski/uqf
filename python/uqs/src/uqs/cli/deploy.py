@@ -262,6 +262,14 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    fix_hdb: Annotated[
+        bool,
+        typer.Option(
+            "--fix-hdb",
+            help="Fill the shared HDB's partitions that lack a table or column this release "
+            "declares (additive); without it they are refused. A changed type always is",
+        ),
+    ] = False,
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())

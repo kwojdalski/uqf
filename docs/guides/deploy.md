@@ -141,6 +141,25 @@ as `deploy-report.json`. The report names the release, the source revision, each
 process and what it answered, the stage that failed if one did, and, separately,
 how the rollback went. Any unsuccessful deployment exits 1.
 
+## The shared HDB and a new schema
+
+Releases share the HDB in the data directory. A release that adds a table or a
+column meets older partitions without it, and a partitioned query then fails on
+the first short one. Once the release's `.venv` exists, prepare runs that
+release's own `uqs data hdb-check --json` against the shared HDB:
+
+- **Missing tables or columns** are refused, naming the partitions. With
+  `--fix-hdb`, prepare runs `hdb-check --fix` and checks again. The fix is
+  additive: each missing table is written empty, and each missing column is
+  written as its type's null.
+- **A column whose type changed** is always refused, naming it. That is a
+  migration, which no fill makes right.
+
+`--dry-run` cannot run the release, because none of it is on the server yet. It
+compares a listing of the server's HDB with the tables and columns
+`uqs deploy build` recorded in the manifest, and says what `--fix-hdb` would
+fill. Column types need q, so they are checked in prepare.
+
 ## When something fails
 
 Before `start`, nothing on the server has changed apart from a new directory
@@ -346,7 +365,7 @@ nesting flattened blocks again wherever every name keeps its meaning (#859).
 
 - Installing q, TorQ or licences.
 - Copying data.
-- Migrations.
+- Migrations: a column whose type changed is refused, never converted.
 - Frontend builds.
 - Zero-downtime upgrades.
 - Deleting old releases.
