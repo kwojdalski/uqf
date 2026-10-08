@@ -55,6 +55,9 @@ network.
 
 - `envsubst` and `rlwrap`, which `torq.sh` needs.
 
+- For live sources, their credentials and, for ODBC, a driver: see [credentials
+  and ODBC](sidecar-bundles.md#credentials-and-odbc).
+
 The server needs no access to PyPI. Every Python dependency arrives as a wheel
 inside the artifact.
 
@@ -89,9 +92,7 @@ Inside the artifact:
 - **`RELEASE_MANIFEST.json`.** The revision, whether the tree had uncommitted
   changes, the target OS, architecture and Python, and every member's sha256.
 
-Jobs kept outside the repository ride along as sidecar bundles:
-`--bundle <folder>`, repeatable, installs each into a staged copy of the tree
-before packaging. See [sidecar bundles](sidecar-bundles.md).
+`--bundle <folder>`, repeatable, adds a [sidecar bundle](sidecar-bundles.md).
 
 The target defaults to Linux on x86_64 with the Python `requires-python` names.
 Pass `--arch aarch64` or `--python 3.14` for others. Uncommitted changes are
@@ -264,8 +265,8 @@ which `uqs` uses in place of the vendored `lib/` trees. It exports
 `UQS_DATA_ROOT`, the data directory that every release shares, so a second
 deployment keeps the first one's HDB. It also exports `QCMD`, `QHOME`,
 `UQS_RUNTIME` and `UV_OFFLINE`, and with `--live`, `UQS_REQUIRE_LIVE_SOURCES`.
-If `shared/config/secrets.env` exists, it sources that too (see [credentials on
-the server](sidecar-bundles.md#credentials-on-the-server)). See [the environment
+If `shared/config/secrets.env` exists, it sources that too (see [credentials and
+ODBC](sidecar-bundles.md#credentials-and-odbc)). See [the environment
 reference](../reference/environment.md).
 
 The demo `gateway_users.csv` is never shipped. Without it the gateway has only
@@ -281,9 +282,8 @@ every release links it in.
 - Frontend builds.
 - Zero-downtime upgrades.
 - Deleting old releases.
-- A single build-and-deploy command, or the Kafka and Databento sidecars, which
-  still start through `uv run`. Sidecar *jobs* are deployed as bundles: see
-  [sidecar bundles](sidecar-bundles.md).
+- A single build-and-deploy command, or the Kafka and Databento feed handlers,
+  which still start through `uv run`.
 
 A deployment that died while holding the lock leaves `deploy.lock/` behind. The
 next run refuses and names it. Remove the directory by hand once you are sure
