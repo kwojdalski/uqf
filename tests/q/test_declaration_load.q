@@ -32,4 +32,27 @@ test_a_failed_load_names_the_file:{[t]
     }
 
 
+/ A fresh directory holding `files`, empty when there are none.
+dir_with:{[files] d:first system"mktemp -d"; {[d;f] (hsym `$d,"/",f) 0: enlist "/ x"}[d] each files; d}
+
+test_a_full_load_takes_a_directory_s_q_files_alphabetically:{[t]
+    d:dir_with[("b.q";"a.q";"notes.txt")];
+    .qunit.assertEquals[.qetl.load.dir_files d;(d,"/a.q";d,"/b.q");
+        "only .q files, in the order init.q has always loaded them"]};
+
+test_only_reactions_may_be_empty:{[t]
+    d:dir_with[()];
+    .qunit.assertThrows[.qetl.load.dir_files;d;"etl load: no .q files under *";
+        "an empty sources/ or workers/ is a broken tree, not an empty one"];
+    r:d,"/reactions"; system"mkdir -p ",r;
+    .qunit.assertEquals[.qetl.load.dir_files r;();"a tree need have no reactions"]};
+
+test_an_empty_selection_loads_no_declaration:{[t]
+    / `only` is what a process sets before src/etl/init.q; set here, then
+    / removed, so no later suite sees a selection nobody made.
+    .qetl.load.only:`symbol$();
+    r:@[.qetl.load.declarations;("src/etl/sources";"src/etl/workers");{x}];
+    delete only from `.qetl.load;
+    .qunit.assertEquals[r;();"the infrastructure-only selection loads nothing"]};
+
 \d .
