@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 
-from uqs.deploy.artifact import MANIFEST
+from uqs.deploy.artifact import MANIFEST, release_runtime
 from uqs.deploy.config import REPORT, Config, DeployError
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.selection import Selection
@@ -89,7 +89,7 @@ def _release(dep: Deployment, release: str | None, kept: list[str]) -> dict | No
         "revision": m.get("revision"),
         "dirty": m.get("dirty"),
         "built_at": m.get("created_at"),
-        "runtime": m.get("runtime"),
+        "runtime": release_runtime(m) if m else None,
         "q": (m.get("target") or {}).get("q"),
         "bundles": m.get("bundles") or {},
     }

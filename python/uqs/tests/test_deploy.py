@@ -1114,3 +1114,16 @@ def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
     )
     with pytest.raises(DeployError, match=r"last beat 9s ago\)\. If it died, --break-lock"):
         driver.deploy(parse_args(_args(_artifact(tmp_path))), FakeRemote({"uv python find": held}))
+
+
+# --- a release's runtime (#883) ---------------------------------------------------
+
+
+def test_a_release_says_its_runtime_and_one_from_before_883_means_uqf():
+    from uqs.deploy.artifact import LEGACY_RUNTIME, release_runtime
+    from uqs.runtimes import RUNTIMES
+
+    assert release_runtime({"runtime": "crypto"}) == "crypto"
+    assert release_runtime({}) == LEGACY_RUNTIME == "uqf"
+    # frozen, not read from DEFAULT_RUNTIME - but it must still be a runtime
+    assert LEGACY_RUNTIME in RUNTIMES

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from uqs.deploy.artifact import compatible
+from uqs.deploy.artifact import LEGACY_RUNTIME, compatible
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.lock import Lock
 from uqs.deploy.remote import Transport, _checked, q, script
@@ -33,8 +33,9 @@ class Server:
         self.q_env: dict[str, str] = {}
         #: what --jobs resolved to against the artifact's bundles
         self.selection = Selection()
-        #: the runtime the artifact was built for (#852): its bundles are in it
-        self.runtime = "uqf"
+        #: the runtime the artifact was built for (#852): its bundles are in it.
+        #: The driver sets it from the manifest (artifact.release_runtime).
+        self.runtime = LEGACY_RUNTIME
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"

@@ -166,6 +166,22 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
     return Artifact(path=path, sha256=digest, manifest=manifest)
 
 
+#: What a manifest WITHOUT a `runtime` means (#883). Until #883 a build for
+#: the default runtime left the field out, so its meaning was whatever the
+#: deploying uqs assumed. Every such release was built for the default of its
+#: day, and that was `uqf` in every version of runtimes.RUNTIMES - so this is
+#: frozen to `uqf`, not read from DEFAULT_RUNTIME: were the default to change,
+#: reading the current one would misread every old release. Builds since #883
+#: always write the field, so only releases from before it come here.
+LEGACY_RUNTIME = "uqf"
+
+
+def release_runtime(manifest: dict) -> str:
+    """The runtime a release was built for - its manifest's, or for a release
+    from before #883, which left the default out, LEGACY_RUNTIME."""
+    return manifest.get("runtime") or LEGACY_RUNTIME
+
+
 def compatible(target: dict, facts: dict[str, str]) -> list[str]:
     """Why a server cannot run a release built for `target`; empty when it can.
 
