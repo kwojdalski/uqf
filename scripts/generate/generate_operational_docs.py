@@ -51,7 +51,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python" / "uqs" / "src"))
 
-from uqs.model import profiles, schemas  # noqa: E402
+from uqs.model import (  # noqa: E402
+    load_plan,  # noqa: E402
+    profiles,
+    schemas,
+)
 from uqs.model.pipeline_edges import (  # noqa: E402
     INBOUND_RESERVE,
     LICENCE_CONNECTION_LIMIT,
@@ -71,6 +75,7 @@ from uqs.stack import procs  # noqa: E402
 
 OUT = REPO / "docs" / "reference" / "processes.md"
 DAG_OUT = REPO / "src" / "etl" / "generated" / "pipeline_dag.q"
+PLAN_OUT = REPO / load_plan.PLAN_FILE
 PORTS_OUT = REPO / PROCESS_PORTS_FILE
 #: The uqs guide, whose profile table is a block this script owns (#822).
 GUIDE = REPO / "docs" / "guides" / "uqs.md"
@@ -294,7 +299,7 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="diff against the committed file")
     args = ap.parse_args()
 
-    # Three outputs, one gate. All derive from PIPELINES, so checking only
+    # Five outputs, one gate. All derive from PIPELINES, so checking only
     # one would let another drift - the q bridge is the one a running process
     # depends on, and the port lock is what keeps a new process from moving
     # every port after it: a process the lock lacks fails --check here until
@@ -303,6 +308,7 @@ def main() -> int:
     outputs = (
         (OUT, render()),
         (DAG_OUT, render_dag()),
+        (PLAN_OUT, load_plan.render(load_plan.load_plan(REPO))),
         (PORTS_OUT, ports),
         (GUIDE, render_guide()),
     )

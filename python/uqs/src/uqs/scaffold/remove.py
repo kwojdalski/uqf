@@ -66,6 +66,7 @@ _BOOKKEEPING = (
     CATALOG_FILE,
     STACK_TABLES_TEST,
     Path("src/etl/generated/pipeline_dag.q"),
+    Path("src/etl/generated/load_plan.q"),
 )
 
 

@@ -63,6 +63,8 @@
 \l src/etl/core/dag.q
 \l src/etl/core/react.q
 \l src/etl/generated/pipeline_dag.q
+\l src/etl/core/declaration_load.q
+\l src/etl/generated/load_plan.q
 \l src/etl/core/worker_config.q
 \l src/etl/core/worker_runtime.q
 \l src/etl/core/continuous_state.q
@@ -106,26 +108,16 @@
 / .qpipe.job.market_data and .qpipe.job.superbook here, which made this
 / function take a hand-kept list of files to load first (#731).
 
-etl_load_declarations:{[dir]
-    found:key hsym `$dir;
-    found:asc found where found like "*.q";
-    if[0=count found; '"etl_load_declarations: no .q files under ",dir];
-    {system "l ",x} each (dir,"/"),/:string found;
-    }
-
-etl_load_declarations "src/etl/sources";
-etl_load_declarations "src/etl/transforms";
-etl_load_declarations "src/etl/workers";
-etl_load_declarations "src/etl/streaming";
-
+/ SELECTIVE when the process says what it runs (#902): a process that sets
+/ .qetl.load.only before loading this file - its procname, or job names -
+/ loads only those declarations and what they reach, so a job whose table this
+/ deployment's schema lacks cannot stop an unrelated process starting. See
+/ src/etl/core/declaration_load.q. The order is the same either way; a
+/ selected load is this one with files left out.
+/ .
 / Reactions last: a reaction names the dataset it watches, which a worker above
 / fills. Unlike the four directories above, this one may be absent or hold no q
 / at all - a tree need have no reactions, and `uqs job remove` of the last one
 / leaves the directory empty - so it is loaded only when there is something to
 / load, rather than throwing the way an empty sources/ rightly does.
-if[any (key `:src/etl/reactions) like "*.q"; etl_load_declarations "src/etl/reactions"];
-
-/ Local to this file rather than tree API: the load order is init.q's own
-/ business, and a helper left in the root namespace is one the enumeration
-/ tools in src/namespaces.q would have to account for.
-delete etl_load_declarations from `.;
+.qetl.load.declarations "src/etl/",/:("sources";"transforms";"workers";"streaming";"reactions");
