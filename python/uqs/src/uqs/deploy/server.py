@@ -7,9 +7,12 @@ import json
 from datetime import UTC, datetime
 
 from uqs.deploy.artifact import compatible
-from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, log, redact
+from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.remote import Transport, _checked, q, script
 from uqs.deploy.selection import Selection
+from uqs.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class Server:
@@ -241,13 +244,13 @@ class Server:
                 "cleanup",
             )
         except DeployError as exc:
-            log(f"could not remove the staging directory: {exc}")
+            log.warning("could not remove the staging directory: {}", redact(str(exc)))
 
     def release_lock(self) -> None:
         try:
             self.remote.run(script(f"rm -rf {q(self.lock)}"), self.cfg.command_timeout, "lock")
         except DeployError as exc:
-            log(f"could not release {self.lock}: {exc}")
+            log.warning("could not release {}: {}", self.lock, redact(str(exc)))
 
 
 #: The preflight checks, run on the server. Read-only - safe under --dry-run.

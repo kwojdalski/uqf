@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -880,3 +882,18 @@ def test_the_dry_run_plans_the_live_check(tmp_path):
         "live-chk  uqs config sources check deals_db quotes_db --timeout 120 "
         "(ODBC from /opt/odbc)" in out.getvalue()
     )
+
+
+def test_deploy_logs_like_every_command_but_on_stderr(tmp_path):
+    """Through uqs.logger's format, on stderr: stdout is for the path, plan or
+    JSON another program reads."""
+    uqs = str(Path(sys.executable).parent / "uqs")
+    r = subprocess.run(
+        [uqs, "deploy", "build", "--dry-run", "--bundle", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "NO_COLOR": "1"},
+    )
+    assert (r.returncode, r.stdout) == (1, "")
+    assert r.stderr.startswith("ERROR    | uqs deploy build: FAILED at bundle: "), r.stderr
