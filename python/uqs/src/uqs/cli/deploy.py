@@ -13,6 +13,7 @@ parses.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -22,12 +23,15 @@ import typer
 
 from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, verify
+from uqs.deploy import config, driver, rollback, verify
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import repo_root, runtime_from_env
 from uqs.stack import runtime_bundles
+
+#: A release id as `uqs deploy build` names one: UTC build time, then the revision.
+RELEASE_ID = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{12}")
 
 deploy_app = typer.Typer(
     no_args_is_help=True,
@@ -271,6 +275,61 @@ def push(
         code = driver.deploy(cfg, remote)
     except config.DeployError as exc:
         _failed("uqs deploy push", exc.stage, exc)
+    raise typer.Exit(code=code)
+
+
+@deploy_app.command("rollback")
+def rollback_cmd(
+    host: Annotated[
+        str, typer.Option("--host", help="ssh destination, as your ssh config knows it")
+    ],
+    dest: Annotated[str, typer.Option("--dest", help="Absolute directory on the server")],
+    to: Annotated[
+        str | None,
+        typer.Option(
+            "--to",
+            metavar="RELEASE",
+            help="The release to return to; default: the one current replaced",
+        ),
+    ] = None,
+    remote_user: Annotated[
+        str | None,
+        typer.Option("--remote-user", help="Run the steps as this account (`sudo -n -iu`)"),
+    ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print what would stop and start; change nothing")
+    ] = False,
+    connect_timeout: Annotated[
+        int, typer.Option("--connect-timeout", help="ssh/scp, seconds")
+    ] = 10,
+    command_timeout: Annotated[
+        int, typer.Option("--command-timeout", help="Each remote step, seconds")
+    ] = 900,
+    verify_timeout: Annotated[
+        int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
+    ] = 180,
+) -> None:
+    """Put a server back on an earlier release: stop current's processes, start
+    and verify the target's, then move `current`. A target that fails to verify
+    is stopped and current's processes are started again."""
+    if to is not None and not RELEASE_ID.fullmatch(to):
+        _failed("uqs deploy rollback", "arguments", ValueError(f"--to {to!r} is not a release id"))
+    try:
+        # profile is unused: each release's own report names the profile it runs
+        cfg = config.make_config(
+            artifact="",
+            host=host,
+            dest=dest,
+            profile="rollback",
+            remote_user=remote_user,
+            connect_timeout=connect_timeout,
+            command_timeout=command_timeout,
+            verify_timeout=verify_timeout,
+        )
+        remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
+        code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
+    except config.DeployError as exc:
+        _failed("uqs deploy rollback", exc.stage, exc)
     raise typer.Exit(code=code)
 
 
