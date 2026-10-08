@@ -574,4 +574,30 @@ test_every_registered_config_has_the_same_keys:{[t]
     .qunit.assertEquals[count distinct ks;1;
         "every config carries the same key set, so the registry's shape is stable"]};
 
+
+/ --- the PeachQ path's two readers, run here on KDB-X ---------------------
+/ .
+/ On PeachQ an append rewrites a partition whole from read_part, and a
+/ partition counts as finished when in_order says so. Neither runs on KDB-X
+/ in the course of a write, so they are asked directly: both only read.
+
+test_read_part_returns_a_partition_with_its_symbols_decoded:{[t]
+    root:hdb_dir[];
+    .qetl.io.write[.qetl.io.hdb[root;`deal_time];`iodeals;deals[]];
+    p:.qetl.io.read_part hsym `$(string .Q.par[root;2026.01.02;`iodeals]),"/";
+    .qunit.assertEquals[(type p`sym;asc p`sym);(11h;`EURUSD`GBPUSD);
+        "symbols as symbols, not the sym file's enumeration - what a whole rewrite appends to"];
+    .qunit.assertEquals[cols p;cols part[root;2026.01.02;`iodeals];"every column the partition has"]};
+
+test_in_order_is_finish_s_order_sym_then_time:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;deals[]];
+    base:string .Q.par[root;2026.01.02;`iodeals];
+    c:get hsym `$base,"/.d";
+    .qunit.assertTrue[not .qetl.io.in_order[base;c];"written in arrival order, GBPUSD first"];
+    .qetl.io.finish m;
+    .qunit.assertTrue[.qetl.io.in_order[base;c];"finished: sorted by sym, then time"];
+    .qunit.assertTrue[.qetl.io.in_order[base;`notional];"no sym and no time: nothing to be out of order"]};
+
 \d .
