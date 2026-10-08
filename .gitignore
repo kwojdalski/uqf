@@ -103,3 +103,6 @@ docs/_site/
 # specific, and the file only ever names the variable a secret is in. The rest
 # of the starter pack's appconfig stays vendored and tracked.
 /lib/torq-finance-starter-pack/appconfig/sources.csv
+
+# Which sidecar bundles each runtime has: the operator's, never this tree's (#852).
+/runtime_bundles.json

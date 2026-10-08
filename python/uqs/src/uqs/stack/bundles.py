@@ -42,7 +42,7 @@ from pathlib import Path
 
 from uqs.model.declarations import read_file
 from uqs.model.pipeline import PipelineKind
-from uqs.paths import CATALOG_FILE, PACKAGE_DIR, TABLES_FILE
+from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, PACKAGE_DIR, TABLES_FILE
 from uqs.stack import install as stack_install
 from uqs.stack.bundle_blocks import BundleError, with_block, without_block
 from uqs.stack.install import Item, Kind, Mode, Status
@@ -54,7 +54,7 @@ OVERRIDES = "process_overrides.csv"
 #: The bundle's own addition files: read by this module, never placed as jobs.
 ADDITIONS = (TABLES, CATALOG, OVERRIDES)
 #: Where the tree records which bundle owns what, relative to its root.
-LEDGER = Path("src/etl/installed_bundles.json")
+LEDGER = BUNDLE_LEDGER
 OVERRIDES_FILE = PACKAGE_DIR / "process_overrides.csv"
 
 _NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
@@ -320,8 +320,13 @@ def _merge_overrides(root: Path, p: Plan, previous: list[list[str]]) -> None:
     path.write_text(out.getvalue())
 
 
-def install(p: Plan, root: Path) -> dict:
-    """Write the plan into the tree at `root`; return the ledger entry."""
+def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
+    """Write the plan into the tree at `root`; return the ledger entry.
+
+    `runtime` joins the runtimes the bundle belongs to (#852): its jobs and
+    tables are in those runtimes' stacks and in no other's
+    (model/runtime_members.py). An entry without `runtimes`, from before,
+    belongs to every runtime that has all of this tree's pipelines."""
     ledger = read_ledger(root)
     previous = ledger.get(p.bundle.name, {})
     # Overrides first: they are the one addition that can still conflict
@@ -346,6 +351,8 @@ def install(p: Plan, root: Path) -> dict:
         "tables": p.tables,
         "overrides": [list(row) for row in p.overrides],
     }
+    if runtime is not None or "runtimes" in previous:
+        entry["runtimes"] = sorted({*previous.get("runtimes", []), *([runtime] if runtime else [])})
     ledger[p.bundle.name] = entry
     (root / LEDGER).write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n")
     return entry

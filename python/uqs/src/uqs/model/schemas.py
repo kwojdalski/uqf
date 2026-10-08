@@ -72,3 +72,8 @@ def definition(table: str) -> str:
 
 
 _DEFS = _definitions()
+
+
+def table_names() -> set[str]:
+    """Every table plant_tables.q defines."""
+    return set(_DEFS)

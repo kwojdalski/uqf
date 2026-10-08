@@ -37,6 +37,33 @@ Reinstalling is idempotent, and an upgrade replaces only the bundle's own files.
 A conflict with the tree or another bundle is refused before anything is
 written.
 
+## Bundles a runtime declares
+
+A runtime decides which stack exists, so it also decides which bundles are in
+it. Declare them in `runtime_bundles.json` at the repository root (gitignored),
+or in a file `UQS_RUNTIME_BUNDLES` names, with folders relative to the file:
+
+```json
+{"uqf": ["../piggybank"], "crypto": ["../piggybank", "../marketwarehouse"]}
+```
+
+```bash
+uqs --runtime crypto runtime prepare --dry-run   # the composition, nothing written
+uqs --runtime crypto runtime prepare             # install it
+```
+
+A runtime has its declared bundles' jobs, the processes they depend on and their
+tables, and no other bundle's. So a profile cannot start a bundle job its
+runtime does not declare. A bundle a runtime stops declaring leaves that
+runtime's stack, but stays installed. `uqs job install <bundle>` adds a bundle
+to the runtime it runs under. `prepare` starts nothing.
+
+`uqs --runtime crypto deploy build` resolves the same composition. `--bundle`
+adds folders to the declared ones, never replaces them. The manifest records the
+`runtime`, and each bundle's `source` (`runtime` or `explicit`); `push` runs the
+release under that runtime. `uqs deploy build --dry-run` prints the composition
+without building.
+
 ## Build and deploy
 
 ```bash

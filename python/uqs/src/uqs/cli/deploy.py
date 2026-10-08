@@ -11,6 +11,7 @@ verify's last two lines are parsed by the push that ran it.
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -23,6 +24,8 @@ from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, verify
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
+from uqs.paths import repo_root, runtime_from_env
+from uqs.stack import runtime_bundles
 
 deploy_app = typer.Typer(
     no_args_is_help=True,
@@ -62,17 +65,37 @@ def build(
         typer.Option(
             "--bundle",
             metavar="DIR",
-            help="A sidecar bundle (a folder with bundle.json) to install into the release; "
-            "repeatable",
+            help="A sidecar bundle (a folder with bundle.json) to install into the release, "
+            "beside those the runtime declares; repeatable",
         ),
     ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print the resolved bundle composition; build nothing")
+    ] = False,
 ) -> None:
-    """Build a release artifact once, for `uqs deploy push` to put on any number of servers."""
+    """Build a release artifact once, for `uqs deploy push` to put on any number of servers.
+
+    It carries the selected runtime's bundles (`uqs --runtime crypto deploy build`):
+    those runtime_bundles.json declares for it, plus any --bundle."""
+    runtime = runtime_from_env()
+    if dry_run:
+        try:
+            members = release_build.composition_members(runtime, repo_root(), bundle or ())
+        except ReleaseError as exc:
+            _failed("uqs deploy build", exc.stage, exc)
+            return
+        print(json.dumps(runtime_bundles.composition(runtime, members), indent=2))
+        return
     if shutil.which("uv") is None:
         _failed("uqs deploy build", "arguments", RuntimeError("uv is not on PATH"))
     try:
         artifact = release_build.build(
-            output, arch=arch, python=python, allow_dirty=allow_dirty, bundles=bundle or ()
+            output,
+            arch=arch,
+            python=python,
+            allow_dirty=allow_dirty,
+            bundles=bundle or (),
+            runtime=runtime,
         )
     except ReleaseError as exc:
         _failed("uqs deploy build", exc.stage, exc)

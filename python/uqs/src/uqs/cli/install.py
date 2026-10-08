@@ -249,7 +249,9 @@ def install_jobs(
     repo_root = _paths().repo_root
     sidecar = sidecar.resolve()
     if bundles.is_bundle(sidecar):
-        install_bundle.install(sidecar, repo_root, mode=mode, dry_run=dry_run, yes=yes)
+        install_bundle.install(
+            sidecar, repo_root, mode=mode, dry_run=dry_run, yes=yes, runtime=_paths().runtime
+        )
         return
     try:
         items = stack_install.plan(sidecar, repo_root)

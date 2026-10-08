@@ -45,7 +45,15 @@ def _summary(plan: bundles.Plan, root: Path) -> Table:
     return table
 
 
-def install(folder: Path, root: Path, *, mode: Mode | None, dry_run: bool, yes: bool) -> None:
+def install(
+    folder: Path,
+    root: Path,
+    *,
+    mode: Mode | None,
+    dry_run: bool,
+    yes: bool,
+    runtime: str | None = None,
+) -> None:
     if mode is Mode.SYMLINK:
         _die(bundles.BundleError("a bundle installs as copies only - drop --mode symlink"))
         return
@@ -67,7 +75,8 @@ def install(folder: Path, root: Path, *, mode: Mode | None, dry_run: bool, yes: 
         console.print("[dim]Nothing installed.[/]")
         raise typer.Exit(code=1)
     try:
-        entry = bundles.install(plan, root)
+        # in the runtime it was installed under (#852), as `runtime prepare` does
+        entry = bundles.install(plan, root, runtime)
     except (bundles.BundleError, OSError) as exc:
         _die(bundles.BundleError(str(exc)))
         return

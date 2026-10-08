@@ -30,6 +30,8 @@ class Server:
         self.q_env: dict[str, str] = {}
         #: what --jobs resolved to against the artifact's bundles
         self.selection = Selection()
+        #: the runtime the artifact was built for (#852): its bundles are in it
+        self.runtime = "uqf"
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -84,7 +86,7 @@ class Server:
             ("QCMD", self.q_env.get("QCMD", c.qcmd)),
             ("QHOME", self.q_env.get("QHOME", c.qhome)),
             ("UQS_DATA_ROOT", c.data_root),
-            ("UQS_RUNTIME", "uqf"),
+            ("UQS_RUNTIME", self.runtime),
             # a source with no credential is refused, never read as its fixture
             ("UQS_REQUIRE_LIVE_SOURCES", "1" if c.live else None),
             # the private ODBC setup deploy.env loads, for `uqs config sources check`

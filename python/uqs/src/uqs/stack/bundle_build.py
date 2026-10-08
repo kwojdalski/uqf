@@ -24,7 +24,7 @@ from pathlib import Path
 from uqs.paths import UqsError, repo_root
 
 
-def _install(folders: list[str]) -> dict:
+def _install(folders: list[str], runtime: str | None = None) -> dict:
     from uqs.stack import bundles
 
     root = repo_root()
@@ -37,7 +37,7 @@ def _install(folders: list[str]) -> dict:
         # One at a time, each planned against the tree the previous ones
         # left: a second bundle declaring the first one's job or table is
         # then refused as the conflict it is.
-        entries[bundle.name] = bundles.install(bundles.plan(bundle, root), root)
+        entries[bundle.name] = bundles.install(bundles.plan(bundle, root), root, runtime)
     return entries
 
 
@@ -50,10 +50,16 @@ def _needs(procnames: list[str]) -> dict[str, list[str]]:
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] not in ("install", "needs"):
-        print("usage: bundle_build install <bundle>... | needs <procname>...", file=sys.stderr)
+        print(
+            "usage: bundle_build install [--runtime NAME] <bundle>... | needs <procname>...",
+            file=sys.stderr,
+        )
         return 2
+    runtime = None
+    if args[1:2] == ["--runtime"]:
+        runtime, args = args[2], [args[0], *args[3:]]
     try:
-        result = _install(args[1:]) if args[0] == "install" else _needs(args[1:])
+        result = _install(args[1:], runtime) if args[0] == "install" else _needs(args[1:])
     except UqsError as exc:
         print(f"bundle_build: {exc}", file=sys.stderr)
         return 1
