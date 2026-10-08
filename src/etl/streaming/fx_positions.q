@@ -151,7 +151,7 @@ load_limits:{[limits]
 on_batch:{[t;x]
     if[not t=`orders; :()];
     if[0=count x; :()];
-    updated:.qetl.transform.apply[`fx_positions;`book`batch!(
+    updated:.qetl.transform.apply[`fx_positions;`book`orders!(
         0!.qpipe.job.fx_positions.book;
         select time, order_id, sym, book, product, side, size, price, order_status from x)];
     `.qpipe.job.fx_positions.book set `sym`book`product xkey updated;
@@ -202,7 +202,7 @@ on_timer:{[]
 \d .
 
 .qetl.transform.define[`fx_positions;`inputs`output`fn`examples!(
-    `book`batch!(.qpipe.job.fx_positions.desk_book;.qpipe.job.fx_positions.orders);
+    `book`orders!(.qpipe.job.fx_positions.desk_book;.qpipe.job.fx_positions.orders);
     .qpipe.job.fx_positions.desk_book;
     .qpipe.job.fx_positions.net_orders;
     (
@@ -210,7 +210,7 @@ on_timer:{[]
     / against each other, a cancel moves nothing at all, and a second book
     / is a row of its own rather than being folded into the first.
     `inputs`expected!(
-        `book`batch!(
+        `book`orders!(
             .qpipe.job.fx_positions.desk_book;
             ([] time:2026.09.17D10:00:00+0D00:00:01*til 4;
                 order_id:1 2 3 4;
@@ -227,7 +227,7 @@ on_timer:{[]
     / opens a row rather than being dropped, and the pair already there is
     / added to rather than replaced.
     `inputs`expected!(
-        `book`batch!(
+        `book`orders!(
             ([] sym:enlist `USDJPY; book:enlist `london; product:enlist `spot;
                 base_qty:enlist 1000000f; quote_qty:enlist -149500000f; fill_count:enlist 1);
             ([] time:2026.09.17D10:00:05 2026.09.17D10:00:06;

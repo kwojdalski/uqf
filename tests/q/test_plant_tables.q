@@ -181,6 +181,38 @@ test_the_input_scan_found_inputs_to_check:{[t]
     named:raze {[plant;tr] k where (k:key (.qetl.transform.def tr)`inputs) in plant}[plant] each .qetl.transform.defined[];
     .qunit.assertTrue[`fx_orderbook in named;"cross_quotes' fx_orderbook input is among those checked"]};
 
+/ Inputs whose columns are exactly a plant table's, under another name: a hand
+/ copy the check above never sees, since it finds inputs by name (#833).
+misnamed_inputs:{[]
+    shapes:{cols .qetl.plant.shape x} each plant!plant:.qetl.plant.names[];
+    raze {[shapes;tr]
+        ins:(.qetl.transform.def tr)`inputs;
+        raze {[shapes;tr;ins;n]
+            same:where shapes~\:cols ins n;
+            $[count[same] and not n in same;
+              enlist `transform`input`is`plant!(tr;n;cols ins n;first same);
+              ()]}[shapes;tr;ins] each key ins}[shapes] each .qetl.transform.defined[]}
+
+test_an_input_with_a_plant_tables_columns_is_named_after_it:{[t]
+    bad:.planttest.misnamed_inputs[];
+    .qunit.assertEquals[count bad;0;
+        "an input carrying a plant table's columns is named after that table, so the check above sees it: ",.Q.s1 bad]};
+
+test_a_misnamed_copy_of_a_plant_table_is_caught:{[t]
+    .qetl.transform.define[`planttest_misnamed;`inputs`output`fn`examples!(
+        (enlist `book)!enlist .qetl.plant.shape `fx_orderbook;
+        ([] sym:`symbol$());
+        {[b] select sym from b};
+        enlist `inputs`expected!(
+            (enlist `book)!enlist ([] time:enlist 2026.10.08D10:00:00; sym:enlist `EURUSD;
+                bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1f;
+                ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 1f);
+            ([] sym:enlist `EURUSD)))];
+    found:.planttest.misnamed_inputs[];
+    .testutil.drop_rows[`.qetl.transform.registry;`planttest_misnamed];
+    hit:found where `planttest_misnamed=found@\:`transform;
+    .qunit.assertEquals[(first hit)`plant;`fx_orderbook;"the plant table it copies is named"]};
+
 test_an_input_that_disagrees_with_its_plant_table_is_caught:{[t]
     .qetl.transform.define[`planttest_stale_copy;`inputs`output`fn`examples!(
         (enlist `fx_orderbook)!enlist ([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); venue:`symbol$());
