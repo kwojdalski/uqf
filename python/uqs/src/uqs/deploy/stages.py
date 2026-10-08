@@ -4,6 +4,7 @@ verify, activate - and the report a deployment leaves in its release."""
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,6 +29,38 @@ from uqs.deploy.server import Server
 from uqs.logger import get_logger
 
 log = get_logger(__name__)
+
+#: Run from the release with its deploy.env, after a soak that began at
+#: argv[1] (epoch seconds, the server's clock): a verdict for each streaming
+#: process among argv[2] (comma-separated), from the release's own
+#: stream_health reader and pipeline registry. .z.p, which each record's `at`
+#: is, is UTC.
+SOAK_PY = r"""
+import json, sys
+from datetime import UTC, datetime
+from uqs.model.pipeline import PipelineKind
+from uqs.model.registry import PIPELINES
+from uqs.paths import default_paths
+from uqs.stack import stream_health
+since = float(sys.argv[1])
+started = {p for p in sys.argv[2].split(",") if p}
+streaming = {p.procname for p in PIPELINES if p.kind is not PipelineKind.BACKFILL}
+records = stream_health.read(default_paths())
+out = {}
+def verdict(r):
+    if r is None:
+        return "no beat", "it wrote no stream_health record"
+    at = datetime.strptime(str(r.get("at", ""))[:26], "%Y.%m.%dD%H:%M:%S.%f")
+    if at.replace(tzinfo=UTC).timestamp() < since:
+        return "no beat", f"its last record is from {r['at']}, before the soak"
+    if r.get("failing"):
+        return "failing", f"{r.get('failed')} batch(es) failed, last: {r.get('last_error')}"
+    return "ok", f"{r.get('ok')} batch(es), none failed since the last beat"
+for proc in sorted(started & streaming):
+    v, detail = verdict(records.get(proc))
+    out[proc] = {"verdict": v, "detail": detail}
+print(json.dumps(out))
+"""
 
 
 @dataclass
@@ -54,6 +87,9 @@ class Report:
     #: to stop, when the new ones verified, and the seconds between. None
     #: when nothing was replaced.
     downtime: dict | None = None
+
+    #: --soak's verdict and duration, and each streaming job's, when it ran (#869)
+    soak: dict | None = None
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
@@ -250,6 +286,34 @@ class Deployment(Server):
         if r.returncode:
             tail = "\n".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-20:])
             raise DeployError("live-check", "a source failed its live check:\n" + redact(tail))
+
+    def soak(self, release: str, processes: list[str]) -> dict:
+        """Let data flow for --soak seconds, then judge every started
+        streaming job by its own stream_health record (#832), read by the
+        release's own code (SOAK_PY). A job that is failing, or wrote no record
+        since the soak began - on the server's clock - fails it."""
+        seconds = self.cfg.soak or 0
+        since = self.run("soak", "reading the server's clock", "date +%s").strip()
+        time.sleep(seconds)
+        out = self.run(
+            "soak",
+            "reading the streaming jobs' health",
+            *self.in_release(
+                release,
+                f".venv/bin/python -c {q(SOAK_PY)} {q(since.splitlines()[-1])} "
+                f"{q(','.join(processes))}",
+            ),
+        )
+        try:
+            jobs = json.loads(out.strip().splitlines()[-1])
+        except UNPARSED:
+            raise DeployError("soak", "the soak check printed no result") from None
+        bad = {p: j for p, j in jobs.items() if j["verdict"] != "ok"}
+        result = {"seconds": seconds, "passed": not bad, "jobs": jobs}
+        if bad:
+            why = "; ".join(f"{p}: {j['verdict']} - {j['detail']}" for p, j in sorted(bad.items()))
+            result["reason"] = why
+        return result
 
     def ports_free(self, release: str) -> None:
         sel = Selection(processes=self.selection.processes)
