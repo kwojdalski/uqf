@@ -17,6 +17,8 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.interpreter import KDBX, loads_nested_contexts, nested_contexts_problem
+
 FORMAT = 1
 MANIFEST = "RELEASE_MANIFEST.json"
 RELEASE_DIR = ".release"
@@ -180,11 +182,15 @@ def compatible(target: dict, facts: dict[str, str]) -> list[str]:
             f"the server is {facts.get('arch') or 'an unknown architecture'}, "
             f"the release is built for {target['arch']}"
         )
-    major = facts.get("qversion", "").split(".")[0]
-    if major.isdigit() and int(major) < 5 and target.get("q") is None:
+    version = facts.get("qversion", "")
+    if target.get("q") is None and loads_nested_contexts(KDBX, version) is False:
         problems.append(
-            f"the server's q is kdb+ {facts['qversion']}, which has no nested contexts, and "
-            "the release's q is as written - build it with `uqs deploy build --q-target 4.0`"
+            nested_contexts_problem(
+                "the server's q",
+                version,
+                "and the release's q is as written: build it with "
+                "`uqs deploy build --q-target 4.0`",
+            )
         )
     if facts.get("python") != target["python"]:
         problems.append(

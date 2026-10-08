@@ -242,6 +242,7 @@ def run_torq_sh(
 
 def start(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False):
     stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
+    qtree.refuse_unloadable(paths, with_interpreter(paths))  # a q too old for it (#882)
     occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["start", procs], base_port=base_port, capture=capture)
 
@@ -255,6 +256,7 @@ def restart(
     paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False
 ):
     stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
+    qtree.refuse_unloadable(paths, with_interpreter(paths))  # a q too old for it (#882)
     occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
 

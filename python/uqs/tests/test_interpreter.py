@@ -173,3 +173,81 @@ def test_the_summary_line_names_the_interpreter_and_its_budget(
     else:
         monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     assert listing.interpreter_line() == f"interpreter: {answer} ({q}) - {budget}"
+
+
+# ------------------------------------- can this q load the tree? (#882)
+
+
+@pytest.mark.parametrize(
+    ("impl", "version", "loads"),
+    [
+        ("kdbx", "5.0", True),
+        ("kdbx", "6.1", True),
+        ("kdbx", "4.1", False),
+        ("kdbx", "4.0", False),
+        ("kdbx", "", None),
+        ("kdbx", "garbage", None),
+        ("peachq", "5.0", False),
+    ],
+)
+def test_one_predicate_answers_whether_a_q_loads_the_tree(impl, version, loads):
+    assert interpreter.loads_nested_contexts(impl, version) is loads
+
+
+def test_the_version_is_asked_of_the_binary(tmp_path):
+    interpreter.q_version.cache_clear()
+    assert interpreter.q_version(str(_fake_q(tmp_path, "4.1"))) == "4.1"
+    assert interpreter.q_version(str(tmp_path / "no_such_q")) == ""
+
+
+def test_install_sh_draws_the_line_where_the_predicate_does():
+    """install.sh is bash, run before uqs exists, so it states the threshold
+    itself; this holds the two equal."""
+    text = (SCRIPT.parents[1] / "install.sh").read_text()
+    import re
+
+    found = re.findall(r"\(\( \$\{qversion%%\.\*\} < (\d+) \)\)", text)
+    assert found == [str(interpreter.NESTED_CONTEXTS_SINCE)]
+
+
+def _start_paths(monkeypatch, q_tree: str):
+    import dataclasses
+
+    from uqs import paths as stack_paths
+
+    paths = stack_paths.default_paths()
+    decl = dataclasses.replace(paths.runtime_declaration, q_tree=q_tree)
+    monkeypatch.setattr(type(paths), "runtime_declaration", property(lambda _s: decl))
+    return paths
+
+
+@pytest.mark.parametrize(("version", "refused"), [("4.1", True), ("5.0", False), ("", False)])
+def test_a_local_start_refuses_a_q_too_old_for_the_tree_as_written(
+    tmp_path, monkeypatch, version, refused
+):
+    from uqs.stack import qtree
+
+    interpreter.q_version.cache_clear()
+    q = _fake_q(tmp_path, version or "silent")
+    if not version:
+        q.write_text("#!/bin/sh\nexit 0\n")
+    env = _env(QCMD=str(q))
+    paths = _start_paths(monkeypatch, "source")
+    if refused:
+        with pytest.raises(
+            UqsError, match=rf"kdb\+ {version}, which has no nested contexts.*flattened"
+        ):
+            qtree.refuse_unloadable(paths, env)
+    else:
+        qtree.refuse_unloadable(paths, env)
+
+
+def test_neither_a_flattened_tree_nor_a_peachq_runtime_is_asked(tmp_path, monkeypatch):
+    from uqs.stack import qtree
+
+    interpreter.q_version.cache_clear()
+    old = _fake_q(tmp_path, "4.0")
+    qtree.refuse_unloadable(_start_paths(monkeypatch, "flattened"), _env(QCMD=str(old)))
+    qtree.refuse_unloadable(
+        _start_paths(monkeypatch, "source"), _env(QCMD=str(old), UQF_Q_IMPL="peachq")
+    )
