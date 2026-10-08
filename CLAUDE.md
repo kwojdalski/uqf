@@ -28,7 +28,7 @@ means no rule matched, which is much weaker than "this is correct" - it is never
 a substitute for `q tests/run_tests.q`.
 
 Installed separately, because the linter is its own project:
-`cargo install --git https://github.com/kwojdalski/q-lint --locked`.
+`cargo install --git https://github.com/kwojdalski/q-lint --tag v0.2.0 --locked`.
 
 ## Working on a GitHub issue: always in a new worktree
 
