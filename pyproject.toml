@@ -18,7 +18,7 @@
 # depend on it and are documented as such at their call sites:
 #   - python/uqf_frontend/tests/test_catalog_drift.py resolves parents[3] to
 #     read src/etl/plant_tables.q as TEXT (never importing uqs)
-#   - python/uqs/tests/test_contract_surface.py and test_example_scripts.py
+#   - python/uqs/tests/test_contract_surface.py and test_etl_standalone_load.py
 #     resolve parents[3] to the repo root, to reach scripts/ and run q there
 # Moving the packages would break both.
 #
