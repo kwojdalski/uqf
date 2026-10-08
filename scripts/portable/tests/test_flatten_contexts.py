@@ -246,6 +246,99 @@ def test_the_status_and_interval_modules_convert_without_refusal():
     assert "merged:.qetl.coverage.compose covered;" in gaps
 
 
+# ------------------------------------------------------- back to 5.0
+
+
+def nested(text: str) -> fc.FileResult:
+    res = one(text, target="5.0")
+    assert not res.refusals, [r.as_dict() for r in res.refusals]
+    return res
+
+
+def test_the_5_0_target_restores_the_issues_example():
+    src = "\\d .example.inner\noffset:2\nadd:{[amount] amount+offset}\n\\d .\n"
+    flat = converted(src)
+    back = nested(flat)
+    assert back.output == src
+    assert back.nested == [
+        {"line": 1, "context": ".example.inner", "statements": 2, "shortened": 3}
+    ]
+
+
+def test_a_name_is_shortened_only_where_it_binds_the_same():
+    flat = (
+        "\\d .\n"
+        ".a.b.k:1\n"
+        ".a.b.p:{[k] k+.a.b.k}\n"  # bare, it would be the parameter
+        ".a.b.i:{x+.a.b.x}\n"  # bare, it would be the implicit argument
+        ".a.b.s:{.a.b.k:2}\n"  # bare, the assignment would make it local
+        ".a.b.q:{select from .a.b.t where px>.a.b.k}\n"  # bare, it could be a column
+        ".a.b.g:{.a.b.n::1; .a.b.c+:1; .a.b.k}\n"
+        "\\d .\n"
+    )
+    assert nested(flat).output.splitlines() == [
+        "\\d .a.b",
+        "k:1",
+        "p:{[k] k+.a.b.k}",
+        "i:{x+.a.b.x}",
+        "s:{.a.b.k:2}",
+        "q:{select from t where px>.a.b.k}",
+        "g:{n::1; c+:1; k}",
+        "\\d .",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("flat", "why"),
+    [
+        ("\\d .\n.a.b.f:{g x}\n\\d .\n", "`g` (line 2) means the root's, and would mean .a.b.g"),
+        ("\\d .\n.a.b.f:{x}\ny:1\n\\d .\n", None),
+        ("\\d .\n.a.b.f:{x}\n.a.c.g:{x}\n\\d .\n", "it defines in .a.b, .a.c"),
+        ("\\d .\n.a.b.v:get `w\n\\d .\n", "get `w (line 2) runs while the file loads"),
+        (
+            "\\d .\nr:1\n.a.b.f:{select from t where px>r}\n\\d .\n",
+            None,
+        ),
+        ("\\d .\n.a.b.f:{x}\n\\l other.q\n", None),  # ends at \\l, not \\d
+        ("\\d .\n.a.b.f:{x}\n", None),  # ends with the file
+        ("\\d .\n.a.f:{x}\n\\d .\n", None),  # single-level: never nested
+    ],
+)
+def test_a_block_that_would_change_meaning_stays_flat(flat, why):
+    res = nested(flat)
+    assert (res.output, res.action, res.nested) == (flat, "unchanged", [])
+    if why is not None:
+        assert any(why in note for note in res.notes), res.notes
+
+
+def test_nesting_is_idempotent_and_leaves_native_contexts_alone():
+    native = "\\d .a.b\nf:{g x}\n\\d .\n"
+    assert nested(native).output == native
+    flat = "\\d .\n.a.b.f:{.a.b.g x}\n\\d .\n"
+    once = nested(flat).output
+    assert once == native and nested(once).output == once
+
+
+def test_every_binding_survives_the_round_trip_through_5_0():
+    """For every q file in the tree, 4.0 -> 5.0 -> 4.0 gives exactly the 4.0
+    output - and since the 4.0 output names every binding explicitly, that is
+    every binding preserved. The original files through 5.0 likewise."""
+    files = subprocess.run(
+        ["git", "-C", str(REPO), "ls-files", "*.q"], capture_output=True, text=True, check=True
+    ).stdout.split()
+    originals = {
+        p: (REPO / p).read_text(encoding="utf-8") for p in files if not p.startswith("lib/")
+    }
+    flat = {p: r.output for p, r in convert(originals, allow=True).items() if not r.refusals}
+    assert len(flat) > 200
+    renested = convert(flat, target="5.0")
+    assert sum(1 for r in renested.values() if r.nested) > 20
+    again = convert({p: r.output for p, r in renested.items()}, allow=True)
+    assert [p for p in flat if again[p].output != flat[p]] == []
+    direct = convert(originals, target="5.0")
+    assert [p for p, r in direct.items() if r.output != originals[p]] == []
+
+
 # ------------------------------------------------------------- refusals
 
 
@@ -645,6 +738,7 @@ def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_p
     trees = {"converted": converted(FIXTURES[fixture])}
     if nested_ok:
         trees["original"] = FIXTURES[fixture]
+        trees["renested"] = nested(trees["converted"]).output
     for name, text in trees.items():
         d = tmp_path / name
         d.mkdir()
@@ -734,3 +828,17 @@ def test_bindings_agree_with_qs_own_parser(interp, tmp_path):
         if ours - theirs or theirs - ours - cols:
             disagree.append((rel, line, sorted(ours - theirs), sorted(theirs - ours - cols)))
     assert not disagree
+
+
+def test_the_5_0_report_names_the_rebuilt_contexts(tmp_path, capsys):
+    src = tmp_path / "repo"
+    _tree(src, {"src/m.q": "\\d .\n.m.n.f:{.m.n.g x}\n.m.n.g:{x}\n\\d .\n"})
+    code, report = _run(
+        src, "src", "--out", str(tmp_path / "out"), "--target", "5.0", capsys=capsys
+    )
+    assert code == 0 and "nested again" in report["claim"]
+    assert report["files"][0]["nested"] == [
+        {"line": 1, "context": ".m.n", "statements": 2, "shortened": 3}
+    ]
+    assert report["namespace_mappings"] == {"src/m.q": [".m.n"]}
+    assert (tmp_path / "out" / "src" / "m.q").read_text() == "\\d .m.n\nf:{g x}\ng:{x}\n\\d .\n"

@@ -43,6 +43,15 @@ reason:
     hidden in a string, a dotted name relative to the context, assigning a
     reserved word, and `name::` where `name` is also local.
 
+`--target 5.0` runs it backwards: a block that starts at `\\d .` and ends at
+the next `\\d` line, and whose definitions all belong to one nested context,
+goes back inside that context, `.example.inner.offset` becoming `offset`
+wherever the bare name binds the same. A block that would mean anything
+different there - a free name that is the root's, a qSQL name that could be a
+root global, a run-time lookup while the file loads - stays flat and the
+report says why: flat code is valid on 5.0. Native nested code is left as
+written. Converting the result back to 4.0 gives exactly the 4.0 output.
+
 Only the selected inputs are read and the originals are never written.
 Output goes to a staging directory beside `--out` and is moved into place
 only when every file converted and every `--check` passed, so a failure
@@ -80,10 +89,12 @@ VENDORED = ("lib/",)
 #: evidence: q exits 0 after a script that errored part-way.
 CHECK_OK = "PORTABLE_CHECK_OK"
 CHECK_FAILED = "PORTABLE_CHECK_FAILED"
-CLAIM = (
-    "nested working contexts flattened; nothing else about kdb+ 4.0 compatibility "
-    "is checked - only a --check run on the target interpreter shows the result works"
-)
+CLAIMS = {
+    "4.0": "nested working contexts flattened; nothing else about kdb+ 4.0 compatibility "
+    "is checked - only a --check run on the target interpreter shows the result works",
+    "5.0": "flattened blocks nested again where every name keeps its binding; the rest "
+    "is left as written - only a --check run on the target interpreter shows the result works",
+}
 
 #: Names q's parser owns: never a context's global, so never qualified (and
 #: assigning one is refused). kdb+ 4.0's `.q` namespace and `.Q.res`, plus the
@@ -631,6 +642,7 @@ class FileResult:
     defined: dict[str, list[str]] = field(default_factory=dict)
     qualified: int = 0
     loads: list[dict] = field(default_factory=list)
+    nested: list[dict] = field(default_factory=list)  # blocks the 5.0 target rebuilt
     notes: list[str] = field(default_factory=list)
     warnings: list[Finding] = field(default_factory=list)
     refusals: list[Finding] = field(default_factory=list)
@@ -760,9 +772,12 @@ class Converter:
             if head.kind == "sys":
                 self._system(res, out, lo, head, ctx)
                 continue
-            self._strings(res, toks, lo, hi)
-            if self.target == "4.0" and _nested(ctx):
-                self._rewrite(res, out, toks, lo, hi, ctx)
+            if self.target == "4.0":
+                self._strings(res, toks, lo, hi)
+                if _nested(ctx):
+                    self._rewrite(res, out, toks, lo, hi, ctx)
+        if self.target == "5.0":
+            self._nest(res, out, toks)
         last = ctx
         if toks and toks[-1].kind == "sys" and _context_of(toks[-1].text):
             last = _context_of(toks[-1].text) or ctx
@@ -774,6 +789,134 @@ class Converter:
         if res.output != text:
             res.action = "transformed"
         return res
+
+    # The 5.0 target: the 4.0 conversion run backwards, where it provably can be.
+
+    def _nest(self, res: FileResult, out: list[str], toks: list[Tok]) -> None:
+        """Rebuild nested contexts. A candidate block starts at a `\\d .` line
+        and runs to the next `\\d` line, so nesting it moves no line; one that
+        ends anywhere else - another system command, the exit line, the end of
+        the file - stays flat, which 5.0 runs as it is."""
+        stmts = list(_contexts(toks))
+        i = 0
+        while i < len(stmts):
+            lo = stmts[i][0]
+            if toks[lo].kind != "sys" or _context_of(toks[lo].text) != ".":
+                i += 1
+                continue
+            j = i + 1
+            while j < len(stmts) and toks[stmts[j][0]].kind not in ("sys", "tail"):
+                j += 1
+            closes = j < len(stmts) and _context_of(toks[stmts[j][0]].text) is not None
+            if closes and j > i + 1:
+                self._nest_block(res, out, toks, lo, stmts[i + 1 : j])
+            i = j
+
+    def _nest_block(
+        self,
+        res: FileResult,
+        out: list[str],
+        toks: list[Tok],
+        head: int,
+        block: list[tuple[int, int, str]],
+    ) -> None:
+        """Nest one root block in the context its definitions share, or leave
+        it exactly as it is."""
+        sts = [Statement(toks, lo, hi, res.path) for lo, hi, _ in block]
+        if any(st.refusals for st in sts):
+            return
+        homes = set()
+        for st in sts:
+            for use in st.uses:
+                name = toks[use.idx].text
+                if use.lam is None and use.role in ("assign", "gassign", "compound", "indexed"):
+                    if _relative(name):
+                        return  # a root global, which the block would take over
+                    parent = name.rpartition(".")[0]
+                    if _nested(parent):
+                        homes.add(parent)
+        if len(homes) != 1:
+            if len(homes) > 1:
+                res.notes.append(
+                    f"line {toks[head].line}: stays flat - it defines in {', '.join(sorted(homes))}"
+                )
+            return
+        ctx = homes.pop()
+        for st in sts:
+            why = self._unmovable(st, ctx)
+            if why is not None:
+                res.notes.append(f"line {toks[head].line}: stays flat - {why}")
+                return
+        shortened = 0
+        for st in sts:
+            for use in st.uses:
+                leaf = self._short(st, use, ctx)
+                if leaf is not None:
+                    out[use.idx] = leaf
+                    shortened += 1
+        out[head] = f"\\d {ctx}"
+        res.nested.append(
+            {
+                "line": toks[head].line,
+                "context": ctx,
+                "statements": len(sts),
+                "shortened": shortened,
+            }
+        )
+
+    def _unmovable(self, st: Statement, ctx: str) -> str | None:
+        """Why running inside `ctx` instead of the root would change what the
+        statement means, or None when it would not."""
+        toks = st.toks
+        for use in st.uses:
+            name = toks[use.idx].text
+            if not _relative(name) or name in BUILTINS or name in QSQL_START:
+                continue
+            if use.role == "column" or (use.lam is not None and use.lam.is_local(name)):
+                continue
+            if use.role == "assign" and use.lam is not None:
+                continue
+            line = toks[use.idx].line
+            if use.column_ctx and name != "i":
+                # A column, or else a global: the root's here, ctx's there.
+                if name in self.defined.get(".", set()) or name in self.defined.get(ctx, set()):
+                    return (
+                        f"`{name}` in a qSQL phrase (line {line}) is a column or, failing "
+                        f"that, a global the inputs define"
+                    )
+                continue
+            if use.column_ctx:
+                continue
+            return f"`{name}` (line {line}) means the root's, and would mean {ctx}.{name}"
+        if st.definition() is None:
+            # It runs while the file loads: its run-time lookups would resolve
+            # against ctx instead of the root.
+            for lk in st.lookups:
+                if lk.lam is None or lk.lam.runs_inline():
+                    return f"{lk.what} (line {toks[lk.idx].line}) runs while the file loads"
+            for callee in sorted(self._calls(st, ".", inline_only=True)):
+                fn = self.functions.get(callee)
+                if fn is not None and fn.level:
+                    return f"it calls {callee} while the file loads ({fn.why})"
+        return None
+
+    @staticmethod
+    def _short(st: Statement, use: Use, ctx: str) -> str | None:
+        """The bare name `ctx.leaf` can become where it binds the same, else None."""
+        name = st.toks[use.idx].text
+        if not name.startswith(ctx + "."):
+            return None
+        leaf = name[len(ctx) + 1 :]
+        if "." in leaf or leaf in BUILTINS or leaf in QSQL_START or leaf in ("from", "by", "where"):
+            return None
+        if use.column_ctx or use.role == "column":
+            return None  # bare, it could be a column
+        if use.lam is not None:
+            if use.lam.is_local(leaf):
+                return None  # bare, it is the local
+            if use.role == "assign":
+                return None  # bare, the assignment would make it local
+        return leaf
 
     def _system(self, res: FileResult, out: list[str], idx: int, t: Tok, ctx: str) -> None:
         new = _context_of(t.text)
@@ -1054,7 +1197,12 @@ def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("paths", nargs="+", help="q files or directories to convert")
     ap.add_argument("--out", required=True, help="directory to write the converted tree to")
-    ap.add_argument("--target", choices=TARGETS, default="4.0")
+    ap.add_argument(
+        "--target",
+        choices=TARGETS,
+        default="4.0",
+        help="4.0 flattens nested contexts; 5.0 nests flattened blocks again where it safely can",
+    )
     ap.add_argument("--root", default=str(REPO), help="paths are kept relative to this")
     ap.add_argument("--dry-run", action="store_true", help="report only; write nothing")
     ap.add_argument("--force", action="store_true", help="replace an existing, non-empty --out")
@@ -1095,7 +1243,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     selected = set(rels.values())
     report: dict = {
         "target": args.target,
-        "claim": CLAIM,
+        "claim": CLAIMS[args.target],
         "root": str(root),
         "out": str(out),
         "dry_run": args.dry_run,
@@ -1107,14 +1255,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "contexts": r.contexts,
                 "defined": {k: sorted(set(v)) for k, v in sorted(r.defined.items())},
                 "qualified": r.qualified,
+                "nested": r.nested,
                 "notes": r.notes,
             }
             for r in results
         ],
         "namespace_mappings": {
-            r.path: sorted({c["context"] for c in r.contexts if c["nested"]})
+            r.path: sorted(
+                {c["context"] for c in r.contexts if c["nested"]} | {b["context"] for b in r.nested}
+            )
             for r in results
-            if any(c["nested"] for c in r.contexts)
+            if any(c["nested"] for c in r.contexts) or r.nested
         },
         "dependencies": [
             {"path": r.path, **ld} for r in results for ld in r.loads if ld["load"] not in selected
