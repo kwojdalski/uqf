@@ -346,7 +346,8 @@ def build(
             target=target,
             python_dir=Path(tmp) / "python",
             bundles=record,
-            runtime=runtime if (members or runtime != DEFAULT_RUNTIME) else None,
+            # always written (#883): a reader must never have to guess it
+            runtime=runtime,
             portable=converted,
             hdb_shape=declared_shape(tree, runtime),
         )

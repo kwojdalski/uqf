@@ -9,7 +9,7 @@ import time
 from datetime import UTC, datetime
 
 from uqs.deploy import fetch, hdb
-from uqs.deploy.artifact import Artifact
+from uqs.deploy.artifact import Artifact, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
@@ -173,7 +173,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
         )
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
-    dep.runtime = pkg.manifest.get("runtime", dep.runtime)
+    dep.runtime = release_runtime(pkg.manifest)
     if cfg.runtime and cfg.runtime != dep.runtime:
         raise DeployError(
             "artifact",

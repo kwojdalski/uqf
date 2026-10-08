@@ -310,3 +310,24 @@ def test_the_build_installs_for_its_runtime_and_records_it(
     assert seen == [["crypto", str((tmp_path / "pb").resolve())]]
     assert art.manifest["runtime"] == "crypto"
     assert art.manifest["bundles"]["pb"]["source"] == "runtime"
+
+
+def test_a_default_runtime_build_records_its_runtime_too(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The case #883 found: the default runtime with no bundles used to leave
+    `runtime` out, so its meaning was whatever the deploying uqs assumed."""
+    from uqs.runtimes import DEFAULT_RUNTIME
+
+    monkeypatch.setattr(release_build, "revision", lambda root, runner: ("0" * 40, False))
+    monkeypatch.setattr(release_build, "tracked_files", lambda root, runner: [])
+    monkeypatch.setattr(release_build, "default_python", lambda root: "3.14")
+
+    def fake_payload(root, into, target, runner):
+        (into / "wheels").mkdir(parents=True)
+        (into / "requirements.txt").write_text("")
+        (into / "wheels" / "uqs-0.1.0-py3-none-any.whl").write_bytes(b"u")
+
+    monkeypatch.setattr(release_build, "python_payload", fake_payload)
+    art = release_build.build(tmp_path / "dist", root=repo)
+    assert art.manifest["runtime"] == DEFAULT_RUNTIME
