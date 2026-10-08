@@ -21,8 +21,13 @@
 / WHY IT IS NOT posbook. .qpipe.job.posbook answers "what did we make", per
 / sym, at weighted-average cost, marked to mid. This answers "what are we
 / holding", along the dimensions a desk reports on, with no marks and no
-/ P&L. Same fills, different question - see src/portfolio/desk_positions.q
-/ for why one module cannot honestly do both.
+/ P&L - and NOT over the same fills (#885). This job nets the FILLED rows of
+/ the `orders` tape (fx_orders_feed); posbook nets `executions`, which the
+/ executions normalizer builds from `trades` and crypto_trades. Those are
+/ independent draws: desk exposure and desk P&L describe different
+/ populations and do not reconcile. `executions` carries no book/product,
+/ the dimensions this view keys on, which is why it reads orders. See
+/ src/portfolio/desk_positions.q for why one module cannot answer both.
 / .
 / WHAT IS IN THIS FILE: the schemas, the netting transform with its
 / examples, the batch handler, the timer, the state, and the declaration

@@ -223,4 +223,17 @@ test_it_is_the_graph_producer_of_deal_positions:{[t]
     .qunit.assertTrue[.qetl.dag.reaction_job[`demo_deals;`rebuild_positions] in .qetl.dag.producers `deal_positions;
         "on_writing puts it in the job graph as what writes deal_positions"]};
 
+
+test_a_deal_side_converts_once_at_the_edge:{[t]
+    d:([] sym:`EURUSD`EURUSD; side:`buy`sell; notional:1e6 2e6; rate:1.08 1.09);
+    .qunit.assertEquals[.qpipe.job.rebuild_positions.as_fills d;
+        ([] sym:`EURUSD`EURUSD; side:1 -1; size:1e6 2e6; price:1.08 1.09);
+        "buy is +1 and sell -1, the library's convention; notional is the size"]};
+
+test_a_side_that_is_neither_buy_nor_sell_is_refused:{[t]
+    / The netting this replaced counted anything but `buy as a sell.
+    .qunit.assertThrows[.qpipe.job.rebuild_positions.as_fills;
+        ([] sym:enlist `EURUSD; side:enlist `SELL; notional:enlist 1e6; rate:enlist 1.08);
+        "*deal side must be buy or sell, not SELL*";"a misspelt side does not flip a position"]};
+
 \d .

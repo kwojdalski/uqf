@@ -40,9 +40,32 @@
 / @eg .qetl.reaction.notify_published[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
 handler:{[dataset;range_from;range_to]
     deals:.qetl.reaction.published[];
-    net:0!select net_notional:sum notional*?[side=`buy;1f;-1f], deals:count i
-        by sym, window:range_from from deals;
+    / Netted by the library, not here (#885): .qdesk.apply_fills is the one
+    / netting rule, and a change to its side convention reaches this too.
+    / One call covers one window, so the book is keyed on sym alone (the
+    / library's dimensions are symbols) and the window is added after.
+    book:0!.qdesk.apply_fills[.qdesk.empty_book`sym;as_fills deals];
+    net:select sym, window:range_from, net_notional:base_qty, deals:fill_count from book;
     .qetl.reaction.write[`deal_positions;`sym`window;`time`sym`window`net_notional`deals#update time:window from net]}
+
+/ The deal source's side, as the library's +1 / -1.
+side_sign:`buy`sell!1 -1
+
+/ demo_deals rows as the fills .qdesk.apply_fills takes: the source spells
+/ side `buy/`sell, converted ONCE here, at the edge, to +1/-1. A side that
+/ is neither is refused - the inline netting this replaced counted it as a
+/ sell, silently flipping a position.
+/ @param deals demo_deals rows
+/ @return sym, side (+1/-1), size (the notional) and price (the rate)
+/ @throws error naming any side that is neither buy nor sell
+/ @eg exec side from .qpipe.job.rebuild_positions.as_fills ([] sym:`EURUSD`EURUSD; side:`buy`sell; notional:1e6 2e6; rate:1.08 1.09) -> 1 -1
+as_fills:{[deals]
+    if[count bad:distinct (deals`side) except key side_sign;
+        '"rebuild_positions: deal side must be buy or sell, not ",", " sv string bad];
+    / A local, not the global by name: inside qSQL KDB-X resolves a bare
+    / global at the ROOT, where no side_sign exists.
+    sg:side_sign;
+    select sym, side:sg side, size:notional, price:rate from deals}
 
 \d .
 
