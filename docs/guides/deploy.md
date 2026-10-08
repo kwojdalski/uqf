@@ -281,17 +281,18 @@ them. Build the release for it, and only the artifact changes - never the
 checkout (#861):
 
 ```bash
-uqs deploy build --q-target 4.0 --q-exclude src/etl/streaming/fx_positions.q
+uqs deploy build --q-target 4.0
 ```
 
 The build converts its staged copy with `scripts/portable/flatten_contexts.py`
 (#856): each nested block runs at the root, with every name it means written out
 in full. It refuses what it cannot convert with certainty, naming the file and
-line. `--q-exclude` ships a folder, file or glob as written: `fx_positions.q`'s
-`book` is both a column and a global. The manifest records what was converted.
-`push` reads the server's `.z.K` and refuses an unconverted release on a server
-older than 5.0. Its smoke test and verification are the proof that the converted
-release runs there.
+line. The whole tree converts, and CI checks that it stays convertible (#863);
+`--q-exclude PATTERN` is the escape hatch, shipping a folder, file or glob as
+written - which a 4.0 server can load only if it has no nested context. The
+manifest records what was converted. `push` reads the server's `.z.K` and
+refuses an unconverted release on a server older than 5.0. Its smoke test and
+verification are the proof that the converted release runs there.
 
 To convert a tree by hand, or inspect the conversion:
 
