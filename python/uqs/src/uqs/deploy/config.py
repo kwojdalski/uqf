@@ -105,6 +105,13 @@ class Config:
     command_timeout: int = 900
     smoke_timeout: int = 120
     verify_timeout: int = 180
+    #: the deploy_targets.toml target this came from (#873), and where each
+    #: setting came from - the target or a flag - for the plan
+    target: str | None = None
+    sources: dict[str, str] = field(default_factory=dict)
+    #: the runtime the target expects the artifact to run; None: the artifact's
+    runtime: str | None = None
+
     #: deploy an artifact built from uncommitted changes (#872)
     allow_dirty: bool = False
     #: owner/name whose releases a tag ARTIFACT names; default: origin's

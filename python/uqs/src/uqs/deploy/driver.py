@@ -121,10 +121,21 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
             + (", created by --init-data" if facts.get("data") == "absent" else "")
             + ")",
             *_selection_lines(sel, cfg.live),
+            *_source_lines(cfg),
             "planned:",
             *[f"  {s}" for s in steps],
         ]
     )
+
+
+def _source_lines(cfg: Config) -> list[str]:
+    """Where each setting came from, when a target supplied any (#873)."""
+    if not cfg.target:
+        return []
+    by: dict[str, list[str]] = {}
+    for key, source in sorted(cfg.sources.items()):
+        by.setdefault(source, []).append(key)
+    return [f"settings: {', '.join(keys)} from {source}" for source, keys in sorted(by.items())]
 
 
 def _selection_lines(sel: Selection, live: bool) -> list[str]:
@@ -162,8 +173,14 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
         )
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
-    dep.selection = select_jobs(pkg.manifest, cfg.jobs)
     dep.runtime = pkg.manifest.get("runtime", dep.runtime)
+    if cfg.runtime and cfg.runtime != dep.runtime:
+        raise DeployError(
+            "artifact",
+            f"target {cfg.target} runs the {cfg.runtime} runtime, but {pkg.path.name} was built "
+            f"for {dep.runtime} - build it with `uqs --runtime {cfg.runtime} deploy build`",
+        )
+    dep.selection = select_jobs(pkg.manifest, cfg.jobs)
     report = Report(
         release=rid,
         revision=pkg.manifest["revision"],

@@ -1,7 +1,7 @@
-"""`uqs deploy status`, `uqs deploy rollback` and `uqs deploy prune`: commands
-about a server that already runs a release, beside cli/deploy.py's build, push
-and verify, which make and install one. Each reads what the server's own pushes
-recorded."""
+"""`uqs deploy status`, `rollback`, `prune` and `verify`: commands about a
+server that already runs a release, beside cli/deploy.py's build and push,
+which make and install one. status, rollback and prune read what the server's
+own pushes recorded; verify runs ON the server, from inside a release."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli.deploy import _failed, deploy_app
-from uqs.deploy import config, prune, rollback, status
+from uqs.deploy import config, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
 
@@ -150,4 +150,39 @@ def prune_cmd(
         code = prune.prune(cfg, remote, keep=keep, dry_run=dry_run)
     except config.DeployError as exc:
         _failed("uqs deploy prune", exc.stage, exc)
+    raise typer.Exit(code=code)
+
+
+@deploy_app.command("verify")
+def verify_cmd(
+    profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
+    deadline: Annotated[float, typer.Option("--deadline", help="Seconds")] = 180.0,
+    query_timeout: Annotated[int, typer.Option("--query-timeout", help="Seconds per query")] = 5,
+    port: Annotated[int | None, typer.Option("--port", help="The stack's base port")] = None,
+    procs: Annotated[
+        str,
+        typer.Option("--procs", metavar="NAME,...", help="Processes beyond the profile"),
+    ] = "",
+    tables: Annotated[
+        str, typer.Option("--tables", metavar="NAME,...", help="Tables stp1 must carry")
+    ] = "",
+    live: Annotated[bool, typer.Option("--live", help="Fixtures must be refused")] = False,
+    ports_free: Annotated[
+        bool,
+        typer.Option(
+            "--ports-free", help="Only check that nothing listens on the profile's ports yet"
+        ),
+    ] = False,
+) -> None:
+    """Run on the server, from a release: does every process the profile promises answer?"""
+    code = verify.run(
+        profile,
+        deadline=deadline,
+        query_timeout=query_timeout,
+        port=port,
+        procs=[p for p in procs.split(",") if p],
+        tables=[t for t in tables.split(",") if t],
+        live=live,
+        ports_free=ports_free,
+    )
     raise typer.Exit(code=code)

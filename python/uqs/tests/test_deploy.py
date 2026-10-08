@@ -35,7 +35,9 @@ _CLI = get_group(deploy_app)
 def parse_args(argv: list[str]) -> Config:
     """The Config `uqs deploy push` makes of `argv`: parsed by the command's
     own options, checked by the make_config it calls."""
-    return make_config(**_CLI.commands["push"].make_context("push", list(argv)).params)
+    params = _CLI.commands["push"].make_context("push", list(argv)).params
+    params.pop("target", None)  # --target is resolved by targets.configs, not make_config
+    return make_config(**params)
 
 
 ARGS = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
@@ -123,9 +125,15 @@ def _args(path: Path, *extra: str) -> list[str]:
 # --- arguments and quoting ------------------------------------------------------
 
 
-def test_the_required_arguments_are_host_dest_and_profile():
-    with pytest.raises(typer.BadParameter, match="profile"):
-        parse_args(["a", "--host", "h", "--dest", "/opt/uqf"])
+def test_the_required_arguments_are_host_dest_and_profile(capfd):
+    """Required by the command rather than the parser: a --target can give them."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+
+    r = CliRunner().invoke(cli.app, ["deploy", "push", "a", "--host", "h", "--dest", "/opt/uqf"])
+    assert r.exit_code == 1
+    assert "--profile is required, or --target" in r.output + capfd.readouterr().err
     cfg = parse_args(BASE)
     assert (cfg.host, cfg.dest, cfg.profile) == ("uqf-server", "/opt/uqf", "essential")
     assert cfg.data_root == "/opt/uqf/shared/data"
