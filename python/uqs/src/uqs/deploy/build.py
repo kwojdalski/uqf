@@ -46,7 +46,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
 import time
@@ -66,8 +65,11 @@ from uqs.deploy.artifact import (
     _sha256,
 )
 from uqs.deploy.payload import ALLOWLIST, Runner, is_excluded, python_payload, tracked_files
+from uqs.logger import get_logger
 from uqs.paths import repo_root
 from uqs.runtimes import DEFAULT_RUNTIME
+
+log = get_logger(__name__)
 
 #: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
 BUNDLE_LEDGER = "src/etl/installed_bundles.json"
@@ -77,10 +79,6 @@ GENERATOR = "scripts/generate/generate_operational_docs.py"
 STAGED_EXTRA = ("docs",)
 
 _PYTHON = re.compile(r"3\.\d{1,2}")
-
-
-def log(message: str) -> None:
-    print(f"uqs deploy build: {message}", file=sys.stderr, flush=True)
 
 
 def revision(root: Path, runner: Runner = subprocess.run) -> tuple[str, bool]:
@@ -300,14 +298,16 @@ def build(
         tree, record = root, None
         if members:
             tree = Path(tmp) / "tree"
-            log(f"installing {len(members)} bundle(s) for runtime {runtime} into a staged tree")
+            log.info(
+                "installing {} bundle(s) for runtime {} into a staged tree", len(members), runtime
+            )
             folders = [str(m.bundle.root) for m in members]
             files, record = stage_bundles(root, files, folders, tree, runner, runtime)
             for m in members:
                 record[m.bundle.name]["source"] = m.source
-        log(f"Python {target.python} wheels for linux/{target.arch}")
+        log.info("Python {} wheels for linux/{}", target.python, target.arch)
         python_payload(root, Path(tmp) / "python", target, runner)
-        log(f"packaging {len(files)} files")
+        log.info("packaging {} files", len(files))
         return build_artifact(
             tree,
             output,

@@ -4,9 +4,10 @@ Thin over uqs.deploy, whose package docstring describes the whole run. The
 push command's parameters are named exactly as uqs.deploy.config.make_config's,
 which checks them, so the options and their validation cannot drift apart.
 
-Everything here prints plainly rather than through the rich console: push
-prints its report and verify its result as JSON, which another program reads -
-verify's last two lines are parsed by the push that ran it.
+Progress goes through uqs.logger like every other command, but on stderr:
+stdout carries what another program reads - build's artifact path, push's
+report and verify's result as JSON, whose last two lines the push that ran it
+parses.
 """
 
 from __future__ import annotations
@@ -19,11 +20,12 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.shared import app
+from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, verify
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
+from uqs.logger import configure_logging, get_logger
 from uqs.paths import repo_root, runtime_from_env
 from uqs.stack import runtime_bundles
 
@@ -34,9 +36,16 @@ deploy_app = typer.Typer(
 )
 app.add_typer(deploy_app, name="deploy")
 
+log = get_logger(__name__)
+
+
+@deploy_app.callback()
+def _log_to_stderr() -> None:
+    configure_logging(component="uqs", level=_env_log_level(), stream=sys.stderr)
+
 
 def _failed(prefix: str, stage: str, exc: Exception) -> None:
-    print(f"{prefix}: FAILED at {stage}: {config.redact(str(exc))}", file=sys.stderr, flush=True)
+    log.error("{}: FAILED at {}: {}", prefix, stage, config.redact(str(exc)))
     raise typer.Exit(code=1)
 
 

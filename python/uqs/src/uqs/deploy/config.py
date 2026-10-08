@@ -4,7 +4,6 @@ and the names and limits every stage shares."""
 from __future__ import annotations
 
 import re
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -76,10 +75,6 @@ def load_artifact(path: str) -> Artifact:
 def redact(text: str) -> str:
     """`text` with anything shaped like a secret assignment masked."""
     return stack_redact.redact(text)
-
-
-def log(message: str) -> None:
-    print(f"uqs deploy push: {redact(message)}", file=sys.stderr, flush=True)
 
 
 @dataclass

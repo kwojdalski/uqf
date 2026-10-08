@@ -7,10 +7,13 @@ import json
 import sys
 
 from uqs.deploy.artifact import Artifact
-from uqs.deploy.config import Config, DeployError, load_artifact, log
+from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.remote import Transport
 from uqs.deploy.selection import Selection, select_jobs, verify_args
 from uqs.deploy.stages import Deployment, Report
+from uqs.logger import get_logger
+
+log = get_logger(__name__)
 
 
 def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deployment) -> str:
@@ -124,7 +127,7 @@ def _selection_lines(sel: Selection, live: bool) -> list[str]:
 
 
 def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
-    log(f"checking {cfg.artifact}")
+    log.info("checking {}", cfg.artifact)
     pkg = load_artifact(cfg.artifact)
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
@@ -143,7 +146,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
         live=cfg.live,
     )
 
-    log(f"preflight on {cfg.host}" + (f" as {cfg.remote_user}" if cfg.remote_user else ""))
+    log.info("preflight on {}{}", cfg.host, f" as {cfg.remote_user}" if cfg.remote_user else "")
     dep.check_sudo()
     facts = dep.preflight()
     report.previous_release = facts.get("current")
@@ -171,7 +174,7 @@ def _run(
         raise
     previous = state.get("current")
     if previous != facts.get("current"):
-        log(f"current changed since preflight: now {previous or 'none'}")
+        log.warning("current changed since preflight: now {}", previous or "none")
     report.previous_release = previous
     prev_profile: str | None = None
     prev_procs: list[str] = []
@@ -179,16 +182,16 @@ def _run(
     stopped_previous = False
     started = False
     try:
-        log(f"transferring release {rid}")
+        log.info("transferring release {}", rid)
         release = dep.transfer(pkg, rid)
-        log("preparing the release environment")
+        log.info("preparing the release environment")
         dep.prepare(release, pkg)
-        log("offline smoke test")
+        log.info("offline smoke test")
         dep.smoke(release)
         report.checks["smoke"] = "ok"
         if previous:
             prev_profile, prev_procs, prev_extra = dep.previous_processes(previous)
-            log(f"stopping release {previous}'s processes")
+            log.info("stopping release {}'s processes", previous)
             # Set before the stop, not after: a stop that fails part-way has
             # still taken some of them down, and rollback must start them.
             stopped_previous = True
@@ -200,7 +203,7 @@ def _run(
                 *prev_procs,
             )
         dep.ports_free(release)
-        log(f"starting profile {cfg.profile}")
+        log.info("starting profile {}", cfg.profile)
         started = True
         dep.uqs(
             release,
@@ -211,14 +214,14 @@ def _run(
             cfg.profile,
             *dep.selection.processes,
         )
-        log(f"verifying every process answers (up to {cfg.verify_timeout}s)")
+        log.info("verifying every process answers (up to {}s)", cfg.verify_timeout)
         result = dep.verify(release)
         report.processes = result.get("processes", [])
         if not result.get("passed"):
             raise DeployError("verify", result.get("reason") or "verification failed")
         report.checks["verify"] = "ok"
         if cfg.live_check:
-            log(f"checking {', '.join(cfg.live_check)} live, before activation")
+            log.info("checking {} live, before activation", ", ".join(cfg.live_check))
             dep.live_check(release)
             report.checks["live-check"] = "ok"
         # Recorded BEFORE activation, and fatal if it cannot be: the next
@@ -231,7 +234,7 @@ def _run(
         report.status = "failed"
         report.stage = exc.stage
         report.error = str(exc)
-        log(f"FAILED at {exc.stage}: {exc}")
+        log.error("FAILED at {}: {}", exc.stage, redact(str(exc)))
         report.rollback = _rollback(
             dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
         )

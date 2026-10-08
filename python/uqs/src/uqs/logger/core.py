@@ -14,7 +14,7 @@ import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TextIO
 
 from loguru import logger
 
@@ -204,8 +204,12 @@ def setup_logging(
     backup_count: int = 5,
     format_string: str | Callable[[dict], str] | None = None,
     log_regex: str | None = None,
+    stream: TextIO | None = None,
 ) -> Any:
-    """Configure loguru sinks and return the logger."""
+    """Configure loguru sinks and return the logger.
+
+    The console sink writes to `stream`, stdout when it is None - read at call
+    time, so a test that swaps sys.stdout is honoured."""
     logger.remove()
 
     if log_regex is None:
@@ -236,7 +240,7 @@ def setup_logging(
         # what turns a per-record template choice into one.
         console_fmt = _make_kv_format(fmt) if use_color or callable(fmt) else fmt
         logger.add(
-            sys.stdout,
+            stream or sys.stdout,
             level=level.upper(),
             format=console_fmt,
             colorize=_colorize() if use_color else False,
@@ -278,6 +282,7 @@ def configure_logging(
     structured_logging: bool = False,
     include_console: bool = True,
     log_regex: str | None = None,
+    stream: TextIO | None = None,
 ) -> Any:
     """Configure logging for a named component (sets up its own log file if log_dir is given)."""
     effective_level = "DEBUG" if debug else level
@@ -315,4 +320,5 @@ def configure_logging(
         structured_logging=structured_logging,
         format_string=fmt if not structured_logging else None,
         log_regex=log_regex,
+        stream=stream,
     )

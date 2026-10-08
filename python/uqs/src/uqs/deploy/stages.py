@@ -20,12 +20,14 @@ from uqs.deploy.config import (
     VERIFY_MARKER,
     WRITE_NEW_PY,
     DeployError,
-    log,
     redact,
 )
 from uqs.deploy.remote import q, script
 from uqs.deploy.selection import Selection, verify_command
 from uqs.deploy.server import Server
+from uqs.logger import get_logger
+
+log = get_logger(__name__)
 
 
 @dataclass
@@ -95,7 +97,9 @@ class Deployment(Server):
             try:
                 self.run_as_login("cleanup", "removing the upload directory", f"rm -rf {q(upload)}")
             except DeployError as exc:
-                log(f"could not remove the upload directory {upload}: {exc}")
+                log.warning(
+                    "could not remove the upload directory {}: {}", upload, redact(str(exc))
+                )
         return remote_archive
 
     def transfer(self, pkg: Artifact, rid: str) -> str:
@@ -286,4 +290,4 @@ class Deployment(Server):
         except DeployError as exc:
             if required:
                 raise DeployError("report", f"could not record the deployment: {exc}") from None
-            log(f"could not write the report on the server: {exc}")
+            log.warning("could not write the report on the server: {}", redact(str(exc)))
