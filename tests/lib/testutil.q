@@ -224,4 +224,75 @@ with_procname:{[p;f]
     $[had; `.proc.procname set old; @[{![`.proc;();0b;enlist `procname]};::;::]];
     r}
 
+// ------------------------------------------------------------ ISOLATION
+//
+// Every suite runs in ONE q process, so whatever a test changes outlives it
+// unless something puts it back (#834). #801's test set
+// UQS_REQUIRE_LIVE_SOURCES=1 and never cleared it, and every suite after it
+// ran with live sources required. Each test restoring its own state by hand
+// is a convention, and a convention is broken by the next test written.
+//
+// So the harness does it: .qunit.runTest - the vendored runner's per-test
+// entry point, which runNsTests calls by name - is wrapped below to take a
+// snapshot before each test and put it back after, whatever the test did and
+// whether or not it threw. setUp/tearDown run inside the wrapper, so state a
+// suite's setUp establishes is gone after each test as well.
+//
+// WHAT IS RESTORED:
+//   environment   every variable the tree reads - the contract surface's env
+//                 scan (docs/reference/surfaces/current/variables.csv) - and
+//                 every one a test or the source sets with setenv. q cannot
+//                 unset a variable, so one that was unset comes back as "",
+//                 which getenv cannot tell apart.
+//   the timer     \t, so a test that starts a timer cannot leave it firing
+//                 into later suites.
+//   root tables   one a test creates is dropped after it, so the next test
+//                 meets the tree's own tables, not a fixture left behind.
+//                 One that existed before the test is left alone: a test
+//                 that changes a shared table restores it itself.
+
+// Private: the names in `files`' `setenv[`NAME;...]` calls.
+// @private
+setenv_names:{[files]
+    lines:raze {read0 hsym `$x} each files;
+    / `[[]`: a bare `[` opens a character class in ss's pattern, as in like's
+    at:ss[;"setenv[[]`"] each lines;
+    names:raze {[l;i] {`$(x?";")#x} each 8_/:i _\: l}'[lines;at];
+    names where {all x in .Q.an} each string names}
+
+// The environment variables a test may change, read once at load.
+env_names:{[]
+    / untrapped: a harness that could not read it would isolate less, silently
+    surface:exec name from (enlist "S";enlist ",") 0: `:docs/reference/surfaces/current/variables.csv;
+    asc distinct surface,.testutil.setenv_names .testutil.q_files["tests/q"],.testutil.q_files["src"]}[]
+
+// What the harness restores after each test: the environment, the timer, and
+// which root tables exist.
+snapshot:{[] `env`timer`tables!(.testutil.env_names!getenv each .testutil.env_names;system"t";tables `.)}
+
+// Put back what `snapshot` took: only what changed is written.
+// @param s a snapshot
+restore:{[s]
+    now:getenv each key s`env;
+    changed:where not (s`env)~'now;
+    if[count changed; setenv'[changed;(s`env) changed]];
+    if[not (s`timer)=system"t"; system"t ",string s`timer];
+    made:(tables `.) except s`tables;
+    if[count made; ![`.;();0b;made]];
+    }
+
+// The runner's own runTest, kept once: loading this file twice must not wrap
+// the wrapper, which would then call itself.
+if[not `run_test_unisolated in key `.testutil; run_test_unisolated:.qunit.runTest];
+
+// Private: one test, isolated - see ISOLATION above.
+// @private
+isolated_run_test:{[fn]
+    s:.testutil.snapshot[];
+    r:@[.testutil.run_test_unisolated;fn;{[s;e] .testutil.restore s; 'e}[s]];
+    .testutil.restore s;
+    r}
+
+.qunit.runTest:isolated_run_test;
+
 \d .

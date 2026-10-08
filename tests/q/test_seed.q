@@ -49,4 +49,33 @@ test_the_runner_seeds_before_loading_any_suite:{[t]
     first_load:first where src like "*.testutil.load_suites*";
     .qunit.assertTrue[(not null seed_line) and seed_line<first_load;"run_tests.q seeds the generator before the first test suite loads"]};
 
+/ --- isolation (#834) -------------------------------------------------------
+/ Every suite shares one process, so the harness restores what a test changed
+/ (.testutil.isolated_run_test). These hold it to that.
+
+/ A test that leaks: it sets a variable the tree reads and starts a timer, and
+/ cleans up neither. Not named test*, so the runner never runs it on its own.
+leaky:{[t]
+    setenv[`UQS_REQUIRE_LIVE_SOURCES;enlist "1"];
+    system"t 3600000";
+    `seedtest_leaked set ([] a:1 2);
+    .qunit.assertTrue[1b;"ran"]}
+
+test_what_a_test_changes_does_not_outlive_it:{[t]
+    / First: the nested run resets the runner's assertion state, so nothing
+    / of this test's may be recorded before it.
+    before:(getenv `UQS_REQUIRE_LIVE_SOURCES;system"t");
+    r:.qunit.runTest `.seedtest.leaky;
+    .qunit.assertEquals[(r`status;getenv `UQS_REQUIRE_LIVE_SOURCES;system"t";`seedtest_leaked in tables `.);
+        (`pass),before,0b;
+        "the leaky test passed, and its variable, timer and root table were put back"]};
+
+test_every_test_runs_isolated:{[t]
+    .qunit.assertEquals[.qunit.runTest;.testutil.isolated_run_test;
+        "the runner's per-test entry point is the isolating one"]};
+
+test_the_isolated_variables_include_those_read_and_those_set:{[t]
+    .qunit.assertTrue[all `UQS_REQUIRE_LIVE_SOURCES`UQF_STATUS_DIR in .testutil.env_names;
+        "one the tree reads (the contract surface) and one only tests set"]};
+
 \d .
