@@ -312,11 +312,13 @@ echo "qhome_from=$qhome_from"
 echo "qcmd=$qcmd_eff"
 echo "qcmd_from=$qcmd_from"
 probe=$(mktemp -d)
-printf '%s\n' '-1 "DEPLOY_Q_OK"; exit 0' > "$probe/probe.q"
+printf '%s\n' '-1 "DEPLOY_Q_OK ",string .z.K; exit 0' > "$probe/probe.q"
 out=$(timeout "$probe_timeout" "$qcmd_eff" "$probe/probe.q" -q 2>&1 || true)
 rm -rf "$probe"
 case "$out" in
-  *DEPLOY_Q_OK*) ;;
+  *DEPLOY_Q_OK*)
+    qversion=$(printf '%s\n' "$out" | sed -n 's/.*DEPLOY_Q_OK \([0-9.]*\).*/\1/p' | head -1)
+    echo "qversion=$qversion";;
   *) fail "$qcmd_eff did not run a script with QHOME=$qhome_eff - is it licensed?" \
           "$(echo "$out" | tail -3)";;
 esac

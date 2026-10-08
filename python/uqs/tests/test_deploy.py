@@ -197,6 +197,10 @@ def test_a_tampered_artifact_is_refused_before_the_server_is_touched(tmp_path):
         ("os=Darwin\narch=x86_64\npython=3.14\n", "not linux"),
         ("os=Linux\narch=aarch64\npython=3.14\n", "built for x86_64"),
         ("os=Linux\narch=x86_64\npython=3.13\n", "wheels are for 3.14"),
+        (
+            "os=Linux\narch=x86_64\npython=3.14\nqversion=4.1\n",
+            "kdb\\+ 4.1, which has no nested contexts.*--q-target 4.0",
+        ),
     ],
 )
 def test_a_server_the_artifact_was_not_built_for_is_refused(tmp_path, facts, said):
@@ -897,3 +901,25 @@ def test_deploy_logs_like_every_command_but_on_stderr(tmp_path):
     )
     assert (r.returncode, r.stdout) == (1, "")
     assert r.stderr.startswith("ERROR    | uqs deploy build: FAILED at bundle: "), r.stderr
+
+
+@pytest.mark.parametrize(("q", "version"), [("4.0", "4.1"), ("4.0", "5"), (None, "5"), (None, "")])
+def test_a_converted_release_or_a_5_0_server_passes_the_q_check(tmp_path, q, version):
+    facts = SERVER + f"qversion={version}\ndata=present\n"
+    code, _, report = _run_with_facts(tmp_path, facts, q)
+    assert code == 0 and report["status"] == "deployed", report
+
+
+def _run_with_facts(tmp_path, facts, q):
+    remote = FakeRemote(
+        {**_HEALTHY, "uv python find": _done(facts), "uqs deploy verify --profile": _verified(True)}
+    )
+    out = io.StringIO()
+    target = {"q": q} if q else {}
+    code = driver.deploy(parse_args(_args(_artifact(tmp_path, **target))), remote, out=out)
+    return code, remote, json.loads(out.getvalue())
+
+
+def test_preflight_asks_the_servers_q_for_its_version():
+    assert '-1 "DEPLOY_Q_OK ",string .z.K' in PREFLIGHT
+    assert 'echo "qversion=$qversion"' in PREFLIGHT

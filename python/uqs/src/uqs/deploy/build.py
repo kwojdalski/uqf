@@ -53,6 +53,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from uqs.deploy import portable
 from uqs.deploy.artifact import (
     FORMAT,
     MANIFEST,
@@ -208,6 +209,7 @@ def build_artifact(
     python_dir: Path,
     bundles: dict | None = None,
     runtime: str | None = None,
+    portable: dict | None = None,
 ) -> Artifact:
     """The archive, its .sha256 and its manifest, written into `out_dir`.
 
@@ -240,6 +242,9 @@ def build_artifact(
     if runtime:
         # the runtime the release runs (#852), whose bundles it carries
         manifest["runtime"] = runtime
+    if portable:
+        # what was converted for the server's kdb+ (#861); target["q"] says which
+        manifest["portable"] = portable
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"uqf-{rid}.tar.gz"
     with tarfile.open(path, "w:gz") as tar:
@@ -271,9 +276,15 @@ def build(
     root: Path | None = None,
     runner: Runner = subprocess.run,
     runtime: str | None = None,
+    q_target: str | None = None,
+    q_exclude: Sequence[str] = (),
+    allow_computed_names: bool = False,
 ) -> Artifact:
     """Build the artifact for the checkout at `root` into `output`, by
     default `root`/dist.
+
+    With `q_target`, its q is converted for that kdb+ (#861), in a staged
+    copy: the checkout is never written (uqs.deploy.portable).
 
     Its bundles are `runtime`'s composition (#852): the bundles
     runtime_bundles.json declares for it, plus `bundles` - resolved by the same
@@ -291,7 +302,7 @@ def build(
         raise ReleaseError(
             "package", "the tree has uncommitted changes - commit them, or pass --allow-dirty"
         )
-    target = Target(os="linux", arch=arch, python=python or default_python(root))
+    target = Target(os="linux", arch=arch, python=python or default_python(root), q=q_target)
     rid = release_id(rev)
     files = tracked_files(root, runner)
     with tempfile.TemporaryDirectory() as tmp:
@@ -305,6 +316,18 @@ def build(
             files, record = stage_bundles(root, files, folders, tree, runner, runtime)
             for m in members:
                 record[m.bundle.name]["source"] = m.source
+        converted = None
+        if q_target:
+            if tree == root:
+                tree = Path(tmp) / "tree"
+                portable.stage_copy(root, files, tree)
+            log.info("converting the q for kdb+ {}", q_target)
+            converted = portable.convert(tree, files, q_target, q_exclude, allow_computed_names)
+            log.info(
+                "{} q file(s) converted, {} excluded",
+                len(converted["transformed"]),
+                len(converted["excluded"]),
+            )
         log.info("Python {} wheels for linux/{}", target.python, target.arch)
         python_payload(root, Path(tmp) / "python", target, runner)
         log.info("packaging {} files", len(files))
@@ -319,6 +342,7 @@ def build(
             python_dir=Path(tmp) / "python",
             bundles=record,
             runtime=runtime if (members or runtime != DEFAULT_RUNTIME) else None,
+            portable=converted,
         )
 
 

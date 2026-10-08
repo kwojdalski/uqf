@@ -277,25 +277,32 @@ every release links it in.
 ## A server on kdb+ 4.0
 
 kdb+ 4.0 has no nested working contexts (`\d .qetl.status`), and this tree uses
-them. `scripts/portable/flatten_contexts.py` writes a copy that runs each nested
-block at the root, with every name it means written out in full (#856):
+them. Build the release for it, and only the artifact changes - never the
+checkout (#861):
 
 ```bash
-python3 scripts/portable/flatten_contexts.py src --out build/portable --dry-run
-python3 scripts/portable/flatten_contexts.py src --out build/portable \
-  --check scripts/portable/checks/status_intervals.q --q /path/to/kdb4/q
+uqs deploy build --q-target 4.0 --q-exclude src/etl/streaming/fx_positions.q
 ```
 
-It refuses what it cannot rewrite with certainty, naming the file and line, and
-then writes nothing. Its JSON report lists the files, contexts, refusals and
-check results. A converted tree is not proof that a release runs on 4.0: only a
-`--check` on that interpreter is. `uqs deploy build` does not run it.
+The build converts its staged copy with `scripts/portable/flatten_contexts.py`
+(#856): each nested block runs at the root, with every name it means written out
+in full. It refuses what it cannot convert with certainty, naming the file and
+line. `--q-exclude` ships a folder, file or glob as written: `fx_positions.q`'s
+`book` is both a column and a global. The manifest records what was converted.
+`push` reads the server's `.z.K` and refuses an unconverted release on a server
+older than 5.0. Its smoke test and verification are the proof that the converted
+release runs there.
 
-`--exclude PATTERN` leaves a folder, file or glob out (still read, never
-written), `--diff` prints each change, and `--debug` logs every rewrite and why.
+To convert a tree by hand, or inspect the conversion:
 
-`--target 5.0` goes the other way, nesting flattened blocks again wherever every
-name keeps its meaning (#859). Anything else stays flat, which 5.0 also runs.
+```bash
+python3 scripts/portable/flatten_contexts.py src --out build/portable --dry-run --diff
+```
+
+`--debug` logs every rewrite and why, `--exclude` leaves files out, and
+`--check` runs a q script in the result, such as
+`scripts/portable/checks/status_intervals.q`. `--target 5.0` goes the other way,
+nesting flattened blocks again wherever every name keeps its meaning (#859).
 
 ## Not in v1
 
