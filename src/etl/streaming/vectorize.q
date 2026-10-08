@@ -17,9 +17,11 @@
 
 / ------------------------------------------------------------- THE SHAPES
 
-/ Eleven levels a side, level 0 first, named as the feed publishes them.
-wide_level_names:(`$("bids",/:string til 11)),`$("asks",/:string til 11)
-wide_orderbook:flip (`time`sym,wide_level_names)!(`timestamp$();`symbol$()),(count[wide_level_names]#enlist `float$())
+/ The table this job folds, as the plant declares it: eleven levels a side,
+/ level 0 first, named as the feed publishes them. Read, not copied, so a
+/ level the plant gains or renames reaches the fold and its examples.
+wide_orderbook:.qetl.plant.shape `wide_orderbook
+wide_level_names:(cols wide_orderbook) except `time`sym
 
 / The column groups the fold reads, derived from the schema rather than
 / written out: bids0..bids10 -> bid_prices, asks0..asks10 -> ask_prices.
@@ -49,20 +51,20 @@ publish:.qetl.job.stream.unwired `vectorize;
 / @return nothing
 on_batch:{[t;x]
     if[not t=`wide_orderbook; :()];
-    .qpipe.job.vectorize.publish[`mkt_orderbook;.qetl.transform.apply[`mkt_orderbook;enlist[`book]!enlist x]];
+    .qpipe.job.vectorize.publish[`mkt_orderbook;.qetl.transform.apply[`mkt_orderbook;enlist[`wide_orderbook]!enlist x]];
     }
 
 \d .
 
 .qetl.transform.define[`mkt_orderbook;`inputs`output`fn`examples!(
-    enlist[`book]!enlist .qpipe.job.vectorize.wide_orderbook;
+    enlist[`wide_orderbook]!enlist .qpipe.job.vectorize.wide_orderbook;
     .qpipe.job.vectorize.mkt_orderbook;
     .qpipe.job.vectorize.fold_wide_orderbook;
     / Level 0 first on both sides, so the fold must keep bids0..bids10 in
     / numeric order - not bids0, bids1, bids10, bids2, as a sort on the
     / column NAMES would give.
     enlist `inputs`expected!(
-        enlist[`book]!enlist flip (`time`sym,.qpipe.job.vectorize.wide_level_names)!
+        enlist[`wide_orderbook]!enlist flip (`time`sym,.qpipe.job.vectorize.wide_level_names)!
             (enlist 2026.09.17D10:00:00;enlist `EURUSD),
             enlist each 1.1 1.0999 1.0998 1.0997 1.0996 1.0995 1.0994 1.0993 1.0992 1.0991 1.099,
                         1.1002 1.1003 1.1004 1.1005 1.1006 1.1007 1.1008 1.1009 1.101 1.1011 1.1012;
