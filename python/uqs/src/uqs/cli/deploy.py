@@ -22,7 +22,7 @@ import typer
 
 from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, verify
+from uqs.deploy import config, driver, targets, verify
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import configure_logging, get_logger
@@ -137,16 +137,37 @@ def build(
     print(artifact.path)
 
 
+def _on_command_line(ctx: typer.Context, name: str) -> bool:
+    """Was option `name` given on the command line, rather than defaulted?
+    By the source's name: typer carries its own click, whose ParameterSource
+    is not click.core's, so an identity check against that never matches."""
+    source = ctx.get_parameter_source(name)
+    return source is not None and source.name == "COMMANDLINE"
+
+
 @deploy_app.command("push")
 def push(
+    ctx: typer.Context,
     artifact: Annotated[str, typer.Argument(help="The release, from `uqs deploy build`")],
     host: Annotated[
-        str, typer.Option("--host", help="ssh destination, as your ssh config knows it")
-    ],
-    dest: Annotated[str, typer.Option("--dest", help="Absolute directory on the server")],
+        str | None,
+        typer.Option("--host", help="ssh destination, as your ssh config knows it"),
+    ] = None,
+    dest: Annotated[
+        str | None, typer.Option("--dest", help="Absolute directory on the server")
+    ] = None,
     profile: Annotated[
-        str, typer.Option("--profile", help="The uqs profile to start, e.g. essential")
-    ],
+        str | None, typer.Option("--profile", help="The uqs profile to start, e.g. essential")
+    ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option(
+            "--target",
+            metavar="NAME,...",
+            help="Targets declared in deploy_targets.toml (or $UQS_DEPLOY_TARGETS); "
+            "deployed in order, stopping at the first failure. A flag given here wins",
+        ),
+    ] = None,
     remote_user: Annotated[
         str | None,
         typer.Option(
@@ -265,10 +286,32 @@ def push(
 ) -> None:
     """Deploy a release onto a server with an existing TorQ, and verify it there."""
     options = dict(locals())
+    del options["ctx"], options["target"]
+    code = 0
     try:
-        cfg = config.make_config(**options)
-        remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
-        code = driver.deploy(cfg, remote)
+        if target:
+            given = {
+                k: v
+                for k, v in options.items()
+                if k not in targets.PER_RUN and _on_command_line(ctx, k)
+            }
+            cfgs = targets.configs(target, artifact, given, dry_run, repo_root())
+        else:
+            for name in ("host", "dest", "profile"):
+                if options[name] is None:
+                    raise config.DeployError("arguments", f"--{name} is required, or --target")
+            cfgs = [config.make_config(**options)]
+        for cfg in cfgs:
+            if cfg.target:
+                log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
+            remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
+            code = driver.deploy(cfg, remote)
+            if code:
+                if len(cfgs) > 1:
+                    log.error(
+                        "target {} failed - the targets after it were not deployed", cfg.target
+                    )
+                break
     except config.DeployError as exc:
         _failed("uqs deploy push", exc.stage, exc)
     raise typer.Exit(code=code)

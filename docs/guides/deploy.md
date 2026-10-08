@@ -118,6 +118,39 @@ runtime data directory the first time. A destination takes each release once: to
 redeploy, build a new artifact. Without it, a missing data directory is refused,
 so a mistyped `--dest` cannot quietly start an empty HDB.
 
+## Targets in a file
+
+Instead of repeating a dozen flags, declare each server once in
+`deploy_targets.toml` at the repository root. The file is gitignored, like
+`runtime_bundles.json`. Point `UQS_DEPLOY_TARGETS` at it to keep it elsewhere:
+
+```toml
+[targets.prod-a]
+host = "deploy@prod-a"
+remote_user = "svc"
+dest = "/srv/uqf"
+runtime = "crypto"
+profile = "essential"
+torq_home = "/opt/torq"
+live = true
+live_check = ["deals_db"]
+```
+
+```bash
+uqs deploy push dist/uqf-<release>.tar.gz --target prod-a --dry-run
+uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
+```
+
+- **The keys.** Each key is a `push` option, spelt as its parameter (`torq_home`
+  for `--torq-home`). The values go through the same checks as the flags, and an
+  unknown key is refused.
+- **`runtime`.** The one key that is not a flag. It must match the runtime the
+  artifact was built for.
+- **Flags win.** A flag given on the command line overrides the file. The
+  dry-run plan says which settings came from the target and which from a flag.
+- **Several targets.** `--target a,b` deploys them in order, host by host, and
+  stops at the first failure.
+
 ## What it does, in order
 
 Each stage stops the deployment if it fails:

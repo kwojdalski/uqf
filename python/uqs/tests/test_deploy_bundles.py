@@ -27,7 +27,9 @@ _CLI = get_group(deploy_app)
 def parse_args(argv: list[str]) -> Config:
     """The Config `uqs deploy push` makes of `argv`: parsed by the command's
     own options, checked by the make_config it calls."""
-    return make_config(**_CLI.commands["push"].make_context("push", list(argv)).params)
+    params = _CLI.commands["push"].make_context("push", list(argv)).params
+    params.pop("target", None)  # --target is resolved by targets.configs, not make_config
+    return make_config(**params)
 
 
 ARGS = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
