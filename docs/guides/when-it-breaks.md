@@ -140,18 +140,21 @@ can be asked for directly:
 uqs gaps <job> --from <start> --to <end>
 ```
 
-It lists each stretch of the range when the job was not up. For a job with a
-bounded "twin" (a backfill worker filling the table the job publishes), it then
-prints the backfill command that refills each gap. For markouts the twin is
-`hdb_demo_markouts_backfill` (see [markouts](../services/markouts.md)). A job
-with no twin cannot be refilled from here, and `uqs gaps` says so;
-`uqs job new NAME --kind backfill --twin-of JOB` scaffolds one (see
-[backfills](../scaffolding/backfill.md)).
+It lists each stretch of the range when the job was not up, or was up but had a
+batch fail: a batch handler that throws is trapped, so the process keeps running
+while it drops rows. For a job with a bounded "twin" (a backfill worker filling
+the table the job publishes), it then prints the backfill command that refills
+each gap. For markouts the twin is `hdb_demo_markouts_backfill` (see
+[markouts](../services/markouts.md)). A job with no twin cannot be refilled from
+here, and `uqs gaps` says so; `uqs job new NAME --kind backfill --twin-of JOB`
+scaffolds one (see [backfills](../scaffolding/backfill.md)).
 
 Two things to know about the answer:
 
-- **It records uptime, not output.** A job that was up but received nothing, or
-  published nothing, shows no gap.
+- **It records uptime and failed batches, not output.** A job that was up but
+  received nothing, or published nothing, shows no gap. One whose batches threw
+  does, from its last beat before the failure to the first beat after a batch
+  succeeds; `uqs summary` shows such a job as `failing` in its Batches column.
 - **A gap can be wider than the outage, never narrower.** A session's end is its
   last beat, recorded once a minute (`.qetl.uptime.period`), so a gap can start
   up to a minute before the job really stopped. Refilling a little extra costs

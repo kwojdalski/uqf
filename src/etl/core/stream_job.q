@@ -292,12 +292,19 @@ subscriptions:{[job]
     d:def job;
     distinct (),(d`subscribe_to),$[`restore_from in key d; d`restore_from; `symbol$()]}
 
-/ Private: the job's on_batch, logging a failure with its table before
-/ re-raising it, so the error still reaches the caller and is also in this
-/ process's own log, where someone asking "why is my output empty" looks.
+/ Private: the job's on_batch, counting every batch in .qetl.stream_health
+/ and logging a failure with its table before re-raising it. Re-raised, the
+/ error still reaches the caller; counted, a job that drops every batch is
+/ a gap in `uqs gaps` and `failing` in `uqs summary` rather than a process
+/ that looks healthy (#832).
 / @private
 guarded:{[job;f;t;x]
-    .[f;(t;x);{[job;t;e] .[{.qetl.log.err[x;y;z]};(job;"on_batch failed";`table`error!(t;e));::]; 'e}[job;t]]}
+    r:.[f;(t;x);{[job;t;e]
+        .[.qetl.stream_health.record;(job;0b;e);::];
+        .[{.qetl.log.err[x;y;z]};(job;"on_batch failed";`table`error!(t;e));::];
+        'e}[job;t]];
+    .[.qetl.stream_health.record;(job;1b;"");::];
+    r}
 
 / Start a job on a transport: the one sequence every runner uses.
 / .

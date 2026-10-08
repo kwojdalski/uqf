@@ -205,7 +205,7 @@ def summary(
         _die(exc)
         return
     result, rows = gathered.result, gathered.rows
-    heartbeats, silent = gathered.heartbeats, gathered.silent
+    heartbeats, silent, failing = gathered.heartbeats, gathered.silent, gathered.failing
     paths = _paths()
 
     # Which q runs the fleet and the connection budget that follows (#518):
@@ -235,6 +235,21 @@ def summary(
             f"\n[bold red]{len(silent)} up process(es) did not answer within "
             f"{probe_timeout:g}s:[/] {', '.join(silent)}"
         )
+
+    if failing:
+        # Up, heartbeat ok, and answering - and dropping batches: the transport
+        # traps the error, so nothing else in this table shows it (#832).
+        console.print(
+            f"\n[bold red]{len(failing)} streaming job(s) failed a batch since their last beat:[/]"
+        )
+        for record in failing:
+            console.print(
+                f"  {record['job']} ({record['process']}), last at "
+                f"{record.get('last_failure_at', '')}: {record.get('last_error', '')} - "
+                f"`uqs gaps {record['job']}` shows the span it dropped, "
+                f"`uqs logs {record['process']}` the error",
+                markup=False,
+            )
 
     # Up and fed are different questions, and the table above only answers
     # the first. A process can hold a PID, heartbeat `ok`, and still be

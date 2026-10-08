@@ -560,6 +560,10 @@ qetl.status,require_transition,function,2,from_state to
 qetl.status,status_dir,function,1,
 qetl.status,status_states,value,,
 qetl.status,write_status,function,6,worker instance_id state spec progress err
+qetl.stream_health,batches,dict,,
+qetl.stream_health,of,function,1,job
+qetl.stream_health,record,function,3,job ok err
+qetl.stream_health,write,function,2,job failing
 qetl.tick,log_handle,value,,
 qetl.tick,log_path,value,,
 qetl.tick,msg_count,value,,
@@ -589,6 +593,7 @@ qetl.transform,verify_all,function,1,
 qetl.uptime,attach,function,1,
 qetl.uptime,beat,function,1,
 qetl.uptime,begin,function,1,job
+qetl.uptime,failed_seen,dict,,
 qetl.uptime,gaps,function,3,job range_from range_to
 qetl.uptime,init_table,function,1,
 qetl.uptime,mine,value,,

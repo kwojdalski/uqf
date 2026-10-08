@@ -14,7 +14,8 @@
 / backfill SKIPS covered windows on the strength of it; folding this weaker
 / fact in would let a window be skipped that was never written. So it is its
 / own table, `etl_stream_uptime`, and only ever answers "when was the job
-/ listening".
+/ listening, with no batch failing". A batch that threw lost rows as surely
+/ as an outage, so a session ends at the beat before one (beat, #832).
 / .
 / ONE ROW PER SESSION - one start of one job in one process. A session opens
 / once the job is wired and subscribed (.qetl.job.stream.start), and a timer
@@ -78,15 +79,40 @@ begin:{[job]
         `etl_stream_uptime insert (id;job;.qetl.run.proc_name[];.z.h;.z.i;now;now)};
         (id;job;now)];
     `.qetl.uptime.mine set mine,id;
+    / failures before the session opened (a replay's) are not this session's
+    `.qetl.uptime.failed_seen set failed_seen,enlist[job]!enlist .qetl.stream_health.of[job]`failed;
     id}
 
-/ Move last_seen to now for every session this process opened.
+/ Each job's failed-batch count at the last beat, to tell what failed since.
+failed_seen:(`symbol$())!`long$()
+
+/ Move last_seen to now for every session this process opened - except one
+/ whose job had a batch fail since the last beat (.qetl.stream_health, #832).
+/ That session ends at its last beat, and a fresh one starts now: the span
+/ between becomes a gap, the same as a job that was down, because rows were
+/ lost either way. A fresh session that fails again is moved to now rather
+/ than left behind, so a job that keeps failing keeps one empty row, not one
+/ per beat. Each job's stream_health file is written on the way.
 / @return the number of sessions beaten
 beat:{[]
     if[0=count mine; :0];
     now:.z.p;
-    update_shared[{[ids;now] update last_seen:now from `etl_stream_uptime where session in ids};
-        (mine;now)];
+    jobs:(exec session!job from sessions[]) mine;
+    failed:{.qetl.stream_health.of[x]`failed} each jobs;
+    broken:failed>0^failed_seen jobs;
+    `.qetl.uptime.failed_seen set failed_seen,jobs!failed;
+    renew:mine where broken;
+    fresh:count[renew]?0Ng;
+    update_shared[{[keep;renew;fresh;now]
+        update last_seen:now from `etl_stream_uptime where session in keep;
+        ended:select from sessions[] where session in renew;
+        delete from `etl_stream_uptime where session in renew, last_seen=started_at;
+        `etl_stream_uptime insert update session:(renew!fresh) session, started_at:now, last_seen:now from ended};
+        (mine except renew;renew;fresh;now)];
+    `.qetl.uptime.mine set (mine except renew),fresh;
+    {[job;failing] .[.qetl.stream_health.write;(job;failing);{[job;e]
+        .qetl.log.warn[job;"could not write its stream_health file";enlist[`error]!enlist e];}[job]]}'[
+        distinct jobs;(distinct jobs) in jobs where broken];
     count mine}
 
 / Where, in [range_from; range_to), was `job` not up and subscribed?

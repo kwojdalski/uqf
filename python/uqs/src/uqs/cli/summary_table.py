@@ -10,14 +10,14 @@ from __future__ import annotations
 import math
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from rich.table import Table
 
 from uqs.cli.shared import _lines, _paths, _sorted_items, log
 from uqs.cli.summary_graph import attach_graph_columns
 from uqs.paths import UqsError
-from uqs.stack import listing, probe, runtime
+from uqs.stack import listing, probe, runtime, stream_health
 from uqs.stack.listing import SUMMARY_GRAPH_COLUMNS
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
@@ -33,6 +33,8 @@ class Gathered:
     heartbeats: dict[str, str] | None
     #: Up processes that did not answer the probe.
     silent: list[str]
+    #: The stream_health records of jobs whose batches are failing.
+    failing: list[dict] = field(default_factory=list)
 
 
 def gather(
@@ -121,9 +123,10 @@ def gather(
     silent = (
         probe.attach_probe_column(rows, probe_timeout, deadline) if "Responds" in needed else []
     )
+    failing = stream_health.attach_batches_column(rows, _paths()) if "Batches" in needed else []
     rows = _sorted_items(rows, sort_column, reverse)
 
-    return Gathered(result, rows, heartbeats, silent)
+    return Gathered(result, rows, heartbeats, silent, failing)
 
 
 def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> Table:
@@ -157,6 +160,7 @@ def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> T
             "not collected": "[dim]not collected[/]",
         }.get(hb, hb)
         responds = row.get("Responds", "")
+        batches = row.get("Batches", "")
         rendered = {
             **row,
             "Status": f"[{status_style}]{row['Status']}[/]" if status_style else row["Status"],
@@ -165,6 +169,7 @@ def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> T
             "Responds": responds
             if responds.endswith("ms") or responds in ("", "-")
             else f"[bold red]{responds}[/]",
+            "Batches": f"[bold red]{batches}[/]" if batches.startswith("failing") else batches,
         }
         table.add_row(*(rendered.get(col, "") for col in chosen))
     return table
