@@ -105,6 +105,33 @@ hidden[`databento_mbp10]:
 hidden[`kafka_client_flow]:
     "the RAW Kafka consumer output, published by an external Python consumer and read only by kafka_flow1, which deduplicates it into client_flow. It holds every redelivery the broker sent, so a desk reading it would see replayed trades twice - client_flow is the one to browse";
 
+/ Browsable tables with NO row in scripts/torqconfig/dataaccess/querypolicy.csv,
+/ each with the reason (#889). The browser's /query runs a whole select on
+/ the tier and only then truncates to max_rows; the policy file's maxrange,
+/ required filters and byte limit bind only gateway logins that are not
+/ trusted, and the frontend logs in as one that is. So a browsable table
+/ without a policy is read unbounded, and that has to be a decision, held
+/ by tests/q/test_catalog.q: every browsable table is in the policy file or
+/ here. A new table therefore cannot become browsable unbounded by omission.
+/ .
+/ "NOT YET ASSESSED" is the honest reason for most of them today: they were
+/ browsable before this list existed, and nobody has measured their rate
+/ and written a policy with its basis. Each one assessed leaves this list
+/ for the policy file.
+unbounded:(`symbol$())!();
+unbounded[`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar]:
+    6#enlist "declared, not yet produced: no rows to bound. Its policy row is due with its first producer";
+unbounded[`config_change]:
+    enlist "one row per watched variable per change - a handful a day";
+unbounded[`fx_limit_breach]:
+    enlist "one row per limit newly crossed, throttled so a standing breach does not repeat";
+unbounded[`etl_coverage]:
+    enlist "one ledger row per published window per dataset - hundreds a day, not ticks";
+unbounded[`deal_positions]:
+    enlist "one row per pair per published window of demo_deals";
+unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`eq_orderbook`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`crypto_market_data`trades_copy`crypto_execution_quality]:
+    21#enlist "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this";
+
 / The browsable surface: every described table that is not hidden.
 / .
 / `except` on the keys rather than a filter over a table, because both sides

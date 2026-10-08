@@ -116,3 +116,32 @@ test_surface_excludes_every_hidden_table:{[t]
 test_surface_carries_the_columns_the_frontend_reads:{[t]
     .qunit.assertEquals[cols .qcat.surface[];`table`description;
         "surface[] is (table; description), which is what catalog.py unpacks"]};
+
+/ --- every browsable table is bounded, or says why not (#889) -------------
+
+/ The tables querypolicy.csv bounds: its tablename column, read as text.
+policied:{[]
+    ls:1_read0 `$":scripts/torqconfig/dataaccess/querypolicy.csv";
+    distinct `$first each (enlist ",") vs/: ls where 0<count each ls}
+
+test_every_browsable_table_has_a_policy_or_says_why_not:{[t]
+    / The browser reads a whole select and only then truncates to max_rows;
+    / the policy file's range, filters and byte limit bind gateway logins
+    / only. A browsable table in neither place is read unbounded by omission.
+    .qunit.assertEquals[
+        (exec table from .qcat.surface[]) except policied[],key .qcat.unbounded;
+        `symbol$();
+        "each browsable table has a querypolicy.csv row or a .qcat.unbounded reason"]};
+
+test_no_table_is_both_bounded_and_said_to_be_unbounded:{[t]
+    / Assessing one moves it: a policy row added and its unbounded entry left
+    / behind would leave a stale "not yet assessed" claim in the catalog.
+    .qunit.assertEquals[policied[] inter key .qcat.unbounded;`symbol$();
+        "a table with a policy row is not also in .qcat.unbounded"]};
+
+test_every_unbounded_entry_is_browsable_and_states_a_reason:{[t]
+    u:.qcat.unbounded;
+    .qunit.assertEquals[(key u) except exec table from .qcat.surface[];`symbol$();
+        ".qcat.unbounded names only browsable tables"];
+    .qunit.assertEquals[(key u) where 0=count each value u;`symbol$();
+        "each unbounded table says why"]};
