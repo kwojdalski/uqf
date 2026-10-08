@@ -53,7 +53,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from uqs.deploy import portable
+from uqs.deploy import foreign_blocks, portable
 from uqs.deploy.artifact import (
     FORMAT,
     MANIFEST,
@@ -310,6 +310,7 @@ def build(
     target = Target(os="linux", arch=arch, python=python or default_python(root), q=q_target)
     rid = release_id(rev)
     files = tracked_files(root, runner)
+    foreign_blocks.refuse(root, files, runtime, {m.bundle.name for m in members})
     with tempfile.TemporaryDirectory() as tmp:
         tree, record = root, None
         if members:

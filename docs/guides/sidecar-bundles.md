@@ -64,6 +64,13 @@ adds folders to the declared ones, never replaces them. The manifest records the
 release under that runtime. `uqs deploy build --dry-run` prints the composition
 without building.
 
+A checkout you ran `prepare` in is not a build tree. `prepare` installs a bundle
+by writing `/ BEGIN bundle <name>` blocks into tracked files (`plant_tables.q`,
+`uqs_catalog.q`). The build copies the working tree, so it refuses any block
+from outside the release's own composition, naming the file, even with
+`--allow-dirty`. The `bundle-blocks` pre-commit hook refuses to commit one at
+all. Build from a clean checkout, or uninstall the bundles first.
+
 ## Build and deploy
 
 ```bash

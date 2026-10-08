@@ -137,6 +137,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: bundle-blocks
+        name: Refuse an installed bundle's blocks in tracked q files
+        entry: python3 scripts/gates/check_bundle_blocks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: doc-references
         name: Check the docs cite functions that exist
         entry: python3 scripts/gates/check_doc_references.py
