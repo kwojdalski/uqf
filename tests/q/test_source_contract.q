@@ -295,9 +295,17 @@ test_only_1_requires_live:{[t]
     .qunit.assertEquals[.qetl.source.live_required[];0b;"the setting is 1, nothing looser"]};
 
 test_a_required_live_source_refuses_its_fixture:{[t]
-    setenv[`UQS_REQUIRE_LIVE_SOURCES;"1"];
-    .qunit.assertEquals[.qetl.source.live_required[];1b;"1 requires every source to be live"];
-    .qunit.assertThrows[.qetl.source.refuse_fixture["init";];`demo_deals;"init: demo_deals has no credential and UQS_REQUIRE_LIVE_SOURCES=1 - refusing its fixture. Set UQF_SOURCE_CRED_DEMO_DEALS*";"the refusal names the source and the variable to set"]};
+    / ,"1", a string: setenv refuses the char atom "1" with 'type on KDB-X.
+    setenv[`UQS_REQUIRE_LIVE_SOURCES;enlist "1"];
+    live:.qetl.source.live_required[];
+    refused:@[{.qetl.source.refuse_fixture["init";x]; ""};`demo_deals;{x}];
+    / Cleared before asserting, so a failure cannot leave every later suite in
+    / this process requiring live sources.
+    setenv[`UQS_REQUIRE_LIVE_SOURCES;""];
+    .qunit.assertEquals[live;1b;"1 requires every source to be live"];
+    .qunit.assertTrue[refused like "init: demo_deals has no credential and UQS_REQUIRE_LIVE_SOURCES=1 - refusing its fixture. Set UQF_SOURCE_CRED_DEMO_DEALS*";
+        "the refusal names the source and the variable to set"];
+    .qunit.assertEquals[.qetl.source.live_required[];0b;"and cleared, nothing is required"]};
 
 / --- configured settings: sources.csv (#718) -----------------------
 
