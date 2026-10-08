@@ -91,6 +91,7 @@ fxtradesfeed1: "fxtradesfeed1" { class: producer }
 cryptomock1: "cryptomock1\nstands in for cryptorust's\ntwo recorders" { class: producer }
 fxordersfeed1: "fxordersfeed1\nsynthetic order flow" { class: producer }
 databento_py: "databento_feed.py\nexternal Python handler" { class: producer }
+kafka_py: "kafka_feed.py\nexternal Python consumer" { class: producer }
 
 # ------------------------------------------------------------- the tables
 
@@ -118,6 +119,9 @@ superbook: "superbook\nliquidity merged across sources" { class: table }
 arbitrage: "arbitrage\nbid over ask in the merged book" { class: table }
 cross_arbitrage: "cross_arbitrage\ndirect vs a synthetic route" { class: table }
 config_change: "config_change\nwho changed which knob" { class: table }
+kafka_client_flow: "kafka_client_flow\neach record with its\npartition · offset" { class: table }
+client_flow: "client_flow\nclient FX flow, each record once" { class: table }
+crypto_execution_quality: "crypto_execution_quality\ntrade_time · horizon · venue\ntrade_price · ref_price · markout_bps" { class: table }
 
 # --------------------------------------------------------------- the jobs
 
@@ -132,6 +136,8 @@ superbook1: "superbook1\n.qpipe.job.superbook merge\nacross sources" { class: jo
 databento1: "databento1\nthe same .qetl.transform fold\nthe backfill declares" { class: job }
 arbitrage1: "arbitrage1\ncrossed levels in the merged book" { class: job }
 crossarb1: "crossarb1\n.qfwd.cross_book_chain_at_sizes" { class: job }
+kafka_flow1: "kafka_flow1\ndeduplicates on (partition;offset)\nstarted with its consumer" { class: job }
+crypto_markout1: "crypto_markout1\nmarkouts in bps against the\nbest mid across venues" { class: job }
 
 storage: "rdb1 — today's ticks\n↓ EOD writedown\nhdb1 / hdb2 — on disk" { class: store }
 
@@ -191,6 +197,14 @@ superbook -> crossarb1: "subscribe"
 crossarb1 -> cross_arbitrage: "republish"
 crossarb1 -> config_change: "a knob change, either side" { style.stroke-dash: 4 }
 
+kafka_py -> kafka_client_flow
+kafka_client_flow -> kafka_flow1: "subscribe"
+kafka_flow1 -> client_flow: "republish, each once"
+
+crypto_trades -> crypto_markout1: "subscribe"
+crypto_book -> crypto_markout1: "best mid"
+crypto_markout1 -> crypto_execution_quality: "republish"
+
 # --------------------------------------------------------------- persisted
 
 quote -> storage
@@ -214,3 +228,6 @@ superbook -> storage
 arbitrage -> storage
 cross_arbitrage -> storage
 config_change -> storage
+kafka_client_flow -> storage
+client_flow -> storage
+crypto_execution_quality -> storage
