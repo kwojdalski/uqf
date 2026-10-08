@@ -61,9 +61,11 @@ available:{[]
 / byte string survives a throw intact and a 255 byte one comes back 254.
 / The long form lives here instead:
 / .
-/   Install unixODBC and the driver your source needs, put odbc.k where q
-/   can load it, and on Linux set LD_LIBRARY_PATH so the driver manager is
-/   found. See code.kx.com/q/interfaces/q-client-for-odbc.
+/   On a server, `uqs odbc install` puts an approved package - KX's client,
+/   unixODBC and the driver - in a private ODBC home, and sourcing that
+/   home's current/env.sh loads it: an overlay QHOME, ODBCSYSINI and
+/   LD_LIBRARY_PATH, with nothing installed system-wide (#840). See
+/   uqs.stack.odbc_home and code.kx.com/q/interfaces/q-client-for-odbc.
 / .
 /   On macOS none of that is enough on its own: KX ships odbc.so for x86_64
 /   only, so q has to run under Rosetta with an overlay QHOME.
@@ -80,7 +82,7 @@ available:{[]
 / @throws error when the driver is unavailable
 require_available:{[]
     if[not available[];
-        '"qetl.io.odbc: driver not loaded - macOS: scripts/dev/odbc_rosetta.sh setup; else see this file's header"];
+        '"qetl.io.odbc: driver not loaded - source an ODBC home's env.sh; macOS: scripts/dev/odbc_rosetta.sh setup"];
     1b}
 
 / ---------------------------------------------------------- ESCAPING

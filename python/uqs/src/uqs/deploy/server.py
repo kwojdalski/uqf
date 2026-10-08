@@ -87,6 +87,8 @@ class Server:
             ("UQS_RUNTIME", "uqf"),
             # a source with no credential is refused, never read as its fixture
             ("UQS_REQUIRE_LIVE_SOURCES", "1" if c.live else None),
+            # the private ODBC setup deploy.env loads, for `uqs config sources check`
+            ("UQS_ODBC_HOME", c.odbc_home),
             # the release installs from its own wheels; nothing after that
             # may reach for an index either
             ("UV_OFFLINE", "1"),
@@ -115,6 +117,7 @@ class Server:
             "torq_home": c.torq_home or "",
             "torq_app_home": c.torq_app_home or "",
             "torq_launcher": c.torq_launcher or "",
+            "odbc_home": c.odbc_home or "",
             "data": c.data_root,
             "current": self.current,
             "lock": self.lock,
@@ -312,6 +315,10 @@ case "$out" in
   *) fail "$qcmd_eff did not run a script with QHOME=$qhome_eff - is it licensed?" \
           "$(echo "$out" | tail -3)";;
 esac
+if [ -n "$odbc_home" ]; then
+  test -f "$odbc_home/current/env.sh" ||
+    fail "no ODBC setup at $odbc_home - run \`uqs odbc install\` there first"
+fi
 if [ -n "$torq_launcher" ]; then
   test -f "$torq_launcher" || fail "no TorQ launcher $torq_launcher"
   test -x "$torq_launcher" || fail "the TorQ launcher $torq_launcher is not executable"

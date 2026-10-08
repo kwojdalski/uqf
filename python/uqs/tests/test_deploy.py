@@ -77,6 +77,10 @@ class FakeRemote:
     def ran(self, text: str) -> bool:
         return any(text in s for _, s in self.scripts)
 
+    def stage(self, name: str) -> list[str]:
+        """Every script run at stage `name`, in order."""
+        return [script for stage, script in self.scripts if stage == name]
+
 
 def _verified(passed: bool, reason: str = "") -> subprocess.CompletedProcess:
     body = {"passed": passed, "reason": reason, "processes": [{"process": "rdb1", "ok": passed}]}
@@ -810,3 +814,69 @@ def test_the_dry_run_names_the_launcher(tmp_path):
     shown = out.getvalue()
     assert "TORQHOME=/opt/site/torq/core/current, launcher /opt/site/torq/bin/torq.sh" in shown
     assert "UQS_TORQ_LAUNCHER" in shown and "TORQDATAHOME" in shown
+
+
+# --- live source checks and a private ODBC setup (#840) -----------------------
+
+_CHECK = ["--live-check", "deals_db,quotes_db", "--odbc-home", "/opt/odbc"]
+
+
+def test_a_live_check_runs_after_verification_and_before_activation(tmp_path):
+    code, remote, report = _run(
+        tmp_path,
+        {"uqs deploy verify --profile": _verified(True), "sources check": _done("ok\n")},
+        args=_CHECK,
+    )
+    assert code == 0 and report["checks"]["live-check"] == "ok"
+    stages = [stage for stage, _ in remote.scripts]
+    assert stages.index("verify") < stages.index("live-check") < stages.index("activate")
+    (check,) = remote.stage("live-check")
+    assert ".venv/bin/uqs config sources check deals_db quotes_db --timeout 120" in check
+    assert "source ./deploy.env" in check, "with the release's own environment"
+
+
+def test_a_failed_live_check_blocks_activation_and_rolls_back(tmp_path):
+    failed = _done("deals_db failed connect login failed: PWD=hunter2\n", rc=1)
+    code, remote, report = _run(
+        tmp_path,
+        {"uqs deploy verify --profile": _verified(True), "sources check": failed},
+        args=_CHECK,
+    )
+    assert code == 1 and report["stage"] == "live-check"
+    assert "deals_db failed connect" in report["error"] and "hunter2" not in report["error"]
+    assert remote.ran("uqs stop all") and not remote.ran(".current.new")
+
+
+def test_the_odbc_setup_is_loaded_by_every_process_the_release_starts(tmp_path):
+    _, remote, _ = _run(
+        tmp_path,
+        {"uqs deploy verify --profile": _verified(True), "sources check": _done("ok\n")},
+        args=_CHECK,
+    )
+    (prepare,) = remote.stage("prepare")
+    assert ". /opt/odbc/current/env.sh" in prepare
+    assert "export UQS_ODBC_HOME=/opt/odbc" in prepare
+    preflight = remote.scripts[0][1]
+    assert "odbc_home=/opt/odbc\n" in preflight and '"$odbc_home/current/env.sh"' in preflight
+
+
+def test_without_a_live_check_nothing_is_checked_and_no_odbc_is_loaded(tmp_path):
+    _, remote, report = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    assert "live-check" not in report["checks"] and not remote.stage("live-check")
+    (prepare,) = remote.stage("prepare")
+    assert "env.sh" not in prepare and "UQS_ODBC_HOME" not in prepare
+
+
+def test_a_live_check_names_only_sources():
+    with pytest.raises(DeployError, match="--live-check"):
+        parse_args([*BASE, "--live-check", "deals;rm -rf /"])
+
+
+def test_the_dry_run_plans_the_live_check(tmp_path):
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    out = io.StringIO()
+    driver.deploy(parse_args(_args(_artifact(tmp_path), "--dry-run", *_CHECK)), remote, out=out)
+    assert (
+        "live-chk  uqs config sources check deals_db quotes_db --timeout 120 "
+        "(ODBC from /opt/odbc)" in out.getvalue()
+    )

@@ -363,6 +363,10 @@ qetl.job.stream.normalizer,defined,function,1,
 qetl.job.stream.normalizer,normalize,function,3,name src batch
 qetl.job.stream.normalizer,registry,dict,,
 qetl.job.stream.normalizer,required_keys,value,,
+qetl.livecheck,check,function,2,source window
+qetl.livecheck,redact,function,2,text cred
+qetl.livecheck,secret_keys,value,,
+qetl.livecheck,tls_off,dict,,
 qetl.log,context,dict,,
 qetl.log,dbg,function,3,id text fields
 qetl.log,debug,function,1,on

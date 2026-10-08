@@ -172,6 +172,26 @@ def push(
             "--live", help="Refuse a source with no credential instead of reading its fixture"
         ),
     ] = False,
+    odbc_home: Annotated[
+        str | None,
+        typer.Option(
+            "--odbc-home",
+            help="A private ODBC setup on the server (uqs odbc install), loaded by every "
+            "process the release starts",
+        ),
+    ] = None,
+    live_check: Annotated[
+        str,
+        typer.Option(
+            "--live-check",
+            metavar="SOURCE,...",
+            help="Check these sources live after verification and before activation; "
+            "a failure rolls the deployment back",
+        ),
+    ] = "",
+    live_check_timeout: Annotated[
+        int, typer.Option("--live-check-timeout", help="Every live check together, seconds")
+    ] = 120,
     connect_timeout: Annotated[
         int, typer.Option("--connect-timeout", help="ssh/scp, seconds")
     ] = 10,
