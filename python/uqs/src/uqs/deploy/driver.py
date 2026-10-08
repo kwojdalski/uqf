@@ -10,7 +10,7 @@ from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
-from uqs.deploy.selection import Selection, select_jobs, verify_args
+from uqs.deploy.selection import Selection, select_jobs, smoke_args, verify_args
 from uqs.deploy.stages import Deployment, Report
 from uqs.logger import get_logger
 
@@ -54,7 +54,9 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "
         + f"{pkg.manifest['python']['wheels']} wheels",
-        "smoke     " + f"q scripts/deploy_smoke.q (timeout {cfg.smoke_timeout}s)",
+        "smoke     "
+        + " ".join(["q scripts/deploy_smoke.q", *smoke_args(cfg.profile, sel)])
+        + f" (timeout {cfg.smoke_timeout}s)",
         "restart   " + restart,
         "ports     "
         + " ".join(

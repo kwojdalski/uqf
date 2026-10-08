@@ -115,6 +115,8 @@ check_cycles:0W
 / stream.q) - every pipeline's computation is a declared .qetl.transform transform, so a
 / pipeline process without them has nothing to call. Restores the cwd even
 / if the load throws, unlike the hand-rolled copies this replaces.
+/ @param only the procnames or job names this process runs, whose
+/   declarations alone are loaded (#902)
 / @throws error if UQF_ROOT is unset, or if any of the three files fails to load
 / .
 / Says so on stdout before and after, with the time it took: .qetl.log is one of
@@ -122,8 +124,11 @@ check_cycles:0W
 / that dies here otherwise leaves a log with no line from uqf at all. Then
 / applies -verbose (see apply_verbose) and loads the source settings (see
 / load_source_settings).
-load_uqf:{[]
+load_uqf:{[only]
     t0:.z.p;
+    / What src/etl/init.q loads: these jobs' declarations and their closure
+    / (src/etl/core/declaration_load.q). Set before the load, which reads it.
+    .qetl.load.only:(),only;
     root:getenv`UQF_ROOT;
     if[0=count root; '"qtorq.load_uqf: UQF_ROOT is not set"];
     -1 string[.z.p]," | qtorq: loading uqf tree from ",root;
