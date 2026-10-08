@@ -121,6 +121,9 @@ the pattern, or the shell will try to expand it against your filenames first.
 `uqs --help` lists every command, and `uqs <command> --help` gives its arguments
 and options. The sections below cover what `--help` cannot.
 
+Putting a release on a server is `uqs deploy`: see [Deploying to a
+server](deploy.md).
+
 `PROCS` is `all` (the default) or one or more process names, each its own word -
 `uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
 single quoted `"posbook1 demo_markout1"` still works. `--port` sets

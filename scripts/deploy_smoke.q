@@ -1,4 +1,4 @@
-/ deploy_smoke.q - the offline check scripts/deploy.py runs on a release
+/ deploy_smoke.q - the offline check `uqs deploy push` runs on a release
 / before it starts anything (#773).
 / .
 / Loads the quant library from the release and checks a few numbers against

@@ -1,33 +1,34 @@
-"""scripts/deploy.py --jobs/--live and deploy_verify.py's bundle checks (#800),
+"""`uqs deploy push --jobs/--live` and `uqs deploy verify`'s bundle checks (#800),
 with no server: a fake remote answers each script by a marker it contains.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import io
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+from typer.main import get_group
+
+from uqs.cli.deploy import deploy_app
+from uqs.deploy import artifact, driver, payload, verify
+from uqs.deploy import build as release_build
+from uqs.deploy.config import Config, DeployError, make_config
+from uqs.deploy.selection import Selection, verify_command
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def _load(name: str, file: str):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / file)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+_CLI = get_group(deploy_app)
 
 
-deploy = _load("uqf_deploy_bundles_under_test", "deploy.py")
-verify = _load("uqf_deploy_verify_bundles_under_test", "deploy_verify.py")
-release = deploy.build_release
+def parse_args(argv: list[str]) -> Config:
+    """The Config `uqs deploy push` makes of `argv`: parsed by the command's
+    own options, checked by the make_config it calls."""
+    return make_config(**_CLI.commands["push"].make_context("push", list(argv)).params)
+
 
 ARGS = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
 SERVER = "os=Linux\narch=x86_64\npython=3.14\nqhome=/opt/kx\nqcmd=/opt/kx/bin/q\ndata=present\n"
@@ -103,14 +104,14 @@ def _artifact(tmp_path: Path, bundles: dict | None = BUNDLES) -> Path:
     (py / "wheels").mkdir(parents=True)
     (py / "requirements.txt").write_text("rich==15.0.0 --hash=sha256:00\n")
     (py / "wheels" / "uqs-0.1.0-py3-none-any.whl").write_bytes(b"uqs")
-    art = release.build_artifact(
+    art = release_build.build_artifact(
         root,
         tmp_path / "dist",
         rid="20261007T000000Z-0123456789ab",
         rev="0123456789abcdef",
         dirty=False,
         files=files,
-        target=release.Target(os="linux", arch="x86_64", python="3.14"),
+        target=artifact.Target(os="linux", arch="x86_64", python="3.14"),
         python_dir=py,
         bundles=bundles,
     )
@@ -121,7 +122,7 @@ _HEALTHY = {
     "uv python find": _done(SERVER),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
-    "deploy_verify.py --profile": _verified(True),
+    "uqs deploy verify --profile": _verified(True),
 }
 
 
@@ -132,8 +133,8 @@ def _deploy(tmp_path, *args, rules=None, bundles=BUNDLES):
         merged.setdefault(marker, result)
     remote = FakeRemote(merged)
     out = io.StringIO()
-    cfg = deploy.parse_args(["--artifact", str(_artifact(tmp_path, bundles)), *ARGS, *args])
-    code = deploy.deploy(cfg, remote, out=out)
+    cfg = parse_args([str(_artifact(tmp_path, bundles)), *ARGS, *args])
+    code = driver.deploy(cfg, remote, out=out)
     return code, remote, out.getvalue()
 
 
@@ -156,27 +157,27 @@ def test_selected_jobs_start_with_their_dependency_closure(tmp_path):
     (start,) = remote.stage("start")
     assert "uqs start --profile essential piggy_spread1 fxfeed1 mw_quotes1" in start
     (ports,) = remote.stage("ports")
-    assert "--ports-free --procs piggy_spread1 fxfeed1 mw_quotes1" in ports
+    assert "--ports-free --procs piggy_spread1,fxfeed1,mw_quotes1" in ports
     (check,) = remote.stage("verify")
-    assert "--procs piggy_spread1 fxfeed1 mw_quotes1" in check
-    assert "--tables mw_quote piggy_tape" in check
+    assert "--procs piggy_spread1,fxfeed1,mw_quotes1" in check
+    assert "--tables mw_quote,piggy_tape" in check
     report = json.loads(out)
     assert report["jobs"] == ["piggy_spread", "mw_quotes"]
     assert report["extra_processes"] == ["piggy_spread1", "fxfeed1", "mw_quotes1"]
 
 
 def test_a_worker_is_never_run_by_a_deployment(tmp_path):
-    with pytest.raises(deploy.DeployError, match="bounded worker.*uqs backfill piggy_backfill"):
+    with pytest.raises(DeployError, match="bounded worker.*uqs backfill piggy_backfill"):
         _deploy(tmp_path, "--jobs", "piggy_backfill")
 
 
 def test_an_unknown_job_is_refused_naming_the_choices(tmp_path):
-    with pytest.raises(deploy.DeployError, match="mw_quotes, piggy_spread"):
+    with pytest.raises(DeployError, match="mw_quotes, piggy_spread"):
         _deploy(tmp_path, "--jobs", "piggy_typo")
 
 
 def test_jobs_need_an_artifact_with_bundles(tmp_path):
-    with pytest.raises(deploy.DeployError, match="carries no bundle"):
+    with pytest.raises(DeployError, match="carries no bundle"):
         _deploy(tmp_path, "--jobs", "piggy_spread", bundles=None)
 
 
@@ -189,8 +190,8 @@ def test_an_artifact_without_bundles_deploys_as_before(tmp_path):
 
 
 def test_a_bad_job_name_is_refused():
-    with pytest.raises(deploy.DeployError, match="not a job name"):
-        deploy.parse_args(["--artifact", "a", *ARGS, "--jobs", "x;rm -rf /"])
+    with pytest.raises(DeployError, match="not a job name"):
+        parse_args(["a", *ARGS, "--jobs", "x;rm -rf /"])
 
 
 def test_the_dry_run_reports_the_resolved_processes(tmp_path):
@@ -212,7 +213,7 @@ def test_live_requires_live_sources_on_the_server_and_in_verification(tmp_path):
     (prepare,) = remote.stage("prepare")
     assert "export UQS_REQUIRE_LIVE_SOURCES=1" in prepare
     (check,) = remote.stage("verify")
-    assert check.rstrip().endswith("--live")
+    assert check.rstrip().endswith("--live; fi")
 
 
 def test_without_live_nothing_is_required(tmp_path):
@@ -236,8 +237,8 @@ def test_a_failed_upgrade_restores_the_previous_sidecar_processes(tmp_path):
         "uv python find": _done(SERVER + "current=OLD\n"),
         "deploy-report.json\n": _done(previous),
         "readlink": _done("current=OLD\n"),
-        "deploy_verify.py --profile essential": _verified(False, "no answer from mw_quotes1"),
-        "deploy_verify.py --profile fx": _verified(True),
+        "uqs deploy verify --profile essential": _verified(False, "no answer from mw_quotes1"),
+        "uqs deploy verify --profile fx": _verified(True),
     }
     code, remote, out = _deploy(tmp_path, "--restart", "--jobs", "mw_quotes", rules=rules)
     assert code == 1
@@ -323,6 +324,23 @@ def test_server_secrets_are_sourced_never_shipped_and_must_be_private(tmp_path):
 
 
 def test_an_env_file_in_a_bundle_never_reaches_an_artifact():
-    assert release.is_excluded("src/etl/streaming/.env")
-    assert release.is_excluded("python/uqs/.env.local")
-    assert release.is_excluded("scripts/torqconfig/secrets.env")
+    assert payload.is_excluded("src/etl/streaming/.env")
+    assert payload.is_excluded("python/uqs/.env.local")
+    assert payload.is_excluded("scripts/torqconfig/secrets.env")
+
+
+def test_a_release_from_before_835_is_verified_by_its_own_script():
+    """A rollback can return to a release that has scripts/deploy_verify.py
+    and no `uqs deploy verify`; the command asks the release which it has,
+    and gives the old script the selection space-separated, as it parsed it."""
+    sel = Selection(processes=["piggy_spread1", "fxfeed1"], tables=["piggy_tape"])
+    command = verify_command("fx", sel, True, "--deadline", "60")
+    assert command.startswith("if [ -f scripts/deploy_verify.py ]; then ")
+    assert (
+        ".venv/bin/python scripts/deploy_verify.py --profile fx --deadline 60 "
+        "--procs piggy_spread1 fxfeed1 --tables piggy_tape --live;" in command
+    )
+    assert (
+        "else .venv/bin/uqs deploy verify --profile fx --deadline 60 "
+        "--procs piggy_spread1,fxfeed1 --tables piggy_tape --live; fi" in command
+    )

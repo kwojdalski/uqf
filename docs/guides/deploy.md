@@ -1,12 +1,14 @@
 # Deploying to a server
 
-Deploying is two tools, run separately (#773, #778):
+Deploying is two commands, run separately (#773, #778):
 
-- `scripts/build_release.py` builds a versioned **release artifact** once, with
-  no SSH access or credentials, so CI can build it.
-- `scripts/deploy.py` puts that artifact on a Linux server that already has TorQ
+- `uqs deploy build` builds a versioned **release artifact** once, with no SSH
+  access or credentials, so CI can build it.
+- `uqs deploy push` puts that artifact on a Linux server that already has TorQ
   and the finance starter pack installed. It starts a `uqs` profile there and
-  checks that every process answers before it calls the deployment done.
+  checks that every process answers before it calls the deployment done. The
+  check is `uqs deploy verify`, which `push` runs on the server from the release
+  itself.
 
 One artifact can go to any number of servers. The server installs it without a
 network.
@@ -19,13 +21,12 @@ network.
 
 ## What the server needs
 
-The tool installs none of these, and checks every one before it changes
-anything:
+`push` installs none of these, and checks every one before it changes anything:
 
-- ssh access from where you run the tool, already working with your own
-  `~/.ssh/config` and known hosts. The tool runs `ssh` and `scp` in batch mode,
-  so a missing key or an unknown host key fails instead of prompting. It never
-  turns host-key checking off.
+- ssh access from where you run `push`, already working with your own
+  `~/.ssh/config` and known hosts. It runs `ssh` and `scp` in batch mode, so a
+  missing key or an unknown host key fails instead of prompting. It never turns
+  host-key checking off.
 
 - `uv`, with the Python the artifact was built for (3.14 by default) where
   `uv python find` sees it, and `python3`, `bash`, `tar` and `timeout`. The
@@ -50,7 +51,7 @@ anything:
 - An existing TorQ (`--torq-home`, holding `torq.q` and `torq.sh`, or only
   `torq.q` with `--torq-launcher`, below) and starter pack (`--torq-app-home`,
   holding `database.q` and `appconfig/process.csv`). Without these flags the
-  release would need its own `lib/`, which the tool does not ship.
+  release would need its own `lib/`, which a release does not ship.
 
 - `envsubst` and `rlwrap`, which `torq.sh` needs.
 
@@ -60,7 +61,7 @@ inside the artifact.
 ## Building a release
 
 ```bash
-python3 scripts/build_release.py --output dist/
+uqs deploy build --output dist/
 ```
 
 This writes three files, named after the release, which is the UTC build time
@@ -103,17 +104,17 @@ preflight on the server. It then prints the artifact, its target beside what the
 server reports, every step, and any restart it would make. It changes nothing:
 
 ```bash
-python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \
+uqs deploy push dist/uqf-<release>.tar.gz \
   --host uqf-server --dest /opt/uqf \
   --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \
   --qcmd /opt/kx/bin/q --qhome /opt/kx \
   --profile essential --init-data --dry-run
 ```
 
-Then the same command without `--dry-run`. `--init-data` lets the tool create
-the runtime data directory the first time. A destination takes each release
-once: to redeploy, build a new artifact. Without it, a missing data directory is
-refused, so a mistyped `--dest` cannot quietly start an empty HDB.
+Then the same command without `--dry-run`. `--init-data` lets `push` create the
+runtime data directory the first time. A destination takes each release once: to
+redeploy, build a new artifact. Without it, a missing data directory is refused,
+so a mistyped `--dest` cannot quietly start an empty HDB.
 
 ## What it does, in order
 
@@ -129,7 +130,7 @@ Each stage stops the deployment if it fails:
   | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime                                                                                                                                                                                                                                                                    |
   | ports     | nothing else listens on the profile's ports                                                                                                                                                                                                                                                                                                                                                    |
   | start     | `uqs start --profile <profile>` from the new release                                                                                                                                                                                                                                                                                                                                           |
-  | verify    | `scripts/deploy_verify.py`: within `--verify-timeout`, every process the profile resolves to answers `.proc.procname` with its own name over q IPC. **Every pipeline process** must pass both the library check (a forward prices correctly) and the ETL check (every transform's examples pass); other processes are checked for whichever they load                                          |
+  | verify    | `uqs deploy verify`: within `--verify-timeout`, every process the profile resolves to answers `.proc.procname` with its own name over q IPC. **Every pipeline process** must pass both the library check (a forward prices correctly) and the ETL check (every transform's examples pass); other processes are checked for whichever they load                                                 |
   | report    | `deploy-report.json` is written into the release **before** activation, and a failed write fails the deployment: the next upgrade reads it to know which processes to stop                                                                                                                                                                                                                     |
   | activate  | `current` moves to the new release in a single rename. The previous release stays where it was                                                                                                                                                                                                                                                                                                 |
 
@@ -162,7 +163,7 @@ an operator would `sudo su - svc` by hand. `--remote-user` does that step
 non-interactively (#780):
 
 ```bash
-python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \
+uqs deploy push dist/uqf-<release>.tar.gz \
   --host deploy@uqf-server --remote-user svc \
   --dest /srv/uqf --torq-home /opt/torq ... --profile essential --dry-run
 ```
@@ -208,7 +209,7 @@ site manages in another, and the starter pack in a third. The launcher is used
 as supplied. `--torq-launcher` names it, and `--torq-home` still names the core:
 
 ```bash
-python3 scripts/deploy.py --artifact dist/uqf-<release>.tar.gz \
+uqs deploy push dist/uqf-<release>.tar.gz \
   --host svc@uqf-server --dest /opt/site/uqf \
   --torq-home /opt/site/torq/core/current \
   --torq-app-home /opt/site/torq/TorQApp \

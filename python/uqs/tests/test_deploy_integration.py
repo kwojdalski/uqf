@@ -1,5 +1,5 @@
-"""scripts/build_release.py and scripts/deploy.py against a real, disposable
-server (#773, #778).
+"""`uqs deploy build` and `uqs deploy push` against a real, disposable
+server (#773, #778, #835).
 
 Skipped unless UQF_DEPLOY_TEST_HOST names one: it needs ssh access, a
 licensed q, an installed TorQ and starter pack, uv and Python 3.14 there, and
@@ -36,7 +36,8 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
+#: The `uqs` console script of the environment running these tests.
+UQS = str(Path(sys.executable).parent / "uqs")
 HOST = os.environ.get("UQF_DEPLOY_TEST_HOST", "")
 DEST = os.environ.get("UQF_DEPLOY_TEST_DEST", "/tmp/uqf-deploy-test")
 PROFILE = os.environ.get("UQF_DEPLOY_TEST_PROFILE", "essential")
@@ -51,8 +52,7 @@ def artifacts(tmp_path_factory) -> list[Path]:
     built = []
     for _ in range(3):
         r = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "build_release.py"), "--output", str(out),
-             "--allow-dirty"],
+            [UQS, "deploy", "build", "--output", str(out), "--allow-dirty"],
             capture_output=True, text=True, check=True, timeout=1800,
         )  # fmt: skip
         built.append(Path(r.stdout.strip().splitlines()[-1]))
@@ -61,7 +61,7 @@ def artifacts(tmp_path_factory) -> list[Path]:
 
 
 def _deploy(artifact: Path, *extra: str) -> subprocess.CompletedProcess:
-    argv = [sys.executable, str(ROOT / "scripts" / "deploy.py"), "--artifact", str(artifact)]
+    argv = [UQS, "deploy", "push", str(artifact)]
     argv += ["--host", HOST, "--dest", DEST, "--profile", PROFILE, *extra]
     for flag, var in (
         ("--torq-home", "UQF_DEPLOY_TEST_TORQHOME"),
