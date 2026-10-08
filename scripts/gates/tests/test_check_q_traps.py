@@ -440,7 +440,8 @@ def test_a_join_after_sv_is_flagged():
 
 def test_the_finding_quotes_the_offending_fragment():
     (finding,) = _sv('\'"a ",", " sv string xs," b"')
-    assert "sv string xs" in finding.detail
+    # Since q-lint 0.14.9 the detail quotes the tail that sv swallows.
+    assert '," b"' in finding.detail
 
 
 def test_a_parenthesised_sv_is_correct_and_not_flagged():
@@ -613,16 +614,3 @@ def test_unparseable_python_is_not_this_rule_s_problem():
     # ruff already reports a syntax error; this rule returning findings for
     # one would be noise attached to the wrong tool.
     assert _py_rule("def (\n") == []
-
-
-def test_the_two_qlinter_configurations_exclude_the_same_paths():
-    """pyproject.toml's [tool.q-lint] is what CI's pinned qlinter reads;
-    .qlinter.toml is what newer releases read. Only `exclude` can live in
-    both, so it must say the same thing in both."""
-    import tomllib
-
-    root = Path(__file__).resolve().parents[3]
-    pyproject = tomllib.loads((root / "pyproject.toml").read_text())["tool"]["q-lint"]
-    newer = tomllib.loads((root / ".qlinter.toml").read_text())
-    assert pyproject["exclude"] == newer["exclude"]
-    assert set(pyproject) == {"exclude"}, "the pinned qlinter accepts only exclude here"

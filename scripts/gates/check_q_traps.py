@@ -2,11 +2,10 @@
 """The q traps this repository checks for that `qlinter` does not.
 
 Most of them it does. This file used to hold fifteen hand-written rules over
-`.q` source; thirteen of those now live in the standalone q linter
+`.q` source; thirteen of those moved to the standalone q linter
 (https://github.com/kwojdalski/q-lint) as QE/QF/QA/QB/QP codes, and keeping a
 second implementation of a rule is keeping a second place for it to be wrong.
-So the thirteen are delegated: this script runs `qlinter` and reports what it
-finds.
+So they are delegated: this script runs `qlinter` and reports what it finds.
 
 ## What did NOT move, and why
 
@@ -348,9 +347,8 @@ def _linter_findings(binary: str) -> list[Finding]:
     comment block and the legacy datetime - are this repository's policy
     rather than general q advice, and live behind that profile.
 
-    Exclusions are NOT passed here: the linter reads `[tool.q-lint]` from
-    `pyproject.toml` itself, and passing them twice would be two places to
-    change one list.
+    Exclusions are NOT passed here: the linter reads them from `.qlinter.toml`
+    itself, and passing them twice would be two places to change one list.
     """
     result = subprocess.run(
         [binary, "src", "tests", "scripts", "--format", "json", "--profile", "uqf"],
@@ -441,8 +439,8 @@ def main() -> int:
     binary = _qlinter()
     if binary is None:
         print(
-            "check_q_traps: qlinter is not installed, and it now owns thirteen of\n"
-            "the fifteen rules this hook checks. Skipping would leave the hook\n"
+            f"check_q_traps: qlinter is not installed, and it owns {len(DELEGATED_CODES)} of\n"
+            "the rules this hook checks. Skipping would leave the hook\n"
             "reporting success over checks that did not run.\n\n"
             f"    {INSTALL_HINT}",
             file=sys.stderr,
@@ -474,7 +472,7 @@ def main() -> int:
 
     print(
         f"check_q_traps: {len(q_files)} .q + {len(python_files)} .py file(s) clean "
-        "(13 rules through qlinter, 1 here)"
+        f"({len(DELEGATED_CODES)} rules through qlinter, 1 here)"
     )
     return 0
 
