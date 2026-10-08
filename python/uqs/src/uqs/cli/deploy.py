@@ -262,6 +262,15 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
+    soak: Annotated[
+        int | None,
+        typer.Option(
+            "--soak",
+            metavar="SECONDS",
+            help="After verify, let data flow this long; then a streaming job that is "
+            "failing, or never beat, rolls the deployment back before activation",
+        ),
+    ] = None,
     break_lock: Annotated[
         bool,
         typer.Option(

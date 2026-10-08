@@ -925,6 +925,62 @@ def test_preflight_asks_the_servers_q_for_its_version():
     assert 'echo "qversion=$qversion"' in PREFLIGHT
 
 
+# --- --soak (#869) ----------------------------------------------------------------
+
+
+def _verdicts(**jobs: str) -> subprocess.CompletedProcess:
+    body = {p: {"verdict": v, "detail": f"{p} said so"} for p, v in jobs.items()}
+    return _done(json.dumps(body) + "\n")
+
+
+def _soaked(tmp_path, monkeypatch, verdicts):
+    from uqs.deploy import stages
+
+    slept: list[float] = []
+    monkeypatch.setattr(stages.time, "sleep", slept.append)
+    rules = {
+        "uqs deploy verify --profile": _verified(True),
+        "date +%s": _done("1800000000\n"),
+        "stream_health.read": verdicts,
+    }
+    code, remote, report = _run(tmp_path, rules, args=["--soak", "45"])
+    return code, remote, report, slept
+
+
+def test_a_healthy_soak_activates_and_records_its_verdict(tmp_path, monkeypatch):
+    code, remote, report, slept = _soaked(tmp_path, monkeypatch, _verdicts(fxfeed1="ok"))
+    assert code == 0 and report["status"] == "deployed" and slept == [45]
+    jobs = {"fxfeed1": {"verdict": "ok", "detail": "fxfeed1 said so"}}
+    assert report["soak"] == {"seconds": 45, "passed": True, "jobs": jobs}
+    stages = [stage for stage, _ in remote.scripts]
+    assert stages.index("verify") < stages.index("soak") < stages.index("activate")
+
+
+@pytest.mark.parametrize("verdict", ["failing", "no beat"])
+def test_a_job_failing_or_silent_after_the_soak_rolls_back_before_activation(
+    tmp_path, monkeypatch, verdict
+):
+    verdicts = _verdicts(fxfeed1="ok", cross1=verdict)
+    code, remote, report, _ = _soaked(tmp_path, monkeypatch, verdicts)
+    assert code == 1 and (report["status"], report["stage"]) == ("failed", "soak")
+    assert f"cross1: {verdict}" in report["error"] and report["soak"]["passed"] is False
+    assert not remote.ran(".current.new"), "never activated"
+    assert "stopped the new release's processes" in report["rollback"]
+
+
+def test_without_soak_there_is_no_wait(tmp_path, monkeypatch):
+    from uqs.deploy import stages
+
+    monkeypatch.setattr(stages.time, "sleep", lambda s: pytest.fail("slept"))
+    _, remote, report = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)})
+    assert report["soak"] is None and not any(st == "soak" for st, _ in remote.scripts)
+
+
+def test_soak_must_be_positive():
+    with pytest.raises(DeployError, match="--soak must be positive"):
+        parse_args([*BASE, "--soak", "0"])
+
+
 # --- the lock's heartbeat (#867) --------------------------------------------------
 
 
