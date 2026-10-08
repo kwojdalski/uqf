@@ -162,17 +162,31 @@ processes do not load the checkout. They load a copy in
 
 ### What runs, and what is refused
 
-  | Works on PeachQ, verified by `test_peachq_pipelines.py`                                | Refused before it starts                                                                     |
-  | ---                                                                                    | ---                                                                                          |
-  | The capture stack: discovery, tickerplants, rdb1, hdb1, gateway1                       | A worker that writes into the HDB: finishing a partition needs `p#`, `s#` and `.Q.chk`       |
-  | A bundle's streaming job publishing into rdb1                                          | A worker whose source uses ODBC: the static PeachQ build cannot load a shared library (`2:`) |
-  | A bounded worker that declares its own `io` manager, recording run status and coverage |                                                                                              |
+Verified by `test_peachq_pipelines.py`:
+
+- the capture stack: discovery, the tickerplants, rdb1, hdb1 and gateway1;
+- a bundle's streaming job publishing into rdb1;
+- a bundle's bounded worker writing into the HDB, with its run status and
+  coverage recorded.
+
+PeachQ cannot upsert onto a partition on disk, set an attribute there, or run
+`.Q.chk`. So on PeachQ, `src/etl/core/io_hdb.q` works differently:
+
+- **Appending.** It rewrites a partition whole, rather than upserting onto it.
+- **Finishing.** It sorts each partition by sym, then time, but sets no `p#sym`
+  and runs no `.Q.chk`. uqs's bootstrap fills in missing tables from the schema
+  instead.
+- **Telling a partition is finished.** With no attribute to read, a partition
+  counts as finished when it is in that order.
+
+KDB-X does exactly what it did before.
 
 Before a backfill starts on `peachq-etl`, uqs asks the PeachQ binary what it
-supports. It then refuses a worker that needs something missing, naming the
-capability and the reason. `--mode validate` and `plan` need nothing, and
-`dry-run` needs only what its source does. A PeachQ build that gains a
-capability gains the workers that need it, with no change here.
+supports. Today that is one thing: whether it can load a shared library (`2:`).
+A worker whose source uses ODBC needs a driver, which is a shared library, so it
+is refused on a build that cannot load one, naming the reason. The pinned build
+(`scripts/peachq.py`) can; a static download cannot. `--mode validate` and
+`plan` open no source, so they need nothing.
 
 Bounded workers still never start on their own. Installing, preparing and
 starting the stack run no backfill.
@@ -180,7 +194,8 @@ starting the stack run no backfill.
 Not yet proven on PeachQ:
 
 - the rest of the ETL tree's sources and jobs;
-- end-of-day writes, and every other HDB operation;
+- end-of-day, keyed rewrites (`--on-conflict replace`) and the other HDB
+  operations still listed in `tests/q/peachq_known_gaps.txt`;
 - `uqs deploy` of this runtime.
 
 `UQF_PEACHQ_STACK_TEST=1` runs the whole-stack test. It needs the 6550 ports.

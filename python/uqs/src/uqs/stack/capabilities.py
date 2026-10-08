@@ -2,12 +2,14 @@
 
 PeachQ runs this tree's flattened q (stack/qtree.py), but not everything a
 worker can ask of q. A static PeachQ build cannot load a shared library (`2:`),
-so no ODBC driver; and PeachQ has neither on-disk attributes (`p#`, `s#`) nor
-`.Q.chk`, which finishing an HDB partition takes (src/etl/core/io_hdb.q). A
-worker started anyway fails after startup - having opened its source, and
-having recorded coverage for a window whose partition it never finished. So a
-backfill on a PeachQ runtime asks the interpreter first, and is refused naming
-each capability missing and why the worker needs it.
+so no ODBC driver: a worker reading through one would fail after startup,
+having taken its lock and begun a run. So a backfill on a PeachQ runtime asks
+the interpreter first, and is refused naming each capability missing and why
+the worker needs it.
+
+Writing the HDB is not one of them: src/etl/core/io_hdb.q writes, appends and
+finishes partitions on PeachQ itself, without the on-disk attributes and
+`.Q.chk` it lacks.
 
 Asked, never assumed: PROBE runs on the binary the runtime starts, so a build
 that gains a capability gains the workers that need it with no edit here.
@@ -29,20 +31,12 @@ from uqs.stack.env import with_interpreter
 from uqs.stack.source_settings import declared_transport
 
 #: Each capability, as an operator reads it.
-CAPABILITIES = {
-    "native": "loading a shared library (`2:`)",
-    "disk_attributes": "setting `p#` and `s#` on a partition on disk",
-    "chk": "`.Q.chk`, which fills a partition's missing tables",
-}
+CAPABILITIES = {"native": "loading a shared library (`2:`)"}
 #: One `name=0|1` line per capability, then DONE: q exits 0 whatever it hit,
 #: so a probe that stops early is told apart from one that answered.
 PROBE = """\
-ok:{[f] @[{x[]; 1b};f;{0b}]};
 native:not (@[{`:./uqs_no_such_library 2:(`f;1)};::;{x}]) like "static-dlopen*";
 -1 "native=",string native;
-@[{`:hdb/2026.01.01/t/ set .Q.en[`:hdb] ([] sym:`a`b; time:2#2026.01.01D00:00; x:1 2)};::;{}];
--1 "disk_attributes=",string ok {@[`:hdb/2026.01.01/t/;`sym;`p#]};
--1 "chk=",string ok {.Q.chk `:hdb};
 -1 "DONE";
 exit 0
 """
@@ -90,18 +84,13 @@ def _transport(repo_root: Path, source: str) -> str:
 def requirements(repo_root: Path, decl: Declaration, mode: str | None) -> list[tuple[str, str]]:
     """(capability, why) for each thing `decl` needs in `mode`.
 
-    validate opens nothing and plan reads only the ledgers; dry-run fetches
-    and transforms but writes nothing; a run does all of it."""
-    needs: list[tuple[str, str]] = []
+    validate opens nothing and plan reads only the ledgers; dry-run and a
+    run open the source."""
     if mode in ("validate", "plan"):
-        return needs
-    transport = _transport(repo_root, decl.source)
-    if transport == "odbc":
-        needs.append(("native", f"its source {decl.source} is read through an ODBC driver"))
-    if mode in (None, "run") and not decl.io:
-        why = f"it writes {decl.dataset} into the HDB, and finishing a partition needs it"
-        needs += [("disk_attributes", why), ("chk", why)]
-    return needs
+        return []
+    if _transport(repo_root, decl.source) == "odbc":
+        return [("native", f"its source {decl.source} is read through an ODBC driver")]
+    return []
 
 
 def refuse_unsupported(paths: UqsPaths, worker: str, mode: str | None = None) -> None:
@@ -122,7 +111,7 @@ def refuse_unsupported(paths: UqsPaths, worker: str, mode: str | None = None) ->
         raise UqsError(
             f"{worker} cannot run on the {paths.runtime} runtime: {qcmd} lacks\n"
             + "\n".join(lines)
-            + "\nNothing was started. A worker that declares its own io manager writes no "
-            "partition; `--mode validate`, `plan` and `dry-run` need less "
+            + "\nNothing was started. `--mode validate` and `plan` open no source; a "
+            "PeachQ build that can load shared libraries (a -glibc download) runs it "
             "(docs/guides/sidecar-bundles.md#peachq)"
         )

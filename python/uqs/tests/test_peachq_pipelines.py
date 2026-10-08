@@ -269,10 +269,6 @@ def test_each_runtime_is_started_with_only_its_own_data_access_tables(monkeypatc
 # ------------------------------------------------------------ capabilities
 
 WORKER = ".qetl.job.bounded.define[`w;`source`dataset`width`procname!(`s;`d;1D;`w1)];\n"
-WORKER_IO = (
-    ".qetl.job.bounded.define[`w;`source`dataset`width`procname`io!"
-    "(`s;`d;1D;`w1;.qetl.io.memory)];\n"
-)
 
 
 def _worker(root: Path, text: str, transport: str = "ipc"):
@@ -283,27 +279,29 @@ def _worker(root: Path, text: str, transport: str = "ipc"):
 
 
 @pytest.mark.parametrize(
-    ("text", "transport", "mode", "needs"),
+    ("transport", "mode", "needs"),
     [
-        (WORKER, "ipc", None, ["disk_attributes", "chk"]),
-        (WORKER_IO, "ipc", None, []),
-        (WORKER, "odbc", "dry-run", ["native"]),
-        (WORKER, "odbc", None, ["native", "disk_attributes", "chk"]),
-        (WORKER, "odbc", "plan", []),
-        (WORKER, "odbc", "validate", []),
+        ("ipc", None, []),
+        ("local", None, []),
+        ("odbc", "dry-run", ["native"]),
+        ("odbc", None, ["native"]),
+        ("odbc", "plan", []),
+        ("odbc", "validate", []),
     ],
 )
-def test_what_a_worker_needs_depends_on_its_source_its_io_and_the_mode(
-    tmp_path, monkeypatch, text, transport, mode, needs
+def test_what_a_worker_needs_depends_on_its_source_and_the_mode(
+    tmp_path, monkeypatch, transport, mode, needs
 ):
+    """An HDB write needs nothing: io_hdb.q writes and finishes partitions on
+    PeachQ itself. Only an ODBC driver - a shared library - is out of reach."""
     monkeypatch.setattr(capabilities.transports, "default", lambda root: "ipc")
-    decl = _worker(tmp_path, text, transport)
+    decl = _worker(tmp_path, WORKER, transport)
     assert [cap for cap, _why in capabilities.requirements(tmp_path, decl, mode)] == needs
 
 
 def test_a_bundle_source_in_a_file_of_another_name_is_still_found(tmp_path, monkeypatch):
     monkeypatch.setattr(capabilities.transports, "default", lambda root: "ipc")
-    decl = _worker(tmp_path, WORKER_IO)
+    decl = _worker(tmp_path, WORKER)
     (tmp_path / "src" / "etl" / "sources" / "s.q").unlink()
     (tmp_path / "src" / "etl" / "sources" / "pb.q").write_text("source_name:`s\ntransport:`odbc\n")
     assert [c for c, _ in capabilities.requirements(tmp_path, decl, None)] == ["native"]
@@ -322,7 +320,6 @@ def test_a_worker_the_interpreter_cannot_run_is_refused_before_it_starts(tmp_pat
     said = str(caught.value)
     assert "w cannot run on the peachq-etl runtime: /pq/q lacks" in said
     assert "loading a shared library" in said and "read through an ODBC driver" in said
-    assert "`.Q.chk`" in said and "writes d into the HDB" in said
     assert "Nothing was started" in said
 
 
@@ -339,7 +336,7 @@ def test_peachq_reports_what_it_cannot_do():
     capabilities.probe.cache_clear()
     have = capabilities.probe(PEACHQ)
     assert set(have) == set(capabilities.CAPABILITIES)
-    assert not have["disk_attributes"] and not have["chk"], "if this fails, PeachQ gained them"
+    assert all(isinstance(v, bool) for v in have.values()), "an answer for each, never a guess"
 
 
 @needs_peachq
@@ -388,10 +385,13 @@ SYNTH = {
         "\\d .qpipe.source.synth_src\n"
         'source_name:`synth_src\ncolumns:`time`sym`seq`px\ntypes:"psjf"\n'
         "target:`synth_hist\ntime_column:`time\nrow_key:`seq\ntz:`UTC\n"
+        "/ The tape a day back: the tickerplant stamps today's time on every row,\n"
+        "/ and today's partition is its own, so a backfill writes yesterday's.\n"
         "query:{[h;range_from;range_to]\n"
-        "    .qetl.source.ipc[h;{[from_ts;to_ts]\n"
+        "    t:.qetl.source.ipc[h;{[from_ts;to_ts]\n"
         "        select time, sym, seq, px from `synth_tape where time>=from_ts, time<to_ts\n"
-        "      };range_from;range_to]}\n"
+        "      };range_from+1D;range_to+1D];\n"
+        "    update time:time-1D from t}\n"
         "fixture:{[] ([] time:2026.09.11D09:00+1000000000*til 5; sym:5#`SYNTH; seq:1+til 5; "
         "px:101f+til 5)}\n"
         ".qetl.source.define[source_name;\n"
@@ -404,9 +404,9 @@ SYNTH = {
         ".qetl.transform.passthrough[`synth_hist_passthrough;`batch;"
         "0#.qpipe.source.synth_src.fixture[];.qpipe.source.synth_src.fixture[]];\n"
         ".qetl.job.bounded.define[`synth_hist_backfill;\n"
-        "    `source`dataset`width`transform`procname`note`source_version`io!\n"
+        "    `source`dataset`width`transform`procname`note`source_version!\n"
         "        (`synth_src;`synth_hist;0D01:00:00;`synth_hist_passthrough;`synthhist1;\n"
-        '         "copies synth_tape";`v1;.qetl.io.memory)];\n'
+        '         "copies synth_tape into the HDB";`v1)];\n'
     ),
     "tables.q": (
         "synth_tape:([]time:`timestamp$();sym:`symbol$();seq:`long$();px:`float$())\n"
@@ -488,7 +488,7 @@ def test_a_bundles_jobs_run_on_peachq(stack_copy):
     px = uqs("query", "exec px from synth_tape", "--port", "6552", timeout=30).stdout
     assert "101 102 103 104 105" in px
 
-    day = datetime.now(UTC).date()
+    day = datetime.now(UTC).date() - timedelta(days=1)
     run = uqs(
         "backfill",
         "synth_hist_backfill",
@@ -506,3 +506,10 @@ def test_a_bundles_jobs_run_on_peachq(stack_copy):
         5,
         24,
     )
+    part = repo / "output" / "uqs-peachq-etl" / "hdb" / str(day).replace("-", ".") / "synth_hist"
+    read = part.parent.parent / "read.q"
+    read.write_text(f'-1 .Q.s1 get `$":{part}/seq";\n-1 .Q.s1 get `$":{part}/px";\nexit 0\n')
+    written = subprocess.run(
+        [PEACHQ, str(read), "-q"], capture_output=True, text=True, timeout=60, check=False
+    ).stdout.splitlines()
+    assert written == ["1 2 3 4 5", "101 102 103 104 105f"], "yesterday's partition, in order"
