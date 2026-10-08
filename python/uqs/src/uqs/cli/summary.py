@@ -227,7 +227,7 @@ def summary(
         every=every or None,
     )
     if _debug_requested(ctx, debug):
-        _print_startups(Path(paths.torqdata) / "logs", [row["Process"] for row in rows])
+        _print_startups(paths.log_dir, [row["Process"] for row in rows])
     if silent:
         # Up by PID, and silent when asked: the case neither Status nor a
         # heartbeat within its tolerance shows yet.

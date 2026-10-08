@@ -649,16 +649,28 @@ replay_reactions:{[worker]
 / and range. Shared by replay_reactions, which re-fires them at the start of
 / a run, and run_body, which ends a run `partial while any remain (#632).
 / None on a dry run, which fires no reaction at all.
+/ .
+/ When the ledgers cannot be read, this THROWS rather than answering "none
+/ owed". It used to trap every error into the empty table - so an unreadable
+/ etl_reactions replayed nothing and ended the run `idle, the stale derived
+/ dataset #632 exists to report, now reported as success (#808). Not knowing
+/ what is owed is not knowing that nothing is: the run fails, naming the
+/ ledger, and the lock is released by `run` as on any other failure.
 / @param worker the worker's name
 / @return a table of name, range_from, range_to; empty when nothing is owed
+/ @throws error naming the worker and why the reaction ledgers could not be read
 owed_reactions:{[worker]
     none:([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$());
     if[not .qetl.job.bounded.runtime.allows`notify_reactions; :none];
     cfg:def worker;
     s:spec worker;
-    @[{[a] .qetl.reaction.pending . a};
+    r:@[{[a] (1b;.qetl.reaction.pending . a)};
         (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
-        {[none;e] none}[none]]}
+        {[e] (0b;e)}];
+    if[first r; :last r];
+    .qetl.log.err[worker;"cannot tell which reactions are owed - the reaction or coverage ledger is unreadable";
+        `dataset`error!(cfg`dataset;last r)];
+    '"owed_reactions: cannot tell which reactions ",string[worker]," owes - ",last r}
 
 / Private: the error a run that leaves reactions owed ends `partial with.
 / @param owed owed_reactions' table, not empty

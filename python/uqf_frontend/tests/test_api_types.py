@@ -59,6 +59,13 @@ def _interfaces() -> dict[str, dict[str, str]]:
     return found
 
 
+def _type_aliases() -> dict[str, str]:
+    """`name -> TypeScript type` for each `export type X = ...;` in api.ts, so a
+    field typed by a named union (`tier: Tier`) is compared by its words, as an
+    inline union is (#820)."""
+    return dict(re.findall(r"^export type (\w+) = ([^;]+);", API_TS.read_text(), re.M))
+
+
 def _literal_words(annotation: object) -> set[str] | None:
     """The words a `Literal[...]` (or an optional one) allows, else None."""
     if typing.get_origin(annotation) is typing.Literal:
@@ -93,11 +100,13 @@ def test_a_literal_field_offers_the_same_words_on_both_sides(interface, model):
     """The drift that happened: a word the server sends that the browser's
     type does not have, so a branch for it can never be written."""
     ts_fields = _interfaces()[interface]
+    aliases = _type_aliases()
     for name, field in getattr(models, model).model_fields.items():
         words = _literal_words(field.annotation)
         if words is None:
             continue
-        ts_words = set(re.findall(r'"([^"]+)"', ts_fields[name]))
+        ts_type = ts_fields[name].strip()
+        ts_words = set(re.findall(r'"([^"]+)"', aliases.get(ts_type, ts_type)))
         assert ts_words == words, (
             f"{interface}.{name}: TypeScript allows {sorted(ts_words)}, "
             f"{model}.{name} allows {sorted(words)}"

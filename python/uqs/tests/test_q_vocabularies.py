@@ -1,9 +1,14 @@
-"""Python's copies of q's vocabularies, pinned to the q source (#609).
+"""Python's use of q's vocabularies, held to q (#609, #818).
 
-The copies stay: uqs must work without starting q. What these tests hold is
-that they agree - changing a level or a trace field in q alone fails here,
-naming the Python copy that would now mislabel or drop it. That happened once
-already: `uqs logs` did not know two of q's levels and showed them as INFO (#598).
+uqs must work without starting q. Where it needs a q VALUE - the conflict
+strategies, the run modes, the log levels, the ledgers' columns - it reads
+uqs.generated.q_facts, which scripts/generate/q_facts.py writes from the
+loaded tree and a hook --checks (#818). These tests hold what uqs builds ON
+those values: a mapping covers every level, a column shown exists. Where uqs
+re-implements a q RULE (the status directory, the checkpoint path), the rule
+is behaviour, not a value, and its test reads q's definition. That happened
+once already: `uqs logs` did not know two of q's levels and showed them as
+INFO (#598).
 """
 
 from __future__ import annotations
@@ -14,17 +19,16 @@ from types import SimpleNamespace
 from typing import Any
 
 from uqs.cli import runs as cli_runs
+from uqs.generated import q_facts
 from uqs.stack import backfill, logs, runs
 from uqs.stack.trace_render import CODE_FIELDS
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 CORE = UQF_ROOT / "src" / "etl" / "core"
-LOG_Q = CORE / "log.q"
 
 
 def q_levels() -> list[str]:
-    line = next(ln for ln in LOG_Q.read_text().splitlines() if ln.startswith("levels:"))
-    return re.findall(r"`(\w+)", line)
+    return list(q_facts.LOG_LEVELS)
 
 
 def test_every_level_q_logs_is_one_uqs_logs_maps():
@@ -100,18 +104,11 @@ def q_definition(file: str, name: str) -> str:
     return "\n".join(lines[start:end]).rstrip()
 
 
-def test_on_conflict_is_every_strategy_q_resolves():
-    """`--on-conflict` offers what .qetl.io.resolve knows. A strategy added in
-    q alone could not be chosen; one removed would be offered and refused."""
-    q = re.findall(r"`(\w+)", q_definition("io_manager.q", "strategies"))
-    assert tuple(q) == backfill.ON_CONFLICT
-
-
-def test_modes_are_qs_spelled_as_the_cli_takes_them():
-    """`--mode` offers .qetl.job.bounded.runtime.modes, in q's order, with
-    q's underscore spelled as a hyphen (`dry_run` is `dry-run`)."""
-    q = re.findall(r"`(\w+)", q_definition("worker_runtime.q", "modes"))
-    assert tuple(m.replace("_", "-") for m in q) == backfill.MODES
+def test_on_conflict_and_modes_are_read_from_q_not_copied():
+    """`--on-conflict` and `--mode` offer q's own values (#818): the CLI
+    spelling of a mode swaps q's underscore for a hyphen, and nothing else."""
+    assert backfill.ON_CONFLICT == q_facts.IO_STRATEGIES
+    assert backfill.MODES == tuple(m.replace("_", "-") for m in q_facts.RUN_MODES)
 
 
 def test_status_dir_is_qs_rule(tmp_path):
@@ -138,9 +135,12 @@ def test_checkpoint_path_is_qs_rule(tmp_path, monkeypatch):
 
 
 def test_every_column_uqs_run_shows_is_one_q_records():
-    """`uqs run` prints these columns of etl_runs; one renamed in q alone would
-    print empty rather than fail."""
-    q = set(re.findall(r"(\w+):`\w+\$\(\)", q_definition("run.q", "init_runs")))
-    assert q, "run.q's init_runs no longer spells etl_runs the way this test reads it"
-    missing = [c for c in cli_runs._RUN_COLUMNS if c not in q]
-    assert not missing, f"cli/runs.py _RUN_COLUMNS names {missing}, which etl_runs lacks"
+    """`uqs run` prints a choice of each ledger's columns; one renamed in q
+    alone would print empty rather than fail. _FACT_COLUMNS had no check at
+    all beside _RUN_COLUMNS' (#818)."""
+    for shown, ledger, name in (
+        (cli_runs._RUN_COLUMNS, q_facts.ETL_RUNS_COLUMNS, "_RUN_COLUMNS"),
+        (cli_runs._FACT_COLUMNS, q_facts.ETL_RUN_META_COLUMNS, "_FACT_COLUMNS"),
+    ):
+        missing = [c for c in shown if c not in ledger]
+        assert not missing, f"cli/runs.py {name} names {missing}, which the ledger lacks"

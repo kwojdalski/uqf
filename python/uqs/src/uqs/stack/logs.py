@@ -174,8 +174,7 @@ def parse_log_line(line: str) -> dict[str, str] | None:
 
 
 def _expected_log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
-    log_dir = paths.torqdata / "logs"
-    return [log_dir / f"{stream}_{name}.log" for name in procnames for stream in ("out", "err")]
+    return [paths.torq_log(name, stream) for name in procnames for stream in ("out", "err")]
 
 
 def _log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
@@ -228,7 +227,7 @@ def get_recent_logs(
     files = _log_files(paths, procnames)
     if not files:
         raise UqsError(
-            f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
+            f"no log files found for {procnames} under {paths.log_dir} "
             "- has the demo been started at least once?"
         )
 
@@ -285,7 +284,7 @@ def follow_logs(
     files = _log_files(paths, procnames)
     if not files:
         raise UqsError(
-            f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
+            f"no log files found for {procnames} under {paths.log_dir} "
             "- has the demo been started at least once?"
         )
     min_level_name(min_level)  # refuse a bad --level before following anything

@@ -185,6 +185,13 @@ ccy_legs:{[sym;qty;avg_price]
 / alike) nets correctly into one number. Raw currency-unit amounts, not
 / comparable to each other across currencies - see ccy_exposure_in to
 / revalue everything into one reporting currency.
+/ .
+/ Realised P&L counts too: it is cash in the pair's QUOTE currency, so each
+/ row's realized_pnl is added to its quote leg. ccy_legs alone describes the
+/ open position; leaving the realised cash out reported a book bought at
+/ 1.10 and half sold at 1.11 as USD -550,000 when it holds -545,000, and a
+/ book closed flat at a profit as no USD exposure at all (#805). This is the
+/ same net cash .qdesk.ccy_exposure reports for the same fills.
 / @param pos a position book (see empty_book)
 / @return a table `ccy`amount, one row per currency touched by the book
 / For a book long 1mm EURAUD @ 1.60 and long 500k AUDUSD @ 0.65, AUD nets
@@ -192,7 +199,11 @@ ccy_legs:{[sym;qty;avg_price]
 / AUDUSD leg is -1,100,000.
 / @eg .qpos.ccy_exposure[.qpos.apply_fill[.qpos.apply_fill[.qpos.empty_book[];`EURAUD;1000000;1.6000;1];`AUDUSD;500000;0.6500;1]] -> +`ccy`amount!(`s#`AUD`EUR`USD;-1100000 1000000 -325000f)
 ccy_exposure:{[pos]
-    legs:raze {[row] ccy_legs[row`sym;row`qty;row`avg_price]} each 0!pos;
+    legs:raze {[row]
+        open:ccy_legs[row`sym;row`qty;row`avg_price];
+        / ccy_legs gives the base leg, then the quote leg. Parenthesised:
+        / a bare comma in a qSQL update starts another column.
+        update amount:amount+(0,row`realized_pnl) from open} each 0!pos;
     / 0! - a plain table, not the keyed-by-ccy table `by` naturally
     / produces: every other function in this file returns/consumes plain
     / tables, and a keyed result here silently breaks a caller doing

@@ -24,9 +24,12 @@
 / quoted pairs, so every one has to chain through USD.
 cross_pairs:`EURJPY`GBPJPY`EURGBP`AUDJPY
 
-/ Mirror of the fx_orderbook table's own schema - what this process receives via
-/ its subscription, and exactly what the transform reads.
-fx_orderbook_in:([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+/ The fx_orderbook table as the plant delivers it - what this process receives
+/ via its subscription, and exactly what the transform reads. Read from the
+/ plant, not written out: a hand copy here was refused by the transform's own
+/ input check the moment the plant table gained a column, which under TorQ's
+/ error trap meant a healthy-looking cross1 publishing nothing (#817).
+fx_orderbook_in:.qetl.plant.shape `fx_orderbook
 
 / This job's output: one row per (pair, reprice).
 cross_quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(); mid:`float$())

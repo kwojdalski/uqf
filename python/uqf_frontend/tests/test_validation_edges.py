@@ -126,8 +126,11 @@ def test_a_stack_root_that_is_not_the_repository_is_refused(tmp_path):
 
 
 def test_a_valid_stack_root_builds_paths_under_it(tmp_path):
-    (tmp_path / "lib" / "torq").mkdir(parents=True)
-    (tmp_path / "lib" / "torq" / "torq.sh").write_text("#!/bin/sh\n")
+    # A stack root is what uqs calls one - its root markers (#802).
+    from uqs import paths as stack_paths
+
+    for marker in (stack_paths.ETL_DIR, stack_paths.PACKAGE_DIR):
+        (tmp_path / marker).mkdir(parents=True)
     paths = control._paths(Settings(enable_writes=True, stack_root=tmp_path))
     assert paths.torqhome == tmp_path / "lib" / "torq"
     assert paths.torqdata == tmp_path / "output" / "uqs"

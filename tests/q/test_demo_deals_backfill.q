@@ -790,6 +790,8 @@ test_a_workers_own_publish_is_kept_and_reached_by_run:{[t]
 / coverage was recorded for the dataset, so the dataset read as complete and
 / held nothing.
 test_a_worker_with_its_own_dataset_writes_its_rows_and_coverage_there:{[t]
+    / A fresh ledger, so "only this dataset" is about this run alone.
+    .testutil.reset_coverage_ledger[];
     .qetl.job.bounded.state.release_lock `own_dataset_worker;
     .qetl.job.bounded.state.clear_checkpoint `own_dataset_worker;
     `ddbftest_own_ds set 0#.qpipe.source.demo_deals.fixture[];
@@ -802,7 +804,9 @@ test_a_worker_with_its_own_dataset_writes_its_rows_and_coverage_there:{[t]
     .qunit.assertEquals[r`state;`completed;"the run completes"];
     .qunit.assertEquals[count value `ddbftest_own_ds;3;"every window's rows land in the worker's dataset"];
     .qunit.assertEquals[count value `demo_deals;0;"and none in the source's target, another worker's table"];
-    .qunit.assertEquals[distinct exec dataset from etl_coverage;enlist `ddbftest_own_ds;
+    / The ledger through its accessor: a bare etl_coverage in this namespace's
+    / lambda resolves to .ddbftest.etl_coverage, which does not exist.
+    .qunit.assertEquals[distinct exec dataset from .qetl.coverage.ledger[];enlist `ddbftest_own_ds;
         "the coverage names the table the rows are in"]};
 
 / A reload re-runs the worker's define. The names it stamped the first time

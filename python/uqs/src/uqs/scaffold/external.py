@@ -207,7 +207,7 @@ def _process(paths: UqsPaths) -> DetachedProcess:
     return DetachedProcess(
         "the {name} feed",
         paths.orchestrator_dir / "{name}_feed.pid",
-        paths.torqdata / "logs" / "{name}_feed.log",
+        paths.log_dir / "{name}_feed.log",
     )
 
 

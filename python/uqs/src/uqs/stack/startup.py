@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from uqs.paths import torq_log_stem
 from uqs.stack.logs import parse_log_line
 
 #: torq.q's `.lg.banner` border: `-1 80#"#"`, printed raw with no timestamp.
@@ -116,7 +117,7 @@ def startup_files(log_dir: Path, procname: str) -> list[Path]:
     The stamp sorts as text, and the exact-suffix match keeps `out_hdb1_…`
     from also collecting `out_hdb12_…` or a `deals_backfill1` under `deals`.
     """
-    prefix = f"out_{procname}"
+    prefix = torq_log_stem(procname, "out")
     return sorted(
         path
         for path in log_dir.glob(f"{prefix}_*.log")

@@ -38,16 +38,21 @@ export interface Coverage extends Pollable {
   gaps: Interval[];
   complete: boolean;
 }
+/** Where a query reads - models.Tier, held to it by test_api_types.py. */
+export type Tier = "rdb" | "hdb" | "both";
+/** A worker's state as status.q writes it - models.RunState, held to it by
+ * test_api_types.py, and RunState to q by test_status.py (#820). */
+export type RunState = "starting" | "running" | "idle" | "completed" | "failed";
 export interface QueryInput {
   table: string;
-  tier: string;
+  tier: Tier;
   limit: number;
   filters: { column: string; op: string; value: unknown }[];
   require_coverage?: CoverageRequest;
 }
 export interface QueryResult extends Pollable {
   table: string;
-  tier: string;
+  tier: Tier;
   rows: Row[];
   row_count: number;
   truncated: boolean;
@@ -60,7 +65,7 @@ export interface Health extends Pollable {
 export interface Worker {
   worker: string;
   instance_id: string;
-  state: string;
+  state: RunState;
   source_version: string;
   range_from: string;
   range_to: string;

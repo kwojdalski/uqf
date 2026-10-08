@@ -16,6 +16,7 @@ import {
   type QueryInput,
   type QueryResult,
   type Row,
+  type Tier,
   filterValue,
   validateRange,
   writeToken,
@@ -377,7 +378,7 @@ function BackfillView() {
 function DeskView() {
   const catalog = useResource<Catalog>("/catalog", undefined, false);
   const [table, setTable] = useState("");
-  const [tier, setTier] = useState("rdb");
+  const [tier, setTier] = useState<Tier>("rdb");
   const [limit, setLimit] = useState(100);
   const [filters, setFilters] = useState<
     { column: string; op: string; raw: string }[]
@@ -502,7 +503,7 @@ function DeskView() {
                   Storage tier
                   <select
                     value={tier}
-                    onChange={(event) => setTier(event.target.value)}
+                    onChange={(event) => setTier(event.target.value as Tier)}
                   >
                     <option value="rdb">RDB · current session</option>
                     <option value="hdb">HDB · completed partitions</option>

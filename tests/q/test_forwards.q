@@ -849,6 +849,20 @@ test_convert_quotes_same_pair_passes_unchanged:{[t]
     .qunit.assertEquals[r`bid`ask;q`bid`ask;"untouched"];
     .qunit.assertEquals[first r`inverted;0b;"and not inverted"]};
 
+test_convert_quotes_inverts_spot_without_points:{[t]
+    / A spot column with no fwd_points was relabelled USDEUR and left at
+    / EURUSD's 1.10 (#806).
+    r:.qfwd.convert_quotes[([] sym:enlist `EURUSD; spot:enlist 1.25);(enlist `EURUSD)!enlist `USDEUR;::];
+    .qunit.assertEquals[r`sym;enlist `USDEUR;"the row is relabelled"];
+    .qunit.assertEquals[r`spot;enlist 0.8;"and its spot inverted with it"]};
+
+test_convert_quotes_refuses_mid_on_an_inverted_row:{[t]
+    q:([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5; mid:enlist 2.25);
+    .qunit.assertThrows[.qfwd.convert_quotes[;(enlist `EURUSD)!enlist `USDEUR;::];q;
+        "convert_quotes: mid has no rule for an inverted pair*";"mid would keep the source pair's price"];
+    r:.qfwd.convert_quotes[q;(enlist `EURUSD)!enlist `EURUSD;::];
+    .qunit.assertEquals[r`mid;enlist 2.25;"a row that does not invert keeps its mid"]};
+
 test_convert_quotes_refusals:{[t]
     q:([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);
     .qunit.assertThrows[.qfwd.convert_quotes[q;;::];(enlist `EURUSD)!enlist `GBPUSD;
