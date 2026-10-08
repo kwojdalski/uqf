@@ -132,6 +132,16 @@ port table below). `--export FILE` (on `summary`/`query`/`list`/`config get`)
 additionally writes the same rows to `FILE` as CSV or Parquet, format inferred
 from the extension; a result that is not a table, such as `count t`, is refused.
 
+### Stopping a process that will not stop
+
+`uqs stop` asks each process to exit (`kill -15`), through the port it listens
+on, so it cannot reach a process stuck before it opened its port, a duplicate
+started by hand, or one that ignores the request. `uqs stop --force [PROCS]`
+finds every instance by its command line instead and kills it outright
+(SIGKILL), touching nothing outside this stack. It is the last resort: nothing
+shuts down cleanly, and a tickerplant killed mid-write may leave its log's last
+message torn.
+
 ### Cleaning up
 
 `uqs remove output` wipes `output/uqs/`. `--match REGEX` keeps only the entries

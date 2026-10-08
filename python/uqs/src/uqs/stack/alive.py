@@ -109,23 +109,36 @@ def _listening_ports(pids: list[int], timeout: float | None) -> dict[int, list[s
     return ports
 
 
-def status_table(
+def instances(
     paths: UqsPaths, base_port: int | None = None, timeout: float | None = None
-) -> str:
-    """torq.sh summary's table: every local process, up with pid and port or down."""
+) -> dict[str, list[int]]:
+    """Every local process this stack declares, with EVERY pid whose command
+    line matches it, oldest first - a duplicate started by hand included.
+    status_table reports the newest, as torq.sh does; `uqs stop --force`
+    kills them all (stack/force_stop.py)."""
     try:
         commands = _command_lines(timeout)
     except subprocess.TimeoutExpired as exc:
         raise UqsError(f"listing processes did not finish within {timeout:g}s") from exc
     local = _local_hosts()
-    found: list[tuple[str, int | None]] = []
     base_port = paths.runtime_declaration.resolve_base_port(base_port)  # torq.sh's -stackid
+    found: dict[str, list[int]] = {}
     for row in _process_rows(paths, base_port):
         if row.get("host", "localhost") not in local:
             continue
         needle = f"-stackid {base_port} -proctype {row['proctype']} -procname {row['procname']} "
-        pids = [pid for pid, args in commands if needle in args + " "]
-        found.append((row["procname"], pids[-1] if pids else None))
+        found[row["procname"]] = [pid for pid, args in commands if needle in args + " "]
+    return found
+
+
+def status_table(
+    paths: UqsPaths, base_port: int | None = None, timeout: float | None = None
+) -> str:
+    """torq.sh summary's table: every local process, up with pid and port or down."""
+    found = [
+        (name, pids[-1] if pids else None)
+        for name, pids in instances(paths, base_port, timeout).items()
+    ]
     ports = _listening_ports([pid for _, pid in found if pid is not None], timeout)
     now = time.strftime("%H:%M:%S")
     lines = [HEADER]

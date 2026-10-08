@@ -17,6 +17,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
+from uqs.cli.force_stop import ForceOpt, _force_stop
 from uqs.cli.shared import (
     PortOpt,
     ProcsArg,
@@ -347,10 +348,12 @@ def up(
 
 
 @app.command()
-def stop(procs: ProcsArg = None, port: PortOpt = None) -> None:
+def stop(procs: ProcsArg = None, port: PortOpt = None, force: ForceOpt = False) -> None:
     """Stop every running process (or specific process name(s))."""
     names = _procs(procs)
     _reject_unknown(names)
+    if force:
+        _force_stop(names, port)
     _run_streaming(runtime.stop, names, base_port=port)
 
 
