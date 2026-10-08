@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from uqs.deploy.artifact import Artifact, ReleaseError, read_artifact
+from uqs.stack import redact as stack_redact
 
 #: Files an operator keeps on the server and every release links in, by their
 #: path in the repository. Absent ones are simply not linked.
@@ -47,7 +48,6 @@ _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 #: What deploy.env sets itself, so --launcher-env may not: TorQ's own core
 #: and generated configuration, q, and uqs's variables.
 _DEPLOY_OWNED = frozenset({"TORQHOME", "TORQAPPHOME", "SETENV", "TORQPROCESSES", "QCMD", "QHOME"})
-_SECRETISH = re.compile(r"(?i)\b(pwd|password|passwd|secret|token|api_?key)\s*[=:]\s*\S+")
 
 
 #: What a report or the verifier's output can fail to parse with, as named
@@ -75,7 +75,7 @@ def load_artifact(path: str) -> Artifact:
 
 def redact(text: str) -> str:
     """`text` with anything shaped like a secret assignment masked."""
-    return _SECRETISH.sub(lambda m: f"{m.group(1)}=<redacted>", text)
+    return stack_redact.redact(text)
 
 
 def log(message: str) -> None:
@@ -101,6 +101,11 @@ class Config:
     init_data: bool = False
     jobs: tuple[str, ...] = ()
     live: bool = False
+    #: a private ODBC setup on the server (uqs odbc install), loaded by deploy.env
+    odbc_home: str | None = None
+    #: sources checked live after verify, before activation (#840)
+    live_check: tuple[str, ...] = ()
+    live_check_timeout: int = 120
     connect_timeout: int = 10
     command_timeout: int = 900
     smoke_timeout: int = 120
@@ -175,6 +180,9 @@ def make_config(
     init_data: bool = False,
     jobs: str = "",
     live: bool = False,
+    odbc_home: str | None = None,
+    live_check: str = "",
+    live_check_timeout: int = 120,
     connect_timeout: int = 10,
     command_timeout: int = 900,
     smoke_timeout: int = 120,
@@ -193,6 +201,7 @@ def make_config(
         "command-timeout": command_timeout,
         "smoke-timeout": smoke_timeout,
         "verify-timeout": verify_timeout,
+        "live-check-timeout": live_check_timeout,
     }
     for name, value in timeouts.items():
         if value <= 0:
@@ -201,6 +210,10 @@ def make_config(
     for job in names:
         if not _JOB.fullmatch(job):
             raise DeployError("arguments", f"--jobs {job!r} is not a job name")
+    checked = tuple(dict.fromkeys(s.strip() for s in live_check.split(",") if s.strip()))
+    for source in checked:
+        if not _JOB.fullmatch(source):
+            raise DeployError("arguments", f"--live-check {source!r} is not a source name")
     path = _required_absolute("--dest", dest)
     if path == "/":
         raise DeployError("arguments", "--dest must not be /")
@@ -222,6 +235,9 @@ def make_config(
         init_data=init_data,
         jobs=names,
         live=live,
+        odbc_home=_absolute("--odbc-home", odbc_home),
+        live_check=checked,
+        live_check_timeout=live_check_timeout,
         connect_timeout=connect_timeout,
         command_timeout=command_timeout,
         smoke_timeout=smoke_timeout,

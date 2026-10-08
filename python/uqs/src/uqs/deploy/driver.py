@@ -67,6 +67,16 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
                 *verify_args(sel, cfg.live),
             ]
         ),
+        *(
+            [
+                "live-chk  uqs config sources check "
+                + " ".join(cfg.live_check)
+                + f" --timeout {cfg.live_check_timeout}"
+                + (f" (ODBC from {cfg.odbc_home})" if cfg.odbc_home else "")
+            ]
+            if cfg.live_check
+            else []
+        ),
         "activate  " + f"{dep.current} -> releases/{rid}",
     ]
     size = pkg.path.stat().st_size
@@ -206,6 +216,10 @@ def _run(
         if not result.get("passed"):
             raise DeployError("verify", result.get("reason") or "verification failed")
         report.checks["verify"] = "ok"
+        if cfg.live_check:
+            log(f"checking {', '.join(cfg.live_check)} live, before activation")
+            dep.live_check(release)
+            report.checks["live-check"] = "ok"
         # Recorded BEFORE activation, and fatal if it cannot be: the next
         # upgrade reads this report to know what to stop.
         report.status = "deployed"

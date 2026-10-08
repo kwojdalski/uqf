@@ -131,6 +131,9 @@ class Deployment(Server):
             "cat > deploy.env <<'DEPLOYENV'",
             *self.env_lines(),
             f"if [ -f {q(secrets)} ]; then set -a; . {q(secrets)}; set +a; fi",
+            # the private ODBC setup: its overlay QHOME, driver registry and
+            # libraries, for every process the release starts
+            *([f". {q(c.odbc_home)}/current/env.sh"] if c.odbc_home else []),
             "DEPLOYENV",
             f'if [ -f {q(secrets)} ] && [ -n "$(find {q(secrets)} -perm /077)" ]; then',
             f"  echo {q(f'{secrets} may be read by others - make it owner-only')} >&2; exit 1",
@@ -220,6 +223,25 @@ class Deployment(Server):
         if r.returncode or not lines or lines[-1] != VERIFY_MARKER or not result.get("passed"):
             result["passed"] = False
         return result
+
+    def live_check(self, release: str) -> None:
+        """Check the named sources live, from the release, with the stack up:
+        a check that needs the running gateway can only run now."""
+        c = self.cfg
+        names = " ".join(q(s) for s in c.live_check)
+        r = self.remote.run(
+            script(
+                *self.in_release(
+                    release,
+                    f".venv/bin/uqs config sources check {names} --timeout {c.live_check_timeout}",
+                )
+            ),
+            c.live_check_timeout + 60,
+            "live-check",
+        )
+        if r.returncode:
+            tail = "\n".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-20:])
+            raise DeployError("live-check", "a source failed its live check:\n" + redact(tail))
 
     def ports_free(self, release: str) -> None:
         sel = Selection(processes=self.selection.processes)
