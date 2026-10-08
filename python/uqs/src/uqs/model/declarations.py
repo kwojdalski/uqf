@@ -60,6 +60,9 @@ class Declaration:
     #: A bounded worker's declared default source_version, "" when it declares
     #: none and a run must name one.
     source_version: str = ""
+    #: A bounded worker's declared io manager, as written - "" when it declares
+    #: none and writes wherever the runner says (the HDB, in the stack).
+    io: str = ""
 
     @property
     def worker(self) -> str | None:
@@ -198,6 +201,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             source=source[0] if source else "",
             dataset=dataset[0] if dataset else "",
             source_version=version[0] if version else "",
+            io=fields.get("io", "").strip(),
         )
     proc = symbols(fields.get("procname", ""))
     if not proc:

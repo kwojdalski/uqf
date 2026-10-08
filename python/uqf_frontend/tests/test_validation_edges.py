@@ -184,6 +184,7 @@ def _backfill_args() -> dict[str, str]:
 def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
     from uqs import paths as stack_paths
     from uqs.paths import UqsError
+    from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
     from uqs.stack import runtime
 
     def refuse(paths, base_port):
@@ -192,7 +193,11 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
     # torqhome: the launcher is resolved before bootstrap runs, from TORQHOME.
     monkeypatch.delenv("UQS_TORQ_LAUNCHER", raising=False)
     monkeypatch.setattr(
-        stack_paths, "default_paths", lambda: SimpleNamespace(torqhome=Path("/repo/lib/torq"))
+        stack_paths,
+        "default_paths",
+        lambda: SimpleNamespace(
+            torqhome=Path("/repo/lib/torq"), runtime_declaration=RUNTIMES[DEFAULT_RUNTIME]
+        ),
     )
     monkeypatch.setattr(runtime, "bootstrap", refuse)
     with pytest.raises(ValidationFailed, match="not vendored"):

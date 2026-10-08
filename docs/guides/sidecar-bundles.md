@@ -115,3 +115,72 @@ ODBC sources also need a driver set up: see [ODBC](odbc.md).
 
 Not done by a deployment: data migration, automatic backfills, or probing
 sources before a job connects.
+
+## PeachQ
+
+`peachq-etl` is an **experimental** runtime: PeachQ's capture stack with this
+tree's layers, plus the bundles declared for it. It has no uqf pipelines of its
+own. The `peachq` runtime is unchanged and still runs the capture stack only.
+
+```bash
+export UQF_PEACHQ=/path/to/peachq/q
+uqs --runtime peachq-etl runtime prepare --bundle ../synthpq --dry-run
+uqs --runtime peachq-etl runtime prepare --bundle ../synthpq
+uqs --runtime peachq-etl start --profile capture
+uqs --runtime peachq-etl start synthfeed1
+```
+
+Bundles are declared and installed as for any other runtime, through
+`runtime_bundles.json` or `--bundle`, with the same installer. The ledger
+records `peachq-etl` as each one's runtime, so the jobs join no other runtime.
+
+### The converted q tree
+
+PeachQ cannot load nested `\d` contexts, and the ETL tree uses them. So the
+processes do not load the checkout. They load a copy in
+`output/uqs-peachq-etl/qtree`:
+
+- **What it holds.** `src/` and `scripts/` from the checkout, installed bundle
+  jobs included. Each q file is rewritten by
+  `scripts/portable/flatten_contexts.py`, the converter that
+  `uqs deploy build --q-target 4.0` uses. `UQF_ROOT`, `UQF_SCRIPTS` and both
+  service layers point at the copy.
+- **When it is built.** Every `start`, before anything starts. A dry run of
+  `runtime prepare` converts the tree and the bundles' files in memory and
+  writes nothing.
+- **When it is refused.** If any place cannot be converted with certainty, the
+  error names its file and line. The copy must also load `src/init.q` and
+  `src/etl/init.q` on PeachQ and print a sentinel. q exits 0 whatever happens
+  while it loads, so only the sentinel counts.
+- **Publishing.** The copy is built beside the published tree and swapped in by
+  rename. A failed preparation leaves the previous tree as it was, records the
+  reason in `qtree-failed.json`, and starts nothing. `qtree.json` records what
+  was converted.
+- **Rebuilding.** An unchanged checkout reuses the tree. `stop` and `summary`
+  never rebuild it.
+- **What is never written.** The checkout and the vendored TorQ trees.
+
+### What runs, and what is refused
+
+  | Works on PeachQ, verified by `test_peachq_pipelines.py`                                | Refused before it starts                                                                     |
+  | ---                                                                                    | ---                                                                                          |
+  | The capture stack: discovery, tickerplants, rdb1, hdb1, gateway1                       | A worker that writes into the HDB: finishing a partition needs `p#`, `s#` and `.Q.chk`       |
+  | A bundle's streaming job publishing into rdb1                                          | A worker whose source uses ODBC: the static PeachQ build cannot load a shared library (`2:`) |
+  | A bounded worker that declares its own `io` manager, recording run status and coverage |                                                                                              |
+
+Before a backfill starts on `peachq-etl`, uqs asks the PeachQ binary what it
+supports. It then refuses a worker that needs something missing, naming the
+capability and the reason. `--mode validate` and `plan` need nothing, and
+`dry-run` needs only what its source does. A PeachQ build that gains a
+capability gains the workers that need it, with no change here.
+
+Bounded workers still never start on their own. Installing, preparing and
+starting the stack run no backfill.
+
+Not yet proven on PeachQ:
+
+- the rest of the ETL tree's sources and jobs;
+- end-of-day writes, and every other HDB operation;
+- `uqs deploy` of this runtime.
+
+`UQF_PEACHQ_STACK_TEST=1` runs the whole-stack test. It needs the 6550 ports.

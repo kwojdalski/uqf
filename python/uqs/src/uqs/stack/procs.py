@@ -109,9 +109,10 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 #:
 #: The file is the tree's own, under KDBSERVCONFIG, listing the tables the
 #: gateway exposes - the query policy for each is querypolicy.csv beside it
-#: (scripts/torqcode/gateway/querypolicy.q).
+#: (scripts/torqcode/gateway/querypolicy.q). Each runtime is started with a
+#: copy holding only its own tables (stack/gateway_access.py).
 DATAACCESS_PROCTYPES = frozenset({"gateway", "rdb", "hdb"})
-DATAACCESS_EXTRAS = "-dataaccess ${UQF_SCRIPTS}/torqconfig/dataaccess/tableproperties.csv"
+DATAACCESS_EXTRAS = "-dataaccess ${TORQDATA}/tableproperties.csv"
 
 #: gateway1's access list (the `U` column, q's `-U`): the vendored one plus
 #: the ordinary users of scripts/torqconfig/permissions/gateway_users.csv,
