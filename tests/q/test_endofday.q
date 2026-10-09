@@ -22,10 +22,14 @@ sent_on:{[t] raze last each sent where t=first each sent}
 
 / Replay `batches` - (table;rows) pairs, in log order - into a job's
 / on_batch as a restart does: .qetl.job.stream.replaying set.
-replay:{[f;batches]
+replay:{[job;batches]
+    / through the shell's handler, as start subscribes it - the carry is
+    / the shell's (#963), not the job's on_batch
+    h:.qetl.job.stream.handler job;
     `.qetl.job.stream.replaying set 1b;
-    r:@[{[f;b] f ./: b; 1b}[f];batches;{x}];
+    r:@[{[h;b] h ./: b; 1b}[h];batches;{x}];
     `.qetl.job.stream.replaying set 0b;
+    .qetl.job.stream.replayed job;
     if[not 1b~r; 'r];
     }
 
@@ -37,7 +41,6 @@ tearDown_eod:{[]
     `.qetl.job.stream.running set .eodtest.saved_running;
     `.qetl.job.stream.replaying set 0b;
     .qetl.job.stream.reset each `fx_positions`posbook;
-    .qpipe.job.posbook.on_replayed[];
     }
 
 feed:{[nm;eod] `procname`subscribe_to`publishes`period`on_timer`on_endofday!(
@@ -91,7 +94,7 @@ test_fx_positions_carries_its_book_and_a_restart_agrees:{[t]
     on:.qpipe.job.fx_positions.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     / day 1 ends: the book is published as day 2 opens
-    n:.qpipe.job.fx_positions.on_endofday d0;
+    n:.qetl.job.stream.snapshot `fx_positions;
     .qunit.assertEquals[n;1;"one position carried"];
     opening:sent_on `fx_position_open;
     .qunit.assertEquals[exec base_qty from opening;enlist 1e6;"the day-1 position"];
@@ -101,7 +104,7 @@ test_fx_positions_carries_its_book_and_a_restart_agrees:{[t]
     running:.qpipe.job.fx_positions.positions;
     / a restart on day 2 replays day 2's log: the opening book, then the fill
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
-    replay[on;((`fx_position_open;opening);(`executions;day2))];
+    replay[`fx_positions;((`fx_position_open;opening);(`executions;day2))];
     .qunit.assertEquals[.qpipe.job.fx_positions.positions;running;"restarted and kept-running books agree"];
     .qunit.assertEquals[exec base_qty from .qpipe.job.fx_positions.positions;enlist 1.5e6;"1mm carried plus 500k today"]};
 
@@ -109,12 +112,12 @@ test_fx_positions_ignores_its_own_live_echo:{[t]
     record[`fx_positions];
     .qpipe.job.fx_positions.on_batch[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     before:.qpipe.job.fx_positions.positions;
-    .qpipe.job.fx_positions.on_batch[`fx_position_open;0#0!before];
+    (.qetl.job.stream.handler `fx_positions)[`fx_position_open;0#0!before];
     .qunit.assertEquals[.qpipe.job.fx_positions.positions;before;"live, the opening book changes nothing"]};
 
 test_an_empty_book_carries_nothing:{[t]
     record[`fx_positions];
-    .qunit.assertEquals[.qpipe.job.fx_positions.on_endofday d0;0;"nothing to carry"];
+    .qunit.assertEquals[.qetl.job.stream.snapshot `fx_positions;0;"nothing to carry"];
     .qunit.assertEquals[count sent;0;"so nothing is published"]};
 
 / #960: the plant rolls and tells the job asynchronously, so a fill can be
@@ -124,13 +127,13 @@ test_fx_positions_keeps_a_fill_logged_before_the_opening_row:{[t]
     record[`fx_positions];
     on:.qpipe.job.fx_positions.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
-    .qpipe.job.fx_positions.on_endofday d0;
+    .qetl.job.stream.snapshot `fx_positions;
     opening:sent_on `fx_position_open;
     early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;early];
     running:.qpipe.job.fx_positions.positions;
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
-    replay[on;((`executions;early);(`fx_position_open;opening))];
+    replay[`fx_positions;((`executions;early);(`fx_position_open;opening))];
     .qunit.assertEquals[.qpipe.job.fx_positions.positions;running;"restarted and kept-running books agree"];
     .qunit.assertEquals[exec base_qty, fill_count from .qpipe.job.fx_positions.positions;`base_qty`fill_count!(enlist 6e5;enlist 2);"600k net, two fills"]};
 
@@ -141,7 +144,7 @@ test_fx_positions_first_day_without_an_opening_row_replays_as_before:{[t]
     on[`executions;f];
     running:.qpipe.job.fx_positions.positions;
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
-    replay[on;enlist (`executions;f)];
+    replay[`fx_positions;enlist (`executions;f)];
     .qunit.assertEquals[.qpipe.job.fx_positions.positions;running;"no opening row: the log alone rebuilds the book"]};
 
 / --- posbook carries its book ------------------------------------------------
@@ -150,13 +153,13 @@ test_posbook_carries_its_book_and_a_restart_agrees:{[t]
     record[`posbook];
     on:.qpipe.job.posbook.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
-    .qpipe.job.posbook.on_endofday d0;
+    .qetl.job.stream.snapshot `posbook;
     opening:sent_on `position_open;
     day2:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;day2];
     running:.qpipe.job.posbook.book;
     `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
-    replay[on;((`position_open;opening);(`executions;day2))];
+    replay[`posbook;((`position_open;opening);(`executions;day2))];
     .qunit.assertEquals[.qpipe.job.posbook.book;running;"restarted and kept-running books agree"];
     .qunit.assertEquals[exec qty from .qpipe.job.posbook.book;enlist 6e5;"1mm carried, 400k sold today"]};
 
@@ -166,17 +169,16 @@ test_posbook_keeps_a_fill_logged_before_the_opening_row:{[t]
     record[`posbook];
     on:.qpipe.job.posbook.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
-    .qpipe.job.posbook.on_endofday d0;
+    .qetl.job.stream.snapshot `posbook;
     opening:sent_on `position_open;
     early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;early];
     running:.qpipe.job.posbook.book;
     `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
-    replay[on;((`executions;early);(`position_open;opening))];
-    .qpipe.job.posbook.on_replayed[];
+    replay[`posbook;((`executions;early);(`position_open;opening))];
     .qunit.assertEquals[.qpipe.job.posbook.book;running;"restarted and kept-running books agree"];
     .qunit.assertEquals[exec qty, realized_pnl from .qpipe.job.posbook.book;`qty`realized_pnl!(enlist 6e5;enlist 2000f);"600k left, 400k*0.005 realised"];
-    .qunit.assertEquals[.qpipe.job.posbook.early;();"the held fills are cleared"]};
+    .qunit.assertFalse[`posbook in key .qetl.job.stream.carry_log;"the recorded batches are forgotten"]};
 
 test_posbook_first_day_without_an_opening_row_replays_as_before:{[t]
     record[`posbook];
@@ -185,23 +187,44 @@ test_posbook_first_day_without_an_opening_row_replays_as_before:{[t]
     on[`executions;f];
     running:.qpipe.job.posbook.book;
     `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
-    replay[on;enlist (`executions;f)];
-    .qpipe.job.posbook.on_replayed[];
+    replay[`posbook;enlist (`executions;f)];
     .qunit.assertEquals[.qpipe.job.posbook.book;running;"no opening row: the log alone rebuilds the book"];
-    .qunit.assertEquals[(.qpipe.job.posbook.early;.qpipe.job.posbook.opened);(();0b);"replay state is reset"]};
+    .qunit.assertFalse[`posbook in key .qetl.job.stream.carry_log;"replay state is reset"]};
 
 test_posbook_restart_with_the_opening_row_first_is_unchanged:{[t]
     record[`posbook];
     on:.qpipe.job.posbook.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
-    .qpipe.job.posbook.on_endofday d0;
+    .qetl.job.stream.snapshot `posbook;
     opening:sent_on `position_open;
     day2:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;day2];
     running:.qpipe.job.posbook.book;
     `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
-    replay[on;((`position_open;opening);(`executions;day2))];
-    .qpipe.job.posbook.on_replayed[];
+    replay[`posbook;((`position_open;opening);(`executions;day2))];
     .qunit.assertEquals[.qpipe.job.posbook.book;running;"no early fill: same book"]};
+
+/ --- the shell's carry (#963) ---------------------------------------------
+
+test_a_malformed_carry_is_refused:{[t]
+    d:`procname`subscribe_to`publishes`on_batch`replay`carry!(`eodcar1;enlist `executions;enlist `eodx_open;{[t;x]};1b;0);
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*carry must be a dict of state and table*";"not a dict"];
+    d[`carry]:`state`table!(`book;`elsewhere);
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*must be one the job publishes*";"a table it does not publish"];
+    d[`carry]:`state`table!(`book;`eodx_open); d[`replay]:0b;
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*needs replay 1b*";"nothing would read it back"]};
+
+test_a_batch_beyond_the_window_is_not_held:{[t]
+    / recording is bounded: past the window, nothing more is kept
+    record[`fx_positions];
+    late:update time:.eodtest.t1+0D00:05 from fill[`EURUSD;1;1e6;1.1;`london;`spot];
+    h:.qetl.job.stream.handler `fx_positions;
+    `.qetl.job.stream.replaying set 1b;
+    h[`executions;update time:.eodtest.t1 from fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    h[`executions;late];
+    held:count last .qetl.job.stream.carry_log `fx_positions;
+    `.qetl.job.stream.replaying set 0b;
+    .qetl.job.stream.replayed `fx_positions;
+    .qunit.assertEquals[held;0;"the 5-minute-late batch closed the window, so nothing is held"]};
 
 \d .

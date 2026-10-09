@@ -138,15 +138,6 @@ load_limits:{[limits]
     `.qpipe.job.fx_positions.limits set limits;
     count limits}
 
-/ Add an opening snapshot to a book: every field is additive, so the
-/ position is the sum per (pair, book, product).
-/ @param book the book built so far, unkeyed
-/ @param opening the opening snapshot, in the book's shape
-/ @return the combined book, keyed on its dimensions
-/ @eg .qpipe.job.fx_positions.combine_book[.qpipe.job.fx_positions.desk_book;.qpipe.job.fx_positions.desk_book]  ->  an empty keyed book
-combine_book:{[book;opening]
-    .qpipe.job.fx_positions.dimensions xkey 0!select sum base_qty, sum quote_qty, sum fill_count by sym, book, product from book,opening}
-
 / Net one batch of fills into the book.
 / .
 / The book is replaced BEFORE anything is published, the way posbook does
@@ -156,17 +147,6 @@ combine_book:{[book;opening]
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
-    / The opening book a restart restores from (#943) - only while
-    / replaying: live, it is this job's own echo, and fills may have landed
-    / since it was taken. ADDED to the book built so far, not set over it:
-    / the plant rolls its log and tells the job asynchronously, so a fill
-    / can be logged before the job's opening row, and live the job applied
-    / it on top of its snapshot (#960). The book is flat at replay start,
-    / so summing is exact.
-    if[t=`fx_position_open;
-        if[.qetl.job.stream.replaying;
-            `.qpipe.job.fx_positions.positions set .qpipe.job.fx_positions.combine_book[0!.qpipe.job.fx_positions.positions;(cols .qpipe.job.fx_positions.desk_book)#x]];
-        :()];
     if[not t=`executions; :()];
     if[0=count x; :()];
     updated:.qetl.transform.apply[`fx_positions;`book`executions!(
@@ -197,19 +177,6 @@ fresh_breaches:{[now]
     r:.qlimit.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
     `.qpipe.job.fx_positions.alerts set r`state;
     r`alerts}
-
-/ The day ended: carry the book into the next one (#943). Published onto
-/ fx_position_open after the plant has rolled its log, so it opens the new
-/ day's log and a restart's replay restores from it before the day's fills.
-/ An empty book publishes nothing: a restart with no opening rows starts flat,
-/ which is the same thing.
-/ @param dt the date that ended
-/ @return the number of positions carried
-on_endofday:{[dt]
-    book:0!.qpipe.job.fx_positions.positions;
-    if[count book;
-        .qpipe.job.fx_positions.publish[`fx_position_open;(cols .qpipe.job.fx_positions.desk_book)#book]];
-    count book}
 
 / Publish a snapshot of the whole book, and any newly breached limit.
 / .
@@ -274,9 +241,9 @@ on_timer:{[]
 / replay 1b: on a restart the book is rebuilt from the day's log - its
 / opening book, then its executions - not started flat, under TorQ as well
 / as run_stream.q.
-/ Positions carry across days (#943): on_endofday publishes the book onto
-/ fx_position_open, and restore_from replays it ahead of the day's fills.
-.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`restore_from`on_endofday`note`state!(
+/ Positions carry across days (#943): the shell publishes the book onto
+/ fx_position_open at end of day and restores it on replay (carry, #963).
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`carry`note`state!(
     `fxpositions1;
     enlist `executions;
     `fx_position`fx_limit_breach`fx_position_open;
@@ -285,7 +252,6 @@ on_timer:{[]
     .qpipe.job.fx_positions.on_timer;
     1b;
     1b;
-    enlist `fx_position_open;
-    .qpipe.job.fx_positions.on_endofday;
+    `state`table!(`positions;`fx_position_open);
     "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it";
     `positions`limits`alerts)];

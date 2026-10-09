@@ -126,13 +126,13 @@ drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`mar
     {[] .qpipe.job.posbook.on_batch[`market_data;.sjtest.a_book[`EURUSD;1.104]];
         .qpipe.job.posbook.on_batch[`executions;.sjtest.an_execution[.sjtest.d 0;`EURUSD;1;1.1;1e6]];
         / and the day ends, so its opening book is published too (#943)
-        .qpipe.job.posbook.on_endofday .sjtest.d 0};
+        .qetl.job.stream.snapshot `posbook};
     {[] .qpipe.job.vectorize.on_batch[`wide_orderbook;.sjtest.wide_row[]]};
     {[] .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.sjtest.mbp10_batch[]]};
     {[] .qpipe.job.fx_positions.load_limits .sjtest.mk_limits[];
         .sjtest.to_fx_positions .sjtest.orders_batch[];
         .qpipe.job.fx_positions.on_timer[];
-        .qpipe.job.fx_positions.on_endofday 2026.10.09};
+        .qetl.job.stream.snapshot `fx_positions};
     {[] .qpipe.job.executions.on_batch[`trades;.sjtest.fx_fill[`EURUSD;1;1.085;1e6]];
         .qpipe.job.executions.on_batch[`crypto_trades;.sjtest.crypto_fill[`$"BTC-USDT";-1;62000f;0.25]]};
     {[] .qpipe.job.market_data.on_batch[`quote;.jobouttest.lp_quotes[]]};
