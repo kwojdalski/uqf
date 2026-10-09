@@ -130,7 +130,7 @@ ALLOWED_MISSING = {
         ".qetl.load.only",
     ): _CALLER_SET,
     (
-        ".claude/agents/uqf-developer.md",
+        ".claude/agents/uqf-quant-developer.md",
         ".qfwd.sub",
     ): "the same nested-namespace illustration, in the rule that forbids it",
     (

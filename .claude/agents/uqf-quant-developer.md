@@ -1,5 +1,5 @@
 ---
-name: uqf-developer
+name: uqf-quant-developer
 description: Specialist for this q/kdb+ eFX quant library's src/*.q modules
   (stats, ccy, daycount, rates, forwards, options, risk, execution, book,
   microstructure) and their matching tests/test_*.q files. Use for implementing
@@ -11,7 +11,7 @@ tools: [Read, Edit, Write, Bash, Grep, Glob]
 model: sonnet
 ---
 
-# uqf-developer
+# uqf-quant-developer
 
 ## Role
 

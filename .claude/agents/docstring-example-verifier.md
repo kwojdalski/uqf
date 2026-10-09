@@ -65,8 +65,8 @@ by module (@eg count): forwards 31, microstructure 20, options 16,
 ```
 
 `src/integrations/data.q` is out of scope --- it is not part of this library and
-is deliberately left in camelCase (see `uqf-developer`). Skip its 6 `@eg` lines
-and say you skipped them.
+is deliberately left in camelCase (see `uqf-quant-developer`). Skip its 6 `@eg`
+lines and say you skipped them.
 
 ## What to check first
 

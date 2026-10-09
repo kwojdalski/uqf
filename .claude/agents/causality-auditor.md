@@ -134,7 +134,7 @@ Do not re-derive these; re-check only the file that changed.
   guarantee.
 
 `src/integrations/data.q` is out of scope --- not part of this library (see
-`uqf-developer`). Say that you skipped it.
+`uqf-quant-developer`). Say that you skipped it.
 
 ## Standard of evidence
 
