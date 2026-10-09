@@ -26,7 +26,7 @@
 / skipping row groups by their min/max. Each bound is a long rendered
 / through .qetl.io.odbc.literal, the one escape function, so no caller value is
 / spliced into SQL any other way - and a long, not a timestamp, because
-/ .qetl.io.odbc.literal's timestamp form drops the sub-second part.
+/ .qetl.io.odbc.literal's timestamp form stops at the microsecond.
 / .
 / The deal's own time stays `deal_time`, NOT `time`. `time` is the
 / tickerplant's: .qtorq.publish drops any `time` a publisher sends and the

@@ -100,6 +100,27 @@ require_available:{[]
 / @private
 escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 
+/ Private: a timestamp as SingleStore DATETIME(6) text - to the microsecond,
+/ ROUNDED UP (#954).
+/ .
+/ It used to drop the whole fractional part (-10_ string v), so a bound at
+/ 09:00:00.123456 read as 09:00:00 and a window either re-read the rows of
+/ the one before it or lost its own. DATETIME(6) holds microseconds, and
+/ every timestamp rendered here bounds a half-open window [from;to): for a
+/ microsecond column, from <= r < to exactly when ceil_us(from) <= r <
+/ ceil_us(to), so rounding both bounds UP keeps every row on the side it
+/ belongs - truncating would not. A whole second renders as before, with no
+/ fraction. q renders 2026.09.11D09:00:00.123456789; the date dots become
+/ hyphens and the D a space.
+/ @private
+datetime6:{[v]
+    if[null v; '"literal: a null timestamp has no SQL literal - a window bound must be an instant"];
+    ns:"j"$v-1970.01.01D00:00;
+    up:1970.01.01D00:00+`timespan$1000*neg (neg ns) div 1000;
+    s:string up;
+    base:ssr[ssr[19#s;".";"-"];"D";" "];
+    $[0=(`long$up-1970.01.01D00:00) mod 1000000000; base; base,".",6#20_s]}
+
 / A q value as a SQL literal.
 / .
 / Every value reaching a query goes through here - that is the question bank's "one
@@ -115,14 +136,7 @@ literal:{[v]
     t:abs type v;
     $[t=11h; "'",escape_text[string v],"'";
       t=10h; "'",escape_text[v],"'";
-      / SingleStore's DATETIME(6) literal. q renders a timestamp as
-      / 2026.09.11D09:00:00.000000000 - the dots and the D are q's, not
-      / SQL's, so the date separators become hyphens and the D a space.
-      / -10_ drops q's ".000000000" - ten characters - leaving
-      / 2026.09.11D09:00:00. Then the date dots become hyphens and the D a
-      / space. The first draft wrote `9#"0"_ -1_` which is drop-BY-STRING and
-      / a plain type error; it looked like character surgery and was not.
-      t=12h; "'",(ssr[ssr[-10_ string v;".";"-"];"D";" "]),"'";
+      t=12h; "'",datetime6[v],"'";
       t=14h; "'",ssr[string v;".";"-"],"'";
       t in 5 6 7h; string v;
       t=9h; string v;
@@ -134,7 +148,7 @@ literal:{[v]
 / make_timestamp_ns over epoch nanoseconds, the long going through `literal`.
 / .
 / Not `literal` on the timestamp itself: that is SingleStore's DATETIME(6)
-/ form, which drops the sub-second part, and a window bound that loses its
+/ form, to the microsecond, and a DuckDB TIMESTAMP_NS bound that loses its
 / nanoseconds fetches rows either side of the window. Every DuckDB source
 / cuts its windows with this - databento_mbp10 and duckdb_deals each had
 / their own copy, byte for byte.

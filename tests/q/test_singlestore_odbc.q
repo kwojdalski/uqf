@@ -70,6 +70,40 @@ test_a_timestamp_becomes_a_datetime_literal:{[t]
         "'2026-09-11 09:00:00'";
         "a q timestamp is rendered as a SQL DATETIME literal"]};
 
+/ --- timestamp precision (#954) -------------------------------------------
+
+test_a_fractional_timestamp_keeps_its_microseconds:{[t]
+    .qunit.assertEquals[.qetl.io.odbc.literal[2026.09.11D09:00:00.123456000];
+        "'2026-09-11 09:00:00.123456'";"DATETIME(6): the fraction is not dropped"]};
+
+test_nanoseconds_round_up_to_the_next_microsecond:{[t]
+    .qunit.assertEquals[.qetl.io.odbc.literal[2026.09.11D09:00:00.123456001];
+        "'2026-09-11 09:00:00.123457'";"up, so a half-open bound keeps every row on its side"]};
+
+test_rounding_up_can_cross_midnight:{[t]
+    .qunit.assertEquals[.qetl.io.odbc.literal[2026.09.11D23:59:59.999999500];
+        "'2026-09-12 00:00:00'";"the next day's first instant, whole, with no fraction"]};
+
+test_a_null_timestamp_is_refused:{[t]
+    .qunit.assertThrows[.qetl.io.odbc.literal;0Np;"literal: a null timestamp has no SQL literal*";
+        "it used to render as ''"]};
+
+/ The literal back as a q timestamp, as SingleStore would read it.
+as_read:{[lit] "P"$ssr[ssr[1_-1_lit;"-";"."];" ";"D"]}
+
+test_a_window_selects_the_same_microsecond_rows_after_rendering:{[t]
+    / For rows at microsecond precision, [from;to) and the rendered
+    / [ceil(from);ceil(to)) hold exactly the same rows - including rows
+    / sharing a timestamp, and the ones either side of each bound.
+    / start_ts/end_ts, not from/to: both are qSQL keywords, which q reserves
+    start_ts:2026.09.11D09:00:00.000000500; end_ts:2026.09.11D09:00:00.000002500;
+    rows:2026.09.11D09:00:00+`timespan$1000*0 0 1 2 2 3;
+    want:rows where (rows>=start_ts) & rows<end_ts;
+    lo:.odbctest.as_read[.qetl.io.odbc.literal start_ts];
+    hi:.odbctest.as_read[.qetl.io.odbc.literal end_ts];
+    .qunit.assertEquals[rows where (rows>=lo) & rows<hi;want;"no row moves across a bound"];
+    .qunit.assertEquals[count want;3;"both rows sharing 2us are in, 0us is out, 3us is out"]};
+
 test_a_date_becomes_a_date_literal:{[t]
     .qunit.assertEquals[.qetl.io.odbc.literal[2026.09.11];"'2026-09-11'";
         "a q date renders with SQL's hyphens"]};
