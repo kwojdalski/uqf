@@ -776,6 +776,18 @@ qopt,gk_vanna,function,6,s k rd rf sigma t
 qopt,gk_vega,function,6,s k rd rf sigma t
 qopt,gk_volga,function,6,s k rd rf sigma t
 qopt,implied_vol,function,7,price s k rd rf t is_call
+qpipe.job.alert_sink,alert_period,value,,
+qpipe.job.alert_sink,alerts,dict,,
+qpipe.job.alert_sink,breach_cols,value,,
+qpipe.job.alert_sink,dead,table,,
+qpipe.job.alert_sink,flush,function,1,now
+qpipe.job.alert_sink,max_attempts,value,,
+qpipe.job.alert_sink,on_batch,function,2,t x
+qpipe.job.alert_sink,on_timer,function,1,
+qpipe.job.alert_sink,payload,function,1,row
+qpipe.job.alert_sink,pending,table,,
+qpipe.job.alert_sink,post,function,2,target body
+qpipe.job.alert_sink,publish,value,,
 qpipe.job.arbitrage,arbitrage,table,,
 qpipe.job.arbitrage,evaluate,function,1,batch
 qpipe.job.arbitrage,on_batch,function,2,t x
@@ -1057,6 +1069,7 @@ qpipe.job.last_value,on_batch,function,2,t x
 qpipe.job.last_value,publish,value,,
 qpipe.job.last_value,state,dict,,
 qpipe.job.last_value,tops,function,1,x
+qpipe.job.market_data,check,function,1,rows
 qpipe.job.market_data,crypto_book,table,,
 qpipe.job.market_data,from_crypto_book,function,1,batch
 qpipe.job.market_data,from_fx_orderbook,function,1,batch

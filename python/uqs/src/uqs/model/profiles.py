@@ -155,6 +155,10 @@ UNPROFILED: dict[str, str] = {
         "a diagnostic subscriber chosen at runtime: which table it taps is an "
         "argument, so there is no standing set it belongs to"
     ),
+    "alert_sink1": (
+        "an outbound sink that needs a webhook URL (UQF_SOURCE_CRED_ALERT_SINK) "
+        "and refuses to run without one, so it starts only when asked"
+    ),
 }
 
 #: The environment variable saying how many concurrent connections this
