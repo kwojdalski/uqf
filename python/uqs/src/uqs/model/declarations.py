@@ -30,13 +30,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.model.kinds import DECLARATION_VERBS
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import STREAM_DIR, WORKER_DIR, UqsError
 
-#: The three calls a job or worker declares itself with, and the start of one.
+#: The calls a job or worker declares itself with (model/kinds.py), and the start of one.
 _CALL_RE = re.compile(
-    r"\.(qetl\.job\.stream\.define|qetl\.job\.stream\.normalize|qetl\.job\.stream\.at_horizons"
-    r"|qetl\.job\.stream\.at_bars|qetl\.job\.bounded\.define)\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
+    r"\.(" + "|".join(re.escape(v) for v in DECLARATION_VERBS) + r")\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
 )
 _OPEN = "([{"
 _CLOSE = ")]}"

@@ -38,6 +38,11 @@ writer can live under `.qpipe.io.<name>`. A custom reaction handler can live
 under `.qpipe.reaction.<name>`. The graph is derived from declarations, so there
 is no separate pipeline graph to maintain.
 
+The declaration verbs and `uqs job new --kind` values are one table,
+`python/uqs/src/uqs/model/kinds.py`; the parser, `uqs job remove` and the
+choices read it, and `python/uqs/tests/test_job_kinds.py` names any place that
+lacks a verb q registers. A new kind starts there.
+
 Every declaring function refuses a bad declaration **when the file loads**,
 naming the key, so a mistake below surfaces the first time the tree is loaded
 rather than part-way through a run.
