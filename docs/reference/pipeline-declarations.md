@@ -362,9 +362,10 @@ one path that notifies, and not on a dry run --- with that window's range.
   | `.qetl.reaction.on_writing[dataset;name;outputs;handler]`    | the same                                                         | that it reads `dataset` and writes `outputs`, as asserted              |
   | `.qetl.reaction.on_worker[dataset;worker;spec_fn]`           | `spec_fn` is `{[range_from;range_to] ...}` returning a run spec  | that it writes the worker's `dataset`, derived from its declaration    |
 
-Prefer `on_worker` when the downstream work is itself a worker: its edge in the
-graph is read from the worker's declaration rather than asserted. [Recomputing a
-table when the one it reads is
+Prefer `on_worker` when the downstream work is itself a worker (plain q only;
+TorQ refuses it, one bounded worker per process): its edge in the graph is read
+from the worker's declaration rather than asserted. [Recomputing a table when
+the one it reads is
 published](../guides/new-pipeline.md#recomputing-on-an-upstream-publish) covers
 when to use which.
 

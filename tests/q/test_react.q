@@ -338,6 +338,56 @@ test_a_worker_reaction_runs_that_worker:{[t]
     .qunit.assertEquals[(count value `demo_deals;exec first outcome from .qetl.reaction.history);(3;`ok);
         "publishing upstream ran the downstream worker over the published range"]};
 
+/ --- a worker reaction inside another worker's run (#973) ------------------
+
+/ A fresh run ledger, in memory and on disk (see test_run.q's setUp_fresh).
+reset_runs:{[]
+    .qetl.run.release[];
+    ![`.;();0b;`etl_runs`etl_run_meta];
+    {@[{system"rm -f ",x};.qetl.run.table_path x;{[e] (::)}]} each `etl_runs`etl_run_meta;
+    .qetl.run.init_runs[]; .qetl.run.init_meta[]; ()}
+
+/ A publishes event_tape over two hours; B (demo_deals_backfill) reacts to each
+/ window. Before the fix B's begin was refused, B's finish closed A's row, A
+/ ended `failed and A's second window was staged with a null run_id.
+test_a_worker_reaction_inside_a_run_leaves_both_runs_their_own_rows:{[t]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    .testutil.reset_coverage_ledger[];
+    .rxtest.reset_runs[];
+    {.qetl.job.bounded.state.release_lock x; .qetl.job.bounded.state.clear_checkpoint x} each `demo_events_backfill`demo_deals_backfill;
+    `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
+    `event_tape set 0#.qpipe.source.demo_events.fixture[];
+    .qetl.reaction.on_worker[`event_tape;`demo_deals_backfill;
+        {[f;tt] `source_version`range_from`range_to!(`rx_nested;f;tt)}];
+    .qpipe.job.demo_events_backfill.init[`source_version`range_from`range_to!(`rx_nested;.rxtest.d[1]+0D09:00:00;.rxtest.d[1]+0D11:00:00)];
+    r:.qpipe.job.demo_events_backfill.run[];
+    a:exec from .qetl.run.runs[] where worker=`demo_events_backfill;
+    b:select from .qetl.run.runs[] where worker=`demo_deals_backfill;
+    .qunit.assertEquals[(r`state;r`windows_completed;r`rows_published;a`status;a`windows_completed;a`rows_published);
+        (`completed;2;10;`completed;2;10);"the publisher completes both windows and records its own outcome"];
+    .qunit.assertTrue[(0<count b) and all (b`status) in `completed`idle;
+        "the reacting worker has rows of its own, ended"];
+    .qunit.assertTrue[not any null exec run_id from .qetl.coverage.ledger[];
+        "no window was staged without a run id"];
+    .qunit.assertTrue[not .qetl.run.is_running[];"no run is left in flight"]};
+
+test_a_failing_nested_worker_reaction_restores_the_outer_run:{[t]
+    .rxtest.reset_runs[];
+    .qetl.run.begin[`outer_worker;()!()];
+    id:.qetl.run.current[];
+    .qetl.reaction.on_worker[`event_tape;`demo_deals_backfill;{[f;tt] '"spec_fn exploded"}];
+    r:.[.qetl.reaction.for_dataset[`event_tape][`handler] 0;(`event_tape;.rxtest.d[1];.rxtest.d[2]);{[e] e}];
+    cur:.qetl.run.current[];
+    .qetl.run.release[];
+    .qunit.assertEquals[(r;cur);("spec_fn exploded";id);
+        "the error surfaces and the outer run is still the one in flight"]};
+
+test_on_worker_is_refused_under_torq:{[t]
+    r:.testutil.with_procname[`events_backfill1;
+        {.qetl.reaction.on_worker[`event_tape;`demo_deals_backfill;{[f;tt] 1}]}];
+    .qunit.assertTrue[(`threw~first r) and (last r) like "*one bounded worker per process*";
+        "a TorQ process cannot admit the reacting worker, so registration says so"]};
+
 / --- the real worker path -------------------------------------------------
 
 / THE POINT OF THE FILE. A real worker run fires the event, once per window,
