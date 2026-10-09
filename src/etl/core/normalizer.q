@@ -56,7 +56,7 @@ required_keys:`procname`output`input
 / positionally and a mapping that emits size before price lands as a
 / table whose sizes are prices.
 / @param name the normalizer's name, e.g. `executions - also its output table and its .qpipe.job namespace
-/ @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally start_with_all (boolean) and note (string)
+/ @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally start_with_all (boolean), note (string), and check with on_fail (see .qetl.job.stream.define)
 / @return the name
 / @throws error naming every problem it finds first
 define:{[name;decl]
@@ -85,8 +85,11 @@ define:{[name;decl]
     / or the runner reaching for a job's handler finds it in the one place.
     handler:dispatch[name;;];
     (` sv (.qetl.job.stream.namespace name),`on_batch) set handler;
-    .qetl.job.stream.define[name;`procname`subscribe_to`publishes`on_batch!(
-        decl`procname; key srcs; enlist name; handler)];
+    / check and on_fail pass straight through (#944): they gate what the
+    / normalizer publishes, and .qetl.job.stream.define validates them.
+    gate:`check`on_fail inter key decl;
+    .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch!(
+        decl`procname; key srcs; enlist name; handler)),gate#decl];
     name}
 
 / Private: one source's transform, held to the canonical output.
