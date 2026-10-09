@@ -1,6 +1,6 @@
 """How a backfill source is reached, read from the committed contract surface.
 
-`.qetl.source.transport` in src/etl/core/source_contract.q is the registry:
+`.qetl.source.transport` in src/etl/core/source_transports.q is the registry:
 one row per transport, with its operations and the words an operator and the
 scaffold need. `scripts/generate/contract_surface.py export` writes the words
 - never the operations - to docs/reference/surfaces/current/transports.csv,

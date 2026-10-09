@@ -3,7 +3,7 @@
 One row per source - its transport, the non-secret setting that transport
 opens (an HDB path, a host:port, an ODBC connection template) and, when the
 setting needs a secret, the NAME of the environment variable holding it. q
-reads it in `.qetl.source.read_settings` (src/etl/core/source_contract.q);
+reads it in `.qetl.source.read_settings` (src/etl/core/source_credentials.q);
 this module reads it for uqs's own commands and the scaffold, with the same
 rules, so the two refuse the same files.
 
