@@ -8,7 +8,7 @@ the job scaffolded as though it had been honoured.
 from __future__ import annotations
 
 _BACKFILL = ("backfill",)
-_STANDING = ("streaming", "normalizer", "external")
+_STANDING = ("streaming", "normalizer", "external", "horizon")
 
 #: option -> the kinds it shapes. `--transform` first, as the most common slip.
 SHAPES: dict[str, tuple[str, ...]] = {
@@ -22,6 +22,7 @@ SHAPES: dict[str, tuple[str, ...]] = {
     "--twin-of": _BACKFILL,
     "--raw-columns": _BACKFILL,
     "--period": ("streaming",),
+    "--horizon": ("horizon",),
     "--poll": ("streaming",),
     "--cursor-fields": ("streaming",),
     # external: the table its publisher writes; backfill: the physical table a

@@ -21,7 +21,7 @@ from rich.text import Text
 
 from uqs.checks.traced_queries import untraced_lines
 from uqs.cli import completion, install_bundle
-from uqs.cli.create import _plant_tables
+from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
 from uqs.cli.shared import _die, _paths, console, job_app
 from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols

@@ -9,14 +9,15 @@ below was run against this tree, and the output shown is what it printed.
 The question that picks it is **where the rows come from**, not what you do with
 them:
 
-  |                                         | rows come from      | shape          | guide                          |
-  | ---                                     | ---                 | ---            | ---                            |
-  | nothing — you make them                 | a timer             | **feed**       | [feed.md](feed.md)             |
-  | one or more plant tables                | a subscription      | **etl**        | [etl.md](etl.md)               |
-  | several tables that mean the same thing | a subscription each | **normalizer** | [normalizer.md](normalizer.md) |
-  | outside the stack, for a past window    | a query you write   | **backfill**   | [backfill.md](backfill.md)     |
-  | a window a backfill just published      | its publication     | **reaction**   | [reaction.md](reaction.md)     |
-  | outside q: a broker, a vendor's stream  | a Python publisher  | **external**   | [external.md](external.md)     |
+  |                                                | rows come from         | shape          | guide                          |
+  | ---                                            | ---                    | ---            | ---                            |
+  | nothing — you make them                        | a timer                | **feed**       | [feed.md](feed.md)             |
+  | one or more plant tables                       | a subscription         | **etl**        | [etl.md](etl.md)               |
+  | several tables that mean the same thing        | a subscription each    | **normalizer** | [normalizer.md](normalizer.md) |
+  | an event, judged by a table some time after it | events and a reference | **horizon**    | [horizon.md](horizon.md)       |
+  | outside the stack, for a past window           | a query you write      | **backfill**   | [backfill.md](backfill.md)     |
+  | a window a backfill just published             | its publication        | **reaction**   | [reaction.md](reaction.md)     |
+  | outside q: a broker, a vendor's stream         | a Python publisher     | **external**   | [external.md](external.md)     |
 
 The first three are **streaming**: long-running processes that subscribe,
 compute and republish forever. The fourth is **bounded**: it takes a window from
@@ -26,11 +27,11 @@ question is asked here, before anything is written.
 [new-pipeline.md](../guides/new-pipeline.md) takes the two shells apart once you
 have chosen.
 
-`--kind` names three of them --- `streaming` (the default), `normalizer`,
-`backfill`. There is no `--kind feed`: a streaming job that subscribes to
-nothing *is* a feed, and the scaffold derives that rather than asking twice. A
-reaction is `--triggered-by DATASET`, and is the one shape with no process of
-its own: it runs inside the process that publishes `DATASET`.
+`--kind` names four of them --- `streaming` (the default), `normalizer`,
+`horizon`, `backfill`. There is no `--kind feed`: a streaming job that
+subscribes to nothing *is* a feed, and the scaffold derives that rather than
+asking twice. A reaction is `--triggered-by DATASET`, and is the one shape with
+no process of its own: it runs inside the process that publishes `DATASET`.
 
 For a backfill taken all the way from scaffold to a filled database, see the
 worked example [from one kdb+ database to another](hdb-transfer.md). One script

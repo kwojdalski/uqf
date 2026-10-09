@@ -92,6 +92,7 @@ website:
           - scaffolding/feed.md
           - scaffolding/etl.md
           - scaffolding/normalizer.md
+          - scaffolding/horizon.md
           - scaffolding/backfill.md
           - scaffolding/hdb-transfer.md
           - scaffolding/reaction.md

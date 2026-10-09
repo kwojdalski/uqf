@@ -149,4 +149,139 @@ test_a_publish_that_throws_leaves_the_events_queued:{[t]
     .qunit.assertThrows[ns[nm;`score_ready];t0+0D00:00:02;"plant down";"the error is not swallowed here"];
     .qunit.assertEquals[count ns[nm;`pending];1;"so the next tick tries it again"]};
 
+/ --- event time, reference readiness, windows, identity, expiry (#952) -----
+/ .
+/ A transform whose events carry the instant they HAPPENED (source_time) and
+/ an id, so the plant's receipt stamp and the event's own clock can differ.
+
+sevents:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); id:`symbol$(); px:`float$())
+spriced:([] sym:`symbol$(); id:`symbol$(); px:`float$(); ref:`float$())
+
+sprice:{[e;r]
+    q:select sym, time:source_time+0D00:00:01, id, px from e;
+    j:aj[`sym`time;q;`sym`time xasc r];
+    select sym, id, px, ref:mid from j}
+
+define_src_transform:{[]
+    if[`horizontest_src in .qetl.transform.defined[]; :()];
+    .qetl.transform.define[`horizontest_src;`inputs`output`fn`examples!(
+        `events`refs!(.horizontest.sevents;.horizontest.refs);
+        .horizontest.spriced;
+        .horizontest.sprice;
+        enlist `inputs`expected!(
+            `events`refs!(([] time:enlist .horizontest.t0+0D00:00:30; source_time:enlist .horizontest.t0;
+                    sym:enlist `a; id:enlist `e1; px:enlist 1f);
+                ([] time:.horizontest.t0+0D00:00:00.5 0D00:00:05; sym:`a`a; mid:1.5 9f));
+            ([] sym:enlist `a; id:enlist `e1; px:enlist 1f; ref:enlist 1.5)))];
+    }
+
+sjob:{[nm;extra]
+    define_src_transform[];
+    d:@[decl_for[nm];`transform;:;`horizontest_src];
+    .qetl.job.stream.at_horizons[nm;d,extra];
+    `.horizontest.sent set ();
+    .qetl.job.stream.wire[nm;{[t;x] .horizontest.sent,:enlist (t;x); count x}];
+    nm}
+
+/ an event that happened at `at`, received 30s later
+sev:{[s;at;i] ([] time:enlist at+0D00:00:30; source_time:enlist at; sym:enlist s; id:enlist i; px:enlist 1f)}
+
+test_maturity_is_measured_on_event_time_not_receipt:{[t]
+    nm:sjob[`hz_s1;enlist[`event_time]!enlist `source_time];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+0D00:00:00 0D00:00:01.5;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:02;
+    .qunit.assertEquals[count sent;1;"due at source_time+1s, not 30s later on receipt"]};
+
+test_reference_readiness_waits_for_the_reference_to_advance:{[t]
+    nm:sjob[`hz_s2;`event_time`ready_on!(`source_time;`reference)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+0D00:00:00 0D00:00:00.5;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D01;
+    .qunit.assertEquals[count sent;0;"an hour of wall time, but the reference stops before T+1s"];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;enlist t0+0D00:00:01.2;enlist 3f]];
+    (ns[nm;`score_ready]) t0+0D01;
+    .qunit.assertEquals[count sent;1;"once it has advanced through the horizon"]};
+
+test_a_missing_cross_leg_holds_the_event_then_expires_it_with_the_reason:{[t]
+    / the event needs keys a and b; only a is ever quoted
+    nm:sjob[`hz_s3;`event_time`ready_on`legs`expire_after!(`source_time;`reference;{[e] (count e)#enlist `a`b};0D00:00:05)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:01 0D00:00:02;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:03;
+    .qunit.assertEquals[count ns[nm;`pending];1;"leg b has no reference, so it waits"];
+    (ns[nm;`score_ready]) t0+0D00:00:06;
+    .qunit.assertEquals[count sent;0;"never scored with a leg missing"];
+    gone:ns[nm;`expired];
+    .qunit.assertEquals[(count gone;count ns[nm;`pending]);1 0;"given up on after expire_after"];
+    .qunit.assertEquals[first gone`reason;"no reference for b";"and the diagnostic names the leg"]};
+
+test_a_negative_window_keeps_its_history_and_an_older_anchor:{[t]
+    / the window reaches 60s back: quotes at T-60s and T-30s must survive
+    nm:sjob[`hz_s4;`event_time`ready_on`lookback!(`source_time;`reference;0D00:01)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:02 -0D00:01 -0D00:00:30 -0D00:00:01;1 2 3 4f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:00.5;
+    kept:exec time from ns[nm;`history];
+    .qunit.assertTrue[all (t0+-0D00:01 -0D00:00:30) in kept;"T-60s and T-30s are inside the window"];
+    .qunit.assertTrue[(t0-0D00:02) in kept;"and T-120s is a's as-of anchor before it"]};
+
+test_an_event_without_an_anchor_before_its_window_is_not_ready:{[t]
+    nm:sjob[`hz_s5;`event_time`ready_on`lookback!(`source_time;`reference;0D00:01)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:30 0D00:00:02;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:03;
+    .qunit.assertEquals[count sent;0;"nothing at or before T-60s"]};
+
+test_a_redelivered_event_is_scored_once:{[t]
+    nm:sjob[`hz_s6;`event_time`identity!(`source_time;`id)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+0D00:00:00 0D00:00:02;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`on_batch])[`hz_events;update px:5f from sev[`a;t0;`e1]];
+    .qunit.assertEquals[exec px from ns[nm;`pending];enlist 5f;"one pending, the last delivery"];
+    (ns[nm;`score_ready]) t0+0D00:00:02;
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    .qunit.assertEquals[count ns[nm;`pending];0;"redelivered after it was scored: dropped"];
+    (ns[nm;`score_ready]) t0+0D00:00:03;
+    .qunit.assertEquals[count raze last each sent;1;"one output row, not two"]};
+
+test_a_scored_identity_is_forgotten_after_remember:{[t]
+    nm:sjob[`hz_s7;`event_time`identity`remember!(`source_time;`id;0D00:01)];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:02;
+    (ns[nm;`score_ready]) t0+0D00:02;
+    .qunit.assertEquals[count ns[nm;`completed];0;"the ledger of scored ids is bounded too"]};
+
+test_a_failed_publish_remembers_nothing:{[t]
+    nm:sjob[`hz_s8;`event_time`identity!(`source_time;`id)];
+    .qetl.job.stream.wire[nm;{[t;x] '"plant down"}];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    .qunit.assertThrows[ns[nm;`score_ready];t0+0D00:00:02;"plant down";"surfaced"];
+    .qunit.assertEquals[(count ns[nm;`pending];count ns[nm;`completed]);1 0;
+        "still queued, and not marked scored - so a retry is not suppressed"]};
+
+test_two_jobs_on_the_same_tables_keep_their_own_state:{[t]
+    / a long and a wide job over one tape
+    a:sjob[`hz_s9;enlist[`event_time]!enlist `source_time];
+    b:sjob[`hz_s10;`event_time`identity!(`source_time;`id)];
+    (ns[a;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    .qunit.assertEquals[(count ns[a;`pending];count ns[b;`pending]);1 0;"a batch to one is not the other's"];
+    (ns[b;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[a;`score_ready]) t0+0D00:00:02;
+    .qunit.assertEquals[(count ns[a;`pending];count ns[b;`pending]);0 1;"scoring one leaves the other queued"]};
+
+test_the_new_keys_are_refused_when_malformed:{[t]
+    define_src_transform[];
+    d:@[decl_for[`hz_s11];`transform;:;`horizontest_src];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`event_time]!enlist `when;
+        "*events input carries no when*";"an event_time the events lack"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`ready_on]!enlist `soon;
+        "*ready_on must be one of wall, reference*";"an unknown rule"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`legs]!enlist {[e] e};
+        "*declares legs, which only ready_on `reference reads*";"legs without reference readiness"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`expire_after]!enlist 0D00:00:00.5;
+        "*expire_after must be a timespan longer than the horizon*";"expiring before due"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`remember]!enlist 0D01;
+        "*remember without identity*";"remember with nothing to remember"]};
+
 \d .
