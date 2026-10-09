@@ -500,6 +500,7 @@ qetl.run,current_run,value,,
 qetl.run,facts_about,function,3,dataset range_from range_to
 qetl.run,facts_of,function,1,id
 qetl.run,finish,function,2,status counts
+qetl.run,finish_for,function,3,worker status counts
 qetl.run,history,function,1,
 qetl.run,in_flight,value,,
 qetl.run,init_meta,function,1,

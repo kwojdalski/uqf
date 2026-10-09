@@ -151,7 +151,21 @@ on_writing:{[dataset;nm;outputs;handler]
 
 / Register a reaction that runs a REGISTERED WORKER over the published range.
 / .
-/ The case where the graph edge is derivable, and therefore the one to prefer.
+/ The case where the graph edge is derivable. The worker runs IN THIS PROCESS,
+/ so it has limits `on` does not (#973):
+/ .
+/   - Plain q only. Under TorQ one process belongs to one bounded worker
+/     (.qetl.job.bounded.claim_process), and a reaction fires inside the
+/     publishing worker's own process, so it could never be admitted.
+/     Registration refuses there; run the downstream worker as its own
+/     process instead.
+/   - It runs as its OWN run, inside the publisher's window. The publisher's
+/     run and reaction drain are set aside for the duration and put back (even when the worker
+/     throws), so the worker gets its own etl_runs row, run id and coverage
+/     attribution and the publisher's row records the publisher's outcome.
+/     The run ledger refuses to close a row for a worker that did not open it
+/     (.qetl.run.finish_for) as a second line of defence.
+/ .
 / A bounded worker already declares its target through its source, so what
 / this reaction writes is read from .qetl.job.bounded rather than asserted: the entry in
 / the graph cannot disagree with what the worker does, and `derived` is 1b.
@@ -164,22 +178,56 @@ on_writing:{[dataset;nm;outputs;handler]
 / @param worker a worker registered with .qetl.job.bounded.define
 / @param spec_fn a function (range_from;range_to) -> the run specification
 / @return the reaction's name, which is the worker's name
-/ @throws error when the worker is not registered, spec_fn is not binary, or
-/   no bounded worker fills `dataset`
+/ @throws error when the worker is not registered, spec_fn is not binary,
+/   no bounded worker fills `dataset`, or this is a TorQ process
 / @eg .qetl.reaction.on_worker[`imported_trades;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
 on_worker:{[dataset;worker;spec_fn]
     cfg:.qetl.job.bounded.def worker;
+    if[not null .qetl.run.proc_name[];
+        '"on_worker: ",string[worker]," cannot run as a reaction inside TorQ process ",
+         string[.qetl.run.proc_name[]],": one bounded worker per process, and the reaction would run in the publisher's"];
     if[not (type spec_fn) within 100 112h;
         '"on_worker: ",string[worker],"'s spec_fn must be a function taking (range_from;range_to)"];
     if[(100h=type spec_fn) and not 2=count (value spec_fn) 1;
         '"on_worker: ",string[worker],"'s spec_fn must take exactly 2 arguments (range_from;range_to)"];
     ns:.qetl.job.bounded.namespace worker;
     h:{[worker;ns;spec_fn;ds;range_from;range_to]
-        (` sv ns,`init)[spec_fn[range_from;range_to]];
-        (` sv ns,`run)[];
-        (` sv ns,`cleanup)[]
-      }[worker;ns;spec_fn];
+        / The publisher's run AND its drain are set aside, not shared: begin
+        / refuses a second run in flight, finish would close the wrong row,
+        / and the reacting worker's own reactions would otherwise queue
+        / behind this one and leave it ending `partial with them owed.
+        saved:isolate[];
+        r:.[{[ns;spec_fn;range_from;range_to]
+            (` sv ns,`init)[spec_fn[range_from;range_to]];
+            (` sv ns,`run)[];
+            (` sv ns,`cleanup)[]; 1b}[ns;spec_fn];(range_from;range_to);{[e] e}];
+        restore saved;
+        if[not 1b~r; 'r];
+        1b}[worker;ns;spec_fn];
     register[dataset;worker;h;(),cfg`dataset;1b]}
+
+/ Private: set the publisher's run and drain aside, so a worker run inside a
+/ reaction starts from a clean process-local state (#973).
+/ @return what `restore` needs to put it all back
+/ @private
+isolate:{[]
+    saved:(.qetl.run.release[];queue;draining;depth_now;rows_now;io_now;window_now);
+    `.qetl.reaction.queue set empty_queue[];
+    `.qetl.reaction.draining set 0b;
+    `.qetl.reaction.depth_now set 0;
+    saved}
+
+/ Private: put back what `isolate` set aside.
+/ @private
+restore:{[saved]
+    `.qetl.run.current_run set saved 0;
+    `.qetl.reaction.queue set saved 1;
+    `.qetl.reaction.draining set saved 2;
+    `.qetl.reaction.depth_now set saved 3;
+    `.qetl.reaction.rows_now set saved 4;
+    `.qetl.reaction.io_now set saved 5;
+    `.qetl.reaction.window_now set saved 6;
+    saved 0}
 
 / The datasets a reaction may watch: those a registered bounded worker fills.
 / .

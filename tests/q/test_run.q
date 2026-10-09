@@ -125,6 +125,15 @@ test_finish_only_touches_its_own_run:{[t]
                          first exec status from .qetl.run.of_run[b]);
         (`completed;`failed);"each run keeps its own outcome"]};
 
+test_finish_for_refuses_a_run_another_worker_opened:{[t]
+    id:.qetl.run.begin[`w1;()!()];
+    .qunit.assertThrows[{[x] .qetl.run.finish_for[`w2;`failed;()!()]};::;
+        "finish_for: run in flight belongs to w1 not w2*";"another worker cannot close this run"];
+    .qunit.assertEquals[(first exec status from .qetl.run.of_run[id];.qetl.run.current[]);(`running;id);
+        "and the refusal closed nothing"];
+    .qetl.run.finish_for[`w1;`completed;()!()];
+    .qunit.assertEquals[first exec status from .qetl.run.of_run[id];`completed;"the owner closes it"]};
+
 test_finish_refuses_outside_a_run:{[t]
     .qunit.assertError[{[x] .qetl.run.finish[`completed;()!()]};::;"no run in flight"]};
 
