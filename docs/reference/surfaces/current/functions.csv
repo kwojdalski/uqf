@@ -540,6 +540,8 @@ qetl.source,local_read,function,4,root table from_ts to_ts
 qetl.source,local_root,function,1,path
 qetl.source,local_segments,function,1,root
 qetl.source,local_to_utc,function,2,tz ts
+qetl.source,mock_meta,function,1,tbl
+qetl.source,mock_seed,function,1,cred
 qetl.source,optional_declarations,dict,,
 qetl.source,primary,function,2,source fetched
 qetl.source,read_settings,function,1,path

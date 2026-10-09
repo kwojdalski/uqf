@@ -14,3 +14,7 @@
 / touches, symbols decoded against the HDB's own sym file - filter the rows
 / to [from_ts;to_ts) yourself. read[(`table;`col1`col2);from_ts;to_ts] reads
 / only those columns' files."
+"mock","0","an integer seed: the same seed and window always give the same rows","42","/ `h` is the seed: the credential, opened as a long - there is nothing to
+/ connect to. Generate the window's rows from it and the bounds,
+/ deterministically: the same seed and window must give the same rows
+/ (sidecars/mockups/mock_trades.q)."
