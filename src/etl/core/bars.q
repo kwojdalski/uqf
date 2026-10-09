@@ -32,7 +32,9 @@
 / (restore_from, #943): a replayed bar evicts its window's rows, so a restart
 / re-buffers the windows that were open and publishes none that were closed.
 / During a replay the process clock is not consulted - the log's rows are old
-/ by then - only whether the log already holds the window's bar.
+/ by then. A row is late if the log already holds the window's bar, or if the
+/ window had closed by the row's own receipt time (its `time` stamp, when that
+/ is not the event time), as it had when the row arrived live (#993).
 / .
 / PUBLISH BEFORE EVICT. The runner's safe timer swallows an error, so a
 / publish that throws leaves the windows buffered for the next tick.
@@ -163,11 +165,16 @@ on_batch:{[name;t;x]
     if[t=d`publishes; :mark_published[ns;ck;x]];
     if[(t<>d`events) or 0=count x; :()];
     pq:` sv ns,`pending;
+    now:(get ` sv ns,`now)[];
+    / the clock the row met: live, now; in a replay the process clock is no use
+    / (every row is old), so the plant's receipt stamp `time` stands for it, and
+    / a row is late exactly when it was live (#993). Without a distinct stamp
+    / (event_time is `time, or no `time`) only the log's own bars say a window is out.
+    / Read before the projection below, which drops `time` when the job does not keep it.
+    rcv:$[.qetl.job.stream.replaying; $[`time in cols x; x`time; count[x]#0Np]; count[x]#now];
     x:assign[d`width;d`event_time;(cols[get pq] except `bar_start)#x];
     x:(cols get pq)#x;
-    now:(get ` sv ns,`now)[];
-    / in a replay every row is old: only the log's own bars say a window is out
-    stale:$[.qetl.job.stream.replaying; 0b; (x[`bar_start]+(d`width)+d`lateness)<=now];
+    stale:(x[`bar_start]+(d`width)+d`lateness)<=rcv;
     out:stale | wkey[ck;x] in wkey[ck;get ` sv ns,`closed];
     if[any out;
         gone:x where out;
