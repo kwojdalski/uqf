@@ -99,8 +99,27 @@ def _configure(
             autocompletion=lambda: list(runtimes.RUNTIMES),
         ),
     ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option(
+            "--target",
+            help=(
+                "Run the command on a deployed release instead of this machine: a target "
+                "from deploy_targets.toml (`uqs target list`). Add --yes to skip the "
+                "confirmation a command that changes the server asks for."
+            ),
+        ),
+    ] = None,
+    yes: Annotated[
+        bool, typer.Option("--yes", help="With --target: run without asking", hidden=True)
+    ] = False,
 ) -> None:
     """Global options, applied before any subcommand runs."""
+    if target is not None or yes:
+        # The entry point forwards `uqs --target NAME ...` before this parses
+        # anything (cli/entry.py); reaching here means it did not, so running
+        # the command locally would be running it on the wrong machine.
+        _die(UqsError("--target goes before the command: `uqs --target NAME <command>`"))
     # Through the environment rather than an argument, so every path this
     # command builds - and every uqs a child process runs - agrees on it.
     if runtime_name is not None:

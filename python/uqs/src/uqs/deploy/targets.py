@@ -43,6 +43,10 @@ PER_RUN = frozenset({"artifact", "dry_run"})
 #: Options make_config takes as one comma-separated string; a file lists them.
 LISTED_AS_TEXT = frozenset({"jobs", "live_check"})
 SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
+#: Keys a target may hold that are not push options: the runtime it must run
+#: (checked against the artifact's), and labels, which `uqs target list` shows
+#: and nothing deploys (#956).
+NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"})
 
 
 def declaration_path(root: Path) -> Path:
@@ -67,7 +71,7 @@ def read(root: Path) -> dict[str, dict]:
 
 def _options(name: str, declared: dict) -> dict:
     """One target's settings, as make_config's keyword arguments."""
-    unknown = sorted(set(declared) - SETTABLE - {"runtime"})
+    unknown = sorted(set(declared) - SETTABLE - NOT_PUSH_OPTIONS)
     if unknown:
         raise DeployError(
             "arguments",
@@ -76,7 +80,7 @@ def _options(name: str, declared: dict) -> dict:
         )
     options = {}
     for key, value in declared.items():
-        if key == "runtime":
+        if key in NOT_PUSH_OPTIONS:
             continue
         if key in LISTED_AS_TEXT and isinstance(value, list):
             value = ",".join(str(v) for v in value)

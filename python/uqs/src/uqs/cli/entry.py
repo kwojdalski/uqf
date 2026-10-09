@@ -60,12 +60,19 @@ from uqs.cli import external  # noqa: F401
 from uqs.cli import odbc  # noqa: F401
 from uqs.cli import deploy  # noqa: F401
 from uqs.cli import deploy_server  # noqa: F401
+from uqs.cli import target  # noqa: F401
 
 # isort: on
+import sys
+
 from uqs.cli.shared import _env_log_level, app
 from uqs.cli.zsh_completion import patch_zsh_completion_script
-from uqs.logger import configure_logging
+from uqs.deploy import control
+from uqs.logger import configure_logging, get_logger
+from uqs.paths import UqsError
 from uqs.stack.envfiles import load_repo_env_files
+
+log = get_logger(__name__)
 
 
 def main() -> None:
@@ -79,6 +86,18 @@ def main() -> None:
     # Before app(): --install-completion and --show-completion are handled
     # inside it, and both read the template this swaps out.
     patch_zsh_completion_script()
+    # `uqs --target NAME <command>` runs the command on a deployed release
+    # (#956). Here, before Typer parses anything, because what follows is the
+    # SERVER's command line: the server's uqs parses it, and a command this
+    # checkout no longer has, or has changed, still means what it means there.
+    name, yes, rest = control.split_global(sys.argv[1:])
+    if name is not None:
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+        try:
+            sys.exit(target.forward(name, yes, rest, interactive=interactive))
+        except UqsError as exc:
+            log.error("{}", exc)
+            sys.exit(1)
     app()
 
 
