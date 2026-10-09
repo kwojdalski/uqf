@@ -82,6 +82,8 @@ the worker to one slice of its dataset - the only way two workers can fill one
 dataset - and `--check` scaffolds a quality check that throws until written.
 `--twin-of JOB` makes a backfill a streaming job's twin: its dataset and columns
 are read from JOB's published table, so `uqs gaps JOB` names it with no wiring.
+If JOB declares its `transform`, the twin applies that one (and `--transform` is
+refused), so a refill re-derives exactly what the job publishes.
 
 `--transform passthrough|derive` scaffolds the transform. For a backfill the
 default is the pass-through; `derive` declares a `.qetl.transform.define` whose

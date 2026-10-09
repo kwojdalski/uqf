@@ -52,8 +52,22 @@ def fixture_row(cols: list[tuple[str, str]]) -> str:
 # ------------------------------------------------------------------ BACKFILL
 
 
-def worker_transform(mode: str, worker: str, src: str, dataset: str) -> tuple[str, str, str]:
-    """A worker's transform: (q inside its namespace, q after it, transform name)."""
+def worker_transform(
+    mode: str, worker: str, src: str, dataset: str, shared: tuple[str, str] | None = None
+) -> tuple[str, str, str]:
+    """A worker's transform: (q inside its namespace, q after it, transform name).
+
+    `shared` is (stream job, its declared transform) for a twin: the twin then
+    applies that transform rather than one of its own, so a refill re-derives
+    what the job publishes (#884), and nothing is written for `mode`."""
+    if shared is not None:
+        job, name = shared
+        after = f"""/ {job}'s own transform, as it declares it: a refill re-derives what
+/ {job} publishes, by construction (#884). The source's fetch must hand over
+/ that transform's inputs, under its input names:
+/ .qetl.transform.registry[`{name}]`inputs.
+"""
+        return "", after, name
     check_mode(mode)
     if mode == "passthrough":
         after = f"""/ Pass-through until a real transform is needed: the batch is published as

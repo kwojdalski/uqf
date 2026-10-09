@@ -93,6 +93,25 @@ def twin_target(
     return dataset, definition_columns(definitions[dataset])
 
 
+def shared_transform(
+    repo_root: Path, twin_of: str, transform: str | None
+) -> tuple[str, str] | None:
+    """(twin_of, its declared transform) for a twin to apply, or None when the
+    job declares none - the twin then gets `transform`'s scaffold (#884).
+
+    A job that declares its transform decides the twin's, so --transform
+    beside it is refused rather than silently overridden."""
+    job = next(d for d in read_declarations(repo_root) if d.name == twin_of)
+    if not job.transform:
+        return None
+    if transform is not None:
+        raise UqsError(
+            f"--twin-of {twin_of} applies the transform it declares ({job.transform}), "
+            "so a refill re-derives what it publishes - drop --transform"
+        )
+    return twin_of, job.transform
+
+
 def backfill_plan(
     repo_root: Path,
     name: str,
@@ -115,8 +134,10 @@ def backfill_plan(
     `twin_of` names a streaming job whose published table this worker refills:
     its dataset and columns then come from there - see twin_target.
     """
+    shared = None
     if twin_of is not None:
         dataset, shape = twin_target(repo_root, twin_of, dataset, shape, definitions or {})
+        shared = shared_transform(repo_root, twin_of, transform)
     if start_with_all:
         # A backfill runs a window and exits; `uqs start all` starts
         # standing processes, and .qetl.job.bounded.define has no such key.
@@ -146,6 +167,7 @@ def backfill_plan(
         partition=partition,
         check=check,
         transform=transform or "passthrough",
+        shared=shared,
         reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
         define_table=dataset not in defined_tables(repo_root),
     )

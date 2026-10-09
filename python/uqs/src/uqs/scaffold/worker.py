@@ -50,6 +50,7 @@ def bounded_worker(
     partition: str | None = None,
     check: bool = False,
     transform: str = "passthrough",
+    shared: tuple[str, str] | None = None,
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker and its test.
 
@@ -76,7 +77,8 @@ def bounded_worker(
 
     `transform` is `passthrough` (the batch published as fetched) or `derive`
     (a `.qetl.transform.define` whose example fails until it is written) - see
-    scaffold/transform.py.
+    scaffold/transform.py. `shared` is (stream job, transform) for a twin of
+    a job that declares its transform: the twin applies that one (#884).
     """
     check_mode(transform)
     _check_name(name, "worker name")
@@ -130,6 +132,7 @@ def bounded_worker(
                 partition=partition,
                 check=check,
                 transform=transform,
+                shared=shared,
             ),
         )
     )
@@ -164,7 +167,12 @@ def bounded_worker(
             "With neither, the worker runs on the fixture, and warns that it is",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
-    if transform == "derive":
+    if shared is not None:
+        notes.append(
+            f"applies {shared[0]}'s transform {shared[1]}: make the source's fetch hand over "
+            f"its inputs, by name (.qetl.transform.registry[`{shared[1]}]`inputs)"
+        )
+    elif transform == "derive":
         notes.append(
             f"write .qpipe.job.{worker}.derive and the expected rows of its example in "
             f"{worker}_transform - .qetl.transform.verify fails the suite until both are"

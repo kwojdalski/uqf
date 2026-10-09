@@ -88,7 +88,9 @@ namespace:{[job] ` sv job_root,job}
 / @param decl dict of procname, subscribe_to, publishes, and then on_batch
 /   (required when it subscribes), period and on_timer (a pair) - or period
 /   and poll, for a polling feed (see stream_poll.q); optionally
-/   start_with_all (a boolean, default 0b) and note (a string)
+/   start_with_all (a boolean, default 0b), note (a string) and transform
+/   (the registered transform it applies, which its backfill twin applies
+/   too - #884)
 / @return the job name
 / @throws error naming every missing or malformed field at once
 define:{[job;decl]
@@ -141,6 +143,15 @@ define:{[job;decl]
         '"define: ",string[job],"'s start_with_all must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note;
         '"define: ",string[job],"'s note must be a string"];
+    / The shared transform the job applies, when it applies one: what a twin
+    / refilling its table must apply too, and what `uqs job new --twin-of`
+    / scaffolds into one (#884). Checked here, so a declared name cannot
+    / point at nothing.
+    if[`transform in key decl;
+        if[not -11h=type decl`transform;
+            '"define: ",string[job],"'s transform must be a symbol naming a registered transform"];
+        if[not (decl`transform) in .qetl.transform.defined[];
+            '"define: ",string[job]," declares transform ",string[decl`transform],", which is not registered - define it before the job"]];
     / Restoring state at start - see `start` below.
     if[(`replay in key decl) and not -1h=type decl`replay;
         '"define: ",string[job],"'s replay must be a boolean, 1b to rebuild state from the day's log at start"];

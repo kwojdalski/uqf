@@ -37,6 +37,12 @@ definition rather than given, so the twin writes the right table by
 construction. `--columns` is refused, and so is a `--dataset` the job does not
 publish. A job that publishes several tables needs `--dataset` to pick one.
 
+When the job declares the transform it applies (`transform` in its
+`.qetl.job.stream.define`), the twin applies that same transform, so a refill
+re-derives what the job publishes, and `--transform` is refused. The source's
+fetch must hand over that transform's inputs, by name. A job that declares no
+transform gets the usual `--transform` scaffold.
+
 ```
 uqs job new crypto_markout_hist --kind backfill --twin-of crypto_markout
 ```

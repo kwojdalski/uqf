@@ -60,6 +60,9 @@ class Declaration:
     #: A bounded worker's declared default source_version, "" when it declares
     #: none and a run must name one.
     source_version: str = ""
+    #: The registered transform the job or worker declares it applies, "" when
+    #: it declares none. A streaming job's is what its twin applies (#884).
+    transform: str = ""
 
     @property
     def worker(self) -> str | None:
@@ -186,6 +189,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
         source = symbols(fields.get("source", ""))
         dataset = symbols(fields.get("dataset", ""))
         version = symbols(fields.get("source_version", ""))
+        transform = symbols(fields.get("transform", ""))
         return Declaration(
             name,
             proc[0],
@@ -198,6 +202,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             source=source[0] if source else "",
             dataset=dataset[0] if dataset else "",
             source_version=version[0] if version else "",
+            transform=transform[0] if transform else "",
         )
     proc = symbols(fields.get("procname", ""))
     if not proc:
@@ -220,7 +225,18 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
     subscribe_to = symbols(fields.get("subscribe_to", ""))
     kind = PipelineKind.ETL if subscribe_to else PipelineKind.FEED
     publishes = symbols(fields.get("publishes", ""))
-    return Declaration(name, proc[0], kind, subscribe_to, publishes, start_with_all, note, path)
+    transform = symbols(fields.get("transform", ""))
+    return Declaration(
+        name,
+        proc[0],
+        kind,
+        subscribe_to,
+        publishes,
+        start_with_all,
+        note,
+        path,
+        transform=transform[0] if transform else "",
+    )
 
 
 def declaration_calls(source: str) -> list[tuple[str, str, dict[str, str]]]:

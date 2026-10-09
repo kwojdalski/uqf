@@ -168,7 +168,7 @@ now:{[] .z.p}
 
 / Score every second - frequent enough that demo_execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
-.qetl.job.stream.define[`demo_markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
+.qetl.job.stream.define[`demo_markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`transform`note!(
     `demo_markout1;
     `trades`quote;
     enlist `demo_execution_quality;
@@ -176,4 +176,5 @@ now:{[] .z.p}
     0D00:00:01.000;
     .qpipe.job.demo_markout.on_timer;
     1b;
+    `demo_execution_quality;
     "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two")];
