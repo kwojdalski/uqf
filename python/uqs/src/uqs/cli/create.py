@@ -28,6 +28,7 @@ from uqs.cli.shared import (
     app,
     job_app,
 )
+from uqs.model.kinds import SCAFFOLD_KINDS
 from uqs.paths import (
     UqsError,
 )
@@ -48,9 +49,7 @@ def new_job(
             help="'streaming' (default), 'backfill', 'normalizer', 'external' (a Python "
             "publisher outside q, plus the q job reshaping what it publishes) or 'horizon' "
             "(each event evaluated once --horizon has passed)",
-            autocompletion=completion.choices(
-                "streaming", "backfill", "normalizer", "external", "horizon"
-            ),
+            autocompletion=completion.choices(*SCAFFOLD_KINDS),
         ),
     ] = "streaming",
     subscribe_to: Annotated[
@@ -363,9 +362,7 @@ def new_job(
                 procname=procname, start_with_all=start_with_all, profile=profile,
                 unprofiled=unprofiled,
             )  # fmt: skip
-        raise UqsError(
-            f"--kind must be streaming, backfill, normalizer, external or horizon: {kind!r}"
-        )
+        raise UqsError(f"--kind must be one of {', '.join(SCAFFOLD_KINDS)}: {kind!r}")
 
     try:
         if bundle is not None:
