@@ -130,7 +130,9 @@ def test_a_lock_with_no_owner_file_is_refused_not_unreadable(tmp_path):
 def test_break_lock_refuses_a_holder_that_still_beats(tmp_path):
     dest = tmp_path / "uqf"
     _held(dest, age=10)
-    with pytest.raises(DeployError, match="not broken: it last beat 10s ago, within 300s"):
+    # 10s, or 11s if a second ticks over between writing the beat and
+    # reading it - which CI's runner did (#951)
+    with pytest.raises(DeployError, match=r"not broken: it last beat 1[01]s ago, within 300s"):
         _server(dest, break_lock=True).take_lock()
     assert "OLD" in (dest / "deploy.lock" / "owner").read_text(), "left as it was"
 
