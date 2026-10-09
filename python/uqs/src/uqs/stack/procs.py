@@ -114,13 +114,17 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 DATAACCESS_PROCTYPES = frozenset({"gateway", "rdb", "hdb"})
 DATAACCESS_EXTRAS = "-dataaccess ${TORQDATA}/tableproperties.csv"
 
-#: gateway1's access list (the `U` column, q's `-U`): the vendored one plus
-#: the ordinary users of scripts/torqconfig/permissions/gateway_users.csv,
-#: written by bootstrap (stack/gateway_access.py). Only gateway1's: an ordinary
-#: user can log in at the gateway, where .pm holds them to getdata and its
-#: policies, and nowhere else - rdb1 and hdb1 still take the vendored list,
-#: so going round the gateway is refused at login.
-GATEWAY_ACCESS_OVERLAY = {"gateway1": "${TORQDATA}/gateway_accesslist.txt"}
+#: Access lists (the `U` column, q's `-U`) written by bootstrap
+#: (stack/gateway_access.py): the vendored logins plus a role's own users.
+#: gateway1 adds scripts/torqconfig/permissions/gateway_users.csv - an
+#: ordinary user logs in there, where .pm holds them to getdata, and nowhere
+#: else, so going round the gateway is refused at login. sctp1, the chained
+#: tickerplant, adds subscriber_users.csv - an outside real-time subscriber
+#: (#984) subscribes there as itself, never on stp1 or a data tier.
+ACCESS_LIST_OVERLAY = {
+    "gateway1": "${TORQDATA}/gateway_accesslist.txt",
+    "sctp1": "${TORQDATA}/subscriber_accesslist.txt",
+}
 
 
 def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
@@ -148,8 +152,8 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
                 row["load"] = " ".join(x for x in (*before, row["load"], *after) if x)
             if row["proctype"] in DATAACCESS_PROCTYPES:
                 row["extras"] = " ".join(x for x in (row["extras"], DATAACCESS_EXTRAS) if x)
-            if row["procname"] in GATEWAY_ACCESS_OVERLAY:
-                row["U"] = GATEWAY_ACCESS_OVERLAY[row["procname"]]
+            if row["procname"] in ACCESS_LIST_OVERLAY:
+                row["U"] = ACCESS_LIST_OVERLAY[row["procname"]]
         for row in rows:
             # stp1 loads its schema via -schemafile in `extras`; point it at the
             # generated copy (vendored database.q + uqf's own `fx_orderbook` table -

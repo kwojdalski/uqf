@@ -100,6 +100,9 @@ def test_run_torq_sh_runs_a_site_launcher_under_the_generated_env(monkeypatch, t
     }
     seen: dict[str, Any] = {}
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: generated)
+    # The launcher is under test, not the q-version guard (#882): with a real
+    # q installed, the guard would ask it through the stubbed subprocess.run.
+    monkeypatch.setattr(runtime.qtree, "refuse_unloadable", lambda paths, env: None)
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, **kw))
     runtime.run_torq_sh(_paths(), ["start", "all"])
     assert seen["cmd"] == [str(launcher), "start", "all"]

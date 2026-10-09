@@ -35,6 +35,11 @@
 .qpipe.source.demo_events.query
 .qpipe.source.duckdb_deals.query
 .qpipe.source.upstream_trades.query
+# hdb_executions.query reads executions over IPC from a live HDB (#946)
+.qpipe.source.hdb_executions.query
+# exec_bars.now is the wall clock bars.q installs ({.z.p}); the bars tests
+# inject their own time, so only a live timer enters it (#946)
+.qpipe.job.exec_bars.now
 
 # --- Needs a running TorQ process --------------------------------------
 # .qtorq is the TorQ block library and .qpipe.job the subscriber processes. Both
