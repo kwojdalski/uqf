@@ -29,9 +29,7 @@ fake_post:{[target;body]
 ready:{[]
     `.alert_sinktest.calls set ();
     `.alert_sinktest.failures set 0;
-    `.qpipe.job.alert_sink.alerts set .qlimit.no_alerts[];
-    `.qpipe.job.alert_sink.pending set 0#.qpipe.job.alert_sink.pending;
-    `.qpipe.job.alert_sink.dead set 0#.qpipe.job.alert_sink.dead;
+    .qetl.job.stream.reset `alert_sink;
     `.qpipe.job.alert_sink.post set .alert_sinktest.fake_post;
     setenv[`UQF_SOURCE_CRED_ALERT_SINK;.alert_sinktest.hook];
     }

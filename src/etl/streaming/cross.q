@@ -151,9 +151,10 @@ now:{[] .z.p}
         2026.09.17D10:00:01);
     1b)];
 
-.qetl.job.stream.define[`cross;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`cross;`procname`subscribe_to`publishes`on_batch`note`state!(
     `cross1;
     enlist `fx_orderbook;
     `symbol$();
     .qpipe.job.cross.on_batch;
-    "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); fxorderbookfeed1 runs by default, so `uqs start cross1` is enough")];
+    "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); fxorderbookfeed1 runs by default, so `uqs start cross1` is enough";
+    `fx_orderbook`crosses`unpriced)];

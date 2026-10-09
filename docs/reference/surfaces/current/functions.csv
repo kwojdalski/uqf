@@ -346,6 +346,7 @@ qetl.job.stream,end_of_day,function,1,dt
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
 qetl.job.stream,horizons,dict,,
+qetl.job.stream,initial,dict,,
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
 qetl.job.stream,namespace,function,1,job
@@ -357,6 +358,7 @@ qetl.job.stream,preview_recent,function,3,job n span
 qetl.job.stream,procnames,dict,,
 qetl.job.stream,replaying,value,,
 qetl.job.stream,required_declarations,value,,
+qetl.job.stream,reset,function,1,job
 qetl.job.stream,running,value,,
 qetl.job.stream,start,function,2,job tr
 qetl.job.stream,subscriptions,function,1,job

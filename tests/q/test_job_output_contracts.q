@@ -182,7 +182,7 @@ unimplemented:()
 
 drive:{[j]
     .sjtest.reset[];
-    `.qpipe.job.cross_arbitrage.books set 0#.qpipe.job.cross_arbitrage.books;
+    .qetl.job.stream.reset `cross_arbitrage;
     $[j in key .jobouttest.drivers; .jobouttest.drivers[j][];
       100h=type f:own_driver j;
         @[f;::;{[j;e] `.jobouttest.unimplemented set

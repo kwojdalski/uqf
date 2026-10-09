@@ -171,7 +171,7 @@ on_replayed:{[]
 
 \d .
 
-.qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note!(
+.qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note`state!(
     `kafka_flow1;
     `kafka_client_flow;
     enlist `client_flow;
@@ -179,4 +179,5 @@ on_replayed:{[]
     1b;
     enlist `client_flow;
     .qpipe.job.kafka_flow.on_replayed;
-    "deduplicates client FX flow consumed off a Kafka topic, on the (partition;offset) the record carries. The raw rows are published by an EXTERNAL Python consumer (external/kafka_feed.py) - a q process cannot hold a Kafka subscription - so kafka_client_flow has a schema row but no producer in this list. That is why it does not start with the stack: on a default start nothing publishes the table it subscribes to, and it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer")];
+    "deduplicates client FX flow consumed off a Kafka topic, on the (partition;offset) the record carries. The raw rows are published by an EXTERNAL Python consumer (external/kafka_feed.py) - a q process cannot hold a Kafka subscription - so kafka_client_flow has a schema row but no producer in this list. That is why it does not start with the stack: on a default start nothing publishes the table it subscribes to, and it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer";
+    enlist `held)];

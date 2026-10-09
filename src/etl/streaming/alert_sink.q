@@ -155,11 +155,12 @@ on_timer:{[] flush[.z.p]; }
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`alert_sink;`procname`subscribe_to`publishes`on_batch`period`on_timer`note!(
+.qetl.job.stream.define[`alert_sink;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state!(
     `alert_sink1;
     enlist `fx_limit_breach;
     `symbol$();
     .qpipe.job.alert_sink.on_batch;
     0D00:00:10;
     .qpipe.job.alert_sink.on_timer;
-    "outbound webhook for fx_limit_breach, at least once; refuses to run without UQF_SOURCE_CRED_ALERT_SINK. On demand: it needs a webhook URL, and without one it would only fail")];
+    "outbound webhook for fx_limit_breach, at least once; refuses to run without UQF_SOURCE_CRED_ALERT_SINK. On demand: it needs a webhook URL, and without one it would only fail";
+    `alerts`pending`dead)];
