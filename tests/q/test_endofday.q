@@ -227,4 +227,39 @@ test_a_batch_beyond_the_window_is_not_held:{[t]
     .qetl.job.stream.replayed `fx_positions;
     .qunit.assertEquals[held;0;"the 5-minute-late batch closed the window, so nothing is held"]};
 
+/ #1015: a snapshot logged later than the window after the first batch
+/ cannot have the earlier batches re-applied, and says so rather than
+/ leaving the book silently short.
+late_snapshot_replay:{[]
+    record[`fx_positions];
+    on:.qpipe.job.fx_positions.on_batch;
+    on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qetl.job.stream.snapshot `fx_positions;
+    opening:update time:.eodtest.t1+0D00:06 from sent_on `fx_position_open;
+    early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+    later:update time:.eodtest.t1+0D00:05 from fill[`GBPUSD;1;1e6;1.27;`london;`spot];
+    `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
+    replay[`fx_positions;((`executions;early);(`executions;later);(`fx_position_open;opening))];
+    }
+
+errors:{[lines] lines where `ERROR=first each lines}
+
+test_a_snapshot_past_the_window_is_logged_as_an_error:{[t]
+    e:errors .testutil.captured_log[0b] .eodtest.late_snapshot_replay;
+    .qunit.assertEquals[count e;1;"one error for the abandoned recording"];
+    .qunit.assertEquals[e[0;1];`fx_positions;"naming the job"];
+    .qunit.assertEquals[e[0;3]`window;0D00:01;"and the window it overran"]};
+
+test_a_snapshot_within_the_window_logs_no_error:{[t]
+    f:{[]
+        record[`fx_positions];
+        on:.qpipe.job.fx_positions.on_batch;
+        on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+        .qetl.job.stream.snapshot `fx_positions;
+        opening:sent_on `fx_position_open;
+        early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+        `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
+        replay[`fx_positions;((`executions;early);(`fx_position_open;opening))]};
+    .qunit.assertEquals[count errors .testutil.captured_log[0b] f;0;"the ordinary restart is not an error"]};
+
 \d .
