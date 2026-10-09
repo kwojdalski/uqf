@@ -28,10 +28,11 @@ REPO = Path(__file__).resolve().parents[2]
 PAGE = REPO / "docs" / "reference" / "pipeline-declarations.md"
 CORE = REPO / "src" / "etl" / "core"
 
-#: section heading prefix -> (declaring file, the key lists it defines,
-#: keys a list names that are derived rather than declared)
+#: section heading prefix -> (declaring file, or a glob where the namespace
+#: spans files (`.qetl.source`, #970), the key lists it defines, keys a list
+#: names that are derived rather than declared)
 BLOCKS: dict[str, tuple[str, tuple[str, ...], frozenset[str]]] = {
-    "## Source": ("source_contract.q", ("required_declarations",), frozenset()),
+    "## Source": ("source_*.q", ("required_declarations",), frozenset()),
     "## Transform": ("transform.q", ("required_keys",), frozenset()),
     "## Bounded worker": ("bounded_worker.q", ("required_cfg", "optional_cfg"), frozenset()),
     # `ns` is in the list because register stamps it before checking; a job
@@ -66,7 +67,7 @@ def main() -> int:
         if heading not in page:
             problems.append(f"{PAGE.name}: no section starting '{heading}'")
             continue
-        source = (CORE / file).read_text()
+        source = "\n".join(f.read_text() for f in sorted(CORE.glob(file)))
         rows = section_keys(page, heading)
         listed = {k for name in lists for k in q_list(source, name)} - derived
         for k in sorted(listed - set(rows)):
