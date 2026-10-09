@@ -108,7 +108,27 @@ EXCLUDED_FILES: dict[str, str] = {}
 #: belongs here if the document is BETTER for naming something non-existent -
 #: an illustration of what not to write, or a name being discussed rather
 #: than used. Anything else should be fixed in the prose instead.
+#: A selector a process SETS before loading src/etl/init.q: defining it in q
+#: would itself be a selection (test_q_names.SET_BY_CALLER).
+_CALLER_SET = "set by the caller before src/etl/init.q loads; never defined in q"
+
 ALLOWED_MISSING = {
+    (
+        ".claude/skills/uqf-framework/SKILL.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-framework/uqf-architecture.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-framework/uqf-architecture.md",
+        ".qetl.load.only_sources",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-framework/uqf-q-traps.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
     (
         ".claude/agents/uqf-developer.md",
         ".qfwd.sub",
