@@ -35,6 +35,7 @@ reset:{[]
     `.qpipe.job.superbook.books set `sym`source xkey .qpipe.job.market_data.market_data;
     `.qpipe.job.posbook.book set 1!0#.qpipe.job.posbook.position_book;
     `.qpipe.job.posbook.last_mid set (`symbol$())!`float$();
+    `.qpipe.job.posbook.crypto_tob set 0#.qpipe.job.posbook.crypto_tob;
     `.qpipe.job.crypto_mock.last_id set .qpipe.job.crypto_mock.venues!(count .qpipe.job.crypto_mock.venues)#0;
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey 0#.qpipe.job.fx_positions.desk_book;
     `.qpipe.job.fx_positions.limits set 0#.qpipe.job.fx_positions.limits;
@@ -494,7 +495,7 @@ an_execution:{[ts;s;side;price;size]
 
 / A one-level book whose touch IS `mid` on both sides, so its level-0 mid is
 / exactly `mid` rather than a float sum's nearest neighbour.
-a_book:{[s;mid] ([] time:enlist d 0; sym:enlist s; source:enlist `UQFFX; source_time:enlist d 0;
+a_book:{[s;mid] ([] time:enlist d 0; sym:enlist s; source:enlist `UQFFX; market:enlist `fx; source_time:enlist d 0;
     bid_prices:enlist enlist mid; bid_sizes:enlist enlist 1e6;
     ask_prices:enlist enlist mid; ask_sizes:enlist enlist 1e6)}
 
@@ -836,8 +837,30 @@ test_the_mock_reaches_posbook_through_both_normalizers:{[t]
         "twenty ticks at a 30% touch share is enough for at least one fill to reach the book"];
     .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in .qpipe.job.crypto_mock.syms;
         "and every position is in a symbol the mock trades"];
-    .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in key .qpipe.job.posbook.last_mid;
-        "each marked to a mid from the mock's own book, through market_data"]};
+    .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in exec sym from .qpipe.job.posbook.crypto_tob;
+        "each marked against the mock's own books, through market_data"]};
+
+test_posbook_marks_a_crypto_fill_to_the_best_mid_across_venues:{[t]
+    / The library's one reference price (#886): the highest bid and lowest
+    / ask any fresh venue shows, not whichever venue published last.
+    reset[];
+    book:{[v;bid;ask] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        update venue:v from crypto_book_row[`$"BTC-USDT";bid;ask]]};
+    to_posbook[`market_data;book[`binance_spot;62000 61999 61998f;62010 62011 62012f]];
+    to_posbook[`market_data;book[`kraken;62004 62003 62002f;62008 62009 62010f]];
+    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
+    .testutil.assertApprox[first last_rows[]`mark_price;62006f;1e-9;
+        "best bid 62004 from kraken, best ask 62008 from kraken: 62006, not binance's 62005"]};
+
+test_posbook_does_not_mark_a_crypto_fill_to_a_stale_venue:{[t]
+    reset[];
+    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]]];
+    / Ten seconds later: the only book is older than the library's max age.
+    fill:.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]];
+    .qpipe.job.posbook.on_batch[`executions;`time xcols update time:.sjtest.d[10] from fill];
+    .testutil.assertApprox[first last_rows[]`mark_price;61000f;1e-9;
+        "no fresh venue: marked at the fill's own price, as an unquoted sym is"]};
 / --- fx orders feed -------------------------------------------------------
 
 test_the_orders_feed_publishes_one_order_a_tick:{[t]

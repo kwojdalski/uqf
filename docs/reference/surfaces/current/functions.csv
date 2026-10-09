@@ -673,6 +673,7 @@ qmeta,profile,function,3,time_cols null_cols rules
 qmeta,reconcile,function,5,metatable dates ds part version
 qmeta,refresh,function,3,current spec partitions
 qmeta,require_name,function,1,name
+qmicro,best_mid_across_venues,function,3,tob targets max_age
 qmicro,book_convexity,function,2,prices side
 qmicro,book_pressure_at_level,function,3,bid_sizes ask_sizes level
 qmicro,book_slope,function,2,prices sizes
@@ -697,6 +698,7 @@ qmicro,ofi_autocorrelation,function,2,ofi_series window
 qmicro,ofi_multilevel,function,3,quotes target_sym n_levels
 qmicro,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
 qmicro,queue_depletion_rate,function,3,quotes target_sym side
+qmicro,reference_max_age,value,,
 qmicro,require_tape,function,1,tape
 qmicro,rolling_ofi,function,2,ofi_series window
 qmicro,rolling_return_variance,function,3,quotes target_sym window
@@ -797,7 +799,6 @@ qpipe.job.crypto_market_data_backfill,range_to,value,,
 qpipe.job.crypto_market_data_backfill,run,function,1,
 qpipe.job.crypto_market_data_backfill,source_version,value,,
 qpipe.job.crypto_market_data_backfill,spec,function,1,
-qpipe.job.crypto_markout,best_mid,function,3,tob targets max_age
 qpipe.job.crypto_markout,book_hist,table,,
 qpipe.job.crypto_markout,books,table,,
 qpipe.job.crypto_markout,crypto_execution_quality,table,,
@@ -1030,6 +1031,9 @@ qpipe.job.market_data,quote,table,,
 qpipe.job.posbook,as_trades,function,1,x
 qpipe.job.posbook,book,dict,,
 qpipe.job.posbook,book_mids,function,1,x
+qpipe.job.posbook,crypto_books,function,1,x
+qpipe.job.posbook,crypto_marks,function,2,tob batch
+qpipe.job.posbook,crypto_tob,dict,,
 qpipe.job.posbook,executions,table,,
 qpipe.job.posbook,last_mid,dict,,
 qpipe.job.posbook,mark_positions,function,3,book trades mids
