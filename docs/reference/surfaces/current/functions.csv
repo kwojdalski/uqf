@@ -651,6 +651,10 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
+qetl.webhook,check,function,1,raw
+qetl.webhook,post,function,2,target body
+qetl.webhook,request,function,3,host path body
+qetl.webhook,status_of,function,1,raw
 qexec,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
 qexec,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
 qexec,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
