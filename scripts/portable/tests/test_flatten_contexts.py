@@ -249,7 +249,7 @@ def test_the_status_and_interval_modules_convert_without_refusal():
         assert results[p].action == "transformed" and not results[p].refusals, p
     gaps = results["src/etl/core/intervals.q"].output
     assert ".qetl.coverage.require_interval[from_ts;to_ts];" in gaps
-    assert "merged:.qetl.coverage.compose covered;" in gaps
+    assert "merged:.qetl.coverage.compose[covered];" in gaps
 
 
 # ------------------------------------------------------- back to 5.0
