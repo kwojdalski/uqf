@@ -376,8 +376,14 @@ key_table:{[t;bys] ?[t;();0b;bys!bys]}
 / definition). Opening lots sit at the FRONT of the queue: they are the
 / oldest thing in it, so fifo reaches them first and lifo reaches them
 / last, exactly as if their trades had been in the table.
+/ .
+/ So each goes in through the method's own `open rule, as a trade's lot
+/ would: under weighted, several carried-in lots merge into the one
+/ running average, rather than sitting in the queue for pick_first to close
+/ the oldest at its own price (#938). For the append_lot methods the fold is
+/ the plain upsert it replaced.
 / @private
-seed_lots:{[trades;opening;ix]
+seed_lots:{[m;trades;opening;ix]
     empty:new_lots[trades];
     if[0=count ix; :empty];
     rows:opening ix;
@@ -385,10 +391,10 @@ seed_lots:{[trades;opening;ix]
     / A carried-in lot with no trade behind it gets a null id and a null
     / time, of the trades table's own types - so the queue stays one
     / typed table whatever mixture it holds.
-    empty upsert ([]
+    (m`open)/[empty; empty upsert ([]
         trade_id:$[`trade_id in cols rows; rows`trade_id; n#first 0#trades`trade_id];
         time:$[`time in cols rows; rows`time; n#first 0#trades`time];
-        qty:"f"$rows`qty; price:"f"$rows`price; side:rows`side)}
+        qty:"f"$rows`qty; price:"f"$rows`price; side:rows`side)]}
 
 / Private: match one bucket, returning its ledger and its leftover lots.
 / @private
@@ -426,7 +432,7 @@ run:{[trades;opts]
     oid:ks?ok;
     res:{[m;bys;trades;opening;ks;tid;oid;j]
         bucket[m;bys;ks j;
-            seed_lots[trades;opening;where oid=j];
+            seed_lots[m;trades;opening;where oid=j];
             trades where tid=j]}[m;bys;trades;opening;ks;tid;oid] each til count ks;
     empty_kv:bys!first each 0#/:trades bys;
     matches:$[count res; raze res[;`matches]; with_by[new_matches[trades];empty_kv;bys]];

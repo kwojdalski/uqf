@@ -264,6 +264,18 @@ test_a_day_split_in_two_attributes_the_same_as_one_run:{[t]
     .qunit.assertEquals[exec open_price from second_half; exec open_price from whole;
         "and the same lots were closed at the same prices"]};
 
+test_weighted_merges_carried_in_lots_as_if_they_had_traded:{[t]
+    / #938: several opening lots went into the queue unmerged, so weighted
+    / closed the oldest at its own price - FIFO under another name.
+    d1:([] time:2026.01.01D10:00 2026.01.01D11:00; sym:`EURUSD`EURUSD; side:1 1; size:1e6 1e6; trade_price:1.10 1.20);
+    d2:([] time:2026.01.02D10:00 2026.01.02D11:00; sym:`EURUSD`EURUSD; side:-1 1; size:1e6 1e6; trade_price:1.15 1.30);
+    opts:`method`opening!(`weighted;.qalloc.residual[d1;`fifo]);
+    r:.qalloc.run[d2;opts];
+    .qunit.assertEquals[exec sum pnl from r`matches; exec sum pnl from .qalloc.allocate[d1,d2;`weighted];
+        "a sell at the 1.15 average realises what the one-go run does: nothing"];
+    .qunit.assertEquals[exec price from r`residual; exec price from .qalloc.residual[d1,d2;`weighted];
+        "and leaves the same 1.225 average open"]};
+
 test_a_malformed_opening_position_is_refused:{[t]
     .qunit.assertThrows[.qalloc.allocate[mk_today[];]; `method`opening!(`fifo;([] sym:enlist `EURUSD));
         "*opening is missing required column(s)*"; "a lot needs a qty, a price and a side"];
