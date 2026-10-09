@@ -1,9 +1,9 @@
 """Installing jobs kept outside the tree - a "sidecar" folder - into it.
 
-src/etl/init.q loads every .q file under src/etl/sources, src/etl/workers and
-src/etl/streaming, in that order, and the registry reads the same folders. So
-putting a file in the right one of those three IS the installation; nothing
-has to be listed anywhere. What this adds is getting the folder right without
+src/etl/init.q loads every .q file under src/etl/sources, src/etl/workers,
+src/etl/streaming and src/etl/reactions, in that order, and the registry reads
+the same folders. So putting a file in the right one of those IS the
+installation; nothing has to be listed anywhere. What this adds is getting the folder right without
 the operator having to know which file is which, and refusing the cases that
 would leave the tree unable to load.
 
@@ -13,6 +13,7 @@ it sat in the sidecar, so a sidecar can be laid out any way its owner likes:
     .qetl.source.define                  a source     -> src/etl/sources
     .qetl.job.bounded.define                     a worker     -> src/etl/workers
     .qetl.job.stream.define, .qetl.job.stream.normalize a streaming job -> src/etl/streaming
+    .qetl.reaction.on, .qetl.reaction.on_writing         a reaction     -> src/etl/reactions
 
 A file declaring more than one kind is refused: the directories load in a
 fixed order - a worker's source must already exist when the worker defines
@@ -34,8 +35,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from uqs.model.declarations import declaration_calls, strip_q_comments
-from uqs.paths import SOURCE_DIR, STREAM_DIR, WORKER_DIR
+from uqs.model.declarations import declaration_calls, reaction_calls, strip_q_comments
+from uqs.paths import REACTION_DIR, SOURCE_DIR, STREAM_DIR, WORKER_DIR
 
 #: A source registers itself through .qetl.source.define, whose name argument is
 #: usually a variable (`source_name`) rather than a literal - so a source is
@@ -52,6 +53,7 @@ class Kind(StrEnum):
     SOURCE = "source"
     WORKER = "worker"
     STREAMING = "streaming job"
+    REACTION = "reaction"
 
 
 #: Where each kind goes, relative to the repository root.
@@ -59,6 +61,7 @@ DESTINATIONS: dict[Kind, Path] = {
     Kind.SOURCE: SOURCE_DIR,
     Kind.WORKER: WORKER_DIR,
     Kind.STREAMING: STREAM_DIR,
+    Kind.REACTION: REACTION_DIR,
 }
 
 
@@ -95,6 +98,9 @@ def classify(text: str) -> tuple[set[Kind], tuple[str, ...]]:
         names.append(name)
     if _SOURCE_CALL.search(strip_q_comments(text)):
         kinds.add(Kind.SOURCE)
+    for reaction in reaction_calls(text):
+        kinds.add(Kind.REACTION)
+        names.append(reaction.name)
     return kinds, tuple(names)
 
 
@@ -113,9 +119,10 @@ def _declared_in_tree(repo_root: Path) -> dict[str, Path]:
     declaration of a name, so a sidecar file re-declaring one under another
     filename is a tree that no longer loads - caught here instead."""
     found: dict[str, Path] = {}
-    for directory in (STREAM_DIR, WORKER_DIR):
+    for directory in (STREAM_DIR, WORKER_DIR, REACTION_DIR):
         for path in sorted((repo_root / directory).glob("*.q")):
-            for _fn, name, _fields in declaration_calls(path.read_text(errors="replace")):
+            _kinds, names = classify(path.read_text(errors="replace"))
+            for name in names:
                 found.setdefault(name, path)
     return found
 
@@ -180,6 +187,8 @@ def install(item: Item, mode: Mode, *, overwrite: bool = False) -> None:
         if not overwrite:
             raise FileExistsError(f"{item.destination} exists and differs")
         item.destination.unlink()
+    # src/etl/reactions may not exist yet: a tree need have no reactions.
+    item.destination.parent.mkdir(parents=True, exist_ok=True)
     if mode is Mode.SYMLINK:
         os.symlink(item.source.resolve(), item.destination)
     else:

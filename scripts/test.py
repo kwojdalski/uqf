@@ -391,6 +391,17 @@ def lane_python() -> None:
     _run("python", ["uv", "run", "pytest", "-q"])
 
 
+def lane_bundles() -> None:
+    """Each sidecar bundle's own tests, installed into a throwaway tree.
+
+    A bundle's test_*.q never enter the tree, so no other lane runs them.
+    scripts/dev/bundle_suite.py copies the checkout, installs the bundle with
+    the real installer, lists its tests in nsList and runs the whole suite.
+    """
+    _banner("bundles: each sidecar bundle's tests, installed into a throwaway tree")
+    _run("bundles", ["uv", "run", "python", "scripts/dev/bundle_suite.py", "--q", Q_CMD])
+
+
 def lane_smoke(flags: Sequence[str] = ()) -> None:
     """`flags` are the script's own: -targets, -tables, -timeout_ms. With
     none, it reports SKIP and exits 0 - an unconfigured checkout is not a
@@ -490,6 +501,7 @@ LANES: dict[str, Callable[[], None]] = {
     "q-docs-peachq": lane_q_docs_peachq,
     "q-two-instances": lane_q_two_instances,
     "python": lane_python,
+    "bundles": lane_bundles,
     "q-coverage": lane_q_coverage,
     "coverage": lane_coverage,
     "smoke": lane_smoke,
@@ -513,6 +525,7 @@ ALL = [
     "q-two-instances",
     "q-metatables-hdb",
     "python",
+    "bundles",
 ]
 
 EPILOG = """\

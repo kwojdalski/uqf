@@ -18,7 +18,7 @@ from uqs import paths as stack_paths
 from uqs.cli import install as cli_install
 from uqs.cli import install_bundle as cli_bundle
 from uqs.cli.regenerate import _DERIVED
-from uqs.paths import CATALOG_FILE, SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR
+from uqs.paths import CATALOG_FILE, REACTION_DIR, SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR
 from uqs.stack import bundle_blocks, bundles
 from uqs.stack.bundles import LEDGER, OVERRIDES_FILE, BundleError
 
@@ -120,6 +120,17 @@ def test_install_places_jobs_and_writes_every_addition(bundle: Path, repo: Path)
     assert json.loads((repo / LEDGER).read_text())["piggybank"] == entry
 
 
+def test_a_reaction_is_installed_beside_the_tree_s_reactions(bundle: Path, repo: Path) -> None:
+    """A reaction has no process of its own, so it is placed by what it
+    declares like any job file, and recorded without a procname."""
+    (bundle / "piggy_rollup.q").write_text(
+        ".qetl.reaction.on[`piggy_tape;`piggy_rollup;{[ds;f;t] ()}];\n"
+    )
+    entry = _install(bundle, repo)
+    assert (repo / REACTION_DIR / "piggy_rollup.q").is_file()
+    assert {"kind": "reaction", "file": "piggy_rollup.q"} in entry["jobs"]
+
+
 def test_secrets_and_tests_never_enter_the_tree(bundle: Path, repo: Path) -> None:
     entry = _install(bundle, repo)
     assert not list(repo.rglob(".env"))
@@ -183,6 +194,23 @@ def test_a_described_table_is_refused(bundle: Path, repo: Path) -> None:
 def test_an_undescribed_table_is_refused(bundle: Path, repo: Path) -> None:
     (bundle / "catalog.q").unlink()
     with pytest.raises(BundleError, match="not described"):
+        bundles.plan(bundles.read_bundle(bundle), repo)
+
+
+def test_a_reason_its_own_table_is_unbounded_is_installed(bundle: Path, repo: Path) -> None:
+    """A bundle cannot add querypolicy.csv rows, so this is how its table
+    meets the catalog's policy-or-reason rule."""
+    reason = '.qcat.unbounded[`piggy_tape]:"one print a day";\n'
+    (bundle / "catalog.q").write_text(CATALOG + reason)
+    _install(bundle, repo)
+    assert reason.strip() in (repo / CATALOG_FILE).read_text()
+
+
+def test_an_unbounded_reason_for_a_table_it_does_not_define_is_refused(
+    bundle: Path, repo: Path
+) -> None:
+    (bundle / "catalog.q").write_text(CATALOG + '.qcat.unbounded[`trade]:"mine now";\n')
+    with pytest.raises(BundleError, match="trade, which this bundle does not define"):
         bundles.plan(bundles.read_bundle(bundle), repo)
 
 

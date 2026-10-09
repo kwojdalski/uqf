@@ -1,27 +1,63 @@
 # Sidecar bundles
 
-A **bundle** is a versioned folder of jobs kept outside this repository, plus
-the plant tables, catalog entries and process overrides they need. The same
-installer puts it into a checkout (`uqs job install`) or a release
-(`uqs deploy build --bundle`). A deployment starts only the jobs you name.
-Bundles are installed as copies, so a release runs on a clean server with no
-workstation or Git checkout behind it.
+A **bundle** is a versioned folder of jobs kept apart from the tree's own, plus
+the plant tables, catalog entries and process overrides they need. It can live
+outside this repository or under `sidecars/` in it. The same installer puts it
+into a checkout (`uqs job install`) or a release (`uqs deploy build --bundle`).
+A deployment starts only the jobs you name. Bundles are installed as copies, so
+a release runs on a clean server with no workstation or Git checkout behind it.
 
 ## Layout
 
 ```
 piggybank/
   bundle.json              {"name": "piggybank", "version": "1.4.0"}
-  *.q                      sources, workers and streaming jobs
+  *.q                      sources, workers, streaming jobs and reactions
+  test_*.q                 its tests: run by `scripts/test.py bundles`
   tables.q                 optional: plant tables and nested[...] contracts
-  catalog.q                optional: .qcat.describe entries for those tables
+  catalog.q                optional: .qcat.describe entries for those tables,
+                           and .qcat.unbounded reasons
   process_overrides.csv    optional: procname,field,value for its own processes
 ```
 
 Each `.q` file is placed by what it declares, as `uqs job install` does for any
 folder. `test_*.q` and every non-`.q` file (`.env`, logs, data) stay out of the
 tree. `tables.q` takes one `name:([]...)` or `nested[...]` line per entry, and
-`catalog.q` must describe every table it defines.
+`catalog.q` must describe every table it defines. A bundle cannot add rows to
+`querypolicy.csv`, so a table of its own that the browser may read without a
+policy needs a `.qcat.unbounded[`table\]:"reason"` line in `catalog.q\`.
+
+## Scaffold a bundle job
+
+`uqs job new` takes `--bundle FOLDER` for every kind of job:
+
+```bash
+uqs job new mock_trades --kind backfill --dataset mock_trades \
+    --columns "sym:symbol, px:float" --bundle sidecars/mockups --dry-run
+uqs job new mock_rollup --triggered-by mock_trades --bundle sidecars/mockups
+```
+
+- **What it writes.** The job's `.q` files and its test go into the folder, its
+  table into `tables.q` and its catalog entry into `catalog.q`. A folder that is
+  not a bundle yet gets a `bundle.json` named after it, at version `0.1.0`.
+- **What it does not write.** Nothing in the tree: no `run_tests.q` entry, no
+  table in `test_stack_tables.q`, no service docs, profile or example script.
+  The dry run names each one.
+- **What it checks against.** The tree with the bundle already installed, so a
+  bundle job can react to, or subscribe to, another job in the same bundle.
+- `--profile` and `--unprofiled` are refused: a bundle's processes join a stack
+  through a runtime and `uqs deploy push --jobs`.
+
+## Test a bundle
+
+```bash
+python3 scripts/test.py bundles               # every bundle under sidecars/
+uv run python scripts/dev/bundle_suite.py ../piggybank
+```
+
+Each bundle is installed into a temporary copy of the checkout, its `test_*.q`
+files are added to the suite, and the whole q suite runs there. The checkout is
+never written to.
 
 ## Install into a checkout
 
