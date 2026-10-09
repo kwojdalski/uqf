@@ -76,7 +76,12 @@ check:{[rows]
     if[0=count rows; :.qetl.job.bounded.no_failures[]];
     / The quality check sorts its answer, so it is handed the row index as its
     / `time` (a timestamp is a long underneath) and the index comes back with it.
-    q:select time:`timestamp$til count rows, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from rows;
+    / A table literal, not `select time:`timestamp$til count rows, ...`: on
+    / KDB-X that select collapses to ONE row of nested columns (PeachQ gives
+    / one row per book), and the check then threw 'type there - unseen by CI,
+    / whose q suite runs on PeachQ only.
+    q:([] time:`timestamp$til count rows; sym:rows`sym; bid_prices:rows`bid_prices;
+        bid_sizes:rows`bid_sizes; ask_prices:rows`ask_prices; ask_sizes:rows`ask_sizes);
     graded:.qdqc.check_market_data_quality[q;0w];
     bad:select from graded where status=`crossed;
     crossed:([] check:count[bad]#`crossed_book; status:bad`status; detail:.qrender.full each bad; row:`long$bad`time);
