@@ -38,6 +38,14 @@ rolls:`none`following`preceding`modified_following
 / What a pair's conventions must carry.
 convention_keys:`spot_lag`roll`eom`weekend
 
+/ What a pair's conventions may carry, and the default when they do not.
+/ settle_via is the vehicle currency settlement clears through (#1024): a
+/ value date must be a business day in it too, while the spot lag counts on
+/ the pair's other currencies only. USD for FX, so a cross (EURGBP) avoids a
+/ USD holiday and EURUSD's T+1 is not pushed out by one. ` (null) for none:
+/ count and settle on the pair's own two currencies.
+convention_defaults:enlist[`settle_via]!enlist `USD
+
 / The weekday of a date, as a symbol.
 / @param d a date, or a list of dates
 / @return `sat`sun`mon`tue`wed`thu`fri - one per date for a list
@@ -134,8 +142,12 @@ month_end_business_day:{[d;ccys;calendars;weekend]
     adjust[last_day;`preceding;ccys;calendars;weekend]}
 
 / Private: a pair's two currencies and its conventions, refusing what is
-/ missing or malformed.
-/ @return dict ccys, spot_lag, roll, eom, weekend
+/ missing or malformed - and the two calendar sets every date function uses,
+/ derived here once so no function decides them for itself (#1024):
+/ count_ccys, what the spot lag counts business days on, and settle_ccys,
+/ what a value date must be a business day in.
+/ @return dict pair, ccys, spot_lag, roll, eom, weekend, settle_via,
+/   count_ccys, settle_ccys
 / @private
 pair_terms:{[pair;conventions]
     if[not 99h=type conventions; '"calendar: conventions must be a dictionary of pair -> conventions"];
@@ -150,33 +162,41 @@ pair_terms:{[pair;conventions]
     if[not c[`spot_lag] within 0 5; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
     if[count bad:(c`weekend) where not (c`weekend) in weekdays;
         '"calendar: ",string[p],"'s weekend has unknown day(s) ",", " sv string bad];
+    c:convention_defaults,c;
+    via:c`settle_via;
+    if[not -11h=type via; '"calendar: ",string[p],"'s settle_via must be a currency symbol, or ` for none"];
     legs:.qccy.ccy_pair_legs p;
-    `pair`ccys`spot_lag`roll`eom`weekend!(p;legs`base`quote;c`spot_lag;c`roll;c`eom;(),c`weekend)}
+    ccys:legs`base`quote;
+    / a pair whose legs are both the vehicle cannot exist; one that has it
+    / counts on its other leg, a cross on both
+    count_ccys:$[null via; ccys; ccys except via];
+    settle_ccys:$[null via; ccys; distinct ccys,via];
+    `pair`ccys`spot_lag`roll`eom`weekend`settle_via`count_ccys`settle_ccys!(
+        p;ccys;c`spot_lag;c`roll;c`eom;(),c`weekend;via;count_ccys;settle_ccys)}
 
 / The spot date a trade date settles on, and why.
 / .
 / Spot is `spot_lag` business days after the trade date, counted on the
-/ non-USD currency(ies) only: a USD holiday on an intermediate day (T+1 of a
-/ T+2 pair) does not push spot out (#997). Spot itself must be a business day
-/ in both currencies and in USD, so a cross (EURGBP) also needs the USD
-/ calendar. A T+0 trade dated on a weekend or a holiday settles on the next
+/ pair's currencies other than its settle_via (USD by default): a USD
+/ holiday on an intermediate day (T+1 of a T+2 pair) does not push spot out
+/ (#997). Spot itself must be a business day in both currencies and in
+/ settle_via, so a cross (EURGBP) also needs the USD calendar (#1024). A T+0 trade dated on a weekend or a holiday settles on the next
 / business day, never before the trade. The result names the lag, the
 / calendars used and every non-business day skipped over on the way.
 / @param trade_date the trade date
 / @param pair the currency pair, e.g. `EURUSD
-/ @param calendars dict currency -> holiday dates; both currencies, and USD, required
-/ @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...)
+/ @param calendars dict currency -> holiday dates; both currencies, and settle_via's, required
+/ @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...), optionally `settle_via
 / @return dict date, trade_date, pair, spot_lag, calendars, skipped - the
 /   non-business days passed over between the trade date and spot
 / @throws error naming a missing calendar, pair or convention
 / @eg (.qcal.spot_date[2026.09.18;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions])`date  -> 2026.09.22
 spot_date:{[trade_date;pair;calendars;conventions]
     c:pair_terms[pair;conventions];
-    / Count on the non-USD currency(ies); USD matters only on the spot date.
-    count_ccys:$[`USD in c`ccys; (c`ccys) except `USD; c`ccys];
-    settle_ccys:distinct (c`ccys),`USD;
-    counted:add_business_days[trade_date;c`spot_lag;count_ccys;calendars;c`weekend];
-    / Roll forward onto a joint business day (USD included). This also covers
+    settle_ccys:c`settle_ccys;
+    / count on count_ccys; settle_via matters only on the spot date itself
+    counted:add_business_days[trade_date;c`spot_lag;c`count_ccys;calendars;c`weekend];
+    / Roll forward onto a joint business day (settle_via included). This also covers
     / T+0, where nothing is counted and a weekend or holiday trade date would
     / be its own spot. Never back - spot does not settle before the trade.
     settle:adjust[counted;`following;settle_ccys;calendars;c`weekend];
@@ -200,12 +220,14 @@ tenor_parts:{[tenor]
 / (Y = 12). The unadjusted date is then rolled by the pair's convention. With
 / `eom` on, a spot date that is the last business day of its month maps a
 / month tenor to the last business day of the target month. A date rather
-/ than a tenor is taken as an explicit value date and only rolled.
+/ than a tenor is taken as an explicit value date and only rolled. Every
+/ roll and month end is on the pair's settle_ccys, as spot_date's is, so a
+/ cross's value date avoids a USD holiday too (#1023).
 / @param spot_date the spot date the tenor runs from
 / @param tenor a tenor symbol (`1W`3M`1Y) or an explicit value date
 / @param pair the currency pair
-/ @param calendars dict currency -> holiday dates
-/ @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...)
+/ @param calendars dict currency -> holiday dates; both currencies, and settle_via's
+/ @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...), optionally `settle_via
 / @return dict date, spot_date, tenor, unadjusted, roll, eom_applied, calendars
 / @throws error naming a missing calendar, pair or convention, or a bad tenor
 / @eg (.qcal.forward_date[2026.09.22;`1M;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions])`date  -> 2026.10.22
@@ -221,13 +243,14 @@ forward_date:{[spot_date;tenor;pair;calendars;conventions]
         unit="M"; add_months[spot_date;n];
         add_months[spot_date;12*n]];
     month_tenor:unit in "MY";
-    at_month_end:spot_date=month_end_business_day[spot_date;c`ccys;calendars;c`weekend];
+    sc:c`settle_ccys;
+    at_month_end:spot_date=month_end_business_day[spot_date;sc;calendars;c`weekend];
     eom_applied:(c`eom) and month_tenor and at_month_end;
     settle:$[eom_applied;
-        month_end_business_day[unadjusted;c`ccys;calendars;c`weekend];
-        adjust[unadjusted;c`roll;c`ccys;calendars;c`weekend]];
+        month_end_business_day[unadjusted;sc;calendars;c`weekend];
+        adjust[unadjusted;c`roll;sc;calendars;c`weekend]];
     `date`spot_date`tenor`unadjusted`roll`eom_applied`calendars!(
-        settle;spot_date;tenor;unadjusted;c`roll;eom_applied;c`ccys)}
+        settle;spot_date;tenor;unadjusted;c`roll;eom_applied;sc)}
 
 / ------------------------------------------------------------- MOCK DATA
 / .
