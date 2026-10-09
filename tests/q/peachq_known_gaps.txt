@@ -20,7 +20,6 @@ platform: Linux-x86_64
 .cattest.test_every_published_table_is_described_or_hidden  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .cattest.test_the_catalog_describes_no_table_that_does_not_exist  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
-.crypto_market_databftest.test_a_bound_rounds_up_to_the_millisecond  # tree-bug: #985 - epoch_ms_bound divides epoch nanoseconds, above 2^53, and PeachQ's long `div` goes through a double
 
 .dagtest.test_a_derived_reaction_is_not_drawn_asserted  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .dagtest.test_d2_declares_every_external_node_before_using_it  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
@@ -31,8 +30,6 @@ platform: Linux-x86_64
 .ddbftest.test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
 .ddbftest.test_a_dry_rerun_repairs_nothing  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
 
-.egtest.test_no_documented_example_is_wrong  # tree-bug: #985 - the one failing @eg is epoch_ms_bound's (src/etl/sources/crypto_market_data.q)
-.egtest.test_the_wrong_ones_are_named_not_merely_counted  # tree-bug: #985 - the one failing @eg is epoch_ms_bound's (src/etl/sources/crypto_market_data.q)
 
 .evttest.test_undefined_if_zero_is_the_guard_and_only_the_guard  # peachq-lacks: type promotion in the vector conditional - ?[1010b;0n;0 2 0 5] gives a general list, not a float vector
 
