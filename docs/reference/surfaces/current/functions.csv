@@ -987,6 +987,7 @@ qpipe.job.fx_orders_feed,sizes,value,,
 qpipe.job.fx_orders_feed,statuses,value,,
 qpipe.job.fx_positions,alert_period,value,,
 qpipe.job.fx_positions,alerts,dict,,
+qpipe.job.fx_positions,combine_book,function,2,book opening
 qpipe.job.fx_positions,desk_book,table,,
 qpipe.job.fx_positions,desk_fills,table,,
 qpipe.job.fx_positions,dimensions,value,,
@@ -1060,12 +1061,14 @@ qpipe.job.market_data,market_data,table,,
 qpipe.job.market_data,on_batch,value,,
 qpipe.job.market_data,publish,value,,
 qpipe.job.market_data,quote,table,,
+qpipe.job.posbook,apply_fills,function,1,x
 qpipe.job.posbook,as_trades,function,1,x
 qpipe.job.posbook,book,dict,,
 qpipe.job.posbook,book_mids,function,1,x
 qpipe.job.posbook,crypto_books,function,1,x
 qpipe.job.posbook,crypto_marks,function,2,tob batch
 qpipe.job.posbook,crypto_tob,dict,,
+qpipe.job.posbook,early,value,,
 qpipe.job.posbook,executions,table,,
 qpipe.job.posbook,last_mid,dict,,
 qpipe.job.posbook,mark_positions,function,3,book trades mids
@@ -1073,6 +1076,8 @@ qpipe.job.posbook,market_data,table,,
 qpipe.job.posbook,next_book,function,2,book positions
 qpipe.job.posbook,on_batch,function,2,t x
 qpipe.job.posbook,on_endofday,function,1,dt
+qpipe.job.posbook,on_replayed,function,1,
+qpipe.job.posbook,opened,value,,
 qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_mids,table,,
