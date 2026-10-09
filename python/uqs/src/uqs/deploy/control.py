@@ -34,7 +34,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.deploy import targets
+from uqs.deploy import history, targets
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError
 
@@ -91,29 +91,37 @@ class Remote:
         return f"{self.host}:{self.dest}{who}"
 
 
-def remote_for(name: str, root: Path) -> Remote:
-    """Target `name` as a Remote, or a refusal naming what is missing."""
+def remote_for(name: str | None, root: Path) -> Remote:
+    """What `--target name` means: a declared target; else a server, as its
+    most recent successful deployment (deploy/history.py); with no name, the
+    most recent deployment of all. A refusal names what is known."""
     try:
-        declared = targets.read(root)
+        declared = targets.read(root) if targets.declaration_path(root).is_file() else {}
+        last = history.latest(root, name) if name not in declared else None
     except DeployError as exc:
         raise UqsError(str(exc)) from None
-    if name not in declared:
+    if name in declared:
+        t, label = declared[name], name
+    elif last is not None:
+        t, label = last, str(last.get("target") or history.server_of(str(last["host"])))
+    else:
         known = ", ".join(sorted(declared)) or "none"
+        what = f"no target or deployed server {name!r}" if name else "no deployment recorded"
         raise UqsError(
-            f"no target {name!r} in {targets.declaration_path(root)} - it declares: {known}"
+            f"{what} - targets in {targets.declaration_path(root)}: {known}; "
+            "`uqs deploy list` shows the deployments"
         )
-    t = declared[name]
     absent = [k for k in ("host", "dest") if not t.get(k)]
     if absent:
-        raise UqsError(f"target {name} sets no {', '.join(absent)}")
+        raise UqsError(f"target {label} sets no {', '.join(absent)}")
     host, dest, user = str(t["host"]), str(t["dest"]), t.get("remote_user")
     # The same shapes make_config holds a push to: both reach a remote shell.
     if host.startswith("-") or any(c.isspace() for c in host):
-        raise UqsError(f"target {name}: host {host!r} is not an ssh destination")
+        raise UqsError(f"target {label}: host {host!r} is not an ssh destination")
     if not dest.startswith("/") or any(c.isspace() for c in dest):
-        raise UqsError(f"target {name}: dest {dest!r} must be an absolute path without spaces")
+        raise UqsError(f"target {label}: dest {dest!r} must be an absolute path without spaces")
     return Remote(
-        name, host, dest, str(user) if user else None,
+        label, host, dest, str(user) if user else None,
         int(t.get("connect_timeout", DEFAULT_CONNECT_TIMEOUT)),
     )  # fmt: skip
 
@@ -185,13 +193,30 @@ def changes_the_server(args: Sequence[str]) -> bool:
 def remote_command(r: Remote, args: Sequence[str]) -> str:
     """The one string the remote login shell runs: check there is a release,
     then the release's own uqs with its deploy.env. Every value is quoted."""
+    run_uqs = "exec .venv/bin/uqs " + " ".join(shlex.quote(a) for a in args)
+    return _in_release(r, run_uqs.rstrip())
+
+
+def shell_command(r: Remote) -> str:
+    """`uqs target shell`: an interactive shell in the release, as `poetry
+    shell` is one in a project - deploy.env loaded, the release's uqs first
+    on PATH, UQS_TARGET naming where it is."""
+    return _in_release(
+        r,
+        f'export UQS_TARGET={shlex.quote(r.name)} PATH="$PWD/.venv/bin:$PATH"; '
+        f'echo "uqs: {r.name} - $(basename "$(pwd -P)") in $PWD (exit to leave)"; '
+        'exec "${SHELL:-bash}" -i',
+    )
+
+
+def _in_release(r: Remote, then: str) -> str:
+    """Run `then` in r's current release with its deploy.env, as its account."""
     current = shlex.quote(f"{r.dest.rstrip('/')}/current")
     inner = (
         f"if [ ! -L {current} ] || [ ! -x {current}/.venv/bin/uqs ]; then "
         f"echo uqs: no deployed release at {current} >&2; exit {NO_RELEASE}; fi; "
-        f"cd {current} && . ./deploy.env && exec .venv/bin/uqs "
-        + " ".join(shlex.quote(a) for a in args)
-    ).rstrip()
+        f"cd {current} && . ./deploy.env && {then}"
+    )
     if r.remote_user:
         # as `uqs deploy push` runs every step: the service account's login
         return f"sudo -n -iu {shlex.quote(r.remote_user)} bash -c {shlex.quote(inner)}"
@@ -199,21 +224,30 @@ def remote_command(r: Remote, args: Sequence[str]) -> str:
     return f"bash -lc {shlex.quote(inner)}"
 
 
-def ssh_argv(r: Remote, args: Sequence[str], tty: bool) -> list[str]:
+def ssh_argv(r: Remote, args: Sequence[str], tty: bool, command: str | None = None) -> list[str]:
     opts = ["-o", "BatchMode=yes", "-o", f"ConnectTimeout={r.connect_timeout}"]
     # A terminal when there is one, so an interactive `query`, `logs -f` and
     # Ctrl-C behave as they do locally.
-    return ["ssh", *opts, *(["-t"] if tty else []), r.host, remote_command(r, args)]
+    remote = command if command is not None else remote_command(r, args)
+    return ["ssh", *opts, *(["-t"] if tty else []), r.host, remote]
 
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
-def run(r: Remote, args: Sequence[str], *, tty: bool, runner: Runner = subprocess.run) -> int:
-    """Run `args` on `r` with its output streaming through; the remote exit
-    code, after saying which side failed when it was not the command."""
+def run(
+    r: Remote,
+    args: Sequence[str],
+    *,
+    tty: bool,
+    runner: Runner = subprocess.run,
+    command: str | None = None,
+) -> int:
+    """Run `args` (or a whole remote `command`) on `r` with its output
+    streaming through; the remote exit code, after saying which side failed
+    when it was not the command."""
     try:
-        done = runner(ssh_argv(r, args, tty), check=False)
+        done = runner(ssh_argv(r, args, tty, command), check=False)
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
     _refuse_unreached(r, done.returncode)

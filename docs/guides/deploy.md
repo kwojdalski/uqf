@@ -210,6 +210,38 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   - the target has no deployed release under its `dest`;
   - the remote command failed, with its own output and exit code.
 
+### Deployments and the default per server
+
+Every `uqs deploy push` from this machine, deployed or failed, is recorded in
+`deploy_history.json`, beside `deploy_targets.toml` (or wherever
+`UQS_DEPLOY_HISTORY` points). A successful push to a server that no target names
+yet registers one, `<server>-<dest's last folder>`, so it can be driven straight
+away.
+
+```bash
+uqs deploy list                 # newest first; * marks each server's default
+uqs deploy list uat.example     # one server, or one target
+uqs --target uat.example summary   # a server name: its latest successful deployment
+uqs target shell                # a shell in the most recent deployment
+uqs target shell uat            # ... or in a given target or server
+```
+
+- **The default per server** is its latest successful deployment. A server name,
+  given wherever a target name is, means that deployment.
+
+- **`uqs target shell`** works like `poetry shell`. It opens an interactive
+  shell on the server, in `<dest>/current`, with:
+  - `deploy.env` loaded;
+  - the release's `uqs` first on `PATH`;
+  - `UQS_TARGET` set;
+  - the target's `remote_user` as the account.
+
+  `exit` returns to your machine.
+
+- **This machine's record.** The history is what you pushed from here. Each
+  release on the server keeps its own `deploy-report.json`, and
+  `uqs deploy status` reads that.
+
 ## What it does, in order
 
 Each stage stops the deployment if it fails:

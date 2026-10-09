@@ -19,7 +19,7 @@ from typer.testing import CliRunner
 
 from uqs.cli import app
 from uqs.cli import target as target_cli
-from uqs.deploy import control, targets
+from uqs.deploy import control, history, targets
 from uqs.paths import UqsError
 
 FAKE_SSH = """#!/bin/bash
@@ -155,7 +155,7 @@ def test_check_names_the_running_release(server):
 
 
 def test_an_unknown_target_lists_the_declared_ones(server):
-    with pytest.raises(UqsError, match="no target 'nope' .* declares: bare, down, uat"):
+    with pytest.raises(UqsError, match="'nope' - targets in .*: bare, down, uat"):
         control.remote_for("nope", Path("."))
 
 
@@ -259,3 +259,100 @@ def test_the_entry_point_forwards(server):
     )
     assert done.returncode == 0, done.stderr
     assert "[logs]" in done.stdout and "[rdb1]" in done.stdout
+
+
+# ------------------------------------------------ history and defaults
+
+
+def _cfg(host: str, dest: str, target: str | None = None, user: str | None = None):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        host=host, dest=dest, remote_user=user, target=target, runtime="uqf", profile="essential"
+    )
+
+
+def _report(release: str, status: str = "deployed"):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        as_dict=lambda: {
+            "release": release, "revision": "abc", "profile": "essential",
+            "status": status, "stage": "done" if status == "deployed" else "verify", "error": "",
+        }
+    )  # fmt: skip
+
+
+def test_a_push_is_recorded_and_its_server_registered(server):
+    root = Path(".")
+    history.record(root, _cfg("svc@new.example", "/srv/new", user="efx"), _report("r1"))
+    (entry,) = history.read(root)
+    assert (entry["target"], entry["release"], entry["status"]) == (
+        "new-example-new",
+        "r1",
+        "deployed",
+    )
+    assert targets.read(root)["new-example-new"] == {
+        "host": "svc@new.example",
+        "dest": "/srv/new",
+        "remote_user": "efx",
+    }
+    # a second push there reuses that target rather than declaring another
+    history.record(root, _cfg("svc@new.example", "/srv/new", user="efx"), _report("r2"))
+    assert sorted(targets.read(root)) == ["bare", "down", "new-example-new", "uat"]
+    assert [e["target"] for e in history.read(root)] == ["new-example-new", "new-example-new"]
+
+
+def test_a_failed_push_is_recorded_and_registers_nothing(server):
+    root = Path(".")
+    history.record(root, _cfg("svc@other", "/srv/o"), _report("r1", status="failed"))
+    assert history.read(root)[0]["status"] == "failed"
+    assert "other" not in targets.read(root)
+
+
+def test_a_push_to_a_declared_target_keeps_its_name(server):
+    root = Path(".")
+    uat = targets.read(root)["uat"]
+    history.record(root, _cfg(uat["host"], uat["dest"]), _report("r9"))
+    assert history.read(root)[0]["target"] == "uat"
+
+
+def test_a_server_resolves_to_its_latest_successful_deployment(server):
+    root = Path(".")
+    history.record(root, _cfg("svc@box", "/srv/a"), _report("r1"))
+    history.record(root, _cfg("svc@box", "/srv/b"), _report("r2"))
+    history.record(root, _cfg("svc@box", "/srv/c"), _report("r3", status="failed"))
+    r = control.remote_for("box", root)
+    assert (r.host, r.dest) == ("svc@box", "/srv/b"), "the latest that DEPLOYED"
+    assert control.remote_for(None, root).dest == "/srv/b", "no name: the latest of all"
+    assert history.defaults(root) == {0, 1}, "each host and dest's latest is a default"
+
+
+def test_with_nothing_deployed_no_name_is_refused(server):
+    with pytest.raises(UqsError, match="no deployment recorded"):
+        control.remote_for(None, Path("."))
+
+
+def test_recording_never_fails_the_deployment(server, monkeypatch):
+    monkeypatch.setenv(history.HISTORY_ENV, "/proc/no/such/dir/history.json")
+    history.record(Path("."), _cfg("svc@x", "/srv/x"), _report("r1"))  # warns, does not raise
+
+
+def test_deploy_list_marks_each_servers_default(server):
+    root = Path(".")
+    history.record(root, _cfg("svc@box", "/srv/a"), _report("r1"))
+    history.record(root, _cfg("svc@box", "/srv/a"), _report("r2"))
+    out = CliRunner().invoke(app, ["deploy", "list"], terminal_width=200).output
+    lines = [ln for ln in out.splitlines() if " r1 " in ln or " r2 " in ln]
+    assert "*" in lines[0] and "r2" in lines[0], "newest first, and it is the default"
+    assert "*" not in lines[1]
+
+
+def test_shell_opens_in_the_release_with_its_environment(server):
+    r = control.remote_for("uat", Path("."))
+    script = control.shell_command(r).replace(
+        'exec "${SHELL:-bash}" -i', 'echo "$UQS_TARGET $FAKE_RELEASE"; command -v uqs'
+    )
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    assert "uat r7" in done.stdout and "/current/.venv/bin/uqs" in done.stdout

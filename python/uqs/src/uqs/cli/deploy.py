@@ -22,7 +22,7 @@ import typer
 
 from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, targets
+from uqs.deploy import config, driver, history, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import configure_logging, get_logger
@@ -367,7 +367,9 @@ def push(
             if cfg.target:
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
             remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
-            code = driver.deploy(cfg, remote)
+            code = driver.deploy(
+                cfg, remote, on_report=lambda rep, c=cfg: history.record(repo_root(), c, rep)
+            )
             if code:
                 if len(cfgs) > 1:
                     log.error(
