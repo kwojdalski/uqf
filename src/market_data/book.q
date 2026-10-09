@@ -227,4 +227,17 @@ sweep_price:{[prices;sizes;target_size]
     fully_filled:filled_size>=target_size;
     `avg_price`worst_price`filled_size`fully_filled!(avg_price;worst_price;filled_size;fully_filled)};
 
+/ Each book's level-0 bid and ask: the ONE top-of-book extraction every
+/ consumer of market_data prices from (#998). A side with an empty ladder is
+/ null - that source withdrew it - and so is a non-positive level, which is
+/ not a price. Whether a book with a null side is dropped (a mid needs both
+/ sides) or kept (a venue's other side still counts across venues) is the
+/ consumer's choice; what counts as a side is not.
+/ @param x table with bid_prices and ask_prices list columns, best level first
+/ @return table bid, ask (float), aligned with x
+/ @eg .qbook.top_sides ([] bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] bid:1.0849 0n; ask:1.0851 1.27)
+top_sides:{[x]
+    side:{[px] $[count px; $[0<f:"f"$first px; f; 0n]; 0n]};
+    ([] bid:"f"$side each x`bid_prices; ask:"f"$side each x`ask_prices)};
+
 \d .
