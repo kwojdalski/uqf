@@ -173,6 +173,74 @@ uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
   dry-run plan says which settings came from the target and which from a flag.
 - **Several targets.** `--target a,b` deploys them in order, host by host, and
   stops at the first failure.
+- **`labels`.** Free-form `key = "value"` pairs that `uqs target list` shows.
+  Nothing deploys them.
+
+## Driving a deployed release from your machine
+
+Once a target is declared, `uqs --target NAME <command>` runs any `uqs` command
+on that server. It runs the release's own `<dest>/current/.venv/bin/uqs`, with
+that release's `deploy.env` loaded, as `remote_user` when the target sets one.
+Processes, ports, jobs and configuration are therefore the server's, not your
+checkout's.
+
+```bash
+uqs target add uat --ssh svc@uat.example --dest /opt/efx/uat/uqf --label env=uat
+uqs target check uat                       # ssh works; names the running release
+uqs --target uat summary
+uqs --target uat logs piggybankgeneralledger1 -f
+uqs --target uat query --proc rdb1 'select [20] from piggybank_general_ledger'
+uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the question
+```
+
+- **The same entries.** `uqs target add` appends a `[targets.NAME]` table to
+  `deploy_targets.toml`, so one entry serves both `deploy push --target` and
+  `uqs --target`. `uqs target list` and `uqs target remove` read and edit that
+  file. `remove` leaves every other line, comments included, as it was.
+- **Confirmation.** A command that can change the server, such as `start`,
+  `stop`, `restart`, `raw`, `backfill`, `config set` or `data seed`, asks first
+  and names the target. Without a terminal it needs `--yes`. Read-only commands
+  run directly: `summary`, `logs`, `query`, `schema`, `list`, `graph`, `gaps`
+  and `run show`.
+- **ssh.** It runs with `BatchMode`, so a missing key or an unknown host key
+  fails rather than prompts. Host-key checking is whatever your `ssh_config`
+  says, and credentials stay on the server.
+- **Failures.** Three kinds are reported separately:
+  - ssh could not connect;
+  - the target has no deployed release under its `dest`;
+  - the remote command failed, with its own output and exit code.
+
+### Deployments and the default per server
+
+Every `uqs deploy push` from this machine, deployed or failed, is recorded in
+`deploy_history.json`, beside `deploy_targets.toml` (or wherever
+`UQS_DEPLOY_HISTORY` points). A successful push to a server that no target names
+yet registers one, `<server>-<dest's last folder>`, so it can be driven straight
+away.
+
+```bash
+uqs deploy list                 # newest first; * marks each server's default
+uqs deploy list uat.example     # one server, or one target
+uqs --target uat.example summary   # a server name: its latest successful deployment
+uqs target shell                # a shell in the most recent deployment
+uqs target shell uat            # ... or in a given target or server
+```
+
+- **The default per server** is its latest successful deployment. A server name,
+  given wherever a target name is, means that deployment.
+
+- **`uqs target shell`** works like `poetry shell`. It opens an interactive
+  shell on the server, in `<dest>/current`, with:
+  - `deploy.env` loaded;
+  - the release's `uqs` first on `PATH`;
+  - `UQS_TARGET` set;
+  - the target's `remote_user` as the account.
+
+  `exit` returns to your machine.
+
+- **This machine's record.** The history is what you pushed from here. Each
+  release on the server keeps its own `deploy-report.json`, and
+  `uqs deploy status` reads that.
 
 ## What it does, in order
 

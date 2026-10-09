@@ -29,7 +29,9 @@ artifact's, so a crypto target never runs a uqf release.
 from __future__ import annotations
 
 import inspect
+import json
 import os
+import re
 import tomllib
 from pathlib import Path
 
@@ -43,6 +45,10 @@ PER_RUN = frozenset({"artifact", "dry_run"})
 #: Options make_config takes as one comma-separated string; a file lists them.
 LISTED_AS_TEXT = frozenset({"jobs", "live_check"})
 SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
+#: Keys a target may hold that are not push options: the runtime it must run
+#: (checked against the artifact's), and labels, which `uqs target list` shows
+#: and nothing deploys (#956).
+NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"})
 
 
 def declaration_path(root: Path) -> Path:
@@ -67,7 +73,7 @@ def read(root: Path) -> dict[str, dict]:
 
 def _options(name: str, declared: dict) -> dict:
     """One target's settings, as make_config's keyword arguments."""
-    unknown = sorted(set(declared) - SETTABLE - {"runtime"})
+    unknown = sorted(set(declared) - SETTABLE - NOT_PUSH_OPTIONS)
     if unknown:
         raise DeployError(
             "arguments",
@@ -76,7 +82,7 @@ def _options(name: str, declared: dict) -> dict:
         )
     options = {}
     for key, value in declared.items():
-        if key == "runtime":
+        if key in NOT_PUSH_OPTIONS:
             continue
         if key in LISTED_AS_TEXT and isinstance(value, list):
             value = ",".join(str(v) for v in value)
@@ -116,3 +122,50 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
         cfg.runtime = declared[name].get("runtime")
         out.append(cfg)
     return out
+
+
+#: A target's name, as `[targets.NAME]` and `uqs --target NAME` spell it.
+NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}")
+
+
+def _toml(value: object) -> str:
+    """A TOML value for what append writes: strings, ints, string tables.
+    JSON's string escapes are TOML's basic-string escapes."""
+    if isinstance(value, dict):
+        return "{ " + ", ".join(f"{k} = {json.dumps(v)}" for k, v in value.items()) + " }"
+    return json.dumps(value)
+
+
+def append(root: Path, name: str, entry: dict) -> Path:
+    """Add [targets.NAME] at the end of the declaration, creating it if need
+    be. Appended, never rewritten: the operator's comments and other entries
+    are not touched (#956). Empty values are left out."""
+    if not NAME.fullmatch(name):
+        raise DeployError("arguments", f"target name {name!r}: lower-case letters, digits, - and _")
+    path = declaration_path(root)
+    before = path.read_text() if path.is_file() else ""
+    if before and name in read(root):
+        raise DeployError("arguments", f"target {name} is already declared in {path}")
+    lines = [f"[targets.{name}]"] + [f"{k} = {_toml(v)}" for k, v in entry.items() if v]
+    sep = "" if not before or before.endswith("\n\n") else "\n" if before.endswith("\n") else "\n\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(before + sep + "\n".join(lines) + "\n")
+    return path
+
+
+def remove(root: Path, name: str) -> Path:
+    """Delete [targets.NAME]'s lines - its header to the next table - and no
+    others."""
+    path = declaration_path(root)
+    if name not in read(root):
+        raise DeployError("arguments", f"no target {name!r} in {path}")
+    lines = path.read_text().splitlines(keepends=True)
+    header = re.compile(rf"^\s*\[targets\.{re.escape(name)}\]\s*(#.*)?$")
+    start = next((i for i, ln in enumerate(lines) if header.match(ln)), None)
+    if start is None:
+        raise DeployError("arguments", f"{name} is not a [targets.{name}] table in {path}")
+    end = next(
+        (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines)
+    )
+    path.write_text("".join(lines[:start] + lines[end:]))
+    return path

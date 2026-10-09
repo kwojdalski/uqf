@@ -162,7 +162,7 @@ def _selection_lines(sel: Selection, live: bool) -> list[str]:
     return lines
 
 
-def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
+def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) -> int:
     local = fetch.resolve(cfg.artifact, repo=cfg.release_repo, root=repo_root())
     log.info("checking {}", local)
     pkg = load_artifact(local)
@@ -203,7 +203,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout) -> int:
         facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
         print(plan(cfg, pkg, rid, facts, dep), file=out)
         return 0
-    return _run(dep, cfg, pkg, rid, report, facts, out)
+    return _run(dep, cfg, pkg, rid, report, facts, out, on_report)
 
 
 def _run(
@@ -214,6 +214,7 @@ def _run(
     report: Report,
     facts: dict,
     out,
+    on_report=None,
 ) -> int:
     dep.take_lock()
     release: str | None = None
@@ -332,6 +333,8 @@ def _run(
         dep.write_report(release, report)
         dep.discard_staging(rid)
         dep.release_lock()
+        if on_report:  # the workstation's deployment history (#956)
+            on_report(report)
     print(json.dumps(report.as_dict(), indent=2), file=out)
     return 0 if report.status == "deployed" else 1
 

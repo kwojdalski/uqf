@@ -122,7 +122,9 @@ def _push(monkeypatch, root, argv, codes):
     seen = []
     answers = iter(codes)
     monkeypatch.setattr(cli_deploy, "repo_root", lambda: root)
-    monkeypatch.setattr(driver, "deploy", lambda cfg, remote: seen.append(cfg) or next(answers))
+    monkeypatch.setattr(
+        driver, "deploy", lambda cfg, remote, **_k: seen.append(cfg) or next(answers)
+    )
     r = CliRunner().invoke(cli.app, ["deploy", "push", "x.tar.gz", *argv])
     return r, seen
 
@@ -186,3 +188,29 @@ def test_the_plan_says_where_each_setting_came_from(root):
     lines = driver._source_lines(cfg)
     assert "settings: profile from --profile" in lines
     assert "settings: dest, host from target prod-b" in lines
+
+
+def test_a_push_records_itself_and_registers_its_server(root, monkeypatch, tmp_path):
+    """#956: a push by flags leaves a history entry and a target to drive it by."""
+    from types import SimpleNamespace
+
+    from uqs.cli import deploy as cli_deploy
+    from uqs.deploy import history
+
+    monkeypatch.delenv(targets.DECLARATION_ENV, raising=False)
+    monkeypatch.delenv(history.HISTORY_ENV, raising=False)
+    monkeypatch.setattr(cli_deploy, "repo_root", lambda: tmp_path)
+
+    def deploy(cfg, remote, *, on_report=None, **_k):
+        report = {"release": "r42", "revision": "abc", "profile": cfg.profile, "status": "deployed"}
+        assert on_report is not None
+        on_report(SimpleNamespace(as_dict=lambda: report))
+        return 0
+
+    monkeypatch.setattr(driver, "deploy", deploy)
+    argv = ["deploy", "push", "x.tar.gz", "--host", "svc@uat.example", "--dest", "/srv/uat"]
+    r = CliRunner().invoke(cli.app, [*argv, "--profile", "essential"])
+    assert r.exit_code == 0, r.output
+    (entry,) = history.read(tmp_path)
+    assert (entry["target"], entry["release"]) == ("uat-example-uat", "r42")
+    assert targets.read(tmp_path)["uat-example-uat"]["dest"] == "/srv/uat"
