@@ -34,8 +34,20 @@
 /                    per `by` key: it is still the as-of answer for any
 /                    horizon before that key's next row.
 / .
+/ Under ready_on `reference the latest pre-cutoff row per key is kept with
+/ max_age too: readiness needs an anchor at or before event_time - lookback,
+/ and a tick that ran before the reference caught up must not delete it (#959).
+/ .
 / Either way the history is bounded by the events still waiting, and the
 / answer for every pending event is the one the full history would give.
+/ .
+/ LATE EVENTS (#958). The bound above reads "no future event is older than the
+/ oldest pending one", which holds only when event_time is receipt time. With
+/ event_time:`source_time an event can arrive after later reference rows, so
+/ eviction also subtracts max_lateness: how much older than its arrival an
+/ event's event_time can be. Default 0D when event_time is `time, else 0D01 -
+/ a bound, not a guess about the data: an event later than it may find its
+/ reference evicted. Declare it to tighten or widen the bound.
 / .
 / EVICT AFTER PUBLISHING. The runner's safe timer swallows an error, so a
 / publish that throws must leave the events queued for the next tick rather
@@ -57,7 +69,7 @@ required_keys:`procname`events`reference`transform`publishes`horizon`period
 / it; the rest (#952) are each OFF unless declared, so a declaration that
 / names none of them behaves exactly as before.
 optional_keys:`max_age`by`keep`start_with_all`note,
-    `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after
+    `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after`max_lateness
 
 / What define installs in .qpipe.job.<name>. They are the shell's, documented
 / here and in define, as a bounded worker's inherited methods are
@@ -87,7 +99,9 @@ normalise:{[who;decl;ins]
         'who,"'s by names ",(", " sv string absent),", which the reference input does not carry"];
     / the defaults, then what was declared, then `by` normalised to a list
     defaults:`event_time`reference_time`lookback`ready_on`remember!(`time;`time;0D;`wall;0D01);
-    d:defaults,decl,enlist[`by]!enlist key_cols;
+    / an event_time that is not receipt time can lag arrival: bound it (header)
+    late:enlist[`max_lateness]!enlist $[`time=$[`event_time in key decl; decl`event_time; `time]; 0D; 0D01];
+    d:defaults,late,decl,enlist[`by]!enlist key_cols;
     if[not -11h=type d`event_time; 'who,"'s event_time must be one column name, a symbol"];
     if[not -11h=type d`reference_time; 'who,"'s reference_time must be one column name, a symbol"];
     if[not (d`event_time) in ev_cols;
@@ -96,6 +110,8 @@ normalise:{[who;decl;ins]
         'who,"'s reference input carries no ",string[d`reference_time]];
     if[not $[-16h=type d`lookback; 0D<=d`lookback; 0b];
         'who,"'s lookback must be a timespan, how far before an event its window reaches"];
+    if[not $[-16h=type d`max_lateness; 0D<=d`max_lateness; 0b];
+        'who,"'s max_lateness must be a timespan, how much older than its arrival an event's event_time can be"];
     if[not (d`ready_on) in ready_rules;
         'who,"'s ready_on must be one of ",", " sv string ready_rules];
     if[$[`legs in key d; not 100h<=type d`legs; 0b]; 'who,"'s legs must be a function of the pending events"];
@@ -129,7 +145,7 @@ normalise:{[who;decl;ins]
 /   (the table they are scored against), transform (two inputs, events first),
 /   publishes (the table it publishes), horizon (how long an event waits, a
 /   timespan), period (the timer); optionally max_age (a timespan, see the
-/   header), by (the reference's key columns, default `sym), keep (a function
+/   header), max_lateness (a timespan, see the header), by (the reference's key columns, default `sym), keep (a function
 /   of a batch returning which rows to buffer), start_with_all, note,
 /   event_time and reference_time (the columns each table's clock is read
 /   from, default `time - e.g. `source_time), lookback (how far BEFORE an
@@ -281,9 +297,12 @@ not_ready:{[d;r;et;legs]
 / @private
 retain:{[d;hist;earliest]
     rt:hist d`reference_time;
-    if[`max_age in key d; :hist where rt>=earliest-d`max_age];
-    old:where rt<earliest;
+    cutoff:$[`max_age in key d; earliest-d`max_age; earliest];
+    old:where rt<cutoff;
     if[0=count old; :hist];
+    / with max_age a row below the cutoff is never an answer - except as the
+    / anchor ready_on `reference needs (#959)
+    if[(`max_age in key d) and not `reference=d`ready_on; :hist where rt>=cutoff];
     / the latest pre-cutoff row per key is still an as-of answer
     latest:old last each value group (d`by)#hist old;
     hist asc (til[count hist] except old),latest}
@@ -328,6 +347,8 @@ score_ready:{[name;now]
     / keep every reference row it is sent
     left:(get pq) d`event_time;
     earliest:$[count left; min left; now-d`horizon];
+    / a late event may be older than everything pending, but not than now - max_lateness
+    if[d[`max_lateness]>0D; earliest:(earliest&now)-d`max_lateness];
     hq set retain[d;get hq;earliest-d`lookback];
     if[`identity in key d; cq set (get cq) where (get cq)[`at]>=now-d`remember];
     }
