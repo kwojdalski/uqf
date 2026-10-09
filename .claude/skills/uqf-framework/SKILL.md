@@ -162,7 +162,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
 - **J9** A source whose adapter returns other columns than it reads declares
   `raw`: physical table → the columns it reads. `columns`/`types` then describe
   only what it returns. The live check holds each side separately
-  (`src/etl/core/source_contract.q`, "RAW INPUTS").
+  (`src/etl/core/source_registry.q`, "RAW INPUTS").
 
 - **J10** `start_with_all 1b` only when the user asks for it. Every started
   process spends one of the licence's 16 connections, with two held back, so 14

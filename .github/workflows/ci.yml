@@ -141,6 +141,11 @@ jobs:
         # dependency is a reviewed line rather than an invisible one.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_module_deps.py
+      - name: Check q modules stay under their line budget
+        # The q counterpart of test_module_split.py (#970): a file over the
+        # limit splits, or is listed with a reason and a cap that only shrinks.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/gates/check_q_module_size.py
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
         # tree knows what happens to those without a gate - docs/man.q once
