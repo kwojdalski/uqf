@@ -10,14 +10,16 @@ torq.sh replaced by a stub that fails the test if it is ever reached.
 
 from __future__ import annotations
 
+import dataclasses
 import subprocess
+from datetime import UTC, datetime
 
 import pytest
 
-from uqs import mcp
+from uqs import interpreter, mcp
 from uqs import paths as stack_paths
 from uqs.paths import UqsError
-from uqs.stack import runtime, start_policy
+from uqs.stack import backfill, occupancy, runtime, start_policy
 
 
 @pytest.fixture
@@ -27,8 +29,9 @@ def no_torq(monkeypatch):
     def ran(*_a, **_k):
         pytest.fail("torq.sh was run for a start that should have been refused")
 
-    monkeypatch.setattr(runtime, "run_torq_sh", ran)
-    monkeypatch.setattr(runtime.occupancy, "refuse_if_taken", lambda *_a: None)
+    # The launcher, not run_torq_sh: the refusals live inside run_torq_sh (#964).
+    monkeypatch.setattr(runtime, "torq_launcher", ran)
+    monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a: None)
 
 
 @pytest.mark.parametrize("verb", [runtime.start, runtime.stop, runtime.restart])
@@ -40,7 +43,7 @@ def test_the_stack_itself_refuses_an_unknown_name(no_torq, verb):
 def test_all_is_still_torq_shs_own_selector(monkeypatch):
     seen = []
     monkeypatch.setattr(runtime, "run_torq_sh", lambda _p, args, **_k: seen.append(args))
-    monkeypatch.setattr(runtime.occupancy, "refuse_if_taken", lambda *_a: None)
+    monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a: None)
     runtime.start(stack_paths.default_paths(), "all")
     assert seen == [["start", "all"]]
 
@@ -63,7 +66,7 @@ def test_the_mcp_server_starts_a_profile_as_the_cli_resolves_it(monkeypatch):
         return subprocess.CompletedProcess(args, 0, "", "")
 
     monkeypatch.setattr(runtime, "run_torq_sh", torq)
-    monkeypatch.setattr(runtime.occupancy, "refuse_if_taken", lambda *_a: None)
+    monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a: None)
     mcp.uqs_start(profile="essential")
     members, _ = start_policy.resolve_profiles(stack_paths.default_paths(), "essential")
     assert seen == [["start", " ".join(members)]]
@@ -89,3 +92,62 @@ def test_the_control_api_refuses_an_unknown_name(no_torq):
 def test_profile_resolution_refuses_with_a_reason(names, extra, says):
     with pytest.raises(UqsError, match=says):
         start_policy.resolve_profiles(stack_paths.default_paths(), names, extra)
+
+
+# ------------------------------------------------- one choke point (#964)
+
+FROM, TO = datetime(2026, 9, 13, tzinfo=UTC), datetime(2026, 9, 15, tzinfo=UTC)
+
+#: Every way into torq.sh that starts q processes: `uqs start`, `uqs restart`,
+#: `uqs backfill`, and `uqs raw -- start ...` (run_torq_sh as given).
+STARTERS = {
+    "start": lambda p: runtime.start(p, "rdb1"),
+    "restart": lambda p: runtime.restart(p, "rdb1"),
+    "backfill": lambda p: backfill.start(p, "demo_deals_backfill", "v1", FROM, TO),
+    "raw": lambda p: runtime.run_torq_sh(p, ["start", "rdb1"]),
+}
+
+
+@pytest.fixture
+def old_q(monkeypatch, tmp_path):
+    """A source-tree KDB-X runtime whose q answers 4.1 - too old for nested `\\d`."""
+    paths = stack_paths.default_paths()
+    decl = dataclasses.replace(paths.runtime_declaration, q_tree="source")
+    monkeypatch.setattr(type(paths), "runtime_declaration", property(lambda _s: decl))
+    q = tmp_path / "q"
+    q.write_text("#!/bin/sh\necho '4.1'\n")
+    q.chmod(0o755)
+    monkeypatch.setenv("QCMD", str(q))
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    interpreter.q_version.cache_clear()
+    yield paths
+    interpreter.q_version.cache_clear()
+
+
+@pytest.mark.parametrize("how", sorted(STARTERS))
+def test_every_starter_refuses_a_q_too_old_for_the_tree(no_torq, old_q, how):
+    """`uqs backfill` used to call torq.sh past the version check, and its
+    worker died at the first nested `\\d` with the failure only in its log."""
+    with pytest.raises(UqsError, match=r"kdb\+ 4\.1, which has no nested contexts"):
+        STARTERS[how](old_q)
+
+
+def test_backfill_is_checked_as_the_process_it_starts(monkeypatch):
+    """The processes are the words before torq.sh's first flag: a backfill's
+    `-extras` are not process names, and its port check is its own process's."""
+    seen = []
+    monkeypatch.setattr(start_policy.qtree, "refuse_unloadable", lambda *_a: None)
+    monkeypatch.setattr(occupancy, "refuse_if_taken", lambda _p, _b, procs: seen.append(procs))
+    paths = stack_paths.default_paths()
+    start_policy.refuse_start(paths, ["start", "deals_backfill1", "-extras", "-worker", "x"], 7000)
+    start_policy.refuse_start(paths, ["restart"], 7000)
+    assert seen == ["deals_backfill1", "all"]
+    with pytest.raises(UqsError, match="nosuchproc1"):
+        start_policy.refuse_start(paths, ["start", "nosuchproc1", "-extras", "-worker", "x"], None)
+
+
+def test_a_verb_that_starts_nothing_is_not_refused(monkeypatch):
+    monkeypatch.setattr(
+        occupancy, "refuse_if_taken", lambda *_a: pytest.fail("a stop checked the ports")
+    )
+    start_policy.refuse_start(stack_paths.default_paths(), ["summary", "nosuchproc1"], None)
