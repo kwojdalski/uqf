@@ -152,6 +152,22 @@ test_the_composed_windows_cover_exactly_the_request:{[t]
     c:.qetl.coverage.compose w;
     .qunit.assertEquals[(count c;first[c]`range_from;last[c]`range_to);(1;.lifecycletest.d[1];(.lifecycletest.d[3])+0D06);"the windows compose back to the original range, with nothing over or under"]};
 
+test_a_one_nanosecond_tail_on_a_long_range_is_a_window_of_its_own:{[t]
+    f:2020.01.01D00:00:00.000000000;
+    e:2026.01.01D00:00:00.000000001;
+    w:.qetl.job.bounded.runtime.windows[f;e;1D];
+    .qunit.assertEquals[(last exec range_from from w;last exec range_to from w);(2026.01.01D00:00:00.000000000;e);"the 1ns tail is not lost to float rounding (#975)"];
+    .qunit.assertEquals[count w;1+("j"$e-f) div "j"$1D;"2192 whole days plus the tail"]};
+
+test_window_counts_at_the_edges:{[t]
+    f:2026.01.01D00:00:00.000000000;
+    n:{[f;e;wd] count .qetl.job.bounded.runtime.windows[f;e;wd]};
+    .qunit.assertEquals[n[f;f+3D;1D];3;"an exact multiple has no extra window"];
+    .qunit.assertEquals[n[f;f+3D+1;1D];4;"one ns over is a fourth"];
+    .qunit.assertEquals[n[f;f+1;1D];1;"a width larger than the range is one window"];
+    .qunit.assertEquals[n[f;f+200D+1;1D];201;"200 days and a ns tail"];
+    .qunit.assertEquals[n[f;f+200D;1D];200;"200 days exactly"]};
+
 test_a_zero_width_window_is_rejected:{[t]
     .qunit.assertError[{.qetl.job.bounded.runtime.windows[x 0;x 1;0D]};(.lifecycletest.d[1];.lifecycletest.d[2]);"a zero width would plan infinitely many empty windows"]};
 

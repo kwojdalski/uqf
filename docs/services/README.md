@@ -119,6 +119,12 @@ Publishes `mkt_orderbook`. Profile `depth`.
 kept as the process's own state and published nowhere. A leaf you can stop
 without anything downstream noticing. Profile `depth`.
 
+**`alert_sink1` · limit breaches to a webhook** --- POSTs each `fx_limit_breach`
+row as JSON to the URL in `UQF_SOURCE_CRED_ALERT_SINK`, throttled, retried three
+times and then recorded in `dead`. At least once, in memory. Refuses to run with
+no URL. On demand, no profile. See
+[pipeline-declarations](../reference/pipeline-declarations.md#sinks-----alert_sink).
+
 ## Backfills
 
 A backfill takes a date range, fills it, records which windows are covered, and
