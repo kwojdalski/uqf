@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
 from collections.abc import Callable
@@ -99,10 +100,28 @@ def script(*lines: str) -> str:
     return "set -euo pipefail\n" + "\n".join(lines) + "\n"
 
 
+#: What ssh itself writes to stderr around a command, which is never the
+#: command's own failure. Kept out of a diagnostic: a host-key notice or a
+#: key-exchange warning used to stand where `uqs start`'s refusal belonged (#936).
+SSH_NOISE = re.compile(
+    r"^(Warning: Permanently added .*|Connection to \S+ closed\.?"
+    r"|Pseudo-terminal will not be allocated.*|\*\* .*"
+    r"|WARNING: connection is not using a post-quantum .*"
+    r"|.*may be vulnerable to \"store now, decrypt later\".*"
+    r"|.*server may need to be upgraded.*)$"
+)
+
+
+def diagnostic(r: subprocess.CompletedProcess, lines: int = 15) -> str:
+    """What a failed remote command said: its stderr without ssh's own notices,
+    then its stdout - a refusal printed on either survives, where taking
+    stderr alone dropped stdout whenever ssh had written a warning."""
+    err = [ln for ln in (r.stderr or "").splitlines() if ln.strip() and not SSH_NOISE.match(ln)]
+    out = [ln for ln in (r.stdout or "").splitlines() if ln.strip()]
+    return redact("\n".join((out + err)[-lines:]))
+
+
 def _checked(r: subprocess.CompletedProcess, stage: str, what: str) -> str:
     if r.returncode:
-        detail = (r.stderr or r.stdout or "").strip().splitlines()[-15:]
-        raise DeployError(
-            stage, f"{what} failed (exit {r.returncode}): " + redact("\n".join(detail))
-        )
+        raise DeployError(stage, f"{what} failed (exit {r.returncode}): " + diagnostic(r))
     return r.stdout

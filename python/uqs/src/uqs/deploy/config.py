@@ -114,6 +114,9 @@ class Config:
 
     #: deploy an artifact built from uncommitted changes (#872)
     allow_dirty: bool = False
+    #: --accept-converted-release's reason: start a converted release on a q
+    #: its version check cannot confirm, after smoke passes there (#936)
+    accept_converted_release: str | None = None
     #: owner/name whose releases a tag ARTIFACT names; default: origin's
     release_repo: str | None = None
 
@@ -173,6 +176,17 @@ def _launcher_env(values: Sequence[str]) -> dict[str, str]:
     return env
 
 
+def _reason(value: str | None) -> str | None:
+    """--accept-converted-release's reason: an override nobody explained is refused."""
+    if value is None:
+        return None
+    if not value.strip():
+        raise DeployError(
+            "arguments", "--accept-converted-release needs a reason, recorded in the report"
+        )
+    return value.strip()
+
+
 def _required_absolute(name: str, value: str) -> str:
     path = _absolute(name, value)
     assert path is not None  # _absolute returns None only for None
@@ -206,6 +220,7 @@ def make_config(
     smoke_timeout: int = 120,
     verify_timeout: int = 180,
     allow_dirty: bool = False,
+    accept_converted_release: str | None = None,
     release_repo: str | None = None,
     fix_hdb: bool = False,
     keep: int | None = None,
@@ -275,6 +290,7 @@ def make_config(
         smoke_timeout=smoke_timeout,
         verify_timeout=verify_timeout,
         allow_dirty=allow_dirty,
+        accept_converted_release=_reason(accept_converted_release),
         release_repo=release_repo,
         fix_hdb=fix_hdb,
         keep=keep,

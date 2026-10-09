@@ -48,6 +48,7 @@ from uqs.interpreter import (
 )
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import converted
 
 log = get_logger(__name__)
 
@@ -78,7 +79,14 @@ VENDORED_SCHEMA = Path("lib") / "torq-finance-starter-pack" / "database.q"
 
 
 def is_flattened(paths: UqsPaths) -> bool:
-    return paths.runtime_declaration.q_tree == "flattened"
+    """Whether this runtime's processes load a tree flattened HERE. Not for a
+    release whose q was converted when it was built (#936): it already is, and
+    loads its packaged code as shipped - converting it again would be work, and
+    a second copy of q to trust."""
+    return (
+        paths.runtime_declaration.q_tree == "flattened"
+        and converted.recorded_target(paths.repo_root) is None
+    )
 
 
 def refuse_unloadable(paths: UqsPaths, env: Mapping[str, str]) -> None:
@@ -91,7 +99,12 @@ def refuse_unloadable(paths: UqsPaths, env: Mapping[str, str]) -> None:
     PeachQ one is refused pipelines by its declaration (runtimes.py), so
     neither is asked here. Nor is an unanswered version: no evidence, no
     refusal. `env` is the runtime's own (stack/env.with_interpreter): this
-    module cannot import it, env importing this one."""
+    module cannot import it, env importing this one.
+
+    A release converted at build time is the exception, on its evidence rather
+    than its runtime's q_tree (#936): stack/converted.recognise checks the
+    manifest's record and every q file's integrity, and refuses - by name -
+    a record that does not hold."""
     if is_flattened(paths) or q_impl(env) != KDBX:
         return
     q = q_interpreter(env)
@@ -99,6 +112,16 @@ def refuse_unloadable(paths: UqsPaths, env: Mapping[str, str]) -> None:
         return  # torq.sh refuses a missing q itself, in its own words
     version = q_version(str(q))
     if loads_nested_contexts(KDBX, version) is False:
+        evidence = converted.recognise(paths.repo_root, version, env)
+        if evidence is not None:
+            log.info(
+                "release {} was converted for kdb+ {}: {} q file(s) verified{}",
+                evidence.release,
+                evidence.q,
+                evidence.checked,
+                " - started under its deployment's override" if evidence.override else "",
+            )
+            return
         raise UqsError(
             nested_contexts_problem(
                 f"{q_command(env)} ({q})",

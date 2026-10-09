@@ -182,11 +182,22 @@ def release_runtime(manifest: dict) -> str:
     return manifest.get("runtime") or LEGACY_RUNTIME
 
 
-def compatible(target: dict, facts: dict[str, str]) -> list[str]:
+def _older(version: str, than: str) -> bool:
+    """Whether kdb+ `version` is older than `than`; False when either says
+    nothing comparable - no evidence, no refusal."""
+    a, b = (v.strip().split(".")[:2] for v in (version, than))
+    if not all(p.isdigit() for p in a + b):
+        return False
+    return tuple(map(int, a)) < tuple(map(int, b))
+
+
+def compatible(target: dict, facts: dict[str, str], *, accept_converted: bool = False) -> list[str]:
     """Why a server cannot run a release built for `target`; empty when it can.
 
     `facts` are what the server reported: os (uname -s), arch (uname -m),
     python (the major.minor uv finds there) and qversion (its q's .z.K).
+    `accept_converted` is --accept-converted-release: a release converted for
+    a newer kdb+ than the server's is then left to its smoke test (#936).
     """
     problems = []
     os_name = facts.get("os", "").lower()
@@ -207,6 +218,13 @@ def compatible(target: dict, facts: dict[str, str]) -> list[str]:
                 "and the release's q is as written: build it with "
                 "`uqs deploy build --q-target 4.0`",
             )
+        )
+    converted_for = target.get("q")
+    if converted_for and not accept_converted and _older(version, converted_for):
+        problems.append(
+            f"the server's q is kdb+ {version}, older than the kdb+ {converted_for} the "
+            "release was converted for - deploy with --accept-converted-release REASON to "
+            "start it once its smoke test passes there"
         )
     if facts.get("python") != target["python"]:
         problems.append(

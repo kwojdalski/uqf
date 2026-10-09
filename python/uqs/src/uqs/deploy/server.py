@@ -145,7 +145,14 @@ class Server:
                 f"the deployment steps run as {facts.get('user') or 'an unknown user'}, "
                 f"not {self.cfg.remote_user}",
             )
-        problems = compatible(self.target, facts)
+        accept = self.cfg.accept_converted_release is not None
+        if accept and not self.target.get("q"):
+            raise DeployError(
+                "preflight",
+                "--accept-converted-release is for a release converted at build time "
+                "(--q-target), and this one ships its q as written",
+            )
+        problems = compatible(self.target, facts, accept_converted=accept)
         if problems:
             raise DeployError(
                 "preflight", "the artifact cannot run on this server: " + "; ".join(problems)
