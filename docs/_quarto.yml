@@ -86,6 +86,7 @@ website:
           - guides/new-pipeline.md
           - guides/config-audit.md
           - guides/metatables.md
+          - guides/real-time-subscribers.md
       - section: "Scaffolding"
         contents:
           - scaffolding/README.md

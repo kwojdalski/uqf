@@ -145,8 +145,8 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     if not paths.runtime_declaration.overlays:
         shutil.copyfile(paths.torqapphome / "database.q", paths.generated_schema)
     else:
-        # gateway1's access list, and the data-access table list the rdbs,
-        # hdbs and gateways are started with (stack/gateway_access.py).
+        # gateway1's and sctp1's access lists, and the data-access table list
+        # the rdbs, hdbs and gateways are started with (stack/gateway_access.py).
         gateway_access.write(paths)
 
         # Same extend-never-edit approach as process.csv above, for stp1's
