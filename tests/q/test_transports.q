@@ -25,9 +25,18 @@ with_field:{[name;col;v;f]
 
 / ------------------------------------------------------------ registration
 
-test_the_three_transports_are_registered:{[t]
-    .qunit.assertEquals[.qetl.source.transports[];`ipc`odbc`local;"ipc, odbc and local, as before"];
+test_the_built_in_transports_are_registered:{[t]
+    .qunit.assertEquals[.qetl.source.transports[];`ipc`odbc`local`mock;"ipc, odbc, local and mock"];
     .qunit.assertEquals[98h=type key .qetl.source.transport;1b;"in a declared keyed table (#512)"]};
+
+test_a_mock_credential_is_its_seed:{[t]
+    .qunit.assertEquals[.qetl.source.mock_seed "42";42;"the credential is the seed, as a long"];
+    .qunit.assertThrows[.qetl.source.mock_seed;"forty-two";"mock: the credential is an integer seed, such as 42";
+        "anything else is refused, not opened as a null seed"]};
+
+test_mock_metadata_comes_from_the_declaring_source:{[t]
+    .qunit.assertThrows[.qetl.source.mock_meta;`no_such_table;"mock_meta: no mock source reads no_such_table";
+        "a table no mock source reads has no columns to report"]};
 
 test_every_transport_has_its_operations_and_its_words:{[t]
     rows:.qetl.source.transport_def each .qetl.source.transports[];

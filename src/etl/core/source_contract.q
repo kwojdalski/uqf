@@ -172,7 +172,7 @@ register_transport:{[name;decl]
 
 / Every registered transport's name.
 / @return a symbol vector
-/ @eg .qetl.source.transports[]  ->  `ipc`odbc`local
+/ @eg .qetl.source.transports[]  ->  `ipc`odbc`local`mock
 transports:{[] (key transport)`name}
 
 / A transport's row, or a refusal naming it and the ones there are - before
@@ -215,6 +215,18 @@ register_transport[`local;transport_fields!(
     "the path of an HDB directory on this machine";
     "/path/to/hdb";
     "/ `h` is the HDB directory, read from its files with no process in between.\n/ Send the query with .qetl.source.local[h;{[read;from_ts;to_ts] ...};range_from;range_to]:\n/ read[`table;from_ts;to_ts] returns the whole date partitions the window\n/ touches, symbols decoded against the HDB's own sym file - filter the rows\n/ to [from_ts;to_ts) yourself. read[(`table;`col1`col2);from_ts;to_ts] reads\n/ only those columns' files.")];
+
+/ A source with nothing behind it: the credential is an integer seed, and the
+/ query GENERATES the window's rows from it. For exercising a worker - a
+/ backfill over any range, its coverage and reactions - with no data stored
+/ anywhere. sidecars/mockups/mock_trades.q is one.
+register_transport[`mock;transport_fields!(
+    {[cred] .qetl.source.mock_seed cred};
+    {[h] (::)};
+    {[h;table_name] .qetl.source.mock_meta table_name};
+    "an integer seed: the same seed and window always give the same rows";
+    "42";
+    "/ `h` is the seed: the credential, opened as a long - there is nothing to\n/ connect to. Generate the window's rows from it and the bounds,\n/ deterministically: the same seed and window must give the same rows\n/ (sidecars/mockups/mock_trades.q).")];
 
 default_transport:`ipc
 
@@ -1369,6 +1381,30 @@ local_latest:{[root;table] local_partition[root;table;`symbol$();0N;local_latest
 / @param table the table's name
 / @return a table of c and t
 / @throws error when no partition holds the table
+/ A mock source's seed, from its credential.
+/ @param cred the credential, a string
+/ @return a long
+/ @throws error when the credential is not an integer
+/ @eg .qetl.source.mock_seed "42"  ->  42
+mock_seed:{[cred]
+    s:"J"$cred;
+    if[null s; '"mock: the credential is an integer seed, such as 42"];
+    s}
+
+/ A mock table's columns: what the mock source reading it declares - there
+/ is no table anywhere to ask.
+/ @param tbl the table a mock source reads
+/ @return ([] c:symbols; t:chars), one row per declared column
+/ @throws error when no mock source reads `tbl`
+mock_meta:{[tbl]
+    / Indexed rather than selected: in qSQL `transport` is this table's
+    / column or .qetl.source.transport, and the PeachQ converter will not guess.
+    src:0!.qetl.source.sources;
+    s:first src[`name] where (src[`table_name]=tbl) & src[`transport]=`mock;
+    if[null s; '"mock_meta: no mock source reads ",string tbl];
+    d:.qetl.source.sources s;
+    ([] c:d`columns; t:d`types)}
+
 local_meta:{[root;table]
     select c, t from 0!meta local_partition[root;table;`symbol$();1;local_latest_part[root;table]]}
 
