@@ -75,7 +75,8 @@ pair_trades:{[slot;sym;level]
 / @return a table of the declared columns, every row in [range_from;range_to)
 / @eg count .qpipe.source.mock_trades.generate[42;2026.09.01D00:00:00.000000000;2026.09.01D01:00:00.000000000]
 generate:{[seed;range_from;range_to]
-    n:0|"j"$(range_to-range_from) div step;
+    / In nanoseconds: PeachQ refuses a timespan `div` a timespan.
+    n:0|("j"$range_to-range_from) div "j"$step;
     slot:range_from+step*til n;
     cycle:1+0.002*sin 2*acos[-1]*("j"$range_from)%86400000000000*30;
     rows:with_seed[window_seed[seed;range_from];{[slot;cycle;x] raze pair_trades[slot]'[syms;base*cycle]}[slot;cycle]];

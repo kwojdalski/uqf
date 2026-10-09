@@ -16,8 +16,12 @@ bundle's tests. This does, without touching the checkout:
 
     uv run python scripts/dev/bundle_suite.py                    # every bundle under sidecars/
     uv run python scripts/dev/bundle_suite.py sidecars/mockups   # one
+    uv run python scripts/dev/bundle_suite.py --install-into DIR # install only, run nothing
 
-Run through `python3 scripts/test.py bundles`.
+Run through `python3 scripts/test.py bundles`. --install-into is how CI's
+PeachQ lane (scripts/portable/full_suite.py --bundles) puts every bundle and
+its tests into the tree it flattens, so the bundles are tested on every PR
+on the q CI has (#925).
 """
 
 from __future__ import annotations
@@ -118,7 +122,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("bundles", nargs="*", help="bundle folders (default: sidecars/*)")
     parser.add_argument("--q", default=os.environ.get("QCMD") or "q", help="the q binary")
     parser.add_argument("--timeout", type=float, default=1200, help="seconds per bundle")
+    parser.add_argument(
+        "--install-into",
+        type=Path,
+        help="install every bundle, tests included, into this tree and run nothing",
+    )
     args = parser.parse_args(argv)
+    if args.install_into is not None:
+        for folder in find_bundles(args.bundles):
+            added = install(folder, args.install_into)
+            print(f"{folder.name}: installed into {args.install_into}; tests {' '.join(added)}")
+        return 0
     q = shutil.which(args.q)
     if q is None:
         raise SystemExit(f"no q at {args.q!r}: set QCMD or put q on PATH")

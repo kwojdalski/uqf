@@ -232,7 +232,7 @@ def lane_q_unit_peachq() -> None:
         raise SystemExit(f"q-unit-peachq: {exc}") from None
     _run(
         "q-unit-peachq",
-        [sys.executable, "scripts/portable/full_suite.py", "--q", str(binary)],
+        [sys.executable, "scripts/portable/full_suite.py", "--q", str(binary), "--bundles"],
     )
 
 
