@@ -149,10 +149,13 @@ test_publishing_returns_the_row_count:{[t]
 
 / ------------------------------------------------------------------- LOG
 
-/ A log directory of this test's own, under the repository's own tmp
-/ convention, removed and recreated per test so a previous run's messages
-/ cannot be counted as this one's.
-log_dir:{[] "/tmp/uqf_ticktest"};
+/ A log directory of this test's own, removed and recreated per test so a
+/ previous test's messages cannot be counted as this one's. Named for this
+/ process (#1012): sessions and worktrees run the suite at once, and two runs
+/ sharing one directory truncated or appended to each other's logs.
+log_dir:{[] "/tmp/uqf_ticktest_",string .z.i};
+
+afterNamespace_remove_the_log_dir:{[] system "rm -rf ",log_dir[];}
 
 fresh_log:{[]
     system "rm -rf ",log_dir[];
