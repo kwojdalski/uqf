@@ -39,7 +39,9 @@ best_mid_across_venues:{[tob;targets;max_age] (best_across_venues[tob;targets;ma
 / @return a table bid, ask, mid aligned with targets
 / @eg .qmicro.best_across_venues[([] time:2026.09.17D10:00:00 2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 62004f; ask:62010 62008f);([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:01);0D00:00:05]  ->  ([] bid:enlist 62004f; ask:enlist 62008f; mid:enlist 62006f)
 best_across_venues:{[tob;targets;max_age]
-    if[0=count tob; :([] bid:(count targets)#0n; ask:(count targets)#0n; mid:(count targets)#0n)];
+    / nothing to price, or nothing to price from: no aj (PeachQ refuses one
+    / with no targets against a non-empty book - #990)
+    if[(0=count tob) or 0=count targets; :([] bid:(count targets)#0n; ask:(count targets)#0n; mid:(count targets)#0n)];
     tob:`sym`time xasc tob;
     per_venue:{[tob;targets;max_age;v]
         j:aj[`sym`time;targets;select sym, time, bid, ask, quoted:time from tob where venue=v];
