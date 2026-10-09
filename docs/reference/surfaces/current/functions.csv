@@ -333,7 +333,9 @@ qetl.job.continuous,poll_once,function,4,worker fetch_page publish_page next_cur
 qetl.job.continuous,register_feeder,function,2,worker dataset
 qetl.job.continuous,save_cursor,function,2,worker cursor
 qetl.job.continuous,save_cursor_value,function,2,worker cursor
+qetl.job.stream,at_bars,function,2,name decl
 qetl.job.stream,at_horizons,function,2,name decl
+qetl.job.stream,bars,dict,,
 qetl.job.stream,cursor_name,function,1,job
 qetl.job.stream,cursor_ops,function,1,job
 qetl.job.stream,def,function,1,job
@@ -362,6 +364,16 @@ qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
+qetl.job.stream.bars,assign,function,3,width tc x
+qetl.job.stream.bars,close_ready,function,2,name now
+qetl.job.stream.bars,def,function,1,name
+qetl.job.stream.bars,define,function,2,name decl
+qetl.job.stream.bars,defined,function,1,
+qetl.job.stream.bars,end_of_day,function,2,name dt
+qetl.job.stream.bars,installed,value,,
+qetl.job.stream.bars,optional_keys,value,,
+qetl.job.stream.bars,registry,dict,,
+qetl.job.stream.bars,required_keys,value,,
 qetl.job.stream.horizons,def,function,1,name
 qetl.job.stream.horizons,define,function,2,name decl
 qetl.job.stream.horizons,defined,function,1,
@@ -969,6 +981,16 @@ qpipe.job.eq_orderbook_backfill,range_to,value,,
 qpipe.job.eq_orderbook_backfill,run,function,1,
 qpipe.job.eq_orderbook_backfill,source_version,value,,
 qpipe.job.eq_orderbook_backfill,spec,function,1,
+qpipe.job.exec_bars,close_ready,value,,
+qpipe.job.exec_bars,closed,table,,
+qpipe.job.exec_bars,dropped,table,,
+qpipe.job.exec_bars,fill_rows,table,,
+qpipe.job.exec_bars,now,function,1,
+qpipe.job.exec_bars,on_batch,value,,
+qpipe.job.exec_bars,on_endofday,value,,
+qpipe.job.exec_bars,on_timer,value,,
+qpipe.job.exec_bars,pending,table,,
+qpipe.job.exec_bars,publish,value,,
 qpipe.job.executions,crypto_trades,table,,
 qpipe.job.executions,executions,table,,
 qpipe.job.executions,filled_status,value,,
@@ -1040,6 +1062,24 @@ qpipe.job.hdb_demo_markouts_backfill,run,function,1,
 qpipe.job.hdb_demo_markouts_backfill,score,function,2,fill_rows quotes
 qpipe.job.hdb_demo_markouts_backfill,source_version,value,,
 qpipe.job.hdb_demo_markouts_backfill,spec,function,1,
+qpipe.job.hdb_exec_bars_backfill,bars,function,1,fill_rows
+qpipe.job.hdb_exec_bars_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_exec_bars_backfill,cleanup,function,1,
+qpipe.job.hdb_exec_bars_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_exec_bars_backfill,handle,value,,
+qpipe.job.hdb_exec_bars_backfill,init,function,1,run_spec
+qpipe.job.hdb_exec_bars_backfill,last_batch,value,,
+qpipe.job.hdb_exec_bars_backfill,last_window,dict,,
+qpipe.job.hdb_exec_bars_backfill,phase,value,,
+qpipe.job.hdb_exec_bars_backfill,plan,function,1,cursor
+qpipe.job.hdb_exec_bars_backfill,progress,dict,,
+qpipe.job.hdb_exec_bars_backfill,publish,function,1,batch
+qpipe.job.hdb_exec_bars_backfill,quality_check,function,1,batch
+qpipe.job.hdb_exec_bars_backfill,range_from,value,,
+qpipe.job.hdb_exec_bars_backfill,range_to,value,,
+qpipe.job.hdb_exec_bars_backfill,run,function,1,
+qpipe.job.hdb_exec_bars_backfill,source_version,value,,
+qpipe.job.hdb_exec_bars_backfill,spec,function,1,
 qpipe.job.hdb_transfer_backfill,checkpoint,function,1,cursor
 qpipe.job.hdb_transfer_backfill,cleanup,function,1,
 qpipe.job.hdb_transfer_backfill,facts,function,1,batch
@@ -1220,6 +1260,15 @@ qpipe.source.hdb_demo_markouts,target,value,,
 qpipe.source.hdb_demo_markouts,time_column,value,,
 qpipe.source.hdb_demo_markouts,types,value,,
 qpipe.source.hdb_demo_markouts,tz,value,,
+qpipe.source.hdb_executions,columns,value,,
+qpipe.source.hdb_executions,fixture,function,1,
+qpipe.source.hdb_executions,query,function,3,h range_from range_to
+qpipe.source.hdb_executions,row_key,value,,
+qpipe.source.hdb_executions,source_name,value,,
+qpipe.source.hdb_executions,target,value,,
+qpipe.source.hdb_executions,time_column,value,,
+qpipe.source.hdb_executions,types,value,,
+qpipe.source.hdb_executions,tz,value,,
 qpipe.source.hdb_transfer,columns,value,,
 qpipe.source.hdb_transfer,credential_example,value,,
 qpipe.source.hdb_transfer,fixture,function,1,
@@ -1252,6 +1301,9 @@ qpipe.transform.eq_orderbook,book,table,,
 qpipe.transform.eq_orderbook,contract,table,,
 qpipe.transform.eq_orderbook,example_book,function,1,
 qpipe.transform.eq_orderbook,to_book,function,1,batch
+qpipe.transform.exec_bars,bars,function,1,x
+qpipe.transform.exec_bars,lateness,value,,
+qpipe.transform.exec_bars,width,value,,
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades
 qpos,ccy_exposure,function,1,pos

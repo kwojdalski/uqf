@@ -153,6 +153,12 @@ Apply the rules below. Each cites the file that holds or enforces it.
   reference readiness with cross legs, a lookback window, identity and expiry
   are declared keys (#952), and `uqs job new --kind horizon` scaffolds one.
 
+- **J8b** Time bars (OHLC, VWAP, volume per interval) are a **bars job**
+  (`.qetl.job.stream.at_bars`, `src/etl/core/bars.q`). Declare the width, the
+  allowed lateness and the aggregation as a `.qetl.transform`; the kind owns
+  window closing, late rows, end of day and replay. `exec_bars` and its twin
+  `hdb_exec_bars_backfill` are the example.
+
 - **J9** A source whose adapter returns other columns than it reads declares
   `raw`: physical table → the columns it reads. `columns`/`types` then describe
   only what it returns. The live check holds each side separately

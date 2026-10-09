@@ -150,6 +150,8 @@ test_documentation_coverage_does_not_regress:{[t]
         / A horizon job's surface is installed by .qetl.job.stream.horizons.define
         / (#945), and documented there, for the inherited methods' reason.
         if[(last ` vs full) in .qetl.job.stream.horizons.defined[]; ks:ks except .qetl.job.stream.horizons.installed];
+        / and a bars job's (#946), by .qetl.job.stream.bars.define.
+        if[(last ` vs full) in .qetl.job.stream.bars.defined[]; ks:ks except .qetl.job.stream.bars.installed];
         ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
         string ` sv/: full,/:ks} each nss;
     / A function tagged @private is plumbing, deliberately not registered (#627).

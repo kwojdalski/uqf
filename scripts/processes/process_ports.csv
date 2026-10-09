@@ -36,3 +36,5 @@ hdb_transfer_backfill1,50
 crypto_markout1,51
 alert_sink1,52
 last_value1,53
+exec_bars1,54
+hdb_exec_bars_backfill1,55

@@ -351,6 +351,39 @@ so a late event still finds its reference rows.
 
 Either way, what is evaluated is what the full history would have given.
 
+## Bars job --- `.qetl.job.stream.bars`
+
+`.qetl.job.stream.at_bars[name;decl]`. A job that aggregates a stream into
+fixed-width time windows: OHLC, VWAP and volume per interval
+(`src/etl/core/bars.q`, #946). `exec_bars` is one: `executions` into `exec_bar`.
+
+Declares `procname`, `period` (how often closed windows are looked for) and
+`start_with_all`/`note` as for a streaming job, and:
+
+- `events`: the table aggregated.
+- `transform`: a `.qetl.transform` with ONE input, the events plus a `bar_start`
+  column the kind adds; one row per group per window out, carrying the grouping
+  columns and `bar_start`. A backfill twin applies the same one (cutting the
+  window itself with `.qetl.job.stream.bars.assign`).
+- `publishes`: the bar table.
+- `width`: a positive timespan. Windows are half-open
+  `[bar_start, bar_start+width)` on the event time; a row on a boundary opens
+  the window that starts there. A window with no rows has no bar.
+- `lateness`: a timespan, `0D` for none. A window closes, and its bar is
+  published once, when its end plus `lateness` has passed.
+- `by` (default `` `sym``), `event_time` (default `` `time``): the grouping
+  columns, and the column the window is cut on.
+
+A row arriving before its window closes amends it; one arriving after is
+dropped, logged, and kept in `.qpipe.job.<name>.dropped` with its reason. At end
+of day (`on_endofday`, #943) every window of the day that ended is closed,
+whatever its lateness. The job replays its log and restores from its own bars
+(`restore_from`), so a restart rebuilds the open windows and publishes none that
+already went out. Bars are published before the windows are evicted, so a
+publish that throws is retried on the next tick. `define` installs `pending`,
+`closed`, `dropped`, `publish`, `now`, `on_batch`, `close_ready[now]`,
+`on_timer` and `on_endofday` in `.qpipe.job.<name>`.
+
 ## Reactions --- `.qetl.reaction`
 
 Running something when a dataset is published, rather than on a timer. A

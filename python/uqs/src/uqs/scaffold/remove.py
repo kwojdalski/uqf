@@ -61,6 +61,7 @@ _DECLARES = (
     "qetl.job.stream.define",
     "qetl.job.stream.normalize",
     "qetl.job.stream.at_horizons",
+    "qetl.job.stream.at_bars",
     "qetl.job.bounded.define",
 )
 _NAMESPACE = re.compile(r"^\\d\s+\.(\w+)\s*$", re.MULTILINE)

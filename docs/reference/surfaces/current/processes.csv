@@ -12,6 +12,7 @@ deals_backfill1,backfill,32,,
 demo_markout1,metrics,31,quote trades,demo_execution_quality
 duckdb_deals_backfill1,backfill,46,,
 events_backfill1,backfill,33,,
+exec_bars1,metrics,52,executions,exec_bar
 executions1,metrics,36,crypto_trades orders trades,executions
 fxfeed1,feed,19,,quote
 fxorderbookfeed1,feed,24,,fx_orderbook
@@ -19,6 +20,7 @@ fxordersfeed1,feed,38,,orders
 fxpositions1,metrics,39,executions,fx_limit_breach fx_position fx_position_open
 fxtradesfeed1,feed,29,,trades
 hdb_demo_markouts_backfill1,backfill,49,,
+hdb_exec_bars_backfill1,backfill,53,,
 hdb_transfer_backfill1,backfill,50,,
 kafka_flow1,metrics,47,kafka_client_flow,client_flow
 marketdata1,metrics,42,crypto_book fx_orderbook quote,market_data

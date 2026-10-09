@@ -36,7 +36,7 @@ from uqs.paths import STREAM_DIR, WORKER_DIR, UqsError
 #: The three calls a job or worker declares itself with, and the start of one.
 _CALL_RE = re.compile(
     r"\.(qetl\.job\.stream\.define|qetl\.job\.stream\.normalize|qetl\.job\.stream\.at_horizons"
-    r"|qetl\.job\.bounded\.define)\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
+    r"|qetl\.job\.stream\.at_bars|qetl\.job\.bounded\.define)\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
 )
 _OPEN = "([{"
 _CLOSE = ")]}"
@@ -223,6 +223,20 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             start_with_all,
             note,
             path,
+        )
+    if fn == "qetl.job.stream.at_bars":
+        # A bars job (#946) subscribes to its events and publishes its bars.
+        transform = symbols(fields.get("transform", ""))
+        return Declaration(
+            name,
+            proc[0],
+            PipelineKind.ETL,
+            symbols(fields.get("events", "")),
+            symbols(fields.get("publishes", "")),
+            start_with_all,
+            note,
+            path,
+            transform=transform[0] if transform else "",
         )
     if fn == "qetl.job.stream.at_horizons":
         # A horizon job (#945) subscribes to its events and its reference,

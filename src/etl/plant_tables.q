@@ -383,6 +383,13 @@ demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`tim
 / `fills` is a q builtin.
 executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$(); book:`symbol$(); product:`symbol$())
 
+/ exec_bars1's output: time bars of `executions` (#946), one row per sym per
+/ window [bar_start, bar_start+width), on the fill's source_time. open and close
+/ are the first and last fill by source_time, vwap is size-weighted, volume the
+/ summed size. A window with no fills has no row. `time` is the plant's, on
+/ publication; the backfill twin writes the window's end.
+exec_bar:([]time:`timestamp$(); sym:`g#`symbol$(); bar_start:`timestamp$(); open:`float$(); high:`float$(); low:`float$(); close:`float$(); volume:`float$(); vwap:`float$(); trades:`long$())
+
 / fx_orders_feed's output: order flow, most of which never becomes a fill.
 / Wider than `trades` because a position keyed on more than sym needs the
 / dimensions to arrive with the order. The executions normalizer keeps the

@@ -151,6 +151,11 @@ UNPROFILED: dict[str, str] = {
         "a live external feed - its rows come from the Kafka consumer "
         "(`uqs feed start kafka`), so it is started with that or not at all"
     ),
+    "exec_bars1": (
+        "on demand: it bars the executions tape, which the fx and crypto chains "
+        "both publish, so it belongs to neither profile - `uqs start exec_bars1` "
+        "alongside whichever is running"
+    ),
     "tap1": (
         "a diagnostic subscriber chosen at runtime: which table it taps is an "
         "argument, so there is no standing set it belongs to"
