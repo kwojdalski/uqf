@@ -284,4 +284,72 @@ test_the_new_keys_are_refused_when_malformed:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`remember]!enlist 0D01;
         "*remember without identity*";"remember with nothing to remember"]};
 
+/ --- eviction under late events and max_age (#958, #959) ------------------
+
+late_refs:{[] rf[`a;t0+0D00:00:00 0D00:00:00.5 0D00:00:05 0D00:00:20;1 1.5 9 20f]}
+
+test_a_late_event_finds_its_reference_after_an_idle_tick:{[t]
+    / received 30s after it happened; an idle tick at t0+25s must not have evicted t0's rows
+    nm:sjob[`hz_l1;`event_time`max_lateness!(`source_time;0D00:01)];
+    (ns[nm;`on_batch])[`hz_refs;late_refs[]];
+    (ns[nm;`score_ready]) t0+0D00:00:25;
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:30;
+    .qunit.assertEquals[exec ref from last last sent;enlist 1.5;"the answer the full history gives"]};
+
+test_the_default_lateness_bound_covers_a_source_time_event:{[t]
+    nm:sjob[`hz_l2;enlist[`event_time]!enlist `source_time];
+    (ns[nm;`on_batch])[`hz_refs;late_refs[]];
+    (ns[nm;`score_ready]) t0+0D00:00:25;
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:30;
+    .qunit.assertEquals[exec ref from last last sent;enlist 1.5;"no declared bound: the documented default applies"]};
+
+test_a_late_event_is_not_falsely_expired_under_reference_readiness:{[t]
+    nm:sjob[`hz_l3;`event_time`ready_on`expire_after!(`source_time;`reference;0D00:01)];
+    (ns[nm;`on_batch])[`hz_refs;late_refs[]];
+    (ns[nm;`score_ready]) t0+0D00:00:25;
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:30;
+    .qunit.assertEquals[(count sent;count ns[nm;`expired]);1 0;"scored, not given up on"]};
+
+test_the_lateness_bound_still_trims_the_history:{[t]
+    nm:sjob[`hz_l4;`event_time`max_lateness!(`source_time;0D00:00:02)];
+    (ns[nm;`on_batch])[`hz_refs;late_refs[]];
+    (ns[nm;`score_ready]) t0+0D00:00:25;
+    .qunit.assertEquals[exec time from ns[nm;`history];enlist t0+0D00:00:20;"only the as-of row below now-horizon-lateness"]};
+
+test_a_receipt_time_job_has_no_lateness:{[t]
+    nm:job[`hz_l5;()!()];
+    .qunit.assertEquals[(.qetl.job.stream.horizons.def nm)`max_lateness;0D;"event_time is `time"]};
+
+test_max_lateness_must_be_a_non_negative_timespan:{[t]
+    define_transform[];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];decl_for[`hz_l6],enlist[`max_lateness]!enlist -0D00:00:01;
+        "*max_lateness must be a timespan*";"negative"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];decl_for[`hz_l6],enlist[`max_lateness]!enlist 5;
+        "*max_lateness must be a timespan*";"not a timespan"]};
+
+/ the anchor is at t0-2s, past max_age 1s; the reference reaches t0+1s only after a tick
+anchor_run:{[nm;tick]
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:02 0D00:00:00.5;1 1.5]];
+    (ns[nm;`on_batch])[`hz_events;ev[`a;t0]];
+    if[tick; (ns[nm;`score_ready]) t0+0D00:00:00.6];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;enlist t0+0D00:00:01.2;enlist 3f]];
+    (ns[nm;`score_ready]) t0+0D00:00:02;
+    exec ref from last last sent}
+
+test_max_age_with_reference_readiness_keeps_the_anchor_across_a_tick:{[t]
+    nm:job[`hz_m1;`ready_on`max_age`expire_after!(`reference;0D00:00:01;0D00:01)];
+    .qunit.assertEquals[anchor_run[nm;1b];enlist 1.5;"scored as the no-tick run is"];
+    nm2:job[`hz_m2;`ready_on`max_age`expire_after!(`reference;0D00:00:01;0D00:01)];
+    .qunit.assertEquals[anchor_run[nm2;0b];enlist 1.5;"the control: no intermediate tick"]};
+
+test_max_age_without_reference_readiness_still_drops_everything_old:{[t]
+    nm:job[`hz_m3;enlist[`max_age]!enlist 0D00:00:01];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:02 0D00:00:00.5;1 1.5]];
+    (ns[nm;`on_batch])[`hz_events;ev[`a;t0]];
+    (ns[nm;`score_ready]) t0+0D00:00:00.6;
+    .qunit.assertEquals[exec time from ns[nm;`history];enlist t0+0D00:00:00.5;"wall readiness: unchanged"]};
+
 \d .

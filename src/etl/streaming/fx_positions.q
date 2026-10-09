@@ -138,6 +138,15 @@ load_limits:{[limits]
     `.qpipe.job.fx_positions.limits set limits;
     count limits}
 
+/ Add an opening snapshot to a book: every field is additive, so the
+/ position is the sum per (pair, book, product).
+/ @param book the book built so far, unkeyed
+/ @param opening the opening snapshot, in the book's shape
+/ @return the combined book, keyed on its dimensions
+/ @eg .qpipe.job.fx_positions.combine_book[.qpipe.job.fx_positions.desk_book;.qpipe.job.fx_positions.desk_book]  ->  an empty keyed book
+combine_book:{[book;opening]
+    .qpipe.job.fx_positions.dimensions xkey 0!select sum base_qty, sum quote_qty, sum fill_count by sym, book, product from book,opening}
+
 / Net one batch of fills into the book.
 / .
 / The book is replaced BEFORE anything is published, the way posbook does
@@ -149,10 +158,14 @@ load_limits:{[limits]
 on_batch:{[t;x]
     / The opening book a restart restores from (#943) - only while
     / replaying: live, it is this job's own echo, and fills may have landed
-    / since it was taken.
+    / since it was taken. ADDED to the book built so far, not set over it:
+    / the plant rolls its log and tells the job asynchronously, so a fill
+    / can be logged before the job's opening row, and live the job applied
+    / it on top of its snapshot (#960). The book is flat at replay start,
+    / so summing is exact.
     if[t=`fx_position_open;
         if[.qetl.job.stream.replaying;
-            `.qpipe.job.fx_positions.positions set .qpipe.job.fx_positions.dimensions xkey (cols .qpipe.job.fx_positions.desk_book)#x];
+            `.qpipe.job.fx_positions.positions set .qpipe.job.fx_positions.combine_book[0!.qpipe.job.fx_positions.positions;(cols .qpipe.job.fx_positions.desk_book)#x]];
         :()];
     if[not t=`executions; :()];
     if[0=count x; :()];

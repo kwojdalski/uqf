@@ -187,4 +187,26 @@ test_each_beat_writes_whether_the_job_is_failing:{[t]
     .qetl.uptime.beat[];
     .qunit.assertFalse[(.j.k first read0 file)`failing;"a beat with no failure since clears it"]};
 
+/ A process that starts with the same random seed as another - which is what
+/ every fresh q does - must still mint a different session id (#974).
+test_sessions_in_identically_seeded_processes_get_different_ids:{[t]
+    system"S 7";
+    a:.qetl.uptime.begin `demo_markout;
+    system"S 7";
+    b:.qetl.uptime.begin `posbook;
+    .qunit.assertTrue[not a=b;"the same seed does not give the same session id"];
+    .qunit.assertEquals[count distinct exec session from .qetl.uptime.sessions[];2;"two distinct rows"]};
+
+test_renewed_sessions_get_distinct_ids_whatever_the_seed:{[t]
+    system"S 7";
+    a:.qetl.uptime.begin `demo_markout;
+    b:.qetl.uptime.begin `posbook;
+    @[.qetl.job.stream.guarded[`demo_markout;.uptimetest.throws;`tbl];();::];
+    @[.qetl.job.stream.guarded[`posbook;.uptimetest.throws;`tbl];();::];
+    system"sleep 0.01";
+    system"S 7";
+    .qetl.uptime.beat[];
+    .qunit.assertEquals[count distinct .qetl.uptime.mine;2;"two renewed sessions, two ids"];
+    .qunit.assertTrue[not any .qetl.uptime.mine in (a;b);"neither reuses an old id"]};
+
 \d .

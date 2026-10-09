@@ -158,6 +158,33 @@ book_mids:{[x]
 executions:.qetl.plant.shape `executions
 market_data:.qetl.plant.shape `market_data
 
+/ Net one executions batch into the book and publish its position rows.
+/ @param x the executions rows, as a table
+/ @return nothing
+apply_fills:{[x]
+    mids:0!(1!([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid)),
+         1!.qpipe.job.posbook.crypto_marks[0!.qpipe.job.posbook.crypto_tob;x];
+    out:.qetl.transform.apply[`position;`book`trades`mids!(
+        0!.qpipe.job.posbook.book;
+        .qpipe.job.posbook.as_trades[x];
+        mids)];
+    `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.next_book[0!.qpipe.job.posbook.book;out];
+    .qpipe.job.posbook.publish[`position;out];
+    }
+
+/ Replay state for the opening book (#960): the executions replayed before
+/ it, and whether it has been seen. Both are cleared when the replay ends.
+early:()
+opened:0b
+
+/ The replay is over: forget the executions held for an opening row that
+/ never came (a first day has none; they were already applied).
+/ @return nothing
+on_replayed:{[]
+    `.qpipe.job.posbook.early set ();
+    `.qpipe.job.posbook.opened set 0b;
+    }
+
 / Executions: apply every fill in the batch in arrival order - already time
 / order off the tickerplant - mark each to the current last_mid, and publish
 / one position row per fill. The book is rebuilt from those rows BEFORE
@@ -176,20 +203,24 @@ market_data:.qetl.plant.shape `market_data
 / @return nothing
 on_batch:{[t;x]
     / The opening book a restart restores from (#943), only while replaying:
-    / live, it is this job's own echo.
+    / live, it is this job's own echo. It REPLACES the book, so the fills
+    / replayed ahead of it are re-applied on top of it, in order: the plant
+    / logs a fill that lands between its roll and the job's snapshot ahead
+    / of the opening row, and live the job applied it after the snapshot
+    / (#960). avg_price and realised P&L depend on lot order, so the fills
+    / are replayed, not summed.
     if[t=`position_open;
         if[.qetl.job.stream.replaying;
-            `.qpipe.job.posbook.book set 1!(cols .qpipe.job.posbook.position_book)#x];
+            `.qpipe.job.posbook.book set 1!(cols .qpipe.job.posbook.position_book)#x;
+            early:.qpipe.job.posbook.early;
+            `.qpipe.job.posbook.early set ();
+            `.qpipe.job.posbook.opened set 1b;
+            .qpipe.job.posbook.apply_fills each early];
         :()];
     $[t=`executions;
-        [mids:0!(1!([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid)),
-             1!.qpipe.job.posbook.crypto_marks[0!.qpipe.job.posbook.crypto_tob;x];
-         out:.qetl.transform.apply[`position;`book`trades`mids!(
-            0!.qpipe.job.posbook.book;
-            .qpipe.job.posbook.as_trades[x];
-            mids)];
-         `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.next_book[0!.qpipe.job.posbook.book;out];
-         .qpipe.job.posbook.publish[`position;out]];
+        [if[.qetl.job.stream.replaying;
+            if[not .qpipe.job.posbook.opened; `.qpipe.job.posbook.early set .qpipe.job.posbook.early,enlist x]];
+         .qpipe.job.posbook.apply_fills x];
       t=`market_data;
         [m:.qpipe.job.posbook.book_mids[x];
          .qpipe.job.posbook.last_mid[m`sym]:m`mid;
@@ -249,7 +280,7 @@ on_endofday:{[dt]
 / flat and publish every later position from zero. Replaying the day's
 / executions and market_data rebuilds it; publish is muted while it does, so the
 / positions already published are not published twice.
-.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`restore_from`on_endofday`note!(
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`restore_from`on_endofday`on_replayed`note!(
     `posbook1;
     `executions`market_data;
     `position`position_open;
@@ -258,4 +289,5 @@ on_endofday:{[dt]
     1b;
     enlist `position_open;
     .qpipe.job.posbook.on_endofday;
+    .qpipe.job.posbook.on_replayed;
     "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job")];
