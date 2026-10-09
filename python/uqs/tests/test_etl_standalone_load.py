@@ -64,7 +64,7 @@ def test_the_etl_tree_loads_outside_the_test_harness(tmp_path: Path) -> None:
     it cannot notice that no one else can.
 
     The order is load-bearing and not obvious - `coercion.q` must precede
-    `source_contract.q`, whose type table names `.qetl.coerce.to_timestamp` at LOAD
+    `source_coercion.q`, whose type table names `.qetl.coerce.to_timestamp` at LOAD
     TIME. Getting it wrong aborts the file with a bare `.qetl.coerce.to_symbol,
     which is how this was found while writing the loader.
     """

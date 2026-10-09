@@ -27,19 +27,7 @@ recorder:{[job;t;x]
 
 reset:{[]
     `.sjtest.published set 0#.sjtest.published;
-    `.qpipe.job.demo_markout.pending set 0#.qpipe.job.demo_markout.pending;
-    `.qpipe.job.demo_markout.history set 0#.qpipe.job.demo_markout.history;
-    `.qpipe.job.cross.fx_orderbook set 0#.qpipe.job.cross.fx_orderbook;
-    `.qpipe.job.cross.crosses set 0#.qpipe.job.cross.crosses;
-    `.qpipe.job.cross.unpriced set `symbol$();
-    `.qpipe.job.superbook.books set `sym`source xkey .qpipe.job.market_data.market_data;
-    `.qpipe.job.posbook.book set 1!0#.qpipe.job.posbook.position_book;
-    `.qpipe.job.posbook.last_mid set (`symbol$())!`float$();
-    `.qpipe.job.posbook.crypto_tob set 0#.qpipe.job.posbook.crypto_tob;
-    `.qpipe.job.crypto_mock.last_id set .qpipe.job.crypto_mock.venues!(count .qpipe.job.crypto_mock.venues)#0;
-    `.qpipe.job.fx_positions.positions set `sym`book`product xkey 0#.qpipe.job.fx_positions.desk_book;
-    `.qpipe.job.fx_positions.limits set 0#.qpipe.job.fx_positions.limits;
-    `.qpipe.job.fx_positions.alerts set .qlimit.no_alerts[];
+    .qetl.job.stream.reset each .qetl.job.stream.defined[];
     {.qetl.job.stream.wire[x;.sjtest.recorder[x]]} each .qetl.job.stream.defined[];
     }
 
@@ -136,6 +124,28 @@ test_a_note_that_is_not_a_string_is_refused:{[t]
             `badnote1;`symbol$();`symbol$();0D00:00:01;{[] ()};`why);
         "*note must be a string*";
         "a note is prose for the process table, so a symbol is refused"]};
+
+test_state_naming_a_variable_the_job_lacks_is_refused:{[t]
+    .qunit.assertThrows[{.qetl.job.stream.define[`badstate;x]};
+        `procname`subscribe_to`publishes`period`on_timer`state!(
+            `badstate1;`symbol$();`symbol$();0D00:00:01;{[] ()};enlist `nosuch);
+        "*state names nosuch, which .qpipe.job.badstate does not define*";
+        "a declared variable that does not exist would make reset a silent no-op"]};
+
+test_reset_restores_every_declared_variable_to_its_defined_value:{[t]
+    / the identity: whatever a batch left behind, reset gives back what the file defined
+    before:.qpipe.job.cross.unpriced;
+    `.qpipe.job.cross.unpriced set `EURJPY`GBPJPY;
+    `.qpipe.job.cross.crosses set 3#.qpipe.job.cross.crosses;
+    .qetl.job.stream.reset `cross;
+    .qunit.assertEquals[.qpipe.job.cross.unpriced;before;"a symbol list is back to empty"];
+    .qunit.assertEquals[count .qpipe.job.cross.crosses;0;"and a table to zero rows"]};
+
+test_a_job_without_declared_state_resets_to_a_no_op:{[t]
+    .qunit.assertEquals[.qetl.job.stream.reset `fx_feed;`fx_feed;"nothing to restore, and no error"]};
+
+test_reset_of_an_unregistered_job_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.reset;`no_such_job;"*is not a registered streaming job*";"named, not ignored"]};
 
 test_a_jobs_namespace_is_derived_from_its_name:{[t]
     .qunit.assertEquals[.qetl.job.stream.namespace `demo_markout;`.qpipe.job.demo_markout;

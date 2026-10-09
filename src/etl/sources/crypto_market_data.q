@@ -149,7 +149,12 @@ select_list:{[]
 / @return SQL text for the first millisecond at or after it
 / @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.11D21:00:00.000000000]  ->  "1789160400000"
 / @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.11D21:00:00.000000001]  ->  "1789160400001"
-epoch_ms_bound:{[ts] .qetl.io.odbc.literal neg[(neg "j"$ts-1970.01.01D00:00) div 1000000]}
+/ Integer arithmetic only: floor division on the long, plus one when a
+/ remainder is left. The earlier neg-div-neg trick leaned on `div` flooring a
+/ negative operand, which PeachQ truncates (#985).
+epoch_ms_bound:{[ts]
+    ns:"j"$ts-1970.01.01D00:00;
+    .qetl.io.odbc.literal (ns div 1000000)+0<ns mod 1000000}
 
 / The SQL for one window: half-open [range_from;range_to) on timestamp_ms,
 / ordered so a window is the same table on every fetch.

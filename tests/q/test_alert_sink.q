@@ -25,13 +25,28 @@ fake_post:{[target;body]
         '"boom"];
     "ok"}
 
+/ The fake target answering as a real server does: a status line and a body,
+/ judged by the transport's own rule. A non-2xx must fail the delivery even
+/ though a client like .Q.hp would hand back its body (#987).
+/ How many of the next POSTs get `status` instead of a 200.
+bad_status:0
+status:500
+
+answering_post:{[target;body]
+    `.alert_sinktest.calls set .alert_sinktest.calls,enlist (target;body);
+    code:200;
+    if[.alert_sinktest.bad_status>0;
+        `.alert_sinktest.bad_status set .alert_sinktest.bad_status-1;
+        code:.alert_sinktest.status];
+    .qetl.webhook.check "HTTP/1.1 ",string[code]," Reason\r\n\r\nwebhook down"}
+
 / Fresh state, the fake wired in and a URL configured.
 ready:{[]
     `.alert_sinktest.calls set ();
     `.alert_sinktest.failures set 0;
-    `.qpipe.job.alert_sink.alerts set .qlimit.no_alerts[];
-    `.qpipe.job.alert_sink.pending set 0#.qpipe.job.alert_sink.pending;
-    `.qpipe.job.alert_sink.dead set 0#.qpipe.job.alert_sink.dead;
+    `.alert_sinktest.bad_status set 0;
+    `.alert_sinktest.status set 500;
+    .qetl.job.stream.reset `alert_sink;
     `.qpipe.job.alert_sink.post set .alert_sinktest.fake_post;
     setenv[`UQF_SOURCE_CRED_ALERT_SINK;.alert_sinktest.hook];
     }
@@ -95,6 +110,33 @@ test_a_failing_target_is_retried_then_recorded:{[t]
     .qunit.assertEquals[first d`failed_at;.alert_sinktest.t0+0D00:00:20;"and when it gave up"];
     .qunit.assertEquals[count .qpipe.job.alert_sink.pending;0;"and the queue is clear"];
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach[enlist `EURUSD];.alert_sinktest.t0+0D00:00:30];1;"a dead breach leaves the throttle, so its next report is queued"]};
+
+test_an_http_error_is_a_failed_delivery_not_a_delivered_one:{[t]
+    ready[];
+    `.qpipe.job.alert_sink.post set .alert_sinktest.answering_post;
+    `.alert_sinktest.bad_status set 100;
+    .qpipe.job.alert_sink.enqueue[breach[enlist `EURUSD];.alert_sinktest.t0];
+    r1:.qpipe.job.alert_sink.flush .alert_sinktest.t0;
+    .qunit.assertEquals[r1;`delivered`retrying`failed!0 1 0;"a 500 is not delivered: the breach stays pending"];
+    .qunit.assertEquals[first .qpipe.job.alert_sink.pending`error;"webhook: answered 500";"with the status as its error"];
+    .qpipe.job.alert_sink.flush .alert_sinktest.t0;
+    r3:.qpipe.job.alert_sink.flush .alert_sinktest.t0+0D00:00:20;
+    .qunit.assertEquals[r3;`delivered`retrying`failed!0 0 1;"and is given up on after max_attempts"];
+    .qunit.assertEquals[count .alert_sinktest.calls;3;"having been retried, not dropped after one"];
+    d:.qpipe.job.alert_sink.dead;
+    .qunit.assertEquals[(count d;first d`attempts;first d`error);(1;3j;"webhook: answered 500");"recorded in dead with the status"]};
+
+test_a_4xx_is_retried_and_a_recovered_endpoint_delivers:{[t]
+    ready[];
+    `.qpipe.job.alert_sink.post set .alert_sinktest.answering_post;
+    `.alert_sinktest.status set 401;
+    `.alert_sinktest.bad_status set 1;
+    .qpipe.job.alert_sink.enqueue[breach[enlist `EURUSD];.alert_sinktest.t0];
+    r1:.qpipe.job.alert_sink.flush .alert_sinktest.t0;
+    .qunit.assertEquals[(r1`delivered;first .qpipe.job.alert_sink.pending`error);(0;"webhook: answered 401");"the 401 is a failure"];
+    r2:.qpipe.job.alert_sink.flush .alert_sinktest.t0;
+    .qunit.assertEquals[r2;`delivered`retrying`failed!1 0 0;"and the 200 after it delivers"];
+    .qunit.assertEquals[count .qpipe.job.alert_sink.dead;0;"nothing is dead"]};
 
 test_a_transient_failure_is_delivered_on_the_retry:{[t]
     ready[];

@@ -25,6 +25,7 @@ qbook,fold_level_columns,function,2,tbl level_groups
 qbook,invert_book_depth,function,2,prices sizes
 qbook,sweep_price,function,3,prices sizes target_size
 qbook,symbolize_columns,function,2,tbl sym_cols
+qbook,top_sides,function,1,x
 qcal,add_business_days,function,5,d n ccys calendars weekend
 qcal,add_months,function,2,d n
 qcal,adjust,function,5,d roll ccys calendars weekend
@@ -336,6 +337,7 @@ qetl.job.continuous,save_cursor_value,function,2,worker cursor
 qetl.job.stream,at_bars,function,2,name decl
 qetl.job.stream,at_horizons,function,2,name decl
 qetl.job.stream,bars,dict,,
+qetl.job.stream,carry_log,dict,,
 qetl.job.stream,cursor_name,function,1,job
 qetl.job.stream,cursor_ops,function,1,job
 qetl.job.stream,def,function,1,job
@@ -345,7 +347,9 @@ qetl.job.stream,drain,function,2,table_name mask
 qetl.job.stream,end_of_day,function,1,dt
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
+qetl.job.stream,handler,function,1,job
 qetl.job.stream,horizons,dict,,
+qetl.job.stream,initial,dict,,
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
 qetl.job.stream,namespace,function,1,job
@@ -355,9 +359,12 @@ qetl.job.stream,poll_keys,value,,
 qetl.job.stream,preview,function,2,job n
 qetl.job.stream,preview_recent,function,3,job n span
 qetl.job.stream,procnames,dict,,
+qetl.job.stream,replayed,function,1,job
 qetl.job.stream,replaying,value,,
 qetl.job.stream,required_declarations,value,,
+qetl.job.stream,reset,function,1,job
 qetl.job.stream,running,value,,
+qetl.job.stream,snapshot,function,1,job
 qetl.job.stream,start,function,2,job tr
 qetl.job.stream,subscriptions,function,1,job
 qetl.job.stream,tick,function,1,job
@@ -653,6 +660,10 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
+qetl.webhook,check,function,1,raw
+qetl.webhook,post,function,2,target body
+qetl.webhook,request,function,3,host path body
+qetl.webhook,status_of,function,1,raw
 qexec,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
 qexec,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
 qexec,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
@@ -1023,7 +1034,6 @@ qpipe.job.fx_orders_feed,sizes,value,,
 qpipe.job.fx_orders_feed,statuses,value,,
 qpipe.job.fx_positions,alert_period,value,,
 qpipe.job.fx_positions,alerts,dict,,
-qpipe.job.fx_positions,combine_book,function,2,book opening
 qpipe.job.fx_positions,desk_book,table,,
 qpipe.job.fx_positions,desk_fills,table,,
 qpipe.job.fx_positions,dimensions,value,,
@@ -1034,7 +1044,6 @@ qpipe.job.fx_positions,limits,table,,
 qpipe.job.fx_positions,load_limits,function,1,limits
 qpipe.job.fx_positions,net_fills,function,2,book batch
 qpipe.job.fx_positions,on_batch,function,2,t x
-qpipe.job.fx_positions,on_endofday,function,1,dt
 qpipe.job.fx_positions,on_timer,function,1,
 qpipe.job.fx_positions,policed,value,,
 qpipe.job.fx_positions,positions,dict,,
@@ -1129,16 +1138,12 @@ qpipe.job.posbook,book_mids,function,1,x
 qpipe.job.posbook,crypto_books,function,1,x
 qpipe.job.posbook,crypto_marks,function,2,tob batch
 qpipe.job.posbook,crypto_tob,dict,,
-qpipe.job.posbook,early,value,,
 qpipe.job.posbook,executions,table,,
 qpipe.job.posbook,last_mid,dict,,
 qpipe.job.posbook,mark_positions,function,3,book trades mids
 qpipe.job.posbook,market_data,table,,
 qpipe.job.posbook,next_book,function,2,book positions
 qpipe.job.posbook,on_batch,function,2,t x
-qpipe.job.posbook,on_endofday,function,1,dt
-qpipe.job.posbook,on_replayed,function,1,
-qpipe.job.posbook,opened,value,,
 qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_mids,table,,

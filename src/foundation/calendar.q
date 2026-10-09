@@ -155,14 +155,16 @@ pair_terms:{[pair;conventions]
 
 / The spot date a trade date settles on, and why.
 / .
-/ Spot is `spot_lag` joint business days after the trade date (holidays of
-/ both currencies count), and always itself a joint business day: a T+0 trade
-/ dated on a weekend or a holiday settles on the next business day, never
-/ before the trade. The result names the lag, the calendars used and every
-/ non-business day skipped over on the way.
+/ Spot is `spot_lag` business days after the trade date, counted on the
+/ non-USD currency(ies) only: a USD holiday on an intermediate day (T+1 of a
+/ T+2 pair) does not push spot out (#997). Spot itself must be a business day
+/ in both currencies and in USD, so a cross (EURGBP) also needs the USD
+/ calendar. A T+0 trade dated on a weekend or a holiday settles on the next
+/ business day, never before the trade. The result names the lag, the
+/ calendars used and every non-business day skipped over on the way.
 / @param trade_date the trade date
 / @param pair the currency pair, e.g. `EURUSD
-/ @param calendars dict currency -> holiday dates; both currencies required
+/ @param calendars dict currency -> holiday dates; both currencies, and USD, required
 / @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...)
 / @return dict date, trade_date, pair, spot_lag, calendars, skipped - the
 /   non-business days passed over between the trade date and spot
@@ -170,14 +172,17 @@ pair_terms:{[pair;conventions]
 / @eg (.qcal.spot_date[2026.09.18;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions])`date  -> 2026.09.22
 spot_date:{[trade_date;pair;calendars;conventions]
     c:pair_terms[pair;conventions];
-    counted:add_business_days[trade_date;c`spot_lag;c`ccys;calendars;c`weekend];
-    / T+0 counts no days, so a weekend or holiday trade date would be its own
-    / spot: roll it forward. Never back - spot does not settle before the
-    / trade. A lag of 1 or more already ends on a business day, unchanged.
-    settle:adjust[counted;`following;c`ccys;calendars;c`weekend];
+    / Count on the non-USD currency(ies); USD matters only on the spot date.
+    count_ccys:$[`USD in c`ccys; (c`ccys) except `USD; c`ccys];
+    settle_ccys:distinct (c`ccys),`USD;
+    counted:add_business_days[trade_date;c`spot_lag;count_ccys;calendars;c`weekend];
+    / Roll forward onto a joint business day (USD included). This also covers
+    / T+0, where nothing is counted and a weekend or holiday trade date would
+    / be its own spot. Never back - spot does not settle before the trade.
+    settle:adjust[counted;`following;settle_ccys;calendars;c`weekend];
     between:trade_date+1+til 0|settle-trade_date;
-    skipped:between where not is_business_day[between;c`ccys;calendars;c`weekend];
-    `date`trade_date`pair`spot_lag`calendars`skipped!(settle;trade_date;c`pair;c`spot_lag;c`ccys;skipped)}
+    skipped:between where not is_business_day[between;settle_ccys;calendars;c`weekend];
+    `date`trade_date`pair`spot_lag`calendars`skipped!(settle;trade_date;c`pair;c`spot_lag;settle_ccys;skipped)}
 
 / Private: a tenor symbol such as `3D`1W`2M`1Y as (count;unit).
 / @private

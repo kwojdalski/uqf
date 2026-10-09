@@ -18,7 +18,7 @@ from uqs.paths import UqsError, paths_for_root
 from uqs.stack import source_settings as ss
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
-SOURCE_CONTRACT_Q = UQF_ROOT / "src" / "etl" / "core" / "source_contract.q"
+CREDENTIALS_Q = UQF_ROOT / "src" / "etl" / "core" / "source_credentials.q"
 TORQ_PIPELINE_Q = UQF_ROOT / "scripts" / "processes" / "torq_pipeline.q"
 
 TRANSPORTS = ("ipc", "odbc", "local")
@@ -204,14 +204,14 @@ def _q_value(path: Path, name: str) -> str:
 
 
 def test_the_columns_are_the_ones_q_reads():
-    assert _q_value(SOURCE_CONTRACT_Q, "settings_cols") == "`" + "`".join(ss.COLUMNS)
+    assert _q_value(CREDENTIALS_Q, "settings_cols") == "`" + "`".join(ss.COLUMNS)
 
 
 def test_the_secret_keys_and_markers_are_the_ones_q_uses():
-    keys = re.findall(r'"([^"]*)"', _q_value(SOURCE_CONTRACT_Q, "secret_keys"))
+    keys = re.findall(r'"([^"]*)"', _q_value(CREDENTIALS_Q, "secret_keys"))
     assert frozenset(keys) == ss.SECRET_KEYS
-    assert _q_value(SOURCE_CONTRACT_Q, "settings_stub") == f'upper "{ss.STUB.lower()}"'
-    assert _q_value(SOURCE_CONTRACT_Q, "secret_placeholder") == f'"{ss.SECRET_PLACEHOLDER}"'
+    assert _q_value(CREDENTIALS_Q, "settings_stub") == f'upper "{ss.STUB.lower()}"'
+    assert _q_value(CREDENTIALS_Q, "secret_placeholder") == f'"{ss.SECRET_PLACEHOLDER}"'
 
 
 def test_the_path_variables_are_the_ones_the_torq_adapter_allows():

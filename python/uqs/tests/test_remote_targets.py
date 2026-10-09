@@ -23,8 +23,7 @@ from uqs.deploy import control, history, targets
 from uqs.paths import UqsError
 
 FAKE_SSH = """#!/bin/bash
-# ${@: -1}, not ${args[-1]}: macOS's bash 3.2 has no negative array index.
-cmd="${@: -1}"; host="${@: -2:1}"
+cmd="${@: -1}"; host="${@: -2:1}"  # not ${args[-1]}: macOS's bash 3.2 has no negative index
 [ "$host" = unreachable ] && { echo "ssh: connect to host unreachable" >&2; exit 255; }
 exec bash -c "$cmd"
 """

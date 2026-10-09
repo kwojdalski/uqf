@@ -140,11 +140,11 @@ Apply the rules below. Each cites the file that holds or enforces it.
   `market_data` from `quote`, `fx_orderbook` and `crypto_book`
   (`docs/architecture/stack.md`).
 
-- **J8b** State a job carries across days is handled in `on_endofday[dt]`, which
-  runs after the plant has rolled its log (`.qetl.job.stream.end_of_day`, #943).
-  A position book carries: it publishes an opening snapshot that `restore_from`
-  replays after a restart. Never assume a job's state empties at midnight on its
-  own.
+- **J8b** State a job carries across days and restarts is DECLARED, not
+  hand-built: `carry:`state`table!(...)` on `.qetl.job.stream.define` (#963).
+  The shell publishes the snapshot at end of day, restores it on replay
+  (re-applying what was logged just ahead of it, #960), and ignores its live
+  echo. `on_endofday[dt]` remains for anything else a job does at end of day.
 
 - **J8a** An event that is evaluated some time after it arrives, such as a fill
   marked out at horizons, is a **horizon job** (`.qetl.job.stream.at_horizons`,
@@ -162,7 +162,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
 - **J9** A source whose adapter returns other columns than it reads declares
   `raw`: physical table → the columns it reads. `columns`/`types` then describe
   only what it returns. The live check holds each side separately
-  (`src/etl/core/source_contract.q`, "RAW INPUTS").
+  (`src/etl/core/source_registry.q`, "RAW INPUTS").
 
 - **J10** `start_with_all 1b` only when the user asks for it. Every started
   process spends one of the licence's 16 connections, with two held back, so 14
@@ -259,7 +259,10 @@ invariants, is `uqf-q-traps.md`.
   (`scripts/portable/flatten_contexts.py`). A test it can't run goes into
   `tests/q/peachq_known_gaps.txt` or `python/peachq_known_gaps.txt`, with the
   reason. Both lists are held both ways: a listed test that passes fails the
-  build too.
+  build too. A q reason starts `peachq-lacks:`, `tree-bug: #N` or `flattening:`,
+  and says why - not the assertion's message (#986). Both lists record CI's
+  Linux PeachQ, and only CI's lane is authoritative: off that platform the q
+  lane reports "not comparable" (#968), so a local pass is no promise.
 - **V6** Every `@eg` line in a qDoc block is executed, by
   `tests/q/run_examples.q` and `.egtest`. One that can't run without a live
   process is listed in `.egtest.needs_live`, with the reason.

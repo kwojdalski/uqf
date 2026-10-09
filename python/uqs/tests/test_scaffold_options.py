@@ -31,7 +31,9 @@ from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.templates import credential_var
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
-SOURCE_CONTRACT_Q = UQF_ROOT / "src" / "etl" / "core" / "source_contract.q"
+CORE = UQF_ROOT / "src" / "etl" / "core"
+TRANSPORTS_Q = CORE / "source_transports.q"
+CREDENTIALS_Q = CORE / "source_credentials.q"
 
 runner = CliRunner()
 
@@ -223,7 +225,7 @@ def test_a_worker_is_pointed_at_a_quality_check():
 def test_the_transports_are_the_ones_q_registers():
     """The surface's list is generated from these calls; this catches a
     registration added without re-exporting the surface."""
-    registered = re.findall(r"^register_transport\[`(\w+);", SOURCE_CONTRACT_Q.read_text(), re.M)
+    registered = re.findall(r"^register_transport\[`(\w+);", TRANSPORTS_Q.read_text(), re.M)
     assert transports.names() == tuple(registered)
     assert transports.default() == "ipc"
 
@@ -242,7 +244,7 @@ def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
 def test_the_credential_variable_is_spelled_as_q_spells_it():
     """q: `credential_var:{[source] "UQF_SOURCE_CRED_",upper string source}`."""
     line = next(
-        ln for ln in SOURCE_CONTRACT_Q.read_text().splitlines() if ln.startswith("credential_var:")
+        ln for ln in CREDENTIALS_Q.read_text().splitlines() if ln.startswith("credential_var:")
     )
     prefix = re.search(r'"(\w+)",upper string source', line)
     assert prefix, "credential_var no longer reads the way this test expects"

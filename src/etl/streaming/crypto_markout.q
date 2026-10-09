@@ -64,8 +64,8 @@ crypto_execution_quality:.qetl.plant.published `crypto_execution_quality
 / @return table time, sym, venue, bid, ask
 / @eg exec bid from .qpipe.job.crypto_markout.top_of_book[([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT"; venue:enlist `a; bid_prices:enlist 62000 61999f; ask_prices:enlist `float$())]  ->  ,62000f
 top_of_book:{[books]
-    top:{[px] $[count px; first px; 0n]};
-    select time, sym, venue, bid:top each bid_prices, ask:top each ask_prices from books}
+    t:.qbook.top_sides books;
+    select time, sym, venue, bid:t`bid, ask:t`ask from books}
 
 / Score each fill's markout, in bps, at every horizon, against the best mid
 / across venues at trade_time+horizon.

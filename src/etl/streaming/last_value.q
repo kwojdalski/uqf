@@ -44,10 +44,9 @@ state:1!last_value
 / @return table sym, market, source, source_time, bid, ask, mid, in batch order
 / @eg .qpipe.job.last_value.tops ([] sym:`EURUSD`GBPUSD; market:`fx`fx; source:`a`a; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 1.0;`float$()); bid_sizes:(enlist 1f;`float$()); ask_prices:(enlist 1.2;enlist 1.3); ask_sizes:(enlist 1f;enlist 1f))  ->  ([] sym:enlist `EURUSD; market:enlist `fx; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1f; ask:enlist 1.2; mid:enlist 1.1)
 tops:{[x]
-    x:select from x where 0<count each bid_prices, 0<count each ask_prices;
-    t:select sym, market, source, source_time, bid:`float$first each bid_prices,
-        ask:`float$first each ask_prices from x;
-    t:select from t where bid>0, ask>0;
+    s:.qbook.top_sides x;
+    t:select sym, market, source, source_time, bid:s`bid, ask:s`ask from x;
+    t:select from t where not null bid, not null ask;
     update mid:(bid+ask)%2 from t}
 
 / Apply a batch of books to the latest rows.

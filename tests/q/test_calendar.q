@@ -38,11 +38,50 @@ test_friday_trade_settles_tuesday:{[t]
     .qunit.assertEquals[r`date;2026.09.22;"Fri T+2 skips the weekend"];
     .qunit.assertEquals[r`skipped;2026.09.19 2026.09.20;"the weekend is named"]};
 
-test_a_monday_holiday_in_either_currency_moves_spot_to_wednesday:{[t]
+test_a_monday_holiday_in_the_non_usd_currency_moves_spot_to_wednesday:{[t]
     eur:.qcal.spot_date[2026.09.18;`EURUSD;monday_off[`EUR];conventions[2]];
-    usd:.qcal.spot_date[2026.09.18;`EURUSD;monday_off[`USD];conventions[2]];
-    .qunit.assertEquals[(eur`date;usd`date);2026.09.23 2026.09.23;"a holiday in EITHER currency is skipped"];
+    .qunit.assertEquals[eur`date;2026.09.23;"a EUR holiday on T+1 is not counted"];
     .qunit.assertEquals[eur`skipped;2026.09.19 2026.09.20 2026.09.21;"the holiday is named"]};
+
+/ #997: a USD holiday on T+1 does not push a non-USD pair's spot out.
+test_a_usd_holiday_on_t_plus_1_does_not_move_spot:{[t]
+    usd:.qcal.spot_date[2026.09.18;`EURUSD;monday_off[`USD];conventions[2]];
+    .qunit.assertEquals[usd`date;2026.09.22;"Fri T+2 counts Mon (EUR open) and Tue"];
+    / the issue's example, on the module's own mock data (Labor Day 2026.09.07)
+    .qunit.assertEquals[.qcal.spot_date[2026.09.04;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions]`date;2026.09.08;
+        "EURUSD before Labor Day spots Tuesday"];
+    .qunit.assertEquals[.qcal.spot_date[2026.09.04;`GBPUSD;.qcal.mock_calendars;.qcal.mock_conventions]`date;2026.09.08;
+        "GBPUSD likewise"]};
+
+/ A USD holiday on the value date itself still rolls it.
+test_a_usd_holiday_on_the_value_date_still_rolls:{[t]
+    / Thu 2026.09.17 T+2 lands on Mon 21 (Fri 18 is T+1), USD off Monday
+    .qunit.assertEquals[.qcal.spot_date[2026.09.17;`EURUSD;monday_off[`USD];conventions[2]]`date;2026.09.22;
+        "counted Monday is a USD holiday: roll to Tuesday"];
+    .qunit.assertEquals[.qcal.spot_date[2026.09.03;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions]`date;2026.09.08;
+        "Thu before Labor Day: T+2 is Mon 7 (USD off), rolls to Tue 8"]};
+
+test_usdcad_t_plus_1_with_a_usd_holiday_on_the_value_date_rolls:{[t]
+    / mock: USD and CAD both off 2026.09.07
+    .qunit.assertEquals[.qcal.spot_date[2026.09.04;`USDCAD;.qcal.mock_calendars;.qcal.mock_conventions]`date;2026.09.08;
+        "T+1 on the joint holiday rolls to Tuesday"];
+    / USD-only holiday on the T+1 date: CAD counts it, USD rolls it
+    cal:`USD`CAD!(enlist 2026.09.21;`date$());
+    conv:(enlist `USDCAD)!enlist `spot_lag`roll`eom`weekend!(1;`modified_following;1b;`sat`sun);
+    .qunit.assertEquals[.qcal.spot_date[2026.09.18;`USDCAD;cal;conv]`date;2026.09.22;
+        "T+1 is a USD holiday: spot rolls to Tuesday"]};
+
+test_a_cross_needs_usd_on_the_spot_date_not_in_between:{[t]
+    / EURGBP Fri 2026.09.04: T+2 over EUR/GBP is Tue 8 (Mon 7 open for both)
+    .qunit.assertEquals[.qcal.spot_date[2026.09.04;`EURGBP;.qcal.mock_calendars;.qcal.mock_conventions]`date;2026.09.08;
+        "USD holiday on T+1 is not counted for a cross"];
+    / Thu 2026.09.03: counted T+2 is Mon 7, a USD holiday, so spot rolls to Tue 8
+    .qunit.assertEquals[.qcal.spot_date[2026.09.03;`EURGBP;.qcal.mock_calendars;.qcal.mock_conventions]`date;2026.09.08;
+        "a USD holiday on a cross's spot date is avoided"];
+    cal:`EUR`GBP!(`date$();`date$());
+    conv:(enlist `EURGBP)!enlist `spot_lag`roll`eom`weekend!(2;`modified_following;1b;`sat`sun);
+    .qunit.assertThrows[.qcal.spot_date[2026.09.03;`EURGBP;;conv];cal;
+        "calendar: no holiday calendar for USD*";"a cross refuses a missing USD calendar"]};
 
 test_spot_lag_is_the_pairs:{[t]
     .qunit.assertEquals[.qcal.spot_date[2026.09.18;`EURUSD;no_holidays[];conventions[1]]`date;2026.09.21;"T+1 from Friday is Monday"];
