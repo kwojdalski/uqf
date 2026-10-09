@@ -8,7 +8,6 @@
 .cattest.test_every_published_table_is_described_or_hidden  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .cattest.test_the_catalog_describes_no_table_that_does_not_exist  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
-.crypto_market_databftest.test_a_bound_rounds_up_to_the_millisecond  # PeachQ result differs: one nanosecond past it is the NEXT millisecond - flooring here would refetch the one before on every window
 
 .dagtest.test_a_derived_reaction_is_not_drawn_asserted  # PeachQ 'type where KDB-X accepts the same code
 .dagtest.test_d2_declares_every_external_node_before_using_it  # PeachQ 'type where KDB-X accepts the same code
@@ -19,8 +18,6 @@
 .ddbftest.test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished  # PeachQ 'type where KDB-X accepts the same code
 .ddbftest.test_a_dry_rerun_repairs_nothing  # PeachQ result differs: with no attribute to read, a partition written in sym-then-time order already is what finish leaves, so it counts as finished
 
-.egtest.test_no_documented_example_is_wrong  # PeachQ result differs: every @eg that states a value states the value the code returns
-.egtest.test_the_wrong_ones_are_named_not_merely_counted  # PeachQ result differs: a failing example is reported by file and line
 
 .evttest.test_undefined_if_zero_is_the_guard_and_only_the_guard  # PeachQ result differs: vectorised, because a functional select hands it one value per group
 
