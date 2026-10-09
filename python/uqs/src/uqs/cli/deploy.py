@@ -295,6 +295,16 @@ def push(
             "--allow-dirty", help="Deploy an artifact built from uncommitted changes (refused)"
         ),
     ] = False,
+    accept_converted_release: Annotated[
+        str | None,
+        typer.Option(
+            "--accept-converted-release",
+            metavar="REASON",
+            help="Start a release converted for an older kdb+ (--q-target) on a q its "
+            "version check cannot confirm, once its smoke test passes there. Its "
+            "conversion record and integrity are still checked; recorded in the report",
+        ),
+    ] = None,
     release_repo: Annotated[
         str | None,
         typer.Option(

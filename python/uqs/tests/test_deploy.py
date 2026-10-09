@@ -21,6 +21,7 @@ from typer.main import get_group
 from uqs.cli.deploy import deploy_app
 from uqs.deploy import artifact, driver, verify
 from uqs.deploy import build as release_build
+from uqs.deploy import remote as remote_mod
 from uqs.deploy.config import Config, DeployError, make_config, redact
 from uqs.deploy.remote import Remote, q
 from uqs.deploy.server import PREFLIGHT
@@ -1127,3 +1128,62 @@ def test_a_release_says_its_runtime_and_one_from_before_883_means_uqf():
     assert release_runtime({}) == LEGACY_RUNTIME == "uqf"
     # frozen, not read from DEFAULT_RUNTIME - but it must still be a runtime
     assert LEGACY_RUNTIME in RUNTIMES
+
+
+# --- a converted release on a q its version check cannot confirm (#936) ----------
+
+
+def test_a_release_converted_for_a_newer_q_is_refused_at_preflight(tmp_path):
+    with pytest.raises(DeployError, match="older than the kdb\\+ 4.0.*--accept-converted-release"):
+        _run_with_facts(tmp_path, SERVER + "qversion=3.6\ndata=present\n", "4.0")
+
+
+def _accepted(tmp_path, q="4.0", reason="smoke passed on the 3.6 server"):
+    remote = FakeRemote(
+        {
+            **_HEALTHY,
+            "uv python find": _done(SERVER + "qversion=3.6\ndata=present\n"),
+            "uqs deploy verify --profile": _verified(True),
+        }
+    )
+    out = io.StringIO()
+    path = _artifact(tmp_path, **({"q": q} if q else {}))
+    args = _args(path, "--accept-converted-release", reason)
+    code = driver.deploy(parse_args(args), remote, out=out)
+    return code, remote, json.loads(out.getvalue())
+
+
+def test_the_override_is_recorded_after_smoke_and_bound_to_this_start(tmp_path):
+    code, remote, report = _accepted(tmp_path)
+    assert code == 0 and report["status"] == "deployed", report
+    record = report["converted_override"]
+    assert record["reason"] == "smoke passed on the 3.6 server"
+    assert (record["target_q"], record["server_q"], record["smoke"]) == ("4.0", "3.6", "ok")
+    stages = [stage for stage, _ in remote.scripts]
+    assert stages.index("smoke") < stages.index("start"), "written only once smoke has passed"
+    written, *starts = remote.stage("start")
+    assert "CONVERTED_RELEASE_OVERRIDE.json" in written
+    assert any(f"UQS_CONVERTED_RELEASE_ATTEMPT={record['attempt']} " in s for s in starts)
+
+
+def test_the_override_is_refused_for_a_release_as_written(tmp_path):
+    with pytest.raises(DeployError, match="ships its q as written"):
+        _accepted(tmp_path, q=None)
+
+
+def test_the_override_needs_a_reason():
+    with pytest.raises(DeployError, match="needs a reason"):
+        parse_args(_args(Path("a.tar.gz"), "--accept-converted-release", "  "))
+
+
+def test_a_remote_failure_keeps_the_refusal_behind_ssh_warnings():
+    r = _done(
+        stdout="uqs: release 20261009 was converted for kdb+ 4.0 - Nothing was started\n",
+        stderr="Warning: Permanently added 'h' (ED25519) to the list of known hosts.\n"
+        "** WARNING: connection is not using a post-quantum key exchange algorithm.\n",
+        rc=1,
+    )
+    with pytest.raises(DeployError) as exc:
+        remote_mod._checked(r, "start", "starting the profile")
+    assert "Nothing was started" in str(exc.value)
+    assert "Permanently added" not in str(exc.value)

@@ -97,6 +97,10 @@ class Report:
     #: --soak's verdict and duration, and each streaming job's, when it ran (#869)
     soak: dict | None = None
 
+    #: --accept-converted-release (#936): who asked, why, and the evidence -
+    #: the release's conversion target, the server's q, the passing smoke test
+    converted_override: dict | None = None
+
     def as_dict(self) -> dict:
         return dict(self.__dict__)
 
@@ -235,13 +239,20 @@ class Deployment(Server):
             raise DeployError("smoke", f"the smoke test exited 0 without printing {SMOKE_MARKER}")
 
     def uqs(
-        self, release: str, stage: str, what: str, *args: str, timeout: int | None = None
+        self,
+        release: str,
+        stage: str,
+        what: str,
+        *args: str,
+        timeout: int | None = None,
+        env: dict[str, str] | None = None,
     ) -> str:
         argv = " ".join(q(a) for a in args)
+        prefix = "".join(f"{k}={q(v)} " for k, v in (env or {}).items())
         return self.run(
             stage,
             what,
-            *self.in_release(release, f".venv/bin/uqs {argv}"),
+            *self.in_release(release, f"{prefix}.venv/bin/uqs {argv}"),
             timeout=timeout,
         )
 

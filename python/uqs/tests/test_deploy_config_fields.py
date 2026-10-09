@@ -59,6 +59,7 @@ SAMPLES: dict[str, Any] = {
     "smoke_timeout": 7,
     "verify_timeout": 7,
     "allow_dirty": True,
+    "accept_converted_release": "smoke passed on the 4.1 server",
     "release_repo": "owner/name",
     "fix_hdb": True,
     "keep": 3,

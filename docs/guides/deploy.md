@@ -448,6 +448,43 @@ manifest records what was converted. `push` reads the server's `.z.K` and
 refuses an unconverted release on a server older than 5.0. Its smoke test and
 verification are the proof that the converted release runs there.
 
+`uqs start` on the server recognises the conversion from the release itself, not
+from the runtime's `q_tree` (#936). It reads `RELEASE_MANIFEST.json` and starts
+the release when all of these hold:
+
+- the target and the conversion record name the same kdb+;
+- every q file is on disk with the sha256 the manifest records;
+- the server's q is at least that version.
+
+The packaged code is loaded as shipped and is never converted again. Evidence
+that doesn't hold is refused by name, and the tree as written is still refused
+on 4.0.
+
+For a server whose q is older than the release's target, push refuses at
+preflight. If that server's q can run the release anyway, deploy it with an
+explicit reason:
+
+```bash
+uqs deploy push dist/uqf-<release>.tar.gz ... \
+  --accept-converted-release "4.0 release, q 3.6 smoke-tested by the desk"
+```
+
+That means "start this verified, already-converted release", not "skip the
+checks":
+
+- After the smoke test passes on the server's q, push writes
+  `CONVERTED_RELEASE_OVERRIDE.json` into the release. It records who asked, why,
+  the release's target, the server's q and the passing smoke test, and the
+  report records it as `converted_override`.
+- `uqs start` honours it only for that deployment attempt, through a one-time
+  token, and still checks the conversion record and every file's integrity.
+- Port checks, verification and rollback run as usual.
+- The flag is refused for a release built as written.
+
+A failed remote step's diagnostic keeps the command's own output and drops ssh's
+notices, so a startup refusal isn't hidden behind a host-key or key-exchange
+warning.
+
 To convert a tree by hand, or inspect the conversion:
 
 ```bash

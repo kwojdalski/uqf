@@ -8,7 +8,7 @@ import sys
 import time
 from datetime import UTC, datetime
 
-from uqs.deploy import fetch, hdb
+from uqs.deploy import converted_override, fetch, hdb
 from uqs.deploy.artifact import Artifact, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.prune import prune_locked
@@ -17,6 +17,7 @@ from uqs.deploy.selection import Selection, select_jobs, smoke_args, verify_args
 from uqs.deploy.stages import Deployment, Report
 from uqs.logger import get_logger
 from uqs.paths import repo_root
+from uqs.stack.converted import ATTEMPT_VAR
 
 log = get_logger(__name__)
 
@@ -245,6 +246,16 @@ def _run(
         dep.smoke(release)
         dep.beat()
         report.checks["smoke"] = "ok"
+        start_env: dict[str, str] = {}
+        if cfg.accept_converted_release is not None:
+            log.warning(
+                "--accept-converted-release: starting release {} on q {}: {}",
+                rid,
+                facts.get("qversion") or "of unknown version",
+                cfg.accept_converted_release,
+            )
+            report.converted_override = converted_override.write(dep, release, facts)
+            start_env[ATTEMPT_VAR] = report.converted_override["attempt"]
         if previous:
             prev_profile, prev_procs, prev_extra = dep.previous_processes(previous)
             log.info("stopping release {}'s processes", previous)
@@ -274,6 +285,7 @@ def _run(
             "--profile",
             cfg.profile,
             *dep.selection.processes,
+            env=start_env,
         )
         dep.beat()
         log.info("verifying every process answers (up to {}s)", cfg.verify_timeout)
