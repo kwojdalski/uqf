@@ -124,6 +124,7 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
   kafka_flow1: "kafka_flow1 :6097\nclient FX flow off Kafka,\ndeduplicated, on demand" { class: job }
   crypto_markout1: "crypto_markout1 :6101\ncrypto fills marked out\nagainst the best mid, on demand" { class: job }
+  alert_sink1: "alert_sink1 :6102\nfx_limit_breach out to a webhook,\nat least once, on demand" { class: job }
   legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\ndatabento1's and kafka_flow1's inputs\ncome from external Python handlers,\nnot from a process in this diagram." { class: band }
 }
 
