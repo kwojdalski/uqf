@@ -10,6 +10,7 @@ point every `git` here at the real checkout.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -89,3 +90,46 @@ def test_the_build_allows_its_own_composition_s_block(tmp_path):
     (tmp_path / TABLES).write_text("trade:([] sym:`symbol$())\n")
     _install(tmp_path, "pb")
     refuse_foreign_blocks(tmp_path, [TABLES], "crypto", {"pb"})
+
+
+# ---------------------------------------- the bundle's files and ledger (#926)
+
+
+def _install_files(root: Path, name: str) -> None:
+    """What an install writes besides the blocks: a job file and the ledger."""
+    job = root / "src/etl/sources/pb.q"
+    job.parent.mkdir(parents=True, exist_ok=True)
+    job.write_text("source_name:`pb\n")
+    ledger = {name: {"files": {"src/etl/sources/pb.q": "0"}, "version": "1"}}
+    (root / gate.LEDGER).write_text(json.dumps(ledger) + "\n")
+
+
+def test_installed_files_only_in_the_working_tree_pass(tmp_path, monkeypatch):
+    root = _repo(tmp_path, monkeypatch)
+    _install_files(root, "pb")
+    assert gate.main() == 0
+
+
+def test_a_staged_bundle_job_file_is_refused_naming_its_bundle(tmp_path, monkeypatch, capsys):
+    root = _repo(tmp_path, monkeypatch)
+    _install_files(root, "pb")
+    subprocess.run(["git", "-C", str(root), "add", "src/etl/sources/pb.q"], check=True)
+    assert gate.main() == 1
+    assert "src/etl/sources/pb.q (bundle pb)" in capsys.readouterr().out
+
+
+def test_the_staged_ledger_is_refused(tmp_path, monkeypatch, capsys):
+    root = _repo(tmp_path, monkeypatch)
+    _install_files(root, "pb")
+    subprocess.run(["git", "-C", str(root), "add", gate.LEDGER], check=True)
+    assert gate.main() == 1
+    assert "the bundle ledger" in capsys.readouterr().out
+
+
+def test_a_tree_file_the_ledger_does_not_list_still_commits(tmp_path, monkeypatch):
+    root = _repo(tmp_path, monkeypatch)
+    _install_files(root, "pb")
+    own = root / "src/etl/sources/mine.q"
+    own.write_text("source_name:`mine\n")
+    subprocess.run(["git", "-C", str(root), "add", "src/etl/sources/mine.q"], check=True)
+    assert gate.main() == 0
