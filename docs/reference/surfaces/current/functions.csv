@@ -29,6 +29,7 @@ qbook,top_sides,function,1,x
 qcal,add_business_days,function,5,d n ccys calendars weekend
 qcal,add_months,function,2,d n
 qcal,adjust,function,5,d roll ccys calendars weekend
+qcal,convention_defaults,dict,,
 qcal,convention_keys,value,,
 qcal,forward_date,function,5,spot_date tenor pair calendars conventions
 qcal,is_business_day,function,4,d ccys calendars weekend

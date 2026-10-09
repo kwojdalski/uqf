@@ -130,6 +130,33 @@ test_forward_date_end_of_month_rule:{[t]
     .qunit.assertEquals[r`date;2026.05.29;"month-end spot maps to the target month's last business day"];
     .qunit.assertEquals[r`eom_applied;1b;"and says so"]};
 
+/ #1023: a cross's tenor clears USD as its spot does. EURGBP 1M from Wed
+/ 2026.06.03 lands on Fri 2026.07.03, a USD holiday in the mock calendars.
+test_forward_date_on_a_cross_avoids_a_usd_holiday:{[t]
+    r:.qcal.forward_date[2026.06.03;`1M;`EURGBP;.qcal.mock_calendars;.qcal.mock_conventions];
+    .qunit.assertEquals[r`unadjusted;2026.07.03;"the tenor lands on the USD holiday"];
+    .qunit.assertEquals[r`date;2026.07.06;"and rolls past it, as EURUSD's does"];
+    .qunit.assertEquals[r`calendars;`EUR`GBP`USD;"on the pair's currencies and USD"]};
+
+/ #1024: the vehicle currency is a convention, not code. ` (null) for none:
+/ the pair's own two currencies count and settle, as before #997.
+test_settle_via_is_the_pairs_convention:{[t]
+    none:(enlist `EURGBP)!enlist `spot_lag`roll`eom`weekend`settle_via!(2;`modified_following;1b;`sat`sun;`);
+    cal:`EUR`GBP!(`date$();`date$());
+    .qunit.assertEquals[.qcal.forward_date[2026.06.03;`1M;`EURGBP;cal;none]`date;2026.07.03;
+        "with no vehicle a USD holiday is not consulted, and USD's calendar is not needed"];
+    .qunit.assertEquals[.qcal.spot_date[2026.09.03;`EURGBP;cal;none]`date;2026.09.07;
+        "nor on the spot date"];
+    eur:(enlist `GBPUSD)!enlist `spot_lag`roll`eom`weekend`settle_via!(2;`modified_following;1b;`sat`sun;`EUR);
+    cal:`EUR`GBP`USD!(enlist 2026.09.22;`date$();`date$());
+    .qunit.assertEquals[.qcal.spot_date[2026.09.18;`GBPUSD;cal;eur]`date;2026.09.23;
+        "a vehicle other than USD is cleared on the spot date instead"]};
+
+test_a_settle_via_that_is_not_a_symbol_is_refused:{[t]
+    bad:(enlist `EURGBP)!enlist `spot_lag`roll`eom`weekend`settle_via!(2;`modified_following;1b;`sat`sun;"USD");
+    .qunit.assertThrows[.qcal.spot_date[2026.09.03;`EURGBP;.qcal.mock_calendars;];bad;
+        "calendar: EURGBP's settle_via must be a currency symbol*";"names the pair and the key"]};
+
 test_forward_date_rolls_an_explicit_value_date:{[t]
     .qunit.assertEquals[.qcal.forward_date[2026.09.22;2026.10.04;`EURUSD;no_holidays[];conventions[2]]`date;2026.10.05;
         "a Sunday value date rolls to Monday"]};
