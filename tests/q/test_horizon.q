@@ -214,7 +214,7 @@ test_a_missing_cross_leg_holds_the_event_then_expires_it_with_the_reason:{[t]
     .qunit.assertEquals[count sent;0;"never scored with a leg missing"];
     gone:ns[nm;`expired];
     .qunit.assertEquals[(count gone;count ns[nm;`pending]);1 0;"given up on after expire_after"];
-    .qunit.assertEquals[first gone`reason;"no reference for b";"and the diagnostic names the leg"]};
+    .qunit.assertEquals[first gone`reason;`$"no reference for b";"and the diagnostic names the leg"]};
 
 test_a_negative_window_keeps_its_history_and_an_older_anchor:{[t]
     / the window reaches 60s back: quotes at T-60s and T-30s must survive

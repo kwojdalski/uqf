@@ -171,8 +171,11 @@ define:{[name;decl]
     ev0:0#first value ins;
     (` sv ns,`pending) set ev0;
     (` sv ns,`history) set 0#last value ins;
-    (` sv ns,`completed) set $[`identity in key d; (d[`identity]#ev0),'([] at:`timestamp$()); ([] at:`timestamp$())];
-    (` sv ns,`expired) set ev0,'([] expired_at:`timestamp$(); reason:());
+    / Plain typed columns, built by update: a symbol id and a symbol reason
+    / rather than joined tables and general columns, which PeachQ types
+    / differently from KDB-X.
+    (` sv ns,`completed) set ([] id:`symbol$(); at:`timestamp$());
+    (` sv ns,`expired) set update expired_at:`timestamp$(), reason:`symbol$() from ev0;
     (` sv ns,`publish) set .qetl.job.stream.unwired name;
     / .z.p, not .proc.cp[]: .u.upd stamps every row with the plant's .z.p, so
     / the times compared against are UTC, and .proc.cp[] is local time under
@@ -229,13 +232,21 @@ on_batch:{[name;t;x]
     buffer:` sv ns,which;
     x:(cols get buffer)#x;
     if[(which=`pending) and `identity in key d;
-        idc:d`identity;
-        x:x where not (idc#x) in idc#get ` sv ns,`completed;
+        ids:ids_of[d;x];
+        keep:(not ids in (get ` sv ns,`completed)`id) & .qetl.io.last_seen ids;
+        x:x where keep;
         if[0=count x; :()];
-        x:x asc last each value group idc#x;
-        buffer set (get buffer) where not (idc#get buffer) in idc#x];
+        held:get buffer;
+        buffer set held where not ids_of[d;held] in ids where keep];
     buffer insert x;
     }
+
+/ Private: one symbol per event, from its identity columns - so membership
+/ and last-delivery-wins are vector operations on symbols.
+/ @private
+ids_of:{[d;t]
+    idc:d`identity;
+    `$$[1=count idc; string t first idc; "|" sv/: flip string t idc]}
 
 / Private: per reference key, the earliest and latest reference time held -
 / the anchor and how far the reference has advanced.
@@ -299,7 +310,7 @@ score_ready:{[name;now]
         ready:pending where mask;
         out:.qetl.transform.apply[d`transform;ins!(ready;get hq)];
         (get ` sv ns,`publish)[d`publishes;out];
-        if[`identity in key d; cq insert (d[`identity]#ready),'([] at:(count ready)#now)];
+        if[`identity in key d; cq insert ([] id:ids_of[d;ready]; at:(count ready)#now)];
         .qetl.job.stream.evict[pq;mask]];
     if[`expire_after in key d;
         pending:get pq;
@@ -310,7 +321,7 @@ score_ready:{[name;now]
             reasons:$[`reference=d`ready_on;
                 not_ready[d;reach[d;get hq];gone d`event_time;legs_of[d;gone]];
                 (count gone)#enlist "horizon has not elapsed"];
-            xq insert gone,'([] expired_at:(count gone)#now; reason:reasons);
+            xq insert update expired_at:now, reason:`$reasons from gone;
             {[name;r] .qetl.log.warn[name;"event expired unresolved";enlist[`reason]!enlist r]}[name] each distinct reasons;
             .qetl.job.stream.evict[pq;lapsed]]];
     / every tick, scoring or not: a job whose events stop arriving must not
