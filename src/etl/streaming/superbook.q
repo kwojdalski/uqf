@@ -158,11 +158,12 @@ on_timer:{[] refresh .z.p;}
 / change to it changes every snapshot downstream - worth recording (#295).
 .qetl.cfg.audit.watch[`superbook;enlist `.qpipe.job.superbook.max_age];
 
-.qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note!(
+.qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state!(
     `superbook1;
     enlist `market_data;
     `superbook`config_change;
     .qpipe.job.superbook.on_batch;
     0D00:00:00.500;
     .qpipe.job.superbook.on_timer;
-    "latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there")];
+    "latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there";
+    enlist `books)];

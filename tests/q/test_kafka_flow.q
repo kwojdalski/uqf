@@ -225,7 +225,7 @@ replay_transport:{[replayed]
 / had already committed their offsets.
 test_a_restart_publishes_exactly_the_rows_that_arrived_while_it_was_down:{[t]
     drive_ready[];
-    `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
+    .qetl.job.stream.reset `kafka_flow;
     .qetl.job.stream.start[`kafka_flow;replay_transport[restart_log[]]];
     .qunit.assertEquals[exec offset from all_rows[];2 3j;"offsets 2 and 3, and not 0 and 1 a second time"];
     .qunit.assertEquals[(.qpipe.job.kafka_flow.high_water 0j;count .qpipe.job.kafka_flow.held);(3j;0);
@@ -233,7 +233,7 @@ test_a_restart_publishes_exactly_the_rows_that_arrived_while_it_was_down:{[t]
 
 test_during_a_replay_raw_rows_are_held_not_published:{[t]
     drive_ready[];
-    `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
+    .qetl.job.stream.reset `kafka_flow;
     `.qetl.job.stream.replaying set 1b;
     @[push[0j;];enlist 5j;{x}];
     `.qetl.job.stream.replaying set 0b;

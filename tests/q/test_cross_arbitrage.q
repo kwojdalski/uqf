@@ -60,7 +60,7 @@ with_direct:{[bid;ask] (legs[]) upsert one .xarbtest.row[`EURJPY;bid;ask;1e9;.xa
 / It was `.cfgatest` that wired this job, by running first; under a shuffled
 / suite order it no longer did.
 drive_ready:{[]
-    `.qpipe.job.cross_arbitrage.books set 0#.qpipe.job.cross_arbitrage.books;
+    .qetl.job.stream.reset `cross_arbitrage;
     .qetl.job.stream.wire[`cross_arbitrage;{[t;x] `.xarbtest.published set (t;x); count x}];
     }
 
