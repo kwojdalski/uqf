@@ -368,6 +368,29 @@ table when the one it reads is
 published](../guides/new-pipeline.md#recomputing-on-an-upstream-publish) covers
 when to use which.
 
+## Sinks --- `alert_sink`
+
+Jobs write inward by default. `alert_sink` (`src/etl/streaming/alert_sink.q`,
+process `alert_sink1`) is the first outbound sink: a streaming job that
+subscribes to `fx_limit_breach` and POSTs each breach to a webhook as JSON
+(`text` for chat webhooks, `breach` for anything that parses it).
+
+It is a streaming job rather than a `.qetl.io` manager because a manager is
+where a bounded worker's finished window goes, and a failure there fails the
+window; a breach has no window or coverage, and its failure policy is retry then
+record. File sinks from bounded workers (Parquet/CSV), ODBC write-back and Kafka
+are not done: #947 stays open for them.
+
+  | behaviour    | what it does                                                                                                                                                                                                         |
+  | ---          | ---                                                                                                                                                                                                                  |
+  | guarantee    | **at least once**, and in memory only: a breach can be sent twice (a timeout after the target acted, a crash after the POST), and what is queued is lost on restart. The receiver must tolerate a repeat             |
+  | throttle     | `.qlimit.throttle` on the breach's scope and metric, `alert_period` (5 minutes): a standing breach is delivered once per period                                                                                      |
+  | retries      | one attempt on arrival, then one per 10 s tick, `max_attempts` (3) in all. No sleeping                                                                                                                               |
+  | failure      | after the last attempt the breach moves to `.qpipe.job.alert_sink.dead` with its error, is logged at error, and leaves the throttle so its next report is delivered                                                  |
+  | URL          | `UQF_SOURCE_CRED_ALERT_SINK` only (a webhook URL carries its token), never logged. There is no `sources.csv` row for it: that file's rows are for sources with a transport and a table to read                       |
+  | none set     | the job **refuses**: `on_batch` throws naming the variable, which `.qetl.stream_health` counts as failing. It does not idle, since an idle sink drops breaches silently                                              |
+  | testing      | `.qpipe.job.alert_sink.post[target;body]` is the one seam that touches the network; `tests/q/test_alert_sink.q` replaces it with a fake that records calls and fails on demand                                       |
+
 ## Job graph: derived, not declared
 
 `.qetl.dag.register[job;decl]` exists, but no job file calls it. The graph is
