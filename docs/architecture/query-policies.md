@@ -113,12 +113,14 @@ call goes through `.pm.req`, and a login can run only what its roles grant.
   login: an hour and a `sym` filter on `mkt_orderbook`, for instance. A table
   the catalog lets the browser read without a policy row, one of
   `.qcat.unbounded`, gets a policy for this role alone: at most `browsermaxrows`
-  rows (10,000, the frontend's default `max_rows`), within the ceiling's range,
-  bytes and timeout. A hidden table has no policy and is refused. An open read
-  covers the latest window its policy allows; a `time` filter sets the window
-  instead. Every plant table is listed for getdata (`tableproperties.csv` gains
-  a derived row for each), and listing a table grants nothing: the policies
-  decide.
+  rows (10,000), within the ceiling's range, bytes and timeout. `.uqf.browse`
+  never asks for more rows than the caller's policy allows, so a browser read is
+  truncated to the policy's limit, never refused for size, whatever the
+  frontend's `max_rows`. A hidden table has no policy and is refused. An open
+  read covers the latest window its policy allows; a `time` filter sets the
+  window instead. Every plant table is listed for getdata (`tableproperties.csv`
+  gains a derived row for each), and listing a table grants nothing: the
+  policies decide.
 - **Ordinary users.** Each user in
   [`permissions/gateway_users.csv`](../../scripts/torqconfig/permissions/gateway_users.csv)
   gets only the role named there. The roles are defined in
