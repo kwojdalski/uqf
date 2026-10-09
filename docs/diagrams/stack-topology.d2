@@ -121,6 +121,7 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   superbook1: "superbook1 :6093\nmerges quoted liquidity\nacross sources" { class: job }
   arbitrage1: "arbitrage1 :6094\nbid over ask in\nthe merged book" { class: job }
   crossarb1: "crossarb1 :6095\ndirect book against a\nsynthetic route" { class: job }
+  last_value1: "last_value1 :6103\nthe newest top of book per sym\nfx profile, on demand" { class: job }
   tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
   kafka_flow1: "kafka_flow1 :6097\nclient FX flow off Kafka,\ndeduplicated, on demand" { class: job }
   crypto_markout1: "crypto_markout1 :6101\ncrypto fills marked out\nagainst the best mid, on demand" { class: job }

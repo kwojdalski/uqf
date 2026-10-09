@@ -1063,6 +1063,13 @@ qpipe.job.kafka_flow,high_water,dict,,
 qpipe.job.kafka_flow,on_batch,function,2,t x
 qpipe.job.kafka_flow,on_replayed,function,1,
 qpipe.job.kafka_flow,publish,value,,
+qpipe.job.last_value,apply,function,2,state batch
+qpipe.job.last_value,last_value,table,,
+qpipe.job.last_value,market_data,table,,
+qpipe.job.last_value,on_batch,function,2,t x
+qpipe.job.last_value,publish,value,,
+qpipe.job.last_value,state,dict,,
+qpipe.job.last_value,tops,function,1,x
 qpipe.job.market_data,check,function,1,rows
 qpipe.job.market_data,crypto_book,table,,
 qpipe.job.market_data,from_crypto_book,function,1,batch
