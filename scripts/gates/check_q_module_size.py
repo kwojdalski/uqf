@@ -39,7 +39,7 @@ ALLOWED: dict[str, tuple[int, str]] = {
         "the next split after source_contract.q (#970), not yet done",
     ),
     "src/market_data/microstructure.q": (
-        1262,
+        1227,
         "one .qmicro namespace of independent analytics (spread, depth, impact, flow); "
         "a split is possible along those lines but nothing is forcing it",
     ),
