@@ -121,8 +121,9 @@ crypto_tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`floa
 / @return table sym, venue, time, bid, ask
 / @eg exec bid from .qpipe.job.posbook.crypto_books ([] time:2#2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; source:`a`b; market:2#`crypto; bid_prices:(enlist 62000f;`float$()); ask_prices:(enlist 62010f;enlist 62008f))  ->  62000 0n
 crypto_books:{[x]
-    top:{[px] $[count px; first px; 0n]};
-    select sym, venue:source, time, bid:top each bid_prices, ask:top each ask_prices from x where market=`crypto}
+    x:select from x where market=`crypto;
+    t:.qbook.top_sides x;
+    select sym, venue:source, time, bid:t`bid, ask:t`ask from x}
 
 / The crypto marks for a batch of fills: per crypto sym, the best mid across
 / fresh venues at its last fill's time. A sym with no fresh venue is left
@@ -149,8 +150,9 @@ crypto_marks:{[tob;batch]
 / @return a table of sym and mid, in batch order
 / @eg .qpipe.job.posbook.book_mids ([] sym:`EURUSD`GBPUSD; market:`fx`fx; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] sym:enlist `EURUSD; mid:enlist 1.085)
 book_mids:{[x]
-    x:select from x where market<>`crypto, 0<count each bid_prices, 0<count each ask_prices;
-    select sym, mid:((first each bid_prices)+first each ask_prices)%2 from x}
+    x:select from x where market<>`crypto;
+    t:.qbook.top_sides x;
+    select sym, mid:(bid+ask)%2 from (select sym, bid:t`bid, ask:t`ask from x) where not null bid, not null ask}
 
 / The canonical tables this job reads, as the plant delivers them - the
 / normalizers' outputs with `time` stamped in front. Declared so that
@@ -172,19 +174,6 @@ apply_fills:{[x]
     .qpipe.job.posbook.publish[`position;out];
     }
 
-/ Replay state for the opening book (#960): the executions replayed before
-/ it, and whether it has been seen. Both are cleared when the replay ends.
-early:()
-opened:0b
-
-/ The replay is over: forget the executions held for an opening row that
-/ never came (a first day has none; they were already applied).
-/ @return nothing
-on_replayed:{[]
-    `.qpipe.job.posbook.early set ();
-    `.qpipe.job.posbook.opened set 0b;
-    }
-
 / Executions: apply every fill in the batch in arrival order - already time
 / order off the tickerplant - mark each to the current last_mid, and publish
 / one position row per fill. The book is rebuilt from those rows BEFORE
@@ -202,41 +191,14 @@ on_replayed:{[]
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
-    / The opening book a restart restores from (#943), only while replaying:
-    / live, it is this job's own echo. It REPLACES the book, so the fills
-    / replayed ahead of it are re-applied on top of it, in order: the plant
-    / logs a fill that lands between its roll and the job's snapshot ahead
-    / of the opening row, and live the job applied it after the snapshot
-    / (#960). avg_price and realised P&L depend on lot order, so the fills
-    / are replayed, not summed.
-    if[t=`position_open;
-        if[.qetl.job.stream.replaying;
-            `.qpipe.job.posbook.book set 1!(cols .qpipe.job.posbook.position_book)#x;
-            early:.qpipe.job.posbook.early;
-            `.qpipe.job.posbook.early set ();
-            `.qpipe.job.posbook.opened set 1b;
-            .qpipe.job.posbook.apply_fills each early];
-        :()];
     $[t=`executions;
-        [if[.qetl.job.stream.replaying;
-            if[not .qpipe.job.posbook.opened; `.qpipe.job.posbook.early set .qpipe.job.posbook.early,enlist x]];
-         .qpipe.job.posbook.apply_fills x];
+        .qpipe.job.posbook.apply_fills x;
       t=`market_data;
         [m:.qpipe.job.posbook.book_mids[x];
          .qpipe.job.posbook.last_mid[m`sym]:m`mid;
          `.qpipe.job.posbook.crypto_tob upsert .qpipe.job.posbook.crypto_books[x]];
       ()];
     }
-
-/ The day ended: carry the book into the next one (#943), onto
-/ position_open, which a restart's replay restores from. Realized P&L
-/ carries with it: the book is the position held, not the day's trading.
-/ @param dt the date that ended
-/ @return the number of positions carried
-on_endofday:{[dt]
-    b:0!.qpipe.job.posbook.book;
-    if[count b; .qpipe.job.posbook.publish[`position_open;(cols .qpipe.job.posbook.position_book)#b]];
-    count b}
 
 \d .
 
@@ -280,15 +242,16 @@ on_endofday:{[dt]
 / flat and publish every later position from zero. Replaying the day's
 / executions and market_data rebuilds it; publish is muted while it does, so the
 / positions already published are not published twice.
-.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`restore_from`on_endofday`on_replayed`note`state!(
+/ The book carries across days (#943, #963): the shell publishes it onto
+/ position_open at end of day and, on replay, sets it from that snapshot and
+/ re-applies whatever was logged ahead of it - fills included, in order.
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`carry`note`state!(
     `posbook1;
     `executions`market_data;
     `position`position_open;
     .qpipe.job.posbook.on_batch;
     1b;
     1b;
-    enlist `position_open;
-    .qpipe.job.posbook.on_endofday;
-    .qpipe.job.posbook.on_replayed;
+    `state`table!(`book;`position_open);
     "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job";
     `book`last_mid`crypto_tob)];

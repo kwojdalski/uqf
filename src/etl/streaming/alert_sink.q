@@ -77,12 +77,13 @@ url:{[]
     v}
 
 / The HTTP POST, and the seam a test replaces with a fake target. Throws on a
-/ failure: .Q.hp signals on a connection error or a non-2xx status.
+/ connection error or any non-2xx status (.qetl.webhook.post reads the status
+/ line; .Q.hp does NOT signal on one, it returns the error body - #987).
 / @param target the URL
 / @param body the JSON text
 / @return the response body
 / @eg .qpipe.job.alert_sink.post[`$":http://localhost:9/hook";"{}"]
-post:{[target;body] .Q.hp[target;"application/json";body]}
+post:{[target;body] .qetl.webhook.post[target;body]}
 
 / The message a breach becomes: a `text` for chat webhooks and the breach
 / itself as `breach` for anything that parses it.

@@ -140,11 +140,11 @@ Apply the rules below. Each cites the file that holds or enforces it.
   `market_data` from `quote`, `fx_orderbook` and `crypto_book`
   (`docs/architecture/stack.md`).
 
-- **J8b** State a job carries across days is handled in `on_endofday[dt]`, which
-  runs after the plant has rolled its log (`.qetl.job.stream.end_of_day`, #943).
-  A position book carries: it publishes an opening snapshot that `restore_from`
-  replays after a restart. Never assume a job's state empties at midnight on its
-  own.
+- **J8b** State a job carries across days and restarts is DECLARED, not
+  hand-built: `carry:`state`table!(...)` on `.qetl.job.stream.define` (#963).
+  The shell publishes the snapshot at end of day, restores it on replay
+  (re-applying what was logged just ahead of it, #960), and ignores its live
+  echo. `on_endofday[dt]` remains for anything else a job does at end of day.
 
 - **J8a** An event that is evaluated some time after it arrives, such as a fill
   marked out at horizons, is a **horizon job** (`.qetl.job.stream.at_horizons`,

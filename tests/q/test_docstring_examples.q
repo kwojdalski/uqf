@@ -191,7 +191,8 @@ needs_live:([] expr:(
         ".qtorq.reload_hdb[]";
         ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]";
-        ".qpipe.job.alert_sink.post[`$\":http://localhost:9/hook\";\"{}\"]");
+        ".qpipe.job.alert_sink.post[`$\":http://localhost:9/hook\";\"{}\"]";
+        ".qetl.webhook.post[\"http://localhost:9/hook\";\"{}\"]");
     reason:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
@@ -200,7 +201,8 @@ needs_live:([] expr:(
         "finds the HDB through TorQ discovery, which needs .servers from a TorQ process";
         "opens an ODBC connection, which needs a licensed driver this tree does not require";
         "opens a Databento parquet file, which exists only where that data has been downloaded";
-        "POSTs to a webhook, which needs an HTTP endpoint listening (#947)"))
+        "POSTs to a webhook, which needs an HTTP endpoint listening (#947)";
+        "POSTs to a webhook, which needs an HTTP endpoint listening (#987)"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,

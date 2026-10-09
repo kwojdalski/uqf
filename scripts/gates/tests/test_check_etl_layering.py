@@ -78,3 +78,23 @@ def test_the_real_tree_is_clean(monkeypatch):
     assert layering.torq_reach(layering.REPO) == []
     monkeypatch.setattr(sys, "argv", ["check_etl_layering.py", "--check"])
     assert layering.main() == 0
+
+
+@pytest.mark.parametrize(
+    "call", ['.Q.hp[u;"application/json";b]', ".Q.hg u", ".Q.hmb[u;`GET;()]", "hopen `:http://h:80"]
+)
+def test_outbound_http_outside_the_transport_is_flagged(tmp_path, call):
+    root = _tree(tmp_path, {"src/etl/streaming/sink.q": f"post:{{[u;b] {call}}}\n"})
+    (hit,) = layering.http_reach(root)
+    assert hit.startswith("src/etl/streaming/sink.q:1:")
+
+
+def test_the_transport_file_may_speak_http_and_a_comment_may_name_it(tmp_path):
+    root = _tree(
+        tmp_path,
+        {
+            layering.HTTP_OWNER: "u:.Q.hap x\n",
+            "src/etl/streaming/sink.q": '/ .Q.hp returns the body of a 500\nm:"see .Q.hp"\n',
+        },
+    )
+    assert layering.http_reach(root) == []

@@ -27,6 +27,8 @@
 .qetl.io.odbc.window_query
 # alert_sink.post POSTs to a webhook, so needs an HTTP endpoint (#947)
 .qpipe.job.alert_sink.post
+# webhook.post is the seam alert_sink.post calls, for the same reason (#987)
+.qetl.webhook.post
 # exec_bars.now is the wall clock; test_bars.q replaces it with a fixed one
 .qpipe.job.exec_bars.now
 .qetl.io.odbc.with_connection

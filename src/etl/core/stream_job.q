@@ -145,6 +145,7 @@ check_replay:{[job;decl]
             '"define: ",string[job]," declares restore_from without replay 1b - those tables are read only by a replay"];
         if[not `on_batch in key decl;
             '"define: ",string[job]," declares restore_from but no on_batch to read it with"]];
+    if[`carry in key decl; check_carry[job;decl;replays]];
     if[`on_replayed in key decl;
         if[not is_callable decl`on_replayed;
             '"define: ",string[job],"'s on_replayed must be a niladic function"];
@@ -393,6 +394,35 @@ evict:{[table_name;mask]
 / look: during a replay their publish is muted anyway.
 replaying:0b
 
+/ The log clock: the time a stream decision uses for each row of a batch (#994).
+/ .
+/ Live, that is the process clock - the row has just arrived, so `now` is when
+/ it met the job. Replaying, the process clock is the restart time and every
+/ logged row looks hours old, so the clock is the plant's receipt stamp `time`,
+/ which the tickerplant wrote on the row when the live process first saw it.
+/ A decision made on this clock comes out the same live and on replay, which is
+/ what makes a restart a pure function of the log. A batch with no `time` has
+/ no log clock: null per row, which no comparison satisfies, so a time-based
+/ rule is simply not applied to it - say so where the rule is documented.
+/ .
+/ Routed through here: the bars kind's lateness. NOT routed, because the log
+/ cannot say what time it was: a timer tick (bars' close_ready, horizon's
+/ score_ready, fx_positions' throttle, superbook, alert_sink, cross) - a tick
+/ is not a logged row, so its `now` is always the process clock and it never
+/ runs during a replay.
+/ @param now the process clock (a job passes its own `now`, so a test can move it)
+/ @param x the batch, a table
+/ @return a timestamp per row of x
+/ @eg .qetl.job.stream.clock_of[2026.10.09D10:00:00;([] a:1 2)]  ->  2026.10.09D10:00:00 2026.10.09D10:00:00
+clock_of:{[now;x]
+    $[replaying; $[`time in cols x; x`time; count[x]#0Np]; count[x]#now]}
+
+/ The log clock with the process clock for `now`.
+/ @param x the batch, a table
+/ @return a timestamp per row of x
+/ @eg count .qetl.job.stream.clock ([] a:1 2)  ->  2
+clock:{[x] clock_of[.z.p;x]}
+
 / What a runner must hand `start`: the transport, as functions.
 / .
 /   connect             niladic; reach the plant.
@@ -412,7 +442,8 @@ transport_keys:`connect`publisher`subscribe`timer
 / @return the tables, as a symbol list
 subscriptions:{[job]
     d:def[job];
-    distinct (),(d`subscribe_to),$[`restore_from in key d; d`restore_from; `symbol$()]}
+    distinct (),(d`subscribe_to),$[`restore_from in key d; d`restore_from; `symbol$()],
+        $[`carry in key d; enlist d[`carry]`table; `symbol$()]}
 
 / Private: the job's on_batch, counting every batch in .qetl.stream_health
 / and logging a failure with its table before re-raising it. Re-raised, the
@@ -467,10 +498,11 @@ start:{[job;tr]
     if[count tbls;
         live:get pub:` sv (d`ns),`publish;
         if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b];
-        r:@[{[tr;tbls;h;replay] tr[`subscribe][tbls;h;replay]; (1b;::)}[tr;tbls;guarded[job;d`on_batch]];
+        r:@[{[tr;tbls;h;replay] tr[`subscribe][tbls;h;replay]; (1b;::)}[tr;tbls;handler job];
             replay;{[e] (0b;e)}];
         pub set live;
         `.qetl.job.stream.replaying set 0b;
+        replayed job;
         if[not first r; 'last r];
         if[`on_replayed in key d; (d`on_replayed)[]];
         / Protected: a record that cannot be written must never stop the job
@@ -505,10 +537,114 @@ running:`symbol$()
 / @return the jobs whose on_endofday ran without throwing
 / @eg .qetl.job.stream.end_of_day 2026.10.09
 end_of_day:{[dt]
+    / carried state first (#963): its snapshot opens the new day's log
+    cs:running where {[j] `carry in key def j} each running;
+    {[dt;j] @[snapshot;j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]}[dt;j]]}[dt] each cs;
     js:running where {[j] `on_endofday in key def j} each running;
     ok:{[dt;j] @[{[dt;j] (def[j]`on_endofday) dt; 1b}[dt];j;
         {[dt;j;e] .qetl.log.err[j;"on_endofday failed";`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
     js where ok}
+
+/ ------------------------------------------------------------ CARRY
+/ .
+/ State a job carries across days and restarts (#963): a position book, say.
+/ The job declares it - carry:`state`table!(`book;`position_open) - and the
+/ shell does the rest, so no job hand-builds recovery again (#960 was two
+/ jobs getting that wrong together):
+/ .
+/   at end of day   end_of_day publishes the state onto `table`, after the
+/                   plant has rolled its log: it opens the new day's log.
+/   on replay       batches are applied as they come, and those within
+/                   `window` of the log's start are also recorded. When the
+/                   snapshot arrives, the state is SET from it and the recorded
+/                   batches are applied again: the plant tells the job its day
+/                   ended asynchronously, so a batch can be logged ahead of the
+/                   snapshot that live it was applied after. Exact for any
+/                   state, lot order included; bounded by `window`.
+/   live            the snapshot is this job's own echo, and is ignored.
+
+/ Every carry's recording during a replay: job -> (first time; done; batches).
+carry_log:(`symbol$())!()
+
+/ Private: refuse a malformed carry, naming it.
+/ @private
+check_carry:{[job;decl;replays]
+    c:decl`carry;
+    who:"define: ",string[job],"'s carry";
+    if[not 99h=type c; 'who," must be a dict of state and table"];
+    if[count `state`table except key c; 'who," needs state (the variable it carries) and table (where its snapshot goes)"];
+    if[not -11h=type c`state; 'who,"'s state must be the name of a variable in the job's namespace"];
+    if[not (c`table) in (),decl`publishes; 'who,"'s table ",string[c`table]," must be one the job publishes"];
+    if[not replays; 'who," needs replay 1b - the snapshot is read back by a replay"];
+    if[$[`window in key c; not -16h=type c`window; 0b]; 'who,"'s window must be a timespan"];
+    }
+
+/ The handler a job's batches go through: its guarded on_batch, behind its
+/ carry when it declares one. What start subscribes with, and what a test
+/ replays through.
+/ @param job the job's name
+/ @return a function of (table;rows)
+/ @eg .qetl.job.stream.handler[`fx_positions]
+handler:{[job]
+    h:guarded[job;def[job]`on_batch];
+    $[`carry in key def job; carried[job;h;;]; h]}
+
+/ Private: route one batch for a job that carries state.
+/ @private
+carried:{[job;h;t;x]
+    c:def[job]`carry;
+    if[t=c`table;
+        if[replaying; restore[job;h;x]];
+        :()];
+    h[t;x];
+    if[replaying; record[job;t;x]];
+    }
+
+/ Private: keep a replayed batch, while it is near enough the log's start
+/ that the snapshot may yet follow it.
+/ @private
+record:{[job;t;x]
+    r:$[job in key carry_log; carry_log job; (0Np;0b;())];
+    if[r 1; :()];
+    t0:$[(`time in cols x) and count x; first x`time; 0Np];
+    if[null r 0; r[0]:t0];
+    w:$[`window in key def[job]`carry; def[job][`carry]`window; 0D00:01];
+    if[(not null t0) and t0>r[0]+w; carry_log[job]:(r 0;1b;()); :()];
+    r[2]:r[2],enlist (t;x);
+    carry_log[job]:r;
+    }
+
+/ Private: set the carried state from its snapshot, then apply again what
+/ the replay delivered ahead of it.
+/ @private
+restore:{[job;h;x]
+    c:def[job]`carry;
+    v:` sv (def[job]`ns),c`state;
+    cur:get v;
+    rows:(cols 0!cur)#x;
+    v set $[99h=type cur; (keys cur) xkey rows; rows];
+    early:$[job in key carry_log; (carry_log job) 2; ()];
+    carry_log[job]:(0Np;1b;());
+    {[h;b] h . b}[h] each early;
+    }
+
+/ The replay of a job's log is over: forget what its carry recorded.
+/ @param job the job's name
+/ @return the job's name
+/ @eg .qetl.job.stream.replayed[`fx_positions]  ->  `fx_positions
+replayed:{[job] carry_log::(enlist job) _ carry_log; job}
+
+/ Publish a job's carried state onto its snapshot table - what end_of_day
+/ does for each running job that carries one. Nothing when the state is empty:
+/ a restart with no snapshot starts flat, which is the same thing.
+/ @param job the job's name
+/ @return how many rows were published
+/ @eg .qetl.job.stream.snapshot[`fx_positions]
+snapshot:{[job]
+    c:def[job]`carry;
+    rows:0!get ` sv (def[job]`ns),c`state;
+    if[count rows; (get ` sv (def[job]`ns),`publish)[c`table;rows]];
+    count rows}
 
 unwired:{[job]
     {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qetl.job.stream.wire first"}[job]}

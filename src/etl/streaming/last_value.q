@@ -44,10 +44,9 @@ state:1!last_value
 / @return table sym, market, source, source_time, bid, ask, mid, in batch order
 / @eg .qpipe.job.last_value.tops ([] sym:`EURUSD`GBPUSD; market:`fx`fx; source:`a`a; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 1.0;`float$()); bid_sizes:(enlist 1f;`float$()); ask_prices:(enlist 1.2;enlist 1.3); ask_sizes:(enlist 1f;enlist 1f))  ->  ([] sym:enlist `EURUSD; market:enlist `fx; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1f; ask:enlist 1.2; mid:enlist 1.1)
 tops:{[x]
-    x:select from x where 0<count each bid_prices, 0<count each ask_prices;
-    t:select sym, market, source, source_time, bid:`float$first each bid_prices,
-        ask:`float$first each ask_prices from x;
-    t:select from t where bid>0, ask>0;
+    s:.qbook.top_sides x;
+    t:select sym, market, source, source_time, bid:s`bid, ask:s`ask from x;
+    t:select from t where not null bid, not null ask;
     update mid:(bid+ask)%2 from t}
 
 / Apply a batch of books to the latest rows.
@@ -84,10 +83,11 @@ on_batch:{[t;x]
 / The state is this process's memory, so a restart used to start it empty
 / until every sym ticked again. Replaying the day's market_data rebuilds it;
 / publish is muted while it does, so rows already published are not repeated.
-.qetl.job.stream.define[`last_value;`procname`subscribe_to`publishes`on_batch`replay`note!(
+.qetl.job.stream.define[`last_value;`procname`subscribe_to`publishes`on_batch`replay`note`state!(
     `last_value1;
     enlist `market_data;
     enlist `last_value;
     .qpipe.job.last_value.on_batch;
     1b;
-    "the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile")];
+    "the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile";
+    enlist `state)];
