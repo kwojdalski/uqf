@@ -86,57 +86,6 @@ score_markouts:{[real_fills;books]
     ([] sym:f`sym; venue:f`venue; fill_id:f`exchange_fill_id; trade_time:f`time; horizon:h;
         side:f`side; trade_price:f`trade_price; ref_price:ref; markout_bps:bps)}
 
-/ --------------------------------------------------------------- THE JOB
-
-/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
-/ (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qetl.job.stream.unwired `crypto_markout;
-
-/ STATE. pending is the queue of fills not yet old enough to score;
-/ book_hist the books they will be scored against, pruned as fills drain -
-/ a book older than every pending fill by more than max_age can never count.
-pending:real_fills;
-book_hist:books;
-
-/ Buffer each batch: real fills into the queue, books into the history.
-/ @param t the table the batch arrived on
-/ @param x the rows, as a table
-/ @return nothing
-on_batch:{[t;x]
-    $[t=`crypto_trades;
-        `.qpipe.job.crypto_markout.pending insert select time, sym, venue, side, trade_price, exchange_fill_id from x;
-      t=`crypto_book;
-        `.qpipe.job.crypto_markout.book_hist insert select time, sym, venue, bid_prices, ask_prices from x;
-      ()];
-    }
-
-/ Score and publish every fill whose longest horizon has passed by `now`,
-/ then drop it from the queue and drop books nothing pending can use.
-/ @param now the time to score up to
-/ @return nothing
-score_ready:{[now]
-    if[0=count .qpipe.job.crypto_markout.pending; :()];
-    mask:.qpipe.job.crypto_markout.pending[`time]<=now-.qpipe.job.crypto_markout.max_horizon;
-    ready:.qpipe.job.crypto_markout.pending where mask;
-    if[0=count ready; :()];
-    out:.qetl.transform.apply[`crypto_execution_quality;`real_fills`books!(ready;.qpipe.job.crypto_markout.book_hist)];
-    .qpipe.job.crypto_markout.publish[`crypto_execution_quality;out];
-    .qetl.job.stream.evict[`.qpipe.job.crypto_markout.pending;mask];
-    left:.qpipe.job.crypto_markout.pending`time;
-    oldest:$[count left; min left; now-.qpipe.job.crypto_markout.max_horizon];
-    cutoff:oldest-.qpipe.job.crypto_markout.max_age;
-    .qetl.job.stream.evict[`.qpipe.job.crypto_markout.book_hist;.qpipe.job.crypto_markout.book_hist[`time]<cutoff];
-    }
-
-/ The timer body: score whatever is ready as of now.
-/ @return nothing
-on_timer:{[] .qpipe.job.crypto_markout.score_ready .qpipe.job.crypto_markout.now[]}
-
-/ The clock score_ready is run against - a function rather than .z.p inline,
-/ so a test can stand a fixed time in for it. .z.p is UTC, as .u.upd stamps.
-/ @return the current timestamp
-now:{[] .z.p}
-
 \d .
 
 / Two venues quote BTC-USDT; one goes quiet. The 1s horizon sees both (best
@@ -161,12 +110,18 @@ now:{[] .z.p}
 
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
-/ (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`crypto_markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`note!(
+/ (absent: on demand, until the connection budget has room). The queue, the
+/ book history, the timer and the eviction are the horizon kind's
+/ (src/etl/core/horizon.q, #945); max_age makes the history drop every book
+/ too old to count at any waiting fill's horizon.
+.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`publishes`horizon`period`max_age`by`note!(
     `crypto_markout1;
-    `crypto_trades`crypto_book;
-    enlist `crypto_execution_quality;
-    .qpipe.job.crypto_markout.on_batch;
+    `crypto_trades;
+    `crypto_book;
+    `crypto_execution_quality;
+    `crypto_execution_quality;
+    .qpipe.job.crypto_markout.max_horizon;
     0D00:00:01;
-    .qpipe.job.crypto_markout.on_timer;
+    .qpipe.job.crypto_markout.max_age;
+    `sym`venue;
     "markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock")];

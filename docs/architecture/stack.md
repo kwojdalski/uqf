@@ -233,12 +233,14 @@ tracked off its own `quote` subscription; `position` is a snapshot republished
 per fill. `demo_markout1` can't score a fill the instant it arrives -
 `.qexec.markout_at_horizons` needs a reference quote at trade_time+horizon,
 which by definition hasn't happened yet - so it buffers trades/quotes in
-`.qpipe.job.demo_markout.pending`/`.qpipe.job.demo_markout.quote_hist` and
+`.qpipe.job.demo_markout.pending`/`.qpipe.job.demo_markout.history` and
 scores+drains them on a 1s repeating timer once each trade is old enough that
-its furthest horizon's quote should already exist. Unlike `cross_quotes`, both
-`position` and `demo_execution_quality` are real, persisted tables (round-trip
-through `rdb1`/`wdb1`/`hdb`, same as `mkt_orderbook`), since this history is
-worth keeping.
+its furthest horizon's quote should already exist. That waiting is a job kind of
+its own, `.qetl.job.stream.at_horizons` (`src/etl/core/horizon.q`), shared with
+`crypto_markout1`: it also bounds the quote history to what a waiting fill can
+still use. Unlike `cross_quotes`, both `position` and `demo_execution_quality`
+are real, persisted tables (round-trip through `rdb1`/`wdb1`/`hdb`, same as
+`mkt_orderbook`), since this history is worth keeping.
 
 `demo_markout1`'s buffers live in its process, so a fill it never saw goes
 unscored: it was down, restarting, or the fill came before it. A bounded

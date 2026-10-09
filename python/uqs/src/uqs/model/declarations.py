@@ -1,6 +1,7 @@
 """The q declarations the process registry is DERIVED from.
 
-Every streaming job (`.qetl.job.stream.define`, `.qetl.job.stream.normalize` under
+Every streaming job (`.qetl.job.stream.define`, `.qetl.job.stream.normalize`,
+`.qetl.job.stream.at_horizons` under
 src/etl/streaming/) and every bounded worker (`.qetl.job.bounded.define` under
 src/etl/workers/) already declares, in q, the process that runs it and the
 tables it reads and writes - and registers itself on load, so a declaration
@@ -34,7 +35,8 @@ from uqs.paths import STREAM_DIR, WORKER_DIR, UqsError
 
 #: The three calls a job or worker declares itself with, and the start of one.
 _CALL_RE = re.compile(
-    r"\.(qetl\.job\.stream\.define|qetl\.job\.stream\.normalize|qetl\.job\.bounded\.define)\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
+    r"\.(qetl\.job\.stream\.define|qetl\.job\.stream\.normalize|qetl\.job\.stream\.at_horizons"
+    r"|qetl\.job\.bounded\.define)\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
 )
 _OPEN = "([{"
 _CLOSE = ")]}"
@@ -221,6 +223,21 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             start_with_all,
             note,
             path,
+        )
+    if fn == "qetl.job.stream.at_horizons":
+        # A horizon job (#945) subscribes to its events and its reference,
+        # and publishes what its transform scores.
+        transform = symbols(fields.get("transform", ""))
+        return Declaration(
+            name,
+            proc[0],
+            PipelineKind.ETL,
+            symbols(fields.get("events", "")) + symbols(fields.get("reference", "")),
+            symbols(fields.get("publishes", "")),
+            start_with_all,
+            note,
+            path,
+            transform=transform[0] if transform else "",
         )
     subscribe_to = symbols(fields.get("subscribe_to", ""))
     kind = PipelineKind.ETL if subscribe_to else PipelineKind.FEED

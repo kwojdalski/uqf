@@ -28,7 +28,7 @@ recorder:{[job;t;x]
 reset:{[]
     `.sjtest.published set 0#.sjtest.published;
     `.qpipe.job.demo_markout.pending set 0#.qpipe.job.demo_markout.pending;
-    `.qpipe.job.demo_markout.quote_hist set 0#.qpipe.job.demo_markout.quote_hist;
+    `.qpipe.job.demo_markout.history set 0#.qpipe.job.demo_markout.history;
     `.qpipe.job.cross.fx_orderbook set 0#.qpipe.job.cross.fx_orderbook;
     `.qpipe.job.cross.crosses set 0#.qpipe.job.cross.crosses;
     `.qpipe.job.cross.unpriced set `symbol$();
@@ -361,7 +361,7 @@ test_markout_buffers_trades_and_quotes_separately:{[t]
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `EURUSD;
         bid:enlist 1.0999; ask:enlist 1.1001)];
-    .qunit.assertEquals[(count .qpipe.job.demo_markout.pending;count .qpipe.job.demo_markout.quote_hist);(1;1);
+    .qunit.assertEquals[(count .qpipe.job.demo_markout.pending;count .qpipe.job.demo_markout.history);(1;1);
         "each batch lands in the buffer its table names"]};
 
 test_markout_ignores_a_pair_this_demo_does_not_trade:{[t]
@@ -369,7 +369,7 @@ test_markout_ignores_a_pair_this_demo_does_not_trade:{[t]
     reset[];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `AAPL;
         bid:enlist 150f; ask:enlist 150.1)];
-    .qunit.assertEquals[count .qpipe.job.demo_markout.quote_hist;0;
+    .qunit.assertEquals[count .qpipe.job.demo_markout.history;0;
         "a quote outside .qsynth.pairs is not buffered"]};
 
 test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]

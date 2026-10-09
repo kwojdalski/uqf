@@ -140,6 +140,11 @@ Apply the rules below. Each cites the file that holds or enforces it.
   `market_data` from `quote`, `fx_orderbook` and `crypto_book`
   (`docs/architecture/stack.md`).
 
+- **J8a** An event that is evaluated some time after it arrives, such as a fill
+  marked out at horizons, is a **horizon job** (`.qetl.job.stream.at_horizons`,
+  `src/etl/core/horizon.q`). Don't hand-build a pending queue and timer: the
+  kind owns the queue, readiness, eviction and the history bound.
+
 - **J9** A source whose adapter returns other columns than it reads declares
   `raw`: physical table → the columns it reads. `columns`/`types` then describe
   only what it returns. The live check holds each side separately
