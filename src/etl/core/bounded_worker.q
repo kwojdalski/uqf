@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -204,7 +204,9 @@ optional_cfg:`check`io`facts`partition
 / @param decl dict of source, dataset, width, transform, and optionally
 /   check, facts, partition, io, procname (default `<worker>1), note,
 /   on_conflict (default `upsert - see .qetl.io's CONFLICTS), target_key
-/   (default the source's row_key - see require_target_key) and
+/   (default the source's row_key - see require_target_key),
+/   window_column (the OUTPUT column that carries the window's time - see
+/   require_window_column) and
 /   source_version (the default release a run records coverage under; none
 /   by default, so a run must name one)
 / @throws error naming every missing or malformed field at once
@@ -297,6 +299,7 @@ define:{[worker;decl]
         '"define: ",string[worker],"'s source_version must be a symbol, e.g. `v1 - the release a run records coverage under when it names none"];
     decl[`source_version]:dv;
     decl[`target_key]:require_target_key[worker;decl];
+    decl[`window_column]:require_window_column[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -388,6 +391,45 @@ require_target_key:{[worker;decl]
          " does not output (",(", " sv string out),")",
          $[`target_key in key decl;"";" - declare target_key in the output's column names"]];
     k}
+
+/ Private: the output column that carries the window's time, ` when none does.
+/ .
+/ `replace clears the window's rows by this column, so it must be the column the
+/ window was CUT on, as the output holds it. Declared with window_column when
+/ the transform moves it: hdb_demo_markouts_backfill's `time` is trade_time+horizon,
+/ the fill's time plus the markout horizon, so clearing by `time` deletes
+/ markouts a neighbouring window wrote (#972). Undeclared, it is the source's
+/ time_column when the output keeps it, else `time (a transform that renamed it),
+/ else none - and a worker with none cannot `replace; see require_replaceable.
+/ @return the column, a symbol
+/ @throws error when a declared window_column is not a symbol naming an output column
+/ @private
+require_window_column:{[worker;decl]
+    out:cols (.qetl.transform.def decl`transform)`output;
+    if[`window_column in key decl;
+        c:decl`window_column;
+        if[not -11h=type c;
+            '"define: ",string[worker],"'s window_column must be a symbol naming an output column"];
+        if[not c in out;
+            '"define: ",string[worker],"'s window_column ",string[c]," is not among transform ",
+             string[decl`transform],"'s output columns (",(", " sv string out),")"];
+        :c];
+    st:(.qetl.source.def decl`source)`time_column;
+    $[st in out; st; `time in out; `time; `]}
+
+/ Private: refuse `replace for a worker whose output has no column the window
+/ was cut on.
+/ @param worker the worker's name
+/ @return the window column
+/ @throws error when the strategy in force is `replace and there is no such column
+/ @private
+require_replaceable:{[worker]
+    c:(def worker)`window_column;
+    if[(`replace=on_conflict worker) and null c;
+        '"on_conflict replace: ",string[worker],"'s output has neither its source's time column ",
+         string[(.qetl.source.def (def worker)`source)`time_column]," nor time, so it cannot tell which rows ",
+         "the window wrote - declare window_column, or use upsert"];
+    c}
 
 / The source_version a run of `worker` uses when it names none, or ` when the
 / worker declares no default and a run must name one.
@@ -747,7 +789,7 @@ check_static:{[worker;run_spec]
 
     .qetl.source.validate_fixture cfg`source;
     .qetl.log.dbg[worker;"init: source fixture satisfies the contract";enlist[`source]!enlist cfg`source];
-    on_conflict worker;
+    require_replaceable worker;
     spec worker}
 
 / The validate mode: is this a run that could start? Checks the declaration,
@@ -997,10 +1039,9 @@ fetch:{[worker;from_ts;to_ts]
 / range was examined and held nothing.
 publish:{[worker;batch]
     cfg:def worker;
-    src:.qetl.source.def cfg`source;
     w:read_state[worker;`last_window];
     opts:`on_conflict`row_key`time_column`range_from`range_to!
-        (on_conflict worker;cfg`target_key;src`time_column;w`range_from;w`range_to);
+        (on_conflict worker;cfg`target_key;cfg`window_column;w`range_from;w`range_to);
     .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}
 
 / The conflict strategy this run writes under: the operator's override when
