@@ -307,7 +307,11 @@ windows:{[from_ts;to_ts;width]
     .qetl.coverage.require_interval[from_ts;to_ts];
     if[not width>0D00:00;
         '"windows: width must be positive, got ",string width];
-    n:"j"$ceiling (to_ts-from_ts)%width;
+    / Integer arithmetic: the float divide loses a nanosecond tail once the
+    / range passes ~104 days (2^53 ns), dropping the last window (#975).
+    span:"j"$to_ts-from_ts;
+    w:"j"$width;
+    n:(span div w)+0<span mod w;
     starts:from_ts+width*til n;
     ([] range_from:starts; range_to:to_ts&starts+width)}
 

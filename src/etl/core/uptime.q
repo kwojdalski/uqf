@@ -73,7 +73,8 @@ update_shared:{[f;args]
 / @return the session id
 begin:{[job]
     system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
-    id:first 1?0Ng;
+    / mint, not `first 1?0Ng`: that is the same guid in every fresh process (run.q)
+    id:.qetl.run.mint[];
     now:.z.p;
     update_shared[{[id;job;now]
         `etl_stream_uptime insert (id;job;.qetl.run.proc_name[];.z.h;.z.i;now;now)};
@@ -102,7 +103,7 @@ beat:{[]
     broken:failed>0^failed_seen jobs;
     `.qetl.uptime.failed_seen set failed_seen,jobs!failed;
     renew:mine where broken;
-    fresh:count[renew]?0Ng;
+    fresh:.qetl.run.mint each til count renew;
     update_shared[{[keep;renew;fresh;now]
         update last_seen:now from `etl_stream_uptime where session in keep;
         ended:select from sessions[] where session in renew;

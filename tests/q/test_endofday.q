@@ -38,6 +38,7 @@ tearDown_eod:{[]
     `.qetl.job.stream.replaying set 0b;
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
     `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
+    .qpipe.job.posbook.on_replayed[];
     }
 
 feed:{[nm;eod] `procname`subscribe_to`publishes`period`on_timer`on_endofday!(
@@ -117,6 +118,33 @@ test_an_empty_book_carries_nothing:{[t]
     .qunit.assertEquals[.qpipe.job.fx_positions.on_endofday d0;0;"nothing to carry"];
     .qunit.assertEquals[count sent;0;"so nothing is published"]};
 
+/ #960: the plant rolls and tells the job asynchronously, so a fill can be
+/ logged BEFORE the job's opening row; live, the job applied it on top of
+/ its snapshot.
+test_fx_positions_keeps_a_fill_logged_before_the_opening_row:{[t]
+    record[`fx_positions];
+    on:.qpipe.job.fx_positions.on_batch;
+    on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qpipe.job.fx_positions.on_endofday d0;
+    opening:sent_on `fx_position_open;
+    early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+    on[`executions;early];
+    running:.qpipe.job.fx_positions.positions;
+    `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
+    replay[on;((`executions;early);(`fx_position_open;opening))];
+    .qunit.assertEquals[.qpipe.job.fx_positions.positions;running;"restarted and kept-running books agree"];
+    .qunit.assertEquals[exec base_qty, fill_count from .qpipe.job.fx_positions.positions;`base_qty`fill_count!(enlist 6e5;enlist 2);"600k net, two fills"]};
+
+test_fx_positions_first_day_without_an_opening_row_replays_as_before:{[t]
+    record[`fx_positions];
+    on:.qpipe.job.fx_positions.on_batch;
+    f:fill[`EURUSD;1;1e6;1.1;`london;`spot];
+    on[`executions;f];
+    running:.qpipe.job.fx_positions.positions;
+    `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
+    replay[on;enlist (`executions;f)];
+    .qunit.assertEquals[.qpipe.job.fx_positions.positions;running;"no opening row: the log alone rebuilds the book"]};
+
 / --- posbook carries its book ------------------------------------------------
 
 test_posbook_carries_its_book_and_a_restart_agrees:{[t]
@@ -132,5 +160,49 @@ test_posbook_carries_its_book_and_a_restart_agrees:{[t]
     replay[on;((`position_open;opening);(`executions;day2))];
     .qunit.assertEquals[.qpipe.job.posbook.book;running;"restarted and kept-running books agree"];
     .qunit.assertEquals[exec qty from .qpipe.job.posbook.book;enlist 6e5;"1mm carried, 400k sold today"]};
+
+/ #960: posbook's avg_price and realised P&L depend on lot order, so a fill
+/ logged before the opening row is re-applied after it, not summed.
+test_posbook_keeps_a_fill_logged_before_the_opening_row:{[t]
+    record[`posbook];
+    on:.qpipe.job.posbook.on_batch;
+    on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qpipe.job.posbook.on_endofday d0;
+    opening:sent_on `position_open;
+    early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+    on[`executions;early];
+    running:.qpipe.job.posbook.book;
+    `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
+    replay[on;((`executions;early);(`position_open;opening))];
+    .qpipe.job.posbook.on_replayed[];
+    .qunit.assertEquals[.qpipe.job.posbook.book;running;"restarted and kept-running books agree"];
+    .qunit.assertEquals[exec qty, realized_pnl from .qpipe.job.posbook.book;`qty`realized_pnl!(enlist 6e5;enlist 2000f);"600k left, 400k*0.005 realised"];
+    .qunit.assertEquals[.qpipe.job.posbook.early;();"the held fills are cleared"]};
+
+test_posbook_first_day_without_an_opening_row_replays_as_before:{[t]
+    record[`posbook];
+    on:.qpipe.job.posbook.on_batch;
+    f:fill[`EURUSD;1;1e6;1.1;`london;`spot];
+    on[`executions;f];
+    running:.qpipe.job.posbook.book;
+    `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
+    replay[on;enlist (`executions;f)];
+    .qpipe.job.posbook.on_replayed[];
+    .qunit.assertEquals[.qpipe.job.posbook.book;running;"no opening row: the log alone rebuilds the book"];
+    .qunit.assertEquals[(.qpipe.job.posbook.early;.qpipe.job.posbook.opened);(();0b);"replay state is reset"]};
+
+test_posbook_restart_with_the_opening_row_first_is_unchanged:{[t]
+    record[`posbook];
+    on:.qpipe.job.posbook.on_batch;
+    on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qpipe.job.posbook.on_endofday d0;
+    opening:sent_on `position_open;
+    day2:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+    on[`executions;day2];
+    running:.qpipe.job.posbook.book;
+    `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
+    replay[on;((`position_open;opening);(`executions;day2))];
+    .qpipe.job.posbook.on_replayed[];
+    .qunit.assertEquals[.qpipe.job.posbook.book;running;"no early fill: same book"]};
 
 \d .

@@ -59,6 +59,33 @@ from_crypto_book:{[batch]
     select sym, source:venue, market:`crypto, source_time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from batch}
 
+/ The rows market_data is about to publish, held to the .qdqc checks (#944):
+/ a crossed book (bid at or through the ask) and a quote stale against the
+/ newest in its batch. A book with an empty side is NOT a failure - the
+/ withdrawal is how a venue pulls its book, and `one_sided is the check's
+/ word for it - and a wide spread is a thin market, not bad data, so neither
+/ is withheld.
+/ .
+/ Staleness is measured against the batch's own newest source_time, not the
+/ wall clock: a replayed or backfilled batch is old by design and must not
+/ read as a stale feed.
+/ @param rows market_data rows (sym, source, source_time, the four ladders)
+/ @return failures: check, status, detail, and `row`, the index in rows
+/ @eg count .qpipe.job.market_data.check[0#.qpipe.job.market_data.market_data] -> 0
+check:{[rows]
+    if[0=count rows; :.qetl.job.bounded.no_failures[]];
+    / The quality check sorts its answer, so it is handed the row index as its
+    / `time` (a timestamp is a long underneath) and the index comes back with it.
+    q:select time:`timestamp$til count rows, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from rows;
+    graded:.qdqc.check_market_data_quality[q;0w];
+    bad:select from graded where status=`crossed;
+    crossed:([] check:count[bad]#`crossed_book; status:bad`status; detail:.qrender.full each bad; row:`long$bad`time);
+    real:select time:source_time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from rows;
+    stale:.qdqc.check_stale_quotes[real;max rows`source_time;0D00:05];
+    late:exec i from rows where sym in exec sym from stale where status=`stale;
+    crossed,([] check:count[late]#`stale_quote; status:count[late]#`stale;
+        detail:count[late]#enlist "older than the batch's newest quote by over 5 minutes"; row:late)}
+
 \d .
 
 .qetl.transform.define[`market_data_from_quote;`inputs`output`fn`examples!(
@@ -102,9 +129,17 @@ from_crypto_book:{[batch]
             bid_prices:enlist 61999 61998f; bid_sizes:enlist 0.5 1f;
             ask_prices:enlist 62001 62002f; ask_sizes:enlist 0.5 1f)))];
 
-.qetl.job.stream.normalize[`market_data;`procname`output`input`start_with_all`note!(
+/ on_fail `drop, not `hold: market_data is every venue's book in one stream,
+/ and a batch is whatever the plant delivered together. One venue's crossed
+/ book must not withhold the other venues' good ones - posbook1 marks
+/ positions to these mids, and a gap in them is worse than a missing bad row.
+/ The bad row is withheld, logged and counted (`uqs summary` shows the job
+/ failing), and the next snapshot for that (sym, source) replaces the book.
+.qetl.job.stream.normalize[`market_data;`procname`output`input`start_with_all`note`check`on_fail!(
     `marketdata1;
     .qpipe.job.market_data.market_data;
     `quote`fx_orderbook`crypto_book!`market_data_from_quote`market_data_from_fx_orderbook`market_data_from_crypto_book;
     1b;
-    "every venue's book in one shape, with source identity and the source's own time: FX from quote and fx_orderbook, crypto from crypto_book. posbook1 marks positions to its level-0 mids, so it starts with the stack; superbook1 merges the FX books by pair for the arbitrage chain, which stays on demand (`uqs start --profile arbitrage`, #285)")];
+    "every venue's book in one shape, with source identity and the source's own time: FX from quote and fx_orderbook, crypto from crypto_book. posbook1 marks positions to its level-0 mids, so it starts with the stack; superbook1 merges the FX books by pair for the arbitrage chain, which stays on demand (`uqs start --profile arbitrage`, #285)";
+    .qpipe.job.market_data.check;
+    `drop)];

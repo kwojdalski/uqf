@@ -686,7 +686,7 @@ advance_phase:{[worker;to;err]
     if[`begin~row`run_ledger; call[begin_run;enlist worker]];
     call[.qetl.hb.beat;(worker;row`beat)];
     call[.qetl.status.write_status;(worker;instance worker;row`status;spec worker;progress_now worker;err)];
-    closed:$[(`finish~row`run_ledger) and `running~was; call[end_run;(to;run_totals worker)]; (1b;"")];
+    closed:$[(`finish~row`run_ledger) and `running~was; call[end_run;(worker;to;run_totals worker)]; (1b;"")];
     write_state[worker;`phase;to];
     / A run whose ledger row could not be closed did not end the way the file
     / just said (#675): Airflow would pass it, the process exit 0, and its
@@ -1239,9 +1239,9 @@ begin_run:{[worker]
 / on (#675). A close that failed silently left the file `completed and the
 / row `running for good.
 / @private
-end_run:{[state;counts]
+end_run:{[worker;state;counts]
     if[not .qetl.job.bounded.runtime.allows`record_run; :(1b;"")];
-    .[{.qetl.run.finish[x;y]; (1b;"")};(state;counts);{[e] (0b;$[10h=type e; e; .Q.s1 e])}]}
+    .[{.qetl.run.finish_for[x;y;z]; (1b;"")};(worker;state;counts);{[e] (0b;$[10h=type e; e; .Q.s1 e])}]}
 
 / Private: the counts the worker's progress holds, as end_run records them.
 / @private

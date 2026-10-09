@@ -176,3 +176,5 @@ surface:{[]
     "One trade copied out of another kdb+ HDB on this machine by hdb_transfer_backfill, with its notional (price times size, in the quote currency) added on the way - the worked example of moving data from one kdb+ database into another; scripts/examples/hdb_transfer_example.q runs it end to end";
 .qcat.describe[`crypto_execution_quality]:
     "Post-trade markout per real crypto fill per horizon, in bps against the best mid across venues; a null markout_bps means no venue had a live book at that horizon, not a zero markout";
+.qcat.describe[`last_value]:
+    "One change to a pair's current price: the newest level-0 bid, ask and mid across sources, FX and crypto, with the source that quoted it and its own source_time. Appended only when a newer book replaces the held one, so read the latest row per sym (select by sym) for the one shared current price";

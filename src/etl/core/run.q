@@ -412,6 +412,26 @@ finish:{[status;counts]
     current_run::0Ng;
     id}
 
+/ Close the current run, on behalf of the worker that says it owns it.
+/ .
+/ `finish` closes whatever run is in flight, which is right for a caller that
+/ began it and wrong for one that did not: a worker run nested inside another's
+/ window (a reaction, #973) finished the OUTER worker's row with its own
+/ outcome and counts. This checks the in-flight row names `worker` first and
+/ refuses otherwise, closing nothing.
+/ @param worker the worker claiming the run
+/ @param status the outcome, as for `finish`
+/ @param counts the counts, as for `finish`
+/ @return the run id that was closed
+/ @throws error when no run is in flight, or the run in flight belongs to another worker
+/ @eg .qetl.run.begin[`demo_deals_backfill;()!()]; .qetl.run.finish_for[`demo_deals_backfill;`completed;()!()]
+finish_for:{[worker;status;counts]
+    id:require_current[];
+    owner:exec first worker from runs[] where run_id=id;
+    if[not worker~owner;
+        '"finish_for: run in flight belongs to ",string[owner]," not ",string[worker]," - refusing to close it"];
+    finish[status;counts]}
+
 / Abandon the current run without recording an outcome.
 / .
 / For a caller that must clear process-local state - a test's teardown -

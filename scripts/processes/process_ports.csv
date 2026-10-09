@@ -34,5 +34,7 @@ crypto_market_data_backfill1,48
 hdb_demo_markouts_backfill1,49
 hdb_transfer_backfill1,50
 crypto_markout1,51
-exec_bars1,52
-hdb_exec_bars_backfill1,53
+alert_sink1,52
+last_value1,53
+exec_bars1,54
+hdb_exec_bars_backfill1,55

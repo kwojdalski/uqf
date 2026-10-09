@@ -1,4 +1,5 @@
 procname,proctype,offset,subscribe_to,publishes
+alert_sink1,metrics,52,fx_limit_breach,
 arbitrage1,metrics,44,superbook,arbitrage
 cross1,metrics,25,fx_orderbook,
 crossarb1,metrics,45,superbook,config_change cross_arbitrage

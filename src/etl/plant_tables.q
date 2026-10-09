@@ -497,3 +497,6 @@ trades_copy:([]time:`timestamp$(); trade_id:`long$(); sym:`g#`symbol$(); price:`
 
 / crypto_markout1's output. <one line: what a row means>
 crypto_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); fill_id:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); side:`long$(); trade_price:`float$(); ref_price:`float$(); markout_bps:`float$())
+
+/ last_value1's output. <one line: what a row means>
+last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())

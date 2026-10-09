@@ -90,7 +90,8 @@ namespace:{[job] ` sv job_root,job}
 /   and poll, for a polling feed (see stream_poll.q); optionally
 /   start_with_all (a boolean, default 0b), note (a string), transform
 /   (the registered transform it applies, which its backfill twin applies
-/   too - #884) and on_endofday (a function of the date that ended, #943)
+/   too - #884), on_endofday (a function of the date that ended, #943), and
+/   check with on_fail (a quality gate on what is published, #944)
 / @return the job name
 / @throws error naming every missing or malformed field at once
 define:{[job;decl]
@@ -156,6 +157,19 @@ define:{[job;decl]
             '"define: ",string[job],"'s transform must be a symbol naming a registered transform"];
         if[not (decl`transform) in .qetl.transform.defined[];
             '"define: ",string[job]," declares transform ",string[decl`transform],", which is not registered - define it before the job"]];
+    / A quality gate on what the job publishes (#944), applied by `wire` to
+    / every publish the job makes. Declaring what to do on failure is
+    / required with it: whether one bad row holds back its neighbours is the
+    / decision, and a default would make it for the author without asking.
+    if[(`on_fail in key decl) and not `check in key decl;
+        '"define: ",string[job]," declares on_fail without a check - there is nothing to fail"];
+    if[`check in key decl;
+        if[not is_callable decl`check;
+            '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
+        if[not (`on_fail in key decl) and -11h=type decl`on_fail;
+            '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
+        if[not (decl`on_fail) in `drop`hold;
+            '"define: ",string[job],"'s on_fail must be `drop or `hold, not ",string decl`on_fail]];
     / Restoring state at start - see `start` below.
     if[(`replay in key decl) and not -1h=type decl`replay;
         '"define: ",string[job],"'s replay must be a boolean, 1b to rebuild state from the day's log at start"];
@@ -222,9 +236,50 @@ defined:{[] key jobs}
 wire:{[job;publisher]
     if[not is_callable publisher;
         '"wire: ",string[job],"'s publisher must be callable as (table; rows) - a lambda or a projection over one"];
-    (` sv (def[job]`ns),`publish) set publisher;
-    .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist def[job]`publishes);::];
+    d:def[job];
+    / A declared check sits in the seam itself, so every route a row takes out
+    / of the job - batch handler, timer, poll, on_replayed - passes through it.
+    (` sv (d`ns),`publish) set $[`check in key d; checked[job;d`check;d`on_fail;publisher]; publisher];
+    .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist d`publishes);::];
     job}
+
+/ Private: a publisher that runs the job's declared check first (#944).
+/ .
+/ The check gets the rows about to be published and returns a table of
+/ offending rows, the bounded worker's failure shape (check, status, detail -
+/ .qetl.job.bounded.no_failures) with one optional column: `row`, the index in
+/ the batch of the row that offends. Under `drop` the rows named by `row` are
+/ withheld and the rest published; a failure that names no row, and every
+/ failure under `hold`, withholds the whole batch - never publishing a row
+/ that might be the bad one.
+/ .
+/ A check that THROWS is a failure of the whole batch under either choice:
+/ rows nobody could vouch for are not published. Every withheld batch is
+/ logged with its failures and counted in .qetl.stream_health, which is what
+/ shows the job as failing in `uqs summary`.
+/ @private
+checked:{[job;chk;mode;publisher;t;x]
+    r:@[{[chk;x] (1b;chk x)}[chk];x;{[e] (0b;e)}];
+    if[not first r;
+        :withhold[job;t;x;"check threw: ",last r;();count x]];
+    f:last r;
+    if[not .Q.qt f;
+        :withhold[job;t;x;"check returned something other than a table of failures";();count x]];
+    if[0=count f; :publisher[t;x]];
+    n:count x;
+    rows:$[(`drop=mode) and (`row in cols f) and (98h=type x) and not any null f`row;
+        distinct "j"$f`row; til n];
+    clean:$[98h=type x; x where not (til n) in rows; x];
+    withhold[job;t;x;"check failed: ",string[count f]," failure(s)";f;count rows];
+    $[count clean; publisher[t;clean]; ::]}
+
+/ Private: log and count a batch the check withheld, in whole or part.
+/ @private
+withhold:{[job;t;x;msg;f;n]
+    .[.qetl.stream_health.record;(job;0b;msg);::];
+    .[{.qetl.log.err[x;y;z]};(job;"publish check withheld rows";
+        `table`rows`withheld`failures!(t;count x;n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
+    ::}
 
 / ------------------------------------------------------------ THE BUFFER
 

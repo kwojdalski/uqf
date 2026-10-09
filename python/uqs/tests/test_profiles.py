@@ -242,7 +242,7 @@ def test_all_leaves_the_crypto_mock_to_be_asked_for():
 def test_a_profile_needing_a_larger_licence_is_refused_on_this_one_and_says_how():
     message = profiles.over_budget(["all"])
     assert message is not None
-    assert "19" in message and "14" in message
+    assert "20" in message and "14" in message
     assert profiles.LICENCE_CONNECTIONS_ENV in message, "the refusal names the way out"
 
 
