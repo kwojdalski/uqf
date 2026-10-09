@@ -158,6 +158,16 @@ run_stream: recovered 19 message(s) from :tplog/uqflocal20260918
 Replaying *after* subscribing would interleave historical and live batches, so
 the book would be right only if nothing traded during recovery.
 
+**Across days, the book carries.** At end of day `on_endofday` publishes the
+whole book onto `fx_position_open`. The plant has already rolled its log, so
+those rows open the new day's log. A restart on that day replays them first,
+because the job declares `restore_from fx_position_open`, and then the day's
+executions. So a process restarted at noon holds the same book as one that ran
+through midnight (#943). Live, the job ignores its own opening rows: fills may
+have landed since they were taken. `posbook1` does the same with
+`position_open`. Under `run_stream.q` the plant in the process rolls its own day
+when the date changes.
+
 One thing makes this trustworthy and is easy to get wrong: the plant logs the
 **table**, which is exactly what subscribers receive --- not the list-of-columns
 form a feed may have published. Logging the raw form would give a job one shape

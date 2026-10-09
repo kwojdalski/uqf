@@ -122,6 +122,10 @@ timers:();
 / complains every five seconds.
 tick:{[]
     now:.z.p;
+    / A plant in this process rolls its own day (#943): TorQ's tickerplant
+    / does that for a deployed stack. .z.D, the clock its log is named by.
+    if[(not null .qetl.tick.log_handle) and .z.D>.qetl.tick.log_date;
+        .qproc.standalone.end_day .z.D];
     fire:{[now;i]
         row:.qproc.standalone.timers i;
         if[not (null row 3) or now>=(row 3)+row 2; :()];
@@ -130,6 +134,17 @@ tick:{[]
         }[now];
     fire each til count timers;
     }
+
+/ End the plant's day in this process: roll the log to `today`, then hand
+/ the date that ended to the jobs running here - in that order, so what they
+/ publish opens the new day's log. Remote subscribers are told by the plant.
+/ @param today the new date
+/ @return the date that ended
+end_day:{[today]
+    ended:.qetl.tick.roll today;
+    .qetl.log.info[`run_stream;"end of day";`ended`today!(ended;today)];
+    .qetl.job.stream.end_of_day ended;
+    ended}
 
 / Private: the timer half both transports share.
 add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timers,enlist (name;f;period;0Np);}

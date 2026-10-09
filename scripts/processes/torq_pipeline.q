@@ -347,13 +347,14 @@ is_columns:{[data] (0h=type data) and (0<count data) and all 0<=type each data}
 / .
 / ROOT, like `upd`, because that is where the plant calls them.
 / .
-/ NO-OPS, and deliberately so rather than by omission. A streaming job here
-/ holds RUNNING state - a position book, a merged superbook, a quote
-/ history - which is exactly the kind of thing that must survive a period
-/ boundary; clearing it would throw away positions at 19:00. Everything
-/ these jobs derive has already been published onto the plant, so there is
-/ nothing to flush either. The rdb and wdb, which DO roll their tables,
-/ have their own vendored handlers and never load this file.
+/ endofperiod is a NO-OP, deliberately. A streaming job here holds RUNNING
+/ state - a position book, a merged superbook, a quote history - which must
+/ survive a period boundary; clearing it would throw away positions at
+/ 19:00. endofday hands the date to each job's declared on_endofday
+/ (.qetl.job.stream.end_of_day, #943): a position book carries across days,
+/ and says so by publishing its opening snapshot into the new day's log.
+/ The rdb and wdb, which DO roll their tables, have their own vendored
+/ handlers and never load this file.
 / @return the names defined
 / @eg .qtorq.install_period_handlers[] -> `endofperiod`endofday
 install_period_handlers:{[]
@@ -368,7 +369,12 @@ install_period_handlers:{[]
     `endofperiod set {[current_period;next_period;data]
         .qetl.log.info[`qtorq;"end of period";`from`to!(current_period;next_period)];
         };
-    `endofday set {[dt;data] .qetl.log.info[`qtorq;"end of day";enlist[`date]!enlist dt]; };
+    / end of day is the jobs' to act on (#943): each declares on_endofday
+    / for the state it carries. The plant has already rolled its log.
+    `endofday set {[dt;data]
+        .qetl.log.info[`qtorq;"end of day";enlist[`date]!enlist dt];
+        .qetl.job.stream.end_of_day dt;
+        };
     `endofperiod`endofday}
 
 / Publish rows onto the tickerplant (invariants 1, 2, 3 and 5). The one and

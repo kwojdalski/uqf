@@ -66,6 +66,10 @@ schemas:(`symbol$())!()
 log_handle:0N
 log_path:`
 msg_count:0
+/ What open_log was given, so roll can open the next day's log beside it.
+log_dir:""
+log_name:`
+log_date:0Nd
 
 / ---------------------------------------------------------- SUBSCRIPTION
 
@@ -243,9 +247,32 @@ open_log:{[dir;name;dt]
     existing:$[() ~ key path; 0; -11!(-2;path)];
     if[() ~ key path; path set ()];
     `.qetl.tick.log_path set path;
+    `.qetl.tick.log_dir set d;
+    `.qetl.tick.log_name set name;
+    `.qetl.tick.log_date set dt;
     `.qetl.tick.log_handle set hopen path;
     `.qetl.tick.msg_count set existing;
     existing}
+
+/ End the day: close today's log and open the one for `dt` beside it.
+/ .
+/ The plant's half of end of day (#943), and TorQ's order: the log rolls
+/ FIRST, so whatever a job publishes from its on_endofday goes into the new
+/ day's log - the one a restart replays. A remote subscriber is sent
+/ .qetl.job.stream.end_of_day to call in its own process; the runner calls
+/ it for the jobs it holds itself.
+/ @param dt the new day
+/ @return the date that ended
+/ @throws error when no log is open - a plant with none has no day to end
+/ @eg .qetl.tick.roll 2026.10.10  ->  throws
+roll:{[dt]
+    if[null log_handle; '"roll: no log is open - open_log first"];
+    ended:log_date;
+    hclose log_handle;
+    open_log[log_dir;log_name;dt];
+    handles:{x where (type each x) in -6 -7h} exec sink from subscribers;
+    {[ended;h] @[neg abs h;(`.qetl.job.stream.end_of_day;ended);::]}[ended] each distinct handles;
+    ended}
 
 / Private: append one message to the log, when there is one to append to.
 / .

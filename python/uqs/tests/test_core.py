@@ -564,7 +564,12 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqsPa
 def test_list_processes_shows_what_each_process_reads_and_writes(fake_paths: UqsPaths):
     by_name = {i["procname"]: i for i in listing.list_items(fake_paths, "processes")}
     assert by_name["fxpositions1"]["inputs"] == "executions"
-    assert set(by_name["fxpositions1"]["outputs"].split(", ")) == {"fx_position", "fx_limit_breach"}
+    # fx_position_open: the book as each day opens, which a restart restores (#943)
+    assert set(by_name["fxpositions1"]["outputs"].split(", ")) == {
+        "fx_position",
+        "fx_limit_breach",
+        "fx_position_open",
+    }
     assert by_name["fxfeed1"]["inputs"] == "", "a feed reads nothing"
     assert by_name["discovery1"]["outputs"] == "", "a vendored process declares no edges"
 
@@ -1804,6 +1809,7 @@ def test_the_fx_positions_tables_reach_the_tickerplant(fake_paths: UqsPaths):
     assert plant_schema._published_tables([BY_NAME["fxpositions1"]]) == {
         "fx_position",
         "fx_limit_breach",
+        "fx_position_open",
     }
 
 
