@@ -149,7 +149,7 @@ select_list:{[]
 / @return SQL text for the first millisecond at or after it
 / @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.11D21:00:00.000000000]  ->  "1789160400000"
 / @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.11D21:00:00.000000001]  ->  "1789160400001"
-epoch_ms_bound:{[ts] .qetl.io.odbc.literal neg[(neg "j"$ts-1970.01.01D00:00) div 1000000]}
+epoch_ms_bound:{[ts] .qetl.io.odbc.literal .qetl.io.odbc.ceil_div["j"$ts-1970.01.01D00:00;1000000]}
 
 / The SQL for one window: half-open [range_from;range_to) on timestamp_ms,
 / ordered so a window is the same table on every fetch.

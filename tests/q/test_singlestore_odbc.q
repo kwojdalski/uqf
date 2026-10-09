@@ -88,6 +88,11 @@ test_a_null_timestamp_is_refused:{[t]
     .qunit.assertThrows[.qetl.io.odbc.literal;0Np;"literal: a null timestamp has no SQL literal*";
         "it used to render as ''"]};
 
+test_ceil_div_rounds_up_on_either_side_of_zero:{[t]
+    / without dividing a negative number, which interpreters floor differently
+    .qunit.assertEquals[.qetl.io.odbc.ceil_div[;1000] each 0 1 1000 1001 -1 -1000 -1001;0 1 1 2 0 -1 -1;
+        "the ceiling, whatever the sign"]};
+
 / The literal back as a q timestamp, as SingleStore would read it.
 as_read:{[lit] "P"$ssr[ssr[1_-1_lit;"-";"."];" ";"D"]}
 

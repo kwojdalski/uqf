@@ -208,6 +208,7 @@ qetl.io,write,function,3,mgr target batch
 qetl.io,write_keyed,function,4,mgr target batch opts
 qetl.io.odbc,available,function,1,
 qetl.io.odbc,build_connection_string,function,5,host port database user password
+qetl.io.odbc,ceil_div,function,2,x n
 qetl.io.odbc,close,function,1,h
 qetl.io.odbc,duckdb_timestamp,function,1,ts
 qetl.io.odbc,literal,function,1,v

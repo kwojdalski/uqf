@@ -100,6 +100,19 @@ require_available:{[]
 / @private
 escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 
+/ x divided by n, rounded up, for a positive n.
+/ .
+/ Never by dividing a NEGATIVE number: `neg (neg x) div n` is the usual
+/ trick, and it relies on div flooring toward minus infinity, which KDB-X
+/ does and PeachQ's Linux build does not - it truncated, so a bound meant to
+/ round up rounded down there (#954). Each branch here divides a value that
+/ is not negative.
+/ @param x a long
+/ @param n a positive long
+/ @return the ceiling of x%n, as a long
+/ @eg .qetl.io.odbc.ceil_div[1001;1000]  ->  2
+ceil_div:{[x;n] $[x>=0; (x+n-1) div n; neg (neg x) div n]}
+
 / Private: a timestamp as SingleStore DATETIME(6) text - to the microsecond,
 / ROUNDED UP (#954).
 / .
@@ -115,8 +128,7 @@ escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 / @private
 datetime6:{[v]
     if[null v; '"literal: a null timestamp has no SQL literal - a window bound must be an instant"];
-    ns:"j"$v-1970.01.01D00:00;
-    up:1970.01.01D00:00+`timespan$1000*neg (neg ns) div 1000;
+    up:1970.01.01D00:00+`timespan$1000*ceil_div["j"$v-1970.01.01D00:00;1000];
     s:string up;
     base:ssr[ssr[19#s;".";"-"];"D";" "];
     $[0=(`long$up-1970.01.01D00:00) mod 1000000000; base; base,".",6#20_s]}
