@@ -10,13 +10,9 @@
 / out by crypto_markout.q, from crypto_trades against crypto_book.
 / .
 / WHAT IS IN THIS FILE: the schemas, the scoring transform with its examples,
-/ the batch handler, the timer body, the job's own buffers, and the
-/ declaration the runner reads. Every step of the job, in the order it runs.
-/ It was two files - the computation in src/etl/transforms/stream.q, the
-/ subscription and timer in the old scripts/torq_markout_etl.q (deleted in
-/ #204) - because the
-/ computation had to be testable and the wiring had to connect. The publish
-/ seam (.qetl.job.stream.wire) makes both true of one file.
+/ and the declaration. The queue, the quote history, the timer and the
+/ eviction are the horizon kind's (src/etl/core/horizon.q, #945): this file
+/ says which tables, which transform and how long a fill waits.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / .
@@ -55,89 +51,6 @@ score_markouts:{[trades;quotes]
     scored:.qpipe.transform.demo_markouts.score[trades;quotes];
     select sym, trade_time, horizon, trade_price, ref_price, markout_pips from scored}
 
-/ --------------------------------------------------------------- THE JOB
-
-/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
-/ (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `demo_markout;
-
-/ STATE, two blocks. pending is a queue: every trade not yet old enough to
-/ score, drained by on_timer as it scores them. quote_hist is a mirror:
-/ every FX quote tick seen so far, with the mid derived at score time rather
-/ than stored. quote_hist has no eviction and grows for as long as the job
-/ runs - the same proof-of-concept tradeoff the cross job documents for its
-/ own mirror.
-/ .
-/ Both are the transform's declared input tables, so the buffers cannot
-/ drift from what the transform reads.
-pending:trades;
-quote_hist:quotes;
-
-/ Buffer one incoming batch into the matching state block, filtered to the
-/ demo's own FX pairs (.qsynth.pairs): `quote` also carries the vendored
-/ starter pack's equity quotes, which this job has no business scoring.
-/ .
-/ Scoring happens on the timer rather than here: a fill cannot be scored
-/ until the quotes at its horizons have arrived.
-/ @param t the table the batch arrived on
-/ @param x the rows, as a table
-/ @return nothing - this handler publishes nothing itself
-on_batch:{[t;x]
-    $[t=`trades;
-        `.qpipe.job.demo_markout.pending insert select time, sym, side, trade_price, size, pip_factor from x where sym in .qsynth.pairs;
-      t=`quote;
-        `.qpipe.job.demo_markout.quote_hist insert select time, sym, bid, ask from x where sym in .qsynth.pairs;
-      ()];
-    }
-
-/ Score every trade old enough that a quote at its furthest horizon
-/ (trade_time+max_horizon) should already have arrived, publish the result,
-/ then evict those trades so the buffer does not grow unbounded.
-/ .
-/ `mask` is computed once and used for both the read and the evict:
-/ recomputing the cutoff in the evict step would drop any trade that arrived
-/ in between, unscored. Evict AFTER publishing, not before, so a failed
-/ publish leaves the batch buffered for the next tick instead of losing it -
-/ the runner's safe timer swallows the error, so a drain-first ordering
-/ would lose the batch silently. That ordering is why this reads then
-/ evicts rather than calling .qetl.job.stream.drain.
-/ .
-/ `now` is an argument so the whole job can be driven in a test. The runner
-/ passes the process clock.
-/ @param now the instant to score as of
-/ @return nothing
-score_ready:{[now]
-    if[0=count .qpipe.job.demo_markout.pending; :()];
-    mask:.qpipe.job.demo_markout.pending[`time]<=now-.qpipe.transform.demo_markouts.max_horizon;
-    ready:.qpipe.job.demo_markout.pending where mask;
-    if[0=count ready; :()];
-    out:.qetl.transform.apply[`demo_execution_quality;`trades`quotes!(ready;.qpipe.job.demo_markout.quote_hist)];
-    .qpipe.job.demo_markout.publish[`demo_execution_quality;out];
-    .qetl.job.stream.evict[`.qpipe.job.demo_markout.pending;mask];
-    }
-
-/ The timer body the runner installs. Reads the clock once and hands it to
-/ score_ready, which is the testable half.
-on_timer:{[] .qpipe.job.demo_markout.score_ready .qpipe.job.demo_markout.now[]}
-
-/ The clock, as a function so a test can replace it.
-/ .
-/ .z.p, NOT .proc.cp[]. Both read "now", and only one of them agrees with the
-/ data: `.u.upd` stamps every row with the tickerplant's own .z.p, so the
-/ times this is compared against are UTC. `.proc.cp[]` is `.z.P` - LOCAL time -
-/ whenever TorQ was started with -localtime, which the vendored process.csv
-/ does for all 23 of its processes.
-/ .
-/ The comparison below is therefore off by the machine's UTC offset. It was
-/ found live as markout scoring trades an hour before their horizon had
-/ elapsed on a UTC+1 machine, and patched then by starting that ONE process
-/ with localtime=0 - which fixed the arithmetic and left every other process
-/ reading a different clock, including this one.
-/ .
-/ Reading .z.p here is what superbook.q and cross_arbitrage.q already do, and
-/ it holds whatever flag the process was started with.
-now:{[] .z.p}
-
 \d .
 
 .qetl.transform.define[`demo_execution_quality;`inputs`output`fn`examples!(
@@ -168,13 +81,19 @@ now:{[] .z.p}
 
 / Score every second - frequent enough that demo_execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
-.qetl.job.stream.define[`demo_markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`transform`note!(
+/ .
+/ No max_age: a fill is priced at the latest quote at or before each horizon
+/ however old, so the history keeps each pair's latest quote before the
+/ oldest waiting fill, and drops the rest. `keep` filters both tables to the
+/ demo's own pairs: `quote` also carries the starter pack's equity quotes.
+.qetl.job.stream.at_horizons[`demo_markout;`procname`events`reference`transform`publishes`horizon`period`keep`start_with_all`note!(
     `demo_markout1;
-    `trades`quote;
-    enlist `demo_execution_quality;
-    .qpipe.job.demo_markout.on_batch;
-    0D00:00:01.000;
-    .qpipe.job.demo_markout.on_timer;
-    1b;
+    `trades;
+    `quote;
     `demo_execution_quality;
+    `demo_execution_quality;
+    .qpipe.transform.demo_markouts.max_horizon;
+    0D00:00:01.000;
+    {[x] x[`sym] in .qsynth.pairs};
+    1b;
     "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two")];

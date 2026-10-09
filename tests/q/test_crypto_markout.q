@@ -23,7 +23,7 @@ book:{[venue;bid;ask;tm]
 
 reset:{[]
     `.qpipe.job.crypto_markout.pending set 0#.qpipe.job.crypto_markout.pending;
-    `.qpipe.job.crypto_markout.book_hist set 0#.qpipe.job.crypto_markout.book_hist;
+    `.qpipe.job.crypto_markout.history set 0#.qpipe.job.crypto_markout.history;
     `.crypto_markouttest.sent set ();
     .qetl.job.stream.wire[`crypto_markout;{[t;x] .crypto_markouttest.sent,:enlist (t;x)}];
     }
@@ -84,7 +84,7 @@ test_scoring_drains_the_queue_and_prunes_old_books:{[t]
     .qpipe.job.crypto_markout.on_batch[`crypto_trades;fill[1;62000f;t0;`f1]];
     .qpipe.job.crypto_markout.score_ready t0+0D00:00:10;
     .qunit.assertEquals[count .qpipe.job.crypto_markout.pending;0;"the scored fill leaves the queue"];
-    .qunit.assertEquals[exec min time from .qpipe.job.crypto_markout.book_hist;t0;
+    .qunit.assertEquals[exec min time from .qpipe.job.crypto_markout.history;t0;
         "a book no pending fill could use is dropped"]};
 
 test_only_real_fills_are_buffered:{[t]
@@ -100,7 +100,7 @@ test_only_real_fills_are_buffered:{[t]
 contract_driver:{[]
     / clear the buffers, not the wiring: the contract suite wired publish
     `.qpipe.job.crypto_markout.pending set 0#.qpipe.job.crypto_markout.pending;
-    `.qpipe.job.crypto_markout.book_hist set 0#.qpipe.job.crypto_markout.book_hist;
+    `.qpipe.job.crypto_markout.history set 0#.qpipe.job.crypto_markout.history;
     .qpipe.job.crypto_markout.on_batch[`crypto_book;.crypto_markouttest.two_venues[]];
     .qpipe.job.crypto_markout.on_batch[`crypto_trades;.crypto_markouttest.fill[1;62000f;.crypto_markouttest.t0;`f1]];
     .qpipe.job.crypto_markout.score_ready .crypto_markouttest.t0+0D00:00:10;

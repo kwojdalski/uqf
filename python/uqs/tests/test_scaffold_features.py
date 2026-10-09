@@ -313,4 +313,4 @@ def test_transform_beside_a_declared_one_is_refused():
 
 
 def test_a_job_that_declares_no_transform_leaves_its_twin_the_usual_scaffold():
-    assert create_backfill.shared_transform(UQF_ROOT, "crypto_markout", None) is None
+    assert create_backfill.shared_transform(UQF_ROOT, "arbitrage", None) is None

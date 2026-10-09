@@ -333,6 +333,7 @@ qetl.job.continuous,poll_once,function,4,worker fetch_page publish_page next_cur
 qetl.job.continuous,register_feeder,function,2,worker dataset
 qetl.job.continuous,save_cursor,function,2,worker cursor
 qetl.job.continuous,save_cursor_value,function,2,worker cursor
+qetl.job.stream,at_horizons,function,2,name decl
 qetl.job.stream,cursor_name,function,1,job
 qetl.job.stream,cursor_ops,function,1,job
 qetl.job.stream,def,function,1,job
@@ -341,6 +342,7 @@ qetl.job.stream,defined,function,1,
 qetl.job.stream,drain,function,2,table_name mask
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
+qetl.job.stream,horizons,dict,,
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
 qetl.job.stream,namespace,function,1,job
@@ -358,6 +360,13 @@ qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
+qetl.job.stream.horizons,def,function,1,name
+qetl.job.stream.horizons,define,function,2,name decl
+qetl.job.stream.horizons,defined,function,1,
+qetl.job.stream.horizons,installed,value,,
+qetl.job.stream.horizons,optional_keys,value,,
+qetl.job.stream.horizons,registry,dict,,
+qetl.job.stream.horizons,required_keys,value,,
 qetl.job.stream.normalizer,def,function,1,name
 qetl.job.stream.normalizer,define,function,2,name decl
 qetl.job.stream.normalizer,defined,function,1,
@@ -805,20 +814,20 @@ qpipe.job.crypto_market_data_backfill,range_to,value,,
 qpipe.job.crypto_market_data_backfill,run,function,1,
 qpipe.job.crypto_market_data_backfill,source_version,value,,
 qpipe.job.crypto_market_data_backfill,spec,function,1,
-qpipe.job.crypto_markout,book_hist,table,,
 qpipe.job.crypto_markout,books,table,,
 qpipe.job.crypto_markout,crypto_execution_quality,table,,
+qpipe.job.crypto_markout,history,table,,
 qpipe.job.crypto_markout,horizons,value,,
 qpipe.job.crypto_markout,max_age,value,,
 qpipe.job.crypto_markout,max_horizon,value,,
 qpipe.job.crypto_markout,now,function,1,
-qpipe.job.crypto_markout,on_batch,function,2,t x
-qpipe.job.crypto_markout,on_timer,function,1,
+qpipe.job.crypto_markout,on_batch,value,,
+qpipe.job.crypto_markout,on_timer,value,,
 qpipe.job.crypto_markout,pending,table,,
 qpipe.job.crypto_markout,publish,value,,
 qpipe.job.crypto_markout,real_fills,table,,
 qpipe.job.crypto_markout,score_markouts,function,2,real_fills books
-qpipe.job.crypto_markout,score_ready,function,1,now
+qpipe.job.crypto_markout,score_ready,value,,
 qpipe.job.crypto_markout,top_of_book,function,1,books
 qpipe.job.crypto_mock,beta_draw,function,2,a b
 qpipe.job.crypto_mock,book_rows,function,1,mkt
@@ -885,15 +894,15 @@ qpipe.job.demo_events_backfill,run,function,1,
 qpipe.job.demo_events_backfill,source_version,value,,
 qpipe.job.demo_events_backfill,spec,function,1,
 qpipe.job.demo_markout,demo_execution_quality,table,,
+qpipe.job.demo_markout,history,table,,
 qpipe.job.demo_markout,now,function,1,
-qpipe.job.demo_markout,on_batch,function,2,t x
-qpipe.job.demo_markout,on_timer,function,1,
+qpipe.job.demo_markout,on_batch,value,,
+qpipe.job.demo_markout,on_timer,value,,
 qpipe.job.demo_markout,pending,table,,
 qpipe.job.demo_markout,publish,value,,
-qpipe.job.demo_markout,quote_hist,table,,
 qpipe.job.demo_markout,quotes,table,,
 qpipe.job.demo_markout,score_markouts,function,2,trades quotes
-qpipe.job.demo_markout,score_ready,function,1,now
+qpipe.job.demo_markout,score_ready,value,,
 qpipe.job.demo_markout,trades,table,,
 qpipe.job.duckdb_deals_backfill,checkpoint,function,1,cursor
 qpipe.job.duckdb_deals_backfill,cleanup,function,1,

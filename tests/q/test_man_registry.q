@@ -147,6 +147,9 @@ test_documentation_coverage_does_not_regress:{[t]
         / the type test below sees a function only for jobs some suite
         / happened to wire - which made this ratchet depend on run order.
         if[(string full) like ".qpipe.job.*"; ks:ks except `publish];
+        / A horizon job's surface is installed by .qetl.job.stream.horizons.define
+        / (#945), and documented there, for the inherited methods' reason.
+        if[(last ` vs full) in .qetl.job.stream.horizons.defined[]; ks:ks except .qetl.job.stream.horizons.installed];
         ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
         string ` sv/: full,/:ks} each nss;
     / A function tagged @private is plumbing, deliberately not registered (#627).

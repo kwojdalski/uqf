@@ -57,7 +57,12 @@ from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.references import Reference, stale_references
 
 MARKER = "SCAFFOLDED"
-_DECLARES = ("qetl.job.stream.define", "qetl.job.stream.normalize", "qetl.job.bounded.define")
+_DECLARES = (
+    "qetl.job.stream.define",
+    "qetl.job.stream.normalize",
+    "qetl.job.stream.at_horizons",
+    "qetl.job.bounded.define",
+)
 _NAMESPACE = re.compile(r"^\\d\s+\.(\w+)\s*$", re.MULTILINE)
 #: Files whose mention of a table is bookkeeping, not a use: the scaffold's own
 #: appends, and the generated job graph, which is regenerated after a removal.

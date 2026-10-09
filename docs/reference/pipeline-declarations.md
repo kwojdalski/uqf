@@ -289,6 +289,46 @@ table the normalizer publishes and its `.qpipe.job.<name>` namespace.
 batch to the columns its transform declares, applies it, and publishes. The
 normalizer's file never handles a batch.
 
+## Horizon job --- `.qetl.job.stream.at_horizons`
+
+`.qetl.job.stream.at_horizons[name;decl]`. A job that evaluates each event once
+its horizon has passed: a markout scores a fill against the market some time
+after it, so the fill waits in a queue until the prices that judge it have
+arrived (`src/etl/core/horizon.q`, #945). `demo_markout` and `crypto_markout`
+are horizon jobs.
+
+  | key              | required | type                   | meaning                                                                                                      | refused when                                                  |
+  | ---              | ---      | ---                    | ---                                                                                                          | ---                                                           |
+  | `procname`       | yes      | symbol                 | the TorQ process that runs it, as for a streaming job                                                        | as for a streaming job                                        |
+  | `events`         | yes      | symbol                 | the tickerplant table carrying the events to evaluate                                                        | not a symbol                                                  |
+  | `reference`      | yes      | symbol                 | the tickerplant table they are evaluated against                                                             | not a symbol                                                  |
+  | `transform`      | yes      | symbol                 | a `.qetl.transform` with two inputs, **events first, reference second**; its inputs are the job's buffers    | not registered, not two inputs, or either input has no `time` |
+  | `publishes`      | yes      | symbol                 | the table the transform's rows are published onto                                                            | not a symbol                                                  |
+  | `horizon`        | yes      | timespan               | how long an event waits after its `time` before it is evaluated                                              | not a positive timespan                                       |
+  | `period`         | yes      | timespan               | the timer that evaluates what is ready                                                                       | as for a streaming job                                        |
+  | `max_age`        | no       | timespan               | the oldest a reference row may be at a horizon and still count; absent, the latest row counts however old    | not a timespan                                                |
+  | `by`             | no       | symbols, default `sym` | the reference's key, for keeping each key's as-of row when `max_age` is absent                               | a column the reference input does not carry                   |
+  | `keep`           | no       | function of a batch    | which rows of either table to buffer (e.g. `{[x] x[`sym] in .qsynth.pairs}`)                                 | not a function                                                |
+  | `start_with_all` | no       | boolean, default `0b`  | as for a streaming job                                                                                       | as for a streaming job                                        |
+  | `note`           | no       | string                 | as for a streaming job                                                                                       | as for a streaming job                                        |
+
+`define` registers the streaming job itself: `subscribe_to` is `events` and
+`reference`, `publishes` is `publishes`, and `transform` is declared so a
+backfill twin applies the same one. It installs into `.qpipe.job.<name>`: -
+`pending` and `history`: the buffers, typed as the transform's inputs; -
+`on_batch`: projects each batch onto those columns, after `keep`; -
+`score_ready[now]`: evaluates and publishes what has waited `horizon`, then
+evicts it; - `on_timer`, `now` (`.z.p`) and the unwired `publish`.
+
+Events are evicted only after a successful publish, so a publish that throws
+leaves them queued for the next tick. On every tick the history is trimmed to
+what a waiting event can still use: - **with `max_age`:** every row older than
+the oldest waiting event minus `max_age` is dropped; - **without it:** each
+key's latest row before the oldest waiting event is kept, because it is still
+that key's as-of answer.
+
+Either way, what is evaluated is what the full history would have given.
+
 ## Reactions --- `.qetl.reaction`
 
 Running something when a dataset is published, rather than on a timer. A
