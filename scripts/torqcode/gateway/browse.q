@@ -51,7 +51,9 @@ browse_window:{[fc;fo;fv;span;now]
 / @param fc filter columns, symbols
 / @param fo filter operators, symbols - eq ne lt le gt ge in
 / @param fv filter values, one per column
-/ @param lim the most rows to return
+/ @param lim the most rows to return - and never more than the caller's
+/   policy allows: the policy is the one authority on size (#928), so a read
+/   asking for more is truncated to it rather than refused
 / @param procs the tiers to read, e.g. `rdb`hdb
 / @return the rows, at most lim
 / @throws error naming an unknown operator, or the policy a request breaks
@@ -60,6 +62,7 @@ browse:{[t;fc;fo;fv;lim;procs]
         '"uqf.browse: unknown operator ",", " sv string bad];
     pol:.checkinputs.querypolicyfor t;
     span:$[99h=type pol; pol`maxrange; .checkinputs.policyceiling`maxrange];
+    lim:$[99h=type pol; lim&pol`maxrows; lim];
     w:browse_window[fc;fo;fv;span;.z.p];
     pairs:browse_pair'[fo;fv];
     req:`tablename`starttime`endtime`sublist`procs!(t;w 0;w 1;lim;(),procs);

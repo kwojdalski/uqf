@@ -204,6 +204,12 @@ test_browse_turns_the_browsers_filters_into_getdata_filters:{[t]
     .qunit.assertEquals[f`sym;((=;`EURUSD);(not;in;enlist `GBPUSD));"ne is not in"];
     .qunit.assertEquals[asked`sublist`procs;(500;`rdb`hdb);"the row cap and the tiers"]};
 
+test_browse_never_asks_for_more_rows_than_the_policy_allows:{[t]
+    / #928: a frontend whose max_rows is above the policy's cap is truncated
+    / to the cap, not refused by checkresponsesize after the read.
+    browse_with[`maxrange`maxrows!(1D;10);{[] .uqf.browse[`config_change;`symbol$();`symbol$();();50000;enlist `rdb]}];
+    .qunit.assertEquals[asked`sublist;10;"the policy's maxrows, not the 50000 asked for"]};
+
 test_browse_reads_the_latest_window_the_policy_allows:{[t]
     browse_with[`maxrange`maxrows!(0D01;10);{[] .uqf.browse[`mkt_orderbook;enlist `sym;enlist `eq;enlist `EURUSD;10;enlist `rdb]}];
     .qunit.assertEquals[(asked`endtime)-asked`starttime;0D01;"an hour, ending now"]};
