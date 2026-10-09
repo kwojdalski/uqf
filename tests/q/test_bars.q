@@ -38,11 +38,19 @@ published:{[] raze last each sent}
 contract_driver:{[]
     `.barstest.clock set t0;
     .qetl.job.stream.reset `exec_bars;
+    / the job's own clock is put back as it was, not redefined, so it stays
+    / the function the suite measures
+    was:.qpipe.job.exec_bars.now;
     .qpipe.job.exec_bars.now:{[] .barstest.clock};
     .qpipe.job.exec_bars.on_batch[`executions;fill[t0+0D00:00:30;`EURUSD;1f;1.1]];
     .qpipe.job.exec_bars.on_endofday d1;
-    .qpipe.job.exec_bars.now:{[] .z.p};
+    .qpipe.job.exec_bars.now:was;
     }
+
+test_a_bars_job_reads_the_process_clock_by_default:{[t]
+    before:.z.p;
+    at:.qpipe.job.exec_bars.now[];
+    .qunit.assertTrue[at within (before;.z.p);"the kind's default clock is .z.p - .u.upd stamps rows in it"]};
 
 / --- declaring -----------------------------------------------------------
 

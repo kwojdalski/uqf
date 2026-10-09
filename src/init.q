@@ -55,6 +55,7 @@
 \l src/portfolio/limits.q
 \l src/execution/execution.q
 \l src/market_data/microstructure.q
+\l src/market_data/microstructure_venues.q
 \l src/market_data/dqchecks.q
 \l src/examples/example_defaults.q
 
