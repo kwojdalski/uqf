@@ -15,10 +15,14 @@
 /   tls         the credential does not turn certificate verification off.
 /   connect     the transport opens it - for ODBC, the driver loads and the
 /               server accepts the login.
-/   schema      validate_live: every declared table and column, with its type.
-/   read        fetch_window over the last `window`, checked against the
-/               declaration. A valid read of no rows is `empty`, not a failure:
-/               the source answered correctly and has nothing in that span.
+/   schema      validate_live: every physical table and column the adapter
+/               reads, with its type - its raw contract when it declares one,
+/               else its own columns and types.
+/   read        fetch_window over the last `window`: the adapter's query ran.
+/   output      the rows it returned satisfy the declared columns and types -
+/               what the adapter promises its worker. A valid read of no rows
+/               is `empty`, not a failure: the source answered correctly and
+/               has nothing in that span.
 / .
 / THE CONNECTION IS CLOSED whatever happened. The check publishes nothing,
 / moves no cursor and records no coverage: it calls none of those paths.
@@ -123,9 +127,12 @@ check:{[source;window]
         (`ok;count rows)}[source;window];h;{(`error;x)}];
     @[tr`close;h;{[e] (::)}];
     if[failed[outcome];
-        schema:last[outcome] like "validate_live*";
-        why:$[schema; last outcome; "the bounded read of the last ",string[window]," failed: ",last outcome];
-        :finish r,`stage`diagnostic!($[schema; `schema; `read];redact[why;cred])];
+        e:last outcome;
+        stage:$[e like "validate_live*"; `schema; e like "validate:*"; `output; `read];
+        why:$[stage=`schema; e;
+            stage=`output; "the read of the last ",string[window]," ran, but its rows break the adapter's declared output: ",e;
+            "the bounded read of the last ",string[window]," failed: ",e];
+        :finish r,`stage`diagnostic!(stage;redact[why;cred])];
     finish r,`status`stage`rows!($[0=last outcome; `empty; `ok];`done;last outcome)}
 
 \d .

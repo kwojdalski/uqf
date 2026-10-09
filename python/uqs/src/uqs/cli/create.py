@@ -18,6 +18,7 @@ import typer
 from uqs.cli import completion
 from uqs.cli.create_backfill import backfill_plan, defined_tables
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
+from uqs.cli.create_kinds import misplaced
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import (
@@ -94,7 +95,19 @@ def new_job(
     ] = None,
     raw_table: Annotated[
         str | None,
-        typer.Option("--raw-table", help="The table the Python publisher writes (external)"),
+        typer.Option(
+            "--raw-table",
+            help="external: the table the Python publisher writes. backfill: the physical "
+            "table a new source's adapter reads, with --raw-columns",
+        ),
+    ] = None,
+    raw_columns: Annotated[
+        str | None,
+        typer.Option(
+            "--raw-columns",
+            help="The columns the adapter reads from --raw-table, as the source names them: "
+            "'CREATED_AT:timestamp, PAYLOAD:any' (backfill)",
+        ),
     ] = None,
     columns: Annotated[
         str | None,
@@ -243,66 +256,43 @@ def new_job(
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
+    used = {
+        "--kind": kind != "streaming",
+        "--subscribe-to": subscribe_to is not None,
+        "--publishes": publishes is not None,
+        "--dataset": dataset is not None,
+        "--raw-table": raw_table is not None,
+        "--raw-columns": raw_columns is not None,
+        "--columns": columns is not None,
+        "--source": source is not None,
+        "--width": width is not None,
+        "--procname": procname is not None,
+        "--start-with-all": start_with_all,
+        "--transport": transport is not None,
+        "--period": period is not None,
+        "--poll": poll,
+        "--cursor-fields": cursor_fields is not None,
+        "--profile": profile is not None,
+        "--unprofiled": unprofiled is not None,
+        "--partition": partition is not None,
+        "--check": check,
+        "--transform": transform is not None,
+        "--twin-of": twin_of is not None,
+    }
     if triggered_by is not None or writes is not None:
         scaffold_reaction(
             name,
             triggered_by,
             writes,
-            {
-                "--kind": kind != "streaming",
-                "--subscribe-to": subscribe_to is not None,
-                "--publishes": publishes is not None,
-                "--dataset": dataset is not None,
-                "--raw-table": raw_table is not None,
-                "--columns": columns is not None,
-                "--source": source is not None,
-                "--width": width is not None,
-                "--procname": procname is not None,
-                "--start-with-all": start_with_all,
-                "--transport": transport is not None,
-                "--period": period is not None,
-                "--poll": poll,
-                "--cursor-fields": cursor_fields is not None,
-                "--profile": profile is not None,
-                "--unprofiled": unprofiled is not None,
-                "--partition": partition is not None,
-                "--check": check,
-                "--transform": transform is not None,
-                "--twin-of": twin_of is not None,
-            },
+            used,
             bundle=bundle,
             dry_run=dry_run,
         )
         return
     # Options that shape one kind only are refused on the others, not ignored.
-    only = {
-        "backfill": {
-            "--transport": transport is not None,
-            "--partition": partition is not None,
-            "--check": check,
-            "--dataset": dataset is not None,
-            "--source": source is not None,
-            "--width": width is not None,
-            "--twin-of": twin_of is not None,
-        },
-        "streaming": {
-            "--period": period is not None,
-            "--poll": poll,
-            "--cursor-fields": cursor_fields is not None,
-        },
-        "external": {"--raw-table": raw_table is not None},
-        "standing": {"--profile": profile is not None, "--unprofiled": unprofiled is not None},
-    }
-    if transform is not None and kind not in ("backfill", "streaming"):
-        _die(UqsError(f"--transform does not apply to --kind {kind}"))
+    if refusal := misplaced(kind, used):
+        _die(UqsError(refusal))
         return
-    for owner, given in only.items():
-        fits = kind in (
-            ("streaming", "normalizer", "external") if owner == "standing" else (owner,)
-        )
-        for option in (o for o, used in given.items() if used and not fits):
-            _die(UqsError(f"{option} does not apply to --kind {kind}"))
-            return
 
     def _plan(root: Path):
         """The plan, read against `root`: the tree, or the tree with --bundle installed."""
@@ -342,6 +332,8 @@ def new_job(
                 start_with_all=start_with_all,
                 twin_of=twin_of,
                 definitions=definitions if twin_of else None,
+                raw_table=raw_table,
+                raw_columns=raw_columns,
             )
         if kind == "normalizer":
             if publishes:

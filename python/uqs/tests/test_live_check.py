@@ -83,6 +83,14 @@ def test_each_source_runs_in_its_own_q_with_live_sources_required(monkeypatch):
     assert live_check.passed(results)
 
 
+def test_the_check_loads_only_the_source_s_own_declarations():
+    """An unrelated job whose plant table this site lacks must not stop the
+    check: the q selects the source's closure before the ETL tree loads."""
+    script = live_check._script("duckdb_deals", 60, None)
+    select = script.index(".qetl.load.only_sources:enlist `duckdb_deals;")
+    assert script.index("\\l src/init.q") < select < script.index("\\l src/etl/init.q")
+
+
 def test_an_empty_read_passes_and_a_failure_does_not():
     assert live_check.passed([{"status": "ok"}, {"status": "empty"}])
     assert not live_check.passed([{"status": "ok"}, {"status": "failed"}])

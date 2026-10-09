@@ -73,6 +73,15 @@ def test_a_sidecar_loads_without_the_demo_jobs_and_changes_no_other_closure(plan
         assert with_sidecar.for_proc(proc) == plan.for_proc(proc), proc
 
 
+def test_a_source_check_loads_its_source_and_no_job(plan):
+    assert plan.for_source("duckdb_deals") == ["src/etl/sources/duckdb_deals.q"]
+    with_sidecar = load_plan.load_plan(REPO, SIDECAR)
+    assert with_sidecar.for_source("zz_side_src") == ["src/etl/sources/zz_side_src.q"]
+    # every source's closure is sources and transforms: never a job's file
+    for name in plan.sources:
+        assert not any("/streaming/" in p or "/workers/" in p for p in plan.for_source(name)), name
+
+
 def test_the_infrastructure_only_selection_loads_nothing(plan):
     assert plan.select([]) == []
 

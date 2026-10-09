@@ -51,6 +51,7 @@ def bounded_worker(
     check: bool = False,
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
+    raw: tuple[str, list[tuple[str, str]]] | None = None,
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker and its test.
 
@@ -79,6 +80,11 @@ def bounded_worker(
     (a `.qetl.transform.define` whose example fails until it is written) - see
     scaffold/transform.py. `shared` is (stream job, transform) for a twin of
     a job that declares its transform: the twin applies that one (#884).
+
+    `raw` is (physical table, columns) when the new source's adapter reads
+    columns other than those it returns: written as the source's `raw`
+    contract, which the live source check holds the physical table to. The
+    mapping between the two is never guessed - the query is the author's.
     """
     check_mode(transform)
     _check_name(name, "worker name")
@@ -106,6 +112,10 @@ def bounded_worker(
             f"--columns has nothing to shape: source {src!r} and table {dataset!r} both "
             "exist already - drop --columns"
         )
+    if reuse_source and raw is not None:
+        raise UqsError(
+            f"--raw-table shapes a new source, and {src!r} exists already - drop --raw-table"
+        )
     if reuse_source and transport is not None:
         raise UqsError(
             f"--transport shapes a new source, and {src!r} exists already - drop --transport"
@@ -118,7 +128,7 @@ def bounded_worker(
     actions: list[FileAction] = []
     if not reuse_source:
         actions.append(
-            FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols, transport))
+            FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols, transport, raw))
         )
     actions.append(
         FileAction(

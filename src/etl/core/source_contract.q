@@ -236,7 +236,7 @@ default_transport:`ipc
 / registered first, when this registry was a collapsed dictionary.
 / supporting's empty dict is a source with one input, as every source was
 / before #617 - see SUPPORTING INPUTS below.
-optional_declarations:`transport`credential_example`supporting!(default_transport;"";()!())
+optional_declarations:`transport`credential_example`supporting`raw!(default_transport;"";()!();()!())
 
 / ---------------------------------------------------- SUPPORTING INPUTS
 / .
@@ -268,6 +268,26 @@ optional_declarations:`transport`credential_example`supporting!(default_transpor
 / time_column is converted to UTC, so a supporting table would be read in
 / the wrong clock with nothing to say so.
 
+/ ------------------------------------------------------------ RAW INPUTS
+/ .
+/ `columns`/`types` (and each supporting contract) describe what the adapter
+/ RETURNS. For an identity adapter that is also what the physical table holds,
+/ and the live check reads the table's metadata against it. An adapter that
+/ renames, casts or derives - reading CREATED_AT and a JSON payload, returning
+/ source_time, sym and typed prices - returns columns no physical table has,
+/ so that check refused a valid adapter before its query ran.
+/ .
+/ `raw` declares the physical side separately: physical table name -> an empty
+/ table of the columns and types the adapter READS from it (a general column,
+/ type " ", accepts any type - a payload whose type depends on the driver):
+/ .
+/   raw:enlist[`EVENTS]!enlist ([] CREATED_AT:`timestamp$(); PAYLOAD:())
+/ .
+/ With `raw`, the live check holds each physical table to its raw contract,
+/ and the adapted rows to columns/types - two checks, two diagnostics. Without
+/ it the adapter is an identity one and nothing changes. Names and casing are
+/ the physical source's own: they are the site's, not this framework's.
+
 / name -> declaration, as a KEYED TABLE declared with its columns (#512).
 / .
 / A dictionary of dictionaries collapses into a table on its first entry, and
@@ -280,7 +300,7 @@ optional_declarations:`transport`credential_example`supporting!(default_transpor
 / the declaration it always did.
 sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
-    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:())
+    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:())
 
 / Register an external source table.
 / .
@@ -298,7 +318,8 @@ sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`sym
 /             so a second worker over this source fills a table of its own
 /   time_column - the column the window is taken on, as a symbol
 /   row_key - the column(s) identifying a row uniquely, as a symbol vector
-/   columns  - the columns this adapter READS, as a symbol vector
+/   columns  - the columns this adapter RETURNS, as a symbol vector - also
+/             what the physical table holds, unless `raw` says otherwise
 /   types   - the expected q type characters, one per field, as a string
 /   query   - a parameterised lambda taking (handle;range_from;range_to)
 /   fixture - a niladic lambda returning a synthetic table of the same shape
@@ -313,6 +334,9 @@ sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`sym
 /     tree is a DuckDB file, whose "connection string" is a path and holds
 /     no secret at all, and the generic ODBC example asked all three of them
 /     for a SERVER, PORT, UID and PWD that DuckDB has no concept of.
+/   raw - physical table name -> an empty table of the columns and types the
+/     adapter reads from it, for an adapter whose output is not its input
+/     (see RAW INPUTS)
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 define:{[source;decl]
@@ -397,6 +421,14 @@ define:{[source;decl]
         if[not `UTC~decl`tz;
             '"define: ",string[source]," is ",string[decl`tz],
              " and declares supporting inputs - only the primary is converted to UTC, so they need tz `UTC"]];
+    raw:$[`raw in key decl; decl`raw; ()!()];
+    if[not 99h=type raw;
+        '"define: ",string[source],"'s raw must be a dict of physical table name -> empty table, what the adapter reads"];
+    if[count raw;
+        if[not 11h=type key raw;
+            '"define: ",string[source],"'s raw must be keyed by physical table name, as symbols"];
+        if[not all 98h=type each value raw;
+            '"define: ",string[source],"'s raw inputs must each be a table - an empty one, the columns the adapter reads"]];
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports[];
         '"define: ",string[source],"'s transport must be one of ",(", " sv string transports[])];
@@ -565,48 +597,56 @@ validate_inputs:{[source;decl;given]
 / that out from a failing worker test is a much longer path.
 validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
 
-/ Validate LIVE external metadata against the same declaration.
+/ Validate LIVE external metadata against what the adapter reads.
 / .
-/ Separate from validate_fixture only in where the table comes from - the
-/ contract and the checking are identical, which is the requirement.
+/ For an identity adapter that is its own contract - table_name against
+/ columns/types, each supporting input against its contract - so the fixture
+/ and the live table are held to the same thing. For one declaring `raw`, each
+/ physical table against its raw contract instead: the output contract
+/ describes rows the adapter makes, which no physical table holds (see RAW
+/ INPUTS). Every table is checked, and the first one off is named.
 / .
 / Belongs to the `smoke` lane, not the deterministic suite: the
 / deterministic suite proves local behaviour, not that a configured external
 / service is reachable or compatible.
 / @param source a registered source name
 / @param h an open handle to the external source
+/ @return 1b
+/ @throws error naming the table, and every missing column or each column's
+/   expected and actual type
 validate_live:{[source;h]
-    decl:def[source];
-    reader:(transport_def[decl`transport])[`metadata][h;];
-    m:@[reader;decl`table_name;
-        {[table_name;err] '"validate_live: cannot read metadata for ",string[table_name]," (",err,")"}[decl`table_name;]];
-    present:exec c from m;
-    chars:exec t from m;
-    missing:decl[`columns] where not decl[`columns] in present;
-    if[count missing;
-        '"validate_live: ",string[decl`table_name]," is missing ",(", " sv string missing),
-         " - the external schema has changed, or this declaration was always wrong"];
-    checkable:decl`columns;
-    expected:decl`types;
-    actual:chars present?checkable;
-    wrong:checkable where not expected=actual;
-    if[count wrong;
-        '"validate_live: ",string[decl`table_name]," type mismatch on ",", " sv string wrong];
-    / Each supporting input is read by its own name, against its contract.
-    {[reader;nm;contract]
-        m:@[reader;nm;{[nm;err] '"validate_live: cannot read metadata for ",string[nm]," (",err,")"}[nm;]];
-        have:exec c from m;
-        want:cols contract;
-        absent:want where not want in have;
-        if[count absent;
-            '"validate_live: supporting input ",string[nm]," is missing ",", " sv string absent];
-        want_t:type_chars[contract];
-        have_t:(exec t from m) have?want;
-        off:want where not (want_t=have_t) or want_t=" ";
-        if[count off;
-            '"validate_live: supporting input ",string[nm]," type mismatch on ",", " sv string off]
-      }[reader]'[key decl`supporting;value decl`supporting];
+    reader:(transport_def[def[source]`transport])[`metadata][h;];
+    live_check_table[reader] .' live_contracts source;
     1b}
+
+/ What validate_live reads, one row per physical table: (label for a
+/ diagnostic; table name; columns; type characters).
+/ @param source a registered source name
+/ @return a list of 4-item lists
+/ @eg count .qetl.source.live_contracts `demo_deals  ->  1
+live_contracts:{[source]
+    d:def[source];
+    if[count d`raw;
+        :{[nm;c] ("raw input ",string nm;nm;cols c;type_chars[c])}'[key d`raw;value d`raw]];
+    (enlist (string d`table_name;d`table_name;d`columns;d`types)),
+        {[nm;c] ("supporting input ",string nm;nm;cols c;type_chars[c])}'[key d`supporting;value d`supporting]}
+
+/ Private: hold one physical table's metadata to (want;want_t). A type of
+/ " " accepts any.
+/ @private
+live_check_table:{[reader;what;nm;want;want_t]
+    m:@[reader;nm;{[nm;err] '"validate_live: cannot read metadata for ",string[nm]," (",err,")"}[nm;]];
+    have:exec c from m;
+    absent:want where not want in have;
+    if[count absent;
+        '"validate_live: ",what," is missing ",(", " sv string absent),
+         " - the external schema has changed, or this declaration was always wrong"];
+    have_t:(exec t from m) have?want;
+    off:where not (want_t=have_t) or want_t=" ";
+    if[count off;
+        '"validate_live: ",what," type mismatch on ",", " sv
+            {[c;e;a] string[c]," (expected ",e,", got ",a,")"}'[want off;enlist each want_t off;enlist each have_t off]];
+    }
 
 / ---------------------------------------------------------- CREDENTIALS
 
@@ -1400,7 +1440,13 @@ mock_meta:{[tbl]
     / Indexed rather than selected: in qSQL `transport` is this table's
     / column or .qetl.source.transport, and the PeachQ converter will not guess.
     src:0!.qetl.source.sources;
-    s:first src[`name] where (src[`table_name]=tbl) & src[`transport]=`mock;
+    mock:src[`transport]=`mock;
+    / A raw contract names the physical table; it is what the mock holds.
+    byraw:where mock & {[tbl;r] tbl in key r}[tbl] each src`raw;
+    if[count byraw;
+        c:(src[`raw] first byraw) tbl;
+        :([] c:cols c; t:type_chars[c])];
+    s:first src[`name] where (src[`table_name]=tbl) & mock;
     if[null s; '"mock_meta: no mock source reads ",string tbl];
     d:.qetl.source.sources s;
     ([] c:d`columns; t:d`types)}

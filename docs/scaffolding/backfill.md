@@ -30,6 +30,21 @@ to the dataset's shape: `derive` throws, and its example's expected output is
 left empty and marked `SCAFFOLDED`, so `.qetl.transform.verify` fails the suite
 until both are written.
 
+When the adapter reads different columns from those it returns, `--raw-table`
+and `--raw-columns` declare its physical side apart from `--columns`:
+
+```bash
+uqs job new events --kind backfill --dataset events --transport odbc \
+    --columns "sym:symbol, px:float" \
+    --raw-table EVENTS --raw-columns "CREATED_AT:timestamp, PAYLOAD:any"
+```
+
+The source then declares `raw`, which `uqs config sources check` holds the
+physical table to, while the query's rows are held to `--columns` (see
+[ODBC](../guides/odbc.md#verifying)). Names keep the source's own case, and
+`any` is a column whose type isn't checked. The mapping from one to the other is
+the query you write: it is never guessed.
+
 `--twin-of JOB` scaffolds a streaming job's backfill **twin**: a worker that
 refills the table the job publishes, which is what `uqs gaps JOB` looks for. The
 dataset and columns are taken from the job's declaration and the plant's
