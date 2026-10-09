@@ -123,7 +123,7 @@ without anything downstream noticing. Profile `depth`.
 row as JSON to the URL in `UQF_SOURCE_CRED_ALERT_SINK`, throttled, retried three
 times and then recorded in `dead`. At least once, in memory. Refuses to run with
 no URL. On demand, no profile. See
-[pipeline-declarations](../reference/pipeline-declarations.md#sinks--alert_sink).
+[pipeline-declarations](../reference/pipeline-declarations.md#sinks-----alert_sink).
 
 ## Backfills
 
