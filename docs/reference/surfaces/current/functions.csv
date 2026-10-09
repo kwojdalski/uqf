@@ -725,6 +725,7 @@ qmeta,profile,function,3,time_cols null_cols rules
 qmeta,reconcile,function,5,metatable dates ds part version
 qmeta,refresh,function,3,current spec partitions
 qmeta,require_name,function,1,name
+qmicro,best_across_venues,function,3,tob targets max_age
 qmicro,best_mid_across_venues,function,3,tob targets max_age
 qmicro,book_convexity,function,2,prices side
 qmicro,book_pressure_at_level,function,3,bid_sizes ask_sizes level
@@ -1116,12 +1117,13 @@ qpipe.job.kafka_flow,high_water,dict,,
 qpipe.job.kafka_flow,on_batch,function,2,t x
 qpipe.job.kafka_flow,on_replayed,function,1,
 qpipe.job.kafka_flow,publish,value,,
-qpipe.job.last_value,apply,function,2,state batch
+qpipe.job.last_value,apply,function,3,state tob batch
 qpipe.job.last_value,last_value,table,,
 qpipe.job.last_value,market_data,table,,
 qpipe.job.last_value,on_batch,function,2,t x
 qpipe.job.last_value,publish,value,,
 qpipe.job.last_value,state,dict,,
+qpipe.job.last_value,tob,dict,,
 qpipe.job.last_value,tops,function,1,x
 qpipe.job.market_data,check,function,1,rows
 qpipe.job.market_data,crypto_book,table,,
