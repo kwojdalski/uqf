@@ -119,6 +119,12 @@ Publishes `mkt_orderbook`. Profile `depth`.
 kept as the process's own state and published nowhere. A leaf you can stop
 without anything downstream noticing. Profile `depth`.
 
+**`last_value1` · the current price of every sym** --- the newest level-0 bid,
+ask and mid per sym from `market_data`, FX and crypto, as a published table. An
+older book never overwrites a newer one. Read the last row per sym for the one
+shared answer: `select by sym from last_value`, from the RDB or through the
+gateway. Publishes `last_value`. Profile `fx`; not in `uqs start`.
+
 ## Backfills
 
 A backfill takes a date range, fills it, records which windows are covered, and

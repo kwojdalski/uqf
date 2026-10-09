@@ -7,9 +7,9 @@ plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `demo_markout1`,
 `databento1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
-`crypto_markout1`), and eight bounded backfill processes (`deals_backfill1`,
-`events_backfill1`, `databento_backfill1`, `upstream_backfill1`,
-`duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
+`crypto_markout1`, `last_value1`), and eight bounded backfill processes
+(`deals_backfill1`, `events_backfill1`, `databento_backfill1`,
+`upstream_backfill1`, `duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
 `hdb_demo_markouts_backfill1`, `hdb_transfer_backfill1`). Declared is not the
 same as running here - see [what starts with the
 stack](#what-starts-and-why-not-all-of-it).

@@ -1,0 +1,93 @@
+/ last_value.q - the current price of every sym, in one place (.qpipe.job.last_value).
+/ .
+/ Reads `market_data`; publishes `last_value`: one row for every change to a
+/ sym's latest top of book. "The current price of EURUSD" is the last row per
+/ sym - `select by sym from last_value` - from the RDB or through the
+/ gateway, so a consumer and the browser read the same answer instead of
+/ each keeping its own cache (posbook's last_mid is one such).
+/ .
+/ WHY A PUBLISHED TABLE, NOT A TABLE HELD IN THIS PROCESS. The gateway
+/ serves the RDB, and the RDB serves what the plant publishes; a keyed table
+/ inside this process would be reachable by nobody but a direct connection to
+/ it. The latest-row-per-sym is therefore a query, the same one
+/ docs/services/superbook.md gives for `arbitrage`, over a table that only
+/ grows by an actual change. The job keeps the keyed state it needs to know
+/ what changed, and rebuilds it by replay (a restart does not start it
+/ empty), which the published table cannot do for it.
+/ .
+/ WHICH ROW WINS. The newest source_time per sym, whatever the source: the
+/ row says which `source` it was. A row OLDER than the sym's current one is
+/ dropped, so a delayed or replayed book cannot rewind the price; an equal
+/ source_time follows arrival order, as superbook's does. Prices are level 0
+/ of the book, and a book with an empty or non-positive side is dropped, not
+/ marked at null: an empty ladder is that source withdrawing, and the last
+/ price is the better answer than none (posbook's rule too).
+/ .
+/ Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
+/ `time` is not published - .u.upd stamps its own (invariant 1).
+
+\d .qpipe.job.last_value
+
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
+/ (the runner) or at a recorder (a test). Never call .u.upd from here.
+publish:.qetl.job.stream.unwired `last_value;
+
+last_value:.qetl.plant.published `last_value
+market_data:.qetl.plant.shape `market_data
+
+/ The latest row per sym: what the job compares an arriving book with.
+/ Rebuilt by replay after a restart.
+state:1!last_value
+
+/ The level-0 top of book of each usable book in a market_data batch.
+/ @param x market_data rows
+/ @return table sym, market, source, source_time, bid, ask, mid, in batch order
+/ @eg .qpipe.job.last_value.tops ([] sym:`EURUSD`GBPUSD; market:`fx`fx; source:`a`a; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 1.0;`float$()); bid_sizes:(enlist 1f;`float$()); ask_prices:(enlist 1.2;enlist 1.3); ask_sizes:(enlist 1f;enlist 1f))  ->  ([] sym:enlist `EURUSD; market:enlist `fx; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1f; ask:enlist 1.2; mid:enlist 1.1)
+tops:{[x]
+    x:select from x where 0<count each bid_prices, 0<count each ask_prices;
+    t:select sym, market, source, source_time, bid:`float$first each bid_prices,
+        ask:`float$first each ask_prices from x;
+    t:select from t where bid>0, ask>0;
+    update mid:(bid+ask)%2 from t}
+
+/ Apply a batch of books to the latest rows.
+/ .
+/ Within the batch the newest source_time per sym wins (the last arrival on a
+/ tie); against the state, a row older than the held one is dropped.
+/ @param state the latest row per sym, keyed by sym
+/ @param batch market_data rows
+/ @return a dict: `state the new keyed state, `changed the rows that replaced
+/   or added a sym's latest, as published
+/ @eg .qpipe.job.last_value.apply[.qpipe.job.last_value.state;0#.qpipe.job.last_value.market_data]`changed  ->  0#.qpipe.job.last_value.last_value
+apply:{[state;batch]
+    t:tops batch;
+    t:0!select by sym from `source_time xasc t;
+    held:(exec sym!source_time from 0!state) t`sym;
+    t:t where (null held) or (t`source_time)>=held;
+    `state`changed!(state upsert t;cols[.qpipe.job.last_value.last_value]#t)}
+
+/ Market data: hold the newest top of book per sym and publish what changed.
+/ The state is advanced BEFORE publishing, as posbook's book is: the books
+/ will not be redelivered, so a failed publish must not also lose them.
+/ @param t the table the batch arrived on
+/ @param x the rows, as a table
+/ @return nothing
+on_batch:{[t;x]
+    if[not t=`market_data; :()];
+    r:apply[.qpipe.job.last_value.state;x];
+    `.qpipe.job.last_value.state set r`state;
+    if[count r`changed; .qpipe.job.last_value.publish[`last_value;r`changed]];
+    }
+
+\d .
+
+/ The state is this process's memory, so a restart used to start it empty
+/ until every sym ticked again. Replaying the day's market_data rebuilds it;
+/ publish is muted while it does, so rows already published are not repeated.
+.qetl.job.stream.define[`last_value;`procname`subscribe_to`publishes`on_batch`replay`note!(
+    `last_value1;
+    enlist `market_data;
+    enlist `last_value;
+    .qpipe.job.last_value.on_batch;
+    1b;
+    "the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile")];

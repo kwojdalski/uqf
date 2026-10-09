@@ -478,15 +478,15 @@ The uqf runtime's profiles, against the community licence's fourteen slots
 
 <!-- BEGIN GENERATED profile table - scripts/generate/generate_operational_docs.py; CI runs it with --check, so edit the profiles, not this table -->
 
-  | profile     | leaves                                                                                                             | processes | plant slots          |
-  | ---         | ---                                                                                                                | ---       | ---                  |
-  | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `demo_markout1`, `fxorderbookfeed1`, `fxpositions1`, `posbook1`, `vectorize1` | 29        | 19/14 - over the cap |
-  | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                          | 20        | 10/14                |
-  | `crypto`    | `cryptomock1`, `crypto_markout1`                                                                                   | 16        | 6/14                 |
-  | `default`   | `posbook1`, `demo_markout1`, `fxpositions1`, `fxorderbookfeed1`                                                    | 23        | 13/14                |
-  | `depth`     | `vectorize1`, `cross1`                                                                                             | 18        | 8/14                 |
-  | `essential` | none - the TorQ stack alone                                                                                        | 14        | 4/14                 |
-  | `fx`        | `posbook1`, `demo_markout1`, `fxpositions1`                                                                        | 23        | 13/14                |
+  | profile     | leaves                                                                                                                            | processes | plant slots          |
+  | ---         | ---                                                                                                                               | ---       | ---                  |
+  | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `demo_markout1`, `fxorderbookfeed1`, `fxpositions1`, `last_value1`, `posbook1`, `vectorize1` | 30        | 20/14 - over the cap |
+  | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                                         | 20        | 10/14                |
+  | `crypto`    | `cryptomock1`, `crypto_markout1`                                                                                                  | 16        | 6/14                 |
+  | `default`   | `posbook1`, `demo_markout1`, `fxpositions1`, `fxorderbookfeed1`                                                                   | 23        | 13/14                |
+  | `depth`     | `vectorize1`, `cross1`                                                                                                            | 18        | 8/14                 |
+  | `essential` | none - the TorQ stack alone                                                                                                       | 14        | 4/14                 |
+  | `fx`        | `posbook1`, `demo_markout1`, `fxpositions1`, `last_value1`                                                                        | 24        | 14/14                |
 
 <!-- END GENERATED profile table -->
 

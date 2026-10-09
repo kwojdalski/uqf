@@ -88,7 +88,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
     #: diffed. Deliberately NOT the union of the others.
     "default": ("posbook1", "demo_markout1", "fxpositions1", "fxorderbookfeed1"),
     #: Positions, P&L and execution quality on the FX chain.
-    "fx": ("posbook1", "demo_markout1", "fxpositions1"),
+    "fx": ("posbook1", "demo_markout1", "fxpositions1", "last_value1"),
     #: Cross-source and cross-currency opportunities, three processes deep.
     "arbitrage": ("arbitrage1", "crossarb1"),
     #: The depth-aware book path: a wide feed folded into vector columns, and

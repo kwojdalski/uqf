@@ -29,8 +29,8 @@ book:`tablename`starttime`endtime`instruments!(`mkt_orderbook;2026.01.01D00:00;2
 refusal:{[p;d] @[{.checkinputs.checkrequest[x;`sym;y];`passed}[p];d;{x}]}
 
 test_every_exposed_table_has_a_policy_for_ordinary_callers:{[t]
-    .qunit.assertEquals[asc exec tablename from shipped where null role;`demo_execution_quality`duckdb_deals`mkt_orderbook;
-        "the three tables the gateway exposes, each with a default row"]};
+    .qunit.assertEquals[asc exec tablename from shipped where null role;`demo_execution_quality`duckdb_deals`last_value`mkt_orderbook;
+        "the four tables the gateway exposes, each with a default row"]};
 
 test_a_table_without_a_policy_is_refused_with_how_to_get_one:{[t]
     .qunit.assertThrows[.checkinputs.resolvepolicy[shipped;caps;;none];`trades;

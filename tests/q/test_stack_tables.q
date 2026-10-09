@@ -24,7 +24,7 @@ beforeNamespace_load:{[]
 / Every table the orchestrator's generated database.q is expected to carry.
 / A floor AND a list: a missing name is caught, and so is a new one added to
 / the q file without a thought about who consumes it.
-expected:`fx_orderbook`wide_orderbook`mkt_orderbook`databento_mbp10`eq_orderbook`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`demo_execution_quality`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data`deal_positions`trades_copy`crypto_execution_quality
+expected:`fx_orderbook`wide_orderbook`mkt_orderbook`databento_mbp10`eq_orderbook`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`demo_execution_quality`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data`deal_positions`trades_copy`crypto_execution_quality`last_value
 
 / Tables an installed sidecar bundle added, read from its ledger
 / (src/etl/installed_bundles.json). The bundle defines and describes them
