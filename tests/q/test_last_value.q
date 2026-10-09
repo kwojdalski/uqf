@@ -98,6 +98,38 @@ test_a_replay_rebuilds_the_state_without_publishing_it_again:{[t]
     .sjtest.live[`market_data;book enlist (`EURUSD;`LP_A;d[4];1.40;1.42)];
     .qunit.assertEquals[count .sjtest.published;1;"a newer live book publishes again"]};
 
+/ The one rule for "the top of book" (#998): posbook, crypto_markout and
+/ last_value read a book's sides through .qbook.top_sides. This drives one
+/ market_data sequence, with a withdrawn side and a non-positive level,
+/ through all three and holds them to it.
+agreement_rows:{[]
+    ([] time:5#d[0]; sym:`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD; source:`a`b`c`d`e;
+        market:5#`fx; source_time:5#d[0];
+        bid_prices:(enlist 1.10;`float$();enlist 1.10;enlist 0f;enlist 1.10);
+        bid_sizes:5#enlist enlist 1e6;
+        ask_prices:(enlist 1.12;enlist 1.12;`float$();enlist 1.12;enlist 1.12);
+        ask_sizes:5#enlist enlist 1e6)}
+
+test_all_consumers_agree_on_a_withdrawn_or_non_positive_side:{[t]
+    x:agreement_rows[];
+    ref:.qbook.top_sides x;
+    .qunit.assertEquals[ref`bid;1.10 0n 1.10 0n 1.10;"an empty ladder and a zero level are both a null side"];
+    .qunit.assertEquals[ref`ask;1.12 1.12 0n 1.12 1.12;"on either side"];
+    pb:.qpipe.job.posbook.crypto_books update market:`crypto from x;
+    .qunit.assertEquals[(pb`bid;pb`ask);(ref`bid;ref`ask);"posbook's crypto books"];
+    mk:.qpipe.job.crypto_markout.top_of_book update venue:source from x;
+    .qunit.assertEquals[(mk`bid;mk`ask);(ref`bid;ref`ask);"crypto_markout's top of book"];
+    lv:.qpipe.job.last_value.tops x;
+    both:where (not null ref`bid) & not null ref`ask;
+    .qunit.assertEquals[lv`source;(x`source) both;"last_value keeps exactly the books with both sides"];
+    .qunit.assertEquals[(.qpipe.job.posbook.book_mids x)`mid;lv`mid;"posbook's FX marks are last_value's mids"]};
+
+test_no_consumer_re_derives_the_top_of_book:{[t]
+    files:`$"src/etl/streaming/",/:("posbook";"crypto_markout";"last_value"),\:".q";
+    src:{" " sv read0 hsym x} each files;
+    .qunit.assertTrue[not any src like\: "*first each bid_prices*";"a consumer reads level 0 itself"];
+    .qunit.assertTrue[not any src like\: "*first px*";"a consumer reads a side itself"]};
+
 / What test_job_output_contracts.q drives last_value with, so the table it
 / publishes is held to its plant table by name, order and type.
 contract_driver:{[]

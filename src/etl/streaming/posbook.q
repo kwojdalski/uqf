@@ -121,8 +121,9 @@ crypto_tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`floa
 / @return table sym, venue, time, bid, ask
 / @eg exec bid from .qpipe.job.posbook.crypto_books ([] time:2#2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; source:`a`b; market:2#`crypto; bid_prices:(enlist 62000f;`float$()); ask_prices:(enlist 62010f;enlist 62008f))  ->  62000 0n
 crypto_books:{[x]
-    top:{[px] $[count px; first px; 0n]};
-    select sym, venue:source, time, bid:top each bid_prices, ask:top each ask_prices from x where market=`crypto}
+    x:select from x where market=`crypto;
+    t:.qbook.top_sides x;
+    select sym, venue:source, time, bid:t`bid, ask:t`ask from x}
 
 / The crypto marks for a batch of fills: per crypto sym, the best mid across
 / fresh venues at its last fill's time. A sym with no fresh venue is left
@@ -149,8 +150,9 @@ crypto_marks:{[tob;batch]
 / @return a table of sym and mid, in batch order
 / @eg .qpipe.job.posbook.book_mids ([] sym:`EURUSD`GBPUSD; market:`fx`fx; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] sym:enlist `EURUSD; mid:enlist 1.085)
 book_mids:{[x]
-    x:select from x where market<>`crypto, 0<count each bid_prices, 0<count each ask_prices;
-    select sym, mid:((first each bid_prices)+first each ask_prices)%2 from x}
+    x:select from x where market<>`crypto;
+    t:.qbook.top_sides x;
+    select sym, mid:(bid+ask)%2 from (select sym, bid:t`bid, ask:t`ask from x) where not null bid, not null ask}
 
 / The canonical tables this job reads, as the plant delivers them - the
 / normalizers' outputs with `time` stamped in front. Declared so that
