@@ -272,7 +272,7 @@ Say this back to the user, because it is the part that surprises people:
   column, a new IO manager. That is `pipeline-developer`'s work, not this.
 - The job needs a new pricing or execution function under `src/foundation/`,
   `pricing/`, `portfolio/`, `execution/` or `market_data/`. That is
-  `uqf-developer`'s.
+  `uqf-quant-developer`'s.
 - The port budget is full. The licence caps a q process at 16 concurrent
   connections and every streaming job opens one to the plant; past that the cap,
   not the configuration, decides what runs. `uqs start` warns, but check before

@@ -7,7 +7,7 @@ description: Specialist for this repo's Dagster-shaped data-pipeline framework
   contracts (`.qetl.source`), worker config (`.qetl.cfg`) and the runtime that sequences
   them (`.qetl.job.bounded.runtime`). Use for adding a pipeline stage or worker, extending the
   coverage/materialisation schema, wiring a new source, or fixing an ETL
-  lifecycle bug. Distinct from `uqf-developer`, which owns the eFX quant modules
+  lifecycle bug. Distinct from `uqf-quant-developer`, which owns the eFX quant modules
   (`src/foundation/`, `pricing/`, `portfolio/`, `execution/`, `market_data/`)
   and is instructed to refuse anything that is not FX pricing/risk/execution —
   ETL work belongs here instead. Use PROACTIVELY when the user mentions a

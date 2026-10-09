@@ -37,8 +37,8 @@ start work from it without asking you a follow-up question.
 This library is strictly electronic FX: forwards/swaps (CIRP), Garman-Kohlhagen
 options, FX position tracking and risk, eFX execution analytics, LOB
 microstructure features, and data quality/risk-limit checks on top of those.
-`uqf-developer` states it plainly: *if a request isn't one of those, it doesn't
-belong here.*
+`uqf-quant-developer` states it plainly: *if a request isn't one of those, it
+doesn't belong here.*
 
 So an idea for an equity signal, a crypto venue adapter, a generic ML layer, or
 a backtesting engine is not an idea this agent may file, however good it is.
