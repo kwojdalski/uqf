@@ -26,7 +26,7 @@ import pytest
 
 from uqs import paths as stack_paths
 from uqs import runtimes
-from uqs.model import runtime_members
+from uqs.model import runtime_members, schemas
 from uqs.model.declarations import read_file_text
 from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import Runtime
@@ -263,7 +263,28 @@ def test_each_runtime_is_started_with_only_its_own_data_access_tables(monkeypatc
         ",synth_tape,time",
     ]
     monkeypatch.setattr(gateway_access, "plant_tables", lambda r: None)
-    assert len(gateway_access.table_properties_lines(paths)) == 3, "None is every table"
+    every = gateway_access.table_properties_lines(paths)
+    assert every[1:3] == [",mkt_orderbook,time", ",synth_tape,time"], "None keeps every row"
+    assert len(every) == 3 + len(schemas.table_names() - {"mkt_orderbook"}), (
+        "and lists every other plant table too"
+    )
+
+
+def test_every_held_plant_table_is_listed_for_getdata(tmp_path: Path, monkeypatch) -> None:
+    """#889: the browser reads through getdata, which serves no table it is
+    not told about - so a held plant table the file omits gets a row."""
+    paths = _paths(tmp_path)
+    props = paths.scripts_dir / gateway_access.TABLE_PROPERTIES
+    props.parent.mkdir(parents=True)
+    props.write_text("proctype,tablename,primarytimecolumn\n,mkt_orderbook,time\n")
+    monkeypatch.setattr(
+        gateway_access, "plant_tables", lambda r: {"mkt_orderbook", "config_change"}
+    )
+    assert gateway_access.table_properties_lines(paths)[1:] == [
+        ",mkt_orderbook,time",
+        gateway_access.derived_row("config_change"),
+    ]
+    assert gateway_access.derived_row("config_change").split(",")[2] == "time"
 
 
 # ------------------------------------------------------------ capabilities

@@ -412,11 +412,8 @@ def create_app(
             _enforce_coverage(gateway, req.require_coverage)
 
         capped = min(req.limit, settings.max_rows)
-        result = gateway.route(
-            queries.SELECT,
-            (tbl.name, columns, operators, values, capped),
-            TIERS[req.tier],
-        )
+        # As the data login, through the gateway's query policy (#889).
+        result = gateway.browse(tbl.name, columns, operators, values, capped, TIERS[req.tier])
         rows = _rows(result)
         return QueryResponse(
             poll_seconds=ops.POLL_SECONDS["query"],

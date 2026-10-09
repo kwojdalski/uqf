@@ -40,7 +40,7 @@ def configured(tmp_path):
 
 
 def client(policy=None, gw=None, **settings_kw):
-    gw = gw or FakeGateway({queries.SELECT: []})
+    gw = gw or FakeGateway({queries.BROWSE: []})
     return (
         TestClient(
             create_app(

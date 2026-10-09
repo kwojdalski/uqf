@@ -25,3 +25,11 @@
 .pm.addrole[`quant;"as analyst, with the role exceptions in querypolicy.csv"]
 .pm.grantfunction[`.dataaccess.getdata;`quant;{1b}]
 .pm.grantfunction[`.checkinputs.querypolicyfor;`quant;{1b}]
+
+/ The frontend's login for reading tables (#889). It may browse - read one
+/ table under its query policy, through .uqf.browse (scripts/torqcode/gateway/
+/ browse.q) - and see that policy, and nothing else: not getdata's raw
+/ parameters, not .gw.syncexec, not a lambda.
+.pm.addrole[`browser;"the frontend's table reads, through .uqf.browse, under querypolicy.csv"]
+.pm.grantfunction[`.uqf.browse;`browser;{1b}]
+.pm.grantfunction[`.checkinputs.querypolicyfor;`browser;{1b}]

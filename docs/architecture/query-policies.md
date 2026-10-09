@@ -102,9 +102,23 @@ call goes through `.pm.req`, and a login can run only what its roles grant.
 - **Process and operator logins.** Every user in the starter pack's access list
   keeps the access they had before `.pm` was turned on: the `administrator`
   role, which grants every function. That covers the fleet's process users, and
-  `admin`, which `uqs` and the frontend log in as. These roles, and `admin`, are
-  in `.checkinputs.trustedroles`. Their getdata calls are not held to a policy,
-  because they can run raw q anyway.
+  `admin`, which `uqs` and the frontend's ops and metadata pages log in as.
+  These roles, and `admin`, are in `.checkinputs.trustedroles`. Their getdata
+  calls are not held to a policy, because they can run raw q anyway.
+- **The browser.** The frontend reads tables (`/query`) as a second login, the
+  `browser` role, which may run only `.uqf.browse`
+  ([`gateway/browse.q`](../../scripts/torqcode/gateway/browse.q)) and
+  `.checkinputs.querypolicyfor`. `.uqf.browse` turns the browser's filters into
+  a getdata request, so the browser is held to the same policies as any other
+  login: an hour and a `sym` filter on `mkt_orderbook`, for instance. A table
+  the catalog lets the browser read without a policy row, one of
+  `.qcat.unbounded`, gets a policy for this role alone: at most `browsermaxrows`
+  rows (10,000, the frontend's default `max_rows`), within the ceiling's range,
+  bytes and timeout. A hidden table has no policy and is refused. An open read
+  covers the latest window its policy allows; a `time` filter sets the window
+  instead. Every plant table is listed for getdata (`tableproperties.csv` gains
+  a derived row for each), and listing a table grants nothing: the policies
+  decide.
 - **Ordinary users.** Each user in
   [`permissions/gateway_users.csv`](../../scripts/torqconfig/permissions/gateway_users.csv)
   gets only the role named there. The roles are defined in
@@ -165,7 +179,8 @@ table below need a KDB-X licence:
   | Check                                                                   | Expected                                         |
   | ---                                                                     | ---                                              |
   | `uqs start --profile essential`, then `uqs query 'count mkt_orderbook'` | works as before: `admin` is trusted              |
-  | the frontend's pages                                                    | work as before: they log in as `admin`           |
+  | the frontend's ops and metadata pages                                   | work as before: they log in as `admin`           |
+  | the frontend's table reads (`/query`)                                   | rows, held to each table's policy as `browser`   |
   | the getdata call above, as `analyst`                                    | rows                                             |
   | `.gw.syncexec` as `analyst`                                             | `pm: user role does not permit running function` |
   | `hopen` to `rdb1` as `analyst`                                          | refused at login                                 |

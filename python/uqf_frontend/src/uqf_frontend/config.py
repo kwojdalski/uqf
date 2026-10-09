@@ -96,6 +96,12 @@ class Settings:
     #: is how a real one ends up committed next to it.
     user: str = ""
     passwd: str = ""
+    #: The login /query reads tables as (#889): a NON-trusted role
+    #: (`browser` in scripts/torqconfig/permissions/gateway.q), so every read
+    #: is held to the gateway's query policy, as any other user's is. Empty
+    #: for the same reason as `user`; on the demo stack it is browser/browser.
+    data_user: str = ""
+    data_passwd: str = ""
     #: Seconds. Passed to kola, which enforces it per query. Historical
     #: HDB queries are legitimately slower than current-session RDB ones.
     timeout: int = 30
@@ -175,6 +181,8 @@ class Settings:
             port=_int_env("UQF_FRONTEND_GATEWAY_PORT", base_port + GATEWAY_PORT_OFFSET),
             user=os.environ.get("UQF_FRONTEND_GATEWAY_USER", cls.user),
             passwd=os.environ.get("UQF_FRONTEND_GATEWAY_PASSWD", cls.passwd),
+            data_user=os.environ.get("UQF_FRONTEND_DATA_USER", cls.data_user),
+            data_passwd=os.environ.get("UQF_FRONTEND_DATA_PASSWD", cls.data_passwd),
             timeout=_int_env("UQF_FRONTEND_TIMEOUT", cls.timeout),
             max_rows=_int_env("UQF_FRONTEND_MAX_ROWS", cls.max_rows),
             processes=_parse_processes(os.environ.get("UQF_FRONTEND_PROCESSES", "")),
