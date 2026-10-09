@@ -26,6 +26,13 @@ beforeNamespace_load:{[]
 / the q file without a thought about who consumes it.
 expected:`fx_orderbook`wide_orderbook`mkt_orderbook`databento_mbp10`eq_orderbook`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`demo_execution_quality`executions`orders`fx_position`fx_limit_breach`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data`deal_positions`trades_copy`crypto_execution_quality
 
+/ Tables an installed sidecar bundle added, read from its ledger
+/ (src/etl/installed_bundles.json). The bundle defines and describes them
+/ itself, so they are not this list's to hold; a checkout with no bundle
+/ installed has no ledger, and nothing is exempt.
+bundled:{[] f:`:src/etl/installed_bundles.json;
+    $[()~key f; `symbol$(); `symbol$(),`$raze {x`tables} each value .j.k raze read0 f]}
+
 / The names THIS FILE declares, read back out of it.
 / .
 / Not `tables \`` - the whole suite runs in one process, so that would also
@@ -65,7 +72,7 @@ test_no_undeclared_table_appears:{[t]
     / The failure is the prompt (#352), so it says what to do: `uqs job new`
     / adds its table to `expected` itself, and a table added by hand needs
     / the same one line once someone has decided it should ship.
-    .qunit.assertEquals[.tabletest.declared[] except expected;`symbol$();
+    .qunit.assertEquals[.tabletest.declared[] except expected,bundled[];`symbol$();
         "a table in src/etl/plant_tables.q that this test does not know - if it is meant to ship, add it to `expected` in tests/q/test_stack_tables.q; if not, remove it"]};
 
 / --- shapes their consumers depend on ------------------------------------

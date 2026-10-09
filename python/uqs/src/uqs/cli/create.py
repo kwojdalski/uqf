@@ -10,12 +10,14 @@ gone.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from uqs.cli import completion
 from uqs.cli.create_backfill import backfill_plan, defined_tables
+from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import (
@@ -34,26 +36,26 @@ from uqs.scaffold import columns as columns_mod
 from uqs.scaffold import external, jobs, normalizer
 
 
-def _plant_definitions(paths: UqsPaths) -> dict[str, str]:
-    """{table: its one-line `name:([]...)` definition}, this tree's and the
-    vendored starter pack's - what a normalizer's source schemas are read from."""
+def _plant_definitions(paths: UqsPaths, root: Path | None = None) -> dict[str, str]:
+    """{table: its one-line `name:([]...)` definition}, the tree at `root`'s (default:
+    the tree's) and the vendored starter pack's - what a normalizer's sources are read from."""
     out: dict[str, str] = {}
-    for path in (paths.torqapphome / "database.q", paths.repo_root / TABLES_FILE):
+    for path in (paths.torqapphome / "database.q", (root or paths.repo_root) / TABLES_FILE):
         if path.is_file():
             out.update((m.group(1), m.group(0)) for m in _DEFINITION.finditer(path.read_text()))
     return out
 
 
-def _plant_tables(paths: UqsPaths) -> set[str]:
-    """Every table the plant carries: this tree's, plus the vendored starter
-    pack's (`quote`, `trade`), which the generated database.q merges in."""
+def _plant_tables(paths: UqsPaths, root: Path | None = None) -> set[str]:
+    """Every table the plant carries: the tree at `root`'s (default: the tree's), plus
+    the vendored starter pack's (`quote`, `trade`), which the generated database.q merges in."""
     vendored = paths.torqapphome / "database.q"
     theirs = (
         {m.group(1) for m in _DEFINITION.finditer(vendored.read_text())}
         if vendored.is_file()
         else set()
     )
-    return defined_tables(paths.repo_root) | theirs
+    return defined_tables(root or paths.repo_root) | theirs
 
 
 app.add_typer(job_app, name="job")
@@ -196,6 +198,14 @@ def new_job(
             "--writes", help="Comma-separated tables the reaction writes (with --triggered-by)"
         ),
     ] = None,
+    bundle: Annotated[
+        Path | None,
+        typer.Option(
+            "--bundle",
+            help="Scaffold into this sidecar bundle folder instead of the tree "
+            "(made a bundle if it is not one yet)",
+        ),
+    ] = None,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print what would be written, write nothing")
     ] = False,
@@ -260,6 +270,7 @@ def new_job(
                 "--transform": transform is not None,
                 "--twin-of": twin_of is not None,
             },
+            bundle=bundle,
             dry_run=dry_run,
         )
         return
@@ -292,16 +303,20 @@ def new_job(
         for option in (o for o, used in given.items() if used and not fits):
             _die(UqsError(f"{option} does not apply to --kind {kind}"))
             return
-    try:
-        shape = columns_mod.resolve_shape(columns, columns_from, _plant_definitions(_paths()))
+
+    def _plan(root: Path):
+        """The plan, read against `root`: the tree, or the tree with --bundle installed."""
+        definitions = _plant_definitions(_paths(), root)
+        known = _plant_tables(_paths(), root)
+        shape = columns_mod.resolve_shape(columns, columns_from, definitions)
         if kind == "streaming":
-            plan = jobs.streaming_job(
+            return jobs.streaming_job(
                 name,
                 subs,
                 publishes,
                 shape,
                 procname,
-                known_tables=_plant_tables(_paths()),
+                known_tables=known,
                 start_with_all=start_with_all,
                 period=period,
                 profile=profile,
@@ -309,11 +324,11 @@ def new_job(
                 poll=poll,
                 cursor=cursor_fields,
                 transform=transform,
-                definitions=_plant_definitions(_paths()) if transform else None,
+                definitions=definitions if transform else None,
             )
-        elif kind == "backfill":
-            plan = backfill_plan(
-                repo_root,
+        if kind == "backfill":
+            return backfill_plan(
+                root,
                 name,
                 dataset,
                 shape,
@@ -326,17 +341,14 @@ def new_job(
                 transform=transform,
                 start_with_all=start_with_all,
                 twin_of=twin_of,
-                definitions=_plant_definitions(_paths()) if twin_of else None,
+                definitions=definitions if twin_of else None,
             )
-        elif kind == "normalizer":
+        if kind == "normalizer":
             if publishes:
-                _die(UqsError("a normalizer publishes its own NAME - drop --publishes"))
-                return
+                raise UqsError("a normalizer publishes its own NAME - drop --publishes")
             if not shape:
-                _die(UqsError("--kind normalizer needs --columns: its canonical table"))
-                return
-            definitions = _plant_definitions(_paths())
-            plan = normalizer.normalizer(
+                raise UqsError("--kind normalizer needs --columns: its canonical table")
+            return normalizer.normalizer(
                 name,
                 subs,
                 columns_mod.as_columns(shape),
@@ -345,36 +357,41 @@ def new_job(
                     for s in subs
                     if s in definitions
                 },
-                known_tables=_plant_tables(_paths()),
+                known_tables=known,
                 procname=procname,
                 start_with_all=start_with_all,
                 profile=profile,
                 unprofiled=unprofiled,
             )
-        elif kind == "external":
+        if kind == "external":
             if not (raw_table and publishes and shape):
-                _die(UqsError("--kind external needs --raw-table, --publishes and --columns"))
-                return
-            plan = external.external_feed(
+                raise UqsError("--kind external needs --raw-table, --publishes and --columns")
+            return external.external_feed(
                 name,
                 raw_table,
                 publishes,
                 shape,
-                known_tables=_plant_tables(_paths()),
+                known_tables=known,
                 procname=procname,
                 start_with_all=start_with_all,
                 profile=profile,
                 unprofiled=unprofiled,
             )
-        else:
-            _die(
-                UqsError(
-                    "--kind must be 'backfill', 'normalizer', 'streaming' or 'external', "
-                    f"not {kind!r}"
-                )
+        raise UqsError(
+            f"--kind must be 'backfill', 'normalizer', 'streaming' or 'external', not {kind!r}"
+        )
+
+    try:
+        if bundle is not None:
+            refuse_tree_only(
+                {"--profile": profile is not None, "--unprofiled": unprofiled is not None}
             )
-            return
+        with planning_root(repo_root, bundle) as root:
+            plan = _plan(root)
     except UqsError as exc:
         _die(exc)
+        return
+    if bundle is not None:
+        write_bundle_plan(plan, bundle, dry_run=dry_run)
         return
     write_plan(plan, repo_root, dry_run=dry_run)

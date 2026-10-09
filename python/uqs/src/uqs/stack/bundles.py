@@ -13,7 +13,9 @@ workstation drift apart. A bundle declares them beside its jobs:
                                what each declares, exactly as stack/install.py
       tables.q                 optional: `name:([]...)` plant tables and
                                `nested[...]` contracts, one per line
-      catalog.q                optional: `.qcat.describe[`table]:"..."` entries
+      catalog.q                optional: `.qcat.describe[`table]:"..."` entries,
+                               and `.qcat.unbounded[`table]:"..."` reasons a
+                               table of its own is browsable without a policy
       process_overrides.csv    optional: procname,field,value for the
                                bundle's OWN processes
 
@@ -57,13 +59,17 @@ ADDITIONS = (TABLES, CATALOG, OVERRIDES)
 LEDGER = BUNDLE_LEDGER
 OVERRIDES_FILE = PACKAGE_DIR / "process_overrides.csv"
 
-_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
+#: What a bundle may be called: its manifest name, and a new bundle's folder.
+NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
 _MANIFEST_KEYS = frozenset({"name", "version", "description"})
 #: The same `name:([]...)` convention uqs.model.schemas reads the plant with.
 _TABLE = re.compile(r"^([a-z_][a-z0-9_]*):\(\[\]")
 _NESTED = re.compile(r"^nested\[`([a-z_][a-z0-9_]*);")
 _DESCRIBE = re.compile(r"^\.qcat\.describe\[`([a-z_][a-z0-9_]*)\]:")
+#: A bundle cannot add querypolicy.csv rows, so a reason its table is browsable
+#: unbounded is how it meets the catalog's policy-or-reason rule (#889).
+_UNBOUNDED = re.compile(r"^\.qcat\.unbounded\[`([a-z_][a-z0-9_]*)\]:")
 
 
 @dataclass(frozen=True)
@@ -94,7 +100,7 @@ def read_bundle(folder: Path) -> Bundle:
     if unknown := sorted(set(data) - _MANIFEST_KEYS):
         raise BundleError(f"{path}: unknown key(s) {', '.join(unknown)}")
     name, version = data.get("name"), data.get("version")
-    if not isinstance(name, str) or not _NAME.fullmatch(name):
+    if not isinstance(name, str) or not NAME.fullmatch(name):
         raise BundleError(f"{path}: name must be lower_snake_case, e.g. piggybank")
     if not isinstance(version, str) or not _VERSION.fullmatch(version):
         raise BundleError(f"{path}: version must be a string such as 1.4.0")
@@ -146,16 +152,26 @@ def table_lines(bundle: Bundle, known: set[str]) -> tuple[list[str], list[str]]:
 
 def catalog_lines(bundle: Bundle, tables: list[str], described: set[str]) -> list[str]:
     """catalog.q's lines, every bundle table described exactly once and
-    nothing the tree already describes described again."""
+    nothing the tree already describes described again. An unbounded reason
+    may name only a table this bundle defines."""
     lines, seen = _lines(bundle.addition(CATALOG)), []
     for n, line in enumerate(lines, 1):
         where = f"{bundle.name}/{CATALOG}:{n}"
         _refuse_block_comment(line, where)
         if not line.strip() or line.startswith("/ ") or line[:1] in " \t":
             continue
+        if u := _UNBOUNDED.match(line):
+            if u.group(1) not in tables:
+                raise BundleError(
+                    f"{where}: .qcat.unbounded for {u.group(1)}, which this bundle does not define"
+                )
+            continue
         m = _DESCRIBE.match(line)
         if not m:
-            raise BundleError(f'{where}: expected .qcat.describe[`table]:"..." (fully qualified)')
+            raise BundleError(
+                f'{where}: expected .qcat.describe[`table]:"..." or .qcat.unbounded[`table]:"..."'
+                " (fully qualified)"
+            )
         if m.group(1) in described or m.group(1) in seen:
             raise BundleError(f"{where}: {m.group(1)} is already described")
         seen.append(m.group(1))
@@ -286,7 +302,7 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     procnames = {
         d.procname
         for i in items
-        if i.kind is not Kind.SOURCE
+        if i.kind in (Kind.WORKER, Kind.STREAMING)
         for d in read_file(i.source)
         if d.kind is not PipelineKind.BACKFILL
     }
@@ -362,9 +378,9 @@ def jobs(p: Plan) -> list[dict[str, str]]:
     """Each installed job's identity: name, kind, procname and file."""
     found = []
     for item in p.jobs:
-        if item.kind is Kind.SOURCE:
+        if item.kind in (Kind.SOURCE, Kind.REACTION):
             assert item.destination is not None
-            found.append({"kind": "source", "file": item.destination.name})
+            found.append({"kind": item.kind.value, "file": item.destination.name})
             continue
         for d in read_file(item.source):
             found.append(

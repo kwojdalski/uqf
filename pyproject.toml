@@ -159,4 +159,6 @@ testpaths = [
     "scripts/gates/tests",
     # scripts/portable/'s converter, tested beside it for the same reason.
     "scripts/portable/tests",
+    # scripts/dev/bundle_suite.py, which runs sidecar bundles' own tests.
+    "scripts/dev/tests",
 ]
