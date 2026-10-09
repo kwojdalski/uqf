@@ -102,6 +102,10 @@ describe[`economic_calendar]:
 hidden:(`symbol$())!();
 hidden[`databento_mbp10]:
     "the RAW Databento feed, published by an external Python handler and consumed only by databento1, which folds it into eq_orderbook. A desk browsing a book wants the folded one; this is the input to that fold";
+hidden[`fx_position_open]:
+    "fxpositions1's book as each day opens (#943), published so a restart restores the carried positions from the day's log. A record for recovery, not a view: fx_position is the book to browse";
+hidden[`position_open]:
+    "posbook1's book as each day opens (#943), for the same recovery; position is the one to browse";
 hidden[`kafka_client_flow]:
     "the RAW Kafka consumer output, published by an external Python consumer and read only by kafka_flow1, which deduplicates it into client_flow. It holds every redelivery the broker sent, so a desk reading it would see replayed trades twice - client_flow is the one to browse";
 

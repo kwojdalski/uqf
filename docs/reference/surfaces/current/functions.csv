@@ -340,6 +340,7 @@ qetl.job.stream,def,function,1,job
 qetl.job.stream,define,function,2,job decl
 qetl.job.stream,defined,function,1,
 qetl.job.stream,drain,function,2,table_name mask
+qetl.job.stream,end_of_day,function,1,dt
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
 qetl.job.stream,horizons,dict,,
@@ -354,6 +355,7 @@ qetl.job.stream,preview_recent,function,3,job n span
 qetl.job.stream,procnames,dict,,
 qetl.job.stream,replaying,value,,
 qetl.job.stream,required_declarations,value,,
+qetl.job.stream,running,value,,
 qetl.job.stream,start,function,2,job tr
 qetl.job.stream,subscriptions,function,1,job
 qetl.job.stream,tick,function,1,job
@@ -429,6 +431,7 @@ qetl.plant,executions,table,,
 qetl.plant,fx_limit_breach,table,,
 qetl.plant,fx_orderbook,table,,
 qetl.plant,fx_position,table,,
+qetl.plant,fx_position_open,table,,
 qetl.plant,kafka_client_flow,table,,
 qetl.plant,market_data,table,,
 qetl.plant,materialise,function,1,ts
@@ -441,6 +444,7 @@ qetl.plant,orders,table,,
 qetl.plant,own,function,1,
 qetl.plant,packets,table,,
 qetl.plant,position,table,,
+qetl.plant,position_open,table,,
 qetl.plant,predictions,table,,
 qetl.plant,problems,function,2,table_name rows
 qetl.plant,published,function,1,t
@@ -593,13 +597,17 @@ qetl.stream_health,batches,dict,,
 qetl.stream_health,of,function,1,job
 qetl.stream_health,record,function,3,job ok err
 qetl.stream_health,write,function,2,job failing
+qetl.tick,log_date,value,,
+qetl.tick,log_dir,value,,
 qetl.tick,log_handle,value,,
+qetl.tick,log_name,value,,
 qetl.tick,log_path,value,,
 qetl.tick,msg_count,value,,
 qetl.tick,open_log,function,3,dir name dt
 qetl.tick,publish,function,2,t x
 qetl.tick,replay,function,2,path handler
 qetl.tick,reset,function,1,
+qetl.tick,roll,function,1,dt
 qetl.tick,schema,function,2,table_name empty
 qetl.tick,schemas,dict,,
 qetl.tick,subscribe,function,2,want sink
@@ -984,6 +992,7 @@ qpipe.job.fx_positions,limits,table,,
 qpipe.job.fx_positions,load_limits,function,1,limits
 qpipe.job.fx_positions,net_fills,function,2,book batch
 qpipe.job.fx_positions,on_batch,function,2,t x
+qpipe.job.fx_positions,on_endofday,function,1,dt
 qpipe.job.fx_positions,on_timer,function,1,
 qpipe.job.fx_positions,policed,value,,
 qpipe.job.fx_positions,positions,dict,,
@@ -1057,6 +1066,7 @@ qpipe.job.posbook,mark_positions,function,3,book trades mids
 qpipe.job.posbook,market_data,table,,
 qpipe.job.posbook,next_book,function,2,book positions
 qpipe.job.posbook,on_batch,function,2,t x
+qpipe.job.posbook,on_endofday,function,1,dt
 qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_mids,table,,

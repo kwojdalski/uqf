@@ -15,13 +15,13 @@ executions1,metrics,36,crypto_trades orders trades,executions
 fxfeed1,feed,19,,quote
 fxorderbookfeed1,feed,24,,fx_orderbook
 fxordersfeed1,feed,38,,orders
-fxpositions1,metrics,39,executions,fx_limit_breach fx_position
+fxpositions1,metrics,39,executions,fx_limit_breach fx_position fx_position_open
 fxtradesfeed1,feed,29,,trades
 hdb_demo_markouts_backfill1,backfill,49,,
 hdb_transfer_backfill1,backfill,50,,
 kafka_flow1,metrics,47,kafka_client_flow,client_flow
 marketdata1,metrics,42,crypto_book fx_orderbook quote,market_data
-posbook1,metrics,30,executions market_data,position
+posbook1,metrics,30,executions market_data,position position_open
 superbook1,metrics,43,market_data,config_change superbook
 tap1,metrics,28,,
 upstream_backfill1,backfill,41,,

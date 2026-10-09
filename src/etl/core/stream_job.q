@@ -88,9 +88,9 @@ namespace:{[job] ` sv job_root,job}
 / @param decl dict of procname, subscribe_to, publishes, and then on_batch
 /   (required when it subscribes), period and on_timer (a pair) - or period
 /   and poll, for a polling feed (see stream_poll.q); optionally
-/   start_with_all (a boolean, default 0b), note (a string) and transform
+/   start_with_all (a boolean, default 0b), note (a string), transform
 /   (the registered transform it applies, which its backfill twin applies
-/   too - #884)
+/   too - #884) and on_endofday (a function of the date that ended, #943)
 / @return the job name
 / @throws error naming every missing or malformed field at once
 define:{[job;decl]
@@ -143,6 +143,10 @@ define:{[job;decl]
         '"define: ",string[job],"'s start_with_all must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note;
         '"define: ",string[job],"'s note must be a string"];
+    / What the job does when the plant's day ends (#943): roll, snapshot or
+    / reset whatever state it carries. Called with the date that ended.
+    if[(`on_endofday in key decl) and not is_callable decl`on_endofday;
+        '"define: ",string[job],"'s on_endofday must be a function of the date that ended"];
     / The shared transform the job applies, when it applies one: what a twin
     / refilling its table must apply too, and what `uqs job new --twin-of`
     / scaffolds into one (#884). Checked here, so a declared name cannot
@@ -372,9 +376,32 @@ start:{[job;tr]
     if[count .qetl.cfg.audit.watching job;
         `.qetl.cfg.audit.owner_here set job;
         tr[`timer][`$(string job),"_config";.qetl.cfg.audit.period;.qetl.cfg.audit.poll_and_publish]];
+    `.qetl.job.stream.running set distinct .qetl.job.stream.running,job;
     .[{.qetl.log.info[x;y;z]};(job;"streaming job wired - running";
         `subscribe_to`publishes!(tbls;d`publishes));::];
     job}
+
+/ The jobs this process has started, in the order it started them: whom
+/ end_of_day tells.
+running:`symbol$()
+
+/ The plant's day has ended: call each running job's on_endofday with it.
+/ .
+/ Called by the runner - TorQ's root `endofday` (.qtorq.install_period_handlers),
+/ or run_stream.q's own plant once it has rolled its log - AFTER the plant
+/ has moved to the new day, so whatever a job publishes here opens the new
+/ day's log, where a restart's replay finds it.
+/ .
+/ Each call is trapped and logged: one job's failure must not stop the
+/ others' end of day, nor the process.
+/ @param dt the date that ended
+/ @return the jobs whose on_endofday ran without throwing
+/ @eg .qetl.job.stream.end_of_day 2026.10.09
+end_of_day:{[dt]
+    js:running where {[j] `on_endofday in key def j} each running;
+    ok:{[dt;j] @[{[dt;j] (def[j]`on_endofday) dt; 1b}[dt];j;
+        {[dt;j;e] .qetl.log.err[j;"on_endofday failed";`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
+    js where ok}
 
 unwired:{[job]
     {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qetl.job.stream.wire first"}[job]}

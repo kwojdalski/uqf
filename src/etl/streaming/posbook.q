@@ -175,6 +175,12 @@ market_data:.qetl.plant.shape `market_data
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
+    / The opening book a restart restores from (#943), only while replaying:
+    / live, it is this job's own echo.
+    if[t=`position_open;
+        if[.qetl.job.stream.replaying;
+            `.qpipe.job.posbook.book set 1!(cols .qpipe.job.posbook.position_book)#x];
+        :()];
     $[t=`executions;
         [mids:0!(1!([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid)),
              1!.qpipe.job.posbook.crypto_marks[0!.qpipe.job.posbook.crypto_tob;x];
@@ -190,6 +196,16 @@ on_batch:{[t;x]
          `.qpipe.job.posbook.crypto_tob upsert .qpipe.job.posbook.crypto_books[x]];
       ()];
     }
+
+/ The day ended: carry the book into the next one (#943), onto
+/ position_open, which a restart's replay restores from. Realized P&L
+/ carries with it: the book is the position held, not the day's trading.
+/ @param dt the date that ended
+/ @return the number of positions carried
+on_endofday:{[dt]
+    b:0!.qpipe.job.posbook.book;
+    if[count b; .qpipe.job.posbook.publish[`position_open;(cols .qpipe.job.posbook.position_book)#b]];
+    count b}
 
 \d .
 
@@ -233,11 +249,13 @@ on_batch:{[t;x]
 / flat and publish every later position from zero. Replaying the day's
 / executions and market_data rebuilds it; publish is muted while it does, so the
 / positions already published are not published twice.
-.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`note!(
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`restore_from`on_endofday`note!(
     `posbook1;
     `executions`market_data;
-    enlist `position;
+    `position`position_open;
     .qpipe.job.posbook.on_batch;
     1b;
     1b;
+    enlist `position_open;
+    .qpipe.job.posbook.on_endofday;
     "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job")];

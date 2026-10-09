@@ -23,6 +23,7 @@ python/uqs/tests/test_gaps.py::test_the_hole_between_two_sessions_and_the_twin_t
 
 python/uqs/tests/test_live_check.py::test_a_real_source_is_checked_end_to_end  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
+python/uqs/tests/test_run_stream.py::test_a_restart_after_the_day_ends_rebuilds_the_carried_book  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 python/uqs/tests/test_run_stream.py::test_the_documented_one_process_command_builds_a_book  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 python/uqs/tests/test_run_stream.py::test_upstream_is_the_job_graph_and_never_a_feed  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 

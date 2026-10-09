@@ -365,6 +365,11 @@ trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`flo
 / tickerplant like mkt_orderbook rather than kept as process-private state.
 position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); mark_price:`float$(); unrealized_pnl:`float$(); total_pnl:`float$())
 
+/ posbook1's book as a day opens (#943): published at end of day into the
+/ new day's log, and restored from by a restart's replay, so positions carry
+/ across days and a restart agrees with a process left running.
+position_open:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$())
+
 / demo_markout1's output: per-trade execution quality at each horizon.
 demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
 
@@ -387,6 +392,9 @@ orders:([]time:`timestamp$(); order_id:`long$(); sym:`g#`symbol$(); book:`symbol
 / fxpositions1's snapshot: net exposure per (sym, book, product), the
 / whole book on every timer tick rather than only what moved.
 fx_position:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); base_qty:`float$(); quote_qty:`float$(); fill_count:`long$(); break_even:`float$())
+
+/ fxpositions1's book as a day opens (#943), as position_open is posbook1's.
+fx_position_open:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); base_qty:`float$(); quote_qty:`float$(); fill_count:`long$())
 
 / fxpositions1's alerts: one row per limit newly crossed, throttled so a
 / standing breach does not republish on every tick.

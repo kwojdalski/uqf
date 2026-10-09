@@ -147,6 +147,13 @@ load_limits:{[limits]
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
+    / The opening book a restart restores from (#943) - only while
+    / replaying: live, it is this job's own echo, and fills may have landed
+    / since it was taken.
+    if[t=`fx_position_open;
+        if[.qetl.job.stream.replaying;
+            `.qpipe.job.fx_positions.positions set .qpipe.job.fx_positions.dimensions xkey (cols .qpipe.job.fx_positions.desk_book)#x];
+        :()];
     if[not t=`executions; :()];
     if[0=count x; :()];
     updated:.qetl.transform.apply[`fx_positions;`book`executions!(
@@ -177,6 +184,19 @@ fresh_breaches:{[now]
     r:.qlimit.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
     `.qpipe.job.fx_positions.alerts set r`state;
     r`alerts}
+
+/ The day ended: carry the book into the next one (#943). Published onto
+/ fx_position_open after the plant has rolled its log, so it opens the new
+/ day's log and a restart's replay restores from it before the day's fills.
+/ An empty book publishes nothing: a restart with no opening rows starts flat,
+/ which is the same thing.
+/ @param dt the date that ended
+/ @return the number of positions carried
+on_endofday:{[dt]
+    book:0!.qpipe.job.fx_positions.positions;
+    if[count book;
+        .qpipe.job.fx_positions.publish[`fx_position_open;(cols .qpipe.job.fx_positions.desk_book)#book]];
+    count book}
 
 / Publish a snapshot of the whole book, and any newly breached limit.
 / .
@@ -238,15 +258,20 @@ on_timer:{[]
             base_qty:250000 600000f; quote_qty:-37387500 -89660000f; fill_count:1 2))
     ))];
 
-/ replay 1b: on a restart the book is rebuilt from the day's executions,
-/ not started flat - under TorQ as well as run_stream.q, which always did.
-.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`note!(
+/ replay 1b: on a restart the book is rebuilt from the day's log - its
+/ opening book, then its executions - not started flat, under TorQ as well
+/ as run_stream.q.
+/ Positions carry across days (#943): on_endofday publishes the book onto
+/ fx_position_open, and restore_from replays it ahead of the day's fills.
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`restore_from`on_endofday`note!(
     `fxpositions1;
     enlist `executions;
-    `fx_position`fx_limit_breach;
+    `fx_position`fx_limit_breach`fx_position_open;
     .qpipe.job.fx_positions.on_batch;
     0D00:00:05.000;
     .qpipe.job.fx_positions.on_timer;
     1b;
     1b;
+    enlist `fx_position_open;
+    .qpipe.job.fx_positions.on_endofday;
     "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it")];

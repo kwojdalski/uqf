@@ -22,7 +22,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `vectorize1` | 6077 | etl | `processes/torq_stream.q` | `mkt_orderbook` | `wide_orderbook` | `mkt_orderbook` |
 | `tap1` | 6078 | etl | `processes/torq_tap.q` | — | _chosen at runtime_ | — |
 | `fxtradesfeed1` | 6079 | feed | `processes/torq_stream.q` | `trades` | — | `trades` |
-| `posbook1` | 6080 | etl | `processes/torq_stream.q` | `position` | `executions`, `market_data` | `position` |
+| `posbook1` | 6080 | etl | `processes/torq_stream.q` | — | `executions`, `market_data` | `position`, `position_open` |
 | `demo_markout1` | 6081 | etl | `processes/torq_stream.q` | `demo_execution_quality` | `trades`, `quote` | `demo_execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `events_backfill1` | 6083 | backfill | `processes/torq_backfill.q` | — | — | — |
@@ -30,7 +30,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `cryptomock1` | 6085 | feed | `processes/torq_stream.q` | — | — | `crypto_book`, `crypto_trades` |
 | `executions1` | 6086 | normalizer | `processes/torq_stream.q` | `executions` | `trades`, `crypto_trades`, `orders` | `executions` |
 | `fxordersfeed1` | 6088 | feed | `processes/torq_stream.q` | `orders` | — | `orders` |
-| `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `executions` | `fx_position`, `fx_limit_breach` |
+| `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `executions` | `fx_position`, `fx_limit_breach`, `fx_position_open` |
 | `databento_backfill1` | 6090 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `upstream_backfill1` | 6091 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `marketdata1` | 6092 | normalizer | `processes/torq_stream.q` | `market_data` | `quote`, `fx_orderbook`, `crypto_book` | `market_data` |
@@ -90,10 +90,12 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |
 | `fx_position` | `plant_tables.q` | `fxpositions1` |
+| `fx_position_open` | `plant_tables.q` | `fxpositions1` |
 | `market_data` | `plant_tables.q` | `marketdata1` |
 | `mkt_orderbook` | `plant_tables.q` | `vectorize1` |
 | `orders` | `plant_tables.q` | `fxordersfeed1` |
 | `position` | `plant_tables.q` | `posbook1` |
+| `position_open` | `plant_tables.q` | `posbook1` |
 | `quote` | _vendored_ | `fxfeed1` |
 | `superbook` | `plant_tables.q` | `superbook1` |
 | `trades` | `plant_tables.q` | `fxtradesfeed1` |

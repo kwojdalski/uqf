@@ -87,3 +87,46 @@ def test_upstream_is_the_job_graph_and_never_a_feed(tmp_path: Path) -> None:
     assert upstream[-2:] == ["fx_positions", "arbitrage"]
     assert {"executions", "market_data", "superbook"} <= set(upstream[:-2])
     assert not any(name.endswith("_feed") for name in upstream)
+
+
+#: After the documented command has built a book: end the day in-process,
+#: then do what a restart on the new day does - replay that day's log into a
+#: flat book - and compare it with the book the running process holds (#943).
+_DAY_CHANGE = """\\l scripts/processes/run_stream.q
+system "t 0";
+due:{[] .qproc.standalone.timers:{x[3]:0Np; x} each .qproc.standalone.timers};
+do[20; due[]; .qproc.standalone.tick[]];
+.qproc.standalone.end_day .z.D+1;
+running:.qpipe.job.fx_positions.positions;
+-1 "OPENING_LOG_MESSAGES:",string -11!(-2;.qetl.tick.log_path);
+`.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
+`.qetl.job.stream.replaying set 1b;
+f:.qpipe.job.fx_positions.on_batch;
+h:{[f;t;x] if[t in `fx_position_open`executions; f[t;x]]}[f];
+.qetl.tick.replay[.qetl.tick.log_path;h];
+`.qetl.job.stream.replaying set 0b;
+-1 "AGREE:",string running~.qpipe.job.fx_positions.positions;
+-1 "BOOK:",string count running;
+exit 0
+"""
+
+
+def test_a_restart_after_the_day_ends_rebuilds_the_carried_book(tmp_path: Path) -> None:
+    q, env = _kdbx()
+    driver = tmp_path / "day.q"
+    driver.write_text(_DAY_CHANGE)
+    result = subprocess.run(
+        [q, str(driver), "-q", *DOCUMENTED, "-logdir", str(tmp_path / "tplog")],
+        cwd=UQF_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=TIMEOUT_SECONDS,
+    )
+    out = result.stdout + result.stderr
+    assert result.returncode == 0, out
+    assert int(_value(out, "BOOK")) > 0, out
+    # the new day's log opens with the carried book
+    assert int(_value(out, "OPENING_LOG_MESSAGES")) >= 1, out
+    assert _value(out, "AGREE") == "1", out
