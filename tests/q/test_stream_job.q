@@ -1184,4 +1184,74 @@ test_restore_declarations_are_refused_without_a_replay:{[t]
     .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`replay]!enlist 1;
         "*replay must be a boolean*";"and replay is 1b or 0b"]};
 
+/ --- a publish check (#944) -----------------------------------------------
+
+/ A job whose rows are positive numbers; its check names the row index of
+/ every negative one, in the bounded worker's failure shape plus `row`.
+neg_check:{[x]
+    bad:where x[`v]<0;
+    ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative"; row:bad)}
+
+check_probe:{[name;procname;mode;chk]
+    / A feed that keeps its output local, so the output-contract suite has nothing to drive.
+    .qetl.job.stream.define[name;`procname`subscribe_to`publishes`period`on_timer`check`on_fail!(
+        procname;`symbol$();`symbol$();0D00:00:01;{[] };chk;mode)];
+    reset[];
+    .qetl.job.stream.wire[name;recorder[name]];
+    ` sv (.qetl.job.stream.namespace name),`publish}
+
+test_a_passing_batch_publishes_whole_and_counts_nothing:{[t]
+    pub:check_probe[`sj_check_pass;`sjcheckpass1;`drop;neg_check];
+    before:.qetl.stream_health.of[`sj_check_pass]`failed;
+    (get pub)[`probe_out;([] v:1 2 3)];
+    .qunit.assertEquals[first first exec rows from .sjtest.published;([] v:1 2 3);"every row published"];
+    .qunit.assertEquals[.qetl.stream_health.of[`sj_check_pass]`failed;before;"no failure counted"]};
+
+test_drop_publishes_the_clean_rows_and_withholds_the_bad:{[t]
+    pub:check_probe[`sj_check_drop;`sjcheckdrop1;`drop;neg_check];
+    (get pub)[`probe_out;([] v:1 -2 3 -4)];
+    .qunit.assertEquals[first first exec rows from .sjtest.published;([] v:1 3);"only the clean rows went out"];
+    h:.qetl.stream_health.of`sj_check_drop;
+    .qunit.assertEquals[h`failed;1;"the batch is counted as failed, so the job reads failing"];
+    .qunit.assertEquals[h`last_error;`$"check failed: 2 failure(s)";"and the reason is kept"]};
+
+test_hold_withholds_the_whole_batch:{[t]
+    pub:check_probe[`sj_check_hold;`sjcheckhold1;`hold;neg_check];
+    (get pub)[`probe_out;([] v:1 -2 3)];
+    .qunit.assertEquals[count .sjtest.published;0;"nothing published, clean rows included"];
+    .qunit.assertEquals[(.qetl.stream_health.of`sj_check_hold)`failed;1;"counted as failed"]};
+
+test_a_check_that_throws_publishes_nothing:{[t]
+    pub:check_probe[`sj_check_throw;`sjcheckthrow1;`drop;{[x] 'boom}];
+    (get pub)[`probe_out;([] v:1 2 3)];
+    .qunit.assertEquals[count .sjtest.published;0;"rows nobody could vouch for are not published, even under drop"];
+    h:.qetl.stream_health.of`sj_check_throw;
+    .qunit.assertEquals[h`failed;1;"counted as failed"];
+    .qunit.assertEquals[h`last_error;`$"check threw: boom";"with the check's own error"]};
+
+test_a_check_must_declare_what_failure_does:{[t]
+    base:`procname`subscribe_to`publishes`on_batch!(`sjcheckbad1;enlist `quote;`symbol$();{[t;x]});
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`check]!enlist neg_check;
+        "*declares a check but no on_fail*";"the author decides whether bad rows hold their neighbours"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,`check`on_fail!(neg_check;`skip);
+        "*on_fail must be `drop or `hold*";"and only the two choices exist"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist `drop;
+        "*on_fail without a check*";"on_fail alone gates nothing"]};
+
+test_market_data_declares_the_qdqc_checks:{[t]
+    d:.qetl.job.stream.def`market_data;
+    .qunit.assertEquals[d`check;.qpipe.job.market_data.check;"market_data's check is declared"];
+    .qunit.assertEquals[d`on_fail;`drop;"one venue's bad book must not hold the others"]};
+
+test_market_data_check_names_crossed_and_stale_rows:{[t]
+    t0:2026.09.19D10:00:00.000000000;
+    book:{[s;ts;b;a] ([] sym:enlist s; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
+        bid_prices:enlist enlist b; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e6)};
+    rows:raze (book[`EURUSD;t0;1.1;1.2];book[`GBPUSD;t0;1.3;1.2];book[`USDJPY;t0-0D00:10;150.0;150.1]);
+    f:.qpipe.job.market_data.check rows;
+    .qunit.assertEquals[exec row from f where check=`crossed_book;enlist 1;"GBPUSD is crossed"];
+    .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"USDJPY lags the batch by ten minutes"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check book[`EURUSD;t0;1.1;1.2];0;"a clean book passes"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from book[`EURUSD;t0;1.1;1.2];0;"an empty side is a withdrawal, not a failure"]};
+
 \d .
