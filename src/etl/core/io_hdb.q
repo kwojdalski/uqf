@@ -159,6 +159,8 @@ hdb_rows:{[partition_col;target;batch]
 / column - with time in the key, a later partition cannot hold the same
 / key - and never in today's partition, which is the tickerplant's: a
 / refill of yesterday cannot reach a row still on its way to end-of-day.
+/ Not on PeachQ, which cannot rewrite a partition already on disk: there a
+/ replace leaves the spill, as it always did.
 / @private
 write_hdb_keyed:{[root;partition_col;target;batch;opts]
     strategy:require_strategy opts`on_conflict;
@@ -186,7 +188,7 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
         existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
         (part;d;plain resolve[strategy;existing;rows;o])
         }[root;target;data;days;strategy;o] each dates;
-    if[(`replace=strategy) and not any (`time,opts`time_column) in (),opts`row_key;
+    if[(`replace=strategy) and (not on_peachq) and not any (`time,opts`time_column) in (),opts`row_key;
         plan,:spill[root;target;data;opts;dates]];
     / STAGED, THEN SWAPPED. Writing `set` straight onto the live partition
     / rewrote it column by column while the HDB had it mapped: a kill part way
