@@ -42,11 +42,11 @@
 / ------------------------------------------------------------- THE SHAPES
 
 / The horizons each fill is scored at, and the oldest a venue's top of book
-/ may be at a horizon and still count toward the best mid - superbook's
-/ expiry window for FX, five seconds.
+/ may be at a horizon and still count toward the best mid - the library's
+/ one cross-venue staleness policy, which posbook's crypto marks share.
 horizons:0D00:00:01 0D00:00:10
 max_horizon:max horizons
-max_age:0D00:00:05
+max_age:.qmicro.reference_max_age
 
 / The transform's inputs: fills as crypto_trades carries them, and books as
 / crypto_book does, narrowed to what scoring reads.
@@ -67,31 +67,6 @@ top_of_book:{[books]
     top:{[px] $[count px; first px; 0n]};
     select time, sym, venue, bid:top each bid_prices, ask:top each ask_prices from books}
 
-/ The best mid across venues at each target (sym; time).
-/ .
-/ Per venue, the latest top of book at or before the target (aj); dropped
-/ when older than max_age. Then the highest bid and the lowest ask over the
-/ venues left. Null when either side has no live venue.
-/ @param tob top of book rows, from top_of_book
-/ @param targets table sym, time - the instants to price
-/ @param max_age the oldest a venue's book may be and still count
-/ @return a float vector aligned with targets
-/ @eg .qpipe.job.crypto_markout.best_mid[([] time:2026.09.17D10:00:00 2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 62004f; ask:62010 62008f);([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:01);0D00:00:05]  ->  ,62006f
-best_mid:{[tob;targets;max_age]
-    if[0=count tob; :(count targets)#0n];
-    tob:`sym`time xasc tob;
-    per_venue:{[tob;targets;max_age;v]
-        j:aj[`sym`time;targets;select sym, time, bid, ask, quoted:time from tob where venue=v];
-        live:(not null j`quoted) & max_age>=(j`time)-j`quoted;
-        (?[live;j`bid;0n];?[live;j`ask;0n])}[tob;targets;max_age] each distinct tob`venue;
-    / null is the smallest float, so it never wins a max but always wins a
-    / min: asks are filled high before taking the lowest, then put back
-    best_bid:max per_venue[;0];
-    best_ask:min 0w^per_venue[;1];
-    best_ask:?[best_ask=0w;0n;best_ask];
-    mid:0.5*best_bid+best_ask;
-    ?[null best_bid;0n;mid]}
-
 / Score each fill's markout, in bps, at every horizon, against the best mid
 / across venues at trade_time+horizon.
 / @param real_fills crypto_trades rows, as the batch handler buffers them
@@ -105,7 +80,7 @@ score_markouts:{[real_fills;books]
     f:real_fills "j"$raze m#'til n;
     h:hs (n*m)#til m;
     targets:([] sym:f`sym; time:(f`time)+h);
-    ref:.qpipe.job.crypto_markout.best_mid[.qpipe.job.crypto_markout.top_of_book[books];targets;.qpipe.job.crypto_markout.max_age];
+    ref:.qmicro.best_mid_across_venues[.qpipe.job.crypto_markout.top_of_book[books];targets;.qpipe.job.crypto_markout.max_age];
     move:(ref-f`trade_price)%f`trade_price;
     bps:(f`side)*10000*move;
     ([] sym:f`sym; venue:f`venue; fill_id:f`exchange_fill_id; trade_time:f`time; horizon:h;

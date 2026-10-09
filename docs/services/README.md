@@ -77,16 +77,17 @@ become `executions`.
 
 **`marketdata1` · every venue's book** --- FX `quote` and `fx_orderbook`, and
 `crypto_book`, as `market_data`, each row keeping its source and the source's
-own time. `posbook1` values positions at its level-0 mids, and it heads the
-arbitrage chain, which takes the FX books only. Profile `fx`.
-[Details](superbook.md)
+own time. `posbook1` values positions from it, and it heads the arbitrage chain,
+which takes the FX books only. Profile `fx`. [Details](superbook.md)
 
 ## Analytics
 
 **`posbook1` · positions and P&L** --- a running position per instrument from
-`executions`, valued at the level-0 mid of `market_data`. One book carries FX
-and crypto, because it reads the normalisers rather than each market. Publishes
-`position`. Profile `fx`.
+`executions`, valued from `market_data`: an FX position at its pair's last
+level-0 mid, a crypto position at the best mid across venues no more than five
+seconds old, the same reference `crypto_markout1` scores against. One book
+carries FX and crypto, because it reads the normalisers rather than each market.
+Publishes `position`. Profile `fx`.
 
 **`demo_markout1` · execution quality** --- each fill against the mid one and
 ten seconds later: did the price move for or against the trade? Reads `trades`

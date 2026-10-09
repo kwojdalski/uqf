@@ -157,8 +157,10 @@ test_a_crypto_book_carries_the_venues_clock_not_the_plants:{[t]
     .qunit.assertEquals[first m`source_time;2026.09.17D10:00:01.000000000;
         "the venue's stamp, not the plant's 14:32:09"];
     .qunit.assertEquals[first m`source;`binance_spot;"the venue is the source"];
-    .qunit.assertEquals[first .qpipe.job.posbook.book_mids m;`sym`mid!(`$"BTC-USDT";62000f);
-        "and posbook's mark is still the touch midpoint"]};
+    / As the plant delivers it, `time` stamped in front.
+    b:first .qpipe.job.posbook.crypto_books update time:2026.09.17D14:32:09.000000000 from m;
+    .qunit.assertEquals[b`venue`bid`ask;(`binance_spot;61999f;62001f);
+        "and posbook reads the venue's touch, to mark across venues"]};
 
 test_market_data_never_carries_a_time_of_its_own:{[t]
     .qunit.assertEquals[`time in cols .qpipe.job.market_data.market_data;0b;

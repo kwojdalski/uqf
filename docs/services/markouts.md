@@ -124,8 +124,10 @@ What differs from the demo job:
 
 - **The reference is the best mid across venues.** At `trade_time + horizon`,
   each venue's latest top of book counts unless it is more than five seconds old
-  (`.qpipe.job.crypto_markout.max_age`). The highest bid and lowest ask over the
-  venues left give the mid. A venue that went quiet does not set the price.
+  (`.qmicro.reference_max_age`). The highest bid and lowest ask over the venues
+  left give the mid (`.qmicro.best_mid_across_venues`). A venue that went quiet
+  does not set the price. `posbook1` marks crypto positions with the same
+  function.
 - **Basis points, not pips.**
   `markout_bps = side × 10000 × (ref_price − trade_price) / trade_price`.
   Positive means the market moved in your favour, as in the demo job.

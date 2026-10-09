@@ -625,4 +625,28 @@ test_stream_snapshot_reports_each_sym:{[t]
     .qunit.assertEquals[snap`quote_rows;30 30;"rows seen"];
     .qunit.assertEquals[first snap`rolling_ofi;last .qmicro.rolling_ofi[.qmicro.ofi[q;`EURUSD];4];"the last rolling value"]};
 
+
+/ --- best_mid_across_venues (#886) ----------------------------------------
+
+test_the_best_mid_takes_the_best_side_from_any_venue:{[t]
+    tob:([] time:2#2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 62004f; ask:62010 62008f);
+    tg:([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:01);
+    .qunit.assertEquals[.qmicro.best_mid_across_venues[tob;tg;0D00:00:05];enlist 62006f;
+        "bid 62004 and ask 62008, both from b"]};
+
+test_a_venue_older_than_max_age_does_not_count:{[t]
+    tob:([] time:2026.09.17D10:00:00 2026.09.17D10:00:08; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 61990f; ask:62010 62020f);
+    tg:([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:09);
+    .qunit.assertEquals[.qmicro.best_mid_across_venues[tob;tg;0D00:00:05];enlist 62005f;
+        "a is nine seconds old: b's mid alone"]};
+
+test_no_live_venue_is_a_null_not_a_guess:{[t]
+    tob:([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT"; venue:enlist `a; bid:enlist 62000f; ask:enlist 0n);
+    tg:([] sym:(`$"BTC-USDT";`$"ETH-USDT"); time:2#2026.09.17D10:00:01);
+    .qunit.assertEquals[.qmicro.best_mid_across_venues[tob;tg;0D00:00:05];0n 0n;
+        "a missing side, and a sym no venue quotes, both price as null"]};
+
+test_one_staleness_policy_serves_both_jobs:{[t]
+    .qunit.assertEquals[.qpipe.job.crypto_markout.max_age;.qmicro.reference_max_age;
+        "crypto_markout reads the library's limit rather than keeping its own"]};
 \d .

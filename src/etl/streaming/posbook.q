@@ -101,23 +101,55 @@ publish:.qetl.job.stream.unwired `posbook;
 / through a computation that has expected tables.
 book:1!position_book;
 
-/ Last-seen mid per sym, off the `market_data` subscription - updated on
-/ every book, read (with a trade_price fallback for a sym never quoted yet)
-/ when marking a fill. A plain dict, not a table: only ever a point lookup
-/ by sym, never queried as a table.
+/ Last-seen mid per FX sym, off the `market_data` subscription - updated on
+/ every FX book, read (with a trade_price fallback for a sym never quoted
+/ yet) when marking a fill. A plain dict, not a table: only ever a point
+/ lookup by sym, never queried as a table.
 last_mid:(`symbol$())!`float$();
 
-/ The mid of each book in a market_data batch: halfway between level 0 of
-/ each ladder, which market_data holds best-first.
+/ Each crypto venue's latest top of book, keyed by sym and venue, off the
+/ same subscription. A crypto fill is marked to the BEST MID ACROSS VENUES
+/ that are fresh at the fill's time - the library's one reference price,
+/ which crypto_markout scores against too (#886) - not to whichever venue
+/ published last. One row per sym and venue, so it stays bounded.
+crypto_tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$())
+
+/ Each crypto book in a market_data batch as a top of book: its source is
+/ the venue, and a side with an empty ladder is null - that venue withdrew
+/ it, so it sets no price on that side.
+/ @param x market_data rows
+/ @return table sym, venue, time, bid, ask
+/ @eg exec bid from .qpipe.job.posbook.crypto_books ([] time:2#2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; source:`a`b; market:2#`crypto; bid_prices:(enlist 62000f;`float$()); ask_prices:(enlist 62010f;enlist 62008f))  ->  62000 0n
+crypto_books:{[x]
+    top:{[px] $[count px; first px; 0n]};
+    select sym, venue:source, time, bid:top each bid_prices, ask:top each ask_prices from x where market=`crypto}
+
+/ The crypto marks for a batch of fills: per crypto sym, the best mid across
+/ fresh venues at its last fill's time. A sym with no fresh venue is left
+/ out, so the transform falls back to the fill's own price, as it does for
+/ a sym never quoted.
+/ @param tob crypto_tob, unkeyed
+/ @param batch executions rows: their plant `time` and the books' are one clock
+/ @return a table of sym and mid
+/ @eg .qpipe.job.posbook.crypto_marks[([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2#2026.09.17D10:00:00; bid:62000 62004f; ask:62010 62008f);([] time:enlist 2026.09.17D10:00:01; sym:enlist `$"BTC-USDT")]  ->  ([] sym:enlist `$"BTC-USDT"; mid:enlist 62006f)
+crypto_marks:{[tob;batch]
+    s:exec sym from tob;
+    targets:0!select last time by sym from batch where sym in s;
+    m:([] sym:targets`sym; mid:.qmicro.best_mid_across_venues[tob;`sym`time#targets;.qmicro.reference_max_age]);
+    select from m where not null mid}
+
+/ The mid of each FX book in a market_data batch: halfway between level 0
+/ of each ladder, which market_data holds best-first. Crypto books are
+/ marked across venues instead (crypto_books).
 / .
 / A book with an empty side gives no mid and is dropped, not marked at 0n:
 / an empty ladder is that source WITHDRAWING its book, and the last mid seen
 / is still the better mark than none.
 / @param x market_data rows
 / @return a table of sym and mid, in batch order
-/ @eg .qpipe.job.posbook.book_mids ([] sym:`EURUSD`GBPUSD; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] sym:enlist `EURUSD; mid:enlist 1.085)
+/ @eg .qpipe.job.posbook.book_mids ([] sym:`EURUSD`GBPUSD; market:`fx`fx; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] sym:enlist `EURUSD; mid:enlist 1.085)
 book_mids:{[x]
-    x:select from x where 0<count each bid_prices, 0<count each ask_prices;
+    x:select from x where market<>`crypto, 0<count each bid_prices, 0<count each ask_prices;
     select sym, mid:((first each bid_prices)+first each ask_prices)%2 from x}
 
 / The canonical tables this job reads, as the plant delivers them - the
@@ -135,22 +167,27 @@ market_data:.qetl.plant.shape `market_data
 / .
 / A fill's `time` for the transform is its source_time - when it happened -
 / not the plant's stamp on the normalized row, which is when it was
-/ reshaped. The mark cache is per sym and the last source to publish wins;
-/ .qpos keys a book on sym alone, so that is the resolution it has.
+/ reshaped. An FX mark is per sym and the last source to publish wins; .qpos
+/ keys a book on sym alone, so that is the resolution it has. A crypto mark
+/ is the best mid across venues fresh at the fill's plant time, the same
+/ clock the books are stamped on (crypto_marks).
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
     $[t=`executions;
-        [out:.qetl.transform.apply[`position;`book`trades`mids!(
+        [mids:0!(1!([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid)),
+             1!.qpipe.job.posbook.crypto_marks[0!.qpipe.job.posbook.crypto_tob;x];
+         out:.qetl.transform.apply[`position;`book`trades`mids!(
             0!.qpipe.job.posbook.book;
             .qpipe.job.posbook.as_trades[x];
-            ([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid))];
+            mids)];
          `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.next_book[0!.qpipe.job.posbook.book;out];
          .qpipe.job.posbook.publish[`position;out]];
       t=`market_data;
         [m:.qpipe.job.posbook.book_mids[x];
-         .qpipe.job.posbook.last_mid[m`sym]:m`mid];
+         .qpipe.job.posbook.last_mid[m`sym]:m`mid;
+         `.qpipe.job.posbook.crypto_tob upsert .qpipe.job.posbook.crypto_books[x]];
       ()];
     }
 
