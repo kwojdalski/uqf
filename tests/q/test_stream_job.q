@@ -858,7 +858,7 @@ test_the_orders_feed_emits_statuses_that_are_not_fills:{[t]
     / The positions service exists partly to filter these out, and a feed
     / that only ever emitted fills would let it be written without a
     / filter and still pass.
-    .qunit.assertTrue[any not .qpipe.job.fx_orders_feed.statuses=.qpipe.job.fx_positions.filled_status;
+    .qunit.assertTrue[any not .qpipe.job.fx_orders_feed.statuses=.qpipe.job.executions.filled_status;
         "order flow carries cancels and rejects, not only fills"]};
 
 test_an_order_id_is_unique_within_a_run:{[t]
@@ -885,9 +885,15 @@ orders_batch:{[]
         price:1.0850 1.0860 1.0855 1.0851;
         order_status:`filled`filled`cancelled`filled)}
 
+/ Deliver orders to fx_positions the way the plant would (#885): through the
+/ executions normalizer, as a table with `time` stamped in front.
+to_fx_positions:{[x]
+    .qpipe.job.fx_positions.on_batch[`executions;
+        `time xcols update time:.sjtest.d[0] from .qetl.job.stream.normalizer.normalize[`executions;`orders;x]]}
+
 test_positions_net_only_filled_orders:{[t]
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qunit.assertEquals[count .qpipe.job.fx_positions.positions;2;
         "two positions - the cancelled 5mm buy is not one of them"];
     .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;600000f;1e-9;
@@ -895,7 +901,7 @@ test_positions_net_only_filled_orders:{[t]
 
 test_positions_keep_the_books_apart:{[t]
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`newyork`spot]`base_qty;250000f;1e-9;
         "newyork's fill is its own position, not netted into london's"]};
 
@@ -905,10 +911,27 @@ test_positions_ignore_a_table_they_did_not_subscribe_to:{[t]
         side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000)];
     .qunit.assertEmpty[.qpipe.job.fx_positions.positions;"a batch on another table moves nothing"]};
 
+test_desk_exposure_and_pnl_net_the_same_fills:{[t]
+    / #885: both views read executions, so a desk fill, an FX trades fill and
+    / a crypto fill reach both, and their totals per sym agree.
+    reset[];
+    x:raze {[tbl;rows] `time xcols update time:.sjtest.d[0] from .qetl.job.stream.normalizer.normalize[`executions;tbl;rows]}'[
+        `orders`trades`crypto_trades;
+        (orders_batch[];fx_fill[`EURUSD;1;1.085;3e5];crypto_fill[`$"BTC-USDT";1;62000f;0.5])];
+    .qpipe.job.fx_positions.on_batch[`executions;x];
+    .qpipe.job.posbook.on_batch[`executions;x];
+    exposure:exec sum base_qty by sym from .qpipe.job.fx_positions.positions;
+    pnl:exec sym!qty from .qpipe.job.posbook.book;
+    .qunit.assertEquals[asc key exposure;asc key pnl;"the same instruments in both"];
+    .testutil.assertApprox[exposure key pnl;value pnl;1e-9;
+        "and the same net quantity: 850k EURUSD (600k london, 250k newyork) plus 300k unbooked, half a bitcoin"];
+    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD``]`base_qty;3e5;1e-9;
+        "the trades fill, which has no book, is held under null dimensions"]};
+
 test_positions_accumulate_across_batches:{[t]
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
-    .qpipe.job.fx_positions.on_batch[`orders;([] time:enlist d 9; order_id:enlist 9;
+    to_fx_positions[orders_batch[]];
+    to_fx_positions[([] time:enlist d 9; order_id:enlist 9;
         sym:enlist `EURUSD; book:enlist `london; product:enlist `spot;
         side:enlist 1; size:enlist 400000f; price:enlist 1.0870;
         order_status:enlist `filled)];
@@ -919,7 +942,7 @@ test_the_book_changes_before_anything_is_published:{[t]
     / Orders will not be redelivered, so a failed publish must not also
     / lose them from the position - the ordering posbook established.
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qunit.assertEmpty[.sjtest.published;"the batch handler publishes nothing at all"];
     .qunit.assertEquals[count .qpipe.job.fx_positions.positions;2;"while the book has already moved"]};
 
@@ -930,7 +953,7 @@ test_the_timer_publishes_the_whole_book:{[t]
     / reader to keep the rest, which is the reader building a second copy
     / of this service's state and getting it wrong on the first drop.
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
     .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`fx_position);
         "one publication, onto fx_position"];
@@ -938,7 +961,7 @@ test_the_timer_publishes_the_whole_book:{[t]
 
 test_the_snapshot_carries_a_break_even_rate:{[t]
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
     .testutil.assertApprox[
         first exec break_even from last_rows[] where book=`london;650600%600000;1e-12;
@@ -952,7 +975,7 @@ test_an_empty_book_publishes_no_snapshot:{[t]
 
 test_the_snapshot_matches_the_declared_stack_table:{[t]
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
     .qunit.assertEquals[cols last_rows[];cols .qpipe.job.fx_positions.fx_position;
         "the published columns are the job's declared output shape"]};
@@ -967,7 +990,7 @@ test_no_limits_means_no_breaches:{[t]
     / A service with no limits reports positions and polices nothing,
     / which is a legitimate way to run and better than inventing caps.
     reset[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
     .qunit.assertEquals[distinct exec tbl from .sjtest.published;enlist `fx_position;
         "the snapshot goes out and nothing else"]};
@@ -975,7 +998,7 @@ test_no_limits_means_no_breaches:{[t]
 test_a_breached_limit_is_published:{[t]
     reset[];
     .qpipe.job.fx_positions.load_limits mk_limits[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
     .qunit.assertEquals[asc exec tbl from .sjtest.published;`s#`fx_limit_breach`fx_position;
         "the snapshot and the breach both go out"];
@@ -987,7 +1010,7 @@ test_a_standing_breach_does_not_republish_every_tick:{[t]
     / one alert per timer tick until someone trades out of the position.
     reset[];
     .qpipe.job.fx_positions.load_limits mk_limits[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
     `.sjtest.published set 0#.sjtest.published;
     .qpipe.job.fx_positions.on_timer[];
@@ -997,10 +1020,10 @@ test_a_standing_breach_does_not_republish_every_tick:{[t]
 test_a_position_that_moves_further_over_is_still_one_breach:{[t]
     reset[];
     .qpipe.job.fx_positions.load_limits mk_limits[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
     `.sjtest.published set 0#.sjtest.published;
-    .qpipe.job.fx_positions.on_batch[`orders;([] time:enlist d 9; order_id:enlist 9;
+    to_fx_positions[([] time:enlist d 9; order_id:enlist 9;
         sym:enlist `EURUSD; book:enlist `london; product:enlist `spot;
         side:enlist 1; size:enlist 2000000f; price:enlist 1.0870;
         order_status:enlist `filled)];
@@ -1029,7 +1052,7 @@ test_a_limit_scoped_on_a_non_dimension_is_refused_at_load:{[t]
 test_fresh_breaches_is_decidable_without_a_timer:{[t]
     reset[];
     .qpipe.job.fx_positions.load_limits mk_limits[];
-    .qpipe.job.fx_positions.on_batch[`orders;orders_batch[]];
+    to_fx_positions[orders_batch[]];
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 0;1;"the first evaluation alerts"];
     .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches d 1;"a second, a second later, does not"];
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 600;1;
@@ -1046,7 +1069,7 @@ test_a_limit_on_a_total_is_compared_with_the_total:{[t]
     / product) position, so 600k in each of two books passed a 1mm cap.
     reset[];
     .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
-    .qpipe.job.fx_positions.on_batch[`orders;two_books[]];
+    to_fx_positions[two_books[]];
     b:.qpipe.job.fx_positions.fresh_breaches d 0;
     .qunit.assertEquals[count b;1;"1.2mm across both books is over a 1mm cap on the pair"];
     .testutil.assertApprox[first b`observed;1200000f;1e-9;"observed is the pair's total"];
@@ -1055,7 +1078,7 @@ test_a_limit_on_a_total_is_compared_with_the_total:{[t]
 test_a_breach_of_a_total_is_published:{[t]
     reset[];
     .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
-    .qpipe.job.fx_positions.on_batch[`orders;two_books[]];
+    to_fx_positions[two_books[]];
     .qpipe.job.fx_positions.on_timer[];
     .qunit.assertEquals[asc exec tbl from .sjtest.published;`s#`fx_limit_breach`fx_position;
         "fx_limit_breach takes a total's breach in its usual shape"]};

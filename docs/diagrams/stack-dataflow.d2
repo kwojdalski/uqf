@@ -100,7 +100,7 @@ trade: "trade\nvendored schema" { class: table }
 fx_orderbook: "fx_orderbook\ntime · sym · bid/ask_prices · bid/ask_sizes" { class: table }
 wide_orderbook: "wide_orderbook\ntime · sym · bids0..10 · asks0..10" { class: table }
 trades: "trades\ntime · sym · side · trade_price · size · pip_factor" { class: table }
-executions: "executions\nsource_time · sym · venue · side · size · price\nfee · fee_ccy · fill_id" { class: table }
+executions: "executions\nsource_time · sym · venue · side · size · price\nfee · fee_ccy · fill_id · book · product" { class: table }
 crypto_book: "crypto_book\ntime · venue · sym · bid/ask_prices · bid/ask_sizes" { class: table }
 crypto_trades: "crypto_trades\ntime · sym · venue · side · trade_price · size\nfee · fee_currency · exchange_fill_id" { class: table }
 
@@ -130,7 +130,7 @@ vectorize1: "vectorize1\n.qbook.book_from_wide_levels" { class: job }
 posbook1: "posbook1\n.qpos.apply_fill + .qrisk.pnl" { class: job }
 executions1: "executions1\nnormalizer: every fill\ntable as one" { class: job }
 demo_markout1: "demo_markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
-fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets FILLED orders, on a timer" { class: job }
+fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets executions, on a timer" { class: job }
 marketdata1: "marketdata1\nnormalizer" { class: job }
 superbook1: "superbook1\n.qpipe.job.superbook merge\nacross sources" { class: job }
 databento1: "databento1\nthe same .qetl.transform fold\nthe backfill declares" { class: job }
@@ -164,6 +164,7 @@ vectorize1 -> mkt_orderbook: "republish"
 
 trades -> executions1: "one shape in"
 crypto_trades -> executions1: "another"
+orders -> executions1: "the filled ones"
 executions1 -> executions: "one shape out"
 
 databento_mbp10 -> databento1: "subscribe"
@@ -177,7 +178,7 @@ trades -> demo_markout1: "subscribe, buffered"
 quote -> demo_markout1: "buffered"
 demo_markout1 -> demo_execution_quality: "republish"
 
-orders -> fxpositions1: "subscribe"
+executions -> fxpositions1: "subscribe"
 fxpositions1 -> fx_position: "republish"
 fxpositions1 -> fx_limit_breach: "new breaches only"
 

@@ -152,12 +152,13 @@ market is a mapping in a normalizer rather than a branch in the position job.
 name would shadow the verb in every process holding it.)
 
 `fxordersfeed1` and `fxpositions1` are the FX positions service: synthetic order
-flow in, net exposure by (sym, book, product) out, with limit breaches throttled
-so a standing breach does not republish every tick. They are worth a note
-because they are the one pair that runs **two** ways. `torq_stream.q` starts
-them here like any other streaming job; `run_stream.q` starts the same two job
-files on stock kdb+ against `.qetl.tick`, with `lib/torq` never loaded. That is
-the publish seam working as intended - a job is TorQ-free code and the runner
+flow in, through `executions1` as fills, net exposure by (sym, book, product)
+out, with limit breaches throttled so a standing breach does not republish every
+tick. They are worth a note because they are the one pair that runs **two**
+ways. `torq_stream.q` starts them here like any other streaming job;
+`run_stream.q` starts the same job files, with `executions` between them, on
+stock kdb+ against `.qetl.tick`, with `lib/torq` never loaded. That is the
+publish seam working as intended - a job is TorQ-free code and the runner
 decides the transport - and being runnable without TorQ was never a reason not
 to be startable with it.
 

@@ -368,17 +368,20 @@ position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`flo
 / demo_markout1's output: per-trade execution quality at each horizon.
 demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
 
-/ executions1's output: every fill table the stack carries, as one. The
-/ `executions` normalizer (src/etl/streaming/executions.q) maps `trades` and
-/ `crypto_trades` onto this; posbook1 reads it and nothing else for fills.
-/ source_time is the source's own stamp, `time` the plant's on the
-/ normalized row. Named `executions` because `fills` is a q builtin.
-executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$())
+/ executions1's output: every fill the stack carries, as one tape (#885). The
+/ `executions` normalizer (src/etl/streaming/executions.q) maps `trades`,
+/ `crypto_trades` and the filled rows of `orders` onto this; posbook1 and
+/ fxpositions1 read it and nothing else for fills, so desk exposure and P&L
+/ net the same population. book and product are the desk's dimensions,
+/ null for a fill that carries none. source_time is the source's own stamp,
+/ `time` the plant's on the normalized row. Named `executions` because
+/ `fills` is a q builtin.
+executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$(); book:`symbol$(); product:`symbol$())
 
 / fx_orders_feed's output: order flow, most of which never becomes a fill.
 / Wider than `trades` because a position keyed on more than sym needs the
-/ dimensions to arrive with the order, and order_status is what
-/ fxpositions1 filters on.
+/ dimensions to arrive with the order. The executions normalizer keeps the
+/ filled ones, by order_status.
 orders:([]time:`timestamp$(); order_id:`long$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); side:`long$(); size:`float$(); price:`float$(); order_status:`symbol$())
 
 / fxpositions1's snapshot: net exposure per (sym, book, product), the

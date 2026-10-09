@@ -94,9 +94,9 @@ and `quote`, publishes `demo_execution_quality`. Profile `fx`.
 [Details](markouts.md)
 
 **`fxpositions1` · exposure and limits** --- net exposure by symbol, book and
-product from the order flow, with a breach row whenever a limit is crossed.
-Publishes `fx_position` and `fx_limit_breach`. Profile `fx`.
-[Details](fx-positions.md)
+product from `executions`, the fills `posbook1` nets too, with a breach row
+whenever a limit is crossed. Publishes `fx_position` and `fx_limit_breach`.
+Profile `fx`. [Details](fx-positions.md)
 
 **`superbook1` · one book from every source** --- the latest book from each
 source merged per pair, with stale liquidity expired on a timer. Publishes

@@ -236,6 +236,8 @@
 "executions","fee","f"
 "executions","fee_ccy","s"
 "executions","fill_id","s"
+"executions","book","s"
+"executions","product","s"
 "fx_limit_breach","time","p"
 "fx_limit_breach","sym","s"
 "fx_limit_breach","book","s"

@@ -128,7 +128,7 @@ drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`mar
     {[] .qpipe.job.vectorize.on_batch[`wide_orderbook;.sjtest.wide_row[]]};
     {[] .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.sjtest.mbp10_batch[]]};
     {[] .qpipe.job.fx_positions.load_limits .sjtest.mk_limits[];
-        .qpipe.job.fx_positions.on_batch[`orders;.sjtest.orders_batch[]];
+        .sjtest.to_fx_positions .sjtest.orders_batch[];
         .qpipe.job.fx_positions.on_timer[]};
     {[] .qpipe.job.executions.on_batch[`trades;.sjtest.fx_fill[`EURUSD;1;1.085;1e6]];
         .qpipe.job.executions.on_batch[`crypto_trades;.sjtest.crypto_fill[`$"BTC-USDT";-1;62000f;0.25]]};

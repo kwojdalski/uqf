@@ -21,10 +21,10 @@
 /       run the service, subscribing to the plant at 5010 and listening on
 /       5011 so a client can query its book.
 / .
-/   q scripts/processes/run_stream.q -job fx_positions -feed fx_orders_feed
-/       BOTH, plus the plant, in one process. No ports, no sockets, no
-/       second terminal - which is what makes the whole service testable
-/       in one q session and is how tests/q/test_fx_positions.q runs it.
+/   q scripts/processes/run_stream.q -job executions,fx_positions -feed fx_orders_feed
+/       ALL of it, plus the plant, in one process: the feed, the executions
+/       normalizer that turns its filled orders into fills, and the service.
+/       No ports, no sockets, no second terminal. -job takes a comma list.
 / .
 / RECOVERY. The plant logs every message it carries, and a job started
 / against an existing log replays it before subscribing, so a restart
@@ -37,7 +37,9 @@
 
 \l src/init.q
 / Only the -job's declarations and what they reach (#902); all of them without one.
-if[`job in key .Q.opt .z.x; .qetl.load.only:`$(.Q.opt .z.x)`job];
+/ -feed is run here too, so it is loaded with the jobs.
+if[`job in key .Q.opt .z.x;
+    .qetl.load.only:{x where not null x} `$"," vs "," sv raze each (.Q.opt .z.x)`job`feed];
 \l src/etl/init.q
 
 \d .qproc.standalone
@@ -177,11 +179,12 @@ remote_transport:{[tp]
 / @return the jobs started
 start:{[]
     plant_port:"J"$opt[`plant;""];
-    job:`$opt[`job;""];
+    / -job takes a comma list: a job and the normalizer feeding it, say.
+    jobs:{x where not null x} `$"," vs opt[`job;""];
     feed:`$opt[`feed;""];
     tp:"J"$opt[`tp;""];
     listen:"J"$opt[`port;""];
-    if[(null job) and null plant_port;
+    if[(0=count jobs) and null plant_port;
         '"run_stream: give -job <name>, or -plant <port> to run a bare tickerplant"];
     / A process with no -tp carries its own plant, so the bare-plant role
     / and the everything-in-one-process role are one code path.
@@ -190,7 +193,7 @@ start:{[]
     if[not null listen; system "p ",string listen];
     started:();
     tr:$[local; local_transport[]; remote_transport tp];
-    if[not null job; started,:.qetl.job.stream.start[job;tr]];
+    started,:raze .qetl.job.stream.start[;tr] each jobs;
     if[not null feed; started,:.qetl.job.stream.start[feed;tr]];
     if[count timers;
         `.z.ts set {[] .qproc.standalone.tick[]};

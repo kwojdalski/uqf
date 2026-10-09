@@ -49,9 +49,8 @@
 / .qpos.apply_fills and .qalloc take - so one fill table feeds the book,
 / the attribution and the exposure without a translation step. A venue
 / that spells it `BUY/`SELL converts once, at the edge that reads it.
-/ (A convention, not a claim about this stack's wiring: fxpositions1 feeds
-/ this module filled `orders`, while posbook reads `executions` - two
-/ populations, #885.)
+/ fxpositions1 feeds this module `executions`, the one fill tape posbook
+/ reads too (#885).
 required_cols:`sym`side`size`price
 
 / An empty book keyed on the given dimensions.

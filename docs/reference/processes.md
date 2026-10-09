@@ -28,9 +28,9 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `events_backfill1` | 6083 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `databento1` | 6084 | etl | `processes/torq_stream.q` | `eq_orderbook` | `databento_mbp10` | `eq_orderbook` |
 | `cryptomock1` | 6085 | feed | `processes/torq_stream.q` | — | — | `crypto_book`, `crypto_trades` |
-| `executions1` | 6086 | normalizer | `processes/torq_stream.q` | `executions` | `trades`, `crypto_trades` | `executions` |
+| `executions1` | 6086 | normalizer | `processes/torq_stream.q` | `executions` | `trades`, `crypto_trades`, `orders` | `executions` |
 | `fxordersfeed1` | 6088 | feed | `processes/torq_stream.q` | `orders` | — | `orders` |
-| `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `orders` | `fx_position`, `fx_limit_breach` |
+| `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `executions` | `fx_position`, `fx_limit_breach` |
 | `databento_backfill1` | 6090 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `upstream_backfill1` | 6091 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `marketdata1` | 6092 | normalizer | `processes/torq_stream.q` | `market_data` | `quote`, `fx_orderbook`, `crypto_book` | `market_data` |
@@ -57,7 +57,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`events_backfill1`** — bounded: see deals_backfill1
 - **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (external/databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
-- **`executions1`** — every fill table as one: trades and crypto_trades -> executions
+- **`executions1`** — every fill as one tape: trades, crypto_trades and filled orders -> executions
 - **`fxordersfeed1`** — synthetic order flow, most of which never becomes a fill - fxpositions1's input
 - **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
 - **`databento_backfill1`** — bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live

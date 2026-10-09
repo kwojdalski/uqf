@@ -132,7 +132,7 @@ normalize: "3 · normalizers — the first waist:\none shape from many (.qetl.jo
   grid-columns: 1
   grid-gap: 20
 
-  executions: "executions\ntrades + crypto_trades\n→ one fill table" { class: job }
+  executions: "executions\ntrades + crypto_trades + filled orders\n→ one fill table" { class: job }
   marketdata: "market_data\nquote + fx_orderbook + crypto_book\n→ one book shape" { class: job }
 }
 
@@ -142,7 +142,7 @@ engines: "4 · engines — subscribe, hold state, republish" {
   grid-gap: 20
 
   posbook: "posbook\nexecutions + market_data → position\n.qpos, FX and crypto in one book" { class: job }
-  fxpos: "fx_positions\norders → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
+  fxpos: "fx_positions\nexecutions → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
   markout: "markout\ntrades + quote → demo_execution_quality\n.qexec, at horizons on a timer" { class: job }
   superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
