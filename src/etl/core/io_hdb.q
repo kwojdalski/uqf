@@ -279,6 +279,34 @@ swap:{[root;d;t]
     system"rm -rf ",old;
     }
 
+/ Remove one date's table from the HDB, through the staging area.
+/ .
+/ The live directory is renamed into `old` and only then deleted, so a reader
+/ sees the table whole or absent - never a half-removed one - and a kill
+/ between the rename and the delete leaves it in `old`, which sweep_staging
+/ puts back (the partition reads as it did, and retention, which supersedes
+/ coverage BEFORE it removes, simply removes it again). A date directory left
+/ with no table at all is removed too: the HDB loads every directory under its
+/ root and an empty one fails a reload.
+/ .
+/ Does not tell a running HDB to reload; that needs the stack (see on_ready).
+/ @param root the HDB root, a file symbol
+/ @param d the date
+/ @param t the table
+/ @return 1b when a table was removed, 0b when there was none
+/ @eg .qetl.io.retire[`:/tmp/qio_eg_hdb;2026.01.02;`iodeals]
+retire:{[root;d;t]
+    live:part_path[root;d;t];
+    if[()~key hsym `$live; :0b];
+    old:staged[root;`old;d;t];
+    system"rm -rf ",old;
+    system"mkdir -p ",(staging[root]),"/old/",string d;
+    system"mv ",live," ",old;
+    system"rm -rf ",old;
+    datedir:(neg 1+count string t)_live;
+    if[0=count key hsym `$datedir; system"rmdir ",datedir];
+    1b}
+
 / Private: put right what a run killed mid-write left in the staging area,
 / for one table.
 / .

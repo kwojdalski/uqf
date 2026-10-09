@@ -191,11 +191,34 @@ for in place:
   and a row per beat would turn "when was the job up" into an aggregation over a
   table that grows every minute.
 
-**Nothing is ever deleted, and retention is not defined.** The ledgers, the
-uptime record and the HDB's partitions grow for as long as the stack runs; no
-process prunes them. At this tree's scale that is a choice, not an oversight.
-Removing data is an operator's act (`uqs remove output`, deleting a partition),
-and nothing in the framework assumes old rows are gone.
+**Nothing is deleted unless a declaration says so.** The ledgers, the uptime
+record and the HDB's partitions grow for as long as the stack runs, and no
+default prunes them: there is no default horizon, and the tree ships no
+retention. A dataset is pruned only when a
+[`.qetl.retention.define`](../../src/etl/core/retention.q) call names it, with
+an explicit horizon. Three kinds exist: old HDB date partitions, withdrawn
+`etl_coverage` rows and ended `etl_runs` rows, and uptime sessions.
+
+The rule that makes it safe to add is the coverage ledger's own:
+
+- **Dry run is the default.** `run` removes only with `apply`; without it, it
+  returns the table an applied run would act on, and nothing else changes.
+- **Coverage is never left claiming what is gone.** A run that would remove data
+  an `etl_coverage` claim still covers is refused, whole, before it removes
+  anything - unless it is also told to `supersede`, which withdraws those claims
+  first. Supersede first, remove second: an interruption leaves unclaimed data
+  (a redundant refill), never a claim over nothing (a window a backfill skips
+  for good).
+- **It records what it removed.** `etl_retention` is append-only, written after
+  each removal, and no declaration can prune it.
+- **HDB partitions are removed through the writer's staging**
+  (`.qetl.io.retire`), so a kill mid-removal is put right by the same recovery
+  that puts right a killed write.
+
+Pruning uptime sessions makes `uqs gaps` report the pruned span as a gap, as it
+would for a job that was never up; ask it only within the horizon. Removing
+other things (a source's files, a table) remains an operator's act, and nothing
+in the framework assumes old rows are gone.
 
 **Schema change is half covered.** A column or table *added* to the schema
 reaches older partitions: `uqs data hdb-check` reports a partition missing one,

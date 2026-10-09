@@ -32,11 +32,11 @@ For example, both Databento jobs use the `eq_orderbook` transform without
 requiring either job to own the other's computation.
 
 Framework services use the same root: `.qetl.io`, `.qetl.dag`, `.qetl.reaction`,
-`.qetl.coverage`, `.qetl.run`, `.qetl.cfg`, `.qetl.cfg.audit`, `.qetl.hb` and
-`.qetl.status`. Standard IO managers stay under `.qetl.io`; a custom pipeline
-writer can live under `.qpipe.io.<name>`. A custom reaction handler can live
-under `.qpipe.reaction.<name>`. The graph is derived from declarations, so there
-is no separate pipeline graph to maintain.
+`.qetl.coverage`, `.qetl.run`, `.qetl.retention`, `.qetl.cfg`,
+`.qetl.cfg.audit`, `.qetl.hb` and `.qetl.status`. Standard IO managers stay
+under `.qetl.io`; a custom pipeline writer can live under `.qpipe.io.<name>`. A
+custom reaction handler can live under `.qpipe.reaction.<name>`. The graph is
+derived from declarations, so there is no separate pipeline graph to maintain.
 
 The declaration verbs and `uqs job new --kind` values are one table,
 `python/uqs/src/uqs/model/kinds.py`; the parser, `uqs job remove` and the

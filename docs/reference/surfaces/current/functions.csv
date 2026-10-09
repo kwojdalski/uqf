@@ -203,6 +203,7 @@ qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
+qetl.io,retire,function,3,root d t
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
 qetl.io,write,function,3,mgr target batch
@@ -516,6 +517,16 @@ qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
 qetl.reaction,window_now,value,,
 qetl.reaction,write,function,3,target row_key rows
+qetl.retention,declared,function,1,
+qetl.retention,decls,dict,,
+qetl.retention,define,function,2,name decl
+qetl.retention,history,function,1,
+qetl.retention,kinds,value,,
+qetl.retention,ledger_age,dict,,
+qetl.retention,plan,function,2,name as_of
+qetl.retention,plan_cols,value,,
+qetl.retention,record_schema,value,,
+qetl.retention,run,function,3,name as_of opts
 qetl.run,attach,function,1,
 qetl.run,begin,function,2,worker spec
 qetl.run,current,function,1,
