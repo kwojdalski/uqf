@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **28 uqf processes** — 51 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **30 uqf processes** — 53 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -43,6 +43,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `hdb_demo_markouts_backfill1` | 6099 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_transfer_backfill1` | 6100 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `crypto_markout1` | 6101 | etl | `processes/torq_stream.q` | `crypto_execution_quality` | `crypto_trades`, `crypto_book` | `crypto_execution_quality` |
+| `exec_bars1` | 6102 | etl | `processes/torq_stream.q` | `exec_bar` | `executions` | `exec_bar` |
+| `hdb_exec_bars_backfill1` | 6103 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -72,6 +74,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`hdb_demo_markouts_backfill1`** — bounded: marks out the HDB's fills against its quotes, into demo_execution_quality
 - **`hdb_transfer_backfill1`** — bounded - copies trades from a kdb+ HDB on this machine into trades_copy, adding notional; the HDB-to-HDB example
 - **`crypto_markout1`** — markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock
+- **`exec_bars1`** — time bars over the unified fills tape; the window is the fill's source_time
+- **`hdb_exec_bars_backfill1`** — bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live
 
 ## Tables these processes publish
 
@@ -86,6 +90,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
 | `demo_execution_quality` | `plant_tables.q` | `demo_markout1` |
 | `eq_orderbook` | `plant_tables.q` | `databento1` |
+| `exec_bar` | `plant_tables.q` | `exec_bars1` |
 | `executions` | `plant_tables.q` | `executions1` |
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |

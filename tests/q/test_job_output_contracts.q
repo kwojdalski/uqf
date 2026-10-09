@@ -117,7 +117,7 @@ last_of:{[j] first last exec rows from .sjtest.published where job=j}
 / job -> a niladic function pushing input the job acts on. Each driver
 / runs after .sjtest.reset[], which empties job state and wires every job
 / to .sjtest.recorder.
-drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage!(
+drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage`exec_bars!(
     {[] .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD; side:enlist 1;
             trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
         .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .sjtest.d 1; sym:enlist `EURUSD;
@@ -140,7 +140,8 @@ drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`mar
         .qpipe.job.superbook.on_batch[`market_data;.jobouttest.last_of `market_data]};
     {[] .jobouttest.drivers[`superbook][];
         .qpipe.job.arbitrage.on_batch[`superbook;.jobouttest.last_of `superbook]};
-    {[] .qpipe.job.cross_arbitrage.on_batch[`superbook;0!.xarbtest.with_direct[164.80;164.90]]})
+    {[] .qpipe.job.cross_arbitrage.on_batch[`superbook;0!.xarbtest.with_direct[164.80;164.90]]};
+    {[] .barstest.contract_driver[]})
 
 / Every registered job that declares at least one published table.
 publishing:{[] j where {[j] 0<count (),.qetl.job.stream.def[j]`publishes} each j:.qetl.job.stream.defined[]}

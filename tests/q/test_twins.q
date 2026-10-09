@@ -18,7 +18,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-renames:(`demo_markout`eq_orderbook)!(`trades`quotes!`trades`quote;()!())
+renames:(`demo_markout`eq_orderbook`exec_bars)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions)
 
 / (the stream job's transform; its twin's; the input renaming), each
 / transform as the declaration names it.
@@ -62,5 +62,8 @@ test_the_demo_markout_twin_scores_as_the_live_job_does:{[t]
 
 test_the_eq_orderbook_twin_applies_the_same_transform:{[t]
     .qunit.assertTrue[agrees[`eq_orderbook];"one transform, shared"]};
+
+test_the_exec_bars_twin_cuts_and_aggregates_as_the_live_job_does:{[t]
+    .qunit.assertTrue[agrees[`exec_bars];"hdb_exec_bars gives the live bars on the live transform's example"]};
 
 \d .

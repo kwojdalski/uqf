@@ -7,12 +7,12 @@ plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `demo_markout1`,
 `databento1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
-`crypto_markout1`), and eight bounded backfill processes (`deals_backfill1`,
-`events_backfill1`, `databento_backfill1`, `upstream_backfill1`,
-`duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
-`hdb_demo_markouts_backfill1`, `hdb_transfer_backfill1`). Declared is not the
-same as running here - see [what starts with the
-stack](#what-starts-and-why-not-all-of-it).
+`crypto_markout1`, `exec_bars1`), and nine bounded backfill processes
+(`deals_backfill1`, `events_backfill1`, `databento_backfill1`,
+`upstream_backfill1`, `duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
+`hdb_demo_markouts_backfill1`, `hdb_transfer_backfill1`,
+`hdb_exec_bars_backfill1`). Declared is not the same as running here - see [what
+starts with the stack](#what-starts-and-why-not-all-of-it).
 
 Direct FX arbitrage flows through `marketdata1` (`quote`, `fx_orderbook` and
 `crypto_book` into `market_data`), `superbook1` (the FX source books merged into
@@ -241,6 +241,14 @@ its own, `.qetl.job.stream.at_horizons` (`src/etl/core/horizon.q`), shared with
 still use. Unlike `cross_quotes`, both `position` and `demo_execution_quality`
 are real, persisted tables (round-trip through `rdb1`/`wdb1`/`hdb`, same as
 `mkt_orderbook`), since this history is worth keeping.
+
+`exec_bars1` turns `executions` into one-minute bars (`exec_bar`: open, high,
+low, close, vwap, volume per sym), a **bars job** (`.qetl.job.stream.at_bars`,
+`src/etl/core/bars.q`): it closes a minute 5 seconds after it ends, so a late
+fill still amends it, closes the day's last minutes at end of day, and rebuilds
+its open minutes from the log on restart. `hdb_exec_bars_backfill1` rebuilds
+bars from the HDB's `executions` with the same aggregation, under the key
+`sym, bar_start`.
 
 `demo_markout1`'s buffers live in its process, so a fill it never saw goes
 unscored: it was down, restarting, or the fill came before it. A bounded

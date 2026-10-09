@@ -79,6 +79,7 @@
 \l src/etl/core/config_audit.q
 \l src/etl/core/normalizer.q
 \l src/etl/core/horizon.q
+\l src/etl/core/bars.q
 \l src/etl/core/tick.q
 / Every plant table's schema, before any job that publishes or reads one.
 \l src/etl/plant_tables.q
