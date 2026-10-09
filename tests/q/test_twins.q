@@ -44,10 +44,10 @@ agrees:{[job]
         0=count .qetl.transform.differences[c#want;c#got]}[p;s] each s`examples}
 
 test_the_demo_markout_twin_scores_as_the_live_job_does:{[t]
-    .qunit.assertTrue[agrees `demo_markout;
+    .qunit.assertTrue[agrees[`demo_markout];
         "hdb_demo_markouts_score gives the live transform's rows on its examples"]};
 
 test_the_eq_orderbook_twin_applies_the_same_transform:{[t]
-    .qunit.assertTrue[agrees `eq_orderbook;"one transform, shared"]};
+    .qunit.assertTrue[agrees[`eq_orderbook];"one transform, shared"]};
 
 \d .
