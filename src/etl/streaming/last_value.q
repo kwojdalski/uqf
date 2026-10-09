@@ -84,10 +84,11 @@ on_batch:{[t;x]
 / The state is this process's memory, so a restart used to start it empty
 / until every sym ticked again. Replaying the day's market_data rebuilds it;
 / publish is muted while it does, so rows already published are not repeated.
-.qetl.job.stream.define[`last_value;`procname`subscribe_to`publishes`on_batch`replay`note!(
+.qetl.job.stream.define[`last_value;`procname`subscribe_to`publishes`on_batch`replay`note`state!(
     `last_value1;
     enlist `market_data;
     enlist `last_value;
     .qpipe.job.last_value.on_batch;
     1b;
-    "the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile")];
+    "the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile";
+    enlist `state)];

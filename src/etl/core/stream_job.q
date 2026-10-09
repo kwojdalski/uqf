@@ -373,6 +373,35 @@ evict:{[table_name;mask]
 / look: during a replay their publish is muted anyway.
 replaying:0b
 
+/ The log clock: the time a stream decision uses for each row of a batch (#994).
+/ .
+/ Live, that is the process clock - the row has just arrived, so `now` is when
+/ it met the job. Replaying, the process clock is the restart time and every
+/ logged row looks hours old, so the clock is the plant's receipt stamp `time`,
+/ which the tickerplant wrote on the row when the live process first saw it.
+/ A decision made on this clock comes out the same live and on replay, which is
+/ what makes a restart a pure function of the log. A batch with no `time` has
+/ no log clock: null per row, which no comparison satisfies, so a time-based
+/ rule is simply not applied to it - say so where the rule is documented.
+/ .
+/ Routed through here: the bars kind's lateness. NOT routed, because the log
+/ cannot say what time it was: a timer tick (bars' close_ready, horizon's
+/ score_ready, fx_positions' throttle, superbook, alert_sink, cross) - a tick
+/ is not a logged row, so its `now` is always the process clock and it never
+/ runs during a replay.
+/ @param now the process clock (a job passes its own `now`, so a test can move it)
+/ @param x the batch, a table
+/ @return a timestamp per row of x
+/ @eg .qetl.job.stream.clock_of[2026.10.09D10:00:00;([] a:1 2)]  ->  2026.10.09D10:00:00 2026.10.09D10:00:00
+clock_of:{[now;x]
+    $[replaying; $[`time in cols x; x`time; count[x]#0Np]; count[x]#now]}
+
+/ The log clock with the process clock for `now`.
+/ @param x the batch, a table
+/ @return a timestamp per row of x
+/ @eg count .qetl.job.stream.clock ([] a:1 2)  ->  2
+clock:{[x] clock_of[.z.p;x]}
+
 / What a runner must hand `start`: the transport, as functions.
 / .
 /   connect             niladic; reach the plant.
