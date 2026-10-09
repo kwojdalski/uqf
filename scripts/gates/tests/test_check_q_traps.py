@@ -30,6 +30,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -497,28 +498,84 @@ def test_every_rule_left_here_is_still_called():
 
 @needs_linter
 def test_the_delegated_rules_are_the_ones_the_linter_has():
-    """The split is only safe while the linter really carries the other
-    thirteen. If a code disappeared upstream, this repository would lose a
-    check and nothing else would say so.
+    """The split is only safe while the linter really carries the codes this
+    file gave up. If one disappeared upstream, this repository would lose a
+    check and nothing else would say so. An opt-out for a code the linter no
+    longer has is dead, and would silently exempt whatever reuses the code.
     """
     assert QLINTER is not None  # narrowed by @needs_linter, but not for the type checker
-    listed = subprocess.run([QLINTER, "--rules"], capture_output=True, text=True, check=True).stdout
-    for code in (
-        "QE002",
-        "QF001",
-        "QF002",
-        "QF003",
-        "QF004",
-        "QA003",
-        "QA004",
-        "QB001",
-        "QB002",
-        "QB003",
-        "QB004",
-        "QP001",
-        "QP002",
-    ):
-        assert code in listed, f"{code} is no longer in the linter's catalogue"
+    listed = set(cqt._catalogue(QLINTER))
+    missing = (cqt.EXTRA_CODES | set(cqt.OPTED_OUT)) - listed
+    assert not missing, f"no longer in the linter's catalogue: {missing}"
+
+
+@needs_linter
+def test_every_correctness_rule_is_gated_unless_opted_out():
+    """#965: the gate is the linter's correctness set minus the opt-outs, so a
+    rule added upstream is enforced the day the pin moves. It was thirteen
+    hand-listed codes, and QB010 was not one of them.
+    """
+    assert QLINTER is not None
+    listed = subprocess.run([QLINTER, "--rules"], capture_output=True, text=True, check=True)
+    correctness = {
+        line.split()[0]
+        for line in listed.stdout.splitlines()
+        if line.split()[1] in ("[syntax]", "[application]", "[correctness]", "[domain]")
+    }
+    assert len(correctness) >= 40, sorted(correctness)
+    gated = {c for c in cqt._catalogue(QLINTER) if cqt._gated(c)}
+    assert gated == (correctness | cqt.EXTRA_CODES) - set(cqt.OPTED_OUT)
+    assert all(reason.strip() for reason in cqt.OPTED_OUT.values())
+
+
+def test_apply_not_subtract_is_flagged_and_gated():
+    """QB010, the rule the thirteen-code list missed: `a -1` applies `a`."""
+    found = _flagged("a:5; b:a -1\n", "QB010")
+    assert len(found) == 1, found
+    assert cqt._gated("QB010")
+    assert not _flagged("a:5; b:a - 1\n", "QB010")
+
+
+# ------------------------------------------------------- the pinned version
+
+
+def test_the_pin_is_a_release_tag():
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", cqt._pinned_version())
+
+
+def test_every_written_mention_of_the_pin_agrees():
+    """#969: the version was written in four files with nothing holding them
+    equal. CI and install.sh now read .qlinter-version; the prose that
+    quotes an install command must quote the same tag.
+    """
+    pinned = cqt._pinned_version()
+    for name in ("README.md", "CLAUDE.md"):
+        tags = re.findall(r"q-lint --tag (v[\d.]+)", (cqt.REPO / name).read_text())
+        assert tags, f"{name} no longer quotes the install command"
+        assert set(tags) == {pinned}, f"{name} quotes {tags}, the pin is {pinned}"
+    for name in (".github/workflows/ci.yml", "install.sh"):
+        text = (cqt.REPO / name).read_text()
+        assert ".qlinter-version" in text, f"{name} no longer reads the pin"
+        assert not re.search(r"QLINT_VERSION[:=]\s*\"?v\d", text), f"{name} writes its own pin"
+
+
+def _fake_linter(tmp_path: Path, version: str) -> str:
+    fake = tmp_path / "qlinter"
+    fake.write_text(f"#!/bin/sh\necho 'qlinter {version}'\n")
+    fake.chmod(0o755)
+    return str(fake)
+
+
+def test_another_installed_version_is_refused(tmp_path):
+    message = cqt._check_version(_fake_linter(tmp_path, "0.1.0"))
+    assert message is not None
+    assert "v0.1.0" in message
+    assert cqt._pinned_version() in message
+    assert f"--tag {cqt._pinned_version()}" in message
+
+
+def test_the_pinned_version_passes(tmp_path):
+    assert cqt._check_version(_fake_linter(tmp_path, cqt._pinned_version()[1:])) is None
 
 
 def test_the_checker_finds_the_repo_s_q_files():

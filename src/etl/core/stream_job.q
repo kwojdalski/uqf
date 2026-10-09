@@ -42,6 +42,9 @@ jobs:(`symbol$())!();
 / declarations to answer it would have to reach inside each one.
 procnames:(`symbol$())!`symbol$();
 
+/ job -> its declared state at define time, ENLISTED as `jobs` is (#967).
+initial:(`symbol$())!();
+
 / What every job must declare.
 / .
 / `on_batch` is required of a job that SUBSCRIBES and `on_timer` of one that
@@ -91,7 +94,9 @@ namespace:{[job] ` sv job_root,job}
 /   start_with_all (a boolean, default 0b), note (a string), transform
 /   (the registered transform it applies, which its backfill twin applies
 /   too - #884), on_endofday (a function of the date that ended, #943), and
-/   check with on_fail (a quality gate on what is published, #944)
+/   check with on_fail (a quality gate on what is published, #944), and
+/   state (a symbol list of the job's private variables, #967: their values
+/   as the job's file leaves them are what `reset` restores)
 / @return the job name
 / @throws error naming every missing or malformed field at once
 define:{[job;decl]
@@ -188,6 +193,15 @@ define:{[job;decl]
             '"define: ",string[job]," declares on_replayed without replay 1b - it would never be called"]];
     if[replays and not `on_batch in key decl;
         '"define: ",string[job]," declares replay 1b but no on_batch - a replay delivers batches"];
+    / The variables the job carries between batches, declared once. Their value
+    / now - define runs at the end of the job's file - is the empty state
+    / `reset` restores, so no test restates it (#967).
+    if[`state in key decl;
+        if[not 11h=type decl`state;
+            '"define: ",string[job],"'s state must be a symbol list naming variables in ",string[decl`ns]];
+        absent:decl[`state] where not (decl`state) in key decl`ns;
+        if[count absent; '"define: ",string[job],"'s state names ",(", " sv string absent),", which ",string[decl`ns]," does not define"];
+        initial[job]:enlist (decl`state)!get each ` sv'decl[`ns],/:decl`state];
     jobs[job]:enlist decl;
     procnames[decl`procname]:job;
     .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";
@@ -219,6 +233,23 @@ for_procname:{[procname]
     if[not procname in key procnames;
         '"for_procname: no streaming job runs as ",string[procname]," - registered processes: ",", " sv string key procnames];
     procnames procname}
+
+/ Put a job's declared state back to what its file defined (#967).
+/ .
+/ The one way to start a job from empty, for a test or a runner that
+/ re-initialises: a job names its variables in `state` at define, so nothing
+/ restates them by name and shape. A job that declares none has nothing to
+/ restore and this is a no-op.
+/ @param job the job's name
+/ @return the job name
+/ @throws error when the job is not registered
+/ @eg .qetl.job.stream.reset `cross  ->  `cross
+reset:{[job]
+    def job;
+    if[job in key initial;
+        s:first initial job;
+        {[ns;k;v] (` sv ns,k) set v}[namespace job]'[key s;value s]];
+    job}
 
 / Every registered job, for the runner and for tests.
 / @return symbol list of job names

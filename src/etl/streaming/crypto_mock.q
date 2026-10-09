@@ -261,10 +261,11 @@ on_timer:{[]
 
 \d .
 
-.qetl.job.stream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note`state!(
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;
     0D00:00:01.000;
     .qpipe.job.crypto_mock.on_timer;
-    "stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one")];
+    "stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one";
+    enlist `last_id)];

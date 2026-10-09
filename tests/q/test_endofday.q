@@ -36,8 +36,7 @@ setUp_eod:{[] `.eodtest.saved_running set .qetl.job.stream.running;}
 tearDown_eod:{[]
     `.qetl.job.stream.running set .eodtest.saved_running;
     `.qetl.job.stream.replaying set 0b;
-    `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
-    `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
+    .qetl.job.stream.reset each `fx_positions`posbook;
     .qpipe.job.posbook.on_replayed[];
     }
 

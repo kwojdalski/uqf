@@ -22,8 +22,7 @@ book:{[venue;bid;ask;tm]
         ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1f)}
 
 reset:{[]
-    `.qpipe.job.crypto_markout.pending set 0#.qpipe.job.crypto_markout.pending;
-    `.qpipe.job.crypto_markout.history set 0#.qpipe.job.crypto_markout.history;
+    .qetl.job.stream.reset `crypto_markout;
     `.crypto_markouttest.sent set ();
     .qetl.job.stream.wire[`crypto_markout;{[t;x] .crypto_markouttest.sent,:enlist (t;x)}];
     }
@@ -99,8 +98,7 @@ test_only_real_fills_are_buffered:{[t]
 / it publishes is held to its plant table by name, order and type.
 contract_driver:{[]
     / clear the buffers, not the wiring: the contract suite wired publish
-    `.qpipe.job.crypto_markout.pending set 0#.qpipe.job.crypto_markout.pending;
-    `.qpipe.job.crypto_markout.history set 0#.qpipe.job.crypto_markout.history;
+    .qetl.job.stream.reset `crypto_markout;
     .qpipe.job.crypto_markout.on_batch[`crypto_book;.crypto_markouttest.two_venues[]];
     .qpipe.job.crypto_markout.on_batch[`crypto_trades;.crypto_markouttest.fill[1;62000f;.crypto_markouttest.t0;`f1]];
     .qpipe.job.crypto_markout.score_ready .crypto_markouttest.t0+0D00:00:10;

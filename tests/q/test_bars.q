@@ -23,9 +23,7 @@ job:{[nm]
         .qetl.job.stream.at_bars[nm;`procname`events`event_time`transform`publishes`width`lateness`period!(
             `$string[nm],"1";`bt_fills;`source_time;`exec_bars;`bt_bar;0D00:01:00;0D00:00:05;0D00:00:01)]];
     ns:.qetl.job.stream.namespace nm;
-    (` sv ns,`pending) set 0#get ` sv ns,`pending;
-    (` sv ns,`closed) set 0#get ` sv ns,`closed;
-    (` sv ns,`dropped) set 0#get ` sv ns,`dropped;
+    .qetl.job.stream.reset nm;
     (` sv ns,`now) set {[] .barstest.clock};
     `.barstest.clock set t0;
     `.barstest.sent set ();
@@ -39,8 +37,7 @@ published:{[] raze last each sent}
 / What jobout drives it with: a fill, and the day's end, which closes its window.
 contract_driver:{[]
     `.barstest.clock set t0;
-    `.qpipe.job.exec_bars.pending set 0#.qpipe.job.exec_bars.pending;
-    `.qpipe.job.exec_bars.closed set 0#.qpipe.job.exec_bars.closed;
+    .qetl.job.stream.reset `exec_bars;
     .qpipe.job.exec_bars.now:{[] .barstest.clock};
     .qpipe.job.exec_bars.on_batch[`executions;fill[t0+0D00:00:30;`EURUSD;1f;1.1]];
     .qpipe.job.exec_bars.on_endofday d1;

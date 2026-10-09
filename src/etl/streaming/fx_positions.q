@@ -276,7 +276,7 @@ on_timer:{[]
 / as run_stream.q.
 / Positions carry across days (#943): on_endofday publishes the book onto
 / fx_position_open, and restore_from replays it ahead of the day's fills.
-.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`restore_from`on_endofday`note!(
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`restore_from`on_endofday`note`state!(
     `fxpositions1;
     enlist `executions;
     `fx_position`fx_limit_breach`fx_position_open;
@@ -287,4 +287,5 @@ on_timer:{[]
     1b;
     enlist `fx_position_open;
     .qpipe.job.fx_positions.on_endofday;
-    "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it")];
+    "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it";
+    `positions`limits`alerts)];
