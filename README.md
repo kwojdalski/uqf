@@ -157,8 +157,9 @@ it (e.g. `src/foundation/stats.q`).
 **Setup is `./install.sh`.** It checks these first, says how to install anything
 missing (it never runs sudo), then puts `uqs` on your PATH. `--dev` also syncs
 the Python workspace and installs the pre-commit hooks, `--web` builds `web/`,
-and `--check` only checks. TLS verification stays on: behind a re-signing proxy,
-set `SSL_CERT_FILE` (uv) and `NODE_EXTRA_CA_CERTS` (npm) to your CA.
+`--odbc` sets up ODBC for q ([ODBC](docs/guides/odbc.md)), and `--check` only
+checks. TLS verification stays on: behind a re-signing proxy, set
+`SSL_CERT_FILE` (uv) and `NODE_EXTRA_CA_CERTS` (npm) to your CA.
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q` and

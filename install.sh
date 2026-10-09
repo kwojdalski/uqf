@@ -4,15 +4,25 @@
 #   ./install.sh               the uqs CLI, after checking the fleet's prerequisites
 #   ./install.sh --dev         also the Python workspace, pre-commit and its hooks
 #   ./install.sh --web         also the browser application in web/, installed and built
+#   ./install.sh --odbc        also ODBC for q: on macOS built in user space, on Linux checked
 #   ./install.sh --check       check the selected components' prerequisites only
 #
-# Flags combine (`--dev --web`, `--check --dev`). Every prerequisite is checked
+# Flags combine (`--dev --web`, `--check --odbc`). Every prerequisite is checked
 # before anything changes, and a missing required one stops the run with the
 # command that installs it. Re-running is safe.
 #
 # WHAT IT NEVER DOES. No sudo and no system packages - a missing system tool is
 # reported, not installed. No change to a q or TorQ installation, no secret
 # written, no process started. Deploying a server is `uqs deploy`'s job.
+#
+# ODBC (--odbc). q's ODBC client links a driver manager, unixODBC - a C
+# library, so no Python package or uv can supply it. On macOS KX's only client
+# is x86_64, so it runs under Rosetta: scripts/dev/odbc_rosetta.sh builds
+# unixODBC, the client and the DuckDB driver into output/odbc-x86_64, in user
+# space, and this runs it. On Linux unixODBC is a system package, so it is
+# checked and its install command printed. A server takes an approved package
+# instead (`uqs odbc install`, docs/guides/odbc.md). Database drivers are
+# per-database and often not redistributable: never installed here.
 #
 # TLS VERIFICATION STAYS ON. Behind a proxy that re-signs TLS, give the tools
 # your CA instead: SSL_CERT_FILE=/path/ca.pem (or UV_SYSTEM_CERTS=1) for uv,
@@ -26,14 +36,15 @@ case "$src" in */*) here="${src%/*}" ;; *) here=. ;; esac
 ROOT="$(cd "$here" && pwd)"
 cd "$ROOT"
 
-DEV=0 WEB=0 CHECK=0
+DEV=0 WEB=0 ODBC=0 CHECK=0
 for arg in "$@"; do
     case "$arg" in
         --dev) DEV=1 ;;
         --web) WEB=1 ;;
+        --odbc) ODBC=1 ;;
         --check) CHECK=1 ;;
         -h | --help)
-            sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -97,7 +108,7 @@ fi
 want direnv "loads .envrc: $(pkg direnv direnv)"
 want multitail "uqs logs --multitail: $(pkg multitail multitail)"
 want qcon "uqs query with no expression; ships with some kdb+ distributions"
-want odbcinst "ODBC sources: see docs/guides/odbc.md"
+((ODBC)) || want odbcinst "ODBC sources: ./install.sh --odbc, or see docs/guides/odbc.md"
 UNVERIFIED+=("live feeds: the databento / confluent-kafka packages and credentials (docs/services/)")
 UNVERIFIED+=("source credentials and ODBC drivers: uqs config sources check")
 
@@ -107,6 +118,33 @@ if ((DEV)); then
     want make "building PeachQ for the q-docs-peachq hook: $(pkg build-essential 'xcode-select --install')"
     want d2 "rendering diagrams (render-diagrams hook): https://d2lang.com"
     want quarto "checking docs links (check-doc-links hook): https://quarto.org"
+fi
+
+if ((ODBC)); then
+    if ((mac)); then
+        # What scripts/dev/odbc_rosetta.sh setup needs (its own Requires line).
+        if [[ "$(uname -m)" == arm64 ]] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            MISSING+=("Rosetta 2 - softwareupdate --install-rosetta --agree-to-license")
+        fi
+        xcode-select -p >/dev/null 2>&1 || MISSING+=("Xcode command line tools - xcode-select --install")
+        need curl "$(pkg curl curl)"
+        if ! have gh; then
+            MISSING+=("gh - $(pkg gh gh), then gh auth login")
+        elif ! gh auth status >/dev/null 2>&1; then
+            MISSING+=("gh is not logged in - gh auth login (it downloads unixODBC and the DuckDB driver)")
+        fi
+        [[ -d "$HOME/.kx" ]] || MISSING+=("KDB-X at ~/.kx - the ODBC overlay QHOME links to it")
+    else
+        need odbcinst "$(pkg unixodbc unixodbc) - root installs the driver manager; a server takes an approved package instead (uqs odbc install)"
+        if have ldconfig && [[ "$(ldconfig -p 2>/dev/null)" != *libodbc.so.2* ]]; then
+            MISSING+=("libodbc.so.2 - $(pkg unixodbc unixodbc)")
+        fi
+        # KX's client goes into QHOME, which this script never changes.
+        if [[ ! -f "${QHOME:-$HOME/.kx}/l64/odbc.so" ]]; then
+            OPTIONAL+=("KX's ODBC client - copy odbc.k and l64/odbc.so from https://github.com/KxSystems/kdb into QHOME (docs/guides/odbc.md)")
+        fi
+    fi
+    UNVERIFIED+=("a database's own ODBC driver: per database - docs/guides/odbc.md")
 fi
 
 if ((WEB)); then
@@ -196,6 +234,17 @@ if ((DEV)); then
     run "installing the git hooks" pre-commit install
     INSTALLED+=("pre-commit and its git hooks")
     UNVERIFIED+=("the q hooks need KDB-X on PATH; see the list above for the rest")
+fi
+
+# ------------------------------------------------------------------- odbc
+
+if ((ODBC)); then
+    if ((mac)); then
+        run "building ODBC for q under Rosetta (a few minutes the first time)" scripts/dev/odbc_rosetta.sh setup
+        INSTALLED+=("ODBC for q under Rosetta, in output/odbc-x86_64 - run q with it: scripts/dev/odbc_rosetta.sh q")
+    else
+        INSTALLED+=("ODBC driver manager present - q loads it through KX's l64/odbc.so")
+    fi
 fi
 
 # -------------------------------------------------------------------- web
