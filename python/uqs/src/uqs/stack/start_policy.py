@@ -6,9 +6,11 @@ refusals used to live in the CLI, so the other two started what the CLI
 refused - a misspelt name exited 0 and the HTTP route answered `ok: true`.
 They live here now, below every front end:
 
-  - a name that is not a process is refused by `runtime.start`, `stop` and
-    `restart` themselves (stack.procs.assert_known_procnames), so no front
-    end can skip it;
+  - a name that is not a process, a q too old for the tree, and ports another
+    stack holds are refused by refuse_start, which `runtime.run_torq_sh`
+    applies to every `start` and `restart` - so neither a front end nor
+    another launcher of q processes (`uqs backfill`, `uqs replay`, `uqs raw`)
+    can skip them (#964); `stop` refuses an unknown name itself;
   - a profile is resolved here, with its refusals: an undeclared profile, a
     set past the licence's connection budget, a member the runtime lacks.
 
@@ -19,12 +21,34 @@ the operator's call rather than this tree's mistake (see resolve_profiles).
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import occupancy, qtree, runtime_profiles
 from uqs.stack import procs as stack_procs
-from uqs.stack import runtime_profiles
+from uqs.stack.env import with_interpreter
+
+#: torq.sh verbs that start q processes, and so load the tree.
+STARTING_VERBS = ("start", "restart")
+
+
+def refuse_start(paths: UqsPaths, args: Sequence[str], base_port: int | None) -> None:
+    """Raise if torq.sh `args` would start what a start may not: an unknown
+    process (#887), a q too old for the tree as written (#882), or ports
+    another stack holds. Anything but a starting verb passes untouched.
+
+    The processes are the words between the verb and torq.sh's first flag
+    (`-extras`, `-csv`): `uqs backfill` starts `<procname> -extras ...`.
+    """
+    if not args or args[0] not in STARTING_VERBS:
+        return
+    names = list(itertools.takewhile(lambda word: not word.startswith("-"), args[1:]))
+    procs = " ".join(names) or "all"
+    stack_procs.assert_known_procnames(paths, procs)
+    qtree.refuse_unloadable(paths, with_interpreter(paths))
+    occupancy.refuse_if_taken(paths, base_port, procs)
 
 
 def resolve_profiles(

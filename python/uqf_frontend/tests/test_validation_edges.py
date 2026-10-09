@@ -200,6 +200,8 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
         ),
     )
     monkeypatch.setattr(runtime, "bootstrap", refuse)
+    # The start-time refusals read a real process table; these paths are fake.
+    monkeypatch.setattr(runtime.start_policy, "refuse_start", lambda *_a: None)
     with pytest.raises(ValidationFailed, match="not vendored"):
         control.start_backfill(Settings(enable_writes=True), **_backfill_args())
 
