@@ -12,11 +12,18 @@ This reads what would be committed - the index, through `git grep --cached` -
 so a block present only in the working tree, where prepare is allowed to
 put it, does not fail a commit of other files.
 
-Run directly, or via the pre-commit hook. Exits 1 on any block.
+The blocks are one of the three things an install writes (#926). It also
+copies the bundle's job files under src/etl/ and records them in the ledger,
+src/etl/installed_bundles.json. Neither carries a marker, so the ledger in the
+working tree is what says which files are a bundle's: a commit staging the
+ledger, or any file it lists, is refused too.
+
+Run directly, or via the pre-commit hook. Exits 1 on any block or file.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -39,11 +46,56 @@ def staged_blocks() -> list[str]:
     return [line for line in r.stdout.splitlines() if line.strip()]
 
 
+#: Where an install records what it put in the tree (uqs.paths.BUNDLE_LEDGER).
+LEDGER = "src/etl/installed_bundles.json"
+
+
+def staged_bundle_files() -> list[str]:
+    """`path (bundle NAME)` for each staged file an installed bundle owns,
+    the ledger included: added or changed, never a deletion."""
+    r = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if r.returncode:
+        raise SystemExit(f"check_bundle_blocks: git diff failed: {r.stderr.strip()}")
+    staged = set(r.stdout.split())
+    ledger_path = REPO / LEDGER
+    if not ledger_path.is_file():
+        return [f"{LEDGER} (the bundle ledger)"] if LEDGER in staged else []
+    try:
+        ledger = json.loads(ledger_path.read_text())
+    except ValueError:
+        ledger = {}
+    owners = {f: name for name, entry in ledger.items() for f in entry.get("files", {})}
+    found = [f"{f} (bundle {owners[f]})" for f in sorted(staged) if f in owners]
+    if LEDGER in staged:
+        found.append(f"{LEDGER} (the bundle ledger)")
+    return found
+
+
 def main() -> int:
     found = staged_blocks()
-    if not found:
-        print("check_bundle_blocks: no bundle blocks in tracked q files")
+    files = staged_bundle_files()
+    if not found and not files:
+        print("check_bundle_blocks: no bundle blocks or bundle files staged")
         return 0
+    if files:
+        print(
+            "check_bundle_blocks: staged files belong to an installed bundle - "
+            "they are its copies, and committing them makes the bundle tree content:\n"
+        )
+        for line in files:
+            print(f"  {line}")
+        print(
+            "\nUnstage them (git restore --staged <path>), or remove the bundle first "
+            "(uqs job remove).\n"
+        )
+    if not found:
+        return 1
     print(
         "check_bundle_blocks: tracked q files carry bundle blocks - an operator's\n"
         "installed bundle, which `uqs runtime prepare` writes into the working tree\n"
