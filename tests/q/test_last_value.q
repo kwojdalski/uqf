@@ -19,7 +19,11 @@ book:{[rows]
 
 reset:{[]
     `.qpipe.job.last_value.state set 1!.qpipe.job.last_value.last_value;
+    `.qpipe.job.last_value.tob set 0#.qpipe.job.last_value.tob;
     .sjtest.reset[]}
+
+/ crypto books: the same rows, on market `crypto
+cbook:{[rows] update market:`crypto from book rows}
 
 / The latest row per sym, as the table a reader would see after `select by sym`.
 latest:{[] 0!.qpipe.job.last_value.state}
@@ -77,10 +81,10 @@ test_a_withdrawn_side_keeps_the_last_price:{[t]
 test_apply_is_the_identity_on_an_empty_batch_and_does_not_mutate_state:{[t]
     reset[];
     s:.qpipe.job.last_value.state;
-    r:.qpipe.job.last_value.apply[s;0#.qpipe.job.last_value.market_data];
+    r:.qpipe.job.last_value.apply[s;.qpipe.job.last_value.tob;0#.qpipe.job.last_value.market_data];
     .qunit.assertEquals[r`state;s;"state unchanged"];
     .qunit.assertEquals[count r`changed;0;"nothing changed"];
-    r:.qpipe.job.last_value.apply[s;book enlist (`EURUSD;`LP_A;d[0];1.10;1.12)];
+    r:.qpipe.job.last_value.apply[s;.qpipe.job.last_value.tob;book enlist (`EURUSD;`LP_A;d[0];1.10;1.12)];
     .qunit.assertEquals[(count s;count r`state);(0;1);"apply returns the new state and leaves the old one"]};
 
 test_a_replay_rebuilds_the_state_without_publishing_it_again:{[t]
@@ -130,10 +134,47 @@ test_no_consumer_re_derives_the_top_of_book:{[t]
     .qunit.assertTrue[not any src like\: "*first each bid_prices*";"a consumer reads level 0 itself"];
     .qunit.assertTrue[not any src like\: "*first px*";"a consumer reads a side itself"]};
 
+/ #990: a crypto sym publishes the cross-venue reference crypto_markout and
+/ posbook price from - the best bid and best ask over live venues - not the
+/ last venue's own book.
+test_a_crypto_sym_publishes_the_best_bid_and_ask_across_venues:{[t]
+    reset[];
+    s:`$"BTC-USDT";
+    .qpipe.job.last_value.on_batch[`market_data;cbook enlist (s;`binance;d[0];100.;102.)];
+    .qpipe.job.last_value.on_batch[`market_data;cbook enlist (s;`okx;d[1];101.;103.)];
+    r:first latest[];
+    .qunit.assertEquals[r`bid`ask`mid;101 102 101.5;"best bid okx, best ask binance"];
+    .qunit.assertEquals[(r`source;r`source_time);(`venues;d[1]);"a reference, as of the newest venue"];
+    want:.qmicro.best_mid_across_venues[select time:source_time, sym, venue:source, bid, ask from
+        ([] sym:2#s; source:`binance`okx; source_time:d 0 1; bid:100 101.; ask:102 103.);
+        ([] sym:enlist s; time:enlist d 1);.qmicro.reference_max_age];
+    .qunit.assertEquals[r`mid;first want;"the shared reference, the one crypto_markout prices from"]};
+
+test_a_stale_venue_drops_out_of_the_crypto_reference:{[t]
+    reset[];
+    s:`$"BTC-USDT";
+    .qpipe.job.last_value.on_batch[`market_data;cbook enlist (s;`binance;d[0];100.;102.)];
+    .qpipe.job.last_value.on_batch[`market_data;cbook enlist (s;`okx;d[10];99.;103.)];
+    .qunit.assertEquals[(first latest[])`bid`ask;99 103.;"binance's book is older than reference_max_age"]};
+
+test_an_older_crypto_book_does_not_rewind_its_venue:{[t]
+    reset[];
+    s:`$"BTC-USDT";
+    .qpipe.job.last_value.on_batch[`market_data;cbook enlist (s;`binance;d[2];100.;102.)];
+    .qpipe.job.last_value.on_batch[`market_data;cbook enlist (s;`binance;d[1];90.;92.)];
+    .qunit.assertEquals[(first latest[])`bid`ask;100 102.;"the venue's newer book stands"]};
+
+test_fx_is_still_last_source_wins:{[t]
+    reset[];
+    .qpipe.job.last_value.on_batch[`market_data;book enlist (`EURUSD;`LP_A;d[0];1.10;1.14)];
+    .qpipe.job.last_value.on_batch[`market_data;book enlist (`EURUSD;`LP_B;d[1];1.11;1.15)];
+    .qunit.assertEquals[(first latest[])`bid`ask`source;(1.11;1.15;`LP_B);"FX unchanged by #990"]};
+
 / What test_job_output_contracts.q drives last_value with, so the table it
 / publishes is held to its plant table by name, order and type.
 contract_driver:{[]
     `.qpipe.job.last_value.state set 1!.qpipe.job.last_value.last_value;
+    `.qpipe.job.last_value.tob set 0#.qpipe.job.last_value.tob;
     .qpipe.job.last_value.on_batch[`market_data;book enlist (`EURUSD;`LP_A;.last_valuetest.d[0];1.10;1.12)]}
 
 \d .

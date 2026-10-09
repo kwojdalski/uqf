@@ -15,8 +15,17 @@
 / what changed, and rebuilds it by replay (a restart does not start it
 / empty), which the published table cannot do for it.
 / .
-/ WHICH ROW WINS. The newest source_time per sym, whatever the source: the
-/ row says which `source` it was. A row OLDER than the sym's current one is
+/ WHICH ROW WINS. For an FX sym, the newest source_time per sym, whatever
+/ the source: the row says which `source` it was.
+/ .
+/ A CRYPTO SYM IS PRICED ACROSS VENUES (#990). Its row is the shared
+/ reference .qmicro.best_across_venues gives - the best bid and best ask over
+/ every venue quoting within .qmicro.reference_max_age, and their mid - with
+/ `source` `venues. That is the price crypto_markout and posbook already use
+/ (#886); the last venue's own book would be a third answer to "the current
+/ price", and this table exists to be the one. So the job also holds the
+/ newest top per (sym; venue), each venue's own book never rewound. A sym
+/ with no live venue left has no row published for it. A row OLDER than the sym's current one is
 / dropped, so a delayed or replayed book cannot rewind the price; an equal
 / source_time follows arrival order, as superbook's does. Prices are level 0
 / of the book, and a book with an empty or non-positive side is dropped, not
@@ -54,16 +63,33 @@ tops:{[x]
 / Within the batch the newest source_time per sym wins (the last arrival on a
 / tie); against the state, a row older than the held one is dropped.
 / @param state the latest row per sym, keyed by sym
+/ @param tob each crypto venue's newest top, keyed by sym and venue
 / @param batch market_data rows
-/ @return a dict: `state the new keyed state, `changed the rows that replaced
+/ @return a dict: `state the new keyed state, `tob the new venue tops, `changed the rows that replaced
 /   or added a sym's latest, as published
-/ @eg .qpipe.job.last_value.apply[.qpipe.job.last_value.state;0#.qpipe.job.last_value.market_data]`changed  ->  0#.qpipe.job.last_value.last_value
-apply:{[state;batch]
+/ @eg .qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;0#.qpipe.job.last_value.market_data]`changed  ->  0#.qpipe.job.last_value.last_value
+apply:{[state;tob;batch]
     t:tops batch;
+    / crypto: each venue's newest top, then the cross-venue reference per sym
+    c:select from t where market=`crypto;
+    c:0!select by sym, venue:source from `source_time xasc c;
+    held:(exec (sym,'venue)!time from 0!tob) c[`sym],'c`venue;
+    c:c where (null held) or c[`source_time]>=held;
+    tob:tob upsert select sym, venue, time:source_time, bid, ask from c;
+    syms:distinct c`sym;
+    at:0!select time:max time by sym from tob where sym in syms;
+    best:.qmicro.best_across_venues[0!tob;at;.qmicro.reference_max_age];
+    crypto:select from ([] sym:at`sym; market:`crypto; source:`venues; source_time:at`time;
+        bid:best`bid; ask:best`ask; mid:best`mid) where not null mid;
+    t:(select from t where market<>`crypto),crypto;
     t:0!select by sym from `source_time xasc t;
     held:(exec sym!source_time from 0!state) t`sym;
     t:t where (null held) or (t`source_time)>=held;
-    `state`changed!(state upsert t;cols[.qpipe.job.last_value.last_value]#t)}
+    `state`tob`changed!(state upsert t;tob;cols[.qpipe.job.last_value.last_value]#t)}
+
+/ Each crypto venue's newest top of book: what a crypto sym's reference is
+/ priced from. Rebuilt by replay after a restart.
+tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$())
 
 / Market data: hold the newest top of book per sym and publish what changed.
 / The state is advanced BEFORE publishing, as posbook's book is: the books
@@ -73,8 +99,9 @@ apply:{[state;batch]
 / @return nothing
 on_batch:{[t;x]
     if[not t=`market_data; :()];
-    r:apply[.qpipe.job.last_value.state;x];
+    r:apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;x];
     `.qpipe.job.last_value.state set r`state;
+    `.qpipe.job.last_value.tob set r`tob;
     if[count r`changed; .qpipe.job.last_value.publish[`last_value;r`changed]];
     }
 
