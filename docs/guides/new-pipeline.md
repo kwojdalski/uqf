@@ -711,12 +711,14 @@ in exactly that:
   | `.qetl.reaction.on_writing` | **asserted** by you                           | a full node, listed in ```audit[]``asserted```                         |
   | `.qetl.reaction.on_worker`  | **derived** from the worker's own declaration | a full node that cannot disagree with what the worker does             |
 
-Prefer `on_worker` where it applies: the worker already declares its target
-through its source, so nothing is restated and `dag.q`'s "derive, never
-re-declare" rule survives. `on_writing` is for a handler that writes something
-no worker owns --- worth having, because it puts the edge in the graph, but it
-is a claim about an opaque lambda rather than a checked fact, and
-`.qetl.reaction.audit[]` lists those separately so a drawing can mark them.
+Prefer `on_worker` where it applies (plain q only: it runs the worker in the
+publisher's process as its own run, so a TorQ process refuses it --- one bounded
+worker per process): the worker already declares its target through its source,
+so nothing is restated and `dag.q`'s "derive, never re-declare" rule survives.
+`on_writing` is for a handler that writes something no worker owns --- worth
+having, because it puts the edge in the graph, but it is a claim about an opaque
+lambda rather than a checked fact, and `.qetl.reaction.audit[]` lists those
+separately so a drawing can mark them.
 
 **A reactive cycle is refused when you wire it**, not when it runs:
 

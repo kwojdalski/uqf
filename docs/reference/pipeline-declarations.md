@@ -38,6 +38,11 @@ writer can live under `.qpipe.io.<name>`. A custom reaction handler can live
 under `.qpipe.reaction.<name>`. The graph is derived from declarations, so there
 is no separate pipeline graph to maintain.
 
+The declaration verbs and `uqs job new --kind` values are one table,
+`python/uqs/src/uqs/model/kinds.py`; the parser, `uqs job remove` and the
+choices read it, and `python/uqs/tests/test_job_kinds.py` names any place that
+lacks a verb q registers. A new kind starts there.
+
 Every declaring function refuses a bad declaration **when the file loads**,
 naming the key, so a mistake below surfaces the first time the tree is loaded
 rather than part-way through a run.
@@ -182,6 +187,7 @@ A job that copies rows unchanged still declares its transform, with
   | `on_conflict`    | no       | symbol, default `` `upsert ``                                                | what a write does with a row whose `target_key` is already in the target: `upsert` replaces it and adds new keys; `replace` also deletes what the target held inside the window and the batch left out; `ignore` keeps the row already there; `append` writes it again (no check); `fail` fails the window. Matched per date partition in the HDB. `uqs backfill --on-conflict` overrides it for one run                                                                                                                                                                                   | not one of those five                                                                                                               |
   | `source_version` | no       | symbol, default none                                                         | the release a run records coverage under when `uqs backfill` is given no `--version`. Declare it for a source that is never restated (a recording, an append-only tape, historical market data); leave it out where the source can be corrected, so every run must name its release --- a default there files a restatement under the old version, and every window reads as already covered. A new `--version` always re-fetches covered windows                                                                                                                                          | not a symbol                                                                                                                        |
   | `target_key`     | no       | symbol or symbol vector, default the source `row_key`                        | the columns `on_conflict` matches rows by, named as the transform OUTPUTS them. Declare it when the transform renames a key column: `upstream_trades_backfill` declares `venue` where its source key says `ex`                                                                                                                                                                                                                                                                                                                                                                             | not symbols, or names a column the transform's declared `output` lacks (including a defaulted source key the transform renamed)     |
+  | `window_column`  | no       | symbol, default the source `time_column`                                     | the OUTPUT column that carries the window's time. `replace` clears a window by it, so it must be the column the window was cut on. Declare it when the transform moves the time: `hdb_demo_markouts_backfill` outputs `time` as trade_time+horizon and declares `trade_time`. Undeclared it is the source's time column if the output keeps it, else `time`; a worker with neither refuses `replace` at plan time                                                                                                                                                                          | not an output column; at run time, `replace` on a worker with no such column                                                        |
 
 `ns` is **not** a key: the namespace is always `.qpipe.job.<worker>`, and a
 supplied `ns` is refused. `define` writes the lifecycle methods (`init`, `plan`,
@@ -350,6 +356,39 @@ so a late event still finds its reference rows.
 
 Either way, what is evaluated is what the full history would have given.
 
+## Bars job --- `.qetl.job.stream.bars`
+
+`.qetl.job.stream.at_bars[name;decl]`. A job that aggregates a stream into
+fixed-width time windows: OHLC, VWAP and volume per interval
+(`src/etl/core/bars.q`, #946). `exec_bars` is one: `executions` into `exec_bar`.
+
+Declares `procname`, `period` (how often closed windows are looked for) and
+`start_with_all`/`note` as for a streaming job, and:
+
+- `events`: the table aggregated.
+- `transform`: a `.qetl.transform` with ONE input, the events plus a `bar_start`
+  column the kind adds; one row per group per window out, carrying the grouping
+  columns and `bar_start`. A backfill twin applies the same one (cutting the
+  window itself with `.qetl.job.stream.bars.assign`).
+- `publishes`: the bar table.
+- `width`: a positive timespan. Windows are half-open
+  `[bar_start, bar_start+width)` on the event time; a row on a boundary opens
+  the window that starts there. A window with no rows has no bar.
+- `lateness`: a timespan, `0D` for none. A window closes, and its bar is
+  published once, when its end plus `lateness` has passed.
+- `by` (default `` `sym``), `event_time` (default `` `time``): the grouping
+  columns, and the column the window is cut on.
+
+A row arriving before its window closes amends it; one arriving after is
+dropped, logged, and kept in `.qpipe.job.<name>.dropped` with its reason. At end
+of day (`on_endofday`, #943) every window of the day that ended is closed,
+whatever its lateness. The job replays its log and restores from its own bars
+(`restore_from`), so a restart rebuilds the open windows and publishes none that
+already went out. Bars are published before the windows are evicted, so a
+publish that throws is retried on the next tick. `define` installs `pending`,
+`closed`, `dropped`, `publish`, `now`, `on_batch`, `close_ready[now]`,
+`on_timer` and `on_endofday` in `.qpipe.job.<name>`.
+
 ## Reactions --- `.qetl.reaction`
 
 Running something when a dataset is published, rather than on a timer. A
@@ -362,11 +401,35 @@ one path that notifies, and not on a dry run --- with that window's range.
   | `.qetl.reaction.on_writing[dataset;name;outputs;handler]`    | the same                                                         | that it reads `dataset` and writes `outputs`, as asserted              |
   | `.qetl.reaction.on_worker[dataset;worker;spec_fn]`           | `spec_fn` is `{[range_from;range_to] ...}` returning a run spec  | that it writes the worker's `dataset`, derived from its declaration    |
 
-Prefer `on_worker` when the downstream work is itself a worker: its edge in the
-graph is read from the worker's declaration rather than asserted. [Recomputing a
-table when the one it reads is
+Prefer `on_worker` when the downstream work is itself a worker (plain q only;
+TorQ refuses it, one bounded worker per process): its edge in the graph is read
+from the worker's declaration rather than asserted. [Recomputing a table when
+the one it reads is
 published](../guides/new-pipeline.md#recomputing-on-an-upstream-publish) covers
 when to use which.
+
+## Sinks --- `alert_sink`
+
+Jobs write inward by default. `alert_sink` (`src/etl/streaming/alert_sink.q`,
+process `alert_sink1`) is the first outbound sink: a streaming job that
+subscribes to `fx_limit_breach` and POSTs each breach to a webhook as JSON
+(`text` for chat webhooks, `breach` for anything that parses it).
+
+It is a streaming job rather than a `.qetl.io` manager because a manager is
+where a bounded worker's finished window goes, and a failure there fails the
+window; a breach has no window or coverage, and its failure policy is retry then
+record. File sinks from bounded workers (Parquet/CSV), ODBC write-back and Kafka
+are not done: #947 stays open for them.
+
+  | behaviour    | what it does                                                                                                                                                                                                         |
+  | ---          | ---                                                                                                                                                                                                                  |
+  | guarantee    | **at least once**, and in memory only: a breach can be sent twice (a timeout after the target acted, a crash after the POST), and what is queued is lost on restart. The receiver must tolerate a repeat             |
+  | throttle     | `.qlimit.throttle` on the breach's scope and metric, `alert_period` (5 minutes): a standing breach is delivered once per period                                                                                      |
+  | retries      | one attempt on arrival, then one per 10 s tick, `max_attempts` (3) in all. No sleeping                                                                                                                               |
+  | failure      | after the last attempt the breach moves to `.qpipe.job.alert_sink.dead` with its error, is logged at error, and leaves the throttle so its next report is delivered                                                  |
+  | URL          | `UQF_SOURCE_CRED_ALERT_SINK` only (a webhook URL carries its token), never logged. There is no `sources.csv` row for it: that file's rows are for sources with a transport and a table to read                       |
+  | none set     | the job **refuses**: `on_batch` throws naming the variable, which `.qetl.stream_health` counts as failing. It does not idle, since an idle sink drops breaches silently                                              |
+  | testing      | `.qpipe.job.alert_sink.post[target;body]` is the one seam that touches the network; `tests/q/test_alert_sink.q` replaces it with a fake that records calls and fails on demand                                       |
 
 ## Job graph: derived, not declared
 

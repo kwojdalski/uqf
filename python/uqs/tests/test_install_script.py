@@ -50,6 +50,8 @@ def repo(tmp_path: Path) -> Path:
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text("")
     shutil.copy2(ROOT / "install.sh", root / "install.sh")
+    # install.sh reads the qlinter pin from here (#969).
+    shutil.copy2(ROOT / ".qlinter-version", root / ".qlinter-version")
     return root
 
 

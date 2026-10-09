@@ -46,6 +46,7 @@ OMITTED: dict[str, dict[str, str]] = {
             if p.kind.value == "backfill"
         },
         "tap1": "subscribes and logs; it writes no table",
+        "alert_sink1": "an outbound sink - reads fx_limit_breach, writes no table",
     },
 }
 

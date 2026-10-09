@@ -174,7 +174,13 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
         span:{[f;t] f+til 1+t-f}[`date$opts`range_from;`date$opts[`range_to]-1];
         dates:distinct dates,span where (span<.z.d) and
             {[root;target;d] not ()~key hsym `$(string .Q.par[root;d;target]),"/"}[root;target] each span];
-    o:opts,`target`time_column!(target;`time);
+    / The window is cleared on opts`time_column - the column it was cut on, as
+    / the output holds it (#972) - while the PARTITION is still by `time`. They
+    / differ when a transform moves time (markouts: trade_time+horizon), and
+    / then only the visited dates are cleared: the window's own days and the
+    / batch's. A row an earlier run filed on a later day, which this batch no
+    / longer produces, is not reached.
+    o:opts,enlist[`target]!enlist target;
     plan:{[root;target;data;days;strategy;o;d]
         part:hsym `$(string .Q.par[root;d;target]),"/";
         rows:data where days=d;

@@ -36,6 +36,7 @@ from pathlib import Path
 
 from uqs.deploy import history, targets
 from uqs.deploy.config import DeployError
+from uqs.deploy.remote import diagnostic
 from uqs.paths import UqsError
 
 #: The remote preflight's exit code when <dest>/current holds no release.
@@ -287,6 +288,6 @@ def current_release(r: Remote, runner: Runner = subprocess.run) -> str:
         raise UqsError(f"could not run ssh: {exc}") from None
     _refuse_unreached(r, done.returncode)
     if done.returncode:
-        said = (done.stderr or done.stdout or "").strip().splitlines()[-1:] or ["nothing"]
-        raise UqsError(f"target {r.name}: the check failed (exit {done.returncode}): {said[0]}")
+        said = diagnostic(done) or "nothing"
+        raise UqsError(f"target {r.name}: the check failed (exit {done.returncode}): {said}")
     return done.stdout.strip()

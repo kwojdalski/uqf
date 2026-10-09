@@ -8,7 +8,7 @@ import json
 from uqs.deploy.artifact import LEGACY_RUNTIME, compatible
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.lock import Lock
-from uqs.deploy.remote import Transport, _checked, q, script
+from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
 from uqs.deploy.selection import Selection
 from uqs.logger import get_logger
 
@@ -73,8 +73,7 @@ class Server:
             raise DeployError(
                 "preflight",
                 f"the login user on {self.cfg.host} cannot run commands as {user} through "
-                f"`sudo -n -iu {user}` without a password: "
-                + redact((r.stderr or r.stdout or "").strip()[-300:]),
+                f"`sudo -n -iu {user}` without a password: " + diagnostic(r),
             )
         got = (r.stdout or "").strip().splitlines()[-1:] or [""]
         if got[0] != user:

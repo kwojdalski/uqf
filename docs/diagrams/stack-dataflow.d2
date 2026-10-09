@@ -117,10 +117,12 @@ fx_limit_breach: "fx_limit_breach\none row per NEW breach" { class: table }
 market_data: "market_data\none book shape from\nevery venue's book" { class: table }
 superbook: "superbook\nliquidity merged across sources" { class: table }
 arbitrage: "arbitrage\nbid over ask in the merged book" { class: table }
+last_value: "last_value\nthe current price of every sym:\nread the last row per sym" { class: table }
 cross_arbitrage: "cross_arbitrage\ndirect vs a synthetic route" { class: table }
 config_change: "config_change\nwho changed which knob" { class: table }
 kafka_client_flow: "kafka_client_flow\neach record with its\npartition · offset" { class: table }
 client_flow: "client_flow\nclient FX flow, each record once" { class: table }
+exec_bar: "exec_bar\nsym · bar_start · open · high · low\nclose · volume · vwap · trades" { class: table }
 crypto_execution_quality: "crypto_execution_quality\ntrade_time · horizon · venue\ntrade_price · ref_price · markout_bps" { class: table }
 
 # --------------------------------------------------------------- the jobs
@@ -135,9 +137,11 @@ marketdata1: "marketdata1\nnormalizer" { class: job }
 superbook1: "superbook1\n.qpipe.job.superbook merge\nacross sources" { class: job }
 databento1: "databento1\nthe same .qetl.transform fold\nthe backfill declares" { class: job }
 arbitrage1: "arbitrage1\ncrossed levels in the merged book" { class: job }
+last_value1: "last_value1\nnewest top of book per sym\nolder books are dropped" { class: job }
 crossarb1: "crossarb1\n.qfwd.cross_book_chain_at_sizes" { class: job }
 kafka_flow1: "kafka_flow1\ndeduplicates on (partition;offset)\nstarted with its consumer" { class: job }
 crypto_markout1: "crypto_markout1\nmarkouts in bps against the\nbest mid across venues" { class: job }
+exec_bars1: "exec_bars1\nopen/high/low/close/vwap per\nminute; late fills amend it" { class: job }
 
 storage: "rdb1 — today's ticks\n↓ EOD writedown\nhdb1 / hdb2 — on disk" { class: store }
 
@@ -191,6 +195,9 @@ market_data -> superbook1: "subscribe, FX only"
 superbook1 -> superbook: "republish"
 superbook1 -> config_change { style.stroke-dash: 4 }
 
+market_data -> last_value1: "subscribe, FX and crypto"
+last_value1 -> last_value: "republish what changed"
+
 superbook -> arbitrage1: "subscribe"
 arbitrage1 -> arbitrage: "republish"
 
@@ -206,6 +213,9 @@ crypto_trades -> crypto_markout1: "subscribe"
 crypto_book -> crypto_markout1: "best mid"
 crypto_markout1 -> crypto_execution_quality: "republish"
 
+executions -> exec_bars1: "subscribe"
+exec_bars1 -> exec_bar: "republish, each bar once"
+
 # --------------------------------------------------------------- persisted
 
 quote -> storage
@@ -216,6 +226,7 @@ trades -> storage
 crypto_book -> storage
 crypto_trades -> storage
 executions -> storage
+exec_bar -> storage
 mkt_orderbook -> storage
 position -> storage
 demo_execution_quality -> storage
@@ -227,6 +238,7 @@ fx_limit_breach -> storage
 market_data -> storage
 superbook -> storage
 arbitrage -> storage
+last_value -> storage
 cross_arbitrage -> storage
 config_change -> storage
 kafka_client_flow -> storage

@@ -119,6 +119,18 @@ Publishes `mkt_orderbook`. Profile `depth`.
 kept as the process's own state and published nowhere. A leaf you can stop
 without anything downstream noticing. Profile `depth`.
 
+**`alert_sink1` · limit breaches to a webhook** --- POSTs each `fx_limit_breach`
+row as JSON to the URL in `UQF_SOURCE_CRED_ALERT_SINK`, throttled, retried three
+times and then recorded in `dead`. At least once, in memory. Refuses to run with
+no URL. On demand, no profile. See
+[pipeline-declarations](../reference/pipeline-declarations.md#sinks-----alert_sink).
+
+**`last_value1` · the current price of every sym** --- the newest level-0 bid,
+ask and mid per sym from `market_data`, FX and crypto, as a published table. An
+older book never overwrites a newer one. Read the last row per sym for the one
+shared answer: `select by sym from last_value`, from the RDB or through the
+gateway. Publishes `last_value`. Profile `fx`; not in `uqs start`.
+
 ## Backfills
 
 A backfill takes a date range, fills it, records which windows are covered, and

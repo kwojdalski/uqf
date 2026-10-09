@@ -54,6 +54,8 @@ describe[`event_tape]:
     "Per-event order/trade tape: add, cancel and trade events with the aggressor side on a trade. A superset of trades, so a tape filtered to action='trade' is trade-shaped. Sorted ascending by time by contract - see docs/architecture/event-tape.md";
 describe[`demo_execution_quality]:
     "Post-trade markout per fill per horizon; a null markout_pips means no reference quote existed at that horizon, not a zero markout";
+describe[`exec_bar]:
+    "One-minute bars of executions per sym, built by exec_bars1 and rebuildable from the HDB by hdb_exec_bars_backfill: open, high, low, close, size-weighted vwap, volume and fill count for [bar_start, bar_start+1m) on the fill's source_time. A minute with no fills has no row; the minute a fill can still amend is not yet published, so the newest bar lags by about 5s past its end";
 describe[`executions]:
     "Every fill table the stack carries, spelled one way by the executions normalizer: the FX trades and cryptorust's crypto_trades. source_time is the source's own stamp, time the plant's on the normalized row. This is what posbook1 reads";
 describe[`fx_limit_breach]:
@@ -127,6 +129,8 @@ unbounded[`predictions`ccy_exposure`reference_data`order_routing`connections`eco
     6#enlist "declared, not yet produced: no rows to bound. Its policy row is due with its first producer";
 unbounded[`config_change]:
     enlist "one row per watched variable per change - a handful a day";
+unbounded[`exec_bar]:
+    enlist "one row per sym per minute - 1440 a day for a sym that trades all day, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`fx_limit_breach]:
     enlist "one row per limit newly crossed, throttled so a standing breach does not repeat";
 unbounded[`etl_coverage]:
@@ -172,3 +176,5 @@ surface:{[]
     "One trade copied out of another kdb+ HDB on this machine by hdb_transfer_backfill, with its notional (price times size, in the quote currency) added on the way - the worked example of moving data from one kdb+ database into another; scripts/examples/hdb_transfer_example.q runs it end to end";
 .qcat.describe[`crypto_execution_quality]:
     "Post-trade markout per real crypto fill per horizon, in bps against the best mid across venues; a null markout_bps means no venue had a live book at that horizon, not a zero markout";
+.qcat.describe[`last_value]:
+    "One change to a pair's current price: the newest level-0 bid, ask and mid across sources, FX and crypto, with the source that quoted it and its own source_time. Appended only when a newer book replaces the held one, so read the latest row per sym (select by sym) for the one shared current price";

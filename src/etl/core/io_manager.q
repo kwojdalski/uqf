@@ -203,10 +203,10 @@ write_memory:{[target;batch]
 / @private
 write_memory_keyed:{[target;batch;opts]
     existing:$[target in tables `.; value target; 0#batch];
-    / The range is the window's; a transformed batch may carry the plant's
-    / `time` rather than the source's own time column, and then that is it.
-    tc:$[`time in cols batch; `time; opts`time_column];
-    target set resolve[opts`on_conflict;existing;batch;opts,`target`time_column!(target;tc)];
+    / The range is the window's, and opts`time_column is the column the window
+    / was cut on, as the batch holds it (#972) - not `time, which a transform
+    / may have moved.
+    target set resolve[opts`on_conflict;existing;batch;opts,enlist[`target]!enlist target];
     count batch}
 
 / The default: an in-process table, which is exactly what every worker did

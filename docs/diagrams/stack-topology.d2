@@ -121,9 +121,12 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   superbook1: "superbook1 :6093\nmerges quoted liquidity\nacross sources" { class: job }
   arbitrage1: "arbitrage1 :6094\nbid over ask in\nthe merged book" { class: job }
   crossarb1: "crossarb1 :6095\ndirect book against a\nsynthetic route" { class: job }
+  last_value1: "last_value1 :6103\nthe newest top of book per sym\nfx profile, on demand" { class: job }
   tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
   kafka_flow1: "kafka_flow1 :6097\nclient FX flow off Kafka,\ndeduplicated, on demand" { class: job }
   crypto_markout1: "crypto_markout1 :6101\ncrypto fills marked out\nagainst the best mid, on demand" { class: job }
+  alert_sink1: "alert_sink1 :6102\nfx_limit_breach out to a webhook,\nat least once, on demand" { class: job }
+  exec_bars1: "exec_bars1 :6104\none-minute fill bars off\nexecutions" { class: job }
   legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\ndatabento1's and kafka_flow1's inputs\ncome from external Python handlers,\nnot from a process in this diagram." { class: band }
 }
 
@@ -156,7 +159,7 @@ downstream: "Storage, the gateway, and the bounded half" {
 
   storage: "rdb1 :6052 — today's ticks\nwdb1 :6055 → sort1 :6056 → sortworker1/2\nhdb1 :6053 · hdb2 :6054 — on disk" { class: store }
   gw: "gateway1 :6057\nthe only door in\n\nmonitor1 :6059 - a handle per process it\nwatches, the connection budget's biggest user\nhousekeeping1 :6061 · metrics1 :6068\ndiscovery1 :6051 registers every process" { class: store }
-  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\ndatabento_backfill1 :6090 · upstream_backfill1 :6091\nduckdb_deals_backfill1 :6096 · crypto_market_data_backfill1 :6098\nhdb_demo_markouts_backfill1 :6099 - marks out the HDB's fills\nhdb_transfer_backfill1 :6100 - copies a local HDB's trades\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qetl.io writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
+  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\ndatabento_backfill1 :6090 · upstream_backfill1 :6091\nduckdb_deals_backfill1 :6096 · crypto_market_data_backfill1 :6098\nhdb_demo_markouts_backfill1 :6099 - marks out the HDB's fills\nhdb_transfer_backfill1 :6100 - copies a local HDB's trades\nhdb_exec_bars_backfill1 :6105 - rebuilds the fill bars\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qetl.io writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
 }
 
 jobs -> runner.qtorq: "run under" { style.stroke: "#3d7a5a" }

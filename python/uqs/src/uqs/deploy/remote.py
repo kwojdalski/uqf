@@ -88,7 +88,7 @@ class Remote:
         except OSError as exc:
             raise DeployError(stage, f"could not run scp: {exc}") from None
         if r.returncode:
-            raise DeployError(stage, f"scp failed: {redact(r.stderr.strip())}")
+            raise DeployError(stage, f"scp failed: {diagnostic(r)}")
 
 
 def q(value: str) -> str:
@@ -113,9 +113,10 @@ SSH_NOISE = re.compile(
 
 
 def diagnostic(r: subprocess.CompletedProcess, lines: int = 15) -> str:
-    """What a failed remote command said: its stderr without ssh's own notices,
-    then its stdout - a refusal printed on either survives, where taking
-    stderr alone dropped stdout whenever ssh had written a warning."""
+    """What a failed remote command said: its stdout, then its stderr without
+    ssh's own notices - a refusal printed on either survives, where taking
+    stderr alone dropped stdout whenever ssh had written a warning. Every
+    remote failure message in deploy/ is read through here (#971)."""
     err = [ln for ln in (r.stderr or "").splitlines() if ln.strip() and not SSH_NOISE.match(ln)]
     out = [ln for ln in (r.stdout or "").splitlines() if ln.strip()]
     return redact("\n".join((out + err)[-lines:]))

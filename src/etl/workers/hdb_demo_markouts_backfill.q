@@ -9,7 +9,9 @@
 / live job also scored replaces those rows rather than counting the fills
 / twice.
 / .
-/ A window is on trade_time - see hdb_demo_markouts.q for why.
+/ A window is on trade_time - see hdb_demo_markouts.q for why. The output's own
+/ `time` is trade_time+horizon, so window_column says trade_time: `replace then
+/ clears the rows the window produced, not a neighbour's late markouts (#972).
 
 \d .qpipe.job.hdb_demo_markouts_backfill
 
@@ -80,9 +82,9 @@ facts:{[batch]
         .qetl.plant.shape `demo_execution_quality)))];
 
 .qetl.job.bounded.define[`hdb_demo_markouts_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key!
+    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column!
     (`hdb_demo_markouts;`demo_execution_quality;0D01:00:00;`hdb_demo_markouts_score;
      .qpipe.job.hdb_demo_markouts_backfill.quality_check;.qpipe.job.hdb_demo_markouts_backfill.facts;
      `hdb_demo_markouts_backfill1;
      "bounded: marks out the HDB's fills against its quotes, into demo_execution_quality";
-     `sym`trade_time`horizon)];
+     `sym`trade_time`horizon;`trade_time)];

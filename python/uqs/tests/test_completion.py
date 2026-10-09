@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
+from uqs.model.kinds import SCAFFOLD_KINDS
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.profiles import PROFILES
 from uqs.stack import listing
@@ -110,13 +111,7 @@ def test_fixed_choices_complete():
     assert complete("uqs logs --level W") == ["WARNING"]
     assert complete("uqs logs --multitail --stream ") == ["out", "err", "both"]
     assert complete("uqs feed start ") == ["databento", "kafka", "crypto", "crypto-fills"]
-    assert complete("uqs job new x --kind ") == [
-        "streaming",
-        "backfill",
-        "normalizer",
-        "external",
-        "horizon",
-    ]
+    assert complete("uqs job new x --kind ") == list(SCAFFOLD_KINDS)
 
 
 def test_plant_tables_complete_for_a_job_s_inputs():
