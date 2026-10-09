@@ -52,7 +52,8 @@ portable rather than a demo of this stack:
 
 ```bash
 # Everything in one process: plant, feed, normalizer and service. No ports needed.
-q scripts/processes/run_stream.q -job executions,fx_positions -feed fx_orders_feed
+# The executions normalizer starts because fx_positions subscribes to its table.
+q scripts/processes/run_stream.q -job fx_positions -feed fx_orders_feed
 
 # Or as separate processes, the way it would run for real.
 q scripts/processes/run_stream.q -plant 5010

@@ -21,10 +21,20 @@
 /       run the service, subscribing to the plant at 5010 and listening on
 /       5011 so a client can query its book.
 / .
-/   q scripts/processes/run_stream.q -job executions,fx_positions -feed fx_orders_feed
+/   q scripts/processes/run_stream.q -job fx_positions -feed fx_orders_feed
 /       ALL of it, plus the plant, in one process: the feed, the executions
 /       normalizer that turns its filled orders into fills, and the service.
 /       No ports, no sockets, no second terminal. -job takes a comma list.
+/ .
+/ UPSTREAM IS DERIVED, NOT NAMED (#927). With the plant in this process,
+/ -job also starts every in-tree job upstream of it - each job publishing a
+/ table it subscribes to, and theirs in turn - read from the jobs' own
+/ subscribe_to/publishes, as `uqs start --profile` reads the same graph. So
+/ moving a job onto a normalized table never changes its run command: the
+/ executions normalizer above is started because fx_positions subscribes to
+/ executions, not because the command line says so. Feeds are never added:
+/ they stand in for the outside world, and which one is -feed's choice. With
+/ -tp the producers run in other processes, so nothing is added.
 / .
 / RECOVERY. The plant logs every message it carries, and a job started
 / against an existing log replays it before subscribing, so a restart
@@ -37,8 +47,10 @@
 
 \l src/init.q
 / Only the -job's declarations and what they reach (#902); all of them without one.
-/ -feed is run here too, so it is loaded with the jobs.
-if[`job in key .Q.opt .z.x;
+/ -feed is run here too, so it is loaded with the jobs. Only with -tp: a plant
+/ in this process starts each job's upstream, which the load plan does not
+/ reach, so it loads the whole tree - as the bare plant always has.
+if[all `job`tp in key .Q.opt .z.x;
     .qetl.load.only:{x where not null x} `$"," vs "," sv raze each (.Q.opt .z.x)`job`feed];
 \l src/etl/init.q
 
@@ -175,6 +187,36 @@ remote_transport:{[tp]
             .qproc.standalone.h({[want] .qetl.tick.subscribe[want;neg .z.w]};tbls);};
         add_timer)}
 
+/ The jobs to run for `jobs` with the plant in this process: every in-tree
+/ producer upstream of them, producers first, then `jobs` themselves.
+/ .
+/ A producer is a registered streaming job that publishes a table a wanted
+/ job subscribes to, followed transitively. Feeds - jobs subscribing to
+/ nothing - are never added: they stand in for an external source, and
+/ -feed chooses which. Every non-feed producer of a table is added, since
+/ each one publishes rows its consumers would otherwise miss. A cycle ends
+/ at the jobs already chosen. A name that is not a registered job is kept
+/ as given, so .qetl.job.stream.start reports it.
+/ @param jobs a job name, or a symbol list of them
+/ @return symbol list: the upstream jobs, nearest-to-source first, then jobs.
+/   For `fx_positions it is `executions`fx_positions (test_run_stream.py)
+with_upstream:{[jobs]
+    jobs:(),jobs;
+    reg:.qetl.job.stream.jobs;
+    known:key reg;
+    subs:{[reg;j] (first reg j)`subscribe_to}[reg] each known;
+    pubs:{[reg;j] (first reg j)`publishes}[reg] each known;
+    makers:known where 0<count each subs;
+    made:pubs where 0<count each subs;
+    seen:jobs; frontier:jobs; chain:`symbol$();
+    while[count frontier;
+        tbls:distinct raze subs known?frontier where frontier in known;
+        found:(makers where {[t;p] any p in t}[tbls] each made) except seen;
+        chain:found,chain;
+        seen,:found;
+        frontier:found];
+    chain,jobs}
+
 / Start everything this process was asked to run.
 / @return the jobs started
 start:{[]
@@ -189,7 +231,13 @@ start:{[]
     / A process with no -tp carries its own plant, so the bare-plant role
     / and the everything-in-one-process role are one code path.
     local:null tp;
-    if[local; start_plant plant_port];
+    if[local;
+        asked:jobs;
+        jobs:with_upstream jobs;
+        if[count added:jobs except asked;
+            .qetl.log.info[`run_stream;"starting what the jobs subscribe to";
+                `asked`upstream!(asked;added)]];
+        start_plant plant_port];
     if[not null listen; system "p ",string listen];
     started:();
     tr:$[local; local_transport[]; remote_transport tp];
