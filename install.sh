@@ -61,7 +61,7 @@ FORMER_NAMES=(uqf-stack torq-orchestrator torq-demo)
 PACKAGE="python/uqs"
 COMMAND="uqs"
 PRE_COMMIT="pre-commit==4.6.2" # the version .github/workflows/ci.yml runs
-QLINT_VERSION="v0.14.9"        # the qlinter CI pins; the q-traps rules match it
+QLINT_VERSION="v0.14.10"       # the qlinter CI pins; the q-traps rules match it
 NODE_RANGE="^22.13 || ^24 || >=26" # web/package.json "engines"
 
 INSTALLED=() MISSING=() OPTIONAL=() UNVERIFIED=()

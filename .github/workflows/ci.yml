@@ -60,7 +60,7 @@ jobs:
         # a new rule landing upstream must not turn this repository red
         # without anyone choosing it - see DELEGATED_CODES.
         env:
-          QLINT_VERSION: v0.14.9
+          QLINT_VERSION: v0.14.10
         run: |
           set -euo pipefail
           url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
