@@ -177,13 +177,17 @@ def worker_body(
     partition: str | None = None,
     check: bool = False,
     transform: str = "passthrough",
+    shared: tuple[str, str] | None = None,
 ) -> str:
     """The worker file. `partition` scopes it to one slice of its dataset,
     which is what lets a second worker fill the same dataset; `check` adds a
-    quality check stub; `transform` is `passthrough` or `derive` - see
+    quality check stub; `transform` is `passthrough` or `derive`, and
+    `shared` a twin's stream job and the transform it declares - see
     scaffold/transform.py."""
     check_stub = _CHECK_STUB.format(worker=worker) if check else ""
-    derive_stub, transform_decl, transform_name = worker_transform(transform, worker, src, dataset)
+    derive_stub, transform_decl, transform_name = worker_transform(
+        transform, worker, src, dataset, shared
+    )
     extra_keys = ("`check" if check else "") + ("`partition" if partition else "")
     extra_values = (f";.qpipe.job.{worker}.quality_check" if check else "") + (
         f";`{partition}" if partition else ""

@@ -148,6 +148,19 @@ hdb_rows:{[partition_col;target;batch]
 / .
 / Resolved for every date BEFORE any is written, so a `fail on the third
 / date leaves the first two untouched rather than half a window written.
+/ .
+/ THE SPILL (#884). A row's key is one row, wherever a writer put it. A
+/ stream job stamps a row when it RECEIVES it - at or after the event - so
+/ near midnight it can file under the next day a row whose backfill twin
+/ files under this one: both writers, one key, two partitions, and a
+/ `replace of this day alone would leave the live copy as a duplicate.
+/ So under `replace, the partition holding the window's END loses every
+/ row whose key the window wrote. Only when the key leaves out the time
+/ column - with time in the key, a later partition cannot hold the same
+/ key - and never in today's partition, which is the tickerplant's: a
+/ refill of yesterday cannot reach a row still on its way to end-of-day.
+/ Not on PeachQ, which cannot rewrite a partition already on disk: there a
+/ replace leaves the spill, as it always did.
 / @private
 write_hdb_keyed:{[root;partition_col;target;batch;opts]
     strategy:require_strategy opts`on_conflict;
@@ -175,6 +188,8 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
         existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
         (part;d;plain resolve[strategy;existing;rows;o])
         }[root;target;data;days;strategy;o] each dates;
+    if[(`replace=strategy) and (not on_peachq) and not any (`time,opts`time_column) in (),opts`row_key;
+        plan,:spill[root;target;data;opts;dates]];
     / STAGED, THEN SWAPPED. Writing `set` straight onto the live partition
     / rewrote it column by column while the HDB had it mapped: a kill part way
     / left columns of different lengths, and a reload in between mapped a
@@ -184,6 +199,27 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
     {[root;target;step] stage[root;step 1;target;step 2]}[root;target] each plan;
     {[root;target;step] swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
     count batch}
+
+/ Private: the partition after a `replace window, without the window's keys.
+/ .
+/ Empty when there is nothing to do: the window ends at midnight on a day
+/ already planned, on today or later, on a day with no such partition, or
+/ on one holding none of the keys.
+/ @param root the HDB root
+/ @param target the table
+/ @param data the window's rows, enumerated
+/ @param opts the write's options: row_key and range_to
+/ @param dates the dates already planned
+/ @return () or one (part;date;rows) step, as write_hdb_keyed plans them
+/ @private
+spill:{[root;target;data;opts;dates]
+    d:`date$opts`range_to;
+    part:hsym `$(string .Q.par[root;d;target]),"/";
+    if[(d in dates) or (d>=.z.d) or ()~key part; :()];
+    kc:(),opts`row_key;
+    existing:flip {x til count x} each flip select from get part;
+    keep:existing where not (kc#existing) in kc#data;
+    $[count[keep]<count existing; enlist (part;d;plain keep); ()]}
 
 / ------------------------------------------------------------ STAGING
 / .

@@ -445,6 +445,32 @@ test_hdb_replace_clears_a_day_the_source_has_emptied:{[t]
     .qunit.assertEquals[(count part[root;2026.01.02;`iodeals];count part[root;2026.01.03;`iodeals]);0 1;
         "the emptied day is empty, the other day keeps its deal"]};
 
+/ A stream job's row and its backfill twin's, one key, stamped either side of
+/ midnight: the live copy by receipt (half a second after), the twin's by the
+/ event (#884). Partitioned on `time`, keyed without it.
+spill_opts:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`sym`trade_time;`time;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000)
+live_rows:{[] ([] time:2026.01.03D00:00:00.500000000 2026.01.03D10:00:00.000000000;
+    sym:`EURUSD`EURUSD; trade_time:2026.01.02D23:59:59.000000000 2026.01.03D09:59:59.000000000; px:1.1 1.2)}
+twin_row:{[] ([] time:enlist 2026.01.02D23:59:59.900000000; sym:enlist `EURUSD;
+    trade_time:enlist 2026.01.02D23:59:59.000000000; px:enlist 1.1)}
+
+test_hdb_replace_takes_its_keys_out_of_the_next_day:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`time];
+    .qetl.io.write[m;`iospill;live_rows[]];
+    .qetl.io.write_keyed[m;`iospill;twin_row[];spill_opts];
+    .qunit.assertEquals[count part[root;2026.01.02;`iospill];1;"the twin's row is on the 2nd"];
+    .qunit.assertEquals[exec trade_time from part[root;2026.01.03;`iospill];enlist 2026.01.03D09:59:59.000000000;
+        "and the 3rd lost the live copy of that key - nothing else"]};
+
+test_hdb_replace_leaves_the_next_day_alone_when_time_is_in_the_key:{[t]
+    / With time in the key, a later partition cannot hold the same key.
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`time];
+    .qetl.io.write[m;`iospill;live_rows[]];
+    .qetl.io.write_keyed[m;`iospill;twin_row[];@[spill_opts;`row_key;:;`sym`time]];
+    .qunit.assertEquals[count part[root;2026.01.03;`iospill];2;"both rows of the 3rd are still there"]};
+
 test_hdb_fail_writes_nothing_when_a_key_clashes:{[t]
     root:hdb_dir[];
     m:.qetl.io.hdb[root;`deal_time];

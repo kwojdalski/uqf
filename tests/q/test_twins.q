@@ -8,25 +8,38 @@
 / .
 / The rule, over every twin pair: run the twin's transform on the STREAM
 / transform's own examples - with the input names mapped - and it must give
-/ the stream's expected rows, on the stream's columns. A pair is listed in
-/ `pairs` with that mapping; a new twin fails here until someone lists it.
+/ the stream's expected rows, on the stream's columns. Which transform each
+/ side applies is read from its own declaration - the stream job's
+/ `transform` and the twin's - so it cannot drift from what runs; only the
+/ input renaming is listed, in `renames`, and a new twin fails here until
+/ someone lists it.
 
 \d .twintest
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
-pairs:(`demo_markout`eq_orderbook)!(
-    (`demo_execution_quality;`hdb_demo_markouts_score;`trades`quotes!`trades`quote);
-    (`eq_orderbook;`eq_orderbook;()!()))
+/ Stream transform input -> twin transform input, where they differ.
+renames:(`demo_markout`eq_orderbook)!(`trades`quotes!`trades`quote;()!())
+
+/ (the stream job's transform; its twin's; the input renaming), each
+/ transform as the declaration names it.
+pair:{[job]
+    twin:first .qetl.uptime.twins job;
+    ((.qetl.job.stream.def job)`transform;(.qetl.job.bounded.def twin)`transform;renames job)}
+
+with_twins:{[] js:key .qetl.job.stream.jobs; js where 0<count each .qetl.uptime.twins each js}
 
 test_every_twin_pair_is_listed:{[t]
-    js:key .qetl.job.stream.jobs;
-    have:js where 0<count each .qetl.uptime.twins each js;
-    .qunit.assertEquals[asc have;asc key pairs;
+    .qunit.assertEquals[asc with_twins[];asc key renames;
         "a stream job with a twin is listed here, so its equivalence is checked"]};
 
 / The twin's transform reproduces each of the stream transform's examples.
+test_a_stream_job_with_a_twin_declares_its_transform:{[t]
+    / What --twin-of scaffolds into the twin, and what this suite compares.
+    .qunit.assertEquals[{null (.qetl.job.stream.def x)`transform} each with_twins[];(count with_twins[])#0b;
+        "every stream job a twin refills names the transform it applies"]};
+
 agrees:{[job]
-    p:pairs job;
+    p:pair job;
     s:.qetl.transform.registry p 0;
     if[(p 0)~p 1; :1b];
     all {[p;s;ex]

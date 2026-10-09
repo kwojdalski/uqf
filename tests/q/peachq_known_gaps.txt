@@ -33,6 +33,7 @@
 .iotest.test_hdb_finish_sorts_and_attributes  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
 .iotest.test_hdb_keyed_writes_are_finished_like_any_other  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
 .iotest.test_hdb_replace_clears_a_day_the_source_has_emptied  # PeachQ 'corrupt: reading or rewriting a partitioned HDB on disk
+.iotest.test_hdb_replace_takes_its_keys_out_of_the_next_day  # PeachQ result differs: it cannot rewrite a partition already on disk, so a replace leaves the next day's spill (src/etl/core/io_hdb.q)
 .iotest.test_recover_finds_what_a_lost_process_wrote_and_finish_repairs_it  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
 .iotest.test_recover_trims_a_torn_append  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
 .iotest.test_recover_looks_only_inside_the_range  # PeachQ result differs: with no attribute to read, a partition written in sym-then-time order already is what finish leaves, so it counts as finished
