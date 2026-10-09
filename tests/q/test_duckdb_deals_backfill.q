@@ -49,7 +49,7 @@ tearDown_release:{[] .qpipe.job.duckdb_deals_backfill.cleanup[];}
 test_a_bound_keeps_its_nanoseconds:{[t]
     .qunit.assertEquals[.qetl.io.odbc.duckdb_timestamp[2026.09.11D09:00:00.000000001];
         "make_timestamp_ns(1789117200000000001)";
-        "a long through .qetl.io.odbc.literal, because its timestamp form drops the sub-second part"]};
+        "a long through .qetl.io.odbc.literal, because its timestamp form stops at the microsecond"]};
 
 test_the_window_is_half_open:{[t]
     sql:.qpipe.source.duckdb_deals.sql_for[.duckdb_dealsbftest.d[1];.duckdb_dealsbftest.d[2]];
