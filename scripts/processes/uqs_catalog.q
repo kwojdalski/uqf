@@ -135,6 +135,8 @@ unbounded[`fx_limit_breach]:
     enlist "one row per limit newly crossed, throttled so a standing breach does not repeat";
 unbounded[`etl_coverage]:
     enlist "one ledger row per published window per dataset - hundreds a day, not ticks";
+unbounded[`flink_vwap]:
+    enlist "one row per sym per one-minute window Flink closes - a few thousand a day";
 unbounded[`deal_positions]:
     enlist "one row per pair per published window of demo_deals";
 unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`eq_orderbook`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`crypto_market_data`trades_copy`crypto_execution_quality]:
@@ -178,3 +180,7 @@ surface:{[]
     "Post-trade markout per real crypto fill per horizon, in bps against the best mid across venues; a null markout_bps means no venue had a live book at that horizon, not a zero markout";
 .qcat.describe[`last_value]:
     "One change to a pair's current price: the newest level-0 bid, ask and mid across sources, FX and crypto, with the source that quoted it and its own source_time. Appended only when a newer book replaces the held one, so read the latest row per sym (select by sym) for the one shared current price";
+.qcat.hidden[`flink_vwap_raw]:
+    "the RAW flink_vwap records, published by flink_vwap_streamer.py outside q and read only by flink_vwap, which reshapes them into flink_vwap";
+.qcat.describe[`flink_vwap]:
+    "Volume-weighted average price, total volume and trade count for one sym over one tumbling window, computed by an Apache Flink job outside q; each window appears once, keyed by its window_end";

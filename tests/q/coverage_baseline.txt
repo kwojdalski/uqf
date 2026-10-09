@@ -27,6 +27,8 @@
 .qetl.io.odbc.window_query
 # alert_sink.post POSTs to a webhook, so needs an HTTP endpoint (#947)
 .qpipe.job.alert_sink.post
+# exec_bars.now is the wall clock; test_bars.q replaces it with a fixed one
+.qpipe.job.exec_bars.now
 .qetl.io.odbc.with_connection
 .qpipe.source.crypto_market_data.query
 .qpipe.source.databento_mbp10.adapt
@@ -34,6 +36,7 @@
 .qpipe.source.databento_mbp10.select_list
 .qpipe.source.demo_events.query
 .qpipe.source.duckdb_deals.query
+.qpipe.source.hdb_executions.query
 .qpipe.source.upstream_trades.query
 
 # --- Needs a running TorQ process --------------------------------------

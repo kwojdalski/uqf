@@ -7,8 +7,8 @@ plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `demo_markout1`,
 `databento1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
-`crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`), and nine bounded
-backfill processes (`deals_backfill1`, `events_backfill1`,
+`crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`, `flink_vwap1`),
+and nine bounded backfill processes (`deals_backfill1`, `events_backfill1`,
 `databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`,
 `crypto_market_data_backfill1`, `hdb_demo_markouts_backfill1`,
 `hdb_transfer_backfill1`, `hdb_exec_bars_backfill1`). Declared is not the same
@@ -202,6 +202,7 @@ their schema row and their place in the DAG, and are one command away:
   | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_orderbook` and its only consumer - so they start and stop together                                                                              |
   | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                         |
   | `kafka_flow1`                             | subscribes to `kafka_client_flow`, which only the external Kafka consumer publishes, so on a default start it consumes nothing                                                             |
+  | `flink_vwap1`                             | subscribes to `flink_vwap_raw`, which only the external Flink job publishes, so on a default start it consumes nothing                                                                     |
   | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                                      |
   | `superbook1`, `arbitrage1`                | the direct-arbitrage chain off `market_data`: `superbook` is read only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together                          |
   | `crossarb1`                               | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it                                                                                                  |

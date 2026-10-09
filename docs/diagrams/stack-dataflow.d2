@@ -92,6 +92,7 @@ cryptomock1: "cryptomock1\nstands in for cryptorust's\ntwo recorders" { class: p
 fxordersfeed1: "fxordersfeed1\nsynthetic order flow" { class: producer }
 databento_py: "databento_feed.py\nexternal Python handler" { class: producer }
 kafka_py: "kafka_feed.py\nexternal Python consumer" { class: producer }
+flink_py: "flink_vwap_streamer.py\nexternal Apache Flink job" { class: producer }
 
 # ------------------------------------------------------------- the tables
 
@@ -122,6 +123,8 @@ cross_arbitrage: "cross_arbitrage\ndirect vs a synthetic route" { class: table }
 config_change: "config_change\nwho changed which knob" { class: table }
 kafka_client_flow: "kafka_client_flow\neach record with its\npartition · offset" { class: table }
 client_flow: "client_flow\nclient FX flow, each record once" { class: table }
+flink_vwap_raw: "flink_vwap_raw\nwindows as Flink emits them" { class: table }
+flink_vwap: "flink_vwap\nVWAP per sym per window, once" { class: table }
 exec_bar: "exec_bar\nsym · bar_start · open · high · low\nclose · volume · vwap · trades" { class: table }
 crypto_execution_quality: "crypto_execution_quality\ntrade_time · horizon · venue\ntrade_price · ref_price · markout_bps" { class: table }
 
@@ -140,6 +143,7 @@ arbitrage1: "arbitrage1\ncrossed levels in the merged book" { class: job }
 last_value1: "last_value1\nnewest top of book per sym\nolder books are dropped" { class: job }
 crossarb1: "crossarb1\n.qfwd.cross_book_chain_at_sizes" { class: job }
 kafka_flow1: "kafka_flow1\ndeduplicates on (partition;offset)\nstarted with its consumer" { class: job }
+flink_vwap1: "flink_vwap1\ndeduplicates on (sym;window_end)\nstarted with its Flink job" { class: job }
 crypto_markout1: "crypto_markout1\nmarkouts in bps against the\nbest mid across venues" { class: job }
 exec_bars1: "exec_bars1\nopen/high/low/close/vwap per\nminute; late fills amend it" { class: job }
 
@@ -208,6 +212,9 @@ crossarb1 -> config_change: "a knob change, either side" { style.stroke-dash: 4 
 kafka_py -> kafka_client_flow
 kafka_client_flow -> kafka_flow1: "subscribe"
 kafka_flow1 -> client_flow: "republish, each once"
+flink_py -> flink_vwap_raw
+flink_vwap_raw -> flink_vwap1: "subscribe"
+flink_vwap1 -> flink_vwap: "republish, each once"
 
 crypto_trades -> crypto_markout1: "subscribe"
 crypto_book -> crypto_markout1: "best mid"
@@ -242,5 +249,7 @@ last_value -> storage
 cross_arbitrage -> storage
 config_change -> storage
 kafka_client_flow -> storage
+flink_vwap_raw -> storage
+flink_vwap -> storage
 client_flow -> storage
 crypto_execution_quality -> storage

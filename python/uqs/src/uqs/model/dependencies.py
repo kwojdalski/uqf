@@ -62,6 +62,7 @@ EXTERNAL_PRODUCERS: dict[str, str] = {
     ),
     "crypto_book": "cryptorust's kdb recorder, which cryptomock1 stands in for",
     "crypto_trades": "cryptorust's kdb recorder, which cryptomock1 stands in for",
+    "flink_vwap_raw": "the external flink_vwap feed (`uqs feed start flink_vwap`)",
 }
 
 

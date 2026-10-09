@@ -164,6 +164,10 @@ UNPROFILED: dict[str, str] = {
         "an outbound sink that needs a webhook URL (UQF_SOURCE_CRED_ALERT_SINK) "
         "and refuses to run without one, so it starts only when asked"
     ),
+    "flink_vwap1": (
+        "a live external feed - its rows come from the Flink job (`uqs feed "
+        "start flink_vwap`), so it is started with that or not at all"
+    ),
 }
 
 #: The environment variable saying how many concurrent connections this

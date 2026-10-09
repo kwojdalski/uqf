@@ -100,6 +100,10 @@ def test_run_torq_sh_runs_a_site_launcher_under_the_generated_env(monkeypatch, t
     }
     seen: dict[str, Any] = {}
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: generated)
+    # The start guards have their own tests (test_start_policy). Left in, they
+    # ask a real q for its version through the fake run below, wherever q is
+    # installed.
+    monkeypatch.setattr(runtime.start_policy, "refuse_start", lambda *_a: None)
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, **kw))
     runtime.run_torq_sh(_paths(), ["start", "all"])
     assert seen["cmd"] == [str(launcher), "start", "all"]

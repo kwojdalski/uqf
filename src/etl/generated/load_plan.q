@@ -5,7 +5,7 @@
 / load order. init.q loads only these when a process names what it runs;
 / the whole tree otherwise (src/etl/core/declaration_load.q).
 
-.qetl.load.order:("src/etl/sources/crypto_market_data.q";"src/etl/sources/databento_mbp10.q";"src/etl/sources/demo_deals.q";"src/etl/sources/demo_events.q";"src/etl/sources/duckdb_deals.q";"src/etl/sources/hdb_demo_markouts.q";"src/etl/sources/hdb_executions.q";"src/etl/sources/hdb_transfer.q";"src/etl/sources/upstream_trades.q";"src/etl/transforms/crypto_market_data.q";"src/etl/transforms/demo_markouts.q";"src/etl/transforms/eq_orderbook.q";"src/etl/transforms/exec_bars.q";"src/etl/workers/crypto_market_data_backfill.q";"src/etl/workers/demo_deals_backfill.q";"src/etl/workers/demo_events_backfill.q";"src/etl/workers/duckdb_deals_backfill.q";"src/etl/workers/eq_orderbook_backfill.q";"src/etl/workers/hdb_demo_markouts_backfill.q";"src/etl/workers/hdb_exec_bars_backfill.q";"src/etl/workers/hdb_transfer_backfill.q";"src/etl/workers/upstream_trades_backfill.q";"src/etl/streaming/alert_sink.q";"src/etl/streaming/arbitrage.q";"src/etl/streaming/cross.q";"src/etl/streaming/cross_arbitrage.q";"src/etl/streaming/crypto_markout.q";"src/etl/streaming/crypto_mock.q";"src/etl/streaming/demo_markout.q";"src/etl/streaming/eq_orderbook.q";"src/etl/streaming/exec_bars.q";"src/etl/streaming/executions.q";"src/etl/streaming/fx_feed.q";"src/etl/streaming/fx_orderbook_feed.q";"src/etl/streaming/fx_orders_feed.q";"src/etl/streaming/fx_positions.q";"src/etl/streaming/fx_trades_feed.q";"src/etl/streaming/kafka_flow.q";"src/etl/streaming/last_value.q";"src/etl/streaming/market_data.q";"src/etl/streaming/posbook.q";"src/etl/streaming/superbook.q";"src/etl/streaming/vectorize.q";"src/etl/streaming/wide_orderbook_feed.q";"src/etl/reactions/rebuild_positions.q")
+.qetl.load.order:("src/etl/sources/crypto_market_data.q";"src/etl/sources/databento_mbp10.q";"src/etl/sources/demo_deals.q";"src/etl/sources/demo_events.q";"src/etl/sources/duckdb_deals.q";"src/etl/sources/hdb_demo_markouts.q";"src/etl/sources/hdb_executions.q";"src/etl/sources/hdb_transfer.q";"src/etl/sources/upstream_trades.q";"src/etl/transforms/crypto_market_data.q";"src/etl/transforms/demo_markouts.q";"src/etl/transforms/eq_orderbook.q";"src/etl/transforms/exec_bars.q";"src/etl/workers/crypto_market_data_backfill.q";"src/etl/workers/demo_deals_backfill.q";"src/etl/workers/demo_events_backfill.q";"src/etl/workers/duckdb_deals_backfill.q";"src/etl/workers/eq_orderbook_backfill.q";"src/etl/workers/hdb_demo_markouts_backfill.q";"src/etl/workers/hdb_exec_bars_backfill.q";"src/etl/workers/hdb_transfer_backfill.q";"src/etl/workers/upstream_trades_backfill.q";"src/etl/streaming/alert_sink.q";"src/etl/streaming/arbitrage.q";"src/etl/streaming/cross.q";"src/etl/streaming/cross_arbitrage.q";"src/etl/streaming/crypto_markout.q";"src/etl/streaming/crypto_mock.q";"src/etl/streaming/demo_markout.q";"src/etl/streaming/eq_orderbook.q";"src/etl/streaming/exec_bars.q";"src/etl/streaming/executions.q";"src/etl/streaming/flink_vwap.q";"src/etl/streaming/fx_feed.q";"src/etl/streaming/fx_orderbook_feed.q";"src/etl/streaming/fx_orders_feed.q";"src/etl/streaming/fx_positions.q";"src/etl/streaming/fx_trades_feed.q";"src/etl/streaming/kafka_flow.q";"src/etl/streaming/last_value.q";"src/etl/streaming/market_data.q";"src/etl/streaming/posbook.q";"src/etl/streaming/superbook.q";"src/etl/streaming/vectorize.q";"src/etl/streaming/wide_orderbook_feed.q";"src/etl/reactions/rebuild_positions.q")
 .qetl.load.declares:(`symbol$())!()
 .qetl.load.declares[`$"src/etl/workers/crypto_market_data_backfill.q"]:enlist `crypto_market_data_backfill
 .qetl.load.declares[`$"src/etl/workers/demo_deals_backfill.q"]:enlist `demo_deals_backfill
@@ -26,6 +26,7 @@
 .qetl.load.declares[`$"src/etl/streaming/eq_orderbook.q"]:enlist `eq_orderbook
 .qetl.load.declares[`$"src/etl/streaming/exec_bars.q"]:enlist `exec_bars
 .qetl.load.declares[`$"src/etl/streaming/executions.q"]:enlist `executions
+.qetl.load.declares[`$"src/etl/streaming/flink_vwap.q"]:enlist `flink_vwap
 .qetl.load.declares[`$"src/etl/streaming/fx_feed.q"]:enlist `fx_feed
 .qetl.load.declares[`$"src/etl/streaming/fx_orderbook_feed.q"]:enlist `fx_orderbook_feed
 .qetl.load.declares[`$"src/etl/streaming/fx_orders_feed.q"]:enlist `fx_orders_feed
@@ -54,6 +55,7 @@
 .qetl.load.jobs[`eq_orderbook_backfill]:("src/etl/sources/databento_mbp10.q";"src/etl/transforms/eq_orderbook.q";"src/etl/workers/eq_orderbook_backfill.q")
 .qetl.load.jobs[`exec_bars]:enlist "src/etl/streaming/exec_bars.q"
 .qetl.load.jobs[`executions]:enlist "src/etl/streaming/executions.q"
+.qetl.load.jobs[`flink_vwap]:enlist "src/etl/streaming/flink_vwap.q"
 .qetl.load.jobs[`fx_feed]:enlist "src/etl/streaming/fx_feed.q"
 .qetl.load.jobs[`fx_orderbook_feed]:enlist "src/etl/streaming/fx_orderbook_feed.q"
 .qetl.load.jobs[`fx_orders_feed]:enlist "src/etl/streaming/fx_orders_feed.q"
@@ -86,6 +88,7 @@
 .qetl.load.procs[`events_backfill1]:("src/etl/sources/demo_events.q";"src/etl/workers/demo_events_backfill.q")
 .qetl.load.procs[`exec_bars1]:enlist "src/etl/streaming/exec_bars.q"
 .qetl.load.procs[`executions1]:enlist "src/etl/streaming/executions.q"
+.qetl.load.procs[`flink_vwap1]:enlist "src/etl/streaming/flink_vwap.q"
 .qetl.load.procs[`fxfeed1]:enlist "src/etl/streaming/fx_feed.q"
 .qetl.load.procs[`fxorderbookfeed1]:enlist "src/etl/streaming/fx_orderbook_feed.q"
 .qetl.load.procs[`fxordersfeed1]:enlist "src/etl/streaming/fx_orders_feed.q"
