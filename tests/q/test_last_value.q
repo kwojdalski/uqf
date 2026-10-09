@@ -18,8 +18,7 @@ book:{[rows]
         ask_prices:ladder each rows[;4]; ask_sizes:sizes each rows[;4])}
 
 reset:{[]
-    `.qpipe.job.last_value.state set 1!.qpipe.job.last_value.last_value;
-    `.qpipe.job.last_value.tob set 0#.qpipe.job.last_value.tob;
+    .qetl.job.stream.reset `last_value;
     .sjtest.reset[]}
 
 / crypto books: the same rows, on market `crypto
@@ -173,8 +172,7 @@ test_fx_is_still_last_source_wins:{[t]
 / What test_job_output_contracts.q drives last_value with, so the table it
 / publishes is held to its plant table by name, order and type.
 contract_driver:{[]
-    `.qpipe.job.last_value.state set 1!.qpipe.job.last_value.last_value;
-    `.qpipe.job.last_value.tob set 0#.qpipe.job.last_value.tob;
+    .qetl.job.stream.reset `last_value;
     .qpipe.job.last_value.on_batch[`market_data;book enlist (`EURUSD;`LP_A;.last_valuetest.d[0];1.10;1.12)]}
 
 \d .

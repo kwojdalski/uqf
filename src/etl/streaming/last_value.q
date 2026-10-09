@@ -117,4 +117,4 @@ on_batch:{[t;x]
     .qpipe.job.last_value.on_batch;
     1b;
     "the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile";
-    enlist `state)];
+    `state`tob)];
