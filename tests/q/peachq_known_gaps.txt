@@ -4,69 +4,81 @@
 # flattening nested contexts, and holds the result to this list both ways: a
 # failure not listed here fails CI, and so does a listed test that passes - so
 # this list only shrinks. Format: `.suite.test_name  # reason`.
+#
+# A reason starts with its kind, and says why rather than what the test
+# expects - a reason that repeats the test's own assertion message is refused
+# (#986):
+#   peachq-lacks: <the capability PeachQ lacks, as specifically as known>
+#   tree-bug: #<issue>  - code here that relies on something it should not
+#   flattening: <why the flattened copy fails, on KDB-X too>
+#
+# These are facts about the platform below - CI's PeachQ build. The same pin
+# built elsewhere behaves differently, so on any other platform the lane
+# reports a difference as not comparable rather than as a verdict (#968).
+platform: Linux-x86_64
 
 .cattest.test_every_published_table_is_described_or_hidden  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .cattest.test_the_catalog_describes_no_table_that_does_not_exist  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
-.crypto_market_databftest.test_a_bound_rounds_up_to_the_millisecond  # PeachQ result differs: one nanosecond past it is the NEXT millisecond - flooring here would refetch the one before on every window
+.crypto_market_databftest.test_a_bound_rounds_up_to_the_millisecond  # tree-bug: #985 - epoch_ms_bound divides epoch nanoseconds, above 2^53, and PeachQ's long `div` goes through a double
 
-.dagtest.test_a_derived_reaction_is_not_drawn_asserted  # PeachQ 'type where KDB-X accepts the same code
-.dagtest.test_d2_declares_every_external_node_before_using_it  # PeachQ 'type where KDB-X accepts the same code
-.dagtest.test_d2_draws_an_asserted_reaction_dashed  # PeachQ 'type where KDB-X accepts the same code
-.dagtest.test_d2_marks_an_external_input  # PeachQ 'type where KDB-X accepts the same code
-.dagtest.test_d2_names_each_edge_with_its_table  # PeachQ 'type where KDB-X accepts the same code
+.dagtest.test_a_derived_reaction_is_not_drawn_asserted  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.dagtest.test_d2_declares_every_external_node_before_using_it  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.dagtest.test_d2_draws_an_asserted_reaction_dashed  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.dagtest.test_d2_marks_an_external_input  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.dagtest.test_d2_names_each_edge_with_its_table  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
-.ddbftest.test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished  # PeachQ 'type where KDB-X accepts the same code
-.ddbftest.test_a_dry_rerun_repairs_nothing  # PeachQ result differs: with no attribute to read, a partition written in sym-then-time order already is what finish leaves, so it counts as finished
+.ddbftest.test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
+.ddbftest.test_a_dry_rerun_repairs_nothing  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
 
-.egtest.test_no_documented_example_is_wrong  # PeachQ result differs: every @eg that states a value states the value the code returns
-.egtest.test_the_wrong_ones_are_named_not_merely_counted  # PeachQ result differs: a failing example is reported by file and line
+.egtest.test_no_documented_example_is_wrong  # tree-bug: #985 - the one failing @eg is epoch_ms_bound's (src/etl/sources/crypto_market_data.q)
+.egtest.test_the_wrong_ones_are_named_not_merely_counted  # tree-bug: #985 - the one failing @eg is epoch_ms_bound's (src/etl/sources/crypto_market_data.q)
 
-.evttest.test_undefined_if_zero_is_the_guard_and_only_the_guard  # PeachQ result differs: vectorised, because a functional select hands it one value per group
+.evttest.test_undefined_if_zero_is_the_guard_and_only_the_guard  # peachq-lacks: type promotion in the vector conditional - ?[1010b;0n;0 2 0 5] gives a general list, not a float vector
 
-.iotest.test_a_keyed_write_leaves_nothing_in_staging  # PeachQ result differs: the partition is written and the staging area is empty again
-.iotest.test_a_table_without_sym_is_judged_by_its_sorted_time  # PeachQ 'io: reading or rewriting a partitioned HDB on disk
-.iotest.test_finish_after_flush_does_only_what_flush_left  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
-.iotest.test_flush_finishes_only_the_days_wholly_behind_it  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
-.iotest.test_hdb_appends_to_a_finished_partition  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
-.iotest.test_hdb_finish_fills_a_partition_missing_a_table  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_hdb_finish_sorts_and_attributes  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
-.iotest.test_hdb_keyed_writes_are_finished_like_any_other  # PeachQ keeps no on-disk attribute, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
-.iotest.test_hdb_replace_clears_a_day_the_source_has_emptied  # PeachQ 'corrupt: reading or rewriting a partitioned HDB on disk
-.iotest.test_hdb_replace_clears_on_the_window_column_not_on_time  # PeachQ 'corrupt: reading or rewriting a partitioned HDB on disk
-.iotest.test_hdb_replace_takes_its_keys_out_of_the_next_day  # PeachQ result differs: it cannot rewrite a partition already on disk, so a replace leaves the next day's spill (src/etl/core/io_hdb.q)
-.iotest.test_recover_finds_what_a_lost_process_wrote_and_finish_repairs_it  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_recover_trims_a_torn_append  # PeachQ 'nyi: writing or appending a partitioned HDB on disk
-.iotest.test_recover_looks_only_inside_the_range  # PeachQ result differs: with no attribute to read, a partition written in sym-then-time order already is what finish leaves, so it counts as finished
+.iotest.test_a_keyed_write_leaves_nothing_in_staging  # peachq-lacks: a splayed `set` of a table with an enumerated column also writes the domain (`sym`) into the parent directory, so staging/new/<date>/sym is left behind
+.iotest.test_a_table_without_sym_is_judged_by_its_sorted_time  # peachq-lacks: reading or rewriting a partitioned HDB on disk ('io)
+.iotest.test_finish_after_flush_does_only_what_flush_left  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_flush_finishes_only_the_days_wholly_behind_it  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_hdb_appends_to_a_finished_partition  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_hdb_finish_fills_a_partition_missing_a_table  # peachq-lacks: writing or appending a partitioned HDB on disk ('nyi)
+.iotest.test_hdb_finish_sorts_and_attributes  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_hdb_keyed_writes_are_finished_like_any_other  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
+.iotest.test_hdb_replace_clears_a_day_the_source_has_emptied  # peachq-lacks: re-reading a splayed table, in the process that read it, after a rename replaced it on disk - it throws 'corrupt (write_hdb_keyed swaps partitions in by rename)
+.iotest.test_hdb_replace_clears_on_the_window_column_not_on_time  # peachq-lacks: re-reading a splayed table, in the process that read it, after a rename replaced it on disk - it throws 'corrupt (write_hdb_keyed swaps partitions in by rename)
+.iotest.test_hdb_replace_takes_its_keys_out_of_the_next_day  # peachq-lacks: re-reading a splayed table, in the process that read it, after a rename replaced it on disk - it throws 'corrupt (write_hdb_keyed swaps partitions in by rename), so the next-day spill is skipped on PeachQ (src/etl/core/io_hdb.q)
+.iotest.test_recover_finds_what_a_lost_process_wrote_and_finish_repairs_it  # peachq-lacks: writing or appending a partitioned HDB on disk ('nyi)
+.iotest.test_recover_trims_a_torn_append  # peachq-lacks: writing or appending a partitioned HDB on disk ('nyi)
+.iotest.test_recover_looks_only_inside_the_range  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written
 
 .jobouttest.test_a_column_list_is_held_to_count_and_types  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .jobouttest.test_a_wrong_type_is_caught  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .jobouttest.test_every_publication_has_the_plant_shape  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .jobouttest.test_the_right_shape_passes  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.jobouttest.test_two_swapped_columns_of_one_type_are_caught  # PeachQ 'type where KDB-X accepts the same code
+.jobouttest.test_two_swapped_columns_of_one_type_are_caught  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
-.loctest.test_a_column_enumerated_against_another_domain_uses_that_domain  # PeachQ result differs: each column against its own domain's file
-.loctest.test_a_domain_file_too_short_for_the_column_is_refused  # PeachQ result differs: positions past the file's end are refused
-.loctest.test_a_nested_symbol_list_column_is_decoded_row_by_row  # PeachQ 'type where KDB-X accepts the same code
-.loctest.test_a_read_of_named_columns_reads_only_their_files  # PeachQ result differs: the requested columns, decoded, and the partition's date
-.loctest.test_a_segmented_hdb_is_read_across_its_segments  # PeachQ result differs: both segments' partitions, decoded against the root's own sym file
-.loctest.test_symbols_are_decoded_against_the_hdbs_own_sym_file  # PeachQ result differs: the HDB's own sym file, whatever this process has loaded as `sym
+.loctest.test_a_column_enumerated_against_another_domain_uses_that_domain  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
+.loctest.test_a_domain_file_too_short_for_the_column_is_refused  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
+.loctest.test_a_nested_symbol_list_column_is_decoded_row_by_row  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.loctest.test_a_read_of_named_columns_reads_only_their_files  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
+.loctest.test_a_segmented_hdb_is_read_across_its_segments  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
+.loctest.test_symbols_are_decoded_against_the_hdbs_own_sym_file  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
 
-.mantest.test_every_private_name_exists  # PeachQ 'type where KDB-X accepts the same code
+.mantest.test_every_private_name_exists  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
-.metatest.test_reconcile_flags_lost_rows_on_a_date_with_no_observations  # PeachQ 'type where KDB-X accepts the same code
-.metatest.test_reconcile_ignores_superseded_claims  # PeachQ 'type where KDB-X accepts the same code
-.metatest.test_reconcile_matches_mismatches_and_unrecorded_dates  # PeachQ 'type where KDB-X accepts the same code
-.metatest.test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows  # PeachQ 'type where KDB-X accepts the same code
+.metatest.test_reconcile_flags_lost_rows_on_a_date_with_no_observations  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.metatest.test_reconcile_ignores_superseded_claims  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.metatest.test_reconcile_matches_mismatches_and_unrecorded_dates  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.metatest.test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
 .nstest.test_the_subscriber_processes_are_inside_the_prefix  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
 
-.regtest.test_the_trap_is_real_and_has_two_halves  # PeachQ 'type where KDB-X accepts the same code
+.regtest.test_the_trap_is_real_and_has_two_halves  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
-.sbtest.test_tickerplant_routes_all_three_processes_using_the_real_schemas  # PeachQ error: schema: market_data's schema must be an unkeyed table
+.sbtest.test_tickerplant_routes_all_three_processes_using_the_real_schemas  # peachq-lacks: `,'` of two empty tables gives () rather than an empty table, so the schema built as ([] time:...),'output is refused as keyed
 
-.seedtest.test_reseeding_reproduces_a_known_draw  # PeachQ result differs: a fixed seed yields a fixed draw, so a random-input test failure can be re-run
+.seedtest.test_reseeding_reproduces_a_known_draw  # peachq-lacks: KDB-X's random generator - a seed is reproducible on PeachQ, but `\S 20260916` then 5?1000 draws 717 47 276 94 179
 
 .srctest.test_every_source_file_declares_the_namespace_its_name_implies  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
@@ -74,9 +86,9 @@
 .tabletest.test_no_undeclared_table_appears  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 .tabletest.test_the_two_fill_tables_do_not_collapse_into_one  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
-.tztest.test_a_datetime_column_filters_without_complaint  # PeachQ result differs: the filter runs and returns a believable answer, so nothing upstream of the contract will notice the type
-.tztest.test_almost_no_timestamp_survives_a_round_trip_through_a_datetime  # PeachQ result differs: 999 of 1000 nanosecond-spaced instants come back as a different instant
-.tztest.test_equals_and_match_disagree_across_the_two_types  # PeachQ result differs: `=` says same instant, `~` says no match - the two guards cannot both be right
+.tztest.test_a_datetime_column_filters_without_complaint  # peachq-lacks: comparing a datetime with a timestamp converts neither, so the raw values (days as a float against nanoseconds) are compared, and the window matches nothing
+.tztest.test_almost_no_timestamp_survives_a_round_trip_through_a_datetime  # peachq-lacks: KDB-X's datetime<->timestamp rounding - 994 of the 1000 instants change on PeachQ, not 999
+.tztest.test_equals_and_match_disagree_across_the_two_types  # peachq-lacks: comparing a datetime with a timestamp converts neither, so the raw values (days as a float against nanoseconds) are compared, so `=` is false for the same instant
 
-.xftest.test_every_registered_transform_passes_its_examples  # PeachQ result differs: every transform reproduces its expected tables, deterministically, and handles empty input: +`example`passed`d
+.xftest.test_every_registered_transform_passes_its_examples  # peachq-lacks: `,'` of two empty tables gives () rather than an empty table (mkt_orderbook's fold), and ?[b;x;y] on an empty condition gives () rather than an empty long (upstream_trades_to_local's side)
 .xftest.test_stream_outputs_match_the_tickerplant_tables  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too

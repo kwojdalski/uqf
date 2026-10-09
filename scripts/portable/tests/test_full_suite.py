@@ -54,15 +54,15 @@ def test_an_entry_without_a_reason_is_refused(tmp_path):
 
 def test_an_entry_listed_twice_is_refused(tmp_path):
     p = tmp_path / "gaps.txt"
-    p.write_text(".a.test_x  # one\n.a.test_x  # two\n")
+    p.write_text(".a.test_x  # peachq-lacks: one\n.a.test_x  # peachq-lacks: two\n")
     with pytest.raises(SystemExit, match="listed twice"):
         fs.read_gaps(p)
 
 
 def test_comments_and_blank_lines_are_not_entries(tmp_path):
     p = tmp_path / "gaps.txt"
-    p.write_text("# header\n\n.a.test_x  # 'nyi: on disk\n")
-    assert fs.read_gaps(p) == {".a.test_x": "'nyi: on disk"}
+    p.write_text("# header\n\nplatform: Linux-x86_64\n.a.test_x  # peachq-lacks: on disk\n")
+    assert fs.read_gaps(p) == {".a.test_x": "peachq-lacks: on disk"}
 
 
 def test_the_failures_file_keeps_status_and_why(tmp_path):
@@ -80,3 +80,86 @@ def test_a_new_failure_and_a_listed_test_that_passes_both_count():
 def test_nothing_to_report_when_the_failures_are_exactly_the_list():
     gaps = {".a.test_known": "'nyi"}
     assert fs.compare({".a.test_known": "error: nyi"}, gaps) == ([], [])
+
+
+# --- a reason is a reason (#986) ---------------------------------------------
+
+
+@pytest.mark.parametrize("reason", [
+    "PeachQ result differs: the partition is written",  # the boilerplate #986 found
+    "'nyi: on disk",
+    "tree-bug: 985",  # an issue is named by its number
+])  # fmt: skip
+def test_a_reason_without_its_kind_is_refused(tmp_path, reason):
+    p = tmp_path / "gaps.txt"
+    p.write_text(f".a.test_x  # {reason}\n")
+    with pytest.raises(SystemExit, match="reason must start with"):
+        fs.read_gaps(p)
+
+
+def test_each_kind_is_accepted(tmp_path):
+    p = tmp_path / "gaps.txt"
+    p.write_text(".a.test_x  # peachq-lacks: on-disk attributes\n.a.test_y  # tree-bug: #985\n"
+                 ".a.test_z  # flattening: reads the source as text\n")  # fmt: skip
+    assert len(fs.read_gaps(p)) == 3
+
+
+def _suite(tmp_path):
+    (tmp_path / "test_x.q").write_text(
+        "\\d .xtest\n\n"
+        "test_one:{[t]\n"
+        '    .qunit.assertEquals[1;1;"positions past the file\'s end are refused"]};\n\n'
+        "test_two:{[t]\n"
+        '    / a comment line in the body\n'
+        '    .qunit.assertTrue[1b;"short"]};\n'
+    )  # fmt: skip
+    return tmp_path
+
+
+def test_a_tests_messages_are_read_from_its_own_body(tmp_path):
+    tests = _suite(tmp_path)
+    assert fs.messages_of(".xtest.test_one", tests) == ["positions past the file's end are refused"]
+    assert fs.messages_of(".xtest.test_two", tests) == ["short"]
+    assert fs.messages_of(".ytest.test_one", tests) == []
+
+
+def test_a_reason_that_repeats_the_assertion_message_is_caught(tmp_path):
+    tests = _suite(tmp_path)
+    gaps = {
+        ".xtest.test_one": "peachq-lacks: positions past the file's end are refused",
+        ".xtest.test_two": "peachq-lacks: short",  # a word, not a message
+    }
+    assert fs.restated(gaps, tests) == [".xtest.test_one"]
+
+
+def test_no_committed_reason_repeats_its_tests_message():
+    assert fs.restated(fs.read_gaps()) == []
+
+
+# --- the gaps are CI's platform's (#968) --------------------------------------
+
+
+def test_the_committed_list_records_cis_platform():
+    """CI's PeachQ lane runs on ubuntu, x86_64 - the platform these were seen on."""
+    assert fs.read_platform() == "Linux-x86_64"
+
+
+def test_a_list_without_its_platform_is_refused(tmp_path):
+    p = tmp_path / "gaps.txt"
+    p.write_text(".a.test_x  # peachq-lacks: on disk\n")
+    with pytest.raises(SystemExit, match="platform"):
+        fs.read_platform(p)
+
+
+def test_a_difference_on_cis_platform_fails_the_lane(capsys):
+    gaps = {".a.test_known": "peachq-lacks: x"}
+    assert fs.report({".a.test_new": "fail: x"}, gaps, "Linux-x86_64", "Linux-x86_64") == 1
+    assert "NEW FAILURE" in capsys.readouterr().err
+
+
+def test_elsewhere_a_difference_is_not_comparable_rather_than_a_verdict(capsys):
+    gaps = {".a.test_known": "peachq-lacks: x"}
+    assert fs.report({".a.test_new": "fail: x"}, gaps, "Linux-x86_64", "Darwin-arm64") == 0
+    out = capsys.readouterr()
+    assert "NOT COMPARABLE on Darwin-arm64" in out.out
+    assert "NEW FAILURE" not in out.err and "NOW PASSES" not in out.err

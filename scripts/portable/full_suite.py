@@ -22,9 +22,14 @@ full suite - tests/run_tests.q, every suite - on that copy:
     python3 scripts/test.py q-unit-peachq      # the same, as a lane
 
 The known-gaps file is one test per line, its full name, then `#` and the
-reason it cannot pass on PeachQ:
+reason it cannot pass on PeachQ, which starts with its kind (#986):
 
-    .iotest.test_hdb_appends_a_second_window  # 'nyi: appending a partitioned HDB
+    .iotest.test_hdb_appends_a_second_window  # peachq-lacks: appending a partitioned HDB
+
+A reason that repeats one of the test's own messages says what the test
+expects, not why PeachQ cannot do it, and is refused. The file also records
+the platform its gaps were seen on - CI's - and on any other the comparison
+is reported as not comparable rather than as a verdict (#968).
 
 Standard library only.
 """
@@ -33,6 +38,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -45,6 +52,12 @@ FLATTENER = REPO / "scripts" / "portable" / "flatten_contexts.py"
 BUNDLE_SUITE = REPO / "scripts" / "dev" / "bundle_suite.py"
 #: What is flattened. lib/ is not: the flattener leaves vendored code alone.
 CONVERTED = ("src", "scripts", "tests")
+#: How a reason starts (#986): PeachQ lacks something, this tree relies on
+#: something it should not, or the flattened copy fails on KDB-X too.
+KINDS = ("peachq-lacks: ", "tree-bug: #", "flattening: ")
+#: A test's message this long or longer, found in its gap's reason, is a
+#: reason that restates the assertion. Shorter ones are words, not messages.
+MIN_MESSAGE = 16
 
 
 def read_gaps(path: Path = GAPS) -> dict[str, str]:
@@ -53,16 +66,62 @@ def read_gaps(path: Path = GAPS) -> dict[str, str]:
     gaps: dict[str, str] = {}
     for number, raw in enumerate(path.read_text().splitlines(), start=1):
         line = raw.strip()
-        if not line or line.startswith("#"):
+        if not line or line.startswith(("#", "platform:")):
             continue
         name, _, reason = line.partition("#")
         name, reason = name.strip(), reason.strip()
         if not name.startswith(".") or not reason:
             raise SystemExit(f"{path.name}:{number}: expected `.suite.test_name  # reason`")
+        if not reason.startswith(KINDS):
+            raise SystemExit(f"{path.name}:{number}: {name}'s reason must start with "
+                             f"{', '.join(repr(k.strip()) for k in KINDS)} (#986)")  # fmt: skip
         if name in gaps:
             raise SystemExit(f"{path.name}:{number}: {name} is listed twice")
         gaps[name] = reason
     return gaps
+
+
+def read_platform(path: Path = GAPS) -> str:
+    """The platform the gaps were recorded on, from its one `platform:` line."""
+    found = [ln.partition(":")[2].strip() for ln in path.read_text().splitlines()
+             if ln.startswith("platform:")]  # fmt: skip
+    if len(found) != 1 or not found[0]:
+        raise SystemExit(f"{path.name}: expected one `platform: <system>-<machine>` line (#968)")
+    return found[0]
+
+
+def this_platform() -> str:
+    return f"{platform.system()}-{platform.machine()}"
+
+
+def messages_of(name: str, tests: Path = REPO / "tests" / "q") -> list[str]:
+    """The string literals in the body of test `name` (`.suite.test_x`), read
+    from its suite file: its assertions' messages among them."""
+    suite, _, test = name.rpartition(".")
+    for path in sorted(tests.glob("test_*.q")):
+        ns, body = None, None
+        for line in path.read_text(errors="replace").splitlines():
+            if body is not None:
+                if line[:1] not in ("", " ", "\t", "/"):
+                    break
+                body.append(line)
+            elif line.startswith("\\d "):
+                ns = line[3:].strip()
+            elif ns == suite and line.startswith(f"{test}:"):
+                body = [line]
+        if body is not None:
+            found = re.findall(r'"((?:[^"\\]|\\.)*)"', "\n".join(body))
+            return [m.replace('\\"', '"').replace("\\\\", "\\") for m in found]
+    return []
+
+
+def restated(gaps: dict[str, str], tests: Path = REPO / "tests" / "q") -> list[str]:
+    """The gaps whose reason repeats one of their test's own messages (#986):
+    what the test expects, recorded as if it were why PeachQ cannot pass it."""
+    return sorted(
+        name for name, reason in gaps.items()
+        if any(len(m) >= MIN_MESSAGE and m in reason for m in messages_of(name, tests))
+    )  # fmt: skip
 
 
 def read_failures(path: Path) -> dict[str, str]:
@@ -120,6 +179,14 @@ def build_tree(into: Path, bundles: bool = False) -> None:
 
 def run(q: str, timeout: float, keep: Path | None = None, bundles: bool = False) -> int:
     gaps = read_gaps()
+    if bad := restated(gaps):
+        raise SystemExit(f"{GAPS.name}: these reasons repeat their test's own message - say "
+                         f"why PeachQ cannot pass it instead (#986): {', '.join(bad)}")  # fmt: skip
+    recorded, here = read_platform(), this_platform()
+    if recorded != here:
+        print(f"NOT COMPARABLE: {GAPS.name} records {recorded} (CI), this is {here} - "
+              "PeachQ behaves differently here, so no result below is CI's (#968)",
+              flush=True)  # fmt: skip
     with tempfile.TemporaryDirectory() as tmp:
         work = keep or Path(tmp)
         work.mkdir(parents=True, exist_ok=True)
@@ -135,13 +202,26 @@ def run(q: str, timeout: float, keep: Path | None = None, bundles: bool = False)
                   "finish loading", file=sys.stderr)  # fmt: skip
             return 1
         failed = read_failures(failures)
+    return report(failed, gaps, recorded, here)
+
+
+def report(failed: dict[str, str], gaps: dict[str, str], recorded: str, here: str) -> int:
+    """Print the comparison and give the lane's exit code. Off CI's platform
+    there is no verdict: a difference there may not be one on CI (#968)."""
+    comparable = recorded == here
     new, fixed = compare(failed, gaps)
     for name in new:
-        print(f"NEW FAILURE  {name}  {failed[name]}", file=sys.stderr)
+        tag = "NEW FAILURE " if comparable else "FAILS HERE  "
+        print(f"{tag} {name}  {failed[name]}", file=sys.stderr)
     for name in fixed:
-        print(f"NOW PASSES   {name}  - remove it from {GAPS.name} ({gaps[name]})", file=sys.stderr)
+        tag = "NOW PASSES   " if comparable else "PASSES HERE  "
+        print(f"{tag}{name}  - remove it from {GAPS.name} ({gaps[name]})", file=sys.stderr)
     print(f"{len(failed)} not passing, {len(gaps)} known gaps: {len(new)} new, {len(fixed)} fixed",
           flush=True)  # fmt: skip
+    if not comparable:
+        print(f"NOT COMPARABLE on {here}: only CI's {recorded} lane decides - exiting 0 (#968)",
+              flush=True)  # fmt: skip
+        return 0
     return 1 if new or fixed else 0
 
 

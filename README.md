@@ -101,7 +101,10 @@ contexts (`\d .a.b`), so `scripts/test.py q-unit-peachq` first writes a copy of
 then runs every suite on it. The tests that cannot pass there are listed, each
 with why, in [`tests/q/peachq_known_gaps.txt`](tests/q/peachq_known_gaps.txt). A
 failure not on that list fails CI, and so does a listed test that passes, so the
-list only shrinks.
+list only shrinks. Each reason names its kind - what PeachQ lacks, or the issue
+for a bug here - and never just repeats the test's message. The list is a fact
+about CI's Linux build: run elsewhere, the lane reports differences as not
+comparable and gives no verdict.
 
 **So do the Python tests that need a q.** Without KDB-X they skip. CI runs the
 Python suites again with PeachQ as the q (`UQF_Q_IMPL=peachq`, `QCMD=<PeachQ>`).
