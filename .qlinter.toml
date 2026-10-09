@@ -1,8 +1,6 @@
-# qlinter's configuration for the releases that read this file (0.14+), and
-# what a bare `qlinter` here runs with. CI pins v0.2.0, which reads only
-# pyproject.toml's [tool.q-lint] and accepts nothing there but `exclude` - so
-# the exclude list lives in both, held equal by test_check_q_traps.py, and
-# what only a newer release understands lives here alone.
+# qlinter's configuration (https://github.com/kwojdalski/q-lint), read by the
+# release CI pins (.github/workflows/ci.yml) and by a bare `qlinter` here. The
+# linter is installed separately and is not a dependency of this project.
 exclude = ["lib/torq/", ".claude/worktrees/"]
 
 # Rules this tree does not apply. QS010 (mixed-naming-convention) flags a
