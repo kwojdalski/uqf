@@ -71,7 +71,10 @@ ledger_age:`etl_coverage`etl_runs!`superseded_at`ended_at
 record_schema:`retention_id`name`kind`target`item`range_from`range_to`rows,
     `claims_superseded`removed_at`run_id
 
-/ The declarations, by name.
+/ The declarations, by name, each ENLISTED (#1028): a dictionary of
+/ dictionaries collapses into a keyed table on the first insert, after which a
+/ declaration with other keys - another kind, or the same keys in another
+/ order - is refused with a bare 'mismatch. Read one back with decl_of.
 decls:(`symbol$())!()
 
 / The columns of a plan, and of what run returns.
@@ -108,12 +111,17 @@ define:{[name;decl]
     need:`uptime_sessions`ledger_rows`hdb_partitions!(`symbol$();enlist `table;`root`table`dataset);
     if[count miss:need[decl`kind] where not need[decl`kind] in key decl;
         '"retention: ",string[name]," is missing ",", " sv string miss];
-    if[(decl[`kind]=`ledger_rows) and not decl[`table] in key ledger_age;
-        '"retention: ",string[name],": table must be one of ",(", " sv string key ledger_age),
-         " - the retention record itself is never pruned"];
-    if[(decl[`kind]=`hdb_partitions) and not (-11h=type decl`root) and ":"=first string decl`root;
-        '"retention: ",string[name],": root must be a file symbol, e.g. `:/data/hdb"];
-    `.qetl.retention.decls set decls,enlist[name]!enlist decl;
+    / Nested, not `and`: q evaluates both sides, and a key this kind does not
+    / take reads as the null of the declaration's FIRST value - 0Nn when that
+    / is the horizon - so `in` a symbol list threw 'type by key order (#1028).
+    if[decl[`kind]=`ledger_rows;
+        if[not decl[`table] in key ledger_age;
+            '"retention: ",string[name],": table must be one of ",(", " sv string key ledger_age),
+             " - the retention record itself is never pruned"]];
+    if[decl[`kind]=`hdb_partitions;
+        if[not (-11h=type decl`root) and ":"=first string decl`root;
+            '"retention: ",string[name],": root must be a file symbol, e.g. `:/data/hdb"]];
+    `.qetl.retention.decls set decls,enlist[name]!enlist enlist decl;
     name}
 
 / The declared retentions' names.
@@ -126,7 +134,7 @@ declared:{[] key decls}
 decl_of:{[name]
     if[not name in key decls;
         '"retention: no retention named ",string[name]," is declared"];
-    decls name}
+    first decls name}
 
 / ------------------------------------------------------------------ PLAN
 
