@@ -63,3 +63,12 @@ def test_a_test_with_no_namespace_is_refused(tmp_path: Path) -> None:
 def test_a_folder_without_a_manifest_is_not_a_bundle(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="not a bundle"):
         suite.find_bundles([str(tmp_path)])
+
+
+def test_every_sidecar_bundle_carries_its_own_tests() -> None:
+    """#925: CI runs each bundle's tests (full_suite.py --bundles), so a bundle
+    without any would be installed, converted and checked by nothing."""
+    found = suite.find_bundles([])
+    assert found, "sidecars/ holds no bundle - the lane would test nothing"
+    bare = [f.name for f in found if not list(f.glob("test_*.q"))]
+    assert not bare, f"bundle(s) with no test_*.q: {bare}"

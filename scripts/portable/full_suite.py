@@ -42,6 +42,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 GAPS = REPO / "tests" / "q" / "peachq_known_gaps.txt"
 FLATTENER = REPO / "scripts" / "portable" / "flatten_contexts.py"
+BUNDLE_SUITE = REPO / "scripts" / "dev" / "bundle_suite.py"
 #: What is flattened. lib/ is not: the flattener leaves vendored code alone.
 CONVERTED = ("src", "scripts", "tests")
 
@@ -80,18 +81,11 @@ def compare(failed: dict[str, str], gaps: dict[str, str]) -> tuple[list[str], li
     return sorted(set(failed) - set(gaps)), sorted(set(gaps) - set(failed))
 
 
-def build_tree(into: Path) -> None:
+def build_tree(into: Path, bundles: bool = False) -> None:
     """A runnable copy of the checkout with src/, scripts/ and tests/ flattened.
-    Raises SystemExit when the flattener refuses."""
-    flat = into / "flat"
-    r = subprocess.run(
-        [sys.executable, str(FLATTENER), *CONVERTED, "--root", str(REPO), "--out", str(flat),
-         "--quiet"],
-        cwd=REPO, capture_output=True, text=True, check=False,
-    )  # fmt: skip
-    if r.returncode:
-        tail = "\n".join((r.stdout + r.stderr).strip().splitlines()[-30:])
-        raise SystemExit(f"the flattener refused - the tree must stay convertible:\n{tail}")
+    With `bundles`, every bundle under sidecars/ is installed into the copy,
+    its tests included, BEFORE flattening, so its jobs are converted and run
+    like the tree's own (#925). Raises SystemExit when the flattener refuses."""
     tree = into / "tree"
     files = subprocess.run(
         ["git", "-C", str(REPO), "ls-files", "-z"], capture_output=True, check=True
@@ -101,16 +95,36 @@ def build_tree(into: Path) -> None:
         if src.is_file():
             (tree / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, tree / rel)
+    if bundles:
+        # uv, not this interpreter: the installer is uqs's, and CI's python3
+        # is not the workspace's environment.
+        r = subprocess.run(
+            ["uv", "run", "--project", str(REPO), "python", str(BUNDLE_SUITE),
+             "--install-into", str(tree)],
+            cwd=REPO, capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        if r.returncode:
+            raise SystemExit(f"a bundle would not install:\n{(r.stdout + r.stderr).strip()}")
+        print(r.stdout.strip(), flush=True)
+    flat = into / "flat"
+    r = subprocess.run(
+        [sys.executable, str(FLATTENER), *CONVERTED, "--root", str(tree), "--out", str(flat),
+         "--quiet"],
+        cwd=tree, capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    if r.returncode:
+        tail = "\n".join((r.stdout + r.stderr).strip().splitlines()[-30:])
+        raise SystemExit(f"the flattener refused - the tree must stay convertible:\n{tail}")
     shutil.copytree(flat, tree, dirs_exist_ok=True)
 
 
-def run(q: str, timeout: float, keep: Path | None = None) -> int:
+def run(q: str, timeout: float, keep: Path | None = None, bundles: bool = False) -> int:
     gaps = read_gaps()
     with tempfile.TemporaryDirectory() as tmp:
         work = keep or Path(tmp)
         work.mkdir(parents=True, exist_ok=True)
         print(f"flattening {', '.join(CONVERTED)} into {work}", flush=True)
-        build_tree(work)
+        build_tree(work, bundles)
         failures = work / "failures.txt"
         env = {**os.environ, "UQF_Q_IMPL": "peachq", "QCMD": q, "UQF_TEST_FAILURES": str(failures)}
         r = subprocess.run(
@@ -136,8 +150,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--q", default=os.environ.get("QCMD", "q"), help="the PeachQ binary")
     p.add_argument("--timeout", type=float, default=1800, help="seconds for the suite")
     p.add_argument("--keep", type=Path, help="build the tree here and leave it, to debug")
+    p.add_argument("--bundles", action="store_true", help="install sidecars/* bundles first (#925)")
     a = p.parse_args(argv)
-    return run(a.q, a.timeout, a.keep)
+    return run(a.q, a.timeout, a.keep, a.bundles)
 
 
 if __name__ == "__main__":
