@@ -82,6 +82,7 @@
 \l src/etl/core/bounded_worker.q
 \l src/etl/core/stream_health.q
 \l src/etl/core/uptime.q
+\l src/etl/core/retention.q
 \l src/etl/core/stream_job.q
 \l src/etl/core/stream_poll.q
 \l src/etl/core/webhook.q

@@ -100,14 +100,19 @@ _TRAILING_COMMENT = re.compile(r"\s/(\s.*)?$")
 _REF = re.compile(r"(?<![\w`])\.(q[a-z]\w*)\.")
 
 
-def modules(root: Path = REPO) -> dict[str, Path]:
-    """{namespace: file} for every library module."""
-    out: dict[str, Path] = {}
+def modules(root: Path = REPO) -> dict[str, list[Path]]:
+    """{namespace: its files} for every library module.
+
+    Usually one file each. A module split by concern under the size gate
+    (microstructure_venues.q beside microstructure.q, #990) keeps its
+    namespace, and its edges are every file's.
+    """
+    out: dict[str, list[Path]] = {}
     for d in LIBRARY_DIRS:
         for path in sorted((root / "src" / d).glob("*.q")):
             m = _NS_LINE.search(path.read_text(errors="replace"))
             if m:
-                out[m.group(1)] = path
+                out.setdefault(m.group(1), []).append(path)
     return out
 
 
@@ -122,12 +127,13 @@ def edges(root: Path = REPO) -> dict[tuple[str, str], str]:
     """{(from, to): the first `path:line` that makes the edge}."""
     mods = modules(root)
     found: dict[tuple[str, str], str] = {}
-    for ns, path in mods.items():
-        for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
-            for m in _REF.finditer(code(line)):
-                to = m.group(1)
-                if to != ns and to in mods:
-                    found.setdefault((ns, to), f"{path.relative_to(root)}:{n}")
+    for ns, paths in mods.items():
+        for path in paths:
+            for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+                for m in _REF.finditer(code(line)):
+                    to = m.group(1)
+                    if to != ns and to in mods:
+                        found.setdefault((ns, to), f"{path.relative_to(root)}:{n}")
     return found
 
 

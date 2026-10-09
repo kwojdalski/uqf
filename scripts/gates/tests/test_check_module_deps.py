@@ -97,3 +97,18 @@ def test_a_removed_edge_is_refused_even_when_listed(tmp_path):
     )
     out = cmd.problems(root, frozenset({("qcross", "qexec")}))
     assert "src/pricing/c.q:2: .qcross -> .qexec is refused" in out[0]
+
+
+def test_a_namespace_split_across_files_keeps_every_files_edges(tmp_path):
+    """A module split by concern keeps its namespace (#990): the second file
+    must not hide the first one's dependencies."""
+    root = _tree(
+        tmp_path,
+        {
+            "src/foundation/a.q": "\\d .qa\nf:{x}\n",
+            "src/foundation/c.q": "\\d .qc\nh:{x}\n",
+            "src/pricing/b.q": "\\d .qb\ng:{.qa.f x}\n",
+            "src/pricing/b_more.q": "\\d .qb\nk:{.qc.h x}\n",
+        },
+    )
+    assert set(cmd.edges(root)) == {("qb", "qa"), ("qb", "qc")}

@@ -1,8 +1,9 @@
 """What the data-access processes are started with, written by bootstrap.
 
-gateway1's access list: procs.GATEWAY_ACCESS_OVERLAY points its `U` column at
-it - the vendored logins plus the ordinary users of
-scripts/torqconfig/permissions/gateway_users.csv.
+gateway1's and sctp1's access lists: procs.ACCESS_LIST_OVERLAY points their
+`U` columns at them - the vendored logins plus, for gateway1, the ordinary
+users of scripts/torqconfig/permissions/gateway_users.csv, and for sctp1 the
+outside real-time subscribers of subscriber_users.csv (#984).
 
 The `-dataaccess` table list every rdb, hdb and gateway gets
 (procs.DATAACCESS_EXTRAS): the tree's tableproperties.csv, keeping only the
@@ -35,13 +36,25 @@ _SYM_COLUMN = re.compile(r"[\[;]\s*sym:")
 TABLE_PROPERTIES = Path("torqconfig") / "dataaccess" / "tableproperties.csv"
 
 
-def gateway_users(paths: UqsPaths) -> list[dict[str, str]]:
-    """The ordinary gateway users, with their passwords and roles."""
-    users = paths.scripts_dir / "torqconfig" / "permissions" / "gateway_users.csv"
+def _users(paths: UqsPaths, name: str) -> list[dict[str, str]]:
+    users = paths.scripts_dir / "torqconfig" / "permissions" / name
     if not users.is_file():
         return []
     with users.open(newline="") as f:
         return list(csv.DictReader(f))
+
+
+def gateway_users(paths: UqsPaths) -> list[dict[str, str]]:
+    """The ordinary gateway users, with their passwords and roles."""
+    return _users(paths, "gateway_users.csv")
+
+
+def _access_lines(paths: UqsPaths, users: list[dict[str, str]]) -> list[str]:
+    """Every vendored login, then each of `users` not already among them."""
+    vendored = paths.torqapphome / "appconfig" / "passwords" / "accesslist.txt"
+    lines = [line.strip() for line in vendored.read_text().splitlines() if line.strip()]
+    known = {line.split(":", 1)[0] for line in lines}
+    return lines + [f"{u['user']}:{u['password']}" for u in users if u["user"] not in known]
 
 
 def gateway_access_lines(paths: UqsPaths) -> list[str]:
@@ -50,13 +63,14 @@ def gateway_access_lines(paths: UqsPaths) -> list[str]:
     An ordinary user already in the vendored list is not repeated - and is
     still held to their role, which handlers/pmusers.q checks by name.
     """
-    vendored = paths.torqapphome / "appconfig" / "passwords" / "accesslist.txt"
-    lines = [line.strip() for line in vendored.read_text().splitlines() if line.strip()]
-    known = {line.split(":", 1)[0] for line in lines}
-    lines += [
-        f"{u['user']}:{u['password']}" for u in gateway_users(paths) if u["user"] not in known
-    ]
-    return lines
+    return _access_lines(paths, gateway_users(paths))
+
+
+def subscriber_access_lines(paths: UqsPaths) -> list[str]:
+    """sctp1's access list: every vendored login, then each outside
+    real-time subscriber - who may subscribe to the chained tickerplant and
+    log in nowhere else."""
+    return _access_lines(paths, _users(paths, "subscriber_users.csv"))
 
 
 def derived_row(table: str) -> str:
@@ -85,5 +99,7 @@ def table_properties_lines(paths: UqsPaths) -> list[str]:
 def write(paths: UqsPaths) -> None:
     """Both files, into the runtime's data directory."""
     paths.generated_gateway_access.write_text("\n".join(gateway_access_lines(paths)) + "\n")
+    subscribers = paths.torqdata / "subscriber_accesslist.txt"
+    subscribers.write_text("\n".join(subscriber_access_lines(paths)) + "\n")
     if lines := table_properties_lines(paths):
         (paths.torqdata / TABLE_PROPERTIES.name).write_text("\n".join(lines) + "\n")

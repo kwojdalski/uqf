@@ -29,6 +29,7 @@ qbook,top_sides,function,1,x
 qcal,add_business_days,function,5,d n ccys calendars weekend
 qcal,add_months,function,2,d n
 qcal,adjust,function,5,d roll ccys calendars weekend
+qcal,convention_defaults,dict,,
 qcal,convention_keys,value,,
 qcal,forward_date,function,5,spot_date tenor pair calendars conventions
 qcal,is_business_day,function,4,d ccys calendars weekend
@@ -203,6 +204,7 @@ qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
+qetl.io,retire,function,3,root d t
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
 qetl.io,write,function,3,mgr target batch
@@ -518,6 +520,16 @@ qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
 qetl.reaction,window_now,value,,
 qetl.reaction,write,function,3,target row_key rows
+qetl.retention,declared,function,1,
+qetl.retention,decls,dict,,
+qetl.retention,define,function,2,name decl
+qetl.retention,history,function,1,
+qetl.retention,kinds,value,,
+qetl.retention,ledger_age,dict,,
+qetl.retention,plan,function,2,name as_of
+qetl.retention,plan_cols,value,,
+qetl.retention,record_schema,value,,
+qetl.retention,run,function,3,name as_of opts
 qetl.run,attach,function,1,
 qetl.run,begin,function,2,worker spec
 qetl.run,current,function,1,
@@ -727,6 +739,7 @@ qmeta,profile,function,3,time_cols null_cols rules
 qmeta,reconcile,function,5,metatable dates ds part version
 qmeta,refresh,function,3,current spec partitions
 qmeta,require_name,function,1,name
+qmicro,best_across_venues,function,3,tob targets max_age
 qmicro,best_mid_across_venues,function,3,tob targets max_age
 qmicro,book_convexity,function,2,prices side
 qmicro,book_pressure_at_level,function,3,bid_sizes ask_sizes level
@@ -1121,12 +1134,13 @@ qpipe.job.kafka_flow,high_water,dict,,
 qpipe.job.kafka_flow,on_batch,function,2,t x
 qpipe.job.kafka_flow,on_replayed,function,1,
 qpipe.job.kafka_flow,publish,value,,
-qpipe.job.last_value,apply,function,2,state batch
+qpipe.job.last_value,apply,function,3,state tob batch
 qpipe.job.last_value,last_value,table,,
 qpipe.job.last_value,market_data,table,,
 qpipe.job.last_value,on_batch,function,2,t x
 qpipe.job.last_value,publish,value,,
 qpipe.job.last_value,state,dict,,
+qpipe.job.last_value,tob,dict,,
 qpipe.job.last_value,tops,function,1,x
 qpipe.job.market_data,check,function,1,rows
 qpipe.job.market_data,crypto_book,table,,
