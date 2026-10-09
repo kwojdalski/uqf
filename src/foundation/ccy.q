@@ -22,7 +22,7 @@ ccy_to_str:{[x] $[10h=type x; x; string x]};
 / @eg .qccy.is_ccy_pair `EURUSD  -> 1b
 / @eg .qccy.is_ccy_pair "eur/usd"  -> 0b
 is_ccy_pair:{[x]
-    s:ccy_to_str x;
+    s:ccy_to_str[x];
     length_ok:(count s)=6;
     all_letters:all s in .Q.A;
     length_ok and all_letters};
@@ -34,7 +34,7 @@ is_ccy_pair:{[x]
 / @throws error if x cannot be normalized to a 6-letter CURCUR pair
 / @eg .qccy.normalize_ccy_pair "eur/usd"  -> `EURUSD
 normalize_ccy_pair:{[x]
-    s:ccy_to_str x;
+    s:ccy_to_str[x];
     no_slash:ssr[s;"/";""];
     no_dash:ssr[no_slash;"-";""];
     no_underscore:ssr[no_dash;"_";""];
@@ -66,7 +66,7 @@ ccy_pair_symbol:{[base;quote]
 / @throws error if pair cannot be normalized to a 6-letter CURCUR pair
 / @eg .qccy.ccy_pair_legs `EURUSD  -> `base`quote!(`EUR;`USD)
 ccy_pair_legs:{[pair]
-    canonical:normalize_ccy_pair pair;
+    canonical:normalize_ccy_pair[pair];
     s:string canonical;
     `base`quote!(`$3#s;`$-3#s)};
 
@@ -87,7 +87,7 @@ pip_size:{[pair]
     / One pair is a symbol atom OR a string ("usd/jpy"): (),pair would have
     / taken a string's characters for pairs.
     one:(0>type pair) or 10h=type pair;
-    quotes:{(ccy_pair_legs x)`quote} each $[one; enlist pair; pair];
+    quotes:{(ccy_pair_legs[x])`quote} each $[one; enlist pair; pair];
     sz:0.0001^pip_size_by_quote quotes;
     $[one; first sz; sz]}
 
@@ -96,6 +96,6 @@ pip_size:{[pair]
 / @param pair a pair, or a list of pairs
 / @return the factor, as a long - one per pair for a list
 / @eg .qccy.pip_factor `EURUSD`USDJPY`EURJPY  -> 10000 100 100
-pip_factor:{[pair] "j"$1%pip_size pair}
+pip_factor:{[pair] "j"$1%pip_size[pair]}
 
 \d .

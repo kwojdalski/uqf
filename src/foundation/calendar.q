@@ -65,7 +65,7 @@ holidays_of:{[ccys;calendars]
 / @eg .qcal.is_business_day[2026.09.21;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 1b
 is_business_day:{[d;ccys;calendars;weekend]
     off:holidays_of[ccys;calendars];
-    (not (weekday d) in weekend) and not d in off}
+    (not (weekday[d]) in weekend) and not d in off}
 
 / Roll `d` onto a joint business day.
 / .
@@ -207,7 +207,7 @@ tenor_parts:{[tenor]
 forward_date:{[spot_date;tenor;pair;calendars;conventions]
     c:pair_terms[pair;conventions];
     explicit:-14h=type tenor;
-    parts:$[explicit; (0;"V"); tenor_parts tenor];
+    parts:$[explicit; (0;"V"); tenor_parts[tenor]];
     n:parts 0;
     unit:parts 1;
     unadjusted:$[explicit; tenor;

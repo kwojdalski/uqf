@@ -198,7 +198,7 @@ on_timer:{[]
     if[count snapshot;
         .qpipe.job.fx_positions.publish[`fx_position;
             select sym, book, product, base_qty, quote_qty, fill_count, break_even from snapshot]];
-    breaches:.qpipe.job.fx_positions.fresh_breaches .z.p;
+    breaches:.qpipe.job.fx_positions.fresh_breaches[.z.p];
     if[count breaches;
         .qpipe.job.fx_positions.publish[`fx_limit_breach;
             select sym, book, product, metric, observed, cap, severity, utilisation from breaches]];

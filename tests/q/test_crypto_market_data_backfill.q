@@ -19,7 +19,7 @@
 h:{[n] 2026.09.11D00:00:00.000000000+n*0D01}
 
 spec_for:{[version;from_n;to_n]
-    `source_version`range_from`range_to!(version;.crypto_market_databftest.h from_n;.crypto_market_databftest.h to_n)}
+    `source_version`range_from`range_to!(version;.crypto_market_databftest.h[from_n];.crypto_market_databftest.h[to_n])}
 
 / What KX's ODBC client returns for sql_for's statement, derived from the
 / fixture rather than typed out again: epoch milliseconds as longs, the text
@@ -52,35 +52,35 @@ tearDown_release:{[] .qpipe.job.crypto_market_data_backfill.cleanup[];}
 / --- the SQL a window sends ----------------------------------------------
 
 test_a_bound_rounds_up_to_the_millisecond:{[t]
-    .qunit.assertEquals[.qpipe.source.crypto_market_data.epoch_ms_bound[.crypto_market_databftest.h 21];
+    .qunit.assertEquals[.qpipe.source.crypto_market_data.epoch_ms_bound[.crypto_market_databftest.h[21]];
         "1789160400000";
         "a whole millisecond is itself"];
-    .qunit.assertEquals[.qpipe.source.crypto_market_data.epoch_ms_bound[1+.crypto_market_databftest.h 21];
+    .qunit.assertEquals[.qpipe.source.crypto_market_data.epoch_ms_bound[1+.crypto_market_databftest.h[21]];
         "1789160400001";
         "one nanosecond past it is the NEXT millisecond - flooring here would refetch the one before on every window"]};
 
 test_the_window_is_half_open:{[t]
-    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
     .qunit.assertTrue[sql like "* WHERE timestamp_ms >= 1789160400000 AND timestamp_ms < 1789164000000 *";
         ">= the lower bound and < the upper, so a row on a boundary is fetched once"]};
 
 test_the_bound_is_not_a_function_of_the_column:{[t]
-    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
     .qunit.assertEquals[sum sql like "*epoch_ns(*";0b;
         "timestamp_ms is compared as it stands, so DuckDB can still skip row groups by min/max"]};
 
 test_a_window_is_ordered:{[t]
-    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
     .qunit.assertTrue[sql like "* ORDER BY timestamp_ms, symbol, latency_count";
         "the same window is the same table on every fetch"]};
 
 test_the_select_list_renames_what_duckdb_calls_it:{[t]
-    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
     .qunit.assertTrue[sql like "SELECT timestamp_ms AS source_time, local_timestamp_ms AS local_time, venue, symbol AS sym, CAST(is_snapshot AS INTEGER) AS is_snapshot,*";
         "the four columns DuckDB spells differently, and the boolean the driver's handling of is unmeasured"]};
 
 test_the_sql_selects_from_the_declared_table:{[t]
-    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
     .qunit.assertTrue[sql like "* FROM ",string[.qetl.source.def[`crypto_market_data]`table_name]," *";
         "sql_for reads table_name rather than spelling it again - the dumped file calls it market_data and the live one market_data_live, and that is the only difference between them"]};
 
@@ -89,7 +89,7 @@ test_the_source_points_at_the_live_view:{[t]
         "data/live.duckdb's view over the rolling parquet shards, not the dumped market_data table"]};
 
 test_every_level_column_is_read:{[t]
-    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
     .qunit.assertEquals[count where {[s;f] s like "*",string[f],"*"}[sql] each .qpipe.source.crypto_market_data.level_fields;
         20;
         "five levels, bid and ask, price and size - a column not selected is a null vector nobody notices"]};
@@ -231,7 +231,7 @@ test_a_window_with_no_rows_is_still_a_completed_window:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qpipe.job.crypto_market_data_backfill.init[.crypto_market_databftest.spec_for[`v1;21;23]];
     .qpipe.job.crypto_market_data_backfill.run[];
-    .qunit.assertTrue[.qetl.coverage.is_covered[`crypto_market_data;`;`v1;.z.p;.crypto_market_databftest.h 21;.crypto_market_databftest.h 23];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`crypto_market_data;`;`v1;.z.p;.crypto_market_databftest.h[21];.crypto_market_databftest.h[23]];
         "the two windows compose into the requested range"]};
 
 test_a_completed_run_releases_the_lock:{[t]

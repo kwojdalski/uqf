@@ -178,7 +178,7 @@ if[(not ()~key`.checkinputs.checkinputs)&not`querypolicywrapped in key`.checkinp
         r:callerroles[];
         if[any r in trustedroles;:f dict];
         dict:f checkprohibited dict;
-        checkrequest[resolvepolicy[querypolicies;policyceiling;dict`tablename;r];policyinstcol dict;dict]}[checkinputs];
+        checkrequest[resolvepolicy[querypolicies;policyceiling;dict`tablename;r];policyinstcol[dict];dict]}[checkinputs];
     querypolicywrapped:1b]
 
 \d .dataaccess

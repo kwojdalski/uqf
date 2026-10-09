@@ -135,13 +135,13 @@ advance:{[rows]
 / @return nothing
 on_batch:{[t;x]
     if[0=count x; :()];
-    if[t=`client_flow; :.qpipe.job.kafka_flow.advance x];
+    if[t=`client_flow; :.qpipe.job.kafka_flow.advance[x]];
     if[not t=`kafka_client_flow; :()];
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
     if[.qetl.job.stream.replaying;
         `.qpipe.job.kafka_flow.held upsert cols[.qpipe.job.kafka_flow.held]#rows;
         :()];
-    .qpipe.job.kafka_flow.publish_fresh rows;
+    .qpipe.job.kafka_flow.publish_fresh[rows];
     }
 
 / Private: publish the rows above the marks, then raise the marks.
@@ -151,11 +151,11 @@ on_batch:{[t;x]
 / was dropped as already seen.
 / @private
 publish_fresh:{[rows]
-    fresh:.qpipe.job.kafka_flow.first_per_coordinate .qpipe.job.kafka_flow.above_high_water rows;
+    fresh:.qpipe.job.kafka_flow.first_per_coordinate[.qpipe.job.kafka_flow.above_high_water[rows]];
     if[0=count fresh; :0];
     out:select broker_time, sym, side, qty, price, client, trade_id, partition, offset from fresh;
     .qpipe.job.kafka_flow.publish[`client_flow;out];
-    .qpipe.job.kafka_flow.advance fresh;
+    .qpipe.job.kafka_flow.advance[fresh];
     count out}
 
 / After the replay: publish what arrived while the job was down.
@@ -164,7 +164,7 @@ publish_fresh:{[rows]
 / rows above them are exactly the missed ones.
 / @return the number of rows published
 on_replayed:{[]
-    n:.qpipe.job.kafka_flow.publish_fresh .qpipe.job.kafka_flow.held;
+    n:.qpipe.job.kafka_flow.publish_fresh[.qpipe.job.kafka_flow.held];
     `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
     if[n>0; .[{.qetl.log.info[x;y;z]};(`kafka_flow;"published rows that arrived while this job was down";enlist[`rows]!enlist n);::]];
     n}

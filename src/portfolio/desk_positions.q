@@ -92,12 +92,13 @@ dimensions:{[book] keys book}
 / path-dependent. Netting is not: sums commute, so a batch has one answer
 / however it is ordered, and that is worth exploiting.
 / @param book the book to add to, keyed on its own dimensions
-/ @param fills a table with sym, side, size, price and every dimension
+/ @param batch the fills: a table with sym, side, size, price and every
+/   dimension (`batch`, because `fills` is a q builtin)
 / @return the updated book
 / @throws error naming any missing column
 / @eg exec base_qty from .qdesk.apply_fills[.qdesk.empty_book[`sym];([] sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; price:1.085 1.086)] -> enlist 600000f
 apply_fills:{[book;batch]
-    dims:dimensions book;
+    dims:dimensions[book];
     if[not 98h=type batch; '"apply_fills: fills must be a table"];
     .qschema.require_cols[`apply_fills;`fills;batch;distinct required_cols,dims];
     if[0=count batch; :book];

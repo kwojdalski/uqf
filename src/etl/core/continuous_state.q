@@ -59,7 +59,7 @@ cursor_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".
 / refused when that is unreadable too.
 / @throws error when the cursor file and its .bak are both unreadable
 load_cursor:{[worker]
-    path:cursor_path worker;
+    path:cursor_path[worker];
     if[()~key hsym `$path; :0Np];
     saved:.qetl.job.bounded.state.durable_read["load_cursor";path;.qetl.job.bounded.state.read_json_dict];
     if[not `cursor in key saved;
@@ -79,7 +79,7 @@ load_cursor:{[worker]
 / so a kill mid-write left a file load_cursor could not read.
 save_cursor:{[worker;cursor]
     system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
-    .qetl.job.bounded.state.durable_lines[cursor_path worker;enlist .j.j `cursor`saved_at!(cursor;.z.p)]}
+    .qetl.job.bounded.state.durable_lines[cursor_path[worker];enlist .j.j `cursor`saved_at!(cursor;.z.p)]}
 
 / Forget a feeder's saved cursor, so its next run starts from the source's
 / own beginning.
@@ -93,7 +93,7 @@ save_cursor:{[worker;cursor]
 / @eg .qetl.job.continuous.clear_cursor `fx_feed_2
 clear_cursor:{[worker]
     .qetl.job.bounded.state.durable_remove each (cursor_path;cursor_value_path)@\:worker;
-    cursor_path worker}
+    cursor_path[worker]}
 
 / ------------------------------------------------------ COMPOUND CURSORS
 / .
@@ -113,7 +113,7 @@ cursor_value_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[work
 / @throws error when the cursor file and its .bak are both unreadable
 / @eg .qetl.job.continuous.load_cursor_value `nosuchworker  ->  (::)
 load_cursor_value:{[worker]
-    path:cursor_value_path worker;
+    path:cursor_value_path[worker];
     $[()~key hsym `$path; (::); .qetl.job.bounded.state.durable_read["load_cursor_value";path;{get hsym `$x}]]}
 
 / Save a compound cursor - any q value - after the page it acknowledges is
@@ -123,7 +123,7 @@ load_cursor_value:{[worker]
 / @return the path written
 save_cursor_value:{[worker;cursor]
     system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
-    .qetl.job.bounded.state.durable_set[cursor_value_path worker;cursor]}
+    .qetl.job.bounded.state.durable_set[cursor_value_path[worker];cursor]}
 
 / Is `proposed` strictly after `current`, comparing the fields `ks` in order?
 / .
@@ -185,7 +185,7 @@ advance:{[worker;current;next_cursor]
 / return value beats leaving a caller to assume there is a guarantee.
 / @return dict of cursor, lag (now minus cursor) and a stated caveat
 freshness:{[worker]
-    c:load_cursor worker;
+    c:load_cursor[worker];
     `worker`cursor`lag`is_completeness_claim!
         (worker;c;$[null c; 0Nn; .z.p-c];0b)}
 
@@ -231,7 +231,7 @@ feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
 /   dataset with no declared feeder cannot have a freshness, and reporting
 /   one would be the silent kind of wrong
 dataset_freshness:{[dataset]
-    ws:feeders_of dataset;
+    ws:feeders_of[dataset];
     if[0=count ws;
         '"dataset_freshness: no worker is registered as feeding ",string[dataset],
          " - call register_feeder first, because a freshness for an unfed dataset would be invented"];
@@ -246,7 +246,7 @@ dataset_freshness:{[dataset]
 
 / Is a dataset within `tolerance` of now, across all its feeders?
 dataset_is_fresh:{[dataset;tolerance]
-    f:dataset_freshness dataset;
+    f:dataset_freshness[dataset];
     $[null f`cursor; 0b; (f`lag)<=tolerance]}
 
 / Is this worker's output within `tolerance` of now?
@@ -255,7 +255,7 @@ dataset_is_fresh:{[dataset;tolerance]
 / run has no cursor, and defaulting the answer to true would report a
 / never-started tailer as up to date.
 is_fresh:{[worker;tolerance]
-    f:freshness worker;
+    f:freshness[worker];
     $[null f`cursor; 0b; (f`lag)<=tolerance]}
 
 / ------------------------------------------------------------------ POLL
@@ -281,7 +281,7 @@ is_fresh:{[worker;tolerance]
 /   cursor that acknowledges it
 / @return dict of state (`idle or `published), rows and cursor
 poll_once:{[worker;fetch_page;publish_page;next_cursor]
-    current:load_cursor worker;
+    current:load_cursor[worker];
     page:fetch_page current;
     if[0=count page;
         :`state`rows`cursor!(`idle;0;current)];

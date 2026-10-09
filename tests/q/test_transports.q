@@ -109,7 +109,7 @@ test_ipc_metadata_has_the_documented_shape:{[t]
     `.trtest.remote set ([] time:enlist .z.p; px:enlist 1f);
     h:{[msg] (msg 0) msg 1};
     m:(.qetl.source.transport_def `ipc)[`metadata][h;`.trtest.remote];
-    .qunit.assertTrue[is_meta_shape m;"columns and type characters"];
+    .qunit.assertTrue[is_meta_shape[m];"columns and type characters"];
     .qunit.assertEquals[(m`c;m`t);(`time`px;"pf");"of the table the process holds"]};
 
 test_odbc_metadata_reads_an_empty_select_into_the_same_shape:{[t]
@@ -118,7 +118,7 @@ test_odbc_metadata_reads_an_empty_select_into_the_same_shape:{[t]
     .qetl.io.odbc.run_sql:{[h;sql] `.trtest.sql set sql; ([] deal_time:`timestamp$(); rate:`float$())};
     m:@[{(.qetl.source.transport_def `odbc)[`metadata][`h;`deals]};::;{(`threw;x)}];
     .qetl.io.odbc.run_sql:keep;
-    .qunit.assertTrue[is_meta_shape m;"the same shape as every other transport"];
+    .qunit.assertTrue[is_meta_shape[m];"the same shape as every other transport"];
     .qunit.assertEquals[(m`c;m`t);(`deal_time`rate;"pf");"typed by the driver's empty result"];
     .qunit.assertEquals[.trtest.sql;"SELECT * FROM deals WHERE 1=0";
         "an ODBC handle is asked by SQL, never handed a q lambda"]};
@@ -126,7 +126,7 @@ test_odbc_metadata_reads_an_empty_select_into_the_same_shape:{[t]
 test_local_metadata_reads_the_hdb_into_the_same_shape:{[t]
     root:.loctest.build[];
     m:(.qetl.source.transport_def `local)[`metadata][root;`trades];
-    .qunit.assertTrue[is_meta_shape m;"the same shape as every other transport"];
+    .qunit.assertTrue[is_meta_shape[m];"the same shape as every other transport"];
     .qunit.assertEquals[m`c;`date`time`sym`px;"the HDB table's own columns"]};
 
 \d .

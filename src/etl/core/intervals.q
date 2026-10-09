@@ -57,8 +57,8 @@ compose:{[intervals]
 
 / The sub-ranges of [range_from;range_to) that `covered` does not cover.
 / An empty result means fully covered.
-/ @param range_from start of the requested range
-/ @param range_to end of the requested range, exclusive
+/ @param from_ts start of the requested range
+/ @param to_ts end of the requested range, exclusive
 / @param covered a table of intervals, need not be composed
 / @return a table of uncovered intervals
 / Parameters are from_ts/to_ts, NOT range_from/range_to, deliberately: those
@@ -77,7 +77,7 @@ compose:{[intervals]
 / @return a table of uncovered sub-ranges; empty means fully covered
 gaps:{[from_ts;to_ts;covered]
     require_interval[from_ts;to_ts];
-    merged:compose covered;
+    merged:compose[covered];
     if[0=count merged;
         :([] range_from:enlist from_ts; range_to:enlist to_ts)];
     / overlapping intervals only, each clipped to the requested range

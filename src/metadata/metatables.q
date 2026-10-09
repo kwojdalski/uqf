@@ -113,7 +113,7 @@ collect_partition:{[spec;part;observed_at;definition_id]
 / @eg .qmeta.collect[.qmeta.definition[`trade;`date;`symbol$();()!()];enlist 2026.09.01]
 collect:{[spec;partitions]
     partitions:require_request[spec;partitions];
-    raze collect_partition[spec;;.z.p;fingerprint spec]each partitions};
+    raze collect_partition[spec;;.z.p;fingerprint[spec]]each partitions};
 
 / Replace complete requested slices of a metatable, including groups which disappeared.
 / Returns a new table only after every query succeeds. Assign or persist it at the caller.
@@ -128,7 +128,7 @@ refresh:{[current;spec;partitions]
     if[not 98h=type current;'"metatables: current must be an unkeyed table"];
     if[not `meta_definition in cols current;
         '"metatables: stored table has no meta_definition; rebuild it with collect"];
-    if[not all (fingerprint spec)=current`meta_definition;
+    if[not all (fingerprint[spec])=current`meta_definition;
         '"metatables: stored rows were collected under a different definition; rebuild"];
     replacement:collect[spec;partitions];
     if[not (0#current)~0#replacement;

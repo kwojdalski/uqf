@@ -13,8 +13,8 @@
 
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
-spec:{[] `source_version`range_from`range_to!(`v1;.statustest.d 1;.statustest.d 2)}
-progress:{[] `cursor`rows_published`windows_completed!(.statustest.d 2;10;1)}
+spec:{[] `source_version`range_from`range_to!(`v1;.statustest.d[1];.statustest.d[2])}
+progress:{[] `cursor`rows_published`windows_completed!(.statustest.d[2];10;1)}
 
 beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
@@ -41,11 +41,11 @@ test_a_failed_state_must_carry_an_error:{[t]
     .qunit.assertError[{.statustest.write[`failed;x]};"";"a failure with no message is not a diagnosis"]};
 
 test_a_reversed_range_is_refused:{[t]
-    bad:`source_version`range_from`range_to!(`v1;.statustest.d 2;.statustest.d 1);
+    bad:`source_version`range_from`range_to!(`v1;.statustest.d[2];.statustest.d[1]);
     .qunit.assertError[{.qetl.status.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"a bad range can never reach the file"]};
 
 test_a_null_source_version_is_refused:{[t]
-    bad:`source_version`range_from`range_to!(`;.statustest.d 1;.statustest.d 2);
+    bad:`source_version`range_from`range_to!(`;.statustest.d[1];.statustest.d[2]);
     .qunit.assertError[{.qetl.status.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"source_version is mandatory"]};
 
 / --- reading the previous state --------------------------------------------

@@ -30,14 +30,14 @@ tearDown_fresh:{[]
 / A session that ran from hour a to hour b.
 session:{[job;a;b]
     .qetl.uptime.init_table[];
-    `etl_stream_uptime insert (first 1?0Ng;job;`proc1;`host1;1i;.uptimetest.h a;.uptimetest.h b);}
+    `etl_stream_uptime insert (first 1?0Ng;job;`proc1;`host1;1i;.uptimetest.h[a];.uptimetest.h[b]);}
 
-gaps:{[job;a;b] .qetl.uptime.gaps[job;.uptimetest.h a;.uptimetest.h b]}
+gaps:{[job;a;b] .qetl.uptime.gaps[job;.uptimetest.h[a];.uptimetest.h[b]]}
 
 / --- recording -------------------------------------------------------------
 
 test_a_session_records_who_and_when_and_is_on_disk:{[t]
-    id:.qetl.uptime.begin `demo_markout;
+    id:.qetl.uptime.begin[`demo_markout];
     r:first select from .qetl.uptime.sessions[] where session=id;
     .qunit.assertEquals[(r`job;r`host;r`pid;(r`started_at)=r`last_seen);(`demo_markout;.z.h;.z.i;1b);
         "the job, this host and pid, just started"];
@@ -48,8 +48,8 @@ test_a_session_records_who_and_when_and_is_on_disk:{[t]
 
 test_a_beat_moves_only_this_processes_sessions:{[t]
     .uptimetest.session[`posbook;0;1];
-    persisted:.qetl.job.bounded.state.durable_set[.qetl.uptime.path[];.qetl.uptime.sessions[]];
-    id:.qetl.uptime.begin `demo_markout;
+    .qetl.job.bounded.state.durable_set[.qetl.uptime.path[];.qetl.uptime.sessions[]];
+    id:.qetl.uptime.begin[`demo_markout];
     before:exec first last_seen from .qetl.uptime.sessions[] where session=id;
     system"sleep 0.01";
     .qunit.assertEquals[.qetl.uptime.beat[];1;"one session is this process's"];
@@ -82,7 +82,7 @@ test_overlapping_and_touching_sessions_leave_no_gap:{[t]
 
 test_the_edges_of_the_range_are_gaps_too:{[t]
     .uptimetest.session[`demo_markout;2;20];
-    .qunit.assertEquals[.uptimetest.gaps[`demo_markout;0;24];([] range_from:.uptimetest.h 0 20; range_to:.uptimetest.h 2 24);
+    .qunit.assertEquals[.uptimetest.gaps[`demo_markout;0;24];([] range_from:.uptimetest.h[0 20]; range_to:.uptimetest.h[2 24]);
         "before it started, and after its last beat"]};
 
 test_another_jobs_session_closes_nothing:{[t]
@@ -123,12 +123,12 @@ test_a_session_that_cannot_be_recorded_does_not_stop_the_job:{[t]
 / --- the process a session names (#619) -------------------------------------
 
 test_a_session_names_no_process_in_plain_q:{[t]
-    id:.testutil.with_procname[`;{.qetl.uptime.begin `demo_markout}];
+    id:.testutil.with_procname[`;{.qetl.uptime.begin[`demo_markout]}];
     .qunit.assertEquals[exec first process from .qetl.uptime.sessions[] where session=id;`;
         "outside TorQ there is no process name to record"]};
 
 test_a_session_names_torqs_process_under_torq:{[t]
-    id:.testutil.with_procname[`uptimetest_proc1;{.qetl.uptime.begin `demo_markout}];
+    id:.testutil.with_procname[`uptimetest_proc1;{.qetl.uptime.begin[`demo_markout]}];
     .qunit.assertEquals[exec first process from .qetl.uptime.sessions[] where session=id;`uptimetest_proc1;
         "under TorQ the session records the process TorQ named"]};
 
@@ -148,7 +148,7 @@ test_the_guard_counts_every_batch_and_keeps_the_last_failure:{[t]
     .qunit.assertFalse[null h`last_failure_at;"and when"]};
 
 test_a_failed_batch_ends_the_session_and_becomes_a_gap:{[t]
-    id:.qetl.uptime.begin `demo_markout;
+    id:.qetl.uptime.begin[`demo_markout];
     system"sleep 0.01";
     .qetl.uptime.beat[];
     last_ok:exec first last_seen from .qetl.uptime.sessions[] where session=id;

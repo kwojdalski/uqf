@@ -44,7 +44,7 @@ handler:{[dataset;range_from;range_to]
     / netting rule, and a change to its side convention reaches this too.
     / One call covers one window, so the book is keyed on sym alone (the
     / library's dimensions are symbols) and the window is added after.
-    book:0!.qdesk.apply_fills[.qdesk.empty_book`sym;as_fills deals];
+    book:0!.qdesk.apply_fills[.qdesk.empty_book`sym;as_fills[deals]];
     net:select sym, window:range_from, net_notional:base_qty, deals:fill_count from book;
     .qetl.reaction.write[`deal_positions;`sym`window;`time`sym`window`net_notional`deals#update time:window from net]}
 

@@ -93,7 +93,7 @@ invert_rate:{[rate] 1%rate};
 / @param rate_ay rate for A/Y (the shared base A over the second quote currency Y)
 / @return the implied rate for Y/X
 / @eg .qfwd.cross_rate_shared_base[4.30;1.075]  -> 4f (EURPLN, EURUSD -> USDPLN)
-cross_rate_shared_base:{[rate_ax;rate_ay] cross_rate[rate_ax;invert_rate rate_ay]};
+cross_rate_shared_base:{[rate_ax;rate_ay] cross_rate[rate_ax;invert_rate[rate_ay]]};
 
 / ---------------------------------------------------- BROKEN-DATE FORWARDS
 / .
@@ -308,7 +308,7 @@ convert_quotes:{[quotes;target_conventions;opts]
     if[count missing:srcs where not srcs in key target_conventions;
         '"convert_quotes: no target convention for ",", " sv string missing];
     targets:target_conventions srcs;
-    flips:{[s;t] $[s=t; 0b; t=.qfwd.inverse_pair s; 1b;
+    flips:{[s;t] $[s=t; 0b; t=.qfwd.inverse_pair[s]; 1b;
         '"convert_quotes: ",string[t]," is neither ",string[s]," nor its inverse"]}'[srcs;targets];
     if[`fwd_points in c;
         if[not 99h=type opts; '"convert_quotes: fwd_points need opts`pip_factors - pip factor per pair"];

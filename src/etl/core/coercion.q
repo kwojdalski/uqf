@@ -141,8 +141,8 @@ to_long:{[str]
 to_timestamp:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Np];
-    if[is_date_only trimmed; :0Np];
-    zoned:utc_offset trimmed;
+    if[is_date_only[trimmed]; :0Np];
+    zoned:utc_offset[trimmed];
     if[null last zoned; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
     / "D". Normalise the separators rather than branching on format, so a

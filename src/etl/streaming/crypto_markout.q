@@ -105,7 +105,7 @@ score_markouts:{[real_fills;books]
     f:real_fills "j"$raze m#'til n;
     h:hs (n*m)#til m;
     targets:([] sym:f`sym; time:(f`time)+h);
-    ref:.qpipe.job.crypto_markout.best_mid[.qpipe.job.crypto_markout.top_of_book books;targets;.qpipe.job.crypto_markout.max_age];
+    ref:.qpipe.job.crypto_markout.best_mid[.qpipe.job.crypto_markout.top_of_book[books];targets;.qpipe.job.crypto_markout.max_age];
     move:(ref-f`trade_price)%f`trade_price;
     bps:(f`side)*10000*move;
     ([] sym:f`sym; venue:f`venue; fill_id:f`exchange_fill_id; trade_time:f`time; horizon:h;

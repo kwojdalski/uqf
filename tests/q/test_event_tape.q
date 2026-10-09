@@ -13,7 +13,7 @@ d:{[n] 2026.09.11D09:00:00.000000000+n*1000000000}
 / the input rather than derived from the fixture. Times ascending, per the
 / sortedness contract.
 tape:{[actions;sides;sizes]
-    ([] time:.evttest.d til count actions;
+    ([] time:.evttest.d[til count actions];
         sym:(count actions)#`EURUSD;
         action:actions;
         side:sides;
@@ -40,7 +40,7 @@ test_the_tape_is_a_superset_of_the_trades_shape:{[t]
     .qunit.assertEquals[all trades_cols in .qpipe.source.demo_events.columns;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
 
 test_the_window_is_taken_on_event_time:{[t]
-    one:last .qetl.source.fetch_window[`demo_events;0Ni;.evttest.d 0;.evttest.d 1];
+    one:last .qetl.source.fetch_window[`demo_events;0Ni;.evttest.d[0];.evttest.d[1]];
     .qunit.assertEquals[count one;1;"one second of a ten-second tape is one event, not ten"]};
 
 / --- require_tape: three silent failures, refused ------------------------
@@ -222,7 +222,7 @@ setUp_worker:{[]
 
 tearDown_worker:{[] .qpipe.job.demo_events_backfill.cleanup[];}
 
-espec:{[from_n;to_n] `source_version`range_from`range_to!(`v1;.evttest.d from_n;.evttest.d to_n)}
+espec:{[from_n;to_n] `source_version`range_from`range_to!(`v1;.evttest.d[from_n];.evttest.d[to_n])}
 
 test_the_worker_satisfies_the_bounded_contract:{[t]
     .qunit.assertEquals[.qpipe.job.demo_events_backfill.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies the contract in full"]};
@@ -269,10 +269,10 @@ test_the_worker_uses_its_own_window_width:{[t]
 test_a_short_range_gives_one_clipped_window:{[t]
     .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
     w:first .qpipe.job.demo_events_backfill.plan 0Np;
-    .qunit.assertEquals[w`range_to;.evttest.d 10;"the final window is clipped to the range, never extended past it"]};
+    .qunit.assertEquals[w`range_to;.evttest.d[10];"the final window is clipped to the range, never extended past it"]};
 
 test_a_long_range_is_split_at_the_declared_width:{[t]
-    .qpipe.job.demo_events_backfill.init `source_version`range_from`range_to!(`v1;.evttest.d 0;(.evttest.d 0)+0D03:00:00);
+    .qpipe.job.demo_events_backfill.init `source_version`range_from`range_to!(`v1;.evttest.d[0];(.evttest.d[0])+0D03:00:00);
     .qunit.assertEquals[count .qpipe.job.demo_events_backfill.plan 0Np;3;"three hours at one hour each"]};
 
 / --- volume bucketing (ROADMAP #25's primitive) -------------------------
@@ -410,22 +410,22 @@ test_the_events_worker_spec_delegates:{[t]
 
 test_the_events_worker_fetch_delegates_with_its_window_in_order:{[t]
     .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
-    r:.qpipe.job.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1];
+    r:.qpipe.job.demo_events_backfill.fetch[.evttest.d[0];.evttest.d[1]];
     .qunit.assertEquals[r`state;`ok;"one second of the tape fetches cleanly"];
     .qunit.assertEquals[count r`result;1;
         "one second of a ten-second tape is one event - a swapped window gives none or ten"]};
 
 test_the_events_worker_publish_delegates:{[t]
     .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
-    batch:(.qpipe.job.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1])`result;
+    batch:(.qpipe.job.demo_events_backfill.fetch[.evttest.d[0];.evttest.d[1]])`result;
     .qunit.assertEquals[.qpipe.job.demo_events_backfill.publish batch;1;"publish reports what it wrote"];
     .qunit.assertEquals[count value `event_tape;1;"and the row reached the target"]};
 
 test_the_events_worker_checkpoint_delegates:{[t]
     .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
-    .qpipe.job.demo_events_backfill.checkpoint[.evttest.d 2];
+    .qpipe.job.demo_events_backfill.checkpoint[.evttest.d[2]];
     .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`demo_events_backfill;.evttest.espec[0;10]];
-        .evttest.d 2;
+        .evttest.d[2];
         "the cursor written through the delegator is the one the shell stores"]};
 
 test_facts_on_an_empty_window_says_so_rather_than_computing_infinities:{[t]

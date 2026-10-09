@@ -76,7 +76,7 @@ require_limits:{[limits]
     if[any null limits`cap; '"require_limits: a null cap polices nothing - remove the row instead"];
     if[any 0f>=limits`cap;
         '"require_limits: every cap must be positive - a cap is on the absolute value, so a negative one can never be met"];
-    scope:scope_cols limits;
+    scope:scope_cols[limits];
     ident:?[limits;();0b;(scope,`metric)!scope,`metric];
     if[(count distinct ident)<count ident;
         '"require_limits: two limits cover the same scope and metric - which one binds would depend on row order"];
@@ -140,8 +140,8 @@ measure:{[book;metrics]
 evaluate:{[measured;limits]
     if[not 98h=type measured; '"evaluate: measured must be a table"];
     .qschema.require_cols[`evaluate;`measured;measured;required_measured_cols];
-    require_limits limits;
-    scope:scope_cols limits;
+    require_limits[limits];
+    scope:scope_cols[limits];
     unknown:scope where not scope in cols measured;
     if[count unknown;
         '"evaluate: limits are scoped on ",(", " sv string unknown),", which the measurements do not carry - roll the book up to the level the limits are written at"];
@@ -161,7 +161,7 @@ evaluate:{[measured;limits]
 / @return the limit rows with no matching measurement
 / @eg count .qlimit.unmatched_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 1f);([] sym:enlist `GBPUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
 unmatched_limits:{[measured;limits]
-    scope:scope_cols limits;
+    scope:scope_cols[limits];
     ident:?[measured;();0b;(scope,`metric)!scope,`metric];
     limits where not (?[limits;();0b;(scope,`metric)!scope,`metric]) in ident}
 
@@ -206,7 +206,7 @@ no_alerts:{[] (`symbol$())!`timestamp$()}
 / @eg count .qlimit.throttle[.qlimit.no_alerts[];([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6; cap:enlist 1e6);2026.01.01D09:00:00;0D00:05]`alerts -> 1
 throttle:{[state;breaches;now;period]
     if[0=count breaches; :`state`alerts!(state;breaches)];
-    scope:scope_cols breaches;
+    scope:scope_cols[breaches];
     ids:identity ?[breaches;();0b;(scope,`metric)!scope,`metric];
     quiet:{[state;now;period;id] $[id in key state; now<period+state id; 0b]}[state;now;period] each ids;
     fresh:breaches where not quiet;

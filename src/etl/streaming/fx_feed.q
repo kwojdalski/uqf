@@ -48,7 +48,7 @@ tick_rows:{[levels]
 / Walk every pair's level, then publish the tick built from it.
 on_timer:{[]
     `.qpipe.job.fx_feed.spot set .qsynth.drift_one each .qpipe.job.fx_feed.spot;
-    .qpipe.job.fx_feed.publish[`quote;.qpipe.job.fx_feed.tick_rows .qpipe.job.fx_feed.spot];
+    .qpipe.job.fx_feed.publish[`quote;.qpipe.job.fx_feed.tick_rows[.qpipe.job.fx_feed.spot]];
     }
 
 \d .

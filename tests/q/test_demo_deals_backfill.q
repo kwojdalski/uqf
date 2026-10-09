@@ -16,7 +16,7 @@
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
 spec_for:{[version;from_n;to_n]
-    `source_version`range_from`range_to!(version;.ddbftest.d from_n;.ddbftest.d to_n)}
+    `source_version`range_from`range_to!(version;.ddbftest.d[from_n];.ddbftest.d[to_n])}
 
 beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
@@ -61,20 +61,20 @@ finished:{[root] .qetl.io.is_finished[root;;`demo_deals] each 2026.09.11 2026.09
 test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished:{[t]
     root:`$":",first system"mktemp -d";
     saved:.qetl.io.default;
-    r1:killed_run root;
-    before:finished root;
+    r1:killed_run[root];
+    before:finished[root];
     .qetl.io.default:.qetl.io.hdb[root;`deal_time];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r2:@[.qpipe.job.demo_deals_backfill.run;::;{x}];
     .qpipe.job.demo_deals_backfill.cleanup[];
     .qetl.io.default:saved;
     .qunit.assertEquals[(r1`windows_completed;before);(3;000b);"the killed run published three days and finished none"];
-    .qunit.assertEquals[(r2`state;finished root);(`idle;111b);"the re-run had no windows to do, and finished all three"]};
+    .qunit.assertEquals[(r2`state;finished[root]);(`idle;111b);"the re-run had no windows to do, and finished all three"]};
 
 test_a_dry_rerun_repairs_nothing:{[t]
     root:`$":",first system"mktemp -d";
     saved:.qetl.io.default;
-    killed_run root;
+    killed_run[root];
     .qetl.io.default:.qetl.io.hdb[root;`deal_time];
     setenv[`UQF_DRY_RUN;"true"];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
@@ -82,7 +82,7 @@ test_a_dry_rerun_repairs_nothing:{[t]
     .qpipe.job.demo_deals_backfill.cleanup[];
     setenv[`UQF_DRY_RUN;""];
     .qetl.io.default:saved;
-    .qunit.assertEquals[finished root;000b;"a rehearsal changes nothing on disk, repairs included"]};
+    .qunit.assertEquals[finished[root];000b;"a rehearsal changes nothing on disk, repairs included"]};
 
 / --- initialisation ----------------------------------------
 
@@ -121,12 +121,12 @@ test_a_full_run_publishes_the_windowed_rows:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qpipe.job.demo_deals_backfill.run[];
-    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;`v1;.z.p;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
+    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;`v1;.z.p;.ddbftest.d[1];.ddbftest.d[4]];1b;"the windows' coverage composes into the whole requested range"]};
 
 test_the_cursor_lands_on_the_range_end:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qpipe.job.demo_deals_backfill.run[];
-    .qunit.assertEquals[r`cursor;.ddbftest.d 4;"a completed run's cursor is the range's exclusive end"]};
+    .qunit.assertEquals[r`cursor;.ddbftest.d[4];"a completed run's cursor is the range's exclusive end"]};
 
 / --- coverage skipping -------------------------------------------
 
@@ -248,7 +248,7 @@ test_a_partial_run_then_a_clean_one_leave_every_record_agreeing:{[t]
     .ddbftest.started["init: the status file and heartbeat both say starting"];
     orig:.ddbftest.swap_fixture {[] '"type error on column px"};
     r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`error!(`threw;x)}];
-    .ddbftest.swap_fixture orig;
+    .ddbftest.swap_fixture[orig];
     .qunit.assertEquals[r`state;`partial;"setup: every window fails, and the run returns rather than throws"];
     a:.ddbftest.agree[`failed;`partial;
         "a partial run: the status file says failed, as an orchestrator must read it; heartbeat and ledger say partial"];
@@ -382,7 +382,7 @@ test_a_failed_stage_carries_its_message_and_fields:{[t]
 test_a_failed_window_is_counted_once_and_answers_false:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     before:.qetl.job.bounded.read_state[`demo_deals_backfill;`progress]`windows_failed;
-    w:`range_from`range_to!.ddbftest.d 1 2;
+    w:`range_from`range_to!.ddbftest.d[1 2];
     ok:.qetl.job.bounded.window_failed[`demo_deals_backfill;w;`message`fields!("window failed";()!())];
     after:.qetl.job.bounded.read_state[`demo_deals_backfill;`progress]`windows_failed;
     .qunit.assertEquals[(ok;after-before);(0b;1);"one failure path: logged, counted once, 0b to do_window"]};
@@ -475,7 +475,7 @@ test_define_refuses_a_target_key_outside_the_output:{[t]
 / A retry after a partial run redoes only the gap. This is the case retry-safety
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[2];1];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"one day already published, two left to do"]};
@@ -484,7 +484,7 @@ test_a_partial_range_is_narrowed_to_the_gap:{[t]
 / covered day sits between two uncovered ones, so the plan must produce two
 / separate runs of windows rather than one 3-day sweep.
 test_a_middle_gap_does_not_bridge_covered_coverage:{[t]
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[2];.ddbftest.d[3];1];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"day 1 and day 3 are planned; day 2 is skipped, not spanned"]};
@@ -497,16 +497,16 @@ test_a_matching_checkpoint_resumes:{[t]
     / interrupted run leaves behind - finish_window stages coverage before it
     / saves the checkpoint - so a checkpoint at day 3 with days 1-2 uncovered
     / is not a resume, it is a gap, and plan now treats it as one.
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 3;2];
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[3];2];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    .qetl.job.bounded.state.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4];.ddbftest.d 3];
+    .qetl.job.bounded.state.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4];.ddbftest.d[3]];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;1;"resuming at day 3, with days 1-2 covered, leaves one window"]};
 
 / The dangerous direction: a cursor from a narrower run must not be used to
 / resume a wider one, which would skip everything before it.
 test_a_foreign_checkpoint_is_discarded:{[t]
-    .qetl.job.bounded.state.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;2];.ddbftest.d 2];
+    .qetl.job.bounded.state.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;2];.ddbftest.d[2]];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;3;"a cursor from a different run specification is dropped, and the range is done in full"]};
@@ -554,7 +554,7 @@ test_a_contract_breaking_source_fails_the_window:{[t]
     orig:(.qetl.source.def `demo_deals)`fixture;
     .testutil.set_field[`.qetl.source.sources;`demo_deals;`fixture;
         {([] deal_time:enlist .ddbftest.d 1; sym:enlist `EURUSD)}];
-    r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`err!(`threw;x)}];
+    @[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`err!(`threw;x)}];
     .testutil.set_field[`.qetl.source.sources;`demo_deals;`fixture;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
@@ -579,8 +579,8 @@ test_a_transport_error_in_the_query_is_retried:{[t]
         .ddbftest.calls+:1;
         if[1=.ddbftest.calls; '"connection refused"];
         .qpipe.source.demo_deals.fixture[]};
-    r:@[{.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d 1;.ddbftest.d 2]};::;{`state`error!(`threw;x)}];
-    .ddbftest.swap_fixture orig;
+    r:@[{.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d[1];.ddbftest.d[2]]};::;{`state`error!(`threw;x)}];
+    .ddbftest.swap_fixture[orig];
     .qunit.assertEquals[r`state;`ok;"the second attempt succeeds, so the window is fetched"];
     .qunit.assertEquals[(r`attempts;.ddbftest.calls);2 2;
         "one failed attempt and one retry - the query ran inside with_retry, twice"]};
@@ -591,7 +591,7 @@ test_a_failing_query_fails_its_window_not_the_run:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     orig:.ddbftest.swap_fixture {[] '"type error on column px"};
     r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`error!(`threw;x)}];
-    .ddbftest.swap_fixture orig;
+    .ddbftest.swap_fixture[orig];
     .qunit.assertEquals[r`state;`partial;"the run returns its result rather than throwing"];
     .qunit.assertEquals[(r`windows_completed;r`windows_failed);0 3;
         "every window was attempted and each failure was counted"]};
@@ -629,9 +629,9 @@ test_plan_delegates_and_passes_the_cursor:{[t]
     / is what makes the count mean something: without it, coverage alone
     / would plan all three days whatever the cursor said, since a gap behind
     / the cursor is planned (see .qetl.job.bounded.plan).
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[2];1];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    .qunit.assertEquals[count .qpipe.job.demo_deals_backfill.plan[.ddbftest.d 2];2;
+    .qunit.assertEquals[count .qpipe.job.demo_deals_backfill.plan[.ddbftest.d[2]];2;
         "with day 1 covered, a cursor at day 2 plans the two days after it"]};
 
 / A gap BEHIND the cursor is planned. This is the restatement case:
@@ -645,14 +645,14 @@ test_a_gap_behind_the_cursor_is_still_planned:{[t]
     / by overlap, so a single three-day claim would be withdrawn whole by a
     / one-day restatement and three windows would be planned - correct, but
     / not the case this test is about.
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d 3;.ddbftest.d 4;1];
-    .qetl.coverage.supersede[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3];
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[2];1];
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[2];.ddbftest.d[3];1];
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[3];.ddbftest.d[4];1];
+    .qetl.coverage.supersede[`demo_deals;`;`v1;.ddbftest.d[2];.ddbftest.d[3]];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    w:.qpipe.job.demo_deals_backfill.plan[.ddbftest.d 4];
+    w:.qpipe.job.demo_deals_backfill.plan[.ddbftest.d[4]];
     .qunit.assertEquals[count w;1;"the withdrawn day is planned although the cursor is past it"];
-    .qunit.assertEquals[(first w)`range_from;.ddbftest.d 2;"and it is exactly the withdrawn day"]};
+    .qunit.assertEquals[(first w)`range_from;.ddbftest.d[2];"and it is exactly the withdrawn day"]};
 
 test_plan_with_a_null_cursor_plans_the_whole_range:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
@@ -660,22 +660,22 @@ test_plan_with_a_null_cursor_plans_the_whole_range:{[t]
 
 test_fetch_delegates_with_its_window_the_right_way_round:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d 1;.ddbftest.d 2];
+    r:.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d[1];.ddbftest.d[2]];
     .qunit.assertEquals[r`state;`ok;"one day of the fixture fetches cleanly"];
     .qunit.assertEquals[count r`result;1;
         "one day of a five-day fixture is one row - a swapped window would be empty or five"]};
 
 test_publish_delegates_and_returns_the_row_count:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    batch:(.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d 1;.ddbftest.d 2])`result;
+    batch:(.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d[1];.ddbftest.d[2]])`result;
     .qunit.assertEquals[.qpipe.job.demo_deals_backfill.publish batch;1;"publish reports what it wrote"];
     .qunit.assertEquals[count value `demo_deals;1;"and the row is actually in the target"]};
 
 test_checkpoint_delegates_and_the_cursor_can_be_read_back:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    .qpipe.job.demo_deals_backfill.checkpoint[.ddbftest.d 2];
+    .qpipe.job.demo_deals_backfill.checkpoint[.ddbftest.d[2]];
     .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4]];
-        .ddbftest.d 2;
+        .ddbftest.d[2];
         "the cursor written through the delegator is the cursor the shell stores"]};
 
 test_cleanup_delegates:{[t]
@@ -976,24 +976,24 @@ test_the_two_shipped_workers_claim_distinct_dataset_partitions:{[t]
 / continuous path all along.
 test_a_backwards_cursor_is_refused:{[t]
     .qunit.assertError[{.qetl.job.bounded.advanced_to[`demo_deals_backfill;x 0;x 1]};
-        (.ddbftest.d 4;.ddbftest.d 2);
+        (.ddbftest.d[4];.ddbftest.d[2]);
         "a cursor that moves backwards skips windows that are still uncovered"]};
 
 test_a_standing_still_cursor_is_refused:{[t]
     .qunit.assertError[{.qetl.job.bounded.advanced_to[`demo_deals_backfill;x;x]};
-        .ddbftest.d 3;
+        .ddbftest.d[3];
         "strictly forward - a repeated cursor would re-plan the same window forever"]};
 
 test_the_first_cursor_of_a_run_is_allowed:{[t]
     / The loaded checkpoint is a null timestamp on a first run, and a null
     / cannot be compared - so the guard must let it through rather than
     / refusing every worker's opening window.
-    .qunit.assertEquals[.qetl.job.bounded.advanced_to[`demo_deals_backfill;0Np;.ddbftest.d 2];
-        .ddbftest.d 2;"a null current cursor is a first run, not a regression"]};
+    .qunit.assertEquals[.qetl.job.bounded.advanced_to[`demo_deals_backfill;0Np;.ddbftest.d[2]];
+        .ddbftest.d[2];"a null current cursor is a first run, not a regression"]};
 
 test_a_forward_cursor_is_returned_unchanged:{[t]
-    .qunit.assertEquals[.qetl.job.bounded.advanced_to[`demo_deals_backfill;.ddbftest.d 2;.ddbftest.d 3];
-        .ddbftest.d 3;"the guard is a pass-through on the legitimate path"]};
+    .qunit.assertEquals[.qetl.job.bounded.advanced_to[`demo_deals_backfill;.ddbftest.d[2];.ddbftest.d[3]];
+        .ddbftest.d[3];"the guard is a pass-through on the legitimate path"]};
 
 / --- the heartbeat is actually written -----------------------------
 
@@ -1022,7 +1022,7 @@ test_an_idle_run_still_beats:{[t]
     `worker_heartbeat set 0#value .qetl.hb.attach[];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`hb3;1;4]];
     .qpipe.job.demo_deals_backfill.run[];
-    r:.qpipe.job.demo_deals_backfill.run[];
+    .qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[first exec state from .qetl.hb.report[] where worker=`demo_deals_backfill;
         `idle;"an idle second run beats idle rather than going quiet"]};
 
@@ -1084,7 +1084,7 @@ test_a_throwing_transform_fails_the_window_and_publishes_nothing:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`xf2;1;4]];
     r:.ddbftest.with_transform[`ddbftest_throws;{.qpipe.job.demo_deals_backfill.run[]}];
     .qunit.assertEquals[(r`windows_failed;count value `demo_deals;
-                         .qetl.coverage.is_covered[`demo_deals;`;`xf2;.z.p;.ddbftest.d 1;.ddbftest.d 4]);
+                         .qetl.coverage.is_covered[`demo_deals;`;`xf2;.z.p;.ddbftest.d[1];.ddbftest.d[4]]);
         (3;0;0b);
         "a transform that throws takes the failed-fetch path: nothing published, nothing covered, the run continues"]};
 
@@ -1150,7 +1150,7 @@ test_a_failing_check_leaves_the_window_uncovered:{[t]
     / without it, is_covered would report the window published forever.
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`chk2;1;4]];
     .ddbftest.with_bad_fixture[{.qpipe.job.demo_deals_backfill.run[]}];
-    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;`chk2;.z.p;.ddbftest.d 1;.ddbftest.d 4];0b;
+    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;`chk2;.z.p;.ddbftest.d[1];.ddbftest.d[4]];0b;
         "a window that failed its check is not recorded as covered"]};
 
 test_a_failing_check_counts_as_a_failed_window:{[t]

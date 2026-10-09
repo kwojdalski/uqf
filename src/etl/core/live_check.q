@@ -69,7 +69,7 @@ failed:{[x] (0h=type x) and (2=count x) and `error~first x}
 / @eg .qetl.livecheck.redact["login failed for DRIVER=x;PWD=hunter2";"DRIVER=x;PWD=hunter2"]  ->  "login failed for DRIVER=x;PWD=<redacted>"
 redact:{[text;cred]
     if[0=count cred; :text];
-    s:settings cred;
+    s:settings[cred];
     secrets:value[s] where key[s] in secret_keys;
     / an ipc credential host:port:user:password keeps its password last
     if[3<=sum cred=":"; secrets,:enlist last ":" vs cred];
@@ -81,7 +81,7 @@ redact:{[text;cred]
 / Private: the first setting in `cred` that turns TLS verification off, or "".
 / @private
 tls_disabled:{[cred]
-    s:settings cred;
+    s:settings[cred];
     / $[], not `and`: q's `and` evaluates both sides, and `s k` of a key the
     / credential lacks is not a string
     bad:{[s;k] $[k in key s; (`$lower s k) in tls_off k; 0b]}[s] each key tls_off;
@@ -96,22 +96,22 @@ check:{[source;window]
     r:`source`transport`status`stage`rows`elapsed_ms`diagnostic!(source;`;`failed;`credential;0N;0N;"");
     finish:{[t0;r] r[`elapsed_ms]:`long$(.z.p-t0)%1000000; r}[t0];
     decl:@[.qetl.source.def;source;{(`error;x)}];
-    if[failed decl; :finish r,`stage`diagnostic!(`declaration;last decl)];
+    if[failed[decl]; :finish r,`stage`diagnostic!(`declaration;last decl)];
     r[`transport]:decl`transport;
     if[not .qetl.source.has_credentials source;
         :finish r,enlist[`diagnostic]!enlist
             string[source]," has no credential - set ",.qetl.source.credential_var[source],
             ", or give it a row in sources.csv. The live check never reads a fixture"];
     cred:@[.qetl.source.require_credentials;source;{(`error;x)}];
-    if[failed cred; :finish r,enlist[`diagnostic]!enlist last cred];
+    if[failed[cred]; :finish r,enlist[`diagnostic]!enlist last cred];
     cred:$[10h=type cred; cred; string cred];
-    off:tls_disabled cred;
+    off:tls_disabled[cred];
     if[count off;
         :finish r,`stage`diagnostic!(`tls;"the credential turns certificate verification off (",
             redact[off;cred],") - the live check refuses it; verify the server's certificate instead")];
     tr:.qetl.source.transport_def decl`transport;
     h:@[tr`open;cred;{(`error;x)}];
-    if[failed h;
+    if[failed[h];
         :finish r,`stage`diagnostic!(`connect;redact[last h;cred])];
     / From here the handle is open: every path below closes it.
     outcome:@[{[source;window;h]
@@ -122,7 +122,7 @@ check:{[source;window]
         .qetl.source.validate[source;rows];
         (`ok;count rows)}[source;window];h;{(`error;x)}];
     @[tr`close;h;{[e] (::)}];
-    if[failed outcome;
+    if[failed[outcome];
         schema:last[outcome] like "validate_live*";
         why:$[schema; last outcome; "the bounded read of the last ",string[window]," failed: ",last outcome];
         :finish r,`stage`diagnostic!($[schema; `schema; `read];redact[why;cred])];

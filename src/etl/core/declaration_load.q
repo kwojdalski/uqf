@@ -51,7 +51,7 @@ one:{[f]
 / @param dirs the declaration directories, in load order, for the full load
 / @return the files loaded
 declarations:{[dirs]
-    fs:$[`only in key `.qetl.load; files only; raze dir_files each dirs];
+    fs:$[`only in key `.qetl.load; files[only]; raze dir_files each dirs];
     one each fs}
 
 / Every .q file under `dir`, alphabetically - the full load's order.

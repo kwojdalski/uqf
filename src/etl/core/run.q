@@ -214,9 +214,9 @@ table_path:{[name] (.qetl.job.bounded.state.lock_dir[]),"/",string name}
 / sentinel that came back as a null would make every unfinished[] read wrong.
 / @return the two paths written
 persist:{[]
-    .qetl.job.bounded.state.durable_set[table_path `etl_runs;runs[]];
-    .qetl.job.bounded.state.durable_set[table_path `etl_run_meta;meta_table[]];
-    (table_path `etl_runs; table_path `etl_run_meta)}
+    .qetl.job.bounded.state.durable_set[table_path[`etl_runs];runs[]];
+    .qetl.job.bounded.state.durable_set[table_path[`etl_run_meta];meta_table[]];
+    (table_path[`etl_runs]; table_path[`etl_run_meta])}
 
 / Replace both in-memory tables with what is on disk, if anything is.
 / .
@@ -226,9 +226,9 @@ persist:{[]
 / @return the two table names
 / @eg .qetl.run.reload[]
 reload:{[]
-    pr:hsym `$table_path `etl_runs;
+    pr:hsym `$table_path[`etl_runs];
     if[not ()~key pr; `etl_runs set .qetl.job.bounded.state.durable_get table_path `etl_runs; require_run_schema[]];
-    pm:hsym `$table_path `etl_run_meta;
+    pm:hsym `$table_path[`etl_run_meta];
     if[not ()~key pm; `etl_run_meta set .qetl.job.bounded.state.durable_get table_path `etl_run_meta];
     `etl_runs`etl_run_meta}
 
@@ -338,7 +338,7 @@ given:{[d;k;fallback] $[k in key d; d k; fallback]}
 / @throws error when the ledger is neither the old shape nor the current one
 / @eg .qetl.run.migrate[]
 migrate:{[]
-    path:hsym `$table_path `etl_runs;
+    path:hsym `$table_path[`etl_runs];
     if[()~key path; :0];
     under_lock[{[path]
         t:get path;

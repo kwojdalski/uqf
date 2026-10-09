@@ -176,7 +176,7 @@ opportunity:{[state;avail;sym;size;as_of]
 / @param as_of the evaluation timestamp
 / @return the cross_arbitrage status table
 evaluate:{[state;size;as_of]
-    avail:quotable state;
+    avail:quotable[state];
     result:0#.qpipe.job.cross_arbitrage.cross_arbitrage;
     i:0;
     while[i<count avail;

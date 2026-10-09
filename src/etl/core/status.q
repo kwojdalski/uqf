@@ -189,7 +189,7 @@ write_status:{[worker;instance_id;state;spec;progress;err]
     / HERE rather than left to the caller, because the caller gets it wrong
     / exactly when it matters - after a restart, when it no longer remembers
     / what it last wrote.
-    require_transition[previous_state instance_id;state];
+    require_transition[previous_state[instance_id];state];
     dir:status_dir[];
     / mkdir -p is idempotent, and cheaper than checking first.
     system"mkdir -p ",dir;

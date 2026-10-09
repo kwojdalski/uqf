@@ -45,7 +45,7 @@ test_define_registers_the_job_with_its_edges_derived:{[t]
     .qunit.assertEquals[(d`subscribe_to;d`publishes);(enlist `src;enlist `nt_a);
         "subscribe_to is the source list and publishes is the normalizer's own name - an instance cannot declare them differently from its mappings"];
     .qunit.assertTrue[`nt_a in .qetl.job.stream.normalizer.defined[];"and it is a defined normalizer"];
-    forget `nt_a};
+    forget[`nt_a]};
 
 test_a_missing_key_is_named:{[t]
     .qunit.assertThrows[.qetl.job.stream.normalize[`nt_b;];`procname`output!(`ntb1;canon);
@@ -92,19 +92,19 @@ test_normalize_projects_the_batch_onto_what_the_mapping_declares:{[t]
     batch:([] time:enlist 2026.01.01D09:00:00; x:enlist 7; y:`g#enlist `k; extra:enlist 1f);
     .qunit.assertEquals[.qetl.job.stream.normalizer.normalize[`nt_h;`src;batch];([] a:enlist 7; b:enlist `k);
         "the canonical rows, from the declared columns only"];
-    forget `nt_h};
+    forget[`nt_h]};
 
 test_normalize_names_a_column_the_batch_lacks:{[t]
     define_ok[`nt_i;`nti1];
     .qunit.assertThrows[.qetl.job.stream.normalizer.normalize[`nt_i;`src;];([] time:enlist 2026.01.01D09:00:00; x:enlist 7);
         "*missing required column(s) y*";"a batch without a declared column is refused by name, not silently mapped"];
-    forget `nt_i};
+    forget[`nt_i]};
 
 test_normalize_refuses_a_table_that_is_not_a_source:{[t]
     define_ok[`nt_j;`ntj1];
     .qunit.assertThrows[.qetl.job.stream.normalizer.normalize[`nt_j;`other;];([] x:enlist 1);
         "*is not a source of nt_j*";"asking to normalize the wrong table is a wiring bug"];
-    forget `nt_j};
+    forget[`nt_j]};
 
 test_an_undefined_normalizer_is_named:{[t]
     .qunit.assertThrows[.qetl.job.stream.normalizer.def;`nonesuch;"*is not a defined normalizer*";
@@ -119,7 +119,7 @@ test_dispatch_publishes_through_the_instances_own_seam:{[t]
     .qetl.job.stream.normalizer.dispatch[`nt_k;`src;([] time:enlist 2026.01.01D09:00:00; x:enlist 3; y:enlist `m)];
     .qunit.assertEquals[.normtest.got;enlist (`nt_k;([] a:enlist 3; b:enlist `m));
         "one publication, onto the canonical table, of the normalized rows"];
-    forget `nt_k};
+    forget[`nt_k]};
 
 test_dispatch_publishes_nothing_for_an_empty_batch:{[t]
     define_ok[`nt_l;`ntl1];
@@ -128,7 +128,7 @@ test_dispatch_publishes_nothing_for_an_empty_batch:{[t]
     .qetl.job.stream.normalizer.dispatch[`nt_l;`src;0#([] time:`timestamp$(); x:`long$(); y:`symbol$())];
     .qetl.job.stream.normalizer.dispatch[`nt_l;`not_a_source;([] x:enlist 1)];
     .qunit.assertEmpty[.normtest.got;"an empty batch, and a batch on a foreign table, publish nothing"];
-    forget `nt_l};
+    forget[`nt_l]};
 
 / ------------------------------------------------------ THE REAL ONES
 

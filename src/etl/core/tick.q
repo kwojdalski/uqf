@@ -193,7 +193,7 @@ publish:{[t;x]
     / the wire, so a subscriber's live path and its recovery path receive
     / different shapes. Everything works until the day something restarts.
     batch:$[98h=type stamped; stamped; learn[t;stamped]];
-    record (`upd;t;batch);
+    record[(`upd;t;batch)];
     fan_out[t;batch];
     count batch}
 

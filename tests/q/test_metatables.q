@@ -12,7 +12,7 @@ strip:{[result] delete meta_observed_at, meta_definition from result};
 
 test_totals_include_empty_slices_and_deduplicate_requests:{[t]
     result:.qmeta.collect[spec[`symbol$();()!()];2026.09.01 2026.09.03 2026.09.01];
-    .qunit.assertEquals[strip result;([]date:2026.09.01 2026.09.03;rows:3 0j);"explicit totals, including an empty slice"];
+    .qunit.assertEquals[strip[result];([]date:2026.09.01 2026.09.03;rows:3 0j);"explicit totals, including an empty slice"];
     .qunit.assertTrue[all not null result`meta_observed_at;"UTC observations populated"]};
 
 test_efx_grouping_and_custom_aggregates:{[t]
@@ -28,7 +28,7 @@ test_restatement_removes_disappeared_groups_and_preserves_other_partitions:{[t]
     stored:.qmeta.collect[definition;2026.09.01 2026.09.02];
     source::delete from source where sym=`GBPUSD;
     refreshed:.qmeta.refresh[stored;definition;enlist 2026.09.01];
-    .qunit.assertEquals[strip refreshed;([]date:2026.09.02 2026.09.01;sym:`EURUSD`EURUSD;rows:1 2j);"replace whole slice, not upsert obsolete groups"];
+    .qunit.assertEquals[strip[refreshed];([]date:2026.09.02 2026.09.01;sym:`EURUSD`EURUSD;rows:1 2j);"replace whole slice, not upsert obsolete groups"];
     .qunit.assertEquals[first refreshed`meta_observed_at;last stored`meta_observed_at;"other slice keeps observation"];
     .qunit.assertEquals[count stored;3j;"caller owns prior immutable value"]};
 
@@ -65,7 +65,7 @@ test_collected_rows_carry_the_definition_fingerprint:{[t]
 test_refresh_refuses_a_redefined_aggregate_with_the_same_name:{[t]
     stored:.qmeta.collect[spec[`symbol$();enlist[`notional]!enlist(sum;`size)];enlist 2026.09.01];
     redefined:spec[`symbol$();enlist[`notional]!enlist(max;`size)];
-    .qunit.assertEquals[0#strip stored;0#strip .qmeta.collect[redefined;enlist 2026.09.01];"schemas really are identical"];
+    .qunit.assertEquals[0#strip[stored];0#strip[.qmeta.collect[redefined;enlist 2026.09.01]];"schemas really are identical"];
     .qunit.assertThrows[.qmeta.refresh[stored;redefined;];enlist 2026.09.01;"*different definition*";"semantic change needs a rebuild"]};
 
 test_refresh_refuses_a_table_without_fingerprints:{[t]
@@ -92,11 +92,11 @@ reconciled:{[dates]
 
 test_reconcile_matches_mismatches_and_unrecorded_dates:{[t]
     current:.qetl.coverage.still_current;
-    ledger (claim[2026.09.01D00:00:00.000000000;2026.09.01D12:00:00.000000000;2;current];
+    ledger[(claim[2026.09.01D00:00:00.000000000;2026.09.01D12:00:00.000000000;2;current];
         claim[2026.09.01D12:00:00.000000000;2026.09.02D00:00:00.000000000;1;current];
         claim[2026.09.02D00:00:00.000000000;2026.09.03D00:00:00.000000000;5;current];
-        claim[2026.09.03D00:00:00.000000000;2026.09.04D00:00:00.000000000;0;current]);
-    result:reconciled 2026.09.01 2026.09.02 2026.09.03 2026.09.04;
+        claim[2026.09.03D00:00:00.000000000;2026.09.04D00:00:00.000000000;0;current])];
+    result:reconciled[2026.09.01 2026.09.02 2026.09.03 2026.09.04];
     .qunit.assertEquals[exec status from result;`match`mismatch`match`unrecorded;"status per date"];
     .qunit.assertEquals[exec observed from result;3 1 0 0j;"observed rows summed over groups"];
     .qunit.assertEquals[exec published from result;3 5 0 0j;"published rows summed over the day's windows"];
@@ -105,22 +105,22 @@ test_reconcile_matches_mismatches_and_unrecorded_dates:{[t]
 
 test_reconcile_ignores_superseded_claims:{[t]
     current:.qetl.coverage.still_current;
-    ledger (claim[2026.09.01D00:00:00.000000000;2026.09.02D00:00:00.000000000;9;2026.09.03D01:00:00.000000000];
-        claim[2026.09.01D00:00:00.000000000;2026.09.02D00:00:00.000000000;3;current]);
-    .qunit.assertEquals[(reconciled enlist 2026.09.01)[2026.09.01;`status];`match;"only the current claim counts"]};
+    ledger[(claim[2026.09.01D00:00:00.000000000;2026.09.02D00:00:00.000000000;9;2026.09.03D01:00:00.000000000];
+        claim[2026.09.01D00:00:00.000000000;2026.09.02D00:00:00.000000000;3;current])];
+    .qunit.assertEquals[(reconciled[enlist 2026.09.01])[2026.09.01;`status];`match;"only the current claim counts"]};
 
 test_reconcile_flags_lost_rows_on_a_date_with_no_observations:{[t]
     ledger enlist claim[2026.09.05D00:00:00.000000000;2026.09.06D00:00:00.000000000;7;.qetl.coverage.still_current];
-    row:(reconciled enlist 2026.09.05)2026.09.05;
+    row:(reconciled[enlist 2026.09.05])2026.09.05;
     .qunit.assertEquals[row`observed`published;0 7j;"published rows that are gone"];
     .qunit.assertEquals[row`status;`mismatch;"absent date is not skipped"]};
 
 test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows:{[t]
     current:.qetl.coverage.still_current;
-    ledger (claim[2026.09.01D18:00:00.000000000;2026.09.02D06:00:00.000000000;4;current];
+    ledger[(claim[2026.09.01D18:00:00.000000000;2026.09.02D06:00:00.000000000;4;current];
         claim[2026.09.03D00:00:00.000000000;2026.09.03D12:00:00.000000000;2;current];
-        claim[2026.09.03D06:00:00.000000000;2026.09.04D00:00:00.000000000;2;current]);
-    result:reconciled 2026.09.01 2026.09.02 2026.09.03;
+        claim[2026.09.03D06:00:00.000000000;2026.09.04D00:00:00.000000000;2;current])];
+    result:reconciled[2026.09.01 2026.09.02 2026.09.03];
     .qunit.assertEquals[exec status from result;3#`ambiguous;"midnight crossing and overlap cannot be split"]};
 
 test_reconcile_rejects_malformed_requests:{[t]
@@ -149,7 +149,7 @@ test_raw_columns_are_not_scalar_aggregates:{[t]
 test_symbol_partitions_are_literal_values:{[t]
     definition:.qmeta.definition[`.metatest.source;`venue;`symbol$();()!()];
     result:.qmeta.collect[definition;`EBS`REUTERS];
-    .qunit.assertEquals[strip result;([]venue:`EBS`REUTERS;rows:3 1j);"logical partition keys are not evaluated as variables"]};
+    .qunit.assertEquals[strip[result];([]venue:`EBS`REUTERS;rows:3 1j);"logical partition keys are not evaluated as variables"]};
 
 test_dqe_adapter_preserves_requested_partition_in_payload:{[t]
     result:.dqe.uqf_metatable[`meta_fx_counts;`.metatest.source;`date;enlist 2026.09.01;`sym`venue;()!()];

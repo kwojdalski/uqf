@@ -16,15 +16,15 @@
 / context itself, so it runs on the 4.0 build it is checking for.
 
 .pc.fail:{[what] -2 "PORTABLE_CHECK_FAILED: ",what; exit 1}
-.pc.eq:{[what;got;want] if[not got~want; .pc.fail what," gave ",(-3!got),", expected ",-3!want]}
+.pc.eq:{[what;got;want] if[not got~want; .pc.fail[what," gave ",(-3!got),", expected ",-3!want]]}
 .pc.throws:{[what;f;prefix]
     r:@[{(0b;x[])};f;{(1b;x)}];
     if[not first r; .pc.fail what," did not throw"];
-    if[not prefix~(count prefix)#last r; .pc.fail what," threw ",last r]}
+    if[not prefix~(count prefix)#last r; .pc.fail[what," threw ",last r]]}
 .pc.load:{[path] @[system;"l ",path;{[p;e] .pc.fail p," did not load: ",e}[path]]}
 
-.pc.load "src/etl/core/intervals.q";
-.pc.load "src/etl/core/status.q";
+.pc.load["src/etl/core/intervals.q"];
+.pc.load["src/etl/core/status.q"];
 
 / ------------------------------------------------------------ intervals
 

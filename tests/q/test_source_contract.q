@@ -158,13 +158,13 @@ test_the_demo_source_is_registered_on_load:{[t]
 / coverage records each window as correctly complete. Nothing errors; the
 / row counts merely lie.
 test_the_fixture_is_windowed_not_returned_whole:{[t]
-    one:last .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 2];
+    one:last .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d[1];.srctest.d[2]];
     .qunit.assertEquals[(count one;count .qpipe.source.demo_deals.fixture[]);(1;5);"one day of a five-day fixture is one row, not five"]};
 
 test_the_fixture_window_is_half_open:{[t]
     / the fixture's rows sit at 09:00 on consecutive days, so a window ending
     / exactly at the next day's 00:00 must exclude that day's row.
-    got:last .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 2];
+    got:last .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d[1];.srctest.d[2]];
     .qunit.assertEquals[count got;1;"[from;to) excludes the upper bound, so no boundary row is published twice"]};
 
 test_a_window_before_the_fixture_is_empty:{[t]
@@ -172,11 +172,11 @@ test_a_window_before_the_fixture_is_empty:{[t]
     .qunit.assertEquals[count got;0;"an empty window is legal and returns no rows rather than throwing"]};
 
 test_the_whole_fixture_is_reachable:{[t]
-    got:last .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 20];
+    got:last .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d[1];.srctest.d[20]];
     .qunit.assertEquals[count got;5;"a window spanning everything returns everything - the filter is not off by a day"]};
 
 test_the_fetch_path_is_announced:{[t]
-    .qunit.assertEquals[first .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 2];`fixture;"synthetic data is announced in the return value, never inferred"]};
+    .qunit.assertEquals[first .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d[1];.srctest.d[2]];`fixture;"synthetic data is announced in the return value, never inferred"]};
 
 / --- the row key --------------------------------------------------
 
@@ -318,16 +318,16 @@ settings_file:{[rows]
     f}
 
 test_a_header_alone_configures_nothing:{[t]
-    .qunit.assertEquals[.qetl.source.load_settings[.srctest.settings_file ();`symbol$()];0;"the tree's own file is a header"];
+    .qunit.assertEquals[.qetl.source.load_settings[.srctest.settings_file[()];`symbol$()];0;"the tree's own file is a header"];
     .qunit.assertEquals[.qetl.source.has_credentials `demo_deals;0b;"so an unconfigured demo source stays on its fixture"]};
 
 test_a_row_configures_its_source_without_a_variable:{[t]
-    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,localhost:5010,";`symbol$()];
+    .qetl.source.load_settings[.srctest.settings_file[enlist "demo_deals,ipc,localhost:5010,"];`symbol$()];
     .qunit.assertEquals[.qetl.source.credential_origin `demo_deals;`settings;"the row is where the credential comes from"];
     .qunit.assertEquals[.qetl.source.require_credentials `demo_deals;"localhost:5010";"no per-source variable is needed"]};
 
 test_the_environment_override_wins_over_a_row:{[t]
-    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,localhost:5010,";`symbol$()];
+    .qetl.source.load_settings[.srctest.settings_file[enlist "demo_deals,ipc,localhost:5010,"];`symbol$()];
     setenv[`UQF_SOURCE_CRED_DEMO_DEALS;"otherhost:6000"];
     got:.qetl.source.require_credentials `demo_deals;
     setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
@@ -335,18 +335,18 @@ test_the_environment_override_wins_over_a_row:{[t]
 
 test_a_permitted_path_variable_is_expanded:{[t]
     setenv[`SRCTEST_HOST;"db1"];
-    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,${SRCTEST_HOST}:5010,";`SRCTEST_HOST];
+    .qetl.source.load_settings[.srctest.settings_file[enlist "demo_deals,ipc,${SRCTEST_HOST}:5010,"];`SRCTEST_HOST];
     got:.qetl.source.require_credentials `demo_deals;
     setenv[`SRCTEST_HOST;""];
     .qunit.assertEquals[got;"db1:5010";"a variable the loader allows is expanded when the source connects"]};
 
 test_an_unlisted_path_variable_is_refused:{[t]
-    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,${HOME}:5010,";`SRCTEST_HOST];
+    .qetl.source.load_settings[.srctest.settings_file[enlist "demo_deals,ipc,${HOME}:5010,"];`SRCTEST_HOST];
     .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*${HOME} is not a path it may use*";"only the variables the loader names are expanded"]};
 
 test_a_secret_comes_from_the_variable_the_row_names:{[t]
     setenv[`SRCTEST_PWD;"s3cret"];
-    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,db1:5010:svc:{secret},SRCTEST_PWD";`symbol$()];
+    .qetl.source.load_settings[.srctest.settings_file[enlist "demo_deals,ipc,db1:5010:svc:{secret},SRCTEST_PWD"];`symbol$()];
     got:.qetl.source.require_credentials `demo_deals;
     setenv[`SRCTEST_PWD;""];
     .qunit.assertEquals[got;"db1:5010:svc:s3cret";"{secret} is filled from the environment when the source connects"]};
@@ -354,7 +354,7 @@ test_a_secret_comes_from_the_variable_the_row_names:{[t]
 / A configured source is live, so a row that cannot resolve fails the run
 / instead of quietly reading the fixture.
 test_an_unset_secret_variable_fails_rather_than_selecting_the_fixture:{[t]
-    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,ipc,db1:5010:svc:{secret},SRCTEST_PWD";`symbol$()];
+    .qetl.source.load_settings[.srctest.settings_file[enlist "demo_deals,ipc,db1:5010:svc:{secret},SRCTEST_PWD"];`symbol$()];
     .qunit.assertEquals[.qetl.source.has_credentials `demo_deals;1b;"a configured source is never a fixture run"];
     .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*SRCTEST_PWD, is not set*";"the variable is named, never a value"]};
 
@@ -363,11 +363,11 @@ test_a_scaffolded_stub_is_refused:{[t]
     .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*still the scaffold's stub*";"an unfinished stub cannot pass for a setting"]};
 
 test_a_transport_the_source_does_not_declare_is_refused:{[t]
-    .qetl.source.load_settings[.srctest.settings_file enlist "demo_deals,odbc,DRIVER=x,";`symbol$()];
+    .qetl.source.load_settings[.srctest.settings_file[enlist "demo_deals,odbc,DRIVER=x,"];`symbol$()];
     .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*says transport odbc, but the source declares ipc*";"an incompatible setting is named"]};
 
 test_an_inline_secret_is_refused_when_the_file_is_read:{[t]
-    f:.srctest.settings_file enlist "demo_deals,odbc,DRIVER=x;PWD=hunter2,";
+    f:.srctest.settings_file[enlist "demo_deals,odbc,DRIVER=x;PWD=hunter2,"];
     .qunit.assertThrows[.qetl.source.read_settings;f;"*holds a secret inline*";"a password in the file is refused"]};
 
 test_a_refusal_names_the_rows_own_line_past_blank_lines:{[t]
@@ -383,11 +383,11 @@ test_a_secret_column_is_refused:{[t]
     .qunit.assertThrows[.qetl.source.read_settings;f;"*password is not a column*";"the file has no place for a secret"]};
 
 test_a_duplicated_source_is_refused_naming_its_lines:{[t]
-    f:.srctest.settings_file ("demo_deals,ipc,h:1,";"demo_deals,ipc,h:2,");
+    f:.srctest.settings_file[("demo_deals,ipc,h:1,";"demo_deals,ipc,h:2,")];
     .qunit.assertThrows[.qetl.source.read_settings;f;"*demo_deals has more than one row - lines 2, 3*";"no implicit choice between two rows"]};
 
 test_a_row_missing_its_setting_is_refused:{[t]
-    f:.srctest.settings_file enlist "demo_deals,ipc,,";
+    f:.srctest.settings_file[enlist "demo_deals,ipc,,"];
     .qunit.assertThrows[.qetl.source.read_settings;f;"*line 2 needs a source, a transport and a setting*";"a missing field is named with its line"]};
 
 / --- where a source's declaration lives (.qpipe.source) --------------------------
@@ -514,21 +514,21 @@ test_the_reader_finds_a_bare_name:{[t]
     / A reader nobody has seen say yes may be matching nothing at all, and
     / this one is string surgery - the kind of check that silently stops
     / working after an unrelated edit.
-    .qunit.assertEquals[bare_from_in bare_source;enlist `trade;
+    .qunit.assertEquals[bare_from_in[bare_source];enlist `trade;
         "a bare table name in a query block is reported"]};
 
 test_the_reader_passes_the_backtick_form:{[t]
-    .qunit.assertEquals[bare_from_in ok_source;();
+    .qunit.assertEquals[bare_from_in[ok_source];();
         "the symbol form every source uses is not reported"]};
 
 test_a_select_after_the_query_block_is_out_of_scope:{[t]
     / A fixture builder selecting from its own local is not sent anywhere,
     / so the scan stops at the end of the query definition.
-    .qunit.assertEquals[bare_from_in ok_source,enlist "helper:{[] t:([] a:1); select from t}";();
+    .qunit.assertEquals[bare_from_in[ok_source,enlist "helper:{[] t:([] a:1); select from t}"];();
         "a select below the query block is not read"]};
 
 test_a_from_inside_a_comment_is_not_read:{[t]
-    .qunit.assertEquals[bare_from_in ok_source,enlist "  / copied from trade upstream";();
+    .qunit.assertEquals[bare_from_in[ok_source,enlist "  / copied from trade upstream"];();
         "prose after a comment marker is not code"]};
 
 test_a_source_can_declare_what_its_credential_looks_like:{[t]
@@ -583,9 +583,9 @@ test_a_live_ipc_source_query_is_traced:{[t]
     / The handle is a global, not an argument: `logged {[h] ...}[h]` would
     / run the fetch BEFORE logged installs its recorder.
     `.srctest.h set {`.srctest.sent set x; ([] deal_id:`long$())};
-    lines:.srctest.logged {.qetl.source.fetch_window[`demo_deals;.srctest.h;.srctest.d 1;.srctest.d 2]};
+    lines:.srctest.logged {.qetl.source.fetch_window[`demo_deals;.srctest.h;.srctest.d[1];.srctest.d[2]]};
     .qunit.assertEquals[`ipc`ipc;2#lines[;1] where `TRACE=lines[;0];"the live query is traced, sent and returned"];
-    .qunit.assertEquals[(type first .srctest.sent;1_.srctest.sent);(100h;(.srctest.d 1;.srctest.d 2));
+    .qunit.assertEquals[(type first .srctest.sent;1_.srctest.sent);(100h;(.srctest.d[1];.srctest.d[2]));
         "the handle is sent (lambda;from;to) - a UTC source's bounds unchanged"]};
 
 
@@ -672,7 +672,7 @@ test_with_trace_off_a_request_is_only_sent:{[t]
 sup:{[] enlist[`q]!enlist ([] ts:`timestamp$(); bid:`float$())}
 decl2:{[]
     d:@[.srctest.decl[];`fixture;:;
-        {`ext`q!(([] ts:.srctest.d 1 5; px:1.5 2.5);([] ts:enlist .srctest.d 0; bid:enlist 1.1))}];
+        {`ext`q!(([] ts:.srctest.d[1 5]; px:1.5 2.5);([] ts:enlist .srctest.d 0; bid:enlist 1.1))}];
     / An amend, not a join with `enlist`: enlisting a dict makes a one-row table.
     @[d;`supporting;:;.srctest.sup[]]}
 
@@ -720,7 +720,7 @@ test_both_inputs_validate_together:{[t]
 
 test_only_the_primary_input_is_cut_to_the_window:{[t]
     .qetl.source.define[`t;.srctest.decl2[]];
-    got:last .qetl.source.fetch_window[`t;0Ni;.srctest.d 1;.srctest.d 2];
+    got:last .qetl.source.fetch_window[`t;0Ni;.srctest.d[1];.srctest.d[2]];
     .qunit.assertEquals[(count got`ext;count got`q);(1;1);
         "day 5 is outside the window, and day 0's quote is kept: supporting rows are context"];
     .qunit.assertEquals[.qetl.source.primary[`t;got];got`ext;"the primary is the window's own rows"]};

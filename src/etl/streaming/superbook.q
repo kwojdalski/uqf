@@ -139,11 +139,11 @@ fx_only:{[x] x where `fx=x`market}
 / @eg .qpipe.job.superbook.on_batch[`unrelated;()]
 on_batch:{[t;x]
     if[not t=`market_data; :()];
-    x:fx_only x;
+    x:fx_only[x];
     if[0=count x; :()];
     now:.z.p;
     `.qpipe.job.superbook.books set replace_books[books;x;now];
-    refresh now;
+    refresh[now];
     }
 
 / Recompute on the clock so silence withdraws stale liquidity.

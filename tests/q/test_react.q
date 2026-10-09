@@ -58,7 +58,7 @@ test_a_reaction_registers_and_is_listed:{[t]
 test_reregistering_replaces_rather_than_adding:{[t]
     .qetl.reaction.on[`a;`r1;.rxtest.recorder`first];
     .qetl.reaction.on[`a;`r1;.rxtest.recorder`second];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[(count .qetl.reaction.for_dataset `a;.rxtest.fired[;0]);(1;enlist `second);
         "the second registration replaces the first, and only it runs"]};
 
@@ -100,7 +100,7 @@ test_published_hands_a_handler_the_rows_of_its_notification:{[t]
     `.rxtest.seen set ();
     .qetl.reaction.on[`a;`reader;{[ds;f;tt] `.rxtest.seen set .qetl.reaction.published[]}];
     rows:([] x:1 2 3);
-    .qetl.reaction.notify_rows[`a;.rxtest.d 1;.rxtest.d 2;rows];
+    .qetl.reaction.notify_rows[`a;.rxtest.d[1];.rxtest.d[2];rows];
     .qunit.assertEquals[.rxtest.seen;rows;"the handler read exactly the rows the notification carried"]};
 
 test_published_refuses_outside_a_reaction:{[t]
@@ -110,7 +110,7 @@ test_published_refuses_outside_a_reaction:{[t]
 test_published_refuses_a_notification_that_carried_no_rows:{[t]
     / A bare notify has no rows; the handler's refusal is recorded, not an empty table.
     .qetl.reaction.on[`a;`reader;{[ds;f;tt] .qetl.reaction.published[]}];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertTrue[(exec last detail from .qetl.reaction.history) like "published: this notification carried no rows*";
         "a handler asking for rows a bare notify never sent is refused, naming why"]};
 
@@ -118,14 +118,14 @@ test_each_cascaded_notification_keeps_its_own_rows:{[t]
     `.rxtest.seen set ();
     .qetl.reaction.on[`a;`to_b;{[ds;f;tt] .qetl.reaction.notify_rows[`b;f;tt;([] y:10 20)]}];
     .qetl.reaction.on[`b;`reader;{[ds;f;tt] `.rxtest.seen set .qetl.reaction.published[]}];
-    .qetl.reaction.notify_rows[`a;.rxtest.d 1;.rxtest.d 2;([] x:1 2 3)];
+    .qetl.reaction.notify_rows[`a;.rxtest.d[1];.rxtest.d[2];([] x:1 2 3)];
     .qunit.assertEquals[.rxtest.seen;([] y:10 20);"a downstream reaction reads its own publication, not the upstream one"]};
 
 test_off_stops_one_reaction_and_leaves_the_others:{[t]
     .qetl.reaction.on[`a;`keep;.rxtest.recorder`keep];
     .qetl.reaction.on[`a;`drop;.rxtest.recorder`drop];
     .qetl.reaction.off[`a;`drop];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[.rxtest.fired[;0];enlist `keep;"only the remaining reaction runs"]};
 
 / --- notifying ------------------------------------------------------------
@@ -135,18 +135,18 @@ test_a_notification_carries_the_range:{[t]
     / told WHAT changed, so it can recompute that range instead of diffing a
     / ledger to find it.
     .qetl.reaction.on[`a;`r1;.rxtest.recorder`r1];
-    .qetl.reaction.notify[`a;.rxtest.d 3;.rxtest.d 4];
-    .qunit.assertEquals[first .rxtest.fired;(`r1;`a;.rxtest.d 3;.rxtest.d 4);
+    .qetl.reaction.notify[`a;.rxtest.d[3];.rxtest.d[4]];
+    .qunit.assertEquals[first .rxtest.fired;(`r1;`a;.rxtest.d[3];.rxtest.d[4]);
         "the handler receives the dataset and the published range"]};
 
 test_a_dataset_with_no_reaction_is_a_no_op:{[t]
-    .qunit.assertEquals[.qetl.reaction.notify[`nobody_cares;.rxtest.d 1;.rxtest.d 2];0;
+    .qunit.assertEquals[.qetl.reaction.notify[`nobody_cares;.rxtest.d[1];.rxtest.d[2]];0;
         "publishing a dataset nothing reads runs nothing and does not throw"]};
 
 test_every_reaction_on_a_dataset_runs:{[t]
     .qetl.reaction.on[`a;`one;.rxtest.recorder`one];
     .qetl.reaction.on[`a;`two;.rxtest.recorder`two];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[asc .rxtest.fired[;0];`one`two;"two consumers of one dataset both hear about it"]};
 
 / --- the three properties -------------------------------------------------
@@ -157,7 +157,7 @@ test_every_reaction_on_a_dataset_runs:{[t]
 test_a_cascade_runs_the_whole_chain:{[t]
     .qetl.reaction.on[`a;`a_to_b;{[ds;f;t] .qetl.reaction.notify_from_here[`b;f;t]}];
     .qetl.reaction.on[`b;`b_done;.rxtest.recorder`b_done];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[.rxtest.fired[;0];enlist `b_done;
         "publishing a triggers b's reaction, with a's range carried through"]};
 
@@ -169,7 +169,7 @@ test_a_cascade_does_not_nest:{[t]
     .qetl.reaction.on[`a;`a_to_b;{[ds;f;t]
         `.rxtest.fired set .rxtest.fired,enlist (`inner_return;.qetl.reaction.notify_from_here[`b;f;t];0N;0N)}];
     .qetl.reaction.on[`b;`b_done;.rxtest.recorder`b_done];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[(first .rxtest.fired)1;0;
         "a notification raised inside a handler is queued, not run nested"]};
 
@@ -179,7 +179,7 @@ test_a_cycle_terminates:{[t]
     / same (dataset;range) is dispatched at most once per drain.
     .qetl.reaction.on[`a;`to_b;{[ds;f;t] .qetl.reaction.notify_from_here[`b;f;t]}];
     .qetl.reaction.on[`b;`to_a;{[ds;f;t] .qetl.reaction.notify_from_here[`a;f;t]}];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[count select from .qetl.reaction.history where outcome=`ok;2;
         "a -> b -> a settles after each fires once rather than spinning"]};
 
@@ -187,28 +187,28 @@ test_the_same_range_fires_again_on_a_later_publication:{[t]
     / The cycle guard is per-drain on purpose. Publishing the same range
     / again later is a NEW event - a restatement, say - and must fire.
     .qetl.reaction.on[`a;`r1;.rxtest.recorder`r1];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[count .rxtest.fired;2;"the guard bounds one cascade, not the future"]};
 
 test_a_runaway_chain_is_refused_at_max_depth:{[t]
     / Every publication is a new range, so the per-drain guard never bites:
     / depth is what stops this one.
     .qetl.reaction.on[`a;`deeper;{[ds;f;t] .qetl.reaction.notify_from_here[`a;f+1D;t+1D]}];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[count select from .qetl.reaction.history where outcome=`refused;1;
         "the chain stops at max_depth and says so rather than running forever"]};
 
 test_a_failing_reaction_is_recorded_not_thrown:{[t]
     .qetl.reaction.on[`a;`bad;{[ds;f;t] '"boom"}];
-    r:@[{.qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2]};::;{`threw}];
+    r:@[{.qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]]};::;{`threw}];
     .qunit.assertEquals[(r;exec first detail from .qetl.reaction.history where outcome=`failed);(1;"boom");
         "the failure is recorded and the notification returns normally"]};
 
 test_a_failing_reaction_does_not_stop_the_others:{[t]
     .qetl.reaction.on[`a;`bad;{[ds;f;t] '"boom"}];
     .qetl.reaction.on[`a;`good;.rxtest.recorder`good];
-    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qetl.reaction.notify[`a;.rxtest.d[1];.rxtest.d[2]];
     .qunit.assertEquals[.rxtest.fired[;0];enlist `good;
         "one broken consumer does not deprive the rest of the event"]};
 
@@ -334,7 +334,7 @@ test_a_worker_reaction_runs_that_worker:{[t]
     `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
     .qetl.reaction.on_worker[`upstream;`demo_deals_backfill;
         {[f;tt] `source_version`range_from`range_to!(`rx_worker;f;tt)}];
-    .qetl.reaction.notify[`upstream;.rxtest.d 1;.rxtest.d 4];
+    .qetl.reaction.notify[`upstream;.rxtest.d[1];.rxtest.d[4]];
     .qunit.assertEquals[(count value `demo_deals;exec first outcome from .qetl.reaction.history);(3;`ok);
         "publishing upstream ran the downstream worker over the published range"]};
 
@@ -348,11 +348,11 @@ test_a_worker_run_fires_the_event_for_every_window:{[t]
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
     `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
     .qetl.reaction.on[`demo_deals;`watcher;.rxtest.recorder`watcher];
-    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx1;.rxtest.d 1;.rxtest.d 4)];
+    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx1;.rxtest.d[1];.rxtest.d[4])];
     .qpipe.job.demo_deals_backfill.run[];
     .qpipe.job.demo_deals_backfill.cleanup[];
     .qunit.assertEquals[(count .rxtest.fired;.rxtest.fired[0;2];.rxtest.fired[0;3]);
-        (3;.rxtest.d 1;.rxtest.d 2);
+        (3;.rxtest.d[1];.rxtest.d[2]);
         "three windows published, three events, the first carrying the first window's own range"]};
 
 test_a_dry_run_publishes_nothing_and_fires_nothing:{[t]
@@ -362,7 +362,7 @@ test_a_dry_run_publishes_nothing_and_fires_nothing:{[t]
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
     .qetl.reaction.on[`demo_deals;`watcher;.rxtest.recorder`watcher];
     setenv[`UQF_DRY_RUN;"true"];
-    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx2;.rxtest.d 1;.rxtest.d 4)];
+    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx2;.rxtest.d[1];.rxtest.d[4])];
     .qpipe.job.demo_deals_backfill.run[];
     .qpipe.job.demo_deals_backfill.cleanup[];
     setenv[`UQF_DRY_RUN;""];
@@ -376,7 +376,7 @@ test_a_dry_run_publishes_nothing_and_fires_nothing:{[t]
 test_a_failing_reaction_leaves_the_window_published_and_covered:{[t]
     .rxtest.fresh_deals[];
     r:.rxtest.run_deals[`rx3;{[ds;f;t] '"downstream is broken"}];
-    .qunit.assertEquals[(r`state;r`windows_failed;r`reactions_owed;.qetl.coverage.is_covered[`demo_deals;`;`rx3;.z.p;.rxtest.d 1;.rxtest.d 4]);
+    .qunit.assertEquals[(r`state;r`windows_failed;r`reactions_owed;.qetl.coverage.is_covered[`demo_deals;`;`rx3;.z.p;.rxtest.d[1];.rxtest.d[4]]);
         (`partial;0;3;1b);
         "the coverage stands, and the run is partial: three windows' reactions are owed"]};
 
@@ -386,7 +386,7 @@ run_deals:{[version;handler]
     .qetl.job.bounded.state.release_lock `demo_deals_backfill;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
     .qetl.reaction.on[`demo_deals;`bad;handler];
-    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(version;.rxtest.d 1;.rxtest.d 4)];
+    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(version;.rxtest.d[1];.rxtest.d[4])];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qpipe.job.demo_deals_backfill.cleanup[];
     r}

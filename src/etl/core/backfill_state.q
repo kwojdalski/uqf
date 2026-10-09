@@ -75,7 +75,7 @@ require_contract:{[worker]
     if[not worker in key bounded_workers;
         '"require_contract: ",string[worker]," is not registered - call .qetl.job.bounded.state.register first"];
     ns:bounded_workers worker;
-    names:ns_names ns;
+    names:ns_names[ns];
     if[0=count names;
         '"require_contract: ",string[worker],"'s namespace ",string[ns]," is empty or absent"];
     missing_methods:bounded_worker_methods where not bounded_worker_methods in names;
@@ -125,8 +125,8 @@ owner_file:{[path] path,"/owner"}
 / @return the owner file's path
 / @eg .qetl.job.bounded.state.write_owner["/tmp/x.lock"]
 write_owner:{[path]
-    (hsym `$owner_file path) 0: enlist .j.j `pid`started`host!(.z.i;.z.p;string .z.h);
-    owner_file path}
+    (hsym `$owner_file[path]) 0: enlist .j.j `pid`started`host!(.z.i;.z.p;string .z.h);
+    owner_file[path]}
 
 / The holder recorded inside a lock, or () when there is none to read.
 / .
@@ -137,7 +137,7 @@ write_owner:{[path]
 / @param path the lock directory
 / @return the parsed owner dictionary, or ()
 / @eg .qetl.job.bounded.state.read_owner["/tmp/nonexistent.lock"]  ->  ()
-read_owner:{[path] @[{.j.k first read0 hsym `$x};owner_file path;{[e] ()}]}
+read_owner:{[path] @[{.j.k first read0 hsym `$x};owner_file[path];{[e] ()}]}
 
 / Is a process with this id running on this host?
 / .
@@ -171,7 +171,7 @@ pid_alive:{[pid]
 / @return 1b when the recorded holder is gone from this host
 / @eg .qetl.job.bounded.state.lock_is_stale["/tmp/nonexistent.lock"]  ->  0b
 lock_is_stale:{[path]
-    o:read_owner path;
+    o:read_owner[path];
     $[()~o;                          0b;
       not all `pid`host in key o;    0b;
       not o[`host]~string .z.h;      0b;
@@ -195,10 +195,10 @@ lock_is_stale:{[path]
 break_stale:{[path]
     b:path,".break";
     if[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};b;{[e] 1}];
-        if[lock_is_stale b; system"rm -rf ",b];
+        if[lock_is_stale[b]; system"rm -rf ",b];
         :0b];
-    write_owner b;
-    broke:lock_is_stale path;
+    write_owner[b];
+    broke:lock_is_stale[path];
     if[broke; system"rm -rf ",path];
     system"rm -rf ",b;
     broke}
@@ -214,7 +214,7 @@ break_stale:{[path]
 / @return a phrase naming the holder, for an error message
 / @eg .qetl.job.bounded.state.owner_desc["/tmp/nonexistent.lock"]  ->  "an unrecorded holder (no owner file - it is mid-acquire)"
 owner_desc:{[path]
-    o:read_owner path;
+    o:read_owner[path];
     if[()~o; :"an unrecorded holder (no owner file - it is mid-acquire)"];
     "pid ",string["j"$o`pid],
         $[`host in key o; " on ",o`host; ""],
@@ -240,7 +240,7 @@ owner_desc:{[path]
 acquire_lock:{[worker]
     dir:lock_dir[];
     system"mkdir -p ",dir;
-    path:lock_path worker;
+    path:lock_path[worker];
     / mkdir on an existing directory returns non-zero: that IS the test.
     rc:@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
     / A lock whose recorded holder is gone from this host is BROKEN AND
@@ -249,38 +249,38 @@ acquire_lock:{[worker]
     / clean exit, a kill and a throw each left one behind, and the next run
     / of that worker refused against a pid that had not existed for hours.
     if[rc<>0;
-        if[lock_is_stale path;
+        if[lock_is_stale[path];
             .[{.qetl.log.info[x;y;z]};
                 (worker;"breaking a stale lock - its holder is gone";
-                 `path`holder!(path;owner_desc path));::];
-            break_stale path;
+                 `path`holder!(path;owner_desc[path]));::];
+            break_stale[path];
             / Retake it through the same atomic mkdir. Losing THIS race means
             / another process got in first, and the refusal below - now
             / describing that live holder - is the right answer.
             rc:@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}]]];
     if[rc<>0;
         '"acquire_lock: ",string[worker]," is already running (lock held at ",path,
-         " by ",(owner_desc path),
+         " by ",(owner_desc[path]),
          ") - refusing to start a second instance, because two instances would ",
          "both advance the same private checkpoint"];
     / Record who holds it, so the next process can tell a live lock from one
     / this process left behind. READ BACK by lock_is_stale above; it was
     / write-only until #490.
-    write_owner path;
+    write_owner[path];
     .[{.qetl.log.dbg[x;y;z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
     path}
 
 / Release the lock. Safe to call when not held, so it can sit in a cleanup
 / path that also runs on the failure branch.
 release_lock:{[worker]
-    path:lock_path worker;
+    path:lock_path[worker];
     system"rm -rf ",path;
     .[{.qetl.log.dbg[x;y;z]};(worker;"lock released";enlist[`path]!enlist path);::];
     path}
 
 / Is the lock currently held? For diagnostics and tests, not for gating -
 / gating on this would reintroduce the race acquire_lock avoids.
-lock_held:{[worker] not () ~ @[{key hsym `$x};lock_path worker;{()}]}
+lock_held:{[worker] not () ~ @[{key hsym `$x};lock_path[worker];{()}]}
 
 / ------------------------------------------------------------ LEDGER LOCK
 
@@ -329,7 +329,7 @@ file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
 with_file_lock:{[name;f;args]
     dir:lock_dir[];
     system"mkdir -p ",dir;
-    path:file_lock_path name;
+    path:file_lock_path[name];
     deadline:.z.p+file_lock_wait;
     while[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
         / Same staleness rule acquire_lock uses, and it matters MORE here.
@@ -337,17 +337,17 @@ with_file_lock:{[name;f;args]
         / the ledger for every worker on the host - five seconds at a time,
         / forever - with an error that named the case it could not handle.
         / Breaking it here turns that into a pause and a log line.
-        stale:lock_is_stale path;
-        if[stale; break_stale path];
+        stale:lock_is_stale[path];
+        if[stale; break_stale[path]];
         if[not stale;
             if[.z.p>deadline;
                 '"with_file_lock: could not take ",string[name]," at ",path," within ",
-                 string[file_lock_wait]," - held by ",(owner_desc path),
+                 string[file_lock_wait]," - held by ",(owner_desc[path]),
                  ", which is still running"];
             system"sleep 0.01"]];
     / Record the holder, so a lock left by a dead process can be broken by
     / the next process to want it rather than waited on.
-    write_owner path;
+    write_owner[path];
     r:@[{[fa] (1b; (fa 0) . fa 1)};(f;args);{[e] (0b;e)}];
     system"rm -rf ",path;
     if[not first r; 'last r];
@@ -475,7 +475,7 @@ checkpoint_path:{[worker] (lock_dir[]),"/",string[worker],".checkpoint"}
 save_checkpoint:{[worker;spec;cursor]
     dir:lock_dir[];
     system"mkdir -p ",dir;
-    path:checkpoint_path worker;
+    path:checkpoint_path[worker];
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);
     durable_lines[path;enlist .j.j payload];
@@ -494,7 +494,7 @@ save_checkpoint:{[worker;spec;cursor]
 / @param spec the CURRENT run specification
 / @return the cursor to resume from, or 0Np to start from range_from
 load_checkpoint:{[worker;spec]
-    path:checkpoint_path worker;
+    path:checkpoint_path[worker];
     if[()~key hsym `$path;
         .[{.qetl.log.dbg[x;y;z]};(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
         :0Np];
@@ -568,7 +568,7 @@ run_pass:{[worker;spec;pass]
     outcome:@[{(`ok;x[])};pass;{(`err;x)}];
     if[`err~first outcome;
         fail[worker;spec;`cursor`rows_published`windows_completed!(0Np;0;0);last outcome];
-        release_lock worker;
+        release_lock[worker];
         '"run_pass: ",string[worker]," failed: ",last outcome];
     last outcome}
 

@@ -110,7 +110,7 @@ switched:{[level] $[level=`DEBUG; debug_enabled; level=`TRACE; trace_enabled; 1b
 / @private
 render:{[fields]
     if[0=count fields; :""];
-    " " sv {[k;v] string[k],"=",value1 v}'[key fields;value fields]}
+    " " sv {[k;v] string[k],"=",value1[v]}'[key fields;value fields]}
 
 / Private: one field's value as q text, IN FULL.
 / .
@@ -124,7 +124,7 @@ render:{[fields]
 / @return its q literal, as .Q.s1 spells it
 / @private
 value1:{[v]
-    if[10h=type v; :quoted v];
+    if[10h=type v; :quoted[v]];
     c:@[system;"c";{[e] ()}];
     if[2<>count c; :.Q.s1 v];
     @[system;"c ",string[c 0]," 2000";::];
@@ -184,7 +184,7 @@ enabled:{[level]
     if[torq_loaded[]; if[not level in key .lg.outmap; register[]]];
     $[torq_loaded[];
         0<0^.lg.outmap level;
-      switched level]}
+      switched[level]]}
 
 / Private: assemble and emit one line.
 / .
@@ -205,9 +205,9 @@ enabled:{[level]
 / nothing. Wrapping the emit has no such ambiguity.
 / @private
 line:{[level;id;text;fields]
-    if[enabled level;
-        f:with_scope fields;
-        emit[level;id;$[0=count f; text; text," ",render f]]];
+    if[enabled[level];
+        f:with_scope[fields];
+        emit[level;id;$[0=count f; text; text," ",render[f]]]];
     }
 
 / ------------------------------------------------------- SCOPED CONTEXT

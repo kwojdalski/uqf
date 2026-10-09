@@ -131,7 +131,7 @@ defined:{[] key registry}
 / @throws error when src is not one of the normalizer's sources, or the batch lacks a declared column
 / @eg cols .qetl.job.stream.normalizer.normalize[`executions;`trades;([] time:enlist 2026.09.17D10:00:00; sym:enlist `EURUSD; side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000)]
 normalize:{[name;src;batch]
-    d:def name;
+    d:def[name];
     srcs:d`input;
     if[not src in key srcs;
         '"normalize: ",string[src]," is not a source of ",string[name]," - its sources are ",", " sv string key srcs];

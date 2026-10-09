@@ -43,7 +43,7 @@ of:{[job]
 / @param err the error, a string; ignored when ok
 / @return the job's counts after this batch
 record:{[job;ok;err]
-    h:of job;
+    h:of[job];
     h:$[ok; @[h;`ok;+;1]; h,`failed`last_error`last_failure_at!(1+h`failed;`$err;.z.p)];
     `.qetl.stream_health.batches upsert (enlist[`job]!enlist job),h;
     h}
@@ -54,7 +54,7 @@ record:{[job;ok;err]
 / @param failing 1b when a batch of the job's failed since the previous beat
 / @return the file's path
 write:{[job;failing]
-    h:of job;
+    h:of[job];
     dir:.qetl.status.status_dir[];
     system"mkdir -p ",dir;
     payload:`job`process`pid`host`at`ok`failed`failing`last_error`last_failure_at!(

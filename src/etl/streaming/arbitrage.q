@@ -51,7 +51,7 @@ evaluate:{[batch]
 / @eg .qpipe.job.arbitrage.on_batch[`unrelated;()]
 on_batch:{[t;x]
     if[not t=`superbook; :()];
-    if[count x; .qpipe.job.arbitrage.publish[`arbitrage;evaluate x]];
+    if[count x; .qpipe.job.arbitrage.publish[`arbitrage;evaluate[x]]];
     }
 
 \d .

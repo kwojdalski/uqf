@@ -212,7 +212,7 @@ decide:{[row;horizon;draws]
     h:.qpipe.job.crypto_mock.hazard_per_s .qpipe.job.crypto_mock.venues?row`venue;
     p:.qpipe.job.crypto_mock.skewed[.qpipe.job.crypto_mock.hazard_to_prob[h;horizon];row`toxicity];
     q:.qpipe.job.crypto_mock.quote_size .qpipe.job.crypto_mock.syms?row`sym;
-    bidask:.qpipe.job.crypto_mock.touch row`mid;
+    bidask:.qpipe.job.crypto_mock.touch[row`mid];
     cap:.qpipe.job.crypto_mock.max_fill_fraction;
     out:();
     if[(draws 1)<p 0; out,:enlist (1;bidask 0;q*cap&draws 3)];
@@ -241,7 +241,7 @@ publish_fills:{[horizon;row]
     {[row;f]
         .qpipe.job.crypto_mock.publish[`crypto_trades;
             .qpipe.job.crypto_mock.fill_rows[row`venue;row`sym;f 0;f 1;f 2;
-                .qpipe.job.crypto_mock.next_id row`venue]]}[row] each decided;
+                .qpipe.job.crypto_mock.next_id[row`venue]]]}[row] each decided;
     count decided}
 
 / The tick length, in seconds - the horizon the fill hazards are converted
@@ -255,7 +255,7 @@ tick_seconds:1f
 on_timer:{[]
     `.qpipe.job.crypto_mock.market set update mid:.qpipe.job.crypto_mock.walk each mid,
         toxicity:.qpipe.job.crypto_mock.drift_toxicity each toxicity from .qpipe.job.crypto_mock.market;
-    .qpipe.job.crypto_mock.publish[`crypto_book;.qpipe.job.crypto_mock.book_rows .qpipe.job.crypto_mock.market];
+    .qpipe.job.crypto_mock.publish[`crypto_book;.qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market]];
     .qpipe.job.crypto_mock.publish_fills[.qpipe.job.crypto_mock.tick_seconds] each .qpipe.job.crypto_mock.market;
     }
 

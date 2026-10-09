@@ -43,17 +43,17 @@ only:{[nm] (enlist `functions)!enlist nm}
 / --- the results contract -------------------------------------------------
 
 test_run_returns_the_documented_columns:{[t]
-    r:.cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+    r:.cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
     .qunit.assertEquals[cols r;
         `name`iterations`lineIterations`blockIterations`lines`blocks`text;
         "the results table is the one the KX API documents"]};
 
 test_a_function_that_ran_reports_an_iteration:{[t]
-    r:.cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+    r:.cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
     .qunit.assertEquals[first r`iterations;1;"one call, one iteration"]};
 
 test_the_text_column_is_the_original_source:{[t]
-    r:.cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+    r:.cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
     .qunit.assertEquals[first r`text;"{[a;b] a+b}";
         "the report shows the source as written, not the instrumented copy"]};
 
@@ -61,17 +61,17 @@ test_the_call_result_is_not_disturbed:{[t]
     / The property everything else depends on. If instrumenting changed what
     / a function returned, every number this tool produced would be about
     / different code from the code that ships.
-    .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+    .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
     .qunit.assertEquals[.covfix.add[1;2];3;"the function still computes what it did"]};
 
 / --- statements ------------------------------------------------------------
 
 test_every_statement_is_counted_separately:{[t]
-    r:.cov.run[.covfix.several;enlist (::);.covtest.only `.covfix.several];
+    r:.cov.run[.covfix.several;enlist (::);.covtest.only[`.covfix.several]];
     .qunit.assertEquals[count first r`lineIterations;3;"three statements, three counters"]};
 
 test_a_nested_lambda_is_instrumented_too:{[t]
-    r:.cov.run[.covfix.nested;enlist 5;.covtest.only `.covfix.nested];
+    r:.cov.run[.covfix.nested;enlist 5;.covtest.only[`.covfix.nested]];
     .qunit.assertEquals[count first r`lines;3;
         "the inner lambda's body is a statement of its own"];
     .qunit.assertEquals[all 0<first r`lineIterations;1b;"and it ran"]};
@@ -82,34 +82,34 @@ test_a_nested_lambda_is_instrumented_too:{[t]
 / That is where most real gaps are, and it is exactly what a function-level
 / counter cannot see.
 test_an_untaken_conditional_arm_is_reported:{[t]
-    r:.cov.run[.covfix.branch;enlist 1;.covtest.only `.covfix.branch];
+    r:.cov.run[.covfix.branch;enlist 1;.covtest.only[`.covfix.branch]];
     .qunit.assertEquals[first r`blockIterations;1 0;
         "the positive arm ran once, the negative arm never"]};
 
 test_the_other_arm_is_reported_when_taken:{[t]
-    r:.cov.run[.covfix.branch;enlist -1;.covtest.only `.covfix.branch];
+    r:.cov.run[.covfix.branch;enlist -1;.covtest.only[`.covfix.branch]];
     .qunit.assertEquals[first r`blockIterations;0 1;"and the other way round"]};
 
 test_a_conditional_still_returns_its_own_value:{[t]
     / The wrapper around a `$` arm is an EXPRESSION that returns the arm. If
     / it returned anything else - or evaluated the untaken arm - this fails.
-    .cov.run[.covfix.branch;enlist 1;.covtest.only `.covfix.branch];
-    .qunit.assertEquals[(.covfix.branch 1;.covfix.branch -1);`pos`neg;
+    .cov.run[.covfix.branch;enlist 1;.covtest.only[`.covfix.branch]];
+    .qunit.assertEquals[(.covfix.branch[1];.covfix.branch -1);`pos`neg;
         "both arms still produce what they always did"]};
 
 test_an_if_arm_is_a_block_as_well_as_a_statement:{[t]
-    r:.cov.run[.covfix.guard;enlist -1;.covtest.only `.covfix.guard];
+    r:.cov.run[.covfix.guard;enlist -1;.covtest.only[`.covfix.guard]];
     .qunit.assertEquals[first r`blockIterations;enlist 0;
         "the guarded statement never ran, and is reported as an untaken branch"]};
 
 test_a_taken_if_arm_is_counted:{[t]
-    r:.cov.run[.covfix.guard;enlist 5;.covtest.only `.covfix.guard];
+    r:.cov.run[.covfix.guard;enlist 5;.covtest.only[`.covfix.guard]];
     .qunit.assertEquals[first r`blockIterations;enlist 1;"taken once"]};
 
 test_a_loop_body_counts_every_iteration:{[t]
     / Not "did it run" but "how often" - a loop that ran once where it should
     / have run a thousand times is a bug a boolean cannot show.
-    r:.cov.run[.covfix.loop;enlist 4;.covtest.only `.covfix.loop];
+    r:.cov.run[.covfix.loop;enlist 4;.covtest.only[`.covfix.loop]];
     .qunit.assertEquals[first r`blockIterations;enlist 4;"four iterations, four counts"]};
 
 / --- the lexer, through the tool ------------------------------------------
@@ -117,9 +117,9 @@ test_a_loop_body_counts_every_iteration:{[t]
 test_a_semicolon_inside_a_string_is_not_a_statement_boundary:{[t]
     / If it were, the probe would land inside the string literal and the
     / function would return different text.
-    r:.cov.run[.covfix.stringy;enlist 1;.covtest.only `.covfix.stringy];
+    r:.cov.run[.covfix.stringy;enlist 1;.covtest.only[`.covfix.stringy]];
     .qunit.assertEquals[count first r`lines;1;"one statement, not two"];
-    .qunit.assertEquals[.covfix.stringy 1;"a;b]";"and the string is unchanged"]};
+    .qunit.assertEquals[.covfix.stringy[1];"a;b]";"and the string is unchanged"]};
 
 / --- selection -------------------------------------------------------------
 
@@ -154,7 +154,7 @@ test_settings_must_be_a_dictionary:{[t]
 / --- restoration -----------------------------------------------------------
 
 test_the_original_is_restored_afterwards:{[t]
-    .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+    .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
     .qunit.assertEquals[last value .covfix.add;"{[a;b] a+b}";
         "the tree is left exactly as it was found"]};
 
@@ -163,13 +163,13 @@ test_the_original_is_restored_even_when_the_call_throws:{[t]
     / later call in the session - worse than losing the measurement.
     thrower:{[x] '"boom"};
     `.covfix.thrower set thrower;
-    @[{.cov.run[.covfix.thrower;enlist 1;.covtest.only `.covfix.thrower]};::;{x}];
+    @[{.cov.run[.covfix.thrower;enlist 1;.covtest.only[`.covfix.thrower]]};::;{x}];
     .qunit.assertEquals[last value .covfix.thrower;"{[x] '\"boom\"}";
         "restoration survives a failing call"]};
 
 test_a_failing_call_is_reported_not_swallowed:{[t]
     `.covfix.thrower2 set {[x] '"boom"};
-    r:@[{.cov.run[.covfix.thrower2;enlist 1;.covtest.only `.covfix.thrower2]; ""};::;{x}];
+    r:@[{.cov.run[.covfix.thrower2;enlist 1;.covtest.only[`.covfix.thrower2]]; ""};::;{x}];
     .qunit.assertTrue[r like "*boom*";"the original error reaches the caller"]};
 
 test_a_function_in_a_namespace_still_resolves_its_own_names:{[t]
@@ -177,9 +177,9 @@ test_a_function_in_a_namespace_still_resolves_its_own_names:{[t]
     / name in it. .covfix.caller says `add`, meaning .covfix.add; valued at
     / root that is a root `add` which does not exist, and the function fails
     / with 'add the moment it runs.
-    r:.cov.run[.covfix.caller;enlist 1;.covtest.only `.covfix.caller];
+    r:.cov.run[.covfix.caller;enlist 1;.covtest.only[`.covfix.caller]];
     .qunit.assertEquals[first r`iterations;1;"a namespaced function runs under instrumentation"];
-    .qunit.assertEquals[.covfix.caller 1;2;"and still resolves its neighbours afterwards"]};
+    .qunit.assertEquals[.covfix.caller[1];2;"and still resolves its neighbours afterwards"]};
 
 / --- captured copies, and nesting ----------------------------------------
 
@@ -192,25 +192,25 @@ test_a_function_in_a_namespace_still_resolves_its_own_names:{[t]
 / response is to write a test that already exists.
 test_a_captured_copy_is_counted:{[t]
     `.covfix.holder set (enlist `f)!enlist .covfix.add;
-    r:.cov.run[{[] .covfix.holder[`f][1;2]};enlist (::);.covtest.only `.covfix.add];
+    r:.cov.run[{[] .covfix.holder[`f][1;2]};enlist (::);.covtest.only[`.covfix.add]];
     .qunit.assertEquals[first r`iterations;1;
         "a call through a dictionary that captured the function is counted"]};
 
 test_a_captured_copy_is_put_back:{[t]
     `.covfix.holder set (enlist `f)!enlist .covfix.add;
-    .cov.run[{[] .covfix.holder[`f][1;2]};enlist (::);.covtest.only `.covfix.add];
+    .cov.run[{[] .covfix.holder[`f][1;2]};enlist (::);.covtest.only[`.covfix.add]];
     .qunit.assertEquals[.covfix.holder[`f]~.covfix.add;1b;
         "the registry holds the original again afterwards"]};
 
 test_a_copy_nested_two_dictionaries_deep_is_counted:{[t]
     / .qetl.source.sources is source -> declaration -> query, which is this shape.
     `.covfix.deep set (enlist `decl)!enlist (enlist `f)!enlist .covfix.add;
-    r:.cov.run[{[] .covfix.deep[`decl][`f][1;2]};enlist (::);.covtest.only `.covfix.add];
+    r:.cov.run[{[] .covfix.deep[`decl][`f][1;2]};enlist (::);.covtest.only[`.covfix.add]];
     .qunit.assertEquals[first r`iterations;1;"the walk reaches a nested capture"]};
 
 test_an_unrelated_global_is_left_alone:{[t]
     `.covfix.untouched_dict set (enlist `g)!enlist .covfix.branch;
-    .cov.run[{[] 1+1};enlist (::);.covtest.only `.covfix.add];
+    .cov.run[{[] 1+1};enlist (::);.covtest.only[`.covfix.add]];
     .qunit.assertEquals[.covfix.untouched_dict[`g]~.covfix.branch;1b;
         "a dictionary holding a function nobody instrumented is not rewritten"]};
 
@@ -228,7 +228,7 @@ test_an_unrelated_global_is_left_alone:{[t]
 / (#460).
 test_an_empty_typed_global_keeps_its_types:{[t]
     `.covfix.empty_typed set (`symbol$())!`long$();
-    .cov.run[{[] 1+1};enlist (::);.covtest.only `.covfix.add];
+    .cov.run[{[] 1+1};enlist (::);.covtest.only[`.covfix.add]];
     .qunit.assertEquals[.covfix.empty_typed~(`symbol$())!`long$();1b;
         "an empty typed dictionary is returned identical, types included"];
     .qunit.assertEquals[0^.covfix.empty_typed `absent;0;
@@ -242,7 +242,7 @@ test_an_empty_typed_global_keeps_its_types:{[t]
 test_an_empty_typed_vector_nested_in_a_global_keeps_its_type:{[t]
     `.covfix.nested_empty set (enlist `counts)!enlist `long$();
     `.covfix.list_empty set `float$();
-    .cov.run[{[] 1+1};enlist (::);.covtest.only `.covfix.add];
+    .cov.run[{[] 1+1};enlist (::);.covtest.only[`.covfix.add]];
     .qunit.assertEquals[.covfix.nested_empty[`counts]~`long$();1b;
         "an empty long vector inside a dictionary is still a long vector"];
     .qunit.assertEquals[.covfix.list_empty~`float$();1b;
@@ -254,9 +254,9 @@ test_an_empty_typed_vector_nested_in_a_global_keeps_its_type:{[t]
 / died in a beforeNamespace with a bare 'length that named nothing.
 test_a_nested_run_does_not_destroy_the_outer_counters:{[t]
     outer:.cov.run[{[]
-        .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
-        .covfix.branch 1}
-      ;enlist (::);.covtest.only `.covfix.branch];
+        .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
+        .covfix.branch[1]}
+      ;enlist (::);.covtest.only[`.covfix.branch]];
     .qunit.assertEquals[first outer`iterations;1;
         "the outer measurement survives a run nested inside it"]};
 
@@ -265,9 +265,9 @@ test_a_nested_run_reports_its_own_numbers:{[t]
     / through that name rather than through a local of the same spelling.
     `.covtest.inner set (::);
     .cov.run[{[]
-        `.covtest.inner set .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
-        .covfix.branch 1}
-      ;enlist (::);.covtest.only `.covfix.branch];
+        `.covtest.inner set .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
+        .covfix.branch[1]}
+      ;enlist (::);.covtest.only[`.covfix.branch]];
     .qunit.assertEquals[first .covtest.inner`iterations;1;"and the inner one is still measured"]};
 
 / --- the report -------------------------------------------------------------
@@ -277,26 +277,26 @@ test_a_nested_run_reports_its_own_numbers:{[t]
 / fails as an ERROR rather than as a mismatch - which reads like a broken
 / tool rather than a broken test.
 test_the_report_marks_an_untaken_branch:{[t]
-    out:.cov.format.go .cov.run[.covfix.branch;enlist 1;.covtest.only `.covfix.branch];
+    out:.cov.format.go .cov.run[.covfix.branch;enlist 1;.covtest.only[`.covfix.branch]];
     .qunit.assertTrue[any out like "*<<<*";"an unexecuted section opens with <<<"];
     .qunit.assertTrue[any out like "*>>>*";"and closes with >>>"]};
 
 test_a_line_holding_unrun_code_is_flagged:{[t]
-    out:.cov.format.go .cov.run[.covfix.branch;enlist 1;.covtest.only `.covfix.branch];
+    out:.cov.format.go .cov.run[.covfix.branch;enlist 1;.covtest.only[`.covfix.branch]];
     .qunit.assertTrue[any out like "X *";"and its line is prefixed with X"]};
 
 test_a_fully_covered_function_is_marked_nowhere:{[t]
-    out:.cov.format.go .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+    out:.cov.format.go .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
     .qunit.assertEquals[any out like "*<<<*";0b;"nothing to mark when everything ran"];
     .qunit.assertTrue[any out like "*100*";"and it reports as complete"]};
 
 test_the_report_counts_the_incomplete_functions:{[t]
-    out:.cov.format.go .cov.run[.covfix.branch;enlist 1;.covtest.only `.covfix.branch];
+    out:.cov.format.go .cov.run[.covfix.branch;enlist 1;.covtest.only[`.covfix.branch]];
     .qunit.assertTrue[any out like "1 function(s) with incomplete coverage*";
         "the summary says how many need attention"]};
 
 test_display_prints_and_returns_nothing:{[t]
-    .qunit.assertEquals[.cov.format.display .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+    .qunit.assertEquals[.cov.format.display .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
         (::);
         "display is for its effect, and returns null like the API says"]};
 

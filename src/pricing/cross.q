@@ -88,8 +88,8 @@ ccy_orient_cross:{[sym1;sym2]
 / @eg .qcross.cross_book[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165f;165.052)
 cross_book:{[sym1;book1;sym2;book2]
     orient:ccy_orient_cross[sym1;sym2];
-    oriented1:$[orient`invert1; invert_book book1; book1];
-    oriented2:$[orient`invert2; invert_book book2; book2];
+    oriented1:$[orient`invert1; invert_book[book1]; book1];
+    oriented2:$[orient`invert2; invert_book[book2]; book2];
     combined:combine_oriented_books[oriented1;oriented2];
     `sym`bid`ask!(orient`cross_sym;combined`bid;combined`ask)};
 
@@ -331,7 +331,7 @@ ccy_graph_edges:{[avail_syms]
 / @eg .qcross.ccy_shortest_path[`AUDUSD`EURUSD;`AUD;`JPY]  -> `symbol$() (JPY isn't reachable from the available pairs)
 ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
     if[start_ccy~goal_ccy; :`symbol$()];
-    edges:ccy_graph_edges avail_syms;
+    edges:ccy_graph_edges[avail_syms];
     visited:enlist start_ccy;
     frontier:enlist start_ccy;
     parent:(enlist start_ccy)!(enlist (`;`));

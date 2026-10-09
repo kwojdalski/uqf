@@ -162,9 +162,9 @@ tick:{[job]
     p:d`poll;
     / A deployment's --live (#800): a feed whose source has no credential
     / publishes nothing, rather than its fixture.
-    if[`fixture~liveness job; .qetl.source.refuse_fixture["tick: ",string job;p`source]];
-    ops:cursor_ops job;
-    name:cursor_name job;
+    if[`fixture~liveness[job]; .qetl.source.refuse_fixture["tick: ",string job;p`source]];
+    ops:cursor_ops[job];
+    name:cursor_name[job];
     current:ops[`load] name;
     / Every line the fetch logs - a traced query above all - carries the job
     / and the cursor it fetched after.
@@ -273,7 +273,7 @@ recent_window:{[job;span]
     / `from` is a qSQL keyword, so neither bound is named after its key
     window_end:.z.p;
     window_start:window_end-span;
-    start:start_cursor_of job;
+    start:start_cursor_of[job];
     `from`to`start_cursor`end_cursor!(window_start;window_end;start window_start;start window_end)}
 
 / Private: which rows of `page` lie in the window: after its start cursor and
@@ -282,7 +282,7 @@ recent_window:{[job;span]
 / @private
 in_window:{[job;window;page]
     p:(def job)`poll;
-    ops:cursor_ops job;
+    ops:cursor_ops[job];
     row_cursor:{[next_cursor;page;i] next_cursor enlist page i}[p`next_cursor;page;] each til count page;
     after_start:ops[`advances][window`start_cursor;] each row_cursor;
     after_end:ops[`advances][window`end_cursor;] each row_cursor;
@@ -293,7 +293,7 @@ in_window:{[job;window;page]
 / @private
 preview_page:{[job;n;span]
     p:(def job)`poll;
-    ops:cursor_ops job;
+    ops:cursor_ops[job];
     recent:not span~(::);
     window:$[recent; recent_window[job;span]; (::)];
     current:$[recent; window`start_cursor; ops[`load] cursor_name job];
@@ -305,7 +305,7 @@ preview_page:{[job;n;span]
     if[recent; context,:`window`page_limit!(window`from`to;limit)];
     fetched:.qetl.log.with_context[context;p`fetch;enlist current];
     page:$[recent; fetched where in_window[job;window;fetched]; fetched];
-    base:`job`mode`live`cursor`fetched!(job;$[recent; `recent; `next_page];liveness job;current;count fetched);
+    base:`job`mode`live`cursor`fetched!(job;$[recent; `recent; `next_page];liveness[job];current;count fetched);
     if[recent;
         base,:`window`kept`page_limit`limited!(window;count page;limit;(not null limit) and limit<=count fetched)];
     if[0=count page;

@@ -95,8 +95,8 @@ col_types:{[tbl] exec c!t from meta tbl}
 problems:{[schema;tbl;ordered]
     if[not 98h=type tbl;
         :enlist "expected an unkeyed table, got type ",string type tbl];
-    want:col_types schema;
-    got:col_types tbl;
+    want:col_types[schema];
+    got:col_types[tbl];
     missing:(key want) except key got;
     extra:(key got) except key want;
     out:();
@@ -130,7 +130,7 @@ differences:{[expected;actual]
         :enlist "expected ",string[count expected]," row(s), got ",string count actual];
     s:problems[expected;actual;1b];
     if[count s; :s];
-    t:col_types expected;
+    t:col_types[expected];
     bad:(key t) where not col_equal'[t key t;expected key t;actual key t];
     if[0=count bad; :()];
     / Name the first differing value, not just the column: "mismatched column(s)
@@ -236,10 +236,10 @@ def:{[name]
     registry name}
 
 / The input names a transform reads, in the order its fn takes them.
-input_names:{[name] key (def name)`inputs}
+input_names:{[name] key (def[name])`inputs}
 
 / The empty output table a transform produces.
-output_schema:{[name] (def name)`output}
+output_schema:{[name] (def[name])`output}
 
 / --------------------------------------------------------------- APPLYING
 
@@ -256,7 +256,7 @@ output_schema:{[name] (def name)`output}
 / @eg .qetl.transform.define[`eg_mid;`inputs`output`fn`examples!(enlist[`q]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`q]!enlist ([] sym:enlist `EURUSD; bid:1.1; ask:1.2); ([] sym:enlist `EURUSD; mid:1.15)))];
 /   .qetl.transform.apply[`eg_mid;enlist[`q]!enlist ([] sym:`EURUSD`GBPUSD; bid:1.10 1.25; ask:1.12 1.27)]  ->  ([] sym:`EURUSD`GBPUSD; mid:1.11 1.26)
 apply:{[name;given]
-    d:def name;
+    d:def[name];
     if[d`as_of; '"apply: transform ",string[name]," takes as_of - use .qetl.transform.apply_as_of"];
     run[name;d;given;()]}
 
@@ -267,7 +267,7 @@ apply:{[name;given]
 / @return the output table
 / @throws error when an input or the output does not match the declaration
 apply_as_of:{[name;given;as_of]
-    d:def name;
+    d:def[name];
     if[not d`as_of; '"apply_as_of: transform ",string[name]," takes no as_of - use .qetl.transform.apply"];
     if[not -12h=type as_of; '"apply_as_of: as_of must be a timestamp"];
     run[name;d;given;enlist as_of]}
@@ -299,7 +299,7 @@ run:{[name;d;given;extra]
 /   per example plus one for the empty case
 / @eg .qetl.transform.verify `mid_quotes
 verify:{[name]
-    d:def name;
+    d:def[name];
     exs:d`examples;
     rows:verify_example[name;d] each exs;
     empty_inputs:{0#x} each d`inputs;
