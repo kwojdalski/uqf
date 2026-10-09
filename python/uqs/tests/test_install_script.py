@@ -188,3 +188,74 @@ def test_tls_is_never_bypassed_and_sudo_never_run() -> None:
 def test_the_old_installer_is_gone() -> None:
     assert not (ROOT / "scripts/dev/install.sh").exists()
     assert os.access(ROOT / "install.sh", os.X_OK)
+
+
+# --------------------------------------------------------------- --odbc
+
+
+def _platform(repo: Path, system: str, *, extra: dict[str, str]) -> None:
+    """Stub uname as `system` (arm64), and add the tools --odbc looks for."""
+    bin_dir = repo.parent / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    stubs = {
+        "uname": f'case "$1" in -m) echo arm64;; *) echo {system};; esac',
+        **extra,
+    }
+    for name, body in stubs.items():
+        stub = bin_dir / name
+        stub.write_text(f'#!{BASH}\necho "{name} $*" >> "$LOG"\n{body}\n')
+        stub.chmod(0o755)
+    rosetta = repo / "scripts/dev/odbc_rosetta.sh"
+    rosetta.parent.mkdir(parents=True, exist_ok=True)
+    rosetta.write_text(f'#!{BASH}\necho "odbc_rosetta.sh $*" >> "$LOG"\n')
+    rosetta.chmod(0o755)
+
+
+MAC_TOOLS = {"arch": "", "xcode-select": "", "curl": "", "gh": ""}
+
+
+def test_odbc_on_macos_builds_in_user_space(repo: Path) -> None:
+    _platform(repo, "Darwin", extra=MAC_TOOLS)
+    (repo.parent / ".kx").mkdir()
+    code, out, calls = run(repo, "--odbc")
+    assert code == 0, out
+    assert "odbc_rosetta.sh setup" in calls
+    assert "output/odbc-x86_64" in out
+
+
+def test_odbc_on_macos_names_what_its_build_needs_and_changes_nothing(repo: Path) -> None:
+    _platform(repo, "Darwin", extra={**MAC_TOOLS, "gh": 'if [ "$1" = auth ]; then exit 1; fi'})
+    code, out, calls = run(repo, "--odbc")
+    assert code == 1
+    assert "gh auth login" in out and "~/.kx" in out
+    assert not ran(calls, "odbc_rosetta.sh") and not ran(calls, "uv tool install")
+
+
+def test_odbc_on_linux_reports_the_system_package_and_never_installs_it(repo: Path) -> None:
+    _platform(repo, "Linux", extra={})
+    code, out, calls = run(repo, "--odbc")
+    assert code == 1
+    assert "sudo apt-get install unixodbc" in out
+    assert not ran(calls, "sudo") and not ran(calls, "odbc_rosetta.sh")
+
+
+def test_odbc_on_linux_with_unixodbc_present_runs_nothing_more(repo: Path) -> None:
+    _platform(
+        repo,
+        "Linux",
+        extra={
+            "odbcinst": "",
+            "ldconfig": "echo '  libodbc.so.2 (libc6,x86-64) => /usr/lib/libodbc.so.2'",
+        },
+    )
+    code, out, calls = run(repo, "--odbc")
+    assert code == 0, out
+    assert "ODBC driver manager present" in out
+    assert not ran(calls, "odbc_rosetta.sh")
+
+
+def test_without_odbc_the_odbc_setup_never_runs(repo: Path) -> None:
+    _platform(repo, "Darwin", extra=MAC_TOOLS)
+    code, out, calls = run(repo)
+    assert code == 0, out
+    assert not ran(calls, "odbc_rosetta.sh")

@@ -24,8 +24,19 @@ binaries:
   | `lib/`         | native libraries: unixODBC's `libodbc.so.2` and each driver                                                           |
   | `certs/`       | optional CA certificates a driver's TLS settings name                                                                 |
 
-Packages are built for Linux. On a macOS development machine, use
-`scripts/dev/odbc_rosetta.sh setup` instead.
+Packages are built for Linux. On a development machine, `./install.sh --odbc`
+sets ODBC up as far as it can without root:
+
+- **macOS** builds unixODBC, KX's client and the DuckDB driver under Rosetta,
+  into `output/odbc-x86_64`, through `scripts/dev/odbc_rosetta.sh setup`. Run q
+  with them through `scripts/dev/odbc_rosetta.sh q`. KX's only macOS client is
+  x86_64, so an arm64 unixODBC from Homebrew is no use to q.
+- **Linux** checks for unixODBC and prints the package command if it is missing,
+  for example `sudo apt-get install unixodbc`. It never runs sudo. It also
+  checks whether KX's client is in `QHOME`, which it never modifies.
+
+unixODBC is a C library that q's client links, so it can't come from uv or any
+Python package. A database's own driver is never installed by `install.sh`.
 
 ## Installing
 
