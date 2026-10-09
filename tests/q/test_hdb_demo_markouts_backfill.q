@@ -107,6 +107,28 @@ test_a_restatement_replaces_rather_than_duplicates:{[t]
     .qpipe.job.hdb_demo_markouts_backfill.run[];
     .qunit.assertEquals[count get `demo_execution_quality;8;"still one row per fill per horizon"]};
 
+test_replace_across_windows_keeps_the_previous_windows_late_markouts:{[t]
+    / #972: the 23:59:59 fill's markouts are timed after midnight (trade_time+
+    / horizon), but belong to the 23:00 window. The 00:00 window's replace used
+    / to clear them as its own; the window is cleared on trade_time now.
+    .qetl.cfg.set_layers[(enlist `on_conflict)!enlist "replace";()!();()!()];
+    .qpipe.job.hdb_demo_markouts_backfill.init[.mbftest.spec_for[`v1;2026.09.17D23:00;2026.09.18D01:00]];
+    r:.qpipe.job.hdb_demo_markouts_backfill.run[];
+    late:select from get `demo_execution_quality where trade_time=2026.09.17D23:59:59;
+    .qunit.assertEquals[(r`state;r`windows_completed);(`completed;2);"both windows ran"];
+    .qunit.assertEquals[(count late;asc late`horizon);(2;asc .qpipe.transform.demo_markouts.horizons);
+        "one markout per horizon survives the next window's replace"];
+    .qunit.assertTrue[all late[`time]>=2026.09.18D00:00;"and they are the ones timed past midnight"]};
+
+test_replace_still_restates_a_window_on_its_window_column:{[t]
+    .qetl.cfg.set_layers[(enlist `on_conflict)!enlist "replace";()!();()!()];
+    .qpipe.job.hdb_demo_markouts_backfill.init[.mbftest.spec_for[`v1;.mbftest.day[]0;.mbftest.day[]1]];
+    .qpipe.job.hdb_demo_markouts_backfill.run[];
+    .qpipe.job.hdb_demo_markouts_backfill.cleanup[];
+    .qpipe.job.hdb_demo_markouts_backfill.init[.mbftest.spec_for[`v2;.mbftest.day[]0;.mbftest.day[]1]];
+    .qpipe.job.hdb_demo_markouts_backfill.run[];
+    .qunit.assertEquals[count get `demo_execution_quality;8;"a second version replaces, never doubles"]};
+
 / --- the live path, against a stand-in HDB ---------------------------------
 
 / A handle that runs each query here, against `trades` and `quote` shaped as
