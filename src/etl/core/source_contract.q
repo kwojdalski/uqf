@@ -1397,10 +1397,13 @@ mock_seed:{[cred]
 / @return ([] c:symbols; t:chars), one row per declared column
 / @throws error when no mock source reads `tbl`
 mock_meta:{[tbl]
-    src:.qetl.source.sources;
-    s:exec first name from src where table_name=tbl, transport=`mock;
+    / Indexed rather than selected: in qSQL `transport` is this table's
+    / column or .qetl.source.transport, and the PeachQ converter will not guess.
+    src:0!.qetl.source.sources;
+    s:first src[`name] where (src[`table_name]=tbl) & src[`transport]=`mock;
     if[null s; '"mock_meta: no mock source reads ",string tbl];
-    ([] c:src[s;`columns]; t:src[s;`types])}
+    d:.qetl.source.sources s;
+    ([] c:d`columns; t:d`types)}
 
 local_meta:{[root;table]
     select c, t from 0!meta local_partition[root;table;`symbol$();1;local_latest_part[root;table]]}
