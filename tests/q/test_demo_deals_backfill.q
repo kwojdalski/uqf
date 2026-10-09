@@ -472,6 +472,42 @@ test_define_refuses_a_target_key_outside_the_output:{[t]
         "*target_key names deal_ref which transform demo_deals_passthrough does not output*";
         "a declared key is held to the output too"]};
 
+/ #972: `replace clears a window by the column the window was cut on, as the
+/ OUTPUT holds it - declared with window_column, else the source's own.
+test_the_window_column_defaults_to_the_sources_time_column:{[t]
+    .qunit.assertEquals[(.qetl.job.bounded.def `demo_deals_backfill)`window_column;`deal_time;
+        "a passthrough keeps the column the window was cut on"]};
+
+test_define_refuses_a_window_column_outside_the_output:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`window_column;:;(`ddbftest_wc;`nosuch)];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note _ d;
+        "*window_column nosuch is not among transform demo_deals_passthrough's output columns*";
+        "a declared window column is held to the output"];
+    d2:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`window_column;:;(`ddbftest_wc;"deal_time")];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note _ d2;
+        "*window_column must be a symbol*";"and must be a symbol"]};
+
+/ A transform that drops every time column leaves `replace nothing to clear by.
+test_replace_is_refused_for_an_output_without_the_window_column:{[t]
+    .qetl.transform.define[`ddbftest_ids;`inputs`output`fn`examples!(
+        (enlist `batch)!enlist 0#.qpipe.source.demo_deals.fixture[];
+        ([] deal_id:`long$(); notional:`float$());
+        {[batch] select deal_id, notional from batch};
+        enlist `inputs`expected!((enlist `batch)!enlist .qpipe.source.demo_deals.fixture[];
+            select deal_id, notional from .qpipe.source.demo_deals.fixture[]))];
+    .qetl.job.bounded.define[`ddbftest_nowin;
+        `source`dataset`width`transform`target_key!(`demo_deals;`ddbftest_nowin_ds;1D;`ddbftest_ids;`deal_id)];
+    .qunit.assertEquals[(.qetl.job.bounded.def `ddbftest_nowin)`window_column;`;"none declared, none found"];
+    / upsert never asks for it
+    .qunit.assertEquals[(.qetl.job.bounded.validate[`ddbftest_nowin;.ddbftest.spec_for[`v1;1;4]])`on_conflict;`upsert;
+        "upsert does not need a window column"];
+    .qetl.cfg.set_layers[(enlist `on_conflict)!enlist "replace";()!();()!()];
+    r:@[.qetl.job.bounded.validate[`ddbftest_nowin;];.ddbftest.spec_for[`v1;1;4];{x}];
+    .testutil.drop_rows[`.qetl.job.bounded.worker_cfg;`ddbftest_nowin];
+    .qunit.assertTrue[r like "on_conflict replace: ddbftest_nowin's output has neither its source's time column deal_time*";
+        "replace is refused at plan time, naming the remedy"];
+    .qunit.assertTrue[r like "*declare window_column*";"and what to do"]};
+
 / A retry after a partial run redoes only the gap. This is the case retry-safety
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]

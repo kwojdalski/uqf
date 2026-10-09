@@ -463,6 +463,38 @@ test_hdb_replace_takes_its_keys_out_of_the_next_day:{[t]
     .qunit.assertEquals[exec trade_time from part[root;2026.01.03;`iospill];enlist 2026.01.03D09:59:59.000000000;
         "and the 3rd lost the live copy of that key - nothing else"]};
 
+/ #972: a transform that moves `time` (trade_time+horizon). Window one is the
+/ 2nd and its row is timed on the 3rd; window two is the 3rd. Replacing window
+/ two must clear on trade_time - the column the windows were cut on - or the
+/ 3rd's partition loses window one's row.
+moved_opts:{[from_ts;to_ts] `on_conflict`row_key`time_column`range_from`range_to!(`replace;`sym`trade_time;`trade_time;from_ts;to_ts)}
+moved_row:{[tt;dt] ([] time:enlist tt+dt; sym:enlist `EURUSD; trade_time:enlist tt; px:enlist 1.1)}
+
+test_hdb_replace_clears_on_the_window_column_not_on_time:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`time];
+    d2:2026.01.02D00:00:00.000000000; d3:2026.01.03D00:00:00.000000000; d4:2026.01.04D00:00:00.000000000;
+    .qetl.io.write_keyed[m;`iomoved;.iotest.moved_row[2026.01.02D23:59:59.000000000;0D00:00:10];.iotest.moved_opts[d2;d3]];
+    .qetl.io.write_keyed[m;`iomoved;.iotest.moved_row[2026.01.03D10:00:00.000000000;0D00:00:10];.iotest.moved_opts[d3;d4]];
+    .qunit.assertEquals[asc exec trade_time from part[root;2026.01.03;`iomoved];
+        2026.01.02D23:59:59.000000000 2026.01.03D10:00:00.000000000;
+        "window one's row, timed on the 3rd, survives window two's replace"];
+    / Restating window two with nothing clears its own row and only that.
+    .qetl.io.write_keyed[m;`iomoved;0#.iotest.moved_row[2026.01.03D10:00:00.000000000;0D00:00:10];.iotest.moved_opts[d3;d4]];
+    .qunit.assertEquals[exec trade_time from part[root;2026.01.03;`iomoved];enlist 2026.01.02D23:59:59.000000000;
+        "an emptied window loses its own rows"]};
+
+test_memory_replace_clears_on_the_window_column_not_on_time:{[t]
+    d2:2026.01.02D00:00:00.000000000; d3:2026.01.03D00:00:00.000000000; d4:2026.01.04D00:00:00.000000000;
+    `iomoved_mem set 0#.iotest.moved_row[2026.01.02D23:59:59.000000000;0D00:00:10];
+    .qetl.io.write_keyed[.qetl.io.memory;`iomoved_mem;.iotest.moved_row[2026.01.02D23:59:59.000000000;0D00:00:10];.iotest.moved_opts[d2;d3]];
+    .qetl.io.write_keyed[.qetl.io.memory;`iomoved_mem;.iotest.moved_row[2026.01.03D10:00:00.000000000;0D00:00:10];.iotest.moved_opts[d3;d4]];
+    .qunit.assertEquals[asc (get `iomoved_mem)`trade_time;2026.01.02D23:59:59.000000000 2026.01.03D10:00:00.000000000;
+        "window two's replace leaves window one's row, whose time is past midnight"];
+    .qetl.io.write_keyed[.qetl.io.memory;`iomoved_mem;0#.iotest.moved_row[2026.01.03D10:00:00.000000000;0D00:00:10];.iotest.moved_opts[d3;d4]];
+    .qunit.assertEquals[(get `iomoved_mem)`trade_time;enlist 2026.01.02D23:59:59.000000000;
+        "restating window two empty clears its own row and only that"]};
+
 test_hdb_replace_leaves_the_next_day_alone_when_time_is_in_the_key:{[t]
     / With time in the key, a later partition cannot hold the same key.
     root:hdb_dir[];
