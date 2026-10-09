@@ -68,6 +68,11 @@ uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
 uqs job new ticks --kind normalizer --subscribe-to quote,trades \
     --columns "source_time:timestamp, sym:symbol, px:float" --dry-run
 
+# horizon: each event evaluated once --horizon has passed (a markout), against
+# a reference table - events first, then reference
+uqs job new fill_marks --kind horizon --subscribe-to executions,market_data \
+    --horizon 0D00:01:00 --columns "sym:symbol, markout_bps:float" --dry-run
+
 # reaction: recompute each time a bounded worker publishes a window of a dataset.
 # No process of its own - it runs in the worker's. --writes puts it in the job graph
 uqs job new rebuild_positions --triggered-by demo_deals --writes positions --dry-run

@@ -40,6 +40,7 @@ from uqs.scaffold.columns import (
 )
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.example import example_path
+from uqs.scaffold.horizon import horizon_job
 from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.reaction import reaction
 
@@ -61,6 +62,7 @@ check:{[label;ok] -1 label,": ",$[ok;"ok";"FAILED"];}
 check["feed registered"; registered[.qetl.job.stream.def;`smokefeed]]
 check["etl registered"; registered[.qetl.job.stream.def;`smokeetl]]
 check["normalizer registered"; registered[.qetl.job.stream.def;`smokenorm]]
+check["horizon job registered"; registered[.qetl.job.stream.horizons.def;`smokehz]]
 check["ipc source registered"; registered[.qetl.source.def;`smokebf]]
 check["odbc source registered"; registered[.qetl.source.def;`smokedb]]
 check["odbc source declares its transport"; `odbc~.qetl.source.def[`smokedb]`transport]
@@ -184,6 +186,20 @@ def _scaffold_every_kind(root: Path) -> None:
             parse_columns("sym:symbol, mid:float"),
             {"smoke_ticks": definition_columns(feed_table)},
             known_tables={"smoke_ticks"},
+        ),
+        # each smoke_ticks row evaluated 10s on, against smoke_poll_ticks (#949)
+        horizon_job(
+            "smokehz",
+            ["smoke_ticks", "smoke_poll_ticks"],
+            parse_columns("sym:symbol, px:float"),
+            {
+                "smoke_ticks": definition_columns(feed_table),
+                "smoke_poll_ticks": definition_columns(
+                    table_definition("smoke_poll_ticks", parse_columns(_FEED_COLUMNS))
+                ),
+            },
+            "0D00:00:10",
+            known_tables={"smoke_ticks", "smoke_poll_ticks"},
         ),
         backfill.bounded_worker("smokebf", "smoke_hist", "sym:symbol, px:float"),
         backfill.bounded_worker(

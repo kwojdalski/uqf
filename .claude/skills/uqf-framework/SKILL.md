@@ -149,7 +149,9 @@ Apply the rules below. Each cites the file that holds or enforces it.
 - **J8a** An event that is evaluated some time after it arrives, such as a fill
   marked out at horizons, is a **horizon job** (`.qetl.job.stream.at_horizons`,
   `src/etl/core/horizon.q`). Don't hand-build a pending queue and timer: the
-  kind owns the queue, readiness, eviction and the history bound.
+  kind owns the queue, readiness, eviction and the history bound. Event time,
+  reference readiness with cross legs, a lookback window, identity and expiry
+  are declared keys (#952), and `uqs job new --kind horizon` scaffolds one.
 
 - **J9** A source whose adapter returns other columns than it reads declares
   `raw`: physical table → the columns it reads. `columns`/`types` then describe

@@ -74,9 +74,9 @@ def _ports(base_port: int | None) -> dict[str, str]:
 def _plant_tables() -> set[str]:
     # Imported here, not at the top: cli/create imports cli/shared, which
     # imports this module to build ProcsArg.
-    from uqs.cli.create import _plant_tables
+    from uqs.cli.create_plant import plant_tables
 
-    return _plant_tables(stack_paths.default_paths())
+    return plant_tables(stack_paths.default_paths())
 
 
 @_never_raises

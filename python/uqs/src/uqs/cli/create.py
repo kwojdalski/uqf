@@ -16,9 +16,10 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
-from uqs.cli.create_backfill import backfill_plan, defined_tables
+from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
 from uqs.cli.create_kinds import misplaced
+from uqs.cli.create_plant import plant_definitions, plant_tables
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import (
@@ -27,37 +28,12 @@ from uqs.cli.shared import (
     app,
     job_app,
 )
-from uqs.model.schemas import _DEFINITION
 from uqs.paths import (
-    TABLES_FILE,
     UqsError,
-    UqsPaths,
 )
 from uqs.scaffold import columns as columns_mod
 from uqs.scaffold import external, jobs, normalizer
-
-
-def _plant_definitions(paths: UqsPaths, root: Path | None = None) -> dict[str, str]:
-    """{table: its one-line `name:([]...)` definition}, the tree at `root`'s (default:
-    the tree's) and the vendored starter pack's - what a normalizer's sources are read from."""
-    out: dict[str, str] = {}
-    for path in (paths.torqapphome / "database.q", (root or paths.repo_root) / TABLES_FILE):
-        if path.is_file():
-            out.update((m.group(1), m.group(0)) for m in _DEFINITION.finditer(path.read_text()))
-    return out
-
-
-def _plant_tables(paths: UqsPaths, root: Path | None = None) -> set[str]:
-    """Every table the plant carries: the tree at `root`'s (default: the tree's), plus
-    the vendored starter pack's (`quote`, `trade`), which the generated database.q merges in."""
-    vendored = paths.torqapphome / "database.q"
-    theirs = (
-        {m.group(1) for m in _DEFINITION.finditer(vendored.read_text())}
-        if vendored.is_file()
-        else set()
-    )
-    return defined_tables(root or paths.repo_root) | theirs
-
+from uqs.scaffold import horizon as horizon_scaffold
 
 app.add_typer(job_app, name="job")
 
@@ -69,9 +45,12 @@ def new_job(
         str,
         typer.Option(
             "--kind",
-            help="'streaming' (default), 'backfill', 'normalizer' or 'external' "
-            "(a Python publisher outside q, plus the q job reshaping what it publishes)",
-            autocompletion=completion.choices("streaming", "backfill", "normalizer", "external"),
+            help="'streaming' (default), 'backfill', 'normalizer', 'external' (a Python "
+            "publisher outside q, plus the q job reshaping what it publishes) or 'horizon' "
+            "(each event evaluated once --horizon has passed)",
+            autocompletion=completion.choices(
+                "streaming", "backfill", "normalizer", "external", "horizon"
+            ),
         ),
     ] = "streaming",
     subscribe_to: Annotated[
@@ -154,6 +133,10 @@ def new_job(
     period: Annotated[
         str | None,
         typer.Option("--period", help="Timer period: a feed's tick, or an etl's added on_timer"),
+    ] = None,
+    horizon: Annotated[
+        str | None,
+        typer.Option("--horizon", help="How long an event waits before it is evaluated (horizon)"),
     ] = None,
     poll: Annotated[
         bool,
@@ -270,6 +253,7 @@ def new_job(
         "--start-with-all": start_with_all,
         "--transport": transport is not None,
         "--period": period is not None,
+        "--horizon": horizon is not None,
         "--poll": poll,
         "--cursor-fields": cursor_fields is not None,
         "--profile": profile is not None,
@@ -296,8 +280,8 @@ def new_job(
 
     def _plan(root: Path):
         """The plan, read against `root`: the tree, or the tree with --bundle installed."""
-        definitions = _plant_definitions(_paths(), root)
-        known = _plant_tables(_paths(), root)
+        definitions = plant_definitions(_paths(), root)
+        known = plant_tables(_paths(), root)
         shape = columns_mod.resolve_shape(columns, columns_from, definitions)
         if kind == "streaming":
             return jobs.streaming_job(
@@ -369,8 +353,18 @@ def new_job(
                 profile=profile,
                 unprofiled=unprofiled,
             )
+        if kind == "horizon":
+            inputs = {
+                s: columns_mod.definition_columns(definitions[s]) for s in subs if s in definitions
+            }
+            out = columns_mod.as_columns(shape) if shape else None
+            return horizon_scaffold.horizon_job(
+                name, subs, out, inputs, horizon, known_tables=known, publishes=publishes,
+                procname=procname, start_with_all=start_with_all, profile=profile,
+                unprofiled=unprofiled,
+            )  # fmt: skip
         raise UqsError(
-            f"--kind must be 'backfill', 'normalizer', 'streaming' or 'external', not {kind!r}"
+            f"--kind must be streaming, backfill, normalizer, external or horizon: {kind!r}"
         )
 
     try:
