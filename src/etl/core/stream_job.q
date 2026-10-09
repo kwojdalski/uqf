@@ -84,6 +84,86 @@ job_root:`.qpipe.job
 / @eg .qetl.job.stream.namespace `demo_markout  ->  `.qpipe.job.demo_markout
 namespace:{[job] ` sv job_root,job}
 
+/ Private: refuse a malformed optional key - deployment facts, transform,
+/ check and on_fail. Split out of `define`, whose single body was too big
+/ for q to compile once the coverage tool instrumented it ('limit).
+/ @param job the job's name
+/ @param decl its declaration
+/ @return nothing - it throws naming the job and the key
+/ @private
+check_optional:{[job;decl]
+    / Deployment facts, both optional. uqs derives its process registry
+    / from these declarations, so this is where a job says whether it starts
+    / with the stack (default: on demand) and why it is deployed as it is.
+    if[(`start_with_all in key decl) and not -1h=type decl`start_with_all;
+        '"define: ",string[job],"'s start_with_all must be a boolean, 1b to start with the stack"];
+    if[(`note in key decl) and not 10h=type decl`note;
+        '"define: ",string[job],"'s note must be a string"];
+    / What the job does when the plant's day ends (#943): roll, snapshot or
+    / reset whatever state it carries. Called with the date that ended.
+    if[(`on_endofday in key decl) and not is_callable decl`on_endofday;
+        '"define: ",string[job],"'s on_endofday must be a function of the date that ended"];
+    / The shared transform the job applies, when it applies one: what a twin
+    / refilling its table must apply too, and what `uqs job new --twin-of`
+    / scaffolds into one (#884). Checked here, so a declared name cannot
+    / point at nothing.
+    if[`transform in key decl;
+        if[not -11h=type decl`transform;
+            '"define: ",string[job],"'s transform must be a symbol naming a registered transform"];
+        if[not (decl`transform) in .qetl.transform.defined[];
+            '"define: ",string[job]," declares transform ",string[decl`transform],", which is not registered - define it before the job"]];
+    / A quality gate on what the job publishes (#944), applied by `wire` to
+    / every publish the job makes. Declaring what to do on failure is
+    / required with it: whether one bad row holds back its neighbours is the
+    / decision, and a default would make it for the author without asking.
+    if[(`on_fail in key decl) and not `check in key decl;
+        '"define: ",string[job]," declares on_fail without a check - there is nothing to fail"];
+    if[`check in key decl;
+        if[not is_callable decl`check;
+            '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
+        if[not (`on_fail in key decl) and -11h=type decl`on_fail;
+            '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
+        if[not (decl`on_fail) in `drop`hold;
+            '"define: ",string[job],"'s on_fail must be `drop or `hold, not ",string decl`on_fail]];
+    }
+
+/ Private: refuse a malformed replay declaration, and record the job's
+/ declared state for `reset`. Split out of `define` for the same reason.
+/ @param job the job's name
+/ @param decl its declaration, `ns` set
+/ @return nothing - it throws naming the job and the key
+/ @private
+check_replay:{[job;decl]
+    / Restoring state at start - see `start` below.
+    if[(`replay in key decl) and not -1h=type decl`replay;
+        '"define: ",string[job],"'s replay must be a boolean, 1b to rebuild state from the day's log at start"];
+    replays:$[`replay in key decl; decl`replay; 0b];
+    if[`restore_from in key decl;
+        if[not 11h=abs type decl`restore_from;
+            '"define: ",string[job],"'s restore_from must be a symbol list of table names"];
+        if[not replays;
+            '"define: ",string[job]," declares restore_from without replay 1b - those tables are read only by a replay"];
+        if[not `on_batch in key decl;
+            '"define: ",string[job]," declares restore_from but no on_batch to read it with"]];
+    if[`carry in key decl; check_carry[job;decl;replays]];
+    if[`on_replayed in key decl;
+        if[not is_callable decl`on_replayed;
+            '"define: ",string[job],"'s on_replayed must be a niladic function"];
+        if[not replays;
+            '"define: ",string[job]," declares on_replayed without replay 1b - it would never be called"]];
+    if[replays and not `on_batch in key decl;
+        '"define: ",string[job]," declares replay 1b but no on_batch - a replay delivers batches"];
+    / The variables the job carries between batches, declared once. Their value
+    / now - define runs at the end of the job's file - is the empty state
+    / `reset` restores, so no test restates it (#967).
+    if[`state in key decl;
+        if[not 11h=type decl`state;
+            '"define: ",string[job],"'s state must be a symbol list naming variables in ",string[decl`ns]];
+        absent:decl[`state] where not (decl`state) in key decl`ns;
+        if[count absent; '"define: ",string[job],"'s state names ",(", " sv string absent),", which ",string[decl`ns]," does not define"];
+        initial[job]:enlist (decl`state)!get each ` sv'decl[`ns],/:decl`state];
+    }
+
 / Declare a streaming job. Called by the job's own file as it loads, so a
 / declaration and its implementation cannot drift - there is no way to have
 / one without the other.
@@ -142,67 +222,8 @@ define:{[job;decl]
             '"define: ",string[job],"'s period must be positive"];
         if[not is_callable decl`on_timer;
             '"define: ",string[job],"'s on_timer must be a niladic function"]];
-    / Deployment facts, both optional. uqs derives its process registry
-    / from these declarations, so this is where a job says whether it starts
-    / with the stack (default: on demand) and why it is deployed as it is.
-    if[(`start_with_all in key decl) and not -1h=type decl`start_with_all;
-        '"define: ",string[job],"'s start_with_all must be a boolean, 1b to start with the stack"];
-    if[(`note in key decl) and not 10h=type decl`note;
-        '"define: ",string[job],"'s note must be a string"];
-    / What the job does when the plant's day ends (#943): roll, snapshot or
-    / reset whatever state it carries. Called with the date that ended.
-    if[(`on_endofday in key decl) and not is_callable decl`on_endofday;
-        '"define: ",string[job],"'s on_endofday must be a function of the date that ended"];
-    / The shared transform the job applies, when it applies one: what a twin
-    / refilling its table must apply too, and what `uqs job new --twin-of`
-    / scaffolds into one (#884). Checked here, so a declared name cannot
-    / point at nothing.
-    if[`transform in key decl;
-        if[not -11h=type decl`transform;
-            '"define: ",string[job],"'s transform must be a symbol naming a registered transform"];
-        if[not (decl`transform) in .qetl.transform.defined[];
-            '"define: ",string[job]," declares transform ",string[decl`transform],", which is not registered - define it before the job"]];
-    / A quality gate on what the job publishes (#944), applied by `wire` to
-    / every publish the job makes. Declaring what to do on failure is
-    / required with it: whether one bad row holds back its neighbours is the
-    / decision, and a default would make it for the author without asking.
-    if[(`on_fail in key decl) and not `check in key decl;
-        '"define: ",string[job]," declares on_fail without a check - there is nothing to fail"];
-    if[`check in key decl;
-        if[not is_callable decl`check;
-            '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
-        if[not (`on_fail in key decl) and -11h=type decl`on_fail;
-            '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
-        if[not (decl`on_fail) in `drop`hold;
-            '"define: ",string[job],"'s on_fail must be `drop or `hold, not ",string decl`on_fail]];
-    / Restoring state at start - see `start` below.
-    if[(`replay in key decl) and not -1h=type decl`replay;
-        '"define: ",string[job],"'s replay must be a boolean, 1b to rebuild state from the day's log at start"];
-    replays:$[`replay in key decl; decl`replay; 0b];
-    if[`restore_from in key decl;
-        if[not 11h=abs type decl`restore_from;
-            '"define: ",string[job],"'s restore_from must be a symbol list of table names"];
-        if[not replays;
-            '"define: ",string[job]," declares restore_from without replay 1b - those tables are read only by a replay"];
-        if[not `on_batch in key decl;
-            '"define: ",string[job]," declares restore_from but no on_batch to read it with"]];
-    if[`carry in key decl; check_carry[job;decl;replays]];
-    if[`on_replayed in key decl;
-        if[not is_callable decl`on_replayed;
-            '"define: ",string[job],"'s on_replayed must be a niladic function"];
-        if[not replays;
-            '"define: ",string[job]," declares on_replayed without replay 1b - it would never be called"]];
-    if[replays and not `on_batch in key decl;
-        '"define: ",string[job]," declares replay 1b but no on_batch - a replay delivers batches"];
-    / The variables the job carries between batches, declared once. Their value
-    / now - define runs at the end of the job's file - is the empty state
-    / `reset` restores, so no test restates it (#967).
-    if[`state in key decl;
-        if[not 11h=type decl`state;
-            '"define: ",string[job],"'s state must be a symbol list naming variables in ",string[decl`ns]];
-        absent:decl[`state] where not (decl`state) in key decl`ns;
-        if[count absent; '"define: ",string[job],"'s state names ",(", " sv string absent),", which ",string[decl`ns]," does not define"];
-        initial[job]:enlist (decl`state)!get each ` sv'decl[`ns],/:decl`state];
+    check_optional[job;decl];
+    check_replay[job;decl];
     jobs[job]:enlist decl;
     procnames[decl`procname]:job;
     .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";

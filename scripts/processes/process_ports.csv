@@ -38,3 +38,4 @@ alert_sink1,52
 last_value1,53
 exec_bars1,54
 hdb_exec_bars_backfill1,55
+flink_vwap1,56

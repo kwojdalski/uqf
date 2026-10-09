@@ -67,6 +67,13 @@ Kafka topic by `external/kafka_feed.py`, deduplicated on the record's
 (partition; offset) so a redelivery is never counted twice. Reads
 `kafka_client_flow`, publishes `client_flow`. [Details](kafka.md)
 
+**`flink_vwap1` · VWAP windows from Apache Flink** --- per-sym one-minute VWAP
+windows computed by a PyFlink job in `external/flink_vwap_streamer.py`, each
+published once: a window Flink emits again is dropped on `(sym; window_end)`.
+Reads `flink_vwap_raw`, publishes `flink_vwap`. Start it with
+`uqs start flink_vwap1`, then `uqs feed start flink_vwap`, which needs
+`apache-flink` and Java.
+
 ## Normalisers
 
 Several sources say the same thing in different shapes. A normaliser folds them

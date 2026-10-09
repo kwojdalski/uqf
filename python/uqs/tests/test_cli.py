@@ -122,6 +122,7 @@ class _Paths:
     torqdata: str = "TORQDATA"
     runtime: str = "uqf"
     log_dir: Path = Path("TORQDATA/logs")
+    orchestrator_dir: Path = Path("TORQDATA/orchestrator")
 
     @property
     def runtime_declaration(self) -> runtimes.Runtime:

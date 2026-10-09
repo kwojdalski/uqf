@@ -14,6 +14,7 @@ duckdb_deals_backfill1,backfill,46,,
 events_backfill1,backfill,33,,
 exec_bars1,metrics,54,executions,exec_bar
 executions1,metrics,36,crypto_trades orders trades,executions
+flink_vwap1,metrics,56,flink_vwap_raw,flink_vwap
 fxfeed1,feed,19,,quote
 fxorderbookfeed1,feed,24,,fx_orderbook
 fxordersfeed1,feed,38,,orders

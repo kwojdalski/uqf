@@ -197,7 +197,7 @@ test_a_replay_rebuilds_open_windows_and_does_not_republish_closed_ones:{[t]
 / across a restart: it is not buffered and no bar appears for it (#993).
 test_a_row_dropped_live_as_late_stays_dropped_on_replay:{[t]
     / event 10:00:30, received (time) 10:05:00: its window [10:00,10:01) closed at 10:01:05
-    late:update time:t0+0D00:05:00 from fill[t0+0D00:00:30;`EURUSD;1f;1.10];
+    late:update time:.barstest.t0+0D00:05:00 from fill[t0+0D00:00:30;`EURUSD;1f;1.10];
     nm:job`bt_l;
     `.barstest.clock set t0+0D00:05:00;
     feed[nm;late];
@@ -217,7 +217,7 @@ test_a_row_dropped_live_as_late_stays_dropped_on_replay:{[t]
 / A row received in time is still buffered on replay: receipt time, not the
 / event time, decides, so an old event that arrived promptly is not lost.
 test_a_row_received_in_time_is_buffered_on_replay:{[t]
-    early:update time:t0+0D00:01:02 from fill[t0+0D00:00:30;`EURUSD;1f;1.10];
+    early:update time:.barstest.t0+0D00:01:02 from fill[t0+0D00:00:30;`EURUSD;1f;1.10];
     nm:job`bt_e;
     `.qetl.job.stream.replaying set 1b;
     r:@[{[nm;x] feed[nm;x]; 1b}[nm];early;{x}];

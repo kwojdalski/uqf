@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **32 uqf processes** — 55 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **33 uqf processes** — 56 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -47,6 +47,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `last_value1` | 6103 | etl | `processes/torq_stream.q` | `last_value` | `market_data` | `last_value` |
 | `exec_bars1` | 6104 | etl | `processes/torq_stream.q` | `exec_bar` | `executions` | `exec_bar` |
 | `hdb_exec_bars_backfill1` | 6105 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `flink_vwap1` | 6106 | etl | `processes/torq_stream.q` | `flink_vwap` | `flink_vwap_raw` | `flink_vwap` |
 
 ### Why a row deviates from the defaults
 
@@ -80,6 +81,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`last_value1`** — the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile
 - **`exec_bars1`** — time bars over the unified fills tape; the window is the fill's source_time
 - **`hdb_exec_bars_backfill1`** — bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live
+- **`flink_vwap1`** — publishes each per-symbol VWAP window an Apache Flink job closes, once, dropping windows Flink emits again after a restart or replay. The raw rows come from an EXTERNAL Python process (external/flink_vwap_feed.py) - Flink runs outside q - so flink_vwap_raw has no producer in this list and this does not start with the stack. Start it with `uqs feed start flink_vwap`
 
 ## Tables these processes publish
 
@@ -96,6 +98,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `eq_orderbook` | `plant_tables.q` | `databento1` |
 | `exec_bar` | `plant_tables.q` | `exec_bars1` |
 | `executions` | `plant_tables.q` | `executions1` |
+| `flink_vwap` | `plant_tables.q` | `flink_vwap1` |
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |
 | `fx_position` | `plant_tables.q` | `fxpositions1` |

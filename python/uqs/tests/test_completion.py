@@ -110,7 +110,13 @@ def test_a_port_is_offered_with_the_process_it_belongs_to():
 def test_fixed_choices_complete():
     assert complete("uqs logs --level W") == ["WARNING"]
     assert complete("uqs logs --multitail --stream ") == ["out", "err", "both"]
-    assert complete("uqs feed start ") == ["databento", "kafka", "crypto", "crypto-fills"]
+    assert complete("uqs feed start ") == [
+        "databento",
+        "kafka",
+        "crypto",
+        "crypto-fills",
+        "flink_vwap",
+    ]
     assert complete("uqs job new x --kind ") == list(SCAFFOLD_KINDS)
 
 

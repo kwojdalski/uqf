@@ -217,6 +217,15 @@ test_uptime_retention_removes_old_sessions_and_keeps_this_processs:{[t]
 
 / --- declaration --------------------------------------------------------
 
+/ Two declarations with the same keys made `decls` a table on KDB-X, so a
+/ third with other keys was refused 'mismatch.
+test_declarations_of_different_shapes_are_all_listed:{[t]
+    .qetl.retention.define[`rt_shape_cov;`kind`table`horizon!(`ledger_rows;`etl_coverage;30D)];
+    .qetl.retention.define[`rt_shape_runs;`kind`table`horizon!(`ledger_rows;`etl_runs;30D)];
+    .qetl.retention.define[`rt_shape_up;`kind`horizon!(`uptime_sessions;30D)];
+    .qunit.assertTrue[all `rt_shape_cov`rt_shape_runs`rt_shape_up in .qetl.retention.declared[];
+        "every declaration is listed, whatever keys it has"]};
+
 test_there_is_no_default_horizon:{[t]
     .qunit.assertThrows[{.qetl.retention.define[`rt_nohorizon;enlist[`kind]!enlist `uptime_sessions]};::;
         "retention: rt_nohorizon must name its `kind and its `horizon - there is no default horizon";
