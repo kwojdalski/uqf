@@ -32,7 +32,12 @@ from uqs.interpreter import q_interpreter
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
-from uqs.scaffold.columns import definition_columns, parse_columns, table_definition
+from uqs.scaffold.columns import (
+    definition_columns,
+    parse_columns,
+    parse_raw_columns,
+    table_definition,
+)
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.example import example_path
 from uqs.scaffold.normalizer import normalizer
@@ -59,6 +64,7 @@ check["normalizer registered"; registered[.qetl.job.stream.def;`smokenorm]]
 check["ipc source registered"; registered[.qetl.source.def;`smokebf]]
 check["odbc source registered"; registered[.qetl.source.def;`smokedb]]
 check["odbc source declares its transport"; `odbc~.qetl.source.def[`smokedb]`transport]
+check["odbc source reads its raw input"; (enlist `EVENTS)~.qetl.source.live_contracts[`smokedb][;1]]
 check["ipc worker registered"; registered[.qetl.job.bounded.def;`smokebf_backfill]]
 check["odbc worker registered"; registered[.qetl.job.bounded.def;`smokedb_backfill]]
 check["local source declares its transport"; `local~.qetl.source.def[`smokelocal]`transport]
@@ -202,7 +208,13 @@ def _scaffold_every_kind(root: Path) -> None:
             transform="derive",
             definitions={"smoke_ticks": feed_table},
         ),
-        backfill.bounded_worker("smokedb", "smoke_db", "sym:symbol, amt:float", transport="odbc"),
+        backfill.bounded_worker(
+            "smokedb",
+            "smoke_db",
+            "sym:symbol, amt:float",
+            transport="odbc",
+            raw=("EVENTS", parse_raw_columns("CREATED_AT:timestamp, PAYLOAD:any")),
+        ),
         backfill.bounded_worker(
             "smokelocal", "smoke_local", "sym:symbol, amt:float", transport="local"
         ),

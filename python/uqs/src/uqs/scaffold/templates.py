@@ -15,7 +15,7 @@ where being unfinished would break the tree rather than the build - see
 from __future__ import annotations
 
 from uqs.model import transports
-from uqs.scaffold.columns import TIME_COLUMN, sample_value, type_char
+from uqs.scaffold.columns import TIME_COLUMN, raw_contract, sample_value, type_char
 from uqs.scaffold.transform import worker_transform
 
 
@@ -86,12 +86,38 @@ credential_example:"SCAFFOLDED: e.g. {transports.get(transport).example}"
     return decls, "`transport`credential_example", ";transport;credential_example"
 
 
+def _raw_block(raw: tuple[str, list[tuple[str, str]]] | None) -> tuple[str, str, str]:
+    """(declaration, define key, define value) for a raw-input contract."""
+    if raw is None:
+        return "", "", ""
+    table, cols = raw
+    decl = f"""
+/ What the adapter READS from the physical table, apart from what it returns
+/ (columns/types above): `uqs config sources check` holds {table}'s live
+/ metadata to this, and the query's rows to columns/types. A general column
+/ accepts any type. Mapping one to the other is the query's job.
+raw:{raw_contract(table, cols)}
+"""
+    return decl, "`raw", ";raw"
+
+
 def source_body(
-    src: str, dataset: str, cols: list[tuple[str, str]], transport: str | None = None
+    src: str,
+    dataset: str,
+    cols: list[tuple[str, str]],
+    transport: str | None = None,
+    raw: tuple[str, list[tuple[str, str]]] | None = None,
 ) -> str:
+    """The source file. `raw` is (physical table, its columns) for an adapter
+    whose output is not its input: declared, not guessed, since only the
+    author knows the mapping."""
     transport = transport or transports.default()
     names = [c for c, _ in cols]
     extra_decls, extra_keys, extra_values = _transport_block(src, transport)
+    raw_decl, raw_key, raw_value = _raw_block(raw)
+    extra_decls += raw_decl
+    extra_keys += raw_key
+    extra_values += raw_value
     types = "".join(type_char(literal) for _, literal in cols)
     # The fixture is a real empty table of the declared shape - see its comment.
     fixture_cols = "; ".join(f"{c}:enlist {sample_value(lit)}" for c, lit in cols)
@@ -103,9 +129,9 @@ def source_body(
 
 source_name:`{src}
 
-/ The columns this adapter READS - not everything the source has. Declaring
-/ one the worker never touches means an upstream change to an unused column
-/ breaks the run.
+/ The columns this adapter RETURNS - for an identity adapter, also what it
+/ reads. Not everything the source has: declaring one the worker never
+/ touches means an upstream change to an unused column breaks the run.
 columns:`{"`".join(names)}
 types:"{types}"
 

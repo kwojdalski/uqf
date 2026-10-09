@@ -77,6 +77,15 @@ def q_definitions() -> set[str]:
     return names
 
 
+#: Names a caller SETS before loading the q that reads them, so no q file
+#: defines them: a definition would itself be a selection. Each is held, in
+#: test_a_name_set_by_its_caller_is_read_where_it_says, to the file reading it.
+SET_BY_CALLER = {
+    "qetl.load.only": "src/etl/core/declaration_load.q",
+    "qetl.load.only_sources": "src/etl/core/declaration_load.q",
+}
+
+
 def mentions() -> list[tuple[str, str, int]]:
     """(name, file relative to the repo, line) for every `.q...` in Python."""
     found = []
@@ -136,6 +145,15 @@ def test_every_q_name_python_mentions_is_defined():
     missing = [
         f"{file}:{line}  .{name}"
         for name, file, line in mentions()
-        if name.split(".")[0] in ours and not resolves(name, defined, namespaces)
+        if name.split(".")[0] in ours
+        and name not in SET_BY_CALLER
+        and not resolves(name, defined, namespaces)
     ]
     assert not missing, "q names in Python that no q file defines:\n" + "\n".join(missing)
+
+
+@pytest.mark.parametrize(("name", "reader"), sorted(SET_BY_CALLER.items()))
+def test_a_name_set_by_its_caller_is_read_where_it_says(name, reader):
+    """The exemption above stays honest: the file named reads the name."""
+    leaf = name.rsplit(".", 1)[1]
+    assert re.search(rf"`{leaf}\b", (UQF_ROOT / reader).read_text()), (name, reader)

@@ -15,7 +15,12 @@ from uqs.model.pipeline import PipelineKind
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import SOURCE_DIR, TABLES_FILE, WORKER_DIR, UqsError
 from uqs.scaffold import worker
-from uqs.scaffold.columns import Columns, definition_columns
+from uqs.scaffold.columns import (
+    PHYSICAL_NAME,
+    Columns,
+    definition_columns,
+    parse_raw_columns,
+)
 from uqs.scaffold.plan import ScaffoldPlan
 
 
@@ -128,12 +133,27 @@ def backfill_plan(
     start_with_all: bool,
     twin_of: str | None = None,
     definitions: dict[str, str] | None = None,
+    raw_table: str | None = None,
+    raw_columns: str | None = None,
 ) -> ScaffoldPlan:
     """The bounded worker's plan, or an error naming why there is none.
 
     `twin_of` names a streaming job whose published table this worker refills:
     its dataset and columns then come from there - see twin_target.
     """
+    if (raw_table is None) != (raw_columns is None):
+        raise UqsError(
+            "--raw-table and --raw-columns go together: the physical table the new source "
+            "reads, and the columns it reads from it"
+        )
+    raw = None
+    if raw_table is not None:
+        if not PHYSICAL_NAME.match(raw_table):
+            raise UqsError(
+                f"--raw-table {raw_table!r} must start with a letter and hold only letters, "
+                "digits and underscores"
+            )
+        raw = (raw_table, parse_raw_columns(raw_columns or ""))
     shared = None
     if twin_of is not None:
         dataset, shape = twin_target(repo_root, twin_of, dataset, shape, definitions or {})
@@ -168,6 +188,7 @@ def backfill_plan(
         check=check,
         transform=transform or "passthrough",
         shared=shared,
+        raw=raw,
         reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
         define_table=dataset not in defined_tables(repo_root),
     )

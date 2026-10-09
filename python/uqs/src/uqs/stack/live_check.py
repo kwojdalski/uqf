@@ -40,8 +40,11 @@ from uqs.stack.redact import redact
 #: A source name as q declares it - checked before it is spliced into q.
 _SOURCE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 
-#: The q every check loads: the library and the ETL tree, nothing of TorQ.
-_TREE = ("src/init.q", "src/etl/init.q")
+#: The q every check loads: the library and the ETL tree, nothing of TorQ -
+#: and of the tree's declarations only the source's own closure, so an
+#: unrelated job whose plant table this site lacks cannot fail the check.
+_LIBRARY = "src/init.q"
+_ETL = "src/etl/init.q"
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -54,7 +57,9 @@ def _script(source: str, window_minutes: int, settings: Path | None) -> str:
     )
     return "\n".join(
         [
-            *(f"\\l {f}" for f in _TREE),
+            f"\\l {_LIBRARY}",
+            f".qetl.load.only_sources:enlist `{source};",
+            f"\\l {_ETL}",
             *load,
             f"-1 .j.j .qetl.livecheck.check[`{source};0D00:01*{window_minutes}];",
             "exit 0",

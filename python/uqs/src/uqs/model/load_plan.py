@@ -139,6 +139,12 @@ class LoadPlan:
                 self._definer.setdefault(key, f.path)
         self.jobs: dict[str, str] = {}
         self.procs: dict[str, list[str]] = {}
+        #: each source and the file declaring it - what a source check loads
+        self.sources: dict[str, str] = {
+            key.split(":", 1)[1]: path
+            for key, path in self._definer.items()
+            if key.startswith("source:")
+        }
         for f in self.files:
             for name, procname in f.jobs:
                 self.jobs[name] = f.path
@@ -165,6 +171,11 @@ class LoadPlan:
 
     def for_job(self, name: str) -> list[str]:
         return self.closure([self.jobs[name]])
+
+    def for_source(self, name: str) -> list[str]:
+        """A source's file and what it reaches: all `uqs config sources check`
+        loads, so an unrelated job whose plant table is absent cannot stop it."""
+        return self.closure([self.sources[name]])
 
     def for_proc(self, procname: str) -> list[str]:
         return self.closure(self.jobs[j] for j in self.procs[procname])
@@ -223,4 +234,7 @@ def render(plan: LoadPlan) -> str:
     lines.append(".qetl.load.procs:(`symbol$())!()")
     for proc in sorted(plan.procs):
         lines.append(f".qetl.load.procs[`{proc}]:{_q_strings(plan.for_proc(proc))}")
+    lines.append(".qetl.load.sources:(`symbol$())!()")
+    for name in sorted(plan.sources):
+        lines.append(f".qetl.load.sources[`{name}]:{_q_strings(plan.for_source(name))}")
     return "\n".join(lines) + "\n"

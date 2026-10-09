@@ -90,3 +90,12 @@
 .qetl.load.procs[`upstream_backfill1]:("src/etl/sources/upstream_trades.q";"src/etl/workers/upstream_trades_backfill.q")
 .qetl.load.procs[`vectorize1]:enlist "src/etl/streaming/vectorize.q"
 .qetl.load.procs[`widefeed1]:enlist "src/etl/streaming/wide_orderbook_feed.q"
+.qetl.load.sources:(`symbol$())!()
+.qetl.load.sources[`crypto_market_data]:enlist "src/etl/sources/crypto_market_data.q"
+.qetl.load.sources[`databento_mbp10]:enlist "src/etl/sources/databento_mbp10.q"
+.qetl.load.sources[`demo_deals]:enlist "src/etl/sources/demo_deals.q"
+.qetl.load.sources[`demo_events]:enlist "src/etl/sources/demo_events.q"
+.qetl.load.sources[`duckdb_deals]:enlist "src/etl/sources/duckdb_deals.q"
+.qetl.load.sources[`hdb_demo_markouts]:("src/etl/sources/hdb_demo_markouts.q";"src/etl/transforms/demo_markouts.q")
+.qetl.load.sources[`hdb_transfer]:enlist "src/etl/sources/hdb_transfer.q"
+.qetl.load.sources[`upstream_trades]:enlist "src/etl/sources/upstream_trades.q"

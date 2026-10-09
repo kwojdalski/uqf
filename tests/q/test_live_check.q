@@ -41,6 +41,7 @@ setUp_live:{[]
 
 tearDown_live:{[]
     .testutil.drop_rows[`.qetl.source.sources;`livetest_src];
+    `.livetest.columns set ([] c:`ts`px; t:"pf");
     .testutil.drop_rows[`.qetl.source.transport;`livetest_tx];
     setenv[`$.livetest.cred_var;""];
     }
@@ -81,13 +82,79 @@ test_a_changed_schema_fails_at_schema_and_closes_the_connection:{[t]
     .qunit.assertTrue[r[`diagnostic] like "*missing px*";"naming the column"];
     .qunit.assertEquals[.livetest.opened,.livetest.closed;1 1;"the handle it opened is closed"]};
 
-test_rows_of_the_wrong_type_fail_at_read_and_close_the_connection:{[t]
+test_rows_of_the_wrong_type_fail_at_output_and_close_the_connection:{[t]
     `.livetest.rows set ([] ts:enlist .z.p; px:enlist 1);
     r:.livetest.check[];
-    .qunit.assertEquals[r`status`stage;(`failed;`read);"px came back as a long"];
+    .qunit.assertEquals[r`status`stage;(`failed;`output);"the read ran; px came back as a long"];
     / "prefix*" alone: KDB-X's like is 'nyi on "prefix*mid*"
-    .qunit.assertTrue[r[`diagnostic] like "the bounded read of the last*";"saying which step failed"];
+    .qunit.assertTrue[r[`diagnostic] like "the read of the last*";"saying the read itself worked"];
+    .qunit.assertTrue[r[`diagnostic] like "*px (expected f, got j)*";"and what the output got wrong"];
     .qunit.assertEquals[.livetest.opened,.livetest.closed;1 1;"closed on failure too"]};
+
+test_a_query_that_throws_fails_at_read:{[t]
+    .testutil.drop_rows[`.qetl.source.sources;`livetest_src];
+    .qetl.source.define[`livetest_src;@[.livetest.decl[];`query;:;{[h;a;b] '"no such table"}]];
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage;(`failed;`read);"the adapter's query itself failed"];
+    .qunit.assertTrue[r[`diagnostic] like "the bounded read of the last*";"saying which step failed"]};
+
+/ --- an adapter whose output is not its input (raw) ----------------------
+/ .
+/ The physical table holds CREATED_AT and a payload; the adapter returns ts
+/ and a typed px. Checking the output against the physical table refused
+/ this valid adapter before its query ran.
+
+adapted_decl:{[] .livetest.decl[],enlist[`raw]!enlist enlist[`EVENTS]!enlist ([] CREATED_AT:`timestamp$(); PAYLOAD:())}
+
+physical:([] c:`CREATED_AT`PAYLOAD`EXTRA; t:"pCj")
+
+define_adapted:{[]
+    .testutil.drop_rows[`.qetl.source.sources;`livetest_src];
+    .qetl.source.define[`livetest_src;.livetest.adapted_decl[]];
+    `.livetest.columns set .livetest.physical;
+    }
+
+test_an_adapter_that_renames_and_casts_passes_input_and_output:{[t]
+    .livetest.define_adapted[];
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage`rows;(`ok;`done;1);"raw input matches EVENTS, the rows match ts/px"]};
+
+test_without_raw_the_same_adapter_is_refused_at_schema:{[t]
+    / What the issue was: the output contract read against the physical table.
+    `.livetest.columns set .livetest.physical;
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage;(`failed;`schema);"ts and px are not physical columns"]};
+
+test_a_missing_raw_column_fails_at_schema_naming_the_raw_input:{[t]
+    .livetest.define_adapted[];
+    `.livetest.columns set ([] c:enlist `CREATED_AT; t:enlist "p");
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage;(`failed;`schema);"PAYLOAD is gone"];
+    .qunit.assertTrue[r[`diagnostic] like "*raw input EVENTS is missing PAYLOAD*";"naming the raw input"];
+    .qunit.assertEquals[.livetest.opened,.livetest.closed;1 1;"closed"]};
+
+test_a_raw_column_of_the_wrong_type_names_both_types:{[t]
+    .livetest.define_adapted[];
+    `.livetest.columns set ([] c:`CREATED_AT`PAYLOAD; t:"zC");
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage;(`failed;`schema);"CREATED_AT is a datetime"];
+    .qunit.assertTrue[r[`diagnostic] like "*CREATED_AT (expected p, got z)*";"expected and actual"]};
+
+test_a_general_raw_column_accepts_any_type:{[t]
+    .livetest.define_adapted[];
+    `.livetest.columns set ([] c:`CREATED_AT`PAYLOAD; t:"pj");
+    .qunit.assertEquals[.livetest.check[]`status;`ok;"PAYLOAD is declared general"]};
+
+test_an_adapter_with_raw_still_fails_bad_output_at_output:{[t]
+    .livetest.define_adapted[];
+    `.livetest.rows set ([] ts:enlist .z.p; px:enlist `bad);
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage;(`failed;`output);"input fine, adapted px a symbol"]};
+
+test_an_adapter_with_raw_reading_nothing_is_empty:{[t]
+    .livetest.define_adapted[];
+    `.livetest.rows set 0#.livetest.rows;
+    .qunit.assertEquals[.livetest.check[]`status`stage`rows;(`empty;`done;0);"a valid empty window"]};
 
 test_a_check_that_passes_closes_its_connection:{[t]
     .livetest.check[];

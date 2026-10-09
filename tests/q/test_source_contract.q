@@ -676,6 +676,30 @@ decl2:{[]
     / An amend, not a join with `enlist`: enlisting a dict makes a one-row table.
     @[d;`supporting;:;.srctest.sup[]]}
 
+/ --- raw inputs: what the adapter reads, apart from what it returns ---
+
+test_a_source_without_raw_is_checked_live_against_its_own_contract:{[t]
+    .qetl.source.define[`t;.srctest.decl[]];
+    c:.qetl.source.live_contracts `t;
+    .qunit.assertEquals[c[;1];enlist `ext;"an identity adapter: its table_name"];
+    .qunit.assertEquals[c[0;2 3];(`ts`px;"pf");"held to columns and types"]};
+
+test_a_source_with_raw_is_checked_live_against_its_raw_contract:{[t]
+    raw:enlist[`EVENTS]!enlist ([] CREATED_AT:`timestamp$(); PAYLOAD:());
+    .qetl.source.define[`t;@[.srctest.decl[];`raw;:;raw]];
+    c:.qetl.source.live_contracts `t;
+    .qunit.assertEquals[c[;1];enlist `EVENTS;"the physical table, not table_name"];
+    .qunit.assertEquals[c[0;2 3];(`CREATED_AT`PAYLOAD;"p ");"its own columns; a general one accepts any type"]};
+
+test_raw_must_be_a_dict_of_tables:{[t]
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[.srctest.decl[];`raw;:;`EVENTS];"*raw must be a dict*";"not a symbol"];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[.srctest.decl[];`raw;:;enlist[`EVENTS]!enlist 1];"*must each be a table*";"a contract is an empty table"]};
+
+test_mock_meta_answers_with_a_raw_contract:{[t]
+    raw:enlist[`EVENTS]!enlist ([] CREATED_AT:`timestamp$(); PAYLOAD:`symbol$());
+    .qetl.source.define[`t;@[.srctest.decl[];`raw`transport;:;(raw;`mock)]];
+    .qunit.assertEquals[.qetl.source.mock_meta `EVENTS;([] c:`CREATED_AT`PAYLOAD; t:"ps");"the physical table a mock stands in for"]};
+
 test_a_source_can_declare_supporting_inputs:{[t]
     .qetl.source.define[`t;.srctest.decl2[]];
     .qunit.assertEquals[.qetl.source.input_names `t;`ext`q;"the primary, then each supporting input"]};

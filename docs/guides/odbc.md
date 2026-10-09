@@ -78,12 +78,29 @@ A source's credential then names the driver as registered:
 uqs config sources check deals_db quotes_db --odbc-home /srv/uqf/odbc --timeout 120
 ```
 
-Each named source is checked in its own q, under one overall timeout: 1.
-**credential:** missing is a failure, never the fixture. 2. **tls:** a setting
-that turns certificate verification off is refused. 3. **connect:** the driver
-loads and the login is accepted. 4. **schema:** the declared tables and column
-types are present. 5. **read:** a bounded read of the last hour (`--window`)
-succeeds.
+Each named source is checked in its own q, under one overall timeout. The q
+loads that source's declaration and what it uses, and no job, so a demo job
+whose table this site lacks can't stop the check. The stages, in order:
+
+1. **credential:** missing is a failure, never the fixture.
+2. **tls:** a setting that turns certificate verification off is refused.
+3. **connect:** the driver loads and the login is accepted.
+4. **schema:** the physical tables and columns the adapter reads are present,
+   with their types. That's the source's `raw` contract when it declares one,
+   and its own `columns` and `types` otherwise.
+5. **read:** the adapter's bounded read of the last hour (`--window`) runs.
+6. **output:** the rows it returned have the declared `columns` and `types`.
+
+Declare `raw` when the adapter's output isn't its input. For example, it reads
+`CREATED_AT` and a JSON payload and returns `source_time`, `sym` and typed
+prices:
+
+```q
+raw:enlist[`EVENTS]!enlist ([] CREATED_AT:`timestamp$(); PAYLOAD:())
+```
+
+A general column (`()`) accepts any type. Without `raw`, the check would look
+for `source_time` in the physical table and refuse a valid adapter at `schema`.
 
 The connection is always closed. Nothing is published, no cursor moves and no
 coverage is recorded. Each source reports its status (`ok`, `empty` for a valid

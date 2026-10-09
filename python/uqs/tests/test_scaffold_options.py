@@ -20,12 +20,13 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
+from uqs.cli import create
 from uqs.model import transports
 from uqs.model.declarations import read_file_text
 from uqs.paths import UqsError
 from uqs.scaffold import jobs
 from uqs.scaffold import worker as backfill
-from uqs.scaffold.columns import definition_columns, parse_columns
+from uqs.scaffold.columns import definition_columns, parse_columns, parse_raw_columns
 from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.templates import credential_var
 
@@ -136,6 +137,74 @@ def test_a_transport_for_a_source_that_already_exists_is_refused():
         backfill.bounded_worker(
             "fx", "fx_rates", None, transport="odbc", reuse_source=True, define_table=False
         )
+
+
+def test_an_identity_source_declares_no_raw_input():
+    body = _body(backfill.bounded_worker("fx", "fx_rates", "px:float"), "sources/fx.q")
+    assert "raw:" not in body and "`raw" not in body
+
+
+def test_a_source_given_its_raw_input_declares_it_apart_from_its_output():
+    raw = ("EVENTS", parse_raw_columns("CREATED_AT:timestamp, PAYLOAD:any"))
+    body = _body(
+        backfill.bounded_worker("fx", "fx_rates", "px:float", transport="odbc", raw=raw),
+        "sources/fx.q",
+    )
+    assert "raw:enlist[`EVENTS]!enlist ([] CREATED_AT:`timestamp$(); PAYLOAD:())" in body
+    define = body.split(".qetl.source.define", 1)[1]
+    assert "`credential_example`raw!" in define and ";credential_example;raw)" in define
+    assert "columns:`time`px" in body, "the output contract is still --columns"
+    assert "not implemented" in body, "and the mapping between them is the author's query"
+
+
+def test_raw_columns_keep_the_source_s_case_and_add_nothing():
+    assert parse_raw_columns("CREATED_AT:timestamp, payload:any, Px:float") == [
+        ("CREATED_AT", "`timestamp$()"),
+        ("payload", "()"),
+        ("Px", "`float$()"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("spec", "message"),
+    [("CREATED_AT", "must be name:type"), ("X:decimal", "unknown type"), ("", "is empty")],
+)
+def test_a_malformed_raw_column_is_refused(spec, message):
+    with pytest.raises(UqsError, match=message):
+        parse_raw_columns(spec)
+
+
+def test_raw_input_for_a_source_that_already_exists_is_refused():
+    with pytest.raises(UqsError, match="--raw-table shapes a new source"):
+        backfill.bounded_worker(
+            "fx",
+            "fx_rates",
+            None,
+            raw=("EVENTS", parse_raw_columns("X:long")),
+            reuse_source=True,
+            define_table=False,
+        )
+
+
+def _refusals(monkeypatch, *argv: str) -> list[str]:
+    refused: list[str] = []
+    monkeypatch.setattr(create, "_die", lambda exc: refused.append(str(exc)))
+    CliRunner().invoke(cli.app, ["job", "new", *argv, "--dry-run"])
+    return refused
+
+
+def test_raw_table_and_raw_columns_come_together(monkeypatch):
+    refused = _refusals(
+        monkeypatch,
+        *("fx", "--kind", "backfill", "--dataset", "fx_rates", "--columns", "px:float"),
+        *("--raw-table", "EVENTS"),
+    )
+    assert any("--raw-table and --raw-columns go together" in r for r in refused), refused
+
+
+def test_raw_columns_do_not_apply_to_a_streaming_job(monkeypatch):
+    refused = _refusals(monkeypatch, "fx", "--raw-columns", "X:long")
+    assert any("--raw-columns does not apply to --kind streaming" in r for r in refused), refused
 
 
 def test_a_new_source_names_the_variable_its_credential_is_read_from():

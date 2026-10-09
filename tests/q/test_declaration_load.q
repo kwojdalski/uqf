@@ -26,6 +26,26 @@ test_an_unknown_name_is_refused_by_name:{[t]
         "a typo must not load nothing and look like it worked"];
     }
 
+test_a_source_selects_its_own_file_and_no_job:{[t]
+    / What `uqs config sources check` loads: nothing of a job (#902's
+    / problem, for the source check).
+    .qunit.assertEquals[.qetl.load.source_files `duckdb_deals;enlist "src/etl/sources/duckdb_deals.q";
+        "the source's file alone"];
+    }
+
+test_an_unknown_source_is_refused_by_name:{[t]
+    .qunit.assertThrows[.qetl.load.source_files;`nosuchsource;"*no declared source named nosuchsource*";
+        "a typo must not load nothing and look like it worked"];
+    }
+
+test_a_source_selection_and_a_job_selection_load_together:{[t]
+    .qetl.load.only:enlist `eq_orderbook;
+    .qetl.load.only_sources:enlist `duckdb_deals;
+    want:.qetl.load.order where .qetl.load.order in .qetl.load.files[`eq_orderbook],.qetl.load.source_files `duckdb_deals;
+    r:@[.qetl.load.selected;();{x}];
+    delete only, only_sources from `.qetl.load;
+    .qunit.assertEquals[r;want;"both selections, in init.q's order"]};
+
 test_a_failed_load_names_the_file:{[t]
     .qunit.assertThrows[.qetl.load.one;"src/etl/streaming/nosuch.q";
         "etl load: src/etl/streaming/nosuch.q failed: *";"which file stopped the load"];

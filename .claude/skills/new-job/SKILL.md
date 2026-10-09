@@ -53,6 +53,12 @@ uqs job new fx_rates --kind backfill --dataset fx_rates \
 uqs job new ledger --kind backfill --dataset ledger \
     --columns "sym:symbol, amt:float" --transport odbc
 
+# an adapter that reads other columns than it returns: declare the physical side
+# (`raw`) - the source check holds the table to it, and the rows to --columns
+uqs job new events --kind backfill --dataset events --transport odbc \
+    --columns "sym:symbol, px:float" \
+    --raw-table EVENTS --raw-columns "CREATED_AT:timestamp, PAYLOAD:any"
+
 # a second worker over that source, into its own dataset: the source is reused
 uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01

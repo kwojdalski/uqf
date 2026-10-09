@@ -376,6 +376,9 @@ qetl.load,jobs,dict,,
 qetl.load,one,function,1,f
 qetl.load,order,value,,
 qetl.load,procs,dict,,
+qetl.load,selected,function,1,dirs
+qetl.load,source_files,function,1,names
+qetl.load,sources,dict,,
 qetl.log,context,dict,,
 qetl.log,dbg,function,3,id text fields
 qetl.log,debug,function,1,on
@@ -528,6 +531,7 @@ qetl.source,inline_secret,function,2,tr setting
 qetl.source,input_names,function,1,source
 qetl.source,ipc,function,4,h f range_from range_to
 qetl.source,ipc_call,function,3,h f args
+qetl.source,live_contracts,function,1,source
 qetl.source,live_required,function,1,
 qetl.source,load_settings,function,2,path path_vars
 qetl.source,load_zone_table,function,1,path
