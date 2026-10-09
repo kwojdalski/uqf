@@ -30,7 +30,7 @@ def _caller_input_reached_q(gw, needle: str) -> bool:
 def test_program_text_is_always_a_package_constant(client, gw):
     """Whatever the caller sends, the q program is one of ours verbatim."""
     client.post("/query", json={"table": "trades", "filters": [], "limit": 10})
-    assert gw.last_program == queries.SELECT
+    assert gw.last_program == queries.BROWSE
 
 
 def test_hostile_symbol_value_travels_as_an_argument_not_as_text(client, gw):
@@ -46,7 +46,7 @@ def test_hostile_symbol_value_travels_as_an_argument_not_as_text(client, gw):
     )
     assert resp.status_code == 200
     program, args, tiers = gw.routed[-1]
-    assert program == queries.SELECT
+    assert program == queries.BROWSE
     assert hostile not in program
     # present as data, in the values list, and nowhere else
     assert args == ("trades", ["sym"], ["eq"], [hostile], 10)
@@ -60,7 +60,7 @@ def test_unknown_table_is_refused_without_the_caller_reaching_q(client, gw):
     assert not _caller_input_reached_q(gw, hostile), (
         "nothing carrying the caller's input may be sent after a validation failure"
     )
-    assert queries.SELECT not in [p for p, _, _ in gw.routed]
+    assert queries.BROWSE not in [p for p, _, _ in gw.routed]
 
 
 def test_unknown_column_is_refused_without_the_caller_reaching_q(client, gw):
@@ -71,7 +71,7 @@ def test_unknown_column_is_refused_without_the_caller_reaching_q(client, gw):
     )
     assert resp.status_code == 422
     assert not _caller_input_reached_q(gw, hostile)
-    assert queries.SELECT not in [p for p, _, _ in gw.routed]
+    assert queries.BROWSE not in [p for p, _, _ in gw.routed]
 
 
 def test_unknown_operator_is_refused_by_the_schema(client, gw):
@@ -94,18 +94,22 @@ def test_vector_column_cannot_be_filtered_on(client, gw):
     assert resp.status_code == 422
     assert "vector" in resp.json()["detail"]
     assert not _caller_input_reached_q(gw, "bid_prices")
-    assert queries.SELECT not in [p for p, _, _ in gw.routed]
+    assert queries.BROWSE not in [p for p, _, _ in gw.routed]
 
 
 def test_every_catalog_operator_exists_in_the_q_program():
     """A catalog operator with no q-side counterpart would fail only at
-    runtime, against a live gateway. Catch it here instead.
+    runtime, against a live gateway. Catch it here instead: the operators
+    .uqf.browse knows are the keys of browse_ops in the gateway's browse.q.
     """
+    from pathlib import Path
+
     from uqf_frontend.catalog import OPERATORS
 
-    ops_line = next(line for line in queries.SELECT.splitlines() if "ops:" in line)
-    for op in OPERATORS:
-        assert f"`{op}" in ops_line or f"{op}`" in ops_line or op in ops_line, op
+    browse_q = Path(__file__).resolve().parents[3] / "scripts/torqcode/gateway/browse.q"
+    ops_line = next(ln for ln in browse_q.read_text().splitlines() if ln.startswith("browse_ops:"))
+    known = set(ops_line.split(":", 1)[1].split("!", 1)[0].strip("`").split("`"))
+    assert set(OPERATORS) <= known, set(OPERATORS) - known
 
 
 def test_the_lambda_is_sent_as_bytes_not_as_a_symbol(gw):
@@ -127,9 +131,42 @@ def test_the_lambda_is_sent_as_bytes_not_as_a_symbol(gw):
             sent["args"] = args
             return None
 
-    Spy(Settings()).route(queries.SELECT, ("trades", [], [], [], 0), ["rdb"])
+    Spy(Settings()).route(queries.COVERAGE, ("demo_deals", "", "v1", None), ["rdb"])
     assert sent["program"] == ".gw.syncexec"
     query_list, tiers = sent["args"]
     assert isinstance(query_list[0], bytes), "the lambda must be a char vector, not a symbol"
-    assert query_list[0] == queries.SELECT.encode()
+    assert query_list[0] == queries.COVERAGE.encode()
     assert tiers == ["rdb"]
+
+
+def test_table_reads_go_as_the_data_login_through_browse():
+    """#889: /query reads as its own, non-trusted login, so the gateway's
+    query policy holds it - never as the trusted login the ops pages use."""
+    from uqf_frontend.config import Settings
+    from uqf_frontend.gateway import KolaGateway
+
+    logins: list[tuple[str, str]] = []
+
+    class Spy(KolaGateway):
+        def _exec(self, program, args):
+            logins.append(self._login)
+            return (program, args)
+
+    gw = Spy(Settings(user="admin", passwd="admin", data_user="browser", data_passwd="pw"))
+    program, args = gw.browse("trades", ["sym"], ["eq"], ["EURUSD"], 10, ["rdb"])
+    assert program == queries.BROWSE == ".uqf.browse"
+    assert args == ("trades", ["sym"], ["eq"], ["EURUSD"], 10, ["rdb"])
+    assert logins == [("browser", "pw")], "the data login, not admin"
+
+
+def test_without_a_data_login_a_table_read_says_what_to_set():
+    import pytest
+
+    from uqf_frontend.config import Settings
+    from uqf_frontend.errors import GatewayUnavailable
+    from uqf_frontend.gateway import KolaGateway
+
+    with pytest.raises(GatewayUnavailable, match="UQF_FRONTEND_DATA_USER"):
+        KolaGateway(Settings(user="admin", passwd="admin")).browse(
+            "trades", [], [], [], 10, ["rdb"]
+        )

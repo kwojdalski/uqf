@@ -77,6 +77,19 @@ class Gateway(Protocol):
         """
         ...
 
+    def browse(
+        self,
+        table: str,
+        columns: list[str],
+        operators: list[str],
+        values: list[Any],
+        limit: int,
+        tiers: list[str],
+    ) -> Any:
+        """Read one table as the data login, through the gateway's
+        ``.uqf.browse`` - under that login's query policy (#889)."""
+        ...
+
 
 class KolaGateway:
     """A :class:`Gateway` backed by real kdb+ IPC connections, kept and reused.
@@ -104,11 +117,19 @@ class KolaGateway:
     #: concurrent request - but only this many wait between requests.
     MAX_IDLE = 4
 
-    def __init__(self, settings: Settings, connect: Callable[[], Any] | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        connect: Callable[[], Any] | None = None,
+        *,
+        login: tuple[str, str] | None = None,
+    ) -> None:
         self._settings = settings
+        self._login = login or (settings.user, settings.passwd)
         self._connect = connect or self._kola_connect
         self._idle: list[Any] = []
         self._lock = threading.Lock()
+        self._data: KolaGateway | None = None
 
     def call(self, program: str, *args: Any) -> Any:
         return self._exec(program, args)
@@ -119,6 +140,30 @@ class KolaGateway:
         # variable named the whole lambda.
         query = [program.encode(), *args]
         return self._exec(".gw.syncexec", (query, tiers))
+
+    def browse(
+        self,
+        table: str,
+        columns: list[str],
+        operators: list[str],
+        values: list[Any],
+        limit: int,
+        tiers: list[str],
+    ) -> Any:
+        from uqf_frontend import queries
+
+        s = self._settings
+        if not s.data_user:
+            raise GatewayUnavailable(
+                "table reads go through the gateway's query policy as their own login (#889) - "
+                "set UQF_FRONTEND_DATA_USER / _PASSWD (browser/browser on the demo stack)"
+            )
+        with self._lock:
+            if self._data is None:
+                connect = None if self._connect == self._kola_connect else self._connect
+                self._data = type(self)(s, connect, login=(s.data_user, s.data_passwd))
+            data = self._data
+        return data._exec(queries.BROWSE, (table, columns, operators, values, limit, tiers))
 
     def _exec(self, program: str, args: tuple[Any, ...]) -> Any:
         q = self._checkout()
@@ -149,8 +194,11 @@ class KolaGateway:
         """Disconnect every idle handle - for a shutdown."""
         with self._lock:
             idle, self._idle = self._idle, []
+            data, self._data = self._data, None
         for q in idle:
             _close(q)
+        if data is not None:
+            data.close()
 
     def _kola_connect(self) -> Any:
         import kola
@@ -160,8 +208,8 @@ class KolaGateway:
             q = kola.Q(
                 kola_host(s.host, s.timeout),
                 s.port,
-                user=s.user,
-                passwd=s.passwd,
+                user=self._login[0],
+                passwd=self._login[1],
                 timeout=s.timeout,
             )
         except Exception as exc:  # pragma: no cover - construction rarely fails
@@ -304,6 +352,22 @@ class FakeGateway:
         if self.raises is not None:
             raise self.raises
         return self._responses.get(program)
+
+    def browse(
+        self,
+        table: str,
+        columns: list[str],
+        operators: list[str],
+        values: list[Any],
+        limit: int,
+        tiers: list[str],
+    ) -> Any:
+        from uqf_frontend import queries
+
+        self.routed.append((queries.BROWSE, (table, columns, operators, values, limit), tiers))
+        if self.raises is not None:
+            raise self.raises
+        return self._responses.get(queries.BROWSE)
 
     @property
     def last_program(self) -> str:

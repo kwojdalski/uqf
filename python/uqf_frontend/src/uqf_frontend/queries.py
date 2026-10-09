@@ -77,21 +77,15 @@ SCHEMA = """raze {[nm] m:0!meta nm; ([] table:nm; column:m`c; kind:m`t)} each ta
 #: it does not have.
 CATALOG = ".qcat.surface[]"
 
-#: Filter a whitelisted table by validated (column, operator, value) triples.
+#: Read one browsable table under the caller's query policy (#889).
 #:
-#: Parameters arrive as IPC arguments: t=table name symbol, fc=column symbols,
-#: fo=operator symbols, fv=values, lim=row cap (0 for no cap).
-#:
-#: The operator dictionary is defined *inside* q and looked up by key, so an
-#: unrecognised operator raises there too - a second line of defence behind
-#: the catalog check, rather than relying on it alone.
-SELECT = """{[t;fc;fo;fv;lim]
-  ops:`eq`ne`lt`le`gt`ge`in!(=;<>;<;<=;>;>=;in);
-  if[not all fo in key ops;'"uqf_frontend: unknown operator"];
-  wrap:{$[11h=abs type x; enlist x; x]};
-  wc:{[o;c;v;m;w] (m o;c;w v)}[;;;ops;wrap]'[fo;fc;fv];
-  r:?[t;wc;0b;()];
-  $[lim>0; lim sublist r; r]}"""
+#: A gateway function, not a lambda: the data login (a non-trusted role) may
+#: run it and nothing else. It takes table, filter columns, operator names,
+#: values, a row cap and the tiers, turns them into a .dataaccess.getdata
+#: request, and getdata holds that to the table's policy - see
+#: scripts/torqcode/gateway/browse.q. An unknown operator is refused there
+#: too, a second line of defence behind the catalog check.
+BROWSE = ".uqf.browse"
 
 #: Coverage intervals for one dataset at one source release, as understood at
 #: an instant.
@@ -232,7 +226,7 @@ def build_filters(
     tbl: Table, filters: list[tuple[str, str, Any]]
 ) -> tuple[list[str], list[str], list[Any]]:
     """Validate filters against the catalog and split them into the three
-    parallel argument lists ``SELECT`` expects.
+    parallel argument lists ``BROWSE`` expects.
 
     Every rejection here happens before any IPC call.
     """

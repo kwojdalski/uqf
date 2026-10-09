@@ -93,7 +93,7 @@ def test_catalog_publishes_the_decimal_places_each_column_is_shown_with(client):
 
 
 def test_query_returns_rows_from_the_gateway(gw):
-    gw._responses[__import__("uqf_frontend.queries", fromlist=["SELECT"]).SELECT] = [
+    gw._responses[__import__("uqf_frontend.queries", fromlist=["BROWSE"]).BROWSE] = [
         {"sym": "EURUSD", "trade_price": 1.085}
     ]
     c = TestClient(create_app(gateway=gw))
@@ -325,7 +325,7 @@ def test_query_proceeds_when_required_coverage_is_complete(client_for):
     from uqf_frontend import queries
 
     gw = _cov([_iv(13, 16)])
-    gw._responses[queries.SELECT] = [{"sym": "EURUSD"}]
+    gw._responses[queries.BROWSE] = [{"sym": "EURUSD"}]
     resp = client_for(gw).post(
         "/query",
         json={
@@ -364,7 +364,7 @@ def test_coverage_precheck_runs_before_the_select(client_for):
     from uqf_frontend import queries
 
     programs = [p for p, _, _ in gw.routed]
-    assert queries.SELECT not in programs
+    assert queries.BROWSE not in programs
 
 
 def test_coverage_requires_a_partition(client):
@@ -411,7 +411,7 @@ def test_the_coverage_precheck_carries_its_partition(client_for):
     from uqf_frontend import queries
 
     gw = _cov([_iv(13, 16)])
-    gw._responses[queries.SELECT] = [{"sym": "EURUSD"}]
+    gw._responses[queries.BROWSE] = [{"sym": "EURUSD"}]
     client_for(gw).post(
         "/query",
         json={

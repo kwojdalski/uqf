@@ -10,6 +10,7 @@
 .checkinputs.checkinputs:{[dict] dict}
 .dataaccess.autojoin:{[options] raze}
 \l scripts/torqcode/gateway/querypolicy.q
+\l scripts/torqcode/gateway/browse.q
 \l scripts/torqcode/handlers/pmusers.q
 
 \d .qpoltest
@@ -154,6 +155,64 @@ test_access_list_logins_are_read_as_user_and_password:{[t]
 
 test_the_ordinary_users_hold_only_ordinary_roles:{[t]
     u:.pm.policylogins `:scripts/torqconfig/permissions/gateway_users.csv;
-    .qunit.assertEquals[exec role from u;`analyst`quant;"never admin or administrator"]};
+    .qunit.assertEquals[exec role from u;`analyst`quant`browser;"never admin or administrator"]};
 
+
+/ --- the browser (#889) ----------------------------------------------------
+
+/ A catalog with one unbounded table and one that has a policy row too.
+unbounded:`config_change`mkt_orderbook!("a few rows a day";"never used: it has a row")
+
+/ Run f with `name` set to v, then put back whatever was there - or nothing.
+with_global:{[name;v;f]
+    had:@[{(1b;get x)};name;{[e] (0b;::)}];
+    name set v;
+    r:@[f;::;{[e] (`failed;e)}];
+    $[had 0; name set had 1; ![` sv -1_` vs name;();0b;enlist last ` vs name]];
+    if[(2=count r) and `failed~first r; 'last r];
+    r}
+
+test_an_unbounded_table_gets_a_row_cap_for_the_browser_alone:{[t]
+    u:0!with_global[`.qcat.unbounded;unbounded;{[x] .checkinputs.unboundedpolicies .qpoltest.shipped}];
+    .qunit.assertEquals[exec tablename from u;enlist `config_change;"mkt_orderbook keeps its real row"];
+    p:.checkinputs.resolvepolicy[shipped,2!u;caps;`config_change;enlist`browser];
+    .qunit.assertEquals[p`maxrows`requiredfilters;(.checkinputs.browsermaxrows;`symbol$());
+        "a row cap, no required filter"];
+    .qunit.assertThrows[.checkinputs.resolvepolicy[shipped,2!u;caps;`config_change;];enlist`analyst;
+        "querypolicy: config_change has no query policy for your role*";"another role still has none"]};
+
+test_a_table_with_a_policy_holds_the_browser_to_it:{[t]
+    p:with_global[`.qcat.unbounded;unbounded;{[x]
+        ps:.qpoltest.shipped,.checkinputs.unboundedpolicies .qpoltest.shipped;
+        .checkinputs.resolvepolicy[ps;.qpoltest.caps;`mkt_orderbook;enlist`browser]}];
+    .qunit.assertEquals[p`maxrange`requiredfilters;(0D01;enlist`sym);"the file's row, an hour and a sym filter"]};
+
+/ What .uqf.browse asked getdata for.
+asked:()
+
+browse_with:{[pol;f]
+    `.qpoltest.asked set ();
+    with_global[`.checkinputs.querypolicyfor;{[p;t] p}[pol];{[f;x]
+        with_global[`.dataaccess.getdata;{[d] `.qpoltest.asked set d; ([] n:enlist 1)};{[f;x] f[]}[f]]}[f]]}
+
+test_browse_turns_the_browsers_filters_into_getdata_filters:{[t]
+    browse_with[.checkinputs.policyceiling;
+        {[] .uqf.browse[`mkt_orderbook;`sym`px`sym;`eq`gt`ne;(`EURUSD;1.08;`GBPUSD);500;`rdb`hdb]}];
+    f:asked`filters;
+    .qunit.assertEquals[key f;`sym`px;"one entry per column"];
+    .qunit.assertEquals[f`px;enlist (>;1.08);"an operator name, as getdata's function"];
+    .qunit.assertEquals[f`sym;((=;`EURUSD);(not;in;enlist `GBPUSD));"ne is not in"];
+    .qunit.assertEquals[asked`sublist`procs;(500;`rdb`hdb);"the row cap and the tiers"]};
+
+test_browse_reads_the_latest_window_the_policy_allows:{[t]
+    browse_with[`maxrange`maxrows!(0D01;10);{[] .uqf.browse[`mkt_orderbook;enlist `sym;enlist `eq;enlist `EURUSD;10;enlist `rdb]}];
+    .qunit.assertEquals[(asked`endtime)-asked`starttime;0D01;"an hour, ending now"]};
+
+test_browse_takes_its_window_from_the_browsers_time_bounds:{[t]
+    w:.uqf.browse_window[`time`time;`ge`lt;(2026.01.01D10:00;2026.01.01D11:00);1D;2026.01.02D00:00];
+    .qunit.assertEquals[w;2026.01.01D10:00 2026.01.01D11:00;"the bounds given, not the policy's span"]};
+
+test_browse_refuses_an_unknown_operator:{[t]
+    .qunit.assertThrows[{.uqf.browse[`t;enlist `sym;enlist `like;enlist "E*";10;enlist `rdb]};::;
+        "uqf.browse: unknown operator like";"named, not run"]};
 \d .

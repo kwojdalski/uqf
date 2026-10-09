@@ -135,9 +135,13 @@ one:
 
 ```bash
 export UQF_FRONTEND_GATEWAY_USER=admin UQF_FRONTEND_GATEWAY_PASSWD=admin
+export UQF_FRONTEND_DATA_USER=browser UQF_FRONTEND_DATA_PASSWD=browser
 ```
 
-`admin:admin` is what `uqs query` uses against the generated appconfig. The port
+`admin:admin` is what `uqs query` uses against the generated appconfig. The
+second login is for reading tables: `/query` reads as the `browser` role,
+through the gateway's `.uqf.browse`, so the gateway's query policy holds every
+read ([query policies](../../docs/architecture/query-policies.md)). The port
 needs no setting: it is derived from the base port, and a stack on another base
 only needs `UQF_FRONTEND_BASE_PORT`.
 
@@ -148,6 +152,7 @@ Configuration is environment-only, so credentials stay server-side:
   | `UQF_FRONTEND_GATEWAY_HOST`             | `localhost`                                                                                                              |
   | `UQF_FRONTEND_GATEWAY_PORT`             | `6057` — the base port +7, where `process.csv` puts `gateway1`; derived from `UQF_FRONTEND_BASE_PORT` when that is set   |
   | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty — set both; `admin`/`admin` for the demo stack                                                                     |
+  | `UQF_FRONTEND_DATA_USER` / `_PASSWD`    | empty — set both; `browser`/`browser` for the demo stack. Without it `/query` refuses with 503, naming these             |
   | `UQF_FRONTEND_TIMEOUT`                  | `30`                                                                                                                     |
   | `UQF_FRONTEND_MAX_ROWS`                 | `10000`                                                                                                                  |
   | `UQF_FRONTEND_PROCESSES`                | empty — `rdb1:6052,hdb1:6053` or `name:host:port`                                                                        |

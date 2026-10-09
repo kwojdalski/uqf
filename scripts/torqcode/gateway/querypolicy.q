@@ -27,6 +27,15 @@
 / extra columns on tableproperties.csv: TorQ reads that one with a fixed
 / type string (readtableproperties, "ssssstsss"), so a column it does not
 / know is not a column it keeps.
+/ .
+/ THE BROWSER (#889). The frontend reads tables as the `browser` role, through
+/ .uqf.browse (browse.q), so its reads are held here like any other login's.
+/ A table the catalog lets the browser read with no policy row - one of
+/ .qcat.unbounded, with its reason - gets a policy for that role ALONE,
+/ built when a request asks (unboundedpolicies): a row cap and the
+/ ceiling's range, bytes and timeout, no required filter. A table that has a
+/ real row is held to it, the browser included. A hidden table has neither,
+/ and is refused.
 
 \d .checkinputs
 
@@ -36,6 +45,11 @@
 querypolicypath:@[value;`querypolicypath;{hsym`$getenv[`KDBSERVCONFIG],"/dataaccess/querypolicy.csv"}]
 policyceiling:@[value;`policyceiling;`maxrange`maxrows`maxbytes`timeout!(31D;5000000;128000000;0D00:05)]
 trustedroles:@[value;`trustedroles;`admin`administrator]
+
+/ The frontend's role, and the most rows it may take from a table that has
+/ no policy of its own: the frontend's default max_rows.
+browserrole:@[value;`browserrole;`browser]
+browsermaxrows:@[value;`browsermaxrows;10000]
 
 / Request parameters an ordinary caller may not send, with why. Each runs
 / code or a query the policy cannot see into, so allowing any one of them is
@@ -163,12 +177,32 @@ querypolicies:@[readquerypolicy;querypolicypath;{[e]
     `tablename`role xkey flip`tablename`role`maxrange`requiredfilters`operations`functions`maxrows`maxbytes`timeout`basis!
         (`symbol$();`symbol$();`timespan$();();();();`long$();`long$();`timespan$();())}]
 
+/ The browser's policies for the tables the catalog lets it read unbounded:
+/ one row each, for browserrole only, from .qcat.unbounded and its reasons.
+/ Built per request, so it follows the catalog as loaded, and empty on a
+/ gateway without one. A table that already has a policy row keeps it.
+/ @param policies what readquerypolicy returned
+/ @return rows of the same table
+/ @eg .checkinputs.unboundedpolicies .checkinputs.querypolicies
+unboundedpolicies:{[policies]
+    u:@[value;`.qcat.unbounded;{[e] (`symbol$())!()}];
+    t:(key u) except exec tablename from policies;
+    n:count t;
+    `tablename`role xkey flip `tablename`role`maxrange`requiredfilters`operations`functions`maxrows`maxbytes`timeout`basis!(
+        t;n#browserrole;n#policyceiling`maxrange;n#enlist`symbol$();n#enlist policyoperations;n#enlist`symbol$();
+        n#browsermaxrows;n#policyceiling`maxbytes;n#0D00:00:30;
+        {"browsable unbounded: ",x} each u t)}
+
+/ Every policy in force: the file's, and the browser's for unbounded tables.
+/ @return the keyed policies
+allpolicies:{[] querypolicies,unboundedpolicies querypolicies}
+
 / What the caller's getdata requests on a table are held to - so a refusal
 / can be understood without reading the file.
 / @eg .checkinputs.querypolicyfor `mkt_orderbook
 querypolicyfor:{[table]
     r:callerroles[];
-    $[any r in trustedroles;`trusted;resolvepolicy[querypolicies;policyceiling;table;r]]}
+    $[any r in trustedroles;`trusted;resolvepolicy[allpolicies[];policyceiling;table;r]]}
 
 / Only on a gateway that has TorQ's checkinputs: this file is also loaded by
 / its tests, in a process with none of TorQ.
@@ -178,7 +212,7 @@ if[(not ()~key`.checkinputs.checkinputs)&not`querypolicywrapped in key`.checkinp
         r:callerroles[];
         if[any r in trustedroles;:f dict];
         dict:f checkprohibited dict;
-        checkrequest[resolvepolicy[querypolicies;policyceiling;dict`tablename;r];policyinstcol[dict];dict]}[checkinputs];
+        checkrequest[resolvepolicy[allpolicies[];policyceiling;dict`tablename;r];policyinstcol[dict];dict]}[checkinputs];
     querypolicywrapped:1b]
 
 \d .dataaccess
