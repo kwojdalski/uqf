@@ -214,9 +214,10 @@ on_batch:{[t;x]
 .qetl.cfg.audit.watch[`cross_arbitrage;
     `.qpipe.job.cross_arbitrage.notional`.qpipe.job.cross_arbitrage.max_skew];
 
-.qetl.job.stream.define[`cross_arbitrage;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`cross_arbitrage;`procname`subscribe_to`publishes`on_batch`note`state!(
     `crossarb1;
     enlist `superbook;
     `cross_arbitrage`config_change;
     .qpipe.job.cross_arbitrage.on_batch;
-    "the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default")];
+    "the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default";
+    enlist `books)];

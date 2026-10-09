@@ -280,7 +280,7 @@ on_endofday:{[dt]
 / flat and publish every later position from zero. Replaying the day's
 / executions and market_data rebuilds it; publish is muted while it does, so the
 / positions already published are not published twice.
-.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`restore_from`on_endofday`on_replayed`note!(
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`restore_from`on_endofday`on_replayed`note`state!(
     `posbook1;
     `executions`market_data;
     `position`position_open;
@@ -290,4 +290,5 @@ on_endofday:{[dt]
     enlist `position_open;
     .qpipe.job.posbook.on_endofday;
     .qpipe.job.posbook.on_replayed;
-    "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job")];
+    "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job";
+    `book`last_mid`crypto_tob)];

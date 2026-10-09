@@ -162,7 +162,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
 - **J9** A source whose adapter returns other columns than it reads declares
   `raw`: physical table → the columns it reads. `columns`/`types` then describe
   only what it returns. The live check holds each side separately
-  (`src/etl/core/source_contract.q`, "RAW INPUTS").
+  (`src/etl/core/source_registry.q`, "RAW INPUTS").
 
 - **J10** `start_with_all 1b` only when the user asks for it. Every started
   process spends one of the licence's 16 connections, with two held back, so 14
@@ -259,7 +259,10 @@ invariants, is `uqf-q-traps.md`.
   (`scripts/portable/flatten_contexts.py`). A test it can't run goes into
   `tests/q/peachq_known_gaps.txt` or `python/peachq_known_gaps.txt`, with the
   reason. Both lists are held both ways: a listed test that passes fails the
-  build too.
+  build too. A q reason starts `peachq-lacks:`, `tree-bug: #N` or `flattening:`,
+  and says why - not the assertion's message (#986). Both lists record CI's
+  Linux PeachQ, and only CI's lane is authoritative: off that platform the q
+  lane reports "not comparable" (#968), so a local pass is no promise.
 - **V6** Every `@eg` line in a qDoc block is executed, by
   `tests/q/run_examples.q` and `.egtest`. One that can't run without a live
   process is listed in `.egtest.needs_live`, with the reason.

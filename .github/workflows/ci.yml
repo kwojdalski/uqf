@@ -58,11 +58,11 @@ jobs:
         # standalone linter, and refuses rather than passing vacuously when
         # it is missing. Pinned: the linter releases on its own cadence, and
         # a new rule landing upstream must not turn this repository red
-        # without anyone choosing it - see DELEGATED_CODES.
-        env:
-          QLINT_VERSION: v0.14.10
+        # without anyone choosing it. The pin lives in .qlinter-version, the
+        # one place it is written; the hook refuses any other version.
         run: |
           set -euo pipefail
+          read -r QLINT_VERSION < .qlinter-version
           url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
           curl -sSfL "$url" -o /tmp/qlinter.tar.gz
           tar xzf /tmp/qlinter.tar.gz -C /tmp
@@ -141,6 +141,11 @@ jobs:
         # dependency is a reviewed line rather than an invisible one.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_module_deps.py
+      - name: Check q modules stay under their line budget
+        # The q counterpart of test_module_split.py (#970): a file over the
+        # limit splits, or is listed with a reason and a cap that only shrinks.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/gates/check_q_module_size.py
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
         # tree knows what happens to those without a gate - docs/man.q once

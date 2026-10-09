@@ -50,7 +50,7 @@ asked to do, and it records what was decided against.
   | `core/worker_runtime.q`    | `.qetl.job.bounded.runtime`     | windowing, coverage skipping, `finish_window`           |
   | `core/continuous_state.q`  | `.qetl.job.continuous`          | the continuous poll-and-cursor pattern                  |
   | `core/stream_poll.q`       | `.qetl.job.stream`              | polling feeds' `poll` steps, and their one-page preview |
-  | `core/source_contract.q`   | `.qetl.source`                  | external source declarations (resources)                |
+  | `core/source_*.q`          | `.qetl.source`                  | external source declarations (resources)                |
   | `core/bounded_worker.q`    | `.qetl.job.bounded`             | the bounded-worker lifecycle and `run`                  |
 
 Sources (`sources/*.q`) and workers (`workers/*.q`) load **last**, because a

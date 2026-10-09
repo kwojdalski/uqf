@@ -20,7 +20,7 @@ from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
-from uqs.stack import alive, gateway_access, occupancy, qtree
+from uqs.stack import alive, gateway_access, qtree, start_policy
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
@@ -198,12 +198,17 @@ def run_torq_sh(
     (stack/launcher.py). A launcher that cannot run is refused before
     bootstrap writes anything.
 
+    A `start` or `restart` is refused first by start_policy.refuse_start -
+    here, so no caller (`uqs start`, `uqs backfill`, `uqs replay`, `uqs raw`)
+    can skip it (#964).
+
     `timeout` is seconds to wait before giving up, or None to wait forever -
     which is the right default for `start`/`stop`, whose whole job is to wait
     for something slow. A read-only command that an operator runs to find out
     what is going on should not be the thing that hangs, so `summary` sets
     one.
     """
+    start_policy.refuse_start(paths, args, base_port)
     # The launcher first: bootstrap writes the data directory, process.csv and
     # setenv.sh, and a launcher that is going to be refused must not have
     # had any of that written on its behalf.
@@ -213,8 +218,8 @@ def run_torq_sh(
     # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
     # stop resolving even though they're on PATH in the calling shell.
     env = {**os.environ, **overrides}
-    if qtree.is_flattened(paths) and args[:1] == ["start"]:
-        # What a start loads, converted and proven first - refused before
+    if qtree.is_flattened(paths) and args and args[0] in start_policy.STARTING_VERBS:
+        # What a start or restart loads, converted and proven first - refused before
         # anything starts. stop and summary leave the published tree alone.
         qtree.prepare(paths, q_command(env), env)
     cmd = [str(launcher), *args]
@@ -241,9 +246,6 @@ def run_torq_sh(
 
 
 def start(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False):
-    stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
-    qtree.refuse_unloadable(paths, with_interpreter(paths))  # a q too old for it (#882)
-    occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["start", procs], base_port=base_port, capture=capture)
 
 
@@ -255,9 +257,6 @@ def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capt
 def restart(
     paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False
 ):
-    stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
-    qtree.refuse_unloadable(paths, with_interpreter(paths))  # a q too old for it (#882)
-    occupancy.refuse_if_taken(paths, base_port, procs)
     return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
 
 

@@ -35,6 +35,13 @@ those. Before, the process name was read four times in three files, each
 with its own fallback, and nothing stopped a fifth. TorQ stays the authority;
 this only says where src/ asks it.
 
+The fourth rule is about outbound HTTP (#988). Under src/etl/ the one place
+that speaks it is src/etl/core/webhook.q: `.Q.hp`, `.Q.hg`, `.Q.hmb`, `.Q.hap`
+and a `:http(s):// address are refused everywhere else. A declaration that owned
+its own client is how #987 happened: `.Q.hp` returns the body of a 500, the
+job's contract assumed it signalled, and nothing outside the job's test fake
+ever checked.
+
 STRING AND COMMENT AWARE, and it has to be. `bounded_worker.q` names
 `.qpipe.job.demo_deals_backfill` inside an error message ("ns must be a namespace symbol such as
 `.qpipe.job.demo_deals_backfill"), which is documentation, not a dependency. A naive search reports
@@ -71,6 +78,10 @@ TORQ_OWNERS = {
 #: A reference to one of them: `.lg.l`, `` `.proc ``. Not `.qetl.run.proc_name`
 #: or `.foo.lg.x`, where the name is a segment of another namespace.
 TORQ_RE = re.compile(r"(?<![\w.])(" + "|".join(re.escape(ns) for ns in TORQ_OWNERS) + r")\b")
+
+#: The one file under src/etl/ allowed to speak HTTP, and what speaking it looks like.
+HTTP_OWNER = "src/etl/core/webhook.q"
+HTTP_RE = re.compile(r"\.Q\.(?:hp|hg|hmb|hap)\b|`:https?://")
 
 #: A namespace declaration, e.g. `\d .qpipe.job.demo_deals_backfill`.
 NAMESPACE_RE = re.compile(
@@ -149,6 +160,20 @@ def torq_reach(root: Path) -> list[str]:
     return hits
 
 
+def http_reach(root: Path) -> list[str]:
+    """Every outbound-HTTP call under `root`'s src/etl/ outside the transport file."""
+    hits = []
+    for path in sorted((root / "src" / "etl").rglob("*.q")):
+        rel = path.relative_to(root).as_posix()
+        if rel == HTTP_OWNER:
+            continue
+        code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
+        for lineno, line in enumerate(code.splitlines(), 1):
+            for match in HTTP_RE.finditer(line):
+                hits.append(f"{rel}:{lineno}: speaks HTTP via {match.group(0)}")
+    return hits
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="accepted for symmetry")
@@ -211,6 +236,18 @@ def main() -> int:
         )
         return 1
 
+    http_hits = http_reach(REPO)
+    if http_hits:
+        print(f"src/etl/ speaks HTTP outside {HTTP_OWNER}:", file=sys.stderr)
+        for v in http_hits:
+            print(f"  {v}", file=sys.stderr)
+        print(
+            "\n#988: go through .qetl.webhook.post, which checks the status line - .Q.hp\n"
+            "returns the body of a 500 instead of signalling (#987).",
+            file=sys.stderr,
+        )
+        return 1
+
     if violations:
         print("src/etl/core/ must not depend on sources/ or workers/:", file=sys.stderr)
         for v in violations:
@@ -227,7 +264,8 @@ def main() -> int:
     print(
         f"check_etl_layering: {len(list(CORE.glob('*.q')))} core file(s) depend on none "
         f"of the {len(declared)} declaring namespace(s); nothing under src/etl/ calls "
-        f"{ADAPTER_NS}; each of {', '.join(TORQ_OWNERS)} is read only by its owner file"
+        f"{ADAPTER_NS}; each of {', '.join(TORQ_OWNERS)} is read only by its owner file; "
+        f"HTTP only in {HTTP_OWNER}"
     )
     return 0
 

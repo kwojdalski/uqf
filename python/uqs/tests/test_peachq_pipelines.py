@@ -189,9 +189,11 @@ def test_a_dry_run_converts_planned_files_in_memory_and_writes_nothing(tmp_path)
     assert sorted(p for p in root.rglob("*")) == before
 
 
-def test_only_a_start_prepares_the_tree(monkeypatch, tmp_path):
-    """stop and summary must work even when the tree cannot be built."""
+def test_only_a_starting_verb_prepares_the_tree(monkeypatch, tmp_path):
+    """stop and summary must work even when the tree cannot be built; start
+    and restart both load it."""
     prepared: list[list[str]] = []
+    monkeypatch.setattr(runtime.start_policy, "refuse_start", lambda *_a: None)
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: {"QCMD": "q"})
     monkeypatch.setattr(qtree, "prepare", lambda paths, qcmd, env: prepared.append(qcmd))
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)
@@ -201,9 +203,10 @@ def test_only_a_start_prepares_the_tree(monkeypatch, tmp_path):
         runtime.run_torq_sh(paths, [verb, "all"])
     assert prepared == []
     runtime.run_torq_sh(paths, ["start", "all"])
-    assert prepared == ["q"]
+    runtime.run_torq_sh(paths, ["restart", "all"])
+    assert prepared == ["q", "q"]
     runtime.run_torq_sh(_paths(tmp_path, "uqf"), ["start", "all"])
-    assert prepared == ["q"], "a runtime on the source tree prepares nothing"
+    assert prepared == ["q", "q"], "a runtime on the source tree prepares nothing"
 
 
 # ------------------------------------------------- bundles and membership

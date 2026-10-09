@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from uqs.model.declarations import declaration_calls, symbols
+from uqs.model.kinds import DECLARATION_VERBS
 from uqs.paths import (
     CATALOG_FILE,
     REACTION_DIR,
@@ -57,13 +58,7 @@ from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.references import Reference, stale_references
 
 MARKER = "SCAFFOLDED"
-_DECLARES = (
-    "qetl.job.stream.define",
-    "qetl.job.stream.normalize",
-    "qetl.job.stream.at_horizons",
-    "qetl.job.stream.at_bars",
-    "qetl.job.bounded.define",
-)
+_DECLARES = DECLARATION_VERBS
 _NAMESPACE = re.compile(r"^\\d\s+\.(\w+)\s*$", re.MULTILINE)
 #: Files whose mention of a table is bookkeeping, not a use: the scaffold's own
 #: appends, and the generated job graph, which is regenerated after a removal.
