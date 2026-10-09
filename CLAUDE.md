@@ -29,6 +29,8 @@ a substitute for `q tests/run_tests.q`.
 
 Installed separately, because the linter is its own project:
 `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.10 --locked`.
+The tag must match `.qlinter-version`, the one place the pin is set: the q-traps
+hook refuses any other installed version.
 
 ## Working on a GitHub issue: always in a new worktree
 

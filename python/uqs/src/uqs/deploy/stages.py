@@ -23,7 +23,7 @@ from uqs.deploy.config import (
     DeployError,
     redact,
 )
-from uqs.deploy.remote import q, script
+from uqs.deploy.remote import diagnostic, q, script
 from uqs.deploy.selection import Selection, smoke_args, verify_command
 from uqs.deploy.server import Server
 from uqs.logger import get_logger
@@ -302,8 +302,7 @@ class Deployment(Server):
             "live-check",
         )
         if r.returncode:
-            tail = "\n".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-20:])
-            raise DeployError("live-check", "a source failed its live check:\n" + redact(tail))
+            raise DeployError("live-check", "a source failed its live check:\n" + diagnostic(r, 20))
 
     def soak(self, release: str, processes: list[str]) -> dict:
         """Let data flow for --soak seconds, then judge every started
@@ -346,7 +345,7 @@ class Deployment(Server):
             busy = json.loads(lines[-2])["busy"]
             what = ", ".join(f"{name} ({port})" for name, port in busy.items())
         except UNPARSED_BUSY:
-            what = redact((r.stderr or "").strip()[-300:]) or "unknown"
+            what = diagnostic(r) or "unknown"
         raise DeployError("ports", f"ports the profile needs are already in use: {what}")
 
     def activate(self, rid: str) -> None:

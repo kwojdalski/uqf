@@ -5,7 +5,9 @@ Most of them it does. This file used to hold fifteen hand-written rules over
 `.q` source; thirteen of those moved to the standalone q linter
 (https://github.com/kwojdalski/q-lint) as QE/QF/QA/QB/QP codes, and keeping a
 second implementation of a rule is keeping a second place for it to be wrong.
-So they are delegated: this script runs `qlinter` and reports what it finds.
+So they are delegated: this script runs `qlinter` and reports what it finds -
+now every correctness rule it has, not only the thirteen (`_gated`), and only
+from the version pinned in `.qlinter-version` (`_check_version`).
 
 ## What did NOT move, and why
 
@@ -54,8 +56,19 @@ EXCLUDED_PREFIXES = ("lib/", "build/")
 #: gives for the q interpreter.
 QLINTER_ENV = "QLINTER"
 
+#: The one place the qlinter version is written (#969). CI and install.sh read
+#: the file; README.md and CLAUDE.md quote it, and a test holds them equal.
+VERSION_FILE = REPO / ".qlinter-version"
+
+
+def _pinned_version() -> str:
+    """The pinned release tag, e.g. `v0.14.10`."""
+    return VERSION_FILE.read_text(encoding="utf-8").strip()
+
+
 INSTALL_HINT = (
-    "cargo install --git https://github.com/kwojdalski/q-lint --locked\n"
+    "cargo install --git https://github.com/kwojdalski/q-lint "
+    f"--tag {_pinned_version()} --locked\n"
     f"    or set ${QLINTER_ENV} to a built binary"
 )
 
@@ -351,7 +364,8 @@ def _linter_findings(binary: str) -> list[Finding]:
     itself, and passing them twice would be two places to change one list.
     """
     result = subprocess.run(
-        [binary, "src", "tests", "scripts", "--format", "json", "--profile", "uqf"],
+        [binary, "src", "tests", "scripts", "--format", "json", "--profile", "uqf"]
+        + ["--extend-select", ",".join(CORRECTNESS_PREFIXES)],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -373,41 +387,74 @@ def _linter_findings(binary: str) -> list[Finding]:
         )
         for item in json.loads(result.stdout or "[]")
         for rel in [_relative(item["path"])]
-        if item["code"] in DELEGATED_CODES and not _exempt(item["code"], rel)
+        if _gated(item["code"]) and not _exempt(item["code"], rel)
     ]
 
 
-#: The codes this hook gates on: exactly the rules that used to live in this
-#: file, and no more.
+#: What this hook gates on: every correctness rule, by CATEGORY (#965).
 #:
-#: The linter is a separate project with its own release cadence, so a new
-#: version can add rules - v0.2.0 added four, which fire 38 times here. Most
-#: of those are QP004, a DISCLOSURE ("this file uses `\l`, so undefined-global
-#: analysis was skipped") rather than a defect, and blocking a commit on it
-#: would be blocking on information. The others look worth having and have
-#: not been triaged.
+#: It used to be a list of thirteen codes - the rules that had lived in this
+#: file - and it stopped growing the day it was written: qlinter went on to
+#: forty correctness rules, and QB010 (apply-not-subtract, the production
+#: timer bug) was not among the thirteen. A prefix enforces a new upstream rule
+#: the day the pin in .qlinter-version moves, and moving the pin is the
+#: deliberate edit: `_check_version` refuses any other installed version, so
+#: an upstream release alone cannot turn a commit here red.
 #:
-#: So adopting a rule is a deliberate edit to this list, with the findings
-#: looked at first. The alternative - gate on whatever the installed version
-#: reports - means an upstream release can turn every commit here red, which
-#: is how a gate gets switched off altogether.
-#:
-#: `qlinter src tests scripts --profile uqf` shows everything, adopted or not.
-DELEGATED_CODES = (
-    "QE002",  # invalid-string-escape
-    "QF001",  # reserved-parameter
-    "QF002",  # underscore-parameter
-    "QF003",  # reserved-local
-    "QF004",  # reserved-definition
-    "QA003",  # multiparam-under-at
-    "QA004",  # dot-empty-list
-    "QB001",  # self-comparison
-    "QB002",  # interior-like-wildcard
-    "QB003",  # unparenthesised-sv
-    "QB004",  # overlong-throw
-    "QP001",  # bare-slash-block
-    "QP002",  # datetime-type
+#: Style, naming-convention and disclosure codes (QS, QL, QP004/QP006, QF016,
+#: ...) stay out: they are advice, and `qlinter src tests scripts` shows them.
+CORRECTNESS_PREFIXES = ("QE", "QA", "QB", "QD")
+
+#: Codes outside those categories that moved here from this file, and stay.
+EXTRA_CODES = frozenset(
+    {
+        "QF001",  # reserved-parameter
+        "QF002",  # underscore-parameter
+        "QF003",  # reserved-local
+        "QF004",  # reserved-definition
+        "QP001",  # bare-slash-block
+        "QP002",  # datetime-type
+    }
 )
+
+#: Correctness codes this hook does NOT gate on, each with its reason. Empty
+#: today - all forty run clean over the tree. An entry needs the reason, the
+#: way .qlinter.toml's `ignore` carries one for style.
+OPTED_OUT: dict[str, str] = {}
+
+
+def _gated(code: str) -> bool:
+    if code in OPTED_OUT:
+        return False
+    return code in EXTRA_CODES or code.startswith(CORRECTNESS_PREFIXES)
+
+
+def _catalogue(binary: str) -> list[str]:
+    """Every rule code the installed linter knows, from `qlinter --rules`."""
+    listed = subprocess.run([binary, "--rules"], capture_output=True, text=True, check=True)
+    return [line.split()[0] for line in listed.stdout.splitlines() if line.strip()]
+
+
+def _check_version(binary: str) -> str | None:
+    """None when the installed linter is the pinned one, else why not (#969).
+
+    Rules change between releases (QB003 at 0.14.6 and 0.14.9, QB010 at
+    0.14.10), so a hook on another version and CI on the pin pass and fail
+    different code. Refused rather than warned: a warning in a hook's output
+    is read as a pass.
+    """
+    out = subprocess.run([binary, "--version"], capture_output=True, text=True, check=False)
+    words = out.stdout.split()
+    installed = f"v{words[-1]}" if out.returncode == 0 and words else "unknown"
+    pinned = _pinned_version()
+    if installed == pinned:
+        return None
+    return (
+        f"check_q_traps: {binary} is qlinter {installed}, but this repository pins\n"
+        f"{pinned} (.qlinter-version). Rules differ between releases, so this\n"
+        "hook and CI would pass and fail different code. Install the pin:\n\n"
+        f"    {INSTALL_HINT}"
+    )
 
 
 #: Rule codes this repository does not apply to its own tests, and why.
@@ -439,12 +486,16 @@ def main() -> int:
     binary = _qlinter()
     if binary is None:
         print(
-            f"check_q_traps: qlinter is not installed, and it owns {len(DELEGATED_CODES)} of\n"
+            "check_q_traps: qlinter is not installed, and it owns all but one of\n"
             "the rules this hook checks. Skipping would leave the hook\n"
             "reporting success over checks that did not run.\n\n"
             f"    {INSTALL_HINT}",
             file=sys.stderr,
         )
+        return 1
+    mismatch = _check_version(binary)
+    if mismatch:
+        print(mismatch, file=sys.stderr)
         return 1
 
     q_files = _tracked_q_files()
@@ -472,7 +523,7 @@ def main() -> int:
 
     print(
         f"check_q_traps: {len(q_files)} .q + {len(python_files)} .py file(s) clean "
-        f"({len(DELEGATED_CODES)} rules through qlinter, 1 here)"
+        f"({sum(map(_gated, _catalogue(binary)))} rules through qlinter, 1 here)"
     )
     return 0
 

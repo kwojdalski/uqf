@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import json
 
-from uqs.deploy.config import DeployError, redact
-from uqs.deploy.remote import q, script
+from uqs.deploy.config import DeployError
+from uqs.deploy.remote import diagnostic, q, script
 from uqs.deploy.stages import Deployment
 from uqs.runtimes import RUNTIMES
 from uqs.stack import hdb_shape
@@ -90,8 +90,9 @@ def _check(dep: Deployment, release: str, fix: bool) -> dict:
     try:
         return json.loads(out[out.index("{") :])
     except ValueError:
-        tail = redact(((r.stderr or "") + out).strip()[-400:])
-        raise DeployError("hdb", f"the release's hdb-check printed no result: {tail}") from None
+        raise DeployError(
+            "hdb", f"the release's hdb-check printed no result: {diagnostic(r)}"
+        ) from None
 
 
 def check(dep: Deployment, release: str) -> dict:

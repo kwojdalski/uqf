@@ -25,6 +25,8 @@
 .qetl.io.odbc.close
 .qetl.io.odbc.table_names
 .qetl.io.odbc.window_query
+# alert_sink.post POSTs to a webhook, so needs an HTTP endpoint (#947)
+.qpipe.job.alert_sink.post
 .qetl.io.odbc.with_connection
 .qpipe.source.crypto_market_data.query
 .qpipe.source.databento_mbp10.adapt
