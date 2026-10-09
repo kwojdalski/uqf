@@ -166,12 +166,12 @@ on_batch:{[name;t;x]
     if[(t<>d`events) or 0=count x; :()];
     pq:` sv ns,`pending;
     now:(get ` sv ns,`now)[];
-    / the clock the row met: live, now; in a replay the process clock is no use
-    / (every row is old), so the plant's receipt stamp `time` stands for it, and
-    / a row is late exactly when it was live (#993). Without a distinct stamp
-    / (event_time is `time, or no `time`) only the log's own bars say a window is out.
+    / the clock the row met, from the shell's log clock (#994): live, now; in a
+    / replay the plant's receipt stamp `time`, so a row is late exactly when it
+    / was live (#993). Without a distinct stamp (event_time is `time, or no `time`)
+    / only the log's own bars say a window is out.
     / Read before the projection below, which drops `time` when the job does not keep it.
-    rcv:$[.qetl.job.stream.replaying; $[`time in cols x; x`time; count[x]#0Np]; count[x]#now];
+    rcv:.qetl.job.stream.clock_of[now;x];
     x:assign[d`width;d`event_time;(cols[get pq] except `bar_start)#x];
     x:(cols get pq)#x;
     stale:(x[`bar_start]+(d`width)+d`lateness)<=rcv;

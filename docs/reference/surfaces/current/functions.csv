@@ -337,6 +337,8 @@ qetl.job.stream,at_bars,function,2,name decl
 qetl.job.stream,at_horizons,function,2,name decl
 qetl.job.stream,bars,dict,,
 qetl.job.stream,carry_log,dict,,
+qetl.job.stream,clock,function,1,x
+qetl.job.stream,clock_of,function,2,now x
 qetl.job.stream,cursor_name,function,1,job
 qetl.job.stream,cursor_ops,function,1,job
 qetl.job.stream,def,function,1,job
