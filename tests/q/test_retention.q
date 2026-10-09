@@ -239,4 +239,19 @@ test_an_undeclared_dataset_is_not_pruned:{[t]
         "only a declaration names a dataset"];
     .qunit.assertEquals[held[root];2026.01.02 2026.01.03 2026.02.20;"its partitions are untouched"]};
 
+
+/ --- the registry ---------------------------------------------------------
+
+/ #1028: the registry collapsed into a keyed table on its first declaration,
+/ so a declaration of another kind - or the same keys in another order - was
+/ refused with a bare 'mismatch. A deployment declares several at once.
+test_retentions_of_every_kind_are_declared_together:{[t]
+    .qetl.retention.define[`rt_mix_hdb;`kind`root`table`dataset`horizon!(`hdb_partitions;`:/tmp/rt_mix;`rtdeals;`rtdeals_ds;30D)];
+    .qetl.retention.define[`rt_mix_runs;`kind`table`horizon!(`ledger_rows;`etl_runs;30D)];
+    .qetl.retention.define[`rt_mix_up;`kind`horizon!(`uptime_sessions;30D)];
+    .qetl.retention.define[`rt_mix_order;`horizon`kind!(30D;`uptime_sessions)];
+    .qunit.assertTrue[all `rt_mix_hdb`rt_mix_runs`rt_mix_up`rt_mix_order in .qetl.retention.declared[];"all four are declared"];
+    .qunit.assertEquals[{(.qetl.retention.decl_of x)`kind} each `rt_mix_hdb`rt_mix_runs`rt_mix_up`rt_mix_order;
+        `hdb_partitions`ledger_rows`uptime_sessions`uptime_sessions;"each reads back as the dictionary it was declared as"]};
+
 \d .
