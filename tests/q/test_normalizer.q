@@ -134,8 +134,8 @@ test_dispatch_publishes_nothing_for_an_empty_batch:{[t]
 
 test_the_shipped_normalizers_are_defined_and_registered:{[t]
     .qunit.assertEquals[`executions`market_data in .qetl.job.stream.normalizer.defined[];11b;"executions and market_data are defined"];
-    .qunit.assertEquals[.qetl.job.stream.def[`executions]`subscribe_to;`trades`crypto_trades;
-        "executions reads both fill tables"];
+    .qunit.assertEquals[.qetl.job.stream.def[`executions]`subscribe_to;`trades`crypto_trades`orders;
+        "executions reads every fill table: FX trades, crypto fills and the desk's orders (#885)"];
     .qunit.assertEquals[.qetl.job.stream.def[`market_data]`subscribe_to;`quote`fx_orderbook`crypto_book;
         "market_data reads every book: the two FX ones and crypto"];
     .qunit.assertEquals[.qetl.dag.kinds;`bounded`continuous`stream`reaction`normalizer;

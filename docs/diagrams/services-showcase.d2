@@ -101,13 +101,13 @@ quiet_leaves: "WATCHERS - publish nothing\n\ntap1: Tickerplant inspector,\nlogs 
 
 q_same: "Several tables that mean\nthe same thing, into\none shape?" { class: question }
 
-normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + crypto_trades -> executions\nmarketdata1: quote (TorQ) + fx_orderbook + crypto_book -> market_data" { class: group }
+normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + crypto_trades + orders -> executions\nmarketdata1: quote (TorQ) + fx_orderbook + crypto_book -> market_data" { class: group }
 
 q_join: "Does it combine several\ntables row by row?" { class: question }
 
 joins: "JOINS - more than one input\n\nmarkout1: trades + quote (TorQ) -> demo_execution_quality\nposbook1: executions + market_data -> position" { class: group }
 
-single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> eq_orderbook\nkafka_flow1: kafka_client_flow -> client_flow\nfxpositions1: orders -> fx_position, fx_limit_breach\nvectorize1: wide_orderbook -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage" { class: group }
+single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> eq_orderbook\nkafka_flow1: kafka_client_flow -> client_flow\nfxpositions1: executions -> fx_position, fx_limit_breach\nvectorize1: wide_orderbook -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage" { class: group }
 
 start -> q_source
 q_source -> feeds: "it makes them"

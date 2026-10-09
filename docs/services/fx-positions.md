@@ -13,14 +13,13 @@ built on this repository's own machinery instead.
 
 ## Which fills it nets
 
-`fxpositions1` nets the **filled rows of the `orders` tape** that
-`fxordersfeed1` publishes. It does not read `executions`, the normalized fill
-table that `posbook1` marks for P&L. `executions` is built from `trades` and
-`crypto_trades`, which are independent of `orders`, so the exposure here and the
-P&L in `position` describe different populations and do not reconcile. This view
-reads `orders` because `executions` carries no `book` or `product`, the
-dimensions it keys on. Making one tape hold the desk's fills is an open decision
-(#885).
+`fxpositions1` nets **`executions`**, the one fill tape: `trades`,
+`crypto_trades` and the filled rows of the `orders` tape that `fxordersfeed1`
+publishes, mapped by `executions1`. `posbook1` nets the same tape for P&L, so
+the exposure here and the positions in `position` reconcile per symbol. An
+order's `book` and `product` travel with its fill. A fill that has neither, such
+as an FX `trades` fill or a crypto fill, is held under a null book and product
+rather than dropped.
 
 ## Running it
 
@@ -52,12 +51,13 @@ The same job also runs with no TorQ and no orchestrator, which is what makes it
 portable rather than a demo of this stack:
 
 ```bash
-# Everything in one process: plant, feed and service. No ports needed.
-q scripts/processes/run_stream.q -job fx_positions -feed fx_orders_feed
+# Everything in one process: plant, feed, normalizer and service. No ports needed.
+q scripts/processes/run_stream.q -job executions,fx_positions -feed fx_orders_feed
 
 # Or as separate processes, the way it would run for real.
 q scripts/processes/run_stream.q -plant 5010
 q scripts/processes/run_stream.q -job fx_orders_feed -tp 5010
+q scripts/processes/run_stream.q -job executions    -tp 5010
 q scripts/processes/run_stream.q -job fx_positions  -tp 5010 -port 5011
 ```
 

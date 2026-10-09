@@ -110,7 +110,8 @@ pipeline: "the service — no step in it knows its runner" {
 
   feed: "fx_orders_feed\norder flow: new, filled,\ncancelled, rejected" { class: feed }
   plant: ".qetl.tick\nsubscribe · publish\nlog · replay" { class: plant }
-  service: "fx_positions\nnets FILLED orders\nsnapshots every 5s" { class: job }
+  norm: "executions\nthe filled orders,\nas fills" { class: job }
+  service: "fx_positions\nnets executions\nsnapshots every 5s" { class: job }
 }
 
 state: "what it holds and emits" {
@@ -134,7 +135,9 @@ runners.standalone -> pipeline.plant: "wires publish"
 runners.torq -> pipeline.plant: "wires publish\n(to TorQ's own plant)" { style.stroke-dash: 4 }
 
 pipeline.feed -> pipeline.plant: "orders"
-pipeline.plant -> pipeline.service: "subscribe"
+pipeline.plant -> pipeline.norm: "orders"
+pipeline.norm -> pipeline.plant: "executions"
+pipeline.plant -> pipeline.service: "executions"
 pipeline.plant -> log: "log, then send"
 
 log -> pipeline.service: "replay on restart,\nBEFORE subscribing" { style.stroke-dash: 4 }

@@ -930,10 +930,13 @@ qpipe.job.eq_orderbook_backfill,source_version,value,,
 qpipe.job.eq_orderbook_backfill,spec,function,1,
 qpipe.job.executions,crypto_trades,table,,
 qpipe.job.executions,executions,table,,
+qpipe.job.executions,filled_status,value,,
 qpipe.job.executions,from_crypto_trades,function,1,batch
+qpipe.job.executions,from_orders,function,1,batch
 qpipe.job.executions,from_trades,function,1,batch
 qpipe.job.executions,fx_venue,value,,
 qpipe.job.executions,on_batch,value,,
+qpipe.job.executions,orders,table,,
 qpipe.job.executions,publish,value,,
 qpipe.job.executions,trades,table,,
 qpipe.job.fx_feed,on_timer,function,1,
@@ -957,17 +960,16 @@ qpipe.job.fx_orders_feed,statuses,value,,
 qpipe.job.fx_positions,alert_period,value,,
 qpipe.job.fx_positions,alerts,dict,,
 qpipe.job.fx_positions,desk_book,table,,
+qpipe.job.fx_positions,desk_fills,table,,
 qpipe.job.fx_positions,dimensions,value,,
-qpipe.job.fx_positions,filled_status,value,,
 qpipe.job.fx_positions,fresh_breaches,function,1,now
 qpipe.job.fx_positions,fx_limit_breach,table,,
 qpipe.job.fx_positions,fx_position,table,,
 qpipe.job.fx_positions,limits,table,,
 qpipe.job.fx_positions,load_limits,function,1,limits
-qpipe.job.fx_positions,net_orders,function,2,book batch
+qpipe.job.fx_positions,net_fills,function,2,book batch
 qpipe.job.fx_positions,on_batch,function,2,t x
 qpipe.job.fx_positions,on_timer,function,1,
-qpipe.job.fx_positions,orders,table,,
 qpipe.job.fx_positions,policed,value,,
 qpipe.job.fx_positions,positions,dict,,
 qpipe.job.fx_positions,publish,value,,

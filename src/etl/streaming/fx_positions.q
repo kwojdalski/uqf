@@ -1,8 +1,8 @@
 / fx_positions.q - the whole of the FX positions service
 / (.qpipe.job.fx_positions).
 / .
-/ Subscribes to `orders`, nets every FILLED one into a running book keyed
-/ on (sym, book, product), and on a timer publishes two things: a
+/ Subscribes to `executions`, nets every fill into a running book keyed on
+/ (sym, book, product), and on a timer publishes two things: a
 / `fx_position` snapshot of the whole book, and a `fx_limit_breach` row
 / for each limit newly crossed.
 / .
@@ -21,13 +21,12 @@
 / WHY IT IS NOT posbook. .qpipe.job.posbook answers "what did we make", per
 / sym, at weighted-average cost, marked to mid. This answers "what are we
 / holding", along the dimensions a desk reports on, with no marks and no
-/ P&L - and NOT over the same fills (#885). This job nets the FILLED rows of
-/ the `orders` tape (fx_orders_feed); posbook nets `executions`, which the
-/ executions normalizer builds from `trades` and crypto_trades. Those are
-/ independent draws: desk exposure and desk P&L describe different
-/ populations and do not reconcile. `executions` carries no book/product,
-/ the dimensions this view keys on, which is why it reads orders. See
-/ src/portfolio/desk_positions.q for why one module cannot answer both.
+/ P&L - over the SAME fills (#885): both read `executions`, the one tape
+/ every fill reaches, so desk exposure and desk P&L net one population and
+/ reconcile per sym. A fill with no book or product - an FX `trades` fill,
+/ a crypto fill - is held under null dimensions rather than dropped, which
+/ is what keeps the totals equal. See src/portfolio/desk_positions.q for
+/ why one module cannot answer both questions.
 / .
 / WHAT IS IN THIS FILE: the schemas, the netting transform with its
 / examples, the batch handler, the timer, the state, and the declaration
@@ -40,7 +39,9 @@
 
 / ------------------------------------------------------------- THE SHAPES
 
-orders:.qetl.plant.shape `orders
+/ The fills, narrowed to what netting reads. Not named `executions`: that
+/ name is held to the plant's whole table (tests/q/test_stack_tables.q).
+desk_fills:.qetl.plant.columns[`executions;`time`sym`side`size`price`book`product]
 desk_book:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
     base_qty:`float$(); quote_qty:`float$(); fill_count:`long$())
 fx_position:.qetl.plant.published `fx_position
@@ -50,31 +51,23 @@ fx_limit_breach:.qetl.plant.published `fx_limit_breach
 / product, book), in this repository's own column names.
 dimensions:`sym`book`product
 
-/ The status that moves a position. One value, named once: a service that
-/ spelled it inline in the handler would be a service where changing it
-/ means finding every place it was spelled.
-filled_status:`filled
-
 / ---------------------------------------------------------- THE TRANSFORM
 
-/ Net a batch of orders into a desk book, keeping only the filled ones.
+/ Net a batch of fills into a desk book.
 / .
 / The book is an INPUT and the new book is the output, never a global this
 / mutates - which is what lets a batch against a given book have an
 / expected answer, and is the convention every job here follows.
 / .
-/ THE FILTER IS PART OF THE TRANSFORM, not of the handler, because it is
-/ the part most worth having examples for: an engine that nets cancels and
-/ rejects into its position is wrong in a way that looks like nothing at
-/ all until someone reconciles.
+/ Every row is a fill: the executions normalizer keeps only the filled
+/ orders, so a cancel never reaches here.
 / @param book the current desk book, unkeyed
-/ @param batch the orders that arrived, any statuses
+/ @param batch executions rows
 / @return the new desk book, unkeyed
-net_orders:{[book;batch]
-    filled:select from batch where order_status=.qpipe.job.fx_positions.filled_status;
+net_fills:{[book;batch]
     updated:.qdesk.apply_fills[
         .qpipe.job.fx_positions.dimensions xkey book;
-        select sym, book, product, side, size, price from filled];
+        select sym, book, product, side, size, price from batch];
     `sym`book`product xasc 0!updated}
 
 / --------------------------------------------------------------- THE JOB
@@ -84,7 +77,7 @@ net_orders:{[book;batch]
 publish:.qetl.job.stream.unwired `fx_positions;
 
 / The running book, keyed on its dimensions. Only ever changed through
-/ net_orders, which has expected tables.
+/ net_fills, which has expected tables.
 positions:`sym`book`product xkey desk_book;
 
 / The desk's limits. Empty until something loads them - a service with no
@@ -145,20 +138,20 @@ load_limits:{[limits]
     `.qpipe.job.fx_positions.limits set limits;
     count limits}
 
-/ Net one batch of orders into the book.
+/ Net one batch of fills into the book.
 / .
 / The book is replaced BEFORE anything is published, the way posbook does
-/ it: orders will not be redelivered, so a failed publish must not also
+/ it: fills will not be redelivered, so a failed publish must not also
 / lose them from the position.
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
-    if[not t=`orders; :()];
+    if[not t=`executions; :()];
     if[0=count x; :()];
-    updated:.qetl.transform.apply[`fx_positions;`book`orders!(
+    updated:.qetl.transform.apply[`fx_positions;`book`executions!(
         0!.qpipe.job.fx_positions.positions;
-        select time, order_id, sym, book, product, side, size, price, order_status from x)];
+        select time, sym, side, size, price, book, product from x)];
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey updated;
     }
 
@@ -207,52 +200,49 @@ on_timer:{[]
 \d .
 
 .qetl.transform.define[`fx_positions;`inputs`output`fn`examples!(
-    `book`orders!(.qpipe.job.fx_positions.desk_book;.qpipe.job.fx_positions.orders);
+    `book`executions!(.qpipe.job.fx_positions.desk_book;.qpipe.job.fx_positions.desk_fills);
     .qpipe.job.fx_positions.desk_book;
-    .qpipe.job.fx_positions.net_orders;
+    .qpipe.job.fx_positions.net_fills;
     (
     / From an empty book: a buy and a sell of the same pair on one book net
-    / against each other, a cancel moves nothing at all, and a second book
-    / is a row of its own rather than being folded into the first.
+    / against each other, a second book is a row of its own rather than
+    / being folded into the first, and a fill with no book or product - an
+    / FX `trades` fill - is held under null dimensions, not dropped.
     `inputs`expected!(
-        `book`orders!(
+        `book`executions!(
             .qpipe.job.fx_positions.desk_book;
             ([] time:2026.09.17D10:00:00+0D00:00:01*til 4;
-                order_id:1 2 3 4;
                 sym:`EURUSD`EURUSD`EURUSD`EURUSD;
-                book:`london`london`london`newyork;
-                product:`spot`spot`spot`spot;
                 side:1 -1 1 1;
-                size:1000000 400000 5000000 250000f;
+                size:1000000 400000 500000 250000f;
                 price:1.0850 1.0860 1.0855 1.0851;
-                order_status:`filled`filled`cancelled`filled));
-        ([] sym:`EURUSD`EURUSD; book:`london`newyork; product:`spot`spot;
-            base_qty:600000 250000f; quote_qty:-650600 -271275f; fill_count:2 1));
+                book:`london`london``newyork;
+                product:`spot`spot``spot));
+        ([] sym:`EURUSD`EURUSD`EURUSD; book:``london`newyork; product:``spot`spot;
+            base_qty:500000 600000 250000f; quote_qty:-542750 -650600 -271275f; fill_count:1 2 1));
     / Against an existing book: a fill in a product the book has never seen
     / opens a row rather than being dropped, and the pair already there is
     / added to rather than replaced.
     `inputs`expected!(
-        `book`orders!(
+        `book`executions!(
             ([] sym:enlist `USDJPY; book:enlist `london; product:enlist `spot;
                 base_qty:enlist 1000000f; quote_qty:enlist -149500000f; fill_count:enlist 1);
             ([] time:2026.09.17D10:00:05 2026.09.17D10:00:06;
-                order_id:5 6;
                 sym:`USDJPY`USDJPY;
-                book:`london`london;
-                product:`spot`fwd;
                 side:-1 1;
                 size:400000 250000f;
                 price:149.60 149.55;
-                order_status:`filled`filled));
+                book:`london`london;
+                product:`spot`fwd));
         ([] sym:`USDJPY`USDJPY; book:`london`london; product:`fwd`spot;
             base_qty:250000 600000f; quote_qty:-37387500 -89660000f; fill_count:1 2))
     ))];
 
-/ replay 1b: on a restart the book is rebuilt from the day's orders, not
-/ started flat - under TorQ as well as run_stream.q, which always did.
+/ replay 1b: on a restart the book is rebuilt from the day's executions,
+/ not started flat - under TorQ as well as run_stream.q, which always did.
 .qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`note!(
     `fxpositions1;
-    enlist `orders;
+    enlist `executions;
     `fx_position`fx_limit_breach;
     .qpipe.job.fx_positions.on_batch;
     0D00:00:05.000;
