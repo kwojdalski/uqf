@@ -281,6 +281,14 @@ The namespace is always `.qpipe.job.<job>`. A job publishes by calling its own
 recorder (a test). Never publish a `time` column --- the tickerplant stamps its
 own.
 
+Whatever it is wired to, a batch for a table in `src/etl/plant_tables.q` is held
+to that table's contract first, `.qetl.plant.problems`: its columns' names,
+order and types, and every nested value's element type. A tickerplant stores
+column vectors by position, so a batch that does not fit would be stored wrong
+rather than refused. One that does not fit is withheld whole, logged, and
+counted against the job in `uqs summary`, as a failed `check` is. A table the
+plant does not carry passes unchecked.
+
 ## Normalizer --- `.qetl.job.stream.normalize`
 
 `.qetl.job.stream.normalize[name;decl]`. Several source tables mapped onto one

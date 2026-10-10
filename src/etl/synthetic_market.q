@@ -75,7 +75,9 @@ levels_one:{[mid;step;dir;levels] mid+dir*step*1+til levels}
 / and tick, which is enough depth realism for a proof of concept.
 / @param levels how many levels deep
 / @return a float vector, levels long, level-0-first
-/ @eg .qsynth.levels_size 3  ->  1000000 2000000 3000000
-levels_size:{[levels] .qsynth.size_unit*1+til levels}
+/ @eg .qsynth.levels_size 3  ->  1000000 2000000 3000000f
+/ Float, as its plant columns declare (fx_orderbook's bid_sizes, "F"): size_unit
+/ is a long, and the longs it made were stored as they came (#1074).
+levels_size:{[levels] "f"$.qsynth.size_unit*1+til levels}
 
 \d .

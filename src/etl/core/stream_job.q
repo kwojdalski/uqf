@@ -296,9 +296,43 @@ wire:{[job;publisher]
     d:def[job];
     / A declared check sits in the seam itself, so every route a row takes out
     / of the job - batch handler, timer, poll, on_replayed - passes through it.
-    (` sv (d`ns),`publish) set $[`check in key d; checked[job;d`check;d`on_fail;publisher]; publisher];
+    / The plant's contract sits under the check, at the transport (#1074).
+    p:contracted[job;(),(d`publishes) inter .qetl.plant.names[];publisher];
+    (` sv (d`ns),`publish) set $[`check in key d; checked[job;d`check;d`on_fail;p]; p];
     .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist d`publishes);::];
     job}
+
+/ Private: a publisher that holds every batch for a plant table to that
+/ table's contract (#1074) - .qetl.plant.problems, its columns' names, order
+/ and types and every nested value, the check a polling feed's page already
+/ passes. A tickerplant takes column vectors POSITIONALLY, so a batch with
+/ two same-typed columns swapped, or a string where a symbol list belongs, is
+/ stored wrong and never refused: this refuses it before it is sent. A
+/ refused batch is withheld whole - logged, and counted in stream_health -
+/ like one a job's own check fails. A table the plant does not carry is the
+/ job's own business and passes as it is.
+/ @private
+contracted:{[job;plant;publisher;t;x]
+    if[not t in plant; :publisher[t;x]];
+    if[count f:contract_problems[t;x];
+        :withhold[job;t;x;"plant contract: ","; " sv f;();count x]];
+    publisher[t;x]}
+
+/ Private: what is wrong with `x` as a batch for plant table `t`: a table,
+/ a dict - one row of atoms, or column -> vector - or a list of column
+/ vectors in the plant's order, the shapes a publisher takes. A list is held
+/ to the types its positions name, which is all it can be held to.
+/ @private
+contract_problems:{[t;x]
+    c:cols .qetl.plant.published t;
+    if[(0h=type x) and not count[x]=count c;
+        :enlist string[t]," was given ",string[count x]," column vector(s) - the plant takes ",string count c];
+    if[not (.Q.qt x) or type[x] in 0 99h;
+        :enlist string[t],"'s rows must be a table, a dict or a list of column vectors"];
+    / Trapped: a ragged list or dict cannot be made a table, and says so.
+    @[{[t;c;x] .qetl.plant.problems[t] $[.Q.qt x; x;
+            99h=type x; $[all 0>type each value x; enlist x; flip x];
+            flip c!x]}[t;c];x;{[e] enlist "could not be checked: ",e}]}
 
 / Private: a publisher that runs the job's declared check first (#944).
 / .
