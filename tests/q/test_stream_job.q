@@ -1374,4 +1374,52 @@ test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
     .qunit.assertEquals[r;1;"a row 600ms ahead counts once the shared lead is a second"];
     .qunit.assertEquals[`max_clock_lead in key `.qpipe.job.superbook;0b;"and superbook keeps no copy of it"]};
 
+/ --- the plant's contract at the seam (#1074) -----------------------------
+/ Every job's publish holds a batch for a plant table to that table's
+/ contract, the one a polling feed's page already passes - so a batch the
+/ tickerplant would store wrong, positionally, is withheld instead.
+
+/ One fx_orderbook row, as fx_orderbook_feed's columns list it.
+ob:{[] (enlist `EURUSD;enlist 1.1 1.0;enlist 1 2f;enlist 1.2 1.3;enlist 1 2f)}
+
+/ fx_orderbook_feed's own publish, wired to the recorder.
+ob_publish:{[t;x] .sjtest.reset[]; .qpipe.job.fx_orderbook_feed.publish[t;x]}
+
+test_a_batch_that_fits_its_plant_table_publishes:{[t]
+    ob_publish[`fx_orderbook;ob[]];
+    .qunit.assertEquals[count .sjtest.published;1;"a well-formed column list goes out"]};
+
+test_a_nested_column_of_the_wrong_type_is_withheld:{[t]
+    before:.qetl.stream_health.of[`fx_orderbook_feed]`failed;
+    / sizes as longs: what fx_orderbook_feed published before this check
+    ob_publish[`fx_orderbook;@[ob[];2;:;enlist 1 2]];
+    h:.qetl.stream_health.of`fx_orderbook_feed;
+    .qunit.assertEquals[(count .sjtest.published;h[`failed]-before);0 1;"nothing sent, and the job reads failing"];
+    .qunit.assertTrue[(string h`last_error) like "plant contract: fx_orderbook.bid_sizes row 0 holds a value of type 7h*";
+        "naming the table, column and row"]};
+
+test_columns_out_of_the_plant_order_are_withheld:{[t]
+    x:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
+    ob_publish[`fx_orderbook;`sym`ask_prices`ask_sizes`bid_prices`bid_sizes xcols x];
+    .qunit.assertEquals[count .sjtest.published;0;"a tickerplant would have stored the asks as bids"];
+    .qunit.assertTrue[(string (.qetl.stream_health.of`fx_orderbook_feed)`last_error) like "*fx_orderbook has columns sym ask_prices*";
+        "and the columns are named"]};
+
+/ Every publisher drops a `time` the job sent - the plant stamps its own - so
+/ the contract must not refuse one either (a bundle's feed sends it).
+test_a_batch_carrying_its_own_time_still_publishes:{[t]
+    x:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
+    ob_publish[`fx_orderbook;`time xcols update time:.z.p from x];
+    .qunit.assertEquals[count .sjtest.published;1;"the time is the publisher's to drop, not a reason to withhold"]};
+
+test_a_column_list_of_the_wrong_length_is_withheld:{[t]
+    ob_publish[`fx_orderbook;-1_ob[]];
+    .qunit.assertEquals[count .sjtest.published;0;"four vectors cannot be five columns"];
+    ob_publish[`fx_orderbook;@[ob[];0;:;`EURUSD`GBPUSD]];
+    .qunit.assertEquals[count .sjtest.published;0;"nor can columns of different lengths be rows"]};
+
+test_a_table_the_plant_does_not_carry_passes_unchecked:{[t]
+    ob_publish[`sjtest_local;([] anything:1 2)];
+    .qunit.assertEquals[count .sjtest.published;1;"a job's own table is its business"]};
+
 \d .
