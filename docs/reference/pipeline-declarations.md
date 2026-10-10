@@ -412,6 +412,12 @@ one path that notifies, and not on a dry run --- with that window's range.
   | `.qetl.reaction.on_writing[dataset;name;outputs;handler]`    | the same                                                         | that it reads `dataset` and writes `outputs`, as asserted              |
   | `.qetl.reaction.on_worker[dataset;worker;spec_fn]`           | `spec_fn` is `{[range_from;range_to] ...}` returning a run spec  | that it writes the worker's `dataset`, derived from its declaration    |
 
+A successful outcome is recorded durably, and a window with one is not re-fired.
+When you change a handler, call `.qetl.reaction.revise[dataset;name;`v2\]\`
+straight after registering it: an outcome counts only under the revision it was
+recorded with, so a new revision owes every covered window again (#1100). The
+default is a null revision, which matches only outcomes recorded without one.
+
 Prefer `on_worker` when the downstream work is itself a worker (plain q only;
 TorQ refuses it, one bounded worker per process): its edge in the graph is read
 from the worker's declaration rather than asserted. [Recomputing a table when

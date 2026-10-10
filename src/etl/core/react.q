@@ -77,7 +77,7 @@ reactions:(`symbol$())!();
 / `outputs` is what this reaction writes and `derived` says where that claim
 / came from - see `on` and `on_worker`.
 / @private
-no_reactions:{[] ([] name:`symbol$(); handler:(); outputs:(); derived:`boolean$())}
+no_reactions:{[] ([] name:`symbol$(); handler:(); outputs:(); derived:`boolean$(); revision:`symbol$())}
 
 / How far a chain of reactions may travel before it is refused.
 / .
@@ -261,7 +261,35 @@ register:{[dataset;nm;handler;outputs;derived]
     existing:$[dataset in key reactions; reactions dataset; no_reactions[]];
     existing:select from existing where not name=nm;
     reactions[dataset]:existing upsert
-        ([] name:enlist nm; handler:enlist handler; outputs:enlist outputs; derived:enlist derived);
+        ([] name:enlist nm; handler:enlist handler; outputs:enlist outputs; derived:enlist derived; revision:enlist `);
+    nm}
+
+/ Declare which revision of a reaction's handler is registered (#1100).
+/ .
+/ A durable `ok` outcome proves the handler ran, not that THIS handler did:
+/ edit the handler, restart, and `pending` would still find the old `ok` and
+/ owe nothing, so the derived table stays built by the old logic. The
+/ revision is the author's statement that the handler changed - bump it and
+/ every window is owed again, because `pending` matches an outcome only when
+/ it was recorded under the same revision. It is a DECLARATION, not derived
+/ from the lambda's text, which is not stable across a reload. Null (the
+/ default, and what re-registering resets to) matches only outcomes recorded
+/ under a null revision.
+/ .
+/ Separate from `on`/`on_writing`/`on_worker` so their signatures do not
+/ change; call it straight after them.
+/ @param dataset the dataset the reaction watches
+/ @param nm the reaction's name, already registered
+/ @param rev a symbol naming this version of the handler (not `revision`: a
+/   parameter sharing a column's name resolves to the column in a where-clause)
+/ @return the reaction's name
+/ @throws error when rev is not a symbol, or no such reaction is registered
+/ @eg .qetl.reaction.revise[`demo_deals;`rebuild_positions;`v2]
+revise:{[dataset;nm;rev]
+    if[not -11h=type rev; '"revise: revision must be a symbol"];
+    if[not nm in exec name from for_dataset dataset;
+        '"revise: ",string[nm]," is not a reaction on ",string dataset];
+    reactions[dataset]:update revision:rev from reactions[dataset] where name=nm;
     nm}
 
 / Stop reacting. Unknown names are ignored: removing a reaction that is not
@@ -365,6 +393,11 @@ history:empty_history[]
 / every outcome after them was silently dropped.
 history_limit:1000
 
+/ Private: the revision a reaction is registered under, null when unrevised
+/ or no longer registered.
+/ @private
+revision_of:{[dataset;nm] exec first revision from for_dataset[dataset] where name=nm}
+
 / Private: record one reaction's outcome - in `history`, and durably.
 / @private
 record:{[item;name;outcome;detail]
@@ -374,7 +407,7 @@ record:{[item;name;outcome;detail]
             outcome:enlist outcome; detail:enlist detail);
     / Never fails the reaction it records: a ledger that cannot be written is
     / logged, and the next run's `pending` simply sees the window as not done.
-    @[persist_outcome;(item`dataset;item`partition;item`source_version;name;item`range_from;item`range_to;outcome;.z.p);
+    @[persist_outcome;(item`dataset;item`partition;item`source_version;name;item`range_from;item`range_to;outcome;.z.p;revision_of[item`dataset;name]);
       {[e] @[{.qetl.log.err[`qetl.reaction;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
     }
 
@@ -398,7 +431,8 @@ record:{[item;name;outcome;detail]
 / an outcome for another partition or release cannot stand in for this
 / one's. Null when the notifier did not say - a plain notify, or a cascade.
 empty_outcomes:{[] ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
-    name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); outcome:`symbol$(); at:`timestamp$())}
+    name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); outcome:`symbol$(); at:`timestamp$();
+    revision:`symbol$())}
 
 / Where it lives: the status dir, beside etl_coverage and etl_runs.
 / @return the file path
@@ -414,6 +448,9 @@ outcomes:{[]
     / outcomes prove nothing for a specific one, so they read as null and
     / their windows are owed once more - conservative, and self-healing.
     if[not `partition in cols t; t:update partition:`, source_version:` from t];
+    / Likewise a ledger written before #1100 has no revision: null, which
+    / matches only an unrevised reaction.
+    if[not `revision in cols t; t:update revision:` from t];
     cols[empty_outcomes[]]#t}
 
 / Private: append one outcome, read-modify-write under its own mutex - the
@@ -427,7 +464,9 @@ persist_outcome:{[row]
 / The (reaction; window) pairs still owed: covered windows of `ds` in
 / [from_ts;to_ts) with a reaction that has no `ok outcome recorded at or
 / after the window was covered. A window re-covered by a restatement is owed
-/ again, because its derived output describes the old release.
+/ again, because its derived output describes the old release. An outcome
+/ counts only under the reaction's current `revision` (#1100), so a changed
+/ handler owes every window again.
 / @param ds the dataset
 / @param part its partition, or ` when it has none
 / @param version the source_version whose coverage counts
@@ -445,10 +484,10 @@ pending:{[ds;part;version;from_ts;to_ts]
         where dataset=ds, partition=part, source_version=version,
               recorded_at<=now, now<superseded_at, range_from<to_ts, range_to>from_ts;
     if[0=count covered; :none];
-    done:select name, range_from, range_to, at from outcomes[]
+    done:select name, range_from, range_to, at, revision from outcomes[]
         where dataset=ds, partition=part, source_version=version, outcome=`ok;
-    pairs:raze {[covered;nm] update name:nm from covered}[covered] each rs`name;
-    ok:{[done;p] any (done[`name]=p`name) and (done[`range_from]=p`range_from) and
+    pairs:raze {[covered;nm;rev] update name:nm, revision:rev from covered}[covered]'[rs`name;rs`revision];
+    ok:{[done;p] any (done[`name]=p`name) and (done[`revision]=p`revision) and (done[`range_from]=p`range_from) and
         (done[`range_to]=p`range_to) and done[`at]>=p`recorded_at}[done] each pairs;
     `name`range_from`range_to#pairs where not ok}
 

@@ -274,6 +274,44 @@ test_an_outcome_ledger_from_before_1099_reads_as_unknown_identity:{[t]
     .qunit.assertEquals[exec (partition;source_version) from o;(enlist `;enlist `);"proving nothing for a specific partition or release"];
     .qetl.reaction.reset_outcomes[]};
 
+/ #1100: a durable `ok` settles a window only for the handler revision that
+/ produced it.
+test_a_changed_handler_revision_owes_its_windows_again:{[t]
+    .qetl.reaction.reset_outcomes[];
+    .testutil.reset_coverage_ledger[];
+    .qetl.reaction.on[`demo_deals;`r1100;{[ds;f;t] }];
+    .qetl.reaction.revise[`demo_deals;`r1100;`v1];
+    f:2026.09.11D00:00; to:2026.09.12D00:00;
+    .qetl.coverage.stage_completion[`demo_deals;`;`v1;f;to;1];
+    item:`dataset`partition`source_version`range_from`range_to`depth!(`demo_deals;`;`v1;f;to;0);
+    owed:{[f;to] count select from .qetl.reaction.pending[`demo_deals;`;`v1;f;to] where name=`r1100};
+    .qetl.reaction.record[item;`r1100;`ok;""];
+    .qunit.assertEquals[exec revision from .qetl.reaction.outcomes[] where name=`r1100;enlist `v1;
+        "the outcome carries the revision it ran under"];
+    .qunit.assertEquals[owed[f;to];0;"the same revision owes nothing"];
+    .qetl.reaction.on[`demo_deals;`r1100;{[ds;f;t] }];
+    .qetl.reaction.revise[`demo_deals;`r1100;`v1];
+    .qunit.assertEquals[owed[f;to];0;"re-registering under the same revision owes nothing"];
+    .qetl.reaction.revise[`demo_deals;`r1100;`v2];
+    .qunit.assertEquals[owed[f;to];1;"a new revision owes the window again"];
+    .qetl.reaction.record[item;`r1100;`ok;""];
+    .qunit.assertEquals[owed[f;to];0;"and is settled by its own success"];
+    .qetl.reaction.reset_outcomes[]};
+
+test_revise_refuses_what_it_cannot_name:{[t]
+    .qetl.reaction.on[`demo_deals;`r1100;{[ds;f;t] }];
+    .qunit.assertThrows[{.qetl.reaction.revise[`demo_deals;`r1100;"v2"]};();"revise: revision must be a symbol";"a string is not a revision"];
+    .qunit.assertThrows[{.qetl.reaction.revise[`demo_deals;`nope;`v2]};();"revise: nope is not a reaction on demo_deals";"an unregistered reaction"]};
+
+test_an_outcome_ledger_from_before_1100_reads_as_an_unrevised_one:{[t]
+    .qetl.reaction.reset_outcomes[];
+    old:([] dataset:enlist `ds; partition:enlist `; source_version:enlist `; name:enlist `r;
+        range_from:enlist 2026.09.11D00:00; range_to:enlist 2026.09.12D00:00; outcome:enlist `ok; at:enlist .z.p);
+    .qetl.job.bounded.state.durable_set[.qetl.reaction.outcomes_path[];old];
+    o:.qetl.reaction.outcomes[];
+    .qunit.assertEquals[(cols o;exec revision from o);(cols .qetl.reaction.empty_outcomes[];enlist `);"null revision, today's shape"];
+    .qetl.reaction.reset_outcomes[]};
+
 test_history_keeps_the_most_recent_outcomes:{[t]
     keep:.qetl.reaction.history_limit;
     .qetl.reaction.history_limit:3;

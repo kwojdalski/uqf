@@ -531,6 +531,7 @@ qetl.reaction,queue,table,,
 qetl.reaction,reactions,dict,,
 qetl.reaction,reset,function,1,
 qetl.reaction,reset_outcomes,function,1,
+qetl.reaction,revise,function,3,dataset nm rev
 qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
 qetl.reaction,window_now,value,,
