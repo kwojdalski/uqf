@@ -1431,8 +1431,8 @@ window_body:{[worker;w]
         / output where this worker wrote - under .qetl.io.hdb there is no
         / root table to read back, and a table kept in memory dies with the
         / process (#541).
-        @[{[a] .qetl.reaction.notify_published . a};
-          (cfg`dataset;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
+        @[{[a] .qetl.reaction.notify_published_for . a};
+          (cfg`dataset;cfg`partition;(spec worker)`source_version;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
           {[e] (::)}]];
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];

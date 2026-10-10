@@ -235,11 +235,51 @@ test_the_audit_runs_when_every_dataset_is_wired:{[t]
     .qunit.assertEquals[(count a`unwired;type key a`unwired);(0;11h);
         "nothing unwired is an empty symbol-keyed dict, not an error"]};
 
+/ #1099: an outcome answers `pending` for the partition and release it was
+/ recorded for, and no other - a success for one partition's window used to
+/ satisfy every partition's.
+test_an_outcome_answers_only_its_own_partition_and_release:{[t]
+    .qetl.reaction.reset_outcomes[];
+    .qetl.coverage.init_ledger[];
+    item:{[part;version] `dataset`partition`source_version`range_from`range_to`depth!(`ds;part;version;2026.09.11D00:00;2026.09.12D00:00;0)};
+    .qetl.reaction.record[item[`EURUSD;`v1];`r;`ok;""];
+    o:.qetl.reaction.outcomes[];
+    .qunit.assertEquals[exec (partition;source_version) from o where name=`r;(enlist `EURUSD;enlist `v1);
+        "the outcome carries the partition and release it answers"];
+    .qetl.reaction.reset_outcomes[]};
+
+test_another_partitions_success_does_not_settle_this_ones_window:{[t]
+    .qetl.reaction.reset_outcomes[];
+    .testutil.reset_coverage_ledger[];
+    .qetl.reaction.on[`demo_deals;`r1099;{[ds;f;t] }];
+    f:2026.09.11D00:00; to:2026.09.12D00:00;
+    .qetl.coverage.stage_completion[`demo_deals;`EURUSD;`v1;f;to;1];
+    item:{[part] `dataset`partition`source_version`range_from`range_to`depth!(`demo_deals;part;`v1;2026.09.11D00:00;2026.09.12D00:00;0)};
+    / a lambda of the window, called with it - a fully applied projection
+    / would run here, once
+    owed:{[f;to] count select from .qetl.reaction.pending[`demo_deals;`EURUSD;`v1;f;to] where name=`r1099};
+    .qetl.reaction.record[item `GBPUSD;`r1099;`ok;""];
+    .qunit.assertEquals[owed[f;to];1;"GBPUSD's success is not EURUSD's"];
+    .qetl.reaction.record[item `EURUSD;`r1099;`ok;""];
+    .qunit.assertEquals[owed[f;to];0;"its own is"];
+    .qetl.reaction.reset_outcomes[]};
+
+test_an_outcome_ledger_from_before_1099_reads_as_unknown_identity:{[t]
+    .qetl.reaction.reset_outcomes[];
+    old:([] dataset:enlist `ds; name:enlist `r; range_from:enlist 2026.09.11D00:00; range_to:enlist 2026.09.12D00:00;
+        outcome:enlist `ok; at:enlist .z.p);
+    .qetl.job.bounded.state.durable_set[.qetl.reaction.outcomes_path[];old];
+    o:.qetl.reaction.outcomes[];
+    .qunit.assertEquals[cols o;cols .qetl.reaction.empty_outcomes[];"read in today's shape"];
+    .qunit.assertEquals[exec (partition;source_version) from o;(enlist `;enlist `);"proving nothing for a specific partition or release"];
+    .qetl.reaction.reset_outcomes[]};
+
 test_history_keeps_the_most_recent_outcomes:{[t]
     keep:.qetl.reaction.history_limit;
     .qetl.reaction.history_limit:3;
     .qetl.reaction.history:.qetl.reaction.empty_history[];
-    {.qetl.reaction.record[`ds;`r;0;0Np;0Np;`ok;string x]} each til 5;
+    item:`dataset`partition`source_version`range_from`range_to`depth!(`ds;`;`v1;0Np;0Np;0);
+    {[item;x] .qetl.reaction.record[item;`r;`ok;string x]}[item] each til 5;
     .qetl.reaction.history_limit:keep;
     .qunit.assertEquals[exec detail from .qetl.reaction.history;string 2 3 4;
         "the newest three survive - not the first three, with every later outcome dropped"]};
