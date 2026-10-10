@@ -386,13 +386,41 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
 / run's plan. The live run that follows still finds the fixture's ROWS in
 / the dataset, and these clear them and withdraw the fixture's claims.
 
-/ The release a run records coverage under: the one asked for, tagged when
-/ the source has no credential, so validate, plan, the run and its ledgers
-/ all see one identity. A null is left for check_static to refuse.
-/ @param source the worker's source
+/ The release a run records coverage under: the one asked for, with the
+/ worker's output revision when it declares one (#1097), and tagged when the
+/ source has no credential (#1082) - so validate, plan, the run and its
+/ ledgers all see one identity. A null is left for check_static to refuse.
+/ @param cfg the worker's declaration, as .qetl.job.bounded.def returns it
 / @param v the release asked for
-/ @return v, or v tagged as the fixture's
-run_version:{[source;v] $[null[v] or .qetl.source.has_credentials source; v; .qetl.source.fixture_version v]}
+/ @return v, as `v@r<revision>` when revised, then `~fixture` when on the fixture
+/ @eg .qetl.job.bounded.runtime.run_version[`source`revision!(`demo_deals;2);`v1]  ->  `$"v1@r2~fixture"
+run_version:{[cfg;v]
+    if[null v; :v];
+    if[not null r:$[`revision in key cfg; cfg`revision; 0N]; v:`$string[v],"@r",string r];
+    $[.qetl.source.has_credentials cfg`source; v; .qetl.source.fixture_version v]}
+
+/ The output revision a worker declares (#1097), or 0N for none. Coverage
+/ says which windows are done under a source release, and nothing about the
+/ logic that made them: change a transform or a scoring rule under the same
+/ release, and the old windows stay covered while new ones use the new
+/ logic - one dataset, two definitions. Bump the revision with the logic and
+/ every window is planned again, under `<release>@r<revision>`; old claims
+/ stay in the ledger under their own identity and stop answering.
+/ @param worker the worker's name
+/ @param decl its declaration
+/ @return the revision, a positive long, or 0N
+/ @throws error when it is not a positive long
+/ @eg .qetl.job.bounded.runtime.require_revision[`w;enlist[`revision]!enlist 2]  ->  2
+require_revision:{[worker;decl]
+    if[not `revision in key decl; :0N];
+    r:decl`revision;
+    / 0N is "none": a declaration copied from .qetl.job.bounded.def carries it
+    if[(-7h=type r) and null r; :0N];
+    / Type first, alone: q evaluates both sides of `and`, and `r2>0 is a 'type.
+    bad:"define: ",string[worker],"'s revision must be a positive long, e.g. 2 - bump it when the output logic changes";
+    if[not -7h=type r; 'bad];
+    if[r<1; 'bad];
+    r}
 
 / Refuse a run on `source`'s fixture: always under a deployment's --live
 / (#800), and otherwise unless fixture writes were asked for - a dry run
