@@ -109,6 +109,11 @@ book:1!position_book;
 / lookup by sym, never queried as a table.
 last_mid:(`symbol$())!`float$();
 
+/ When each last_mid was quoted - its book's source_time - so a late, older
+/ book does not rewind the mark, as last_value's latest row is not rewound
+/ (#1088, .qmicro.newer_by_sym).
+last_mid_at:(`symbol$())!`timestamp$();
+
 / Each crypto venue's latest top of book, keyed by sym and venue, off the
 / same subscription. A crypto fill is marked to the BEST MID ACROSS VENUES
 / that are fresh as the books now stand (crypto_marks) - the library's one
@@ -185,8 +190,9 @@ on_batch:{[t;x]
     $[t=`executions;
         .qpipe.job.posbook.apply_fills x;
       t=`market_data;
-        [m:.qmicro.own_book_mids x;
+        [m:.qmicro.newer_by_sym[.qpipe.job.posbook.last_mid_at;.qmicro.own_book_mids x];
          .qpipe.job.posbook.last_mid[m`sym]:m`mid;
+         .qpipe.job.posbook.last_mid_at[m`sym]:m`source_time;
          `.qpipe.job.posbook.crypto_tob upsert .qmicro.newer_venue_tops[.qpipe.job.posbook.crypto_tob;.qmicro.venue_tops x]];
       ()];
     }
@@ -245,4 +251,4 @@ on_batch:{[t;x]
     1b;
     `state`table!(`book;`position_open);
     "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job";
-    `book`last_mid`crypto_tob)];
+    `book`last_mid`last_mid_at`crypto_tob)];

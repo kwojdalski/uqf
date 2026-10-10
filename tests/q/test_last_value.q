@@ -187,6 +187,19 @@ test_an_older_crypto_book_does_not_rewind_its_venue:{[t]
     .qpipe.job.last_value.on_batch[`market_data;cbook enlist (s;`binance;d[1];90.;92.)];
     .qunit.assertEquals[(first latest[])`bid`ask;100 102.;"the venue's newer book stands"]};
 
+/ #1088: FX's rule is the newest book's own mid, and "newest" is the
+/ source's clock, not arrival: a late, older book moves neither posbook's
+/ mark nor last_value's row - one rule, .qmicro.newer_by_sym.
+test_a_late_older_fx_book_moves_neither_mark:{[t]
+    reset[];
+    .qetl.job.stream.reset `posbook;
+    both:{[x] .qpipe.job.last_value.on_batch[`market_data;x]; .qpipe.job.posbook.on_batch[`market_data;x]};
+    both book enlist (`EURUSD;`LP_A;d[2];1.20;1.22);
+    both book enlist (`EURUSD;`LP_B;d[1];1.00;1.02);
+    lv:(exec sym!mid from latest[])`EURUSD;
+    .testutil.assertApprox[.qpipe.job.posbook.last_mid`EURUSD;1.21;1e-12;"posbook keeps the newer book's mid"];
+    .qunit.assertEquals[.qpipe.job.posbook.last_mid`EURUSD;lv;"the mark last_value publishes"]};
+
 test_fx_is_still_last_source_wins:{[t]
     reset[];
     .qpipe.job.last_value.on_batch[`market_data;book enlist (`EURUSD;`LP_A;d[0];1.10;1.14)];

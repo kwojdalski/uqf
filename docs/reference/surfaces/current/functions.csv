@@ -767,6 +767,7 @@ qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_size
 qmicro,mid_price,function,2,bid_prices ask_prices
 qmicro,mid_price_acceleration,function,2,quotes target_sym
 qmicro,mid_price_velocity,function,2,quotes target_sym
+qmicro,newer_by_sym,function,2,held rows
 qmicro,newer_venue_tops,function,2,tob tops
 qmicro,odd_lot_imbalance,function,2,tape threshold
 qmicro,odd_lot_trade_ratio,function,2,tape threshold
@@ -1172,6 +1173,7 @@ qpipe.job.posbook,crypto_marks,function,2,tob batch
 qpipe.job.posbook,crypto_tob,dict,,
 qpipe.job.posbook,executions,table,,
 qpipe.job.posbook,last_mid,dict,,
+qpipe.job.posbook,last_mid_at,dict,,
 qpipe.job.posbook,mark_positions,function,3,book trades mids
 qpipe.job.posbook,market_data,table,,
 qpipe.job.posbook,next_book,function,2,book positions
