@@ -65,6 +65,7 @@ qcross,cross_ref_price_at,function,4,quotes sym as_of ref_size
 qcross,cross_size_at_price,function,5,quotes sym as_of side price_limit
 qcross,invert_book,function,1,book
 qcross,leg_book_as_of,function,3,quotes as_of target_sym
+qcross,leg_inverts,function,2,leg cross_sym
 qcross,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qdata,cfg,function,2,k dflt
 qdata,databentoDir,function,1,
