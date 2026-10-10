@@ -146,7 +146,7 @@ load_limits:{[limits]
 / @param path the file, as a string
 / @return the limits table
 / @throws error naming a file that does not exist
-/ @eg .qpipe.job.fx_positions.read_limits "config/fx_limits.csv"
+/ @eg .qpipe.job.fx_positions.read_limits "no/such/fx_limits.csv"  ->  throws
 read_limits:{[path]
     f:hsym `$path;
     if[()~key f; '"read_limits: ",path," does not exist - UQF_FX_POSITION_LIMITS names the limits file"];
