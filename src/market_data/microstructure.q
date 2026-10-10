@@ -39,15 +39,14 @@
 / (integer) prices/sizes - a float null 0n mixed element-by-element into an
 / otherwise-long vector produces a mixed-type general list, and KDB-X then
 / throws a 'type error on later arithmetic against it - so every element is
-/ normalized to float
-/ here, at the source, rather than only the null ones.
+/ normalized to float here, at the source - and an empty `levels` is `float$().
 / @param levels a vector of vectors, one level-0-first vector per row
 / @param level the level index to extract from every row
 / @return a vector, one value per row
 / @private
 level_at:{[levels;level]
     pick_level:{[level;row] $[level<count row; "f"$row level; 0n]};
-    pick_level[level;] each levels};
+    "f"$pick_level[level;] each levels};
 
 / Private: sum of level_at[sizes;l] for l in til n_levels, per row.
 / @param sizes a vector of vectors, one level-0-first vector per row
@@ -310,7 +309,8 @@ quotes_for_sym:{[fn_name;quotes;target_sym]
 / First difference of the L0 mid price for one sym's quotes, time-ordered.
 / Index 0 is forced to 0n (no prior snapshot to diff against) - `deltas`
 / keeps a vector's first element as-is rather than nulling it (unlike
-/ `prev`), so it's overridden explicitly here.
+/ `prev`), so it's overridden explicitly here. `til 1&count` is index 0 only
+/ when there is one, so a sym with no quotes gives `float$() (#1047).
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute velocity for
 / @return a vector, one velocity value per quote row for target_sym, in time order
@@ -320,7 +320,7 @@ mid_price_velocity:{[quotes;target_sym]
     sub:quotes_for_sym[`mid_price_velocity;quotes;target_sym];
     mids:mid_price[sub`bid_prices;sub`ask_prices];
     velocity:deltas mids;
-    @[velocity;0;:;0n]};
+    @[velocity;til 1&count velocity;:;0n]};
 
 / Second difference of the L0 mid price for one sym's quotes. Index 0 is
 / already null from mid_price_velocity's own override (kept as-is by
@@ -379,7 +379,7 @@ queue_depletion_rate:{[quotes;target_sym;side]
     tr:side_transition[sub;0;side];
     held:(0|tr[`prev_size]-tr`size)%tr`prev_size;
     rate:?[0=tr`move; held; ?[1=tr`move; 0f; 1f]];
-    @[rate;0;:;0n]};
+    @[rate;til 1&count rate;:;0n]};
 
 / L0 order flow imbalance (Cont-Kukanov-Stoikov): per side, if the price
 / improved vs the prior row that side's whole new size counts as "new"
@@ -399,7 +399,7 @@ queue_depletion_rate:{[quotes;target_sym;side]
 ofi:{[quotes;target_sym]
     sub:quotes_for_sym[`ofi;quotes;target_sym];
     raw:ofi_at_level[sub;0];
-    @[raw;0;:;0n]};
+    @[raw;til 1&count raw;:;0n]};
 
 / Private: ofi's e_bid-e_ask at one level, every row of sub; an absent level
 / is read as side_transition fills it, and two absent snapshots give zero.
@@ -421,7 +421,7 @@ ofi_multilevel:{[quotes;target_sym;n_levels]
     sub:quotes_for_sym[`ofi_multilevel;quotes;target_sym];
     per_level:ofi_at_level[sub;] each til n_levels;
     raw:sum per_level;
-    @[raw;0;:;0n]};
+    @[raw;til 1&count raw;:;0n]};
 
 / Rolling (moving-window) sum of an OFI series - a thin wrapper around
 / kdb+'s builtin msum, not a hand-rolled moving sum.
@@ -675,7 +675,7 @@ volume_buckets:{[tape;bucket_volume]
     cum:sums trades`size;
     starts:cum-trades`size;
     total:last cum;
-    n:"j"$floor total%bucket_volume;
+    n:"j"$floor 1e-9+total%bucket_volume;
     if[0=n; :empty_buckets[]];
     / For bucket b spanning [lo;hi), each trade contributes the overlap of
     / its own [start;end) with that span - which is what splits a straddling
@@ -822,7 +822,7 @@ large_trade_threshold:{[tape;q]
         '"large_trade_threshold: quantile must be in (0;1], got ",string q];
     sizes:asc exec size from tape where action=`trade;
     if[0=count sizes; :0n];
-    sizes -1+"j"$ceiling q*count sizes};
+    sizes -1+"j"$ceiling -1e-9+q*count sizes};
 
 / Share of trades at or above the quantile threshold, by COUNT.
 / .
@@ -994,10 +994,10 @@ window_variance:{[w]
 rolling_return_variance:{[quotes;target_sym;window]
     sub:quotes_for_sym[`rolling_return_variance;quotes;target_sym];
     log_mid:log mid_price[sub`bid_prices;sub`ask_prices];
-    rets:@[deltas log_mid;0;:;0n];
+    rets:{@[x;til 1&count x;:;0n]} deltas log_mid;
     n:count rets;
     var_at:{[rets;window;i] $[i<window; 0n; window_variance[rets (1+i-window)+til window]]};
-    var_at[rets;window;] each til n}
+    "f"$var_at[rets;window;] each til n}
 
 / Private: a stream's configuration with defaults filled in, refused when
 / malformed.
