@@ -135,3 +135,12 @@ def test_a_fixture_runs_rerun_asks_for_the_fixture_again():
     command = stack_runs.rerun_command({**_FAILED_RUN, "source_version": "v1~fixture"})
     assert command is not None
     assert command.endswith("--version v1 --fixture")
+
+
+def test_a_revised_runs_rerun_names_only_the_release():
+    """#1097: a run records `v1@r2` - the worker's revision is its own, so the
+    command names the release, and the fixture when it was one."""
+    for recorded, tail in (("v1@r2", "--version v1"), ("v1@r2~fixture", "--version v1 --fixture")):
+        command = stack_runs.rerun_command({**_FAILED_RUN, "source_version": recorded})
+        assert command is not None
+        assert command.endswith(tail), command

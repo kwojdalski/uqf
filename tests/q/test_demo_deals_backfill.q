@@ -1242,4 +1242,50 @@ test_a_windows_lines_carry_the_run_worker_and_window:{[t]
     .qunit.assertEquals[count distinct starts[;`range_from];2;"and its own window"];
     .qunit.assertEquals[.qetl.log.context;()!();"nothing is left behind for the next worker"]};
 
+/ --- an output revision is part of the coverage identity (#1097) ------------
+/ Coverage said which windows were done under a release, never under which
+/ logic, so a transform changed under the same release left the old windows
+/ covered and mixed two definitions in one dataset.
+
+/ Run f with demo_deals_backfill declaring revision `r`, then put it back.
+with_revision:{[r;f]
+    .testutil.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`revision;r];
+    out:@[f;::;{(`threw;x)}];
+    .testutil.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`revision;0N];
+    out}
+
+/ One full run of demo_deals_backfill over days 1-4, as a fresh process would.
+full_run:{[]
+    .qetl.job.bounded.state.release_lock `demo_deals_backfill;
+    .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qpipe.job.demo_deals_backfill.run[];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    r}
+
+test_a_revision_bump_plans_every_window_again:{[t]
+    before:.ddbftest.full_run[];
+    after:.ddbftest.with_revision[2;.ddbftest.full_run];
+    .qunit.assertEquals[(before`windows_completed;after`state;after`windows_completed);(3;`completed;3);
+        "the new logic redoes the range rather than finding it covered"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;`$"v1@r2~fixture";.z.p;.ddbftest.d[1];.ddbftest.d[4]];1b;
+        "recorded under the release and its revision"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;.ddbftest.fv;.z.p;.ddbftest.d[1];.ddbftest.d[4]];1b;
+        "and the old claims keep their own identity"]};
+
+test_the_same_revision_is_idle_the_second_time:{[t]
+    r:.ddbftest.with_revision[2;{[] .ddbftest.full_run[]; .ddbftest.full_run[]}];
+    .qunit.assertEquals[r`state;`idle;"unchanged logic is not redone"]};
+
+test_a_revision_must_be_a_positive_long:{[t]
+    f:{[r] .qetl.job.bounded.runtime.require_revision[`ddbftest_rev;enlist[`revision]!enlist r]};
+    {[f;r] .qunit.assertThrows[f;r;"define: ddbftest_rev's revision must be a positive long*";"refused: ",-3!r]}[f] each (0;-1;1.5;`r2);
+    .qunit.assertEquals[f each (3;0N);3 0N;"a positive long, or 0N for none"]};
+
+test_the_run_version_carries_revision_then_fixture:{[t]
+    v:.qetl.job.bounded.runtime.run_version;
+    .qunit.assertEquals[v[`source`revision!(`demo_deals;2);`v1];`$"v1@r2~fixture";"revision first, then the fixture tag"];
+    .qunit.assertEquals[v[`source`revision!(`demo_deals;0N);`v1];`$"v1~fixture";"no revision, no suffix"];
+    .qunit.assertEquals[v[`source`revision!(`demo_deals;2);`];`;"a null release is left for check_static to refuse"]};
+
 \d .

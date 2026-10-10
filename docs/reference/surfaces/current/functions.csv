@@ -290,11 +290,12 @@ qetl.job.bounded.runtime,q_owned,value,,
 qetl.job.bounded.runtime,refuse_fixture,function,2,who source
 qetl.job.bounded.runtime,remaining,function,6,ds part version as_of from_ts to_ts
 qetl.job.bounded.runtime,require_dependencies,function,1,worker
+qetl.job.bounded.runtime,require_revision,function,2,worker decl
 qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
 qetl.job.bounded.runtime,retire_fixture_claims,function,2,worker rows
 qetl.job.bounded.runtime,retry_boundary,value,,
 qetl.job.bounded.runtime,retryable,function,1,err
-qetl.job.bounded.runtime,run_version,function,2,source v
+qetl.job.bounded.runtime,run_version,function,2,cfg v
 qetl.job.bounded.runtime,suppressed_in_dry_run,value,,
 qetl.job.bounded.runtime,transport_patterns,value,,
 qetl.job.bounded.runtime,windows,function,3,from_ts to_ts width

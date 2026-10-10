@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); revision:`long$())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -208,7 +208,7 @@ optional_cfg:`check`io`facts`partition
 /   window_column (the OUTPUT column that carries the window's time - see
 /   require_window_column) and
 /   source_version (the default release a run records coverage under; none
-/   by default, so a run must name one)
+/   by default, so a run must name one) and revision (the output logic's, #1097)
 / @throws error naming every missing or malformed field at once
 define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -289,17 +289,16 @@ define:{[worker;decl]
     if[not -11h=type oc;
         '"define: ",string[worker],"'s on_conflict must be a symbol, e.g. `upsert"];
     decl[`on_conflict]:.qetl.io.require_strategy oc;
-    / The source_version a run uses when it names none - for a source that is
-    / never restated, where every run would otherwise be told `v1 forever.
-    / ` declares no default, and then a run must name one: for a source that
-    / CAN be restated, a default would file the restatement under the old
-    / version, and every window would read as already covered.
+    / The source_version a run uses when it names none, for a source never
+    / restated. ` declares none, so a run must: for a source that CAN be, a
+    / default would file a restatement under the old version, as covered.
     dv:$[`source_version in key decl; decl`source_version; `];
     if[not -11h=type dv;
         '"define: ",string[worker],"'s source_version must be a symbol, e.g. `v1 - the release a run records coverage under when it names none"];
     decl[`source_version]:dv;
     decl[`target_key]:require_target_key[worker;decl];
     decl[`window_column]:require_window_column[worker;decl];
+    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -775,7 +774,7 @@ fail_run:{[worker;e]
 / @private
 check_static:{[worker;run_spec]
     cfg:def worker;
-    write_state[worker;`source_version;.qetl.job.bounded.runtime.run_version[cfg`source;run_spec`source_version]];
+    write_state[worker;`source_version;.qetl.job.bounded.runtime.run_version[cfg;run_spec`source_version]];
     write_state[worker;`range_from;run_spec`range_from];
     write_state[worker;`range_to;run_spec`range_to];
 

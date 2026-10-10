@@ -176,6 +176,10 @@ def _as_bound(ledger_value: str) -> str:
 #: source's fixture records under.
 FIXTURE_TAG = "~fixture"
 
+#: What `.qetl.job.bounded.runtime.run_version` puts between the release and
+#: a worker's declared output revision.
+REVISION_TAG = "@r"
+
 
 def rerun_command(run: dict) -> str | None:
     """The command that re-runs `run`'s range - which, because coverage skips
@@ -187,12 +191,14 @@ def rerun_command(run: dict) -> str | None:
     needed = ("worker", "range_from", "range_to", "source_version")
     if any(not run.get(k) for k in needed):
         return None
-    # A run on a source's fixture recorded its release tagged (#1082); the
-    # command takes the release and asks for the fixture again.
+    # A run records its release tagged: `@r<n>` for the worker's output
+    # revision (#1097), which the worker declares, and `~fixture` for a run on
+    # the fixture (#1082), which the command asks for again.
     version = str(run["source_version"])
     fixture = version.endswith(FIXTURE_TAG)
     if fixture:
         version = version.removesuffix(FIXTURE_TAG)
+    version = version.split(REVISION_TAG)[0]
     return (
         f"uqs backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
         f"--to {_as_bound(str(run['range_to']))} --version {version}"
