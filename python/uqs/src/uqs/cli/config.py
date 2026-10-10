@@ -36,6 +36,7 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.paths import UqsError
+from uqs.stack import channel as stack_channel
 from uqs.stack import listing
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
@@ -199,6 +200,20 @@ def logs(
         bool,
         typer.Option("--print", help="With --multitail: show its command without running it"),
     ] = False,
+    channel: Annotated[
+        bool,
+        typer.Option(
+            "--channel",
+            help="Subscribe to the lines the processes publish (WARNING and up by default) "
+            "instead of reading their files - live, until Ctrl-C",
+        ),
+    ] = False,
+    ids: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--id", help="With --channel: only this worker or component's lines (repeatable)"
+        ),
+    ] = None,
 ) -> None:
     """Tail out_/err_*.log for one or more processes through the same
     colorized logger the CLI itself uses, instead of raw per-process files -
@@ -206,7 +221,19 @@ def logs(
 
     `--multitail` follows the same files in the `multitail` binary, one pane
     each: `logs all --multitail --stream err -c 2`.
+
+    `--channel` subscribes instead of reading files: every line the processes
+    publish, filtered by `--id` and `--level` - e.g. `logs all --channel
+    --level ERROR`, `logs fxpositions1 --channel --id fx_positions` (#1067).
     """
+    if ids and not channel:
+        _die(UqsError("--id needs --channel"))
+        return
+    if channel:
+        for option, used in {"--follow": follow, "--multitail": multitail}.items():
+            if used:
+                _die(UqsError(f"{option} does not apply with --channel, which is always live"))
+                return
     given = {
         "--stream": stream is not None,
         "--columns": columns is not None,
@@ -220,7 +247,9 @@ def logs(
             _die(UqsError(f"{option} {relation} --multitail"))
             return
     try:
-        if multitail:
+        if channel:
+            stack_channel.follow_channel(_paths(), _procs(procs), ids=ids or (), min_level=level)
+        elif multitail:
             argv = stack_multitail.multitail_command(
                 _paths(), _procs(procs), stream=stream or "both", columns=columns or 1, lines=lines
             )

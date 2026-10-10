@@ -985,7 +985,7 @@ def test_print_recent_logs_emits_sorted_by_time(fake_paths: UqsPaths, capsys):
     stack_logs.print_recent_logs(fake_paths, "discovery1")
 
     # print_recent_logs reconfigures loguru's sink onto sys.stdout at call
-    # time (see _configure_kdb_log_sink), i.e. after capsys has already
+    # time (see log_sink), i.e. after capsys has already
     # patched sys.stdout - unlike loguru's own un-configured default sink
     # (bound once, at import time), this one is reliably captured here.
     out = capsys.readouterr().out

@@ -45,11 +45,11 @@ _LEVEL_ORDER = {"TRACE": 5, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
 # The short names a log written before the rename still carries, read as the
 # level each one is. Only for READING such a file: they are not accepted
 # anywhere a level is chosen, and a parsed record never shows them.
-_LEGACY_LEVEL = {"ERR": "ERROR", "WARN": "WARNING", "INF": "INFO", "DBG": "DEBUG", "TRC": "TRACE"}
+LEGACY_LEVEL = {"ERR": "ERROR", "WARN": "WARNING", "INF": "INFO", "DBG": "DEBUG", "TRC": "TRACE"}
 
 # A line's level as one of the five. An unknown one reads as INFO, so a line
 # is never dropped for its label.
-_LOGURU_LEVEL = {**{name: name for name in _LEVEL_ORDER}, **_LEGACY_LEVEL}
+_LOGURU_LEVEL = {**{name: name for name in _LEVEL_ORDER}, **LEGACY_LEVEL}
 
 #: `--level`'s choices, least to most severe - derived, so a level added to
 #: _LEVEL_ORDER reaches every command's completion and help without a third
@@ -58,7 +58,7 @@ LEVEL_CHOICES = tuple(sorted(_LEVEL_ORDER, key=_LEVEL_ORDER.__getitem__))
 LEVEL_HELP = "Only show this level and above: " + "/".join(LEVEL_CHOICES)
 
 # Dedicated format for `logs` output - the record's own {time}/{function}/
-# {line} are Python's (always logger/core.py's _emit, useless here); the kdb
+# {line} are Python's (always logger/core.py's emit, useless here); the kdb
 # process's own timestamp/procname/proctype (bound as `extra` below) are
 # what's actually informative, so they replace them entirely rather than
 # just prefixing the message.
@@ -106,7 +106,7 @@ def _format_kdb_time(t: str) -> str:
     return f"{date}D{whole}.{frac[:3]}" if dot else t
 
 
-def _configure_kdb_log_sink() -> Any:
+def log_sink() -> Any:
     """(Re)configure the shared loguru logger for the duration of a `logs`
     or `up` stream, overriding whatever format main()'s
     configure_logging(component="uqs") set up for the rest of the CLI.
@@ -169,7 +169,7 @@ def parse_log_line(line: str) -> dict[str, str] | None:
         return None
     rec = dict(zip(_LOG_FIELDS, parts, strict=True))
     # One vocabulary out, whichever a file was written in.
-    rec["loglevel"] = _LEGACY_LEVEL.get(rec["loglevel"], rec["loglevel"])
+    rec["loglevel"] = LEGACY_LEVEL.get(rec["loglevel"], rec["loglevel"])
     return rec
 
 
@@ -203,7 +203,7 @@ def _passes_level(level: str, min_level: str | None) -> bool:
     return _LEVEL_ORDER.get(level, 0) >= _LEVEL_ORDER[wanted]
 
 
-def _emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
+def emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
     level = _LOGURU_LEVEL.get(rec["loglevel"], "INFO")
     if not _passes_level(level, min_level):
         return
@@ -257,9 +257,9 @@ def print_recent_logs(
     log, merged and sorted by timestamp, through the shared loguru logger.
     """
     records = get_recent_logs(paths, procs, lines, min_level)
-    log = _configure_kdb_log_sink()
+    log = log_sink()
     for rec in records:
-        _emit(log, rec, None)
+        emit(log, rec, None)
 
 
 def _pump(stream: Any, out_queue: Any) -> None:
@@ -345,7 +345,7 @@ def _follow(
 ) -> None:
     import queue
 
-    log = _configure_kdb_log_sink()
+    log = log_sink()
     line_queue: queue.Queue[str] = queue.Queue()
     tails: list[subprocess.Popen[str]] = []
     lock = threading.Lock()
@@ -379,7 +379,7 @@ def _follow(
 
     try:
         for rec in history() if history is not None else []:
-            _emit(log, rec, None)
+            emit(log, rec, None)
         if before is not None:
             before()
         if awaited:
@@ -387,7 +387,7 @@ def _follow(
         while True:
             rec = parse_log_line(line_queue.get())
             if rec is not None:
-                _emit(log, rec, min_level)
+                emit(log, rec, min_level)
     except KeyboardInterrupt:
         pass
     finally:
