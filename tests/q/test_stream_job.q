@@ -904,6 +904,40 @@ test_posbook_does_not_let_a_late_older_book_rewind_its_venue:{[t]
     lv:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;
         update time:.sjtest.d[3] from book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f],book[`okx;d[0];90f;91f]];
     .qunit.assertEquals[first exec mid from lv`state;100.5;"the price last_value publishes for the same books"]};
+
+test_posbook_marks_a_fill_reported_after_the_venues_requote:{[t]
+    / #1058: a fill executed at 10:00:00.000 is reported after binance
+    / requotes 100/102 at .100 and okx 101/103 at .200. Neither held top is
+    / at or before the execution, so pricing AT the fill's source_time found
+    / no venue and fell back to the fill's own 95. The mark is the reference
+    / as the books now stand - best bid 101 (okx), best ask 102 (binance):
+    / 101.5 - the price last_value publishes for the same books.
+    reset[];
+    s:`$"BTC-USDT";
+    book:{[s;v;st;b;a] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        update venue:v, source_time:st from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
+    books:book[`binance;d[0]+0D00:00:00.100;100f;102f],book[`okx;d[0]+0D00:00:00.200;101f;103f];
+    to_posbook[`market_data;books];
+    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
+        crypto_fill[s;1;95f;1f]]];
+    .testutil.assertApprox[first last_rows[]`mark_price;101.5;1e-9;
+        "marked at the books as they stand, not at the fill's own 95"];
+    lv:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;
+        update time:.sjtest.d[1] from books];
+    .qunit.assertEquals[first exec mid from lv`state;101.5;"the price last_value publishes for the same books"]};
+
+test_posbook_marks_a_batch_at_its_newest_fill_whatever_the_order:{[t]
+    / #1058: fills in one batch need not be in source_time order. The
+    / venue quoted 100/101 at 10:00:01; the batch's newer fill (10:00:02)
+    / sees it, the older one (10:00:00) arriving last would not. The batch's
+    / newest time prices it: 100.5 for both rows, not the fill's own price.
+    reset[];
+    s:`$"BTC-USDT";
+    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        update source_time:.sjtest.d[1] from crypto_book_row[s;100 99 98f;101 102 103f]]];
+    two:(update time:.sjtest.d[2] from crypto_fill[s;1;90f;1f]),crypto_fill[s;1;91f;1f];
+    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;two]];
+    .qunit.assertEquals[last_rows[]`mark_price;100.5 100.5;"both rows marked to the live book"]};
 / --- fx orders feed -------------------------------------------------------
 
 test_the_orders_feed_publishes_one_order_a_tick:{[t]
