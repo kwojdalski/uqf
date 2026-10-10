@@ -286,4 +286,39 @@ test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
     .qunit.assertEquals[e[0;1];`eod_cap;"naming the job"];
     .qunit.assertEquals[e[0;3]`cap;1;"and the cap it overran"]};
 
+/ --- a missed end of day (#1072) -------------------------------------------
+
+/ The errors missed_end_of_day logs for fx_positions with `marker` as the
+/ last end of day it saw (0Nd: none recorded), and `status` its carry's.
+missed:{[marker;status]
+    p:.qetl.job.stream.carry_marker_path `fx_positions;
+    system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    system "rm -f ",p,"*";
+    if[not null marker; .qetl.job.bounded.state.durable_set[p;([] last_end_of_day:enlist marker)]];
+    if[not null status; .qetl.job.stream.carry_log[`fx_positions]:(status;0;())];
+    e:errors .testutil.captured_log[0b] {.qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]};
+    .qetl.job.stream.replayed `fx_positions;
+    system "rm -f ",p,"*";
+    e}
+
+test_a_restart_after_a_missed_end_of_day_says_so:{[t]
+    e:missed[.z.D-3;`recording];
+    .qunit.assertEquals[count e;1;"one error: the book lacks what was carried from before today"];
+    .qunit.assertEquals[e[0;3]`last_end_of_day;.z.D-3;"naming the last end of day the job saw"]};
+
+test_a_flat_end_of_day_a_first_start_and_a_found_snapshot_are_quiet:{[t]
+    .qunit.assertEquals[count missed[.z.D-1;`recording];0;"yesterday's end of day was seen - its book was just flat"];
+    .qunit.assertEquals[count missed[0Nd;`recording];0;"a first start has no end of day to have missed"];
+    .qunit.assertEquals[count missed[.z.D-3;`restored];0;"a snapshot was found, so nothing is missing"]};
+
+test_end_of_day_records_the_day_a_carrying_job_saw_end:{[t]
+    record[`fx_positions];
+    p:.qetl.job.stream.carry_marker_path `fx_positions;
+    system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    `.qetl.job.stream.running set enlist `fx_positions;
+    .qetl.job.stream.end_of_day d0;
+    m:first (.qetl.job.bounded.state.durable_get p)`last_end_of_day;
+    system "rm -f ",p,"*";
+    .qunit.assertEquals[m;d0;"the date that ended, kept beside the ledgers"]};
+
 \d .

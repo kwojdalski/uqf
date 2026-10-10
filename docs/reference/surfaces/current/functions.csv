@@ -354,6 +354,7 @@ qetl.job.stream,at_horizons,function,2,name decl
 qetl.job.stream,bars,dict,,
 qetl.job.stream,carried_to,dict,,
 qetl.job.stream,carry_log,dict,,
+qetl.job.stream,carry_marker_path,function,1,job
 qetl.job.stream,clock,function,1,x
 qetl.job.stream,clock_of,function,2,now x
 qetl.job.stream,cursor_name,function,1,job
@@ -370,6 +371,7 @@ qetl.job.stream,horizons,dict,,
 qetl.job.stream,initial,dict,,
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
+qetl.job.stream,missed_end_of_day,function,2,job today
 qetl.job.stream,namespace,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
