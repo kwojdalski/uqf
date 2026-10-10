@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.interpreter import q_interpreter
+from uqs.interpreter import KDBX, identify, q_interpreter
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 
@@ -163,6 +163,10 @@ def test_a_job_with_its_plant_in_another_process_replays_the_plants_log(tmp_path
     import time
 
     q, env = _kdbx()
+    if identify(Path(q), env) != KDBX:
+        # three processes talking over ports; CI's PeachQ could not open a
+        # handle to the plant ('io), and this module is KDB-X's to run
+        pytest.skip("the multi-process run needs KDB-X")
     plant_port, job_port = _free_port(), _free_port()
     publish = tmp_path / "publish.q"
     publish.write_text(_PUBLISH.format(port=plant_port))
