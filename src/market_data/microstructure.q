@@ -309,8 +309,8 @@ quotes_for_sym:{[fn_name;quotes;target_sym]
 / First difference of the L0 mid price for one sym's quotes, time-ordered.
 / Index 0 is forced to 0n (no prior snapshot to diff against) - `deltas`
 / keeps a vector's first element as-is rather than nulling it (unlike
-/ `prev`), so it's overridden explicitly here. `til 1&count` is index 0 only
-/ when there is one, so a sym with no quotes gives `float$() (#1047).
+/ `prev`), so it's overridden explicitly - at `til 1&count`, index 0 only if
+/ there is one; "f"$ keeps a sym with no quotes `float$() on PeachQ (#1047).
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute velocity for
 / @return a vector, one velocity value per quote row for target_sym, in time order
@@ -320,7 +320,7 @@ mid_price_velocity:{[quotes;target_sym]
     sub:quotes_for_sym[`mid_price_velocity;quotes;target_sym];
     mids:mid_price[sub`bid_prices;sub`ask_prices];
     velocity:deltas mids;
-    @[velocity;til 1&count velocity;:;0n]};
+    "f"$@[velocity;til 1&count velocity;:;0n]};
 
 / Second difference of the L0 mid price for one sym's quotes. Index 0 is
 / already null from mid_price_velocity's own override (kept as-is by
@@ -333,7 +333,7 @@ mid_price_velocity:{[quotes;target_sym]
 / @throws error if quotes is missing a required column
 / @eg .qmicro.mid_price_acceleration[quotes;`EURUSD]
 mid_price_acceleration:{[quotes;target_sym]
-    deltas mid_price_velocity[quotes;target_sym]};
+    "f"$deltas mid_price_velocity[quotes;target_sym]};
 
 / Private: how one side's queue at one level moved between rows, the one
 / rule every snapshot-to-snapshot book feature reads (#1032). `move` is 1
@@ -351,8 +351,8 @@ side_transition:{[sub;level;side]
     if[not bid; px:0w^px];
     sz:0^level_at[sub $[bid;`bid_sizes;`ask_sizes];level];
     prev_px:prev px;
-    better:$[bid; px>prev_px; px<prev_px];
-    `move`size`prev_size!(?[px=prev_px; 0; ?[better; 1; -1]];sz;prev sz)};
+    / Arithmetic, not a nested ?[]: PeachQ makes that () on no rows (#1047).
+    `move`size`prev_size!($[bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev sz)};
 
 / Private: Cont-Kukanov-Stoikov per-side flow: new size if improved, size
 / change if held, minus the prior size if worsened (that queue is gone).
@@ -379,7 +379,7 @@ queue_depletion_rate:{[quotes;target_sym;side]
     tr:side_transition[sub;0;side];
     held:(0|tr[`prev_size]-tr`size)%tr`prev_size;
     rate:?[0=tr`move; held; ?[1=tr`move; 0f; 1f]];
-    @[rate;til 1&count rate;:;0n]};
+    "f"$@[rate;til 1&count rate;:;0n]};
 
 / L0 order flow imbalance (Cont-Kukanov-Stoikov): per side, if the price
 / improved vs the prior row that side's whole new size counts as "new"
@@ -399,7 +399,7 @@ queue_depletion_rate:{[quotes;target_sym;side]
 ofi:{[quotes;target_sym]
     sub:quotes_for_sym[`ofi;quotes;target_sym];
     raw:ofi_at_level[sub;0];
-    @[raw;til 1&count raw;:;0n]};
+    "f"$@[raw;til 1&count raw;:;0n]};
 
 / Private: ofi's e_bid-e_ask at one level, every row of sub; an absent level
 / is read as side_transition fills it, and two absent snapshots give zero.
@@ -421,7 +421,7 @@ ofi_multilevel:{[quotes;target_sym;n_levels]
     sub:quotes_for_sym[`ofi_multilevel;quotes;target_sym];
     per_level:ofi_at_level[sub;] each til n_levels;
     raw:sum per_level;
-    @[raw;til 1&count raw;:;0n]};
+    "f"$@[raw;til 1&count raw;:;0n]};
 
 / Rolling (moving-window) sum of an OFI series - a thin wrapper around
 / kdb+'s builtin msum, not a hand-rolled moving sum.
