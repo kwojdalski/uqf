@@ -335,10 +335,37 @@ mid_price_velocity:{[quotes;target_sym]
 mid_price_acceleration:{[quotes;target_sym]
     deltas mid_price_velocity[quotes;target_sym]};
 
-/ Queue depletion rate at L0 for one side: max(V_prev-V_cur,0)/V_prev -
-/ how much of the prior top-of-book size drained away, floored at 0 (a
-/ size increase is not "negative depletion"). Index 0 is forced to 0n (no
-/ prior snapshot).
+/ Private: how one side's queue at one level moved between rows, the one
+/ rule every snapshot-to-snapshot book feature reads (#1032). `move` is 1
+/ improved (bid up, ask down), 0 held, -1 worsened. An absent level has size
+/ 0 and a null bid / 0w ask price, so a withdrawn side worsens and a
+/ returning one improves. Callers null row 0.
+/ @param sub quotes for one sym, in time order
+/ @param level the level index, 0 the touch
+/ @param side `bid or `ask
+/ @return dict `move`size`prev_size, each a vector with one value per row
+/ @private
+side_transition:{[sub;level;side]
+    bid:side=`bid;
+    px:level_at[sub $[bid;`bid_prices;`ask_prices];level];
+    if[not bid; px:0w^px];
+    sz:0^level_at[sub $[bid;`bid_sizes;`ask_sizes];level];
+    prev_px:prev px;
+    better:$[bid; px>prev_px; px<prev_px];
+    `move`size`prev_size!(?[px=prev_px; 0; ?[better; 1; -1]];sz;prev sz)};
+
+/ Private: Cont-Kukanov-Stoikov per-side flow: new size if improved, size
+/ change if held, minus the prior size if worsened (that queue is gone).
+/ @param tr a side_transition dict
+/ @return a vector, one flow per row
+/ @private
+side_flow:{[tr]
+    ?[1=tr`move; tr`size; ?[0=tr`move; tr[`size]-tr`prev_size; neg tr`prev_size]]};
+
+/ Queue depletion rate at L0 for one side: how much of the prior top QUEUE
+/ drained away (#1031). Price held: max(V_prev-V_cur,0)/V_prev. Improved: 0,
+/ the prior queue sits untouched behind. Worsened: 1, it is gone. Index 0 is
+/ 0n. For the raw size change, use `deltas level_at[...;0]`.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute depletion for
 / @param side `bid or `ask
@@ -349,11 +376,9 @@ queue_depletion_rate:{[quotes;target_sym;side]
     sub:quotes_for_sym[`queue_depletion_rate;quotes;target_sym];
     if[not $[-11h=type side; side in `bid`ask; 0b];
         '"queue_depletion_rate: side must be `bid or `ask, got ",.Q.s1 side];
-    sizes_col:$[side=`bid; `bid_sizes; `ask_sizes];
-    l0:level_at[sub sizes_col;0];
-    prev_l0:prev l0;
-    depleted:0|prev_l0-l0;
-    rate:depleted%prev_l0;
+    tr:side_transition[sub;0;side];
+    held:(0|tr[`prev_size]-tr`size)%tr`prev_size;
+    rate:?[0=tr`move; held; ?[1=tr`move; 0f; 1f]];
     @[rate;0;:;0n]};
 
 / L0 order flow imbalance (Cont-Kukanov-Stoikov): per side, if the price
@@ -365,7 +390,7 @@ queue_depletion_rate:{[quotes;target_sym;side]
 / price comparisons against a null previous price do not themselves come
 / out null (a boolean comparison against 0n is just false, not null), so
 / without this override index 0 would silently pick a branch instead of
-/ nulling.
+/ nulling. It is exactly ofi_multilevel at one level (#1032).
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute OFI for
 / @return a vector, one OFI value per quote row for target_sym, in time order
@@ -373,39 +398,14 @@ queue_depletion_rate:{[quotes;target_sym;side]
 / @eg .qmicro.ofi[quotes;`EURUSD]
 ofi:{[quotes;target_sym]
     sub:quotes_for_sym[`ofi;quotes;target_sym];
-    bid_px:level_at[sub`bid_prices;0];
-    bid_sz:level_at[sub`bid_sizes;0];
-    ask_px:level_at[sub`ask_prices;0];
-    ask_sz:level_at[sub`ask_sizes;0];
-    prev_bid_px:prev bid_px;
-    prev_bid_sz:prev bid_sz;
-    prev_ask_px:prev ask_px;
-    prev_ask_sz:prev ask_sz;
-    e_bid:?[bid_px>prev_bid_px; bid_sz; ?[bid_px=prev_bid_px; bid_sz-prev_bid_sz; neg prev_bid_sz]];
-    e_ask:?[ask_px<prev_ask_px; ask_sz; ?[ask_px=prev_ask_px; ask_sz-prev_ask_sz; neg prev_ask_sz]];
-    raw:e_bid-e_ask;
+    raw:ofi_at_level[sub;0];
     @[raw;0;:;0n]};
 
-/ Private: ofi's e_bid-e_ask contribution at one specific level, across
-/ every row of sub. A level absent on a row (level_at's null) contributes
-/ 0 size (`0^` before use) rather than nulling that level's whole
-/ contribution. A missing bid price sorts below real prices; a missing ask
-/ is filled with positive infinity so it sorts above them. Disappearance
-/ therefore drains the previous size on either side, and reappearance adds
-/ the new size. Two absent snapshots contribute zero.
+/ Private: ofi's e_bid-e_ask at one level, every row of sub; an absent level
+/ is read as side_transition fills it, and two absent snapshots give zero.
 / @private
 ofi_at_level:{[sub;level]
-    bid_px:level_at[sub`bid_prices;level];
-    bid_sz:0^level_at[sub`bid_sizes;level];
-    ask_px:0w^level_at[sub`ask_prices;level];
-    ask_sz:0^level_at[sub`ask_sizes;level];
-    prev_bid_px:prev bid_px;
-    prev_bid_sz:prev bid_sz;
-    prev_ask_px:prev ask_px;
-    prev_ask_sz:prev ask_sz;
-    e_bid:?[bid_px>prev_bid_px; bid_sz; ?[bid_px=prev_bid_px; bid_sz-prev_bid_sz; neg prev_bid_sz]];
-    e_ask:?[ask_px<prev_ask_px; ask_sz; ?[ask_px=prev_ask_px; ask_sz-prev_ask_sz; neg prev_ask_sz]];
-    e_bid-e_ask};
+    side_flow[side_transition[sub;level;`bid]]-side_flow[side_transition[sub;level;`ask]]};
 
 / Multi-level order flow imbalance: ofi's e_bid/e_ask logic applied at
 / every level 0..n_levels-1 and summed, handling levels that appear or
