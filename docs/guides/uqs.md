@@ -390,9 +390,10 @@ the processes that hit PeachQ gaps, none of them in this tree:
 So end of day and the HDB don't work on it yet. It is a capture-and-query stack
 for today's data.
 
-A runtime on PeachQ can't have this tree's pipelines yet. PeachQ can't load the
-nested namespaces the ETL tree is built from (peachq-org/peachq#80), so
-declaring one with `pipelines=True` is refused when `runtimes.py` loads.
+A runtime on PeachQ can't load this tree's pipelines as written. PeachQ can't
+load the nested namespaces the ETL tree is built from (peachq-org/peachq#80), so
+declaring one with `pipelines=True` is refused when `runtimes.py` loads, unless
+the tree is flattened and the runtime marked experimental, as `peachq-etl` is.
 
 A new runtime's HDB holds only the starter pack's two sample partitions. To
 compare it with `uqf` on the same history, copy `uqf`'s partitions of the tables

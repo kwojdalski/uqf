@@ -1,7 +1,7 @@
 # Scaffolding
 
 `uqs job new` writes the skeleton of a process: its q files, its table, its
-registry entry and a failing test. Five shapes, one page each. Every command
+registry entry and a failing test. Seven shapes, one page each. Every command
 below was run against this tree, and the output shown is what it printed.
 
 ## Which shape
@@ -19,19 +19,19 @@ them:
   | a window a backfill just published             | its publication        | **reaction**   | [reaction.md](reaction.md)     |
   | outside q: a broker, a vendor's stream         | a Python publisher     | **external**   | [external.md](external.md)     |
 
-The first three are **streaming**: long-running processes that subscribe,
-compute and republish forever. The fourth is **bounded**: it takes a window from
-the environment, fills it, records coverage and exits. Picking the wrong one is
-the only structural mistake here that is expensive to undo, which is why the
+The first four are **streaming**: long-running processes that subscribe, compute
+and republish forever. The fifth is **bounded**: it takes a window from the
+environment, fills it, records coverage and exits. Picking the wrong one is the
+only structural mistake here that is expensive to undo, which is why the
 question is asked here, before anything is written.
 [new-pipeline.md](../guides/new-pipeline.md) takes the two shells apart once you
 have chosen.
 
-`--kind` names four of them --- `streaming` (the default), `normalizer`,
-`horizon`, `backfill`. There is no `--kind feed`: a streaming job that
-subscribes to nothing *is* a feed, and the scaffold derives that rather than
-asking twice. A reaction is `--triggered-by DATASET`, and is the one shape with
-no process of its own: it runs inside the process that publishes `DATASET`.
+`--kind` names five of them --- `streaming` (the default), `normalizer`,
+`horizon`, `backfill`, `external`. There is no `--kind feed`: a streaming job
+that subscribes to nothing *is* a feed, and the scaffold derives that rather
+than asking twice. A reaction is `--triggered-by DATASET`, and is the one shape
+with no process of its own: it runs inside the process that publishes `DATASET`.
 
 For a backfill taken all the way from scaffold to a filled database, see the
 worked example [from one kdb+ database to another](hdb-transfer.md). One script
