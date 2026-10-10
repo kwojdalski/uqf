@@ -481,6 +481,35 @@ test_hdb_upsert_writes_a_window_twice_without_duplicating:{[t]
     p:part[root;2026.01.02;`iodeals];
     .qunit.assertEquals[(count p;asc p`notional);(2;9e6 9e6);"two deals on the 2nd, each restated, none doubled"]};
 
+/ #1086: a batch whose keys a date does not hold is appended, not resolved
+/ into a rewrite of the whole date - with the same result.
+test_hdb_upsert_of_new_keys_adds_them_to_the_day:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    more:([] deal_time:enlist 2026.01.02D12:00:00.000000000; sym:enlist `AUDUSD; notional:enlist 5e6);
+    .qetl.io.write_keyed[m;`iodeals;more;hdb_opts`upsert];
+    p:part[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[(count p;asc p`notional);(3;1e6 2e6 5e6);"the day's two deals and the new one"]};
+
+test_hdb_new_keys_a_batch_repeats_fold_as_resolve_folds_them:{[t]
+    twice:([] deal_time:2#2026.01.02D12:00:00.000000000; sym:2#`AUDUSD; notional:5e6 6e6);
+    up:hdb_dir[];
+    .qetl.io.write_keyed[.qetl.io.hdb[up;`deal_time];`iodeals;twice;hdb_opts`upsert];
+    ig:hdb_dir[];
+    .qetl.io.write_keyed[.qetl.io.hdb[ig;`deal_time];`iodeals;twice;hdb_opts`ignore];
+    .qunit.assertEquals[(part[up;2026.01.02;`iodeals]`notional;part[ig;2026.01.02;`iodeals]`notional);(enlist 6e6;enlist 5e6);
+        "upsert keeps the last, ignore the first - one row either way"]};
+
+test_hdb_fail_with_one_clashing_date_writes_no_date:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    b:([] deal_time:2026.01.02D10:00:00.000000000 2026.01.03D12:00:00.000000000; sym:`GBPUSD`AUDUSD; notional:7e6 8e6);
+    .qunit.assertThrows[{[r;b] .qetl.io.write_keyed[.qetl.io.hdb[r;`deal_time];`iodeals;b;.iotest.hdb_opts`fail]}[root];b;
+        "on_conflict fail: *";"the 2nd's clash is refused"];
+    .qunit.assertEquals[count part[root;2026.01.03;`iodeals];1;"and the 3rd's new deal was not appended meanwhile"]};
+
 test_hdb_append_still_duplicates:{[t]
     root:hdb_dir[];
     m:.qetl.io.hdb[root;`deal_time];
