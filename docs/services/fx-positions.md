@@ -45,6 +45,22 @@ uqs query --port 6089 "select from fx_limit_breach"
 uqs query --port 6089                    # an interactive qcon session
 ```
 
+Breaches need limits, and the job loads them when it starts: a CSV named by
+`UQF_FX_POSITION_LIMITS`, one row per limit, with a header naming the scope
+columns it caps on (any of `sym`, `book`, `product`), then `metric`, `cap` and
+`severity`:
+
+```text
+sym,book,product,metric,cap,severity
+EURUSD,london,spot,base_qty,1000000,hard
+```
+
+A file that is missing or malformed stops the job from starting, rather than
+letting it police nothing. With no file the job starts and logs a warning, and
+`fx_limit_breach` stays empty until limits are loaded over IPC with
+`.qpipe.job.fx_positions.load_limits`. The limits are watched, so a change made
+over IPC, or a restart that drops one, is recorded in `config_change`.
+
 ### Without TorQ, on stock kdb+
 
 The same job also runs with no TorQ and no orchestrator, which is what makes it

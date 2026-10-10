@@ -30,7 +30,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `cryptomock1` | 6085 | feed | `processes/torq_stream.q` | — | — | `crypto_book`, `crypto_trades` |
 | `executions1` | 6086 | normalizer | `processes/torq_stream.q` | `executions` | `trades`, `crypto_trades`, `orders` | `executions` |
 | `fxordersfeed1` | 6088 | feed | `processes/torq_stream.q` | `orders` | — | `orders` |
-| `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `executions` | `fx_position`, `fx_limit_breach`, `fx_position_open` |
+| `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `executions` | `fx_position`, `fx_limit_breach`, `fx_position_open`, `config_change` |
 | `databento_backfill1` | 6090 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `upstream_backfill1` | 6091 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `marketdata1` | 6092 | normalizer | `processes/torq_stream.q` | `market_data` | `quote`, `fx_orderbook`, `crypto_book` | `market_data` |
@@ -89,7 +89,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 |---|---|---|
 | `arbitrage` | `plant_tables.q` | `arbitrage1` |
 | `client_flow` | `plant_tables.q` | `kafka_flow1` |
-| `config_change` | `plant_tables.q` | `crossarb1`, `superbook1` |
+| `config_change` | `plant_tables.q` | `crossarb1`, `fxpositions1`, `superbook1` |
 | `cross_arbitrage` | `plant_tables.q` | `crossarb1` |
 | `crypto_book` | `plant_tables.q` | `cryptomock1` |
 | `crypto_execution_quality` | `plant_tables.q` | `crypto_markout1` |

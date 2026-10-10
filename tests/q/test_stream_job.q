@@ -1374,4 +1374,52 @@ test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
     .qunit.assertEquals[r;1;"a row 600ms ahead counts once the shared lead is a second"];
     .qunit.assertEquals[`max_clock_lead in key `.qpipe.job.superbook;0b;"and superbook keeps no copy of it"]};
 
+/ --- fx_positions loads its limits at start (#1112) -------------------------
+/ Nothing used to: only tests called load_limits, so a running fxpositions1
+/ policed nothing and alert_sink, fed by fx_limit_breach, never fired.
+
+/ A limits CSV under build/, with `rows` under the header.
+limits_file:{[rows]
+    system "mkdir -p build";
+    f:":build/sjtest_fx_limits.csv";
+    (hsym `$f) 0: enlist["sym,book,product,metric,cap,severity"],rows;
+    1_f}
+
+/ fx_positions started on the fake transport, with no limits held, and
+/ whether its transport was connected.
+start_fx:{[path]
+    reset[];
+    `.qpipe.job.fx_positions.limits set 0#.qpipe.job.fx_positions.limits;
+    setenv[`UQF_FX_POSITION_LIMITS;path];
+    `.sjtest.connected set 0b;
+    tr:@[fake_transport[`fx_positions;()];`connect;:;{[] `.sjtest.connected set 1b;}];
+    @[.qetl.job.stream.start[`fx_positions];tr;{x}]}
+
+test_fx_positions_loads_its_limits_file_at_start:{[t]
+    r:start_fx limits_file ("EURUSD,london,spot,base_qty,1000000,hard";"GBPUSD,london,spot,base_qty,2000000,soft");
+    .qunit.assertEquals[(r;.sjtest.connected);(`fx_positions;1b);"started"];
+    .qunit.assertEquals[exec cap from .qpipe.job.fx_positions.limits;1e6 2e6;"both limits are policed from the first tick"]};
+
+test_a_malformed_limits_file_stops_the_start_before_it_connects:{[t]
+    r:start_fx limits_file enlist "EURUSD,,spot,base_qty,1000000,hard";
+    .qunit.assertTrue[(10h=type r) and r like "load_limits: book is null on some limit*";"refused, as load_limits refuses it"];
+    .qunit.assertEquals[.sjtest.connected;0b;"and nothing was opened: the job does not run blind"]};
+
+test_a_missing_limits_file_is_named:{[t]
+    r:start_fx "build/no_such_limits.csv";
+    .qunit.assertTrue[r like "read_limits: build/no_such_limits.csv does not exist*";"the path is in the refusal"]};
+
+test_no_limits_file_starts_and_polices_nothing:{[t]
+    .qunit.assertEquals[(start_fx "";count .qpipe.job.fx_positions.limits);(`fx_positions;0);
+        "it still starts - limits can be loaded over IPC - and says so in a warning"]};
+
+test_fx_positions_limits_are_watched:{[t]
+    .qunit.assertTrue[`.qpipe.job.fx_positions.limits in .qetl.cfg.audit.watching `fx_positions;
+        "a change over IPC, or a restart that drops one, reaches config_change"]};
+
+test_on_start_must_be_callable:{[t]
+    base:`procname`subscribe_to`publishes`period`on_timer!(`sjonstart1;`symbol$();`symbol$();0D00:00:01;{[] });
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_on_start_bad;];base,enlist[`on_start]!enlist 1;
+        "*on_start must be a niladic function*";"refused at declaration"]};
+
 \d .

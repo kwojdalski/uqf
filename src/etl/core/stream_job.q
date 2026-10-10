@@ -104,6 +104,10 @@ check_optional:{[job;decl]
     / reset whatever state it carries. Called with the date that ended.
     if[(`on_endofday in key decl) and not is_callable decl`on_endofday;
         '"define: ",string[job],"'s on_endofday must be a function of the date that ended"];
+    / What the job loads before it runs (#1112): configuration a running
+    / process needs and a declaration cannot hold, such as a limits file.
+    if[(`on_start in key decl) and not is_callable decl`on_start;
+        '"define: ",string[job],"'s on_start must be a niladic function"];
     / The shared transform the job applies, when it applies one: what a twin
     / refilling its table must apply too, and what `uqs job new --twin-of`
     / scaffolds into one (#884). Checked here, so a declared name cannot
@@ -174,7 +178,8 @@ check_replay:{[job;decl]
 /   and poll, for a polling feed (see stream_poll.q); optionally
 /   start_with_all (a boolean, default 0b), note (a string), transform
 /   (the registered transform it applies, which its backfill twin applies
-/   too - #884), on_endofday (a function of the date that ended, #943), and
+/   too - #884), on_endofday (a function of the date that ended, #943),
+/   on_start (a niladic function start calls first, #1112), and
 /   check with on_fail (a quality gate on what is published, #944), and
 /   state (a symbol list of the job's private variables, #967: their values
 /   as the job's file leaves them are what `reset` restores)
@@ -466,6 +471,8 @@ guarded:{[job;f;t;x]
 / Start a job on a transport: the one sequence every runner uses.
 / .
 / IN THIS ORDER, and the order is the point.
+/   0. on_start, before anything is opened: a job that cannot load what it
+/      needs (a malformed limits file) fails to start rather than run blind.
 /   1. connect.
 /   2. Wire publish - BEFORE subscribing, so a replay can reach it.
 /   3. Subscribe, which installs the handler first. With `replay` 1b the
@@ -495,6 +502,7 @@ start:{[job;tr]
     .[{.qetl.log.info[x;y;z]};(job;"starting streaming job";
         `subscribe_to`publishes`replay`timer!(tbls;d`publishes;replay;
             $[`period in key d; d`period; 0Nn]));::];
+    if[`on_start in key d; (d`on_start)[]];
     tr[`connect][];
     if[count d`publishes;
         if[`check_publishable in key tr; tr[`check_publishable] d`publishes];

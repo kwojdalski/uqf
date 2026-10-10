@@ -1079,10 +1079,12 @@ qpipe.job.fx_positions,limits,table,,
 qpipe.job.fx_positions,load_limits,function,1,limits
 qpipe.job.fx_positions,net_fills,function,2,book batch
 qpipe.job.fx_positions,on_batch,function,2,t x
+qpipe.job.fx_positions,on_start,function,1,
 qpipe.job.fx_positions,on_timer,function,1,
 qpipe.job.fx_positions,policed,value,,
 qpipe.job.fx_positions,positions,dict,,
 qpipe.job.fx_positions,publish,value,,
+qpipe.job.fx_positions,read_limits,function,1,path
 qpipe.job.fx_trades_feed,fill_rows,function,4,i side size slip_pips
 qpipe.job.fx_trades_feed,on_timer,function,1,
 qpipe.job.fx_trades_feed,pip_factor,value,,
