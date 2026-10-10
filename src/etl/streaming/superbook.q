@@ -14,12 +14,11 @@ books:`sym`source xkey .qetl.plant.published `market_data
 superbook:.qetl.plant.published `superbook
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
 max_age:0D00:00:05
-/ How far a source's clock may lead this host's and its rows still count.
-/ Every multi-venue feed has some skew: with none allowed, a venue a few ms
-/ ahead had every row refused as future-dated and vanished from the book
-/ while last_value kept it live (#1033). A row past it is still refused.
-/ The shared tolerance market_data's publish check also applies (#1021).
-max_clock_lead:.qmicro.max_clock_lead
+/ How far a source's clock may lead this host's is .qmicro.max_clock_lead:
+/ every multi-venue feed has some skew, and with none allowed a venue a few
+/ ms ahead vanished from the book while last_value kept it live (#1033). It
+/ is read where it is used, never copied here, so a change to it reaches
+/ superbook and market_data's publish check at once (#1021, #1063).
 
 / Remove non-executable levels, keeping prices and base sizes aligned.
 / @param prices a numeric vector
@@ -39,7 +38,7 @@ levels:{[prices;sizes]
 / Replace newer source snapshots. Equal timestamps use arrival order.
 / Empty or unusable sides replace the old side too; zero size is withdrawal.
 / Rows dated after as_of are ignored, so they cannot poison a source's
-/ watermark. on_batch passes the processing time plus max_clock_lead (#1033).
+/ watermark. on_batch passes the processing time plus .qmicro.max_clock_lead (#1033).
 / @param state latest snapshots keyed by sym and source
 / @param batch market_data rows; a plant time column may also be present
 / @param as_of the latest source_time accepted
@@ -124,7 +123,7 @@ snapshot:{[state;as_of;age;lead]
 / example whose result depends on whatever ran before it is worse than
 / none. tests/q/test_superbook.q drives it against a book it builds itself.
 refresh:{[as_of]
-    rows:snapshot[books;as_of;max_age;max_clock_lead];
+    rows:snapshot[books;as_of;max_age;.qmicro.max_clock_lead];
     if[count rows; .qpipe.job.superbook.publish[`superbook;rows]];
     }
 
@@ -151,11 +150,12 @@ on_batch:{[t;x]
     x:fx_only[x];
     if[0=count x; :()];
     now:.z.p;
-    latest:now+max_clock_lead;
+    lead:.qmicro.max_clock_lead;
+    latest:now+lead;
     ahead:select from x where source_time>latest;
     if[count ahead;
         .qetl.log.warn[`superbook;"rows dated past the allowed clock lead refused";
-            `sources`rows`max_clock_lead!(distinct ahead`source;count ahead;max_clock_lead)]];
+            `sources`rows`max_clock_lead!(distinct ahead`source;count ahead;lead)]];
     `.qpipe.job.superbook.books set replace_books[books;x;latest];
     refresh[now];
     }
@@ -171,7 +171,7 @@ on_timer:{[] refresh .z.p;}
 / The expiry window and the clock lead decide which liquidity counts as live,
 / so a change to either changes every snapshot downstream - worth recording
 / (#295, #1033).
-.qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qpipe.job.superbook.max_clock_lead];
+.qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qmicro.max_clock_lead];
 
 .qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state!(
     `superbook1;

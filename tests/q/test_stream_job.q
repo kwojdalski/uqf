@@ -1325,8 +1325,19 @@ test_market_data_check_names_bad_levels_and_future_stamps:{[t]
     lead:book[enlist 1.10;enlist 1e6;now+.qmicro.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
 
-test_superbook_takes_the_shared_clock_lead:{[t]
-    .qunit.assertEquals[.qpipe.job.superbook.max_clock_lead;.qmicro.max_clock_lead;
-        "one tolerance for a source's clock, read by market_data's check and superbook"]};
+/ #1063: superbook reads the shared lead when a batch arrives, not a copy
+/ taken at load, so tuning it moves superbook and market_data's check together.
+test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
+    saved:.qmicro.max_clock_lead;
+    `.qmicro.max_clock_lead set 0D00:00:01;
+    `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
+    .qetl.job.stream.wire[`superbook;{[t;x]}];
+    row:([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist .z.p+0D00:00:00.600;
+        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6);
+    r:@[{.qpipe.job.superbook.on_batch[`market_data;x]; count .qpipe.job.superbook.books};row;{x}];
+    `.qmicro.max_clock_lead set saved;
+    `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
+    .qunit.assertEquals[r;1;"a row 600ms ahead counts once the shared lead is a second"];
+    .qunit.assertEquals[`max_clock_lead in key `.qpipe.job.superbook;0b;"and superbook keeps no copy of it"]};
 
 \d .
