@@ -575,12 +575,12 @@ def _coverage(
     # reproducible and the test doubles can pin it, and a caller asking twice
     # in one request gets one consistent belief rather than two.
     as_of = dt.datetime.now(dt.UTC)
-    raw = gateway.route(
-        queries.COVERAGE, (dataset, partition, source_version, as_of), TIERS["both"]
-    )
-    # Composed and gapped by .qetl.coverage on the gateway, not here: the
-    # rule a backfill trusts when it skips a covered window has one
-    # implementation, and this reports what it says.
+    # From the ledger file the workers persist, read on the gateway (#1081):
+    # no RDB or HDB holds etl_coverage, so routing a select to the tiers found
+    # nothing a backfill had recorded. Composed and gapped by .qetl.coverage
+    # there too, not here: the rule a backfill trusts when it skips a covered
+    # window has one implementation, and this reports what it says.
+    raw = gateway.call(queries.COVERAGE, dataset, partition, source_version, as_of)
     covered = _rows(gateway.call(queries.COMPOSE, raw))
 
     requested = None

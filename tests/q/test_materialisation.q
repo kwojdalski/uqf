@@ -580,4 +580,26 @@ test_a_corrupted_ledger_file_reloads_its_previous_generation:{[t]
     .qunit.assertEquals[exec rows_published from .qetl.coverage.history[`ds_crash;`;`v1];enlist 10j;
         "the ledger as it stood before the last write, not an error"]};
 
+/ #1081: a reader that is not a worker - gateway1, for the frontend's
+/ /coverage - reads the claims from the ledger FILE the workers persist, not
+/ from a table in its own memory or on a tier that never holds one.
+test_claims_reads_what_the_workers_persisted:{[t]
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d[1];.coveragetest.d[2];5];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d[3];.coveragetest.d[4];5];
+    .qetl.coverage.stage_completion[`markouts;`;`v2;.coveragetest.d[5];.coveragetest.d[6];5];
+    / a reader in another process has no etl_coverage of its own
+    ![`.;();0b;enlist `etl_coverage];
+    c:.qetl.coverage.claims[`markouts;`;`v1;.z.p];
+    .qunit.assertEquals[c;([] range_from:enlist .coveragetest.d[1]; range_to:enlist .coveragetest.d[2]);
+        "the file's claim for this partition and release, and no other's"];
+    .qunit.assertEquals[count .qetl.coverage.claims[`markouts;`;`v1;.coveragetest.d[0]];0;
+        "and nothing recorded after the as-of"]};
+
+test_claims_with_no_ledger_yet_is_empty_not_an_error:{[t]
+    saved:getenv`UQF_STATUS_DIR;
+    setenv[`UQF_STATUS_DIR;"build/test-status-no-ledger"];
+    c:@[{.qetl.coverage.claims[`markouts;`;`v1;.z.p]};::;{x}];
+    setenv[`UQF_STATUS_DIR;saved];
+    .qunit.assertEquals[c;([] range_from:`timestamp$(); range_to:`timestamp$());"a first run has nothing to claim"]};
+
 \d .

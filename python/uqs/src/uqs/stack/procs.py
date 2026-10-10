@@ -78,11 +78,12 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: rather than replacing it, because the `load` column takes a
 #: space-separated list and TorQ loads it in order.
 #:
-#: gateway1 also loads src/etl/core/intervals.q - the coverage ledger's
-#: interval arithmetic and nothing else. The frontend's /coverage reads
-#: etl_coverage from both tiers, and only the gateway holds both halves, so
-#: it asks the gateway to compose them and find the gaps rather than keeping
-#: a second implementation of that rule in Python.
+#: gateway1 also loads the coverage ledger's reader and its arithmetic -
+#: status.q and backfill_state.q (where the ledger file is, and its durable
+#: read), intervals.q and materialisation.q (.qetl.coverage). The ledger is a
+#: file the bounded workers persist, held by no RDB or HDB, so the frontend's
+#: /coverage reads it here (.qetl.coverage.claims, #1081) and composes and
+#: gaps it here rather than keeping a second implementation in Python.
 #:
 #: hdb1 and dqe1 - the metatables (docs/guides/metatables.md). DQE sends
 #: `.dqe.uqf_metatable` to hdb1 by value and it runs there, so `.qmeta` must be
@@ -92,7 +93,13 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "gateway1": (
         (),
-        ("${UQF_ROOT}/src/etl/core/intervals.q", "${UQF_SCRIPTS}/processes/uqs_catalog.q"),
+        (
+            "${UQF_ROOT}/src/etl/core/status.q",
+            "${UQF_ROOT}/src/etl/core/backfill_state.q",
+            "${UQF_ROOT}/src/etl/core/intervals.q",
+            "${UQF_ROOT}/src/etl/core/materialisation.q",
+            "${UQF_SCRIPTS}/processes/uqs_catalog.q",
+        ),
     ),
     "hdb1": ((), ("${UQF_ROOT}/src/metadata/metatables.q",)),
     "dqe1": (

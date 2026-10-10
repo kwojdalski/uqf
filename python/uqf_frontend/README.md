@@ -208,12 +208,14 @@ a caller cannot omit it.
 Interval composition: `[range_from, range_to)` is half-open and adjacent
 intervals compose **only at their common boundary**, so `[Mon,Tue)` and
 `[Tue,Wed)` merge while `[Mon,Tue)` and `[Wed,Thu)` leave Tuesday as a reported
-gap. That arithmetic is not done here: the rows come back from both tiers, and
-the frontend sends them to `.qetl.coverage.compose` and `.qetl.coverage.gaps` on
-the gateway, which loads
-[`src/etl/core/intervals.q`](../../src/etl/core/intervals.q) for that. It is the
-same code a backfill uses to skip a covered window, so `/coverage` cannot
-disagree with what a backfill would do.
+gap. None of it is done here, and none of it reads a tier: the coverage ledger
+is a file the bounded workers persist (`.qetl.coverage.ledger_path`, beside
+their checkpoints), held by no RDB or HDB. The gateway loads its reader
+([`src/etl/core/materialisation.q`](../../src/etl/core/materialisation.q)), so
+`/coverage` and `require_coverage` call `.qetl.coverage.claims` there for the
+claims current now (#1081), then `.qetl.coverage.compose` and
+`.qetl.coverage.gaps`. It is the file and the code a backfill uses to skip a
+covered window, so `/coverage` cannot disagree with what a backfill would do.
 
 ### The schema it reads
 
