@@ -172,6 +172,11 @@ def _as_bound(ledger_value: str) -> str:
     return f"{date.replace('-', '.')}D{clock}.{fraction}"
 
 
+#: What `.qetl.source.fixture_version` appends to the release a run on a
+#: source's fixture records under.
+FIXTURE_TAG = "~fixture"
+
+
 def rerun_command(run: dict) -> str | None:
     """The command that re-runs `run`'s range - which, because coverage skips
     what is already covered, is also how a failed or interrupted run resumes.
@@ -182,9 +187,16 @@ def rerun_command(run: dict) -> str | None:
     needed = ("worker", "range_from", "range_to", "source_version")
     if any(not run.get(k) for k in needed):
         return None
+    # A run on a source's fixture recorded its release tagged (#1082); the
+    # command takes the release and asks for the fixture again.
+    version = str(run["source_version"])
+    fixture = version.endswith(FIXTURE_TAG)
+    if fixture:
+        version = version.removesuffix(FIXTURE_TAG)
     return (
         f"uqs backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
-        f"--to {_as_bound(str(run['range_to']))} --version {run['source_version']}"
+        f"--to {_as_bound(str(run['range_to']))} --version {version}"
+        + (" --fixture" if fixture else "")
     )
 
 

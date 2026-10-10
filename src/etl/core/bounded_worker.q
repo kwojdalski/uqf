@@ -775,7 +775,7 @@ fail_run:{[worker;e]
 / @private
 check_static:{[worker;run_spec]
     cfg:def worker;
-    write_state[worker;`source_version;run_spec`source_version];
+    write_state[worker;`source_version;.qetl.job.bounded.runtime.run_version[cfg`source;run_spec`source_version]];
     write_state[worker;`range_from;run_spec`range_from];
     write_state[worker;`range_to;run_spec`range_to];
 
@@ -853,7 +853,7 @@ init_body:{[worker;run_spec]
 
     / A deployment's --live (#800): no credential is refused here, before the
     / lock is taken or a row is read, rather than run on the fixture below.
-    if[not .qetl.source.has_credentials cfg`source; .qetl.source.refuse_fixture["init";cfg`source]];
+    if[not .qetl.source.has_credentials cfg`source; .qetl.job.bounded.runtime.refuse_fixture["init";cfg`source]];
 
     .qetl.job.bounded.state.acquire_lock worker;
 
@@ -895,7 +895,7 @@ init_body:{[worker;run_spec]
     .qetl.log.register[];
     .qetl.log.info[worker;"initialised";
         `source_version`range_from`range_to`live!
-        (run_spec`source_version;run_spec`range_from;run_spec`range_to;
+        (read_state[worker;`source_version];run_spec`range_from;run_spec`range_to;
          not null read_state[worker;`handle])];
 
     spec worker}
@@ -1041,7 +1041,7 @@ publish:{[worker;batch]
     cfg:def worker;
     w:read_state[worker;`last_window];
     opts:`on_conflict`row_key`time_column`range_from`range_to!
-        (on_conflict worker;cfg`target_key;cfg`window_column;w`range_from;w`range_to);
+        (.qetl.job.bounded.runtime.write_strategy[worker;w];cfg`target_key;cfg`window_column;w`range_from;w`range_to);
     .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}
 
 / The conflict strategy this run writes under: the operator's override when
@@ -1626,7 +1626,7 @@ advanced_to:{[worker;current;next_cursor]
 / @private
 publish_pending:{[worker] publish_last_batch[worker;]}
 
-publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last_batch]}
+publish_last_batch:{[worker;unused] .qetl.job.bounded.runtime.retire_fixture_claims[worker;own[worker;`publish] read_state[worker;`last_batch]]}
 
 / Release everything the worker holds. Safe on the failure branch too, since
 / release_lock is a no-op when not held.

@@ -189,7 +189,7 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
     if[0=count path;
         legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_markout_decomp: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
-    inverts:$[1=count path; enlist not (path 0)~cross_sym; (.qcross.ccy_orient_chain path)`inverts];
+    inverts:$[1=count path; enlist .qcross.leg_inverts[path 0;cross_sym]; (.qcross.ccy_orient_chain path)`inverts];
     n:count path;
     price_t0:.qcross.cross_ref_price_at[quotes;;t0;ref_size] each path;
     price_t1:.qcross.cross_ref_price_at[quotes;;t1;ref_size] each path;
@@ -197,7 +197,7 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
     if[not any null price_t0,price_t1;
         price_books:{[cross_sym;path;ref_size;books]
             $[1=count path;
-                (.qcross.single_leg_at_one_size[cross_sym;books 0;not (path 0)~cross_sym;ref_size])`mid;
+                (.qcross.single_leg_at_one_size[cross_sym;books 0;.qcross.leg_inverts[path 0;cross_sym];ref_size])`mid;
                 (.qcross.cross_book_chain_at_one_size[path;books;ref_size])`mid]};
         running:.qcross.leg_book_as_of[quotes;t0;] each path;
         end_books:.qcross.leg_book_as_of[quotes;t1;] each path;

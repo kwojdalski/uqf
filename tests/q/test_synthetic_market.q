@@ -64,7 +64,7 @@ test_a_ladder_is_as_deep_as_it_was_asked_for:{[t]
 
 test_sizes_grow_with_depth:{[t]
     sizes:.qsynth.levels_size 3;
-    .qunit.assertEquals[(first sizes;all 0<1_deltas sizes);(.qsynth.size_unit;1b);
-        "the top of book is one size_unit and every level below is deeper"]};
+    .qunit.assertEquals[(type sizes;first sizes;all 0<1_deltas sizes);(9h;"f"$.qsynth.size_unit;1b);
+        "floats, as fx_orderbook declares: the top of book is one size_unit and every level below is deeper"]};
 
 \d .

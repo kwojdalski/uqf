@@ -53,6 +53,10 @@
 /             .qetl.job.bounded.runtime.modes. validate and plan stop before
 /             any source is opened or anything written; dry_run fetches and
 /             writes nothing. `uqs backfill --mode` passes it.
+/   -fixture  optional: let a run with no credential write its source's
+/             fixture (#1082) - refused otherwise, outside a dry run.
+/             Its coverage is recorded under the release tagged ~fixture.
+/             `uqs backfill --fixture` passes it.
 / .
 / -worker, -from and -to are required and refused when absent, and -version
 / unless the worker declares a default. A backfill that defaulted a
@@ -103,6 +107,14 @@ use_on_conflict:{[opts]
 use_mode:{[opts]
     if[`mode in key opts; .qetl.cfg.set_override[`mode;first opts`mode]];
     .qetl.job.bounded.runtime.mode[]}
+
+/ Apply -fixture, when given, as the fixture_writes config override, which
+/ .qetl.source.fixture_writes_allowed reads.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return 1b when this run may write a fixture
+use_fixture:{[opts]
+    if[`fixture in key opts; .qetl.cfg.set_override[`fixture_writes;"1"]];
+    .qetl.source.fixture_writes_allowed[]}
 
 / Log a validate or plan report: one summary line, then the planned windows,
 / capped so a year of hourly windows does not bury the summary.
@@ -222,6 +234,7 @@ run:{[]
     if[not null oc; .qetl.log.info[worker;"on_conflict for this run";enlist[`on_conflict]!enlist oc]];
     md:use_mode .Q.opt .z.x;
     .qetl.log.info[worker;"mode";enlist[`mode]!enlist md];
+    if[use_fixture .Q.opt .z.x; .qetl.log.info[worker;"fixture writes allowed for this run";enlist[`fixture_writes]!enlist 1b]];
     / validate and plan stop here: no HDB, no ledger, no lock, no source.
     if[md~`validate; :report[worker;.qetl.job.bounded.validate[worker;spec]]];
     if[md~`plan; :report[worker;.qetl.job.bounded.plan_only[worker;spec]]];

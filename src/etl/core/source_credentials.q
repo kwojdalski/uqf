@@ -240,6 +240,39 @@ refuse_fixture:{[who;source]
         'who,": ",string[source]," has no credential and UQS_REQUIRE_LIVE_SOURCES=1 - refusing its fixture. Set ",
          credential_var[source],", or give it a row in sources.csv"]}
 
+/ May a bounded worker WRITE its source's fixture (#1082)? The fixture_writes
+/ flag - UQF_FIXTURE_WRITES, or `uqs backfill --fixture` - and off by
+/ default. A run with no credential used to publish synthetic rows into the
+/ dataset and record their windows as covered whenever a credential was
+/ simply missing, so the first live run after one was provisioned found the
+/ range done and fetched nothing. Writing a fixture is now something asked
+/ for. validate, plan and dry_run read it freely: they write nothing.
+/ Protected like the run mode: a loader without .qetl.cfg has no flag set.
+/ @return 1b when fixture writes were asked for, else 0b
+/ @eg .qetl.source.fixture_writes_allowed[]
+fixture_writes_allowed:{[] @[{.qetl.cfg.get_flag `fixture_writes};::;{0b}]}
+
+/ Refuse a run that would write `source`'s fixture unless that was asked for.
+/ @param who the caller, leading the message
+/ @param source the source that has no credential
+/ @throws error naming the source, its variable and the opt-in
+refuse_fixture_writes:{[who;source]
+    if[not fixture_writes_allowed[];
+        'who,": ",string[source]," has no credential - refusing to write its fixture. Set ",
+         credential_var[source],", or UQF_FIXTURE_WRITES=1 (uqs backfill --fixture) for a demo"]}
+
+/ The source_version a run on the fixture records coverage under: the
+/ release asked for, tagged. A fixture's coverage is a claim about the
+/ fixture, not about the source, so it must never answer "is this window
+/ done?" for a live run of the same release (#1082). Already-tagged is left
+/ as it is.
+/ @param v the release asked for
+/ @return v with ~fixture appended
+/ @eg .qetl.source.fixture_version `v1  ->  `$"v1~fixture"
+fixture_version:{[v]
+    s:string v;
+    $[s like "*~fixture"; v; `$s,"~fixture"]}
+
 / What this source's credential looks like, for an operator who has not set
 / one. The source's own `credential_example` when it declared one, and
 / otherwise the most that can be said from its transport alone.

@@ -307,6 +307,20 @@ test_a_required_live_source_refuses_its_fixture:{[t]
         "the refusal names the source and the variable to set"];
     .qunit.assertEquals[.qetl.source.live_required[];0b;"and cleared, nothing is required"]};
 
+/ --- fixture writes are asked for (#1082) ---------------------------
+
+test_fixture_writes_are_refused_unless_asked_for:{[t]
+    setenv[`UQF_FIXTURE_WRITES;""];
+    refused:@[{.qetl.source.refuse_fixture_writes["init";x]; ""};`demo_deals;{x}];
+    .qunit.assertTrue[refused like "init: demo_deals has no credential - refusing to write its fixture. Set UQF_SOURCE_CRED_DEMO_DEALS, or UQF_FIXTURE_WRITES=1*";
+        "the refusal names the source, its variable and the opt-in"];
+    setenv[`UQF_FIXTURE_WRITES;enlist "1"];
+    .qunit.assertEquals[@[{.qetl.source.refuse_fixture_writes["init";x]; 1b};`demo_deals;{0b}];1b;"asked for, it is a no-op"]};
+
+test_the_fixture_version_is_tagged_once:{[t]
+    .qunit.assertEquals[.qetl.source.fixture_version `v1;`$"v1~fixture";"the release, tagged"];
+    .qunit.assertEquals[.qetl.source.fixture_version `$"v1~fixture";`$"v1~fixture";"already tagged is left alone"]};
+
 / --- configured settings: sources.csv (#718) -----------------------
 
 settings_header:"source,transport,setting,secret_env"

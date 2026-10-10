@@ -270,3 +270,63 @@ def test_a_remote_publish_the_plant_refuses_throws_in_the_publisher(tmp_path: Pa
     finally:
         plant.kill()
         plant.wait(timeout=10)
+
+
+_ROLL_CHECK = """h:hopen {port};
+h"`.qetl.tick.log_date set .z.D-1";
+system "sleep 1";
+-1 "ROLLED:",string h"(.qetl.tick.log_date=.z.D)";
+exit 0
+"""
+
+
+def test_a_bare_plant_rolls_its_log_at_the_date_change(tmp_path: Path) -> None:
+    """#1075: the roll lives in run_stream's tick, which only a job's timer
+    used to install - so a bare `-plant` process never rolled, and wrote past
+    midnight into yesterday's log. Its date is wound back a day here, and its
+    own timer must roll it within a tick."""
+    import time
+
+    q, env = _kdbx()
+    if identify(Path(q), env) != KDBX:
+        pytest.skip("the multi-process run needs KDB-X")
+    port = _free_port()
+    check = tmp_path / "roll.q"
+    check.write_text(_ROLL_CHECK.format(port=port))
+    plant = subprocess.Popen(
+        [
+            q,
+            "scripts/processes/run_stream.q",
+            "-q",
+            "-plant",
+            str(port),
+            "-logdir",
+            str(tmp_path / "tplog"),
+        ],
+        cwd=UQF_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        out = ""
+        for _ in range(50):
+            done = subprocess.run(
+                [q, str(check), "-q"],
+                cwd=UQF_ROOT,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            out = done.stdout + done.stderr
+            if "ROLLED:" in out:
+                break
+            time.sleep(0.2)
+        assert _value(out, "ROLLED") == "1", out
+    finally:
+        plant.kill()
+        plant.wait(timeout=10)

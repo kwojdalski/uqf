@@ -350,9 +350,13 @@ side_transition:{[sub;level;side]
     px:level_at[sub $[bid;`bid_prices;`ask_prices];level];
     if[not bid; px:0w^px];
     sz:0^level_at[sub $[bid;`bid_sizes;`ask_sizes];level];
-    prev_px:prev px;
+    transition[side;px;sz;prev px;prev sz]};
+
+/ Private: side_transition's rule on read prices/sizes and the prior row's; the stream's too (#1111).
+/ @private
+transition:{[side;px;sz;prev_px;prev_sz]
     / Arithmetic, not a nested ?[]: PeachQ makes that () on no rows (#1047).
-    `move`size`prev_size!($[bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev sz)};
+    `move`size`prev_size!($[side=`bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev_sz)};
 
 / Private: Cont-Kukanov-Stoikov per-side flow: new size if improved, size
 / change if held, minus the prior size if worsened (that queue is gone).
@@ -1075,15 +1079,11 @@ require_sorted:{[what;times]
 stream_quotes_one:{[st;sub;window]
     n:count sub;
     bid_px:level_at[sub`bid_prices;0];
-    bid_sz:level_at[sub`bid_sizes;0];
     ask_px:level_at[sub`ask_prices;0];
-    ask_sz:level_at[sub`ask_sizes;0];
-    prev_bid_px:(st`bid_px),-1_bid_px;
-    prev_bid_sz:(st`bid_sz),-1_bid_sz;
-    prev_ask_px:(st`ask_px),-1_ask_px;
-    prev_ask_sz:(st`ask_sz),-1_ask_sz;
-    e_bid:?[bid_px>prev_bid_px; bid_sz; ?[bid_px=prev_bid_px; bid_sz-prev_bid_sz; neg prev_bid_sz]];
-    e_ask:?[ask_px<prev_ask_px; ask_sz; ?[ask_px=prev_ask_px; ask_sz-prev_ask_sz; neg prev_ask_sz]];
+    / read as side_transition reads them, the state too: a raw null ask nulled the flow (#1111)
+    bpx:bid_px; bsz:0^level_at[sub`bid_sizes;0]; apx:0w^ask_px; asz:0^level_at[sub`ask_sizes;0];
+    e_bid:side_flow[transition[`bid;bpx;bsz;(st`bid_px),-1_bpx;(st`bid_sz),-1_bsz]];
+    e_ask:side_flow[transition[`ask;apx;asz;(st`ask_px),-1_apx;(st`ask_sz),-1_asz]];
     flow:e_bid-e_ask;
     / the sym's very first row has no prior snapshot - null, as ofi's is
     if[0=st`rows; flow:@[flow;0;:;0n]];
@@ -1104,7 +1104,7 @@ stream_quotes_one:{[st;sub;window]
     variance:var_at[ret_hist;window;offset;first_row;] each til n;
     keep:neg window-1;
     new_st:`rows`time`bid_px`bid_sz`ask_px`ask_sz`mid`ofi_tail`ret_tail`rolling_ofi`return_variance!(
-        first_row+n;last sub`time;last bid_px;last bid_sz;last ask_px;last ask_sz;last mid;
+        first_row+n;last sub`time;last bpx;last bsz;last apx;last asz;last mid;
         keep sublist ofi_hist;keep sublist ret_hist;last rolled;last variance);
     (new_st;([] row:sub`row; ofi:flow; rolling_ofi:rolled; return_variance:variance))}
 

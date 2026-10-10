@@ -124,7 +124,17 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
     seen = {}
 
     def fake(
-        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+        paths,
+        worker,
+        version,
+        range_from,
+        range_to,
+        base_port,
+        verbose,
+        trace,
+        on_conflict,
+        mode,
+        fixture,
     ):
         seen.update(worker=worker, version=version, range=(range_from, range_to), port=base_port)
         seen["verbose"] = verbose
@@ -152,7 +162,17 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     seen = {}
 
     def fake(
-        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+        paths,
+        worker,
+        version,
+        range_from,
+        range_to,
+        base_port,
+        verbose,
+        trace,
+        on_conflict,
+        mode,
+        fixture,
     ):
         seen["verbose"] = verbose
         return type("Completed", (), {"returncode": 0})()
@@ -183,11 +203,56 @@ def test_an_unknown_on_conflict_is_refused_naming_the_strategies():
         backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, on_conflict="merge")
 
 
+def test_fixture_reaches_the_process_as_a_flag():
+    """#1082: a run with no credential writes its fixture only when asked."""
+    assert "-fixture" in backfill.backfill_flags(
+        "demo_deals_backfill", "v1", FROM, TO, fixture=True
+    )
+    assert "-fixture" not in backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO)
+
+
+def test_the_cli_passes_fixture_through(monkeypatch):
+    seen = {}
+
+    def fake(
+        paths,
+        worker,
+        version,
+        range_from,
+        range_to,
+        base_port,
+        verbose,
+        trace,
+        on_conflict,
+        mode,
+        fixture,
+    ):
+        seen["fixture"] = fixture
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(backfill, "start", fake)
+    argv = ["backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv += ["--to", "2026-09-15", "--fixture"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen == {"fixture": True}
+
+
 def test_the_cli_passes_on_conflict_through(monkeypatch):
     seen = {}
 
     def fake(
-        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+        paths,
+        worker,
+        version,
+        range_from,
+        range_to,
+        base_port,
+        verbose,
+        trace,
+        on_conflict,
+        mode,
+        fixture,
     ):
         seen["on_conflict"] = on_conflict
         return type("Completed", (), {"returncode": 0})()
@@ -218,7 +283,17 @@ def test_trace_on_the_command_line_reaches_the_process(monkeypatch):
     seen = {}
 
     def fake(
-        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+        paths,
+        worker,
+        version,
+        range_from,
+        range_to,
+        base_port,
+        verbose,
+        trace,
+        on_conflict,
+        mode,
+        fixture,
     ):
         seen.update(verbose=verbose, trace=trace)
         return type("Completed", (), {"returncode": 0})()
@@ -364,7 +439,17 @@ def test_the_cli_passes_the_mode_through(monkeypatch):
     seen = {}
 
     def fake(
-        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+        paths,
+        worker,
+        version,
+        range_from,
+        range_to,
+        base_port,
+        verbose,
+        trace,
+        on_conflict,
+        mode,
+        fixture,
     ):
         seen["mode"] = mode
         return type("Completed", (), {"returncode": 0})()
@@ -396,7 +481,17 @@ def test_the_cli_runs_without_version_for_a_worker_with_a_default(monkeypatch):
     seen = {}
 
     def fake(
-        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+        paths,
+        worker,
+        version,
+        range_from,
+        range_to,
+        base_port,
+        verbose,
+        trace,
+        on_conflict,
+        mode,
+        fixture,
     ):
         seen["version"] = version
         return type("Completed", (), {"returncode": 0})()

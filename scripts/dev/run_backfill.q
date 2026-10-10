@@ -17,7 +17,10 @@
 // or, when no driver is needed (the fixture path):
 //
 //   q scripts/dev/run_backfill.q -worker crypto_market_data_backfill \
-//       -version v2 -from 2026.09.11D21:00 -to 2026.09.11D23:00
+//       -version v2 -from 2026.09.11D21:00 -to 2026.09.11D23:00 -fixture
+//
+// -fixture is what lets a run with no credential write the fixture (#1082);
+// without it that run is refused.
 //
 // WHAT IT IS NOT. Not a replacement for `uqs backfill`, and deliberately
 // smaller: it does not register with discovery, does not tell a running HDB
@@ -81,6 +84,7 @@ worker:s`worker;
 ns:(.qetl.job.bounded.def worker)`ns;
 
 .qetl.log.info[worker;"run_backfill starting";s`spec];
+if[`fixture in key .Q.opt .z.x; .qetl.cfg.set_override[`fixture_writes;"1"]];
 .qdev.runbackfill.use_io[.Q.opt .z.x;worker];
 
 / Three named parameters so {...}[ns;spec] is a PROJECTION: .Q.trp calls

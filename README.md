@@ -207,7 +207,7 @@ a process that starts with the stack. It registers with discovery, so the fleet
 above has to be up:
 
 ```
-uv run uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15
+uv run uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
 `--from` and `--to` are required, and a date without an offset is UTC: a
@@ -215,7 +215,10 @@ backfill that silently defaulted its range would publish the wrong window and
 record coverage for it. `--version` may be left out only for a worker that
 declares a `source_version` - one whose source is never restated. `uqs` finds
 the process that runs the worker and passes all four to it as flags on its start
-line.
+line. `--fixture` is there because the demo has no credential for `demo_deals`:
+a run that would write a source's built-in fixture must ask to, and its coverage
+is recorded under `v1~fixture`, so it never counts as the source's own - a live
+run later over the same range still fetches it.
 
 **Add a pipeline.** `uqs job new` scaffolds one of three shapes, and `--dry-run`
 lists every file it would create or append to without writing any of them:

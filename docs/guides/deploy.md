@@ -487,7 +487,10 @@ which `uqs` uses in place of the vendored `lib/` trees. It exports
 `UQS_DATA_ROOT`, the data directory that every release shares, so a second
 deployment keeps the first one's HDB. It also exports `QCMD`, `QHOME`,
 `UQS_RUNTIME` and `UV_OFFLINE`, and with `--live`, `UQS_REQUIRE_LIVE_SOURCES`.
-If `shared/config/secrets.env` exists, it sources that too (see [credentials and
+Without `--live`, a backfill whose source has no credential is still refused
+unless run with `--fixture`, so a missing credential cannot quietly fill a
+server's tables with fixture rows. If `shared/config/secrets.env` exists, it
+sources that too (see [credentials and
 ODBC](sidecar-bundles.md#credentials-and-odbc)). See [the environment
 reference](../reference/environment.md).
 
