@@ -106,18 +106,18 @@ test_a_replay_rebuilds_the_state_without_publishing_it_again:{[t]
 / market_data sequence, with a withdrawn side and a non-positive level,
 / through all three and holds them to it.
 agreement_rows:{[]
-    ([] time:5#d[0]; sym:`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD; source:`a`b`c`d`e;
-        market:5#`fx; source_time:5#d[0];
-        bid_prices:(enlist 1.10;`float$();enlist 1.10;enlist 0f;enlist 1.10);
-        bid_sizes:5#enlist enlist 1e6;
-        ask_prices:(enlist 1.12;enlist 1.12;`float$();enlist 1.12;enlist 1.12);
-        ask_sizes:5#enlist enlist 1e6)}
+    ([] time:7#d[0]; sym:7#`EURUSD; source:`a`b`c`d`e`f`g;
+        market:7#`fx; source_time:7#d[0];
+        bid_prices:(enlist 1.10;`float$();enlist 1.10;enlist 0f;enlist 1.10;enlist 0w;enlist 1.10);
+        bid_sizes:7#enlist enlist 1e6;
+        ask_prices:(enlist 1.12;enlist 1.12;`float$();enlist 1.12;enlist 1.12;enlist 1.12;enlist 0w);
+        ask_sizes:7#enlist enlist 1e6)}
 
 test_all_consumers_agree_on_a_withdrawn_or_non_positive_side:{[t]
     x:agreement_rows[];
     ref:.qbook.top_sides x;
-    .qunit.assertEquals[ref`bid;1.10 0n 1.10 0n 1.10;"an empty ladder and a zero level are both a null side"];
-    .qunit.assertEquals[ref`ask;1.12 1.12 0n 1.12 1.12;"on either side"];
+    .qunit.assertEquals[ref`bid;1.10 0n 1.10 0n 1.10 0n 1.10;"an empty ladder, a zero level and an infinite one are all a null side (#1020)"];
+    .qunit.assertEquals[ref`ask;1.12 1.12 0n 1.12 1.12 1.12 0n;"on either side"];
     pb:.qpipe.job.posbook.crypto_books update market:`crypto from x;
     .qunit.assertEquals[(pb`bid;pb`ask);(ref`bid;ref`ask);"posbook's crypto books"];
     mk:.qpipe.job.crypto_markout.top_of_book update venue:source from x;

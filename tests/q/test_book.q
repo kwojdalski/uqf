@@ -95,4 +95,13 @@ test_book_from_wide_levels_composes_fold_then_symbolize:{[t]
     .qunit.assertEquals[(out 0)`bid_prices;1.1 1.2;"folds level columns"];
     .qunit.assertEquals[type out`sym;11h;"then casts sym_cols to symbol"]};
 
+/ #1020: an infinite level is no more a price than a zero one - superbook
+/ already refuses it (price<0w), so the one top-of-book rule must too.
+test_top_sides_takes_no_infinite_level_as_a_price:{[t]
+    x:([] bid_prices:(enlist 0w;enlist 1.10;enlist -0w;enlist 1.10);
+        ask_prices:(enlist 1.12;enlist 0w;enlist 1.12;enlist 1.12));
+    r:.qbook.top_sides x;
+    .qunit.assertEquals[r`bid;0n 1.10 0n 1.10;"an infinite bid, either sign, is a null side"];
+    .qunit.assertEquals[r`ask;1.12 0n 1.12 1.12;"and so is an infinite ask"]};
+
 \d .
