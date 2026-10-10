@@ -62,8 +62,9 @@
 / .
 /   A CASCADE TERMINATES. The same (dataset; range) is not dispatched twice
 /   within one drain, and `max_depth` bounds how far a chain may travel. A
-/   cycle in the graph therefore stops rather than spinning - .qetl.dag.topological
-/   refuses a cycle at registration, but a handler can always publish anywhere.
+/   cycle in the graph therefore stops rather than spinning - .qetl.dag.check_acyclic
+/   refuses a cycle among DECLARED outputs when src/etl/init.q finishes loading
+/   (not at `register`), but a handler can always publish anywhere.
 
 \d .qetl.reaction
 
@@ -97,8 +98,9 @@ max_depth:8
 / worker's inputs and outputs come from the source declaration and therefore
 / cannot disagree with what it does. A handler is an arbitrary lambda that
 / could write anywhere, so `outputs` here is a CLAIM about it - which is worth
-/ having (it puts the reaction in the graph, where a cycle is refused at
-/ registration rather than surviving until max_depth stops it at runtime) but
+/ having (it puts the reaction in the graph, where a cycle is refused when the
+/ declarations finish loading - .qetl.dag.check_acyclic, not `register` -
+/ rather than surviving until max_depth stops it at runtime) but
 / is not the same kind of fact. `derived` is 0b for these, so a reader of the
 / graph can tell which edges were checked and which were promised. Use
 / `on_worker` where the answer IS derivable.

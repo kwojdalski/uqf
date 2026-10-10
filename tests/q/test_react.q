@@ -335,6 +335,23 @@ test_a_reactive_cycle_is_refused_by_the_graph:{[t]
     .qunit.assertTrue[(err like "*cycle*") and err like "*a~to_b*";  / two likes: >1 inner * throws 'nyi
         "the cycle is refused at graph time and names the reactions in it"]};
 
+/ #1090: the load path runs this check, so a cyclic pair must make it throw,
+/ and the registry must be left as it was whether or not it threw.
+test_the_load_time_check_refuses_a_reactive_cycle:{[t]
+    .qetl.reaction.on_writing[`a;`to_b;`b;{[ds;f;t] 1}];
+    .qetl.reaction.on_writing[`b;`to_a;`a;{[ds;f;t] 1}];
+    keep:.qetl.dag.jobs;
+    .qunit.assertThrows[{.qetl.dag.check_acyclic[]};::;"*cycle among*";
+        "a cyclic on_writing pair is refused by the check init.q runs after loading"];
+    .qunit.assertEquals[.qetl.dag.jobs;keep;"a refused check leaves the graph registry untouched"]};
+
+test_the_load_time_check_passes_an_acyclic_graph:{[t]
+    .qetl.reaction.on_writing[`a;`to_b;`b;{[ds;f;t] 1}];
+    keep:.qetl.dag.jobs;
+    n:.qetl.dag.check_acyclic[];
+    .qunit.assertEquals[(n>0;.qetl.dag.jobs);(1b;keep);
+        "an acyclic graph returns its job count and is not left populated"]};
+
 test_a_worker_reaction_derives_its_output_rather_than_claiming_it:{[t]
     / The case that keeps dag.q's "derive, never re-declare" rule: the output
     / is read from the worker's own declaration, so the graph entry cannot
