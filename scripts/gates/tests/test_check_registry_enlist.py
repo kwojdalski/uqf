@@ -41,7 +41,7 @@ def test_an_enlisted_indexed_write_passes(tmp_path, no_exemptions):
 def test_a_bare_indexed_write_fails_naming_the_line(tmp_path, no_exemptions):
     found = gate.problems(_tree(tmp_path, "define:{[n;d]\n    registry[n]:d}\n"))
     assert len(found) == 1
-    assert found[0].startswith("src/etl/core/kind.q:4: registry[...]")
+    assert found[0].startswith("src/etl/core/kind.q:4: registry gets a bare value")
 
 
 def test_a_fully_qualified_write_is_checked_too(tmp_path, no_exemptions):
@@ -78,3 +78,29 @@ def test_an_exemption_for_a_registry_that_is_gone_fails(tmp_path, monkeypatch):
     found = gate.problems(_tree(tmp_path, ""))
     assert len(found) == 1
     assert found[0].startswith("NOT_DICTS lists registry in src/etl/core/gone.q")
+
+
+@pytest.mark.parametrize(
+    ("bad", "good"),
+    [
+        (
+            "define:{[n;d] registry,:enlist[n]!enlist d}\n",
+            "define:{[n;d] registry,:enlist[n]!enlist enlist d}\n",
+        ),
+        (
+            "define:{[n;d] @[`.qetl.kind.registry;n;:;d]}\n",
+            "define:{[n;d] @[`.qetl.kind.registry;n;:;enlist d]}\n",
+        ),
+        (
+            "define:{[n;d] `.qetl.kind.registry upsert enlist[n]!enlist d}\n",
+            "define:{[n;d] `.qetl.kind.registry upsert enlist[n]!enlist enlist d}\n",
+        ),
+    ],
+    ids=["append-in-place", "functional-amend", "upsert"],
+)
+def test_every_form_that_adds_an_entry_is_held_to_the_idiom(tmp_path, no_exemptions, bad, good):
+    """#1061: `,:`, `@[...;:;...]` and `upsert` collapse a dict of dicts as
+    surely as an indexed write, and passed the gate un-enlisted."""
+    found = gate.problems(_tree(tmp_path / "bad", bad))
+    assert len(found) == 1 and found[0].startswith("src/etl/core/kind.q:3: registry")
+    assert gate.problems(_tree(tmp_path / "good", good)) == []
