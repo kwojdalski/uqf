@@ -523,8 +523,17 @@ cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
 / of its own. Nulls out rather than throwing if no quote exists yet for
 / some required leg at or before as_of, so a caller sweeping many timestamps
 / (cross_markout_at_horizons, cross_markout_decomp) can null one bad
-/ lookup instead of failing the whole batch.
+/ lookup instead of failing the whole batch. That is the ONLY null: any
+/ other failure is re-raised, and a ref_size that is not a positive number
+/ is refused up front - a size of 0 used to come back as a column of nulls
+/ that read as "no quotes at those times" (#1034).
+/ @throws error if ref_size is not a positive number, or anything
+/   cross_book_at throws other than leg_book_as_of's no-quote refusal
 cross_ref_price_at:{[quotes;sym;as_of;ref_size]
-    @[{[quotes;sym;ref_size;as_of] first cross_book_at[quotes;sym;as_of;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];as_of;{0n}]};
+    if[not $[(type ref_size) within -9 -5h; ref_size>0; 0b];
+        '"cross_ref_price_at: ref_size must be a positive number, got ",.Q.s1 ref_size];
+    @[{[quotes;sym;ref_size;as_of] first cross_book_at[quotes;sym;as_of;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];
+        as_of;
+        {[e] $[e like "leg_book_as_of: no quote for *"; 0n; 'e]}]};
 
 \d .
