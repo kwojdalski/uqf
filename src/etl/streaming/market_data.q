@@ -61,7 +61,10 @@ from_crypto_book:{[batch]
 
 / The rows market_data is about to publish, held to the .qdqc checks (#944):
 / a crossed book (bid at or through the ask) and a quote stale against the
-/ newest in its batch. A book with an empty side is NOT a failure - the
+/ newest in its batch. And to what a book must be before ANY consumer reads
+/ it (#1021), judged here once rather than by each: a level 0 that is not a
+/ price by .qbook.level_ok (`bad_level), and a source_time further ahead of
+/ this host than .qmicro.max_clock_lead (`bad_time). A book with an empty side is NOT a failure - the
 / withdrawal is how a venue pulls its book, and `one_sided is the check's
 / word for it - and a wide spread is a thin market, not bad data, so neither
 / is withheld.
@@ -94,8 +97,18 @@ check:{[rows]
         bid_sizes:rows`bid_sizes; ask_prices:rows`ask_prices; ask_sizes:rows`ask_sizes);
     stale:.qdqc.check_stale_quotes[real;max rows`source_time;0D00:05];
     late:where pair in exec sym from stale where status=`stale;
-    crossed,([] check:count[late]#`stale_quote; status:count[late]#`stale;
-        detail:count[late]#enlist "older than the batch's newest quote by over 5 minutes"; row:late)}
+    stale:([] check:count[late]#`stale_quote; status:count[late]#`stale;
+        detail:count[late]#enlist "older than the batch's newest quote by over 5 minutes"; row:late);
+    / An empty ladder is a withdrawal, not a bad level: only a level that is
+    / there and is not a price fails.
+    off:{[px;sz] $[count px; not .qbook.level_ok["f"$first px;"f"$first sz]; 0b]};
+    bad:where off'[rows`bid_prices;rows`bid_sizes] or off'[rows`ask_prices;rows`ask_sizes];
+    level:([] check:count[bad]#`bad_level; status:count[bad]#`bad_level;
+        detail:count[bad]#enlist "a level-0 price or size that is not positive and finite"; row:bad);
+    ahead:where rows[`source_time]>.z.p+.qmicro.max_clock_lead;
+    timed:([] check:count[ahead]#`bad_time; status:count[ahead]#`future;
+        detail:count[ahead]#enlist "source_time is further ahead of this host than .qmicro.max_clock_lead"; row:ahead);
+    crossed,stale,level,timed}
 
 \d .
 

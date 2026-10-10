@@ -104,4 +104,23 @@ test_top_sides_takes_no_infinite_level_as_a_price:{[t]
     .qunit.assertEquals[r`bid;0n 1.10 0n 1.10;"an infinite bid, either sign, is a null side"];
     .qunit.assertEquals[r`ask;1.12 0n 1.12 1.12;"and so is an infinite ask"]};
 
+/ #1021: one rule for "this level is a price", shared by top_sides,
+/ superbook and market_data's publish check.
+test_a_level_is_a_price_when_price_and_size_are_positive_and_finite:{[t]
+    .qunit.assertEquals[.qbook.level_ok[1.1 0 -1 0w 1.1 1.1 1.1 0n;1e6 1e6 1e6 1e6 0 -1 0w 1e6];10000000b;
+        "zero, negative, infinite or null - in price or in size - is not a price"]};
+
+test_top_sides_takes_no_zero_size_level_as_a_price:{[t]
+    x:([] bid_prices:(enlist 1.10;enlist 1.10); bid_sizes:(enlist 1e6;enlist 0f);
+        ask_prices:(enlist 1.12;enlist 1.12); ask_sizes:(enlist 0w;enlist 1e6));
+    r:.qbook.top_sides x;
+    .qunit.assertEquals[(r`bid;r`ask);(1.10 0n;0n 1.12);"a level with no usable size is a null side, as superbook drops it"]};
+
+test_superbook_and_top_sides_agree_on_level_0:{[t]
+    px:(1.10;0w;1.10;0f;1.10);
+    sz:(1e6;1e6;0f;1e6;0w);
+    x:([] bid_prices:enlist each px; bid_sizes:enlist each sz; ask_prices:5#enlist enlist 1.12; ask_sizes:5#enlist enlist 1e6);
+    sb:{first .qpipe.job.superbook.levels[enlist x;enlist y]`price}'[px;sz];
+    .qunit.assertEquals[sb;(.qbook.top_sides x)`bid;"superbook keeps exactly the level-0 prices top_sides does"]};
+
 \d .

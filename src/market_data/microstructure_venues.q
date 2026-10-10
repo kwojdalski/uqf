@@ -60,6 +60,12 @@ own_book_mids:{[x]
 / marks (#886). Five seconds, superbook's expiry window for FX.
 reference_max_age:0D00:00:05
 
+/ How far a source's clock may lead this host's and its book still count as
+/ current: market_data's publish check refuses a book dated further ahead
+/ (#1021), and superbook takes it as its default (#1033). Every multi-venue
+/ feed has some skew; past this, the stamp is wrong rather than early.
+max_clock_lead:0D00:00:00.250
+
 / The best mid across venues at each target (sym; time).
 / .
 / Per venue, the latest top of book at or before the target (aj); dropped
