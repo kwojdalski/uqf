@@ -65,7 +65,7 @@ def test_anything_else_is_shown_exactly_as_it_was(message):
 
 
 def test_the_follow_path_renders_through_the_same_function(monkeypatch):
-    """Recent and follow both print through _emit, so they cannot disagree."""
+    """Recent and follow both print through emit, so they cannot disagree."""
     seen = []
 
     class _Log:
@@ -76,7 +76,7 @@ def test_the_follow_path_renders_through_the_same_function(monkeypatch):
             seen.append((level, message))
 
     rec = {"time": "2026.08.22D14:21:10.0", "procname": "p", "proctype": "t"}
-    stack_logs._emit(_Log(), {**rec, "loglevel": "TRACE", "message": IPC}, None)
+    stack_logs.emit(_Log(), {**rec, "loglevel": "TRACE", "message": IPC}, None)
     assert seen == [("TRACE", render_query_trace(IPC))]
 
 

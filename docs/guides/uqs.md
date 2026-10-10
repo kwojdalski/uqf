@@ -807,6 +807,25 @@ uqs logs --multitail stp1 -n 100 --print        # show the multitail command, ru
 A process that has never started has no log and gets no pane; a name that is not
 a process is refused. Press `q` to leave multitail.
 
+`uqs logs --channel` subscribes to the lines the processes publish instead of
+reading their files. Every TorQ process publishes its log to a `logmsg` table
+through its own pub/sub, which is what TorQ's monitor reads. A channel picks the
+processes, the worker or component (`--id`, repeatable) and a minimum `--level`,
+and prints matching lines live until Ctrl-C:
+
+```
+uqs logs all --channel --level ERROR                  # every error, from every process
+uqs logs fxpositions1 --channel --id fx_positions     # one job's warnings and errors
+```
+
+Only what a process publishes reaches a channel. WARNING and ERROR are published
+by default, INFO and below are not (`scripts/torqconfig/settings/default.q` maps
+`.lg.pubmap` onto these names). A process that is down, or restarts, is reported
+once and resubscribed. Each subscribed process holds one more connection, so on
+a stack near its licence connection limit, name processes rather than `all`.
+`-f` reads the files, so it is the one to use when a process is not running or
+is not a TorQ process, such as the external feeds.
+
 **`uqs up` is the foreground form of all this**: it starts what `start` would -
 the same names, `all`, or `--profile` - then streams those processes' logs to
 this console until Ctrl-C, which stops what it started, the way

@@ -375,7 +375,7 @@ def test_follow_logs_shows_the_recent_lines_then_what_is_appended(tmp_path, monk
         if len(seen) == 2:
             raise KeyboardInterrupt  # how a user stops it; must end cleanly
 
-    monkeypatch.setattr(logs, "_emit", stop_after_two)
+    monkeypatch.setattr(logs, "emit", stop_after_two)
 
     def append_later():
         time.sleep(0.5)
@@ -392,7 +392,7 @@ def test_follow_logs_with_no_history_starts_at_the_end(tmp_path, monkeypatch):
     paths = _paths_with_logs(tmp_path, monkeypatch, {"out_rdb1.log": [LINE_INF]})
     target = tmp_path / "logs" / "out_rdb1.log"
     seen: list[dict[str, str]] = []
-    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+    monkeypatch.setattr(logs, "emit", _stop_after_first(seen))
 
     def append_later():
         time.sleep(0.5)
@@ -412,7 +412,7 @@ def test_follow_logs_follows_the_alias_to_a_restarted_processs_new_file(tmp_path
     log_dir = tmp_path / "logs"
     (log_dir / "out_rdb1.log").symlink_to("out_rdb1_1.log")
     seen: list[dict[str, str]] = []
-    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+    monkeypatch.setattr(logs, "emit", _stop_after_first(seen))
 
     def restart_later():
         time.sleep(0.5)
@@ -441,7 +441,7 @@ def test_follow_during_reads_a_log_the_start_creates_from_its_first_line(tmp_pat
     paths = _paths_with_logs(tmp_path, monkeypatch, {})
     target = tmp_path / "logs" / "out_rdb1.log"
     seen: list[dict[str, str]] = []
-    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+    monkeypatch.setattr(logs, "emit", _stop_after_first(seen))
 
     logs.follow_during(paths, ["rdb1"], lambda: target.write_text(LINE_INF + "\n"))
 
@@ -454,7 +454,7 @@ def test_follow_during_is_following_before_the_start_runs(tmp_path, monkeypatch)
     paths = _paths_with_logs(tmp_path, monkeypatch, {"out_rdb1.log": [LINE_INF]})
     target = tmp_path / "logs" / "out_rdb1.log"
     seen: list[dict[str, str]] = []
-    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+    monkeypatch.setattr(logs, "emit", _stop_after_first(seen))
 
     def start():
         time.sleep(0.5)  # the tail has the file open by now
@@ -476,7 +476,7 @@ def test_a_line_below_the_minimum_level_is_not_emitted(capsys):
     log = logcore.setup_logging(level="DEBUG", colored_output=False)
     rec = logs.parse_log_line(LINE_INF)
     assert rec is not None
-    logs._emit(log, rec, "WARNING")
+    logs.emit(log, rec, "WARNING")
     assert "started" not in capsys.readouterr().out
 
 
@@ -512,9 +512,9 @@ def test_the_kdb_sink_formats_uqs_records_too(capsys):
     not one word of the instruction explaining what to run.
     """
     from uqs.logger import get_logger
-    from uqs.stack.logs import _configure_kdb_log_sink
+    from uqs.stack.logs import log_sink
 
-    _configure_kdb_log_sink()
+    log_sink()
     log = get_logger(__name__)
     try:
         log.error("{}", "the data directory has moved")
@@ -534,9 +534,9 @@ def test_the_kdb_sink_still_formats_kdb_records_as_kdb(capsys):
     them stream past."""
     from uqs.logger import get_logger
     from uqs.logger.core import setup_logging
-    from uqs.stack.logs import _configure_kdb_log_sink
+    from uqs.stack.logs import log_sink
 
-    _configure_kdb_log_sink()
+    log_sink()
     log = get_logger(__name__)
     try:
         log.bind(kdb_time="2026.09.24D13:28:55.853", procname="cross1", proctype="metrics").info(

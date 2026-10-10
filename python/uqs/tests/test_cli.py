@@ -66,6 +66,7 @@ from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import alive, listing, probe, runtime, stream_health
+from uqs.stack import channel as stack_channel
 from uqs.stack import clean as stack_clean
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
@@ -1361,6 +1362,48 @@ def test_logs_refuses_options_for_the_other_viewer(monkeypatch, argv, message):
     _patch(monkeypatch, stack_multitail, "run_multitail")
     _patch(monkeypatch, stack_logs, "print_recent_logs")
     assert runner.invoke(cli.app, ["logs", *argv]).exit_code == 1
+    assert any(message in m for m in errors.messages), errors.messages
+
+
+def test_channel_subscribes_with_its_ids_and_level(monkeypatch):
+    """#1067: --channel reads what the processes publish, not their files."""
+    recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
+    chan = _patch(monkeypatch, stack_channel, "follow_channel")
+    result = runner.invoke(
+        cli.app,
+        [
+            "logs",
+            "rdb1",
+            "--channel",
+            "--id",
+            "fx_positions",
+            "--id",
+            "posbook",
+            "--level",
+            "ERROR",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert recent.calls == []
+    assert chan.args[1] == "rdb1"
+    assert list(chan.kwargs["ids"]) == ["fx_positions", "posbook"]
+    assert chan.kwargs["min_level"] == "ERROR"
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["--id", "fx_positions"], "--id needs --channel"),
+        (["--channel", "-f"], "--follow does not apply with --channel"),
+        (["--channel", "--multitail"], "--multitail does not apply with --channel"),
+    ],
+)
+def test_logs_refuses_channel_options_out_of_place(monkeypatch, argv, message):
+    errors = _error_log(monkeypatch)
+    chan = _patch(monkeypatch, stack_channel, "follow_channel")
+    _patch(monkeypatch, stack_logs, "print_recent_logs")
+    assert runner.invoke(cli.app, ["logs", *argv]).exit_code == 1
+    assert chan.calls == []
     assert any(message in m for m in errors.messages), errors.messages
 
 
