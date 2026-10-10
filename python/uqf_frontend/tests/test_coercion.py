@@ -111,14 +111,16 @@ def test_filters_split_into_three_parallel_lists():
 
 def test_guid_accepts_a_well_formed_run_id():
     got = coerce("8c6b8b64-6815-6084-0a3e-178401251b68", QType.GUID, "run_id", as_list=False)
-    assert got == "8c6b8b64-6815-6084-0a3e-178401251b68"
+    # bytes: kola sends them as a char vector, which .uqf.browse parses with
+    # "G"$. A str would arrive as a symbol and fail on a guid column (#1042).
+    assert got == b"8c6b8b64-6815-6084-0a3e-178401251b68"
 
 
 def test_guid_normalises_case_and_surrounding_form():
     # uuid.UUID accepts braces and uppercase; normalising here means the q side
     # sees one spelling and an exact-match filter cannot miss by formatting.
     got = coerce("{8C6B8B64-6815-6084-0A3E-178401251B68}", QType.GUID, "run_id", as_list=False)
-    assert got == "8c6b8b64-6815-6084-0a3e-178401251b68"
+    assert got == b"8c6b8b64-6815-6084-0a3e-178401251b68"
 
 
 def test_guid_rejects_a_non_string():
@@ -141,5 +143,5 @@ def test_run_id_is_filterable_on_the_coverage_table():
     assert (cols, ops, vals) == (
         ["run_id"],
         ["eq"],
-        ["8c6b8b64-6815-6084-0a3e-178401251b68"],
+        [b"8c6b8b64-6815-6084-0a3e-178401251b68"],
     )

@@ -409,6 +409,10 @@ def create_app(
         )
 
         if req.require_coverage is not None:
+            # The coverage dataset is read too, so it is authorised as a
+            # table in its own right: otherwise a 409's gaps disclose the
+            # coverage of a dataset /coverage would refuse with 403 (#1044).
+            authorise(request, table=req.require_coverage.dataset)
             _enforce_coverage(gateway, req.require_coverage)
 
         capped = min(req.limit, settings.max_rows)
