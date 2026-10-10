@@ -164,13 +164,22 @@ reload_interval:{[]
 / What has been finished and not yet reloaded, and when the last reload was.
 reload_state:`dirty`last!(0b;0Np)
 
-/ The HDB manager's on_ready: reload when .qetl.io.due says so.
+/ The HDB manager's on_ready: reload when .qetl.io.due says so. What is
+/ written stays owed until every registered HDB has reloaded it (#1084):
+/ one that refused or failed is asked again at the next on_ready, and the
+/ run's final call that still falls short says so - its rows are on disk
+/ and covered, but a running HDB is serving the map from before them.
 / @param status `finished`pending`final from .qetl.io.flush or .qetl.io.finish
 / @return 1b when it asked the HDB to reload
 on_hdb_ready:{[status]
     d:.qetl.io.due[.qproc.backfill.reload_state;status;.z.p;reload_interval[]];
-    `.qproc.backfill.reload_state set d`state;
-    if[d`act; .qtorq.reload_hdb[]];
+    s:d`state;
+    if[d`act;
+        r:.qtorq.reload_hdb[];
+        s:.qetl.io.acknowledged[s;r];
+        if[s[`dirty] and status`final;
+            .qetl.log.err[`backfill;"backfill finished with rows a running hdb has not reloaded - they are on disk and covered, and appear there when it reloads or restarts";r]]];
+    `.qproc.backfill.reload_state set s;
     d`act}
 
 / Point every worker that declares no io of its own at the HDB, partitioned
@@ -229,10 +238,13 @@ run:{[]
     .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist .qtorq.elapsed_ms t1];
     t2:.z.p;
     r:(` sv ns,`run)[];
+    / No reload here: the run's finish step called on_hdb_ready with final
+    / set, which reloads if anything finished since the last one - and what
+    / it could not get a running HDB to reload is reported beside the run,
+    / apart from whether the rows were written (#1084).
+    r:r,enlist[`hdb_unreloaded]!enlist .qproc.backfill.reload_state`dirty;
     .qetl.log.info[worker;"backfill process finished";
         r,`run_ms`total_ms!(.qtorq.elapsed_ms t2;.qtorq.elapsed_ms t0)];
-    / No reload here: the run's finish step called on_hdb_ready with final
-    / set, which reloads if anything finished since the last one.
     r}
 
 \d .
