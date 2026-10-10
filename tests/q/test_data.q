@@ -9,7 +9,7 @@
 \d .datatest
 
 testParseEnvParsesKeyValuePairs:{[t]
-    f:`:/tmp/uqf_test_data_parseenv1.env;
+    f:hsym `$"/tmp/uqf_test_data_parseenv1_",string[.z.i],".env";
     f 0: ("FOO=bar";"BAZ=1/2/3");
     d:.qdata.parseEnv[f];
     hdel f;
@@ -17,7 +17,7 @@ testParseEnvParsesKeyValuePairs:{[t]
     .qunit.assertEquals[d`BAZ;"1/2/3";"value containing extra `=`-free chars survives untouched"]};
 
 testParseEnvIgnoresCommentsAndBlankLines:{[t]
-    f:`:/tmp/uqf_test_data_parseenv2.env;
+    f:hsym `$"/tmp/uqf_test_data_parseenv2_",string[.z.i],".env";
     f 0: ("# a comment";"";"FOO=bar";"   ");
     d:.qdata.parseEnv[f];
     hdel f;

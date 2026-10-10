@@ -116,14 +116,14 @@ test_a_result_within_the_limits_is_returned_unchanged:{[t]
     .qunit.assertEquals[.dataaccess.checkresponsesize[`tablename`maxrows`maxbytes!(`x;3;1000000);r];r;"as merged"]};
 
 test_a_policy_file_allowing_an_unknown_operation_is_refused:{[t]
-    f:`:/tmp/qpoltest_policy.csv;
+    f:hsym `$"/tmp/qpoltest_policy_",string[.z.i],".csv";
     f 0:("tablename,role,maxrange,requiredfilters,operations,functions,maxrows,maxbytes,timeout,basis";
         "trades,,0D01:00:00,,raw|everything,,10,10,0D00:00:30,x");
     .qunit.assertThrows[.checkinputs.readquerypolicy;f;
         "querypolicy: trades - operations must be one or more of raw|aggregate";"a typo must not widen access"]};
 
 test_a_policy_file_with_a_missing_limit_is_refused:{[t]
-    f:`:/tmp/qpoltest_policy.csv;
+    f:hsym `$"/tmp/qpoltest_policy_",string[.z.i],".csv";
     f 0:("tablename,role,maxrange,requiredfilters,operations,functions,maxrows,maxbytes,timeout,basis";
         "trades,,0D01:00:00,,raw,,,10,0D00:00:30,x");
     .qunit.assertThrows[.checkinputs.readquerypolicy;f;
