@@ -166,7 +166,18 @@ check_replay:{[job;decl]
             '"define: ",string[job],"'s state must be a symbol list naming variables in ",string[decl`ns]];
         absent:decl[`state] where not (decl`state) in key decl`ns;
         if[count absent; '"define: ",string[job],"'s state names ",(", " sv string absent),", which ",string[decl`ns]," does not define"];
-        initial[job]:enlist (decl`state)!get each ` sv'decl[`ns],/:decl`state];
+        initial[job]:enlist (decl`state)!get each ` sv'decl[`ns],/:decl`state;
+        / State says how it survives a restart (#1073): rebuilt by replay, or
+        / declared ephemeral with the reason losing it is acceptable. Neither
+        / was the default - a markout's pending fills, a superbook's books -
+        / and nothing asked a new job to choose.
+        replays:$[`replay in key decl; decl`replay; 0b];
+        if[$[`ephemeral in key decl; not (10h=type decl`ephemeral) and 0<count decl`ephemeral; 0b];
+            '"define: ",string[job],"'s ephemeral must be a string: why losing its state on a restart is acceptable"];
+        if[replays and `ephemeral in key decl;
+            '"define: ",string[job]," declares replay 1b and ephemeral - its state is rebuilt, so it is not ephemeral"];
+        if[not replays or `ephemeral in key decl;
+            '"define: ",string[job]," declares state but not how it recovers - declare replay 1b to rebuild it from the day's log, or ephemeral \"<why losing it on a restart is acceptable>\""]];
     }
 
 / Declare a streaming job. Called by the job's own file as it loads, so a

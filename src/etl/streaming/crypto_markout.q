@@ -114,7 +114,7 @@ score_markouts:{[real_fills;books]
 / book history, the timer and the eviction are the horizon kind's
 / (src/etl/core/horizon.q, #945); max_age makes the history drop every book
 / too old to count at any waiting fill's horizon.
-.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`publishes`horizon`period`max_age`by`note!(
+.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`publishes`horizon`period`max_age`by`note`ephemeral!(
     `crypto_markout1;
     `crypto_trades;
     `crypto_book;
@@ -124,4 +124,5 @@ score_markouts:{[real_fills;books]
     0D00:00:01;
     .qpipe.job.crypto_markout.max_age;
     `sym`venue;
-    "markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock")];
+    "markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock";
+    "fills waiting for their horizons at a restart are not scored, and the venue-book history is rebuilt from the next books; the job publishes scores, it holds no book of record")];

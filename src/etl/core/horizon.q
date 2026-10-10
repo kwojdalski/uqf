@@ -68,7 +68,7 @@ required_keys:`procname`events`reference`transform`publishes`horizon`period
 / What it may declare besides. The first five are the kind as #945 shipped
 / it; the rest (#952) are each OFF unless declared, so a declaration that
 / names none of them behaves exactly as before.
-optional_keys:`max_age`by`keep`start_with_all`note,
+optional_keys:`max_age`by`keep`start_with_all`note`ephemeral,
     `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after`max_lateness
 
 / What define installs in .qpipe.job.<name>. They are the shell's, documented
@@ -203,7 +203,7 @@ define:{[name;decl]
     / here, `{[ns] ...}[ns]` would run once, now, rather than per tick
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`score_ready) (get ` sv ns,`now)[]}[ns];
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
-    extra:((`start_with_all`note inter key decl)#decl),enlist[`state]!enlist `pending`history`completed`expired;
+    extra:((`start_with_all`note`ephemeral inter key decl)#decl),enlist[`state]!enlist `pending`history`completed`expired;
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform!(
         decl`procname;
         decl`events`reference;

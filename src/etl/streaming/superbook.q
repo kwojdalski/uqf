@@ -173,7 +173,7 @@ on_timer:{[] refresh .z.p;}
 / (#295, #1033).
 .qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qmicro.max_clock_lead];
 
-.qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state!(
+.qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state`ephemeral!(
     `superbook1;
     enlist `market_data;
     `superbook`config_change;
@@ -181,4 +181,5 @@ on_timer:{[] refresh .z.p;}
     0D00:00:00.500;
     .qpipe.job.superbook.on_timer;
     "latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there";
-    enlist `books)];
+    enlist `books;
+    "each source's next snapshot replaces its book, and a book older than max_age expires anyway, so a restart is whole again within one feed interval")];

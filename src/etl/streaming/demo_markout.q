@@ -86,7 +86,7 @@ score_markouts:{[trades;quotes]
 / however old, so the history keeps each pair's latest quote before the
 / oldest waiting fill, and drops the rest. `keep` filters both tables to the
 / demo's own pairs: `quote` also carries the starter pack's equity quotes.
-.qetl.job.stream.at_horizons[`demo_markout;`procname`events`reference`transform`publishes`horizon`period`keep`start_with_all`note!(
+.qetl.job.stream.at_horizons[`demo_markout;`procname`events`reference`transform`publishes`horizon`period`keep`start_with_all`note`ephemeral!(
     `demo_markout1;
     `trades;
     `quote;
@@ -96,4 +96,5 @@ score_markouts:{[trades;quotes]
     0D00:00:01.000;
     {[x] x[`sym] in .qsynth.pairs};
     1b;
-    "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two")];
+    "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two";
+    "fills waiting for their horizon at a restart are not scored - a demo's markouts, and hdb_demo_markouts_backfill scores the same fills from the HDB")];
