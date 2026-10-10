@@ -203,6 +203,28 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
     data:.Q.en[root;hdb_rows[partition_col;target;batch]];
     days:`date$data`time;
     dates:distinct days;
+    / NEW KEYS ARE APPENDED, not resolved into a rewrite (#1086). Every
+    / window used to read its date whole, resolve and swap it back, so a
+    / day filled window by window was rewritten once per window. Under
+    / upsert, ignore and fail, a batch none of whose keys a date already
+    / holds resolves to that date plus the batch - folded within itself as
+    / resolve folds it - so it is appended, as the append path does. Only
+    / when EVERY date is clean: one clash sends the whole batch the slow way,
+    / so a `fail on one date still leaves every date untouched. replace
+    / always rewrites - it removes the window's rows. Not on PeachQ, whose
+    / append path rewrites a partition whole anyway (it cannot upsert onto a
+    / splayed table), so there is nothing to save and the key probe would
+    / read a partition the way PeachQ cannot.
+    if[(not on_peachq) and not `replace=strategy;
+        kc:(),opts`row_key;
+        fold:data where $[`ignore=strategy; first_seen; last_seen] kc#data;
+        fdays:`date$fold`time;
+        clean:{[root;target;kc;fold;fdays;d]
+            part:hsym `$(string .Q.par[root;d;target]),"/";
+            if[()~key part; :1b];
+            if[not (exec t from meta fold)~exec t from meta part; :0b];
+            not any (kc#fold where fdays=d) in ?[part;();0b;kc!kc]}[root;target;kc;fold;fdays] each dates;
+        if[all clean; write_hdb[root;partition_col;target;fold]; :count batch]];
     if[`replace=strategy;
         span:{[f;t] f+til 1+t-f}[`date$opts`range_from;`date$opts[`range_to]-1];
         dates:distinct dates,span where (span<.z.d) and
