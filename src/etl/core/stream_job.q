@@ -548,6 +548,7 @@ start:{[job;tr]
             replay;{[e] (0b;e)}];
         pub set live;
         `.qetl.job.stream.replaying set 0b;
+        if[replay and `carry in key d; missed_end_of_day[job;.z.D]];
         replayed job;
         if[not first r; 'last r];
         if[`on_replayed in key d; (d`on_replayed)[]];
@@ -586,6 +587,10 @@ end_of_day:{[dt]
     / carried state first (#963): its snapshot opens the new day's log
     cs:running where {[j] `carry in key def j} each running;
     {[dt;j] @[snapshot;j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]}[dt;j]]}[dt] each cs;
+    / and the day each carrying job saw end, for a restart to tell a flat
+    / book from one that missed an end of day (#1072)
+    {[dt;j] @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path j;dt]}[dt];j;
+        {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]}[j]]}[dt] each cs;
     js:running where {[j] `on_endofday in key def j} each running;
     ok:{[dt;j] @[{[dt;j] (def[j]`on_endofday) dt; 1b}[dt];j;
         {[dt;j;e] .qetl.log.err[j;"on_endofday failed";`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
@@ -691,6 +696,34 @@ restore:{[job;h;x]
     carry_log[job]:(`restored;0;());
     {[h;hwm;b] rs:b 1; if[(not null hwm) and `time in cols rs; rs:select from rs where time>hwm]; if[count rs; h[b 0;rs]]}[h;hwm] each r 2;
     }
+
+/ Where a carrying job records the last day it saw end (#1072): beside the
+/ ledgers, in the status directory, so it outlives the process.
+/ @param job the job's name
+/ @return the file path
+/ @eg .qetl.job.stream.carry_marker_path `fx_positions
+carry_marker_path:{[job] (.qetl.job.bounded.state.lock_dir[]),"/carry_",string job}
+
+/ After a carrying job's replay, say whether it found no snapshot because
+/ it missed an end of day (#1072). The snapshot is written by a job RUNNING
+/ at the roll; one down across it leaves the new day's log without one, and
+/ the restart rebuilds from that day's fills alone - every position carried
+/ from before is missing. A first start (no marker) and a flat book at the
+/ last end of day (marker for yesterday, nothing to snapshot) are not that,
+/ and pass quietly. Detection only: the earlier days' logs are not replayed.
+/ @param job the job's name
+/ @param today the date the replayed log is for
+/ @return 1b when an end of day was missed, after logging it as an ERROR
+/ @eg .qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]
+missed_end_of_day:{[job;today]
+    if[`restored~first $[job in key carry_log; carry_log job; enlist `none]; :0b];
+    p:carry_marker_path job;
+    if[()~key hsym `$p; :0b];
+    last_eod:@[.qetl.job.bounded.state.durable_get;p;{[e] 0Nd}];
+    if[(null last_eod) or last_eod>=today-1; :0b];
+    .qetl.log.err[job;"replayed with no carried snapshot, and the last end of day this job saw was before yesterday - it was down at an end of day, so the state carried from before today is missing; replay the logs since then, or restart from a process that ran through end of day";
+        `last_end_of_day`today`table!(last_eod;today;def[job][`carry]`table)];
+    1b}
 
 / The replay of a job's log is over: forget what its carry recorded.
 / @param job the job's name
