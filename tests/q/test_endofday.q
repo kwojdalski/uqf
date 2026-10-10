@@ -294,7 +294,7 @@ missed:{[marker;status]
     p:.qetl.job.stream.carry_marker_path `fx_positions;
     system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
     system "rm -f ",p,"*";
-    if[not null marker; .qetl.job.bounded.state.durable_set[p;marker]];
+    if[not null marker; .qetl.job.bounded.state.durable_set[p;([] last_end_of_day:enlist marker)]];
     if[not null status; .qetl.job.stream.carry_log[`fx_positions]:(status;0;())];
     e:errors .testutil.captured_log[0b] {.qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]};
     .qetl.job.stream.replayed `fx_positions;
@@ -317,7 +317,7 @@ test_end_of_day_records_the_day_a_carrying_job_saw_end:{[t]
     system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
     `.qetl.job.stream.running set enlist `fx_positions;
     .qetl.job.stream.end_of_day d0;
-    m:.qetl.job.bounded.state.durable_get p;
+    m:first (.qetl.job.bounded.state.durable_get p)`last_end_of_day;
     system "rm -f ",p,"*";
     .qunit.assertEquals[m;d0;"the date that ended, kept beside the ledgers"]};
 

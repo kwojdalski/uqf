@@ -589,7 +589,8 @@ end_of_day:{[dt]
     {[dt;j] @[snapshot;j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]}[dt;j]]}[dt] each cs;
     / and the day each carrying job saw end, for a restart to tell a flat
     / book from one that missed an end of day (#1072)
-    {[dt;j] @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path j;dt]}[dt];j;
+    / A one-row table, not a bare date: PeachQ cannot read a `set` atom back.
+    {[dt;j] @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path j;([] last_end_of_day:enlist dt)]}[dt];j;
         {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]}[j]]}[dt] each cs;
     js:running where {[j] `on_endofday in key def j} each running;
     ok:{[dt;j] @[{[dt;j] (def[j]`on_endofday) dt; 1b}[dt];j;
@@ -719,7 +720,7 @@ missed_end_of_day:{[job;today]
     if[`restored~first $[job in key carry_log; carry_log job; enlist `none]; :0b];
     p:carry_marker_path job;
     if[()~key hsym `$p; :0b];
-    last_eod:@[.qetl.job.bounded.state.durable_get;p;{[e] 0Nd}];
+    last_eod:@[{first (.qetl.job.bounded.state.durable_get x)`last_end_of_day};p;{[e] 0Nd}];
     if[(null last_eod) or last_eod>=today-1; :0b];
     .qetl.log.err[job;"replayed with no carried snapshot, and the last end of day this job saw was before yesterday - it was down at an end of day, so the state carried from before today is missing; replay the logs since then, or restart from a process that ran through end of day";
         `last_end_of_day`today`table!(last_eod;today;def[job][`carry]`table)];
