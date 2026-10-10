@@ -72,8 +72,16 @@ def smoke_args(profile: str, sel: Selection) -> list[str]:
     """deploy_smoke.q's flags: every process the deployment starts, so the
     smoke loads exactly their declarations against the server's schema (#902).
     The smoke passes over the names that run no declared job."""
+    return ["-procs", *started_by(profile, sel.processes)]
+
+
+def started_by(profile: str, extra: Sequence[str]) -> list[str]:
+    """Every process `uqs start --profile <profile> <extra>` starts, and so
+    what undoing that start must stop. Never `stop all`: torq.sh reads `all`
+    as the startwithall=1 rows only, which leaves most profiles' jobs and
+    every extra process running (#1040)."""
     procs = profiles.resolve(n for n in profile.split(",") if n)
-    return ["-procs", *dict.fromkeys([*procs, *sel.processes])]
+    return list(dict.fromkeys([*procs, *extra]))
 
 
 #: A release from before #835 carries scripts/deploy_verify.py and no

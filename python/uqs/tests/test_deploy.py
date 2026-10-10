@@ -322,7 +322,19 @@ def test_failed_verification_stops_the_new_processes_and_never_activates(tmp_pat
         tmp_path, {"uqs deploy verify --profile": _verified(False, "no answer from rdb1")}
     )
     assert code == 1 and report["stage"] == "verify" and "rdb1" in report["error"]
-    assert remote.ran("uqs stop all") and not remote.ran(".current.new")
+    assert remote.ran("uqs stop discovery1 stp1 rdb1") and not remote.ran(".current.new")
+
+
+def test_a_failed_profile_release_stops_every_process_it_started(tmp_path):
+    """Never `stop all`: torq.sh reads that as the startwithall=1 rows only,
+    and arbitrage1, crossarb1 and superbook1 are not among them (#1040)."""
+    rules = {"uqs deploy verify --profile": _verified(False, "no answer from crossarb1")}
+    code, remote, report = _run(tmp_path, rules, args=["--profile", "arbitrage"])
+    assert code == 1 and "stopped the new release's processes" in report["rollback"]
+    (stop,) = [s for st, s in remote.scripts if st == "rollback" and "uqs stop" in s]
+    named = stop.split("uqs stop", 1)[1].split()
+    assert {"arbitrage1", "crossarb1", "superbook1", "rdb1"} <= set(named)
+    assert "all" not in named
 
 
 def test_a_failed_upgrade_restores_the_previous_release(tmp_path):
@@ -649,7 +661,7 @@ def test_a_report_that_cannot_be_written_fails_the_deployment_and_never_activate
     }
     code, remote, report = _run(tmp_path, rules)
     assert code == 1 and report["stage"] == "report"
-    assert not remote.ran(".current.new") and remote.ran("uqs stop all")
+    assert not remote.ran(".current.new") and remote.ran("uqs stop discovery1 stp1 rdb1")
 
 
 def test_a_recovered_previous_release_is_verified_with_its_own_verifier(tmp_path):
@@ -861,7 +873,7 @@ def test_a_failed_live_check_blocks_activation_and_rolls_back(tmp_path):
     )
     assert code == 1 and report["stage"] == "live-check"
     assert "deals_db failed connect" in report["error"] and "hunter2" not in report["error"]
-    assert remote.ran("uqs stop all") and not remote.ran(".current.new")
+    assert remote.ran("uqs stop discovery1 stp1 rdb1") and not remote.ran(".current.new")
 
 
 def test_the_odbc_setup_is_loaded_by_every_process_the_release_starts(tmp_path):

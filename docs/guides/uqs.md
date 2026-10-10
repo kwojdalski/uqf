@@ -30,7 +30,7 @@ draws the topology.
 ./install.sh               # once: checks prerequisites, puts `uqs` on your PATH
 uqs start all              # every startwithall=1 process
 uqs summary                # status table
-uqs stop all               # stop everything
+uqs stop all               # stop every startwithall=1 process
 ```
 
 Without the install - in CI or a fresh checkout - prefix each command with

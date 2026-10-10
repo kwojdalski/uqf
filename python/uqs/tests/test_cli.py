@@ -166,6 +166,13 @@ def test_a_lifecycle_command_calls_its_core_function(monkeypatch, command, fn):
     assert rec.args[1] == "all", "the default process selector is 'all'"
 
 
+def test_a_bare_stop_says_it_stops_the_startwithall_rows_not_everything_running():
+    """`stop` with no names hands torq.sh `all`, which is the startwithall=1
+    rows only - the help must not promise every running process (#1040)."""
+    shown = runner.invoke(cli.app, ["stop", "--help"]).output
+    assert "startwithall=1" in shown and "every running process" not in shown
+
+
 @pytest.fixture
 def _known_procs(monkeypatch):
     """Put the real guard back, against a two-row stub registry.

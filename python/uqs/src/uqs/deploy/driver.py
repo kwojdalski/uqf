@@ -13,7 +13,7 @@ from uqs.deploy.artifact import Artifact, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
-from uqs.deploy.selection import Selection, select_jobs, smoke_args, verify_args
+from uqs.deploy.selection import Selection, select_jobs, smoke_args, started_by, verify_args
 from uqs.deploy.stages import Deployment, Report
 from uqs.logger import get_logger
 from uqs.paths import repo_root
@@ -361,7 +361,8 @@ def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
     notes = []
     if started and release:
         try:
-            dep.uqs(release, "rollback", "stopping the new processes", "stop", "all")
+            dep.uqs(release, "rollback", "stopping the new processes", "stop",
+                    *started_by(dep.cfg.profile, dep.selection.processes))  # fmt: skip
             notes.append("stopped the new release's processes")
         except DeployError as exc:
             notes.append(f"FAILED to stop the new release's processes: {exc}")

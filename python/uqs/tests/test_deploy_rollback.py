@@ -117,12 +117,32 @@ def test_a_target_that_does_not_verify_leaves_the_server_where_it_began():
     assert code == 1 and result["rollback"] == "failed" and result["current"] == NEW
     assert result["restore"] == "restored"
     assert not remote.ran(".current.new"), "current never moves"
-    assert remote.ran(f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop all")
     restart = remote.index(
         f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"
     )
     assert restart > remote.index("uqs deploy verify --profile fx")
     assert remote.ran("uqs deploy verify --profile essential"), "and the restore is verified"
+
+
+def test_a_target_that_does_not_verify_is_stopped_by_name_never_by_all():
+    """`stop all` would leave the target's startwithall=0 processes and its
+    extra ones running beside the restored release (#1040)."""
+    remote = _server(target_verifies=False)
+    _roll(remote)
+    assert not remote.ran(".venv/bin/uqs stop all")
+    assert remote.ran(f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop rdb1 piggy1")
+
+
+def test_a_report_naming_no_processes_stops_its_profile_and_extras():
+    remote = _server()
+    remote.rules[f"releases/{NEW}/deploy-report.json"] = _done(
+        _report("arbitrage", [], OLD, extra=["piggy1"])
+    )
+    code, _ = _roll(remote)
+    assert code == 0 and not remote.ran(".venv/bin/uqs stop all")
+    stop = next(s for _, s in remote.scripts if ".venv/bin/uqs stop" in s)
+    named = stop.split("uqs stop", 1)[1].split()
+    assert {"arbitrage1", "crossarb1", "superbook1", "piggy1"} <= set(named)
 
 
 def test_a_dry_run_stops_and_starts_nothing():
