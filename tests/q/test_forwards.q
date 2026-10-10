@@ -703,6 +703,29 @@ test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
     wrapper:{[q;trade_time] .qexec.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertThrows[wrapper;quotes;"cross_markout_at_horizons: no chain*";"no chain of available pairs connects AUD and JPY"]};
 
+test_cross_markout_at_horizons_rejects_a_non_positive_ref_size_instead_of_nulling:{[t]
+    / ref_size 0 - a natural guess at "top of book" - used to reach
+    / sweep_price's refusal inside cross_ref_price_at's guard and come back
+    / as a table of null markouts, read as "no quotes at those times" (#1034).
+    quotes:mk_ts_quotes_table[::];
+    trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
+    wrapper:{[q;trade_time] .qexec.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0D00:00:00;0]}[;trade_time];
+    .qunit.assertThrows[wrapper;quotes;"cross_ref_price_at: ref_size must be a positive number, got 0";"ref_size 0 is refused by name, not nulled"]};
+
+test_cross_ref_price_at_refuses_a_negative_or_non_numeric_ref_size:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.500000000;
+    .qunit.assertThrows[{[q;t0] .qcross.cross_ref_price_at[q;`AUDPLN;t0;-5]}[;t0];quotes;"cross_ref_price_at: ref_size must be a positive number, got -5";"a negative ref_size is refused"];
+    .qunit.assertThrows[{[q;t0] .qcross.cross_ref_price_at[q;`AUDPLN;t0;`big]}[;t0];quotes;"cross_ref_price_at: ref_size must be a positive number, got `big";"a symbol ref_size is refused"]};
+
+test_cross_ref_price_at_nulls_only_when_no_quote_exists_yet:{[t]
+    / the one documented null: a leg with no quote at or before as_of
+    quotes:mk_ts_quotes_table[::];
+    before:(min quotes`time)-0D00:00:01;
+    .qunit.assertTrue[null .qcross.cross_ref_price_at[quotes;`AUDPLN;before;1];"no quote yet for a leg is still a null"];
+    / anything else surfaces: unsorted quotes reach cross_book_at's own refusal
+    .qunit.assertThrows[{[q] .qcross.cross_ref_price_at[q;`AUDPLN;2026.01.01D00:00:00.500000000;1]};reverse quotes;"cross_book_at: quotes must be sorted*";"a failure other than no-quote-yet is re-raised, not nulled"]};
+
 test_cross_markout_decomp_rejects_quotes_missing_a_column:{[t]
     quotes:mk_ts_quotes_table[::];
     bad:delete ask_prices from quotes;
