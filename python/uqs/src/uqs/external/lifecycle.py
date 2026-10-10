@@ -22,6 +22,14 @@ process: once the OS gives it to something else, `running` would say the feed
 is up and `stop` would SIGTERM a stranger (#1043). A pid whose identity no
 longer matches, or a file with no identity to check, is stale: it is never
 signalled.
+
+`ps` prints the start time in the caller's locale and timezone, so the
+identity is always read under a fixed one: a feed started from an en_GB
+terminal and stopped from cron is the same process (#1055). A pid file
+written before that, in another environment, can mismatch on the start
+time's formatting alone; when the live process's command line is the one
+recorded it is neither signalled nor forgotten - its pid file stays and the
+operator decides.
 """
 
 from __future__ import annotations
@@ -42,22 +50,32 @@ log = get_logger(__name__)
 #: does not also stub the ps that identifies the process it spawned.
 _run = subprocess.run
 
+#: The locale and timezone every identity is read in, whoever asks (#1055).
+_PS_ENV = {"LC_ALL": "C", "TZ": "UTC0"}
+
+
+def _ps(pid: int, *fields: str, fixed: bool = True) -> str | None:
+    """ps's `fields` for `pid`, whitespace-normalised; None when it has none."""
+    args = ["ps"] + [a for f in fields for a in ("-o", f"{f}=")] + ["-p", str(pid)]
+    try:
+        out = _run(  # noqa: S603
+            args,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, **_PS_ENV} if fixed else None,
+        ).stdout
+    except OSError:
+        return None
+    return " ".join(out.split()) or None
+
 
 def process_identity(pid: int) -> str | None:
     """`pid`'s start time and argv, whitespace-normalised, or None when ps
     knows no such process. Start time to the second plus the command line is
-    what tells a pid's current holder from the process that once had it."""
-    try:
-        out = _run(  # noqa: S603
-            ["ps", "-o", "lstart=", "-o", "args=", "-p", str(pid)],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout
-    except OSError:
-        return None
-    identity = " ".join(out.split())
-    return identity or None
+    what tells a pid's current holder from the process that once had it. Read
+    in the C locale and UTC, so it does not depend on who asks."""
+    return _ps(pid, "lstart", "args")
 
 
 @dataclass(frozen=True)
@@ -100,7 +118,33 @@ class DetachedProcess:
         if recorded is None or not self._alive(recorded[0]):
             return False
         pid, identity = recorded
-        return bool(identity) and process_identity(pid) == identity
+        # The second read is a pid file from before #1055, in the caller's
+        # environment: it still matches when read back in the same one.
+        return bool(identity) and identity in (
+            process_identity(pid),
+            _ps(pid, "lstart", "args", fixed=False),
+        )
+
+    def _unconfirmed(self) -> int | None:
+        """The pid, when it is alive and not provably ours but runs the very
+        command line recorded: a start time formatted in another locale or
+        timezone (#1055) looks just like that, so it may well be the feed."""
+        recorded = self._recorded()
+        if recorded is None or not recorded[1] or self._ours():
+            return None
+        pid, identity = recorded
+        args = _ps(pid, "args")
+        if args and self._alive(pid) and identity.endswith(" " + args):
+            return pid
+        return None
+
+    def _refuse_unconfirmed(self, pid: int) -> UqsError:
+        return UqsError(
+            f"{self.label}: cannot confirm pid {pid} is the one it started - it runs "
+            "the recorded command line, but its start time was recorded in another "
+            f"format. Not signalled; check it with `ps -p {pid}`, stop it by hand "
+            f"if it is the feed, then remove {self.pid_path}"
+        )
 
     def running(self) -> bool:
         """Whether the recorded process is still alive and still ours."""
@@ -122,6 +166,8 @@ class DetachedProcess:
         """
         if self.running():
             raise UqsError(f"{self.label} is already running - stop it first")
+        if (unconfirmed := self._unconfirmed()) is not None:
+            raise self._refuse_unconfirmed(unconfirmed)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         with self.log_path.open("w") as log_file:
             process = subprocess.Popen(  # noqa: S603
@@ -148,6 +194,13 @@ class DetachedProcess:
             if not missing_ok:
                 raise UqsError(f"{self.label} is not running (no pid file)")
             self.pid_path.unlink(missing_ok=True)
+            return None
+        if self._unconfirmed() is not None:
+            # Maybe the feed, maybe not: neither signal it nor lose track of it.
+            error = self._refuse_unconfirmed(pid)
+            if not missing_ok:
+                raise error
+            log.warning("{}", error)
             return None
         if self._alive(pid) and not self._ours():
             # The pid is held by a process we cannot show is the one we
