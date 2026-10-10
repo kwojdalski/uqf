@@ -600,6 +600,11 @@ carried:{[job;h;t;x]
     if[replaying; record[job;t;x]];
     }
 
+/ Private: how long after a job's first replayed batch its carry keeps
+/ recording - its declared `window`, else a minute.
+/ @private
+carry_window:{[job] $[`window in key def[job]`carry; def[job][`carry]`window; 0D00:01]}
+
 / Private: keep a replayed batch, while it is near enough the log's start
 / that the snapshot may yet follow it.
 / @private
@@ -608,17 +613,25 @@ record:{[job;t;x]
     if[r 1; :()];
     t0:$[(`time in cols x) and count x; first x`time; 0Np];
     if[null r 0; r[0]:t0];
-    w:$[`window in key def[job]`carry; def[job][`carry]`window; 0D00:01];
-    if[(not null t0) and t0>r[0]+w; carry_log[job]:(r 0;1b;()); :()];
+    if[(not null t0) and t0>r[0]+carry_window job; carry_log[job]:(r 0;1b;()); :()];
     r[2]:r[2],enlist (t;x);
     carry_log[job]:r;
     }
 
 / Private: set the carried state from its snapshot, then apply again what
 / the replay delivered ahead of it.
+/ .
+/ A recording `record` gave up on - done, with its first time still set -
+/ means the snapshot came later than `window` after the log's first batch.
+/ The batches logged before it are then not applied again, so the restored
+/ state is missing them (#1015). That is logged as an error, never silent.
 / @private
 restore:{[job;h;x]
     c:def[job]`carry;
+    r:$[job in key carry_log; carry_log job; (0Np;0b;())];
+    if[r[1] and not null r 0;
+        .qetl.log.err[job;"carry snapshot arrived after its recording window closed - batches logged before it are not re-applied, so the restored state is missing them";
+            `table`first_batch`snapshot`window!(c`table;r 0;$[(`time in cols x) and count x; first x`time; 0Np];carry_window job)]];
     v:` sv (def[job]`ns),c`state;
     cur:get v;
     rows:(cols 0!cur)#x;
