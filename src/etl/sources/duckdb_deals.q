@@ -102,8 +102,17 @@ fixture:{[]
         notional:1000000 2500000 750000 3000000 1250000f;
         rate:1.0842 1.2631 1.0847 149.82 1.0851)}
 
+/ The physical table, as the live check reads it (#1077): what KX's ODBC
+/ client reports for `SELECT * FROM deals WHERE 1=0` on the DuckDB driver,
+/ measured - not the adapter's output above, which casts and renames. The
+/ strings come back general, and an empty TIMESTAMP column as a date (`d`),
+/ so deal_time is general too: its type is the output contract's to check,
+/ after `adapt`. Without this the live check failed a correctly configured
+/ source at `schema`.
+raw:enlist[table_name]!enlist ([] deal_id:`long$(); deal_time:(); sym:(); side:(); notional:`float$(); rate:`float$())
+
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
 
 \d .
