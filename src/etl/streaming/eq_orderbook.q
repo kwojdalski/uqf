@@ -85,11 +85,9 @@ on_batch:{[t;x]
     if[0=count x; :()];
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
     folded:.qetl.transform.apply[`eq_orderbook;enlist[`batch]!enlist rows];
-    / The transform names the venue clock `time`; rename it rather than
-    / leave two columns meaning different instants, and let .u.upd stamp
-    / the receipt time on the way in.
-    out:select sym, ts_event:time, action, side, price, size, sequence,
-        bid_prices, bid_sizes, ask_prices, ask_sizes from folded;
+    / The transform's output is the plant shape (#1076), its `time` the
+    / venue clock; dropped here, so .u.upd stamps the receipt time instead.
+    out:![folded;();0b;enlist `time];
     .qpipe.job.eq_orderbook.publish[`eq_orderbook;out];
     }
 

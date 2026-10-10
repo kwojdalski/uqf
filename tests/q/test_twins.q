@@ -63,6 +63,16 @@ test_the_demo_markout_twin_scores_as_the_live_job_does:{[t]
 test_the_eq_orderbook_twin_applies_the_same_transform:{[t]
     .qunit.assertTrue[agrees[`eq_orderbook];"one transform, shared"]};
 
+/ #1076: the backfill writes the fold to the HDB as it is, so the fold is
+/ the plant's table - ts_event included - or historical partitions lack a
+/ column the live ones carry, and `time` means event time in one and
+/ receipt time in the other.
+test_the_eq_orderbook_backfill_writes_the_plant_shape:{[t]
+    f:.qpipe.transform.eq_orderbook.to_book .qpipe.source.databento_mbp10.fixture[];
+    .qunit.assertEquals[cols f;cols .qetl.plant.shape `eq_orderbook;"the plant's columns, in its order, ts_event included"];
+    .qunit.assertEquals[.qetl.plant.problems[`eq_orderbook;![f;();0b;enlist `time]];();"with its types, nested columns included"];
+    .qunit.assertEquals[f`time;f`ts_event;"history has no receipt time: time is the event time"]};
+
 test_the_exec_bars_twin_cuts_and_aggregates_as_the_live_job_does:{[t]
     .qunit.assertTrue[agrees[`exec_bars];"hdb_exec_bars gives the live bars on the live transform's example"]};
 
