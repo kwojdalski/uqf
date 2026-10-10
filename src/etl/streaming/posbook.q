@@ -13,7 +13,9 @@
 / book, from one subscription each, and a third market is a mapping in a
 / normalizer rather than a branch here.
 / .
-/ The mark is the level-0 mid of a market_data book, taken here (book_mids).
+/ The mark is the level-0 mid of a market_data book, or for a market priced
+/ across venues the best mid over live venues: .qmicro's per-market rule
+/ (.qmicro.price_rules, #998), which last_value publishes by too.
 / A `marks` normalizer used to publish that mid as a table of its own, for
 / this job alone - a process, a plant connection and a stored table for
 / (bid+ask)%2.
@@ -117,18 +119,6 @@ last_mid:(`symbol$())!`float$();
 / (.qmicro.newer_venue_tops, last_value's rule - #1049).
 crypto_tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$())
 
-/ Each crypto book in a market_data batch as a top of book: its source is
-/ the venue, its time the venue's source_time (when it quoted, not when the
-/ plant received it), and a side with an empty ladder is null - that venue
-/ withdrew it, so it sets no price on that side.
-/ @param x market_data rows
-/ @return table sym, venue, time, bid, ask
-/ @eg exec bid from .qpipe.job.posbook.crypto_books ([] source_time:2#2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; source:`a`b; market:2#`crypto; bid_prices:(enlist 62000f;`float$()); ask_prices:(enlist 62010f;enlist 62008f))  ->  62000 0n
-crypto_books:{[x]
-    x:select from x where market=`crypto;
-    t:.qbook.top_sides x;
-    select sym, venue:source, time:source_time, bid:t`bid, ask:t`ask from x}
-
 / The crypto marks for a batch of fills: per crypto sym, the best mid across
 / fresh venues at its last fill's time. A sym with no fresh venue is left
 / out, so the transform falls back to the fill's own price, as it does for
@@ -143,21 +133,6 @@ crypto_marks:{[tob;batch]
     targets:0!select last time by sym from batch where sym in s;
     m:([] sym:targets`sym; mid:.qmicro.best_mid_across_venues[tob;`sym`time#targets;.qmicro.reference_max_age]);
     select from m where not null mid}
-
-/ The mid of each FX book in a market_data batch: halfway between level 0
-/ of each ladder, which market_data holds best-first. Crypto books are
-/ marked across venues instead (crypto_books).
-/ .
-/ A book with an empty side gives no mid and is dropped, not marked at 0n:
-/ an empty ladder is that source WITHDRAWING its book, and the last mid seen
-/ is still the better mark than none.
-/ @param x market_data rows
-/ @return a table of sym and mid, in batch order
-/ @eg .qpipe.job.posbook.book_mids ([] sym:`EURUSD`GBPUSD; market:`fx`fx; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] sym:enlist `EURUSD; mid:enlist 1.085)
-book_mids:{[x]
-    x:select from x where market<>`crypto;
-    t:.qbook.top_sides x;
-    select sym, mid:(bid+ask)%2 from (select sym, bid:t`bid, ask:t`ask from x) where not null bid, not null ask}
 
 / The canonical tables this job reads, as the plant delivers them - the
 / normalizers' outputs with `time` stamped in front. Declared so that
@@ -200,9 +175,9 @@ on_batch:{[t;x]
     $[t=`executions;
         .qpipe.job.posbook.apply_fills x;
       t=`market_data;
-        [m:.qpipe.job.posbook.book_mids[x];
+        [m:.qmicro.own_book_mids x;
          .qpipe.job.posbook.last_mid[m`sym]:m`mid;
-         `.qpipe.job.posbook.crypto_tob upsert .qmicro.newer_venue_tops[.qpipe.job.posbook.crypto_tob;.qpipe.job.posbook.crypto_books[x]]];
+         `.qpipe.job.posbook.crypto_tob upsert .qmicro.newer_venue_tops[.qpipe.job.posbook.crypto_tob;.qmicro.venue_tops x]];
       ()];
     }
 

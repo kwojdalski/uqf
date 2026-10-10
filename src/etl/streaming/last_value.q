@@ -48,16 +48,6 @@ market_data:.qetl.plant.shape `market_data
 / Rebuilt by replay after a restart.
 state:1!last_value
 
-/ The level-0 top of book of each usable book in a market_data batch.
-/ @param x market_data rows
-/ @return table sym, market, source, source_time, bid, ask, mid, in batch order
-/ @eg .qpipe.job.last_value.tops ([] sym:`EURUSD`GBPUSD; market:`fx`fx; source:`a`a; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 1.0;`float$()); bid_sizes:(enlist 1f;`float$()); ask_prices:(enlist 1.2;enlist 1.3); ask_sizes:(enlist 1f;enlist 1f))  ->  ([] sym:enlist `EURUSD; market:enlist `fx; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1f; ask:enlist 1.2; mid:enlist 1.1)
-tops:{[x]
-    s:.qbook.top_sides x;
-    t:select sym, market, source, source_time, bid:s`bid, ask:s`ask from x;
-    t:select from t where not null bid, not null ask;
-    update mid:(bid+ask)%2 from t}
-
 / Apply a batch of books to the latest rows.
 / .
 / Within the batch the newest source_time per sym wins (the last arrival on a
@@ -69,16 +59,19 @@ tops:{[x]
 /   or added a sym's latest, as published
 / @eg .qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;0#.qpipe.job.last_value.market_data]`changed  ->  0#.qpipe.job.last_value.last_value
 apply:{[state;tob;batch]
-    t:tops batch;
-    / crypto: each venue's newest top, then the cross-venue reference per sym
-    c:.qmicro.newer_venue_tops[tob;select sym, venue:source, time:source_time, bid, ask from t where market=`crypto];
+    / each market by its rule (.qmicro.price_rules, #998), as posbook marks:
+    / a book's own mid, or each venue's newest top - a withdrawn side
+    / included, so it stops counting - then the best across live venues
+    t:.qmicro.own_book_mids batch;
+    c:.qmicro.newer_venue_tops[tob;.qmicro.venue_tops batch];
     tob:tob upsert c;
     syms:distinct c`sym;
     at:0!select time:max time by sym from tob where sym in syms;
     best:.qmicro.best_across_venues[0!tob;at;.qmicro.reference_max_age];
-    crypto:select from ([] sym:at`sym; market:`crypto; source:`venues; source_time:at`time;
+    mk:exec last market by sym from batch;
+    venues:select from ([] sym:at`sym; market:mk at`sym; source:`venues; source_time:at`time;
         bid:best`bid; ask:best`ask; mid:best`mid) where not null mid;
-    t:(select from t where market<>`crypto),crypto;
+    t:t,venues;
     t:0!select by sym from `source_time xasc t;
     held:(exec sym!source_time from 0!state) t`sym;
     t:t where (null held) or (t`source_time)>=held;

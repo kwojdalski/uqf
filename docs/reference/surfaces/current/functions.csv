@@ -766,6 +766,9 @@ qmicro,ofi,function,2,quotes target_sym
 qmicro,ofi_autocorrelation,function,2,ofi_series window
 qmicro,ofi_multilevel,function,3,quotes target_sym n_levels
 qmicro,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
+qmicro,own_book_mids,function,1,x
+qmicro,price_rule,function,1,markets
+qmicro,price_rules,dict,,
 qmicro,queue_depletion_rate,function,3,quotes target_sym side
 qmicro,reference_max_age,value,,
 qmicro,require_tape,function,1,tape
@@ -788,6 +791,7 @@ qmicro,tape_cols,value,,
 qmicro,trade_arrival_rate,function,1,tape
 qmicro,trade_arrival_rate_by,function,3,tape bucket_size group_cols
 qmicro,vamp,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
+qmicro,venue_tops,function,1,x
 qmicro,volume_buckets,function,2,tape bucket_volume
 qmicro,vpin,function,3,tape bucket_volume n_buckets
 qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
@@ -1143,7 +1147,6 @@ qpipe.job.last_value,on_batch,function,2,t x
 qpipe.job.last_value,publish,value,,
 qpipe.job.last_value,state,dict,,
 qpipe.job.last_value,tob,dict,,
-qpipe.job.last_value,tops,function,1,x
 qpipe.job.market_data,check,function,1,rows
 qpipe.job.market_data,crypto_book,table,,
 qpipe.job.market_data,from_crypto_book,function,1,batch
@@ -1157,8 +1160,6 @@ qpipe.job.market_data,quote,table,,
 qpipe.job.posbook,apply_fills,function,1,x
 qpipe.job.posbook,as_trades,function,1,x
 qpipe.job.posbook,book,dict,,
-qpipe.job.posbook,book_mids,function,1,x
-qpipe.job.posbook,crypto_books,function,1,x
 qpipe.job.posbook,crypto_marks,function,2,tob batch
 qpipe.job.posbook,crypto_tob,dict,,
 qpipe.job.posbook,executions,table,,
