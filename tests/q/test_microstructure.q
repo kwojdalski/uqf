@@ -703,4 +703,43 @@ test_no_live_venue_is_a_null_not_a_guess:{[t]
 test_one_staleness_policy_serves_both_jobs:{[t]
     .qunit.assertEquals[.qpipe.job.crypto_markout.max_age;.qmicro.reference_max_age;
         "crypto_markout reads the library's limit rather than keeping its own"]};
+
+/ ---- float-rounding edges (#1045, #1046) ----
+
+/ A tape of trades of the given sizes, sides buy buy sell repeating.
+fr_tape:{[s] n:count s;
+    ([] time:2026.01.01D09:00:00+0D00:00:01*til n; sym:n#`BTCUSD; action:n#`trade; side:n#1 1 -1; size:s)};
+
+test_ten_tenths_fill_one_whole_bucket:{[t]
+    / 10*0.1 sums to 0.9999999999999999; a bare floor made that 0 buckets.
+    b:.qmicro.volume_buckets[fr_tape[10#0.1];1f];
+    .qunit.assertEquals[count b;1;"ten 0.1 trades fill one 1.0 bucket"];
+    .testutil.assertApprox[first b`buy_volume;0.7;1e-9;"seven buys"];
+    .testutil.assertApprox[first .qmicro.vpin[fr_tape[10#0.1];1f;1]`vpin;0.4;1e-9;"|0.7-0.3|/1"]};
+
+test_tenth_sized_buckets_count_every_trade:{[t]
+    .qunit.assertEquals[count .qmicro.volume_buckets[fr_tape[10#0.1];0.1];10;"ten 0.1 buckets, not 9"];
+    .qunit.assertEquals[count .qmicro.volume_buckets[fr_tape[7#0.1];0.1];7;"seven 0.1 buckets, not 6"]};
+
+test_the_threshold_rank_survives_float_noise:{[t]
+    / 0.07*100 is 7.000000000000001, which a bare ceiling took to rank 8.
+    tape:fr_tape[1f+til 100];
+    .qunit.assertEquals[.qmicro.large_trade_threshold[tape;0.07];7f;"q=0.07 of 1..100 is 7"];
+    .qunit.assertEquals[.qmicro.large_trade_threshold[tape;0.55];55f;"q=0.55 of 1..100 is 55"];
+    .testutil.assertApprox[.qmicro.large_trade_ratio[tape;0.07];0.94;1e-12;"94 of 100 trades are >= 7"]};
+
+/ ---- a sym with no quotes (#1047) ----
+
+test_tier2_functions_return_empty_for_a_sym_with_no_quotes:{[t]
+    q:1#mk_mid_quotes[::];
+    .qunit.assertEquals[.qmicro.mid_price_velocity[q;`GBPUSD];`float$();"velocity"];
+    .qunit.assertEquals[.qmicro.mid_price_acceleration[q;`GBPUSD];`float$();"acceleration"];
+    .qunit.assertEquals[.qmicro.queue_depletion_rate[q;`GBPUSD;`bid];`float$();"depletion"];
+    .qunit.assertEquals[.qmicro.ofi[q;`GBPUSD];`float$();"ofi"];
+    .qunit.assertEquals[.qmicro.ofi_multilevel[q;`GBPUSD;3];`float$();"ofi_multilevel"];
+    .qunit.assertEquals[.qmicro.rolling_return_variance[q;`GBPUSD;3];`float$();"variance"]};
+
+test_an_empty_sym_still_validates_the_side:{[t]
+    .qunit.assertThrows[.qmicro.queue_depletion_rate[1#mk_mid_quotes[::];`GBPUSD;];`mid;
+        "queue_depletion_rate: side must be `bid or `ask*";"a bad side is refused even with no rows"]};
 \d .
