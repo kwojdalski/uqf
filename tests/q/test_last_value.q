@@ -101,10 +101,11 @@ test_a_replay_rebuilds_the_state_without_publishing_it_again:{[t]
     .sjtest.live[`market_data;book enlist (`EURUSD;`LP_A;d[4];1.40;1.42)];
     .qunit.assertEquals[count .sjtest.published;1;"a newer live book publishes again"]};
 
-/ The one rule for "the top of book" (#998): posbook, crypto_markout and
-/ last_value read a book's sides through .qbook.top_sides. This drives one
-/ market_data sequence, with a withdrawn side and a non-positive level,
-/ through all three and holds them to it.
+/ The one rule for "the top of book" (#998): posbook and last_value read a
+/ market_data book's sides through .qmicro's per-market extractions, and
+/ crypto_markout a crypto_book's through .qbook.top_sides. This drives one
+/ sequence, with a withdrawn side and a non-positive level, through all of
+/ them and holds them to it.
 agreement_rows:{[]
     ([] time:7#d[0]; sym:7#`EURUSD; source:`a`b`c`d`e`f`g;
         market:7#`fx; source_time:7#d[0];
@@ -118,14 +119,37 @@ test_all_consumers_agree_on_a_withdrawn_or_non_positive_side:{[t]
     ref:.qbook.top_sides x;
     .qunit.assertEquals[ref`bid;1.10 0n 1.10 0n 1.10 0n 1.10;"an empty ladder, a zero level and an infinite one are all a null side (#1020)"];
     .qunit.assertEquals[ref`ask;1.12 1.12 0n 1.12 1.12 1.12 0n;"on either side"];
-    pb:.qpipe.job.posbook.crypto_books update market:`crypto from x;
-    .qunit.assertEquals[(pb`bid;pb`ask);(ref`bid;ref`ask);"posbook's crypto books"];
+    v:.qmicro.venue_tops update market:`crypto from x;
+    .qunit.assertEquals[(v`bid;v`ask);(ref`bid;ref`ask);"a venue's top keeps a withdrawn side, null"];
     mk:.qpipe.job.crypto_markout.top_of_book update venue:source from x;
     .qunit.assertEquals[(mk`bid;mk`ask);(ref`bid;ref`ask);"crypto_markout's top of book"];
-    lv:.qpipe.job.last_value.tops x;
+    own:.qmicro.own_book_mids x;
     both:where (not null ref`bid) & not null ref`ask;
-    .qunit.assertEquals[lv`source;(x`source) both;"last_value keeps exactly the books with both sides"];
-    .qunit.assertEquals[(.qpipe.job.posbook.book_mids x)`mid;lv`mid;"posbook's FX marks are last_value's mids"]};
+    .qunit.assertEquals[own`source;(x`source) both;"a book's own mid needs both sides"]};
+
+test_a_market_with_no_price_rule_is_refused_by_name:{[t]
+    x:update market:`equity from agreement_rows[];
+    .qunit.assertThrows[.qmicro.venue_tops;x;"*no pricing rule for market equity*";"not priced by whichever branch a consumer wrote"];
+    .qunit.assertThrows[.qmicro.own_book_mids;x;"*no pricing rule for market equity*";"on either extraction"]};
+
+/ #998: posbook marks and last_value publishes by the same rule, so they
+/ agree when a venue withdraws a side and another goes stale. last_value
+/ used to drop a book with an empty side, which left that venue's previous
+/ bid counting in its reference while posbook's no longer did.
+test_posbook_and_last_value_agree_on_every_market:{[t]
+    reset[];
+    .qetl.job.stream.reset `posbook;
+    s:`$"BTC-USDT";
+    batches:(
+        cbook ((s;`binance;d[0];100.;101.);(s;`okx;d[0];99.;102.);(s;`kraken;d[-10];105.;106.));
+        cbook enlist (s;`binance;d[1];0n;101.);
+        book ((`EURUSD;`LP_A;d[0];1.10;1.12);(`EURUSD;`LP_A;d[1];0n;1.12)));
+    {.qpipe.job.last_value.on_batch[`market_data;x]; .qpipe.job.posbook.on_batch[`market_data;x]} each batches;
+    lv:exec sym!mid from latest[];
+    pb:exec first mid from .qpipe.job.posbook.crypto_marks[0!.qpipe.job.posbook.crypto_tob;([] time:enlist d[1]; sym:enlist s)];
+    .qunit.assertEquals[pb;100f;"posbook: binance's bid withdrawn, kraken stale - okx 99 against binance 101"];
+    .qunit.assertEquals[lv s;pb;"last_value publishes the mark posbook uses"];
+    .qunit.assertEquals[(.qpipe.job.posbook.last_mid`EURUSD;lv`EURUSD);1.11 1.11;"FX: the withdrawn book leaves the last mid standing in both"]};
 
 test_no_consumer_re_derives_the_top_of_book:{[t]
     files:`$"src/etl/streaming/",/:("posbook";"crypto_markout";"last_value"),\:".q";

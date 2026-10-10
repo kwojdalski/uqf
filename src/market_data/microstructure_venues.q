@@ -6,6 +6,52 @@
 
 \d .qmicro
 
+/ ------------------------------------------------- HOW A MARKET IS PRICED
+
+/ How each market in market_data is priced (#998): on its own book's level-0
+/ mid, or across venues - the best bid and ask over live venues. One rule per
+/ market, read by every consumer that prices from market_data (posbook,
+/ last_value), so a market added without one is refused by name rather than
+/ falling into whichever branch each consumer wrote.
+price_rules:`fx`crypto!`own_book`across_venues
+
+/ The pricing rule for each market.
+/ @param markets symbol list
+/ @return the rule for each, aligned
+/ @throws when a market has no rule, naming it
+/ @eg .qmicro.price_rule `fx`crypto`fx  ->  `own_book`across_venues`own_book
+price_rule:{[markets]
+    u:distinct markets except key price_rules;
+    if[count u; '"price_rule: no pricing rule for market ",(", " sv string u)," - add it to .qmicro.price_rules"];
+    price_rules markets}
+
+/ Each venue's top of book, for the markets priced across venues: the venue
+/ is the book's source and its time the venue's source_time. A side with no
+/ usable level (.qbook.top_sides) is null and the top is still kept: the
+/ venue withdrew that side, so it must stop setting a price on it rather
+/ than leave its previous quote counting.
+/ @param x market_data rows
+/ @return table sym, venue, time, bid, ask, in batch order
+/ @eg exec bid from .qmicro.venue_tops ([] sym:2#`$"BTC-USDT"; market:2#`crypto; source:`a`b; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 62000f;`float$()); ask_prices:(enlist 62010f;enlist 62008f))  ->  62000 0n
+venue_tops:{[x]
+    x:x where `across_venues=price_rule x`market;
+    s:.qbook.top_sides x;
+    ([] sym:x`sym; venue:x`source; time:x`source_time; bid:s`bid; ask:s`ask)}
+
+/ The mid of each book, for the markets priced on their own book: halfway
+/ between level 0 of each side. A book with no usable level on a side gives
+/ no mid and is dropped: an empty ladder is the source withdrawing its book,
+/ and the last mid seen is a better mark than none.
+/ @param x market_data rows
+/ @return table sym, market, source, source_time, bid, ask, mid, in batch order
+/ @eg exec mid from .qmicro.own_book_mids ([] sym:`EURUSD`GBPUSD; market:`fx`fx; source:`a`a; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ,1.085
+own_book_mids:{[x]
+    x:x where `own_book=price_rule x`market;
+    s:.qbook.top_sides x;
+    t:([] sym:x`sym; market:x`market; source:x`source; source_time:x`source_time; bid:s`bid; ask:s`ask);
+    t:t where (not null t`bid) & not null t`ask;
+    update mid:(bid+ask)%2 from t}
+
 / ------------------------------------------- A REFERENCE PRICE ACROSS VENUES
 
 / The oldest a venue's top of book may be and still set a cross-venue
