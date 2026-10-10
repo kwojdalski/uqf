@@ -62,6 +62,7 @@
 \l src/etl/core/heartbeat.q
 \l src/etl/core/dag.q
 \l src/etl/core/react.q
+\l src/etl/core/react_replay.q
 \l src/etl/generated/pipeline_dag.q
 \l src/etl/core/declaration_load.q
 \l src/etl/generated/load_plan.q
