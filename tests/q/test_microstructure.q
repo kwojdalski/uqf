@@ -180,6 +180,46 @@ test_queue_depletion_rate_depletion_and_replenishment:{[t]
     .testutil.assertApprox[r 1;0.4;1e-9;"size fell from 100 to 60: (100-60)/100"];
     .testutil.assertApprox[r 2;0f;1e-9;"size rose from 60 to 80 - clamped at 0, not negative"]};
 
+/ #1031: the prior top QUEUE, not the L0 size whatever its price did. Row 1's
+/ bid improves to 1.1001 and the 1.1000 queue, untouched, is now L1: it used
+/ to read (5-1)/5 = 0.8. Row 2's bid falls below 1.1001, so that queue is
+/ gone: it used to read 0, the 8M at 1.0999 being larger.
+test_queue_depletion_rate_compares_the_prior_queue_across_a_price_move:{[t]
+    t0:2026.01.01D09:00:00.000000000;
+    quotes:([] time:t0+(1000000000*til 3);
+        sym:3#`EURUSD;
+        bid_prices:(1.1000 1.0999;1.1001 1.1000;1.0999 1.0998);
+        bid_sizes:(5e6 3e6;1e6 5e6;8e6 2e6);
+        ask_prices:3#enlist 1.1003 1.1004;
+        ask_sizes:3#enlist 1e6 1e6);
+    r:.qmicro.queue_depletion_rate[quotes;`EURUSD;`bid];
+    .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
+    .testutil.assertApprox[r 1;0f;1e-9;"a better bid leaves the prior queue untouched"];
+    .testutil.assertApprox[r 2;1f;1e-9;"a worse bid means the prior queue is gone"]};
+
+test_queue_depletion_rate_reads_the_ask_side_the_other_way_round:{[t]
+    t0:2026.01.01D09:00:00.000000000;
+    quotes:([] time:t0+(1000000000*til 4);
+        sym:4#`EURUSD;
+        bid_prices:4#enlist 1.1000;
+        bid_sizes:4#enlist 100f;
+        ask_prices:enlist each 1.1003 1.1002 1.1002 1.1004;
+        ask_sizes:enlist each 100 300 150 500f);
+    r:.qmicro.queue_depletion_rate[quotes;`EURUSD;`ask];
+    .qunit.assertEquals[r;0n 0 0.5 1f;"down is better for an ask: 0, then (300-150)/300, then up is worse: 1"]};
+
+test_queue_depletion_rate_a_withdrawn_side_drains_and_its_return_does_not:{[t]
+    t0:2026.01.01D09:00:00.000000000;
+    quotes:([] time:t0+(1000000000*til 4);
+        sym:4#`EURUSD;
+        bid_prices:(enlist 1.1000;`float$();`float$();enlist 1.1000);
+        bid_sizes:(enlist 100f;`float$();`float$();enlist 100f);
+        ask_prices:4#enlist 1.1002;
+        ask_sizes:4#enlist 100f);
+    r:.qmicro.queue_depletion_rate[quotes;`EURUSD;`bid];
+    .qunit.assertEquals[r;0n 1 0n 0f;
+        "withdrawal consumes the queue; absent to absent has no queue to drain; a return is new"]};
+
 test_queue_depletion_rate_rejects_bad_side:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:enlist t0; sym:enlist `EURUSD;
@@ -218,6 +258,20 @@ test_ofi_covers_improve_unchanged_worsen_on_both_sides:{[t]
     .testutil.assertApprox[r 2;-350f;1e-9;"bid price-worsen branch, ask price-improve branch"];
     / row 3: bid unchanged (120-90=30), ask worsens (-200) -> 30-(-200)
     .testutil.assertApprox[r 3;230f;1e-9;"bid unchanged branch, ask price-worsen branch"]};
+
+/ #1032: L0 OFI and one-level multilevel OFI are one quantity. With the ask
+/ withdrawn for a row and back the next, ofi used to be null on both rows.
+test_ofi_agrees_with_one_level_multilevel_on_a_withdrawn_side:{[t]
+    t0:2026.01.01D09:00:00.000000000;
+    quotes:([] time:t0+(1000000000*til 3);
+        sym:3#`EURUSD;
+        bid_prices:3#enlist enlist 1.1000;
+        bid_sizes:3#enlist enlist 1e6;
+        ask_prices:(enlist 1.1002;`float$();enlist 1.1002);
+        ask_sizes:(enlist 2e6;`float$();enlist 2e6));
+    r:.qmicro.ofi[quotes;`EURUSD];
+    .qunit.assertEquals[r;0n 2e6 -2e6;"the ask's withdrawal is +2M of flow, its return -2M"];
+    .qunit.assertEquals[r;.qmicro.ofi_multilevel[quotes;`EURUSD;1];"ofi is ofi_multilevel at one level"]};
 
 / ---- ofi_multilevel ----
 
