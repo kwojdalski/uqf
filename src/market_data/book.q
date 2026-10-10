@@ -227,18 +227,34 @@ sweep_price:{[prices;sizes;target_size]
     fully_filled:filled_size>=target_size;
     `avg_price`worst_price`filled_size`fully_filled!(avg_price;worst_price;filled_size;fully_filled)};
 
+/ Whether a book level is a price someone could deal at: its price and its
+/ size both positive and finite. The ONE rule for it (#1021) - top_sides
+/ takes level 0 by it, superbook its whole ladder, and market_data's publish
+/ check refuses a book whose level 0 fails it - so no consumer decides it
+/ for itself. Vectorised.
+/ @param price level price(s)
+/ @param size the matching size(s)
+/ @return boolean, aligned
+/ @eg .qbook.level_ok[1.1 0 0w 1.1 1.1;1e6 1e6 1e6 0 0w]  ->  10000b
+level_ok:{[price;size] (0<price) & (0w>price) & (0<size) & 0w>size}
+
 / Each book's level-0 bid and ask: the ONE top-of-book extraction every
 / consumer of market_data prices from (#998). A side with an empty ladder is
-/ null - that source withdrew it - and so is a non-positive or infinite level,
-/ which is not a price (#1020: superbook refuses one too). Whether a book
-/ with a null side is dropped (a mid needs both sides) or kept (a venue's
-/ other side still counts across venues) is the consumer's choice; what
-/ counts as a side is not.
-/ @param x table with bid_prices and ask_prices list columns, best level first
+/ null - that source withdrew it - and so is a level that is not a price by
+/ level_ok (#1020, #1021): non-positive or infinite, or, where the rows
+/ carry sizes, a non-positive or infinite size. Whether a book with a null
+/ side is dropped (a mid needs both sides) or kept (a venue's other side
+/ still counts across venues) is the consumer's choice; what counts as a
+/ side is not.
+/ @param x table with bid_prices and ask_prices list columns, best level
+/   first, and optionally bid_sizes and ask_sizes
 / @return table bid, ask (float), aligned with x
 / @eg .qbook.top_sides ([] bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] bid:1.0849 0n; ask:1.0851 1.27)
 top_sides:{[x]
-    side:{[px] $[count px; $[(0<f) & 0w>f:"f"$first px; f; 0n]; 0n]};
-    ([] bid:"f"$side each x`bid_prices; ask:"f"$side each x`ask_prices)};
+    n:count x;
+    bsz:$[`bid_sizes in cols x; x`bid_sizes; n#enlist enlist 1f];
+    asz:$[`ask_sizes in cols x; x`ask_sizes; n#enlist enlist 1f];
+    side:{[px;sz] $[count px; $[level_ok[f:"f"$first px;"f"$first sz]; f; 0n]; 0n]};
+    ([] bid:"f"$side'[x`bid_prices;bsz]; ask:"f"$side'[x`ask_prices;asz])};
 
 \d .

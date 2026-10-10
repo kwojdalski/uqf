@@ -18,12 +18,13 @@ max_age:0D00:00:05
 / Every multi-venue feed has some skew: with none allowed, a venue a few ms
 / ahead had every row refused as future-dated and vanished from the book
 / while last_value kept it live (#1033). A row past it is still refused.
-max_clock_lead:0D00:00:00.250
+/ The shared tolerance market_data's publish check also applies (#1021).
+max_clock_lead:.qmicro.max_clock_lead
 
 / Remove non-executable levels, keeping prices and base sizes aligned.
 / @param prices a numeric vector
 / @param sizes the matching numeric vector in base currency
-/ @return a table of positive finite price and size
+/ @return a table of the levels that are prices by .qbook.level_ok (#1021)
 / @throws when vectors are malformed or their lengths differ
 / @eg .qpipe.job.superbook.levels[1.1 1.2;100 0f] -> ([] price:enlist 1.1; size:enlist 100f)
 levels:{[prices;sizes]
@@ -33,7 +34,7 @@ levels:{[prices;sizes]
     if[any (0h=type each (prices;sizes)) and 0<count each (prices;sizes);
         '"superbook: prices and sizes must be numeric vectors"];
     ladder:([] price:`float$prices; size:`float$sizes);
-    select from ladder where price>0, price<0w, size>0, size<0w}
+    ladder where .qbook.level_ok[ladder`price;ladder`size]}
 
 / Replace newer source snapshots. Equal timestamps use arrival order.
 / Empty or unusable sides replace the old side too; zero size is withdrawal.

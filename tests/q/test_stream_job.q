@@ -1308,4 +1308,25 @@ test_market_data_check_judges_staleness_per_sym_and_source:{[t]
     .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"okx lags the batch by ten minutes"];
     .qunit.assertEquals[count .qpipe.job.market_data.check 2#rows;0;"the two fresh venues pass"]};
 
+/ #1021: what a book must be is judged once, where every book enters, not
+/ by each consumer: a level 0 that is not a price, and a stamp from the
+/ future, are failures there and withheld under on_fail `drop.
+test_market_data_check_names_bad_levels_and_future_stamps:{[t]
+    now:.z.p;
+    book:{[b;bs;ts] ([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
+        bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6)};
+    rows:raze (book[enlist 1.10;enlist 1e6;now];book[enlist 0w;enlist 1e6;now];book[enlist 1.10;enlist 0f;now];
+        book[`float$();`float$();now];book[enlist 1.10;enlist 1e6;now+0D00:01]);
+    f:.qpipe.job.market_data.check rows;
+    .qunit.assertEquals[exec row from f where check=`bad_level;1 2;"an infinite price and a zero size are not prices"];
+    .qunit.assertEquals[exec row from f where check=`bad_time;enlist 4;"a book stamped a minute ahead of this host"];
+    .qunit.assertEquals[3 in f`row;0b;"an empty ladder is still a withdrawal, not a failure"];
+    / lead less a millisecond: timespan arithmetic only, as `%` gives a float on PeachQ
+    lead:book[enlist 1.10;enlist 1e6;now+.qmicro.max_clock_lead-0D00:00:00.001];
+    .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
+
+test_superbook_takes_the_shared_clock_lead:{[t]
+    .qunit.assertEquals[.qpipe.job.superbook.max_clock_lead;.qmicro.max_clock_lead;
+        "one tolerance for a source's clock, read by market_data's check and superbook"]};
+
 \d .

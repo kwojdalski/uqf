@@ -23,6 +23,7 @@ qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
 qbook,derive_level_groups,function,2,col_names prefix_targets
 qbook,fold_level_columns,function,2,tbl level_groups
 qbook,invert_book_depth,function,2,prices sizes
+qbook,level_ok,function,2,price size
 qbook,sweep_price,function,3,prices sizes target_size
 qbook,symbolize_columns,function,2,tbl sym_cols
 qbook,top_sides,function,1,x
@@ -754,6 +755,7 @@ qmicro,inter_event_time,function,2,quotes target_sym
 qmicro,large_trade_ratio,function,2,tape q
 qmicro,large_trade_threshold,function,2,tape q
 qmicro,large_trade_volume_share,function,2,tape q
+qmicro,max_clock_lead,value,,
 qmicro,microprice,function,4,bid_prices bid_sizes ask_prices ask_sizes
 qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_sizes
 qmicro,mid_price,function,2,bid_prices ask_prices
