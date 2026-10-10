@@ -1321,7 +1321,8 @@ test_market_data_check_names_bad_levels_and_future_stamps:{[t]
     .qunit.assertEquals[exec row from f where check=`bad_level;1 2;"an infinite price and a zero size are not prices"];
     .qunit.assertEquals[exec row from f where check=`bad_time;enlist 4;"a book stamped a minute ahead of this host"];
     .qunit.assertEquals[3 in f`row;0b;"an empty ladder is still a withdrawal, not a failure"];
-    lead:book[enlist 1.10;enlist 1e6;now+.qmicro.max_clock_lead%2];
+    / lead less a millisecond: timespan arithmetic only, as `%` gives a float on PeachQ
+    lead:book[enlist 1.10;enlist 1e6;now+.qmicro.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
 
 test_superbook_takes_the_shared_clock_lead:{[t]
