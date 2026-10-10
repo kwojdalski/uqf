@@ -36,6 +36,8 @@ from pathlib import Path
 
 import pytest
 
+from uqs.deploy.selection import started_by
+
 #: The `uqs` console script of the environment running these tests.
 UQS = str(Path(sys.executable).parent / "uqs")
 HOST = os.environ.get("UQF_DEPLOY_TEST_HOST", "")
@@ -106,4 +108,5 @@ def test_deploy_upgrade_and_rollback_on_a_real_server(artifacts):
     assert _ssh(f"basename $(readlink {DEST}/current)") == release_2
     assert "restarted release" in third.stdout
 
-    _ssh(f"cd {DEST}/current && source ./deploy.env && .venv/bin/uqs stop all")
+    stop = " ".join(started_by(PROFILE, []))  # not `all`: startwithall=1 only (#1040)
+    _ssh(f"cd {DEST}/current && source ./deploy.env && .venv/bin/uqs stop {stop}")

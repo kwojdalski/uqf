@@ -313,7 +313,7 @@ def up(
 
 @app.command()
 def stop(procs: ProcsArg = None, port: PortOpt = None, force: ForceOpt = False) -> None:
-    """Stop every running process (or specific process name(s))."""
+    """Stop every startwithall=1 process (or specific process name(s))."""
     names = _procs(procs)
     _reject_unknown(names)
     if force:

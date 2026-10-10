@@ -31,7 +31,7 @@ import sys
 
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError
 from uqs.deploy.remote import Transport, q
-from uqs.deploy.selection import Selection
+from uqs.deploy.selection import Selection, started_by
 from uqs.deploy.stages import Deployment
 from uqs.logger import get_logger
 
@@ -56,6 +56,13 @@ def _report(dep: Deployment, release: str) -> dict:
         raise DeployError(
             "rollback", f"release {release} has no readable {REPORT} to say what it runs"
         ) from None
+
+
+def _started(report: dict) -> list[str]:
+    """What a release's start ran: its verified processes - or, in a report
+    that names none, its profile resolved - and its extra processes (#1040)."""
+    procs = report["processes"] or started_by(report["profile"], [])
+    return list(dict.fromkeys([*procs, *report["extra_processes"]]))
 
 
 def _current(dep: Deployment) -> str:
@@ -107,7 +114,7 @@ def rollback(
         plan = {
             "from": current,
             "to": target,
-            "stop": now["processes"] or [now["profile"]],
+            "stop": _started(now),
             "start": {"profile": then["profile"], "extra_processes": then["extra_processes"]},
         }
         if dry_run:
@@ -115,7 +122,7 @@ def rollback(
             return 0
         log.info("stopping release {}'s processes", current)
         dep.uqs(f"{dep.releases}/{current}", "rollback", "stopping the current processes",
-                "stop", *now["processes"] or ["all"])  # fmt: skip
+                "stop", *_started(now))  # fmt: skip
         dep.beat()
         log.info("starting release {}'s profile {}", target, then["profile"])
         result = _start_and_verify(dep, target, then, f"release {target}")
@@ -124,7 +131,7 @@ def rollback(
             reason = result.get("reason") or "verification failed"
             log.error("release {} did not verify: {}; restoring {}", target, reason, current)
             dep.uqs(f"{dep.releases}/{target}", "rollback", "stopping the target's processes",
-                    "stop", "all")  # fmt: skip
+                    "stop", *_started(then))  # fmt: skip
             restored = _start_and_verify(dep, current, now, f"release {current} again")
             outcome = "restored" if restored.get("passed") else "NOT restored - check by hand"
             failed = {"rollback": "failed", **plan, "reason": reason, "current": current}
