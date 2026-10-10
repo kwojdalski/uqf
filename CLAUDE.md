@@ -54,5 +54,12 @@ in the main checkout.
 4. When done: push the branch, open a PR, `/release <number>`, then
    `git worktree remove .claude/worktrees/issue-<number>`.
 
+   If the PR touches q (a `.q` file, `tests/q/`, a generator or what it
+   generates) and you have KDB-X, run `uv run python scripts/dev/attest_kdbx.py`
+   after the LAST rebase and push again. Hosted CI cannot run the KDB-X gates;
+   this runs them over the whole tree and records a `KDB-X-gates: <tree>`
+   trailer, which CI's advisory "KDB-X attestation" check reports on the PR
+   (#1014). A rebase changes the tree, so it needs a fresh run.
+
 Only triage without edits (reading code, commenting, labelling) may stay in the
 main checkout.
