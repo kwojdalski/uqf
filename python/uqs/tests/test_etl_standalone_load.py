@@ -63,10 +63,8 @@ def test_the_etl_tree_loads_outside_the_test_harness(tmp_path: Path) -> None:
     from `q tests/run_tests.q` on purpose: the suite loads the tree itself, so
     it cannot notice that no one else can.
 
-    The order is load-bearing and not obvious - `coercion.q` must precede
-    `source_coercion.q`, whose type table names `.qetl.coerce.to_timestamp` at LOAD
-    TIME. Getting it wrong aborts the file with a bare `.qetl.coerce.to_symbol,
-    which is how this was found while writing the loader.
+    The order is load-bearing and not obvious from the filenames; see the
+    header of `src/etl/init.q`.
     """
     qbin, env = _kdbx()
     script = tmp_path / "load_etl.q"

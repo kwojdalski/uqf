@@ -15,11 +15,6 @@
 / .
 / THE ORDER IS LOAD-BEARING, and not obvious from the filenames:
 / .
-/   coercion    before  source_coercion  - .qetl.source's type table names
-/                                          .qetl.coerce.to_timestamp/to_symbol AT
-/                                          LOAD TIME, so a later coercion.q
-/                                          aborts source_coercion.q with a
-/                                          bare `.qetl.coerce.to_symbol
 /   materialisation before worker_runtime - .qetl.job.bounded.runtime.remaining calls .qetl.coverage
 /   dag         before  pipeline_dag     - the generated bridge defines
 /                                          .qetl.dag.register_pipelines, which
@@ -75,7 +70,6 @@
 \l src/etl/core/source_validation.q
 \l src/etl/core/source_credentials.q
 \l src/etl/core/source_zones.q
-\l src/etl/core/source_coercion.q
 \l src/etl/core/source_local_hdb.q
 \l src/etl/core/source_fetch.q
 \l src/etl/core/live_check.q

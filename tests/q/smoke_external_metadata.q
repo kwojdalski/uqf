@@ -41,7 +41,6 @@
 \l src/etl/core/source_validation.q
 \l src/etl/core/source_credentials.q
 \l src/etl/core/source_zones.q
-\l src/etl/core/source_coercion.q
 \l src/etl/core/source_local_hdb.q
 \l src/etl/core/source_fetch.q
 \l src/etl/sources/demo_deals.q
