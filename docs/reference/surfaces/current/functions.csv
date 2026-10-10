@@ -197,6 +197,7 @@ qetl.io,discard,dict,,
 qetl.io,due,function,4,state status now interval
 qetl.io,finish,function,1,mgr
 qetl.io,flush,function,2,mgr upto
+qetl.io,folded,function,3,target batch row_key
 qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
 qetl.io,hdb_lock,function,1,root

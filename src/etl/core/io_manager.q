@@ -271,6 +271,22 @@ for_cfg:{[cfg]
 / @eg .qetl.io.write[.qetl.io.memory;`demo_deals;.qpipe.source.demo_deals.fixture[]]
 write:{[mgr;target;batch] (mgr`write)[target;batch]}
 
+/ How many rows of a batch share a key with another row of it - the rows a
+/ keyed write folds away - logged as a WARNING when there are any (#1089).
+/ @param target the target table, for the message
+/ @param batch the rows
+/ @param row_key the key columns
+/ @return how many rows fold away
+/ @eg .qetl.io.folded[`t;([] id:1 1 2; v:1 2 3);`id]  ->  1
+folded:{[target;batch;row_key]
+    if[0=count batch; :0];
+    k:(),row_key;
+    n:count[batch]-count distinct k#batch;
+    if[n>0;
+        .[{.qetl.log.warn[x;y;z]};(`qetl.io;"a batch repeats a key - folded to one row per key";
+            `target`row_key`rows`folded!(target;k;count batch;n));::]];
+    n}
+
 / Write a batch under a conflict strategy (CONFLICTS above).
 / .
 / A manager without write_keyed can only append, so anything else is
@@ -285,6 +301,12 @@ write:{[mgr;target;batch] (mgr`write)[target;batch]}
 / @eg .qetl.io.write_keyed[.qetl.io.discard;`t;([] id:1 2);`on_conflict`row_key!(`upsert;`id)]  ->  2
 write_keyed:{[mgr;target;batch;opts]
     strategy:require_strategy[opts`on_conflict];
+    / A key a batch repeats is folded to one row - the last, or the first
+    / under `ignore (resolve). Deliberate - a later row corrects an earlier
+    / one - but not silent (#1089): several sources' keys are unique only in
+    / the captures sampled, and a key that stops being unique would otherwise
+    / collapse rows with no trace.
+    if[not `append=strategy; folded[target;batch;opts`row_key]];
     $[`write_keyed in key mgr; (mgr`write_keyed)[target;batch;opts];
       `append=strategy; (mgr`write)[target;batch];
       '"write_keyed: this io manager can only append - declare on_conflict `append, or give it a write_keyed"]}
