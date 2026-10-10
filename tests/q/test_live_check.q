@@ -21,8 +21,8 @@ transport:{[] .qetl.source.transport_fields!(
     {[h;t] .livetest.columns};
     "a test connection string";"DRIVER=test";"/ test only")}
 
-decl:{[] `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
-    (`livetest_src;`ext;`loc;`ts;`ts;`ts`px;"pf";
+decl:{[] `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport!
+    (`livetest_src;`ext;`ts;`ts;`ts`px;"pf";
      {[h;a;b] .livetest.rows};
      {([] ts:enlist 2026.01.01D00:00; px:enlist 9.9)};
      `UTC;`livetest_tx)}

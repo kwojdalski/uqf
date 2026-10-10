@@ -30,8 +30,8 @@ beforeNamespace_isolate:{[]
 / A source and worker over the local HDB, defined once.
 beforeNamespace_define:{[]
     .qetl.source.define[`loctest_src;
-        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
-        (`loctest_src;`trades;`loctest_out;`time;`time`sym;`time`sym`px;"psf";
+        `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport!
+        (`loctest_src;`trades;`time;`time`sym;`time`sym`px;"psf";
          {[h;range_from;range_to]
             .qetl.source.local[h;{[read;from_ts;to_ts]
                 select time, sym, px from read[`trades;from_ts;to_ts]

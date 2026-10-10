@@ -34,7 +34,7 @@ LIMIT = 800
 #: cap, so the allowlist can only shrink.
 ALLOWED: dict[str, tuple[int, str]] = {
     "src/etl/core/bounded_worker.q": (
-        1640,
+        1639,
         "the bounded-worker lifecycle (define, plan, run, retry, cleanup) in one namespace; "
         "the next split after source_contract.q (#970), not yet done",
     ),

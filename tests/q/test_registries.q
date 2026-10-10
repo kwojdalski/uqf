@@ -134,7 +134,7 @@ test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
     / scope, so `{[] e}` would throw 'e the moment anything called it -
     / which registration does not, making it a fixture that is broken and
     / silent until the day it is used.
-    base:`table_name`target`time_column`columns`types`query`fixture`tz!(`regtest_t;`regtest_out;`time;`time`sym;"ps";
+    base:`table_name`time_column`columns`types`query`fixture`tz!(`regtest_t;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`$"UTC");
     .qetl.source.define[`regtest_scalar;(`source`row_key!(`regtest_scalar;`sym)),base];
     .qetl.source.define[`regtest_vector;(`source`row_key!(`regtest_vector;`time`sym)),base];
@@ -196,7 +196,7 @@ test_no_keyed_registry_is_classified_as_a_collapsed_dictionary:{[t]
 / narrow-first and wide-first, because a collapsed dictionary differed by
 / order: the narrower one gained a NULL when it came second.
 test_sources_with_different_optional_fields_coexist:{[t]
-    base:`table_name`target`time_column`row_key`columns`types`query`fixture`tz!(`regtest_t;`regtest_out;`time;`time;`time`sym;"ps";
+    base:`table_name`time_column`row_key`columns`types`query`fixture`tz!(`regtest_t;`time;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`UTC);
     .qetl.source.define[`regtest_narrow;(enlist[`source]!enlist `regtest_narrow),base];
     .qetl.source.define[`regtest_wide;(`source`transport`credential_example!(`regtest_wide;`odbc;"DSN=x")),base];
@@ -208,7 +208,7 @@ test_sources_with_different_optional_fields_coexist:{[t]
     forget[`.qetl.source.sources;`regtest_narrow`regtest_wide]};
 
 test_a_source_key_no_column_holds_is_refused_by_name:{[t]
-    decl:`source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`colour!(`regtest_bad;`regtest_t;`regtest_out;`time;`time;`time`sym;"ps";
+    decl:`source`table_name`time_column`row_key`columns`types`query`fixture`tz`colour!(`regtest_bad;`regtest_t;`time;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`UTC;`red);
     .qunit.assertThrows[.qetl.source.define[`regtest_bad];decl;"*declares colour*";
         "an unknown key is refused naming it - it once failed as a bare 'mismatch, or not at all"];

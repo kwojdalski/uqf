@@ -45,7 +45,6 @@ types:"pjssff"
 
 / The table in the DuckDB file, and the table its rows land in here.
 table_name:`deals
-target:`duckdb_deals
 
 time_column:`deal_time
 
@@ -112,7 +111,7 @@ fixture:{[]
 raw:enlist[table_name]!enlist ([] deal_id:`long$(); deal_time:(); sym:(); side:(); notional:`float$(); rate:`float$())
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
+    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
 
 \d .
