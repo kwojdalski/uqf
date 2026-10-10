@@ -345,6 +345,19 @@ due:{[state;status;now;interval]
     act:dirty and (0=status`pending) and not soon;
     `act`state!(act;$[act; `dirty`last!(0b;now); `dirty`last!(dirty;state`last)])}
 
+/ What is still owed after a deployment acted on `due`: the debt `due`
+/ cleared stays cleared only when every target acknowledged it (#1084). A
+/ TorQ HDB reload that some HDB refused or failed leaves it owed, so the next
+/ on_ready tries again rather than the run ending with a running HDB
+/ serving the map from before its rows - silently, with coverage recorded.
+/ @param state `dirty`last, as `due` returned it
+/ @param result `registered`reloaded - how many targets there are, and how
+/   many acknowledged
+/ @return the state to keep
+/ @eg .qetl.io.acknowledged[`dirty`last!(0b;2026.01.02D12:00);`registered`reloaded!2 1]`dirty  ->  1b
+acknowledged:{[state;result]
+    @[state;`dirty;:;result[`reloaded]<result`registered]}
+
 / Private: tell the deployment what is finished. Its failure is logged and
 / swallowed: the rows are already written, and a reload that failed is no
 / reason to fail the run that wrote them.

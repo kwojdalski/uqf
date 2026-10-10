@@ -179,7 +179,7 @@ test_registered_hdbs_that_refused_reload_nothing_and_say_so:{[t]
     .pipetest.errs_seen:();
     n:.qtorq.reload_handles[2;()];
     .qetl.log.err:saved;
-    .qunit.assertEquals[n;0;"nothing reloaded"];
+    .qunit.assertEquals[n;`registered`opened`reloaded!2 0 0;"two registered, none reloaded - owed (#1084)"];
     .qunit.assertTrue[any .pipetest.errs_seen like "hdb reload: could not open a handle to every registered hdb*";
         "the refusal is an error naming its likely cause"]};
 
@@ -189,12 +189,12 @@ test_no_hdb_running_is_not_an_error:{[t]
     .pipetest.errs_seen:();
     n:.qtorq.reload_handles[0;()];
     .qetl.log.err:saved;
-    .qunit.assertEquals[(n;count .pipetest.errs_seen);(0;0);"none registered: nothing to do, nothing wrong"]};
+    .qunit.assertEquals[(n;count .pipetest.errs_seen);(`registered`opened`reloaded!0 0 0;0);"none registered: nothing to do, nothing wrong"]};
 
 test_every_opened_hdb_is_asked_to_reload_today:{[t]
     .pipetest.reload_seen:();
     n:.qtorq.reload_handles[2;(.pipetest.hdb_ok;.pipetest.hdb_ok)];
-    .qunit.assertEquals[(n;.pipetest.reload_seen);(2;2#enlist (`reload;.z.d));"both reloaded, with today's date"]};
+    .qunit.assertEquals[(n`reloaded;.pipetest.reload_seen);(2;2#enlist (`reload;.z.d));"both reloaded, with today's date"]};
 
 test_a_reload_that_throws_counts_as_not_reloaded:{[t]
     saved:.qetl.log.err;
@@ -202,7 +202,7 @@ test_a_reload_that_throws_counts_as_not_reloaded:{[t]
     .pipetest.errs_seen:();
     n:.qtorq.reload_handles[2;(.pipetest.hdb_ok;.pipetest.hdb_broken)];
     .qetl.log.err:saved;
-    .qunit.assertEquals[(n;.pipetest.errs_seen);(1;enlist "hdb reload failed");"one reloaded, one logged as failed"]};
+    .qunit.assertEquals[(n;.pipetest.errs_seen);(`registered`opened`reloaded!2 2 1;enlist "hdb reload failed");"one reloaded, one logged as failed"]};
 
 / reload_hdb itself, not only reload_handles: the tests above never reached
 / its own lookup, and that lookup is what failed - `where proctype=hdb_type`
@@ -223,7 +223,7 @@ test_reload_hdb_asks_every_registered_hdb_and_nothing_else:{[t]
     .pipetest.reload_seen:();
     n:@[.qtorq.reload_hdb;::;{[e] `threw,e}];
     {[nm;k] $[first k; (` sv `.servers,nm) set last k; ![`.servers;();0b;enlist nm]]}'[`SERVERS`getservers;keep];
-    .qunit.assertEquals[n;2;"both registered HDBs are counted and reloaded - no hdb_type error"];
+    .qunit.assertEquals[n;`registered`opened`reloaded!2 2 2;"both registered HDBs are counted and reloaded - no hdb_type error"];
     .qunit.assertEquals[.pipetest.asked;enlist (`proctype;`hdb);"and only HDBs are looked up, not the rdb"];
     .qunit.assertEquals[.pipetest.reload_seen;2#enlist (`reload;.z.d);"each is sent today's reload"]};
 

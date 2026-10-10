@@ -339,6 +339,18 @@ test_the_final_call_ignores_the_interval:{[t]
     .qunit.assertEquals[.iotest.dueat[1b;2026.01.02D11:59:59.000000000;0;0;1b]`act;1b;
         "the run's end never leaves finished work unshown"]};
 
+/ --- acknowledged: what stays owed after acting (#1084) -------------------
+
+test_a_reload_every_hdb_acknowledged_owes_nothing:{[t]
+    s:.qetl.io.acknowledged[`dirty`last!(0b;2026.01.02D12:00:00.000000000);`registered`reloaded!2 2];
+    .qunit.assertEquals[s;`dirty`last!(0b;2026.01.02D12:00:00.000000000);"cleared, as due left it"]};
+
+test_a_reload_an_hdb_refused_stays_owed_for_the_next_call:{[t]
+    s:.qetl.io.acknowledged[`dirty`last!(0b;2026.01.02D12:00:00.000000000);`registered`reloaded!2 1];
+    .qunit.assertEquals[s`dirty;1b;"one of two reloaded: still owed"];
+    .qunit.assertEquals[.qetl.io.due[s;`finished`pending`final!(0;0;1b);2026.01.02D12:00:01.000000000;0D00:00:30]`act;1b;
+        "so the run's final call asks again, though nothing new finished"]};
+
 test_hdb_refuses_a_root_that_is_not_a_file_symbol:{[t]
     .qunit.assertThrows[{.qetl.io.hdb[x;`deal_time]};`plain;
         "hdb: root must be a file symbol*";"a bare symbol is not a directory"]};

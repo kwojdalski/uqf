@@ -188,6 +188,7 @@ qetl.hb,never_started,function,1,
 qetl.hb,report,function,1,
 qetl.hb,require_schema,function,1,
 qetl.hb,stale,function,1,max_age
+qetl.io,acknowledged,function,2,state result
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
 qetl.io,discard,dict,,

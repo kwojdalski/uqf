@@ -450,7 +450,8 @@ hdb_type:`hdb
 / is not running is not an error: it maps the partitions when it starts. One
 / that fails to reload is logged and does not fail the backfill, whose rows
 / are already on disk and its coverage recorded.
-/ @return the number of HDBs asked to reload
+/ @return `registered`opened`reloaded - so a caller can tell a reload owed
+/   (#1084) from none needed
 / @eg .qtorq.reload_hdb[]
 reload_hdb:{[]
     / getservers returns only the handles that OPENED, so an HDB that refused
@@ -474,8 +475,8 @@ reload_hdb:{[]
 / @param registered how many HDBs discovery has registered
 / @param hs the handles that opened, each a handle or anything callable
 /   with (`reload;date)
-/ @return how many HDBs reloaded
-/ @eg .qtorq.reload_handles[0;()]  ->  0
+/ @return `registered`opened`reloaded counts
+/ @eg .qtorq.reload_handles[0;()]  ->  `registered`opened`reloaded!0 0 0
 reload_handles:{[registered;hs]
     hs:hs where not null hs;
     if[registered>count hs;
@@ -485,9 +486,9 @@ reload_handles:{[registered;hs]
     / "j"$ before sum: `sum` over booleans is an INT (2i, not the 2 this
     / documents), and `each` over no handles gives a general empty list that
     / `sum` leaves as () - not the 0 "nothing to reload" should read as.
-    n:sum "j"$ok;
-    .qetl.log.info[`qtorq;"hdb reload requested";`registered`opened`reloaded!(registered;count hs;n)];
-    n}
+    r:`registered`opened`reloaded!("j"$registered;count hs;sum "j"$ok);
+    .qetl.log.info[`qtorq;"hdb reload requested";r];
+    r}
 
 / The outbound identity a process should connect to the fleet with, when
 / TorQ's own lookup found nothing specific to it.
