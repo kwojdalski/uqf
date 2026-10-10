@@ -121,4 +121,18 @@ newer_venue_tops:{[tob;tops]
     t:0!select by sym, venue from `time xasc tops;
     held:(exec (sym,'venue)!time from 0!tob) t[`sym],'t`venue;
     t where (null held) or t[`time]>=held}
+
+/ The rows that advance each sym's held price: per sym the newest in the
+/ batch by source_time (an equal time follows arrival order), kept only when
+/ it is at least as new as the one held. newer_venue_tops' rule, one level
+/ up - for a price held per sym rather than per venue: last_value's latest
+/ row and posbook's FX mark (#1088), so a late, older book moves neither.
+/ @param held sym -> the source_time of the price held now
+/ @param rows a table with sym and source_time, any order
+/ @return the rows to apply, one per sym at most
+/ @eg exec mid from .qmicro.newer_by_sym[enlist[`EURUSD]!enlist 2026.09.17D10:00:01;([] sym:`EURUSD`GBPUSD; source_time:2#2026.09.17D10:00:00; mid:1.1 1.27)]  ->  ,1.27
+newer_by_sym:{[held;rows]
+    t:0!select by sym from `source_time xasc rows;
+    h:held t`sym;
+    t where (null h) or t[`source_time]>=h}
 \d .

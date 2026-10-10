@@ -72,9 +72,7 @@ apply:{[state;tob;batch]
     venues:select from ([] sym:at`sym; market:mk at`sym; source:`venues; source_time:at`time;
         bid:best`bid; ask:best`ask; mid:best`mid) where not null mid;
     t:t,venues;
-    t:0!select by sym from `source_time xasc t;
-    held:(exec sym!source_time from 0!state) t`sym;
-    t:t where (null held) or (t`source_time)>=held;
+    t:.qmicro.newer_by_sym[exec sym!source_time from 0!state;t];
     `state`tob`changed!(state upsert t;tob;cols[.qpipe.job.last_value.last_value]#t)}
 
 / Each crypto venue's newest top of book: what a crypto sym's reference is
