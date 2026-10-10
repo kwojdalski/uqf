@@ -22,7 +22,7 @@
 / Is this value a namespace, as `\d` creates them?
 / .
 / The key type is checked BEFORE looking for the empty symbol. A dictionary
-/ is 99h whatever its keys are, and .qetl.source.coercers is keyed by type CHARS -
+/ is 99h whatever its keys are, and a lookup keyed by type CHARS (as .qetl.source.coercers once was) -
 / so `` ` in key v `` on it compares a symbol against a char vector and
 / throws a bare 'type from inside a scan whose caller is nowhere near it.
 / A keyed table is 99h too, and its `key` is a table.

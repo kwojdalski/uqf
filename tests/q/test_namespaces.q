@@ -8,7 +8,7 @@
 / once while each keeps printing a passing line over a smaller set.
 / .
 / The nested case is therefore asserted directly rather than through the
-/ tools, and so is the char-keyed dictionary (.qetl.source.coercers) that made the
+/ tools, and so is the char-keyed dictionary (a type-char lookup, as a source once held) that made the
 / first version of is_namespace throw a bare 'type from four frames down.
 
 \d .nstest
@@ -52,10 +52,10 @@ test_an_ordinary_dictionary_is_not_a_namespace:{[t]
         "a symbol-keyed dictionary with no empty key is not a namespace"]};
 
 test_a_char_keyed_dictionary_is_not_a_namespace:{[t]
-    / The live trap: .qetl.source.coercers is keyed by type CHARS, so `` ` in key v ``
+    / The trap: a lookup keyed by type CHARS (the shape .qetl.source.coercers had), so `` ` in key v ``
     / compares a symbol against a char vector and throws 'type. A scan that
     / walks every global meets it, and the error names nothing useful.
-    .qunit.assertEquals[.qns.is_namespace .qetl.source.coercers;0b;
+    .qunit.assertEquals[.qns.is_namespace "fjps"!`float`long`timestamp`symbol;0b;
         "a char-keyed dictionary answers 0b rather than throwing 'type"]};
 
 test_a_table_is_not_a_namespace:{[t]

@@ -9,9 +9,12 @@
 /   source_validation.q   validate, validate_fixture, validate_live
 /   source_credentials.q  credential_var and the sources.csv settings
 /   source_zones.q        the zone table, utc_to_local, local_to_utc
-/   source_coercion.q     the shared coercion step
 /   source_local_hdb.q    the local transport: an HDB read from its files
 /   source_fetch.q        ipc and mock, fetch_window, zone bounds, fixture windowing
+/ .
+/ There is no shared row-coercion step here: an adapter converts its own rows to the
+/ declared types (see .qetl.coerce for the helpers it can call), because a
+/ per-source policy (case, decimal comma, date-only) is the adapter's to own (#1093).
 / .
 / The source contract: "register every external source table, target
 / mapping, required field and required type in the centralised source

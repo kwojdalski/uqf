@@ -583,8 +583,6 @@ qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,bound_padding,value,,
 qetl.source,clear_settings,function,1,
-qetl.source,coerce,function,2,source tbl
-qetl.source,coercers,dict,,
 qetl.source,column_names,function,1,tbl
 qetl.source,configured,function,1,
 qetl.source,credential_example,function,1,source
