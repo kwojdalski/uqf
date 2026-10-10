@@ -97,7 +97,7 @@ test_future_rows_cannot_poison_the_watermark:{[t]
 / from superbook entirely while last_value kept it live (#1033).
 test_a_source_whose_clock_leads_by_less_than_the_allowed_lead_is_kept:{[t]
     ahead:update source_time:.sbtest.d[0]+0D00:00:00.005 from 1#fixtures[];
-    lead:.qpipe.job.superbook.max_clock_lead;
+    lead:.qmicro.max_clock_lead;
     .qunit.assertTrue[lead>=0D00:00:00.005;"the default lead tolerates ordinary NTP skew"];
     s:.qpipe.job.superbook.replace_books[empty[];ahead;d[0]+lead];
     .qunit.assertEquals[count s;1;"a row 5ms ahead is stored"];

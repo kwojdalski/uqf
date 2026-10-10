@@ -1182,7 +1182,6 @@ qpipe.job.superbook,books,dict,,
 qpipe.job.superbook,fx_only,function,1,x
 qpipe.job.superbook,levels,function,2,prices sizes
 qpipe.job.superbook,max_age,value,,
-qpipe.job.superbook,max_clock_lead,value,,
 qpipe.job.superbook,on_batch,function,2,t x
 qpipe.job.superbook,on_timer,function,1,
 qpipe.job.superbook,publish,value,,
