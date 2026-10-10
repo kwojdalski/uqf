@@ -111,26 +111,35 @@ last_mid:(`symbol$())!`float$();
 
 / Each crypto venue's latest top of book, keyed by sym and venue, off the
 / same subscription. A crypto fill is marked to the BEST MID ACROSS VENUES
-/ that are fresh at the fill's time - the library's one reference price,
-/ which crypto_markout scores against too (#886) - not to whichever venue
-/ published last. One row per sym and venue, so it stays bounded.
+/ that are fresh as the books now stand (crypto_marks) - the library's one
+/ reference price, which crypto_markout scores against too (#886) - not to
+/ whichever venue published last. One row per sym and venue, so it stays bounded.
 / `time` is the venue's source_time, not the plant's arrival stamp, and a
 / venue's top is never rewound by an older book that arrives late
 / (.qmicro.newer_venue_tops, last_value's rule - #1049).
 crypto_tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$())
 
 / The crypto marks for a batch of fills: per crypto sym, the best mid across
-/ fresh venues at its last fill's time. A sym with no fresh venue is left
-/ out, so the transform falls back to the fill's own price, as it does for
-/ a sym never quoted.
+/ fresh venues as the books stand after the batch - priced at the later of
+/ the batch's newest fill and the sym's newest held top, the instant
+/ last_value prices the same books at, so the two publish one price
+/ (`max`, not `last`: one batch's fills need not be in source_time order).
+/ A sym with no fresh venue is left out, so the transform falls back to the
+/ fill's own price, as it does for a sym never quoted.
+/ .
+/ NOT at the fill's own source_time (#1058). crypto_tob holds each venue's
+/ NEWEST top only, and a fill is reported with latency: when every venue
+/ requotes between an execution and its report, no held top is at or
+/ before the execution, and an as-of lookup there finds nothing. The mark a
+/ position row carries is the position's value now, not at its fill.
 / @param tob crypto_tob, unkeyed
 / @param batch fills as as_trades gives them: `time` is the fill's
 /   source_time, the clock crypto_tob's books are stamped on
 / @return a table of sym and mid
-/ @eg .qpipe.job.posbook.crypto_marks[([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2#2026.09.17D10:00:00; bid:62000 62004f; ask:62010 62008f);([] time:enlist 2026.09.17D10:00:01; sym:enlist `$"BTC-USDT")]  ->  ([] sym:enlist `$"BTC-USDT"; mid:enlist 62006f)
+/ @eg .qpipe.job.posbook.crypto_marks[([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2026.09.17D10:00:00.1 2026.09.17D10:00:00.2; bid:100 101f; ask:102 103f);([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT")]  ->  ([] sym:enlist `$"BTC-USDT"; mid:enlist 101.5)
 crypto_marks:{[tob;batch]
-    s:exec sym from tob;
-    targets:0!select last time by sym from batch where sym in s;
+    f:select sym, time from batch where sym in tob`sym;
+    targets:0!select time:max time by sym from f,select sym, time from tob where sym in f`sym;
     m:([] sym:targets`sym; mid:.qmicro.best_mid_across_venues[tob;`sym`time#targets;.qmicro.reference_max_age]);
     select from m where not null mid}
 
@@ -165,9 +174,10 @@ apply_fills:{[x]
 / not the plant's stamp on the normalized row, which is when it was
 / reshaped. An FX mark is per sym and the last source to publish wins; .qpos
 / keys a book on sym alone, so that is the resolution it has. A crypto mark
-/ is the best mid across venues fresh at the fill's source_time, the same
-/ clock the books are stamped on (crypto_marks); a venue's book older than
-/ the one held for it is dropped, not upserted (#1049).
+/ is the best mid across venues fresh as the books now stand, judged on
+/ source_time - the clock the books are stamped on - rather than as of the
+/ fill (crypto_marks, #1058); a venue's book older than the one held for
+/ it is dropped, not upserted (#1049).
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
