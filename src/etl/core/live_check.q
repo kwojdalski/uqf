@@ -122,9 +122,10 @@ check:{[source;window]
         .qetl.source.validate_live[source;h];
         now:.z.p;
         got:.qetl.source.fetch_window[source;h;now-window;now];
-        rows:.qetl.source.primary[source;got 1];
-        .qetl.source.validate[source;rows];
-        (`ok;count rows)}[source;window];h;{(`error;x)}];
+        / The whole read is the contract - a dict of every input for a source
+        / with supporting ones (#1078) - and its primary table the row count.
+        .qetl.source.validate[source;got 1];
+        (`ok;count .qetl.source.primary[source;got 1])}[source;window];h;{(`error;x)}];
     @[tr`close;h;{[e] (::)}];
     if[failed[outcome];
         e:last outcome;

@@ -156,6 +156,28 @@ test_an_adapter_with_raw_reading_nothing_is_empty:{[t]
     `.livetest.rows set 0#.livetest.rows;
     .qunit.assertEquals[.livetest.check[]`status`stage`rows;(`empty;`done;0);"a valid empty window"]};
 
+/ #1078: a source with supporting inputs reads a dict of tables, and its
+/ contract is the whole dict. The check used to hand validate the primary
+/ table alone, so every valid read of such a source failed at `output`.
+supported_decl:{[]
+    d:.livetest.decl[];
+    d[`supporting]:enlist[`quote]!enlist ([] ts:`timestamp$(); px:`float$());
+    d[`query]:{[h;a;b] `ext`quote!(.livetest.rows;.livetest.rows)};
+    d[`fixture]:{`ext`quote!2#enlist ([] ts:enlist 2026.01.01D00:00; px:enlist 9.9)};
+    d}
+
+test_a_source_with_supporting_inputs_is_checked_whole_and_counts_its_primary:{[t]
+    .qetl.source.define[`livetest_src;.livetest.supported_decl[]];
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage`rows;(`ok;`done;1);"the whole read validated, its primary's rows counted"]};
+
+test_a_supporting_input_that_breaks_its_contract_still_fails_at_output:{[t]
+    d:.livetest.supported_decl[];
+    d[`query]:{[h;a;b] `ext`quote!(.livetest.rows;([] ts:enlist .z.p; px:enlist `wrong))};
+    .qetl.source.define[`livetest_src;d];
+    r:.livetest.check[];
+    .qunit.assertEquals[r`status`stage;(`failed;`output);"a supporting input is held to its own contract"]};
+
 test_a_check_that_passes_closes_its_connection:{[t]
     .livetest.check[];
     .qunit.assertEquals[.livetest.opened,.livetest.closed;1 1;"one opened, one closed"]};
