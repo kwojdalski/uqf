@@ -312,6 +312,34 @@ reload:{[]
     require_schema[];
     `etl_coverage}
 
+/ The claims one dataset, partition and release holds at `at`, read from
+/ the ledger the workers persist - for a reader that is not a worker (#1081).
+/ .
+/ The ledger lives in one file, beside the checkpoints (ledger_path). It is
+/ not in any RDB or HDB: nothing replicates it there, and the frontend's
+/ /coverage, which used to select etl_coverage on both tiers, could not see
+/ a backfill every worker skipped as covered. gateway1 loads this file to
+/ answer it, as `uqs gaps` reads the same file. Read without the ledger's
+/ lock: durable_set renames a whole file into place, so a read sees the old
+/ ledger or the new one, never half of either.
+/ .
+/ The empty string's partition, the q null symbol, is the "no partition
+/ dimension" sentinel and matches only rows recorded under it.
+/ @param ds the dataset
+/ @param part the partition, or ` for a dataset with none
+/ @param release the source version
+/ @param at the as-of: claims recorded by then and not yet superseded
+/ @return table range_from, range_to - for compose and gaps
+/ @eg count .qetl.coverage.claims[`no_such_dataset;`;`v1;.z.p]  ->  0
+claims:{[ds;part;release;at]
+    p:hsym `$ledger_path[];
+    t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
+          range_from:`timestamp$(); range_to:`timestamp$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
+        .qetl.job.bounded.state.durable_get ledger_path[]];
+    select range_from, range_to from t
+        where dataset=ds, partition=part, source_version=release,
+              recorded_at<=at, at<superseded_at, range_to>range_from}
+
 / Private: the run this process is executing, or the null guid.
 / .
 / Protected rather than a bare .qetl.run.current[] call, because run.q is not a

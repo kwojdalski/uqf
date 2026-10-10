@@ -117,10 +117,11 @@ BROWSE = ".uqf.browse"
 #: added to prevent, rebuilt on the HTTP side. The empty string maps to the
 #: q null symbol `, which is .qetl.coverage's "this dataset has no partition
 #: dimension" sentinel and matches only rows recorded under it.
-COVERAGE = """{[ds;part;release;at]
-  select range_from, range_to from etl_coverage
-    where dataset=ds, partition=part, source_version=release,
-          recorded_at<=at, at<superseded_at, range_to>range_from}"""
+#: Since #1081 a NAME on the gateway, not a lambda routed to the tiers: the
+#: ledger is a file the workers persist (.qetl.coverage.ledger_path), not a
+#: table any RDB or HDB holds, and gateway1 loads the reader. The same
+#: arguments and the same answer as before - the claims current at the as-of.
+COVERAGE = ".qetl.coverage.claims"
 
 #: The coverage ledger's own interval arithmetic, run on the GATEWAY
 #: (`Gateway.call`, not `route`): COVERAGE's rows come back razed from both

@@ -200,6 +200,14 @@ def _cov(rows, covered=None, gaps=()):
     )
 
 
+def _cov_args(gw):
+    """The arguments of the last coverage read: a gateway CALL since #1081,
+    the ledger being a file gateway1 reads rather than a table on a tier."""
+    from uqf_frontend import queries
+
+    return [args for program, args in gw.calls if program == queries.COVERAGE][-1]
+
+
 def test_coverage_reports_what_q_composed(client_for):
     """The routed rows go to .qetl.coverage.compose on the gateway, and what
     it answers is what /coverage reports - no second merge in Python."""
@@ -212,7 +220,9 @@ def test_coverage_reports_what_q_composed(client_for):
         .get("/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"})
         .json()
     )
-    assert gw.calls == [(queries.COMPOSE, (rows,))]
+    assert [program for program, _ in gw.calls] == [queries.COVERAGE, queries.COMPOSE]
+    assert gw.calls[-1] == (queries.COMPOSE, (rows,))
+    assert gw.routed == [], "the ledger is read on the gateway, never routed to a tier"
     assert body["covered"] == [
         {"range_from": "2026-09-13T00:00:00+00:00", "range_to": "2026-09-15T00:00:00+00:00"}
     ]
@@ -275,7 +285,7 @@ def test_coverage_filters_on_source_version(client_for):
     client_for(gw).get(
         "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v7"}
     )
-    program, args, _ = gw.routed[-1]
+    args = _cov_args(gw)
     assert args[:3] == ("trades", "", "v7")
 
 
@@ -294,7 +304,7 @@ def test_coverage_passes_an_as_of_to_q(client_for):
     client_for(gw).get(
         "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v7"}
     )
-    _program, args, _tier = gw.routed[-1]
+    args = _cov_args(gw)
     assert len(args) == 4, f"expected (dataset, partition, version, as_of), got {args}"
     assert isinstance(args[-1], dt.datetime)
     assert args[-1].tzinfo is not None, "the as-of must be timezone-aware, not naive"
@@ -391,7 +401,7 @@ def test_the_empty_partition_is_the_sentinel_not_a_wildcard(client_for):
     client_for(gw).get(
         "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"}
     )
-    _program, args, _tier = gw.routed[-1]
+    args = _cov_args(gw)
     assert args[1] == "", "the sentinel is passed through, not elided"
 
 
@@ -400,7 +410,7 @@ def test_a_named_partition_reaches_q(client_for):
     client_for(gw).get(
         "/coverage", params={"dataset": "trades", "partition": "EURUSD", "source_version": "v1"}
     )
-    _program, args, _tier = gw.routed[-1]
+    args = _cov_args(gw)
     assert args[:3] == ("trades", "EURUSD", "v1")
 
 
@@ -426,7 +436,7 @@ def test_the_coverage_precheck_carries_its_partition(client_for):
             },
         },
     )
-    cov_args = [a for prog, a, _ in gw.routed if prog == queries.COVERAGE][-1]
+    cov_args = _cov_args(gw)
     assert cov_args[1] == "EURUSD"
 
 

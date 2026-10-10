@@ -128,6 +128,7 @@ qetl.coerce,to_symbol_cased,function,1,str
 qetl.coerce,to_timestamp,function,1,str
 qetl.coerce,utc_offset,function,1,str
 qetl.coverage,attach,function,1,
+qetl.coverage,claims,function,4,ds part release at
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
 qetl.coverage,gaps,function,3,from_ts to_ts covered
