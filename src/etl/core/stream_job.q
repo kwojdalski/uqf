@@ -34,7 +34,8 @@
 / table - and markout's declaration, which carries an on_batch the feeds do
 / not, was refused with a bare 'mismatch naming nothing. Enlisting each
 / declaration keeps the values a general list, so a job may declare whatever
-/ its shape needs.
+/ its shape needs. scripts/gates/check_registry_enlist.py holds every
+/ registry under src/ to this (#1030).
 jobs:(`symbol$())!();
 
 / procname -> the job that runs there. A second index rather than a scan:

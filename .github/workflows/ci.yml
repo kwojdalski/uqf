@@ -146,6 +146,12 @@ jobs:
         # limit splits, or is listed with a reason and a cap that only shrinks.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_q_module_size.py
+      - name: Check every q registry stores its values enlisted
+        # A dict of same-keyed dicts collapses into a table on its first
+        # insert, and the next differently-shaped entry is refused (#1028).
+        # The enlist idiom was prose in three files; this holds it (#1030).
+        if: ${{ !cancelled() }}
+        run: python3 scripts/gates/check_registry_enlist.py
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
         # tree knows what happens to those without a gate - docs/man.q once
