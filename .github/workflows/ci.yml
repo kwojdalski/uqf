@@ -283,3 +283,33 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+
+  kdbx-attestation:
+    # Advisory (#1014): hosted CI has no KDB-X, so whether the q-tests,
+    # q-coverage, contract-surface and q-facts hooks passed on a PR's tree is
+    # known only where they ran. scripts/dev/attest_kdbx.py records that as a
+    # `KDB-X-gates: <tree>` trailer; this reports whether the head's exact
+    # tree carries one. It warns and never fails.
+    name: KDB-X attestation (advisory)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Report whether the KDB-X gates passed on this tree
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if out=$(python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD"); then
+            echo "$out" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=KDB-X attestation::$out"
+            echo "$out" >> "$GITHUB_STEP_SUMMARY"
+          fi
