@@ -129,7 +129,8 @@ test_fx_positions_keeps_a_fill_logged_before_the_opening_row:{[t]
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     .qetl.job.stream.snapshot `fx_positions;
     opening:sent_on `fx_position_open;
-    early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+    / logged after the roll, so stamped later than anything the snapshot holds
+    early:update time:.eodtest.t1+0D00:00:01 from fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;early];
     running:.qpipe.job.fx_positions.positions;
     `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
@@ -171,7 +172,8 @@ test_posbook_keeps_a_fill_logged_before_the_opening_row:{[t]
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     .qetl.job.stream.snapshot `posbook;
     opening:sent_on `position_open;
-    early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+    / logged after the roll, so stamped later than anything the snapshot holds
+    early:update time:.eodtest.t1+0D00:00:01 from fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;early];
     running:.qpipe.job.posbook.book;
     `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.position_book;
@@ -214,52 +216,74 @@ test_a_malformed_carry_is_refused:{[t]
     d[`carry]:`state`table!(`book;`eodx_open); d[`replay]:0b;
     .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*needs replay 1b*";"nothing would read it back"]};
 
-test_a_batch_beyond_the_window_is_not_held:{[t]
-    / recording is bounded: past the window, nothing more is kept
-    record[`fx_positions];
-    late:update time:.eodtest.t1+0D00:05 from fill[`EURUSD;1;1e6;1.1;`london;`spot];
-    h:.qetl.job.stream.handler `fx_positions;
-    `.qetl.job.stream.replaying set 1b;
-    h[`executions;update time:.eodtest.t1 from fill[`EURUSD;1;1e6;1.1;`london;`spot]];
-    h[`executions;late];
-    held:count last .qetl.job.stream.carry_log `fx_positions;
-    `.qetl.job.stream.replaying set 0b;
-    .qetl.job.stream.replayed `fx_positions;
-    .qunit.assertEquals[held;0;"the 5-minute-late batch closed the window, so nothing is held"]};
+test_a_carry_takes_only_state_table_and_a_positive_cap:{[t]
+    d:`procname`subscribe_to`publishes`on_batch`replay`carry!(`eodcar1;enlist `executions;enlist `eodx_open;{[t;x]};1b;`state`table`window!(`book;`eodx_open;0D00:01));
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*takes state, table and cap, not window*";"the old time window is gone"];
+    d[`carry]:`state`table`cap!(`book;`eodx_open;0);
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*cap must be a positive long*";"a cap that holds nothing"]};
 
-/ #1015: a snapshot logged later than the window after the first batch
-/ cannot have the earlier batches re-applied, and says so rather than
-/ leaving the book silently short.
+/ #1015: the snapshot says how far its state had got, so a replay re-applies
+/ exactly the rows it lacks, however long after the log's start it lands.
+test_a_snapshot_names_the_last_batch_its_state_applied:{[t]
+    record[`fx_positions];
+    (.qetl.job.stream.handler `fx_positions)[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qetl.job.stream.snapshot `fx_positions;
+    .qunit.assertEquals[exec carried_to from sent_on `fx_position_open;enlist t1;"the day-1 fill's plant time"]};
+
 late_snapshot_replay:{[]
     record[`fx_positions];
-    on:.qpipe.job.fx_positions.on_batch;
-    on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    h:.qetl.job.stream.handler `fx_positions;
+    h[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     .qetl.job.stream.snapshot `fx_positions;
-    opening:update time:.eodtest.t1+0D00:06 from sent_on `fx_position_open;
-    early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
-    later:update time:.eodtest.t1+0D00:05 from fill[`GBPUSD;1;1e6;1.27;`london;`spot];
-    `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
+    / the snapshot reaches the log an hour after the roll
+    opening:update time:.eodtest.t1+0D01 from sent_on `fx_position_open;
+    early:update time:.eodtest.t1+0D00:00:01 from fill[`EURUSD;-1;4e5;1.105;`london;`spot];
+    later:update time:.eodtest.t1+0D00:30 from fill[`GBPUSD;1;1e6;1.27;`london;`spot];
+    h[`executions;early]; h[`executions;later];
+    `.eodtest.running_book set .qpipe.job.fx_positions.positions;
+    .qetl.job.stream.reset `fx_positions;
     replay[`fx_positions;((`executions;early);(`executions;later);(`fx_position_open;opening))];
     }
 
 errors:{[lines] lines where `ERROR=first each lines}
 
-test_a_snapshot_past_the_window_is_logged_as_an_error:{[t]
+test_a_late_snapshot_still_restores_the_whole_book:{[t]
     e:errors .testutil.captured_log[0b] .eodtest.late_snapshot_replay;
-    .qunit.assertEquals[count e;1;"one error for the abandoned recording"];
-    .qunit.assertEquals[e[0;1];`fx_positions;"naming the job"];
-    .qunit.assertEquals[e[0;3]`window;0D00:01;"and the window it overran"]};
+    .qunit.assertEquals[.qpipe.job.fx_positions.positions;running_book;"restarted and kept-running books agree"];
+    .qunit.assertEquals[count e;0;"and nothing is reported lost"]};
 
-test_a_snapshot_within_the_window_logs_no_error:{[t]
-    f:{[]
-        record[`fx_positions];
-        on:.qpipe.job.fx_positions.on_batch;
-        on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
-        .qetl.job.stream.snapshot `fx_positions;
-        opening:sent_on `fx_position_open;
-        early:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
-        `.qpipe.job.fx_positions.positions set `sym`book`product xkey .qpipe.job.fx_positions.desk_book;
-        replay[`fx_positions;((`executions;early);(`fx_position_open;opening))]};
-    .qunit.assertEquals[count errors .testutil.captured_log[0b] f;0;"the ordinary restart is not an error"]};
+/ A batch logged before the snapshot but already IN it - one the job applied
+/ before taking it - is not applied twice.
+test_a_batch_the_snapshot_holds_is_not_applied_again:{[t]
+    record[`fx_positions];
+    h:.qetl.job.stream.handler `fx_positions;
+    h[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    held:update time:.eodtest.t1+0D00:00:01 from fill[`EURUSD;1;2e5;1.1;`london;`spot];
+    h[`executions;held];
+    .qetl.job.stream.snapshot `fx_positions;
+    opening:sent_on `fx_position_open;
+    running:.qpipe.job.fx_positions.positions;
+    .qetl.job.stream.reset `fx_positions;
+    replay[`fx_positions;((`executions;held);(`fx_position_open;opening))];
+    .qunit.assertEquals[.qpipe.job.fx_positions.positions;running;"1.2mm, not 1.4mm"]};
+
+/ A recording is capped; a snapshot that arrives after the cap cannot have the
+/ dropped batches re-applied, and says so rather than leaving the book short.
+capped:{[]
+    if[not `eod_cap in key .qetl.job.stream.jobs;
+        `.qpipe.job.eod_cap.book set ([] sym:`symbol$(); qty:`float$());
+        .qetl.job.stream.define[`eod_cap;`procname`subscribe_to`publishes`on_batch`replay`carry!(
+            `eodcap1;enlist `executions;enlist `eodx_open;{[t;x] `.qpipe.job.eod_cap.book upsert select sym, qty:size from x};1b;
+            `state`table`cap!(`book;`eodx_open;1))]];
+    `.qpipe.job.eod_cap.book set ([] sym:`symbol$(); qty:`float$());
+    f:fill[`EURUSD;1;1e6;1.1;`london;`spot];
+    replay[`eod_cap;((`executions;f);(`executions;f);(`eodx_open;([] time:enlist t1; sym:`EURUSD; qty:3e6; carried_to:enlist 0Np)))];
+    }
+
+test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
+    e:errors .testutil.captured_log[0b] .eodtest.capped;
+    .qunit.assertEquals[count e;1;"one error for the abandoned recording"];
+    .qunit.assertEquals[e[0;1];`eod_cap;"naming the job"];
+    .qunit.assertEquals[e[0;3]`cap;1;"and the cap it overran"]};
 
 \d .

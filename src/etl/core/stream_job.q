@@ -271,6 +271,9 @@ reset:{[job]
     if[job in key initial;
         s:first initial job;
         {[ns;k;v] (` sv ns,k) set v}[namespace job]'[key s;value s]];
+    / and what its carry knows of that state (#1015)
+    carried_to::(enlist job) _ carried_to;
+    carry_log::(enlist job) _ carry_log;
     job}
 
 / Every registered job, for the runner and for tests.
@@ -554,17 +557,28 @@ end_of_day:{[dt]
 / .
 /   at end of day   end_of_day publishes the state onto `table`, after the
 /                   plant has rolled its log: it opens the new day's log.
-/   on replay       batches are applied as they come, and those within
-/                   `window` of the log's start are also recorded. When the
-/                   snapshot arrives, the state is SET from it and the recorded
-/                   batches are applied again: the plant tells the job its day
-/                   ended asynchronously, so a batch can be logged ahead of the
+/                   Each row carries `carried_to`, the plant `time` of the
+/                   last batch the state had applied (#1015).
+/   on replay       batches are applied as they come, and also recorded
+/                   until the snapshot arrives. The state is then SET from
+/                   it and the recorded rows later than its `carried_to`
+/                   applied again: the plant tells the job its day ended
+/                   asynchronously, so a batch can be logged ahead of the
 /                   snapshot that live it was applied after. Exact for any
-/                   state, lot order included; bounded by `window`.
+/                   state, lot order included, however late the snapshot.
 /   live            the snapshot is this job's own echo, and is ignored.
+/ .
+/ What a recording holds is capped (`cap` rows, default 100000), because a
+/ log with no snapshot - an empty book yesterday - is recorded to its end.
+/ A snapshot that arrives after the cap was hit is logged as an error: the
+/ rows dropped are missing from the restored state, and that is never silent.
 
-/ Every carry's recording during a replay: job -> (first time; done; batches).
+/ Every carry's recording during a replay: job -> (status; rows held;
+/ batches), status `recording, `full once the cap was hit, `restored.
 carry_log:(`symbol$())!()
+
+/ job -> the plant `time` of the last batch its carried state applied.
+carried_to:(`symbol$())!`timestamp$()
 
 / Private: refuse a malformed carry, naming it.
 / @private
@@ -576,7 +590,8 @@ check_carry:{[job;decl;replays]
     if[not -11h=type c`state; 'who,"'s state must be the name of a variable in the job's namespace"];
     if[not (c`table) in (),decl`publishes; 'who,"'s table ",string[c`table]," must be one the job publishes"];
     if[not replays; 'who," needs replay 1b - the snapshot is read back by a replay"];
-    if[$[`window in key c; not -16h=type c`window; 0b]; 'who,"'s window must be a timespan"];
+    if[count (key c) except `state`table`cap; 'who," takes state, table and cap, not ",", " sv string (key c) except `state`table`cap];
+    if[$[`cap in key c; not (-7h=type c`cap) and 0<c`cap; 0b]; 'who,"'s cap must be a positive long, the rows a replay may hold"];
     }
 
 / The handler a job's batches go through: its guarded on_batch, behind its
@@ -597,48 +612,41 @@ carried:{[job;h;t;x]
         if[replaying; restore[job;h;x]];
         :()];
     h[t;x];
+    if[(`time in cols x) and count x; carried_to[job]:max (carried_to job;max x`time)];
     if[replaying; record[job;t;x]];
     }
 
-/ Private: how long after a job's first replayed batch its carry keeps
-/ recording - its declared `window`, else a minute.
+/ Private: how many rows a job's carry may hold during a replay.
 / @private
-carry_window:{[job] $[`window in key def[job]`carry; def[job][`carry]`window; 0D00:01]}
+carry_cap:{[job] $[`cap in key def[job]`carry; def[job][`carry]`cap; 100000]}
 
-/ Private: keep a replayed batch, while it is near enough the log's start
-/ that the snapshot may yet follow it.
+/ Private: keep a replayed batch until the snapshot arrives, up to the cap.
 / @private
 record:{[job;t;x]
-    r:$[job in key carry_log; carry_log job; (0Np;0b;())];
-    if[r 1; :()];
-    t0:$[(`time in cols x) and count x; first x`time; 0Np];
-    if[null r 0; r[0]:t0];
-    if[(not null t0) and t0>r[0]+carry_window job; carry_log[job]:(r 0;1b;()); :()];
-    r[2]:r[2],enlist (t;x);
-    carry_log[job]:r;
+    r:$[job in key carry_log; carry_log job; (`recording;0;())];
+    if[not `recording=r 0; :()];
+    if[carry_cap[job]<n:r[1]+count x; carry_log[job]:(`full;n;()); :()];
+    carry_log[job]:(`recording;n;r[2],enlist (t;x));
     }
 
-/ Private: set the carried state from its snapshot, then apply again what
-/ the replay delivered ahead of it.
-/ .
-/ A recording `record` gave up on - done, with its first time still set -
-/ means the snapshot came later than `window` after the log's first batch.
-/ The batches logged before it are then not applied again, so the restored
-/ state is missing them (#1015). That is logged as an error, never silent.
+/ Private: set the carried state from its snapshot, then apply again the
+/ recorded rows the snapshot does not hold - those later than its
+/ `carried_to`. A recording that hit its cap has lost rows the state needs,
+/ which is logged as an error, never silent (#1015).
 / @private
 restore:{[job;h;x]
     c:def[job]`carry;
-    r:$[job in key carry_log; carry_log job; (0Np;0b;())];
-    if[r[1] and not null r 0;
-        .qetl.log.err[job;"carry snapshot arrived after its recording window closed - batches logged before it are not re-applied, so the restored state is missing them";
-            `table`first_batch`snapshot`window!(c`table;r 0;$[(`time in cols x) and count x; first x`time; 0Np];carry_window job)]];
+    r:$[job in key carry_log; carry_log job; (`recording;0;())];
+    if[`full=r 0;
+        .qetl.log.err[job;"carry snapshot arrived after its recording hit the cap - batches logged before it are not re-applied, so the restored state is missing them";
+            `table`held`cap!(c`table;r 1;carry_cap job)]];
     v:` sv (def[job]`ns),c`state;
     cur:get v;
     rows:(cols 0!cur)#x;
     v set $[99h=type cur; (keys cur) xkey rows; rows];
-    early:$[job in key carry_log; (carry_log job) 2; ()];
-    carry_log[job]:(0Np;1b;());
-    {[h;b] h . b}[h] each early;
+    hwm:$[(`carried_to in cols x) and count x; max x`carried_to; 0Np];
+    carry_log[job]:(`restored;0;());
+    {[h;hwm;b] rs:b 1; if[(not null hwm) and `time in cols rs; rs:select from rs where time>hwm]; if[count rs; h[b 0;rs]]}[h;hwm] each r 2;
     }
 
 / The replay of a job's log is over: forget what its carry recorded.
@@ -648,15 +656,20 @@ restore:{[job;h;x]
 replayed:{[job] carry_log::(enlist job) _ carry_log; job}
 
 / Publish a job's carried state onto its snapshot table - what end_of_day
-/ does for each running job that carries one. Nothing when the state is empty:
-/ a restart with no snapshot starts flat, which is the same thing.
+/ does for each running job that carries one - each row stamped with the
+/ plant `time` of the last batch the state applied, so a replay re-applies
+/ exactly what the snapshot lacks. Nothing when the state is empty: a
+/ restart with no snapshot starts flat, which is the same thing.
 / @param job the job's name
 / @return how many rows were published
 / @eg .qetl.job.stream.snapshot[`fx_positions]
 snapshot:{[job]
     c:def[job]`carry;
     rows:0!get ` sv (def[job]`ns),c`state;
-    if[count rows; (get ` sv (def[job]`ns),`publish)[c`table;rows]];
+    if[count rows;
+        hwm:$[job in key carried_to; carried_to job; 0Np];
+        rows:update carried_to:hwm from rows;
+        (get ` sv (def[job]`ns),`publish)[c`table;rows]];
     count rows}
 
 unwired:{[job]

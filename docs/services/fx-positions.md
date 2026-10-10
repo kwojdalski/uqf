@@ -166,8 +166,10 @@ does the rest (#943, #963):
   plant has already rolled its log, so those rows open the new day's log.
 - **On a restart's replay** it sets the book from those rows. The plant tells
   the job its day ended asynchronously, so a fill can be logged ahead of the
-  snapshot even though the live job applied it after. The shell therefore
-  re-applies whatever was replayed just before the snapshot (#960).
+  snapshot even though the live job applied it after. Each snapshot row carries
+  `carried_to`, the plant time of the last fill the book held, so the shell
+  re-applies exactly the replayed fills later than that, however late the
+  snapshot reached the log (#960, #1015).
 - **Live** it ignores the job's own opening rows.
 
 So a process restarted at noon holds the same book as one that ran through
