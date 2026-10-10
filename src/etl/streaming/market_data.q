@@ -85,9 +85,15 @@ check:{[rows]
     graded:.qdqc.check_market_data_quality[q;0w];
     bad:select from graded where status=`crossed;
     crossed:([] check:count[bad]#`crossed_book; status:bad`status; detail:.qrender.full each bad; row:`long$bad`time);
-    real:select time:source_time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from rows;
+    / Staleness is per (sym, source), not per sym (#1050): a book replaces
+    / its own source's book only, so one fresh venue on a sym must not let
+    / another's ten-minute-old book through. The check groups by `sym`, so
+    / it is handed the pair as one symbol and the late rows are found by it.
+    pair:`$string[rows`sym],'"|",'string rows`source;
+    real:([] time:rows`source_time; sym:pair; bid_prices:rows`bid_prices;
+        bid_sizes:rows`bid_sizes; ask_prices:rows`ask_prices; ask_sizes:rows`ask_sizes);
     stale:.qdqc.check_stale_quotes[real;max rows`source_time;0D00:05];
-    late:exec i from rows where sym in exec sym from stale where status=`stale;
+    late:where pair in exec sym from stale where status=`stale;
     crossed,([] check:count[late]#`stale_quote; status:count[late]#`stale;
         detail:count[late]#enlist "older than the batch's newest quote by over 5 minutes"; row:late)}
 

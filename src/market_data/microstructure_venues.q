@@ -54,4 +54,19 @@ best_across_venues:{[tob;targets;max_age]
     best_ask:?[best_ask=0w;0n;best_ask];
     mid:0.5*best_bid+best_ask;
     ([] bid:best_bid; ask:best_ask; mid:?[null best_bid;0n;mid])}
+
+/ The tops in a batch that advance each venue's held top of book: per
+/ (sym; venue) the newest in the batch, kept only when its time is at least
+/ the held one's. A delayed or replayed book older than the venue's current
+/ one is dropped, so it cannot rewind the price; an equal time follows
+/ arrival order. The one rule last_value and posbook hold their per-venue
+/ tops by (#1049) - `time` is the venue's source_time, never the plant's.
+/ @param tob the held tops, keyed by sym and venue, with a `time` column
+/ @param tops table sym, venue, time, bid, ask - a batch's tops, any order
+/ @return the rows of tops to upsert into tob, one per (sym; venue) at most
+/ @eg exec bid from .qmicro.newer_venue_tops[2!([] sym:enlist `$"BTC-USDT"; venue:enlist `a; time:enlist 2026.09.17D10:00:01; bid:enlist 100f; ask:enlist 101f);([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2#2026.09.17D10:00:00; bid:90 95f; ask:91 96f)]  ->  ,95f
+newer_venue_tops:{[tob;tops]
+    t:0!select by sym, venue from `time xasc tops;
+    held:(exec (sym,'venue)!time from 0!tob) t[`sym],'t`venue;
+    t where (null held) or t[`time]>=held}
 \d .

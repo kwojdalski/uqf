@@ -759,6 +759,7 @@ qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_size
 qmicro,mid_price,function,2,bid_prices ask_prices
 qmicro,mid_price_acceleration,function,2,quotes target_sym
 qmicro,mid_price_velocity,function,2,quotes target_sym
+qmicro,newer_venue_tops,function,2,tob tops
 qmicro,odd_lot_imbalance,function,2,tape threshold
 qmicro,odd_lot_trade_ratio,function,2,tape threshold
 qmicro,ofi,function,2,quotes target_sym
