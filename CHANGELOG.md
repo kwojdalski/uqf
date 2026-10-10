@@ -2,6 +2,47 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-10-10
+
+**Overview.** Five days of pipeline-framework hardening, two new streaming job
+kinds (horizon, bars), carried stream state and remote deployment. Most of the
+work closed architecture and bug findings: data that could be lost, duplicated
+or served stale now fails loudly or is handled, each with a regression test.
+KDB-X runs are now recorded against the exact tree they passed on.
+
+**Changes by area** - **`src/etl/core`:** - New job kinds: horizon jobs
+(`.qetl.job.stream.at_horizons`), time bars, and stream state carried across
+days by the shell (`carry`, exact on restart via `carried_to`). - Data safety: -
+backfill writers take a per-HDB-root lock; - a torn tick log is cut back on
+reopen; - a remote plant replays its log to a restarting job; - fixture coverage
+no longer satisfies live runs; - HDB reload debt is kept until every running HDB
+acknowledges it; - reaction outcomes are scoped by partition and release; -
+durable ledgers are type-checked. - Declared recovery for stateful jobs
+(`replay` or `ephemeral`). - Keyed backfills append new keys instead of
+rewriting the day (about 8x faster). - A source no longer declares a destination
+(`target`). - **`src/etl/streaming`:** `last_value`, `alert_sink` and
+`flink_vwap` jobs added. One per-market price rule (`.qmicro.price_rules`) is
+shared by `posbook` and `last_value`. `market_data` withholds bad levels, future
+stamps and per-venue stale books at its publish check. - **`src/market_data`,
+`src/pricing`:** one level-validity rule (`.qbook.level_ok`), one
+book-transition rule under the OFI family, fixes to VPIN buckets, the
+large-trade threshold, empty-sym results and `cross_ref_price_at`, and
+settlement calendars per pair (`settle_via`). - **`python/uqs`:** - remote
+targets (`uqs --target`); - deploy push, rollback, soak and prune; -
+`uqs logs --channel`; - a sidecar bundle scaffold. - Fixes: rollback stops
+exactly what it started, process overrides refuse shell metacharacters, and pid
+identity is checked in a fixed locale. - **`python/uqf_frontend`:** `/coverage`
+reads the persisted ledger on the gateway, guid filters work, and
+`require_coverage` honours the access policy. - **`scripts/gates`, CI:** - KDB-X
+attestation (`scripts/dev/attest_kdbx.py`, advisory CI check); - registry-enlist
+and q module-size gates; - the PeachQ lane runs the whole suite against recorded
+gaps; - qlinter pinned. - **`tests`:** about 2,560 KDB-X qUnit tests, plus
+multi-process tests for remote replay, synchronous publish and the plant's day
+roll. - **`sidecars/mockups`, `.claude`:** a mock-data bundle, plus a uqf
+framework skill and new agents.
+
+**Files changed:** 659 files changed, 57012 insertions(+), 9390 deletions(-)
+
 ## stable/2026-10-05
 
 This snapshot covers 147 commits since `stable/2026-10-02`. Four review rounds
