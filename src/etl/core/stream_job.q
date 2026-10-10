@@ -329,10 +329,10 @@ contract_problems:{[t;x]
         :enlist string[t]," was given ",string[count x]," column vector(s) - the plant takes ",string count c];
     if[not (.Q.qt x) or type[x] in 0 99h;
         :enlist string[t],"'s rows must be a table, a dict or a list of column vectors"];
-    / Trapped: a ragged list or dict cannot be made a table, and says so.
-    @[{[t;c;x] .qetl.plant.problems[t] $[.Q.qt x; x;
-            99h=type x; $[all 0>type each value x; enlist x; flip x];
-            flip c!x]}[t;c];x;{[e] enlist "could not be checked: ",e}]}
+    / Trapped: a ragged list or dict cannot be made a table, and says so. A
+    / `time` is dropped, as every publisher drops it: the plant stamps its own.
+    @[{[t;c;x] r:0!$[.Q.qt x; x; 99h=type x; $[all 0>type each value x; enlist x; flip x]; flip c!x];
+            .qetl.plant.problems[t] (cols[r] except `time)#r}[t;c];x;{[e] enlist "could not be checked: ",e}]}
 
 / Private: a publisher that runs the job's declared check first (#944).
 / .

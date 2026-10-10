@@ -1405,6 +1405,13 @@ test_columns_out_of_the_plant_order_are_withheld:{[t]
     .qunit.assertTrue[(string (.qetl.stream_health.of`fx_orderbook_feed)`last_error) like "*fx_orderbook has columns sym ask_prices*";
         "and the columns are named"]};
 
+/ Every publisher drops a `time` the job sent - the plant stamps its own - so
+/ the contract must not refuse one either (a bundle's feed sends it).
+test_a_batch_carrying_its_own_time_still_publishes:{[t]
+    x:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
+    ob_publish[`fx_orderbook;`time xcols update time:.z.p from x];
+    .qunit.assertEquals[count .sjtest.published;1;"the time is the publisher's to drop, not a reason to withhold"]};
+
 test_a_column_list_of_the_wrong_length_is_withheld:{[t]
     ob_publish[`fx_orderbook;-1_ob[]];
     .qunit.assertEquals[count .sjtest.published;0;"four vectors cannot be five columns"];
