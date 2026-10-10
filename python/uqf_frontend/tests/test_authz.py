@@ -227,3 +227,28 @@ def test_a_denied_table_is_refused_on_coverage_too():
     )
     assert r.status_code == 403, r.text
     assert "fx_quotes" in r.text
+
+
+def test_a_denied_coverage_dataset_is_refused_on_query_too():
+    """#1044: require_coverage reads the named dataset's coverage, so a policy
+    refusing that dataset must refuse the query - not answer 409 with its gaps."""
+    c, gw = client(policy=deny_tables({"etl_coverage"}))
+    r = c.post(
+        "/query",
+        json={
+            "table": "trades",
+            "filters": [],
+            "require_coverage": {
+                "dataset": "etl_coverage",
+                "partition": "",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-16T00:00:00Z",
+            },
+        },
+    )
+    assert r.status_code == 403, r.text
+    assert "etl_coverage" in r.json()["detail"]
+    metadata = {queries.CATALOG, queries.SCHEMA}
+    assert [p for p, _, _ in gw.routed if p not in metadata] == [], "no coverage read"
+    assert [p for p, _ in gw.calls if p not in metadata] == []

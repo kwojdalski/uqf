@@ -24,9 +24,22 @@
 / `not in`: TorQ allows `not` only before in, within and like.
 browse_ops:`eq`ne`lt`le`gt`ge`in!((=);(not;in);(<);(<=);(>);(>=);(in))
 
+/ Private: a browser value as the q type its column holds. A guid arrives as
+/ a char vector - kola cannot encode a Python uuid, and a str would arrive as
+/ a symbol, which a guid column refuses with 'type (#1042) - so a char vector,
+/ or a list of them for `in`, is parsed with "G"$. No other column type is
+/ sent as chars: the frontend sends symbols as str, which kola makes symbols.
+browse_value:{[v]
+    $[10h=type v; "G"$v;
+      0h<>type v; v;
+      not count v; v;
+      all 10h=type each v; "G"$v;
+      v]}
+
 / Private: one browser condition as a getdata filter pair.
 browse_pair:{[o;v]
     op:browse_ops o;
+    v:browse_value v;
     $[`ne=o; (op 0;op 1;enlist v); `in=o; (op;(),v); (op;v)]}
 
 / The time window a read covers: the browser's own bounds on `time` where it
@@ -50,7 +63,7 @@ browse_window:{[fc;fo;fv;span;now]
 / @param t the table
 / @param fc filter columns, symbols
 / @param fo filter operators, symbols - eq ne lt le gt ge in
-/ @param fv filter values, one per column
+/ @param fv filter values, one per column; a guid as a char vector
 / @param lim the most rows to return - and never more than the caller's
 /   policy allows: the policy is the one authority on size (#928), so a read
 /   asking for more is truncated to it rather than refused

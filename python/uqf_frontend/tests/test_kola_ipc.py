@@ -17,6 +17,7 @@ whole lambda; gateway.py sends bytes for that reason, and nothing tested it.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -102,6 +103,37 @@ def test_a_connection_the_gateway_drops_is_reopened_by_the_next_request(q_port):
     with pytest.raises(GatewayUnavailable):
         gw.call("{x}", 2)
     assert gw.call("{x}", 3) == 3
+
+
+BROWSE_Q = Path(__file__).resolve().parents[3] / "scripts" / "torqcode" / "gateway" / "browse.q"
+
+
+@pytest.fixture(scope="module")
+def browse_port(start_q, tmp_path_factory) -> Any:
+    script = tmp_path_factory.mktemp("browse") / "browse.q"
+    script.write_text(BROWSE_Q.read_text())
+    with start_q(str(script)) as port:
+        yield port
+
+
+def test_a_guid_filter_value_reaches_q_as_a_guid(browse_port):
+    """#1042: kola refuses a uuid.UUID and sends a str as a symbol, which a
+    guid column rejects with 'type. coerce sends bytes; over a real kola
+    connection they must come out of .uqf.browse's filter as guids - for eq a
+    guid atom, for `in` a guid vector."""
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.queries import coerce
+
+    one = coerce("8c6b8b64-6815-6084-0a3e-178401251b68", QType.GUID, "run_id", as_list=False)
+    many = coerce(
+        ["8c6b8b64-6815-6084-0a3e-178401251b68", "11111111-2222-3333-4444-555555555555"],
+        QType.GUID,
+        "run_id",
+        as_list=True,
+    )
+    gw = KolaGateway(Settings(port=browse_port))
+    types = gw.call("{[o;v] {type last x} each .uqf.browse_pair'[o;v]}", ["eq", "in"], [one, many])
+    assert list(types) == [-2, 2]
 
 
 @pytest.mark.parametrize(

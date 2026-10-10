@@ -180,13 +180,14 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
         case QType.GUID:
             # Validated here rather than passed through, so a malformed id is
             # a 422 naming the column instead of a q-side type error the
-            # caller cannot act on. Returned as a string: the q side parses it
-            # with "G"$, and a uuid object would not survive the IPC encoding
-            # this layer uses.
+            # caller cannot act on. Returned as bytes, which kola sends as a
+            # q char vector that .uqf.browse parses with "G"$ (#1042): kola
+            # refuses a uuid.UUID outright, and a str would arrive as a
+            # symbol, which a guid column rejects with 'type.
             if not isinstance(value, str):
                 raise ValidationFailed(f"column {column!r} is a guid; expected a string")
             try:
-                return str(uuid.UUID(value))
+                return str(uuid.UUID(value)).encode()
             except ValueError as exc:
                 raise ValidationFailed(
                     f"column {column!r} is a guid; {value!r} is not one"

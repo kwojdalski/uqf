@@ -12,6 +12,7 @@
 \l scripts/torqcode/gateway/querypolicy.q
 \l scripts/torqcode/gateway/browse.q
 \l scripts/torqcode/handlers/pmusers.q
+\l lib/torq/code/dataaccess/extractqueryparams.q
 
 \d .qpoltest
 
@@ -221,4 +222,27 @@ test_browse_takes_its_window_from_the_browsers_time_bounds:{[t]
 test_browse_refuses_an_unknown_operator:{[t]
     .qunit.assertThrows[{.uqf.browse[`t;enlist `sym;enlist `like;enlist "E*";10;enlist `rdb]};::;
         "uqf.browse: unknown operator like";"named, not run"]};
+
+/ #1042: the frontend sends a guid as a char vector (kola cannot encode a
+/ Python uuid, and a str would be a symbol). The filter getdata gets must hold
+/ a guid, or the read fails with 'type. Applied here to an etl_coverage-shaped
+/ table through TorQ's own extractfilters, the step getdata takes.
+coverage:([] run_id:"G"$("8c6b8b64-6815-6084-0a3e-178401251b68";"0a3e1784-0125-1b68-8c6b-8b6468156084";"11111111-2222-3333-4444-555555555555"); dataset:`a`b`c)
+
+filtered:{[f] ?[.qpoltest.coverage;.eqp.extractfilters[enlist[`filters]!enlist f;.eqp.queryparams]`filters;0b;()]}
+
+test_browse_filters_etl_coverage_on_a_guid_run_id:{[t]
+    browse_with[.checkinputs.policyceiling;
+        {[] .uqf.browse[`etl_coverage;enlist `run_id;enlist `eq;enlist "8c6b8b64-6815-6084-0a3e-178401251b68";10;enlist `rdb]}];
+    .qunit.assertEquals[type last first asked[`filters]`run_id;-2h;"a guid, not the chars it was sent as"];
+    r:filtered asked`filters; .qunit.assertEquals[r`dataset;enlist `a;"the one run asked for"]};
+
+test_browse_filters_etl_coverage_on_a_list_of_guid_run_ids:{[t]
+    browse_with[.checkinputs.policyceiling;{[] ids:("8c6b8b64-6815-6084-0a3e-178401251b68";"11111111-2222-3333-4444-555555555555");
+        .uqf.browse[`etl_coverage;`run_id`run_id;`in`ne;(ids;last ids);10;enlist `rdb]}];
+    r:filtered asked`filters; .qunit.assertEquals[r`dataset;enlist `a;"in, then ne, both on guids"]};
+
+test_a_symbol_value_on_a_guid_column_is_the_type_error_1042_fixed:{[t]
+    .qunit.assertThrows[{filtered enlist[`run_id]!enlist enlist (=;`$"8c6b8b64-6815-6084-0a3e-178401251b68")};::;
+        "type";"why the value must be parsed"]};
 \d .
