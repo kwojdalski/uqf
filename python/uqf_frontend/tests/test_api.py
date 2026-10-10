@@ -194,6 +194,7 @@ def _cov(rows, covered=None, gaps=()):
     return FakeGateway(
         {
             queries.COVERAGE: rows,
+            queries.READY_CLAIMS: rows,
             queries.COMPOSE: rows if covered is None else covered,
             queries.GAPS: list(gaps),
         }
@@ -477,3 +478,42 @@ def test_coverage_rejects_a_naive_requested_range(client_for):
     )
     assert resp.status_code == 422
     assert "timezone" in resp.json()["detail"]
+
+
+def test_query_is_refused_when_coverage_is_written_but_not_loaded(client_for):
+    """#1094: a backfill stages coverage as it appends, before the HDB has
+    finished and reloaded the date. The ledger says written; the readiness
+    watermark says not yet - and /query refuses rather than return a short
+    result under require_coverage, naming the reason."""
+    from uqf_frontend import queries
+    from uqf_frontend.gateway import FakeGateway
+
+    written, loaded = [_iv(13, 16)], [_iv(13, 14)]
+
+    class Gateway(FakeGateway):
+        def call(self, program, *args):
+            if program == queries.GAPS:
+                self.calls.append((program, args))
+                return [] if args[2] is written else [_iv(14, 16)]
+            return super().call(program, *args)
+
+    gw = Gateway({queries.COVERAGE: written, queries.READY_CLAIMS: loaded})
+    gw._responses[queries.COMPOSE] = written
+    resp = client_for(gw).post(
+        "/query",
+        json={
+            "table": "trades",
+            "filters": [],
+            "require_coverage": {
+                "dataset": "trades",
+                "partition": "",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-16T00:00:00Z",
+            },
+        },
+    )
+    assert resp.status_code == 409
+    assert "not yet loaded by the HDB" in resp.json()["detail"]
+    assert queries.READY_CLAIMS in [program for program, _ in gw.calls]
+    assert queries.BROWSE not in [program for program, *_ in gw.routed], "nothing was queried"

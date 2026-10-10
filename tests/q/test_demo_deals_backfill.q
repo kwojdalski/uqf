@@ -1287,5 +1287,21 @@ test_the_run_version_carries_revision_then_fixture:{[t]
     .qunit.assertEquals[v[`source`revision!(`demo_deals;2);`v1];`$"v1@r2~fixture";"revision first, then the fixture tag"];
     .qunit.assertEquals[v[`source`revision!(`demo_deals;0N);`v1];`$"v1~fixture";"no revision, no suffix"];
     .qunit.assertEquals[v[`source`revision!(`demo_deals;2);`];`;"a null release is left for check_static to refuse"]};
+||||||| parent of 86bd2545 (Coverage means written; a readiness watermark says what is queryable (#1094))
+/ #1094: a run on a store whose writes are visible at once leaves every
+/ window it covered queryable - finish_window advances the watermark.
+test_a_run_on_an_immediate_store_leaves_its_windows_queryable:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    ready:.qetl.coverage.compose .qetl.coverage.ready_claims[`demo_deals;`;.ddbftest.fv;.z.p];
+    .qunit.assertEquals[ready;([] range_from:enlist .ddbftest.d 1; range_to:enlist .ddbftest.d 4);
+        "every covered window is queryable"]};
+
+/ A dry run stages no coverage, so it marks nothing ready either.
+test_a_dry_run_marks_nothing_ready:{[t]
+    setenv[`UQF_DRY_RUN;"true"];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    .qunit.assertEquals[()~key hsym `$.qetl.coverage.ready_path[];1b;"no watermark was written"]};
 
 \d .
