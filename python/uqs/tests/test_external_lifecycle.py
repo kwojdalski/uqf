@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -101,3 +102,56 @@ def test_a_pid_file_with_no_identity_is_unverifiable_and_never_signalled(proc, s
     assert not proc.running()
     assert proc.stop() is None
     assert stranger.poll() is None
+
+
+def _ps_identity_under(pid: int, **env: str) -> str:
+    """What the pre-#1055 code recorded: ps's output in whatever locale and
+    timezone the caller happened to have."""
+    out = subprocess.run(  # noqa: S603
+        ["ps", "-o", "lstart=", "-o", "args=", "-p", str(pid)],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, **env},
+    ).stdout
+    return " ".join(out.split())
+
+
+def test_the_identity_does_not_depend_on_the_callers_locale_or_timezone(proc, monkeypatch):
+    """#1055: a feed started from an en_GB terminal in Tokyo and stopped from
+    cron (LANG unset, another TZ) is the same process - running says so and
+    stop signals it."""
+    monkeypatch.setenv("LC_ALL", "en_GB.UTF-8")
+    monkeypatch.setenv("TZ", "Asia/Tokyo")
+    pid = proc.start(SLEEP, cwd=proc.pid_path.parent)
+    started_under = process_identity(pid)
+    monkeypatch.setenv("LC_ALL", "C")
+    monkeypatch.setenv("TZ", "America/New_York")
+    assert process_identity(pid) == started_under
+    assert proc.running()
+    assert proc.stop() == pid
+    assert not proc.pid_path.exists()
+
+
+def test_an_old_format_identity_from_the_same_environment_still_matches(proc, stranger):
+    """A pid file written before #1055, read back in the environment that wrote
+    it, is still recognised as ours."""
+    proc.pid_path.write_text(f"{stranger.pid}\n{_ps_identity_under(stranger.pid)}\n")
+    assert proc.running()
+
+
+def test_a_formatting_only_mismatch_keeps_the_pid_file_and_never_signals(proc, stranger):
+    """#1055: an old pid file written under another timezone names the same
+    command line, so the live process may well be the feed. It is not
+    signalled (it cannot be proved ours) but its pid file is not thrown away
+    either, and a second start is refused."""
+    legacy = _ps_identity_under(stranger.pid, LC_ALL="C", TZ="Pacific/Kiritimati")
+    proc.pid_path.write_text(f"{stranger.pid}\n{legacy}\n")
+    with pytest.raises(UqsError, match=rf"cannot confirm pid {stranger.pid} is the one it started"):
+        proc.stop(missing_ok=False)
+    assert proc.stop() is None
+    assert proc.pid_path.exists(), "the pid file of a possibly-live feed is kept"
+    with pytest.raises(UqsError, match="cannot confirm pid"):
+        proc.start(SLEEP, cwd=proc.pid_path.parent)
+    assert stranger.poll() is None, "never signalled"
+    proc.pid_path.unlink()
