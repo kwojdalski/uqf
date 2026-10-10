@@ -327,10 +327,23 @@ file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
 / @throws error when the lock cannot be taken within file_lock_wait
 / @eg .qetl.job.bounded.state.with_file_lock[`etl_coverage;{[n] n};enlist 1]
 with_file_lock:{[name;f;args]
-    dir:lock_dir[];
-    system"mkdir -p ",dir;
-    path:file_lock_path[name];
-    deadline:.z.p+file_lock_wait;
+    system"mkdir -p ",lock_dir[];
+    with_lock_at[file_lock_path name;file_lock_wait;f;args]}
+
+/ with_file_lock's critical section, at any lock path and with any wait: for
+/ a lock that belongs beside the thing it guards rather than in this
+/ deployment's status directory - an HDB root's (#1083), which every process
+/ writing that root must share whatever its own status directory - and
+/ whose holder may be busy, not stuck, for more than seconds.
+/ @param path the lock directory; its parent must exist
+/ @param wait the longest to wait for it, a timespan
+/ @param f the function to run under the lock
+/ @param args its arguments, as a list
+/ @return whatever f returns
+/ @throws error when the lock cannot be taken within wait
+/ @eg .qetl.job.bounded.state.with_lock_at["/tmp/uqf_eg.lock";0D00:00:01;{[n] n};enlist 1]  ->  1
+with_lock_at:{[path;wait;f;args]
+    deadline:.z.p+wait;
     while[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
         / Same staleness rule acquire_lock uses, and it matters MORE here.
         / This mutex is SHARED, so one process dying mid-write used to wedge
@@ -341,8 +354,8 @@ with_file_lock:{[name;f;args]
         if[stale; break_stale[path]];
         if[not stale;
             if[.z.p>deadline;
-                '"with_file_lock: could not take ",string[name]," at ",path," within ",
-                 string[file_lock_wait]," - held by ",(owner_desc[path]),
+                '"with_file_lock: could not take the lock at ",path," within ",
+                 string[wait]," - held by ",(owner_desc[path]),
                  ", which is still running"];
             system"sleep 0.01"]];
     / Record the holder, so a lock left by a dead process can be broken by

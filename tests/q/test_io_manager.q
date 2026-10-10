@@ -116,6 +116,39 @@ test_hdb_writes_each_row_into_its_own_date:{[t]
     .qunit.assertEquals[(count part[root;2026.01.02;`iodeals];count part[root;2026.01.03;`iodeals]);2 1;
         "two deals on the 2nd, one on the 3rd - each in the partition of the day it happened"]};
 
+/ #1083: every writer to one root holds its lock for the call, so backfills
+/ partitioned over one dataset queue rather than swap over each other.
+hold_root:{[root]
+    path:.qetl.io.hdb_lock root;
+    system"mkdir -p ",path;
+    .qetl.job.bounded.state.write_owner path;
+    path}
+
+test_a_write_waits_for_another_writer_on_the_same_root:{[t]
+    root:hdb_dir[];
+    held:hold_root root;
+    saved:.qetl.io.hdb_lock_wait;
+    `.qetl.io.hdb_lock_wait set 0D00:00:00.050;
+    r:@[{.qetl.io.write[.qetl.io.hdb[x;`deal_time];`iodeals;.iotest.deals[]]; `wrote};root;{x}];
+    `.qetl.io.hdb_lock_wait set saved;
+    system"rm -rf ",held;
+    / two wildcards at most: `like` throws 'nyi on three on KDB-X
+    .qunit.assertTrue[r like "*could not take the lock at*";"refused while another live writer holds the root"];
+    .qunit.assertTrue[0<count ss[r;(1_string root),".write.lock"];"naming the root's own lock"];
+    .qunit.assertEquals[count key root;0;"and nothing was written meanwhile"]};
+
+test_a_write_releases_the_root_lock_whether_it_succeeds_or_throws:{[t]
+    root:hdb_dir[];
+    path:.qetl.io.hdb_lock root;
+    .qetl.io.write[.qetl.io.hdb[root;`deal_time];`iodeals;deals[]];
+    .qunit.assertEquals[()~key hsym `$path;1b;"released after a write"];
+    @[{.qetl.io.write[.qetl.io.hdb[x;`no_such_col];`iobook;([] notional:enlist 1f)]};root;{x}];
+    .qunit.assertEquals[()~key hsym `$path;1b;"and after one that threw"]};
+
+test_two_roots_have_two_locks:{[t]
+    .qunit.assertEquals[.qetl.io.hdb_lock each `:/data/hdb`:/data/hdb2;("/data/hdb.write.lock";"/data/hdb2.write.lock");
+        "beside each root: one HDB's writers do not wait for another's"]};
+
 test_hdb_gives_the_rows_a_time_from_the_partition_column:{[t]
     root:hdb_dir[];
     .qetl.io.write[.qetl.io.hdb[root;`deal_time];`iodeals;deals[]];
