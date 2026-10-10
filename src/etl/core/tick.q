@@ -346,6 +346,37 @@ replay:{[path;handler]
     if[not 1b~r; '"replay: ",$[10h=type r; r; .Q.s1 r]];
     n}
 
+/ The plant's half of a REMOTE replay (#1071): replay its log for `want`,
+/ then subscribe `sink`, in one call, and hand back what was replayed.
+/ .
+/ A subscriber in another process cannot read this plant's log, and asking
+/ for the log and then subscribing in two calls leaves a gap a publish can
+/ fall into. Done here in ONE synchronous request it cannot: this process is
+/ single-threaded, so nothing is published between the replay and the
+/ subscription, and the live messages the subscription sends from then on
+/ are async - the subscriber reaches them only after it has applied what
+/ this returns. The local transport keeps the same order by calling replay
+/ and subscribe itself.
+/ .
+/ The whole replay comes back as the call's result, so it holds the wanted
+/ tables' messages of the day so far - the standalone runner's scale, not a
+/ production tickerplant's.
+/ @param want the table names, or ` for every table the plant knows
+/ @param sink where live batches go: `neg .z.w` for the calling subscriber
+/ @return the replayed (table;rows) pairs for `want`, in log order
+/ @throws whatever subscribe throws - a sink that cannot be called, an
+/   unknown table
+/ @eg .qetl.tick.reset[]; .qetl.tick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; .qetl.tick.replay_then_subscribe[`eg_t;{[m] m}]  ->  ()
+replay_then_subscribe:{[want;sink]
+    w:$[want~`; key schemas; (),want];
+    `.qetl.tick.handoff set ();
+    if[not null log_path;
+        replay[log_path;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]];
+    subscribe[want;sink];
+    m:handoff;
+    `.qetl.tick.handoff set ();
+    m}
+
 / ----------------------------------------------------------------- RESET
 
 / Forget every subscription, schema and log handle - what a test calls

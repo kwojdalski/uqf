@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.interpreter import q_interpreter
+from uqs.interpreter import KDBX, identify, q_interpreter
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 
@@ -131,3 +131,88 @@ def test_a_restart_after_the_day_ends_rebuilds_the_carried_book(tmp_path: Path) 
     # the new day's log opens with the carried book
     assert int(_value(out, "OPENING_LOG_MESSAGES")) >= 1, out
     assert _value(out, "AGREE") == "1", out
+
+
+def _free_port() -> int:
+    import socket
+
+    with socket.socket() as s:
+        s.bind(("localhost", 0))
+        return s.getsockname()[1]
+
+
+_PUBLISH = """h:hopen {port};
+f:{{[sz] ([] source_time:enlist .z.p; sym:enlist `EURUSD; venue:enlist `v; side:enlist 1;
+    size:enlist sz; price:enlist 1.1; fee:enlist 0f; fee_ccy:enlist `USD;
+    fill_id:enlist `$string sz; book:enlist `london; product:enlist `spot)}};
+h(`.qetl.tick.publish;`executions;f 1e6);
+h(`.qetl.tick.publish;`executions;f 5e5);
+exit 0
+"""
+
+_READ = """h:@[hopen;{port};{{0N}}];
+-1 "BOOK:",$[null h; "unreachable"; .Q.s1 h"exec base_qty from .qpipe.job.fx_positions.positions"];
+exit 0
+"""
+
+
+def test_a_job_with_its_plant_in_another_process_replays_the_plants_log(tmp_path: Path) -> None:
+    """#1071: with the plant in another process, a replay-dependent job was
+    warned and started flat. It now asks the plant to replay its log and
+    subscribe it in one call, so the book a restart builds is the log's."""
+    import time
+
+    q, env = _kdbx()
+    if identify(Path(q), env) != KDBX:
+        # three processes talking over ports; CI's PeachQ could not open a
+        # handle to the plant ('io), and this module is KDB-X's to run
+        pytest.skip("the multi-process run needs KDB-X")
+    plant_port, job_port = _free_port(), _free_port()
+    publish = tmp_path / "publish.q"
+    publish.write_text(_PUBLISH.format(port=plant_port))
+    read = tmp_path / "read.q"
+    read.write_text(_READ.format(port=job_port))
+    script = "scripts/processes/run_stream.q"
+
+    def start(*args: str) -> subprocess.Popen[bytes]:
+        return subprocess.Popen(
+            [q, script, "-q", *args],
+            cwd=UQF_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def run(path: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [q, str(path), "-q"],
+            cwd=UQF_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+    procs = [start("-plant", str(plant_port), "-logdir", str(tmp_path / "tplog"))]
+    try:
+        for _ in range(50):
+            done = run(publish)
+            if done.returncode == 0:
+                break
+            time.sleep(0.2)
+        assert done.returncode == 0, done.stdout + done.stderr
+        procs.append(start("-job", "fx_positions", "-tp", str(plant_port), "-port", str(job_port)))
+        out = ""
+        for _ in range(50):
+            out = run(read).stdout
+            if "unreachable" not in out:
+                break
+            time.sleep(0.2)
+        assert _value(out, "BOOK") == ",1500000f", out
+    finally:
+        for proc in reversed(procs):
+            proc.kill()
+            proc.wait(timeout=10)

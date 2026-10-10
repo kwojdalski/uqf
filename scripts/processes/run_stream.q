@@ -183,8 +183,13 @@ local_transport:{[]
 / would send a two-element message the remote evaluates as `tbl[rows]`. The
 / wrapper names the function to call over there.
 / .
-/ No replay here: the log belongs to the other process. A job asking for one
-/ is told so rather than silently started without it.
+/ A replay is the plant's to do - the log is in its process - so it is ASKED
+/ for one (#1071): .qetl.tick.replay_then_subscribe replays the wanted tables
+/ and subscribes this process in one synchronous call, and the replayed
+/ batches come back as its result, applied here before any live one. A job
+/ declaring replay 1b used to be warned and started without it, so
+/ fx_positions rebuilt its book with the plant in its own process and started
+/ flat with the plant in another.
 / @param tp the plant's port
 / @return the transport dictionary
 remote_transport:{[tp]
@@ -195,11 +200,11 @@ remote_transport:{[tp]
                 '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];}[tp];
         {[] {[send;t;x] send(`.qetl.tick.publish;t;x)}[neg .qproc.standalone.h]};
         {[tbls;handler;replay]
-            if[replay;
-                .qetl.log.warn[`run_stream;"replay asked for, but the plant's log is in another process - starting without it";
-                    enlist[`tables]!enlist tbls]];
             `upd set handler;
-            .qproc.standalone.h({[want] .qetl.tick.subscribe[want;neg .z.w]};tbls);};
+            if[not replay; .qproc.standalone.h({[want] .qetl.tick.subscribe[want;neg .z.w]};tbls); :()];
+            msgs:.qproc.standalone.h({[want] .qetl.tick.replay_then_subscribe[want;neg .z.w]};tbls);
+            {[h;m] h . m}[handler] each msgs;
+            if[count msgs; -1 "run_stream: recovered ",string[count msgs]," message(s) from the plant's log"];};
         add_timer)}
 
 / The jobs to run for `jobs` with the plant in this process: every in-tree

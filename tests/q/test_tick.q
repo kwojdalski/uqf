@@ -216,6 +216,26 @@ test_a_replayed_batch_is_a_table_like_a_live_one:{[t]
     .qunit.assertEquals[.ticktest.shapes;enlist 98h;
         "published as columns, replayed as a table - the same thing a subscriber saw live"]};
 
+/ #1071: the plant's half of a remote replay. Only the wanted tables come
+/ back, in log order, and the caller is subscribed in the same call, so a
+/ publish after it reaches the caller live and is not in what came back.
+test_replay_then_subscribe_hands_back_the_log_and_subscribes_in_one_call:{[t]
+    fresh_log[];
+    .qetl.tick.publish[`tt_trade;([] sym:`EURUSD`GBPUSD; px:1.085 1.265)];
+    .qetl.tick.publish[`tt_quote;([] sym:enlist `EURUSD; bid:enlist 1.084)];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `USDJPY; px:enlist 149.5)];
+    m:.qetl.tick.replay_then_subscribe[`tt_trade;.ticktest.recorder];
+    .qunit.assertEquals[(first each m;count each last each m);(`tt_trade`tt_trade;2 1);
+        "the wanted table's messages, in the order published, and no other table's"];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `AUDUSD; px:enlist 0.66)];
+    .qunit.assertEquals[count .ticktest.received;1;"and the caller now receives what is published live"]};
+
+test_replay_then_subscribe_with_no_log_only_subscribes:{[t]
+    setup[];
+    .qunit.assertEquals[.qetl.tick.replay_then_subscribe[`tt_trade;.ticktest.recorder];();"nothing to replay"];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];
+    .qunit.assertEquals[count .ticktest.received;1;"subscribed all the same"]};
+
 test_replaying_a_log_that_is_not_there_is_not_an_error:{[t]
     .qunit.assertEquals[.qetl.tick.replay[hsym `$"/tmp/uqf_ticktest_nonexistent";{[t;r] r}];0;
         "a first start has no log to replay, which is ordinary rather than exceptional"]};
