@@ -742,4 +742,31 @@ test_tier2_functions_return_empty_for_a_sym_with_no_quotes:{[t]
 test_an_empty_sym_still_validates_the_side:{[t]
     .qunit.assertThrows[.qmicro.queue_depletion_rate[1#mk_mid_quotes[::];`GBPUSD;];`mid;
         "queue_depletion_rate: side must be `bid or `ask*";"a bad side is refused even with no rows"]};
+/ --- the stream reads a withdrawn side as ofi does (#1111) ------------------
+/ #1032 moved the batch functions onto side_transition, which reads an
+/ absent ask as 0w with size 0. The stream kept raw nulls, so a withdrawn
+/ ask's flow was null and msum read it as 0.
+
+/ EURUSD with its ask withdrawn on row 1 and back on row 2.
+withdrawn:{[] ([] time:2026.01.01D10:00:00+0D00:00:01*til 4; sym:`EURUSD;
+    bid_prices:4#enlist enlist 1.1; bid_sizes:4#enlist enlist 1e6;
+    ask_prices:(enlist 1.1002;`float$();enlist 1.1002;enlist 1.1002);
+    ask_sizes:(enlist 2e6;`float$();enlist 2e6;enlist 2e6))}
+
+test_the_stream_reads_a_withdrawn_ask_as_ofi_does:{[t]
+    q:withdrawn[];
+    cfg:enlist[`window]!enlist 2;
+    r:.qmicro.stream_update[.qmicro.stream_init[`ofi`rolling_ofi;cfg];enlist[`quotes]!enlist q;cfg];
+    want:.qmicro.ofi[q;`EURUSD];
+    .qunit.assertEquals[r[`quotes]`ofi;want;"the queue leaving is +2e6, its return -2e6 - as the batch says"];
+    .qunit.assertEquals[r[`quotes]`rolling_ofi;.qmicro.rolling_ofi[want;2];"so the rolling sum is not silently 0"]};
+
+test_a_batch_boundary_at_the_withdrawal_changes_nothing:{[t]
+    q:withdrawn[];
+    cfg:enlist[`window]!enlist 2;
+    a:.qmicro.stream_update[.qmicro.stream_init[`ofi;cfg];enlist[`quotes]!enlist 2#q;cfg];
+    b:.qmicro.stream_update[a`state;enlist[`quotes]!enlist 2_q;cfg];
+    .qunit.assertEquals[(a[`quotes]`ofi),b[`quotes]`ofi;.qmicro.ofi[q;`EURUSD];
+        "the state holds the withdrawn ask as the rule reads it"]};
+
 \d .
