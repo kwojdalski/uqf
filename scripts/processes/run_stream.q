@@ -178,10 +178,17 @@ local_transport:{[]
 / lambda to apply. What comes back is (`upd;table;rows), evaluated here as
 / upd[table;rows], so the handler has to BE root upd.
 / .
-/ Publishing is NOT a bare `neg h`. A handle is an integer, which
-/ .qetl.job.stream.wire rejects (functions only), and `(neg h)[tbl;rows]`
-/ would send a two-element message the remote evaluates as `tbl[rows]`. The
+/ Publishing is NOT a bare handle. A handle is an integer, which
+/ .qetl.job.stream.wire rejects (functions only), and `h[tbl;rows]` would
+/ send a two-element message the remote evaluates as `tbl[rows]`. The
 / wrapper names the function to call over there.
+/ .
+/ And it is SYNCHRONOUS (#1085): it returns once the plant has logged and
+/ sent the rows, and a plant that refuses them throws here. An async `neg h`
+/ returned on enqueue, so a markout job evicted fills the plant had not
+/ logged - a disconnect or a refusal after the send lost them, with nothing
+/ left to retry. The cost is a round trip per publish, at this runner's
+/ scale nothing.
 / .
 / A replay is the plant's to do - the log is in its process - so it is ASKED
 / for one (#1071): .qetl.tick.replay_then_subscribe replays the wanted tables
@@ -198,7 +205,7 @@ remote_transport:{[tp]
             .qetl.log.info[`run_stream;"connecting to the plant";enlist[`port]!enlist tp];
             `.qproc.standalone.h set @[hopen;tp;{[tp;e]
                 '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];}[tp];
-        {[] {[send;t;x] send(`.qetl.tick.publish;t;x)}[neg .qproc.standalone.h]};
+        {[] {[h;t;x] h(`.qetl.tick.publish;t;x)}[.qproc.standalone.h]};
         {[tbls;handler;replay]
             `upd set handler;
             if[not replay; .qproc.standalone.h({[want] .qetl.tick.subscribe[want;neg .z.w]};tbls); :()];
