@@ -178,6 +178,25 @@ test_the_whole_fixture_is_reachable:{[t]
 test_the_fetch_path_is_announced:{[t]
     .qunit.assertEquals[first .qetl.source.fetch_window[`demo_deals;0Ni;.srctest.d[1];.srctest.d[2]];`fixture;"synthetic data is announced in the return value, never inferred"]};
 
+/ A live adapter is responsible for its query bounds, but the framework must
+/ refuse a broken one before coverage can claim that window as complete.
+test_a_live_utc_source_must_return_only_its_window:{[t]
+    decl:@[.srctest.decl[];`query;:;{[h;a;b] h[a;b]}];
+    .qetl.source.define[`t;decl];
+    handle:{[a;b] ([] ts:(a-1D;a;b); px:3#1.5)};
+    .qunit.assertThrows[{.qetl.source.fetch_window[`t;x;.srctest.d[1];.srctest.d[2]]};handle;
+        "*t returned 2 primary row(s) outside*";
+        "an inclusive upper bound and an earlier row cannot be published under this coverage window"]};
+
+/ Supporting rows are context: their timestamps may precede the primary window.
+test_a_live_utc_source_keeps_supporting_context_outside_the_window:{[t]
+    decl:@[.srctest.decl2[];`query;:;{[h;a;b] h[a;b]}];
+    .qetl.source.define[`t;decl];
+    handle:{[a;b] `ext`q!(([] ts:(a;b-0D00:00:01); px:1.5 2.5);([] ts:enlist a-1D; bid:enlist 1.1))};
+    got:last .qetl.source.fetch_window[`t;handle;.srctest.d[1];.srctest.d[2]];
+    .qunit.assertEquals[(count got`ext;count got`q);(2;1);
+        "the primary stays inside the window and the preceding quote is still available"]};
+
 / --- the row key --------------------------------------------------
 
 / Declared and validated, deliberately unused. The mechanism lands ahead of

@@ -148,12 +148,28 @@ fetch_window:{[source;h;range_from;range_to]
         (`fixture;window_fixture[decl;bounds 0;bounds 1]);
         (`live;(decl`query)[h;bounds 0;bounds 1])];
     out:narrow_to_utc[decl;page 1;range_from;range_to];
+    if[(page 0)=`live; require_live_window[source;decl;out;range_from;range_to]];
     / fetched vs kept differ only for a zoned source, whose bounds are padded:
     / the difference is the neighbouring windows' rows, dropped on purpose.
     .[{.qetl.log.dbg[x;y;z]};(source;"fetched";
         `path`fetched`kept`ms!(page 0;count primary[source;page 1];count primary[source;out];
             `long$(.z.p-t0)%1000000));::];
     (page 0;out)}
+
+/ Private: refuse excess live primary rows before coverage can claim a window.
+/ Supporting inputs are context and may lie outside it.
+/ @private
+require_live_window:{[source;decl;out;range_from;range_to]
+    tbl:primary[source;out];
+    f:decl`time_column;
+    if[not f in column_names tbl;
+        '"fetch_window: ",string[source],"'s primary input has no ",string[f]," time column"];
+    ts:tbl f;
+    outside:where (null ts)|(ts<range_from)|(ts>=range_to);
+    if[count outside;
+        '"fetch_window: ",string[source]," returned ",string[count outside],
+            " primary row(s) outside the requested UTC window on ",string[f]];
+    ()}
 
 / How far to widen a non-UTC source's window, in its own clock.
 / .
@@ -190,9 +206,9 @@ source_bounds:{[decl;range_from;range_to]
 / Private: convert a fetched page's time_column to UTC and narrow it to the
 / requested half-open range.
 / .
-/ For `UTC this is the identity: the query (or window_fixture) has already
-/ applied [range_from;range_to) and re-filtering would be dead code that
-/ could only ever disagree.
+/ For `UTC this returns the query (or window_fixture) rows unchanged. The live
+/ path verifies the query's bounds in fetch_window rather than silently
+/ filtering excess primary rows after the fact.
 / .
 / For a zoned source the narrowing is NOT optional - source_bounds
 / deliberately over-fetched, so without this every window would publish up
