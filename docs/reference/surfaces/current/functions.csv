@@ -197,6 +197,8 @@ qetl.io,finish,function,1,mgr
 qetl.io,flush,function,2,mgr upto
 qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
+qetl.io,hdb_lock,function,1,root
+qetl.io,hdb_lock_wait,value,,
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
 qetl.io,on_peachq,value,,
@@ -320,6 +322,7 @@ qetl.job.bounded.state,require_contract,function,1,worker
 qetl.job.bounded.state,run_pass,function,3,worker spec pass
 qetl.job.bounded.state,save_checkpoint,function,3,worker spec cursor
 qetl.job.bounded.state,with_file_lock,function,3,name f args
+qetl.job.bounded.state,with_lock_at,function,4,path wait f args
 qetl.job.bounded.state,write_owner,function,1,path
 qetl.job.continuous,advance,function,3,worker current next_cursor
 qetl.job.continuous,clear_cursor,function,1,worker

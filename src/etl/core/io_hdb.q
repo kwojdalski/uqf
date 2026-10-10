@@ -51,7 +51,11 @@
 / Neither tells a running HDB to reload: that needs the stack, so the
 / manager's on_ready does it, set by scripts/processes/torq_backfill.q.
 / .
-/ Not safe to run beside end-of-day: both append to the HDB's sym file.
+/ Every call holds the root's write lock (hdb_lock, #1083), so backfills
+/ writing one root queue rather than lose each other's rows or interleave
+/ appends to its sym file. TorQ's end-of-day does not take it - the vendored
+/ tree is not edited - so a backfill is still not safe beside end-of-day:
+/ both append to the sym file. Backfills never write today's partition.
 / .
 / ON PEACHQ. PeachQ cannot upsert onto a splayed table on disk, so write
 / rewrites a partition it appends to whole. It has no on-disk attributes and
@@ -64,6 +68,29 @@
 / Is this PeachQ? The one test this tree uses for it, as uqs's own
 / (python/uqs/src/uqs/interpreter.py): PeachQ defines .pq.load_natives.
 on_peachq:not -7h=type @[value;`.pq.load_natives;{0N}]
+
+/ How long an HDB write waits for another writer on the same root (#1083).
+/ A keyed write rewrites a whole date partition, so the holder may be busy
+/ for well over the ledger's few seconds; a dead holder is broken at once.
+hdb_lock_wait:0D00:10
+
+/ The lock every writer to one HDB root holds (#1083), beside the root as
+/ its staging area is, so every process writing the root shares it whatever
+/ its own status directory. By ROOT, not by worker, date or table: workers
+/ partitioned over one dataset write the same date's table, a keyed write
+/ reads a partition, resolves and swaps it back - so two at once lose
+/ whichever swapped first - and every table in a root enumerates against
+/ the one sym file. Held for one write, flush, finish or recover call, so
+/ writers queue for a window rather than for a run.
+/ @param root the HDB root, a file symbol
+/ @return the lock directory's path
+/ @eg .qetl.io.hdb_lock `:/data/hdb  ->  "/data/hdb.write.lock"
+hdb_lock:{[root] (1_string root),".write.lock"}
+
+/ Private: run f . args holding root's write lock.
+/ @private
+locked:{[root;f;args]
+    .qetl.job.bounded.state.with_lock_at[hdb_lock root;hdb_lock_wait;f;args]}
 
 / Partitions written and not yet finished: root, date, table.
 touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())
@@ -80,10 +107,16 @@ hdb:{[root;partition_col]
         '"hdb: root must be a file symbol, e.g. `:/data/hdb"];
     if[not -11h=type partition_col;
         '"hdb: partition_col must be a symbol naming a timestamp column"];
-    / finish_hdb takes a second, ignored argument so that finish_hdb[root;] is a
-    / PROJECTION: on a one-argument function, finish_hdb[root] would be a call.
-    `write`write_keyed`flush`finish`recover!(write_hdb[root;partition_col;;];write_hdb_keyed[root;partition_col;;;];
-        flush_hdb[root;];finish_hdb[root;];recover_hdb[root;;;])}
+    / Each entry takes root's write lock for the one call (#1083). Lambdas over
+    / the arguments, not projections of `locked`: a fully-applied projection
+    / is a CALL, and would run the write before the lock is taken.
+    / finish takes a second, ignored argument so it stays a function of one.
+    `write`write_keyed`flush`finish`recover!(
+        {[r;p;t;b] locked[r;write_hdb;(r;p;t;b)]}[root;partition_col];
+        {[r;p;t;b;o] locked[r;write_hdb_keyed;(r;p;t;b;o)]}[root;partition_col];
+        {[r;u] locked[r;flush_hdb;(r;u)]}[root];
+        {[r;x] locked[r;finish_hdb;(r;x)]}[root];
+        {[r;a;b;c] locked[r;recover_hdb;(r;a;b;c)]}[root])}
 
 / Private: append one window into its date partitions.
 / @private
