@@ -220,13 +220,17 @@ would for a job that was never up; ask it only within the horizon. Removing
 other things (a source's files, a table) remains an operator's act, and nothing
 in the framework assumes old rows are gone.
 
-**Schema change is half covered.** A column or table *added* to the schema
-reaches older partitions: `uqs data hdb-check` reports a partition missing one,
-and `--fix` fills it
+**Schema change has two paths.** A column or table *added* to the schema reaches
+older partitions through `uqs data hdb-check --fix`
 ([`stack/hdb_shape.py`](../../python/uqs/src/uqs/stack/hdb_shape.py)). A column
-whose *type* changes, or that is *renamed*, has no path: older partitions keep
-the old shape, and a query across both fails. Today that means a new column or a
-new table rather than a change in place.
+whose *type* changes, or that is *renamed*, needs an explicit offline migration:
+`uqs data migrate` rebuilds one date/table from named renames and lossless
+casts, validates its staged rows against the current declaration, then exchanges
+the table directories atomically. It retains the old directory as a rollback
+copy. An unmapped source column or a cast that loses values is refused before
+the exchange. The stack must be stopped: TorQ end of day does not take the HDB
+writer's lock. Segmented HDBs still require an operator migration outside this
+command.
 
 ## 8. Authority is split, and written down
 
