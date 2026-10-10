@@ -111,24 +111,33 @@ in_flight:`running
 / @return the ledger table name
 / @eg .qetl.run.init_runs[]
 init_runs:{[]
-    if[not `etl_runs in tables `.;
-        `etl_runs set ([] run_id:0#0Ng; worker:`symbol$(); process:`symbol$();
-            host:`symbol$(); pid:`int$(); started_at:`timestamp$();
-            ended_at:`timestamp$(); status:`symbol$();
-            dataset:`symbol$(); source_version:`symbol$(); range_from:`timestamp$();
-            range_to:`timestamp$(); width:`timespan$(); windows_planned:`long$();
-            windows_completed:`long$(); windows_failed:`long$(); rows_published:`long$())];
+    if[not `etl_runs in tables `.; `etl_runs set empty_runs[]];
     `etl_runs}
+
+/ The run ledger's shape, typed and empty: what init_runs creates and what a
+/ ledger read from disk is held to, types included (#1101).
+/ @return the empty ledger
+/ @eg cols .qetl.run.empty_runs[]
+empty_runs:{[] ([] run_id:0#0Ng; worker:`symbol$(); process:`symbol$();
+    host:`symbol$(); pid:`int$(); started_at:`timestamp$();
+    ended_at:`timestamp$(); status:`symbol$();
+    dataset:`symbol$(); source_version:`symbol$(); range_from:`timestamp$();
+    range_to:`timestamp$(); width:`timespan$(); windows_planned:`long$();
+    windows_completed:`long$(); windows_failed:`long$(); rows_published:`long$())}
 
 / Create the materialisation metadata table if absent.
 / @return the metadata table name
 / @eg .qetl.run.init_meta[]
 init_meta:{[]
-    if[not `etl_run_meta in tables `.;
-        `etl_run_meta set ([] run_id:0#0Ng; dataset:`symbol$();
-            range_from:`timestamp$(); range_to:`timestamp$();
-            label:`symbol$(); text:(); recorded_at:`timestamp$())];
+    if[not `etl_run_meta in tables `.; `etl_run_meta set empty_meta[]];
     `etl_run_meta}
+
+/ The metadata table's shape, typed and empty (#1101).
+/ @return the empty table
+/ @eg cols .qetl.run.empty_meta[]
+empty_meta:{[] ([] run_id:0#0Ng; dataset:`symbol$();
+    range_from:`timestamp$(); range_to:`timestamp$();
+    label:`symbol$(); text:(); recorded_at:`timestamp$())}
 
 / The root run table. Exists so no read below names `etl_runs` bare - inside
 / \d .qetl.run a bare name resolves to .qetl.run.etl_runs, which does not exist, and
@@ -164,6 +173,7 @@ require_run_schema:{[]
          " - built to a different shape, and reads here would return nulls"];
     if[count extra;
         '"require_run_schema: etl_runs has unexpected ",(", " sv string extra)];
+    .qetl.job.bounded.state.require_types[`etl_runs;value `etl_runs;empty_runs[]];
     1b}
 
 / Attach to both tables, validating a shape this process did not create.
@@ -229,7 +239,12 @@ reload:{[]
     pr:hsym `$table_path[`etl_runs];
     if[not ()~key pr; `etl_runs set .qetl.job.bounded.state.durable_get table_path `etl_runs; require_run_schema[]];
     pm:hsym `$table_path[`etl_run_meta];
-    if[not ()~key pm; `etl_run_meta set .qetl.job.bounded.state.durable_get table_path `etl_run_meta];
+    / the metadata table was reloaded unchecked (#1101): names and types now
+    if[not ()~key pm;
+        `etl_run_meta set .qetl.job.bounded.state.durable_get table_path `etl_run_meta;
+        if[not (asc cols value `etl_run_meta)~asc cols empty_meta[];
+            '"reload: etl_run_meta has columns ",(" " sv string cols value `etl_run_meta)," - expected ",(" " sv string cols empty_meta[])];
+        .qetl.job.bounded.state.require_types[`etl_run_meta;value `etl_run_meta;empty_meta[]]];
     `etl_runs`etl_run_meta}
 
 / Private: read-modify-write under the run ledger's own mutex.
