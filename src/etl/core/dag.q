@@ -454,4 +454,25 @@ adopt_all:{[]
     `workers`feeders`streams`pipelines`reactions!
         (adopt_workers[]; adopt_feeders[]; adopt_streams[]; adopt_pipelines[]; adopt_reactions[])}
 
+/ Refuse a cyclic graph, leaving the registry as it was found.
+/ .
+/ The load-time check (#1090): src/etl/init.q calls this after the declarations
+/ are in, so a cycle among workers, feeders, streams and reactions stops the
+/ process that loaded it rather than waiting for someone to ask for an order.
+/ It builds the graph from the registries (adopt_all) and orders it, then puts
+/ `jobs` back - a check that left the graph populated would change what every
+/ later reader of an unbuilt graph sees. Only what is loaded is checked, so a
+/ selective load (.qetl.load.only) checks the subset it chose.
+/ .
+/ Reactions registered by hand AFTER the load are not covered; call this again.
+/ @return the number of jobs in the acyclic graph
+/ @throws error naming the jobs in the cycle ("topological: cycle among ...")
+/ @eg .qetl.dag.check_acyclic[]
+check_acyclic:{[]
+    keep:jobs;
+    r:@[{adopt_all[]; count topological[]};::;{(`err;x)}];
+    jobs::keep;
+    if[`err~first r; 'last r];
+    r}
+
 \d .

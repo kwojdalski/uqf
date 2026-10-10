@@ -133,3 +133,7 @@
 / leaves the directory empty - so it is loaded only when there is something to
 / load, rather than throwing the way an empty sources/ rightly does.
 .qetl.load.declarations "src/etl/",/:("sources";"transforms";"workers";"streaming";"reactions");
+/ .
+/ Then the graph those declarations form must be acyclic (#1090): the check is
+/ here, at load, because nothing else in a running process asks for an order.
+.qetl.dag.check_acyclic[];
