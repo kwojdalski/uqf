@@ -148,13 +148,19 @@ still_current:0Wp
 / @return the ledger table name
 / @eg .qetl.coverage.init_ledger[]
 init_ledger:{[]
-    if[not `etl_coverage in tables `.;
-        `etl_coverage set ([] dataset:`symbol$(); partition:`symbol$();
-            source_version:`symbol$();
-            range_from:`timestamp$(); range_to:`timestamp$();
-            rows_published:`long$(); recorded_at:`timestamp$();
-            superseded_at:`timestamp$(); run_id:0#0Ng)];
+    if[not `etl_coverage in tables `.; `etl_coverage set empty_ledger[]];
     `etl_coverage}
+
+/ The ledger's shape, typed and empty: what init_ledger creates and what
+/ require_schema holds a ledger read from disk to, column TYPES included
+/ (#1101).
+/ @return the empty ledger
+/ @eg cols .qetl.coverage.empty_ledger[]
+empty_ledger:{[] ([] dataset:`symbol$(); partition:`symbol$();
+    source_version:`symbol$();
+    range_from:`timestamp$(); range_to:`timestamp$();
+    rows_published:`long$(); recorded_at:`timestamp$();
+    superseded_at:`timestamp$(); run_id:0#0Ng)}
 
 / The root ledger table. Exists so no read below names `etl_coverage` bare -
 / see init_ledger's note on namespace resolution.
@@ -240,6 +246,9 @@ require_schema:{[]
         '"require_schema: etl_coverage has unexpected column(s) ",
          (", " sv string extra),
          " - an extra column that distinguishes rows makes reads aggregate across it and report a gap-ridden range as complete"];
+    / The same names with another type pass a names check and fail later, in
+    / a timestamp comparison or a guid match far from here (#1101).
+    .qetl.job.bounded.state.require_types[`etl_coverage;ledger[];empty_ledger[]];
     1b}
 
 / -------------------------------------------------------------- INTERVALS

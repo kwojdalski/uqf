@@ -366,6 +366,25 @@ with_lock_at:{[path;wait;f;args]
     if[not first r; 'last r];
     last r}
 
+/ Refuse a durable table whose columns have the expected names but not the
+/ expected types (#1101), naming each. A general column (" ") in `want`, or
+/ an empty general one read back, is not compared: it has no single type.
+/ @param name the table, for the message
+/ @param got the table read from disk
+/ @param want its typed empty shape
+/ @return 1b
+/ @throws error naming each column whose type differs, with both types
+/ @eg .qetl.job.bounded.state.require_types[`t;([] a:enlist 1);([] a:`long$())]  ->  1b
+require_types:{[name;got;want]
+    w:exec c!t from 0!meta want;
+    g:exec c!t from 0!meta got;
+    c:(key w) where (key w) in key g;
+    c:c where (" "<>w c) and (" "<>g c) and w[c]<>g c;
+    if[count c;
+        '"require_types: ",string[name]," has ",(", " sv {[w;g;x] string[x]," as ",g[x],", not ",w x}[w;g] each c),
+         " - written by another version; migrate it or move it aside"];
+    1b}
+
 / -------------------------------------------------- DURABLE STATE FILES
 
 / Write `v` to `path` so that a crash at any moment leaves a readable file.

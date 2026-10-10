@@ -132,6 +132,7 @@ qetl.coverage,attach,function,1,
 qetl.coverage,claims,function,4,ds part release at
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
+qetl.coverage,empty_ledger,function,1,
 qetl.coverage,gaps,function,3,from_ts to_ts covered
 qetl.coverage,history,function,3,ds part version
 qetl.coverage,init_ledger,function,1,
@@ -329,6 +330,7 @@ qetl.job.bounded.state,register,function,2,worker ns
 qetl.job.bounded.state,registered,function,1,
 qetl.job.bounded.state,release_lock,function,1,worker
 qetl.job.bounded.state,require_contract,function,1,worker
+qetl.job.bounded.state,require_types,function,3,name got want
 qetl.job.bounded.state,run_pass,function,3,worker spec pass
 qetl.job.bounded.state,save_checkpoint,function,3,worker spec cursor
 qetl.job.bounded.state,with_file_lock,function,3,name f args
@@ -554,6 +556,8 @@ qetl.run,attach,function,1,
 qetl.run,begin,function,2,worker spec
 qetl.run,current,function,1,
 qetl.run,current_run,value,,
+qetl.run,empty_meta,function,1,
+qetl.run,empty_runs,function,1,
 qetl.run,facts_about,function,3,dataset range_from range_to
 qetl.run,facts_of,function,1,id
 qetl.run,finish,function,2,status counts

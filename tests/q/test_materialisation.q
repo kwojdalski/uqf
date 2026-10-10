@@ -602,4 +602,19 @@ test_claims_with_no_ledger_yet_is_empty_not_an_error:{[t]
     setenv[`UQF_STATUS_DIR;saved];
     .qunit.assertEquals[c;([] range_from:`timestamp$(); range_to:`timestamp$());"a first run has nothing to claim"]};
 
+/ #1101: a ledger with the right column names and a wrong type was
+/ accepted, and failed later in a comparison far from here.
+test_a_ledger_with_a_column_of_the_wrong_type_is_refused_by_name:{[t]
+    good:.qetl.coverage.empty_ledger[];
+    bad:update rows_published:`int$() from good;
+    `etl_coverage set bad;
+    r:@[.qetl.coverage.require_schema;::;{x}];
+    `etl_coverage set good;
+    .qunit.assertTrue[r like "require_types: etl_coverage has rows_published as i, not j*";"names the column and both types"];
+    .qunit.assertEquals[.qetl.coverage.require_schema[];1b;"the right types pass"]};
+
+test_require_types_ignores_a_general_column:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.state.require_types[`t;([] a:enlist 1; b:enlist "x");([] a:`long$(); b:())];1b;
+        "a general column has no single type to hold it to"]};
+
 \d .
