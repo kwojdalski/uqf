@@ -900,4 +900,38 @@ test_convert_quotes_refusals:{[t]
 test_inverse_pair_swaps_legs:{[t]
     .qunit.assertEquals[.qfwd.inverse_pair each `EURUSD`USDJPY;`USDEUR`JPYUSD;"legs swapped"]};
 
+/ --- a pair quoted under a non-canonical sym (#1110) -------------------------
+/ The one-leg path holds the sym as `quotes` spells it. Every function that
+/ prices off it must answer the same whatever that spelling, as the chained
+/ path always did: comparing the raw sym to the normalised pair inverted it.
+
+/ A one-row, one-level book per pair, quoted under the syms given.
+sym_book:{[s;b;a] ([] time:enlist 2026.01.01D10:00:00; sym:enlist s; bid_prices:enlist enlist b;
+    bid_sizes:enlist enlist 1e9; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e9)}
+spelled:{[eur;jpy] `sym`time xasc sym_book[eur;1.0998;1.1002],sym_book[jpy;149.98;150.02]}
+
+test_a_book_quoted_as_EUR_USD_is_not_inverted:{[t]
+    at:2026.01.01D10:00:01;
+    r:{[q;at] .qcross.cross_book_at[q;`EURUSD;at;enlist 1e5;`bid`ask]}[;at] each
+        (spelled[`EURUSD;`USDJPY];spelled[`$"EUR/USD";`$"USD/JPY"];spelled[`eurusd;`usdjpy]);
+    .qunit.assertEquals[r[;`bid`ask];3#enlist (enlist 1.0998;enlist 1.1002);"the book as quoted, however the sym is spelled"]};
+
+test_a_single_leg_reference_and_markout_ignore_the_spelling:{[t]
+    q:spelled[`$"EUR/USD";`$"USD/JPY"];
+    at:2026.01.01D10:00:01;
+    .qunit.assertEquals[.qcross.cross_ref_price_at[q;`EURUSD;at;1e5];1.1;"the mid, not its inverse"];
+    .qunit.assertEquals[.qcross.cross_ref_price_at[q;`EURJPY;at;1e5];.qcross.cross_ref_price_at[spelled[`EURUSD;`USDJPY];`EURJPY;at;1e5];
+        "and the chained cross exactly as under the canonical syms"];
+    .qunit.assertEquals[(.qexec.cross_markout_at_horizons[q;`EURUSD;at;1;1.1;10000;0D;1e5])`markout_pips;enlist 0f;
+        "a buy at the mid marks out at zero, not -1909 pips"]};
+
+test_a_single_leg_markout_decomposition_ignores_the_spelling:{[t]
+    t0:2026.01.01D10:00:01; t1:2026.01.01D10:00:03;
+    moved:{[eur;jpy] `sym`time xasc spelled[eur;jpy],update time:2026.01.01D10:00:02, bid_prices:enlist enlist 1.1008,
+        ask_prices:enlist enlist 1.1012 from sym_book[eur;0n;0n]};
+    a:.qexec.cross_markout_decomp[moved[`EURUSD;`USDJPY];`EURUSD;t0;t1;10000;1e5];
+    b:.qexec.cross_markout_decomp[moved[`$"EUR/USD";`$"USD/JPY"];`EURUSD;t0;t1;10000;1e5];
+    .qunit.assertEquals[delete leg from b;delete leg from a;"the same decomposition as under the canonical sym, legs named as quoted"];
+    .qunit.assertEquals[(b`invert;b`contribution_pips);(enlist 0b;enlist 10f);"not inverted: the ten pips EURUSD rose"]};
+
 \d .

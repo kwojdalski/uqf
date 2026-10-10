@@ -408,6 +408,17 @@ single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;cross_sym;bid_r`avg_price;bid_r`filled_size;bid_r`fully_filled;ask_r`avg_price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
 
+/ Does a one-leg path quote the inverse of cross_sym? The leg is the sym as
+/ `quotes` spells it - EUR/USD, eurusd - and cross_sym is normalised, so the
+/ two are compared normalised: a raw `~` called every such book inverted and
+/ priced EURUSD at 1/1.1 (#1110).
+/ @param leg the path's one leg, as quoted
+/ @param cross_sym the normalised pair being priced
+/ @return 1b when the leg is the pair's inverse
+/ @eg .qcross.leg_inverts[`$"EUR/USD";`EURUSD]  ->  0b
+/ @eg .qcross.leg_inverts[`USDEUR;`EURUSD]  ->  1b
+leg_inverts:{[leg;cross_sym] not (.qccy.normalize_ccy_pair leg)~cross_sym}
+
 / Private: like cross_book_chain_at_sizes, but for exactly one leg.
 / @private
 single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
@@ -451,7 +462,7 @@ cross_book_at:{[quotes;sym;as_of;sizes;sides]
         legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_book_at: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     $[1=count path;
-        single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;as_of;path 0];not (path 0)~cross_sym;sizes;sides];
+        single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;as_of;path 0];leg_inverts[path 0;cross_sym];sizes;sides];
         cross_book_chain_at_sizes[path;leg_book_as_of[quotes;as_of;] each path;sizes;sides]]};
 
 / Private: true if sweeping `size` on `side` (via cross_book_at) still
