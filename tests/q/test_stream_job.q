@@ -863,14 +863,47 @@ test_posbook_marks_a_crypto_fill_to_the_best_mid_across_venues:{[t]
         "best bid 62004 from kraken, best ask 62008 from kraken: 62006, not binance's 62005"]};
 
 test_posbook_does_not_mark_a_crypto_fill_to_a_stale_venue:{[t]
+    / Age is judged on source_time (#1049): the book and the fill reach the
+    / plant together, but the venue quoted twelve seconds before the fill.
     reset[];
     to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
         crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]]];
-    / Ten seconds later: the only book is older than the library's max age.
-    fill:.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]];
-    .qpipe.job.posbook.on_batch[`executions;`time xcols update time:.sjtest.d[10] from fill];
+    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
+        update time:.sjtest.d[10] from crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
     .testutil.assertApprox[first last_rows[]`mark_price;61000f;1e-9;
         "no fresh venue: marked at the fill's own price, as an unquoted sym is"]};
+
+test_posbook_ages_a_crypto_book_on_source_time_not_arrival:{[t]
+    / #1049: a book the plant received ten seconds late was still quoted two
+    / seconds before the fill, so it is fresh at the fill.
+    reset[];
+    m:.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]];
+    .qpipe.job.posbook.on_batch[`market_data;`time xcols update time:.sjtest.d[10] from m];
+    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
+        crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
+    .testutil.assertApprox[first last_rows[]`mark_price;62005f;1e-9;
+        "the venue's own stamp is two seconds before the fill: marked at its mid"]};
+
+test_posbook_does_not_let_a_late_older_book_rewind_its_venue:{[t]
+    / #1049: binance and okx quote 100/101 at source 10:00:01, then a
+    / delayed okx 90/91 stamped 10:00:00 arrives. last_value's rule: a book
+    / older than the venue's held one is dropped, so okx stays 100/101.
+    reset[];
+    s:`$"BTC-USDT";
+    book:{[s;v;st;b;a] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        update venue:v, source_time:st from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
+    to_posbook[`market_data;book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f]];
+    to_posbook[`market_data;book[`okx;d[0];90f;91f]];
+    .qunit.assertEquals[(.qpipe.job.posbook.crypto_tob(s;`okx))`time`bid`ask;(d[1];100f;101f);
+        "okx's newer book stands"];
+    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
+        update time:.sjtest.d[2] from crypto_fill[s;1;100f;1f]]];
+    .testutil.assertApprox[first last_rows[]`mark_price;100.5;1e-9;
+        "marked at 100.5, not 95.5 off a crossed 100/91"];
+    lv:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;
+        update time:.sjtest.d[3] from book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f],book[`okx;d[0];90f;91f]];
+    .qunit.assertEquals[first exec mid from lv`state;100.5;"the price last_value publishes for the same books"]};
 / --- fx orders feed -------------------------------------------------------
 
 test_the_orders_feed_publishes_one_order_a_tick:{[t]
@@ -1263,5 +1296,16 @@ test_market_data_check_names_crossed_and_stale_rows:{[t]
     .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"USDJPY lags the batch by ten minutes"];
     .qunit.assertEquals[count .qpipe.job.market_data.check book[`EURUSD;t0;1.1;1.2];0;"a clean book passes"];
     .qunit.assertEquals[count .qpipe.job.market_data.check update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from book[`EURUSD;t0;1.1;1.2];0;"an empty side is a withdrawal, not a failure"]};
+
+test_market_data_check_judges_staleness_per_sym_and_source:{[t]
+    / #1050: binance and kraken quote BTC-USDT at 10:10:00, okx at 10:00:00.
+    / Two fresh venues must not let okx's ten-minute-old book through.
+    t0:2026.09.19D10:10:00.000000000;
+    book:{[v;ts] ([] sym:enlist `$"BTC-USDT"; source:enlist v; market:enlist `crypto; source_time:enlist ts;
+        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f)};
+    rows:raze (book[`binance;t0];book[`kraken;t0];book[`okx;t0-0D00:10]);
+    f:.qpipe.job.market_data.check rows;
+    .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"okx lags the batch by ten minutes"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check 2#rows;0;"the two fresh venues pass"]};
 
 \d .

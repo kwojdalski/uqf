@@ -71,11 +71,8 @@ tops:{[x]
 apply:{[state;tob;batch]
     t:tops batch;
     / crypto: each venue's newest top, then the cross-venue reference per sym
-    c:select from t where market=`crypto;
-    c:0!select by sym, venue:source from `source_time xasc c;
-    held:(exec (sym,'venue)!time from 0!tob) c[`sym],'c`venue;
-    c:c where (null held) or c[`source_time]>=held;
-    tob:tob upsert select sym, venue, time:source_time, bid, ask from c;
+    c:.qmicro.newer_venue_tops[tob;select sym, venue:source, time:source_time, bid, ask from t where market=`crypto];
+    tob:tob upsert c;
     syms:distinct c`sym;
     at:0!select time:max time by sym from tob where sym in syms;
     best:.qmicro.best_across_venues[0!tob;at;.qmicro.reference_max_age];
