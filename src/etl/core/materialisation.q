@@ -647,9 +647,16 @@ ready_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_ready"}
 / Private: the watermarks as stored, or none.
 / @private
 ready_table:{[]
-    $[()~key hsym `$ready_path[];
-        ([dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$()] ready_at:`timestamp$());
-        .qetl.job.bounded.state.durable_get ready_path[]]}
+    if[()~key hsym `$ready_path[]; :empty_ready[]];
+    t:.qetl.job.bounded.state.durable_get ready_path[];
+    / held to its typed shape like the coverage ledger (#1101)
+    .qetl.job.bounded.state.require_types[`etl_ready;0!t;0!empty_ready[]];
+    t}
+
+/ The readiness watermarks' shape, typed and empty.
+/ @return the empty keyed table
+/ @eg cols .qetl.coverage.empty_ready[]
+empty_ready:{[] ([dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$()] ready_at:`timestamp$())}
 
 / Whether this process's writes become queryable only when its deployment
 / says so (release_ready). Set by the deployment, never by a worker.
