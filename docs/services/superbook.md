@@ -100,8 +100,14 @@ prices remain separate levels with their source identity intact.
 The default maximum age is five seconds, inclusive at the boundary, controlled
 by `.qpipe.job.superbook.max_age`. The process recomputes on updates and every
 500ms. Known pairs whose sources all expire produce an empty superbook snapshot.
-Each output has an `as_of` calculation timestamp; the plant stamps its own
-`time` independently.
+
+A source's clock may lead this host's by up to
+`.qpipe.job.superbook.max_clock_lead` (default 250ms) and its rows still count:
+every multi-venue feed has some skew, and with none allowed a venue a few
+milliseconds ahead vanished from the book. A row dated further ahead is refused,
+so it cannot poison that source's watermark, and the refusal is logged as a
+warning naming the source. Each output has an `as_of` calculation timestamp; the
+plant stamps its own `time` independently.
 
 ## Reading opportunities
 
