@@ -651,6 +651,7 @@ qetl.tick,msg_count,value,,
 qetl.tick,open_log,function,3,dir name dt
 qetl.tick,publish,function,2,t x
 qetl.tick,replay,function,2,path handler
+qetl.tick,replay_then_subscribe,function,2,want sink
 qetl.tick,reset,function,1,
 qetl.tick,roll,function,1,dt
 qetl.tick,schema,function,2,table_name empty
