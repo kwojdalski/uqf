@@ -27,6 +27,7 @@ import pytest
 
 from uqs.external import databento_feed
 from uqs.external.databento_streamer import contract_fields, rows_from_records
+from uqs.external.lifecycle import process_identity
 from uqs.paths import UqsError, UqsPaths
 
 REPO = Path(__file__).resolve().parents[3]
@@ -213,7 +214,7 @@ def test_an_unparseable_pid_file_is_not_running(tmp_path):
 
 def test_the_live_process_reports_running(tmp_path):
     paths = _paths(tmp_path)
-    paths.databento_feed_pid_path.write_text(str(os.getpid()))
+    paths.databento_feed_pid_path.write_text(f"{os.getpid()}\n{process_identity(os.getpid())}\n")
     assert databento_feed.is_databento_feed_running(paths) is True
 
 
