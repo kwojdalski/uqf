@@ -270,7 +270,12 @@ start:{[]
     tr:$[local; local_transport[]; remote_transport tp];
     started,:raze .qetl.job.stream.start[;tr] each jobs;
     if[not null feed; started,:.qetl.job.stream.start[feed;tr]];
-    if[count timers;
+    / A process carrying its own plant needs the tick even with no job
+    / timers: it is what rolls the plant's log at the date change (#943), and
+    / a bare -plant process - the separate-process deployment - has no job to
+    / install it, so its log never rolled and a restart after midnight found
+    / nothing to replay (#1075).
+    if[local or count timers;
         `.z.ts set {[] .qproc.standalone.tick[]};
         / A fixed 250ms wakeup that each job's own period is checked
         / against, rather than \t set to some job's period: q has one
