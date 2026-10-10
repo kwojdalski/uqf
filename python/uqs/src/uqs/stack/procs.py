@@ -23,6 +23,7 @@ from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS, _pipeline_rows
 from uqs.model.runtime_members import pipeline_procnames
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack.carriable import refuse_unsafe_override
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
     MONITOR_QUIET_EXTRAS,
@@ -196,7 +197,7 @@ def effective_process_rows(
     subscriptions monitor1 drops under the licence cap. An override of
     monitor1's own `extras` still wins outright, as it always did.
     """
-    overrides = _read_overrides(paths)
+    overrides = _checked_overrides(paths)
     rows = [
         {**row, **overrides.get(row["procname"], {})} for row in _defaulted(paths, default_qcmd)
     ]
@@ -235,6 +236,16 @@ def _read_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
     with paths.overrides_path.open(newline="") as f:
         for row in csv.DictReader(f):
             overrides.setdefault(row["procname"], {})[row["field"]] = row["value"]
+    return overrides
+
+
+def _checked_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
+    """The overrides on disk, each refused by name if torq.sh's eval would run
+    it - one written by hand, or before set_process_config refused it (#1041)."""
+    overrides = _read_overrides(paths)
+    for procname, fields in overrides.items():
+        for field, value in fields.items():
+            refuse_unsafe_override(procname, field, value or "")
     return overrides
 
 
@@ -351,33 +362,6 @@ def get_process_config(
     return row
 
 
-#: Characters torq.sh cannot carry in a process.csv field: it splits lines
-#: with `awk -F,`, so a comma starts a new field however csv quoted it, the
-#: quote stays literal, and a newline starts a row it miscounts (#777).
-UNCARRIABLE = ',"\n\r'
-
-
-def _refuse_uncarriable(procname: str, field: str, value: str) -> None:
-    if any(ch in value for ch in UNCARRIABLE):
-        raise UqsError(
-            f"{procname}.{field} value {value!r} contains a comma, quote or newline - "
-            "torq.sh splits process.csv on commas with awk and cannot quote one; "
-            "separate the parts with spaces instead (e.g. -pairs EURUSD USDJPY)"
-        )
-
-
-def check_carriable(rows: list[dict[str, str]]) -> None:
-    """Refuse a process.csv torq.sh would misread, naming the field.
-
-    For an override already on disk, written before set_process_config
-    refused one: found here, at bootstrap, it fails by name instead of as a
-    start whose qcmd is the second half of `extras`.
-    """
-    for row in rows:
-        for field, value in row.items():
-            _refuse_uncarriable(row["procname"], field, value or "")
-
-
 def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -> None:
     """Persist a process.csv field override for *procname*, applied by every
     later bootstrap() (i.e. every start/stop/summary/... call) until
@@ -388,7 +372,7 @@ def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -
         raise UqsError(f"unknown process.csv field {field!r} - {sorted(PROCESS_CSV_FIELDS)}")
     if procname not in list_process_names(paths):
         raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
-    _refuse_uncarriable(procname, field, value)
+    refuse_unsafe_override(procname, field, value)
 
     overrides = _read_overrides(paths)
     overrides.setdefault(procname, {})[field] = value

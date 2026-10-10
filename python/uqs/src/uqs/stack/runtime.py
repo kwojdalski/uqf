@@ -23,10 +23,11 @@ from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive, gateway_access, qtree, start_policy
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
+from uqs.stack.carriable import check_carriable
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.launcher import torq_launcher
-from uqs.stack.procs import check_carriable, effective_process_rows
+from uqs.stack.procs import effective_process_rows
 
 log = get_logger(__name__)
 

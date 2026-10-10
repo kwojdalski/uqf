@@ -13,6 +13,7 @@ import pytest
 from uqs import paths as stack_paths
 from uqs.external import crypto
 from uqs.external.crypto import CRYPTORUST_ROOT_ENV
+from uqs.external.lifecycle import process_identity
 from uqs.model import dependencies, pipeline_edges, plant_schema, schemas
 from uqs.model.pipeline import (
     FROM_DECLARATION,
@@ -263,6 +264,52 @@ def test_set_process_config_refuses_what_torq_sh_would_split(fake_paths: UqsPath
     ):
         stack_procs.set_process_config(fake_paths, "discovery1", "extras", value)
     assert not fake_paths.overrides_path.exists(), "nothing written"
+
+
+@pytest.mark.parametrize("field", ["qcmd", "extras", "load", "U", "proctype"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "touch /tmp/x; q",
+        "q && id",
+        "q | tee x",
+        "q $(id)",
+        "q `id`",
+        "q > /tmp/x",
+        "q < x",
+        "(q)",
+        "q \\x",
+        "q 'x'",
+        "q $HOME",
+    ],
+)
+def test_set_process_config_refuses_what_torq_sh_would_eval(fake_paths: UqsPaths, field, value):
+    """#1041: torq.sh composes qcmd, extras, load, ... into one line and runs
+    `eval "nohup $sline ..."`, so a shell metacharacter in an override would
+    run as the API's user on the next start."""
+    with pytest.raises(UqsError, match=rf"discovery1\.{field} value .* shell"):
+        stack_procs.set_process_config(fake_paths, "discovery1", field, value)
+    assert not fake_paths.overrides_path.exists(), "nothing written"
+
+
+def test_an_env_placeholder_is_still_accepted(fake_paths: UqsPaths):
+    """`${NAME}` is torq.sh's own placeholder, expanded by envsubst before eval."""
+    stack_procs.set_process_config(fake_paths, "discovery1", "load", "${KDBCODE}/processes/x.q")
+    row = stack_procs.get_process_config(fake_paths, "discovery1", resolve=False)
+    assert row["load"] == "${KDBCODE}/processes/x.q"
+
+
+def test_bootstrap_refuses_an_override_on_disk_torq_sh_would_eval(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """Written by hand, or before the setter refused one: named at bootstrap,
+    never handed to torq.sh's eval."""
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_paths.overrides_path.parent.mkdir(parents=True)
+    fake_paths.overrides_path.write_text("procname,field,value\nfxfeed1,qcmd,touch x; q\n")
+    with pytest.raises(UqsError, match=r"fxfeed1\.qcmd value 'touch x; q' .* shell"):
+        runtime.bootstrap(fake_paths)
+    assert not fake_paths.generated_procs.exists()
 
 
 def test_a_list_separated_by_spaces_is_still_accepted(fake_paths: UqsPaths):
@@ -1178,7 +1225,9 @@ def test_crypto_recorder_status_when_never_started(fake_paths: UqsPaths):
 
 def test_is_crypto_recorder_running_reflects_live_pid(fake_paths: UqsPaths):
     fake_paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
-    fake_paths.crypto_recorder_pid_path.write_text(str(os.getpid()))
+    fake_paths.crypto_recorder_pid_path.write_text(
+        f"{os.getpid()}\n{process_identity(os.getpid())}\n"
+    )
     assert crypto.is_crypto_recorder_running(fake_paths) is True
 
 

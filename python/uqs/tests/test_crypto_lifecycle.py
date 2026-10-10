@@ -60,6 +60,8 @@ def fake_build(monkeypatch):
     real_popen = subprocess.Popen
 
     def popen(cmd, **kw):
+        if cmd[0] == "ps":  # the identity lookup beside the pid (#1043), not a spawn
+            return real_popen(cmd, **kw)
         record["spawned"].append((cmd, kw))
         return real_popen(["sleep", "30"], stdout=kw.get("stdout"), stderr=kw.get("stderr"))
 
@@ -104,7 +106,7 @@ def test_start_builds_writes_config_spawns_and_records_the_pid(paths, fake_build
         )
         ((spawn_cmd, _),) = fake_build["spawned"]
         assert spawn_cmd[-2:] == ["--config", str(paths.crypto_recorder_config_path)]
-        assert paths.crypto_recorder_pid_path.read_text() == str(pid)
+        assert paths.crypto_recorder_pid_path.read_text().split("\n")[0] == str(pid)
         assert crypto.is_crypto_recorder_running(paths)
         assert crypto.crypto_recorder_status(paths)["running"] == "True"
     finally:
