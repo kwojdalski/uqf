@@ -200,6 +200,16 @@ and *names the missing ranges* when the requested window is not fully published:
                       "range_to":   "2026-09-16T00:00:00Z"}}
 ```
 
+Published is not the same as queryable (#1094). A backfill records a window as
+covered as soon as its rows are appended, while the HDB only sees a date once
+the backfill has finished it and every running HDB has reloaded. So
+`require_coverage` checks twice: first that the range is covered, then that it
+is covered *at or before the dataset's readiness watermark*
+(`.qetl.coverage.ready_claims`). A range that is written but not yet loaded is
+also refused with **409**, with a message that says so and names the window:
+retry once the reload has gone through. `/coverage` itself still reports what is
+written.
+
 `source_version` is **mandatory**, not optional, because coverage consumers must
 filter on it --- coverage under one source release says nothing about another.
 The filter is applied inside the q program rather than afterwards in Python, so

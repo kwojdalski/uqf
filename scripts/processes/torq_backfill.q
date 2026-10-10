@@ -187,8 +187,12 @@ on_hdb_ready:{[status]
     d:.qetl.io.due[.qproc.backfill.reload_state;status;.z.p;reload_interval[]];
     s:d`state;
     if[d`act;
+        / taken BEFORE the reload is asked: what it maps is what was on disk then
+        asked:.z.p;
         r:.qtorq.reload_hdb[];
         s:.qetl.io.acknowledged[s;r];
+        / every running HDB has it, with nothing open: queryable now (#1094)
+        if[not s`dirty; .qetl.coverage.release_ready asked];
         if[s[`dirty] and status`final;
             .qetl.log.err[`backfill;"backfill finished with rows a running hdb has not reloaded - they are on disk and covered, and appear there when it reloads or restarts";r]]];
     `.qproc.backfill.reload_state set s;
@@ -204,8 +208,25 @@ use_hdb:{[decl]
     root:hdb_root[];
     col:(.qetl.source.def decl`source)`time_column;
     .qetl.io.default:.qetl.io.hdb[root;col],enlist[`on_ready]!enlist on_hdb_ready;
+    / coverage here means written; queryable once the HDBs reload (#1094)
+    .qetl.coverage.defer_ready:1b;
     .qetl.log.info[`backfill;"writing into the HDB";`root`partition_col!(root;col)];
     .qetl.io.default}
+
+/ A run on a key whose coverage its HDBs may not show yet - an earlier run
+/ ended before they reloaded - owes them a reload even if it writes nothing,
+/ or an idle re-run would leave those windows unqueryable for good (#1094).
+/ @param worker the worker being run
+/ @return 1b when this run took the debt on
+catch_up:{[worker]
+    if[not .qetl.job.bounded.runtime.allows`finish_store; :0b];
+    cfg:.qetl.job.bounded.def worker;
+    v:(.qetl.job.bounded.spec worker)`source_version;
+    if[not .qetl.coverage.outstanding[cfg`dataset;cfg`partition;v]; :0b];
+    `.qetl.coverage.unready set distinct .qetl.coverage.unready,([] dataset:enlist cfg`dataset; partition:enlist cfg`partition; source_version:enlist v);
+    @[`.qproc.backfill.reload_state;`dirty;:;1b];
+    .qetl.log.info[worker;"coverage the hdb has not loaded yet - this run reloads it";`dataset`source_version!(cfg`dataset;v)];
+    1b}
 
 / Run the worker named on the command line, and report what it did.
 / .
@@ -248,6 +269,7 @@ run:{[]
     if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
     t1:.z.p;
     (` sv ns,`init)[spec];
+    catch_up worker;
     .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist .qtorq.elapsed_ms t1];
     t2:.z.p;
     r:(` sv ns,`run)[];
@@ -255,6 +277,9 @@ run:{[]
     / set, which reloads if anything finished since the last one - and what
     / it could not get a running HDB to reload is reported beside the run,
     / apart from whether the rows were written (#1084).
+    / An idle run never finishes its store, so what it took on in catch_up
+    / is reloaded here; a run that wrote has already released or failed to.
+    if[count .qetl.coverage.unready; on_hdb_ready `finished`pending`final!(0;0;1b)];
     r:r,enlist[`hdb_unreloaded]!enlist .qproc.backfill.reload_state`dirty;
     .qetl.log.info[worker;"backfill process finished";
         r,`run_ms`total_ms!(.qtorq.elapsed_ms t2;.qtorq.elapsed_ms t0)];

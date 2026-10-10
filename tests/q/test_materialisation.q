@@ -616,5 +616,48 @@ test_a_ledger_with_a_column_of_the_wrong_type_is_refused_by_name:{[t]
 test_require_types_ignores_a_general_column:{[t]
     .qunit.assertEquals[.qetl.job.bounded.state.require_types[`t;([] a:enlist 1; b:enlist "x");([] a:`long$(); b:())];1b;
         "a general column has no single type to hold it to"]};
+/ --- query readiness (#1094) -------------------------------------------------
+/ Coverage means written. Readiness is a watermark per (dataset, partition,
+/ release): the claims recorded at or before it are queryable.
+
+rdy:{[ds] ([] dataset:enlist ds; partition:enlist `; source_version:enlist `v1)}
+
+test_a_store_with_immediate_visibility_is_ready_as_it_writes:{[t]
+    .testutil.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`rdy_a;`;`v1;.coveragetest.d[1];.coveragetest.d[2];1];
+    .qunit.assertEquals[count .qetl.coverage.ready_claims[`rdy_a;`;`v1;.z.p];0;"written, and not yet said to be ready"];
+    .qetl.coverage.note_written[`rdy_a;`;`v1];
+    .qunit.assertEquals[count .qetl.coverage.ready_claims[`rdy_a;`;`v1;.z.p];1;"no deferral: ready as it is written"];
+    .qunit.assertEquals[.qetl.coverage.outstanding[`rdy_a;`;`v1];0b;"and nothing is owed"]};
+
+test_a_deferring_deployment_holds_readiness_until_it_releases:{[t]
+    .testutil.reset_coverage_ledger[];
+    .qetl.coverage.defer_ready:1b;
+    .qetl.coverage.stage_completion[`rdy_b;`;`v1;.coveragetest.d[1];.coveragetest.d[2];1];
+    .qetl.coverage.note_written[`rdy_b;`;`v1];
+    held:(count .qetl.coverage.ready_claims[`rdy_b;`;`v1;.z.p];.qetl.coverage.outstanding[`rdy_b;`;`v1]);
+    released:.qetl.coverage.release_ready .z.p;
+    .qetl.coverage.defer_ready:0b;
+    .qunit.assertEquals[held;(0;1b);"covered but not queryable, and owed"];
+    .qunit.assertEquals[(released;count .qetl.coverage.ready_claims[`rdy_b;`;`v1;.z.p];count .qetl.coverage.unready);1 1 0;
+        "released: queryable, and nothing left held"]};
+
+test_a_claim_recorded_after_the_watermark_is_not_ready:{[t]
+    .testutil.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`rdy_c;`;`v1;.coveragetest.d[1];.coveragetest.d[2];1];
+    .qetl.coverage.mark_ready[rdy[`rdy_c];.z.p];
+    / a restatement re-stages the window after the reload that showed the first
+    .qetl.coverage.supersede[`rdy_c;`;`v1;.coveragetest.d[1];.coveragetest.d[2]];
+    .qetl.coverage.stage_completion[`rdy_c;`;`v1;.coveragetest.d[1];.coveragetest.d[2];2];
+    .qunit.assertEquals[(count .qetl.coverage.claims[`rdy_c;`;`v1;.z.p];count .qetl.coverage.ready_claims[`rdy_c;`;`v1;.z.p]);1 0;
+        "the new claim is covered, and not ready until the HDB has the restated rows"];
+    .qunit.assertEquals[.qetl.coverage.outstanding[`rdy_c;`;`v1];1b;"so the next run owes a reload"]};
+
+test_a_watermark_never_moves_back:{[t]
+    .testutil.reset_coverage_ledger[];
+    .qetl.coverage.mark_ready[rdy[`rdy_d];2026.10.10D12:00];
+    .qetl.coverage.mark_ready[rdy[`rdy_d];2026.10.10D11:00];
+    .qunit.assertEquals[(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(`rdy_d;`;`v1)]`ready_at;2026.10.10D12:00;
+        "a late, older release does not unready what a newer one showed"]};
 
 \d .

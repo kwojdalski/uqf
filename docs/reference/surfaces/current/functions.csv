@@ -132,7 +132,9 @@ qetl.coverage,attach,function,1,
 qetl.coverage,claims,function,4,ds part release at
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
+qetl.coverage,defer_ready,value,,
 qetl.coverage,empty_ledger,function,1,
+qetl.coverage,empty_ready,function,1,
 qetl.coverage,gaps,function,3,from_ts to_ts covered
 qetl.coverage,history,function,3,ds part version
 qetl.coverage,init_ledger,function,1,
@@ -140,9 +142,15 @@ qetl.coverage,intervals,function,4,ds part version as_of
 qetl.coverage,is_covered,function,6,ds part version as_of from_ts to_ts
 qetl.coverage,ledger,function,1,
 qetl.coverage,ledger_path,function,1,
+qetl.coverage,mark_ready,function,2,ks at
 qetl.coverage,materialisations_of,function,1,id
 qetl.coverage,missing,function,6,ds part version as_of from_ts to_ts
+qetl.coverage,note_written,function,3,ds part version
+qetl.coverage,outstanding,function,3,ds part version
 qetl.coverage,persist,function,1,
+qetl.coverage,ready_claims,function,4,ds part release at
+qetl.coverage,ready_path,function,1,
+qetl.coverage,release_ready,function,1,at
 qetl.coverage,reload,function,1,
 qetl.coverage,require_covered,function,6,ds part version as_of from_ts to_ts
 qetl.coverage,require_interval,function,2,range_from range_to
@@ -151,6 +159,7 @@ qetl.coverage,schema,value,,
 qetl.coverage,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
 qetl.coverage,still_current,value,,
 qetl.coverage,supersede,function,5,ds part version from_ts to_ts
+qetl.coverage,unready,table,,
 qetl.coverage,with_lock,function,2,f args
 qetl.dag,adopt_all,function,1,
 qetl.dag,adopt_feeders,function,1,
