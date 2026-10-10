@@ -239,12 +239,12 @@ open_log:{[dir;name;dt]
     d:$[10h=abs type dir; dir; string dir];
     system "mkdir -p ",d;
     path:hsym `$d,"/",string[name],ssr[string dt;".";""];
-    / -11!(-2;path) counts the messages and checks the log is not
-    / truncated. Bare -11!path REPLAYS them, calling whatever `upd` is
-    / installed, and -11!(-1;path) still resolves `upd` and so throws in a
-    / process that has none. Only the -2 form reads a log without needing
-    / a handler, which is what opening one should do.
-    existing:$[() ~ key path; 0; -11!(-2;path)];
+    / -11!(-2;path) counts the messages without replaying them. Bare
+    / -11!path REPLAYS them, calling whatever `upd` is installed, and
+    / -11!(-1;path) still resolves `upd` and so throws in a process that
+    / has none. Only the -2 form reads a log without needing a handler,
+    / which is what opening one should do. repair also cuts off a torn tail.
+    existing:$[() ~ key path; 0; repair[path]];
     if[() ~ key path; path set ()];
     `.qetl.tick.log_path set path;
     `.qetl.tick.log_dir set d;
@@ -253,6 +253,26 @@ open_log:{[dir;name;dt]
     `.qetl.tick.log_handle set hopen path;
     `.qetl.tick.msg_count set existing;
     existing}
+
+/ Private: count the whole messages in a log, cutting off a torn tail.
+/ .
+/ A crash mid-write leaves the start of a message nobody finished. -11!(-2)
+/ then answers (whole messages; bytes they take) instead of a count, and a
+/ plant that appended after the torn bytes would put every later message
+/ where no replay can reach it (#1048). So the file is cut back to its whole
+/ messages, with a warning naming what was dropped, before anything is
+/ appended. Only the torn message is lost, and it was never fully written.
+/ @param path the log file, as an hsym, which must exist
+/ @return the number of whole messages in the log
+/ @private
+repair:{[path]
+    r:-11!(-2;path);
+    if[-7h=type r; :r];
+    size:hcount path;
+    path 1: read1 (path;0;last r);
+    .qetl.log.warn[`qetl.tick;"cut a torn tail off the log - a crash left a partly written message";
+        `path`messages`kept_bytes`dropped_bytes!(path;first r;last r;size-last r)];
+    first r}
 
 / End the day: close today's log and open the one for `dt` beside it.
 / .
@@ -305,14 +325,23 @@ record:{[msg]
 replay:{[path;handler]
     if[not can_send handler; '"replay: the handler must be callable as handler[table;rows]"];
     if[() ~ key path; :0];
-    n:-11!(-2;path);
+    / A torn log - one a crash cut off mid-message - answers -11!(-2) with
+    / (whole messages; bytes), and bare -11! on it throws 'badtail. Replay
+    / the whole messages and leave the file alone: repairing it is the
+    / writing plant's job (open_log), and a reader that rewrote it could
+    / race the plant appending to it.
+    cnt:-11!(-2;path);
+    n:first cnt;
     if[0=n; :0];
+    if[not -7h=type cnt;
+        .qetl.log.warn[`qetl.tick;"replaying only the whole messages of a torn log";
+            `path`messages`valid_bytes`log_bytes!(path;n;last cnt;hcount path)]];
     saved:$[`upd in key `.; enlist get `upd; ()];
     `upd set handler;
     / Restore the previous root upd whether the replay finished or threw:
     / leaving a replay handler installed would send live traffic into
     / recovery code, which is worse than the failure that caused it.
-    r:@[{[path] -11!path; 1b}; path; {[e] e}];
+    r:.[{[n;path] -11!(n;path); 1b}; (n;path); {[e] e}];
     $[count saved; `upd set first saved; ![`.;();0b;enlist `upd]];
     if[not 1b~r; '"replay: ",$[10h=type r; r; .Q.s1 r]];
     n}

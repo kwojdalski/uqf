@@ -244,6 +244,54 @@ test_replay_leaves_no_upd_behind_when_there_was_none:{[t]
     .qunit.assertFalse[`upd in key `.;
         "a process that had no root upd should not acquire one by replaying"]};
 
+/ A log with two whole messages and then the start of a third that a crash
+/ cut off mid-write (#1048). Closes the plant's handle first, so the junk is
+/ appended to a file nothing else is writing to. Returns the log's path and
+/ how many bytes the two whole messages take.
+torn_log:{[]
+    fresh_log[];
+    .qetl.tick.publish[`tt_trade;([] sym:`EURUSD`GBPUSD; px:1.085 1.265)];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `USDJPY; px:enlist 149.5)];
+    p:.qetl.tick.log_path;
+    good:hcount p;
+    .qetl.tick.reset[];
+    p 1: (read1 p),0x01020304050607;
+    .qetl.tick.schema[`tt_trade;([] time:`timestamp$(); sym:`symbol$(); px:`float$())];
+    (p;good)};
+
+test_reopening_a_torn_log_cuts_it_back_to_its_whole_messages:{[t]
+    / -11!(-2) answers a torn log with (messages;valid bytes), not a count.
+    / Storing that pair as msg_count and appending after the torn bytes put
+    / every later message where no replay could reach it.
+    pg:torn_log[];
+    n:.qetl.tick.open_log[log_dir[];`tt;2026.01.01];
+    .qunit.assertEquals[n;2;"the two whole messages, as a count rather than a (count;bytes) pair"];
+    .qunit.assertEquals[.qetl.tick.msg_count;2;"msg_count is the count too"];
+    .qunit.assertEquals[hcount first pg;last pg;"the torn bytes are cut off"]};
+
+test_messages_published_after_a_torn_log_is_reopened_replay:{[t]
+    pg:torn_log[];
+    .qetl.tick.open_log[log_dir[];`tt;2026.01.01];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `AUDUSD; px:enlist 0.66)];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `NZDUSD; px:enlist 0.60)];
+    .qunit.assertEquals[-11!(-2;first pg);4;"the log is whole again: four messages, no torn tail"];
+    `.ticktest.seen set ();
+    n:.qetl.tick.replay[first pg;{[t;r] `.ticktest.seen set .ticktest.seen,enlist exec sym from r;}];
+    .qunit.assertEquals[n;4;"all four replay"];
+    .qunit.assertEquals[.ticktest.seen;(`EURUSD`GBPUSD;enlist `USDJPY;enlist `AUDUSD;enlist `NZDUSD);
+        "including the two written after the repair, in order"]};
+
+test_replaying_a_torn_log_hands_back_its_whole_messages:{[t]
+    / A replaying job can start before the plant has reopened (and so
+    / repaired) the log. It used to die with a bare 'type; it now gets the
+    / whole messages, and leaves the file for the plant to repair.
+    pg:torn_log[];
+    `.ticktest.seen set ();
+    n:.qetl.tick.replay[first pg;{[t;r] `.ticktest.seen set .ticktest.seen,enlist count r;}];
+    .qunit.assertEquals[n;2;"the two whole messages"];
+    .qunit.assertEquals[.ticktest.seen;2 1;"replayed in order"];
+    .qunit.assertEquals[-11!(-2;first pg);2,last pg;"replay reads the log; it does not rewrite it"]};
+
 / ----------------------------------------------------------------- RESET
 
 test_reset_forgets_everything:{[t]
