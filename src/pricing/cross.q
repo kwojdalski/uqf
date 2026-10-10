@@ -390,7 +390,8 @@ cross_decomp:{[avail_syms;sym]
 leg_book_as_of:{[quotes;as_of;target_sym]
     lookup:([] sym:enlist target_sym; time:enlist as_of);
     joined:aj[`sym`time;lookup;quotes];
-    if[0=count first joined`bid_prices;
+    / no match is an empty ladder on KDB-X but a null atom on PeachQ (#1034)
+    if[$[0>type b:first joined`bid_prices; 1b; 0=count b];
         '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string as_of];
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(first joined`bid_prices;first joined`bid_sizes;first joined`ask_prices;first joined`ask_sizes)};
 
