@@ -156,7 +156,7 @@ score:{{[events;reference]
 / SCAFFOLDED. Optional keys, each off until declared (src/etl/core/horizon.q):
 / event_time (e.g. `source_time), ready_on `reference with legs and lookback,
 / identity, expire_after.
-.qetl.job.stream.at_horizons[`{name};`procname`events`reference`transform`publishes`horizon`period{swa_key}`note!(
+.qetl.job.stream.at_horizons[`{name};`procname`events`reference`transform`publishes`horizon`period{swa_key}`note`ephemeral!(
     `{proc};
     `{events};
     `{reference};
@@ -164,7 +164,8 @@ score:{{[events;reference]
     `{name};
     {horizon};
     0D00:00:01;{swa_value}
-    "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
+    "SCAFFOLDED: say why this exists, and why it does or does not start with the stack";
+    "SCAFFOLDED: why losing events still waiting for their horizon on a restart is acceptable")];
 """
     notes = [f"implement .qpipe.job.{name}.score and its example"]
     actions = [

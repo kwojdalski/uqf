@@ -1470,4 +1470,26 @@ test_a_table_the_plant_does_not_carry_passes_unchecked:{[t]
     ob_publish[`sjtest_local;([] anything:1 2)];
     .qunit.assertEquals[count .sjtest.published;1;"a job's own table is its business"]};
 
+/ #1073: state says how it survives a restart - rebuilt by replay, or
+/ declared ephemeral with the reason - or the job is refused where it is
+/ declared.
+recovering:{[extra]
+    `.qpipe.job.sj_rec.book set ([] sym:`symbol$(); qty:`float$());
+    / the dict in parentheses: right to left, `,extra` would join the values
+    (`procname`subscribe_to`publishes`on_batch`state!(`sjrec1;enlist `quote;`symbol$();{[t;x]};enlist `book)),extra}
+
+test_state_without_a_recovery_policy_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering ()!();
+        "*declares state but not how it recovers*";"neither replay nor ephemeral"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering `replay`ephemeral!(1b;"why");
+        "*declares replay 1b and ephemeral*";"both is a contradiction"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering enlist[`ephemeral]!enlist `why;
+        "*ephemeral must be a string*";"a reason, in words"]};
+
+test_state_with_a_recovery_policy_is_accepted:{[t]
+    .qunit.assertEquals[.qetl.job.stream.define[`sj_rec;recovering enlist[`ephemeral]!enlist "a test fixture"];`sj_rec;"ephemeral, with its reason"];
+    `.qetl.job.stream.jobs set (enlist `sj_rec) _ .qetl.job.stream.jobs;
+    `.qetl.job.stream.initial set (enlist `sj_rec) _ .qetl.job.stream.initial;
+    `.qetl.job.stream.procnames set (enlist `sjrec1) _ .qetl.job.stream.procnames}
+
 \d .

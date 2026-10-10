@@ -47,10 +47,11 @@ on_batch:{[t;x]
 
 \d .
 
-.qetl.job.stream.define[`flink_vwap;`procname`subscribe_to`publishes`on_batch`note`state!(
+.qetl.job.stream.define[`flink_vwap;`procname`subscribe_to`publishes`on_batch`note`state`ephemeral!(
     `flink_vwap1;
     enlist `flink_vwap_raw;
     enlist `flink_vwap;
     .qpipe.job.flink_vwap.on_batch;
     "publishes each per-symbol VWAP window an Apache Flink job closes, once, dropping windows Flink emits again after a restart or replay. The raw rows come from an EXTERNAL Python process (external/flink_vwap_feed.py) - Flink runs outside q - so flink_vwap_raw has no producer in this list and this does not start with the stack. Start it with `uqs feed start flink_vwap`";
-    enlist `high_water)];
+    enlist `high_water;
+    "the high-water marks start empty, so a window Flink re-emits across a restart of this process is not caught (see the header)")];

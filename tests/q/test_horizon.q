@@ -31,8 +31,8 @@ define_transform:{[]
             ([] sym:enlist `a; event_time:enlist .horizontest.t0; px:enlist 1f; ref:enlist 1.5)))];
     }
 
-decl:{[] `procname`events`reference`transform`publishes`horizon`period!(
-    `hzt1;`hz_events;`hz_refs;`horizontest_px;`hz_priced;0D00:00:01;0D00:00:01)}
+decl:{[] `procname`events`reference`transform`publishes`horizon`period`ephemeral!(
+    `hzt1;`hz_events;`hz_refs;`horizontest_px;`hz_priced;0D00:00:01;0D00:00:01;"a test fixture")}
 
 / one process per job, as .qetl.job.stream.define insists
 decl_for:{[nm] @[decl[];`procname;:;`$string[nm],"1"]}
