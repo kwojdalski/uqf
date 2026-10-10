@@ -14,6 +14,11 @@ books:`sym`source xkey .qetl.plant.published `market_data
 superbook:.qetl.plant.published `superbook
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
 max_age:0D00:00:05
+/ How far a source's clock may lead this host's and its rows still count.
+/ Every multi-venue feed has some skew: with none allowed, a venue a few ms
+/ ahead had every row refused as future-dated and vanished from the book
+/ while last_value kept it live (#1033). A row past it is still refused.
+max_clock_lead:0D00:00:00.250
 
 / Remove non-executable levels, keeping prices and base sizes aligned.
 / @param prices a numeric vector
@@ -32,10 +37,11 @@ levels:{[prices;sizes]
 
 / Replace newer source snapshots. Equal timestamps use arrival order.
 / Empty or unusable sides replace the old side too; zero size is withdrawal.
-/ Future-dated rows are ignored, so they cannot poison a source's watermark.
+/ Rows dated after as_of are ignored, so they cannot poison a source's
+/ watermark. on_batch passes the processing time plus max_clock_lead (#1033).
 / @param state latest snapshots keyed by sym and source
 / @param batch market_data rows; a plant time column may also be present
-/ @param as_of UTC processing timestamp
+/ @param as_of the latest source_time accepted
 / @return updated keyed snapshots, without mutating state
 / @throws when columns, identities, timestamps or level vectors are malformed
 / @eg count .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0
@@ -88,12 +94,14 @@ side_levels:{[rows;side]
 / @param state latest source snapshots keyed by sym and source
 / @param as_of UTC processing timestamp
 / @param age maximum quote age, inclusive at the boundary
+/ @param lead how far a source_time may be after as_of and still count
 / @return unkeyed superbook snapshots, one row per known pair
-/ @eg count .qpipe.job.superbook.snapshot[`sym`source xkey 0#.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05] -> 0
-snapshot:{[state;as_of;age]
+/ @eg count .qpipe.job.superbook.snapshot[`sym`source xkey 0#.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05;0D00:00:00.250] -> 0
+snapshot:{[state;as_of;age;lead]
     all_books:0!state;
     cutoff:as_of-age;
-    fresh:select from all_books where source_time>=cutoff, source_time<=as_of;
+    latest:as_of+lead;
+    fresh:select from all_books where source_time>=cutoff, source_time<=latest;
     result:0#.qpipe.job.superbook.superbook;
     pairs:distinct all_books`sym;
     i:0;
@@ -115,7 +123,7 @@ snapshot:{[state;as_of;age]
 / example whose result depends on whatever ran before it is worse than
 / none. tests/q/test_superbook.q drives it against a book it builds itself.
 refresh:{[as_of]
-    rows:snapshot[books;as_of;max_age];
+    rows:snapshot[books;as_of;max_age;max_clock_lead];
     if[count rows; .qpipe.job.superbook.publish[`superbook;rows]];
     }
 
@@ -142,7 +150,12 @@ on_batch:{[t;x]
     x:fx_only[x];
     if[0=count x; :()];
     now:.z.p;
-    `.qpipe.job.superbook.books set replace_books[books;x;now];
+    latest:now+max_clock_lead;
+    ahead:select from x where source_time>latest;
+    if[count ahead;
+        .qetl.log.warn[`superbook;"rows dated past the allowed clock lead refused";
+            `sources`rows`max_clock_lead!(distinct ahead`source;count ahead;max_clock_lead)]];
+    `.qpipe.job.superbook.books set replace_books[books;x;latest];
     refresh[now];
     }
 
@@ -154,9 +167,10 @@ on_timer:{[] refresh .z.p;}
 
 \d .
 
-/ The expiry window is what decides which liquidity counts as live, so a
-/ change to it changes every snapshot downstream - worth recording (#295).
-.qetl.cfg.audit.watch[`superbook;enlist `.qpipe.job.superbook.max_age];
+/ The expiry window and the clock lead decide which liquidity counts as live,
+/ so a change to either changes every snapshot downstream - worth recording
+/ (#295, #1033).
+.qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qpipe.job.superbook.max_clock_lead];
 
 .qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state!(
     `superbook1;

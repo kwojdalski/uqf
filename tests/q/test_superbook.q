@@ -7,7 +7,7 @@ fixtures:{[] ([] sym:`EURUSD`EURUSD; source:`LP_A`LP_B; market:`fx`fx; source_ti
     bid_prices:(1.101 1.098;1.099 1.097); bid_sizes:(100 200f;500 600f);
     ask_prices:(1.103 1.104;1.100 1.102); ask_sizes:(200 300f;60 70f))}
 state:{[] .qpipe.job.superbook.replace_books[empty[];fixtures[];d[0]]}
-snapshot:{[s;n] .qpipe.job.superbook.snapshot[s;d[n];0D00:00:05]}
+snapshot:{[s;n] .qpipe.job.superbook.snapshot[s;d[n];0D00:00:05;0D]}
 arb:{[s;n] first .qpipe.job.arbitrage.evaluate snapshot[s;n]}
 
 test_sources_are_merged_best_first_with_aligned_provenance:{[t]
@@ -91,6 +91,32 @@ test_future_rows_cannot_poison_the_watermark:{[t]
     good:update source_time:.sbtest.d[2] from fixtures[];
     s:.qpipe.job.superbook.replace_books[s;good;d[2]];
     .qunit.assertEquals[(0!s)`source_time;d[2 2];"subsequent timely updates remain acceptable"]};
+
+/ A venue whose clock leads this host by a few ms is skew, not a bad row: every
+/ one of its rows arrives "in the future", and refusing them dropped the venue
+/ from superbook entirely while last_value kept it live (#1033).
+test_a_source_whose_clock_leads_by_less_than_the_allowed_lead_is_kept:{[t]
+    ahead:update source_time:.sbtest.d[0]+0D00:00:00.005 from 1#fixtures[];
+    lead:.qpipe.job.superbook.max_clock_lead;
+    .qunit.assertTrue[lead>=0D00:00:00.005;"the default lead tolerates ordinary NTP skew"];
+    s:.qpipe.job.superbook.replace_books[empty[];ahead;d[0]+lead];
+    .qunit.assertEquals[count s;1;"a row 5ms ahead is stored"];
+    r:first .qpipe.job.superbook.snapshot[s;d[0];0D00:00:05;lead];
+    .qunit.assertEquals[r`bid_sources;`LP_A`LP_A;"and published while its clock leads"];
+    r:first .qpipe.job.superbook.snapshot[s;d[0];0D00:00:05;0D];
+    .qunit.assertEquals[count r`bid_prices;0;"with no lead it is held back, as before"]};
+
+test_a_row_far_beyond_the_lead_is_refused_and_logged:{[t]
+    far:update source_time:.z.p+0D00:01:40 from 1#fixtures[];
+    saved:.qetl.log.warn;
+    `.qetl.log.warn set {[id;text;fields] `.sbtest.logged set (id;text;fields);};
+    `.qpipe.job.superbook.books set empty[];
+    .qetl.job.stream.wire[`superbook;{[t;x]}];
+    @[{.qpipe.job.superbook.on_batch[`market_data;x]; 1b};far;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
+    `.qetl.log.warn set saved;
+    .qunit.assertEquals[count .qpipe.job.superbook.books;0;"a row 100s ahead is still refused"];
+    .qunit.assertEquals[.sbtest.logged 0;`superbook;"the refusal is logged, not silent"];
+    .qunit.assertEquals[(.sbtest.logged 2)`sources;enlist `LP_A;"naming the source whose clock leads"]};
 
 test_pairs_and_inverse_pairs_are_kept_separate:{[t]
     rows:fixtures[],update sym:`USDEUR from fixtures[];
