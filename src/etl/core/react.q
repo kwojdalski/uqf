@@ -343,7 +343,8 @@ audit:{[]
 / when a notification carried none. `io` is the IO manager the publisher
 / wrote through, which `write` writes a reaction's output through too, or
 / (::) when the notifier named none.
-empty_queue:{[] ([] dataset:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); depth:`long$(); rows:(); io:())}
+empty_queue:{[] ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
+    range_from:`timestamp$(); range_to:`timestamp$(); depth:`long$(); rows:(); io:())}
 
 queue:empty_queue[]
 
@@ -366,14 +367,14 @@ history_limit:1000
 
 / Private: record one reaction's outcome - in `history`, and durably.
 / @private
-record:{[dataset;name;depth;range_from;range_to;outcome;detail]
+record:{[item;name;outcome;detail]
     `.qetl.reaction.history set neg[history_limit] sublist history,
-        ([] at:enlist .z.p; dataset:enlist dataset; name:enlist name; depth:enlist depth;
-            range_from:enlist range_from; range_to:enlist range_to;
+        ([] at:enlist .z.p; dataset:enlist item`dataset; name:enlist name; depth:enlist item`depth;
+            range_from:enlist item`range_from; range_to:enlist item`range_to;
             outcome:enlist outcome; detail:enlist detail);
     / Never fails the reaction it records: a ledger that cannot be written is
     / logged, and the next run's `pending` simply sees the window as not done.
-    @[persist_outcome;(dataset;name;range_from;range_to;outcome;.z.p);
+    @[persist_outcome;(item`dataset;item`partition;item`source_version;name;item`range_from;item`range_to;outcome;.z.p);
       {[e] @[{.qetl.log.err[`qetl.reaction;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
     }
 
@@ -392,9 +393,12 @@ record:{[dataset;name;depth;range_from;range_to;outcome;detail]
 / (.qetl.job.bounded.replay_reactions) - the reconciler, as a backstop to
 / the notification, not a replacement for it.
 
-/ The ledger's shape.
-empty_outcomes:{[] ([] dataset:`symbol$(); name:`symbol$(); range_from:`timestamp$();
-    range_to:`timestamp$(); outcome:`symbol$(); at:`timestamp$())}
+/ The ledger's shape. An outcome carries the partition and source_version
+/ of the coverage it answers (#1099): `pending` matches coverage on both, so
+/ an outcome for another partition or release cannot stand in for this
+/ one's. Null when the notifier did not say - a plain notify, or a cascade.
+empty_outcomes:{[] ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
+    name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); outcome:`symbol$(); at:`timestamp$())}
 
 / Where it lives: the status dir, beside etl_coverage and etl_runs.
 / @return the file path
@@ -405,7 +409,12 @@ outcomes_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_reactions"}
 / @eg .qetl.reaction.outcomes[]
 outcomes:{[]
     p:outcomes_path[];
-    $[()~key hsym `$p; empty_outcomes[]; .qetl.job.bounded.state.durable_get p]}
+    t:$[()~key hsym `$p; empty_outcomes[]; .qetl.job.bounded.state.durable_get p];
+    / A ledger written before #1099 has no partition or source_version: its
+    / outcomes prove nothing for a specific one, so they read as null and
+    / their windows are owed once more - conservative, and self-healing.
+    if[not `partition in cols t; t:update partition:`, source_version:` from t];
+    cols[empty_outcomes[]]#t}
 
 / Private: append one outcome, read-modify-write under its own mutex - the
 / same pattern as the coverage and run ledgers.
@@ -436,7 +445,8 @@ pending:{[ds;part;version;from_ts;to_ts]
         where dataset=ds, partition=part, source_version=version,
               recorded_at<=now, now<superseded_at, range_from<to_ts, range_to>from_ts;
     if[0=count covered; :none];
-    done:select name, range_from, range_to, at from outcomes[] where dataset=ds, outcome=`ok;
+    done:select name, range_from, range_to, at from outcomes[]
+        where dataset=ds, partition=part, source_version=version, outcome=`ok;
     pairs:raze {[covered;nm] update name:nm from covered}[covered] each rs`name;
     ok:{[done;p] any (done[`name]=p`name) and (done[`range_from]=p`range_from) and
         (done[`range_to]=p`range_to) and done[`at]>=p`recorded_at}[done] each pairs;
@@ -460,13 +470,13 @@ pending:{[ds;part;version;from_ts;to_ts]
 / @param range_to exclusive upper bound
 / @return the number of reactions run by this call
 / @eg .qetl.reaction.notify[`demo_deals;2026.09.11D00:00;2026.09.12D00:00]
-notify:{[dataset;range_from;range_to] enqueue[dataset;range_from;range_to;0;();(::)]}
+notify:{[dataset;range_from;range_to] enqueue[dataset;`;`;range_from;range_to;0;();(::)]}
 
 / Private: queue one notification and, unless a drain is already running,
 / drain the queue.
 / @private
-enqueue:{[dataset;range_from;range_to;depth;rows;io]
-    queue,:([] dataset:enlist dataset; range_from:enlist range_from;
+enqueue:{[dataset;part;version;range_from;range_to;depth;rows;io]
+    queue,:([] dataset:enlist dataset; partition:enlist part; source_version:enlist version; range_from:enlist range_from;
               range_to:enlist range_to; depth:enlist depth; rows:enlist rows; io:enlist io);
     $[draining; 0; drain[]]}
 
@@ -505,7 +515,7 @@ dispatch:{[item]
     rs:for_dataset[item`dataset];
     if[0=count rs; :0];
     if[item[`depth]>=max_depth;
-        {[item;nm] record[item`dataset;nm;item`depth;item`range_from;item`range_to;`refused;
+        {[item;nm] record[item;nm;`refused;
             "cascade deeper than .qetl.reaction.max_depth (",string[max_depth],") - refusing rather than continuing"]
           }[item] each rs`name;
         :0];
@@ -548,8 +558,8 @@ run_one:{[item;nm;h]
     `.qetl.reaction.io_now set (::);
     `.qetl.reaction.window_now set 0#0Np;
     $[`ok~r;
-        record[item`dataset;nm;item`depth;item`range_from;item`range_to;`ok;""];
-        [record[item`dataset;nm;item`depth;item`range_from;item`range_to;`failed;last r];
+        record[item;nm;`ok;""];
+        [record[item;nm;`failed;last r];
          log_failure[item;nm;last r]]];
     1b}
 
@@ -594,7 +604,16 @@ notify_rows:{[dataset;range_from;range_to;rows] notify_published[dataset;range_f
 / @param io the IO manager the rows were written with, or (::)
 / @eg .qetl.reaction.notify_published[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
 notify_published:{[dataset;range_from;range_to;rows;io]
-    enqueue[dataset;range_from;range_to;$[draining; depth_now+1; 0];rows;io]}
+    notify_published_for[dataset;`;`;range_from;range_to;rows;io]}
+
+/ notify_published, naming the partition and source_version whose coverage
+/ the publication is (#1099) - what a bounded worker calls, so the outcomes
+/ it leaves answer `pending` for that partition and release only.
+/ @param part the partition, or ` for a dataset with none
+/ @param version the source_version
+/ @eg .qetl.reaction.notify_published_for[`demo_deals;`;`v1;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
+notify_published_for:{[dataset;part;version;range_from;range_to;rows;io]
+    enqueue[dataset;part;version;range_from;range_to;$[draining; depth_now+1; 0];rows;io]}
 
 / The rows the publication being reacted to published - call it from a
 / handler.
@@ -746,8 +765,8 @@ replay_window:{[worker;w]
         .qetl.log.err[worker;"could not transform a window to re-fire its reactions";
             `range_from`range_to`error!(w`range_from;w`range_to;last out)];
         :0];
-    @[{[a] .qetl.reaction.notify_published . a};
-      (cfg`dataset;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
+    @[{[a] .qetl.reaction.notify_published_for . a};
+      (cfg`dataset;cfg`partition;(spec worker)`source_version;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
       {[e] (::)}];
     1}
 

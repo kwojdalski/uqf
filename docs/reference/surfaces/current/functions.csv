@@ -517,6 +517,7 @@ qetl.reaction,max_depth,value,,
 qetl.reaction,notify,function,3,dataset range_from range_to
 qetl.reaction,notify_from_here,function,3,dataset range_from range_to
 qetl.reaction,notify_published,function,5,dataset range_from range_to rows io
+qetl.reaction,notify_published_for,function,7,dataset part version range_from range_to rows io
 qetl.reaction,notify_rows,function,4,dataset range_from range_to rows
 qetl.reaction,off,function,2,dataset nm
 qetl.reaction,on,function,3,dataset nm handler
