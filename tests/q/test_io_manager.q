@@ -433,6 +433,21 @@ test_a_batch_that_repeats_a_key_writes_it_once:{[t]
     .qunit.assertEquals[exec v from .qetl.io.resolve[`ignore;.iotest.held[];b;.iotest.opts[]] where id=3;enlist 30;
         "ignore: the first does"]};
 
+/ #1089: the fold is deliberate but not silent - a key a source only
+/ observed to be unique shows in the log the first time it repeats.
+warned:{[f] {x where `WARNING=first each x} .testutil.captured_log[0b] f}
+
+test_a_keyed_write_that_folds_a_repeated_key_says_so:{[t]
+    w:.iotest.warned {.qetl.io.write_keyed[.qetl.io.discard;`t;([] id:3 3 4; v:30 31 40);`on_conflict`row_key!(`upsert;`id)]};
+    .qunit.assertEquals[count w;1;"one warning for the batch"];
+    .qunit.assertEquals[(w[0;3])`folded`target;(1;`t);"naming the target and how many rows folded"]};
+
+test_a_keyed_write_of_unique_keys_and_an_append_say_nothing:{[t]
+    .qunit.assertEquals[count .iotest.warned {.qetl.io.write_keyed[.qetl.io.discard;`t;([] id:3 4; v:30 40);`on_conflict`row_key!(`upsert;`id)]};0;
+        "unique keys fold nothing"];
+    .qunit.assertEquals[count .iotest.warned {.qetl.io.write_keyed[.qetl.io.discard;`t;([] id:3 3; v:30 31);`on_conflict`row_key!(`append;`id)]};0;
+        "append keeps both rows, so there is nothing to report"]};
+
 test_a_batch_with_other_columns_is_refused:{[t]
     .qunit.assertThrows[{[x] .qetl.io.resolve[`upsert;.iotest.held[];([] id:enlist 9);.iotest.opts[]]};::;
         "on_conflict: t holds *";"columns that differ are named, not joined"]};
