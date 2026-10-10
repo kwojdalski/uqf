@@ -216,7 +216,6 @@ A source declares its **shape**, not its plumbing. Create
 source_name:`fx_rates
 columns:`rate_time`sym`mid    / the columns this adapter reads
 types:"psf"                    / one q type character per field
-target:`fx_rates               / the local table they land in
 time_column:`rate_time         / the column the window is taken on
 row_key:`rate_time`sym         / what identifies a row uniquely
 tz:`UTC                        / what time_column is expressed in
@@ -233,8 +232,8 @@ fixture:{[]
         mid:1.0842 1.2631 1.0847 149.82 1.0851)}
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`fx_rates;target;time_column;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`fx_rates;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .
 ```
@@ -719,8 +718,8 @@ in exactly that:
 
 Prefer `on_worker` where it applies (plain q only: it runs the worker in the
 publisher's process as its own run, so a TorQ process refuses it --- one bounded
-worker per process): the worker already declares its target through its source,
-so nothing is restated and `dag.q`'s "derive, never re-declare" rule survives.
+worker per process): the worker already declares the dataset it writes, so
+nothing is restated and `dag.q`'s "derive, never re-declare" rule survives.
 `on_writing` is for a handler that writes something no worker owns --- worth
 having, because it puts the edge in the graph, but it is a claim about an opaque
 lambda rather than a checked fact, and `.qetl.reaction.audit[]` lists those

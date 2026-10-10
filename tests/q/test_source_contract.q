@@ -14,8 +14,8 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 / rather than reusing the demo source's keeps a test's failure attributable
 / to the thing it changed.
 decl:{[]
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-    (`t;`ext;`loc;`ts;`ts;`ts`px;"pf";
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+    (`t;`ext;`ts;`ts;`ts`px;"pf";
      {[h;a;b] ()};
      {([] ts:enlist .srctest.d 1; px:enlist 1.5)};
      `UTC)}
@@ -48,8 +48,14 @@ test_a_complete_declaration_registers:{[t]
 test_a_missing_declaration_is_refused_at_registration:{[t]
     .qunit.assertError[{.qetl.source.define[`t;x]};(enlist `source)#.srctest.decl[];"an incomplete declaration fails at registration, not at first use"]};
 
+/ #1092: where rows go is the worker's dataset, so a source naming a
+/ destination is refused rather than read as a second answer.
+test_a_source_declaring_target_is_refused:{[t]
+    .qunit.assertThrows[.qetl.source.define[`tgt;];.srctest.decl[],enlist[`target]!enlist `loc;
+        "*declares target, which is gone*";"the worker's dataset is the destination"]};
+
 test_every_missing_field_is_named_at_once:{[t]
-    partial:`source`table_name`target!(`t;`ext;`loc);
+    partial:`source`table_name!(`t;`ext);
     err:@[{.qetl.source.define[`t;x]; ""};partial;{x}];
     .qunit.assertEquals[all err like/: ("*columns*";"*types*";"*query*";"*fixture*");1b;"four omissions are reported together, not one per attempt"]};
 

@@ -261,8 +261,8 @@ test_an_adopted_worker_reads_its_sources_table_and_writes_its_dataset:{[t]
     {[w]
         cfg:.qetl.job.bounded.def w;
         src:.qetl.source.def cfg`source;
-        .qunit.assertTrue[all `table_name`target in key src;
-            "source ",string[cfg`source]," declares table_name and target - if this",
+        .qunit.assertTrue[`table_name in key src;
+            "source ",string[cfg`source]," declares table_name - if this",
                 " fails, a rename reached the contract and not this test"];
         d:.qetl.dag.def w;
         .qunit.assertEquals[(d`inputs;d`outputs);

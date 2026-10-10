@@ -66,7 +66,7 @@
 / .
 / `source` stays a column beside the `name` key, so .qetl.source.def returns
 / the declaration it always did.
-sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`symbol$();
+sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
     tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:())
 
@@ -81,9 +81,6 @@ sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`sym
 / @param source a name for this source, e.g. `deals_analogue
 / @param decl a dict carrying every name in required_declarations:
 /   table   - the external table name, as a symbol
-/   target  - the local table it lands in, as a symbol: the dataset its
-/             worker is named after. A worker writes its OWN dataset (#769),
-/             so a second worker over this source fills a table of its own
 /   time_column - the column the window is taken on, as a symbol
 /   row_key - the column(s) identifying a row uniquely, as a symbol vector
 /   columns  - the columns this adapter RETURNS, as a symbol vector - also
@@ -108,6 +105,11 @@ sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$(); target:`sym
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 define:{[source;decl]
+    / Where rows go is the WORKER's dataset (#769), so a source naming a
+    / destination was a second answer to that question, shown and never used
+    / (#1092).
+    if[`target in key decl;
+        '"define: ",string[source]," declares target, which is gone (#1092) - rows go to the worker's dataset; drop it"];
     missing:required_declarations where not required_declarations in key decl;
     if[count missing;
         '"define: ",string[source]," is missing declaration(s): ",", " sv string missing];
@@ -266,7 +268,7 @@ row_key:{[source] (),(def[source])`row_key}
 / that got an empty dict back would fail later, somewhere else, on a missing
 / key.
 / @param source the registered source's name, as a symbol
-/ @return the declaration dict (source, table, target, time_column, row_key,
+/ @return the declaration dict (source, table, time_column, row_key,
 /   columns, types, query, fixture, tz, transport, credential_example,
 /   supporting)
 / @throws error naming the source when it was never registered
