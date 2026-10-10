@@ -9,7 +9,7 @@
 / The source contract, as the empty table the transform reads.
 contract:flip .qpipe.source.databento_mbp10.columns!{[c] c$()} each .qpipe.source.databento_mbp10.types
 
-book:([] time:`timestamp$(); sym:`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$();
+book:([] time:`timestamp$(); sym:`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$();
     bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / Private: one side and quantity's ten level columns, as a vector per row.
@@ -19,14 +19,20 @@ fold:{[batch;prefix] flip batch `$prefix,/:.qpipe.source.databento_mbp10.levels}
 
 / Fold Databento's per-level columns into level-0-first vectors.
 / .
-/ time and sym are renamed to this library's convention; everything else
-/ passes through. An empty batch yields a typed empty book - flip over ten
-/ empty columns would otherwise give a list with no rows to type.
+/ The output is eq_orderbook's plant shape, column for column (#1076):
+/ `ts_event` is the venue's clock, and so is `time` - which the live job
+/ drops, since the tickerplant stamps its own receipt time, and which a
+/ backfill keeps: history has no receipt time, so the event time is the only
+/ honest one, and it is what partitions the row. Live and historical
+/ partitions then carry the same columns, and ts_event means the same thing
+/ in both. symbol is renamed sym; everything else passes through. An empty
+/ batch yields a typed empty book - flip over ten empty columns would
+/ otherwise give a list with no rows to type.
 / @param batch MBP-10 records in the source contract's shape
 / @return one book row per record
 to_book:{[batch]
     if[0=count batch; :.qpipe.transform.eq_orderbook.book];
-    ([] time:batch`ts_event; sym:batch`symbol; action:batch`action; side:batch`side;
+    ([] time:batch`ts_event; sym:batch`symbol; ts_event:batch`ts_event; action:batch`action; side:batch`side;
         price:batch`price; size:batch`size; sequence:batch`sequence;
         bid_prices:fold[batch;"bid_px_"]; bid_sizes:fold[batch;"bid_sz_"];
         ask_prices:fold[batch;"ask_px_"]; ask_sizes:fold[batch;"ask_sz_"])}
@@ -37,7 +43,7 @@ example_book:{[]
     f:.qpipe.source.databento_mbp10.fixture[];
     px:{[touch;dir] touch+dir*0.01*til 10};
     sz:{[s] s+100*til 10};
-    ([] time:f`ts_event; sym:`AAPL`AAPL`META`META; action:`A`T`A`C; side:`B`N`A`A;
+    ([] time:f`ts_event; sym:`AAPL`AAPL`META`META; ts_event:f`ts_event; action:`A`T`A`C; side:`B`N`A`A;
         price:271.2 271.65 643.48 643.48; size:200 21 10 10; sequence:28151775 28158778 29559422 29563793;
         bid_prices:(px[271.45;-1];px[271.45;-1];px[642f;-1];px[642f;-1]);
         bid_sizes:(sz 500;sz 479;sz 100;sz 100);
