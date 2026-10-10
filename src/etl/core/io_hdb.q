@@ -211,8 +211,11 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
     / resolve folds it - so it is appended, as the append path does. Only
     / when EVERY date is clean: one clash sends the whole batch the slow way,
     / so a `fail on one date still leaves every date untouched. replace
-    / always rewrites - it removes the window's rows.
-    if[not `replace=strategy;
+    / always rewrites - it removes the window's rows. Not on PeachQ, whose
+    / append path rewrites a partition whole anyway (it cannot upsert onto a
+    / splayed table), so there is nothing to save and the key probe would
+    / read a partition the way PeachQ cannot.
+    if[(not on_peachq) and not `replace=strategy;
         kc:(),opts`row_key;
         fold:data where $[`ignore=strategy; first_seen; last_seen] kc#data;
         fdays:`date$fold`time;

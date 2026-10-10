@@ -43,6 +43,7 @@ platform: Linux-x86_64
 .iotest.test_hdb_keyed_writes_are_finished_like_any_other  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
 .iotest.test_hdb_replace_clears_a_day_the_source_has_emptied  # peachq-lacks: re-reading a splayed table, in the process that read it, after a rename replaced it on disk - it throws 'corrupt (write_hdb_keyed swaps partitions in by rename)
 .iotest.test_hdb_replace_clears_on_the_window_column_not_on_time  # peachq-lacks: re-reading a splayed table, in the process that read it, after a rename replaced it on disk - it throws 'corrupt (write_hdb_keyed swaps partitions in by rename)
+.iotest.test_hdb_upsert_of_new_keys_adds_them_to_the_day  # peachq-lacks: re-reading a splayed table, in the process that read it, after a rename replaced it on disk - it throws 'corrupt (write_hdb_keyed swaps partitions in by rename)
 .iotest.test_hdb_replace_takes_its_keys_out_of_the_next_day  # peachq-lacks: re-reading a splayed table, in the process that read it, after a rename replaced it on disk - it throws 'corrupt (write_hdb_keyed swaps partitions in by rename), so the next-day spill is skipped on PeachQ (src/etl/core/io_hdb.q)
 .iotest.test_recover_finds_what_a_lost_process_wrote_and_finish_repairs_it  # peachq-lacks: writing or appending a partitioned HDB on disk ('nyi)
 .iotest.test_recover_trims_a_torn_append  # peachq-lacks: writing or appending a partitioned HDB on disk ('nyi)
