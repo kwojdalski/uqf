@@ -49,7 +49,7 @@ and the facts it recorded. It then prints the two things to do next:
 logs   uqs logs deals_backfill1 --level ERROR
          .../torqdata/logs/out_deals_backfill1.log
          .../torqdata/logs/err_deals_backfill1.log
-re-run uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00 --to 2026-09-15T00:00:00 --version v1
+re-run uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00 --to 2026-09-15T00:00:00 --version v1 --fixture
          covered windows are skipped, so this resumes rather than repeats
 ```
 

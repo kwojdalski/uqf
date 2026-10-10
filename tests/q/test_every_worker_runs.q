@@ -102,7 +102,7 @@ test_every_worker_reports_its_spec_after_init:{[t]
     bad:{[w]
         spec:.wruntest.prepare[w];
         .wruntest.call[w;`init][spec];
-        $[(.wruntest.call[w;`spec][])~spec; (); enlist w]} each .wruntest.workers[];
+        $[(.wruntest.call[w;`spec][])~.testutil.fixture_spec spec; (); enlist w]} each .wruntest.workers[];
     .qunit.assertEquals[count raze bad;0;
         "each worker's spec reads back exactly the run spec init was given"]};
 
@@ -258,7 +258,7 @@ test_every_worker_checkpoints_through_its_own_delegator:{[t]
         .wruntest.call[w;`init][spec];
         cursor:spec`range_from;
         .wruntest.call[w;`checkpoint][cursor];
-        $[cursor~.qetl.job.bounded.state.load_checkpoint[w;spec]; (); enlist w]} each .wruntest.workers[];
+        $[cursor~.qetl.job.bounded.state.load_checkpoint[w;.testutil.fixture_spec spec]; (); enlist w]} each .wruntest.workers[];
     .qunit.assertEquals[count raze bad;0;
         "the cursor written through each delegator is the cursor the shell stores"]};
 

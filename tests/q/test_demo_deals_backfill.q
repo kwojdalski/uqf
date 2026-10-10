@@ -18,6 +18,10 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 spec_for:{[version;from_n;to_n]
     `source_version`range_from`range_to!(version;.ddbftest.d[from_n];.ddbftest.d[to_n])}
 
+/ The release a v1 run on demo_deals' fixture records under (#1082): with no
+/ credential, the worker's coverage, checkpoint and spec carry the tag.
+fv:`$"v1~fixture"
+
 beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
@@ -87,7 +91,7 @@ test_a_dry_rerun_repairs_nothing:{[t]
 / --- initialisation ----------------------------------------
 
 test_init_satisfies_the_contract:{[t]
-    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];.ddbftest.spec_for[`v1;1;4];"the worker implements every contract method and global"]};
+    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];.ddbftest.spec_for[.ddbftest.fv;1;4];"the worker implements every contract method and global"]};
 
 test_a_null_source_version_is_refused_at_init:{[t]
     .qunit.assertError[{.qpipe.job.demo_deals_backfill.init x};.ddbftest.spec_for[`;1;4];"a run that cannot name its release cannot record coverage"]};
@@ -121,7 +125,7 @@ test_a_full_run_publishes_the_windowed_rows:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qpipe.job.demo_deals_backfill.run[];
-    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;`v1;.z.p;.ddbftest.d[1];.ddbftest.d[4]];1b;"the windows' coverage composes into the whole requested range"]};
+    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;.ddbftest.fv;.z.p;.ddbftest.d[1];.ddbftest.d[4]];1b;"the windows' coverage composes into the whole requested range"]};
 
 test_the_cursor_lands_on_the_range_end:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
@@ -170,7 +174,7 @@ test_a_worker_initialising_under_torq_claims_its_process:{[t]
     r:.testutil.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
     got:.qetl.job.bounded.process_worker;
     .qetl.job.bounded.process_worker:saved;
-    .qunit.assertEquals[(r;got);(.ddbftest.spec_for[`v1;1;4];`demo_deals_backfill);
+    .qunit.assertEquals[(r;got);(.ddbftest.spec_for[.ddbftest.fv;1;4];`demo_deals_backfill);
         "the first init succeeds, and the process is now that worker's"]};
 
 / A rerun at a new source_version is the same worker initialising again.
@@ -511,7 +515,7 @@ test_replace_is_refused_for_an_output_without_the_window_column:{[t]
 / A retry after a partial run redoes only the gap. This is the case retry-safety
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[2];1];
+    .qetl.coverage.stage_completion[`demo_deals;`;.ddbftest.fv;.ddbftest.d[1];.ddbftest.d[2];1];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"one day already published, two left to do"]};
@@ -520,7 +524,7 @@ test_a_partial_range_is_narrowed_to_the_gap:{[t]
 / covered day sits between two uncovered ones, so the plan must produce two
 / separate runs of windows rather than one 3-day sweep.
 test_a_middle_gap_does_not_bridge_covered_coverage:{[t]
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[2];.ddbftest.d[3];1];
+    .qetl.coverage.stage_completion[`demo_deals;`;.ddbftest.fv;.ddbftest.d[2];.ddbftest.d[3];1];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"day 1 and day 3 are planned; day 2 is skipped, not spanned"]};
@@ -533,9 +537,9 @@ test_a_matching_checkpoint_resumes:{[t]
     / interrupted run leaves behind - finish_window stages coverage before it
     / saves the checkpoint - so a checkpoint at day 3 with days 1-2 uncovered
     / is not a resume, it is a gap, and plan now treats it as one.
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[3];2];
+    .qetl.coverage.stage_completion[`demo_deals;`;.ddbftest.fv;.ddbftest.d[1];.ddbftest.d[3];2];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    .qetl.job.bounded.state.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4];.ddbftest.d[3]];
+    .qetl.job.bounded.state.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[.ddbftest.fv;1;4];.ddbftest.d[3]];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;1;"resuming at day 3, with days 1-2 covered, leaves one window"]};
 
@@ -568,7 +572,7 @@ test_a_dry_run_writes_no_checkpoint:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qpipe.job.demo_deals_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
-    .qunit.assertEquals[null .qetl.job.bounded.state.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4]];1b;"no resumable state survives a diagnostic run"]};
+    .qunit.assertEquals[null .qetl.job.bounded.state.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[.ddbftest.fv;1;4]];1b;"no resumable state survives a diagnostic run"]};
 
 / A dry run must be repeatable and must not make the next real run think
 / work was done.
@@ -665,7 +669,7 @@ test_plan_delegates_and_passes_the_cursor:{[t]
     / is what makes the count mean something: without it, coverage alone
     / would plan all three days whatever the cursor said, since a gap behind
     / the cursor is planned (see .qetl.job.bounded.plan).
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[2];1];
+    .qetl.coverage.stage_completion[`demo_deals;`;.ddbftest.fv;.ddbftest.d[1];.ddbftest.d[2];1];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qunit.assertEquals[count .qpipe.job.demo_deals_backfill.plan[.ddbftest.d[2]];2;
         "with day 1 covered, a cursor at day 2 plans the two days after it"]};
@@ -681,10 +685,10 @@ test_a_gap_behind_the_cursor_is_still_planned:{[t]
     / by overlap, so a single three-day claim would be withdrawn whole by a
     / one-day restatement and three windows would be planned - correct, but
     / not the case this test is about.
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[1];.ddbftest.d[2];1];
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[2];.ddbftest.d[3];1];
-    .qetl.coverage.stage_completion[`demo_deals;`;`v1;.ddbftest.d[3];.ddbftest.d[4];1];
-    .qetl.coverage.supersede[`demo_deals;`;`v1;.ddbftest.d[2];.ddbftest.d[3]];
+    .qetl.coverage.stage_completion[`demo_deals;`;.ddbftest.fv;.ddbftest.d[1];.ddbftest.d[2];1];
+    .qetl.coverage.stage_completion[`demo_deals;`;.ddbftest.fv;.ddbftest.d[2];.ddbftest.d[3];1];
+    .qetl.coverage.stage_completion[`demo_deals;`;.ddbftest.fv;.ddbftest.d[3];.ddbftest.d[4];1];
+    .qetl.coverage.supersede[`demo_deals;`;.ddbftest.fv;.ddbftest.d[2];.ddbftest.d[3]];
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     w:.qpipe.job.demo_deals_backfill.plan[.ddbftest.d[4]];
     .qunit.assertEquals[count w;1;"the withdrawn day is planned although the cursor is past it"];
@@ -710,7 +714,7 @@ test_publish_delegates_and_returns_the_row_count:{[t]
 test_checkpoint_delegates_and_the_cursor_can_be_read_back:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qpipe.job.demo_deals_backfill.checkpoint[.ddbftest.d[2]];
-    .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[.ddbftest.fv;1;4]];
         .ddbftest.d[2];
         "the cursor written through the delegator is the cursor the shell stores"]};
 
@@ -854,7 +858,7 @@ test_redeclaring_a_worker_keeps_its_state:{[t]
         .qetl.job.bounded.define[`demo_deals_backfill;
             `source`dataset`width`transform`check!
             (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check)]}];
-    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.spec[];.ddbftest.spec_for[`v1;1;4];
+    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.spec[];.ddbftest.spec_for[.ddbftest.fv;1;4];
         "a second define fills only absent names, and the run specification is not one"]};
 
 / --- the derived namespace (.qpipe.job) --------------------------------------

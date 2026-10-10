@@ -490,6 +490,7 @@ In a q session from the repository root:
 \l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
 
+setenv[`UQF_FIXTURE_WRITES;enlist "1"];   / no credential yet: write the fixture
 .qpipe.job.fx_rates_backfill.init[`source_version`range_from`range_to!(`v1;2026.09.11D00:00;2026.09.16D00:00)];
 .qpipe.job.fx_rates_backfill.run[]
 ```
@@ -517,8 +518,13 @@ wrong window and record it as covered. The source version is required too,
 unless the worker declares a default `source_version`:
 
 ```
-uqs backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16
+uqs backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16 --fixture
 ```
+
+Both ask for the fixture (`UQF_FIXTURE_WRITES`, `--fixture`): a run with no
+credential that would write one is refused otherwise, and its coverage is
+recorded under `v1~fixture`, never `v1`, so a live run once the credential is
+set still fetches the range.
 
 Every run it makes is recorded in the run ledger, beside the coverage ledger in
 the status directory, with the facts each window reported. `uqs run` reads it

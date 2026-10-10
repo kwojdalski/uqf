@@ -225,7 +225,7 @@ tearDown_worker:{[] .qpipe.job.demo_events_backfill.cleanup[];}
 espec:{[from_n;to_n] `source_version`range_from`range_to!(`v1;.evttest.d[from_n];.evttest.d[to_n])}
 
 test_the_worker_satisfies_the_bounded_contract:{[t]
-    .qunit.assertEquals[.qpipe.job.demo_events_backfill.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies the contract in full"]};
+    .qunit.assertEquals[.qpipe.job.demo_events_backfill.init .evttest.espec[0;10];.testutil.fixture_spec .evttest.espec[0;10];"a 47-line declaration still satisfies the contract in full"]};
 
 test_the_worker_publishes_the_windowed_events:{[t]
     .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
@@ -424,7 +424,7 @@ test_the_events_worker_publish_delegates:{[t]
 test_the_events_worker_checkpoint_delegates:{[t]
     .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
     .qpipe.job.demo_events_backfill.checkpoint[.evttest.d[2]];
-    .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`demo_events_backfill;.evttest.espec[0;10]];
+    .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`demo_events_backfill;.testutil.fixture_spec .evttest.espec[0;10]];
         .evttest.d[2];
         "the cursor written through the delegator is the one the shell stores"]};
 

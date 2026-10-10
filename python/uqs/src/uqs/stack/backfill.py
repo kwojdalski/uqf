@@ -160,6 +160,7 @@ def backfill_flags(
     trace: bool = False,
     on_conflict: str | None = None,
     mode: str | None = None,
+    fixture: bool = False,
 ) -> list[str]:
     """The flags torq_backfill.q reads, validated so torq.sh passes them intact.
 
@@ -168,6 +169,8 @@ def backfill_flags(
     `on_conflict` adds `-on_conflict`, this run's strategy for a row already
     there, over the worker's own. `mode` adds `-mode`, spelled as q spells it
     (dry-run becomes dry_run); left out, the process runs for real.
+    `fixture` adds `-fixture`: a source with no credential may write its
+    fixture, which is refused otherwise (#1082).
     """
     if mode is not None and mode not in MODES:
         raise UqsError(f"--mode {mode!r} is not one of {', '.join(MODES)}")
@@ -205,7 +208,12 @@ def backfill_flags(
         flags += ["-on_conflict", on_conflict]
     if mode is not None:
         flags += ["-mode", mode.replace("-", "_")]
-    return [*flags, *(["-verbose"] if verbose else []), *(["-trace"] if trace else [])]
+    return [
+        *flags,
+        *(["-fixture"] if fixture else []),
+        *(["-verbose"] if verbose else []),
+        *(["-trace"] if trace else []),
+    ]
 
 
 def start(
@@ -220,6 +228,7 @@ def start(
     trace: bool = False,
     on_conflict: str | None = None,
     mode: str | None = None,
+    fixture: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Start the process that runs `worker`, over [range_from, range_to)."""
     # Before anything starts: a PeachQ runtime refuses a worker its
@@ -235,6 +244,7 @@ def start(
         trace=trace,
         on_conflict=on_conflict,
         mode=mode,
+        fixture=fixture,
     )
     return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)
 

@@ -69,6 +69,15 @@ def backfill(
             autocompletion=completion.choices(*stack_backfill.MODES),
         ),
     ] = None,
+    fixture: Annotated[
+        bool,
+        typer.Option(
+            "--fixture",
+            help="Let a worker whose source has no credential write the source's fixture "
+            "(a demo). Refused otherwise outside a dry run; its coverage is recorded "
+            "under <version>~fixture, so a later live run still fetches the range",
+        ),
+    ] = False,
     port: PortOpt = None,
     debug: Annotated[
         bool,
@@ -142,6 +151,7 @@ def backfill(
             trace=trace,
             on_conflict=on_conflict,
             mode=mode,
+            fixture=fixture,
         )
         if result.returncode != 0 or not wait:
             raise typer.Exit(code=result.returncode)

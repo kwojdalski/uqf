@@ -231,7 +231,7 @@ test_a_window_with_no_rows_is_still_a_completed_window:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qpipe.job.crypto_market_data_backfill.init[.crypto_market_databftest.spec_for[`v1;21;23]];
     .qpipe.job.crypto_market_data_backfill.run[];
-    .qunit.assertTrue[.qetl.coverage.is_covered[`crypto_market_data;`;`v1;.z.p;.crypto_market_databftest.h[21];.crypto_market_databftest.h[23]];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`crypto_market_data;`;`$"v1~fixture";.z.p;.crypto_market_databftest.h[21];.crypto_market_databftest.h[23]];
         "the two windows compose into the requested range"]};
 
 test_a_completed_run_releases_the_lock:{[t]

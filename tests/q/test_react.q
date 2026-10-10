@@ -426,7 +426,7 @@ test_a_dry_run_publishes_nothing_and_fires_nothing:{[t]
 test_a_failing_reaction_leaves_the_window_published_and_covered:{[t]
     .rxtest.fresh_deals[];
     r:.rxtest.run_deals[`rx3;{[ds;f;t] '"downstream is broken"}];
-    .qunit.assertEquals[(r`state;r`windows_failed;r`reactions_owed;.qetl.coverage.is_covered[`demo_deals;`;`rx3;.z.p;.rxtest.d[1];.rxtest.d[4]]);
+    .qunit.assertEquals[(r`state;r`windows_failed;r`reactions_owed;.qetl.coverage.is_covered[`demo_deals;`;`$"rx3~fixture";.z.p;.rxtest.d[1];.rxtest.d[4]]);
         (`partial;0;3;1b);
         "the coverage stands, and the run is partial: three windows' reactions are owed"]};
 
