@@ -63,13 +63,15 @@ unowned:enlist[`quote]!enlist
     "the vendored starter pack's quote table, which fx_feed publishes into and lib/torq defines"
 
 / (job; table; reason) for a table a job declares but its handlers never
-/ build. Two entries, so a list of triples as written; a single entry would
+/ build. Several entries, so a list of triples as written; a single entry would
 / need the enlist .tabletest.not_exchanged explains.
 not_built:(
     (`superbook;`config_change;
         "published by .qetl.cfg.audit through the job's own publish when its config changes, not by its handlers");
     (`cross_arbitrage;`config_change;
-        "the same .qetl.cfg.audit publication"))
+        "the same .qetl.cfg.audit publication");
+    (`fx_positions;`config_change;
+        "the same .qetl.cfg.audit publication, of its limits (#1112)"))
 
 / --- the comparison -------------------------------------------------------
 

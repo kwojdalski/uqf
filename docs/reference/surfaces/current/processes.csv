@@ -18,7 +18,7 @@ flink_vwap1,metrics,56,flink_vwap_raw,flink_vwap
 fxfeed1,feed,19,,quote
 fxorderbookfeed1,feed,24,,fx_orderbook
 fxordersfeed1,feed,38,,orders
-fxpositions1,metrics,39,executions,fx_limit_breach fx_position fx_position_open
+fxpositions1,metrics,39,executions,config_change fx_limit_breach fx_position fx_position_open
 fxtradesfeed1,feed,29,,trades
 hdb_demo_markouts_backfill1,backfill,49,,
 hdb_exec_bars_backfill1,backfill,55,,

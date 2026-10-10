@@ -138,6 +138,35 @@ load_limits:{[limits]
     `.qpipe.job.fx_positions.limits set limits;
     count limits}
 
+/ The limits file a running process loads (#1112): a CSV with a header, one
+/ row per limit - the scope columns it caps on (any of sym, book and
+/ product), then metric, cap and severity. Read as symbols but cap, and
+/ handed to load_limits, so a malformed file is refused as a malformed table
+/ would be. An empty scope cell is null, which load_limits refuses.
+/ @param path the file, as a string
+/ @return the limits table
+/ @throws error naming a file that does not exist
+/ @eg .qpipe.job.fx_positions.read_limits "no/such/fx_limits.csv"  ->  throws
+read_limits:{[path]
+    f:hsym `$path;
+    if[()~key f; '"read_limits: ",path," does not exist - UQF_FX_POSITION_LIMITS names the limits file"];
+    hdr:`$"," vs first read0 f;
+    (("SF" `cap=hdr);enlist ",") 0: f}
+
+/ Load the limits before the job runs (#1112). Nothing else does: a limits
+/ table is configuration, and a restart would otherwise start policing
+/ nothing, which looks exactly like a quiet day - so the file named by
+/ UQF_FX_POSITION_LIMITS is loaded here, and no file is said out loud.
+/ @return the number of limits loaded
+/ @throws error when the file is missing or malformed: the job does not start
+on_start:{[]
+    path:getenv `UQF_FX_POSITION_LIMITS;
+    if[count path; load_limits read_limits path];
+    if[0=count .qpipe.job.fx_positions.limits;
+        .qetl.log.warn[`fx_positions;"no limits loaded - fx_limit_breach stays empty and nothing is policed. Name a limits CSV in UQF_FX_POSITION_LIMITS, or load one over IPC with load_limits";
+            enlist[`variable]!enlist "UQF_FX_POSITION_LIMITS"]];
+    count .qpipe.job.fx_positions.limits}
+
 / Net one batch of fills into the book.
 / .
 / The book is replaced BEFORE anything is published, the way posbook does
@@ -243,13 +272,17 @@ on_timer:{[]
 / as run_stream.q.
 / Positions carry across days (#943): the shell publishes the book onto
 / fx_position_open at end of day and restores it on replay (carry, #963).
-.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`carry`note`state!(
+/ The limits are loaded at start (on_start) and watched, so a change over
+/ IPC, or a restart that drops one, lands in config_change (#1112).
+.qetl.cfg.audit.watch[`fx_positions;enlist `.qpipe.job.fx_positions.limits];
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`on_start`start_with_all`replay`carry`note`state!(
     `fxpositions1;
     enlist `executions;
-    `fx_position`fx_limit_breach`fx_position_open;
+    `fx_position`fx_limit_breach`fx_position_open`config_change;
     .qpipe.job.fx_positions.on_batch;
     0D00:00:05.000;
     .qpipe.job.fx_positions.on_timer;
+    .qpipe.job.fx_positions.on_start;
     1b;
     1b;
     `state`table!(`positions;`fx_position_open);
