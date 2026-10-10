@@ -182,8 +182,12 @@ A backfill takes its window as flags and registers with discovery, so the fleet
 has to be up:
 
 ```bash
-uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15
+uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
+
+`--fixture` because a scaffolded source has no credential yet: a run that would
+write its fixture is refused unless asked for, and records its coverage under
+`v1~fixture` rather than `v1` (#1082). Once the credential is set, drop it.
 
 `--from` and `--to` are required: `uqs` refuses without them, and the process
 itself refuses and names every missing flag at once, because a backfill that
@@ -200,7 +204,7 @@ worker's declaration, each stage's timing and every window as it starts and
 publishes:
 
 ```bash
-uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --debug
+uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture --debug
 ```
 
 ## Then

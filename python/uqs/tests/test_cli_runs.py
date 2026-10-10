@@ -127,3 +127,11 @@ def test_show_says_so_when_the_run_had_no_torq_process(monkeypatch):
     result = runner.invoke(cli.app, ["run", "show", run["run_id"]], env={"COLUMNS": "400"})
     assert result.exit_code == 0, result.output
     assert "recorded no TorQ process" in result.output
+
+
+def test_a_fixture_runs_rerun_asks_for_the_fixture_again():
+    """#1082: a run on a fixture records `v1~fixture`, which --version refuses;
+    the command names the release and passes --fixture instead."""
+    command = stack_runs.rerun_command({**_FAILED_RUN, "source_version": "v1~fixture"})
+    assert command is not None
+    assert command.endswith("--version v1 --fixture")

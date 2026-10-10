@@ -123,7 +123,7 @@ test_a_full_run_lands_every_fixture_deal_once:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qpipe.job.duckdb_deals_backfill.init[.duckdb_dealsbftest.spec_for[`v1;1;6]];
     .qpipe.job.duckdb_deals_backfill.run[];
-    .qunit.assertTrue[.qetl.coverage.is_covered[`duckdb_deals;`;`v1;.z.p;.duckdb_dealsbftest.d[1];.duckdb_dealsbftest.d[6]];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`duckdb_deals;`;`$"v1~fixture";.z.p;.duckdb_dealsbftest.d[1];.duckdb_dealsbftest.d[6]];
         "the five windows compose into the requested range"]};
 
 test_a_second_run_is_idle:{[t]

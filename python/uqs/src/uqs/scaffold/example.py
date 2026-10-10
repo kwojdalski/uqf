@@ -124,8 +124,10 @@ check:{{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}}
 system "rm -rf ",.{ns}.dir;
 system "mkdir -p ",.{ns}.dir,"/status";
 setenv[`UQF_STATUS_DIR;.{ns}.dir,"/status"];
-/ No credential: the worker reads the fixture, the demo path it warns about.
+/ No credential: the worker reads the fixture, the demo path it warns about,
+/ which a run must ask for before it may write it (#1082).
 setenv[`{credential};""];
+setenv[`UQF_FIXTURE_WRITES;enlist "1"];
 {local_run.replace("{ns}", ns)}
 -1 "\\n== 2. run {worker} into ",1_string .{ns}.dst;
 / Where rows go is the runner's choice: here, an HDB partitioned on `time`.

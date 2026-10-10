@@ -163,11 +163,11 @@ test_each_outcome_is_recorded_durably:{[t]
 test_a_reaction_that_failed_is_fired_again_by_the_next_run:{[t]
     .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;enlist `deal_positions;{[ds;f;t] '"broken"}];
     r1:run_worker `rp11;
-    owed:.qetl.reaction.pending[`demo_deals;`;`rp11;d 0;d 5];
+    owed:.qetl.reaction.pending[`demo_deals;`;`$"rp11~fixture";d 0;d 5];
     system "l src/etl/reactions/rebuild_positions.q";
     r2:run_worker `rp11;
     .qunit.assertEquals[(r1`windows_completed;count owed;r2`state;positions[];
-        count .qetl.reaction.pending[`demo_deals;`;`rp11;d 0;d 5]);
+        count .qetl.reaction.pending[`demo_deals;`;`$"rp11~fixture";d 0;d 5]);
         (5;5;`idle;expected;0);
         "the failed windows are owed, the idle re-run rebuilds them, and nothing is owed after"]};
 
@@ -193,7 +193,7 @@ test_a_covered_window_with_no_outcome_is_owed_and_filled:{[t]
     .qetl.reaction.off[`demo_deals;`rebuild_positions];
     run_worker `rp12;
     system "l src/etl/reactions/rebuild_positions.q";
-    owed:.qetl.reaction.pending[`demo_deals;`;`rp12;d 0;d 5];
+    owed:.qetl.reaction.pending[`demo_deals;`;`$"rp12~fixture";d 0;d 5];
     r:run_worker `rp12;
     .qunit.assertEquals[(count owed;r`state;positions[]);(5;`idle;expected);
         "every window is owed, and the next run builds them"]};
@@ -202,9 +202,9 @@ test_a_covered_window_with_no_outcome_is_owed_and_filled:{[t]
 / again: the derived rows describe the release before it.
 test_a_window_covered_again_after_its_reaction_is_owed_again:{[t]
     run_worker `rp13;
-    before:count .qetl.reaction.pending[`demo_deals;`;`rp13;d 0;d 5];
-    .qetl.coverage.stage_completion[`demo_deals;`;`rp13;d 0;d 1;1];
-    after:.qetl.reaction.pending[`demo_deals;`;`rp13;d 0;d 5];
+    before:count .qetl.reaction.pending[`demo_deals;`;`$"rp13~fixture";d 0;d 5];
+    .qetl.coverage.stage_completion[`demo_deals;`;`$"rp13~fixture";d 0;d 1;1];
+    after:.qetl.reaction.pending[`demo_deals;`;`$"rp13~fixture";d 0;d 5];
     .qunit.assertEquals[(before;count after;first after`range_from);(0;1;d 0);
         "only the re-covered window is owed"]};
 
@@ -215,7 +215,7 @@ test_a_dry_run_fires_no_owed_reaction:{[t]
     setenv[`UQF_DRY_RUN;"true"];
     run_worker `rp14;
     setenv[`UQF_DRY_RUN;""];
-    .qunit.assertEquals[(count positions[];count .qetl.reaction.pending[`demo_deals;`;`rp14;d 0;d 5]);(0;5);
+    .qunit.assertEquals[(count positions[];count .qetl.reaction.pending[`demo_deals;`;`$"rp14~fixture";d 0;d 5]);(0;5);
         "a rehearsal fires nothing, so the windows stay owed"]};
 
 test_it_is_the_graph_producer_of_deal_positions:{[t]

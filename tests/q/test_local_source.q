@@ -188,6 +188,45 @@ test_an_unset_path_runs_on_the_fixture:{[t]
     .qpipe.job.loctest_backfill.run[];
     .qunit.assertEquals[exec sym from get `loctest_out;enlist `FIXTURE;"the explicit fixture path, as before"]};
 
+/ --- a fixture's windows are not the source's (#1082) -----------------------
+
+/ The bug: a run with no credential recorded its fixture windows as covered
+/ under v1, so the live run that followed once a credential was set found
+/ the range done, fetched nothing, and left the synthetic row standing.
+test_a_live_run_replaces_what_a_fixture_run_wrote:{[t]
+    setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;""];
+    .qpipe.job.loctest_backfill.init[.loctest.spec[]];
+    .qpipe.job.loctest_backfill.run[];
+    .qpipe.job.loctest_backfill.cleanup[];
+    fv:`$"v1~fixture";
+    fixture_covered:.qetl.coverage.is_covered[`loctest_out;`;fv;.z.p;2026.09.17D00:00;2026.09.19D00:00];
+    setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;.loctest.dir[]];
+    .qpipe.job.loctest_backfill.init[.loctest.spec[]];
+    r:.qpipe.job.loctest_backfill.run[];
+    rows:get `loctest_out;
+    .qunit.assertEquals[(fixture_covered;r`state;r`windows_completed);(1b;`completed;2);
+        "the fixture covered its own release, and the live run still fetched both days"];
+    .qunit.assertEquals[asc distinct rows`sym;`EURUSD`USDJPY;"the live rows, and the fixture's row is gone"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`loctest_out;`;`v1;.z.p;2026.09.17D00:00;2026.09.19D00:00];1b;
+        "v1 is covered by the live run"];
+    .qunit.assertEquals[count .qetl.coverage.intervals[`loctest_out;`;fv;.z.p];0;
+        "and the fixture's claims on those windows are withdrawn"]};
+
+test_a_fixture_run_must_be_asked_for:{[t]
+    setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;""];
+    setenv[`UQF_FIXTURE_WRITES;""];
+    .qunit.assertThrows[.qpipe.job.loctest_backfill.init;.loctest.spec[];
+        "init: loctest_src has no credential - refusing to write its fixture. Set UQF_SOURCE_CRED_LOCTEST_SRC, or UQF_FIXTURE_WRITES=1*";
+        "a run with no credential is refused, naming both ways out"];
+    .qunit.assertEquals[(count get `loctest_out;count .qetl.coverage.ledger[]);0 0;"and nothing was written"]};
+
+test_a_dry_run_may_read_the_fixture_unasked:{[t]
+    setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;""];
+    setenv[`UQF_FIXTURE_WRITES;""];
+    setenv[`UQF_DRY_RUN;"true"];
+    s:.qpipe.job.loctest_backfill.init[.loctest.spec[]];
+    .qunit.assertEquals[s`source_version;`$"v1~fixture";"a rehearsal writes nothing, so it is not refused"]};
+
 test_cleanup_does_not_try_to_close_a_directory:{[t]
     setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;.loctest.dir[]];
     .qpipe.job.loctest_backfill.init[.loctest.spec[]];

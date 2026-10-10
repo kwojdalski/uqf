@@ -295,4 +295,15 @@ isolated_run_test:{[fn]
 
 .qunit.runTest:isolated_run_test;
 
+// The run spec a worker with no credential stores once `init` has it: the
+// same, under the release tagged as the fixture's (#1082).
+// @param s a run spec - source_version, range_from, range_to
+// @return s, its source_version tagged
+fixture_spec:{[s] @[s;`source_version;.qetl.source.fixture_version]}
+
+// The suites run bounded workers on their sources' fixtures, which a run must
+// now ask for (#1082). Set once, before any test, so it is the baseline every
+// test is restored to; a test of the refusal clears it for itself.
+setenv[`UQF_FIXTURE_WRITES;enlist "1"];
+
 \d .

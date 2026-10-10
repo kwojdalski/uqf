@@ -275,6 +275,7 @@ qetl.job.bounded.runtime,declare_dependencies,function,2,worker procs
 qetl.job.bounded.runtime,declared_dependencies,dict,,
 qetl.job.bounded.runtime,default_policy,dict,,
 qetl.job.bounded.runtime,finish_window,function,7,worker ds part spec from_ts to_ts publish
+qetl.job.bounded.runtime,fixture_claimed,function,2,worker w
 qetl.job.bounded.runtime,is_dry_run,function,1,
 qetl.job.bounded.runtime,mode,function,1,
 qetl.job.bounded.runtime,modes,value,,
@@ -282,15 +283,19 @@ qetl.job.bounded.runtime,needs_fetch,function,6,ds part version as_of from_ts to
 qetl.job.bounded.runtime,owner,function,1,concern
 qetl.job.bounded.runtime,policy,function,1,
 qetl.job.bounded.runtime,q_owned,value,,
+qetl.job.bounded.runtime,refuse_fixture,function,2,who source
 qetl.job.bounded.runtime,remaining,function,6,ds part version as_of from_ts to_ts
 qetl.job.bounded.runtime,require_dependencies,function,1,worker
 qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
+qetl.job.bounded.runtime,retire_fixture_claims,function,2,worker rows
 qetl.job.bounded.runtime,retry_boundary,value,,
 qetl.job.bounded.runtime,retryable,function,1,err
+qetl.job.bounded.runtime,run_version,function,2,source v
 qetl.job.bounded.runtime,suppressed_in_dry_run,value,,
 qetl.job.bounded.runtime,transport_patterns,value,,
 qetl.job.bounded.runtime,windows,function,3,from_ts to_ts width
 qetl.job.bounded.runtime,with_retry,function,2,pol f
+qetl.job.bounded.runtime,write_strategy,function,2,worker w
 qetl.job.bounded.state,acquire_lock,function,1,worker
 qetl.job.bounded.state,bounded_worker_globals,value,,
 qetl.job.bounded.state,bounded_worker_methods,value,,
@@ -583,6 +588,8 @@ qetl.source,define,function,2,source decl
 qetl.source,defined,function,1,
 qetl.source,expand_path_vars,function,2,who txt
 qetl.source,fetch_window,function,4,source h range_from range_to
+qetl.source,fixture_version,function,1,v
+qetl.source,fixture_writes_allowed,function,1,
 qetl.source,for_source,function,1,source
 qetl.source,has_credentials,function,1,source
 qetl.source,inline_secret,function,2,tr setting
@@ -608,6 +615,7 @@ qetl.source,optional_declarations,dict,,
 qetl.source,primary,function,2,source fetched
 qetl.source,read_settings,function,1,path
 qetl.source,refuse_fixture,function,2,who source
+qetl.source,refuse_fixture_writes,function,2,who source
 qetl.source,register_transport,function,2,name decl
 qetl.source,require_credentials,function,1,source
 qetl.source,require_zone_table,function,1,tz

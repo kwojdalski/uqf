@@ -380,6 +380,74 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
     `dry_run`rows_published`published`covered`checkpointed!
         (dry;rows;published;covered;checkpointed)}
 
+/ ------------------------------------------------- FIXTURE CLAIMS (#1082)
+/ A run with no credential records its windows under the release tagged
+/ ~fixture (.qetl.source.fixture_version), so they never satisfy a live
+/ run's plan. The live run that follows still finds the fixture's ROWS in
+/ the dataset, and these clear them and withdraw the fixture's claims.
+
+/ The release a run records coverage under: the one asked for, tagged when
+/ the source has no credential, so validate, plan, the run and its ledgers
+/ all see one identity. A null is left for check_static to refuse.
+/ @param source the worker's source
+/ @param v the release asked for
+/ @return v, or v tagged as the fixture's
+run_version:{[source;v] $[null[v] or .qetl.source.has_credentials source; v; .qetl.source.fixture_version v]}
+
+/ Refuse a run on `source`'s fixture: always under a deployment's --live
+/ (#800), and otherwise unless fixture writes were asked for - a dry run
+/ writes nothing, so it may still read the fixture.
+/ @param who the caller, leading the message
+/ @param source the source that has no credential
+/ @throws error naming the source, its variable and the way out
+refuse_fixture:{[who;source]
+    .qetl.source.refuse_fixture[who;source];
+    if[not is_dry_run[]; .qetl.source.refuse_fixture_writes[who;source]]}
+
+/ Did a run on the fixture claim any of this window? Only a live run asks -
+/ a fixture run's own claims are under the tagged release.
+/ @param worker the worker's name
+/ @param w the window, a dict of range_from and range_to
+/ @return 1b when a current fixture claim overlaps the window
+fixture_claimed:{[worker;w]
+    cfg:.qetl.job.bounded.def worker;
+    if[not .qetl.source.has_credentials cfg`source; :0b];
+    v:.qetl.source.fixture_version .qetl.job.bounded.read_state[worker;`source_version];
+    iv:.qetl.coverage.intervals[cfg`dataset;cfg`partition;v;.z.p];
+    any (iv[`range_from]<w`range_to) and w[`range_from]<iv`range_to}
+
+/ The strategy a window is written under: the run's own, unless a fixture
+/ run claimed the window. Its rows are then still there, and an upsert would
+/ keep every one whose key the live data does not repeat - so `replace,
+/ which clears the window first, when the worker has a window_column. One
+/ without upserts, and says what may be left behind.
+/ @param worker the worker's name
+/ @param w the window, a dict of range_from and range_to
+/ @return the strategy, a symbol
+write_strategy:{[worker;w]
+    oc:.qetl.job.bounded.on_conflict worker;
+    if[not fixture_claimed[worker;w]; :oc];
+    if[not null (.qetl.job.bounded.def worker)`window_column; :`replace];
+    .qetl.log.warn[worker;"a fixture run wrote this window, and with no window_column its rows cannot be cleared - fixture rows the live data does not overwrite stay";
+        `range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
+    oc}
+
+/ Withdraw the fixture's claims on the window just published. After the
+/ write and before finish_window stages the live claim, so an interruption
+/ between them leaves the window claimed by neither - an under-claim, which a
+/ re-run repairs - never by both.
+/ @param worker the worker's name
+/ @param rows what the publish returned, passed through
+/ @return rows
+retire_fixture_claims:{[worker;rows]
+    w:.qetl.job.bounded.read_state[worker;`last_window];
+    if[not fixture_claimed[worker;w]; :rows];
+    cfg:.qetl.job.bounded.def worker;
+    v:.qetl.source.fixture_version .qetl.job.bounded.read_state[worker;`source_version];
+    n:.qetl.coverage.supersede[cfg`dataset;cfg`partition;v;w`range_from;w`range_to];
+    .qetl.log.info[worker;"live rows replace a fixture run's window";`range_from`range_to`claims!(w`range_from;w`range_to;n)];
+    rows}
+
 / ---------------------------------------------------------- DEPENDENCIES
 
 / worker -> the TorQ process types it needs a connection to.
