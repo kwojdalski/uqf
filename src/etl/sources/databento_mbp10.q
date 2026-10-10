@@ -115,8 +115,17 @@ fixture:{[]
     lv:flip level_fields!raze each flip (fixture_levels[271.45;271.66;500];fixture_levels[271.45;271.66;479];fixture_levels[642;643.;100];fixture_levels[642;643.01;100]);
     base,'lv}
 
+/ The physical table, as the live check reads it (#1077): the same names the
+/ query reads, but the driver's types, not the adapter's. A DOUBLE reaches q
+/ as a float (measured on duckdb_deals' driver), so prices are typed; an
+/ empty TIMESTAMP reports as a date, strings as general and UINTEGER sizes as
+/ 32-bit ints, so those are general - their types the output contract's to
+/ check after `adapt`. Without this the live check failed a correctly
+/ configured source at `schema`.
+raw:enlist[table_name]!enlist flip columns!{$[x="f"; `float$(); ()]} each types
+
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
 
 \d .

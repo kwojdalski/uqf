@@ -121,6 +121,10 @@ transport:`odbc
 / or password to supply.
 credential_example:"DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY"
 
+/ The physical column each output column is read from, where they differ:
+/ what select_list renames, and what `raw` names (#1077).
+renamed:`source_time`local_time`sym!`timestamp_ms`local_timestamp_ms`symbol
+
 / The SQL expression selecting each field, in `columns` order. Only four of
 / them need one; the level and latency columns are read as they stand.
 / @return the comma-separated select list
@@ -128,9 +132,7 @@ credential_example:"DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ON
 select_list:{[]
     exprs:{[f]
         s:string f;
-        $[f=`source_time; "timestamp_ms AS source_time";
-          f=`local_time;  "local_timestamp_ms AS local_time";
-          f=`sym;         "symbol AS sym";
+        $[f in key .qpipe.source.crypto_market_data.renamed; string[.qpipe.source.crypto_market_data.renamed f]," AS ",s;
           f=`is_snapshot; "CAST(is_snapshot AS INTEGER) AS is_snapshot";
           s]} each .qpipe.source.crypto_market_data.columns;
     ", " sv exprs}
@@ -236,8 +238,16 @@ fixture:{[]
         trade_side:`$("buy";"sell";"buy";"buy";"sell";"buy"));
     base,'lv,'tail}
 
+/ The physical table, as the live check reads it (#1077): the recorder's
+/ column names, not the adapter's, which renames and casts. A DOUBLE reaches
+/ q as a float (measured on duckdb_deals' driver), so the float columns are
+/ typed; the rest - epoch-millisecond BIGINTs, strings, a boolean - are
+/ general, their types the output contract's to check after `adapt`. Without
+/ this the live check failed a correctly configured source at `schema`.
+raw:enlist[table_name]!enlist flip ({x^renamed x} columns)!{$[x="f"; `float$(); ()]} each types
+
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
 
 \d .

@@ -178,6 +178,34 @@ test_a_supporting_input_that_breaks_its_contract_still_fails_at_output:{[t]
     r:.livetest.check[];
     .qunit.assertEquals[r`status`stage;(`failed;`output);"a supporting input is held to its own contract"]};
 
+/ #1077: what KX's ODBC client reported for `SELECT * FROM deals WHERE 1=0`
+/ on the DuckDB driver, measured under scripts/dev/odbc_rosetta.sh.
+measured_deals:([] c:`deal_id`deal_time`sym`side`notional`rate; t:"jd  ff")
+
+/ duckdb_deals' own declaration, read through the test transport so the
+/ schema stage sees the measured metadata.
+as_measured:{[with_raw]
+    d:.qetl.source.def `duckdb_deals;
+    d:@[d;`source`transport;:;(`livetest_src;`livetest_tx)];
+    if[not with_raw; d:@[d;`raw;:;()!()]];
+    .testutil.drop_rows[`.qetl.source.sources;`livetest_src];
+    .qetl.source.define[`livetest_src;d];
+    `.livetest.columns set .livetest.measured_deals;
+    }
+
+test_an_odbc_adapter_passes_the_schema_stage_on_its_drivers_metadata:{[t]
+    .livetest.as_measured[1b];
+    .qunit.assertTrue[.qetl.source.validate_live[`livetest_src;7];"duckdb_deals' raw matches what the driver reports"];
+    .livetest.as_measured[0b];
+    .qunit.assertTrue[(@[.qetl.source.validate_live[`livetest_src;];7;{x}]) like "validate_live*";
+        "without raw, the output contract was read against the driver's table - the false failure"]};
+
+test_every_odbc_source_declares_its_physical_table:{[t]
+    s:exec name from .qetl.source.sources where transport=`odbc;
+    missing:s where {[s] 0=count (.qetl.source.def s)`raw} each s;
+    .qunit.assertTrue[0<count s;"the tree ships ODBC sources to hold to it"];
+    .qunit.assertEquals[missing;`symbol$();"an ODBC adapter casts and renames, so its live check needs raw"]};
+
 test_a_check_that_passes_closes_its_connection:{[t]
     .livetest.check[];
     .qunit.assertEquals[.livetest.opened,.livetest.closed;1 1;"one opened, one closed"]};
