@@ -216,3 +216,57 @@ def test_a_job_with_its_plant_in_another_process_replays_the_plants_log(tmp_path
         for proc in reversed(procs):
             proc.kill()
             proc.wait(timeout=10)
+
+
+_PUBLISHER = """\\l scripts/processes/run_stream.q
+tr:.qproc.standalone.remote_transport {port};
+tr[`connect][];
+pub:tr[`publisher][];
+-1 "REFUSED:",@[{{x[`probe;42]; "accepted"}};pub;{{x}}];
+-1 "COUNT:",.Q.s1 pub[`probe;([] a:1 2 3)];
+exit 0
+"""
+
+
+def test_a_remote_publish_the_plant_refuses_throws_in_the_publisher(tmp_path: Path) -> None:
+    """#1085: the remote publisher is synchronous, so the plant's refusal
+    reaches the job - which keeps what it buffered - instead of an async send
+    returning on enqueue and the rows being lost after it."""
+    import time
+
+    q, env = _kdbx()
+    if identify(Path(q), env) != KDBX:
+        pytest.skip("the multi-process run needs KDB-X")
+    port = _free_port()
+    client = tmp_path / "publisher.q"
+    client.write_text(_PUBLISHER.format(port=port))
+    plant = subprocess.Popen(
+        [q, "scripts/processes/run_stream.q", "-q", "-plant", str(port)],
+        cwd=UQF_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        out = ""
+        for _ in range(50):
+            done = subprocess.run(
+                [q, str(client), "-q"],
+                cwd=UQF_ROOT,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            out = done.stdout + done.stderr
+            if "REFUSED:" in out:
+                break
+            time.sleep(0.2)
+        assert _value(out, "REFUSED") != "accepted", "a malformed batch is refused back here"
+        assert _value(out, "COUNT") == "3", "and an accepted one answers with what the plant took"
+    finally:
+        plant.kill()
+        plant.wait(timeout=10)
