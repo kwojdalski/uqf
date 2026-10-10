@@ -89,14 +89,23 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    git(
-        "commit",
-        "--allow-empty",
-        "-m",
-        f"KDB-X gates pass on tree {tree[:12]}",
-        "-m",
-        f"{', '.join(HOOKS)}, run on KDB-X over the whole tree.\n\n{TRAILER}: {tree}",
-    )
+    try:
+        git(
+            "commit",
+            "--allow-empty",
+            "-m",
+            f"KDB-X gates pass on tree {tree[:12]}",
+            "-m",
+            f"{', '.join(HOOKS)}, run on KDB-X over the whole tree.\n\n{TRAILER}: {tree}",
+        )
+    except subprocess.CalledProcessError as exc:
+        # The commit runs the repository's hooks too; one that refuses (a
+        # qlinter off its pin, say) is named here rather than as a traceback.
+        print(
+            f"attest_kdbx: the gates passed but the commit was refused:\n{exc.stdout}{exc.stderr}",
+            file=sys.stderr,
+        )
+        return 1
     print(f"attest_kdbx: recorded {TRAILER}: {tree} - push to show it on the PR")
     return 0
 
