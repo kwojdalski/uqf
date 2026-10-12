@@ -296,14 +296,16 @@ test_no_fallback_to_adopt_is_reported_not_guessed:{[t]
     b:.pipetest.write_log[d1;`stp1_pos20261008120000;enlist (`pos;(enlist 2026.10.08D13:00:00;enlist `EURUSD;enlist 1e5))];
     c:.pipetest.write_log[d1;`stp1_fill20261008000000;enlist (`fill;(enlist 2026.10.08D02:00:00;enlist `GBPUSD;enlist 2e5))];
     z:.pipetest.write_log[d1;`stp1_other20261008000000;enlist (`other;(enlist 2026.10.08D03:00:00;enlist `X;enlist 1e0))];
-    listing:([] seq:1 2 1 1i; logname:a,b,c,z; tbls:(enlist `pos;enlist `pos;enlist `fill;enlist `other));
+    listing:([] seq:1 2 1 1i; logname:a,b,c,z; tbls:(enlist `pos;enlist `pos;enlist `fill;enlist `other);
+        schema:.pipetest.schema_of each (enlist `pos;enlist `pos;enlist `fill;enlist `other));
     (` sv d1,`stpmeta) set listing;
     / day two: only a fill; its stpmeta lists a log that was lost
     e:.pipetest.write_log[d2;`stp1_fill20261009000000;enlist (`fill;(enlist 2026.10.09D02:00:00;enlist `GBPUSD;enlist 3e5))];
-    (` sv d2,`stpmeta) set ([] seq:1 1i; logname:e,` sv d2,`stp1_pos_lost; tbls:(enlist `fill;enlist `pos));
+    (` sv d2,`stpmeta) set ([] seq:1 1i; logname:e,` sv d2,`stp1_pos_lost; tbls:(enlist `fill;enlist `pos); schema:.pipetest.schema_of each (enlist `fill;enlist `pos));
     root}
 
-.pipetest.names:`pos`fill!(`time`sym`qty;`time`sym`qty)
+/ What stpmeta records beside a log: its tables, each as an empty table.
+.pipetest.schema_of:{[tbls] (),tbls!{[t] ([] time:`timestamp$(); sym:`symbol$(); qty:`float$())} each (),tbls}
 
 test_the_plants_day_directory_is_procname_underscore_date:{[t]
     .qunit.assertEquals[.qtorq.day_dir[`$"/data/tplogs";`stp1;2026.10.09];`$":/data/tplogs/stp1_2026.10.09";"stplog.q createdld"];
@@ -311,7 +313,7 @@ test_the_plants_day_directory_is_procname_underscore_date:{[t]
 
 test_earlier_days_returns_the_wanted_tables_across_days_in_order_as_tables:{[t]
     root:.pipetest.plant_root[];
-    m:.qtorq.earlier_days[root;`stp1;.pipetest.names;`pos`fill;2026.10.08;2026.10.09];
+    m:.qtorq.earlier_days[root;`stp1;`pos`fill;2026.10.08;2026.10.09];
     .qunit.assertEquals[m[;0];`pos`fill`pos`fill;
         "day one by time (pos 01:00, fill 02:00, pos 13:00), then day two - and the unwanted table never"];
     .qunit.assertEquals[m 0;(`pos;([] time:enlist 2026.10.08D01:00:00; sym:enlist `EURUSD; qty:enlist 5e5));
@@ -320,21 +322,106 @@ test_earlier_days_returns_the_wanted_tables_across_days_in_order_as_tables:{[t]
 
 test_earlier_days_reads_only_the_days_asked_for:{[t]
     root:.pipetest.plant_root[];
-    m:.qtorq.earlier_days[root;`stp1;.pipetest.names;enlist `pos;2026.10.09;2026.10.09];
+    m:.qtorq.earlier_days[root;`stp1;enlist `pos;2026.10.09;2026.10.09];
     .qunit.assertEquals[m;();"day two lost its pos log, and day one was not asked for"]};
 
 test_earlier_days_returns_what_exists_when_a_log_or_a_day_is_missing:{[t]
     root:.pipetest.plant_root[];
-    m:.qtorq.earlier_days[root;`stp1;.pipetest.names;`pos`fill;2026.10.07;2026.10.10];
+    m:.qtorq.earlier_days[root;`stp1;`pos`fill;2026.10.07;2026.10.10];
     .qunit.assertEquals[count m;4;"days 07 and 10 have no directory, one log of 09 is gone - the other four messages are still there"]};
 
 test_earlier_days_with_no_log_root_is_empty_not_an_error:{[t]
-    .qunit.assertEquals[.qtorq.earlier_days[`:/no/such/root;`stp1;.pipetest.names;enlist `pos;2026.10.08;2026.10.09];();"nothing to replay"]};
+    .qunit.assertEquals[.qtorq.earlier_days[`:/no/such/root;`stp1;enlist `pos;2026.10.08;2026.10.09];();"nothing to replay"]};
 
 test_earlier_days_leaves_the_root_upd_alone:{[t]
     root:.pipetest.plant_root[];
     `upd set {[t;x] `mine};
-    .qtorq.earlier_days[root;`stp1;.pipetest.names;enlist `pos;2026.10.08;2026.10.08];
+    .qtorq.earlier_days[root;`stp1;enlist `pos;2026.10.08;2026.10.08];
     r:(get `upd)[1;2];
     ![`.;();0b;enlist `upd];
     .qunit.assertEquals[r;`mine;"the job's own upd is put back after the logs are read"]};
+
+/ --- the recorded schema names an old log's columns (#1205) -------------------
+
+/ A one-day plant root with one pos log, a given recorded schema and message.
+.pipetest.one_log_root:{[schema;msg;withschema]
+    root:hsym `$first system "mktemp -d";
+    d:` sv root,`stp1_2026.10.08;
+    system "mkdir -p ",1_string d;
+    a:.pipetest.write_log[d;`stp1_pos20261008000000;enlist (`pos;msg)];
+    (` sv d,`stpmeta) set $[withschema;
+        ([] seq:enlist 1i; logname:enlist a; tbls:enlist enlist `pos; schema:enlist (enlist `pos)!enlist schema);
+        ([] seq:enlist 1i; logname:enlist a; tbls:enlist enlist `pos)];
+    root}
+
+test_a_table_whose_columns_changed_between_days_is_named_by_each_days_schema:{[t]
+    root:hsym `$first system "mktemp -d";
+    d1:` sv root,`stp1_2026.10.08;
+    d2:` sv root,`stp1_2026.10.09;
+    system "mkdir -p ",1_string d1;
+    system "mkdir -p ",1_string d2;
+    / day one: time, sym, qty. A release then reorders them and adds a column.
+    s1:([] time:`timestamp$(); sym:`symbol$(); qty:`float$());
+    s2:([] time:`timestamp$(); qty:`float$(); sym:`symbol$(); venue:`symbol$());
+    a:.pipetest.write_log[d1;`stp1_pos20261008000000;enlist (`pos;(enlist 2026.10.08D01:00:00;enlist `EURUSD;enlist 5e5))];
+    b:.pipetest.write_log[d2;`stp1_pos20261009000000;enlist (`pos;(enlist 2026.10.09D01:00:00;enlist 7e5;enlist `GBPUSD;enlist `lse))];
+    (` sv d1,`stpmeta) set ([] seq:enlist 1i; logname:enlist a; tbls:enlist enlist `pos; schema:enlist (enlist `pos)!enlist s1);
+    (` sv d2,`stpmeta) set ([] seq:enlist 1i; logname:enlist b; tbls:enlist enlist `pos; schema:enlist (enlist `pos)!enlist s2);
+    m:.qtorq.earlier_days[root;`stp1;enlist `pos;2026.10.08;2026.10.09];
+    .qunit.assertEquals[m 0;(`pos;([] time:enlist 2026.10.08D01:00:00; sym:enlist `EURUSD; qty:enlist 5e5));
+        "the old log is named as it was written"];
+    .qunit.assertEquals[m 1;(`pos;([] time:enlist 2026.10.09D01:00:00; qty:enlist 7e5; sym:enlist `GBPUSD; venue:enlist `lse));
+        "and the new one by its own schema, with the extra column - not by either day's guess"]};
+
+test_a_log_that_disagrees_with_its_recorded_schema_is_refused_with_both_counts:{[t]
+    s:([] time:`timestamp$(); sym:`symbol$(); qty:`float$());
+    root:.pipetest.one_log_root[s;(enlist 2026.10.08D01:00:00;enlist `EURUSD);1b];
+    .qunit.assertThrows[{.qtorq.earlier_days[x;`stp1;enlist `pos;2026.10.08;2026.10.08]};root;
+        "*recorded 3 columns for pos (time, sym, qty) but its messages hold 2*";
+        "never padded or truncated"]};
+
+test_an_stpmeta_with_no_schema_is_refused_not_guessed_from_the_plant:{[t]
+    s:([] time:`timestamp$(); sym:`symbol$(); qty:`float$());
+    root:.pipetest.one_log_root[s;(enlist 2026.10.08D01:00:00;enlist `EURUSD;enlist 5e5);0b];
+    .qunit.assertThrows[{.qtorq.earlier_days[x;`stp1;enlist `pos;2026.10.08;2026.10.08]};root;
+        "*records no schema*";
+        "loud, naming the file"]};
+
+/ --- the plant's day and its logs, for catch_up (#1211) ------------------------
+
+/ A plant that answers for `root` while its current day directory is `dldir`.
+.pipetest.ask:{[root;dldir] {[r;d;unused] (r;`stp1;d)}[root;dldir]}
+
+test_the_day_a_plant_directory_is_for_is_the_date_it_ends_in:{[t]
+    .qunit.assertEquals[.qtorq.dir_day `$":/data/tplogs/stp1_2026.10.09";2026.10.09;"the plant's own naming"]};
+
+test_plant_day_is_the_day_of_the_plants_current_log_directory:{[t]
+    root:.pipetest.plant_root[];
+    hooks:.qtorq.plant_hooks[.pipetest.ask[root;` sv root,`stp1_2026.10.08];`pos`fill];
+    .qunit.assertEquals[hooks[`plant_day][];2026.10.08;"asked of the plant, not read off the job's clock"]};
+
+test_has_log_is_true_for_a_day_with_a_log_and_false_for_one_without:{[t]
+    root:.pipetest.plant_root[];
+    hooks:.qtorq.plant_hooks[.pipetest.ask[root;` sv root,`stp1_2026.10.09];`pos`fill];
+    .qunit.assertEquals[hooks[`has_log] 2026.10.08;1b;"day one has its logs"];
+    .qunit.assertEquals[hooks[`has_log] 2026.10.07;0b;"no directory, no log"];
+    h2:.qtorq.plant_hooks[.pipetest.ask[root;` sv root,`stp1_2026.10.09];enlist `pos];
+    .qunit.assertEquals[h2[`has_log] 2026.10.09;0b;"day two's only pos log was lost: the file must be there, not just listed"]};
+
+/ The #1190 case on TorQ: the job's clock is a day ahead of a plant that has
+/ not rolled. Logs for the 8th and the 9th, plant still on the 9th, marker the
+/ 7th: the 9th is the log `subscribe` replays, so catch_up reads the 8th only.
+test_a_torq_restart_between_local_midnight_and_the_plant_roll_replays_each_log_once:{[t]
+    root:.pipetest.plant_root[];
+    hooks:.qtorq.plant_hooks[.pipetest.ask[root;` sv root,`stp1_2026.10.09];`pos`fill];
+    p:.qetl.job.stream.carry_marker_path `fx_positions;
+    system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    system "rm -f ",p,"*";
+    .qetl.job.bounded.state.durable_set[p;([] last_end_of_day:enlist 2026.10.07)];
+    .pipetest.replayed:();
+    h:{[tb;x] .pipetest.replayed,:enlist (tb;count x)};
+    n:.qetl.job.stream.catch_up[`fx_positions;hooks;`pos`fill;h];
+    system "rm -f ",p,"*";
+    .qetl.job.stream.reset `fx_positions;
+    .qunit.assertEquals[n;3;"day one's three messages (pos, fill, pos); day two is the live log's"];
+    .qunit.assertEquals[sum .pipetest.replayed[;1];3;"each row once"]};

@@ -267,35 +267,67 @@ day_dir:{[root;plant;day]
     r:$[":"=first string root; root; hsym root];
     ` sv r,`$(string plant),"_",string day}
 
+/ The day a plant day directory is for: the date its name ends in
+/ (day_dir's <procname>_<date>).
+/ @param dir the day's directory, as a file symbol or a string
+/ @return a date, 0Nd when the name does not end in one
+/ @eg .qtorq.dir_day `:/data/tplogs/stp1_2026.10.09  / 2026.10.09
+dir_day:{[dir] "D"$-10#string dir}
+
 / The logs of one plant day that hold any of the wanted tables, in the
 / order the plant opened them. The plant lists every log it opened that
-/ day, with the tables each feeds, in its `stpmeta` file next to them
-/ (stpmeta.q) - one per table and period in the default tabperiod mode, one
-/ for all tables in singular mode - so this reads that rather than guessing
-/ at file names. A day with no directory or no stpmeta contributes nothing.
+/ day, with the tables each feeds and the SCHEMA of each, in its `stpmeta`
+/ file next to them (stpmeta.q) - one log per table and period in the default
+/ tabperiod mode, one for all tables in singular mode - so this reads that
+/ rather than guessing at file names, and a log is later named by the schema
+/ recorded with it, not by whatever the plant's tables are today (#1205). A
+/ day with no directory or no stpmeta contributes nothing.
 / @param dir the day's directory, as day_dir returns it
 / @param want the wanted table names
-/ @return a table of seq, logname, oldest first
+/ @return a table of seq, logname, schema (a table-to-empty-table dictionary), oldest first
+/ @throws error when the stpmeta records no schema (one written by an older plant)
 / @eg .qtorq.day_logs[`:/nonexistent/stp1_2026.10.09;enlist `trade]  / empty
 day_logs:{[dir;want]
     m:` sv dir,`stpmeta;
-    if[() ~ key m; :([] seq:`int$(); logname:`symbol$())];
+    if[() ~ key m; :([] seq:`int$(); logname:`symbol$(); schema:())];
     t:get m;
+    if[not `schema in cols t;
+        '"qtorq.day_logs: ",(string m)," records no schema, so its logs cannot be named - refusing to guess from the plant's current tables"];
     keep:{[want;fed] any ((),fed) in want}[want] each t`tbls;
-    t:select seq,logname from t where keep, not null logname;
+    t:select seq,logname,schema from t where keep, not null logname;
     `seq`logname xasc t}
+
+/ Whether a plant day has a log holding any of the wanted tables: the log
+/ file stpmeta lists is there. For the transport's `has_log` (#1189).
+/ @param root the plant's log root
+/ @param plant the plant's procname
+/ @param want the wanted table names
+/ @param day the plant day, a date
+/ @return 1b when at least one such log file exists
+/ @eg .qtorq.has_log[`:/nonexistent;`stp1;enlist `trade;2026.10.09]  / 0b
+has_log:{[root;plant;want;day]
+    logs:day_logs[day_dir[root;plant;day];(),want];
+    any {not () ~ key x} each logs`logname}
 
 / Private: the wanted messages of ONE log, as (day;seq;time;table;rows).
 / Read with .qetl.tick.replay, which is -11! with a torn tail tolerated and
-/ the root upd put back after.
+/ the root upd put back after. A message is a list of columns; they are named
+/ by the schema recorded with THIS log (#1205), and a count that disagrees
+/ with it is refused, never padded or truncated.
 / @private
-log_messages:{[names;want;day;seq;path]
+log_messages:{[want;day;seq;path;schema]
     `.qtorq.collected set ();
-    .qetl.tick.replay[path;{[names;want;day;seq;t;x]
+    .qetl.tick.replay[path;{[schema;path;want;day;seq;t;x]
         if[t in want;
-            x:$[0h=type x; flip names[t]!x; x];
+            if[0h=type x;
+                if[not t in key schema;
+                    '"qtorq.log_messages: ",(string path)," recorded no schema for ",string t];
+                nm:cols schema t;
+                if[not (count nm)=count x;
+                    '"qtorq.log_messages: ",(string path)," recorded ",(string count nm)," columns for ",(string t)," (",(", " sv string nm),") but its messages hold ",string count x];
+                x:flip nm!x];
             ts:$[count x; first x`time; 0Np];
-            .qtorq.collected,:enlist (day;seq;ts;t;x)];}[names;want;day;seq]];
+            .qtorq.collected,:enlist (day;seq;ts;t;x)];}[schema;path;want;day;seq]];
     c:collected;
     `.qtorq.collected set ();
     c}
@@ -306,30 +338,46 @@ log_messages:{[names;want;day;seq;path]
 / .
 / A log holds what .u.upd received - (`upd;table;list of columns), `time`
 / first - and each is read with -11!, as TorQ's own replay does it. The
-/ columns are named from `names`, so the job gets the table a live batch
-/ would have been. Logs of different tables in one rolling period carry no
+/ columns are named from the schema stpmeta recorded with that log (#1205),
+/ so a log written before a plant table changed shape is named as it was
+/ written; asking the plant for its columns today would name an older log
+/ wrongly (throwing on a count change, silently swapping values on a
+/ reorder). Logs of different tables in one rolling period carry no
 / shared sequence, so within a period they are interleaved by the plant's own
 / `time` stamp, stably. A missing day or log gives nothing, and the caller
 / says what is lost.
 / @param root the plant's log root
 / @param plant the plant's procname
-/ @param names a dictionary of table name to its column names
 / @param want the wanted table names
 / @param first_day the first plant day to read
 / @param last_day the last plant day to read, inclusive
 / @return a list of (table; rows) pairs
-/ @eg .qtorq.earlier_days[`:/nonexistent;`stp1;(`symbol$())!();enlist `trade;2026.10.08;2026.10.09]  / ()
-earlier_days:{[root;plant;names;want;first_day;last_day]
+/ @eg .qtorq.earlier_days[`:/nonexistent;`stp1;enlist `trade;2026.10.08;2026.10.09]  / ()
+earlier_days:{[root;plant;want;first_day;last_day]
     want:(),want;
-    {[root;plant;names;want;day]
+    {[root;plant;want;day]
         logs:day_logs[day_dir[root;plant;day];want];
-        `.qtorq.got set (.qtorq.got),raze log_messages[names;want;day]'[logs`seq;logs`logname];
-        }[root;plant;names;want] each first_day+til 0|1+last_day-first_day;
+        `.qtorq.got set (.qtorq.got),raze log_messages[want;day]'[logs`seq;logs`logname;logs`schema];
+        }[root;plant;want] each first_day+til 0|1+last_day-first_day;
     msgs:got;
     `.qtorq.got set ();
     if[0=count msgs; :()];
     t:`day`seq`ts xasc flip `day`seq`ts`t`x!flip msgs;
     flip (t`t;t`x)}
+
+/ The three recovery hooks a carrying job's transport needs of the plant's
+/ logs (#1072, #1190, #1189), over whatever answers for the plant. The
+/ plant is asked where it keeps its logs each time (the root, its procname,
+/ and the directory of the day it is on), so a hook is as current as the plant.
+/ @param ask a niladic function returning (log root; plant procname; current day directory)
+/ @param want the tables the job subscribes to
+/ @return a dictionary of `earlier_days`plant_day`has_log to functions
+/ @eg .qtorq.plant_hooks[{(`:/nonexistent;`stp1;`:/nonexistent/stp1_2026.10.09)};enlist `trade][`plant_day][]  / 2026.10.09
+plant_hooks:{[ask;want]
+    `earlier_days`plant_day`has_log!(
+        {[ask;tbls;first_day;last_day] loc:ask[]; earlier_days[loc 0;loc 1;tbls;first_day;last_day]}[ask];
+        {[ask;unused] dir_day (ask[]) 2}[ask];  / called as plant_day[]: the generic null fills `unused`
+        {[ask;want;day] loc:ask[]; has_log[loc 0;loc 1;want;day]}[ask;want])}
 
 / Scratch for earlier_days: one log's messages, and the span's.
 collected:()
