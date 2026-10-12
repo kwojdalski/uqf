@@ -27,6 +27,7 @@ from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import effective_process_rows
+from uqs.stack.reporter import write_reporter_config
 from uqs.stack.site_fields import process_csv_fields
 
 log = get_logger(__name__)
@@ -157,6 +158,11 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
         # Same again for DQE's query list: the vendored rows plus this tree's
         # metatables, which dqe1 is pointed at (stack/dqe.py).
         write_dqe_config(paths)
+
+        # reporter1's checks: this tree's own, validated against this
+        # deployment's tables, which reporter1 is pointed at instead of the
+        # site's reporter.csv (stack/reporter.py).
+        write_reporter_config(paths, (r["procname"] for r in rows))
 
     # Make the HDB rectangular, now that database.q says what it should
     # hold. A partitioned kdb+ database needs every table in every
