@@ -510,11 +510,13 @@ clock:{[x] clock_of[.z.p;x]}
 /   timer               [name; period; f]: call niladic f every period.
 /   check_publishable   optional, [tables]: refuse a table the plant lacks.
 / .
-/ A carrying job's recovery (stream_carry_recovery.q) uses three more optional
-/ keys, and a transport missing one is a transport that cannot recover that
-/ much: earlier_days[tables; first; last], plant_day[] (the date of the log
-/ subscribe replays - the plant's day, never the job's clock, #1190) and
-/ has_log[day] (whether that day's log exists, #1189).
+/ A carrying job's recovery (stream_carry_recovery.q) uses three more keys,
+/ the recovery_keys: earlier_days[tables; first; last], plant_day[] (the date
+/ of the log subscribe replays - the plant's day, never the job's clock,
+/ #1190) and has_log[day] (whether that day's log exists, #1189). They are a
+/ contract (#1220), judged by `start` once connected, for a job with carry and
+/ replay: all three, or the transport states `recovery` as 0b to say it
+/ cannot recover; some but not all is refused, and none is an ERROR.
 transport_keys:`connect`publisher`subscribe`timer
 
 / Every table a job subscribes to: its inputs, and those it reads only to
@@ -577,6 +579,7 @@ start:{[job;tr]
             $[`period in key d; d`period; 0Nn]));::];
     if[`on_start in key d; (d`on_start)[]];
     tr[`connect][];
+    require_recovery[job;tr];
     if[count d`publishes;
         if[`check_publishable in key tr; tr[`check_publishable] d`publishes];
         wire[job;tr[`publisher][]]];

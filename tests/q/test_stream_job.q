@@ -1276,7 +1276,8 @@ test_a_null_scope_value_is_refused_at_load:{[t]
 / handler it was given is kept, so a test can send a batch after start.
 started:()!()
 fake_transport:{[job;replayed]
-    `connect`publisher`subscribe`timer!(
+    / recovery:0b - a fake that replays one log has no earlier days to give (#1220)
+    `connect`publisher`subscribe`timer`recovery!(
         {[] };
         / A projection still owed its one argument: start calls publisher[].
         {[job;unused] .sjtest.recorder job}[job];
@@ -1285,7 +1286,8 @@ fake_transport:{[job;replayed]
             if[replay;
                 {[h;m] .sjtest.started[`seen_replaying],:.qetl.job.stream.replaying; h . m}[h] each replayed];
             `.sjtest.live set h;}[replayed];
-        {[n;p;f] })}
+        {[n;p;f] };
+        0b)}
 
 / The bug this fixes: a restarted posbook1 started its book flat, so the next
 / fill published a position as if it were the first of the day.

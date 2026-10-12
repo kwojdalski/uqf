@@ -406,10 +406,74 @@ test_a_restart_before_the_plant_rolls_replays_each_log_once:{[t]
 test_a_transport_without_earlier_days_still_reports_the_gap:{[t]
     missed_logs .z.D-3;
     .qetl.job.stream.reset `fx_positions;
-    e:errors .testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;`connect`publisher`subscribe`timer#.eodtest.gap_transport[]]};
+    e:errors .testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;(`connect`publisher`subscribe`timer#.eodtest.gap_transport[]),enlist[`recovery]!enlist 0b]};
     system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
     .qetl.tick.reset[];
     .qunit.assertEquals[count e;1;"the existing detection still speaks"];
     .qunit.assertEquals[exec base_qty from .qpipe.job.fx_positions.positions;enlist 1e5;"and the book is today's fill alone"]};
+
+/ --- the plant's day, not the job's (#1212) ---------------------------------
+
+/ Start fx_positions after logs from `marker`, on a transport whose plant is on
+/ `plant`; the errors logged, and the days catch_up asked earlier_days for.
+plant_on:{[marker;plant]
+    missed_logs marker;
+    .qetl.job.stream.reset `fx_positions;
+    `.eodtest.asked set ();
+    tr:gap_transport[];
+    tr[`plant_day]:{[p;unused] p}[plant];
+    tr[`earlier_days]:{[tbls;a;b] `.eodtest.asked set (a;b); ()};
+    tr[`has_log]:{[dt] 0b};
+    tr[`subscribe]:{[tbls;h;replay] };
+    e:errors .testutil.captured_log[0b] {[tr;unused] .qetl.job.stream.start[`fx_positions;tr]}[tr];
+    system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
+    .qetl.tick.reset[];
+    (e;.eodtest.asked)}
+
+test_a_plant_a_day_ahead_of_the_job_replays_and_judges_by_the_plants_day:{[t]
+    / the job's clock says the marker (yesterday) is current; the plant, a day on, says it missed a day
+    r:plant_on[.z.D-1;.z.D+1];
+    .qunit.assertEquals[r 1;(.z.D;.z.D);"catch_up replays the plant's yesterday, which is the job's today"];
+    .qunit.assertEquals[count r 0;1;"missed_end_of_day judges it against the plant's day and reports the lost state"];
+    .qunit.assertEquals[r[0;0;3]`today;.z.D+1;"naming the plant's day"]};
+
+test_a_plant_a_day_behind_the_job_replays_nothing_and_reports_nothing:{[t]
+    / the job's clock would call the marker two days stale; the plant, a day back, has seen it through yesterday
+    r:plant_on[.z.D-2;.z.D-1];
+    .qunit.assertEquals[r 1;();"no earlier day is the plant's to replay"];
+    .qunit.assertEquals[count r 0;0;"and nothing is judged missed"]};
+
+/ --- the recovery contract (#1220) -----------------------------------------
+
+/ Start fx_positions on gap_transport[] with `tr` altering it; the errors logged.
+start_with:{[alter]
+    missed_logs .z.D-2;
+    .qetl.job.stream.reset `fx_positions;
+    e:errors .testutil.captured_log[0b] {[alter;unused] .qetl.job.stream.start[`fx_positions;alter gap_transport[]]}[alter];
+    system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
+    .qetl.tick.reset[];
+    e}
+
+test_a_carrying_transport_with_all_three_recovery_keys_starts_quietly:{[t]
+    .qunit.assertEquals[count start_with[::];0;"all of earlier_days, plant_day and has_log: nothing to say"]};
+
+test_a_carrying_transport_with_some_recovery_keys_is_refused_by_name:{[t]
+    missed_logs .z.D-2;
+    .qetl.job.stream.reset `fx_positions;
+    tr:`earlier_days`plant_day _ gap_transport[];
+    .qunit.assertThrows[.qetl.job.stream.start[`fx_positions;];tr;"start: the transport for fx_positions has some recovery keys but not all - missing earlier_days, plant_day";"half a recovery contract"];
+    .qetl.job.stream.reset `fx_positions;
+    system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
+    .qetl.tick.reset[]};
+
+test_a_carrying_transport_with_no_recovery_keys_logs_an_error_naming_the_job:{[t]
+    e:start_with {[tr] `earlier_days`plant_day`has_log _ tr};
+    errs:e where e[;1]=`fx_positions;
+    .qunit.assertEquals[1<=count errs;1b;"an ERROR, not a WARN"];
+    .qunit.assertEquals[any errs[;2] like "*restart across an end of day will lose the state this job carries*";1b;"saying what is lost"]};
+
+test_a_transport_that_declares_recovery_off_is_quiet:{[t]
+    e:start_with {[tr] (`earlier_days`plant_day`has_log _ tr),enlist[`recovery]!enlist 0b};
+    .qunit.assertEquals[any e[;2] like "*restart across an end of day*";0b;"declared, so not an error"]};
 
 \d .
