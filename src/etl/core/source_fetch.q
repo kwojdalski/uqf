@@ -11,12 +11,19 @@
 / How far a source can vouch for its data, in UTC (see COMPLETE THROUGH in
 / source_registry.q).
 / @param source a registered source name
-/ @param h the open handle, or null on the fixture path (closed data)
+/ .
+/ Whether the run is on the fixture is stated, never read off the handle: a
+/ null handle means "closed data" on the fixture and "nobody opened the source
+/ yet" on a live run, and only the second is an error (#1201).
+/ @param source a registered source name
+/ @param h the open handle; ignored on the fixture, required when live
+/ @param live 1b when the run reads the real source, 0b on the fixture (closed data)
 / @return the exclusive instant every row before which is present; 0Wp when unbounded
-/ @throws error naming the source when complete_through does not return a timestamp
-/ @eg .qetl.source.complete_through_of[`demo_deals;0Ni]  ->  0Wp
-complete_through_of:{[source;h]
-    if[null h; :0Wp];
+/ @throws error naming the source when live without a handle, or when complete_through does not return a timestamp
+/ @eg .qetl.source.complete_through_of[`demo_deals;0Ni;0b]  ->  0Wp
+complete_through_of:{[source;h;live]
+    if[not live; :0Wp];
+    if[null h; '"complete_through: ",string[source]," is live but has no open handle to ask"];
     ct:((def source)`complete_through) h;
     if[not -12h=type ct;
         '"complete_through: ",string[source]," returned type ",string[type ct],", not a timestamp atom"];
@@ -29,12 +36,14 @@ complete_through_of:{[source;h]
 / a repeating line rather than as a window that silently never completes.
 / @param worker the worker's name, for the log
 / @param source a registered source name
-/ @param h the open handle, or null on the fixture path
+/ @param h the open handle (ignored on the fixture)
+/ @param live 1b when the run reads the real source, 0b on the fixture
 / @param range_to the requested exclusive end
 / @return the end to plan to: range_to, or the source's bound when earlier
-/ @eg .qetl.source.clip_to_complete[`w;`demo_deals;0Ni;2026.09.11D00:00]  ->  2026.09.11D00:00:00.000000000
-clip_to_complete:{[worker;source;h;range_to]
-    bound:complete_through_of[source;h];
+/ @throws as complete_through_of
+/ @eg .qetl.source.clip_to_complete[`w;`demo_deals;0Ni;0b;2026.09.11D00:00]  ->  2026.09.11D00:00:00.000000000
+clip_to_complete:{[worker;source;h;live;range_to]
+    bound:complete_through_of[source;h;live];
     if[bound>=range_to; :range_to];
     .qetl.log.warn[worker;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
         `source`complete_through`requested_to!(source;bound;range_to)];

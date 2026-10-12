@@ -58,32 +58,33 @@ spec:{[] `source_version`range_from`range_to!(`v1;2026.09.01D00:00;2026.09.03D00
 init_live:{[]
     .qpipe.job.ct_backfill.init[.cttest.spec[]];
     .qetl.job.bounded.write_state[`ct_backfill;`source_version;`v1];
-    .qetl.job.bounded.write_state[`ct_backfill;`handle;7i]}
+    .qetl.job.bounded.write_state[`ct_backfill;`handle;7i];
+    .qetl.job.bounded.write_state[`ct_backfill;`live;1b]}
 
 / --- the clip --------------------------------------------------------------
 
 test_a_closed_source_is_never_clipped:{[t]
-    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;2026.09.03D00:00];2026.09.03D00:00;
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;1b;2026.09.03D00:00];2026.09.03D00:00;
         "an unbounded complete_through leaves the range alone"]};
 
 test_a_bound_inside_the_range_ends_it:{[t]
     .cttest.bound:2026.09.01D12:00;
-    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;2026.09.03D00:00];2026.09.01D12:00;
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;1b;2026.09.03D00:00];2026.09.01D12:00;
         "the range ends where the source can vouch"]};
 
 test_the_fixture_path_is_closed_data:{[t]
     .cttest.bound:2026.09.01D12:00;
-    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;0Ni;2026.09.03D00:00];2026.09.03D00:00;
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;0Ni;0b;2026.09.03D00:00];2026.09.03D00:00;
         "no handle, no source to be incomplete: the fixture is not clipped"]};
 
 test_a_null_bound_means_nothing_is_complete:{[t]
     .cttest.bound:0Np;
-    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;2026.09.03D00:00];-0Wp;
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;1b;2026.09.03D00:00];-0Wp;
         "null is not unbounded"]};
 
 test_a_bound_that_is_not_a_timestamp_is_refused:{[t]
     .cttest.bound:5;
-    .qunit.assertThrows[{.qetl.source.clip_to_complete[`w;`ct_src;7i;x]};2026.09.03D00:00;
+    .qunit.assertThrows[{.qetl.source.clip_to_complete[`w;`ct_src;7i;1b;x]};2026.09.03D00:00;
         "complete_through: ct_src returned type -7, not a timestamp atom";"named, not compared"]};
 
 / --- the declaration -------------------------------------------------------
@@ -144,6 +145,43 @@ test_the_next_run_after_the_bound_advances_covers_the_rest:{[t]
         "the whole range, composed from the two runs"];
     .qunit.assertEquals[count value `ct_out;48;"every hour of the two days exactly once, none refetched"]};
 
+/ --- plan mode agrees with the run (#1201) ------------------------------------
+
+/ Run niladic `f` as a live worker would see it: a credential in the
+/ environment and an opener that hands back a fake handle.
+with_live_credential:{[f]
+    envname:.qetl.source.credential_var `ct_src;
+    keep:.qetl.job.bounded.connect;
+    setenv[`$envname;"fake:1"];
+    `.qetl.job.bounded.connect set {[w] 7i};
+    r:@[f;::;{[e] (`failed;e)}];
+    `.qetl.job.bounded.connect set keep;
+    setenv[`$envname;""];
+    if[(0h=type r) and `failed~first r; 'last r];
+    r}
+
+test_plan_only_clips_to_the_bound_exactly_as_a_run_does:{[t]
+    .cttest.bound:2026.09.01D12:00;
+    p:.cttest.with_live_credential[{.qetl.job.bounded.plan_only[`ct_backfill;.cttest.spec[]]}];
+    .qunit.assertEquals[(p[`plan]`range_from;p[`plan]`range_to);(enlist 2026.09.01D00:00;enlist 2026.09.01D12:00);
+        "plan mode lists the clipped window, not the whole requested day"];
+    .qunit.assertEquals[null .qetl.job.bounded.read_state[`ct_backfill;`handle];1b;
+        "the source it opened to ask is closed again"];
+    .cttest.init_live[];
+    r:.qpipe.job.ct_backfill.run[];
+    .qunit.assertEquals[p`planned;r`windows_completed;"the run does exactly the windows plan listed"]};
+
+test_plan_only_on_the_fixture_is_not_clipped:{[t]
+    .cttest.bound:2026.09.01D12:00;
+    p:.qetl.job.bounded.plan_only[`ct_backfill;.cttest.spec[]];
+    .qunit.assertEquals[(p[`plan]`range_from;p[`plan]`range_to);
+        (2026.09.01D00:00 2026.09.02D00:00;2026.09.02D00:00 2026.09.03D00:00);
+        "closed fixture data is complete however far the live bound says"]};
+
+test_a_live_run_with_no_handle_is_refused_not_read_as_closed:{[t]
+    .qunit.assertThrows[{.qetl.source.complete_through_of[`ct_src;0Ni;1b]};(::);
+        "complete_through: ct_src is live but has no open handle to ask";"null is not closed data"]};
+
 / --- crypto_market_data (#1186) ---------------------------------------------
 
 / Run niladic `f` with run_sql answering `newest` (milliseconds, or null) and
@@ -168,12 +206,12 @@ test_the_shard_glob_is_complete_through_the_newest_finished_row:{[t]
 
 test_a_window_into_the_unfinished_shard_is_clipped:{[t]
     r:.cttest.with_shards[1789162200000;{
-        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;2026.09.11D22:00:00.000000000]}];
+        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;1b;2026.09.11D22:00:00.000000000]}];
     .qunit.assertEquals[r;2026.09.11D21:30:00.000000000;"21:00-22:00 is planned only to 21:30"]};
 
 test_no_finished_shard_means_nothing_is_complete:{[t]
     r:.cttest.with_shards[0N;{
-        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;2026.09.11D22:00:00.000000000]}];
+        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;1b;2026.09.11D22:00:00.000000000]}];
     .qunit.assertEquals[r;-0Wp;"an empty glob is not a finished capture"]};
 
 test_without_a_glob_the_capture_is_closed_data:{[t]
