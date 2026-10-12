@@ -1128,6 +1128,7 @@ qpipe.job.fx_positions,policed,value,,
 qpipe.job.fx_positions,positions,dict,,
 qpipe.job.fx_positions,publish,value,,
 qpipe.job.fx_positions,read_limits,function,1,path
+qpipe.job.fx_positions,restore_throttle,function,1,x
 qpipe.job.fx_trades_feed,fill_rows,function,5,i side size slip_pips fill_id
 qpipe.job.fx_trades_feed,last_id,value,,
 qpipe.job.fx_trades_feed,on_timer,function,1,

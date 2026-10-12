@@ -35,6 +35,15 @@ test_check_market_data_quality_a_one_sided_quote_is_not_crossed:{[t]
     r:.qdqc.check_market_data_quality[quotes;5];
     .qunit.assertEquals[first r`status;`one_sided;"an ask with no bid is one-sided, not a crossed book"]};
 
+/ #1200: a zero or negative ask is not a price (level_ok), so it is absent -
+/ flagged one_sided, never ok.
+test_check_market_data_quality_a_zero_or_negative_ask_is_not_ok:{[t]
+    t0:2026.01.01D00:00:00.000000000;
+    quotes:(enlist mk_quotes_row[t0;`A;1.1;0f]),(enlist mk_quotes_row[t0;`B;1.27;-1f]),(enlist mk_quotes_row[t0;`C;1.1;1.1001]);
+    r:.qdqc.check_market_data_quality[quotes;1000];
+    .qunit.assertEquals[(exec sym!status from r)`A`B`C;`one_sided`one_sided`ok;
+        "a zero ask and a negative ask are flagged one_sided; a sane book stays ok"]};
+
 test_check_market_data_quality_a_quote_with_no_sides_is_one_sided:{[t]
     quotes:([] time:enlist 2026.01.01D00:00:00.000000000; sym:enlist `EURUSD;
         bid_prices:enlist enlist 0n; bid_sizes:enlist enlist 0;
