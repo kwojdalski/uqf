@@ -1298,6 +1298,28 @@ test_hold_withholds_the_whole_batch:{[t]
     .qunit.assertEquals[count .sjtest.published;0;"nothing published, clean rows included"];
     .qunit.assertEquals[(.qetl.stream_health.of`sj_check_hold)`failed;1;"counted as failed"]};
 
+/ A check that accepts the dict and column-list batch shapes a publisher takes.
+shape_check:{[x] v:$[99h=type x; x`v; 98h=type x; x`v; x 1]; bad:where (),v<0;
+    ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative")}
+
+shape_batches:{[name;procname;mode]
+    pub:check_probe[name;procname;mode;shape_check];
+    (get pub)[`probe_out;`sym`v!(`a;-5)];
+    (get pub)[`probe_out;(`a`b;1 -1)];
+    (count .sjtest.published; (.qetl.stream_health.of name)`failed)}
+
+test_a_failing_dict_or_column_list_batch_is_withheld_under_hold:{[t]
+    r:shape_batches[`sj_check_shape_hold;`sjcheckshapehold1;`hold];
+    .qunit.assertEquals[r 0;0;"nothing of a failing dict row or column list is published under hold"];
+    .qunit.assertEquals[r 1;2;"both are counted as failed"]};
+
+test_a_failing_dict_or_column_list_batch_is_withheld_whole_under_drop:{[t]
+    r:shape_batches[`sj_check_shape_drop;`sjcheckshapedrop1;`drop];
+    .qunit.assertEquals[r 0;0;"drop has no clean subset to rebuild for a non-table batch, so it is withheld"];
+    .qunit.assertEquals[r 1;2;"both are counted as failed"];
+    (get ` sv (.qetl.job.stream.namespace `sj_check_shape_drop),`publish)[`probe_out;`sym`v!(`a;5)];
+    .qunit.assertEquals[count .sjtest.published;1;"a passing dict row still goes out"]};
+
 test_a_check_that_throws_publishes_nothing:{[t]
     pub:check_probe[`sj_check_throw;`sjcheckthrow1;`drop;{[x] 'boom}];
     (get pub)[`probe_out;([] v:1 2 3)];
