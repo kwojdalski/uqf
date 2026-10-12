@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -144,3 +147,118 @@ def test_the_shared_hdb_write_lock_is_respected(hdb):
     lock.mkdir()
     with pytest.raises(UqsError, match="write lock already held"):
         hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"}, apply=True)
+
+
+# A backfill writer on the same root (#1168): .qetl.io.locked, the lock each
+# of .qetl.io.hdb's write, flush, finish and recover takes, given the root
+# as the stack would give it and waiting half a second for a live holder.
+# The two modules alone, so it loads on PeachQ from a flattened copy too.
+WRITER = """\
+\\l src/etl/core/backfill_state.q
+\\l src/etl/core/io_hdb.q
+.qetl.io.hdb_lock_wait:0D00:00:00.5;
+root:hsym `$first .z.x;
+-1 "LOCK|",.qetl.io.hdb_lock root;
+-1 @[{.qetl.io.locked[x;{[r] "WROTE"};enlist x]};root;{"REFUSED|",x}];
+exit 0
+"""
+
+# The spellings a writer's root arrives in, relative to the HDB's parent.
+SPELLINGS = {
+    "absolute": lambda hdb_dir: str(hdb_dir),
+    "trailing slash": lambda hdb_dir: str(hdb_dir) + "/",
+    "relative": lambda _hdb_dir: "hdb",
+    "relative, trailing slash": lambda _hdb_dir: "hdb/",
+}
+
+
+def _write_as_a_q_writer(q_binary, tmp_path: Path, paths: UqsPaths, spelling: str) -> str:
+    q, env = q_binary
+    script = tmp_path / "writer.q"
+    script.write_text(WRITER)
+    hdb_dir = paths.hdb_dir
+    # Run where the lock's own q loads from (the checkout, or PeachQ's
+    # flattened copy); a relative root is joined to the HDB's parent from there.
+    with hdb_migrate._lock_code(paths, env) as code:
+        root = SPELLINGS[spelling](hdb_dir)
+        if not root.startswith("/"):
+            # Both resolved: q's cwd is the physical directory, and a temp
+            # directory's name may pass through a link (/var on macOS).
+            root = os.path.relpath(hdb_dir.parent.resolve(), code.resolve()) + "/" + root
+        result = subprocess.run(
+            [q, str(script), root],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=code,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+        )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout
+
+
+@pytest.mark.parametrize("spelling", list(SPELLINGS))
+def test_a_live_migration_holds_the_lock_a_q_writer_takes_for_any_spelling(
+    hdb, q_binary, tmp_path, monkeypatch, spelling
+):
+    seen: dict[str, str] = {}
+    exchange = hdb_migrate._exchange
+
+    def write_mid_migration(left: Path, right: Path) -> None:
+        seen["writer"] = _write_as_a_q_writer(q_binary, tmp_path, hdb, spelling)
+        exchange(left, right)
+
+    monkeypatch.setattr(hdb_migrate, "_exchange", write_mid_migration)
+    hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"}, apply=True)
+
+    lock = hdb.hdb_dir.with_name(hdb.hdb_dir.name + ".write.lock")
+    writer_lock = seen["writer"].split("LOCK|", 1)[1].splitlines()[0]
+    assert Path(writer_lock).resolve() == lock.resolve()
+    assert "REFUSED|" in seen["writer"] and "could not take the lock" in seen["writer"]
+    assert not lock.exists()
+
+
+KILLED_MIGRATION = """\
+import os, signal, sys
+from datetime import date
+from pathlib import Path
+from uqs.paths import UqsPaths
+from uqs.stack import hdb_migrate
+
+root = Path(sys.argv[1])
+paths = UqsPaths(
+    repo_root=Path(sys.argv[2]),
+    torqhome=root / "torq",
+    torqapphome=root / "starter",
+    torqdata=root / "runtime with space",
+    scripts_dir=Path(sys.argv[2]) / "scripts",
+    orchestrator_dir=root / "orchestrator",
+    runtime="torq",
+)
+hdb_migrate._exchange = lambda *_: os.kill(os.getpid(), signal.SIGKILL)
+hdb_migrate.migrate(paths, "trade", date(2026, 1, 1), {"px": "price"}, {"price"}, apply=True)
+"""
+
+
+def test_a_killed_migrations_lock_is_broken_by_the_next_q_writer(hdb, q_binary, tmp_path):
+    script = tmp_path / "killed.py"
+    script.write_text(KILLED_MIGRATION)
+    _, env = q_binary
+    killed = subprocess.run(
+        [sys.executable, str(script), str(tmp_path), str(ROOT)],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=ROOT,
+        check=False,
+        timeout=300,
+    )
+    assert killed.returncode == -signal.SIGKILL, killed.stdout + killed.stderr
+    lock = hdb.hdb_dir.with_name(hdb.hdb_dir.name + ".write.lock")
+    assert lock.is_dir(), "the killed migration left its lock behind"
+
+    out = _write_as_a_q_writer(q_binary, tmp_path, hdb, "absolute")
+    assert "WROTE" in out, out
+    assert not lock.exists()

@@ -228,8 +228,11 @@ whose *type* changes, or that is *renamed*, needs an explicit offline migration:
 casts, validates its staged rows against the current declaration, then exchanges
 the table directories atomically. It retains the old directory as a rollback
 copy. An unmapped source column or a cast that loses values is refused before
-the exchange. The stack must be stopped: TorQ end of day does not take the HDB
-writer's lock. Segmented HDBs still require an operator migration outside this
+the exchange. The migration holds the HDB writer's lock, taken through q
+([`scripts/gates/hdb_lock.q`](../../scripts/gates/hdb_lock.q)) in the
+migration's own name, so a migration killed mid-way leaves a lock the next
+backfill breaks. The stack must still be stopped: TorQ end of day does not take
+that lock. Segmented HDBs still require an operator migration outside this
 command.
 
 ## 8. Authority is split, and written down

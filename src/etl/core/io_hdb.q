@@ -82,10 +82,23 @@ hdb_lock_wait:0D00:10
 / whichever swapped first - and every table in a root enumerates against
 / the one sym file. Held for one write, flush, finish or recover call, so
 / writers queue for a window rather than for a run.
+/ .
+/ ONE PATH PER ROOT, HOWEVER IT IS SPELLED (#1168). A trailing slash put the
+/ lock INSIDE the root (`:/data/hdb/ -> /data/hdb/.write.lock), and a relative
+/ root left it relative; uqs data migrate takes this lock through q
+/ (scripts/gates/hdb_lock.q) with the root made absolute, so a writer given
+/ either spelling held a different lock than the migration and neither
+/ excluded the other. Lexical only: symlinks are not resolved, so a root
+/ reached through two different links is still two locks.
 / @param root the HDB root, a file symbol
-/ @return the lock directory's path
+/ @return the lock directory's path, absolute
 / @eg .qetl.io.hdb_lock `:/data/hdb  ->  "/data/hdb.write.lock"
-hdb_lock:{[root] (1_string root),".write.lock"}
+/ @eg .qetl.io.hdb_lock `:/data/hdb/  ->  "/data/hdb.write.lock"
+hdb_lock:{[root]
+    p:1_string root;
+    p:(neg sum mins reverse "/"=p)_p;
+    if[not "/"=first p; p:(system"cd"),"/",p];
+    p,".write.lock"}
 
 / Private: run f . args holding root's write lock.
 / @private
