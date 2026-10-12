@@ -41,11 +41,11 @@ combine_oriented_books:{[book_ab;book_bc]
 / True if a book is crossed - a sanity check for synthetic books built from
 / cross_book/combine_oriented_books. The rule is .qbook.crossed_top's (#1176):
 / bid strictly above ask; a locked book (bid = ask) or a side with no usable
-/ price is not crossed.
+/ price is not crossed. A book dict carries no sizes, so this is the price-only form of the rule.
 / @param book a dict `bid`ask!(bidPx;askPx)
 / @return 1b if bid>ask, else 0b
 / @eg .qcross.book_crossed[`bid`ask!(1.1000;1.1002)]  -> 0b
-book_crossed:{[book] first .qbook.crossed_top[enlist enlist book`bid;enlist enlist book`ask]};
+book_crossed:{[book] first .qbook.crossed_top ([] bid_prices:enlist enlist book`bid; ask_prices:enlist enlist book`ask)};
 
 / Private: work out how two currency pairs relate - which currency they
 / share, what the resulting cross pair's symbol is, and whether either
