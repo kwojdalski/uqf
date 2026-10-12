@@ -32,16 +32,19 @@ max_horizon:max horizons
 / markout_pips rather than being dropped, so a gap shows in the table.
 / The empty guard is not tidiness: .qexec.markout_at_horizons throws `type`
 / on zero trades.
-/ @param fill_rows time sym side trade_price pip_factor, at least
+/ The fill's id (#1080) rides along: .qexec returns trade-major rows, one per
+/ horizon, so row i of its output belongs to fill i div (count horizons).
+/ @param fill_rows time sym side trade_price pip_factor fill_id, at least
 / @param quotes time sym bid ask
-/ @return time (trade_time+horizon) sym trade_time horizon trade_price ref_price markout_pips
-/ @eg count .qpipe.transform.demo_markouts.score[([] time:enlist 2026.09.17D10:00:00; sym:`EURUSD; side:1; trade_price:1.1; pip_factor:10000);([] time:enlist 2026.09.17D10:00:00.5; sym:`EURUSD; bid:1.1004; ask:1.1006)] -> 2
+/ @return time (trade_time+horizon) sym trade_time horizon trade_price ref_price markout_pips fill_id
+/ @eg count .qpipe.transform.demo_markouts.score[([] time:enlist 2026.09.17D10:00:00; sym:`EURUSD; side:1; trade_price:1.1; pip_factor:10000; fill_id:enlist `f1);([] time:enlist 2026.09.17D10:00:00.5; sym:`EURUSD; bid:1.1004; ask:1.1006)] -> 2
 score:{[fill_rows;quotes]
     shape:.qetl.plant.shape `demo_execution_quality;
     fill_rows:fill_rows where fill_rows[`sym] in .qsynth.pairs;
     if[0=count fill_rows; :0#shape];
     mids:select sym, time, mid:0.5*bid+ask from quotes;
     out:.qexec.markout_at_horizons[fill_rows;mids;.qpipe.transform.demo_markouts.horizons];
+    out:update fill_id:fill_rows[`fill_id] (til count out) div count .qpipe.transform.demo_markouts.horizons from out;
     cols[shape] xcols out}
 
 \d .

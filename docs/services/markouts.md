@@ -94,6 +94,25 @@ checks the rows (an infinite markout fails the window); - writes them into
 `demo_execution_quality`'s partitions; - records the window in the coverage
 ledger, so a rerun of the same range is idle; - asks the HDB to reload.
 
+### Fill identity and upgrading an existing HDB (#1080)
+
+`trades` and `demo_execution_quality` carry a `fill_id` (`fx-<run>-<n>`, issued
+by `fx_trades_feed`), and the backfill writes by
+`(sym; trade_time; fill_id; horizon)`. Two fills of one pair that share an
+instant therefore keep separate markouts. Adding a column is not a rename or a
+retype, so `uqs data migrate` does not apply: stop the stack, then
+
+```
+uqs data hdb-check          # reports trades / demo_execution_quality as short of fill_id
+uqs data hdb-check --fix    # adds the column, null, to every older partition
+uqs restart hdb1
+```
+
+Rows from before the column keep a null `fill_id` and are keyed as they always
+were, by `(sym; trade_time; horizon)`: two legacy fills at one instant still
+collapse. They cannot be recovered, as the id was never recorded. Use
+`uqs data migrate` only for a later rename or type change of these columns.
+
 ### Why it is built this way
 
 - **The scoring is the worker's transform, not the source's query** (#617). A

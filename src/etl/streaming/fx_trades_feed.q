@@ -34,6 +34,18 @@ pip_factor:.qccy.pip_factor .qsynth.pairs
 / size:`float$() - a long here inserts as the wrong type rather than failing.
 sizes:500000 1000000 2000000 5000000f
 
+/ Fill ids (#1080): `fx-<run>-<n>`. The run is this process's start, so a
+/ restarted feed cannot reissue an id the HDB already holds; n counts fills
+/ within the run, so no two fills of a run share one.
+run_id:`long$.z.p
+last_id:0
+
+/ Private: issue the next fill id.
+/ @private
+next_id:{[]
+    .qpipe.job.fx_trades_feed.last_id+:1;
+    `$"fx-",string[.qpipe.job.fx_trades_feed.run_id],"-",string .qpipe.job.fx_trades_feed.last_id}
+
 / One fill, for a given pair index, side, size and slippage in pips.
 / .
 / Every column is a ONE-ELEMENT VECTOR, never a bare atom: that is the
@@ -44,12 +56,13 @@ sizes:500000 1000000 2000000 5000000f
 / @param side 1 for a buy, -1 for a sell
 / @param size the fill size
 / @param slip_pips how far from the pair's level the fill printed, in pips
-/ @return one fill's rows: sym, side, price, size, pip_factor
-/ @eg count .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0]  ->  5
-fill_rows:{[i;side;size;slip_pips]
+/ @param fill_id the fill's id, unique per fill (next_id)
+/ @return one fill's rows: sym, side, price, size, pip_factor, fill_id
+/ @eg count .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1]  ->  6
+fill_rows:{[i;side;size;slip_pips;fill_id]
     price:.qpipe.job.fx_trades_feed.spot[i]+slip_pips%.qpipe.job.fx_trades_feed.pip_factor[i];
     (enlist .qsynth.pairs i;enlist side;enlist price;enlist size;
-        enlist .qpipe.job.fx_trades_feed.pip_factor i)}
+        enlist .qpipe.job.fx_trades_feed.pip_factor i;enlist fill_id)}
 
 / Draw one fill and publish it. The draws are here rather than in fill_rows
 / so that the row builder stays deterministic.
@@ -59,7 +72,8 @@ on_timer:{[]
     / is how this produced a list instead, and .u.upd took it as two rows.
     side:1-2*rand 2;
     .qpipe.job.fx_trades_feed.publish[`trades;
-        .qpipe.job.fx_trades_feed.fill_rows[i;side;.qpipe.job.fx_trades_feed.sizes rand count .qpipe.job.fx_trades_feed.sizes;-3+rand 7]];
+        .qpipe.job.fx_trades_feed.fill_rows[i;side;.qpipe.job.fx_trades_feed.sizes rand count .qpipe.job.fx_trades_feed.sizes;-3+rand 7;
+            .qpipe.job.fx_trades_feed.next_id[]]];
     }
 
 \d .

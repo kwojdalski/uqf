@@ -5,7 +5,7 @@
 / transform scores them with the transform the live job applies
 / (src/etl/transforms/demo_markouts.q, #884), and
 / the rows land in the SAME `demo_execution_quality` table the live job
-/ feeds. The target key is (sym;trade_time;horizon), so writing a window the
+/ feeds. The target key is (sym;trade_time;fill_id;horizon), so writing a window the
 / live job also scored replaces those rows rather than counting the fills
 / twice.
 / .
@@ -43,7 +43,7 @@ quality_check:{[batch]
 / @return fills scored, horizons, and rows with no reference quote
 facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
-    `scored_fills`horizons`unpriced!(count distinct `sym`trade_time#batch;
+    `scored_fills`horizons`unpriced!(count distinct `sym`trade_time`fill_id#batch;
         count distinct batch`horizon; sum "j"$null batch`markout_pips)}
 
 \d .
@@ -58,14 +58,14 @@ facts:{[batch]
 / and fills of none score to nothing, however many quotes there are.
 .qetl.transform.define[`hdb_demo_markouts_score;`inputs`output`fn`examples!(
     `trades`quote!(
-        ([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); pip_factor:`long$());
+        ([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); pip_factor:`long$(); fill_id:`symbol$());
         ([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$()));
     .qetl.plant.shape `demo_execution_quality;
     {[fill_rows;quotes] .qpipe.job.hdb_demo_markouts_backfill.score[fill_rows;quotes]};
     (`inputs`expected!(
         `trades`quote!(
             ([] time:2026.09.17D10:00:00 2026.09.17D10:00:05; sym:`EURUSD`EURUSD; side:1 -1;
-                trade_price:1.1001 1.1003; pip_factor:.qccy.pip_factor `EURUSD`EURUSD);
+                trade_price:1.1001 1.1003; pip_factor:.qccy.pip_factor `EURUSD`EURUSD; fill_id:`f1`f2);
             ([] time:2026.09.17D09:59:59 2026.09.17D10:00:01 2026.09.17D10:00:06.5 2026.09.17D10:00:12;
                 sym:4#`EURUSD; bid:1.1000 1.1004 1.1006 1.1010; ask:1.1002 1.1006 1.1008 1.1012));
         ([] time:2026.09.17D10:00:01 2026.09.17D10:00:10 2026.09.17D10:00:06 2026.09.17D10:00:15;
@@ -74,10 +74,11 @@ facts:{[batch]
             horizon:0D00:00:01 0D00:00:10 0D00:00:01 0D00:00:10;
             trade_price:1.1001 1.1001 1.1003 1.1003;
             ref_price:1.1005 1.1007 1.1005 1.1011;
-            markout_pips:4 6 -2 -8f));
+            markout_pips:4 6 -2 -8f;
+            fill_id:`f1`f1`f2`f2));
      `inputs`expected!(
         `trades`quote!(
-            ([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); pip_factor:`long$());
+            ([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); pip_factor:`long$(); fill_id:`symbol$());
             ([] time:enlist 2026.09.17D10:00:01; sym:enlist `EURUSD; bid:enlist 1.1004; ask:enlist 1.1006));
         .qetl.plant.shape `demo_execution_quality)))];
 
@@ -87,4 +88,4 @@ facts:{[batch]
      .qpipe.job.hdb_demo_markouts_backfill.quality_check;.qpipe.job.hdb_demo_markouts_backfill.facts;
      `hdb_demo_markouts_backfill1;
      "bounded: marks out the HDB's fills against its quotes, into demo_execution_quality";
-     `sym`trade_time`horizon;`trade_time)];
+     `sym`trade_time`fill_id`horizon;`trade_time)];

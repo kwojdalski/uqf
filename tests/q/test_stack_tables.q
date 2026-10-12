@@ -90,7 +90,7 @@ test_fx_orderbook_matches_the_shape_pricing_expects:{[t]
 test_trades_matches_the_shape_the_markout_family_expects:{[t]
     / src/execution/execution.q's markout_at_horizons input shape.
     .qunit.assertEquals[cols .tabletest.tbl `trades;
-        `time`sym`side`trade_price`size`pip_factor;
+        `time`sym`side`trade_price`size`pip_factor`fill_id;
         "trades carries the columns markout_at_horizons reads"]};
 
 test_wide_book_levels_are_contiguous_from_zero:{[t]

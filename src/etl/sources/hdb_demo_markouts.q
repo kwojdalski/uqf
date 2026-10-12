@@ -40,15 +40,18 @@ source_name:`hdb_demo_markouts
 
 / The primary input: the HDB's fills, in markout's shape already (signed
 / side, trade_price, pip_factor).
-columns:`time`sym`side`trade_price`pip_factor
-types:"psjfj"
+columns:`time`sym`side`trade_price`pip_factor`fill_id
+types:"psjfjs"
 
 time_column:`time
 
-/ A fill. The table carries no fill id, so two fills of one pair at the same
-/ instant share a key - as they do in the live job's rows. The worker writes
-/ by its own target_key, (sym;trade_time;horizon), the markout rows' key.
-row_key:`sym`time
+/ A fill is its fill_id (#1080); sym and time stay in the key because a
+/ partition written before the column holds null ids, and for those the pair
+/ and the instant are all that identifies a fill (two such fills at one
+/ instant still collapse, as before the column - the limitation is now only
+/ for legacy rows). The worker writes by its own target_key, the markout
+/ rows' key.
+row_key:`sym`time`fill_id
 
 / The supporting input: top of book, read by the transform as `quote`.
 supporting:enlist[`quote]!enlist ([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$())
@@ -73,7 +76,7 @@ lookback:7D
 / @return `trades`quote!(the window's fills; the quotes they need)
 query:{[h;range_from;range_to]
     deals:.qetl.source.ipc[h;{[from_ts;to_ts]
-        `time xasc select time, sym, side, trade_price, pip_factor from `trades
+        `time xasc select time, sym, side, trade_price, pip_factor, fill_id from `trades
             where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts
       };range_from;range_to];
     / No fills, no quote query: a window whose primary input is empty
@@ -101,7 +104,8 @@ raw_fills:{[]
         sym:`EURUSD`EURUSD`USDJPY`GBPUSD;
         side:1 -1 1 1;
         trade_price:1.1001 1.1003 150.02 1.2701;
-        pip_factor:.qccy.pip_factor `EURUSD`EURUSD`USDJPY`GBPUSD)}
+        pip_factor:.qccy.pip_factor `EURUSD`EURUSD`USDJPY`GBPUSD;
+        fill_id:`f1`f2`f3`f4)}
 
 / Quotes around raw_fills, as the HDB's quote holds them.
 / @return quotes on 2026.09.17, sorted by time

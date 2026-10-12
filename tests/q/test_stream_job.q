@@ -246,7 +246,7 @@ test_the_wide_feed_column_is_as_long_as_the_pair_list:{[t]
 test_a_fill_prices_around_its_pairs_level:{[t]
     / Three pips either way, which is what makes some fills cross the spread
     / and some improve.
-    rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;3];
+    rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;3;`fx1];
     .qunit.assertEquals[first rows 2;
         (first .qsynth.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
         "the fill prints its slippage in pips from the pair's own level"]};
@@ -254,7 +254,7 @@ test_a_fill_prices_around_its_pairs_level:{[t]
 test_a_fill_is_published_as_one_element_vectors:{[t]
     / .u.upd counts rows from column lengths, so an atom column here is a
     / length error on insert - the vendored feed.q's own convention.
-    rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0];
+    rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
     .qunit.assertEquals[distinct count each rows;enlist 1;
         "every column of a fill is a one-element vector, never an atom"]};
 
@@ -368,7 +368,7 @@ bad:()
 test_markout_buffers_trades_and_quotes_separately:{[t]
     reset[];
     .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
+        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `EURUSD;
         bid:enlist 1.0999; ask:enlist 1.1001)];
     .qunit.assertEquals[(count .qpipe.job.demo_markout.pending;count .qpipe.job.demo_markout.history);(1;1);
@@ -388,7 +388,7 @@ test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
     / quotes that have not arrived.
     reset[];
     .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
+        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
     .qpipe.job.demo_markout.score_ready[d[1]];
     .qunit.assertEquals[(count .sjtest.published;count .qpipe.job.demo_markout.pending);(0;1);
         "a fill younger than the longest horizon is neither scored nor dropped"]};
@@ -396,7 +396,7 @@ test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
 test_markout_scores_and_evicts_a_ready_fill:{[t]
     reset[];
     .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
+        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:d[1 10]; sym:`EURUSD`EURUSD;
         bid:1.1004 1.1009; ask:1.1006 1.1011)];
     .qpipe.job.demo_markout.score_ready[d[20]];
@@ -407,7 +407,7 @@ test_markout_scores_and_evicts_a_ready_fill:{[t]
 test_markout_publishes_the_execution_quality_table:{[t]
     reset[];
     .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
+        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
     .qpipe.job.demo_markout.score_ready[d[20]];
@@ -421,7 +421,7 @@ test_markout_keeps_the_batch_when_publishing_throws:{[t]
     reset[];
     .qetl.job.stream.wire[`demo_markout;{[t;x] '"tickerplant is down"}];
     .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
+        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
     @[{.qpipe.job.demo_markout.score_ready x};d[20];{x}];
@@ -650,7 +650,7 @@ test_the_adapter_recognises_the_list_of_columns_form:{[t]
     / Every feed's row builder returns this shape, and so does cryptorust's
     / recorder. Refusing it was invisible while the running stack predated
     / the runner, because the old per-feed scripts sent to .u.upd directly.
-    .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0];
+    .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
         "a fill's rows are the list-of-columns form"];
     .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
         "and so is a depth tick, whose ladder columns are lists of vectors"];
@@ -665,7 +665,7 @@ test_the_adapter_still_refuses_a_list_of_atoms:{[t]
 
 test_the_adapter_sends_columns_straight_through:{[t]
     `.sjtest.sent set ();
-    rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0];
+    rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
     n:.qtorq.publish[.sjtest.fake_handle;`trades;rows];
     .qunit.assertEquals[n;1;"one row, counted from the first column"];
     .qunit.assertEquals[.sjtest.sent 0;(`.u.upd;`trades;rows);
@@ -759,6 +759,23 @@ test_fill_ids_are_unique_per_venue:{[t]
     .qunit.assertEquals[ids;`$("binance_spot-1";"binance_spot-2";"binance_spot-3");
         "monotonic within a venue, the way an exchange's own ids are"]};
 
+test_fx_fill_ids_are_unique_and_survive_a_restart:{[t]
+    / #1080: two fills of one pair at one instant must differ by id. The run
+    / stamp keeps a restarted feed (counter back at 0) off the ids the HDB holds.
+    keep:(.qpipe.job.fx_trades_feed.run_id;.qpipe.job.fx_trades_feed.last_id);
+    .qpipe.job.fx_trades_feed.run_id:111; .qpipe.job.fx_trades_feed.last_id:0;
+    first_run:.qpipe.job.fx_trades_feed.next_id each til 3;
+    .qpipe.job.fx_trades_feed.run_id:222; .qpipe.job.fx_trades_feed.last_id:0;
+    second_run:.qpipe.job.fx_trades_feed.next_id[];
+    .qpipe.job.fx_trades_feed.run_id:keep 0; .qpipe.job.fx_trades_feed.last_id:keep 1;
+    .qunit.assertEquals[first_run;`$("fx-111-1";"fx-111-2";"fx-111-3");"counted within a run"];
+    .qunit.assertEquals[second_run;`$"fx-222-1";"and a new run cannot reissue the old run's ids"]};
+
+test_the_fx_fill_row_carries_its_id_last_as_trades_declares:{[t]
+    rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx9];
+    .qunit.assertEquals[last rows;enlist `fx9;"the id is the final column"];
+    .qunit.assertEquals[last cols .qetl.plant.shape `trades;`fill_id;"matching the table's last column"]};
+
 test_the_mock_publishes_no_sim_fills:{[t]
     / The paper strategy's table. A mock that published it would tempt a
     / position engine into consuming it.
@@ -774,7 +791,7 @@ crypto_fill:{[s;side;price;size]
 
 fx_fill:{[s;side;price;size]
     ([] time:enlist d 0; sym:enlist s; side:enlist side; trade_price:enlist price;
-        size:enlist size; pip_factor:enlist 10000)}
+        size:enlist size; pip_factor:enlist 10000; fill_id:enlist `fx1)}
 
 / source_time deliberately EARLIER than time: the venue stamped it before
 / this stack received it, which is the whole reason crypto_book carries both.
@@ -1008,7 +1025,7 @@ test_positions_keep_the_books_apart:{[t]
 test_positions_ignore_a_table_they_did_not_subscribe_to:{[t]
     reset[];
     .qpipe.job.fx_positions.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD;
-        side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000)];
+        side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
     .qunit.assertEmpty[.qpipe.job.fx_positions.positions;"a batch on another table moves nothing"]};
 
 test_desk_exposure_and_pnl_net_the_same_fills:{[t]

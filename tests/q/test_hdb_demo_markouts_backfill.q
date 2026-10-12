@@ -172,7 +172,7 @@ test_a_fill_early_in_a_window_is_priced_by_the_quote_before_it:{[t]
     / the target key then replaced the live job's correct row with that null.
     `.mbftest.early set {
         `trades set ([] date:enlist 2026.09.17; time:enlist 2026.09.17D10:00:03; sym:enlist `EURUSD;
-            side:enlist 1; trade_price:enlist 1.1; pip_factor:enlist 10000);
+            side:enlist 1; trade_price:enlist 1.1; pip_factor:enlist 10000; fill_id:enlist `f1);
         `quote set ([] date:2026.09.17 2026.09.17; time:2026.09.17D09:59:50 2026.09.17D11:30:00;
             sym:`EURUSD`EURUSD; bid:1.1 1.2; ask:1.1002 1.2002);
         .qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;2026.09.17D10:00;2026.09.17D11:00]};
@@ -185,7 +185,7 @@ test_the_quote_before_a_window_is_bounded_by_the_lookback:{[t]
     / job would leave it after a restart - the lookback is a bound, not all history.
     `.mbftest.stale set {
         `trades set ([] date:enlist 2026.09.17; time:enlist 2026.09.17D10:00:03; sym:enlist `EURUSD;
-            side:enlist 1; trade_price:enlist 1.1; pip_factor:enlist 10000);
+            side:enlist 1; trade_price:enlist 1.1; pip_factor:enlist 10000; fill_id:enlist `f1);
         `quote set ([] date:enlist 2026.09.01; time:enlist 2026.09.01D10:00; sym:enlist `EURUSD;
             bid:enlist 1.1; ask:enlist 1.1002);
         .qpipe.source.hdb_demo_markouts.query[.mbftest.hdb;2026.09.17D10:00;2026.09.17D11:00]};
@@ -234,5 +234,38 @@ test_the_facts_describe_a_scored_window:{[t]
     f:.qpipe.job.hdb_demo_markouts_backfill.facts b;
     .qunit.assertEquals[f`scored_fills`horizons`unpriced;4 2 2;
         "four fills, two horizons, and the unpriced rows counted"]};
+
+\
+
+/ --- fill identity (#1080) -----------------------------------------------
+
+/ Two fills of one pair that share a time, a price and a side: only their
+/ ids tell them apart. `ids` is the fill_id column.
+twin_fills:{[ids]
+    inputs:.qpipe.source.hdb_demo_markouts.fixture[];
+    inputs[`trades]:([] time:2#2026.09.17D10:00:00; sym:2#`EURUSD; side:2#1; trade_price:2#1.1001;
+        pip_factor:2#.qccy.pip_factor `EURUSD; fill_id:ids);
+    inputs}
+
+test_scoring_carries_each_fills_id_onto_its_horizons:{[t]
+    f:.mbftest.scored .mbftest.twin_fills `fxa`fxb;
+    .qunit.assertEquals[f`fill_id;`fxa`fxa`fxb`fxb;"fill i's id on its rows, one per horizon"]};
+
+test_the_target_key_names_the_fill_so_twins_are_not_collapsed:{[t]
+    / On master the key was (sym;trade_time;horizon): the two fills' markouts
+    / collapsed to one row per horizon, 2 rows, losing a fill.
+    key_cols:.qetl.job.bounded.def[`hdb_demo_markouts_backfill]`target_key;
+    f:.mbftest.scored .mbftest.twin_fills `fxa`fxb;
+    `mbf_twin set 0#f;
+    .qetl.io.write_keyed[.qetl.io.memory;`mbf_twin;f;`on_conflict`row_key!(`upsert;key_cols)];
+    .qetl.io.write_keyed[.qetl.io.memory;`mbf_twin;f;`on_conflict`row_key!(`upsert;key_cols)];
+    .qunit.assertEquals[(count get `mbf_twin;asc distinct (get `mbf_twin)`fill_id);(4;`fxa`fxb);
+        "two fills x two horizons survive, and a re-run still replaces rather than duplicates"]};
+
+test_a_legacy_fill_without_an_id_still_scores_and_keys:{[t]
+    / A partition written before the column holds null ids (hdb-check --fix):
+    / the row scores, keyed as it was by sym and time.
+    f:.mbftest.scored .mbftest.twin_fills 2#`;
+    .qunit.assertEquals[(count f;distinct f`fill_id);(4;enlist `);"null ids pass through, unmapped"]};
 
 \d .
