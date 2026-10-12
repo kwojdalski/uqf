@@ -23,6 +23,30 @@ last_end_seen:{[job]
     if[()~key hsym `$p; :0Nd];
     @[{first (.qetl.job.bounded.state.durable_get x)`last_end_of_day};p;{[e] 0Nd}]}
 
+/ The keys of a transport that can recover a carrying job across an end of day.
+recovery_keys:`earlier_days`plant_day`has_log
+
+/ Judge a transport's recovery keys against a job (#1220). Only a job with
+/ carry and replay needs them.
+/ @param job the job's name
+/ @param tr the transport, after connect
+/ @return the job name
+/ @throws error naming the recovery keys the transport lacks, when it has some but not all
+/ @eg .qetl.job.stream.require_recovery[`fx_positions;.qetl.job.stream.recovery_keys!3#enlist {[x]}]  / `fx_positions
+require_recovery:{[job;tr]
+    d:def[job];
+    if[not (`carry in key d) and $[`replay in key d; d`replay; 0b]; :job];
+    present:recovery_keys inter key tr;
+    if[count[present]=count recovery_keys; :job];
+    if[count present;
+        '"start: the transport for ",string[job]," has some recovery keys but not all - missing ",
+            ", " sv string recovery_keys except present];
+    / $[], not `and`: q evaluates both sides, and tr`recovery of a transport without it is a null
+    if[$[`recovery in key tr; not tr`recovery; 0b]; :job];
+    .qetl.log.err[job;"this transport has none of earlier_days, plant_day and has_log, so a restart across an end of day will lose the state this job carries - give the transport all three, or state recovery:0b if it cannot recover";
+        enlist[`transport_keys]!enlist key tr];
+    job}
+
 / The day the plant's log is on - the log `subscribe` is about to replay (#1190).
 / The plant owns that fact; the job's own clock can disagree with it (another
 / host or zone, or a restart after midnight but before the plant's timer rolls

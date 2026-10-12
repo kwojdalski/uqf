@@ -426,13 +426,55 @@ test_a_torq_restart_between_local_midnight_and_the_plant_roll_replays_each_log_o
     .qunit.assertEquals[n;3;"day one's three messages (pos, fill, pos); day two is the live log's"];
     .qunit.assertEquals[sum .pipetest.replayed[;1];3;"each row once"]};
 
-test_a_plant_that_cannot_say_where_its_logs_are_costs_the_catch_up_not_the_start:{[t]
+/ --- the hooks exist before connect has run (#1219) -------------------------
+
+/ The TorQ stream process's transport, loaded from the process file itself:
+/ the definitions between its switch into .qproc.stream and the switch back,
+/ without the lines that start the process. Each line starting in a letter (a
+/ top-level definition) is
+/ qualified instead of entered by a context switch, so it loads the same
+/ where nested contexts are not supported.
+.pipetest.load_stream_transport:{[]
+    ls:read0 `:scripts/processes/torq_stream.q;
+    / the first definition; a flattened copy has no context switch to find
+    from_i:first where ls like "*which_job:{*";
+    to_i:first where (ls like "?d .") and (til count ls)>from_i;
+    body:from_i _ to_i # ls;
+    body:{$[(first x) in .Q.a; ".qproc.stream.",x; x]} each body;
+    f:hsym `$(first system "mktemp -d"),"/stream_transport.q";
+    f 0: body;
+    system "l ",1_string f}
+
+test_a_transport_built_before_connect_has_its_recovery_hooks_and_they_answer_after:{[t]
+    .pipetest.load_stream_transport[];
+    / as at process start: nothing has set the handle
+    if[`h in key `.qproc.stream; delete h from `.qproc.stream];
+    root:.pipetest.plant_root[];
+    dir:` sv root,`stp1_2026.10.09;
+    saved:.qtorq.connect_etl;
+    `.pipetest.connected set 0;
+    .qtorq.connect_etl:{[root;dir;job] `.pipetest.connected set 1+.pipetest.connected; {[root;dir;q] (root;`stp1;dir)}[root;dir]}[root;dir];
+    subs:.qetl.job.stream.subscriptions;
+    .qetl.job.stream.subscriptions:{[job] `pos`fill};  / the tables this stand-in plant logs
+    tr:.qproc.stream.transport `fx_positions;
+    .qetl.job.stream.subscriptions:subs;
+    .qunit.assertEquals[.pipetest.connected;0;"building the transport does not connect: start does, after on_start"];
+    .qunit.assertEquals[all `earlier_days`plant_day`has_log in key tr;1b;"the hooks are there at build time, with the handle unset"];
+    / connect, which is the only thing that sets the handle
+    tr[`connect][];
+    .qtorq.connect_etl:saved;
+    .qunit.assertEquals[.pipetest.connected;1;"connect connects, once"];
+    .qunit.assertEquals[tr[`plant_day][];2026.10.09;"asked of the plant now that there is one"];
+    .qunit.assertEquals[tr[`has_log] 2026.10.08;1b;"and the plant's day-one logs are there"];
+    .qunit.assertEquals[tr[`has_log] 2026.10.07;0b;"and none for a day without a directory"];
+    .qunit.assertEquals[count tr[`earlier_days][`pos`fill;2026.10.08;2026.10.08];3;"and the earlier days read from them"]}
+
+test_a_plant_that_cannot_answer_costs_the_call_not_the_job:{[t]
     saved:.qetl.log.warn;
-    .qetl.log.warn:{[c;m;d] .pipetest.warned,:enlist (m;d`error)};
+    .qetl.log.warn:{[c;m;d] .pipetest.warned,:enlist m};
     .pipetest.warned:();
     hooks:.qtorq.plant_hooks[{[unused] '"no .stplg.dldir"};enlist `pos];
+    r:(hooks[`earlier_days][`pos;2026.10.08;2026.10.08]; hooks[`plant_day][]; hooks[`has_log] 2026.10.08);
     .qetl.log.warn:saved;
-    .qunit.assertEquals[count hooks;0;"no hooks, so catch_up sees no earlier_days and does nothing"];
-    .qunit.assertEquals[count .pipetest.warned;1;"and says so once"];
-    .qunit.assertEquals[last first .pipetest.warned;"no .stplg.dldir";"naming the plant's error"];
-    .qunit.assertEquals[.qetl.job.stream.catch_up[`fx_positions;hooks;enlist `pos;{[tb;x]}];0;"catch_up with no hooks replays nothing, without throwing"]};
+    .qunit.assertEquals[r;(();.z.D;0b);"no earlier days, the job's own clock, no log"];
+    .qunit.assertEquals[count .pipetest.warned;3;"each costing a warning"]}

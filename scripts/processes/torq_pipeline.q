@@ -365,27 +365,53 @@ earlier_days:{[root;plant;want;first_day;last_day]
     t:`day`seq`ts xasc flip `day`seq`ts`t`x!flip msgs;
     flip (t`t;t`x)}
 
+/ Where each plant_hooks instance found the plant's logs, once asked: the
+/ memo, keyed by an id the instance holds. A closure cannot update itself.
+plant_found:()!()
+plant_hook_seq:0
+
+/ Ask the plant where its logs are, the first time a hook needs it, and
+/ remember the answer. NOT asked when the hooks are built: a TorQ process has
+/ no handle to the plant until its transport's connect has run (#1219), and
+/ a probe made earlier found it unset and dropped every hook.
+/ @private
+plant_loc:{[id;ask]
+    if[id in key plant_found; :plant_found id];
+    loc:ask[];
+    `.qtorq.plant_found set plant_found,enlist[id]!enlist loc;
+    loc}
+
+/ Run a hook's body against the plant's location; when the plant cannot
+/ answer, log it and return `degraded: the call costs the job its catch-up,
+/ never its start (the error a hook threw would stop `start`).
+/ @private
+plant_try:{[id;ask;what;degraded;f]
+    r:.[{[id;ask;f] (1b;f plant_loc[id;ask])};(id;ask;f);{[e] (0b;e)}];
+    if[first r; :last r];
+    .qetl.log.warn[`qtorq;"the plant could not say where its logs are - ",what;enlist[`error]!enlist last r];
+    degraded}
+
 / The three recovery hooks a carrying job's transport needs of the plant's
-/ logs (#1072, #1190, #1189), over whatever answers for the plant. The
-/ plant is asked where it keeps its logs each time (the root, its procname,
-/ and the directory of the day it is on), so a hook is as current as the plant.
+/ logs (#1072, #1190, #1189), over whatever answers for the plant. Always
+/ all three: the plant is asked where it keeps its logs (the root, its
+/ procname, and the directory of the day it is on) on the first use of a
+/ hook, which is after the transport has connected, and the answer is kept.
+/ A plant that cannot answer costs that call a warning and the degraded
+/ value (no earlier days, the job's own clock, no log), not the job its start.
 / @param ask a niladic function returning (log root; plant procname; current day directory)
 / @param want the tables the job subscribes to
-/ @return a dictionary of `earlier_days`plant_day`has_log to functions; empty (with a warning) when the plant cannot answer ask
+/ @return a dictionary of `earlier_days`plant_day`has_log to functions
 / @eg .qtorq.plant_hooks[{(`:/nonexistent;`stp1;`:/nonexistent/stp1_2026.10.09)};enlist `trade][`plant_day][]  / 2026.10.09
 plant_hooks:{[ask;want]
-    / Probed once: the hooks only serve catch_up, so a plant that cannot
-    / answer (no .stplg.dldir, a dropped handle) costs the job its catch-up,
-    / with a warning, and not its start.
-    probe:@[ask;::;{[e] (`failed;e)}];
-    if[(2=count probe) and `failed~first probe;
-        .qetl.log.warn[`qtorq;"the plant could not say where its logs are - starting without earlier_days, plant_day and has_log";
-            enlist[`error]!enlist last probe];
-        :(`symbol$())!()];
+    id:1+plant_hook_seq;
+    `.qtorq.plant_hook_seq set id;
     `earlier_days`plant_day`has_log!(
-        {[ask;tbls;first_day;last_day] loc:ask[]; earlier_days[loc 0;loc 1;tbls;first_day;last_day]}[ask];
-        {[ask;unused] dir_day (ask[]) 2}[ask];  / called as plant_day[]: the generic null fills `unused`
-        {[ask;want;day] loc:ask[]; has_log[loc 0;loc 1;want;day]}[ask;want])}
+        {[id;ask;tbls;first_day;last_day]
+            plant_try[id;ask;"earlier_days found nothing to replay";();{[tbls;a;b;loc] earlier_days[loc 0;loc 1;tbls;a;b]}[tbls;first_day;last_day]]}[id;ask];
+        {[id;ask;unused]  / called as plant_day[]: the generic null fills `unused`
+            plant_try[id;ask;"plant_day fell back to the job's own clock";.z.D;{[loc] dir_day loc 2}]}[id;ask];
+        {[id;ask;want;day]
+            plant_try[id;ask;"has_log says no log";0b;{[want;day;loc] has_log[loc 0;loc 1;want;day]}[want;day]]}[id;ask;want])}
 
 / Scratch for earlier_days: one log's messages, and the span's.
 collected:()

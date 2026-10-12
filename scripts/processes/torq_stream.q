@@ -61,7 +61,10 @@ which_job:{[]
 transport:{[job]
     feed:0=count .qetl.job.stream.subscriptions job;
     base:`connect`publisher`check_publishable`subscribe`timer!(
-        {[job;feed] `.qproc.stream.h set $[feed; .qtorq.feed_handle[]; .qtorq.connect_etl job];}[job;feed];
+        / A projection still owed its one argument: start calls connect[]. Fully
+        / applied it ran HERE, while the transport was being built - before
+        / on_start, and before anything else had a say (#1219).
+        {[job;feed;unused] `.qproc.stream.h set $[feed; .qtorq.feed_handle[]; .qtorq.connect_etl job];}[job;feed];
         {[] .qtorq.publish[.qproc.stream.h;;]};
         {[tbls] .qtorq.assert_publishable[.qproc.stream.h;tbls];};
         {[job;tbls;handler;replay]
@@ -95,11 +98,14 @@ transport:{[job]
     / where it keeps them and which day it is on, and they are read
     / here - the same file system its live replay already reads from.
     / Columns are named from each log's own recorded schema (#1205), so
-    / the plant's tables are not asked for. A plant that cannot answer
-    / costs the job its catch-up, not its start (plant_hooks warns).
+    / the plant's tables are not asked for. The plant is asked on a hook's
+    / first use, after connect has set the handle (#1219), never here; one
+    / that cannot answer costs the call its catch-up, not the job its start.
     / A feed replays nothing, so asks the plant nothing.
-    hooks:$[feed; (`symbol$())!();
-        .qtorq.plant_hooks[
+    / Separate statements: PeachQ throws 'type on the single-expression join.
+    hooks:(`symbol$())!();
+    if[not feed;
+        hooks:.qtorq.plant_hooks[
             {[] .qproc.stream.h"(.stplg.kdbtplog;.proc.procname;.stplg.dldir)"};
             .qetl.job.stream.subscriptions job]];
     base,hooks}
