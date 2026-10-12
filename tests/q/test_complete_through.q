@@ -1,0 +1,183 @@
+/ test_complete_through.q - a source says how far it can vouch for its data
+/ (.qetl.source.complete_through_of, clip_to_complete), planning clips to it,
+/ and crypto_market_data reports the bound of a shard glob (#1187, #1186).
+/ .
+/ No driver and no DuckDB file: the crypto bound is checked by replacing
+/ .qetl.io.odbc.run_sql for the length of one test.
+
+\d .cttest
+
+/ The bound the test source reports; moved by a test to model a feed advancing.
+bound:0Wp
+
+beforeNamespace_isolate:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"mkdir -p build/test-status";
+    }
+
+beforeNamespace_define:{[]
+    .qetl.source.define[`ct_src;
+        `source`table_name`time_column`row_key`columns`types`query`fixture`tz`complete_through!
+        (`ct_src;`ct_events;`time;`time;`time`px;"pf";
+         {[h;range_from;range_to]
+            ([] time:range_from+0D01*til "j"$(range_to-range_from)%0D01; px:1f)};
+         {[] ([] time:enlist 2026.09.01D00:00; px:enlist 0f)};
+         `UTC;
+         {[h] .cttest.bound})];
+    .qetl.transform.define[`ct_passthrough;`inputs`output`fn`examples!(
+        enlist[`batch]!enlist ([] time:`timestamp$(); px:`float$());
+        ([] time:`timestamp$(); px:`float$());
+        {[batch] batch};
+        enlist `inputs`expected!(
+            enlist[`batch]!enlist ([] time:enlist 2026.09.01D00:00; px:enlist 1f);
+            ([] time:enlist 2026.09.01D00:00; px:enlist 1f)))];
+    .qetl.job.bounded.define[`ct_backfill;
+        `source`dataset`width`transform!(`ct_src;`ct_out;1D;`ct_passthrough)];
+    }
+
+setUp_fresh:{[]
+    .testutil.reset_coverage_ledger[];
+    .qetl.cfg.reset[];
+    .qetl.cfg.set_layers[()!();()!();()!()];
+    setenv[`UQF_DRY_RUN;""];
+    .cttest.bound:0Wp;
+    .qetl.job.bounded.state.release_lock `ct_backfill;
+    .qetl.job.bounded.state.clear_checkpoint `ct_backfill;
+    `ct_out set ([] time:`timestamp$(); px:`float$());
+    }
+
+tearDown_release:{[]
+    .qetl.job.bounded.write_state[`ct_backfill;`handle;0Ni];
+    .qpipe.job.ct_backfill.cleanup[];}
+
+spec:{[] `source_version`range_from`range_to!(`v1;2026.09.01D00:00;2026.09.03D00:00)}
+
+/ Init, then pretend a connection: the test has no credential, so init would
+/ otherwise take the fixture path, which is never clipped and whose coverage
+/ is recorded under `v1~fixture rather than `v1.
+init_live:{[]
+    .qpipe.job.ct_backfill.init[.cttest.spec[]];
+    .qetl.job.bounded.write_state[`ct_backfill;`source_version;`v1];
+    .qetl.job.bounded.write_state[`ct_backfill;`handle;7i]}
+
+/ --- the clip --------------------------------------------------------------
+
+test_a_closed_source_is_never_clipped:{[t]
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;2026.09.03D00:00];2026.09.03D00:00;
+        "an unbounded complete_through leaves the range alone"]};
+
+test_a_bound_inside_the_range_ends_it:{[t]
+    .cttest.bound:2026.09.01D12:00;
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;2026.09.03D00:00];2026.09.01D12:00;
+        "the range ends where the source can vouch"]};
+
+test_the_fixture_path_is_closed_data:{[t]
+    .cttest.bound:2026.09.01D12:00;
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;0Ni;2026.09.03D00:00];2026.09.03D00:00;
+        "no handle, no source to be incomplete: the fixture is not clipped"]};
+
+test_a_null_bound_means_nothing_is_complete:{[t]
+    .cttest.bound:0Np;
+    .qunit.assertEquals[.qetl.source.clip_to_complete[`w;`ct_src;7i;2026.09.03D00:00];-0Wp;
+        "null is not unbounded"]};
+
+test_a_bound_that_is_not_a_timestamp_is_refused:{[t]
+    .cttest.bound:5;
+    .qunit.assertThrows[{.qetl.source.clip_to_complete[`w;`ct_src;7i;x]};2026.09.03D00:00;
+        "complete_through: ct_src returned type -7, not a timestamp atom";"named, not compared"]};
+
+/ --- the declaration -------------------------------------------------------
+
+test_the_default_is_unbounded:{[t]
+    .qunit.assertEquals[((.qetl.source.def `demo_deals)`complete_through) 0Ni;0Wp;"closed data is the default"]};
+
+test_a_complete_through_that_is_not_a_lambda_is_refused:{[t]
+    d:`source`table_name`time_column`row_key`columns`types`query`fixture`tz`complete_through!
+        (`ct_bad;`t;`time;`time;enlist `time;enlist "p";{[h;a;b] ()};{[] ()};`UTC;2026.09.01D00:00);
+    .qunit.assertThrows[{.qetl.source.define[`ct_bad;x]};d;
+        "define: ct_bad's complete_through must be a lambda*";"a timestamp is not a function"]};
+
+test_a_complete_through_of_the_wrong_arity_is_refused:{[t]
+    d:`source`table_name`time_column`row_key`columns`types`query`fixture`tz`complete_through!
+        (`ct_bad;`t;`time;`time;enlist `time;enlist "p";{[h;a;b] ()};{[] ()};`UTC;{[] 0Wp});
+    .qunit.assertThrows[{.qetl.source.define[`ct_bad;x]};d;
+        "define: ct_bad's complete_through must take exactly one argument*";"it needs the handle"]};
+
+/ --- planning --------------------------------------------------------------
+
+test_planning_stops_at_the_bound:{[t]
+    .cttest.bound:2026.09.01D12:00;
+    .cttest.init_live[];
+    w:.qpipe.job.ct_backfill.plan 0Np;
+    .qunit.assertEquals[(w`range_from;w`range_to);(enlist 2026.09.01D00:00;enlist 2026.09.01D12:00);
+        "one window, cut at the bound"]};
+
+test_a_bound_behind_the_range_plans_nothing:{[t]
+    .cttest.bound:2026.08.31D00:00;
+    .cttest.init_live[];
+    .qunit.assertEquals[count .qpipe.job.ct_backfill.plan 0Np;0;"nothing is complete yet"]};
+
+test_a_window_past_the_bound_is_never_covered:{[t]
+    .cttest.bound:2026.09.01D12:00;
+    .cttest.init_live[];
+    r:.qpipe.job.ct_backfill.run[];
+    .qunit.assertEquals[(r`state;r`windows_completed);(`completed;1);"the clipped window ran"];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`ct_out;`;`v1;.z.p;2026.09.01D00:00;2026.09.01D12:00];
+        "the part before the bound is covered"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ct_out;`;`v1;.z.p;2026.09.01D00:00;2026.09.01D12:00:00.000000001];0b;
+        "and not one nanosecond past it"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ct_out;`;`v1;.z.p;2026.09.01D00:00;2026.09.03D00:00];0b;
+        "the requested range is not claimed"]};
+
+test_the_next_run_after_the_bound_advances_covers_the_rest:{[t]
+    .cttest.bound:2026.09.01D12:00;
+    .cttest.init_live[];
+    .qpipe.job.ct_backfill.run[];
+    .qetl.job.bounded.write_state[`ct_backfill;`handle;0Ni];
+    .qpipe.job.ct_backfill.cleanup[];
+    .cttest.bound:0Wp;
+    .cttest.init_live[];
+    r:.qpipe.job.ct_backfill.run[];
+    .qunit.assertEquals[(r`state;r`windows_completed);(`completed;2);
+        "the clipped remainder and the second day"];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`ct_out;`;`v1;.z.p;2026.09.01D00:00;2026.09.03D00:00];
+        "the whole range, composed from the two runs"];
+    .qunit.assertEquals[count value `ct_out;48;"every hour of the two days exactly once, none refetched"]};
+
+/ --- crypto_market_data (#1186) ---------------------------------------------
+
+/ Run niladic `f` with run_sql answering `newest` (milliseconds, or null) and
+/ the capture glob set, restoring both whether or not it throws.
+with_shards:{[newest;f]
+    keep:.qetl.io.odbc.run_sql;
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;"/rec/data/live*.parquet"];
+    `.qetl.io.odbc.run_sql set {[n;h;sql] .cttest.sql:sql; ([] newest:enlist n)}[newest];
+    r:@[f;::;{[e] (`failed;e)}];
+    `.qetl.io.odbc.run_sql set keep;
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;""];
+    if[(0h=type r) and `failed~first r; 'last r];
+    r}
+
+test_the_shard_glob_is_complete_through_the_newest_finished_row:{[t]
+    / 21:30 on 2026.09.11 in epoch milliseconds
+    r:.cttest.with_shards[1789162200000;{.qpipe.source.crypto_market_data.complete_through 7i}];
+    .qunit.assertEquals[r;2026.09.11D21:30:00.000000000;
+        "the unfinished shard holds rows from there on, so a window may end at it, not past it"];
+    .qunit.assertTrue[0<count ss[.cttest.sql;"FROM read_parquet('/rec/data/live"];
+        "the bound is read from the finished shards the glob matches"]};
+
+test_a_window_into_the_unfinished_shard_is_clipped:{[t]
+    r:.cttest.with_shards[1789162200000;{
+        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;2026.09.11D22:00:00.000000000]}];
+    .qunit.assertEquals[r;2026.09.11D21:30:00.000000000;"21:00-22:00 is planned only to 21:30"]};
+
+test_no_finished_shard_means_nothing_is_complete:{[t]
+    r:.cttest.with_shards[0N;{
+        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;2026.09.11D22:00:00.000000000]}];
+    .qunit.assertEquals[r;-0Wp;"an empty glob is not a finished capture"]};
+
+test_without_a_glob_the_capture_is_closed_data:{[t]
+    .qunit.assertEquals[.qpipe.source.crypto_market_data.complete_through 7i;0Wp;
+        "the named table or view of a finished capture is not clipped"]};
+
+\d .

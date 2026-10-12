@@ -600,7 +600,9 @@ qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,bound_padding,value,,
 qetl.source,clear_settings,function,1,
+qetl.source,clip_to_complete,function,4,worker source h range_to
 qetl.source,column_names,function,1,tbl
+qetl.source,complete_through_of,function,2,source h
 qetl.source,configured,function,1,
 qetl.source,credential_example,function,1,source
 qetl.source,credential_origin,function,1,source
@@ -1267,12 +1269,14 @@ qpipe.job.wide_orderbook_feed,spot,value,,
 qpipe.job.wide_orderbook_feed,tick_rows,function,1,mids
 qpipe.source.crypto_market_data,adapt,function,1,raw
 qpipe.source.crypto_market_data,columns,value,,
+qpipe.source.crypto_market_data,complete_through,function,1,h
 qpipe.source.crypto_market_data,credential_example,value,,
 qpipe.source.crypto_market_data,epoch_ms_bound,function,1,ts
 qpipe.source.crypto_market_data,fixture,function,1,
 qpipe.source.crypto_market_data,from_expr,function,1,
 qpipe.source.crypto_market_data,level_fields,value,,
 qpipe.source.crypto_market_data,levels,value,,
+qpipe.source.crypto_market_data,newest_sql,function,1,
 qpipe.source.crypto_market_data,query,function,3,h range_from range_to
 qpipe.source.crypto_market_data,raw,dict,,
 qpipe.source.crypto_market_data,renamed,dict,,

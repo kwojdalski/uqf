@@ -956,12 +956,12 @@ empty_windows:{[] ([] range_from:`timestamp$(); range_to:`timestamp$())}
 plan:{[worker;cursor]
     cfg:def worker;
     s:spec worker;
-    / ONE as_of for the whole plan, captured here rather than read per call
-    / Calling .z.p inside each coverage read would plan against a
-    / ledger that could be superseded midway, so a range could be reported
-    / both covered and uncovered within a single planning pass - and the
-    / resulting window list would correspond to no coherent belief about the
-    / data at any instant.
+    / The range ends where the source can vouch for its data (#1187): a read
+    / past that succeeds but is not a complete window.
+    to:.qetl.source.clip_to_complete[worker;cfg`source;read_state[worker;`handle];s`range_to];
+    if[to<=s`range_from; :empty_windows[]];
+    / ONE as_of for the whole plan, captured once: a ledger superseded midway
+    / would report a range both covered and uncovered in one pass.
     as_of:.z.p;
     / COVERAGE DECIDES WHAT IS LEFT. The cursor is a resumption hint and
     / nothing more.
@@ -983,7 +983,7 @@ plan:{[worker;cursor]
     / gaps all lie at or after it and the plan starts there, exactly as
     / before. When a gap lies behind it, the gap wins, because a gap is a
     / fact about the data and a cursor is a note about a previous run.
-    todo:.qetl.job.bounded.runtime.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;s`range_from;s`range_to];
+    todo:.qetl.job.bounded.runtime.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;s`range_from;to];
     if[0=count todo; :empty_windows[]];
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.

@@ -6,6 +6,40 @@
 
 \d .qetl.source
 
+/ ------------------------------------------------------- COMPLETE THROUGH
+
+/ How far a source can vouch for its data, in UTC (see COMPLETE THROUGH in
+/ source_registry.q).
+/ @param source a registered source name
+/ @param h the open handle, or null on the fixture path (closed data)
+/ @return the exclusive instant every row before which is present; 0Wp when unbounded
+/ @throws error naming the source when complete_through does not return a timestamp
+/ @eg .qetl.source.complete_through_of[`demo_deals;0Ni]  ->  0Wp
+complete_through_of:{[source;h]
+    if[null h; :0Wp];
+    ct:((def source)`complete_through) h;
+    if[not -12h=type ct;
+        '"complete_through: ",string[source]," returned type ",string[type ct],", not a timestamp atom"];
+    $[null ct; -0Wp; ct]}
+
+/ Clip a planned range's end to what the source can vouch for.
+/ .
+/ The part past the bound is NOT covered, so the next run, once the bound has
+/ advanced, plans it. The clip is logged at WARN so a stalled feed shows as
+/ a repeating line rather than as a window that silently never completes.
+/ @param worker the worker's name, for the log
+/ @param source a registered source name
+/ @param h the open handle, or null on the fixture path
+/ @param range_to the requested exclusive end
+/ @return the end to plan to: range_to, or the source's bound when earlier
+/ @eg .qetl.source.clip_to_complete[`w;`demo_deals;0Ni;2026.09.11D00:00]  ->  2026.09.11D00:00:00.000000000
+clip_to_complete:{[worker;source;h;range_to]
+    bound:complete_through_of[source;h];
+    if[bound>=range_to; :range_to];
+    .qetl.log.warn[worker;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
+        `source`complete_through`requested_to!(source;bound;range_to)];
+    bound}
+
 / ------------------------------------------------------------- FETCHING
 
 / Send an IPC source's query: call `f` on the handle with the window's bounds,
