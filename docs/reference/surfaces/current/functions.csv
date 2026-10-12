@@ -1261,6 +1261,7 @@ qpipe.source.crypto_market_data,columns,value,,
 qpipe.source.crypto_market_data,credential_example,value,,
 qpipe.source.crypto_market_data,epoch_ms_bound,function,1,ts
 qpipe.source.crypto_market_data,fixture,function,1,
+qpipe.source.crypto_market_data,from_expr,function,1,
 qpipe.source.crypto_market_data,level_fields,value,,
 qpipe.source.crypto_market_data,levels,value,,
 qpipe.source.crypto_market_data,query,function,3,h range_from range_to

@@ -42,12 +42,13 @@ setUp_fresh:{[]
     .qetl.cfg.set_layers[()!();()!();()!()];
     setenv[`UQF_DRY_RUN;""];
     setenv[`UQF_SOURCE_CRED_CRYPTO_MARKET_DATA;""];
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;""];
     .qetl.job.bounded.state.release_lock `crypto_market_data_backfill;
     .qetl.job.bounded.state.clear_checkpoint `crypto_market_data_backfill;
     `crypto_market_data set 0#.qpipe.transform.crypto_market_data.book;
     }
 
-tearDown_release:{[] .qpipe.job.crypto_market_data_backfill.cleanup[];}
+tearDown_release:{[] setenv[`UQF_CRYPTO_CAPTURE_GLOB;""]; .qpipe.job.crypto_market_data_backfill.cleanup[];}
 
 / --- the SQL a window sends ----------------------------------------------
 
@@ -83,6 +84,22 @@ test_the_sql_selects_from_the_declared_table:{[t]
     sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
     .qunit.assertTrue[sql like "* FROM ",string[.qetl.source.def[`crypto_market_data]`table_name]," *";
         "sql_for reads table_name rather than spelling it again - the dumped file calls it market_data and the live one market_data_live, and that is the only difference between them"]};
+
+/ --- reading shards while the recorder runs (#1079) ---------------------
+
+test_a_capture_glob_reads_the_shards_not_the_locked_file:{[t]
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;"/rec/data/live*.parquet"];
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h[21];.crypto_market_databftest.h[22]];
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;""];
+    .qunit.assertTrue[0<count ss[sql;" FROM read_parquet('/rec/data/live[*].parquet', union_by_name=true) WHERE "];
+        "the finalised shards are the relation, so the recorder's DuckDB write lock is never taken"];
+    .qunit.assertEquals[.qpipe.source.crypto_market_data.from_expr[];"market_data_live";
+        "unset, the declared table is read exactly as before"]};
+
+test_a_relative_capture_glob_is_refused:{[t]
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;"data/live*.parquet"];
+    .qunit.assertThrows[.qpipe.source.crypto_market_data.from_expr;::;"crypto_market_data: UQF_CRYPTO_CAPTURE_GLOB must be an absolute glob*";
+        "a relative glob resolves against the backfill's directory, so it is refused rather than matching nothing"]};
 
 test_the_source_points_at_the_live_view:{[t]
     .qunit.assertEquals[.qetl.source.def[`crypto_market_data]`table_name;`market_data_live;

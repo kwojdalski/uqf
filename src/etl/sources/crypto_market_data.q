@@ -99,6 +99,30 @@ types:"ppssb",(raze 5#enlist "ffff"),"ffjffs"
 /   the database file that indexes them.
 table_name:`market_data_live
 
+/ READING WHILE THE RECORDER RUNS (#1079). The recorder writes each shard as
+/ a hidden `.live*.tmp.*` file and renames it to live_N.parquet only when it
+/ is complete, so every file the glob `live*.parquet` matches is finished,
+/ immutable and unlocked; only live.duckdb carries the lock. Setting
+/ UQF_CRYPTO_CAPTURE_GLOB to an ABSOLUTE glob of those shards makes `from_expr`
+/ read them directly, and the credential then names an empty in-memory
+/ database - "DRIVER=DuckDB;Database=:memory:" - so nothing opens the locked
+/ file and no relative path depends on the working directory. A torn or
+/ half-written shard cannot be seen: it does not match the glob.
+/ The row stream is the same as the view's (it IS the view's definition), and
+/ the shards seen are those finalised when the query runs, so a window ending
+/ before the newest shard's first row is complete. Unset, the named table or
+/ view is read as before.
+/ The relation a window is read from.
+/ @return the table name, or read_parquet over the configured shard glob
+/ @throws error when the glob is not absolute
+/ @eg .qpipe.source.crypto_market_data.from_expr[]  ->  "market_data_live"
+from_expr:{[]
+    g:getenv `UQF_CRYPTO_CAPTURE_GLOB;
+    if[0=count g; :string .qpipe.source.crypto_market_data.table_name];
+    if[not "/"=first g;
+        '"crypto_market_data: UQF_CRYPTO_CAPTURE_GLOB must be an absolute glob, not ",g," - a relative one resolves against the process's directory, which is not the recorder's"];
+    "read_parquet(",.qetl.io.odbc.literal[g],", union_by_name=true)"}
+
 time_column:`source_time
 
 / NOT a key cryptorust guarantees, and deliberately said so. The recorder
@@ -164,7 +188,7 @@ epoch_ms_bound:{[ts]
 / @return the SELECT statement text
 / @eg .qpipe.source.crypto_market_data.sql_for[2026.09.11D21:00:00.000000000;2026.09.11D22:00:00.000000000]
 sql_for:{[range_from;range_to]
-    "SELECT ",select_list[]," FROM ",string[table_name],
+    "SELECT ",select_list[]," FROM ",from_expr[],
     " WHERE timestamp_ms >= ",epoch_ms_bound[range_from],
     " AND timestamp_ms < ",epoch_ms_bound[range_to],
     " ORDER BY timestamp_ms, symbol, latency_count"}
