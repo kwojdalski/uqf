@@ -103,6 +103,13 @@ publish:.qetl.job.stream.unwired `posbook;
 / through a computation that has expected tables.
 book:1!position_book;
 
+/ NOT ON .qasof.lookup / .qetl.enrich (#1223). The shared as-of helper answers
+/ "the reference row prevailing AT the event's time"; this job marks a fill to
+/ the mid as the books stand NOW (the position's value now, not at its fill -
+/ see crypto_marks, #1058), refuses to let a late older book rewind a sym
+/ (.qmicro.newer_by_sym, #1088) and falls back to the fill's own price. Moving
+/ it onto the helper would change what a position row carries, so it keeps
+/ its own last_mid cache until that is a decision rather than a refactor.
 / Last-seen mid per FX sym, off the `market_data` subscription - updated on
 / every FX book, read (with a trade_price fallback for a sym never quoted
 / yet) when marking a fill. A plain dict, not a table: only ever a point
