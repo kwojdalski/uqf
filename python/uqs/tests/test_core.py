@@ -62,11 +62,6 @@ def fake_paths(tmp_path: Path) -> UqsPaths:
     (torqapphome / "appconfig" / "passwords" / "accesslist.txt").write_text(
         "rdb:pass\nadmin:admin\n"
     )
-    # The generated database.q reads uqf's tables from the tree it composes
-    # (#1158), and this stands in for one: give it the real declarations.
-    tables = tmp_path / stack_paths.TABLES_FILE
-    tables.parent.mkdir(parents=True)
-    shutil.copy2(schemas.TABLES_Q, tables)
 
     return UqsPaths(
         repo_root=tmp_path,

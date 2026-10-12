@@ -448,4 +448,26 @@ test_a_universe_that_excludes_everything_is_the_empty_book:{[t]
     r:.qalloc.allocate[mk_two_lots[];`method`universe!(`fifo;.qalloc.by_cols[enlist[`sym]!enlist `NOPE])];
     .qunit.assertEmpty[r; "filtering the universe down to nothing matches nothing"]};
 
+/ ------------------------------------------------------- EMPTY BY (#1145)
+
+mk_by_empty_trades:{[]
+    ([] time:2026.01.01D09:00:00 2026.01.01D10:00:00 2026.01.01D11:00:00;
+        sym:3#`EURUSD; side:1 1 -1; size:3#1000000f; trade_price:1.10 1.12 1.15)}
+
+test_an_empty_by_is_one_book_not_one_bucket_per_trade:{[t]
+    o:`method`by!(`fifo;`symbol$());
+    r:.qalloc.run[mk_by_empty_trades[];o];
+    .qunit.assertEquals[count r`matches; 1; "the sell matched the first buy"];
+    .qunit.assertEquals[first exec pnl from r`matches; 50000f; "(1.15-1.10) * 1e6"];
+    .qunit.assertEquals[count r`residual; 1; "one lot left"];
+    .qunit.assertEquals[first exec price from r`residual; 1.12; "the second buy"]};
+
+test_an_empty_by_with_an_opening_table_does_not_mismatch:{[t]
+    op:([] qty:enlist 1000000f; price:enlist 1.10; side:enlist 1);
+    tr:([] time:2026.01.01D09:00:00 2026.01.01D11:00:00; sym:2#`EURUSD;
+        side:1 -1; size:2#1000000f; trade_price:1.12 1.15);
+    r:.qalloc.run[tr;`method`by`opening!(`fifo;`symbol$();op)];
+    .qunit.assertEquals[first exec pnl from r`matches; 50000f; "the carried-in lot closes first"];
+    .qunit.assertEquals[first exec price from r`residual; 1.12; "the day's buy is left"]};
+
 \d .

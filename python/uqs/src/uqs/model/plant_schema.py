@@ -106,14 +106,14 @@ def _generated_schema_content(paths: UqsPaths) -> str:
     # Definition order among independent table declarations is immaterial to
     # q, so they are sorted for a stable file.
     #
-    # Both from the tree at paths.repo_root - not the checkout uqs was
-    # imported from: `uqs deploy build` composes a staged release, whose
-    # installed bundles declare tables of their own (#1158).
-    owned = _table_definitions(paths.repo_root)
+    # Both - the definitions and which of them a runtime holds - from the
+    # tree uqs was imported from: `uqs deploy build` composes a staged
+    # release's by running uqs from that tree (#1163).
+    owned = _table_definitions()
     # Here, not at the top: runtime_members reads model.dependencies, which
     # imports this module for _publishers.
     from uqs.model.runtime_members import plant_tables
 
-    wanted = plant_tables(paths.runtime_declaration, paths.repo_root)
+    wanted = plant_tables(paths.runtime_declaration)
     definitions = [owned[t] for t in sorted(owned) if wanted is None or t in wanted]
     return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions)

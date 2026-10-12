@@ -83,6 +83,8 @@ def _tools(files: list[str], fail_install: bool = False):
             (staged / bundles.LEDGER.as_posix()).write_text("{}\n")
             jobs = [{"kind": "streaming", "name": "piggy_spread", "procname": "piggy_spread1"}]
             return _done(json.dumps({"piggybank": {"version": "1.0.0", "jobs": jobs}}))
+        if "uqs.stack.hdb_shape" in argv:
+            return _done(json.dumps({"piggy_quote": ["time", "sym"]}))
         if "needs" in argv:
             return _done(json.dumps({"piggy_spread1": ["piggy_spread1", "fxfeed1"]}))
         if argv[-1].endswith(release_build.GENERATOR):
@@ -116,9 +118,11 @@ def _build(tmp_path: Path, *extra: str, fail_install: bool = False):
 
 
 def test_without_a_bundle_nothing_is_staged_or_recorded(tmp_path):
-    art, calls, _ = _build(tmp_path)
+    art, calls, root = _build(tmp_path)
     assert "bundles" not in art.manifest
-    assert not [argv for argv, _ in calls if "run" in argv]
+    # the one uqs step is the shape's, composed by the checkout's own uqs
+    (shape,) = [(argv, kw) for argv, kw in calls if "run" in argv]
+    assert "uqs.stack.hdb_shape" in shape[0] and Path(shape[1]["cwd"]) == root
 
 
 def test_a_bundle_is_installed_into_a_staged_tree_and_recorded(tmp_path):
@@ -131,9 +135,11 @@ def test_a_bundle_is_installed_into_a_staged_tree_and_recorded(tmp_path):
     assert job["needs"] == ["piggy_spread1", "fxfeed1"]
     # the checkout itself is never written
     assert not (root / JOB).exists()
-    # every uqs step imports uqs from the staged tree, not the checkout
+    # every uqs step imports uqs from the staged tree, not the checkout -
+    # the hdb_shape's too, so it reads the staged bundle ledger (#1162)
     runs = [(argv, kw) for argv, kw in calls if argv[:2] == ["uv", "run"]]
-    assert len(runs) == 3
+    assert len(runs) == 4 and "uqs.stack.hdb_shape" in runs[-1][0]
+    assert art.manifest["hdb_shape"] == {"piggy_quote": ["time", "sym"]}
     for argv, kw in runs:
         staged = Path(kw["cwd"])
         assert staged != root

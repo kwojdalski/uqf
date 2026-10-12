@@ -15,7 +15,6 @@ all of this tree's pipelines, as it always was.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from uqs.model import profiles
 from uqs.model.dependencies import inputs_by_process, outputs_by_process
@@ -34,28 +33,31 @@ def _ledger() -> dict[str, dict]:
         raise UqsError(f"{BUNDLE_LEDGER} is not JSON ({exc}) - fix or remove it") from None
 
 
-def _bundle_split(runtime: Runtime) -> tuple[set[str], set[str], set[str]]:
-    """(procnames of bundles in `runtime`, procnames and tables of those not)."""
+def _bundle_split(runtime: Runtime) -> tuple[set[str], set[str], set[str], set[str]]:
+    """(procnames of bundles in `runtime`, procnames and tables of those not,
+    tables of those in it)."""
     included: set[str] = set()
     excluded: set[str] = set()
     excluded_tables: set[str] = set()
+    included_tables: set[str] = set()
     for entry in _ledger().values():
         names = entry.get("runtimes")
         member = runtime.profile is None if names is None else runtime.name in names
         procs = {j["procname"] for j in entry.get("jobs", []) if "procname" in j}
         if member:
             included |= procs
+            included_tables |= set(entry.get("tables", []))
         else:
             excluded |= procs
             excluded_tables |= set(entry.get("tables", []))
-    return included, excluded, excluded_tables
+    return included, excluded, excluded_tables, included_tables
 
 
 def pipeline_procnames(runtime: Runtime) -> set[str] | None:
     """The pipeline processes `runtime` has; None means every one."""
     if not runtime.pipelines:
         return set()
-    included, excluded, _ = _bundle_split(runtime)
+    included, excluded, *_ = _bundle_split(runtime)
     if runtime.profile is None:
         return (profiles._procnames() - excluded) if excluded else None
     if runtime.profile not in profiles.PROFILES:
@@ -66,10 +68,9 @@ def pipeline_procnames(runtime: Runtime) -> set[str] | None:
     return profiles.closure([*profiles.PROFILES[runtime.profile], *sorted(included)])
 
 
-def plant_tables(runtime: Runtime, root: Path | None = None) -> set[str] | None:
+def plant_tables(runtime: Runtime) -> set[str] | None:
     """This tree's plant tables `runtime`'s schema holds: those its pipeline
-    processes read or write. None means every one (plant_tables.q whole).
-    `root` names the tree whose plant_tables.q is read (schemas.table_names)."""
+    processes read or write. None means every one (plant_tables.q whole)."""
     members = pipeline_procnames(runtime)
     if members is None:
         return None
@@ -77,6 +78,9 @@ def plant_tables(runtime: Runtime, root: Path | None = None) -> set[str] | None:
         # every pipeline but the bundles it does not have: every table but theirs
         from uqs.model import schemas
 
-        return schemas.table_names(root) - _bundle_split(runtime)[2]
+        return schemas.table_names() - _bundle_split(runtime)[2]
     inputs, outputs = inputs_by_process(), outputs_by_process()
-    return {t for p in members for t in (*inputs.get(p, ()), *outputs.get(p, ()))}
+    edges = {t for p in members for t in (*inputs.get(p, ()), *outputs.get(p, ()))}
+    # and every table of a bundle it has, as uqf leaves out every table of
+    # one it has not: a bounded worker's target is on no streaming edge (#1162)
+    return edges | _bundle_split(runtime)[3]
