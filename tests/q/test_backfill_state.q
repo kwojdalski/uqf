@@ -207,6 +207,56 @@ test_with_file_lock_still_takes_a_mutex_a_dead_process_left:{[t]
     .qunit.assertEquals[.qetl.job.bounded.state.with_file_lock[`brk_ledger;{x+1};enlist 41];42;
         "the stale mutex is broken through break_stale and the section runs"]};
 
+/ --- a lock held for another process (#1168) ------------------------------
+/ .
+/ uqs data migrate takes an HDB root's lock through a short-lived q that
+/ names the migration's own pid as the holder, so its liveness - not that q's
+/ - decides whether the lock is stale. pid 1 stands for a live holder that
+/ is not this process: it is always running.
+
+/ A fresh lock path in the test status directory.
+held_for:{[nm] p:.qetl.job.bounded.state.file_lock_path nm; system"rm -rf ",p; p}
+
+test_a_lock_taken_for_a_live_process_blocks_a_writer:{[t]
+    p:.qetl.job.bounded.state.take_lock_at[held_for[`for_live];0D;1];
+    .qunit.assertEquals["j"$(.qetl.job.bounded.state.read_owner p)`pid;1;"the owner is the process it was taken for"];
+    .qunit.assertThrows[.qetl.job.bounded.state.with_lock_at[;0D00:00:00.05;{x};enlist 1];p;
+        "*held by pid 1 on*";"its holder is alive, so a writer waits and gives up"];
+    .qunit.assertEquals[.qetl.job.bounded.state.release_lock_at[p;1];1b;"and its holder releases it"]};
+
+test_a_lock_taken_for_a_process_that_died_is_broken:{[t]
+    p:.qetl.job.bounded.state.take_lock_at[held_for[`for_dead];0D;dead_pid];
+    .qunit.assertEquals[.qetl.job.bounded.state.with_lock_at[p;0D00:00:01;{x+1};enlist 41];42;
+        "a migration killed while holding the root's lock does not wedge the next writer"];
+    .qunit.assertTrue[()~key hsym `$p;"and the writer released it"]};
+
+test_release_lock_at_leaves_another_holders_lock:{[t]
+    p:.qetl.job.bounded.state.take_lock_at[held_for[`for_other];0D;1];
+    .qunit.assertThrows[.qetl.job.bounded.state.release_lock_at[;.z.i];p;
+        "release_lock_at: the lock at*";"releasing for the wrong pid is refused"];
+    .qunit.assertTrue[not ()~key hsym `$p;"and the holder's lock is left in place"];
+    .qetl.job.bounded.state.release_lock_at[p;1]};
+
+test_releasing_a_lock_already_gone_is_not_an_error:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.state.release_lock_at[held_for[`for_gone];.z.i];0b;"nothing to release"]};
+
+test_a_dead_holder_named_in_another_case_of_this_host_is_broken:{[t]
+    / .z.h is lower-case on macOS, gethostname() need not be (#726): a
+    / holder recorded either way is on this host.
+    plant_lock[`lock_hostcase;dead_pid;upper string .z.h];
+    .qunit.assertTrue[0<count .qetl.job.bounded.state.acquire_lock[`lock_hostcase];
+        "the host is compared without case, so the dead holder's lock is broken"];
+    .qetl.job.bounded.state.release_lock[`lock_hostcase]};
+
+test_a_lock_path_with_a_space_is_one_directory:{[t]
+    d:.qetl.job.bounded.state.lock_dir[],"/with space";
+    system"rm -rf ",.qetl.job.bounded.state.shell_word d;
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word d;
+    .qunit.assertEquals[.qetl.job.bounded.state.with_lock_at[d,"/hdb.write.lock";0D00:00:01;{x+1};enlist 1];2;
+        "taken and released, quoted as one shell word"];
+    .qunit.assertEquals[key hsym `$d;`symbol$();"leaving nothing behind"];
+    system"rm -rf ",.qetl.job.bounded.state.shell_word d};
+
 / --- durable ledger files ------------------------------------------------
 
 durable_path:{[nm] "build/test-status/",nm}

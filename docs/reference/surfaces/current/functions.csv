@@ -338,13 +338,17 @@ qetl.job.bounded.state,read_owner,function,1,path
 qetl.job.bounded.state,register,function,2,worker ns
 qetl.job.bounded.state,registered,function,1,
 qetl.job.bounded.state,release_lock,function,1,worker
+qetl.job.bounded.state,release_lock_at,function,2,path pid
 qetl.job.bounded.state,require_contract,function,1,worker
 qetl.job.bounded.state,require_types,function,3,name got want
 qetl.job.bounded.state,run_pass,function,3,worker spec pass
 qetl.job.bounded.state,save_checkpoint,function,3,worker spec cursor
+qetl.job.bounded.state,shell_word,function,1,path
+qetl.job.bounded.state,take_lock_at,function,3,path wait pid
 qetl.job.bounded.state,with_file_lock,function,3,name f args
 qetl.job.bounded.state,with_lock_at,function,4,path wait f args
 qetl.job.bounded.state,write_owner,function,1,path
+qetl.job.bounded.state,write_owner_as,function,2,path pid
 qetl.job.continuous,advance,function,3,worker current next_cursor
 qetl.job.continuous,clear_cursor,function,1,worker
 qetl.job.continuous,cursor_path,function,1,worker

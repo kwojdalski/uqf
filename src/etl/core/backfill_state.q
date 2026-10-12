@@ -98,6 +98,25 @@ lock_dir:{[] .qetl.status.status_dir[]}
 
 lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 
+/ A path as ONE shell word, whatever it holds. Unquoted, a lock beside an HDB
+/ root under "runtime with space" - the directory uqs's own migration tests
+/ use - split `mkdir` into three: it made junk directories, failed, and the
+/ failure read as "held" until the wait ran out (#1168).
+/ @param path a filesystem path
+/ @return it single-quoted for sh, any single quote in it escaped
+/ @eg .qetl.job.bounded.state.shell_word "/a b/c.lock"  ->  "'/a b/c.lock'"
+shell_word:{[path] "'",ssr[path;"'";"'\\''"],"'"}
+
+/ Private: create one lock directory, atomically - 0 when this call made it,
+/ 1 when it exists already (or cannot be made). mkdir on an existing
+/ directory returns non-zero: that IS the test.
+/ @private
+try_mkdir:{[path] @[{system"mkdir ",shell_word[x]," 2>/dev/null"; 0};path;{[e] 1}]}
+
+/ Private: remove a lock directory and everything in it.
+/ @private
+rm_lock:{[path] system"rm -rf ",shell_word[path]}
+
 / ------------------------------------------------- LOCK OWNERSHIP
 / .
 / A lock records WHO holds it, and these are the functions that read that
@@ -124,8 +143,19 @@ owner_file:{[path] path,"/owner"}
 / @param path the lock directory
 / @return the owner file's path
 / @eg .qetl.job.bounded.state.write_owner["/tmp/x.lock"]
-write_owner:{[path]
-    (hsym `$owner_file[path]) 0: enlist .j.j `pid`started`host!(.z.i;.z.p;string .z.h);
+write_owner:{[path] write_owner_as[path;.z.i]}
+
+/ write_owner, naming another process on this host as the holder: for a lock
+/ taken on behalf of a process that is not q - uqs data migrate holds an HDB
+/ root's lock across several q calls and its own exchange (#1168), so the
+/ holder whose death makes the lock stale is the migration, not the short-
+/ lived q that took it.
+/ @param path the lock directory
+/ @param pid the holder's process id on this host
+/ @return the owner file's path
+/ @eg .qetl.job.bounded.state.write_owner_as["/tmp/x.lock";.z.i]
+write_owner_as:{[path;pid]
+    (hsym `$owner_file[path]) 0: enlist .j.j `pid`started`host!("j"$pid;.z.p;string .z.h);
     owner_file[path]}
 
 / The holder recorded inside a lock, or () when there is none to read.
@@ -164,7 +194,9 @@ pid_alive:{[pid]
 /                       are two steps - so the lock is live
 /   no pid or host      written by a version that recorded neither; not ours
 /                       to judge
-/   another host        a pid is meaningless off the machine that issued it
+/   another host        a pid is meaningless off the machine that issued it;
+/                       compared without case, since .z.h is lower-case on
+/                       macOS and a non-q writer's hostname need not be (#726)
 /   the pid is running  it holds the lock, or a reused number does, and
 /                       neither is ours to break
 / @param path the lock directory
@@ -174,7 +206,7 @@ lock_is_stale:{[path]
     o:read_owner[path];
     $[()~o;                          0b;
       not all `pid`host in key o;    0b;
-      not o[`host]~string .z.h;      0b;
+      not lower[o`host]~lower string .z.h; 0b;
       not pid_alive o`pid]}
 
 / Break a stale lock, if it is still stale - without ever removing a live one.
@@ -194,13 +226,13 @@ lock_is_stale:{[path]
 / @eg .qetl.job.bounded.state.break_stale "/tmp/nonexistent.lock"  ->  0b
 break_stale:{[path]
     b:path,".break";
-    if[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};b;{[e] 1}];
-        if[lock_is_stale[b]; system"rm -rf ",b];
+    if[0<>try_mkdir[b];
+        if[lock_is_stale[b]; rm_lock[b]];
         :0b];
     write_owner[b];
     broke:lock_is_stale[path];
-    if[broke; system"rm -rf ",path];
-    system"rm -rf ",b;
+    if[broke; rm_lock[path]];
+    rm_lock[b];
     broke}
 
 / How a refusal or a timeout describes the holder it found.
@@ -239,10 +271,9 @@ owner_desc:{[path]
 / @eg .qetl.job.bounded.state.acquire_lock[`markout_backfill]
 acquire_lock:{[worker]
     dir:lock_dir[];
-    system"mkdir -p ",dir;
+    system"mkdir -p ",shell_word[dir];
     path:lock_path[worker];
-    / mkdir on an existing directory returns non-zero: that IS the test.
-    rc:@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
+    rc:try_mkdir[path];
     / A lock whose recorded holder is gone from this host is BROKEN AND
     / RETAKEN rather than reported (#490). Nothing releases a lock when a
     / process ends - this tree has no .z.exit handler - so without this a
@@ -257,7 +288,7 @@ acquire_lock:{[worker]
             / Retake it through the same atomic mkdir. Losing THIS race means
             / another process got in first, and the refusal below - now
             / describing that live holder - is the right answer.
-            rc:@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}]]];
+            rc:try_mkdir[path]]];
     if[rc<>0;
         '"acquire_lock: ",string[worker]," is already running (lock held at ",path,
          " by ",(owner_desc[path]),
@@ -274,7 +305,7 @@ acquire_lock:{[worker]
 / path that also runs on the failure branch.
 release_lock:{[worker]
     path:lock_path[worker];
-    system"rm -rf ",path;
+    rm_lock[path];
     .[{.qetl.log.dbg[x;y;z]};(worker;"lock released";enlist[`path]!enlist path);::];
     path}
 
@@ -327,24 +358,26 @@ file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
 / @throws error when the lock cannot be taken within file_lock_wait
 / @eg .qetl.job.bounded.state.with_file_lock[`etl_coverage;{[n] n};enlist 1]
 with_file_lock:{[name;f;args]
-    system"mkdir -p ",lock_dir[];
+    system"mkdir -p ",shell_word[lock_dir[]];
     with_lock_at[file_lock_path name;file_lock_wait;f;args]}
 
-/ with_file_lock's critical section, at any lock path and with any wait: for
-/ a lock that belongs beside the thing it guards rather than in this
-/ deployment's status directory - an HDB root's (#1083), which every process
-/ writing that root must share whatever its own status directory - and
-/ whose holder may be busy, not stuck, for more than seconds.
+/ Take the lock at path for a holder, waiting up to wait while a live one
+/ has it and breaking a dead one at once: with_lock_at's acquisition on its
+/ own, for a holder that keeps the lock beyond one q call. uqs data migrate
+/ holds an HDB root's across its q stage and its own exchange (#1168) by
+/ having q take it here, naming the migration as the holder - so the path,
+/ the owner record and the staleness rule are q's, and a migration killed
+/ mid-way leaves a lock the next q writer breaks.
 / @param path the lock directory; its parent must exist
 / @param wait the longest to wait for it, a timespan
-/ @param f the function to run under the lock
-/ @param args its arguments, as a list
-/ @return whatever f returns
+/ @param pid the holder's process id on this host: .z.i, or the process
+/   this one takes it for
+/ @return path
 / @throws error when the lock cannot be taken within wait
-/ @eg .qetl.job.bounded.state.with_lock_at["/tmp/uqf_eg.lock";0D00:00:01;{[n] n};enlist 1]  ->  1
-with_lock_at:{[path;wait;f;args]
+/ @eg .qetl.job.bounded.state.release_lock_at[;.z.i] .qetl.job.bounded.state.take_lock_at["/tmp/uqf_eg_take.lock";0D00:00:01;.z.i]  ->  1b
+take_lock_at:{[path;wait;pid]
     deadline:.z.p+wait;
-    while[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
+    while[0<>try_mkdir[path];
         / Same staleness rule acquire_lock uses, and it matters MORE here.
         / This mutex is SHARED, so one process dying mid-write used to wedge
         / the ledger for every worker on the host - five seconds at a time,
@@ -360,9 +393,44 @@ with_lock_at:{[path;wait;f;args]
             system"sleep 0.01"]];
     / Record the holder, so a lock left by a dead process can be broken by
     / the next process to want it rather than waited on.
-    write_owner[path];
+    write_owner_as[path;pid];
+    path}
+
+/ Give up a lock take_lock_at took for pid - and only that one. A lock
+/ already gone is not an error (a holder that died was broken, and is not
+/ this caller); a lock held by anyone else is, and is left in place.
+/ @param path the lock directory
+/ @param pid the holder it was taken for
+/ @return 1b when this call removed it, 0b when it was already gone
+/ @throws error when the lock is held by another process or host
+/ @eg .qetl.job.bounded.state.release_lock_at["/tmp/uqf_eg_nonexistent.lock";.z.i]  ->  0b
+release_lock_at:{[path;pid]
+    if[()~key hsym `$path; :0b];
+    o:read_owner[path];
+    mine:$[()~o; 0b; not all `pid`host in key o; 0b;
+        (("j"$o`pid)=pid) and lower[o`host]~lower string .z.h];
+    if[not mine;
+        '"release_lock_at: the lock at ",path," is held by ",(owner_desc[path]),
+         ", not pid ",string["j"$pid]," on ",string[.z.h]," - left in place"];
+    rm_lock[path];
+    1b}
+
+/ with_file_lock's critical section, at any lock path and with any wait: for
+/ a lock that belongs beside the thing it guards rather than in this
+/ deployment's status directory - an HDB root's (#1083), which every process
+/ writing that root must share whatever its own status directory - and
+/ whose holder may be busy, not stuck, for more than seconds.
+/ @param path the lock directory; its parent must exist
+/ @param wait the longest to wait for it, a timespan
+/ @param f the function to run under the lock
+/ @param args its arguments, as a list
+/ @return whatever f returns
+/ @throws error when the lock cannot be taken within wait
+/ @eg .qetl.job.bounded.state.with_lock_at["/tmp/uqf_eg.lock";0D00:00:01;{[n] n};enlist 1]  ->  1
+with_lock_at:{[path;wait;f;args]
+    take_lock_at[path;wait;.z.i];
     r:@[{[fa] (1b; (fa 0) . fa 1)};(f;args);{[e] (0b;e)}];
-    system"rm -rf ",path;
+    rm_lock[path];
     if[not first r; 'last r];
     last r}
 

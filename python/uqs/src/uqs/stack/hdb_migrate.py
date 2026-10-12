@@ -5,16 +5,21 @@ checks the rows it wrote. The final exchange is one filesystem operation; the
 old table remains beside the HDB as a rollback copy. Backfill writers share
 the root's write lock, and the operator must stop the stack before applying a
 schema migration because TorQ end of day does not take that lock.
+
+The write lock is taken and given up by q (scripts/gates/hdb_lock.q, #1168), so
+its path, owner record and staleness rule are the q writers' own. It names
+this process as the holder: q writers wait while it runs and break the lock
+once it is gone, however it ended.
 """
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import json
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -27,6 +32,7 @@ from uqs.stack.env import with_interpreter
 from uqs.stack.hdb_types import declared_schema
 
 STAGE_SCRIPT = Path("gates") / "stage_hdb_migration.q"
+LOCK_SCRIPT = Path("gates") / "hdb_lock.q"
 _NAME = re.compile(r"^[a-z_][a-z_0-9]*$")
 
 
@@ -63,6 +69,38 @@ def _exchange(left: Path, right: Path) -> None:
     if result != 0:
         err = ctypes.get_errno()
         raise UqsError(f"atomic HDB partition exchange failed: {os.strerror(err)}")
+
+
+def _write_lock(paths: UqsPaths, q: Path, env: dict[str, str], action: str) -> str:
+    """Acquire or release the HDB root's write lock through q, for this pid.
+
+    The root is passed as the writers are given it (KDBHDB), made absolute but
+    not resolved: .qetl.io.hdb_lock computes the path, so both sides agree.
+    """
+    result = subprocess.run(
+        [
+            str(q),
+            str(paths.scripts_dir / LOCK_SCRIPT),
+            action,
+            str(paths.hdb_dir.absolute()),
+            str(os.getpid()),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=paths.repo_root,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        timeout=120,
+    )
+    tag = "LOCKED|" if action == "acquire" else "RELEASED|"
+    lines = [line for line in result.stdout.splitlines() if line.startswith(tag)]
+    if result.returncode != 0 or len(lines) != 1:
+        said = " ".join((result.stderr or result.stdout).strip().splitlines()[-3:])
+        if action == "acquire" and "could not take the lock" in said:
+            raise UqsError(f"HDB write lock already held; stop writers first: {said}")
+        raise UqsError(f"HDB write lock {action} failed: {said}")
+    return lines[0].split("|", 1)[1]
 
 
 def migrate(
@@ -110,16 +148,11 @@ def migrate(
     q = q_interpreter(env)
     if q is None:
         raise UqsError("HDB migration needs q; set QCMD")
-    lock = root.with_name(root.name + ".write.lock")
-    try:
-        lock.mkdir()
-    except FileExistsError as exc:
-        raise UqsError(f"HDB write lock already held at {lock}; stop writers first") from exc
+    _write_lock(paths, q, env, "acquire")
 
     stage_root: Path | None = None
     swapped = False
     try:
-        (lock / "owner").write_text(json.dumps({"pid": os.getpid(), "host": socket.gethostname()}))
         stage_root = Path(tempfile.mkdtemp(prefix=root.name + ".migration-", dir=root.parent))
         stage = stage_root / "new" / partition.strftime("%Y.%m.%d") / table
         stage.mkdir(parents=True)
@@ -177,5 +210,8 @@ def migrate(
     finally:
         if stage_root is not None and not swapped:
             shutil.rmtree(stage_root)
-        (lock / "owner").unlink(missing_ok=True)
-        lock.rmdir()
+        # A release that fails must not hide the migration's own outcome, and
+        # cannot strand the root: the lock names this pid, so the next q
+        # writer breaks it once uqs has exited.
+        with contextlib.suppress(UqsError):
+            _write_lock(paths, q, env, "release")

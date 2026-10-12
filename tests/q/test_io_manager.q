@@ -149,6 +149,14 @@ test_two_roots_have_two_locks:{[t]
     .qunit.assertEquals[.qetl.io.hdb_lock each `:/data/hdb`:/data/hdb2;("/data/hdb.write.lock";"/data/hdb2.write.lock");
         "beside each root: one HDB's writers do not wait for another's"]};
 
+/ #1168: one lock per root however it is spelled - a trailing slash put it
+/ inside the root, and uqs data migrate passes the root absolute.
+test_the_root_lock_is_beside_the_root_however_it_is_spelled:{[t]
+    .qunit.assertEquals[.qetl.io.hdb_lock each `:/data/hdb/`:/data/hdb//;2#enlist "/data/hdb.write.lock";
+        "a trailing slash names the same root"];
+    .qunit.assertEquals[.qetl.io.hdb_lock `:data/hdb/;(system"cd"),"/data/hdb.write.lock";
+        "a relative root is the one under this process's directory"]};
+
 test_hdb_gives_the_rows_a_time_from_the_partition_column:{[t]
     root:hdb_dir[];
     .qetl.io.write[.qetl.io.hdb[root;`deal_time];`iodeals;deals[]];
