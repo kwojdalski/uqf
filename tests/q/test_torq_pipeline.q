@@ -269,3 +269,72 @@ test_load_source_settings_with_no_file_in_any_layer_configures_nothing:{[t]
 test_no_fallback_to_adopt_is_reported_not_guessed:{[t]
     .qunit.assertEquals[.qtorq.credential_from[();`:/no/such/metrics.txt];`source`userpass!(`missing;`);
         "missing, so the caller warns rather than connecting as torquser"]};
+
+/ --- earlier_days: the logs of the days a carrying job was down (#1072) -----
+
+/ A stand-in plant log root in TorQ's segmented layout: <root>/<plant>_<date>/,
+/ one log per table and period, named <plant>_<table><time>, and a `stpmeta`
+/ table listing them. Each message is what .u.upd received - (`upd;table;
+/ list of columns), `time` first - appended the way the plant appends, so
+/ -11! reads it back.
+.pipetest.write_log:{[dir;name;msgs]
+    p:` sv dir,name;
+    p set ();
+    h:hopen p;
+    {[h;m] h enlist (`upd;m 0;m 1)}[h] each msgs;
+    hclose h;
+    p}
+
+.pipetest.plant_root:{[]
+    root:hsym `$first system "mktemp -d";
+    d1:` sv root,`stp1_2026.10.08;
+    d2:` sv root,`stp1_2026.10.09;
+    system "mkdir -p ",1_string d1;
+    system "mkdir -p ",1_string d2;
+    / day one: positions rolled over two periods, plus a table nobody wants
+    a:.pipetest.write_log[d1;`stp1_pos20261008000000;enlist (`pos;(enlist 2026.10.08D01:00:00;enlist `EURUSD;enlist 5e5))];
+    b:.pipetest.write_log[d1;`stp1_pos20261008120000;enlist (`pos;(enlist 2026.10.08D13:00:00;enlist `EURUSD;enlist 1e5))];
+    c:.pipetest.write_log[d1;`stp1_fill20261008000000;enlist (`fill;(enlist 2026.10.08D02:00:00;enlist `GBPUSD;enlist 2e5))];
+    z:.pipetest.write_log[d1;`stp1_other20261008000000;enlist (`other;(enlist 2026.10.08D03:00:00;enlist `X;enlist 1e0))];
+    listing:([] seq:1 2 1 1i; logname:a,b,c,z; tbls:(enlist `pos;enlist `pos;enlist `fill;enlist `other));
+    (` sv d1,`stpmeta) set listing;
+    / day two: only a fill; its stpmeta lists a log that was lost
+    e:.pipetest.write_log[d2;`stp1_fill20261009000000;enlist (`fill;(enlist 2026.10.09D02:00:00;enlist `GBPUSD;enlist 3e5))];
+    (` sv d2,`stpmeta) set ([] seq:1 1i; logname:e,` sv d2,`stp1_pos_lost; tbls:(enlist `fill;enlist `pos));
+    root}
+
+.pipetest.names:`pos`fill!(`time`sym`qty;`time`sym`qty)
+
+test_the_plants_day_directory_is_procname_underscore_date:{[t]
+    .qunit.assertEquals[.qtorq.day_dir[`$"/data/tplogs";`stp1;2026.10.09];`$":/data/tplogs/stp1_2026.10.09";"stplog.q createdld"];
+    .qunit.assertEquals[.qtorq.day_dir[`$":/data/tplogs";`stp1;2026.10.09];`$":/data/tplogs/stp1_2026.10.09";"a root already a file symbol is not hsym'd twice"]};
+
+test_earlier_days_returns_the_wanted_tables_across_days_in_order_as_tables:{[t]
+    root:.pipetest.plant_root[];
+    m:.qtorq.earlier_days[root;`stp1;.pipetest.names;`pos`fill;2026.10.08;2026.10.09];
+    .qunit.assertEquals[m[;0];`pos`fill`pos`fill;
+        "day one by time (pos 01:00, fill 02:00, pos 13:00), then day two - and the unwanted table never"];
+    .qunit.assertEquals[m 0;(`pos;([] time:enlist 2026.10.08D01:00:00; sym:enlist `EURUSD; qty:enlist 5e5));
+        "the columns a log holds come back named, as the table a live batch is"];
+    .qunit.assertEquals[sum (raze m[;1])`qty;sum 5e5 2e5 1e5 3e5;"nothing dropped or doubled"]};
+
+test_earlier_days_reads_only_the_days_asked_for:{[t]
+    root:.pipetest.plant_root[];
+    m:.qtorq.earlier_days[root;`stp1;.pipetest.names;enlist `pos;2026.10.09;2026.10.09];
+    .qunit.assertEquals[m;();"day two lost its pos log, and day one was not asked for"]};
+
+test_earlier_days_returns_what_exists_when_a_log_or_a_day_is_missing:{[t]
+    root:.pipetest.plant_root[];
+    m:.qtorq.earlier_days[root;`stp1;.pipetest.names;`pos`fill;2026.10.07;2026.10.10];
+    .qunit.assertEquals[count m;4;"days 07 and 10 have no directory, one log of 09 is gone - the other four messages are still there"]};
+
+test_earlier_days_with_no_log_root_is_empty_not_an_error:{[t]
+    .qunit.assertEquals[.qtorq.earlier_days[`:/no/such/root;`stp1;.pipetest.names;enlist `pos;2026.10.08;2026.10.09];();"nothing to replay"]};
+
+test_earlier_days_leaves_the_root_upd_alone:{[t]
+    root:.pipetest.plant_root[];
+    `upd set {[t;x] `mine};
+    .qtorq.earlier_days[root;`stp1;.pipetest.names;enlist `pos;2026.10.08;2026.10.08];
+    r:(get `upd)[1;2];
+    ![`.;();0b;enlist `upd];
+    .qunit.assertEquals[r;`mine;"the job's own upd is put back after the logs are read"]};
