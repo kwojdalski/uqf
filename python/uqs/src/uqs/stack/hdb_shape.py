@@ -236,3 +236,35 @@ def describe_columns(short: dict[str, dict[str, set[str]]]) -> str:
             more = f" (+{len(missing) - 6} more)" if len(missing) > 6 else ""
             lines.append(f"  {name}/{table}: {shown}{more}")
     return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`python -m uqs.stack.hdb_shape declared --runtime NAME`: print, as
+    JSON, {table: columns} the runtime's schema declares in the tree uqs is
+    imported from.
+
+    For `uqs deploy build` (deploy/build.py's declared_shape), which runs it
+    with PYTHONPATH at a staged release, so the job graph, the bundle ledger
+    and plant_tables.q it reads are all the release's - not the builder's
+    (#1163)."""
+    import json
+    import sys
+
+    from uqs.paths import UqsError, paths_for_root, repo_root
+    from uqs.stack.hdb_types import declared_schema
+
+    args = list(sys.argv[1:] if argv is None else argv)
+    if len(args) != 3 or args[0] != "declared" or args[1] != "--runtime":
+        print("usage: hdb_shape declared --runtime NAME", file=sys.stderr)
+        return 2
+    try:
+        shape = declared_columns(declared_schema(paths_for_root(repo_root(), args[2])))
+    except (UqsError, OSError, ValueError) as exc:
+        print(f"hdb_shape: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(shape))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

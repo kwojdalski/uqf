@@ -132,10 +132,18 @@ measure:{[book;metrics]
 / every pair it might ever touch. The converse is reported by
 / unmatched_limits, because a limit that matches nothing is usually a typo
 / in a scope name and is otherwise invisible.
+/ .
+/ A NULL OBSERVED ON A LIMITED SCOPE IS REFUSED, not skipped. cap<abs 0n is
+/ false, so a skipped null would be neither a breach nor an unmatched limit
+/ and would read as a quiet day - the same fail-open shape require_limits
+/ refuses for a null cap. Refusing (rather than adding a status column)
+/ keeps the return shape breaches-only for every caller, and a measure that
+/ cannot be taken is a fault to fix upstream. A null observed on a scope
+/ with NO limit is unpoliced and stays harmless.
 / @param measured the long-form measurements (see measure)
 / @param limits the limits table
 / @return a table of scope, metric, observed, cap, severity, utilisation - one row per breach, worst first
-/ @throws error when either table is malformed
+/ @throws error when either table is malformed, or a limited scope's observed is null
 / @eg count .qlimit.evaluate[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6);([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
 evaluate:{[measured;limits]
     if[not 98h=type measured; '"evaluate: measured must be a table"];
@@ -147,7 +155,11 @@ evaluate:{[measured;limits]
         '"evaluate: limits are scoped on ",(", " sv string unknown),", which the measurements do not carry - roll the book up to the level the limits are written at"];
     keyed:(scope,`metric) xkey $[`severity in cols limits; limits; update severity:`hard from limits];
     joined:measured lj keyed;
-    breached:select from joined where not null cap, cap<abs observed;
+    policed:select from joined where not null cap;
+    unmeasured:select from policed where null observed;
+    if[count unmeasured;
+        '"evaluate: ",(string count unmeasured)," limited scope(s) have a null observed value - an unmeasured scope is not a within-limit one, so fix the measurement rather than read it as a quiet day"];
+    breached:select from policed where cap<abs observed;
     r:update utilisation:(abs observed)%cap from breached;
     `utilisation xdesc r}
 

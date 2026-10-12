@@ -243,6 +243,16 @@ def test_a_bundle_and_its_dependencies_join_a_profile_runtime(ledger) -> None:
     assert "arbitrage1" not in (runtime_members.pipeline_procnames(RUNTIMES["crypto"]) or set())
 
 
+def test_every_table_of_a_bundle_a_profile_runtime_has_is_in_its_schema(ledger) -> None:
+    """A table on no streaming edge - a bounded worker's target - is still
+    the bundle's, and the runtime that has the bundle defines it (#1162)."""
+    ledger("pb", "arbitrage1", "pb_backfill_target", ["crypto"])
+    ledger("other", "kafka_flow1", "other_target", ["fx"])
+    tables = runtime_members.plant_tables(RUNTIMES["crypto"])
+    assert tables is not None and "pb_backfill_target" in tables
+    assert "other_target" not in tables
+
+
 def test_an_undeclared_bundle_leaves_the_full_runtime(ledger) -> None:
     ledger("pb", "arbitrage1", "arbitrage", ["fx"])
     uqf = runtime_members.pipeline_procnames(RUNTIMES["uqf"])
