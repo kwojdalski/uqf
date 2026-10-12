@@ -359,7 +359,10 @@ crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`
 / The trades shape src/execution/execution.q's markout family consumes
 / (sym/time/side/trade_price/pip_factor), so demo_markout1 and posbook1 read
 / rows off this table with zero reshaping.
-trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$())
+/ fill_id (#1080) is the fill's identity: unique per fill, so a keyed consumer
+/ never collapses two fills that share a time, sym and price. Null in a
+/ partition written before the column existed (uqs data hdb-check --fix adds it).
+trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$(); fill_id:`symbol$())
 
 / posbook1's output: weighted-average-cost positions, republished onto the
 / tickerplant like mkt_orderbook rather than kept as process-private state.
@@ -372,7 +375,9 @@ position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`flo
 position_open:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); carried_to:`timestamp$())
 
 / demo_markout1's output: per-trade execution quality at each horizon.
-demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
+/ fill_id (#1080) is the scored fill's trades.fill_id, so (fill_id; horizon)
+/ identifies a row; null for a fill that predates the column.
+demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$(); fill_id:`symbol$())
 
 / executions1's output: every fill the stack carries, as one tape (#885). The
 / `executions` normalizer (src/etl/streaming/executions.q) maps `trades`,

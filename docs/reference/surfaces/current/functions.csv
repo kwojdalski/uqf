@@ -1111,10 +1111,12 @@ qpipe.job.fx_positions,policed,value,,
 qpipe.job.fx_positions,positions,dict,,
 qpipe.job.fx_positions,publish,value,,
 qpipe.job.fx_positions,read_limits,function,1,path
-qpipe.job.fx_trades_feed,fill_rows,function,4,i side size slip_pips
+qpipe.job.fx_trades_feed,fill_rows,function,5,i side size slip_pips fill_id
+qpipe.job.fx_trades_feed,last_id,value,,
 qpipe.job.fx_trades_feed,on_timer,function,1,
 qpipe.job.fx_trades_feed,pip_factor,value,,
 qpipe.job.fx_trades_feed,publish,value,,
+qpipe.job.fx_trades_feed,run_id,value,,
 qpipe.job.fx_trades_feed,sizes,value,,
 qpipe.job.fx_trades_feed,spot,value,,
 qpipe.job.hdb_demo_markouts_backfill,checkpoint,function,1,cursor

@@ -121,7 +121,7 @@ last_of:{[j] first last exec rows from .sjtest.published where job=j}
 / to .sjtest.recorder.
 drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage`exec_bars!(
     {[] .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD; side:enlist 1;
-            trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
+            trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
         .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .sjtest.d 1; sym:enlist `EURUSD;
             bid:enlist 1.1004; ask:enlist 1.1006)];
         .qpipe.job.demo_markout.score_ready .sjtest.d 20};

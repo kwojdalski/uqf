@@ -66,13 +66,13 @@ filled_status:`filled
 / standing in for "the FX one".
 fx_venue:`fx
 
-/ An FX fill as a canonical execution: the venue is fixed, there is no fee and
-/ no id.
+/ An FX fill as a canonical execution: the venue is fixed, there is no fee;
+/ the id is the feed's own (#1080), null for a fill from before the column.
 / @param batch a trades batch
 / @return canonical executions
 from_trades:{[batch]
     select source_time:time, sym, venue:.qpipe.job.executions.fx_venue, side, size, price:trade_price,
-        fee:0f, fee_ccy:`, fill_id:`, book:`, product:` from batch}
+        fee:0f, fee_ccy:`, fill_id, book:`, product:` from batch}
 
 / A crypto fill as a canonical execution: a rename, because the recorder's shape
 / is already the canonical one with different spellings.
@@ -101,10 +101,10 @@ from_orders:{[batch]
     enlist `inputs`expected!(
         (enlist `trades)!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:01;
             sym:`EURUSD`USDJPY; side:1 -1; trade_price:1.085 149.5; size:1e6 5e5;
-            pip_factor:.qccy.pip_factor `EURUSD`USDJPY);
+            pip_factor:.qccy.pip_factor `EURUSD`USDJPY; fill_id:`fx1`fx2);
         ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:01; sym:`EURUSD`USDJPY;
             venue:`fx`fx; side:1 -1; size:1e6 5e5; price:1.085 149.5; fee:0 0f;
-            fee_ccy:``; fill_id:``; book:``; product:``)))];
+            fee_ccy:``; fill_id:`fx1`fx2; book:``; product:``)))];
 
 .qetl.transform.define[`executions_from_crypto_trades;`inputs`output`fn`examples!(
     (enlist `crypto_trades)!enlist .qpipe.job.executions.crypto_trades;

@@ -49,7 +49,7 @@ demo_execution_quality:.qetl.plant.published `demo_execution_quality
 / @return one row per fill per horizon, in fill order then horizon order
 score_markouts:{[trades;quotes]
     scored:.qpipe.transform.demo_markouts.score[trades;quotes];
-    select sym, trade_time, horizon, trade_price, ref_price, markout_pips from scored}
+    select sym, trade_time, horizon, trade_price, ref_price, markout_pips, fill_id from scored}
 
 \d .
 
@@ -67,7 +67,8 @@ score_markouts:{[trades;quotes]
                 side:1 -1 1;
                 trade_price:1.1 150 1.27;
                 size:1e6 2e6 5e5;
-                pip_factor:.qccy.pip_factor `EURUSD`USDJPY`GBPUSD);
+                pip_factor:.qccy.pip_factor `EURUSD`USDJPY`GBPUSD;
+                fill_id:`f1`f2`f3);
             ([] time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00 2026.09.17D10:00:02.5;
                 sym:`EURUSD`EURUSD`EURUSD`USDJPY`USDJPY;
                 bid:1.0999 1.1004 1.1009 149.99 149.94;
@@ -77,7 +78,8 @@ score_markouts:{[trades;quotes]
             horizon:0D00:00:01 0D00:00:10 0D00:00:01 0D00:00:10 0D00:00:01 0D00:00:10;
             trade_price:1.1 1.1 150 150 1.27 1.27;
             ref_price:1.1005 1.101 149.95 149.95 0n 0n;
-            markout_pips:5 10 5 5 0n 0n)))];
+            markout_pips:5 10 5 5 0n 0n;
+            fill_id:`f1`f1`f2`f2`f3`f3)))];
 
 / Score every second - frequent enough that demo_execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
