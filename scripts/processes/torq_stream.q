@@ -60,7 +60,7 @@ which_job:{[]
 / @return the transport dictionary
 transport:{[job]
     feed:0=count .qetl.job.stream.subscriptions job;
-    `connect`publisher`check_publishable`subscribe`timer!(
+    `connect`publisher`check_publishable`subscribe`timer`earlier_days!(
         {[job;feed] `.qproc.stream.h set $[feed; .qtorq.feed_handle[]; .qtorq.connect_etl job];}[job;feed];
         {[] .qtorq.publish[.qproc.stream.h;;]};
         {[tbls] .qtorq.assert_publishable[.qproc.stream.h;tbls];};
@@ -88,7 +88,16 @@ transport:{[job]
             / gets a global of its own under .qproc.stream.timers.
             fn:` sv `.qproc.stream.timers,name;
             fn set f;
-            .qtorq.safe_timer[name;period;fn;"Run ",(string name)," for its streaming job"];})}
+            .qtorq.safe_timer[name;period;fn;"Run ",(string name)," for its streaming job"];};
+        / The logs of the days a carrying job was down across (#1072). They
+        / are the plant's own files, so the plant is asked where it keeps
+        / them and what its tables' columns are, and they are read here -
+        / the same file system its live replay already reads from.
+        {[tbls;first_day;last_day]
+            h:.qproc.stream.h;
+            loc:h"(.stplg.kdbtplog;.proc.procname)";
+            names:tbls!{[h;t] h({cols x};t)}[h] each tbls;
+            .qtorq.earlier_days[loc 0;loc 1;names;tbls;first_day;last_day]})}
 
 \d .
 

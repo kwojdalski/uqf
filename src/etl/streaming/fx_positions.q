@@ -100,8 +100,32 @@ policed:`base_qty`quote_qty
 / one alert per timer tick and stops reading them.
 alert_period:0D00:05;
 
-/ Throttle state: breach identity -> when it was last alerted.
+/ Throttle state: breach identity -> when it was last alerted. Rebuilt on a
+/ restart from this job's own fx_limit_breach rows in the replayed log
+/ (restore_throttle, #1197), so a standing breach published inside the
+/ period before the restart is not published again until the period is out.
 alerts:.qlimit.no_alerts[];
+
+/ Fold replayed fx_limit_breach rows into the throttle state: each breach
+/ identity is remembered at the newest plant `time` it was published at.
+/ .
+/ The identity is built exactly as fresh_breaches builds it (the dimensions
+/ and the metric, rendered by .qlimit.identity) and the time is the plant's
+/ stamp on the row, the moment the breach was last published, so after the
+/ restart `.qlimit.throttle` sees what it saw before it: quiet until the
+/ period has run from that stamp. Merged with `|` so a state already held is
+/ never moved back in time. Only a replay folds: live, a row of this table is
+/ the job's own echo and the throttle already knows it.
+/ @param x fx_limit_breach rows as the plant logged them, with `time`
+/ @return the number of identities now held
+/ @eg .qpipe.job.fx_positions.restore_throttle 0#.qpipe.job.fx_positions.fx_limit_breach  ->  count .qpipe.job.fx_positions.alerts
+restore_throttle:{[x]
+    if[(0=count x) or not `time in cols x; :count .qpipe.job.fx_positions.alerts];
+    keyed:.qpipe.job.fx_positions.dimensions,`metric;
+    ids:.qlimit.identity ?[x;();0b;keyed!keyed];
+    seen:exec max time by id from ([] id:ids; time:x`time);
+    `.qpipe.job.fx_positions.alerts set .qpipe.job.fx_positions.alerts|seen;
+    count .qpipe.job.fx_positions.alerts}
 
 / Load a limits table, refusing a malformed one at load rather than at the
 / first breach - a limits table that polices nothing looks exactly like a
@@ -176,6 +200,11 @@ on_start:{[]
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
+    / The job's own output, read back only by a replay (restore_from): the
+    / throttle must know what was published before the restart (#1197).
+    if[t=`fx_limit_breach;
+        if[.qetl.job.stream.replaying; .qpipe.job.fx_positions.restore_throttle x];
+        :()];
     if[not t=`executions; :()];
     if[0=count x; :()];
     updated:.qetl.transform.apply[`fx_positions;`book`executions!(
@@ -201,8 +230,12 @@ fresh_breaches:{[now]
     measured:.qlimit.measure[rolled;.qpipe.job.fx_positions.policed];
     breaches:.qlimit.evaluate[measured;.qpipe.job.fx_positions.limits];
     / A breach always names every dimension, null where it covers them all,
-    / so fx_limit_breach keeps one shape and the throttle one identity.
+    / so fx_limit_breach keeps one shape and the throttle one identity. The
+    / dimensions lead, in the book's order, so the identity renders the same
+    / whatever order the limits file named its scope in - restore_throttle
+    / builds it from the published row, which is always in that order.
     breaches:{[t;c] $[c in cols t; t; ![t;();0b;(enlist c)!enlist enlist `]]}/[breaches;.qpipe.job.fx_positions.dimensions];
+    breaches:(.qpipe.job.fx_positions.dimensions,cols[breaches] except .qpipe.job.fx_positions.dimensions)#breaches;
     r:.qlimit.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
     `.qpipe.job.fx_positions.alerts set r`state;
     r`alerts}
@@ -272,10 +305,13 @@ on_timer:{[]
 / as run_stream.q.
 / Positions carry across days (#943): the shell publishes the book onto
 / fx_position_open at end of day and restores it on replay (carry, #963).
+/ The breach throttle is rebuilt from the job's own fx_limit_breach rows in
+/ the log (restore_from, #1197), so a restart does not re-publish a standing
+/ breach inside its period.
 / The limits are loaded at start (on_start) and watched, so a change over
 / IPC, or a restart that drops one, lands in config_change (#1112).
 .qetl.cfg.audit.watch[`fx_positions;enlist `.qpipe.job.fx_positions.limits];
-.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`on_start`start_with_all`replay`carry`note`state!(
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`on_start`start_with_all`replay`restore_from`carry`note`state!(
     `fxpositions1;
     enlist `executions;
     `fx_position`fx_limit_breach`fx_position_open`config_change;
@@ -285,6 +321,7 @@ on_timer:{[]
     .qpipe.job.fx_positions.on_start;
     1b;
     1b;
+    enlist `fx_limit_breach;
     `state`table!(`positions;`fx_position_open);
     "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it";
     `positions`limits`alerts)];

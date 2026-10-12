@@ -1175,6 +1175,67 @@ test_fresh_breaches_is_decidable_without_a_timer:{[t]
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 600;1;
         "and once the throttle period has passed it does again"]};
 
+/ A breach row as the plant logs it: what fx_positions published, with the
+/ plant's `time` in front.
+logged_breach:{[tm;s;m]
+    ([] time:enlist tm; sym:enlist s; book:enlist `london; product:enlist `spot; metric:enlist m;
+        observed:enlist 6e5; cap:enlist 1e5; severity:enlist `hard; utilisation:enlist 6f)}
+
+/ Replay `batches` into fx_positions' on_batch as a restart does.
+replay_fx:{[batches]
+    `.qetl.job.stream.replaying set 1b;
+    r:@[{[b] .qpipe.job.fx_positions.on_batch ./: b; 1b};batches;{x}];
+    `.qetl.job.stream.replaying set 0b;
+    if[not 1b~r; 'r]}
+
+test_a_restart_does_not_republish_a_breach_inside_its_period:{[t]
+    / #1197: the throttle was in memory only, so a restarted fx_positions
+    / published every standing breach again on its first tick.
+    reset[];
+    .qpipe.job.fx_positions.load_limits mk_limits[];
+    to_fx_positions[orders_batch[]];
+    pub:d 0;
+    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches pub;1;"live, the breach publishes"];
+    / the restart: state is lost, then the log is replayed - the fill, and the breach as published
+    .qetl.job.stream.reset `fx_positions;
+    .qpipe.job.fx_positions.load_limits mk_limits[];
+    .qunit.assertEmpty[.qpipe.job.fx_positions.alerts;"a restart starts with no throttle state"];
+    replay_fx ((`executions;`time xcols update time:pub from .qetl.job.stream.normalizer.normalize[`executions;`orders;orders_batch[]]);
+               (`fx_limit_breach;logged_breach[pub;`EURUSD;`base_qty]));
+    .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches pub+0D00:01;
+        "a minute after it was published, the standing breach is not published again"];
+    .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches pub+0D00:04:59;"nor just inside the period"];
+    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches pub+0D00:05;1;
+        "and it reminds once the period has passed, as it would have without the restart"]};
+
+test_a_new_breach_after_a_restart_still_publishes_at_once:{[t]
+    reset[];
+    .qpipe.job.fx_positions.load_limits mk_limits[];
+    to_fx_positions[orders_batch[]];
+    / the log holds a breach of a DIFFERENT metric only: this one is new
+    replay_fx enlist (`fx_limit_breach;logged_breach[d 0;`EURUSD;`quote_qty]);
+    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 60;1;
+        "a breach the log does not hold publishes immediately"]};
+
+test_the_job_s_own_live_echo_does_not_move_its_throttle:{[t]
+    reset[];
+    .qpipe.job.fx_positions.on_batch[`fx_limit_breach;logged_breach[d 0;`EURUSD;`base_qty]];
+    .qunit.assertEmpty[.qpipe.job.fx_positions.alerts;"live, the throttle already knows what it published"]};
+
+test_restoring_the_throttle_keeps_the_newest_time_per_identity:{[t]
+    reset[];
+    rows:logged_breach[d 0;`EURUSD;`base_qty],logged_breach[d 30;`EURUSD;`base_qty],logged_breach[d 10;`EURUSD;`quote_qty];
+    replay_fx enlist (`fx_limit_breach;rows);
+    a:.qpipe.job.fx_positions.alerts;
+    .qunit.assertEquals[count a;2;"one entry per (scope, metric)"];
+    .qunit.assertEquals[asc value a;asc (d 30;d 10);"each at its newest time"]};
+
+test_fx_positions_declares_that_its_throttle_is_rebuilt_by_replay:{[t]
+    dc:.qetl.job.stream.def `fx_positions;
+    .qunit.assertEquals[dc`restore_from;enlist `fx_limit_breach;"it replays its own breaches"];
+    .qunit.assertTrue[`alerts in dc`state;"the throttle is declared state"];
+    .qunit.assertTrue[(dc`replay) and not `ephemeral in key dc;"recovered by replay, not ephemeral"]};
+
 / Two books each long 600k EURUSD - 1.2mm across the desk.
 two_books:{[]
     ([] time:d[1 2]; order_id:1 2; sym:`EURUSD`EURUSD; book:`london`newyork;
