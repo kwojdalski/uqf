@@ -452,6 +452,30 @@ test_a_partial_worker_reaction_is_recorded_failed_and_stays_owed:{[t]
         "a partial downstream run throws, naming the worker and its state"];
     .qunit.assertTrue[not .qetl.run.is_running[];"cleanup ran: no run is left in flight"]};
 
+/ react's notion of a successful worker run is .qetl.job.bounded.exit_code's,
+/ not a second copy of the list (#1154): over every terminal state, the
+/ reaction throws exactly when the exit code is not 0i. The worker's init, run
+/ and cleanup are stubbed, so only the verdict on the state is under test.
+test_react_success_set_is_the_exit_code_over_every_state:{[t]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    dfx:{[] ([] id:1 2j; time:.rxtest.d[1]+0D10:00 1D10:00; px:1 2f)};
+    `rxs_tab set 0#dfx[];
+    .qetl.source.define[`rxs_src;`source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+        (`rxs_src;`rxs_tab;`time;`id;`id`time`px;"jpf";{[h;f;t] .qetl.source.ipc[h;{[a;b] select from rxs_tab where time>=a, time<b};f;t]};dfx;`UTC)];
+    .qetl.transform.passthrough[`rxs_pass;`batch;0#dfx[];dfx[]];
+    .qetl.job.bounded.define[`rxs_worker;`source`dataset`width`transform!(`rxs_src;`rxs_tab;1D;`rxs_pass)];
+    .qetl.reaction.on_worker[`demo_deals;`rxs_worker;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
+    ns:.qetl.job.bounded.namespace `rxs_worker;
+    states:`completed`idle`partial`failed`validated`planned;
+    verdicts:{[ns;st]
+        (` sv ns,`init) set {[x] x};
+        (` sv ns,`run) set {[st;u] `state`windows_failed!(st;1)}[st];
+        (` sv ns,`cleanup) set {[u] ::};
+        r:.[.qetl.reaction.for_dataset[`demo_deals][`handler] 0;(`demo_deals;.rxtest.d[1];.rxtest.d[2]);{[e] e}];
+        not 10h=type r}[ns] each states;
+    .qunit.assertEquals[verdicts;0i=.qetl.job.bounded.exit_code each states;
+        "a reaction succeeds for exactly the states exit_code reads as success"]};
+
 / --- a worker reaction inside another worker's run (#973) ------------------
 
 / A fresh run ledger, in memory and on disk (see test_run.q's setUp_fresh).

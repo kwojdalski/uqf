@@ -368,7 +368,10 @@ with_by:{[out;kv;bys]
 / multi-column cases stopped being one code path. As a table both cases
 / are: find each row's key in the distinct keys, group on the answer.
 / @private
-key_table:{[t;bys] ?[t;();0b;bys!bys]}
+key_table:{[t;bys]
+    / An empty `by is ONE book: `?[t;();0b;()!()]` would return the whole table
+    / and make every row its own bucket, so give every row the same key.
+    $[count bys; ?[t;();0b;bys!bys]; ([] one_book:(count t)#0b)]}
 
 / Private: the seed lot queue for one bucket - the carried-in position,
 / typed like the trades table and stripped of its bucket columns, which

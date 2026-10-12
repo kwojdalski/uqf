@@ -23,11 +23,23 @@
 / free of a second delivery concept. A manager for FILE sinks from bounded
 / workers (Parquet/CSV) is the part of #947 this does not do.
 / .
-/ THROTTLING. fx_positions already throttles what it publishes, but a
-/ restart REPLAYS and a second publisher is possible, so the sink applies
-/ .qlimit.throttle again, on the same identity (scope and metric). A breach
-/ that was recorded as dead leaves the throttle, so the next report of it is
-/ delivered rather than silenced for another period.
+/ DEDUPLICATION, ON THE PUBLISHER'S CLOCK. fx_positions already throttles what
+/ it publishes (one reminder per breach per period), but a restart REPLAYS
+/ the plant's log and a second publisher is possible, so the sink must still
+/ drop a breach it has already delivered. It does NOT do that with a second
+/ period of its own, measured on its own receipt clock: that clock adds a
+/ different delivery latency to each arrival, so a reminder published exactly
+/ one period after the first can land a few milliseconds INSIDE a sink
+/ period of the same length and be silenced (#1151) - the standing breach
+/ the desk is being reminded of goes quiet. Instead each breach is keyed on
+/ its identity (scope and metric) and the `time` the plant stamped on it, and
+/ the sink remembers the newest time delivered per identity: a row at or
+/ before it is a replay and is dropped, a row after it is a new report
+/ and always passes. The publisher's throttle alone decides how often a
+/ standing breach is reminded. Cost: a second publisher's copy of a live
+/ breach carries its own, later, time and is delivered too; the receiver
+/ already has to tolerate a repeat (see the guarantee). A breach recorded as
+/ dead leaves the memory, so its next report is delivered.
 / .
 / RETRIES, BOUNDED AND RECORDED. A delivery is attempted when the breach
 / arrives and then once per timer tick, at most `max_attempts` times. The
@@ -48,13 +60,10 @@
 / `time`, which is not part of a breach's identity (see .qlimit.scope_cols).
 breach_cols:`sym`book`product`metric`observed`cap`severity`utilisation
 
-/ How long a delivered breach stays quiet. As fx_positions' own period.
-alert_period:0D00:05;
-
 / How many times one breach is attempted before it is recorded as dead.
 max_attempts:3
 
-/ Throttle state: breach identity -> when it was last queued.
+/ Dedup state: breach identity -> the plant `time` of the newest report queued.
 alerts:.qlimit.no_alerts[]
 
 / Breaches awaiting delivery. `body` is the JSON text to POST, built once so
@@ -95,24 +104,32 @@ payload:{[row]
          string[row`metric]," ",string[row`observed]," against cap ",string[row`cap];
     .j.j `text`breach!(text;row)}
 
-/ Queue the breaches that survive the throttle.
+/ Queue the breaches that are not replays of one already queued.
 / @param x fx_limit_breach rows
-/ @param now the time to throttle against
+/ @param now stands in for the `time` of a row that has none
 / @return how many were queued
 / @private
 enqueue:{[x;now]
-    r:.qlimit.throttle[.qpipe.job.alert_sink.alerts;breach_cols#x;now;.qpipe.job.alert_sink.alert_period];
-    `.qpipe.job.alert_sink.alerts set r`state;
-    fresh:r`alerts;
-    if[0=count fresh; :0];
-    scope:.qlimit.scope_cols fresh;
-    ids:.qlimit.identity ?[fresh;();0b;(scope,`metric)!scope,`metric];
-    `.qpipe.job.alert_sink.pending upsert flip `id`body`attempts`error!(ids;payload each fresh;(count fresh)#0j;(count fresh)#enlist "");
+    x:update time:?[null time;now;time] from x;
+    scope:.qlimit.scope_cols breach_cols#x;
+    ids:.qlimit.identity ?[x;();0b;(scope,`metric)!scope,`metric];
+    cur:.qpipe.job.alert_sink.alerts;
+    / A row is a replay when its time is not after the newest queued for its identity.
+    newer:{[cur;i;t] $[i in key cur; t>cur i; 1b]}[cur]'[ids;x`time];
+    / One report per identity per batch: the newest of those that are new.
+    w:where newer;
+    o:w iasc (x`time) w;
+    pick:o value last each group ids o;
+    if[0=count pick; :0];
+    fresh:x pick;
+    fids:ids pick;
+    `.qpipe.job.alert_sink.alerts set cur,fids!fresh`time;
+    `.qpipe.job.alert_sink.pending upsert flip `id`body`attempts`error!(fids;payload each breach_cols#fresh;(count fresh)#0j;(count fresh)#enlist "");
     count fresh}
 
 / Attempt every pending delivery once. A success leaves the queue; a failure
 / is counted and stays, until its last attempt, when it is recorded in
-/ `dead`, logged, and released from the throttle.
+/ `dead`, logged, and forgotten by the dedup state.
 / @param now the time to record a dead breach at
 / @return a dict of delivered, retrying and failed counts
 / @throws error when no URL is configured
@@ -133,14 +150,14 @@ flush:{[now]
         {[r] .qetl.log.err[`alert_sink;"breach not delivered - recorded in dead";`id`attempts`error!(r`id;r`attempts;r`error)]} each gave_up];
     `delivered`retrying`failed!(count where ok;count .qpipe.job.alert_sink.pending;count gave_up)}
 
-/ A batch of breaches: throttle, queue, and try to deliver.
+/ A batch of breaches: dedupe, queue, and try to deliver.
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
     if[not t=`fx_limit_breach; :()];
     if[0=count x; :()];
-    / Before the throttle is touched: a refusal must not mark anything alerted.
+    / Before the dedup state is touched: a refusal must not mark anything alerted.
     url[];
     enqueue[x;.z.p];
     flush[.z.p];

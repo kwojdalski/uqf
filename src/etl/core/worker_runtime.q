@@ -462,6 +462,34 @@ write_strategy:{[worker;w]
         `range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
     oc}
 
+/ Private: refuse a batch `replace would write on a window column that does
+/ not lie inside the window.
+/ .
+/ `replace deletes the target's rows whose window column falls in
+/ [range_from;range_to). Every row a window wrote was cut on that column, so
+/ its values lie inside the window; a value outside means the column the
+/ worker uses (inferred, when none is declared - see .qetl.job.bounded.require_window_column)
+/ is one the transform recomputed, and the delete would remove a neighbouring
+/ window's rows (#972, #1143). Checked here, where it can be: not under
+/ upsert, which never clears by the column, so a transform may move it freely.
+/ @param worker the worker's name
+/ @param batch the rows about to be written
+/ @param w the window, a dict of range_from and range_to
+/ @return the batch
+/ @throws error naming the column and the window when a value lies outside it
+/ @private
+require_inside_window:{[worker;batch;w]
+    c:.qetl.job.bounded.def[worker]`window_column;
+    if[null c; :batch];
+    t:`timestamp$batch c;
+    out:(t<w`range_from) or t>=w`range_to;
+    / kept under 255 bytes: a longer thrown string is silently cut
+    if[any out;
+        '"on_conflict replace: ",string[worker],"'s window column ",string[c]," has ",string[sum out],
+         " value(s) outside [",string[w`range_from],"; ",string[w`range_to],
+         "), so replace would delete another window's rows - declare window_column"];
+    batch}
+
 / Withdraw the fixture's claims on the window just published - the window's
 / part of them only. A claim reaching past the window is cut, not dropped: its
 / remainders [c.from;w.from) and [w.to;c.to) are staged again under the

@@ -200,6 +200,8 @@ invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 / first) to price a buy/sweep-the-offer, or the bid side (best/highest
 / price first) to price a sell/sweep-the-bid - this function doesn't care
 / which side it is, only that prices/sizes are already ordered best-first.
+/ Levels that are not level_ok (null, non-positive or infinite price or size)
+/ are skipped, so they count toward neither the fill nor the average (#1146).
 / @param prices level prices, best (most aggressive) first
 / @param sizes level sizes, same length as prices, aligned to the same levels
 / @param target_size the size you want to sweep
@@ -214,6 +216,9 @@ invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 sweep_price:{[prices;sizes;target_size]
     if[target_size<=0; '"sweep_price: size must be positive"];
     if[(count prices)<>count sizes; '"sweep_price: prices and sizes must be the same length"];
+    usable:level_ok["f"$prices;"f"$sizes];
+    prices:prices where usable;
+    sizes:sizes where usable;
     cum_size:sums sizes;
     prior_cum:cum_size-sizes;
     capped_cum:target_size&cum_size;

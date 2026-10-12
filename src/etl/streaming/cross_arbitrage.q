@@ -94,17 +94,68 @@ route_for:{[avail;sym]
     legs:.qccy.ccy_pair_legs sym;
     @[{.qcross.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
 
+/ The oldest quote time among the levels a sweep of `notional` consumes: the
+/ cumulative-size prefix through the first level where the running total
+/ reaches the notional, or the whole ladder when it never does. Nothing
+/ consumed (a non-positive notional) is 0Wp, the identity for `min`.
+/ @param times the ladder's level times, best-first
+/ @param sizes the ladder's level sizes, aligned to times
+/ @param notional the size swept, in the ladder's own base currency
+/ @return the oldest consumed level time, 0Wp if none
+/ @private
+consumed_time:{[times;sizes;notional]
+    if[notional<=0f; :0Wp];
+    n:(count sizes)&1+(sums[sizes]>=notional)?1b;
+    min n#times}
+
+/ The oldest level time each leg of a sweep consumes, walking the notional
+/ through the route exactly as .qcross.cross_sweep_chain does: leg 0 at the
+/ notional, each later leg at the bridge amount the previous sweep produced,
+/ on the oriented side (an inverted leg reads the other ladder).
+/ @param books the route's superbook rows, in traversal order
+/ @param inverts per-leg inversion flags from .qcross.ccy_orient_chain
+/ @param side `bid or `ask - the side of the synthetic being priced
+/ @param size the notional, in leg 0's currency
+/ @return one oldest-consumed time per leg
+/ @private
+chain_times:{[books;inverts;side;size]
+    out:`timestamp$();
+    notional:size;
+    i:0;
+    while[i<count books;
+        bk:books i;
+        lvl:.qcross.oriented_levels[side;leg_book bk;inverts i];
+        use_ask:$[inverts i; side=`bid; side=`ask];
+        out,:consumed_time[$[use_ask; bk`ask_times; bk`bid_times];lvl 1;notional];
+        sw:$[notional>0f; .qbook.sweep_price[lvl 0;lvl 1;notional]; `filled_size`avg_price!(0f;0n)];
+        notional:sw[`filled_size]*sw`avg_price;
+        notional:$[null notional; 0f; notional];
+        i+:1];
+    out}
+
 / When each of a set of books was last quoted, and how far apart those
-/ moments are. Top-of-book times: those are the levels a small sweep uses,
-/ and the deeper ones are no fresher. opportunity passes the direct pair
-/ along with its route's legs, since every price compared counts.
+/ moments are. A leg is as old as the OLDEST level its sweep consumes, not
+/ its top of book: a superbook ladder mixes sources, so a sweep that runs
+/ past a fresh top level into a deeper one is priced partly off that older
+/ quote (#1147). The direct pair is timed too, since every price compared
+/ counts.
 / @param state the keyed book state
-/ @param route the books to time - the direct pair and its route's legs
+/ @param sym the direct pair
+/ @param route the synthetic route's legs, in traversal order (empty: no legs)
+/ @param size the notional, in the direct pair's base currency
+/ @param route_sides sides of the synthetic that are priced, `bid`ask or one
+/ @param direct_sides sides of the direct book that are priced
 / @return dict `as_of`skew - the OLDEST leg time, and oldest-to-newest
-/ @eg .qpipe.job.cross_arbitrage.leg_times[`sym xkey 0#.qpipe.job.superbook.superbook;`symbol$()] -> `as_of`skew!(0Np;0Nn)
-leg_times:{[state;route]
+/ @eg .qpipe.job.cross_arbitrage.leg_times[`sym xkey 0#.qpipe.job.superbook.superbook;`EURJPY;`symbol$();1e6;`bid`ask;`bid`ask] -> `as_of`skew!(0Np;0Nn)
+leg_times:{[state;sym;route;size;route_sides;direct_sides]
     if[0=count route; :`as_of`skew!(0Np;0Nn)];
-    ts:{[state;leg] r:state leg; min (first r`bid_times;first r`ask_times)}[state] each route;
+    inverts:(.qcross.ccy_orient_chain route)`inverts;
+    books:state ([] sym:route);
+    rt:{[books;inverts;size;side] chain_times[books;inverts;side;size]}[books;inverts;size] each (),route_sides;
+    d:state sym;
+    dt:{[d;size;side]
+        $[side=`bid; consumed_time[d`bid_times;d`bid_sizes;size]; consumed_time[d`ask_times;d`ask_sizes;size]]}[d;size] each (),direct_sides;
+    ts:(min each flip rt),min dt;
     `as_of`skew!(min ts;(max ts)-min ts)}
 
 / Sweep one side of the direct book at the notional.
@@ -143,7 +194,9 @@ opportunity:{[state;avail;sym;size;as_of]
     / comparison, so a stale direct quote against fresh legs is the same
     / two-moments price as one stale leg. Timing the route alone published a
     / direct book seconds old as an active edge with skew 0 (#727).
-    times:leg_times[state;sym,route];
+    / Timed at the levels each sweep consumes, not the top of book (#1147).
+    both:`bid`ask;
+    times:leg_times[state;sym;route;size;both;both];
     / `state ([] sym:route)`, not `state route`: a keyed table indexed by a
     / symbol VECTOR is a 'length, even though the same table indexed by one
     / symbol is the row you expect. Indexing by a table of keys is the form
@@ -162,12 +215,14 @@ opportunity:{[state;avail;sym;size;as_of]
     buy_synthetic:(direct_bid`price)-syn`ask;
     edge:buy_direct|buy_synthetic;
     if[not edge>0f; :(sym;times`as_of;0b;`;route;0n;0n;size;0n;0n;0b;times`skew)];
-    fresh:(times`skew)<=max_skew;
     $[buy_direct>=buy_synthetic;
         [dir:`buy_direct; direct_px:direct_ask`price; syn_px:syn`bid;
-            filled:(direct_ask`fully_filled) and syn`bid_fully_filled];
+            filled:(direct_ask`fully_filled) and syn`bid_fully_filled;
+            times:leg_times[state;sym;route;size;`bid;`ask]];
         [dir:`buy_synthetic; direct_px:direct_bid`price; syn_px:syn`ask;
-            filled:(direct_bid`fully_filled) and syn`ask_fully_filled]];
+            filled:(direct_bid`fully_filled) and syn`ask_fully_filled;
+            times:leg_times[state;sym;route;size;`ask;`bid]]];
+    fresh:(times`skew)<=max_skew;
     (sym;times`as_of;fresh;dir;route;direct_px;syn_px;size;edge;size*edge;filled;times`skew)}
 
 / Status for every pair that has both a direct book and a synthetic route.

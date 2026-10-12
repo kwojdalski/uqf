@@ -129,6 +129,32 @@ def _staged_files(staged: Path) -> list[str]:
     return sorted(found)
 
 
+def tree_python(root: Path, tree: Path, runner: Runner, stage: str):
+    """A runner of `python <argv>` from `root`'s environment that imports uqs
+    from `tree` (cwd and PYTHONPATH), so every `repo_root()` - and all uqs
+    reads at import from it: the job graph, the bundle ledger,
+    plant_tables.q - is the copy's. A failure is a ReleaseError at `stage`."""
+    env = dict(os.environ, PYTHONPATH=str(tree / "python" / "uqs" / "src"))
+    # A staged tree carries no lib/ (a release never does): the step reads
+    # the vendored TorQ and starter pack from the checkout's, as a deployed
+    # release reads the server's - unless the builder named its own.
+    env.setdefault("TORQHOME", str(root / "lib" / "torq"))
+    env.setdefault("TORQAPPHOME", str(root / "lib" / "torq-finance-starter-pack"))
+    python = ["uv", "run", "--frozen", "--quiet", "--project", str(root), "python"]
+
+    def step(what: str, *argv: str) -> str:
+        try:
+            r = runner([*python, *argv], cwd=tree, env=env, capture_output=True, text=True)
+        except OSError as exc:
+            raise ReleaseError(stage, f"{what}: could not run uv: {exc}") from None
+        if r.returncode:
+            tail = "\n".join((r.stderr or r.stdout or "").strip().splitlines()[-15:])
+            raise ReleaseError(stage, f"{what} failed (exit {r.returncode}):\n{tail}")
+        return r.stdout
+
+    return step
+
+
 def stage_bundles(
     root: Path,
     files: list[str],
@@ -154,24 +180,7 @@ def stage_bundles(
     for rel in sorted(set(files) | set(tracked_files(root, runner, STAGED_EXTRA))):
         (staged / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / rel, staged / rel)
-    env = dict(os.environ, PYTHONPATH=str(staged / "python" / "uqs" / "src"))
-    # The staged tree carries no lib/ (a release never does): the generator
-    # reads the vendored process table from the checkout's, as a deployed
-    # release reads the server's - unless the builder named its own.
-    env.setdefault("TORQHOME", str(root / "lib" / "torq"))
-    env.setdefault("TORQAPPHOME", str(root / "lib" / "torq-finance-starter-pack"))
-    python = ["uv", "run", "--frozen", "--quiet", "--project", str(root), "python"]
-
-    def step(what: str, *argv: str) -> str:
-        try:
-            r = runner([*python, *argv], cwd=staged, env=env, capture_output=True, text=True)
-        except OSError as exc:
-            raise ReleaseError("bundle", f"{what}: could not run uv: {exc}") from None
-        if r.returncode:
-            tail = "\n".join((r.stderr or r.stdout or "").strip().splitlines()[-15:])
-            raise ReleaseError("bundle", f"{what} failed (exit {r.returncode}):\n{tail}")
-        return r.stdout
-
+    step = tree_python(root, staged, runner, "bundle")
     record = json.loads(
         step(
             "installing the bundles",
@@ -350,32 +359,29 @@ def build(
             # always written (#883): a reader must never have to guess it
             runtime=runtime,
             portable=converted,
-            hdb_shape=declared_shape(tree, runtime, root),
+            hdb_shape=declared_shape(tree, runtime, root, runner),
         )
 
 
-def declared_shape(tree: Path, runtime: str, root: Path) -> dict[str, list[str]] | None:
-    """{table: columns} the release staged at `tree` declares, or None - with
-    a warning - when it cannot be composed here; push then judges the HDB in
-    prepare only.
+def declared_shape(
+    tree: Path, runtime: str, root: Path, runner: Runner = subprocess.run
+) -> dict[str, list[str]] | None:
+    """{table: columns} the release at `tree` declares for `runtime`, or None
+    - with a warning - when it cannot be composed; push then judges the HDB
+    in prepare only.
 
-    The staged tree never carries lib/ (a release never does), so the base
-    schema is the configured starter pack - TORQAPPHOME, else the BUILDER
-    checkout `root`'s vendored one, as stage_bundles gives the generator -
-    while uqf's and the installed bundles' tables are read from `tree`, the
-    release that ships them (#1158)."""
-    from dataclasses import replace
-
-    from uqs.paths import UqsError, paths_for_root
-    from uqs.stack import hdb_shape
-    from uqs.stack.hdb_types import declared_schema
-
+    Composed by the uqs of `tree`, in a subprocess (tree_python), not in
+    this process: which tables a runtime holds is read at import from the
+    tree uqs was imported from - its job graph, its bundle ledger, its
+    plant_tables.q - and only the staged tree has the bundles installed
+    (#1158, #1162, #1163). The base schema is the configured starter pack,
+    TORQAPPHOME, else the builder checkout `root`'s vendored one: a release
+    never carries lib/."""
+    step = tree_python(root, tree, runner, "hdb_shape")
+    argv = ("-m", "uqs.stack.hdb_shape", "declared", "--runtime", runtime)
     try:
-        paths = replace(
-            paths_for_root(tree, runtime), torqapphome=paths_for_root(root, runtime).torqapphome
-        )
-        return hdb_shape.declared_columns(declared_schema(paths))
-    except (UqsError, OSError, ValueError) as exc:
+        return json.loads(step("composing the hdb_shape", *argv))
+    except (ReleaseError, ValueError) as exc:
         log.warning("the manifest records no hdb_shape: {}", exc)
         return None
 
