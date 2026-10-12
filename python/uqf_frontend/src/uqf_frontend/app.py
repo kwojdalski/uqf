@@ -568,6 +568,7 @@ def _coverage(
     source_version: str,
     range_from: str | None,
     range_to: str | None,
+    claims: str = queries.COVERAGE,
 ) -> CoverageResponse:
     # Coverage is now a claim that is true until superseded, so the
     # read needs an as-of. `datetime.now(UTC)` here rather than letting q use
@@ -580,7 +581,7 @@ def _coverage(
     # nothing a backfill had recorded. Composed and gapped by .qetl.coverage
     # there too, not here: the rule a backfill trusts when it skips a covered
     # window has one implementation, and this reports what it says.
-    raw = gateway.call(queries.COVERAGE, dataset, partition, source_version, as_of)
+    raw = gateway.call(claims, dataset, partition, source_version, as_of)
     covered = _rows(gateway.call(queries.COMPOSE, raw))
 
     requested = None
@@ -622,6 +623,25 @@ def _enforce_coverage(gateway: Gateway, req: CoverageRequirement) -> None:
         raise CoverageIncomplete(
             f"{req.dataset!r} at source_version {req.source_version!r} is not fully "
             f"published for the requested range; missing: {gaps or 'unknown'}"
+        )
+    # Written is not queryable (#1094): a backfill stages coverage as it
+    # appends, and a running HDB sees a date only once it is finished and
+    # reloaded. Checked second, so a range that is simply missing says so.
+    ready = _coverage(
+        gateway,
+        req.dataset,
+        req.partition,
+        req.source_version,
+        req.range_from,
+        req.range_to,
+        claims=queries.READY_CLAIMS,
+    )
+    if not ready.complete:
+        gaps = ", ".join(f"[{g.range_from}, {g.range_to})" for g in ready.gaps)
+        raise CoverageIncomplete(
+            f"{req.dataset!r} at source_version {req.source_version!r} is published for "
+            f"the requested range but not yet loaded by the HDB: {gaps or 'unknown'} - "
+            "retry once the backfill's reload has gone through"
         )
 
 
