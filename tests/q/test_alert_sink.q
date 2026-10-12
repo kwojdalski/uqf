@@ -94,7 +94,7 @@ test_a_replay_of_a_queued_breach_is_suppressed_and_a_later_report_is_not:{[t]
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0;.z.p];0;"the same row replayed is quiet"];
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0-0D00:01;.z.p];0;"and so is an older one"];
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[enlist `GBPUSD;.alert_sinktest.t0];.z.p];1;"another pair is its own alert"];
-    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0+0D00:05;.z.p];1;"a reminder the publisher stamped later is delivered"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0+0D00:05;.z.p];1;"a reminder a period later is delivered"];
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[`EURUSD`EURUSD;.alert_sinktest.t0+0D00:10],breach_at[enlist `EURUSD;.alert_sinktest.t0+0D00:11];.z.p];1;"two new reports of one breach in a batch are one delivery"];
     .qunit.assertEquals[(.qpipe.job.alert_sink.flush .alert_sinktest.t0)`delivered;4;"four queued, four sent"]};
 
@@ -108,6 +108,21 @@ test_a_reminder_is_delivered_whatever_its_delivery_latency:{[t]
     p2:p1+0D00:05;
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[enlist `EURUSD;p1];p1+0D00:00:00.012];1;"the first, received 12ms after publication"];
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[enlist `EURUSD;p2];p2+0D00:00:00.003];1;"the reminder, received 3ms after: delivered"]};
+
+/ #1182: a restarted fx_positions re-publishes every standing breach with a
+/ fresh plant time; inside the period that is a repeat, not a new report.
+test_a_restart_republication_inside_the_period_is_suppressed:{[t]
+    ready[];
+    e:{[tm] breach_at[enlist `EURUSD;tm]};
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0;.z.p];1;"delivered at T"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0+0D00:01:05;.z.p];0;"re-published 65s later with a fresh time: dropped"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0;.z.p];0;"a replay with the same time: dropped"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0+0D00:05;.z.p];1;"the reminder at exactly +period passes"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0+0D00:09:30;.z.p];0;"and the gap restarts from the reminder"];
+    .qunit.assertEquals[(.qpipe.job.alert_sink.flush .alert_sinktest.t0)`delivered;2;"two sent in all"]};
+
+test_the_period_matches_the_publishers:{[t]
+    .qunit.assertEquals[.qpipe.job.alert_sink.alert_period;.qpipe.job.fx_positions.alert_period;"the sink's gap is fx_positions' reminder period"]};
 
 test_a_failing_target_is_retried_then_recorded:{[t]
     ready[];
