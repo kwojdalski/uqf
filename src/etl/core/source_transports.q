@@ -131,6 +131,7 @@ default_transport:`ipc
 / registered first, when this registry was a collapsed dictionary.
 / supporting's empty dict is a source with one input, as every source was
 / before #617 - see SUPPORTING INPUTS below.
-optional_declarations:`transport`credential_example`supporting`raw!(default_transport;"";()!();()!())
+/ complete_through's default is a source over CLOSED data: complete forever.
+optional_declarations:`transport`credential_example`supporting`raw`complete_through!(default_transport;"";()!();()!();{[h] 0Wp})
 
 \d .
