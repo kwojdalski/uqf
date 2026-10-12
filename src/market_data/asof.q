@@ -67,12 +67,17 @@ lookup:{[refs;events;spec]
     tmp:`$"qasof_a",/:string til n;
     tt:`qasof_t;
     rt:`qasof_rt;
+    names:(key attach),.qasof.result_cols;
+    / No events: the typed empty shape, built without aj or `,'` - PeachQ gives
+    / () for an aj on an empty left and for `,'` of two empty tables.
+    if[0=count events;
+        :flip (flip events),names!((0#'refs each value attach),(enlist `timespan$()),enlist `symbol$())];
     r:?[refs;();0b;((ks,tt,rt,tmp)!(ks,spec[`ref_time],spec[`ref_time],value attach))];
     r:(ks,tt) xasc r;
     probe:?[events;();0b;((ks,tt)!(ks,spec`event_time))];
     j:aj[ks,tt;probe;r];
     staleness:(events spec`event_time)-j rt;
     status:?[null j rt;`missing;?[(not null tol)&staleness>tol;`stale;`ok]];
-    events,'flip ((key attach),.qasof.result_cols)!(j each tmp),(enlist staleness),enlist status}
+    flip (flip events),names!(j each tmp),(enlist staleness),enlist status}
 
 \d .
