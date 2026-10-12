@@ -45,7 +45,6 @@ columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
 types:"psssfjj",raze 10#enlist "fjfj"
 
 table_name:`mbp10
-target:`eq_orderbook
 time_column:`ts_event
 
 / NOT Databento's documented key, and deliberately said so. (symbol,
@@ -125,7 +124,7 @@ fixture:{[]
 raw:enlist[table_name]!enlist flip columns!{$[x="f"; `float$(); ()]} each types
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
+    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
 
 \d .

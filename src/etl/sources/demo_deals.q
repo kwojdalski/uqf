@@ -42,7 +42,6 @@ columns:`deal_id`deal_time`sym`side`notional`rate
 types:"jpssff"
 
 / The local table this lands in.
-target:`demo_deals
 
 / The column the bounded window is taken on. Declared rather than assumed so
 / .qetl.source can window the fixture exactly as the live query windows the source.
@@ -114,7 +113,7 @@ fixture:{[]
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`demo_deals;target;time_column;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`demo_deals;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

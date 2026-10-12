@@ -21,7 +21,6 @@ source_name:`hdb_executions
 columns:`source_time`sym`size`price
 types:"psff"
 
-target:`exec_bar
 time_column:`source_time
 
 / The table carries a fill id only where the venue gave one, so two fills of a
@@ -55,7 +54,7 @@ fixture:{[]
         price:1.10 1.12 1.11 1.20 150.0)}
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`executions;target;time_column;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`executions;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

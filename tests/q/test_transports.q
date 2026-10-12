@@ -76,8 +76,8 @@ test_an_unknown_transport_is_refused_before_anything_is_opened:{[t]
         "an unknown transport is named, with the ones there are"]};
 
 test_a_source_on_an_unknown_transport_is_refused_at_define:{[t]
-    d:`source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!(
-        `trtest_src;`t;`trtest_out;`time;`time;enlist `time;enlist "p";{[h;a;b] ()};{[] ([] time:enlist .z.p)};`UTC;`carrier_pigeon);
+    d:`source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport!(
+        `trtest_src;`t;`time;`time;enlist `time;enlist "p";{[h;a;b] ()};{[] ([] time:enlist .z.p)};`UTC;`carrier_pigeon);
     .qunit.assertThrows[.qetl.source.define[`trtest_src];d;"*transport must be one of ipc, odbc, local*";
         "the transport is checked when the source is declared"]};
 

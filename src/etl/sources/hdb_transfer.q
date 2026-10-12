@@ -18,7 +18,6 @@ source_name:`hdb_transfer
 columns:`time`trade_id`sym`price`size`side
 types:"pjsfjs"
 
-target:`trades_copy
 
 / The column the window is taken on.
 time_column:`time
@@ -70,7 +69,7 @@ fixture:{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
-    (source_name;`trades;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
+    (source_name;`trades;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
 
 \d .

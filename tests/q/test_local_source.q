@@ -30,8 +30,8 @@ beforeNamespace_isolate:{[]
 / A source and worker over the local HDB, defined once.
 beforeNamespace_define:{[]
     .qetl.source.define[`loctest_src;
-        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
-        (`loctest_src;`trades;`loctest_out;`time;`time`sym;`time`sym`px;"psf";
+        `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport!
+        (`loctest_src;`trades;`time;`time`sym;`time`sym`px;"psf";
          {[h;range_from;range_to]
             .qetl.source.local[h;{[read;from_ts;to_ts]
                 select time, sym, px from read[`trades;from_ts;to_ts]
@@ -211,6 +211,25 @@ test_a_live_run_replaces_what_a_fixture_run_wrote:{[t]
         "v1 is covered by the live run"];
     .qunit.assertEquals[count .qetl.coverage.intervals[`loctest_out;`;fv;.z.p];0;
         "and the fixture's claims on those windows are withdrawn"]};
+
+/ #1140: a fixture claim wider than the live window was withdrawn whole, so the
+/ next live window saw no fixture claim, upserted, and left fixture rows
+/ standing under a live claim.
+test_a_fixture_claim_wider_than_the_live_window_keeps_its_remainders:{[t]
+    setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;.loctest.dir[]];
+    .qpipe.job.loctest_backfill.init[.loctest.spec[]];
+    fv:`$"v1~fixture";
+    .qetl.coverage.stage_completion[`loctest_out;`;fv;2026.09.16D12:00;2026.09.18D12:00;1];
+    w:`range_from`range_to!(2026.09.17D00:00;2026.09.18D00:00);
+    .qetl.job.bounded.write_state[`loctest_backfill;`last_window;w];
+    .qetl.job.bounded.runtime.retire_fixture_claims[`loctest_backfill;::];
+    iv:.qetl.coverage.intervals[`loctest_out;`;fv;.z.p];
+    .qunit.assertEquals[(iv`range_from;iv`range_to);
+        (2026.09.16D12:00 2026.09.18D00:00;2026.09.17D00:00 2026.09.18D12:00);
+        "the fixture keeps [c.from;w.from) and [w.to;c.to), and nothing inside the window"];
+    later:`range_from`range_to!(2026.09.18D00:00;2026.09.19D00:00);
+    .qunit.assertEquals[.qetl.job.bounded.runtime.fixture_claimed[`loctest_backfill;later];1b;
+        "so the next live window still sees a fixture claim, and replaces rather than upserts"]};
 
 test_a_fixture_run_must_be_asked_for:{[t]
     setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;""];

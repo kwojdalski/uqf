@@ -23,11 +23,10 @@ from __future__ import annotations
 
 import csv
 import io
-import re
 
 import pytest
 
-from uqs.model.declarations import reaction_calls, strip_q_comments
+from uqs.model.declarations import reaction_calls, read_declarations, strip_q_comments
 from uqs.paths import repo_root
 
 ROOT = repo_root()
@@ -74,13 +73,10 @@ def mismatches(sort_csv_text: str, tables: list[str]) -> list[str]:
 
 
 def backfilled_tables() -> list[str]:
-    """Every table the IO manager writes: each source's `target`, and each
+    """Every table the IO manager writes: each bounded worker's `dataset` -
+    where its rows go, not its source's old `target` (#1092) - and each
     reaction's declared output."""
-    found: set[str] = set()
-    for path in sorted((ROOT / "src" / "etl" / "sources").glob("*.q")):
-        match = re.search(r"(?m)^target:`([A-Za-z_][A-Za-z0-9_]*)", path.read_text())
-        if match:
-            found.add(match.group(1))
+    found: set[str] = {d.dataset for d in read_declarations(ROOT) if d.dataset}
     for path in sorted((ROOT / "src" / "etl" / "reactions").glob("*.q")):
         for reaction in reaction_calls(strip_q_comments(path.read_text())):
             found.update(reaction.writes)

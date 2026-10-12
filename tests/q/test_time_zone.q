@@ -44,14 +44,14 @@ beforeNamespace_zones:{[]
 setUp_sources:{[]
     .tztest.drop_sources[];
     .qetl.source.define[`tz_london;
-        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-        (`tz_london;`ext;`loc;`ts;`ts;`ts`px;"pf";
+        `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+        (`tz_london;`ext;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
          .tztest.london)];
     .qetl.source.define[`tz_summer;
-        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-        (`tz_summer;`ext;`loc;`ts;`ts;`ts`px;"pf";
+        `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+        (`tz_summer;`ext;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:enlist 2026.07.15D09:00:00.000000000; px:enlist 1.5)};
          .tztest.london)];

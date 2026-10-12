@@ -43,7 +43,6 @@ source_name:`hdb_demo_markouts
 columns:`time`sym`side`trade_price`pip_factor
 types:"psjfj"
 
-target:`demo_execution_quality
 time_column:`time
 
 / A fill. The table carries no fill id, so two fills of one pair at the same
@@ -122,7 +121,7 @@ raw_quotes:{[]
 fixture:{[] `trades`quote!(raw_fills[];raw_quotes[])}
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`supporting!
-    (source_name;`trades;target;time_column;row_key;columns;types;query;fixture;tz;supporting)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting!
+    (source_name;`trades;time_column;row_key;columns;types;query;fixture;tz;supporting)];
 
 \d .

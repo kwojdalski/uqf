@@ -805,13 +805,12 @@ check_static:{[worker;run_spec]
 validate:{[worker;run_spec]
     cfg:def worker;
     s:check_static[worker;run_spec];
-    src:.qetl.source.def cfg`source;
     / A configured row is checked here too - a stub, a transport mismatch or
     / an unset secret variable - so validate catches what init would. Its
     / result may hold a secret, so it is dropped.
     if[`settings~.qetl.source.credential_origin cfg`source; .qetl.source.resolve_setting cfg`source];
-    s,`state`worker`source`target`dataset`width`windows`on_conflict`live!
-        (`validated;worker;cfg`source;src`target;cfg`dataset;cfg`width;
+    s,`state`worker`source`dataset`width`windows`on_conflict`live!
+        (`validated;worker;cfg`source;cfg`dataset;cfg`width;
          count .qetl.job.bounded.runtime.windows[s`range_from;s`range_to;cfg`width];
          on_conflict worker;.qetl.source.has_credentials cfg`source)}
 

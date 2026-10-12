@@ -98,7 +98,6 @@ types:"ppssb",(raze 5#enlist "ffff"),"ffjffs"
 /   wants the parquet shards, which are append-only and unlocked, rather than
 /   the database file that indexes them.
 table_name:`market_data_live
-target:`crypto_market_data
 
 time_column:`source_time
 
@@ -247,7 +246,7 @@ fixture:{[]
 raw:enlist[table_name]!enlist flip ({x^renamed x} columns)!{$[x="f"; `float$(); ()]} each types
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
+    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
 
 \d .

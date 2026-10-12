@@ -433,6 +433,25 @@ test_a_worker_reaction_runs_that_worker:{[t]
     .qunit.assertEquals[(count value `demo_deals;exec first outcome from .qetl.reaction.history);(3;`ok);
         "publishing upstream ran the downstream worker over the published range"]};
 
+/ A downstream worker whose run ends `partial (every window fails its check,
+/ nothing throws) must leave the reaction owed, not record it ok (#1141).
+test_a_partial_worker_reaction_is_recorded_failed_and_stays_owed:{[t]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    .testutil.reset_coverage_ledger[];
+    dfx:{[] ([] id:1 2j; time:.rxtest.d[1]+0D10:00 1D10:00; px:1 2f)};
+    `rxp_tab set 0#dfx[];
+    .qetl.source.define[`rxp_src;`source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+        (`rxp_src;`rxp_tab;`time;`id;`id`time`px;"jpf";{[h;f;t] .qetl.source.ipc[h;{[a;b] select from rxp_tab where time>=a, time<b};f;t]};dfx;`UTC)];
+    .qetl.transform.passthrough[`rxp_pass;`batch;0#dfx[];dfx[]];
+    .qetl.job.bounded.define[`rxp_worker;`source`dataset`width`transform`check!(`rxp_src;`rxp_tab;1D;`rxp_pass;
+        {[b] ([] check:count[b]#`always; status:count[b]#`breach; detail:count[b]#enlist "x")})];
+    {.qetl.job.bounded.state.release_lock x; .qetl.job.bounded.state.clear_checkpoint x} `rxp_worker;
+    .qetl.reaction.on_worker[`demo_deals;`rxp_worker;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
+    r:.[.qetl.reaction.for_dataset[`demo_deals][`handler] 0;(`demo_deals;.rxtest.d[1];.rxtest.d[2]);{[e] e}];
+    .qunit.assertTrue[(10h=type r) and r like "*rxp_worker ended partial*";
+        "a partial downstream run throws, naming the worker and its state"];
+    .qunit.assertTrue[not .qetl.run.is_running[];"cleanup ran: no run is left in flight"]};
+
 / --- a worker reaction inside another worker's run (#973) ------------------
 
 / A fresh run ledger, in memory and on disk (see test_run.q's setUp_fresh).

@@ -26,7 +26,6 @@ columns:`time`sym`ex`price`size`side
 types:"pscfis"
 
 / Where the rows land locally - a name that says they came from elsewhere.
-target:`imported_trades
 
 time_column:`time
 
@@ -97,7 +96,7 @@ fixture:{[]
         side:`side`buy`side`side`buy`side`buy`buy`buy`buy)}
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`trade;target;time_column;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`trade;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

@@ -462,10 +462,19 @@ write_strategy:{[worker;w]
         `range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
     oc}
 
-/ Withdraw the fixture's claims on the window just published. After the
-/ write and before finish_window stages the live claim, so an interruption
-/ between them leaves the window claimed by neither - an under-claim, which a
-/ re-run repairs - never by both.
+/ Withdraw the fixture's claims on the window just published - the window's
+/ part of them only. A claim reaching past the window is cut, not dropped: its
+/ remainders [c.from;w.from) and [w.to;c.to) are staged again under the
+/ fixture release first, so a later live window over them still finds a
+/ fixture claim and writes under `replace. Withdrawing the whole claim made
+/ that window upsert, and fixture rows the live data did not repeat stayed
+/ under a live claim (#1140).
+/ .
+/ After the write and before finish_window stages the live claim, and the
+/ remainders BEFORE the supersede: an interruption between them leaves the
+/ remainder claimed twice by the fixture (harmless, claims compose), and one
+/ after the supersede leaves the window claimed by neither - an under-claim,
+/ which a re-run repairs - never by both fixture and live.
 / @param worker the worker's name
 / @param rows what the publish returned, passed through
 / @return rows
@@ -474,6 +483,14 @@ retire_fixture_claims:{[worker;rows]
     if[not fixture_claimed[worker;w]; :rows];
     cfg:.qetl.job.bounded.def worker;
     v:.qetl.source.fixture_version .qetl.job.bounded.read_state[worker;`source_version];
+    iv:.qetl.coverage.intervals[cfg`dataset;cfg`partition;v;.z.p];
+    hit:select from iv where range_from<w`range_to, (w`range_from)<range_to;
+    / each remainder is a claim of the fixture's own, over rows it did not
+    / publish in this call, so 0 rows - the interval is what is claimed
+    k:count hit;
+    froms:(hit`range_from),k#w`range_to;
+    tos:(k#w`range_from),hit`range_to;
+    {[cfg;v;a;b] if[a<b; .qetl.coverage.stage_completion[cfg`dataset;cfg`partition;v;a;b;0]]}[cfg;v]'[froms;tos];
     n:.qetl.coverage.supersede[cfg`dataset;cfg`partition;v;w`range_from;w`range_to];
     .qetl.log.info[worker;"live rows replace a fixture run's window";`range_from`range_to`claims!(w`range_from;w`range_to;n)];
     rows}

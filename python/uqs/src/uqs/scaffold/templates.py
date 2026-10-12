@@ -135,8 +135,6 @@ source_name:`{src}
 columns:`{"`".join(names)}
 types:"{types}"
 
-target:`{dataset}
-
 / The column the window is taken on.
 time_column:`{TIME_COLUMN}
 
@@ -173,8 +171,8 @@ fixture:{{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz{extra_keys}!
-    (source_name;`{dataset};target;time_column;row_key;columns;types;query;fixture;tz{extra_values})];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz{extra_keys}!
+    (source_name;`{dataset};time_column;row_key;columns;types;query;fixture;tz{extra_values})];
 
 \\d .
 """

@@ -31,7 +31,6 @@ source_name:`demo_events
 columns:`time`sym`action`side`size`price`order_id`pip_factor
 types:"pssjffjj"
 
-target:`event_tape
 
 / The window is taken on event time.
 time_column:`time
@@ -85,7 +84,7 @@ fixture:{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`event_tape;target;time_column;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`event_tape;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

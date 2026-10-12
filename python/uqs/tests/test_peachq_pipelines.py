@@ -408,7 +408,7 @@ SYNTH = {
     "synth_src.q": (
         "\\d .qpipe.source.synth_src\n"
         'source_name:`synth_src\ncolumns:`time`sym`seq`px\ntypes:"psjf"\n'
-        "target:`synth_hist\ntime_column:`time\nrow_key:`seq\ntz:`UTC\n"
+        "time_column:`time\nrow_key:`seq\ntz:`UTC\n"
         "/ The tape a day back: the tickerplant stamps today's time on every row,\n"
         "/ and today's partition is its own, so a backfill writes yesterday's.\n"
         "query:{[h;range_from;range_to]\n"
@@ -419,8 +419,8 @@ SYNTH = {
         "fixture:{[] ([] time:2026.09.11D09:00+1000000000*til 5; sym:5#`SYNTH; seq:1+til 5; "
         "px:101f+til 5)}\n"
         ".qetl.source.define[source_name;\n"
-        "    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!\n"
-        "    (source_name;`synth_tape;target;time_column;row_key;columns;types;query;"
+        "    `source`table_name`time_column`row_key`columns`types`query`fixture`tz!\n"
+        "    (source_name;`synth_tape;time_column;row_key;columns;types;query;"
         "fixture;tz)];\n"
         "\\d .\n"
     ),
