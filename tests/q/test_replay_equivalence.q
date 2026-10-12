@@ -51,6 +51,24 @@ bars_script:{[]
      ev[t0+0D00:06:10;`tick;()];
      ev[t0+0D00:07:00;`tick;()])}
 
+/ A crypto_book row received at rcv, for the venue's stamp src.
+cbook:{[src;rcv;v;s;bid]
+    ([] time:enlist rcv; source_time:enlist src; venue:enlist v; sym:enlist s;
+        bid_prices:enlist bid-0 1f; bid_sizes:enlist 1 2f; ask_prices:enlist bid+10 11f; ask_sizes:enlist 3 4f)}
+
+/ crypto_book_1s: two updates of a second out of order, the second closing, a late
+/ update that amends an open second, one for a second already out, and a second venue.
+cbook_script:{[]
+    (ev[t0+0D00:00:00.900;`crypto_book;cbook[t0+0D00:00:00.800;t0+0D00:00:00.900;`a;`BTC;62001f]];
+     ev[t0+0D00:00:01.100;`crypto_book;cbook[t0+0D00:00:00.200;t0+0D00:00:01.100;`a;`BTC;62000f]];
+     ev[t0+0D00:00:01.600;`tick;()];
+     ev[t0+0D00:00:02.100;`crypto_book;cbook[t0+0D00:00:01.900;t0+0D00:00:02.100;`a;`BTC;62010f]];
+     ev[t0+0D00:00:02.200;`crypto_book;cbook[t0+0D00:00:02.300;t0+0D00:00:02.200;`b;`BTC;61000f]];
+     ev[t0+0D00:00:02.300;`crypto_book;cbook[t0+0D00:00:00.950;t0+0D00:00:02.300;`a;`BTC;62099f]];
+     ev[t0+0D00:00:02.700;`crypto_book;cbook[t0+0D00:00:02.600;t0+0D00:00:02.700;`b;`BTC;61005f]];
+     ev[t0+0D00:00:03.600;`tick;()];
+     ev[t0+0D00:00:09.000;`tick;()])}
+
 last_value_script:{[]
     (ev[t0+0D00:00:01;`market_data;book[t0+0D00:00:01;`EURUSD;1.10;1.12]];
      ev[t0+0D00:00:02;`market_data;book[t0+0D00:00:02;`GBPUSD;1.30;1.32]];
@@ -59,9 +77,10 @@ last_value_script:{[]
      ev[t0+0D00:00:05;`market_data;book[t0+0D00:00:05;`GBPUSD;1.31;1.33]])}
 
 / The scripted jobs: name -> the script and what to do on a tick.
-scripts:`exec_bars`last_value!(
+scripts:`exec_bars`last_value`crypto_book_1s!(
     `script`tick!(bars_script;{[j;n] .qpipe.job.exec_bars.close_ready n});
-    `script`tick!(last_value_script;{[j;n] ::}))
+    `script`tick!(last_value_script;{[j;n] ::});
+    `script`tick!(cbook_script;{[j;n] .qpipe.job.crypto_book_1s.close_ready n}))
 
 / Replaying jobs deliberately not scripted: job -> why.
 excluded:`fx_positions`posbook`kafka_flow!(
@@ -111,14 +130,14 @@ run:{[j;k]
     pub:` sv ((.qetl.job.stream.def j)`ns),`publish;
     keep:get pub;
     .qetl.job.stream.reset j;
-    if[j=`exec_bars; `.qpipe.job.exec_bars.now set {[] .reqtest.clock}];
+    if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .reqtest.clock}];
     `.reqtest.pubs set (); `.reqtest.wal set ();
     .qetl.job.stream.wire[j;recorder[j]];
     step[j;spec] each k#evs;
     if[k>0; restart j];
     step[j;spec] each k _ evs;
     out:pubs;
-    if[j=`exec_bars; `.qpipe.job.exec_bars.now set {[] .z.p}];
+    if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .z.p}];
     pub set keep;
     .qetl.job.stream.reset j;
     out}
@@ -133,6 +152,11 @@ equivalent:{[j]
 test_a_restart_at_any_point_publishes_what_the_running_bars_job_did:{[t]
     r:equivalent `exec_bars;
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes bars"];
+    .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
+
+test_a_restart_at_any_point_publishes_what_the_running_crypto_book_1s_job_did:{[t]
+    r:equivalent `crypto_book_1s;
+    .qunit.assertTrue[0<sum count each last each first r;"the script publishes snapshots"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
 test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]
