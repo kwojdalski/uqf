@@ -331,7 +331,7 @@ wire:{[job;publisher]
 contracted:{[job;plant;publisher;t;x]
     if[not t in plant; :publisher[t;x]];
     if[count f:contract_problems[t;x];
-        :withhold[job;t;x;"plant contract: ","; " sv f;();count x]];
+        :withhold[job;t;x;"plant contract: ","; " sv f;();row_count[t;x]]];
     publisher[t;x]}
 
 / Private: what is wrong with `x` as a batch for plant table `t`: a table,
@@ -347,8 +347,22 @@ contract_problems:{[t;x]
         :enlist string[t],"'s rows must be a table, a dict or a list of column vectors"];
     / Trapped: a ragged list or dict cannot be made a table, and says so. A
     / `time` is dropped, as every publisher drops it: the plant stamps its own.
-    @[{[t;c;x] r:0!$[.Q.qt x; x; 99h=type x; $[all 0>type each value x; enlist x; flip x]; flip c!x];
+    @[{[t;c;x] r:as_rows[c;x];
             .qetl.plant.problems[t] (cols[r] except `time)#r}[t;c];x;{[e] enlist "could not be checked: ",e}]}
+
+/ Private: a batch in any shape a publisher takes, as a table (#1164): a table
+/ as it is, a dict of atoms as one row, a dict of vectors flipped to N rows, a
+/ list of column vectors flipped under the names in `c`. The one reading of
+/ "the rows of this batch"; throws on a ragged dict or list.
+/ @private
+as_rows:{[c;x] 0!$[.Q.qt x; x; 99h=type x; $[all 0>type each value x; enlist x; flip x]; flip c!x]}
+
+/ Private: how many rows a batch holds, whatever its shape (#1164). A batch
+/ that cannot be made a table (ragged) counts as 1: it is withheld whole.
+/ @private
+row_count:{[t;x]
+    c:$[t in .qetl.plant.names[]; cols .qetl.plant.published t; `$"c",/:string til count x];
+    @[{[c;x] count as_rows[c;x]}[c];x;{[e] 1}]}
 
 / Private: a publisher that runs the job's declared check first (#944).
 / .
@@ -368,17 +382,17 @@ contract_problems:{[t;x]
 checked:{[job;chk;mode;publisher;t;x]
     r:@[{[chk;x] (1b;chk x)}[chk];x;{[e] (0b;e)}];
     if[not first r;
-        :withhold[job;t;x;"check threw: ",last r;();count x]];
+        :withhold[job;t;x;"check threw: ",last r;();row_count[t;x]]];
     f:last r;
     if[not .Q.qt f;
-        :withhold[job;t;x;"check returned something other than a table of failures";();count x]];
+        :withhold[job;t;x;"check returned something other than a table of failures";();row_count[t;x]]];
     if[0=count f; :publisher[t;x]];
     / Only a table has rows a check can name by index and a publisher can be
     / handed a subset of. A dict row or a list of column vectors that fails is
     / withheld whole, under drop as under hold: no clean subset is rebuilt in
     / a shape the check never indexed.
     tbl:98h=type x;
-    n:$[tbl; count x; 99h=type x; 1; count first x];
+    n:row_count[t;x];
     / `row is read only once it is known to be there: `and evaluates both
     / sides, and indexing a missing column throws on PeachQ
     named:$[tbl and (`drop=mode) and `row in cols f; not any null f`row; 0b];
@@ -392,7 +406,7 @@ checked:{[job;chk;mode;publisher;t;x]
 withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
     .[{.qetl.log.err[x;y;z]};(job;"publish check withheld rows";
-        `table`rows`withheld`failures!(t;count x;n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
+        `table`rows`withheld`failures!(t;row_count[t;x];n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
     ::}
 
 / ------------------------------------------------------------ THE BUFFER
