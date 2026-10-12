@@ -2,7 +2,10 @@
 / not q (#1168).
 / .
 / Run as:  q scripts/gates/hdb_lock.q acquire|release <hdb root> <holder pid>
-/ from the repository root (init.q's \l lines are root-relative).
+/ from a directory holding src/etl/core/backfill_state.q and io_hdb.q - the
+/ repository root, or for PeachQ, which cannot load their nested \d contexts,
+/ a copy uqs has flattened (hdb_migrate._lock_code). Only those two load: the
+/ lock protocol and the lock's path, which need nothing else in the tree.
 / .
 / Called by uqs.stack.hdb_migrate, which holds the root's lock across its q
 / stage and its own atomic exchange. Python used to take the lock itself, with
@@ -30,8 +33,8 @@ if[3<>count args; -2 "hdb_lock: needs acquire|release <hdb root> <holder pid>"; 
 if[not (args 0) in ("acquire";"release"); -2 "hdb_lock: the action is acquire or release"; exit 2];
 if[null holder:"J"$args 2; -2 "hdb_lock: the holder pid is not a number"; exit 2];
 
-\l src/init.q
-\l src/etl/init.q
+\l src/etl/core/backfill_state.q
+\l src/etl/core/io_hdb.q
 
 path:.qetl.io.hdb_lock hsym `$args 1;
 refuse:{[e] -2 "hdb_lock: ",e; exit 1};

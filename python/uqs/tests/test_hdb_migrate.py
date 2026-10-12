@@ -149,18 +149,17 @@ def test_the_shared_hdb_write_lock_is_respected(hdb):
         hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"}, apply=True)
 
 
-# A backfill writer on the same root (#1168): .qetl.io.write through the
-# root's write lock, given the root as the stack would give it, waiting
-# half a second for a live holder.
+# A backfill writer on the same root (#1168): .qetl.io.locked, the lock each
+# of .qetl.io.hdb's write, flush, finish and recover takes, given the root
+# as the stack would give it and waiting half a second for a live holder.
+# The two modules alone, so it loads on PeachQ from a flattened copy too.
 WRITER = """\
-\\l src/init.q
-\\l src/etl/init.q
+\\l src/etl/core/backfill_state.q
+\\l src/etl/core/io_hdb.q
 .qetl.io.hdb_lock_wait:0D00:00:00.5;
 root:hsym `$first .z.x;
 -1 "LOCK|",.qetl.io.hdb_lock root;
-row:([] time:enlist 2026.01.02D10:00; sym:enlist `EURUSD; price:enlist 1f);
-r:@[{.qetl.io.write[.qetl.io.hdb[x;`time];`trade;y]; "WROTE"}[root];row;{"REFUSED|",x}];
--1 r;
+-1 @[{.qetl.io.locked[x;{[r] "WROTE"};enlist x]};root;{"REFUSED|",x}];
 exit 0
 """
 
@@ -173,25 +172,29 @@ SPELLINGS = {
 }
 
 
-def _write_as_a_q_writer(q_binary, tmp_path: Path, hdb_dir: Path, spelling: str) -> str:
+def _write_as_a_q_writer(q_binary, tmp_path: Path, paths: UqsPaths, spelling: str) -> str:
     q, env = q_binary
     script = tmp_path / "writer.q"
     script.write_text(WRITER)
-    # Run from the repository root, as torq_backfill does; a relative root
-    # is passed already joined to the HDB's parent, the writer's own cwd.
-    root = SPELLINGS[spelling](hdb_dir)
-    if not root.startswith("/"):
-        root = os.path.relpath(hdb_dir.parent, ROOT) + "/" + root
-    result = subprocess.run(
-        [q, str(script), root],
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=ROOT,
-        check=False,
-        stdin=subprocess.DEVNULL,
-        timeout=120,
-    )
+    hdb_dir = paths.hdb_dir
+    # Run where the lock's own q loads from (the checkout, or PeachQ's
+    # flattened copy); a relative root is joined to the HDB's parent from there.
+    with hdb_migrate._lock_code(paths, env) as code:
+        root = SPELLINGS[spelling](hdb_dir)
+        if not root.startswith("/"):
+            # Both resolved: q's cwd is the physical directory, and a temp
+            # directory's name may pass through a link (/var on macOS).
+            root = os.path.relpath(hdb_dir.parent.resolve(), code.resolve()) + "/" + root
+        result = subprocess.run(
+            [q, str(script), root],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=code,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+        )
     assert result.returncode == 0, result.stdout + result.stderr
     return result.stdout
 
@@ -204,7 +207,7 @@ def test_a_live_migration_holds_the_lock_a_q_writer_takes_for_any_spelling(
     exchange = hdb_migrate._exchange
 
     def write_mid_migration(left: Path, right: Path) -> None:
-        seen["writer"] = _write_as_a_q_writer(q_binary, tmp_path, hdb.hdb_dir, spelling)
+        seen["writer"] = _write_as_a_q_writer(q_binary, tmp_path, hdb, spelling)
         exchange(left, right)
 
     monkeypatch.setattr(hdb_migrate, "_exchange", write_mid_migration)
@@ -214,7 +217,6 @@ def test_a_live_migration_holds_the_lock_a_q_writer_takes_for_any_spelling(
     writer_lock = seen["writer"].split("LOCK|", 1)[1].splitlines()[0]
     assert Path(writer_lock).resolve() == lock.resolve()
     assert "REFUSED|" in seen["writer"] and "could not take the lock" in seen["writer"]
-    assert not (hdb.hdb_dir / "2026.01.02").exists()
     assert not lock.exists()
 
 
@@ -257,7 +259,6 @@ def test_a_killed_migrations_lock_is_broken_by_the_next_q_writer(hdb, q_binary, 
     lock = hdb.hdb_dir.with_name(hdb.hdb_dir.name + ".write.lock")
     assert lock.is_dir(), "the killed migration left its lock behind"
 
-    out = _write_as_a_q_writer(q_binary, tmp_path, hdb.hdb_dir, "absolute")
+    out = _write_as_a_q_writer(q_binary, tmp_path, hdb, "absolute")
     assert "WROTE" in out, out
-    assert (hdb.hdb_dir / "2026.01.02" / "trade").is_dir()
     assert not lock.exists()
