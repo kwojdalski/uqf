@@ -45,9 +45,10 @@
 / Refuse a batch that is shaped correctly but cannot be true. Three
 / conditions, each one a thing no correct recorded row can meet:
 / .
-/   crossed_book        the best bid at or above the best ask. A book can be
-/                       locked or crossed for a moment on a real venue, but
-/                       not in a snapshot the recorder assembled from one
+/   crossed_book        the best bid above the best ask (.qbook.crossed_top,
+/                       #1176; a LOCKED book, bid = ask, is legitimate and
+/                       passes). A book can be crossed for a moment on a
+/                       real venue, but not in a snapshot the recorder assembled from one
 /                       feed message - there it means the levels were paired
 /                       wrong, which is exactly what a five-column fold can
 /                       get wrong and nothing downstream would notice.
@@ -55,10 +56,9 @@
 /   negative_latency    a latency sample below zero, or a running minimum
 /                       above the sample it is supposed to bound.
 / .
-/ Nulls are excluded from the crossed test explicitly, and that is not
-/ decoration: q says `0n>=0n` is 1b, so a pair the venue quoted on neither
-/ side would report as crossed on every row if the test were written the
-/ obvious way. A level nobody quoted is absent, not wrong.
+/ A level nobody quoted is absent, not wrong: .qbook.crossed_top never calls a
+/ side with no usable level crossed (q says `0n>=0n` is 1b, so a naive test
+/ would fail every such row).
 / .
 / The latency test excludes them for the same reason: `0n<0` is 1b, and so
 / is `5f>0n`, so a row carrying no latency sample read as negative_latency
@@ -68,9 +68,7 @@
 / @eg .qpipe.job.crypto_market_data_backfill.quality_check[.qpipe.transform.crypto_market_data.example_book[]]  ->  an empty table
 quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    top_bid:first each batch`bid_prices;
-    top_ask:first each batch`ask_prices;
-    crossed:batch where (not null top_bid) & (not null top_ask) & top_bid>=top_ask;
+    crossed:batch where .qbook.crossed_top[batch`bid_prices;batch`ask_prices];
     bad_trade:select from batch where (not null trade_price) & not (trade_price>0) & (trade_size>0);
     sample:batch`latency_ms;
     floor_ms:batch`latency_min_ms;

@@ -28,8 +28,9 @@
 
 / Per-row market data sanity, built on microstructure.q's own spread_bps
 / (no re-derivation of top-of-book/mid here) - a negative spread means the
-/ book is crossed (bid at or through the ask, a genuine data error, not
-/ just a quality concern), a spread wider than max_spread_bps is flagged
+/ book is crossed (bid strictly above the ask - a locked book, bid = ask,
+/ is not - a genuine data error, not just a quality concern; the rule is
+/ .qbook.crossed_top's, shared with the backfill gates, #1176), a spread wider than max_spread_bps is flagged
 / separately (thin/stale liquidity or a bad print, not necessarily wrong,
 / but worth a human's attention) so the two very different severities
 / don't collapse into one generic "bad" bucket.
@@ -37,9 +38,8 @@
 / A side nobody quoted is ABSENT, not wrong: its spread is null, and a null
 / is neither crossed nor wide - it is `one_sided. Written the obvious way,
 / `spreads<0` called it crossed, because q orders a null below every number,
-/ so a quote with an ask and no bid read as a data error (#546). The same
-/ guard crypto_market_data_backfill.q's quality_check applies to its own
-/ crossed test.
+/ so a quote with an ask and no bid read as a data error (#546). .qbook.crossed_top
+/ owns that guard now, for every path that decides a crossed book.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 /   (see forwards.q's require_depth_quotes) - any row order, needn't be sorted
 / @param max_spread_bps a spread at or below this many bps is `ok; above
@@ -61,7 +61,7 @@ check_market_data_quality:{[quotes;max_spread_bps]
     / already use for the 2-way case, generalized to 3 statuses via a
     / 0/1/2 index built from ordinary boolean arithmetic instead of $.
     one_sided:null spreads;
-    is_crossed:(not one_sided) & spreads<0;
+    is_crossed:(not one_sided) & .qbook.crossed_top[quotes`bid_prices;quotes`ask_prices];
     is_wide:spreads>max_spread_bps;
     / 0 crossed, 1 ok, 2 wide - and 3 one_sided, which overrides: a null
     / spread is never crossed (guarded above) or wide (null>x is false).
