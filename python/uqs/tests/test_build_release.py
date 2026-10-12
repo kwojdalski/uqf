@@ -39,6 +39,8 @@ def _built(argv: list[str], **kwargs):
 
 
 REV = "0123456789abcdef0123456789abcdef01234567"
+#: What the faked `uqs.stack.hdb_shape declared` step prints.
+SHAPE = {"quote": ["time", "sym"]}
 
 
 def _done(stdout: str = "", rc: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
@@ -53,6 +55,8 @@ def _tools(files: list[str], dirty: str = "", fail: str | None = None):
         calls.append(list(argv))
         if fail and fail in argv:
             return _done(rc=2, stderr=f"{fail} broke")
+        if "uqs.stack.hdb_shape" in argv:
+            return _done(json.dumps(SHAPE))
         if "ls-files" in argv:
             return _done("\0".join(files) + "\0")
         if "rev-parse" in argv:
@@ -167,6 +171,7 @@ def test_the_manifest_records_revision_target_and_every_checksum(tmp_path):
     assert m["target"]["python"] == "3.14" and "manylinux_2_28_aarch64" in m["target"]["platforms"]
     assert m["python"]["app_wheel"] == ".release/wheels/uqs-0.1.0-py3-none-any.whl"
     assert all(len(h) == 64 for h in m["files"].values()) and len(m["files"]) == 6
+    assert m["hdb_shape"] == SHAPE
     beside = json.loads((tmp_path / "dist" / f"uqf-{m['release']}.manifest.json").read_text())
     assert beside == m
 
