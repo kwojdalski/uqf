@@ -166,14 +166,14 @@ depth_ratio:{[bid_sizes;ask_sizes]
 / Private: vwmp_skew for a single row - volume-weighted mid over the first
 / n_levels (via execution.q's vwap, concatenating that row's bid and ask
 / prices/sizes over til n_levels) minus the simple L0 mid, divided by the
-/ L0 spread.
+/ L0 spread. Locked/crossed L0 (spread <= 0) is null, not +-0w (see depth_ratio).
 / @private
 vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
     idx:til n_levels;
     vw_mid:.qexec.vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
     simple_mid:0.5*(bid_prices 0)+ask_prices 0;
     l0_spread:(ask_prices 0)-bid_prices 0;
-    (vw_mid-simple_mid)%l0_spread};
+    $[l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
 
 / Volume-weighted mid (over n_levels, via execution.q's vwap) minus the
 / simple L0 mid, divided by the L0 spread - how far deeper-book weighting
@@ -183,7 +183,7 @@ vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to volume-weight over
-/ @return a vector, skew per row
+/ @return a vector, skew per row - null for a locked or crossed L0
 / @eg .qmicro.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> ,0f
 vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
     n:count bid_prices;
