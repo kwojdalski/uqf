@@ -98,6 +98,15 @@ test_a_position_over_its_cap_breaches:{[t]
     .qunit.assertEquals[first exec sym from b;`EURUSD;"worst first, by utilisation"];
     .testutil.assertApprox[first exec utilisation from b;2f;1e-9;"2mm against a 1mm cap is twice the limit"]};
 
+test_a_null_observed_on_a_limited_scope_is_refused_not_dropped:{[t]
+    m:.qlimit.measure[mk_book[];enlist `base_qty];
+    m:update observed:0n from m where sym=`GBPUSD;
+    .qunit.assertThrows[.qlimit.evaluate[;mk_limits[]];m;
+        "*evaluate: 1 limited scope(s) have a null observed value*";"an unmeasured limited scope must not read as within limit"];
+    / no limit on the null scope: unpoliced, harmless
+    lim:select from mk_limits[] where sym<>`GBPUSD;
+    .qunit.assertEquals[2;count .qlimit.evaluate[m;lim];"an unlimited null scope is not an error"]};
+
 test_a_short_position_breaches_the_same_cap:{[t]
     / A cap is on |value|: a desk 9mm short is as far over a 5mm limit as
     / one 9mm long, and a signed comparison would police one direction.
