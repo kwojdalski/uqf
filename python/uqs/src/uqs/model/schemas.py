@@ -18,7 +18,6 @@ lookup, and a table added to the q file did not get one.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from uqs.logger import get_logger
 from uqs.paths import TABLES_FILE, repo_root
@@ -46,24 +45,22 @@ _RELEASE_DEFINITION = re.compile(
 )
 
 
-def _definitions(root: Path | None = None) -> dict[str, str]:
-    """{table name: its one-line q definition}, read from the q file of the
-    tree at `root` - by default the checkout uqs was imported from.
+def _definitions() -> dict[str, str]:
+    """{table name: its one-line q definition}, read from the q file.
 
     Read at import and cached in the constants below rather than on every
     call: these are consulted while generating `database.q`, which
-    `bootstrap()` does on *every* uqs command. `root` is for a tree that is
-    not this one: `uqs deploy build` composes the schema of a STAGED release,
-    whose installed bundles declare tables this checkout does not (#1158).
+    `bootstrap()` does on *every* uqs command. `uqs deploy build` reads a
+    STAGED release's by running uqs from it (deploy/build.py's tree_python,
+    #1163), so this always reads the tree uqs was imported from.
     """
-    tables_q = TABLES_Q if root is None else root / TABLES_FILE
-    if not tables_q.is_file():  # pragma: no cover - a broken checkout
-        raise FileNotFoundError(f"table definitions not found at {tables_q}")
-    text = tables_q.read_text()
+    if not TABLES_Q.is_file():  # pragma: no cover - a broken checkout
+        raise FileNotFoundError(f"table definitions not found at {TABLES_Q}")
+    text = TABLES_Q.read_text()
     found = {match.group(2): match.group(1) for match in _RELEASE_DEFINITION.finditer(text)}
     if not found:  # pragma: no cover - guarded by test_schemas.py
         raise ValueError(
-            f"{tables_q} defines no tables - the `name:([]...)` convention this "
+            f"{TABLES_Q} defines no tables - the `name:([]...)` convention this "
             "reader matches on has changed, and every generated database.q "
             "would silently lose uqf's tables"
         )
@@ -88,6 +85,6 @@ def definition(table: str) -> str:
 _DEFS = _definitions()
 
 
-def table_names(root: Path | None = None) -> set[str]:
-    """Every table plant_tables.q defines - the tree at `root`'s, if given."""
-    return set(_DEFS) if root is None else set(_definitions(root))
+def table_names() -> set[str]:
+    """Every table plant_tables.q defines."""
+    return set(_DEFS)

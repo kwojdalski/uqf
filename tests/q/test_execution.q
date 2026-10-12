@@ -289,6 +289,13 @@ test_sweep_price_empty_book_fills_nothing:{[t]
     .qunit.assertTrue[null r`avg_price;"avg_price is null when nothing filled"];
     .qunit.assertTrue[null r`worst_price;"worst_price is null when nothing filled"]};
 
+test_sweep_price_skips_unusable_levels:{[t]
+    r:.qbook.sweep_price[1.10 0n 1.11;1e6 1e6 1e6;2.5e6];
+    .testutil.assertApprox[r`avg_price;1.105;1e-9;"null-price level contributes no fill and no average"];
+    .testutil.assertApprox[r`filled_size;2e6;1e-9;"only usable levels fill"];
+    .qunit.assertFalse[r`fully_filled;"book short of target once the null level is skipped"];
+    .testutil.assertApprox[r`worst_price;1.11;1e-9;"worst price from usable levels"]};
+
 test_sweep_price_rejects_non_positive_size:{[t]
     wrapper:{[x] .qbook.sweep_price[1.10 1.11;100 100;x]};
     .qunit.assertError[wrapper;0;"zero size is rejected"];

@@ -1337,6 +1337,19 @@ test_a_failing_dict_or_column_list_batch_is_withheld_whole_under_drop:{[t]
     (get ` sv (.qetl.job.stream.namespace `sj_check_shape_drop),`publish)[`probe_out;`sym`v!(`a;5)];
     .qunit.assertEquals[count .sjtest.published;1;"a passing dict row still goes out"]};
 
+test_a_column_dict_of_n_rows_is_counted_as_n_and_withheld:{[t]
+    / #1164: every shape is read as rows once; a dict of 3 rows is 3, not 1
+    x:`sym`v!(`a`b`c;1 -1 2);
+    .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;x];3;"a column -> vector dict of 3 rows"];
+    .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;`sym`v!(`a;1)];1;"a dict of atoms is one row"];
+    .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;(`a`b;1 -1)];2;"a column list of 2 rows"];
+    .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;([] v:1 2 3 4)];4;"a table"];
+    .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;`a`b!(1 2;1 2 3)];1;"a ragged dict is withheld whole as 1"];
+    pub:check_probe[`sj_check_coldict;`sjcheckcoldict1;`drop;shape_check];
+    (get pub)[`probe_out;x];
+    .qunit.assertEquals[count .sjtest.published;0;"the failing column dict is withheld"];
+    .qunit.assertEquals[(.qetl.stream_health.of`sj_check_coldict)`failed;1;"and counted as failed"]};
+
 test_a_check_that_throws_publishes_nothing:{[t]
     pub:check_probe[`sj_check_throw;`sjcheckthrow1;`drop;{[x] 'boom}];
     (get pub)[`probe_out;([] v:1 2 3)];

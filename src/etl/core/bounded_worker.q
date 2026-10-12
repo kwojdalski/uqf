@@ -1036,10 +1036,10 @@ fetch:{[worker;from_ts;to_ts]
 / is legal and meaningful: an empty window is positive evidence the
 / range was examined and held nothing.
 publish:{[worker;batch]
-    cfg:def worker;
-    w:read_state[worker;`last_window];
-    opts:`on_conflict`row_key`time_column`range_from`range_to!
-        (.qetl.job.bounded.runtime.write_strategy[worker;w];cfg`target_key;cfg`window_column;w`range_from;w`range_to);
+    cfg:def worker; w:read_state[worker;`last_window];
+    strategy:.qetl.job.bounded.runtime.write_strategy[worker;w];
+    if[`replace=strategy; .qetl.job.bounded.runtime.require_inside_window[worker;batch;w]];
+    opts:`on_conflict`row_key`time_column`range_from`range_to!(strategy;cfg`target_key;cfg`window_column;w`range_from;w`range_to);
     .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}
 
 / The conflict strategy this run writes under: the operator's override when

@@ -22,12 +22,21 @@
 / missing level, or a price <= 0. A single venue's own book cannot be
 / crossed after an event is applied, so one that is means the levels were
 / mis-folded - exactly the mistake the transform could make.
+/ .
+/ An EMPTIED side or a book clear (action R) is not either condition, and nulls
+/ are excluded from both tests explicitly: q orders null below every number, so
+/ `(first each bid)>=first each ask` is 1b when the ask is null and `not 0n>0`
+/ is 1b for a null price, which would fail a whole 10-minute window on one
+/ legitimate record (the same trap crypto_market_data_backfill guards, #546,
+/ #734; here #1148).
 / @param batch the transformed book
 / @return a table check/status/detail, one row per offending record
 quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    crossed:select from batch where (first each bid_prices)>=first each ask_prices;
-    bad_price:select from batch where not price>0;
+    top_bid:first each batch`bid_prices;
+    top_ask:first each batch`ask_prices;
+    crossed:batch where (not null top_bid) & (not null top_ask) & top_bid>=top_ask;
+    bad_price:select from batch where (not null price) & not price>0;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
         ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each select time, sym, sequence from t)
