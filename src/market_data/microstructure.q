@@ -166,7 +166,7 @@ depth_ratio:{[bid_sizes;ask_sizes]
 / Private: vwmp_skew for a single row - volume-weighted mid over the first
 / n_levels (via execution.q's vwap, concatenating that row's bid and ask
 / prices/sizes over til n_levels) minus the simple L0 mid, divided by the
-/ L0 spread. Locked/crossed L0 (spread <= 0) is null, not +-0w (see depth_ratio).
+/ L0 spread. Locked/crossed L0 (spread <= 0) is null, not +-0w: a locked spread of 0 divides by zero. This is a division guard, not .qbook.crossed_top's crossed test (a locked book is not crossed, #1176).
 / @private
 vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
     idx:til n_levels;

@@ -262,4 +262,28 @@ top_sides:{[x]
     side:{[px;sz] $[count px; $[level_ok[f:"f"$first px;"f"$first sz]; f; 0n]; 0n]};
     ([] bid:"f"$side'[x`bid_prices;bsz]; ask:"f"$side'[x`ask_prices;asz])};
 
+/ Whether each book's top is CROSSED: its best bid strictly above its best ask.
+/ The ONE rule for it (#1176) - the live market_data check (.qdqc), both
+/ backfill quality gates and .qcross.book_crossed all call it, so a book
+/ cannot be valid through one path and a breach through another.
+/ .
+/ LOCKED (bid = ask) is NOT crossed. A locked book is a legitimate, common
+/ state - venues publish it for an instant, and an aggregated superbook ladder
+/ is locked whenever two venues touch - so refusing it would fail whole
+/ backfill windows on real data. Crossed (bid > ask) is the data error: the
+/ levels were paired wrong or mis-folded. A side with no usable level
+/ (empty, null, non-positive or infinite price, by top_sides / level_ok) is
+/ ABSENT, not wrong, so a one-sided book is never crossed - q orders a null
+/ below every number, so `bid>ask` written directly calls it crossed (#546,
+/ #734, #1148).
+/ @param bid_prices a vector of vectors, one best-first ladder per row
+/ @param ask_prices a vector of vectors, one best-first ladder per row
+/ @return boolean per row, 1b iff both tops are usable and bid > ask
+/ @eg .qbook.crossed_top[(1.1005 1.1;1.1 1.1;1.1;`float$());(1.1000 1.2;1.1 1.2;`float$();1.2)]  ->  1000b
+crossed_top:{[bid_prices;ask_prices]
+    t:top_sides ([] bid_prices:bid_prices; ask_prices:ask_prices);
+    b:t`bid;
+    a:t`ask;
+    (not null b) & (not null a) & b>a};
+
 \d .

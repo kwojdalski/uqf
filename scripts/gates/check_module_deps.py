@@ -72,6 +72,7 @@ ALLOWED = frozenset(
         ("qcross", "qschema"),
         ("qdesk", "qccy"),
         ("qdesk", "qschema"),
+        ("qdqc", "qbook"),
         ("qdqc", "qmicro"),
         ("qdqc", "qrender"),
         ("qdqc", "qschema"),

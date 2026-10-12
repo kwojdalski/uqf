@@ -20,6 +20,7 @@ qalloc,summary,function,2,matches group_cols
 qalloc,unrealised,function,2,lots marks
 qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
+qbook,crossed_top,function,2,bid_prices ask_prices
 qbook,derive_level_groups,function,2,col_names prefix_targets
 qbook,fold_level_columns,function,2,tbl level_groups
 qbook,invert_book_depth,function,2,prices sizes
