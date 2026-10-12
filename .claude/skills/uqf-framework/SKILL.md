@@ -159,6 +159,14 @@ Apply the rules below. Each cites the file that holds or enforces it.
   window closing, late rows, end of day and replay. `exec_bars` and its twin
   `hdb_exec_bars_backfill` are the example.
 
+- **J8c** A statistic over the last N minutes, updated continuously (rolling
+  reject rate, volume, short-horizon vol), is a **rolling job**
+  (`.qetl.job.stream.at_rolling`, `src/etl/core/rolling.q`). Declare the window
+  lengths, the lateness, the period and the statistic as a `.qetl.transform`
+  over rows tagged `window`/`as_of`/`inside`; the kind owns the
+  `(as_of-N, as_of]` windows, eviction, late rows and restart. `order_quality`
+  is the example.
+
 - **J9** A source whose adapter returns other columns than it reads declares
   `raw`: physical table → the columns it reads. `columns`/`types` then describe
   only what it returns. The live check holds each side separately

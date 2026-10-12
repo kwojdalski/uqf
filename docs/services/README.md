@@ -132,6 +132,15 @@ times and then recorded in `dead`. At least once, in memory. Refuses to run with
 no URL. On demand, no profile. See
 [pipeline-declarations](../reference/pipeline-declarations.md#sinks-----alert_sink).
 
+**`order_quality1` · rolling fill and reject rates** --- per book, over the last
+minute, five minutes and hour: how many orders, how many filled and rejected,
+and the two ratios, re-evaluated every five seconds from `orders`. A book quiet
+in a short window shows 0 orders and null ratios, not a rate of zero. A
+**rolling job** (`.qetl.job.stream.at_rolling`), so late orders amend it, it
+rolls across midnight and it rebuilds its window from the log on restart.
+Publishes `order_quality`. On demand, no profile (`fx` has no free plant slot).
+[Details](../reference/pipeline-declarations.md#rolling-window-job-----qetljobstreamrolling)
+
 **`last_value1` · the current price of every sym** --- the newest level-0 bid,
 ask and mid per sym from `market_data`, FX and crypto, as a published table. An
 older book never overwrites a newer one. Read the last row per sym for the one

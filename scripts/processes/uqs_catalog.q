@@ -56,6 +56,8 @@ describe[`demo_execution_quality]:
     "Post-trade markout per fill per horizon; a null markout_pips means no reference quote existed at that horizon, not a zero markout";
 describe[`exec_bar]:
     "One-minute bars of executions per sym, built by exec_bars1 and rebuildable from the HDB by hdb_exec_bars_backfill: open, high, low, close, size-weighted vwap, volume and fill count for [bar_start, bar_start+1m) on the fill's source_time. A minute with no fills has no row; the minute a fill can still amend is not yet published, so the newest bar lags by about 5s past its end";
+describe[`order_quality]:
+    "Rolling order outcomes per book from order_quality1: over the last 1m, 5m and 1h ending at as_of, the orders in the window, how many ended filled and rejected, and the fill and reject ratios. Windows are (as_of-window, as_of] on the order's time, published every five seconds. A book quiet in a short window shows 0 orders and null ratios (no order says nothing about a rate); a book with no order in the last hour has no row";
 describe[`executions]:
     "Every fill table the stack carries, spelled one way by the executions normalizer: the FX trades and cryptorust's crypto_trades. source_time is the source's own stamp, time the plant's on the normalized row. This is what posbook1 reads";
 describe[`fx_limit_breach]:
@@ -131,6 +133,8 @@ unbounded[`config_change]:
     enlist "one row per watched variable per change - a handful a day";
 unbounded[`exec_bar]:
     enlist "one row per sym per minute - 1440 a day for a sym that trades all day, not ticks; its policy row is due once a desk reads it through the gateway";
+unbounded[`order_quality]:
+    enlist "one row per book per window length every five seconds - 52 thousand a day for a book that has traded in the last hour: bounded by books and time, not by ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`fx_limit_breach]:
     enlist "one row per limit newly crossed, throttled so a standing breach does not repeat";
 unbounded[`etl_coverage]:

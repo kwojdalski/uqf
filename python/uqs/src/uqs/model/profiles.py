@@ -156,6 +156,12 @@ UNPROFILED: dict[str, str] = {
         "both publish, so it belongs to neither profile - `uqs start exec_bars1` "
         "alongside whichever is running"
     ),
+    "order_quality1": (
+        "on demand: it reads `orders`, which fxordersfeed1 publishes in the fx and "
+        "default sets, but fx already holds all fourteen plant slots, so the job "
+        "cannot join it - `uqs start order_quality1` once something else is stopped, "
+        "or on its own with fxordersfeed1"
+    ),
     "tap1": (
         "a diagnostic subscriber chosen at runtime: which table it taps is an "
         "argument, so there is no standing set it belongs to"

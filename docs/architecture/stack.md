@@ -252,6 +252,14 @@ its open minutes from the log on restart. `hdb_exec_bars_backfill1` rebuilds
 bars from the HDB's `executions` with the same aggregation, under the key
 `sym, bar_start`.
 
+`order_quality1` keeps order outcomes over the last minute, five minutes and
+hour (`order_quality`: orders, fills, rejects and their ratios per book), a
+**rolling job** (`.qetl.job.stream.at_rolling`, `src/etl/core/rolling.q`). Where
+a bar is one interval published once, this re-evaluates sliding windows
+`(as_of-N, as_of]` every five seconds; a late order amends the next publication,
+the windows roll across midnight, and a restart replays `orders` and its own
+output to publish what an uninterrupted job would have.
+
 `demo_markout1`'s buffers live in its process, so a fill it never saw goes
 unscored: it was down, restarting, or the fill came before it. A bounded
 backfill covers those. `hdb_demo_markouts_backfill1`

@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **33 uqf processes** — 56 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **34 uqf processes** — 57 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -48,6 +48,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `exec_bars1` | 6104 | etl | `processes/torq_stream.q` | `exec_bar` | `executions` | `exec_bar` |
 | `hdb_exec_bars_backfill1` | 6105 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `flink_vwap1` | 6106 | etl | `processes/torq_stream.q` | `flink_vwap` | `flink_vwap_raw` | `flink_vwap` |
+| `order_quality1` | 6107 | etl | `processes/torq_stream.q` | `order_quality` | `orders` | `order_quality` |
 
 ### Why a row deviates from the defaults
 
@@ -82,6 +83,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`exec_bars1`** — time bars over the unified fills tape; the window is the fill's source_time
 - **`hdb_exec_bars_backfill1`** — bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live
 - **`flink_vwap1`** — publishes each per-symbol VWAP window an Apache Flink job closes, once, dropping windows Flink emits again after a restart or replay. The raw rows come from an EXTERNAL Python process (external/flink_vwap_feed.py) - Flink runs outside q - so flink_vwap_raw has no producer in this list and this does not start with the stack. Start it with `uqs feed start flink_vwap`
+- **`order_quality1`** — rolling fill and reject ratios per book over the last 1m, 5m and 1h
 
 ## Tables these processes publish
 
@@ -106,6 +108,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `last_value` | `plant_tables.q` | `last_value1` |
 | `market_data` | `plant_tables.q` | `marketdata1` |
 | `mkt_orderbook` | `plant_tables.q` | `vectorize1` |
+| `order_quality` | `plant_tables.q` | `order_quality1` |
 | `orders` | `plant_tables.q` | `fxordersfeed1` |
 | `position` | `plant_tables.q` | `posbook1` |
 | `position_open` | `plant_tables.q` | `posbook1` |

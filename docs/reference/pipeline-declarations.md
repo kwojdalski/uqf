@@ -402,6 +402,62 @@ publish that throws is retried on the next tick. `define` installs `pending`,
 `closed`, `dropped`, `publish`, `now`, `on_batch`, `close_ready[now]`,
 `on_timer` and `on_endofday` in `.qpipe.job.<name>`.
 
+## Rolling-window job --- `.qetl.job.stream.rolling`
+
+`.qetl.job.stream.at_rolling[name;decl]`. A job that keeps a statistic over the
+last N minutes, updated continuously: a venue's reject rate, a client's volume,
+at several window lengths at once (`src/etl/core/rolling.q`, #1224). Bars give
+fixed windows published once; this gives a window that slides, re-evaluated
+every period. `order_quality` is one: `orders` into `order_quality`, fill and
+reject ratios per book over 1m, 5m and 1h.
+
+Declares `procname`, `period` and `start_with_all`/`note` as for a streaming
+job, and:
+
+- `events`: the table read.
+- `transform`: a `.qetl.transform` with ONE input, the events plus three columns
+  the kind adds: `window` (the window length, a timespan), `as_of` (the instant
+  the windows end at) and `inside` (whether the row is in that window). It
+  returns one row per key per window length carrying the grouping columns,
+  `window` and `as_of`, and reads only the rows `inside`. The input holds every
+  row of the longest window once per window length, so a key quiet in a short
+  window is still a row there: it publishes the statistic's identity (0 for a
+  count or sum, null for a mean or ratio), which each transform documents.
+- `publishes`: the table written.
+- `windows`: the window lengths, positive timespans. A window is
+  `(as_of-N, as_of]` on the event time: a row exactly N old is out, a row
+  exactly at `as_of` is in.
+- `lateness`: a timespan, `0D` for none. A row received more than `lateness`
+  after its event time is dropped, logged, and kept in
+  `.qpipe.job.<name>.dropped` with its reason; one within it is buffered and is
+  in the next publication whose window holds it. When `event_time` is the
+  plant's own `time` there is no distinct receipt, so no row is late.
+- `by` (default `` `sym``), `event_time` (default `` `time``): the grouping
+  columns and the column the window is read from.
+
+Every `period` the job publishes at `as_of` = the clock floored to the period, a
+grid a restart and a backfill share; a grid point already published is not
+published again. A key is published only if it had a row within the longest
+window, and rows older than the longest window plus `lateness` are evicted, so
+state is bounded however long the process runs. Cost is one pass per window
+length over the longest window's rows per period, O(W x R); a transform that is
+a stdev or a drawdown cannot be held as running sums, which is why the statistic
+is a transform and not an accumulator.
+
+A rolling window is not day-bucketed: at end of day nothing is published and the
+buffer is kept, so the series carries on across midnight. The plant's log is per
+day, though, so after a restart the replay holds only today's rows; the job
+records `covered_from`, the start of that day, and withholds a window length
+whose span reaches before it (logged when the set changes) rather than
+publishing a rate over part of its window. The job replays its input and
+restores from its own output (`restore_from`), so the first publication after a
+restart is the one an uninterrupted job would make.
+`.qetl.job.stream.rolling.compute` and `series` are the pure form, for a
+backfill twin reading the HDB at a fixed cadence. `define` installs `pending`,
+`dropped`, `last_as_of`, `covered_from`, `withheld`, `publish`, `now`,
+`on_batch`, `evaluate[now]`, `on_timer` and `on_endofday` in
+`.qpipe.job.<name>`.
+
 ## Reactions --- `.qetl.reaction`
 
 Running something when a dataset is published, rather than on a timer. A
