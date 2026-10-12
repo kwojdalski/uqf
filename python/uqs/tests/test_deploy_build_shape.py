@@ -66,3 +66,24 @@ def test_the_vendored_only_runtime_reads_the_builders_starter_pack(staged, monke
     assert shape is not None
     assert {"quote", "trade"} <= set(shape)
     assert STAGED_ONLY not in shape
+
+
+def test_q_4_0_converted_declarations_are_read(staged, tmp_path, monkeypatch):
+    """--q-target 4.0 qualifies plant_tables.q's names under `.qetl.plant`
+    (#861); the shape still has every table, under its own name."""
+    import shutil
+
+    from uqs.deploy import portable
+    from uqs.model import schemas
+
+    shutil.copytree(repo_root() / portable.CONVERTER.parent, staged / portable.CONVERTER.parent)
+    portable.convert(staged, [str(TABLES_FILE)], "4.0", [], False)
+    text = (staged / TABLES_FILE).read_text()
+    assert f".qetl.plant.{STAGED_ONLY}:([]" in text, "the converter no longer qualifies names"
+    monkeypatch.delenv(TORQAPPHOME_ENV, raising=False)
+    shape = declared_shape(staged, "uqf", repo_root())
+    assert shape is not None
+    assert shape[STAGED_ONLY] == ["time", "sym", "px"]
+    assert set(schemas.table_names()) | {STAGED_ONLY} <= set(shape)
+    # the definition database.q carries is unqualified: it loads in the root context
+    assert schemas._definitions(staged)[STAGED_ONLY] == STAGED_DEF

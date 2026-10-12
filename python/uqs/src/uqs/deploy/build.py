@@ -375,7 +375,7 @@ def declared_shape(tree: Path, runtime: str, root: Path) -> dict[str, list[str]]
             paths_for_root(tree, runtime), torqapphome=paths_for_root(root, runtime).torqapphome
         )
         return hdb_shape.declared_columns(declared_schema(paths))
-    except (UqsError, OSError) as exc:
+    except (UqsError, OSError, ValueError) as exc:
         log.warning("the manifest records no hdb_shape: {}", exc)
         return None
 
