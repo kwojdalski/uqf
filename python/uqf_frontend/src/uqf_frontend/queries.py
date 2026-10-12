@@ -123,6 +123,13 @@ BROWSE = ".uqf.browse"
 #: arguments and the same answer as before - the claims current at the as-of.
 COVERAGE = ".qetl.coverage.claims"
 
+#: The claims a reader can query NOW - recorded at or before the dataset's
+#: readiness watermark (#1094). COVERAGE means written: a backfill stages it
+#: as it appends, before the HDB has finished and reloaded the date. /query's
+#: require_coverage composes these too, so a short result is refused rather
+#: than returned under a completeness guarantee.
+READY_CLAIMS = ".qetl.coverage.ready_claims"
+
 #: The coverage ledger's own interval arithmetic, run on the GATEWAY
 #: (`Gateway.call`, not `route`): COVERAGE's rows come back razed from both
 #: tiers, and only the gateway holds both halves, so that is where they are
