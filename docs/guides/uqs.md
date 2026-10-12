@@ -557,6 +557,17 @@ HDB, and started without them it exits at startup, before it reads or empties
 anything - so expect it shown down. Composing `essential` with a job profile -
 `--profile essential,fx` - starts both sets.
 
+**TorQ discovers only what the profile started.** `process.csv` still lists
+every process, but TorQ's discovery would hand all of them out, so under
+`essential` `sort1` would keep retrying `sortworker2`'s port. A profile start
+writes its resolved set to `deployment.txt` in the data directory, and every
+TorQ process (through `scripts/torqcode/handlers/deployment.q`) skips the
+`process.csv` rows outside it. Any later start adds to the set -
+`uqs start sortworker2` makes it discoverable from then on - and stopping a
+process does not take it out, so a selected process that goes down is still
+retried and its failures still logged. A stack started without a profile has no
+set, and TorQ discovers as it always has.
+
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.
 

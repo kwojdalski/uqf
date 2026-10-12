@@ -68,7 +68,7 @@
 / @eg .qpipe.job.crypto_market_data_backfill.quality_check[.qpipe.transform.crypto_market_data.example_book[]]  ->  an empty table
 quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    crossed:batch where .qbook.crossed_top[batch`bid_prices;batch`ask_prices];
+    crossed:batch where .qbook.crossed_top batch;
     bad_trade:select from batch where (not null trade_price) & not (trade_price>0) & (trade_size>0);
     sample:batch`latency_ms;
     floor_ms:batch`latency_min_ms;

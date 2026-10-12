@@ -20,7 +20,7 @@ qalloc,summary,function,2,matches group_cols
 qalloc,unrealised,function,2,lots marks
 qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
-qbook,crossed_top,function,2,bid_prices ask_prices
+qbook,crossed_top,function,1,x
 qbook,derive_level_groups,function,2,col_names prefix_targets
 qbook,fold_level_columns,function,2,tbl level_groups
 qbook,invert_book_depth,function,2,prices sizes
@@ -374,6 +374,7 @@ qetl.job.stream,carried_to,dict,,
 qetl.job.stream,carry_log,dict,,
 qetl.job.stream,carry_marker_path,function,1,job
 qetl.job.stream,catch_up,function,4,job tr tbls h
+qetl.job.stream,caught_up,dict,,
 qetl.job.stream,clock,function,1,x
 qetl.job.stream,clock_of,function,2,now x
 qetl.job.stream,cursor_name,function,1,job
@@ -395,6 +396,7 @@ qetl.job.stream,missed_end_of_day,function,2,job today
 qetl.job.stream,namespace,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
+qetl.job.stream,plant_today,function,1,tr
 qetl.job.stream,poll_keys,value,,
 qetl.job.stream,preview,function,2,job n
 qetl.job.stream,preview_recent,function,3,job n span
@@ -604,9 +606,9 @@ qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,bound_padding,value,,
 qetl.source,clear_settings,function,1,
-qetl.source,clip_to_complete,function,4,worker source h range_to
+qetl.source,clip_to_complete,function,5,worker source h live range_to
 qetl.source,column_names,function,1,tbl
-qetl.source,complete_through_of,function,2,source h
+qetl.source,complete_through_of,function,3,source h live
 qetl.source,configured,function,1,
 qetl.source,credential_example,function,1,source
 qetl.source,credential_origin,function,1,source
@@ -681,6 +683,7 @@ qetl.stream_health,record,function,3,job ok err
 qetl.stream_health,write,function,2,job failing
 qetl.tick,day_log,function,1,dt
 qetl.tick,earlier_days,function,3,want first_day last_day
+qetl.tick,has_log,function,1,dt
 qetl.tick,log_date,value,,
 qetl.tick,log_dir,value,,
 qetl.tick,log_handle,value,,
@@ -688,6 +691,7 @@ qetl.tick,log_name,value,,
 qetl.tick,log_path,value,,
 qetl.tick,msg_count,value,,
 qetl.tick,open_log,function,3,dir name dt
+qetl.tick,plant_day,function,1,
 qetl.tick,publish,function,2,t x
 qetl.tick,replay,function,2,path handler
 qetl.tick,replay_then_subscribe,function,2,want sink
@@ -921,6 +925,7 @@ qpipe.job.crypto_market_data_backfill,handle,value,,
 qpipe.job.crypto_market_data_backfill,init,function,1,run_spec
 qpipe.job.crypto_market_data_backfill,last_batch,value,,
 qpipe.job.crypto_market_data_backfill,last_window,dict,,
+qpipe.job.crypto_market_data_backfill,live,value,,
 qpipe.job.crypto_market_data_backfill,phase,value,,
 qpipe.job.crypto_market_data_backfill,plan,function,1,cursor
 qpipe.job.crypto_market_data_backfill,progress,dict,,
@@ -985,6 +990,7 @@ qpipe.job.demo_deals_backfill,handle,value,,
 qpipe.job.demo_deals_backfill,init,function,1,run_spec
 qpipe.job.demo_deals_backfill,last_batch,value,,
 qpipe.job.demo_deals_backfill,last_window,dict,,
+qpipe.job.demo_deals_backfill,live,value,,
 qpipe.job.demo_deals_backfill,phase,value,,
 qpipe.job.demo_deals_backfill,plan,function,1,cursor
 qpipe.job.demo_deals_backfill,progress,dict,,
@@ -1003,6 +1009,7 @@ qpipe.job.demo_events_backfill,handle,value,,
 qpipe.job.demo_events_backfill,init,function,1,run_spec
 qpipe.job.demo_events_backfill,last_batch,value,,
 qpipe.job.demo_events_backfill,last_window,dict,,
+qpipe.job.demo_events_backfill,live,value,,
 qpipe.job.demo_events_backfill,phase,value,,
 qpipe.job.demo_events_backfill,plan,function,1,cursor
 qpipe.job.demo_events_backfill,progress,dict,,
@@ -1033,6 +1040,7 @@ qpipe.job.duckdb_deals_backfill,handle,value,,
 qpipe.job.duckdb_deals_backfill,init,function,1,run_spec
 qpipe.job.duckdb_deals_backfill,last_batch,value,,
 qpipe.job.duckdb_deals_backfill,last_window,dict,,
+qpipe.job.duckdb_deals_backfill,live,value,,
 qpipe.job.duckdb_deals_backfill,phase,value,,
 qpipe.job.duckdb_deals_backfill,plan,function,1,cursor
 qpipe.job.duckdb_deals_backfill,progress,dict,,
@@ -1054,6 +1062,7 @@ qpipe.job.eq_orderbook_backfill,handle,value,,
 qpipe.job.eq_orderbook_backfill,init,function,1,run_spec
 qpipe.job.eq_orderbook_backfill,last_batch,value,,
 qpipe.job.eq_orderbook_backfill,last_window,dict,,
+qpipe.job.eq_orderbook_backfill,live,value,,
 qpipe.job.eq_orderbook_backfill,phase,value,,
 qpipe.job.eq_orderbook_backfill,plan,function,1,cursor
 qpipe.job.eq_orderbook_backfill,progress,dict,,
@@ -1141,6 +1150,7 @@ qpipe.job.hdb_demo_markouts_backfill,handle,value,,
 qpipe.job.hdb_demo_markouts_backfill,init,function,1,run_spec
 qpipe.job.hdb_demo_markouts_backfill,last_batch,value,,
 qpipe.job.hdb_demo_markouts_backfill,last_window,dict,,
+qpipe.job.hdb_demo_markouts_backfill,live,value,,
 qpipe.job.hdb_demo_markouts_backfill,phase,value,,
 qpipe.job.hdb_demo_markouts_backfill,plan,function,1,cursor
 qpipe.job.hdb_demo_markouts_backfill,progress,dict,,
@@ -1160,6 +1170,7 @@ qpipe.job.hdb_exec_bars_backfill,handle,value,,
 qpipe.job.hdb_exec_bars_backfill,init,function,1,run_spec
 qpipe.job.hdb_exec_bars_backfill,last_batch,value,,
 qpipe.job.hdb_exec_bars_backfill,last_window,dict,,
+qpipe.job.hdb_exec_bars_backfill,live,value,,
 qpipe.job.hdb_exec_bars_backfill,phase,value,,
 qpipe.job.hdb_exec_bars_backfill,plan,function,1,cursor
 qpipe.job.hdb_exec_bars_backfill,progress,dict,,
@@ -1178,6 +1189,7 @@ qpipe.job.hdb_transfer_backfill,handle,value,,
 qpipe.job.hdb_transfer_backfill,init,function,1,run_spec
 qpipe.job.hdb_transfer_backfill,last_batch,value,,
 qpipe.job.hdb_transfer_backfill,last_window,dict,,
+qpipe.job.hdb_transfer_backfill,live,value,,
 qpipe.job.hdb_transfer_backfill,phase,value,,
 qpipe.job.hdb_transfer_backfill,plan,function,1,cursor
 qpipe.job.hdb_transfer_backfill,progress,dict,,
@@ -1250,6 +1262,7 @@ qpipe.job.upstream_trades_backfill,handle,value,,
 qpipe.job.upstream_trades_backfill,init,function,1,run_spec
 qpipe.job.upstream_trades_backfill,last_batch,value,,
 qpipe.job.upstream_trades_backfill,last_window,dict,,
+qpipe.job.upstream_trades_backfill,live,value,,
 qpipe.job.upstream_trades_backfill,phase,value,,
 qpipe.job.upstream_trades_backfill,plan,function,1,cursor
 qpipe.job.upstream_trades_backfill,progress,dict,,

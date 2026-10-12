@@ -223,6 +223,15 @@ fan_out:{[name;batch]
 
 / ---------------------------------------------------------------- THE LOG
 
+/ Private: the one rule that names a day's log file, shared by open_log and
+/ day_log so the two cannot drift.
+/ @param dir the log directory, as a string
+/ @param name the log's base name
+/ @param dt the date
+/ @return the file, as an hsym
+/ @private
+log_file:{[dir;name;dt] hsym `$dir,"/",string[name],ssr[string dt;".";""]}
+
 / Open (or reopen) the log for a given day, and say how many messages are
 / already in it.
 / .
@@ -238,7 +247,7 @@ fan_out:{[name;batch]
 open_log:{[dir;name;dt]
     d:$[10h=abs type dir; dir; string dir];
     system "mkdir -p ",d;
-    path:hsym `$d,"/",string[name],ssr[string dt;".";""];
+    path:log_file[d;name;dt];
     / -11!(-2;path) counts the messages without replaying them. Bare
     / -11!path REPLAYS them, calling whatever `upd` is installed, and
     / -11!(-1;path) still resolves `upd` and so throws in a process that
@@ -382,7 +391,19 @@ replay_then_subscribe:{[want;sink]
 / @return the file, as an hsym (it may not exist), or ` when no log was opened
 / @eg .qetl.tick.reset[]; .qetl.tick.day_log 2026.10.09  ->  `
 day_log:{[dt]
-    $[0=count log_dir; `; hsym `$log_dir,"/",string[log_name],ssr[string dt;".";""]]}
+    $[0=count log_dir; `; log_file[log_dir;log_name;dt]]}
+
+/ Whether the plant holds a log for a day.
+/ @param dt the date
+/ @return 1b when that day's log file exists
+/ @eg .qetl.tick.reset[]; .qetl.tick.has_log 2026.10.09  ->  0b
+has_log:{[dt] p:day_log dt; $[null p; 0b; not () ~ key p]}
+
+/ The day the plant's open log is for: the log a subscription replays, and so
+/ the authority on which days are "earlier" (#1190). 0Nd when no log is open.
+/ @return a date, or 0Nd
+/ @eg .qetl.tick.reset[]; .qetl.tick.plant_day[]  ->  0Nd
+plant_day:{[] log_date}
 
 / The wanted tables' messages from the logs of earlier days, oldest first
 / (#1072). A job that was down across an end of day restarts into a log
@@ -400,7 +421,7 @@ earlier_days:{[want;first_day;last_day]
     w:$[want~`; key schemas; (),want];
     `.qetl.tick.handoff set ();
     {[w;dt] p:day_log dt;
-        if[$[null p; 0b; not () ~ key p];
+        if[has_log dt;
             replay[p;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]]}[w] each first_day+til 0|1+last_day-first_day;
     m:handoff;
     `.qetl.tick.handoff set ();

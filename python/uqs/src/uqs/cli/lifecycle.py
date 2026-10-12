@@ -193,22 +193,29 @@ def _reject_unknown(names: str) -> None:
         _die(exc)
 
 
-def _start(names: str, port: int | None) -> None:
+def _selected(names: str, profile: str | None) -> list[str] | None:
+    """A profile start's resolved set - what TorQ is let discover
+    (stack/deployment.py) - or None for a start that only adds to it."""
+    return names.split() if profile is not None else None
+
+
+def _start(names: str, port: int | None, profile: str | None = None) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
     _note_monitor_coverage()
-    _run_streaming(runtime.start, names, base_port=port)
+    _run_streaming(runtime.start, names, base_port=port, selected=_selected(names, profile))
 
 
-def _start_in_foreground(names: str, port: int | None) -> None:
+def _start_in_foreground(names: str, port: int | None, profile: str | None = None) -> None:
     """`_start`, minus its ending: _run_streaming always exits the command,
     and `up` has the whole run still to stream after the start returns."""
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
     _note_monitor_coverage()
-    result = runtime.start(_paths(), names, base_port=port, capture=False)
+    selected = _selected(names, profile)
+    result = runtime.start(_paths(), names, base_port=port, capture=False, selected=selected)
     if result.returncode != 0:
         raise typer.Exit(code=result.returncode)
 
@@ -233,7 +240,7 @@ def start(
     if print_only:
         _print_startlines(names, port)
         return
-    _start(names, port)
+    _start(names, port, profile)
 
 
 LevelOpt = Annotated[
@@ -290,7 +297,7 @@ def up(
     exit_code = 0
     try:
         stack_logs.follow_during(
-            _paths(), wanted, lambda: _start_in_foreground(names, port), min_level=level
+            _paths(), wanted, lambda: _start_in_foreground(names, port, profile), min_level=level
         )
     except UqsError as exc:
         log.error("{}", exc)

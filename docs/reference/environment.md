@@ -123,31 +123,32 @@ about where data lives, which is a confusing way to spend an afternoon.
 along with `UQS_DATA_ROOT`, so they move the trees everything else is built from
 (see the table above).
 
-  | Variable        | Value                                                                                            |
-  | --------------- | ------------------------------------------------                                                 |
-  | `TORQHOME`      | the vendored TorQ tree                                                                           |
-  | `TORQAPPHOME`   | the starter-pack app tree                                                                        |
-  | `TORQDATA`      | data root; `UQF_STATUS_DIR` falls back inside it                                                 |
-  | `TORQPROCESSES` | the generated `process.csv`                                                                      |
-  | `UQF_SCRIPTS`   | `scripts/`                                                                                       |
-  | `KDBCONFIG`     | `$TORQHOME/config`                                                                               |
-  | `KDBCODE`       | `$TORQHOME/code`                                                                                 |
-  | `KDBAPPCONFIG`  | `$TORQAPPHOME/appconfig`                                                                         |
-  | `KDBAPPCODE`    | `$TORQAPPHOME/code`                                                                              |
-  | `KDBSERVCONFIG` | `scripts/torqconfig`: names TorQ's log levels as `.qetl.log` does. Not set in the `torq` runtime |
-  | `KDBSERVCODE`   | `scripts/torqcode`: TorQ's password loader, fixed for that layer; not set in the `torq` runtime  |
-  | `KDBLIB`        | `$TORQHOME/lib`                                                                                  |
-  | `KDBTESTS`      | `$TORQHOME/tests`                                                                                |
-  | `KDBLOG`        | `$TORQDATA/logs`                                                                                 |
-  | `KDBHDB`        | `$TORQDATA/hdb`                                                                                  |
-  | `KDBWDB`        | `$TORQDATA/wdbhdb`                                                                               |
-  | `KDBTPLOG`      | `$TORQDATA/tplogs`                                                                               |
-  | `KDBDQCDB`      | the DQC database                                                                                 |
-  | `KDBDQEDB`      | the DQE database                                                                                 |
-  | `KDBBASEPORT`   | the port block base                                                                              |
-  | `RLWRAP`        | `rlwrap`                                                                                         |
-  | `QCON`          | `qcon`                                                                                           |
-  | `QCMD`          | `$QCMD`, else `q` --- see above                                                                  |
+  | Variable              | Value                                                                                                                          |
+  | ---------------       | ------------------------------------------------                                                                               |
+  | `TORQHOME`            | the vendored TorQ tree                                                                                                         |
+  | `TORQAPPHOME`         | the starter-pack app tree                                                                                                      |
+  | `TORQDATA`            | data root; `UQF_STATUS_DIR` falls back inside it                                                                               |
+  | `TORQPROCESSES`       | the generated `process.csv`                                                                                                    |
+  | `UQS_DEPLOYMENT_FILE` | `$TORQDATA/deployment.txt`: the processes TorQ discovers after a profile start (#1207)                                         |
+  | `UQF_SCRIPTS`         | `scripts/`                                                                                                                     |
+  | `KDBCONFIG`           | `$TORQHOME/config`                                                                                                             |
+  | `KDBCODE`             | `$TORQHOME/code`                                                                                                               |
+  | `KDBAPPCONFIG`        | `$TORQAPPHOME/appconfig`                                                                                                       |
+  | `KDBAPPCODE`          | `$TORQAPPHOME/code`                                                                                                            |
+  | `KDBSERVCONFIG`       | `scripts/torqconfig`: names TorQ's log levels as `.qetl.log` does. Not set in the `torq` runtime                               |
+  | `KDBSERVCODE`         | `scripts/torqcode`: TorQ's password loader, fixed for that layer, and the deployment-set filter; not set in the `torq` runtime |
+  | `KDBLIB`              | `$TORQHOME/lib`                                                                                                                |
+  | `KDBTESTS`            | `$TORQHOME/tests`                                                                                                              |
+  | `KDBLOG`              | `$TORQDATA/logs`                                                                                                               |
+  | `KDBHDB`              | `$TORQDATA/hdb`                                                                                                                |
+  | `KDBWDB`              | `$TORQDATA/wdbhdb`                                                                                                             |
+  | `KDBTPLOG`            | `$TORQDATA/tplogs`                                                                                                             |
+  | `KDBDQCDB`            | the DQC database                                                                                                               |
+  | `KDBDQEDB`            | the DQE database                                                                                                               |
+  | `KDBBASEPORT`         | the port block base                                                                                                            |
+  | `RLWRAP`              | `rlwrap`                                                                                                                       |
+  | `QCON`                | `qcon`                                                                                                                         |
+  | `QCMD`                | `$QCMD`, else `q` --- see above                                                                                                |
 
 ## Where to put them
 

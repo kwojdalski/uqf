@@ -281,12 +281,17 @@ top_sides:{[x]
 / ABSENT, not wrong, so a one-sided book is never crossed - q orders a null
 / below every number, so `bid>ask` written directly calls it crossed (#546,
 / #734, #1148).
-/ @param bid_prices a vector of vectors, one best-first ladder per row
-/ @param ask_prices a vector of vectors, one best-first ladder per row
+/ A level at a positive price but ZERO size is absent here as everywhere
+/ (#1210): the table goes to top_sides whole, so when it carries bid_sizes and
+/ ask_sizes the size half of level_ok applies, exactly as for sweep_price and
+/ superbook. Only a table without the size columns is judged by price alone.
+/ @param x table with bid_prices and ask_prices (a vector of vectors, one
+/   best-first ladder per row) and, where the caller has them, bid_sizes and
+/   ask_sizes - pass them
 / @return boolean per row, 1b iff both tops are usable and bid > ask
-/ @eg .qbook.crossed_top[(1.1005 1.1;1.1 1.1;1.1;`float$());(1.1000 1.2;1.1 1.2;`float$();1.2)]  ->  1000b
-crossed_top:{[bid_prices;ask_prices]
-    t:top_sides ([] bid_prices:bid_prices; ask_prices:ask_prices);
+/ @eg .qbook.crossed_top ([] bid_prices:(1.1005 1.1;1.1 1.1;1.1;`float$()); bid_sizes:(1e6 1e6;1e6 1e6;1e6;`float$()); ask_prices:(1.1000 1.2;1.1 1.2;`float$();1.2); ask_sizes:(1e6 1e6;1e6 1e6;`float$();1e6))  ->  1000b
+crossed_top:{[x]
+    t:top_sides x;
     b:t`bid;
     a:t`ask;
     (not null b) & (not null a) & b>a};
