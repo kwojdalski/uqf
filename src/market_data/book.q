@@ -210,15 +210,19 @@ invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 /   worst_price is the price of the last level touched (the marginal fill,
 /   null if nothing filled), filled_size is how much actually filled (may
 /   be less than target_size if the book doesn't have enough depth), and
-/   fully_filled is 1b iff filled_size>=target_size
+/   fully_filled is 1b iff filled_size>=target_size, and levels_used is the
+/   indices, into the ORIGINAL (unfiltered) ladder, of the levels the sweep
+/   consumed - so a caller can look up any parallel column (e.g. level
+/   times) for exactly the levels that priced the fill (#1181)
 / @throws error if target_size is not positive, or prices/sizes differ in length
-/ @eg .qbook.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled!(1.100233;1.1005;3000000;1b)
+/ @eg .qbook.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled`levels_used!(1.100233;1.1005;3000000;1b;0 1 2)
 sweep_price:{[prices;sizes;target_size]
     if[target_size<=0; '"sweep_price: size must be positive"];
     if[(count prices)<>count sizes; '"sweep_price: prices and sizes must be the same length"];
     usable:level_ok["f"$prices;"f"$sizes];
-    prices:prices where usable;
-    sizes:sizes where usable;
+    usable_idx:where usable;
+    prices:prices usable_idx;
+    sizes:sizes usable_idx;
     cum_size:sums sizes;
     prior_cum:cum_size-sizes;
     capped_cum:target_size&cum_size;
@@ -230,7 +234,8 @@ sweep_price:{[prices;sizes;target_size]
     touched_idx:where consumed>0;
     worst_price:$[count touched_idx; prices last touched_idx; 0n];
     fully_filled:filled_size>=target_size;
-    `avg_price`worst_price`filled_size`fully_filled!(avg_price;worst_price;filled_size;fully_filled)};
+    levels_used:usable_idx touched_idx;
+    `avg_price`worst_price`filled_size`fully_filled`levels_used!(avg_price;worst_price;filled_size;fully_filled;levels_used)};
 
 / Whether a book level is a price someone could deal at: its price and its
 / size both positive and finite. The ONE rule for it (#1021) - top_sides
