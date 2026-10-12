@@ -350,21 +350,32 @@ def build(
             # always written (#883): a reader must never have to guess it
             runtime=runtime,
             portable=converted,
-            hdb_shape=declared_shape(tree, runtime),
+            hdb_shape=declared_shape(tree, runtime, root),
         )
 
 
-def declared_shape(tree: Path, runtime: str) -> dict[str, list[str]] | None:
-    """{table: columns} the release's schema declares, or None - with a
-    warning - when it cannot be composed here; push then judges the HDB in
-    prepare only."""
+def declared_shape(tree: Path, runtime: str, root: Path) -> dict[str, list[str]] | None:
+    """{table: columns} the release staged at `tree` declares, or None - with
+    a warning - when it cannot be composed here; push then judges the HDB in
+    prepare only.
+
+    The staged tree never carries lib/ (a release never does), so the base
+    schema is the configured starter pack - TORQAPPHOME, else the BUILDER
+    checkout `root`'s vendored one, as stage_bundles gives the generator -
+    while uqf's and the installed bundles' tables are read from `tree`, the
+    release that ships them (#1158)."""
+    from dataclasses import replace
+
     from uqs.paths import UqsError, paths_for_root
     from uqs.stack import hdb_shape
     from uqs.stack.hdb_types import declared_schema
 
     try:
-        return hdb_shape.declared_columns(declared_schema(paths_for_root(tree, runtime)))
-    except (UqsError, OSError) as exc:
+        paths = replace(
+            paths_for_root(tree, runtime), torqapphome=paths_for_root(root, runtime).torqapphome
+        )
+        return hdb_shape.declared_columns(declared_schema(paths))
+    except (UqsError, OSError, ValueError) as exc:
         log.warning("the manifest records no hdb_shape: {}", exc)
         return None
 

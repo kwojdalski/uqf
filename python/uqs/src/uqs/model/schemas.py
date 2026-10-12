@@ -18,6 +18,7 @@ lookup, and a table added to the q file did not get one.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from uqs.logger import get_logger
 from uqs.paths import TABLES_FILE, repo_root
@@ -35,21 +36,34 @@ TABLES_Q = repo_root() / TABLES_FILE
 #: match cannot pick one up.
 _DEFINITION = re.compile(r"^([a-z_][a-z0-9_]*):\(\[\].*$", re.MULTILINE)
 
+#: The same, also as `uqs deploy build --q-target 4.0` leaves it (#861): the
+#: converter qualifies every name under the file's `\d .qetl.plant`, so a
+#: release built for kdb+ 4.0 prefixes each `name:([]...)` with that context. Group 1 is
+#: the definition WITHOUT that context - what database.q, loaded in the root
+#: context, must carry - and group 2 the name (#1158).
+_RELEASE_DEFINITION = re.compile(
+    r"^(?:\.qetl\.plant\.)?(([a-z_][a-z0-9_]*):\(\[\].*)$", re.MULTILINE
+)
 
-def _definitions() -> dict[str, str]:
-    """{table name: its one-line q definition}, read from the q file.
+
+def _definitions(root: Path | None = None) -> dict[str, str]:
+    """{table name: its one-line q definition}, read from the q file of the
+    tree at `root` - by default the checkout uqs was imported from.
 
     Read at import and cached in the constants below rather than on every
     call: these are consulted while generating `database.q`, which
-    `bootstrap()` does on *every* uqs command.
+    `bootstrap()` does on *every* uqs command. `root` is for a tree that is
+    not this one: `uqs deploy build` composes the schema of a STAGED release,
+    whose installed bundles declare tables this checkout does not (#1158).
     """
-    if not TABLES_Q.is_file():  # pragma: no cover - a broken checkout
-        raise FileNotFoundError(f"table definitions not found at {TABLES_Q}")
-    text = TABLES_Q.read_text()
-    found = {match.group(1): match.group(0) for match in _DEFINITION.finditer(text)}
+    tables_q = TABLES_Q if root is None else root / TABLES_FILE
+    if not tables_q.is_file():  # pragma: no cover - a broken checkout
+        raise FileNotFoundError(f"table definitions not found at {tables_q}")
+    text = tables_q.read_text()
+    found = {match.group(2): match.group(1) for match in _RELEASE_DEFINITION.finditer(text)}
     if not found:  # pragma: no cover - guarded by test_schemas.py
         raise ValueError(
-            f"{TABLES_Q} defines no tables - the `name:([]...)` convention this "
+            f"{tables_q} defines no tables - the `name:([]...)` convention this "
             "reader matches on has changed, and every generated database.q "
             "would silently lose uqf's tables"
         )
@@ -74,6 +88,6 @@ def definition(table: str) -> str:
 _DEFS = _definitions()
 
 
-def table_names() -> set[str]:
-    """Every table plant_tables.q defines."""
-    return set(_DEFS)
+def table_names(root: Path | None = None) -> set[str]:
+    """Every table plant_tables.q defines - the tree at `root`'s, if given."""
+    return set(_DEFS) if root is None else set(_definitions(root))

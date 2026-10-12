@@ -18,7 +18,6 @@ source_name:`mock_trades
 columns:`time`sym`side`qty`px
 types:"pssff"
 
-target:`mock_trades
 
 time_column:`time
 
@@ -93,8 +92,8 @@ fixture:{[] generate[42;2026.01.02D00:00:00.000000000;2026.01.02D01:00:00.000000
 \d .
 
 .qetl.source.define[.qpipe.source.mock_trades.source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
-    (.qpipe.source.mock_trades.source_name;`mock_trades;.qpipe.source.mock_trades.target;
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport!
+    (.qpipe.source.mock_trades.source_name;`mock_trades;
      .qpipe.source.mock_trades.time_column;.qpipe.source.mock_trades.row_key;
      .qpipe.source.mock_trades.columns;.qpipe.source.mock_trades.types;
      .qpipe.source.mock_trades.query;.qpipe.source.mock_trades.fixture;

@@ -212,6 +212,25 @@ test_a_live_run_replaces_what_a_fixture_run_wrote:{[t]
     .qunit.assertEquals[count .qetl.coverage.intervals[`loctest_out;`;fv;.z.p];0;
         "and the fixture's claims on those windows are withdrawn"]};
 
+/ #1140: a fixture claim wider than the live window was withdrawn whole, so the
+/ next live window saw no fixture claim, upserted, and left fixture rows
+/ standing under a live claim.
+test_a_fixture_claim_wider_than_the_live_window_keeps_its_remainders:{[t]
+    setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;.loctest.dir[]];
+    .qpipe.job.loctest_backfill.init[.loctest.spec[]];
+    fv:`$"v1~fixture";
+    .qetl.coverage.stage_completion[`loctest_out;`;fv;2026.09.16D12:00;2026.09.18D12:00;1];
+    w:`range_from`range_to!(2026.09.17D00:00;2026.09.18D00:00);
+    .qetl.job.bounded.write_state[`loctest_backfill;`last_window;w];
+    .qetl.job.bounded.runtime.retire_fixture_claims[`loctest_backfill;::];
+    iv:.qetl.coverage.intervals[`loctest_out;`;fv;.z.p];
+    .qunit.assertEquals[(iv`range_from;iv`range_to);
+        (2026.09.16D12:00 2026.09.18D00:00;2026.09.17D00:00 2026.09.18D12:00);
+        "the fixture keeps [c.from;w.from) and [w.to;c.to), and nothing inside the window"];
+    later:`range_from`range_to!(2026.09.18D00:00;2026.09.19D00:00);
+    .qunit.assertEquals[.qetl.job.bounded.runtime.fixture_claimed[`loctest_backfill;later];1b;
+        "so the next live window still sees a fixture claim, and replaces rather than upserts"]};
+
 test_a_fixture_run_must_be_asked_for:{[t]
     setenv[`UQF_SOURCE_CRED_LOCTEST_SRC;""];
     setenv[`UQF_FIXTURE_WRITES;""];

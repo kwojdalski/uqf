@@ -373,12 +373,19 @@ checked:{[job;chk;mode;publisher;t;x]
     if[not .Q.qt f;
         :withhold[job;t;x;"check returned something other than a table of failures";();count x]];
     if[0=count f; :publisher[t;x]];
-    n:count x;
-    rows:$[(`drop=mode) and (`row in cols f) and (98h=type x) and not any null f`row;
-        distinct "j"$f`row; til n];
-    clean:$[98h=type x; x where not (til n) in rows; x];
+    / Only a table has rows a check can name by index and a publisher can be
+    / handed a subset of. A dict row or a list of column vectors that fails is
+    / withheld whole, under drop as under hold: no clean subset is rebuilt in
+    / a shape the check never indexed.
+    tbl:98h=type x;
+    n:$[tbl; count x; 99h=type x; 1; count first x];
+    / `row is read only once it is known to be there: `and evaluates both
+    / sides, and indexing a missing column throws on PeachQ
+    named:$[tbl and (`drop=mode) and `row in cols f; not any null f`row; 0b];
+    rows:$[named; distinct "j"$f`row; til n];
+    clean:$[tbl; x where not (til n) in rows; ()];
     withhold[job;t;x;"check failed: ",string[count f]," failure(s)";f;count rows];
-    $[count clean; publisher[t;clean]; ::]}
+    $[tbl and count clean; publisher[t;clean]; ::]}
 
 / Private: log and count a batch the check withheld, in whole or part.
 / @private
