@@ -46,6 +46,7 @@
 \l src/foundation/rates.q
 \l src/market_data/book.q
 \l src/pricing/cross.q
+\l src/pricing/attribution_routes.q
 \l src/pricing/forwards.q
 \l src/pricing/options.q
 \l src/portfolio/risk.q
@@ -54,6 +55,7 @@
 \l src/portfolio/desk_positions.q
 \l src/portfolio/limits.q
 \l src/execution/execution.q
+\l src/execution/execution_attribution.q
 \l src/market_data/microstructure.q
 \l src/market_data/microstructure_venues.q
 \l src/market_data/dqchecks.q
