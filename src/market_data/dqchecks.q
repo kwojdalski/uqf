@@ -35,6 +35,10 @@
 / but worth a human's attention) so the two very different severities
 / don't collapse into one generic "bad" bucket.
 / .
+/ A side whose best level is not usable (.qbook.level_ok: a zero, negative,
+/ null or infinite price) is ABSENT too, so a zero or negative ask is
+/ `one_sided - flagged, not ok (#1200); all statuses and spread_bps come from
+/ the same .qbook.top_sides tops, with null spread_bps for such a row.
 / A side nobody quoted is ABSENT, not wrong: its spread is null, and a null
 / is neither crossed nor wide - it is `one_sided. Written the obvious way,
 / `spreads<0` called it crossed, because q orders a null below every number,
@@ -53,14 +57,22 @@
 / @eg .qdqc.check_market_data_quality[quotes;5]
 check_market_data_quality:{[quotes;max_spread_bps]
     .qschema.require_depth_quotes[`check_market_data_quality;quotes];
-    spreads:.qmicro.spread_bps[quotes`bid_prices;quotes`ask_prices];
+    / ONE extraction of the top for every status (#1200): a side whose level 0
+    / is not level_ok (zero, negative, null, infinite) is absent, so it is
+    / one_sided - never ok, and never judged wide or crossed from a number
+    / the rest of the library refuses to call a price.
+    t:.qbook.top_sides ([] bid_prices:quotes`bid_prices; ask_prices:quotes`ask_prices);
+    bid0:t`bid;
+    ask0:t`ask;
+    one_sided:(null bid0) | null ask0;
+    mid:0.5*bid0+ask0;
+    spreads:10000*(ask0-bid0)%mid;
     / boolean-indexed status vector rather than a nested $[cond;a;b].
     / KDB-X supports a vector cond, so this is now a style choice rather
     / than a requirement - kept because `crossed`ok`wide idx is the same
     / index-a-status-vector idiom check_stale_quotes/reconcile_trades
     / already use for the 2-way case, generalized to 3 statuses via a
     / 0/1/2 index built from ordinary boolean arithmetic instead of $.
-    one_sided:null spreads;
     is_crossed:(not one_sided) & .qbook.crossed_top[quotes`bid_prices;quotes`ask_prices];
     is_wide:spreads>max_spread_bps;
     / 0 crossed, 1 ok, 2 wide - and 3 one_sided, which overrides: a null

@@ -24,11 +24,14 @@
 / workers (Parquet/CSV) is the part of #947 this does not do.
 / .
 / DEDUPLICATION, ON THE PUBLISHER'S CLOCK. fx_positions throttles what it
-/ publishes (one reminder per breach per period), but that throttle is in
-/ memory and a replay does not rebuild it: a restarted fx_positions publishes
-/ every standing breach again on its first timer tick, and the plant stamps
-/ each with a NEW `time`. So the sink must still drop a breach it has already
-/ delivered, and equality of `time` alone would not (#1182). It does NOT do
+/ publishes (one reminder per breach per period), and since #1197 it rebuilds
+/ that throttle on a restart from its own fx_limit_breach rows in the replayed
+/ log, so a restart no longer re-publishes a standing breach inside its
+/ period. The sink keeps its own dedup as defence in depth: a second publisher
+/ of the table, a log that lacks the earlier rows, or a throttle restored from
+/ rows the plant stamped a moment apart would otherwise reach the webhook,
+/ and a re-publication carries a NEW `time`, so equality of `time` alone would
+/ not catch it (#1182). It does NOT do
 / that with a period of its own measured on its own receipt clock: that clock
 / adds a different delivery latency to each arrival, so a reminder published
 / exactly one period after the first can land a few milliseconds INSIDE a sink
