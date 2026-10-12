@@ -61,7 +61,9 @@ check_market_data_quality:{[quotes;max_spread_bps]
     / is not level_ok (zero, negative, null, infinite) is absent, so it is
     / one_sided - never ok, and never judged wide or crossed from a number
     / the rest of the library refuses to call a price.
-    t:.qbook.top_sides ([] bid_prices:quotes`bid_prices; ask_prices:quotes`ask_prices);
+    depth:quotes`bid_prices`bid_sizes`ask_prices`ask_sizes;
+    book:`bid_prices`bid_sizes`ask_prices`ask_sizes!depth;
+    t:.qbook.top_sides flip book;
     bid0:t`bid;
     ask0:t`ask;
     one_sided:(null bid0) | null ask0;
@@ -73,7 +75,7 @@ check_market_data_quality:{[quotes;max_spread_bps]
     / index-a-status-vector idiom check_stale_quotes/reconcile_trades
     / already use for the 2-way case, generalized to 3 statuses via a
     / 0/1/2 index built from ordinary boolean arithmetic instead of $.
-    is_crossed:(not one_sided) & .qbook.crossed_top[quotes`bid_prices;quotes`ask_prices];
+    is_crossed:(not one_sided) & .qbook.crossed_top flip book;
     is_wide:spreads>max_spread_bps;
     / 0 crossed, 1 ok, 2 wide - and 3 one_sided, which overrides: a null
     / spread is never crossed (guarded above) or wide (null>x is false).
