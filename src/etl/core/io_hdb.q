@@ -207,7 +207,7 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
     / window used to read its date whole, resolve and swap it back, so a
     / day filled window by window was rewritten once per window. Under
     / upsert, ignore and fail, a batch none of whose keys a date already
-    / holds resolves to that date plus the batch - folded within itself as
+    / holds resolves to that date plus the batch - folded within itself, per date, as
     / resolve folds it - so it is appended, as the append path does. Only
     / when EVERY date is clean: one clash sends the whole batch the slow way,
     / so a `fail on one date still leaves every date untouched. replace
@@ -217,7 +217,9 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
     / read a partition the way PeachQ cannot.
     if[(not on_peachq) and not `replace=strategy;
         kc:(),opts`row_key;
-        fold:data where $[`ignore=strategy; first_seen; last_seen] kc#data;
+        / Folded per DATE, as resolve folds (one call per partition): a key
+        / on both sides of midnight is two rows, not one (#1142).
+        fold:data where $[`ignore=strategy; first_seen; last_seen] ([] zz_part:days),'kc#data;
         fdays:`date$fold`time;
         clean:{[root;target;kc;fold;fdays;d]
             part:hsym `$(string .Q.par[root;d;target]),"/";

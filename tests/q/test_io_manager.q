@@ -501,6 +501,20 @@ test_hdb_new_keys_a_batch_repeats_fold_as_resolve_folds_them:{[t]
     .qunit.assertEquals[(part[up;2026.01.02;`iodeals]`notional;part[ig;2026.01.02;`iodeals]`notional);(enlist 6e6;enlist 5e6);
         "upsert keeps the last, ignore the first - one row either way"]};
 
+/ #1142: a key on both sides of midnight is two rows - the fast path (fresh
+/ HDB) must fold per date like the full path (the 2nd already holds a key).
+test_hdb_fast_path_keeps_a_key_either_side_of_midnight:{[t]
+    b:([] deal_time:2026.01.02D23:59:00.000000000 2026.01.03D00:01:00.000000000 2026.01.02D13:00:00.000000000; sym:`AUDUSD`AUDUSD`GBPUSD; notional:1 2 3e6);
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`upsert;enlist `sym;`deal_time;2026.01.02D00:00:00.000000000;2026.01.04D00:00:00.000000000);
+    fast:hdb_dir[];
+    .qetl.io.write_keyed[.qetl.io.hdb[fast;`deal_time];`iodeals;b;o];
+    slow:hdb_dir[];
+    .qetl.io.write_keyed[.qetl.io.hdb[slow;`deal_time];`iodeals;([] deal_time:enlist 2026.01.02D13:00:00.000000000; sym:enlist `GBPUSD; notional:enlist 9e6);o];
+    .qetl.io.write_keyed[.qetl.io.hdb[slow;`deal_time];`iodeals;b;o];
+    rows:{[r] asc raze {[r;d] p:.iotest.part[r;d;`iodeals]; exec notional from p}[r] each 2026.01.02 2026.01.03};
+    .qunit.assertEquals[rows fast;1 2 3e6;"fast path: one AUDUSD row each side of midnight"];
+    .qunit.assertEquals[rows fast;rows slow;"and the full path agrees"]};
+
 test_hdb_fail_with_one_clashing_date_writes_no_date:{[t]
     root:hdb_dir[];
     m:.qetl.io.hdb[root;`deal_time];
