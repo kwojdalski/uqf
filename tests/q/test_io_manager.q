@@ -515,6 +515,36 @@ test_hdb_fast_path_keeps_a_key_either_side_of_midnight:{[t]
     .qunit.assertEquals[rows fast;1 2 3e6;"fast path: one AUDUSD row each side of midnight"];
     .qunit.assertEquals[rows fast;rows slow;"and the full path agrees"]};
 
+/ #1160: the fast path is derived from resolve, so for any clean batch it
+/ writes what the full path writes. The full path is forced by seeding the
+/ second HDB with a row of an unrelated key on the 2nd (a non-empty date that
+/ clashes with nothing); that row is set aside before comparing.
+test_hdb_fast_path_writes_what_the_full_path_writes:{[t]
+    mk:{[tm;sy;nt] ([] deal_time:tm; sym:sy; notional:nt)};
+    batches:(
+        mk[2026.01.02D23:59:00.000000000 2026.01.03D00:01:00.000000000 2026.01.02D13:00:00.000000000;`AUDUSD`AUDUSD`GBPUSD;1 2 3e6];
+        mk[2026.01.02D10:00:00.000000000 2026.01.02D11:00:00.000000000 2026.01.02D12:00:00.000000000 2026.01.03D01:00:00.000000000 2026.01.03D02:00:00.000000000;`AUDUSD`AUDUSD`NZDUSD`NZDUSD`NZDUSD;1 2 3 4 5e6];
+        mk[2026.01.03D09:00:00.000000000 2026.01.02D09:00:00.000000000 2026.01.03D10:00:00.000000000;`EURUSD`EURUSD`EURUSD;7 8 9e6];
+        mk[enlist 2026.01.03D05:00:00.000000000;enlist `CADUSD;enlist 4e6]);
+    / Enumerated symbols read against THIS root's domain, so they read as symbols.
+    rows:{[r] @[`.;`sym;:;get ` sv r,`sym]; a:raze {[r;d] $[()~key hsym `$(string .Q.par[r;d;`iodeals]),"/"; ([] deal_time:0#0Np; sym:0#`; notional:0#0f); select deal_time,sym:`$string sym,notional from .iotest.part[r;d;`iodeals] where sym<>`ZZZ]}[r] each 2026.01.02 2026.01.03;
+        `deal_time`notional xasc 0!a};
+    seed:mk[enlist 2026.01.02D08:00:00.000000000;enlist `ZZZ;enlist 0e6];
+    run:{[rows;seed;batches;s]
+        o:hdb_opts s;
+        {[rows;seed;o;b]
+            fast:hdb_dir[];
+            .qetl.io.write_keyed[.qetl.io.hdb[fast;`deal_time];`iodeals;b;o];
+            slow:hdb_dir[];
+            .qetl.io.write_keyed[.qetl.io.hdb[slow;`deal_time];`iodeals;seed;o];
+            .qetl.io.write_keyed[.qetl.io.hdb[slow;`deal_time];`iodeals;b;o];
+            (rows fast;rows slow)}[rows;seed;o] each batches};
+    {[run;rows;seed;batches;s]
+        pairs:run[rows;seed;batches;s];
+        .qunit.assertEquals[pairs[;0];pairs[;1];"fast path equals full path under ",string s]}[run;rows;seed;batches] each `upsert`ignore;
+    pairs:run[rows;seed;batches;`fail];
+    .qunit.assertEquals[pairs[;0];pairs[;1];"fast path equals full path under fail"]};
+
 test_hdb_fail_with_one_clashing_date_writes_no_date:{[t]
     root:hdb_dir[];
     m:.qetl.io.hdb[root;`deal_time];

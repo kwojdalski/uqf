@@ -217,15 +217,18 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
     / read a partition the way PeachQ cannot.
     if[(not on_peachq) and not `replace=strategy;
         kc:(),opts`row_key;
-        / Folded per DATE, as resolve folds (one call per partition): a key
-        / on both sides of midnight is two rows, not one (#1142).
-        fold:data where $[`ignore=strategy; first_seen; last_seen] ([] zz_part:days),'kc#data;
-        fdays:`date$fold`time;
-        clean:{[root;target;kc;fold;fdays;d]
+        / The fold IS resolve's: each date's rows resolved against an empty
+        / table, one call per date as the slow path makes one per partition
+        / (#1160; the hand copy drifted once, #1142).
+        fo:(`target,())!(),target;
+        folds:{[strategy;kc;data;days;fo;d]
+            resolve[strategy;0#data;data where days=d;fo,enlist[`row_key]!enlist kc]}[strategy;kc;data;days;fo] each dates;
+        fold:raze folds;
+        clean:{[root;target;kc;rows;d]
             part:hsym `$(string .Q.par[root;d;target]),"/";
             if[()~key part; :1b];
-            if[not (exec t from meta fold)~exec t from meta part; :0b];
-            not any (kc#fold where fdays=d) in ?[part;();0b;kc!kc]}[root;target;kc;fold;fdays] each dates;
+            if[not (exec t from meta rows)~exec t from meta part; :0b];
+            not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
         if[all clean; write_hdb[root;partition_col;target;fold]; :count batch]];
     if[`replace=strategy;
         span:{[f;t] f+til 1+t-f}[`date$opts`range_from;`date$opts[`range_to]-1];
