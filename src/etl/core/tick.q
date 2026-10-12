@@ -377,6 +377,35 @@ replay_then_subscribe:{[want;sink]
     `.qetl.tick.handoff set ();
     m}
 
+/ The log file the plant keeps for a day, as open_log names it.
+/ @param dt the date
+/ @return the file, as an hsym (it may not exist), or ` when no log was opened
+/ @eg .qetl.tick.reset[]; .qetl.tick.day_log 2026.10.09  ->  `
+day_log:{[dt]
+    $[0=count log_dir; `; hsym `$log_dir,"/",string[log_name],ssr[string dt;".";""]]}
+
+/ The wanted tables' messages from the logs of earlier days, oldest first
+/ (#1072). A job that was down across an end of day restarts into a log
+/ whose opening snapshot was never written; the snapshot that carries its
+/ state is at the head of the log of the day AFTER the last end of day it
+/ saw, and every day since adds fills on top. Replaying those logs in order,
+/ then today's, rebuilds what a job left running would hold. A day with no
+/ log (the plant was down too, or it was cleared) contributes nothing.
+/ @param want the table names, or ` for every table the plant knows
+/ @param first_day the first date to read
+/ @param last_day the last date to read, inclusive
+/ @return the (table;rows) pairs, in log order
+/ @eg .qetl.tick.reset[]; .qetl.tick.earlier_days[`;2026.10.08;2026.10.09]  ->  ()
+earlier_days:{[want;first_day;last_day]
+    w:$[want~`; key schemas; (),want];
+    `.qetl.tick.handoff set ();
+    {[w;dt] p:day_log dt;
+        if[$[null p; 0b; not () ~ key p];
+            replay[p;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]]}[w] each first_day+til 0|1+last_day-first_day;
+    m:handoff;
+    `.qetl.tick.handoff set ();
+    m}
+
 / ----------------------------------------------------------------- RESET
 
 / Forget every subscription, schema and log handle - what a test calls

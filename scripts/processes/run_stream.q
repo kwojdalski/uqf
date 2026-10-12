@@ -161,7 +161,7 @@ add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timer
 / the handler to one argument and make a projection rather than an error.
 / @return the transport dictionary
 local_transport:{[]
-    `connect`publisher`subscribe`timer!(
+    `connect`publisher`subscribe`timer`earlier_days!(
         {[] };
         {[] {[t;r] .qetl.tick.publish[t;r]}};
         {[tbls;handler;replay]
@@ -169,7 +169,8 @@ local_transport:{[]
                 n:.qetl.tick.replay[.qetl.tick.log_path;{[tbls;h;t;r] if[t in tbls; h[t;r]];}[tbls;handler]];
                 if[0<n; -1 "run_stream: recovered ",string[n]," message(s) from ",string .qetl.tick.log_path]];
             .qetl.tick.subscribe[tbls;{[h;m] h . 1_m}[handler]];};
-        add_timer)}
+        add_timer;
+        {[tbls;first_day;last_day] .qetl.tick.earlier_days[tbls;first_day;last_day]})}
 
 / The transport for a plant in ANOTHER process, on port `tp`.
 / .
@@ -200,7 +201,7 @@ local_transport:{[]
 / @param tp the plant's port
 / @return the transport dictionary
 remote_transport:{[tp]
-    `connect`publisher`subscribe`timer!(
+    `connect`publisher`subscribe`timer`earlier_days!(
         {[tp]
             .qetl.log.info[`run_stream;"connecting to the plant";enlist[`port]!enlist tp];
             `.qproc.standalone.h set @[hopen;tp;{[tp;e]
@@ -212,7 +213,8 @@ remote_transport:{[tp]
             msgs:.qproc.standalone.h({[want] .qetl.tick.replay_then_subscribe[want;neg .z.w]};tbls);
             {[h;m] h . m}[handler] each msgs;
             if[count msgs; -1 "run_stream: recovered ",string[count msgs]," message(s) from the plant's log"];};
-        add_timer)}
+        add_timer;
+        {[tbls;first_day;last_day] .qproc.standalone.h({[w;a;b] .qetl.tick.earlier_days[w;a;b]};tbls;first_day;last_day)})}
 
 / The jobs to run for `jobs` with the plant in this process: every in-tree
 / producer upstream of them, producers first, then `jobs` themselves.
