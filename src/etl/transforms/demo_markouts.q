@@ -32,8 +32,9 @@ max_horizon:max horizons
 / markout_pips rather than being dropped, so a gap shows in the table.
 / The empty guard is not tidiness: .qexec.markout_at_horizons throws `type`
 / on zero trades.
-/ The fill's id (#1080) rides along: .qexec returns trade-major rows, one per
-/ horizon, so row i of its output belongs to fill i div (count horizons).
+/ The fill's id (#1080) rides along: .qexec.markout_at_horizons carries extra
+/ trade columns through, so fill_id is read from each row, not paired by
+/ position (#1188).
 / @param fill_rows time sym side trade_price pip_factor fill_id, at least
 / @param quotes time sym bid ask
 / @return time (trade_time+horizon) sym trade_time horizon trade_price ref_price markout_pips fill_id
@@ -44,7 +45,6 @@ score:{[fill_rows;quotes]
     if[0=count fill_rows; :0#shape];
     mids:select sym, time, mid:0.5*bid+ask from quotes;
     out:.qexec.markout_at_horizons[fill_rows;mids;.qpipe.transform.demo_markouts.horizons];
-    out:update fill_id:fill_rows[`fill_id] (til count out) div count .qpipe.transform.demo_markouts.horizons from out;
-    cols[shape] xcols out}
+    (cols shape)#out}
 
 \d .
