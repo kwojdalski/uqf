@@ -17,8 +17,9 @@ What the copies differed on is kept as a choice, not flattened:
                 or raises it (the recorders) - `missing_ok` says which.
 
 The pid file holds the pid and, on its second line, the process's identity -
-its start time and argv as `ps` reports them. A pid alone outlives the
-process: once the OS gives it to something else, `running` would say the feed
+its start time and argv: on Linux the kernel's start time in ticks since
+boot, elsewhere ps's lstart (see `process_identity`, #1167). A pid alone
+outlives the process: once the OS gives it to something else, `running` would say the feed
 is up and `stop` would SIGTERM a stranger (#1043). A pid whose identity no
 longer matches, or a file with no identity to check, is stale: it is never
 signalled.
@@ -26,10 +27,10 @@ signalled.
 `ps` prints the start time in the caller's locale and timezone, so the
 identity is always read under a fixed one: a feed started from an en_GB
 terminal and stopped from cron is the same process (#1055). A pid file
-written before that, in another environment, can mismatch on the start
-time's formatting alone; when the live process's command line is the one
-recorded it is neither signalled nor forgotten - its pid file stays and the
-operator decides.
+written before that, in another environment - or on Linux before #1167,
+with ps's lstart - can mismatch on the start time's form alone; when the
+live process's command line is the one recorded it is neither signalled nor
+forgotten - its pid file stays and the operator decides.
 """
 
 from __future__ import annotations
@@ -70,12 +71,42 @@ def _ps(pid: int, *fields: str, fixed: bool = True) -> str | None:
     return " ".join(out.split()) or None
 
 
+#: Where Linux keeps each process's start time as the kernel stored it.
+_PROC = Path("/proc")
+
+
+def _boot_ticks(pid: int) -> str | None:
+    """`pid`'s start time as Linux stores it - clock ticks since boot, field 22
+    of /proc/<pid>/stat - or None where there is no /proc (macOS).
+
+    Linux's `ps -o lstart` is not this number: it adds it to a boot time ps
+    derives from the wall clock at the moment it runs, so one process's lstart
+    can move by a second between two calls - and stop would then refuse the
+    feed it started as "another process" (#1167). The ticks never move."""
+    try:
+        stat = (_PROC / str(pid) / "stat").read_text()
+    except OSError:
+        return None
+    # Field 2, the command name, is parenthesised and may itself hold spaces
+    # or ")": the fixed fields start after the LAST ")", at field 3.
+    fields = stat[stat.rfind(")") + 1 :].split()
+    return f"boot+{fields[19]}" if len(fields) > 19 else None
+
+
 def process_identity(pid: int) -> str | None:
-    """`pid`'s start time and argv, whitespace-normalised, or None when ps
-    knows no such process. Start time to the second plus the command line is
-    what tells a pid's current holder from the process that once had it. Read
-    in the C locale and UTC, so it does not depend on who asks."""
-    return _ps(pid, "lstart", "args")
+    """`pid`'s start time and argv, whitespace-normalised, or None when it
+    has no such process. The start time plus the command line is what tells
+    a pid's current holder from the process that once had it.
+
+    On Linux the start time is the kernel's own (`boot+<ticks>`), since ps's
+    lstart there is recomputed from the wall clock on every call (#1167).
+    Elsewhere it is ps's lstart, which macOS reads from a stored timestamp,
+    read in the C locale and UTC so it does not depend on who asks (#1055)."""
+    ticks = _boot_ticks(pid)
+    if ticks is None:
+        return _ps(pid, "lstart", "args")
+    args = _ps(pid, "args")
+    return f"{ticks} {args}" if args else None
 
 
 @dataclass(frozen=True)
