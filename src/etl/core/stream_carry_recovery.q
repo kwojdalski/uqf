@@ -39,7 +39,7 @@ last_end_seen:{[job]
 / @param tbls the tables subscribed to
 / @param h the handler to replay through
 / @return how many messages were replayed
-/ @eg .qetl.job.stream.catch_up[`fx_positions;tr;`executions`fx_position_open;h]
+/ @eg .qetl.job.stream.catch_up[`fx_positions;()!();`executions`fx_position_open;{[t;x]}]  / a transport with no earlier_days: nothing to replay
 catch_up:{[job;tr;tbls;h]
     last_eod:last_end_seen job;
     if[(null last_eod) or last_eod>=.z.D-1; :0];
