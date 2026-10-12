@@ -12,6 +12,7 @@ import os
 import shutil
 import socket
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,7 @@ from uqs.interpreter import q_command, q_interpreter
 from uqs.logger import get_logger
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
-from uqs.stack import alive, gateway_access, qtree, start_policy
+from uqs.stack import alive, deployment, gateway_access, qtree, start_policy
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
 from uqs.stack.carriable import check_carriable
@@ -27,6 +28,7 @@ from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import effective_process_rows
+from uqs.stack.reporter import write_reporter_config
 from uqs.stack.site_fields import process_csv_fields
 
 log = get_logger(__name__)
@@ -149,14 +151,13 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
         # gateway1's and sctp1's access lists, and the data-access table list
         # the rdbs, hdbs and gateways are started with (stack/gateway_access.py).
         gateway_access.write(paths)
-
         # Same extend-never-edit approach as process.csv above, for stp1's
         # -schemafile (see _generated_schema_content/_composed_rows).
         paths.generated_schema.write_text(_generated_schema_content(paths))
-
-        # Same again for DQE's query list: the vendored rows plus this tree's
-        # metatables, which dqe1 is pointed at (stack/dqe.py).
+        # Same again for DQE's query list (stack/dqe.py), and for reporter1's checks,
+        # validated against this deployment, not the site's reporter.csv (stack/reporter.py).
         write_dqe_config(paths)
+        write_reporter_config(paths, (r["procname"] for r in rows))
 
     # Make the HDB rectangular, now that database.q says what it should
     # hold. A partitioned kdb+ database needs every table in every
@@ -193,6 +194,7 @@ def run_torq_sh(
     base_port: int | None = None,
     capture: bool = False,
     timeout: float | None = None,
+    selected: Sequence[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Check the TorQ launcher, bootstrap, then run the launcher with *args*
     under the generated env: `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER`
@@ -208,6 +210,8 @@ def run_torq_sh(
     for something slow. A read-only command that an operator runs to find out
     what is going on should not be the thing that hangs, so `summary` sets
     one.
+
+    `selected` is a profile start's set: what TorQ discovers (stack/deployment.py).
     """
     start_policy.refuse_start(paths, args, base_port)
     # The launcher first: bootstrap writes the data directory, process.csv and
@@ -219,10 +223,13 @@ def run_torq_sh(
     # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
     # stop resolving even though they're on PATH in the calling shell.
     env = {**os.environ, **overrides}
-    if qtree.is_flattened(paths) and args and args[0] in start_policy.STARTING_VERBS:
+    if args and args[0] in start_policy.STARTING_VERBS:
         # What a start or restart loads, converted and proven first - refused before
         # anything starts. stop and summary leave the published tree alone.
-        qtree.prepare(paths, q_command(env), env)
+        if qtree.is_flattened(paths):
+            qtree.prepare(paths, q_command(env), env)
+        # What TorQ discovers: `selected` is a profile's set (stack/deployment.py)
+        deployment.record(paths, start_policy.started_procs(args), selected)
     cmd = [str(launcher), *args]
     log.debug("running: {} (timeout={})", " ".join(cmd), timeout)
     try:
@@ -246,8 +253,10 @@ def run_torq_sh(
         ) from exc
 
 
-def start(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False):
-    return run_torq_sh(paths, ["start", procs], base_port=base_port, capture=capture)
+def start(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
+    """`selected=` a profile's resolved set, `capture=` as run_torq_sh."""
+    kw.setdefault("capture", False)
+    return run_torq_sh(paths, ["start", procs], base_port=base_port, **kw)
 
 
 def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False):

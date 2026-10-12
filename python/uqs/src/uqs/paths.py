@@ -132,6 +132,11 @@ class UqsPaths:
         return self.torqdata / "process.csv"
 
     @property
+    def generated_deployment(self) -> Path:
+        """The processes this stack's TorQ discovers (stack/deployment.py)."""
+        return self.torqdata / "deployment.txt"
+
+    @property
     def generated_schema(self) -> Path:
         return self.torqdata / "database.q"
 
@@ -142,6 +147,10 @@ class UqsPaths:
     @property
     def generated_dqe_config(self) -> Path:
         return self.torqdata / "dqengineconfig.csv"
+
+    @property
+    def generated_reporter_config(self) -> Path:
+        return self.torqdata / "reporter.csv"
 
     @property
     def generated_setenv(self) -> Path:

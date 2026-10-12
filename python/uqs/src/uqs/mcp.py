@@ -71,6 +71,7 @@ def uqs_start(procs: str = "all", port: int | None = None, profile: str | None =
     names to start only specific ones. profile names comma-separated start
     sets (`uqs list profiles`); procs given with it are added to the set.
     """
+    selected = None
     if profile is not None:
         try:
             members, _ = start_policy.resolve_profiles(
@@ -80,8 +81,8 @@ def uqs_start(procs: str = "all", port: int | None = None, profile: str | None =
             )
         except UqsError as exc:
             return f"ERROR: {exc}"
-        procs = " ".join(members)
-    return _run(runtime.start, procs, base_port=port)
+        procs, selected = " ".join(members), members
+    return _run(runtime.start, procs, base_port=port, selected=selected)
 
 
 @mcp.tool

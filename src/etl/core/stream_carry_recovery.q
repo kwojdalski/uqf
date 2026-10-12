@@ -46,9 +46,8 @@ plant_today:{[tr] $[`plant_day in key tr; tr[`plant_day][]; .z.D]}
 / replays never overlap (#1190). When the log of the first missed day was
 / replayed (`has_log`), the job is marked `caught_up`: with no snapshot
 / anywhere, that state is a book that was flat at the marker plus every later
-/ fill, and is complete (#1189). One without earlier_days (TorQ's
-/ per-table, rotated logs are the plant's to read) leaves missed_end_of_day to
-/ say what is lost.
+/ fill, and is complete (#1189). One without earlier_days leaves
+/ missed_end_of_day to say what is lost.
 / @param job the job's name
 / @param tr the transport
 / @param tbls the tables subscribed to

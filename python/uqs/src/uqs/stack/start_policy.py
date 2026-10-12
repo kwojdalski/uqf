@@ -44,11 +44,17 @@ def refuse_start(paths: UqsPaths, args: Sequence[str], base_port: int | None) ->
     """
     if not args or args[0] not in STARTING_VERBS:
         return
-    names = list(itertools.takewhile(lambda word: not word.startswith("-"), args[1:]))
-    procs = " ".join(names) or "all"
+    procs = started_procs(args)
     stack_procs.assert_known_procnames(paths, procs)
     qtree.refuse_unloadable(paths, with_interpreter(paths))
     occupancy.refuse_if_taken(paths, base_port, procs)
+
+
+def started_procs(args: Sequence[str]) -> str:
+    """The processes torq.sh `args` start: the words between the verb and its
+    first flag (`-extras`, `-csv`), or `all` when there are none."""
+    names = itertools.takewhile(lambda word: not word.startswith("-"), args[1:])
+    return " ".join(names) or "all"
 
 
 def resolve_profiles(

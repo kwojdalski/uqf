@@ -544,11 +544,29 @@ second sort worker (`sortworker2`), plus `reporter1` and `tpreplay1`, which only
 `essential` starts. At end of day `wdb1` hands its writedown to `sort1`, which
 sorts it into the HDB with `sortworker1`, so `wdb1` stays free. `reporter1`
 holds no plant slot, but it does open handles to `gateway1`, `rdb1` and `hdb1`.
+On a runtime with this tree's overlays it doesn't read the site's
+`appconfig/reporter.csv`. It reads `reporter.csv` in the data directory, which
+bootstrap writes on every start from `UQF_REPORTER_CHECKS`
+(`python/uqs/src/uqs/stack/reporter.py`). That list is a memory check plus
+activity checks, each with its own window and row threshold, and a check on a
+table the runtime doesn't publish is left out with a log line saying why. A
+table name that nothing in the tree defines stops the bootstrap with an error.
 `tpreplay1` starts and exits: it is the one-shot replay
 [`data replay`](#replaying-a-tickerplant-log) aims with a log, a schema and an
 HDB, and started without them it exits at startup, before it reads or empties
 anything - so expect it shown down. Composing `essential` with a job profile -
 `--profile essential,fx` - starts both sets.
+
+**TorQ discovers only what the profile started.** `process.csv` still lists
+every process, but TorQ's discovery would hand all of them out, so under
+`essential` `sort1` would keep retrying `sortworker2`'s port. A profile start
+writes its resolved set to `deployment.txt` in the data directory, and every
+TorQ process (through `scripts/torqcode/handlers/deployment.q`) skips the
+`process.csv` rows outside it. Any later start adds to the set -
+`uqs start sortworker2` makes it discoverable from then on - and stopping a
+process does not take it out, so a selected process that goes down is still
+retried and its failures still logged. A stack started without a profile has no
+set, and TorQ discovers as it always has.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.
