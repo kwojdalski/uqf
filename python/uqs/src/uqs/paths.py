@@ -149,6 +149,10 @@ class UqsPaths:
         return self.torqdata / "dqengineconfig.csv"
 
     @property
+    def generated_reporter_config(self) -> Path:
+        return self.torqdata / "reporter.csv"
+
+    @property
     def generated_setenv(self) -> Path:
         return self.torqdata / "setenv.sh"
 
