@@ -116,6 +116,25 @@ case-sensitively against the names the process reported. An exact name is just a
 pattern that matches itself, so there is one behaviour rather than two - quote
 the pattern, or the shell will try to expand it against your filenames first.
 
+### Renamed or retyped HDB columns
+
+`hdb-check --fix` does not rewrite existing columns. When a release renames or
+changes one, stop the stack and migrate each affected date/table explicitly:
+
+```
+uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
+uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
+uqs data hdb-check
+uqs restart hdb1
+```
+
+The first command is a dry run. `--cast` authorises a type change only when
+every value survives conversion back to its original type. The applied command
+builds and checks a complete table partition before exchanging it with the old
+one; it prints the old directory's backup path for rollback. A source column not
+named in the current schema must be mapped with `--rename` rather than silently
+dropped. The command refuses segmented HDBs.
+
 ## Commands
 
 `uqs --help` lists every command, and `uqs <command> --help` gives its arguments
