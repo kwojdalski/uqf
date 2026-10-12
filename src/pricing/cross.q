@@ -229,14 +229,18 @@ ccy_orient_chain:{[syms]
 / @param side `bid or `ask - the side of the final cross being priced
 / @param size the size to sweep, in leg 1's relevant currency
 / @param inverts boolean list, one per leg, from ccy_orient_chain
-/ @return dict `price`filled_size`fully_filled for this side of the cross
+/ @return dict `price`filled_size`fully_filled`legs for this side of the
+/   cross; legs is a table, one row (`notional`levels_used) per leg - the size that leg
+/   was swept at (leg 0: size; later legs: the previous bridge notional, 0 if
+/   none) and the indices into that leg's ORIGINAL oriented ladder it consumed
 / @private
 cross_sweep_chain:{[books;side;size;inverts]
     n:count books;
     lvl0:oriented_levels[side;books 0;inverts 0];
     sweep0:.qbook.sweep_price[lvl0 0;lvl0 1;size];
-    empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
+    empty_sweep:`avg_price`worst_price`filled_size`fully_filled`levels_used!(0n;0n;0f;0b;`long$());
     acc:sweep0;
+    legs:enlist `notional`levels_used!("f"$size;sweep0`levels_used);
     price:sweep0[`avg_price];
     fully_filled:sweep0[`fully_filled];
     filled_size:sweep0[`filled_size];
@@ -245,11 +249,12 @@ cross_sweep_chain:{[books;side;size;inverts]
         bridge_notional:acc[`filled_size]*acc[`avg_price];
         lvl:oriented_levels[side;books i;inverts i];
         sweep_i:$[bridge_notional>0; .qbook.sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
+        legs,:enlist `notional`levels_used!(0f|bridge_notional;sweep_i`levels_used);
         price*:sweep_i[`avg_price];
         fully_filled:fully_filled and sweep_i[`fully_filled];
         acc:sweep_i;
         i+:1];
-    `price`filled_size`fully_filled!(price;filled_size;fully_filled)};
+    `price`filled_size`fully_filled`legs!(price;filled_size;fully_filled;legs)};
 
 / Bid, ask and mid for an N-leg cross at a single size. mid is
 / the average of the swept cross bid and the swept cross ask at that

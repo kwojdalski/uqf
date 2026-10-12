@@ -310,6 +310,14 @@ test_sweep_price_skips_unusable_levels:{[t]
     .qunit.assertFalse[r`fully_filled;"book short of target once the null level is skipped"];
     .testutil.assertApprox[r`worst_price;1.11;1e-9;"worst price from usable levels"]};
 
+test_sweep_price_levels_used_are_original_indices:{[t]
+    r:.qbook.sweep_price[1.10 0n 1.11 1.12;1e6 1e6 1e6 1e6;1.5e6];
+    .qunit.assertEquals[r`levels_used;0 2;"the null level at 1 is skipped, so the sweep consumed original levels 0 and 2"];
+    r2:.qbook.sweep_price[1.10 1.11;1e6 1e6;1e6];
+    .qunit.assertEquals[r2`levels_used;enlist 0;"a fill that ends exactly on a level boundary does not touch the next"];
+    r3:.qbook.sweep_price[`float$();`float$();1e6];
+    .qunit.assertEquals[count r3`levels_used;0;"an empty ladder consumes nothing"]};
+
 test_sweep_price_rejects_non_positive_size:{[t]
     wrapper:{[x] .qbook.sweep_price[1.10 1.11;100 100;x]};
     .qunit.assertError[wrapper;0;"zero size is rejected"];
