@@ -199,10 +199,18 @@ on_worker:{[dataset;worker;spec_fn]
         / and the reacting worker's own reactions would otherwise queue
         / behind this one and leave it ending `partial with them owed.
         saved:isolate[];
-        r:.[{[ns;spec_fn;range_from;range_to]
+        / run returns its summary rather than throwing when windows fail, so
+        / the state is checked: a `partial run recorded as ok would leave
+        / .qetl.reaction.pending and never be re-fired (#1141). Cleanup runs
+        / first so the worker's lock is released on the failure path too.
+        r:.[{[worker;ns;spec_fn;range_from;range_to]
             (` sv ns,`init)[spec_fn[range_from;range_to]];
-            (` sv ns,`run)[];
-            (` sv ns,`cleanup)[]; 1b}[ns;spec_fn];(range_from;range_to);{[e] e}];
+            res:(` sv ns,`run)[];
+            (` sv ns,`cleanup)[];
+            if[not (res`state) in `completed`idle;
+                '"on_worker: ",string[worker]," ended ",string[res`state]," (",
+                 string[res`windows_failed]," windows failed), so the reaction is still owed"];
+            1b}[worker;ns;spec_fn];(range_from;range_to);{[e] e}];
         restore saved;
         if[not 1b~r; 'r];
         1b}[worker;ns;spec_fn];
