@@ -31,29 +31,31 @@ Every module has a matching test file, and every function carries a
 those are the per-function reference, so the table below only says what each
 module is *for*.
 
-  | Module                                                                   | Namespace  | For                                                                                                                                                     | Tests                                        |
-  | ---                                                                      | ---        | ---                                                                                                                                                     | ---                                          |
-  | [`foundation/schema.q`](../../src/foundation/schema.q)                   | `.qschema` | one refusal for a table that lacks the columns a function reads                                                                                         | [tests](../../tests/q/test_schema.q)         |
-  | [`foundation/render.q`](../../src/foundation/render.q)                   | `.qrender` | a value as q text in full, without the console-width cut, for anything that records a rendering                                                         | [tests](../../tests/q/test_render.q)         |
-  | [`foundation/stats.q`](../../src/foundation/stats.q)                     | `.qstats`  | normal distribution helpers, shared polynomial evaluator                                                                                                | [tests](../../tests/q/test_stats.q)          |
-  | [`foundation/ccy.q`](../../src/foundation/ccy.q)                         | `.qccy`    | CURCUR pair convention: validate, normalize, split, build                                                                                               | [tests](../../tests/q/test_ccy.q)            |
-  | [`foundation/daycount.q`](../../src/foundation/daycount.q)               | `.qdcf`    | day count fractions — dates to the year fraction `t` pricing takes                                                                                      | [tests](../../tests/q/test_daycount.q)       |
-  | [`foundation/calendar.q`](../../src/foundation/calendar.q)               | `.qcal`    | FX settlement calendars: joint business days, rolls, spot dates, tenor value dates (caller-supplied holidays; mock data included)                       | [tests](../../tests/q/test_calendar.q)       |
-  | [`foundation/rates.q`](../../src/foundation/rates.q)                     | `.qrates`  | discount/growth factors, simple↔continuous conversion                                                                                                   | [tests](../../tests/q/test_rates.q)          |
-  | [`pricing/cross.q`](../../src/pricing/cross.q)                           | `.qcross`  | synthetic cross pricing: currency-chain discovery, leg-book lookup, depth-aware synthetic books, reference prices                                       | [tests](../../tests/q/test_forwards.q)       |
-  | [`pricing/forwards.q`](../../src/pricing/forwards.q)                     | `.qfwd`    | CIRP forwards and swap points, broken dates, swap cash flows and PV, quote inversion, spot cross rates                                                  | [tests](../../tests/q/test_forwards.q)       |
-  | [`pricing/options.q`](../../src/pricing/options.q)                       | `.qopt`    | Garman-Kohlhagen pricing, Greeks, implied vol                                                                                                           | [tests](../../tests/q/test_options.q)        |
-  | [`portfolio/risk.q`](../../src/portfolio/risk.q)                         | `.qrisk`   | pip value, P&L, carry, parametric and historical VaR                                                                                                    | [tests](../../tests/q/test_risk.q)           |
-  | [`portfolio/positions.q`](../../src/portfolio/positions.q)               | `.qpos`    | weighted-average-cost position tracking, currency exposure, reconciliation                                                                              | [tests](../../tests/q/test_positions.q)      |
-  | [`portfolio/allocation.q`](../../src/portfolio/allocation.q)             | `.qalloc`  | P&L attribution: lot matching (FIFO/LIFO/HIFO/weighted), carried positions, as-of books                                                                 | [tests](../../tests/q/test_allocation.q)     |
-  | [`portfolio/desk_positions.q`](../../src/portfolio/desk_positions.q)     | `.qdesk`   | net FX exposure along declared dimensions, per-currency netting, break-even rates                                                                       | [tests](../../tests/q/test_desk_positions.q) |
-  | [`portfolio/limits.q`](../../src/portfolio/limits.q)                     | `.qlimit`  | risk limits, breach detection, alert throttling                                                                                                         | [tests](../../tests/q/test_limits.q)         |
-  | [`execution/execution.q`](../../src/execution/execution.q)               | `.qexec`   | markouts (direct and synthetic-cross), cross impact, effective spread, slippage, fill/reject ratios, empirical fill probability by horizon, VWAP        | [tests](../../tests/q/test_execution.q)      |
-  | [`market_data/book.q`](../../src/market_data/book.q)                     | `.qbook`   | reshapes wide/mis-typed order books into the shape the other modules expect; shared book maths (sweep pricing, depth inversion)                         | [tests](../../tests/q/test_book.q)           |
-  | [`market_data/microstructure.q`](../../src/market_data/microstructure.q) | `.qmicro`  | LOB signals: book pressure, microprice, order flow imbalance, odd-lot share and imbalance, VAMP; checkpointable streaming OFI, flow and return variance | [tests](../../tests/q/test_microstructure.q) |
-  | [`market_data/dqchecks.q`](../../src/market_data/dqchecks.q)             | `.qdqc`    | data-quality checks on quotes, reported rather than thrown; business limits are `.qlimit`'s                                                             | [tests](../../tests/q/test_dqchecks.q)       |
-  | [`integrations/data.q`](../../src/integrations/data.q)                   | `.qdata`   | external data access                                                                                                                                    | [tests](../../tests/q/test_data.q)           |
-  | [`examples/example_defaults.q`](../../src/examples/example_defaults.q)   | `.qexdef`  | shared example inputs used by docstrings and demos                                                                                                      | —                                            |
+  | Module                                                                             | Namespace  | For                                                                                                                                                     | Tests                                        |
+  | ---                                                                                | ---        | ---                                                                                                                                                     | ---                                          |
+  | [`foundation/schema.q`](../../src/foundation/schema.q)                             | `.qschema` | one refusal for a table that lacks the columns a function reads                                                                                         | [tests](../../tests/q/test_schema.q)         |
+  | [`foundation/render.q`](../../src/foundation/render.q)                             | `.qrender` | a value as q text in full, without the console-width cut, for anything that records a rendering                                                         | [tests](../../tests/q/test_render.q)         |
+  | [`foundation/stats.q`](../../src/foundation/stats.q)                               | `.qstats`  | normal distribution helpers, shared polynomial evaluator                                                                                                | [tests](../../tests/q/test_stats.q)          |
+  | [`foundation/ccy.q`](../../src/foundation/ccy.q)                                   | `.qccy`    | CURCUR pair convention: validate, normalize, split, build                                                                                               | [tests](../../tests/q/test_ccy.q)            |
+  | [`foundation/daycount.q`](../../src/foundation/daycount.q)                         | `.qdcf`    | day count fractions — dates to the year fraction `t` pricing takes                                                                                      | [tests](../../tests/q/test_daycount.q)       |
+  | [`foundation/calendar.q`](../../src/foundation/calendar.q)                         | `.qcal`    | FX settlement calendars: joint business days, rolls, spot dates, tenor value dates (caller-supplied holidays; mock data included)                       | [tests](../../tests/q/test_calendar.q)       |
+  | [`foundation/rates.q`](../../src/foundation/rates.q)                               | `.qrates`  | discount/growth factors, simple↔continuous conversion                                                                                                   | [tests](../../tests/q/test_rates.q)          |
+  | [`pricing/cross.q`](../../src/pricing/cross.q)                                     | `.qcross`  | synthetic cross pricing: currency-chain discovery, leg-book lookup, depth-aware synthetic books, reference prices                                       | [tests](../../tests/q/test_forwards.q)       |
+  | [`pricing/attribution_routes.q`](../../src/pricing/attribution_routes.q)           | `.qcross`  | markout attribution routes generated from a versioned, PROPOSED (desk-unapproved) convention: G10/EM bridge rules, direct pairs, exceptions             | [tests](../../tests/q/test_attribution.q)    |
+  | [`pricing/forwards.q`](../../src/pricing/forwards.q)                               | `.qfwd`    | CIRP forwards and swap points, broken dates, swap cash flows and PV, quote inversion, spot cross rates                                                  | [tests](../../tests/q/test_forwards.q)       |
+  | [`pricing/options.q`](../../src/pricing/options.q)                                 | `.qopt`    | Garman-Kohlhagen pricing, Greeks, implied vol                                                                                                           | [tests](../../tests/q/test_options.q)        |
+  | [`portfolio/risk.q`](../../src/portfolio/risk.q)                                   | `.qrisk`   | pip value, P&L, carry, parametric and historical VaR                                                                                                    | [tests](../../tests/q/test_risk.q)           |
+  | [`portfolio/positions.q`](../../src/portfolio/positions.q)                         | `.qpos`    | weighted-average-cost position tracking, currency exposure, reconciliation                                                                              | [tests](../../tests/q/test_positions.q)      |
+  | [`portfolio/allocation.q`](../../src/portfolio/allocation.q)                       | `.qalloc`  | P&L attribution: lot matching (FIFO/LIFO/HIFO/weighted), carried positions, as-of books                                                                 | [tests](../../tests/q/test_allocation.q)     |
+  | [`portfolio/desk_positions.q`](../../src/portfolio/desk_positions.q)               | `.qdesk`   | net FX exposure along declared dimensions, per-currency netting, break-even rates                                                                       | [tests](../../tests/q/test_desk_positions.q) |
+  | [`portfolio/limits.q`](../../src/portfolio/limits.q)                               | `.qlimit`  | risk limits, breach detection, alert throttling                                                                                                         | [tests](../../tests/q/test_limits.q)         |
+  | [`execution/execution.q`](../../src/execution/execution.q)                         | `.qexec`   | markouts (direct and synthetic-cross), cross impact, effective spread, slippage, fill/reject ratios, empirical fill probability by horizon, VWAP        | [tests](../../tests/q/test_execution.q)      |
+  | [`execution/execution_attribution.q`](../../src/execution/execution_attribution.q) | `.qexec`   | cross markout attribution along the convention route: leg allocations, explicit residual, convention version                                            | [tests](../../tests/q/test_attribution.q)    |
+  | [`market_data/book.q`](../../src/market_data/book.q)                               | `.qbook`   | reshapes wide/mis-typed order books into the shape the other modules expect; shared book maths (sweep pricing, depth inversion)                         | [tests](../../tests/q/test_book.q)           |
+  | [`market_data/microstructure.q`](../../src/market_data/microstructure.q)           | `.qmicro`  | LOB signals: book pressure, microprice, order flow imbalance, odd-lot share and imbalance, VAMP; checkpointable streaming OFI, flow and return variance | [tests](../../tests/q/test_microstructure.q) |
+  | [`market_data/dqchecks.q`](../../src/market_data/dqchecks.q)                       | `.qdqc`    | data-quality checks on quotes, reported rather than thrown; business limits are `.qlimit`'s                                                             | [tests](../../tests/q/test_dqchecks.q)       |
+  | [`integrations/data.q`](../../src/integrations/data.q)                             | `.qdata`   | external data access                                                                                                                                    | [tests](../../tests/q/test_data.q)           |
+  | [`examples/example_defaults.q`](../../src/examples/example_defaults.q)             | `.qexdef`  | shared example inputs used by docstrings and demos                                                                                                      | —                                            |
 
 The data-engineering component is documented separately: see
 [pipeline-philosophy.md](../architecture/pipeline-philosophy.md) for the
@@ -120,3 +122,29 @@ or `.qmicro`. They are called only by tests, doc examples and one another:
 Their results are therefore checked only by their own suites: no live output
 would look wrong if one of them were. A module leaves this list when a job under
 `src/etl/` or `scripts/processes/` calls it.
+
+## Markout attribution routes (#1213)
+
+`.qcross.cross_decomp` picks the shortest chain through the books that exist,
+which is right for pricing a cross and wrong for attributing a markout: USDPLN
+would be attributed to EURUSD+EURPLN until a USDPLN book appeared, then to
+USDPLN. `.qcross.attribution_route[pair]` generates the legs (and which to
+invert) from a compact convention instead, so a route depends on the pair and
+the convention version only, never on which books exist.
+`.qexec.cross_markout_attribution` allocates a signed markout along that route:
+a prescribed leg whose own book is missing is `unavailable` (null allocation),
+never rerouted; an explicit `residual` row (reference-price total less
+allocations) makes legs plus residual equal the total; every row records the
+convention `version`. Generic shortest-path pricing is unchanged.
+
+**The default convention (`proposed_v1`) is PROPOSED and has not been approved
+by any desk.** Its rules, each with its rationale, are in the header of
+`src/pricing/attribution_routes.q`: the currency list orders each pair's base;
+G10 pairs are direct; PLN, HUF, CZK and RON bridge via EUR (Central-European EM
+quotes against EUR) and the other EM currencies via USD; EURTRY, EURZAR and
+EURCNH are designated direct; `exceptions` override everything. To replace it,
+pass another convention dict (checked by `attribution_convention_check`) to
+`attribution_route_with` / `cross_markout_attribution_with`, or edit the data
+and bump `version`. The markout jobs under `src/etl` do not call the cross
+decomposition today, so there is no job to switch; any job that does should call
+`cross_markout_attribution`.

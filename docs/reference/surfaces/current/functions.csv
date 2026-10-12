@@ -52,6 +52,11 @@ qccy,pip_size_by_quote,dict,,
 qcross,CROSS_SIZE_MAX_DOUBLINGS,value,,
 qcross,CROSS_SIZE_MAX_HALVINGS,value,,
 qcross,CROSS_SIZE_REL_TOL,value,,
+qcross,attribution_convention,dict,,
+qcross,attribution_convention_check,function,1,conv
+qcross,attribution_pairs,function,1,conv
+qcross,attribution_route,function,1,pair
+qcross,attribution_route_with,function,2,conv pair
 qcross,book_crossed,function,1,book
 qcross,ccy_orient_chain,function,1,syms
 qcross,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
@@ -732,6 +737,8 @@ qetl.webhook,request,function,3,host path body
 qetl.webhook,status_of,function,1,raw
 qexec,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
 qexec,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
+qexec,cross_markout_attribution,function,7,quotes sym side t0 t1 pip_factor ref_size
+qexec,cross_markout_attribution_with,function,8,conv quotes sym side t0 t1 pip_factor ref_size
 qexec,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_order_time_cols,value,,

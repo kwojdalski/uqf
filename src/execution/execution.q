@@ -155,6 +155,36 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
     n:count horizons;
     flip markout_cols!(target_time;n#cross_sym;n#trade_time;horizons;n#trade_price;ref_price;markout_pips)};
 
+/ Private: the waterfall behind cross_markout_decomp and
+/ cross_markout_attribution - revalue the legs of path one at a time, in
+/ order, from their t0 books to their t1 books, and return each step's change
+/ in the cross mid (price units, not pips).
+/ @param path the leg pair symbols, in order
+/ @return dict `price_t0`price_t1`contribution, one value per leg; contribution
+/   is all null if any leg's t0 or t1 mid is unavailable
+/ @private
+decomp_legs:{[quotes;cross_sym;path;t0;t1;ref_size]
+    n:count path;
+    price_t0:.qcross.cross_ref_price_at[quotes;;t0;ref_size] each path;
+    price_t1:.qcross.cross_ref_price_at[quotes;;t1;ref_size] each path;
+    contributions:n#0n;
+    if[not any null price_t0,price_t1;
+        price_books:{[cross_sym;path;ref_size;books]
+            $[1=count path;
+                (.qcross.single_leg_at_one_size[cross_sym;books 0;.qcross.leg_inverts[path 0;cross_sym];ref_size])`mid;
+                (.qcross.cross_book_chain_at_one_size[path;books;ref_size])`mid]};
+        running:.qcross.leg_book_as_of[quotes;t0;] each path;
+        end_books:.qcross.leg_book_as_of[quotes;t1;] each path;
+        before:price_books[cross_sym;path;ref_size;running];
+        i:0;
+        while[i<n;
+            running[i]:end_books i;
+            after:price_books[cross_sym;path;ref_size;running];
+            contributions[i]:after-before;
+            before:after;
+            i+:1]];
+    `price_t0`price_t1`contribution!(price_t0;price_t1;contributions)};
+
 / Decompose a synthetic cross pair's price move between two times into
 / exact per-leg contributions, by revaluing one leg at a time - in the
 / chain's own order (cross_decomp) - from its t0 book to its t1 book,
@@ -195,26 +225,8 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
         legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_markout_decomp: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     inverts:$[1=count path; enlist .qcross.leg_inverts[path 0;cross_sym]; (.qcross.ccy_orient_chain path)`inverts];
-    n:count path;
-    price_t0:.qcross.cross_ref_price_at[quotes;;t0;ref_size] each path;
-    price_t1:.qcross.cross_ref_price_at[quotes;;t1;ref_size] each path;
-    contributions:n#0n;
-    if[not any null price_t0,price_t1;
-        price_books:{[cross_sym;path;ref_size;books]
-            $[1=count path;
-                (.qcross.single_leg_at_one_size[cross_sym;books 0;.qcross.leg_inverts[path 0;cross_sym];ref_size])`mid;
-                (.qcross.cross_book_chain_at_one_size[path;books;ref_size])`mid]};
-        running:.qcross.leg_book_as_of[quotes;t0;] each path;
-        end_books:.qcross.leg_book_as_of[quotes;t1;] each path;
-        before:price_books[cross_sym;path;ref_size;running];
-        i:0;
-        while[i<n;
-            running[i]:end_books i;
-            after:price_books[cross_sym;path;ref_size;running];
-            contributions[i]:after-before;
-            before:after;
-            i+:1]];
-    ([] leg:path; invert:inverts; price_t0; price_t1; contribution_pips:pip_factor*contributions)};
+    d:decomp_legs[quotes;cross_sym;path;t0;t1;ref_size];
+    ([] leg:path; invert:inverts; price_t0:d`price_t0; price_t1:d`price_t1; contribution_pips:pip_factor*d`contribution)};
 
 / Market-impact check: did a trade in traded_sym coincide with a price
 / move in a DIFFERENT, related pair (impact_sym) around the same time?
