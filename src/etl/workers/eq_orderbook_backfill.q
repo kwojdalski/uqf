@@ -34,7 +34,7 @@
 / @return a table check/status/detail, one row per offending record
 quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    crossed:batch where .qbook.crossed_top[batch`bid_prices;batch`ask_prices];
+    crossed:batch where .qbook.crossed_top batch;
     bad_price:select from batch where (not null price) & not price>0;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
