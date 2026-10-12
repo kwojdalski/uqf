@@ -49,7 +49,10 @@ markout_cols:`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 /   `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips, `time
 /   being trade_time+horizon. cross_markout_at_horizons and
 /   cross_impact_at_horizons below return the same columns, so direct and
-/   synthetic markouts join with uj
+/   synthetic markouts join with uj. Rows are trade-major in the input order of
+/   trades. Any other column of trades (anything beyond `sym`time`side`trade_price`pip_factor,
+/   e.g. a fill_id or book) is carried through AFTER those columns, repeated per
+/   horizon, so a consumer reads it from the row instead of pairing by position
 / @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
 /   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
 /   table fails loudly here rather than surfacing as a bare `domain error deep inside aj;
@@ -76,7 +79,9 @@ markout_at_horizons:{[trades;quotes;horizons]
     joined:aj[`sym`time;lookup_tbl;sorted_quotes];
     ref_price:joined`mid;
     markout_pips:markout[exp_trades`side;exp_trades`trade_price;ref_price;exp_trades`pip_factor];
-    flip markout_cols!(target_time;exp_trades`sym;exp_trades`time;exp_horizons;exp_trades`trade_price;ref_price;markout_pips)};
+    base:flip markout_cols!(target_time;exp_trades`sym;exp_trades`time;exp_horizons;exp_trades`trade_price;ref_price;markout_pips);
+    extra_cols:(cols trades) except `sym`time`side`trade_price`pip_factor,markout_cols;
+    $[count extra_cols; base,'extra_cols#exp_trades; base]};
 
 / ------------------------------------------------ CROSS-PAIR MARKOUTS (#626)
 / .
