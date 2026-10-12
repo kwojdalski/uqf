@@ -256,6 +256,85 @@ subscribe_tables:{[nm;sub_tables;replay]
     .qetl.log.dbg[nm;"subscribed";enlist[`result]!enlist r];
     r}
 
+/ The directory the segmented tickerplant keeps one day's logs in:
+/ <root>/<plant procname>_<date> (stplog.q createdld).
+/ @param root the plant's log root (.stplg.kdbtplog), with or without the colon
+/ @param plant the plant's procname
+/ @param day the plant day, a date
+/ @return the directory as a file symbol
+/ @eg .qtorq.day_dir[`$"/data/tplogs";`stp1;2026.10.09]  / `:/data/tplogs/stp1_2026.10.09
+day_dir:{[root;plant;day]
+    r:$[":"=first string root; root; hsym root];
+    ` sv r,`$(string plant),"_",string day}
+
+/ The logs of one plant day that hold any of the wanted tables, in the
+/ order the plant opened them. The plant lists every log it opened that
+/ day, with the tables each feeds, in its `stpmeta` file next to them
+/ (stpmeta.q) - one per table and period in the default tabperiod mode, one
+/ for all tables in singular mode - so this reads that rather than guessing
+/ at file names. A day with no directory or no stpmeta contributes nothing.
+/ @param dir the day's directory, as day_dir returns it
+/ @param want the wanted table names
+/ @return a table of seq, logname, oldest first
+/ @eg .qtorq.day_logs[`:/nonexistent/stp1_2026.10.09;enlist `trade]  / empty
+day_logs:{[dir;want]
+    m:` sv dir,`stpmeta;
+    if[() ~ key m; :([] seq:`int$(); logname:`symbol$())];
+    t:get m;
+    keep:{[want;fed] any ((),fed) in want}[want] each t`tbls;
+    t:select seq,logname from t where keep, not null logname;
+    `seq`logname xasc t}
+
+/ Private: the wanted messages of ONE log, as (day;seq;time;table;rows).
+/ Read with .qetl.tick.replay, which is -11! with a torn tail tolerated and
+/ the root upd put back after.
+/ @private
+log_messages:{[names;want;day;seq;path]
+    `.qtorq.collected set ();
+    .qetl.tick.replay[path;{[names;want;day;seq;t;x]
+        if[t in want;
+            x:$[0h=type x; flip names[t]!x; x];
+            ts:$[count x; first x`time; 0Np];
+            .qtorq.collected,:enlist (day;seq;ts;t;x)];}[names;want;day;seq]];
+    c:collected;
+    `.qtorq.collected set ();
+    c}
+
+/ The messages the plant logged for the wanted tables on a span of its days,
+/ in the order it logged them: what a carrying job missed by being down
+/ across an end of day (#1072), for its `earlier_days` transport hook.
+/ .
+/ A log holds what .u.upd received - (`upd;table;list of columns), `time`
+/ first - and each is read with -11!, as TorQ's own replay does it. The
+/ columns are named from `names`, so the job gets the table a live batch
+/ would have been. Logs of different tables in one rolling period carry no
+/ shared sequence, so within a period they are interleaved by the plant's own
+/ `time` stamp, stably. A missing day or log gives nothing, and the caller
+/ says what is lost.
+/ @param root the plant's log root
+/ @param plant the plant's procname
+/ @param names a dictionary of table name to its column names
+/ @param want the wanted table names
+/ @param first_day the first plant day to read
+/ @param last_day the last plant day to read, inclusive
+/ @return a list of (table; rows) pairs
+/ @eg .qtorq.earlier_days[`:/nonexistent;`stp1;(`symbol$())!();enlist `trade;2026.10.08;2026.10.09]  / ()
+earlier_days:{[root;plant;names;want;first_day;last_day]
+    want:(),want;
+    {[root;plant;names;want;day]
+        logs:day_logs[day_dir[root;plant;day];want];
+        `.qtorq.got set (.qtorq.got),raze log_messages[names;want;day]'[logs`seq;logs`logname];
+        }[root;plant;names;want] each first_day+til 0|1+last_day-first_day;
+    msgs:got;
+    `.qtorq.got set ();
+    if[0=count msgs; :()];
+    t:`day`seq`ts xasc flip `day`seq`ts`t`x!flip msgs;
+    flip (t`t;t`x)}
+
+/ Scratch for earlier_days: one log's messages, and the span's.
+collected:()
+got:()
+
 / Refuse to start when the plant has no table for something this process
 / says it publishes.
 / .
