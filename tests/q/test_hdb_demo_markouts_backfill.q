@@ -268,4 +268,15 @@ test_a_legacy_fill_without_an_id_still_scores_and_keys:{[t]
     f:.mbftest.scored .mbftest.twin_fills 2#`;
     .qunit.assertEquals[(count f;distinct f`fill_id);(4;enlist `);"null ids pass through, unmapped"]};
 
+test_score_carries_each_fills_own_id_with_shuffled_fills:{[t]
+    / fills out of time order: fill_id must come from the row, not from position
+    fills:([] time:2026.09.17D10:00:09 2026.09.17D10:00:00 2026.09.17D10:00:04; sym:`EURUSD`GBPUSD`EURUSD;
+        side:1 1 1; trade_price:1.1 1.3 1.2; pip_factor:10000 10000 10000; fill_id:`f9`f0`f4);
+    quotes:([] time:2026.09.17D10:00:00; sym:`EURUSD; bid:1.1; ask:1.1);
+    r:.qpipe.transform.demo_markouts.score[fills;quotes];
+    pairs_in:.qsynth.pairs;
+    keep:fills where fills[`sym] in pairs_in;
+    .qunit.assertEquals[r`fill_id;raze (count .qpipe.transform.demo_markouts.horizons)#'keep`fill_id;"each row carries its own fill's id"];
+    .qunit.assertEquals[r`trade_price;raze (count .qpipe.transform.demo_markouts.horizons)#'keep`trade_price;"and its own price"]};
+
 \d .
