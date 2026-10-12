@@ -68,7 +68,25 @@
 / the declaration it always did.
 sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
-    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:())
+    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:())
+
+/ ------------------------------------------------------- COMPLETE THROUGH
+/ .
+/ A coverage claim is permanent, and the framework makes it on one condition:
+/ the window was fetched and published without error (#1187). That is true
+/ only of CLOSED data. A source over data still growing - a recorder's open
+/ file, a live process's last few seconds - can return a successful, PARTIAL
+/ window, and coverage would then record it as whole and never plan it again.
+/ .
+/ `complete_through:{[h] -> timestamp}` is the source saying how far it can
+/ vouch: every row stamped before the returned UTC instant is present. Planning
+/ clips the range to it (see .qetl.source.clip_to_complete), so the clipped
+/ remainder stays uncovered and the next run picks it up. It is EXCLUSIVE, like
+/ every window end. A null answer means "nothing is complete yet", not
+/ "unbounded"; unbounded is 0Wp, the default. The fixture path has no source
+/ and is closed data, so it is never clipped. A settle lag (a per-worker
+/ allowance for late rows below the bound) is deliberately not built: add it
+/ when a source shows rows arriving behind its own bound.
 
 / Register an external source table.
 / .
@@ -102,6 +120,10 @@ sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
 /   raw - physical table name -> an empty table of the columns and types the
 /     adapter reads from it, for an adapter whose output is not its input
 /     (see RAW INPUTS)
+/   complete_through - a lambda taking the source's handle and returning the
+/     UTC instant (a timestamp) through which the source holds EVERY row, for
+/     a source over data that is still growing (see COMPLETE THROUGH). The
+/     default, {[h] 0Wp}, is closed data: complete forever.
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 define:{[source;decl]
@@ -199,6 +221,15 @@ define:{[source;decl]
             '"define: ",string[source],"'s raw must be keyed by physical table name, as symbols"];
         if[not all 98h=type each value raw;
             '"define: ",string[source],"'s raw inputs must each be a table - an empty one, the columns the adapter reads"]];
+    if[`complete_through in key decl;
+        ct:decl`complete_through;
+        if[not 100h=type ct;
+            '"define: ",string[source],"'s complete_through must be a lambda taking the source's handle and returning a timestamp"];
+        / `{[] ...}` reports one parameter, a null symbol, so a niladic lambda
+        / is counted as one unless that is looked for.
+        params:(value ct) 1;
+        if[(not 1=count params) or null first params;
+            '"define: ",string[source],"'s complete_through must take exactly one argument, the source's handle"]];
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports[];
         '"define: ",string[source],"'s transport must be one of ",(", " sv string transports[])];

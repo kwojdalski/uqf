@@ -23,21 +23,23 @@
 / free of a second delivery concept. A manager for FILE sinks from bounded
 / workers (Parquet/CSV) is the part of #947 this does not do.
 / .
-/ DEDUPLICATION, ON THE PUBLISHER'S CLOCK. fx_positions already throttles what
-/ it publishes (one reminder per breach per period), but a restart REPLAYS
-/ the plant's log and a second publisher is possible, so the sink must still
-/ drop a breach it has already delivered. It does NOT do that with a second
-/ period of its own, measured on its own receipt clock: that clock adds a
-/ different delivery latency to each arrival, so a reminder published exactly
-/ one period after the first can land a few milliseconds INSIDE a sink
-/ period of the same length and be silenced (#1151) - the standing breach
-/ the desk is being reminded of goes quiet. Instead each breach is keyed on
-/ its identity (scope and metric) and the `time` the plant stamped on it, and
-/ the sink remembers the newest time delivered per identity: a row at or
-/ before it is a replay and is dropped, a row after it is a new report
-/ and always passes. The publisher's throttle alone decides how often a
-/ standing breach is reminded. Cost: a second publisher's copy of a live
-/ breach carries its own, later, time and is delivered too; the receiver
+/ DEDUPLICATION, ON THE PUBLISHER'S CLOCK. fx_positions throttles what it
+/ publishes (one reminder per breach per period), but that throttle is in
+/ memory and a replay does not rebuild it: a restarted fx_positions publishes
+/ every standing breach again on its first timer tick, and the plant stamps
+/ each with a NEW `time`. So the sink must still drop a breach it has already
+/ delivered, and equality of `time` alone would not (#1182). It does NOT do
+/ that with a period of its own measured on its own receipt clock: that clock
+/ adds a different delivery latency to each arrival, so a reminder published
+/ exactly one period after the first can land a few milliseconds INSIDE a sink
+/ period of the same length and be silenced (#1151). Instead each breach is
+/ keyed on its identity (scope and metric) and the `time` the plant stamped on
+/ it, and the sink remembers the newest time delivered per identity: a row
+/ less than `alert_period` (less `slack`) after it is a repeat - a replay, or
+/ a restart's re-publication - and is dropped; a row a period or more after it
+/ is a reminder and passes. Both ends of the comparison are plant times, so
+/ delivery latency cancels. Cost: a second publisher's copy of a live breach
+/ inside the period is dropped, and one outside it delivered; the receiver
 / already has to tolerate a repeat (see the guarantee). A breach recorded as
 / dead leaves the memory, so its next report is delivered.
 / .
@@ -62,6 +64,17 @@ breach_cols:`sym`book`product`metric`observed`cap`severity`utilisation
 
 / How many times one breach is attempted before it is recorded as dead.
 max_attempts:3
+
+/ The gap between reminders of one breach, on the plant's clock. It is
+/ fx_positions' own alert_period, repeated here and not read from that job: a
+/ job may not read a peer at load (test_no_job_reads_a_peer_job_at_load), and
+/ test_the_period_matches_the_publishers pins the two together.
+alert_period:0D00:05
+
+/ How early a reminder may be stamped and still count as a full period after
+/ the last report: the plant stamps each row on arrival, so a reminder the
+/ publisher sent exactly one period later can be stamped a few ms short.
+slack:0D00:00:01
 
 / Dedup state: breach identity -> the plant `time` of the newest report queued.
 alerts:.qlimit.no_alerts[]
@@ -104,7 +117,7 @@ payload:{[row]
          string[row`metric]," ",string[row`observed]," against cap ",string[row`cap];
     .j.j `text`breach!(text;row)}
 
-/ Queue the breaches that are not replays of one already queued.
+/ Queue the breaches that are not repeats of one already queued.
 / @param x fx_limit_breach rows
 / @param now stands in for the `time` of a row that has none
 / @return how many were queued
@@ -114,8 +127,9 @@ enqueue:{[x;now]
     scope:.qlimit.scope_cols breach_cols#x;
     ids:.qlimit.identity ?[x;();0b;(scope,`metric)!scope,`metric];
     cur:.qpipe.job.alert_sink.alerts;
-    / A row is a replay when its time is not after the newest queued for its identity.
-    newer:{[cur;i;t] $[i in key cur; t>cur i; 1b]}[cur]'[ids;x`time];
+    / A row is a repeat when its time is under one period after the newest queued for its identity.
+    gap:.qpipe.job.alert_sink.alert_period-.qpipe.job.alert_sink.slack;
+    newer:{[cur;g;i;t] $[i in key cur; t>=cur[i]+g; 1b]}[cur;gap]'[ids;x`time];
     / One report per identity per batch: the newest of those that are new.
     w:where newer;
     o:w iasc (x`time) w;

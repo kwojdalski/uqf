@@ -183,6 +183,30 @@ test_a_sweep_the_fresh_top_covers_ignores_older_levels_behind_it:{[t]
     .qunit.assertEquals[r`skew;0D00:00:00;"1mm of EURJPY converts to about 1.1mm USD, inside USDJPY's 1e9 top"];
     .qunit.assertEquals[r`active;1b;"nothing old was consumed"]};
 
+/ #1181: the timing must follow the levels the PRICING consumed. A zero-size
+/ level is skipped by sweep_price (#1146), so the sweep below runs from
+/ original level 0 into level 2; the 09:00 time on the skipped level 1
+/ must not be read.
+test_leg_times_ignore_a_level_the_sweep_skips:{[t]
+    stale:t0-0D03:00:00;
+    mixed:`sym`as_of`bid_prices`bid_sizes`bid_sources`bid_times`ask_prices`ask_sizes`ask_sources`ask_times!
+        (`EURUSD;t0;1.1000 1.0999 1.0998;1e6 0 1e6;`A`B`C;(t0;stale;t0);1.1002 1.1003 1.1004;1e6 0 1e6;`A`B`C;(t0;stale;t0));
+    state:(one mixed) upsert one row[`USDJPY;usdjpy 0;usdjpy 1;1e11;t0];
+    state:state upsert one row[`EURJPY;164.80;164.90;1e11;t0];
+    r:.qpipe.job.cross_arbitrage.leg_times[state;`EURJPY;`EURUSD`USDJPY;1.5e6;`bid`ask;`bid`ask];
+    .qunit.assertEquals[r`as_of;t0;"the skipped stale level is not part of the fill"];
+    .qunit.assertEquals[r`skew;0D00:00:00;"so there is no skew"]};
+
+/ The chain reports, per leg, the levels it consumed.
+test_cross_sweep_chain_reports_each_legs_levels_used:{[t]
+    bk1:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.10 0n 1.09;1e6 1e6 1e9;1.11 1.12;1e9 1e9);
+    bk2:`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 150.0;enlist 1e9;enlist 150.1;enlist 1e9);
+    r:.qcross.cross_sweep_chain[(bk1;bk2);`bid;1.5e6;00b];
+    .qunit.assertEquals[r[`legs][0]`levels_used;0 2;"leg 0 skips its null level and reports original indices"];
+    .qunit.assertEquals[r[`legs][1]`levels_used;enlist 0;"leg 1 consumed its single level"];
+    .qunit.assertEquals[r[`legs][0]`notional;1.5e6;"leg 0 is swept at the size"];
+    .qunit.assertTrue[0<r[`legs][1]`notional;"leg 1 is swept at the positive bridge notional"]};
+
 / --- size -----------------------------------------------------------------
 
 test_a_thin_middle_leg_marks_the_edge_unfillable:{[t]

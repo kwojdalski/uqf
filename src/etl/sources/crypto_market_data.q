@@ -109,8 +109,10 @@ table_name:`market_data_live
 / file and no relative path depends on the working directory. A torn or
 / half-written shard cannot be seen: it does not match the glob.
 / The row stream is the same as the view's (it IS the view's definition), and
-/ the shards seen are those finalised when the query runs, so a window ending
-/ before the newest shard's first row is complete. Unset, the named table or
+/ the shards seen are those finalised when the query runs, so a window is
+/ complete only up to the newest finished shard's last row. `complete_through`
+/ reports that bound and planning clips every window to it (#1186), so the
+/ recorder's open shard is never claimed as covered. Unset, the named table or
 / view is read as before.
 / The relation a window is read from.
 / @return the table name, or read_parquet over the configured shard glob
@@ -210,6 +212,32 @@ adapt:{[raw]
 / @return the rows in the window, in the contract's shape
 query:{[h;range_from;range_to] adapt .qetl.io.odbc.run_sql[h;sql_for[range_from;range_to]]}
 
+/ The SQL for the newest millisecond the finished shards hold.
+/ @return the SELECT statement text
+/ @eg .qpipe.source.crypto_market_data.newest_sql[]  ->  "SELECT MAX(timestamp_ms) AS newest FROM market_data_live"
+newest_sql:{[] "SELECT MAX(timestamp_ms) AS newest FROM ",from_expr[]}
+
+/ The instant, exclusive, through which a shard-glob read holds every row (#1186).
+/ .
+/ The newest FINISHED shard's last row is the newest millisecond the glob can
+/ see, and the recorder's open `.live*.tmp.*` shard holds rows at or after it.
+/ A window may therefore end AT that millisecond but not after it: rows stamped
+/ exactly then may still be arriving in the open shard, so the bound is
+/ exclusive, and a window that stops short of it reads only finished data. This
+/ leans on the recorder writing rows in time order; a venue stamp that arrives
+/ late and below the bound is what a settle lag would absorb, and is not built.
+/ With no glob set the named table or view is read as before - a finished
+/ capture, closed data - and the answer is unbounded. No finished shard means
+/ nothing is complete, and the answer is null (read as "nothing yet").
+/ @param h an ODBC handle from .qetl.io.odbc.open
+/ @return the bound as a timestamp; 0Wp when no glob is set, null when no shard holds a row
+/ @eg .qpipe.source.crypto_market_data.complete_through 0i  ->  0Wp
+complete_through:{[h]
+    if[0=count getenv `UQF_CRYPTO_CAPTURE_GLOB; :0Wp];
+    r:.qetl.io.odbc.run_sql[h;newest_sql[]];
+    ms:first r`newest;
+    $[null ms; 0Np; 1970.01.01D00:00+1000000*"j"$ms]}
+
 / Private: one row's five levels, flattened in level_fields order.
 / @param bid the best bid
 / @param ask the best ask
@@ -270,7 +298,7 @@ fixture:{[]
 raw:enlist[table_name]!enlist flip ({x^renamed x} columns)!{$[x="f"; `float$(); ()]} each types
 
 .qetl.source.define[source_name;
-    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
-    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw`complete_through!
+    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw;complete_through)];
 
 \d .

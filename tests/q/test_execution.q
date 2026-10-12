@@ -53,6 +53,20 @@ test_markout_at_horizons_known_values:{[t]
     .testutil.assertApprox[r[`ref_price] 1;1.1005;1e-9;"10s horizon finds the quote at exactly +10s"];
     .testutil.assertApprox[r[`markout_pips] 1;5f;1e-6;"markout at the 10s horizon"]};
 
+test_markout_at_horizons_carries_extra_columns_per_trade_with_shuffled_input:{[t]
+    / trades deliberately out of time and sym order: rows must stay trade-major in
+    / input order, and each row's carried fill_id must be its own trade's
+    trades:([] sym:`USDJPY`EURUSD`EURUSD; time:2024.01.01D09:00:05.000000000 2024.01.01D09:00:00.000000000 2024.01.01D09:00:02.000000000;
+        side:1 1 -1; trade_price:150.00 1.1000 1.1010; pip_factor:100 10000 10000; fill_id:`fa`fb`fc; book:`x`y`z);
+    quotes:([] sym:`EURUSD`EURUSD`USDJPY; time:2024.01.01D09:00:30.000000000 2024.01.01D09:00:31.000000000 2024.01.01D09:00:30.000000000; mid:1.1005 1.1006 150.10);
+    r:.qexec.markout_at_horizons[trades;quotes;0D00:00:20 0D00:00:40];
+    .qunit.assertEquals[(cols r) til 7;.qexec.markout_cols;"documented columns come first, unchanged"];
+    .qunit.assertEquals[(cols r) 7 8;`fill_id`book;"extra trade columns follow"];
+    .qunit.assertEquals[r`fill_id;`fa`fa`fb`fb`fc`fc;"fill_id repeats per horizon in input trade order"];
+    .qunit.assertEquals[r`book;`x`x`y`y`z`z;"every extra column is carried"];
+    .qunit.assertEquals[r`sym;`USDJPY`USDJPY`EURUSD`EURUSD`EURUSD`EURUSD;"each row's sym is its own trade's"];
+    .qunit.assertEquals[r`trade_price;150 150 1.1 1.1 1.101 1.101;"each row's price is its own trade's"]};
+
 test_markout_at_horizons_finds_most_recent_quote_before_target:{[t]
     / no quote exactly at the target time - should use the last one before it
     trades:([] sym:enlist `USDJPY; time:enlist 2024.01.01D09:00:02.000000000; side:enlist -1; trade_price:enlist 150.00; pip_factor:enlist 100);
@@ -295,6 +309,14 @@ test_sweep_price_skips_unusable_levels:{[t]
     .testutil.assertApprox[r`filled_size;2e6;1e-9;"only usable levels fill"];
     .qunit.assertFalse[r`fully_filled;"book short of target once the null level is skipped"];
     .testutil.assertApprox[r`worst_price;1.11;1e-9;"worst price from usable levels"]};
+
+test_sweep_price_levels_used_are_original_indices:{[t]
+    r:.qbook.sweep_price[1.10 0n 1.11 1.12;1e6 1e6 1e6 1e6;1.5e6];
+    .qunit.assertEquals[r`levels_used;0 2;"the null level at 1 is skipped, so the sweep consumed original levels 0 and 2"];
+    r2:.qbook.sweep_price[1.10 1.11;1e6 1e6;1e6];
+    .qunit.assertEquals[r2`levels_used;enlist 0;"a fill that ends exactly on a level boundary does not touch the next"];
+    r3:.qbook.sweep_price[`float$();`float$();1e6];
+    .qunit.assertEquals[count r3`levels_used;0;"an empty ladder consumes nothing"]};
 
 test_sweep_price_rejects_non_positive_size:{[t]
     wrapper:{[x] .qbook.sweep_price[1.10 1.11;100 100;x]};

@@ -94,24 +94,22 @@ route_for:{[avail;sym]
     legs:.qccy.ccy_pair_legs sym;
     @[{.qcross.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
 
-/ The oldest quote time among the levels a sweep of `notional` consumes: the
-/ cumulative-size prefix through the first level where the running total
-/ reaches the notional, or the whole ladder when it never does. Nothing
-/ consumed (a non-positive notional) is 0Wp, the identity for `min`.
-/ @param times the ladder's level times, best-first
-/ @param sizes the ladder's level sizes, aligned to times
-/ @param notional the size swept, in the ladder's own base currency
+/ The oldest level time among the levels a sweep consumed, given the
+/ levels_used indices .qbook.sweep_price returned for it (into the ORIGINAL
+/ ladder, after its level_ok filter). Nothing consumed is 0Wp, the identity
+/ for `min`. Timing reads the pricing's own answer rather than re-deriving
+/ which levels it took (#1181).
+/ @param times the ladder's level times, best-first, aligned to the ladder swept
+/ @param used indices into times of the consumed levels
 / @return the oldest consumed level time, 0Wp if none
+/ @eg .qpipe.job.cross_arbitrage.used_time[`timestamp$1 2;enlist 1] -> 2000.01.01D00:00:00.000000002
 / @private
-consumed_time:{[times;sizes;notional]
-    if[notional<=0f; :0Wp];
-    n:(count sizes)&1+(sums[sizes]>=notional)?1b;
-    min n#times}
+used_time:{[times;used] $[count used; min times used; 0Wp]}
 
-/ The oldest level time each leg of a sweep consumes, walking the notional
-/ through the route exactly as .qcross.cross_sweep_chain does: leg 0 at the
-/ notional, each later leg at the bridge amount the previous sweep produced,
-/ on the oriented side (an inverted leg reads the other ladder).
+/ The oldest level time each leg of a chain sweep consumed, from the legs
+/ .qcross.cross_sweep_chain reports: each leg's own levels_used indexes the
+/ time column of the ladder that leg read (an inverted leg reads the other
+/ side's ladder).
 / @param books the route's superbook rows, in traversal order
 / @param inverts per-leg inversion flags from .qcross.ccy_orient_chain
 / @param side `bid or `ask - the side of the synthetic being priced
@@ -119,19 +117,9 @@ consumed_time:{[times;sizes;notional]
 / @return one oldest-consumed time per leg
 / @private
 chain_times:{[books;inverts;side;size]
-    out:`timestamp$();
-    notional:size;
-    i:0;
-    while[i<count books;
-        bk:books i;
-        lvl:.qcross.oriented_levels[side;leg_book bk;inverts i];
-        use_ask:$[inverts i; side=`bid; side=`ask];
-        out,:consumed_time[$[use_ask; bk`ask_times; bk`bid_times];lvl 1;notional];
-        sw:$[notional>0f; .qbook.sweep_price[lvl 0;lvl 1;notional]; `filled_size`avg_price!(0f;0n)];
-        notional:sw[`filled_size]*sw`avg_price;
-        notional:$[null notional; 0f; notional];
-        i+:1];
-    out}
+    r:.qcross.cross_sweep_chain[leg_book each books;side;size;inverts];
+    leg_ladder_times:{[side;bk;iv] $[iv; $[side=`bid; bk`ask_times; bk`bid_times]; $[side=`ask; bk`ask_times; bk`bid_times]]}[side]'[books;inverts];
+    used_time'[leg_ladder_times;r[`legs]`levels_used]}
 
 / When each of a set of books was last quoted, and how far apart those
 / moments are. A leg is as old as the OLDEST level its sweep consumes, not
@@ -154,7 +142,8 @@ leg_times:{[state;sym;route;size;route_sides;direct_sides]
     rt:{[books;inverts;size;side] chain_times[books;inverts;side;size]}[books;inverts;size] each (),route_sides;
     d:state sym;
     dt:{[d;size;side]
-        $[side=`bid; consumed_time[d`bid_times;d`bid_sizes;size]; consumed_time[d`ask_times;d`ask_sizes;size]]}[d;size] each (),direct_sides;
+        swept:.qbook.sweep_price[$[side=`bid; d`bid_prices; d`ask_prices];$[side=`bid; d`bid_sizes; d`ask_sizes];size];
+        used_time[$[side=`bid; d`bid_times; d`ask_times];swept`levels_used]}[d;size] each (),direct_sides;
     ts:(min each flip rt),min dt;
     `as_of`skew!(min ts;(max ts)-min ts)}
 

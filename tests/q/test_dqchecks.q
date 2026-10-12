@@ -123,4 +123,39 @@ test_summarize_checks_all_ok_checks_produce_an_empty_report:{[t]
     r:.qdqc.summarize_checks[enlist (`spread;check_a)];
     .qunit.assertEmpty[r;"nothing needs attention -> an empty report, not a spurious row"]};
 
+/ #1176: "is this book crossed" has one rule (.qbook.crossed_top), so the live
+/ check and both backfill gates agree on a locked, a one-sided and a crossed book.
+live_crossed:{[b]
+    q:([] time:count[b]#2026.01.01D00:00:00.000000000; sym:count[b]#`X; bid_prices:b`bid_prices; bid_sizes:(count b)#enlist enlist 1e6; ask_prices:b`ask_prices; ask_sizes:(count b)#enlist enlist 1e6);
+    count select from .qdqc.check_market_data_quality[q;1000] where status=`crossed};
+
+gates_crossed:{[crypto_f;eq_f]
+    cb:.qpipe.transform.crypto_market_data.to_book crypto_f;
+    eb:.qetl.transform.apply[`eq_orderbook;enlist[`batch]!enlist eq_f];
+    c:count select from .qpipe.job.crypto_market_data_backfill.quality_check[cb] where check=`crossed_book;
+    e:count select from .qpipe.job.eq_orderbook_backfill.quality_check[eb] where check=`crossed_top_of_book;
+    (live_crossed cb;c;live_crossed eb;e)};
+
+test_a_locked_book_is_not_crossed_on_any_path:{[t]
+    cf:update bid_price_1:ask_price_1 from .qpipe.source.crypto_market_data.fixture[];
+    ef:update bid_px_00:ask_px_00 from .qpipe.source.databento_mbp10.fixture[] where i=3;
+    .qunit.assertEquals[gates_crossed[cf;ef];0 0 0 0;"locked (bid = ask): live check, crypto gate, eq gate all pass it"]};
+
+test_a_one_sided_book_is_not_crossed_on_any_path:{[t]
+    cf:update bid_price_1:0n from .qpipe.source.crypto_market_data.fixture[];
+    ef:update bid_px_00:0n from .qpipe.source.databento_mbp10.fixture[] where i=3;
+    .qunit.assertEquals[gates_crossed[cf;ef];0 0 0 0;"one-sided: absent, not crossed, on every path"]};
+
+test_a_crossed_book_is_crossed_on_every_path:{[t]
+    cf:update bid_price_1:ask_price_1+1f from .qpipe.source.crypto_market_data.fixture[] where i=0;
+    ef:update bid_px_00:ask_px_00+1f from .qpipe.source.databento_mbp10.fixture[] where i=3;
+    r:gates_crossed[cf;ef];
+    .qunit.assertEquals[r;1 1 1 1;"bid above ask: flagged by the live check and both gates"]};
+
+test_crossed_top_rule:{[t]
+    .qunit.assertEquals[.qbook.crossed_top[(1.1005 1.1;1.1 1.1;1.1;`float$();0.0 1.0);(1.1000 1.2;1.1 1.2;`float$();1.2;1.0 1.0)];10000b;"only strictly crossed with two usable tops"];
+    .qunit.assertEquals[.qcross.book_crossed `bid`ask!(1.1002;1.1002);0b;"locked is not crossed"];
+    .qunit.assertEquals[.qcross.book_crossed `bid`ask!(1.1003;1.1002);1b;"bid above ask is crossed"];
+    .qunit.assertEquals[.qcross.book_crossed `bid`ask!(0n;1.1002);0b;"a null side is not crossed"]};
+
 \d .

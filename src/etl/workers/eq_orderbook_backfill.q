@@ -15,7 +15,8 @@
 
 / --- the data-quality gate ------------------------------------------------
 
-/ Refuse a window whose book is crossed or whose price is not positive.
+/ Refuse a window whose book is crossed (bid strictly above ask, by the shared
+/ .qbook.crossed_top, #1176; a locked book passes) or whose price is not positive.
 / .
 / Both are conditions this data does not contain, not merely rare ones:
 / across all 46,038,453 rows loaded, no record had bid_px_00 >= ask_px_00, a
@@ -24,7 +25,7 @@
 / mis-folded - exactly the mistake the transform could make.
 / .
 / An EMPTIED side or a book clear (action R) is not either condition, and nulls
-/ are excluded from both tests explicitly: q orders null below every number, so
+/ are excluded from both tests (crossed_top does it for the book): q orders null below every number, so
 / `(first each bid)>=first each ask` is 1b when the ask is null and `not 0n>0`
 / is 1b for a null price, which would fail a whole 10-minute window on one
 / legitimate record (the same trap crypto_market_data_backfill guards, #546,
@@ -33,9 +34,7 @@
 / @return a table check/status/detail, one row per offending record
 quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    top_bid:first each batch`bid_prices;
-    top_ask:first each batch`ask_prices;
-    crossed:batch where (not null top_bid) & (not null top_ask) & top_bid>=top_ask;
+    crossed:batch where .qbook.crossed_top[batch`bid_prices;batch`ask_prices];
     bad_price:select from batch where (not null price) & not price>0;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
