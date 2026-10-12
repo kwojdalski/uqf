@@ -617,4 +617,123 @@ history:{[ds;part;version]
     select from ledger[]
         where dataset=ds, partition=part, source_version=version}
 
+/ ------------------------------------------------------- QUERY READINESS
+/ .
+/ Coverage means WRITTEN (#1094), which is what retry-safety needs: a window
+/ is staged right after its rows are appended. It is not the same as
+/ QUERYABLE. The HDB writer finishes a date - sorts it, sets p#sym - only once
+/ the run has moved past it, and a running HDB sees it only after it reloads;
+/ in between, coverage is true and a query returns a short result. The
+/ frontend's /query with require_coverage was reading coverage as exactly
+/ that guarantee.
+/ .
+/ So readiness is its own record: a watermark per (dataset, partition,
+/ source_version) - every coverage claim recorded at or before `ready_at` is
+/ queryable. A watermark, not a row per window, because one worker owns its
+/ (dataset, partition) under a single-instance lock, and because a reload
+/ maps everything on disk: a later acknowledged reload makes an earlier
+/ run's unreleased windows queryable too, with nothing to reconcile.
+/ .
+/ WHO MOVES IT. A store whose writes are visible at once (memory, anything
+/ without an on_ready) advances it as each window is written. A deployment
+/ that defers visibility sets defer_ready and calls release_ready once its
+/ readers have caught up - torq_backfill, after every running HDB has
+/ acknowledged a reload with no partition open.
+
+/ Where the readiness watermarks are kept, beside the coverage ledger.
+/ @return the path, as a string
+ready_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_ready"}
+
+/ Private: the watermarks as stored, or none.
+/ @private
+ready_table:{[]
+    if[()~key hsym `$ready_path[]; :empty_ready[]];
+    t:.qetl.job.bounded.state.durable_get ready_path[];
+    / held to its typed shape like the coverage ledger (#1101)
+    .qetl.job.bounded.state.require_types[`etl_ready;0!t;0!empty_ready[]];
+    t}
+
+/ The readiness watermarks' shape, typed and empty.
+/ @return the empty keyed table
+/ @eg cols .qetl.coverage.empty_ready[]
+empty_ready:{[] ([dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$()] ready_at:`timestamp$())}
+
+/ Whether this process's writes become queryable only when its deployment
+/ says so (release_ready). Set by the deployment, never by a worker.
+defer_ready:0b
+
+/ The (dataset, partition, source_version) written since the last release,
+/ while readiness is deferred.
+unready:([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$())
+
+/ Advance the watermarks of `keys` to `at`. Never moves one back.
+/ @param ks table dataset, partition, source_version
+/ @param at the time up to which their claims are queryable
+/ @return the number of keys advanced
+mark_ready:{[ks;at]
+    if[0=count ks; :0];
+    .qetl.job.bounded.state.with_file_lock[`etl_ready;{[ks;at]
+        t:ready_table[];
+        new:update ready_at:ready_at|at from distinct[ks] lj t;
+        .qetl.job.bounded.state.durable_set[ready_path[];t upsert `dataset`partition`source_version xkey new];
+        count new};(ks;at)]}
+
+/ A window's coverage was just staged: queryable now, or once the deployment
+/ releases it. Called by finish_window.
+/ @param ds the dataset
+/ @param part the partition, or `
+/ @param version the release the claim is under
+/ @return nothing
+note_written:{[ds;part;version]
+    k:([] dataset:enlist ds; partition:enlist part; source_version:enlist version);
+    $[defer_ready; `.qetl.coverage.unready set distinct unready,k; mark_ready[k;.z.p]];
+    }
+
+/ The deployment's readers have caught up with everything written before
+/ `at`: release what this process wrote. Keeps nothing on failure to write -
+/ an unreleased window is reported not queryable, which is the safe side.
+/ @param at the time the readers' view was taken (before a reload was asked)
+/ @return the number of keys released
+release_ready:{[at]
+    n:mark_ready[unready;at];
+    `.qetl.coverage.unready set 0#unready;
+    n}
+
+/ Has this key coverage its readers may not yet see - a claim recorded after
+/ its watermark? A run starting on such a key makes its deployment catch up
+/ even when it writes nothing, or an idle re-run would leave it unready.
+/ @param ds the dataset
+/ @param part the partition, or `
+/ @param version the release
+/ @return 1b when some current claim is newer than the watermark
+outstanding:{[ds;part;version]
+    w:(ready_table[])[`dataset`partition`source_version!(ds;part;version)]`ready_at;
+    c:claims_at[ds;part;version;.z.p];
+    $[0=count c; 0b; null w; 1b; any w<c`recorded_at]}
+
+/ The coverage claims a reader can query now: claims as `claims` returns
+/ them, recorded at or before the key's readiness watermark. What /query's
+/ require_coverage composes (#1094), read on the gateway like `claims`.
+/ @param ds the dataset
+/ @param part the partition, or `
+/ @param release the source version
+/ @param at the as-of
+/ @return table range_from, range_to - for compose and gaps
+/ @eg count .qetl.coverage.ready_claims[`no_such_dataset;`;`v1;.z.p]  ->  0
+ready_claims:{[ds;part;release;at]
+    w:(ready_table[])[`dataset`partition`source_version!(ds;part;release)]`ready_at;
+    w:at&0Np^w;
+    select range_from, range_to from claims_at[ds;part;release;at] where recorded_at<=w}
+
+/ Private: the current claims with their recorded_at - claims' read.
+/ @private
+claims_at:{[ds;part;release;at]
+    p:hsym `$ledger_path[];
+    t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
+          range_from:`timestamp$(); range_to:`timestamp$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
+        .qetl.job.bounded.state.durable_get ledger_path[]];
+    select range_from, range_to, recorded_at from t
+        where dataset=ds, partition=part, source_version=release,
+              recorded_at<=at, at<superseded_at, range_to>range_from}
+
 \d .

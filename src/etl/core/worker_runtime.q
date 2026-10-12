@@ -373,6 +373,8 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
     rows:$[`done~first published; last published; 0];
     covered:commit[dry;`publish_coverage;.qetl.coverage.stage_completion;
         (ds;part;spec`source_version;from_ts;to_ts;rows)];
+    / written; queryable now, or when the deployment says so (#1094)
+    if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version]];
     checkpointed:commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;
         (worker;spec;to_ts)];
     .[{.qetl.log.dbg[x;y;z]};(worker;"window finished";
