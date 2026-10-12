@@ -425,3 +425,14 @@ test_a_torq_restart_between_local_midnight_and_the_plant_roll_replays_each_log_o
     .qetl.job.stream.reset `fx_positions;
     .qunit.assertEquals[n;3;"day one's three messages (pos, fill, pos); day two is the live log's"];
     .qunit.assertEquals[sum .pipetest.replayed[;1];3;"each row once"]};
+
+test_a_plant_that_cannot_say_where_its_logs_are_costs_the_catch_up_not_the_start:{[t]
+    saved:.qetl.log.warn;
+    .qetl.log.warn:{[c;m;d] .pipetest.warned,:enlist (m;d`error)};
+    .pipetest.warned:();
+    hooks:.qtorq.plant_hooks[{[unused] '"no .stplg.dldir"};enlist `pos];
+    .qetl.log.warn:saved;
+    .qunit.assertEquals[count hooks;0;"no hooks, so catch_up sees no earlier_days and does nothing"];
+    .qunit.assertEquals[count .pipetest.warned;1;"and says so once"];
+    .qunit.assertEquals[last first .pipetest.warned;"no .stplg.dldir";"naming the plant's error"];
+    .qunit.assertEquals[.qetl.job.stream.catch_up[`fx_positions;hooks;enlist `pos;{[tb;x]}];0;"catch_up with no hooks replays nothing, without throwing"]};

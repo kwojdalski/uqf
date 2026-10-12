@@ -60,7 +60,7 @@ which_job:{[]
 / @return the transport dictionary
 transport:{[job]
     feed:0=count .qetl.job.stream.subscriptions job;
-    (`connect`publisher`check_publishable`subscribe`timer!(
+    base:`connect`publisher`check_publishable`subscribe`timer!(
         {[job;feed] `.qproc.stream.h set $[feed; .qtorq.feed_handle[]; .qtorq.connect_etl job];}[job;feed];
         {[] .qtorq.publish[.qproc.stream.h;;]};
         {[tbls] .qtorq.assert_publishable[.qproc.stream.h;tbls];};
@@ -88,17 +88,21 @@ transport:{[job]
             / gets a global of its own under .qproc.stream.timers.
             fn:` sv `.qproc.stream.timers,name;
             fn set f;
-            .qtorq.safe_timer[name;period;fn;"Run ",(string name)," for its streaming job"];}),
-        / The logs of the days a carrying job was down across (#1072), the
-        / plant's current log day (#1190) and whether a day's log exists
-        / (#1189). They are the plant's own files, so the plant is asked
-        / where it keeps them and which day it is on, and they are read
-        / here - the same file system its live replay already reads from.
-        / Columns are named from each log's own recorded schema (#1205), so
-        / the plant's tables are not asked for.
+            .qtorq.safe_timer[name;period;fn;"Run ",(string name)," for its streaming job"];});
+    / The logs of the days a carrying job was down across (#1072), the
+    / plant's current log day (#1190) and whether a day's log exists
+    / (#1189). They are the plant's own files, so the plant is asked
+    / where it keeps them and which day it is on, and they are read
+    / here - the same file system its live replay already reads from.
+    / Columns are named from each log's own recorded schema (#1205), so
+    / the plant's tables are not asked for. A plant that cannot answer
+    / costs the job its catch-up, not its start (plant_hooks warns).
+    / A feed replays nothing, so asks the plant nothing.
+    hooks:$[feed; (`symbol$())!();
         .qtorq.plant_hooks[
             {[] .qproc.stream.h"(.stplg.kdbtplog;.proc.procname;.stplg.dldir)"};
-            .qetl.job.stream.subscriptions job])}
+            .qetl.job.stream.subscriptions job]];
+    base,hooks}
 
 \d .
 

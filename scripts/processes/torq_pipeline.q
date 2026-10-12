@@ -371,9 +371,17 @@ earlier_days:{[root;plant;want;first_day;last_day]
 / and the directory of the day it is on), so a hook is as current as the plant.
 / @param ask a niladic function returning (log root; plant procname; current day directory)
 / @param want the tables the job subscribes to
-/ @return a dictionary of `earlier_days`plant_day`has_log to functions
+/ @return a dictionary of `earlier_days`plant_day`has_log to functions; empty (with a warning) when the plant cannot answer ask
 / @eg .qtorq.plant_hooks[{(`:/nonexistent;`stp1;`:/nonexistent/stp1_2026.10.09)};enlist `trade][`plant_day][]  / 2026.10.09
 plant_hooks:{[ask;want]
+    / Probed once: the hooks only serve catch_up, so a plant that cannot
+    / answer (no .stplg.dldir, a dropped handle) costs the job its catch-up,
+    / with a warning, and not its start.
+    probe:@[ask;::;{[e] (`failed;e)}];
+    if[(2=count probe) and `failed~first probe;
+        .qetl.log.warn[`qtorq;"the plant could not say where its logs are - starting without earlier_days, plant_day and has_log";
+            enlist[`error]!enlist last probe];
+        :(`symbol$())!()];
     `earlier_days`plant_day`has_log!(
         {[ask;tbls;first_day;last_day] loc:ask[]; earlier_days[loc 0;loc 1;tbls;first_day;last_day]}[ask];
         {[ask;unused] dir_day (ask[]) 2}[ask];  / called as plant_day[]: the generic null fills `unused`
