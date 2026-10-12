@@ -464,6 +464,36 @@ uqs deploy push dist/uqf-<release>.tar.gz \
 - **Nothing in the TorQ installation changes.** It is not uploaded, written to,
   symlinked into or re-permissioned.
 
+### Columns the site launcher reads
+
+A site launcher may read a `process.csv` column TorQ does not have. One reads
+`taskset_no`, the CPUs its q wrapper pins a process to (`3`, or `3:5` for CPUs 3
+and 5). It finds the column by its header, so when the column is missing it
+builds `{if(NR == 2) print $}` and prints an awk syntax error for every process
+it starts.
+
+Declare those columns on the target, as `process_fields = ["taskset_no"]` in
+`deploy_targets.toml` or `--process-fields taskset_no`. `deploy.env` exports
+them as `UQS_PROCESS_FIELDS`, and every row of the generated `process.csv`
+carries each one, empty unless it is configured. Without the declaration the
+columns are TorQ's own.
+
+Set each process's value on the server:
+
+```bash
+uqs --target uat config set stp1 taskset_no 3:5
+uqs --target uat start --print stp1
+```
+
+`config set` writes `python/uqs/process_overrides.csv` (see [changing a
+process's config](uqs.md#changing-a-processs-config)). Every release links that
+file from `shared/config/python/uqs/process_overrides.csv` when it exists, so
+create it there, with just the header `procname,field,value`, before the first
+`config set`. Values set without it are kept by that release only. A process
+with no value keeps the column empty, and nothing assigns CPUs on its own.
+`start --print` shows the start lines the launcher builds, without starting
+anything.
+
 ## On the server
 
 ```
@@ -498,6 +528,10 @@ The demo `gateway_users.csv` is never shipped. Without it the gateway has only
 the starter pack's logins. To give it ordinary users, put your own file at
 `/opt/uqf/shared/config/scripts/torqconfig/permissions/gateway_users.csv`, and
 every release links it in.
+
+`shared/config/python/uqs/process_overrides.csv`, when present, is linked the
+same way. It holds the server's own `uqs config set` values, such as a site
+launcher's [CPU affinity](#columns-the-site-launcher-reads).
 
 ## A server on kdb+ 4.0
 

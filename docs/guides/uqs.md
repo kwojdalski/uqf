@@ -766,6 +766,21 @@ Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `qcmd`. A change takes effect on the next `start`/`restart` of that process (the
 running process itself isn't touched).
 
+A site launcher that reads a column TorQ lacks, such as `taskset_no` for CPU
+affinity, has it declared in `UQS_PROCESS_FIELDS`. Each declared column is added
+to the generated `process.csv`, after `qcmd`, and every row has it, empty unless
+set:
+
+```
+export UQS_PROCESS_FIELDS=taskset_no
+uqs config set stp1 taskset_no 3:5
+```
+
+Every command regenerates `process.csv`, so the variable has to be set for each
+one. An override for a column that isn't declared is refused, naming the
+variable. A deployment declares it per target, in its `deploy.env` ([columns the
+site launcher reads](deploy.md#columns-the-site-launcher-reads)).
+
 A value with a comma, a double quote or a newline is refused. `torq.sh` reads
 `process.csv` by splitting each line on commas with `awk`, so it can't carry a
 quoted comma: the rest of the value would land in the next column. To pass a

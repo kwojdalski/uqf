@@ -9,7 +9,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from uqs.deploy.artifact import Artifact, ReleaseError, read_artifact
+from uqs.paths import UqsError
 from uqs.stack import redact as stack_redact
+from uqs.stack import site_fields
 
 #: Files an operator keeps on the server and every release links in, by their
 #: path in the repository. Absent ones are simply not linked.
@@ -18,6 +20,10 @@ SHARED_CONFIG = (
     # which source connects to what; a row names a secret's variable, never
     # the secret (#718)
     "scripts/torqconfig/sources.csv",
+    # this server's own process.csv values - a site column's, such as
+    # taskset_no's CPU affinity (#1191) - kept across releases, and written
+    # through by `uqs --target NAME config set`
+    "python/uqs/process_overrides.csv",
 )
 #: The server's credentials, as NAME=VALUE lines, in shared/config/. Never in
 #: an artifact: deploy.env sources it, so every process uqs starts inherits the
@@ -88,6 +94,8 @@ class Config:
     torq_app_home: str | None = None
     torq_launcher: str | None = None
     launcher_env: dict[str, str] = field(default_factory=dict)
+    #: a site launcher's own process.csv columns, UQS_PROCESS_FIELDS (#1191)
+    process_fields: tuple[str, ...] = ()
     qcmd: str | None = None
     qhome: str | None = None
     data_dir: str | None = None
@@ -176,6 +184,14 @@ def _launcher_env(values: Sequence[str]) -> dict[str, str]:
     return env
 
 
+def _process_fields(value: str) -> tuple[str, ...]:
+    """--process-fields: the site columns, each a plain name TorQ lacks."""
+    try:
+        return site_fields.parse(value, "--process-fields")
+    except UqsError as exc:
+        raise DeployError("arguments", str(exc)) from None
+
+
 def _reason(value: str | None) -> str | None:
     """--accept-converted-release's reason: an override nobody explained is refused."""
     if value is None:
@@ -204,6 +220,7 @@ def make_config(
     torq_app_home: str | None = None,
     torq_launcher: str | None = None,
     launcher_env: Sequence[str] | None = None,
+    process_fields: str = "",
     qcmd: str | None = None,
     qhome: str | None = None,
     data_dir: str | None = None,
@@ -274,6 +291,7 @@ def make_config(
         torq_app_home=_absolute("--torq-app-home", torq_app_home),
         torq_launcher=_absolute("--torq-launcher", torq_launcher),
         launcher_env=_launcher_env(launcher_env or ()),
+        process_fields=_process_fields(process_fields),
         qcmd=_q_path("--qcmd", qcmd),
         qhome=_q_path("--qhome", qhome),
         data_dir=_absolute("--data-dir", data_dir),

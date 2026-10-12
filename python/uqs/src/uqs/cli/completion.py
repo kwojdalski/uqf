@@ -25,9 +25,9 @@ import typer
 
 from uqs import paths as stack_paths
 from uqs.model import transports as registered_transports
-from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.profiles import PROFILES
 from uqs.stack import backfill, listing
+from uqs.stack.site_fields import process_csv_fields
 
 Candidates = list[str] | list[tuple[str, str]]
 
@@ -141,7 +141,7 @@ def list_columns(ctx: typer.Context) -> list[str]:
 
 @_never_raises
 def csv_fields() -> list[str]:
-    return list(PROCESS_CSV_FIELDS)
+    return list(process_csv_fields())
 
 
 @_never_raises

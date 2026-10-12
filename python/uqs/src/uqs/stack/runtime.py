@@ -17,7 +17,6 @@ from typing import Any
 
 from uqs.interpreter import q_command, q_interpreter
 from uqs.logger import get_logger
-from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive, gateway_access, qtree, start_policy
@@ -28,6 +27,7 @@ from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import effective_process_rows
+from uqs.stack.site_fields import process_csv_fields
 
 log = get_logger(__name__)
 
@@ -135,7 +135,7 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
         # match, which every single process start looks up), producing a
         # bare `print $` awk syntax error for every process - hard-won via
         # `start all` throwing exactly that for every process at once.
-        writer = csv.DictWriter(f, fieldnames=PROCESS_CSV_FIELDS, lineterminator="\n")
+        writer = csv.DictWriter(f, fieldnames=process_csv_fields(), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

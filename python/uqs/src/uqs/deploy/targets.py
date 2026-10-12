@@ -43,7 +43,7 @@ DECLARATION_ENV = "UQS_DEPLOY_TARGETS"
 #: are this run's to say.
 PER_RUN = frozenset({"artifact", "dry_run"})
 #: Options make_config takes as one comma-separated string; a file lists them.
-LISTED_AS_TEXT = frozenset({"jobs", "live_check"})
+LISTED_AS_TEXT = frozenset({"jobs", "live_check", "process_fields"})
 SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
 #: Keys a target may hold that are not push options: the runtime it must run
 #: (checked against the artifact's), and labels, which `uqs target list` shows

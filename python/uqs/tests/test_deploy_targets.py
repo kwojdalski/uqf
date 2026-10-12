@@ -28,6 +28,7 @@ live = true
 live_check = ["deals_db", "quotes_db"]
 jobs = ["piggy_spread"]
 launcher_env = ["KDBDB_ORG=desk"]
+process_fields = ["taskset_no"]
 
 [targets.prod-b]
 host = "deploy@prod-b"
@@ -38,7 +39,7 @@ profile = "essential"
 FLAGS: dict[str, Any] = dict(
     host="deploy@prod-a", remote_user="svc", dest="/srv/uqf", profile="essential",
     torq_home="/opt/torq", live=True, live_check="deals_db,quotes_db", jobs="piggy_spread",
-    launcher_env=["KDBDB_ORG=desk"],
+    launcher_env=["KDBDB_ORG=desk"], process_fields="taskset_no",
 )  # fmt: skip
 
 
@@ -60,6 +61,7 @@ def test_a_targets_values_make_the_config_its_flags_would(root):
     assert _same(cfg, make_config(artifact="x.tar.gz", **FLAGS))
     assert (cfg.target, cfg.runtime) == ("prod-a", "crypto")
     assert cfg.sources["host"] == "target prod-a"
+    assert cfg.process_fields == ("taskset_no",), "a site's columns, listed in the file (#1191)"
 
 
 def test_a_flag_wins_over_the_file_and_says_so(root):

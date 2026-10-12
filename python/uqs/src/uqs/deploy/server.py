@@ -11,6 +11,7 @@ from uqs.deploy.lock import Lock
 from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
 from uqs.deploy.selection import Selection
 from uqs.logger import get_logger
+from uqs.stack import site_fields
 
 log = get_logger(__name__)
 
@@ -95,6 +96,8 @@ class Server:
             ("UQS_REQUIRE_LIVE_SOURCES", "1" if c.live else None),
             # the private ODBC setup deploy.env loads, for `uqs config sources check`
             ("UQS_ODBC_HOME", c.odbc_home),
+            # the site launcher's own process.csv columns, empty unless set
+            (site_fields.PROCESS_FIELDS_ENV, ",".join(c.process_fields)),
             # the release installs from its own wheels; nothing after that
             # may reach for an index either
             ("UV_OFFLINE", "1"),
