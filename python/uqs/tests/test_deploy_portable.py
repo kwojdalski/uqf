@@ -64,6 +64,8 @@ def _tools(files: list[str]):
             return _done()
         if "download" in argv:
             return _done()
+        if "uqs.stack.hdb_shape" in argv:
+            return _done('{"quote": ["time", "sym"]}')
         raise AssertionError(argv)
 
     return runner
