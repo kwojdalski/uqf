@@ -150,7 +150,8 @@ def uqs_get_config(procname: str, port: int | None = None, resolve: bool = True)
 @mcp.tool
 def uqs_set_config(procname: str, field: str, value: str) -> str:
     """Set one process.csv field for *procname* (host, port, proctype,
-    procname, U, localtime, g, T, w, load, startwithall, extras, qcmd).
+    procname, U, localtime, g, T, w, load, startwithall, extras, qcmd, and
+    any site column UQS_PROCESS_FIELDS declares, such as taskset_no).
     Persisted to process_overrides.csv and applied on every later start/
     stop/summary/... - restart the process for a running instance to pick
     it up.

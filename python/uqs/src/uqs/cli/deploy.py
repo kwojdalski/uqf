@@ -206,6 +206,16 @@ def push(
             "TORQDATAHOME defaults to the runtime data directory when --torq-launcher is given",
         ),
     ] = None,
+    process_fields: Annotated[
+        str,
+        typer.Option(
+            "--process-fields",
+            metavar="NAME,...",
+            help="Columns the site launcher reads that TorQ's process.csv lacks, such as "
+            "taskset_no; every row carries them, empty unless `uqs config set` gives a value. "
+            "Persisted in deploy.env as UQS_PROCESS_FIELDS",
+        ),
+    ] = "",
     qcmd: Annotated[
         str | None,
         typer.Option(

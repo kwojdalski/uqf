@@ -43,6 +43,7 @@ SAMPLES: dict[str, Any] = {
     "torq_app_home": "/opt/torqapp",
     "torq_launcher": "/opt/torq/torq.sh",
     "launcher_env": ["UQF_X=1"],
+    "process_fields": "taskset_no",
     "qcmd": "/opt/kx/bin/q",
     "qhome": "/opt/kx",
     "data_dir": "/data/uqf",

@@ -20,7 +20,7 @@ import re
 from string import Template
 
 from uqs.logger import get_logger
-from uqs.model.pipelines import PROCESS_CSV_FIELDS, _pipeline_rows
+from uqs.model.pipelines import _pipeline_rows
 from uqs.model.runtime_members import pipeline_procnames
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.carriable import refuse_unsafe_override
@@ -30,6 +30,7 @@ from uqs.stack.monitor_budget import (
     monitor_connection_extras,
     monitor_dropped,
 )
+from uqs.stack.site_fields import declared, refuse_unknown_field
 
 log = get_logger(__name__)
 
@@ -203,10 +204,15 @@ def effective_process_rows(
     set X startwithall 1` never reached the plan that decides which heartbeat
     subscriptions monitor1 drops under the licence cap. An override of
     monitor1's own `extras` still wins outright, as it always did.
+
+    A declared site column (stack/site_fields.py) is on every row, empty
+    unless an override sets it, so a site launcher always finds it (#1191).
     """
     overrides = _checked_overrides(paths)
+    site = dict.fromkeys(declared(), "")
     rows = [
-        {**row, **overrides.get(row["procname"], {})} for row in _defaulted(paths, default_qcmd)
+        {**row, **site, **overrides.get(row["procname"], {})}
+        for row in _defaulted(paths, default_qcmd)
     ]
     if not paths.runtime_declaration.overlays:
         # monitor1 subscribes to the vendored list, as the starter pack ships
@@ -248,10 +254,12 @@ def _read_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
 
 def _checked_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
     """The overrides on disk, each refused by name if torq.sh's eval would run
-    it - one written by hand, or before set_process_config refused it (#1041)."""
+    it - one written by hand, or before set_process_config refused it (#1041) -
+    or names a column process.csv lacks, such as an undeclared site one (#1191)."""
     overrides = _read_overrides(paths)
     for procname, fields in overrides.items():
         for field, value in fields.items():
+            refuse_unknown_field(field, f"{paths.overrides_path} sets {procname}.{field}")
             refuse_unsafe_override(procname, field, value or "")
     return overrides
 
@@ -375,8 +383,7 @@ def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -
     changed again. Read-modify-write against process_overrides.csv - the
     only file this touches; the vendored process.csv is never edited.
     """
-    if field not in PROCESS_CSV_FIELDS:
-        raise UqsError(f"unknown process.csv field {field!r} - {sorted(PROCESS_CSV_FIELDS)}")
+    refuse_unknown_field(field, "unknown process.csv field")
     if procname not in list_process_names(paths):
         raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
     refuse_unsafe_override(procname, field, value)

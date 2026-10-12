@@ -352,6 +352,112 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
     assert generated_rows["fxfeed1"]["startwithall"] == "0"
 
 
+# --------------------------------------------- a site's own columns (#1191)
+
+
+def _generated_csv(paths: UqsPaths) -> tuple[list[str], dict[str, dict[str, str]]]:
+    """The generated process.csv's header, and its rows by procname."""
+    with paths.generated_procs.open(newline="") as f:
+        reader = csv.DictReader(f)
+        rows = {r["procname"]: r for r in reader}
+    return list(reader.fieldnames or ()), rows
+
+
+def test_without_a_declared_site_column_the_header_is_torqs_own(fake_paths: UqsPaths, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    monkeypatch.delenv("UQS_PROCESS_FIELDS", raising=False)
+    runtime.bootstrap(fake_paths)
+    header, _ = _generated_csv(fake_paths)
+    assert header == list(PROCESS_CSV_FIELDS)
+    assert fake_paths.generated_procs.read_text().splitlines()[0] == (
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd"
+    )
+
+
+def test_a_declared_site_column_is_on_every_row_and_empty_unless_set(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """taskset_no, as a UAT launcher reads it: the values configured reach
+    process.csv unchanged, every other row has the column empty - never a
+    CPU nobody chose - and both survive the next regeneration."""
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    monkeypatch.setenv("UQS_PROCESS_FIELDS", "taskset_no")
+    stack_procs.set_process_config(fake_paths, "fxfeed1", "taskset_no", "3")
+    stack_procs.set_process_config(fake_paths, "stp1", "taskset_no", "3:5")
+    for _ in range(2):  # every command regenerates it
+        runtime.bootstrap(fake_paths)
+        header, rows = _generated_csv(fake_paths)
+        assert header == [*PROCESS_CSV_FIELDS, "taskset_no"]
+        assert rows["fxfeed1"]["taskset_no"] == "3"
+        assert rows["stp1"]["taskset_no"] == "3:5"
+        assert {r["taskset_no"] for p, r in rows.items() if p not in ("fxfeed1", "stp1")} == {""}
+    assert stack_procs.get_process_config(fake_paths, "stp1")["taskset_no"] == "3:5"
+    assert {"field": "taskset_no"} in listing.list_items(fake_paths, "fields")
+
+
+def test_an_undeclared_site_column_is_refused_naming_the_declaration(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """Set without UQS_PROCESS_FIELDS, or left in the overrides where it is no
+    longer declared: refused by name, not a column invented or a csv
+    writer's ValueError."""
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    monkeypatch.delenv("UQS_PROCESS_FIELDS", raising=False)
+    with pytest.raises(UqsError, match="unknown process.csv field: 'taskset_no' .*PROCESS_FIELDS"):
+        stack_procs.set_process_config(fake_paths, "fxfeed1", "taskset_no", "3")
+    fake_paths.overrides_path.parent.mkdir(parents=True, exist_ok=True)
+    fake_paths.overrides_path.write_text("procname,field,value\nfxfeed1,taskset_no,3\n")
+    with pytest.raises(UqsError, match=r"sets fxfeed1\.taskset_no: .*UQS_PROCESS_FIELDS"):
+        runtime.bootstrap(fake_paths)
+    assert not fake_paths.generated_procs.exists()
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [("extras", "already one of process.csv's own columns"), ("task set", "'set'"), ("a=b", "")],
+)
+def test_a_site_column_is_a_new_plain_name(value, message, fake_paths: UqsPaths, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    monkeypatch.setenv("UQS_PROCESS_FIELDS", value)
+    if value == "task set":  # two names, both plain: declared, not refused
+        runtime.bootstrap(fake_paths)
+        assert _generated_csv(fake_paths)[0][-2:] == ["task", "set"]
+        return
+    with pytest.raises(UqsError, match=f"UQS_PROCESS_FIELDS: .*{message}"):
+        runtime.bootstrap(fake_paths)
+
+
+def test_a_site_launcher_finds_its_column_in_the_printed_start(
+    fake_paths: UqsPaths, monkeypatch, tmp_path: Path
+):
+    """`uqs start --print` through a launcher that looks taskset_no up the
+    way the UAT torq.sh does - by header, as the vendored getfield does. With
+    no such column that lookup is `print $}`, an awk syntax error for every
+    process; declared, a configured row prints its CPUs and an unconfigured
+    one prints nothing, with no error either way."""
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    launcher = tmp_path / "site" / "torq.sh"
+    launcher.parent.mkdir()
+    launcher.write_text(
+        "#!/bin/sh\n"
+        "getfield() {\n"
+        "  fieldno=$(awk -F, '{if(NR==1) for(i=1;i<=NF;i++){if($i==\"'$2'\") print i}}'"
+        ' "$TORQPROCESSES")\n'
+        "  awk -F, '{if(NR == '$1') print $'$fieldno'}' \"$TORQPROCESSES\"\n"
+        "}\n"
+        "procno=$(awk '/,'$2',/{print NR}' \"$TORQPROCESSES\")\n"
+        'echo "$2 taskset_no=[$(getfield $procno taskset_no)]"\n'
+    )
+    launcher.chmod(0o755)
+    monkeypatch.setenv("UQS_TORQ_LAUNCHER", str(launcher))
+    monkeypatch.setenv("UQS_PROCESS_FIELDS", "taskset_no")
+    stack_procs.set_process_config(fake_paths, "stp1", "taskset_no", "3:5")
+    printed = runtime.print_procs(fake_paths, "stp1")
+    assert (printed.stdout.strip(), printed.stderr) == ("stp1 taskset_no=[3:5]", "")
+    printed = runtime.print_procs(fake_paths, "discovery1")
+    assert (printed.stdout.strip(), printed.stderr) == ("discovery1 taskset_no=[]", "")
+
+
 def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 

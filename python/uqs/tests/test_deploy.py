@@ -826,6 +826,28 @@ def test_without_a_launcher_the_release_environment_is_unchanged():
     assert not [ln for ln in lines if "LAUNCHER" in ln or "TORQDATAHOME" in ln]
 
 
+def test_a_site_launchers_own_process_columns_reach_the_release_environment():
+    """--process-fields is how a target declares the columns its launcher reads
+    (#1191): deploy.env exports them, and without the flag it exports nothing."""
+    cfg = parse_args([*BASE, *SITE, "--process-fields", "taskset_no"])
+    assert cfg.process_fields == ("taskset_no",)
+    assert "export UQS_PROCESS_FIELDS=taskset_no" in Deployment(cfg, FakeRemote()).env_lines()
+    lines = Deployment(parse_args([*BASE, *SITE]), FakeRemote()).env_lines()
+    assert not [ln for ln in lines if "UQS_PROCESS_FIELDS" in ln]
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ("qcmd", "'qcmd' is already one of process.csv's own columns"),
+        ("taskset-no", "'taskset-no' is not a column name"),
+    ],
+)
+def test_a_process_column_must_be_a_new_plain_name(value, message):
+    with pytest.raises(DeployError, match=f"--process-fields: {message}"):
+        parse_args([*BASE, "--process-fields", value])
+
+
 def test_every_stage_runs_the_launcher_its_release_persisted(tmp_path):
     _, remote, _ = _run(tmp_path, {"uqs deploy verify --profile": _verified(True)}, args=SITE)
     prepare = next(s for stage, s in remote.scripts if stage == "prepare")

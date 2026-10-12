@@ -325,6 +325,8 @@ def test_server_secrets_are_sourced_never_shipped_and_must_be_private(tmp_path):
     assert f"find {secrets} -perm /077" in prepare
     # sources.csv is the server's, linked in like gateway_users.csv
     assert "/opt/uqf/shared/config/scripts/torqconfig/sources.csv" in prepare
+    # and so are its process.csv values, such as a site column's (#1191)
+    assert "/opt/uqf/shared/config/python/uqs/process_overrides.csv" in prepare
 
 
 def test_an_env_file_in_a_bundle_never_reaches_an_artifact():

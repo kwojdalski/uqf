@@ -13,7 +13,6 @@ from uqs.model import profiles
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_by_process
 from uqs.model.jobs import job_rows
-from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
 from uqs.stack import runtime_report
@@ -24,6 +23,7 @@ from uqs.stack.procs import (
     resolve_process_config,
 )
 from uqs.stack.runtime import query
+from uqs.stack.site_fields import process_csv_fields
 
 log = get_logger(__name__)
 
@@ -93,7 +93,7 @@ def _list_processes(paths: UqsPaths, base_port: int | None) -> list[dict[str, st
 
 
 def _list_fields(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
-    return [{"field": f} for f in PROCESS_CSV_FIELDS]
+    return [{"field": f} for f in process_csv_fields()]
 
 
 def _list_overrides(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
