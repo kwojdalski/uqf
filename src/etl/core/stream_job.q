@@ -291,6 +291,7 @@ reset:{[job]
     / and what its carry knows of that state (#1015)
     carried_to::(enlist job) _ carried_to;
     carry_log::(enlist job) _ carry_log;
+    caught_up::(enlist job) _ caught_up;
     job}
 
 / Every registered job, for the runner and for tests.
@@ -508,6 +509,12 @@ clock:{[x] clock_of[.z.p;x]}
 /                       day's log first, synchronously, before it returns.
 /   timer               [name; period; f]: call niladic f every period.
 /   check_publishable   optional, [tables]: refuse a table the plant lacks.
+/ .
+/ A carrying job's recovery (stream_carry_recovery.q) uses three more optional
+/ keys, and a transport missing one is a transport that cannot recover that
+/ much: earlier_days[tables; first; last], plant_day[] (the date of the log
+/ subscribe replays - the plant's day, never the job's clock, #1190) and
+/ has_log[day] (whether that day's log exists, #1189).
 transport_keys:`connect`publisher`subscribe`timer
 
 / Every table a job subscribes to: its inputs, and those it reads only to
@@ -576,13 +583,14 @@ start:{[job;tr]
     if[count tbls;
         live:get pub:` sv (d`ns),`publish;
         if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b];
+        today:plant_today tr;
         r:@[{[job;tr;tbls;h;replay]
                 if[replay and `carry in key def job; catch_up[job;tr;tbls;h]];
                 tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;handler job];
             replay;{[e] (0b;e)}];
         pub set live;
         `.qetl.job.stream.replaying set 0b;
-        if[replay and `carry in key d; missed_end_of_day[job;.z.D]];
+        if[replay and `carry in key d; missed_end_of_day[job;today]];
         replayed job;
         if[not first r; 'last r];
         if[`on_replayed in key d; (d`on_replayed)[]];
@@ -664,6 +672,10 @@ end_of_day:{[dt]
 / batches), status `recording, `full once the cap was hit, `restored.
 carry_log:(`symbol$())!()
 
+/ job -> 1b once catch_up replayed the log of the day after the job's last end
+/ of day (#1189): the state is then complete even though no log held a snapshot.
+caught_up:(`symbol$())!`boolean$()
+
 / job -> the plant `time` of the last batch its carried state applied.
 carried_to:(`symbol$())!`timestamp$()
 
@@ -740,7 +752,7 @@ restore:{[job;h;x]
 / @param job the job's name
 / @return the job's name
 / @eg .qetl.job.stream.replayed[`fx_positions]  ->  `fx_positions
-replayed:{[job] carry_log::(enlist job) _ carry_log; job}
+replayed:{[job] carry_log::(enlist job) _ carry_log; caught_up::(enlist job) _ caught_up; job}
 
 / Publish a job's carried state onto its snapshot table - what end_of_day
 / does for each running job that carries one - each row stamped with the

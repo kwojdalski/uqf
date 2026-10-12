@@ -327,16 +327,20 @@ test_end_of_day_records_the_day_a_carrying_job_saw_end:{[t]
 / opens with the snapshot of a book carrying 1mm EURUSD (the job was running
 / at that roll); each log then holds one 100k fill, and no later roll wrote a
 / snapshot - the job was down. Returns the marker's date.
-missed_logs:{[marker]
+missed_logs:{[marker] missed_logs_to[marker;1b;.z.D]}
+
+/ The same, carrying a book (`seeded` 1b) or flat at the marker (0b - no
+/ snapshot is written then), with the plant's last log being `through`.
+missed_logs_to:{[marker;seeded;through]
     record[`fx_positions];
-    .qpipe.job.fx_positions.on_batch[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    if[seeded; .qpipe.job.fx_positions.on_batch[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]]];
     .qetl.job.stream.snapshot `fx_positions;
     opening:sent_on `fx_position_open;
     dir:first system "mktemp -d";
     .qetl.tick.reset[];
     .qetl.tick.open_log[dir;`eodgap;marker+1];
-    .qetl.tick.publish[`fx_position_open;opening];
-    days:(marker+1)+til .z.D-marker;
+    if[seeded; .qetl.tick.publish[`fx_position_open;opening]];
+    days:(marker+1)+til through-marker;
     {[dt] if[not dt=.qetl.tick.log_date; .qetl.tick.roll dt]; .qetl.tick.publish[`executions;fill[`EURUSD;1;1e5;1.1;`london;`spot]]} each days;
     p:.qetl.job.stream.carry_marker_path `fx_positions;
     system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
@@ -347,12 +351,14 @@ missed_logs:{[marker]
 / The transport a local restart uses: today's log through the handler, and
 / the earlier days from the plant's logs.
 gap_transport:{[]
-    `connect`publisher`subscribe`timer`earlier_days!(
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log!(
         {[] };
         {[] {[t;x] count x}};
         {[tbls;h;replay] .qetl.tick.replay[.qetl.tick.log_path;{[tbls;h;t;r] if[t in tbls; h[t;r]]}[tbls;h]]};
         {[n;p;f] };
-        {[tbls;a;b] .qetl.tick.earlier_days[tbls;a;b]})}
+        {[tbls;a;b] .qetl.tick.earlier_days[tbls;a;b]};
+        {[] .qetl.tick.plant_day[]};
+        {[dt] .qetl.tick.has_log dt})}
 
 / Restart fx_positions after `missed_logs[marker]`; the errors it logged, and
 / the book it holds.
@@ -374,6 +380,28 @@ test_a_job_down_across_two_end_of_days_restarts_with_its_carried_book:{[t]
     r:restart_after .z.D-3;
     .qunit.assertEquals[r 1;enlist 1.3e6;"1mm carried, plus three days' 100k fills"];
     .qunit.assertEquals[count r 0;0;"and nothing is reported missing"]};
+
+/ Restart fx_positions after the given logs; (errors; book).
+restart_flat:{[marker;seeded;through]
+    missed_logs_to[marker;seeded;through];
+    .qetl.job.stream.reset `fx_positions;
+    e:errors .testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;.eodtest.gap_transport[]]};
+    book:exec base_qty from .qpipe.job.fx_positions.positions;
+    system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
+    .qetl.tick.reset[];
+    (e;book)}
+
+test_a_job_flat_at_its_last_end_of_day_catches_up_without_an_error:{[t]
+    r:restart_flat[.z.D-3;0b;.z.D];
+    .qunit.assertEquals[r 1;enlist 3e5;"no snapshot anywhere: the three days' fills are the whole book"];
+    .qunit.assertEquals[count r 0;0;"and nothing is reported lost (#1189)"]};
+
+test_a_restart_before_the_plant_rolls_replays_each_log_once:{[t]
+    / the job's clock is on .z.D but the plant is still on yesterday's log
+    / flat at the marker: no snapshot at the head of the log to mask a double replay
+    r:restart_flat[.z.D-2;0b;.z.D-1];
+    .qunit.assertEquals[r 1;enlist 1e5;"yesterday's one 100k fill, not applied twice (#1190)"];
+    .qunit.assertEquals[count r 0;0;"and no end of day is judged missed"]};
 
 test_a_transport_without_earlier_days_still_reports_the_gap:{[t]
     missed_logs .z.D-3;
