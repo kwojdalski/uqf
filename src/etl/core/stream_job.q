@@ -379,8 +379,10 @@ checked:{[job;chk;mode;publisher;t;x]
     / a shape the check never indexed.
     tbl:98h=type x;
     n:$[tbl; count x; 99h=type x; 1; count first x];
-    rows:$[tbl and (`drop=mode) and (`row in cols f) and not any null f`row;
-        distinct "j"$f`row; til n];
+    / `row is read only once it is known to be there: `and evaluates both
+    / sides, and indexing a missing column throws on PeachQ
+    named:$[tbl and (`drop=mode) and `row in cols f; not any null f`row; 0b];
+    rows:$[named; distinct "j"$f`row; til n];
     clean:$[tbl; x where not (til n) in rows; ()];
     withhold[job;t;x;"check failed: ",string[count f]," failure(s)";f;count rows];
     $[tbl and count clean; publisher[t;clean]; ::]}
