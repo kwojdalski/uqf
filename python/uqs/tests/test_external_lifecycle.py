@@ -9,6 +9,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from uqs.external import lifecycle
 from uqs.external.lifecycle import DetachedProcess, process_identity
 from uqs.paths import UqsError
 
@@ -155,3 +156,55 @@ def test_a_formatting_only_mismatch_keeps_the_pid_file_and_never_signals(proc, s
         proc.start(SLEEP, cwd=proc.pid_path.parent)
     assert stranger.poll() is None, "never signalled"
     proc.pid_path.unlink()
+
+
+def _fake_proc_stat(root, pid: int, comm: str, start_ticks: int) -> None:
+    """A /proc/<pid>/stat with `comm` in field 2 and `start_ticks` in field 22."""
+    (root / str(pid)).mkdir(parents=True)
+    rest = ["S"] + ["0"] * 18 + [str(start_ticks), "0", "0"]
+    (root / str(pid) / "stat").write_text(f"{pid} ({comm}) {' '.join(rest)}\n")
+
+
+def test_a_start_time_ps_recomputes_on_each_call_does_not_disown_the_feed(
+    proc, stranger, monkeypatch, tmp_path
+):
+    """#1167: Linux's `ps -o lstart` is boot time - itself derived from the
+    wall clock at the moment ps runs - plus the process's ticks since boot, so
+    the same process can read a second later on the next call. Recorded with
+    one second and checked with the next, stop refused the feed it had just
+    started as "another process". The identity uses the kernel's ticks, which
+    never move; ps here answers 09:40:27 once and 09:40:28 ever after."""
+    args = " ".join(" ".join(SLEEP).split())
+    lstart_calls = iter(range(1_000_000))
+
+    def ps(pid, *fields, fixed=True):
+        if "lstart" in fields:
+            return f"Mon Oct 12 09:40:{27 if next(lstart_calls) == 0 else 28} 2026 {args}"
+        return args
+
+    fake_proc = tmp_path / "proc"
+    _fake_proc_stat(fake_proc, stranger.pid, "python", 4242)
+    monkeypatch.setattr(lifecycle, "_ps", ps)
+    monkeypatch.setattr(lifecycle, "_PROC", fake_proc, raising=False)
+    proc.pid_path.write_text(f"{stranger.pid}\n{process_identity(stranger.pid)}\n")
+
+    assert proc.running() and proc.running(), "still ours on every later look"
+    assert proc.stop(missing_ok=False) == stranger.pid
+    assert stranger.wait(timeout=5) == -15, "the feed itself was stopped"
+
+
+def test_the_start_time_is_field_22_even_when_the_command_name_holds_a_paren(monkeypatch, tmp_path):
+    """A command name is the process's to choose: "(a) b)" must not shift the
+    fields after it."""
+    _fake_proc_stat(tmp_path, 7, "a) b", 99)
+    monkeypatch.setattr(lifecycle, "_PROC", tmp_path)
+    assert lifecycle._boot_ticks(7) == "boot+99"
+    assert lifecycle._boot_ticks(8) is None, "no such process"
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="/proc is Linux's")
+def test_on_linux_the_identity_is_the_kernels_and_never_moves(proc):
+    pid = proc.start(SLEEP, cwd=proc.pid_path.parent)
+    identity = process_identity(pid)
+    assert identity is not None and identity.startswith("boot+")
+    assert all(process_identity(pid) == identity for _ in range(50))

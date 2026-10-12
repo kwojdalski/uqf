@@ -711,6 +711,26 @@ test_publish_delegates_and_returns_the_row_count:{[t]
     .qunit.assertEquals[.qpipe.job.demo_deals_backfill.publish batch;1;"publish reports what it wrote"];
     .qunit.assertEquals[count value `demo_deals;1;"and the row is actually in the target"]};
 
+/ #1157: the window column is inferred when undeclared, and the guess cannot
+/ tell a passed-through time from one the transform recomputed. `replace clears
+/ [from;to) by that column, so a batch whose values lie outside it would delete
+/ a neighbouring window's rows - refused at publish, before anything is written.
+test_replace_refuses_a_batch_whose_window_column_lies_outside_the_window:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qetl.job.bounded.write_state[`demo_deals_backfill;`last_window;`range_from`range_to!(.ddbftest.d[1];.ddbftest.d[2])];
+    batch:(.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d[1];.ddbftest.d[2]])`result;
+    shifted:update deal_time:deal_time+1D from batch;
+    .qetl.cfg.set_layers[(enlist `on_conflict)!enlist "replace";()!();()!()];
+    e:@[{.qpipe.job.demo_deals_backfill.publish x};shifted;{x}];
+    .qunit.assertTrue[e like "on_conflict replace: demo_deals_backfill's window column deal_time has 1 value(s) outside*";
+        "a moved window column is refused under replace, naming the column and the count"];
+    .qunit.assertTrue[e like "*declare window_column";"and the remedy"];
+    .qunit.assertEquals[count value `demo_deals;0;"and nothing was written"];
+    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.publish batch;1;"a batch inside its window is written"];
+    .qetl.cfg.set_layers[()!();()!();()!()];
+    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.publish shifted;1;
+        "upsert never clears by the column, so it is not held to the window"]};
+
 test_checkpoint_delegates_and_the_cursor_can_be_read_back:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qpipe.job.demo_deals_backfill.checkpoint[.ddbftest.d[2]];

@@ -157,6 +157,32 @@ test_fresh_direct_book_against_equally_stale_legs_is_not_active:{[t]
     .qunit.assertEquals[r`active;0b;"legs that agree with each other but not with the direct book are not one price"];
     .qunit.assertEquals[r`skew;0D00:00:04;"the gap to the direct book is the skew"]};
 
+/ #1147: a leg was timed by its top of book, but a superbook ladder mixes
+/ sources, so a sweep that runs past a fresh top level into an older one is
+/ priced partly off that older quote. Skew was 0 and the route active while
+/ the sweep consumed a four-second-old level (max_skew is two seconds).
+test_a_sweep_past_a_fresh_top_into_an_old_level_carries_that_age:{[t]
+    old:t0-0D00:00:04;
+    deep:`sym`as_of`bid_prices`bid_sizes`bid_sources`bid_times`ask_prices`ask_sizes`ask_sources`ask_times!
+        (`USDJPY;t0;150.00 149.99;1e6 1e11;`LP_A`LP_B;(t0;old);150.02 150.03;1e6 1e11;`LP_A`LP_B;(t0;old));
+    state:(one[row[`EURUSD;eurusd 0;eurusd 1;1e9;t0]]) upsert one deep;
+    state:state upsert one row[`EURJPY;164.80;164.90;1e9;t0];
+    r:eurjpy[.qpipe.job.cross_arbitrage.evaluate[state;1e6;t0]];
+    .qunit.assertEquals[r`skew;0D00:00:04;"the deeper level the sweep consumes is four seconds old"];
+    .qunit.assertEquals[r`active;0b;"so the route is not one price"];
+    .qunit.assertEquals[r`as_of;old;"and it is as old as that level"]};
+
+/ The converse: a sweep the fresh top level covers never touches the old one.
+test_a_sweep_the_fresh_top_covers_ignores_older_levels_behind_it:{[t]
+    old:t0-0D00:00:04;
+    deep:`sym`as_of`bid_prices`bid_sizes`bid_sources`bid_times`ask_prices`ask_sizes`ask_sources`ask_times!
+        (`USDJPY;t0;150.00 149.99;1e9 1e11;`LP_A`LP_B;(t0;old);150.02 150.03;1e9 1e11;`LP_A`LP_B;(t0;old));
+    state:(one[row[`EURUSD;eurusd 0;eurusd 1;1e9;t0]]) upsert one deep;
+    state:state upsert one row[`EURJPY;164.80;164.90;1e9;t0];
+    r:eurjpy[.qpipe.job.cross_arbitrage.evaluate[state;1e6;t0]];
+    .qunit.assertEquals[r`skew;0D00:00:00;"1mm of EURJPY converts to about 1.1mm USD, inside USDJPY's 1e9 top"];
+    .qunit.assertEquals[r`active;1b;"nothing old was consumed"]};
+
 / --- size -----------------------------------------------------------------
 
 test_a_thin_middle_leg_marks_the_edge_unfillable:{[t]

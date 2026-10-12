@@ -207,7 +207,7 @@ on_worker:{[dataset;worker;spec_fn]
             (` sv ns,`init)[spec_fn[range_from;range_to]];
             res:(` sv ns,`run)[];
             (` sv ns,`cleanup)[];
-            if[not (res`state) in `completed`idle;
+            if[not 0i~.qetl.job.bounded.exit_code res`state;
                 '"on_worker: ",string[worker]," ended ",string[res`state]," (",
                  string[res`windows_failed]," windows failed), so the reaction is still owed"];
             1b}[worker;ns;spec_fn];(range_from;range_to);{[e] e}];

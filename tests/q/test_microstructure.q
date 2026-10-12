@@ -85,6 +85,17 @@ test_vwmp_skew_matches_direct_vwap_call:{[t]
     r:.qmicro.vwmp_skew[bid_prices;bid_sizes;ask_prices;ask_sizes;2];
     .testutil.assertApprox[first r;expected;1e-9;"vwmp_skew matches a direct vwap call over the same concatenated levels"]};
 
+test_vwmp_skew_locked_or_crossed_l0_is_null_not_infinite:{[t]
+    bid_prices:(1.1000 1.0996;1.1000 1.0996;1.1000 1.0996);
+    bid_sizes:(300 100;300 100;300 100);
+    ask_prices:(1.1000 1.1010;1.0999 1.1010;1.1002 1.1010);
+    ask_sizes:(100 100;100 100;100 100);
+    r:.qmicro.vwmp_skew[bid_prices;bid_sizes;ask_prices;ask_sizes;2];
+    .qunit.assertTrue[null r 0;"locked L0 (spread 0) -> null, not +-0w"];
+    .qunit.assertTrue[null r 1;"crossed L0 (negative spread) -> null"];
+    .qunit.assertTrue[not null r 2;"normal L0 still gives a value"];
+    .qunit.assertTrue[0w>abs avg r where not null r;"avg over a series with a locked row stays finite"]};
+
 / ---- book_slope ----
 
 test_book_slope_opposite_signs_for_bid_vs_ask:{[t]

@@ -861,7 +861,6 @@ qopt,gk_vanna,function,6,s k rd rf sigma t
 qopt,gk_vega,function,6,s k rd rf sigma t
 qopt,gk_volga,function,6,s k rd rf sigma t
 qopt,implied_vol,function,7,price s k rd rf t is_call
-qpipe.job.alert_sink,alert_period,value,,
 qpipe.job.alert_sink,alerts,dict,,
 qpipe.job.alert_sink,breach_cols,value,,
 qpipe.job.alert_sink,dead,table,,
@@ -893,7 +892,7 @@ qpipe.job.cross_arbitrage,cross_arbitrage,table,,
 qpipe.job.cross_arbitrage,direct_side,function,3,row side size
 qpipe.job.cross_arbitrage,evaluate,function,3,state size as_of
 qpipe.job.cross_arbitrage,leg_book,function,1,row
-qpipe.job.cross_arbitrage,leg_times,function,2,state route
+qpipe.job.cross_arbitrage,leg_times,function,6,state sym route size route_sides direct_sides
 qpipe.job.cross_arbitrage,max_skew,value,,
 qpipe.job.cross_arbitrage,notional,value,,
 qpipe.job.cross_arbitrage,on_batch,function,2,t x

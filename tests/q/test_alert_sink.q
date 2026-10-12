@@ -57,9 +57,12 @@ afterNamespace_restore:{[]
     setenv[`UQF_SOURCE_CRED_ALERT_SINK;""];}
 
 / fx_limit_breach rows as the plant delivers them.
-breach:{[syms]
+breach:{[syms] breach_at[syms;t0]}
+
+/ The same, stamped by the plant at `tm`.
+breach_at:{[syms;tm]
     n:count syms;
-    ([] time:n#2026.10.09D09:00:00; sym:syms; book:n#`london; product:n#`spot; metric:n#`base_qty;
+    ([] time:n#tm; sym:syms; book:n#`london; product:n#`spot; metric:n#`base_qty;
         observed:n#2e6; cap:n#1e6; severity:n#`hard; utilisation:n#2f)}
 
 t0:2026.10.09D09:00:00
@@ -84,13 +87,27 @@ test_a_clean_batch_delivers_nothing:{[t]
     .qunit.assertEquals[count .alert_sinktest.calls;0;"no POST for an empty batch, another table or an idle tick"];
     .qunit.assertEquals[count .qpipe.job.alert_sink.alerts;0;"and nothing marked alerted"]};
 
-test_a_repeat_inside_the_window_is_suppressed_and_one_outside_is_not:{[t]
+test_a_replay_of_a_queued_breach_is_suppressed_and_a_later_report_is_not:{[t]
     ready[];
-    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach[enlist `EURUSD];.alert_sinktest.t0];1;"the first is queued"];
-    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach[enlist `EURUSD];.alert_sinktest.t0+0D00:01];0;"the same breach a minute on is quiet"];
-    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach[enlist `GBPUSD];.alert_sinktest.t0+0D00:01];1;"another pair is its own alert"];
-    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach[enlist `EURUSD];.alert_sinktest.t0+0D00:06];1;"past alert_period it is delivered again"];
-    .qunit.assertEquals[(.qpipe.job.alert_sink.flush .alert_sinktest.t0)`delivered;3;"three queued, three sent"]};
+    e:{[tm] breach_at[enlist `EURUSD;tm]};
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0;.z.p];1;"the first is queued"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0;.z.p];0;"the same row replayed is quiet"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0-0D00:01;.z.p];0;"and so is an older one"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[enlist `GBPUSD;.alert_sinktest.t0];.z.p];1;"another pair is its own alert"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .alert_sinktest.t0+0D00:05;.z.p];1;"a reminder the publisher stamped later is delivered"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[`EURUSD`EURUSD;.alert_sinktest.t0+0D00:10],breach_at[enlist `EURUSD;.alert_sinktest.t0+0D00:11];.z.p];1;"two new reports of one breach in a batch are one delivery"];
+    .qunit.assertEquals[(.qpipe.job.alert_sink.flush .alert_sinktest.t0)`delivered;4;"four queued, four sent"]};
+
+/ #1151: the sink once re-throttled on its OWN receipt clock with the
+/ publisher's period, so a reminder published exactly one period after the
+/ first, but received with less latency, fell inside the sink's period and was
+/ dropped. The receipt time must not matter.
+test_a_reminder_is_delivered_whatever_its_delivery_latency:{[t]
+    ready[];
+    p1:.alert_sinktest.t0;
+    p2:p1+0D00:05;
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[enlist `EURUSD;p1];p1+0D00:00:00.012];1;"the first, received 12ms after publication"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[enlist `EURUSD;p2];p2+0D00:00:00.003];1;"the reminder, received 3ms after: delivered"]};
 
 test_a_failing_target_is_retried_then_recorded:{[t]
     ready[];
@@ -109,7 +126,7 @@ test_a_failing_target_is_retried_then_recorded:{[t]
     .qunit.assertEquals[first d`error;"boom";"and the last error"];
     .qunit.assertEquals[first d`failed_at;.alert_sinktest.t0+0D00:00:20;"and when it gave up"];
     .qunit.assertEquals[count .qpipe.job.alert_sink.pending;0;"and the queue is clear"];
-    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach[enlist `EURUSD];.alert_sinktest.t0+0D00:00:30];1;"a dead breach leaves the throttle, so its next report is queued"]};
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[breach_at[enlist `EURUSD;.alert_sinktest.t0+0D00:00:30];.alert_sinktest.t0+0D00:00:30];1;"a dead breach leaves the dedup state, so its next report is queued"]};
 
 test_an_http_error_is_a_failed_delivery_not_a_delivered_one:{[t]
     ready[];
