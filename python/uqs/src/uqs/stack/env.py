@@ -29,6 +29,10 @@ from uqs.stack import qtree
 
 log = get_logger(__name__)
 
+#: The variable naming the deployment set's file to every TorQ process
+#: (stack/deployment.py writes it, scripts/torqcode/handlers/deployment.q reads it).
+DEPLOYMENT_ENV = "UQS_DEPLOYMENT_FILE"
+
 
 def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
     """The env vars torq.sh (and process.csv's ${VAR}/{VAR}+N placeholders)
@@ -73,6 +77,8 @@ def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
         "KDBDQEDB": str(paths.torqdata / "dqe" / "dqedb" / "database"),
         "KDBBASEPORT": str(paths.runtime_declaration.resolve_base_port(base_port)),
         "TORQPROCESSES": str(paths.generated_procs),
+        # What KDBSERVCODE's handlers/deployment.q lets TorQ discover (#1207).
+        DEPLOYMENT_ENV: str(paths.generated_deployment),
         "RLWRAP": "rlwrap",
         "QCON": "qcon",
         # $QCMD, else `q` - the one interpreter rule, which is TorQ's own.
