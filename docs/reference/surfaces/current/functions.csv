@@ -761,9 +761,11 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
+qetl.webhook,address,function,1,u
+qetl.webhook,auth_header,function,1,cred
 qetl.webhook,check,function,1,raw
 qetl.webhook,post,function,2,target body
-qetl.webhook,request,function,3,host path body
+qetl.webhook,request,function,4,host path cred body
 qetl.webhook,status_of,function,1,raw
 qexec,attribution_review,function,5,quotes trades horizons pip_factor ref_size
 qexec,attribution_review_with,function,6,conv quotes trades horizons pip_factor ref_size
