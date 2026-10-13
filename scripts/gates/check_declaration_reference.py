@@ -13,7 +13,9 @@ block's key table:
 
 Optional keys that no list names (`procname`, `note`, `start_with_all`, `transport`,
 `as_of`, the stream handlers) are held by the second direction only: the page
-can describe them, and cannot describe one that no longer exists.
+can describe them, and cannot describe one that no longer exists. A kind
+that forwards `.qetl.job.stream.passthrough` accepts stream_job.q's
+`passthrough_keys` without naming them, so those count as mentioned (#1232).
 
     python3 scripts/gates/check_declaration_reference.py
 """
@@ -63,17 +65,21 @@ def section_keys(page: str, heading: str) -> list[str]:
 def main() -> int:
     page = PAGE.read_text()
     problems: list[str] = []
+    # A kind that forwards `.qetl.job.stream.passthrough decl` accepts every
+    # key stream_job.q lists in passthrough_keys without naming it (#1232).
+    passthrough = set(q_list((CORE / "stream_job.q").read_text(), "passthrough_keys"))
     for heading, (file, lists, derived) in BLOCKS.items():
         if heading not in page:
             problems.append(f"{PAGE.name}: no section starting '{heading}'")
             continue
         source = "\n".join(f.read_text() for f in sorted(CORE.glob(file)))
+        forwarded = passthrough if ".qetl.job.stream.passthrough" in source else set()
         rows = section_keys(page, heading)
         listed = {k for name in lists for k in q_list(source, name)} - derived
         for k in sorted(listed - set(rows)):
             problems.append(f"{heading[3:]}: {file} declares `{k}` but the page has no row for it")
         for k in rows:
-            if not re.search(rf"`{k}\b", source):
+            if k not in forwarded and not re.search(rf"`{k}\b", source):
                 problems.append(
                     f"{heading[3:]}: the page describes `{k}`, which {file} never mentions"
                 )

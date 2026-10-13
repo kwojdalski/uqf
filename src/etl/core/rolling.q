@@ -97,7 +97,7 @@ required_keys:`procname`events`transform`publishes`windows`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
-optional_keys:`by`event_time`start_with_all`note
+optional_keys:`by`event_time,.qetl.job.stream.passthrough_keys
 
 / The columns the shell adds to the transform's input, with their types.
 shell_columns:`window`as_of`inside!"npb"
@@ -116,7 +116,8 @@ installed:`pending`dropped`last_as_of`covered_from`withheld`publish`now`on_batch
 /   windows (the window lengths, timespans), lateness (a timespan, 0D for
 /   none) and period (the timer, and the grid the windows end on); optionally
 /   by (grouping columns, default `sym), event_time (default `time),
-/   start_with_all, note
+/   the passthrough options of .qetl.job.stream.define (start_with_all, note,
+/   on_start, check with on_fail)
 / @return the name
 / @throws error naming the first problem found
 define:{[name;decl]
@@ -167,7 +168,7 @@ define:{[name;decl]
     (` sv ns,`evaluate) set evaluate[name;];
     (` sv ns,`on_endofday) set end_of_day[name;];
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`evaluate) (get ` sv ns,`now)[]}[ns];
-    extra:((`start_with_all`note inter key decl)#decl),enlist[`state]!enlist `pending`dropped`last_as_of`covered_from`withheld;
+    extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`dropped`last_as_of`covered_from`withheld;
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
         decl`procname;
         enlist decl`events;

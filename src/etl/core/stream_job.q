@@ -61,6 +61,24 @@ initial:(`symbol$())!();
 / was started under decides. `on_batch` is the job itself.
 required_declarations:`ns`procname`subscribe_to`publishes
 
+/ The options of `define` that every job KIND (bars, horizon, rolling,
+/ normalizer) accepts and forwards unchanged: job-level facts independent of
+/ what the kind computes. `define` validates them once, at declaration time;
+/ a kind neither re-validates nor hand-lists them. This is the one list: a
+/ kind's optional keys are its own plus these, so a new `define` option is
+/ added here and every kind has it (#1232; `check` (#944) once reached only
+/ the normalizer and `on_start` (#1112) no kind). tests/q/test_stream_job.q
+/ iterates kinds x this list. A kind that must refuse one says so, with the
+/ reason, in that test. `ephemeral` is not here: only horizon, which keeps
+/ state it does not replay, has a use for it.
+passthrough_keys:`start_with_all`note`on_start`check`on_fail
+
+/ The passthrough options a declaration carries, to forward to `define`.
+/ @param decl a kind instance's declaration dict
+/ @return the sub-dictionary of decl on `passthrough_keys`
+/ @eg .qetl.job.stream.passthrough `a`note!(1;"n")  ->  enlist[`note]!enlist "n"
+passthrough:{[decl] (passthrough_keys inter key decl)#decl}
+
 / Private: can this value be called?
 / .
 / Not `100h=type`, which is a LAMBDA only. The natural way to hand a job a
