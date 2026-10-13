@@ -23,6 +23,26 @@ specs_with_direct:{specs_route[],enlist (`USDPLN;3.9;3.8)};
 
 conv:.qcross.attribution_convention;
 
+tm_two:2026.01.01D00:00:02.000000000;
+
+/ --- desk review fixture (#1213) ---------------------------------------
+/ Mids at 0s, 1s, 2s. EURUSD is a G10 direct; USDPLN bridges via EUR with an
+/ inverted first leg; AUDPLN is EURAUD(inv)+EURPLN; EURMXN is EURUSD+USDMXN
+/ (EM via USD). GBPPLN has a direct book but its prescribed EURGBP leg has
+/ none, so it is unavailable, never rerouted.
+review_fixture_specs:{(
+    (`EURUSD;1.10;1.12;1.13);(`EURPLN;4.30;4.35;4.34);(`EURAUD;1.60;1.62;1.61);
+    (`USDMXN;17.0;17.1;17.2);(`GBPPLN;5.40;5.45;5.48))};
+
+review_fixture_quotes:{
+    rows:raze {[s] (mk_row[tm_zero;s 0;s 1];mk_row[tm_one;s 0;s 2];mk_row[tm_two;s 0;s 3])} each review_fixture_specs[];
+    `sym`time xasc flip flip rows};
+
+/ A buy at 0s and a sell at 1s in each of five pairs.
+review_fixture_trades:{
+    pairs:`EURUSD`USDPLN`AUDPLN`EURMXN`GBPPLN;
+    ([] time:(2*count pairs)#tm_zero,tm_one; sym:raze pairs,'pairs; side:(2*count pairs)#1 -1)};
+
 legs_of:{[pair] (.qcross.attribution_route pair)`leg};
 
 / --- routes ------------------------------------------------------------
@@ -179,3 +199,86 @@ test_attribution_refuses_unsupported_currency_and_unsorted_quotes:{[t]
     q:mk_quotes specs_route[];
     .qunit.assertThrows[{.qexec.cross_markout_attribution[x;`USDXYZ;1;tm_zero;tm_one;10000;1]};q;"*unsupported currency XYZ*";"unsupported currency"];
     .qunit.assertThrows[{.qexec.cross_markout_attribution[x;`USDPLN;1;tm_zero;tm_one;10000;1]};reverse q;"*must be sorted*";"unsorted quotes"]};
+
+/ --- desk review (#1213) ---------------------------------------------------
+
+review:{[] .qexec.attribution_review[review_fixture_quotes[];review_fixture_trades[];enlist 0D00:00:01;10000;1]};
+
+test_review_matches_hand_computed_totals:{[t]
+    r:review[];
+    / EURUSD: buy 1.10->1.12 = +200 pips, sell 1.12->1.13 = -100 pips
+    e:first select from r where pair=`EURUSD,kind=`total;
+    .testutil.assertApprox[e`total_pips;100f;1e-6;"EURUSD total"];
+    .testutil.assertApprox[e`mean_pips;50f;1e-6;"EURUSD mean"];
+    .qunit.assertEquals[e`n_trades;2;"two trades"];
+    .qunit.assertEquals[count select from r where pair=`EURUSD,kind=`leg;1;"a direct pair has one leg row"];
+    / EURMXN = EURUSD*USDMXN: buy 18.7->19.152 = +4520, sell 19.152->19.436 = -2840
+    m:first select from r where pair=`EURMXN,kind=`total;
+    .testutil.assertApprox[m`total_pips;1680f;1e-6;"EURMXN total"];
+    legs:select from r where pair=`EURMXN,kind=`leg;
+    .qunit.assertEquals[legs`leg;`EURUSD`USDMXN;"EM via USD legs"];
+    .qunit.assertEquals[distinct r`horizon;enlist 0D00:00:01;"one horizon"];
+    .qunit.assertEquals[distinct r`version;enlist `proposed_v1;"version on every row"]};
+
+test_review_shares_sum_to_one_with_residual:{[t]
+    r:review[];
+    parts:select s:sum share by pair from r where kind in `leg`residual;
+    .testutil.assertApprox[exec s from parts;(count parts)#1f;1e-9;"leg shares plus residual share are 1 for every pair"];
+    tot:select from r where kind=`total;
+    .testutil.assertApprox[tot`share;(count tot)#1f;1e-12;"total share is 1"];
+    / the legs and residual add up to the total in pips too
+    pair_sums:exec s:sum total_pips by pair from r where kind in `leg`residual;
+    totals:exec total_pips by pair from tot;
+    .testutil.assertApprox[pair_sums`GBPPLN;totals`GBPPLN;1e-9;"GBPPLN: all of it is residual"];
+    .testutil.assertApprox[pair_sums`USDPLN;totals`USDPLN;1e-6;"USDPLN reconciles"]};
+
+test_review_counts_unavailable_legs_and_never_reroutes:{[t]
+    r:review[];
+    g:select from r where pair=`GBPPLN;
+    .qunit.assertEquals[(select from g where kind=`leg)`leg;`EURGBP`EURPLN;"GBPPLN keeps its prescribed route though a GBPPLN book exists"];
+    .qunit.assertEquals[(select from g where kind=`leg)`n_unavailable;2 0;"EURGBP unavailable for both trades, EURPLN never"];
+    .qunit.assertEquals[first exec n_unavailable from g where kind=`residual;2;"the residual is unallocated for both trades"];
+    .qunit.assertTrue[all null (select from g where kind=`leg)`total_pips;"a leg never priced has a null total, not a 0"];
+    .qunit.assertEquals[first exec n_unavailable from g where kind=`total;0;"the total itself is available"];
+    .testutil.assertApprox[first exec total_pips from g where kind=`residual;200f;1e-6;"buy 5.40->5.45 +500, sell 5.45->5.48 -300, all residual"];
+    .qunit.assertEquals[first exec route from g;`$"EURGBP(inv)+EURPLN";"route text shows the inversion"];
+    .qunit.assertEquals[sum exec n_unavailable from r where pair<>`GBPPLN,kind in `leg`total;0;"no other pair has an unavailable leg"]};
+
+test_review_horizons_and_pip_factor_dict:{[t]
+    q:review_fixture_quotes[];
+    t_zero:tm_zero;
+    tr:select from review_fixture_trades[] where sym=`EURUSD,time=t_zero;
+    r:.qexec.attribution_review[q;tr;0D00:00:01 0D00:00:02;(enlist `EURUSD)!enlist 100f;1];
+    t_row:select from r where kind=`total;
+    .qunit.assertEquals[t_row`horizon;0D00:00:01 0D00:00:02;"one total row per horizon"];
+    .testutil.assertApprox[t_row`total_pips;2 3f;1e-9;"pip_factor 100: 0.02 and 0.03 of price"]};
+
+test_review_refuses_bad_input:{[t]
+    q:review_fixture_quotes[];
+    tr:review_fixture_trades[];
+    .qunit.assertThrows[{.qexec.attribution_review[x 0;delete side from x 1;enlist 0D00:00:01;10000;1]};(q;tr);"*missing column side*";"trades without side"];
+    .qunit.assertThrows[{.qexec.attribution_review[x 0;x 1;`timespan$();10000;1]};(q;tr);"*non-empty list of positive timespans*";"no horizons"]};
+
+/ --- route table -------------------------------------------------------------
+
+test_route_table_covers_every_pair_with_inversion_text:{[t]
+    rt:.qcross.attribution_route_table conv;
+    .qunit.assertEquals[rt`pair;.qcross.attribution_pairs conv;"one row per supported pair, canonical order"];
+    .qunit.assertEquals[first exec route from rt where pair=`AUDPLN;`$"EURAUD(inv)+EURPLN";"AUDPLN bridges via EUR with an inverted first leg"];
+    .qunit.assertEquals[first exec usd_route from rt where pair=`AUDPLN;`$"AUDUSD+USDPLN";"the USD baseline for AUDPLN"];
+    .qunit.assertEquals[rt`n_legs;count each .qcross.attribution_route each rt`pair;"n_legs matches the route"]};
+
+test_route_differences_list_non_usd_hubs_not_g10_directs:{[t]
+    d:(.qcross.attribution_route_differences conv)`pair;
+    .qunit.assertTrue[`AUDPLN in d;"AUDPLN differs from via-USD"];
+    .qunit.assertTrue[`USDPLN in d;"USDPLN differs from via-USD"];
+    .qunit.assertTrue[`GBPHUF in d;"GBPHUF differs from via-USD"];
+    g10:exec ccy from conv[`currencies] where tier=`G10;
+    all_pairs:.qcross.attribution_pairs conv;
+    ends:.qccy.ccy_pair_legs each all_pairs;
+    g10_only:all_pairs where {[g;e] (e[`base] in g) and e[`quote] in g}[g10;] each ends;
+    .qunit.assertTrue[45=count g10_only;"45 G10 pairs"];
+    .qunit.assertEquals[d inter g10_only;`symbol$();"no G10 pair is a difference"];
+    .qunit.assertTrue[not any `EURTRY`EURZAR`EURCNH`USDMXN`USDTRY in d;"designated directs and EM-via-USD pairs match the baseline"];
+    pln_like:all_pairs where {[e] (e[`base] in `PLN`HUF`CZK`RON) or e[`quote] in `PLN`HUF`CZK`RON} each ends;
+    .qunit.assertTrue[all d in pln_like;"every difference involves a EUR-bridged currency"]};

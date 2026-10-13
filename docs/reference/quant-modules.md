@@ -149,3 +149,66 @@ pass another convention dict (checked by `attribution_convention_check`) to
 and bump `version`. The markout jobs under `src/etl` do not call the cross
 decomposition today, so there is no job to switch; any job that does should call
 `cross_markout_attribution`.
+
+### Desk review of the proposed convention
+
+Because `proposed_v1` is unapproved, two pure functions print what it does so a
+desk can approve or amend it with numbers:
+
+- `.qcross.attribution_route_table[conv]` - every supported pair (435 under
+  `proposed_v1`) with its route as text (`EURAUD(inv)+EURPLN`), the route under
+  a naive "every EM currency via USD" baseline, and `differs_from_usd`.
+  `.qcross.attribution_route_differences[conv]` keeps only the differing rows
+  (110 under `proposed_v1`: every pair that involves PLN, HUF, CZK or RON except
+  where the two routes coincide); G10 pairs and designated directs never appear.
+  AUDPLN is the typical case: `EURAUD(inv)+EURPLN` against `AUDUSD+USDPLN`.
+- `.qexec.attribution_review[quotes;trades;horizons;pip_factor;ref_size]`
+  (`attribution_review_with[conv;...]` for another convention) - for each pair,
+  horizon and route leg: `n_trades`, `total_pips`, `mean_pips`, `share` of the
+  pair's total, `n_unavailable` (trades where the prescribed book was missing),
+  then the `residual` and `total` rows, with the route text and the convention
+  `version`. The leg shares plus the residual share sum to 1.
+  `scripts/examples/attribution_review_example.q` prints both on a fixed
+  fixture.
+
+### Migrating a markout job to `cross_markout_attribution`
+
+A job that called `cross_markout_decomp` (shortest path over the books that
+exist) switches to `cross_markout_attribution`, whose route comes from the
+convention. What changes in the output:
+
+  | `cross_markout_decomp`                                           | `cross_markout_attribution`                                                                                                                               |
+  | ---                                                              | ---                                                                                                                                                       |
+  | one row per leg of the shortest path                             | one `kind=leg` row per prescribed leg (`step`, `leg`, `invert`, `price_t0`, `price_t1`, `pips`)                                                           |
+  | `contribution_pips` (price units x pip factor, unsigned by side) | `pips`, already signed by `side`                                                                                                                          |
+  | nothing for a move the legs do not explain                       | a `kind=residual` row: total less allocations                                                                                                             |
+  | no total                                                         | a `kind=total` row: the signed markout of the pair's own reference price                                                                                  |
+  | no status                                                        | `status`: `ok`, `unavailable`, `reconciled`, `unallocated`                                                                                                |
+  | no version                                                       | `version` on every row                                                                                                                                    |
+  | a missing book silently picks another path                       | a missing prescribed book makes that leg `unavailable` with null `pips` (the residual is then `unallocated`: the whole total); the route is never changed |
+
+Persist `version` with the rows. It is a symbol column, so the HDB table needs
+no special handling beyond being part of the schema; when the desk replaces the
+convention the new `version` separates old rows from new ones and a query can
+group by it. `kind`, `step` (null on `residual` and `total`) and `status` are
+persisted too.
+
+<!-- q-example: run -->
+```q
+t0:2026.01.01D00:00:00.000000000;
+t1:t0+0D00:00:01;
+mk_row:{[tm;sym;mid] `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes!(tm;sym;enlist mid-0.0001;enlist 1e9;enlist mid+0.0001;enlist 1e9)};
+/ EURUSD and EURPLN exist; the prescribed route for USDPLN is EURUSD(inv)+EURPLN
+quotes:`sym`time xasc flip flip (mk_row[t0;`EURUSD;1.10];mk_row[t1;`EURUSD;1.12];mk_row[t0;`EURPLN;4.30];mk_row[t1;`EURPLN;4.35]);
+/ before: decomp:.qexec.cross_markout_decomp[quotes;`USDPLN;t0;t1;10000;1]
+rows:.qexec.cross_markout_attribution[quotes;`USDPLN;1;t0;t1;10000;1];
+/ the HDB output table: one row per leg + residual + total, version included
+out:select time,sym,kind,step,leg,invert,pips,status,version from rows;
+cols out
+exec leg from out where kind=`leg
+/ legs plus residual reconcile to the total
+abs[(sum exec pips from out where kind in `leg`residual)-exec first pips from out where kind=`total]<1e-6
+/ a missing prescribed book: no EURPLN book, so that leg is unavailable, not rerouted
+gap:`sym`time xasc flip flip (mk_row[t0;`EURUSD;1.10];mk_row[t1;`EURUSD;1.12];mk_row[t0;`USDPLN;3.9];mk_row[t1;`USDPLN;3.8]);
+exec status from .qexec.cross_markout_attribution[gap;`USDPLN;1;t0;t1;10000;1] where kind in `leg`residual
+```

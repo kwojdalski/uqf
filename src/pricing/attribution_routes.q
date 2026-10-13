@@ -155,3 +155,52 @@ attribution_convention_check:{[conv]
     if[not all (conv`direct) in attribution_pairs conv; '"attribution_convention: direct pairs must be canonical (base ranks before quote)"];
     attribution_route_with[conv;] each attribution_pairs conv;
     conv};
+
+/ The route of a pair as one readable symbol: the legs in chain order, each
+/ inverted leg suffixed (inv), joined by +. A direct pair is just its own name.
+/ @param route a table from attribution_route_with, `leg and `invert columns
+/ @return a symbol, e.g. `EURAUD(inv)+EURPLN
+/ @eg .qcross.attribution_route_text .qcross.attribution_route `AUDPLN  -> `$"EURAUD(inv)+EURPLN"
+/ @eg .qcross.attribution_route_text .qcross.attribution_route `EURUSD  -> `EURUSD
+attribution_route_text:{[route]
+    parts:(string route`leg),'?[route`invert;count[route]#enlist "(inv)";count[route]#enlist ""];
+    `$"+" sv parts};
+
+/ The comparison convention for the desk review: the same convention with every
+/ EM currency bridged via USD instead of its own bridge. A pair whose route
+/ differs from it is one the proposal routes through a non-USD hub, e.g. AUDPLN
+/ via EUR. G10 pairs and designated directs are identical under both, so they
+/ never appear as differences.
+/ @param conv a convention dict
+/ @return conv with every EM bridge replaced by USD
+/ @eg first exec bridge from .qcross.attribution_usd_baseline[.qcross.attribution_convention]`currencies where ccy=`PLN  -> `USD
+attribution_usd_baseline:{[conv]
+    conv[`currencies]:update bridge:`USD from conv`currencies where tier=`EM;
+    conv};
+
+/ The route table for the desk to read: every supported pair, its route, and
+/ whether it differs from the USD baseline.
+/ @param conv a convention dict
+/ @return table `pair`n_legs`route`usd_route`differs_from_usd`version, one row
+/   per pair of attribution_pairs, route and usd_route as attribution_route_text
+/ @eg count .qcross.attribution_route_table .qcross.attribution_convention  -> 435
+/ @eg exec route from .qcross.attribution_route_table[.qcross.attribution_convention] where pair=`AUDPLN  -> enlist `$"EURAUD(inv)+EURPLN"
+attribution_route_table:{[conv]
+    pairs:attribution_pairs conv;
+    base_conv:attribution_usd_baseline conv;
+    routes:attribution_route_with[conv;] each pairs;
+    base_routes:attribution_route_with[base_conv;] each pairs;
+    route_txt:attribution_route_text each routes;
+    base_txt:attribution_route_text each base_routes;
+    ([] pair:pairs; n_legs:count each routes; route:route_txt; usd_route:base_txt;
+        differs_from_usd:not route_txt=base_txt; version:(count pairs)#conv`version)};
+
+/ The pairs whose proposed route differs from the USD baseline, i.e. the ones
+/ the desk has to look at: every pair involving a currency that bridges
+/ elsewhere than USD (PLN, HUF, CZK, RON under proposed_v1) except where the
+/ other end makes the routes coincide.
+/ @param conv a convention dict
+/ @return the rows of attribution_route_table where differs_from_usd
+/ @eg `AUDPLN in exec pair from .qcross.attribution_route_differences .qcross.attribution_convention  -> 1b
+attribution_route_differences:{[conv]
+    select from attribution_route_table[conv] where differs_from_usd};
