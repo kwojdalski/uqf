@@ -86,3 +86,69 @@ cross_markout_attribution_with:{[conv;quotes;sym;side;t0;t1;pip_factor;ref_size]
 / @eg .qexec.cross_markout_attribution[quotes;`USDPLN;1;t0;t1;10000;1]`leg  -> `EURUSD`EURPLN``
 cross_markout_attribution:{[quotes;sym;side;t0;t1;pip_factor;ref_size]
     cross_markout_attribution_with[.qcross.attribution_convention;quotes;sym;side;t0;t1;pip_factor;ref_size]};
+
+/ Private: the sum of the non-null values, null if there are none (q's own sum
+/ of all-null is 0, which would read as a priced zero).
+/ @private
+sum_or_null:{$[any not null x;sum x;0n]};
+
+/ Desk review of an attribution convention against real trades: for each pair,
+/ horizon and route leg, how much of the markout the convention attributes
+/ where, and how often a leg could not be attributed. Runs
+/ cross_markout_attribution_with for every trade at every horizon (t0 is the
+/ trade time, t1 is t0 plus the horizon), so it is as expensive as that.
+/ Pure: reads its arguments, writes nothing.
+/ @param conv a convention dict, e.g. .qcross.attribution_convention
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
+/ @param trades table with at least `time`sym`side (side 1 buy, -1 sell)
+/ @param horizons non-empty list of positive timespans
+/ @param pip_factor one factor for every pair, or a dict pair->factor
+/ @param ref_size the size swept for every price
+/ @return table `pair`horizon`kind`step`leg`invert`n_trades`n_unavailable`total_pips`mean_pips`share`route`version,
+/   one row per pair, horizon and route leg, then that pair's `residual and
+/   `total rows. total_pips and mean_pips skip null allocations (both null if none was priced). share is
+/   total_pips over the pair-horizon's total row (leg shares plus the residual
+/   share sum to 1, the total row is 1). n_unavailable counts trades whose row
+/   was neither `ok nor `reconciled: a missing prescribed book, never rerouted.
+/ @throws error if trades lacks a column, horizons is empty or not positive,
+/   trades is empty, or cross_markout_attribution_with throws
+/ @eg .qexec.attribution_review_with[.qcross.attribution_convention;.attributiontest.review_fixture_quotes[];.attributiontest.review_fixture_trades[];enlist 0D00:00:01;10000;1]`share
+attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
+    miss:`time`sym`side except cols trades;
+    if[count miss; '"attribution_review: trades is missing column ",string first miss];
+    if[0=count trades; '"attribution_review: no trades"];
+    horizons:(),horizons;
+    if[(0=count horizons) or any horizons<=0D; '"attribution_review: horizons must be a non-empty list of positive timespans"];
+    one:{[conv;quotes;pf;rs;trades;i;h]
+        tr:trades i;
+        pair:.qccy.normalize_ccy_pair tr`sym;
+        f:$[99h=type pf;pf pair;pf];
+        r:cross_markout_attribution_with[conv;quotes;pair;tr`side;tr`time;tr[`time]+h;f;rs];
+        update pair:pair,horizon:h from r};
+    n:count trades;
+    m:count horizons;
+    ii:(m*n)#til n;
+    hh:raze n#'horizons;
+    rows:raze one[conv;quotes;pip_factor;ref_size;trades;]'[ii;hh];
+    agg:select n_trades:count i,n_unavailable:sum `long$not status in `ok`reconciled,
+        total_pips:.qexec.sum_or_null pips,mean_pips:avg pips
+        by pair,horizon,kind,step,leg,invert,version from rows;
+    agg:0!agg;
+    agg:update share:total_pips%sum total_pips where kind=`total by pair,horizon from agg;
+    agg:update ord:`leg`residual`total?kind from agg;
+    agg:`pair`horizon`ord`step xasc agg;
+    route_txt:(distinct exec pair from agg)!{[conv;p] .qcross.attribution_route_text .qcross.attribution_route_with[conv;p]}[conv;] each distinct exec pair from agg;
+    agg:update route:route_txt pair from agg;
+    `pair`horizon`kind`step`leg`invert`n_trades`n_unavailable`total_pips`mean_pips`share`route`version#agg};
+
+/ attribution_review_with under the proposed default convention.
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
+/ @param trades table with at least `time`sym`side
+/ @param horizons non-empty list of positive timespans
+/ @param pip_factor one factor for every pair, or a dict pair->factor
+/ @param ref_size the size swept for every price
+/ @return table, see attribution_review_with
+/ @throws error as attribution_review_with does
+/ @eg .qexec.attribution_review[.attributiontest.review_fixture_quotes[];.attributiontest.review_fixture_trades[];enlist 0D00:00:01;10000;1]`pair
+attribution_review:{[quotes;trades;horizons;pip_factor;ref_size]
+    attribution_review_with[.qcross.attribution_convention;quotes;trades;horizons;pip_factor;ref_size]};
