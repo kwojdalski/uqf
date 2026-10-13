@@ -235,7 +235,17 @@ test_the_facts_describe_a_scored_window:{[t]
     .qunit.assertEquals[f`scored_fills`horizons`unpriced;4 2 2;
         "four fills, two horizons, and the unpriced rows counted"]};
 
-\
+/ #1281: the output's key leaves `time` out and its `time` is trade_time+horizon,
+/ so a fill in the last seconds of a day has its live rows in the NEXT day's
+/ partition and its twin's 1s row in this one. Only `replace clears across that
+/ boundary (io_hdb's spill) - an upsert would leave both rows. So the worker
+/ must DECLARE replace, or a plain refill duplicates fills near midnight.
+test_a_refill_replaces_so_the_live_copy_across_midnight_is_cleared:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.on_conflict `hdb_demo_markouts_backfill;`replace;
+        "declared replace: upsert does not clear the next day's live copy of a key"];
+    .qunit.assertEquals[`time in (),.qetl.job.bounded.def[`hdb_demo_markouts_backfill]`target_key;0b;
+        "the spill only applies while time is out of the key"]};
+
 
 / --- fill identity (#1080) -----------------------------------------------
 
@@ -248,14 +258,14 @@ twin_fills:{[ids]
     inputs}
 
 test_scoring_carries_each_fills_id_onto_its_horizons:{[t]
-    f:.mbftest.scored .mbftest.twin_fills `fxa`fxb;
+    f:.mbftest.scored[.mbftest.twin_fills[`fxa`fxb]];
     .qunit.assertEquals[f`fill_id;`fxa`fxa`fxb`fxb;"fill i's id on its rows, one per horizon"]};
 
 test_the_target_key_names_the_fill_so_twins_are_not_collapsed:{[t]
     / On master the key was (sym;trade_time;horizon): the two fills' markouts
     / collapsed to one row per horizon, 2 rows, losing a fill.
     key_cols:.qetl.job.bounded.def[`hdb_demo_markouts_backfill]`target_key;
-    f:.mbftest.scored .mbftest.twin_fills `fxa`fxb;
+    f:.mbftest.scored[.mbftest.twin_fills[`fxa`fxb]];
     `mbf_twin set 0#f;
     .qetl.io.write_keyed[.qetl.io.memory;`mbf_twin;f;`on_conflict`row_key!(`upsert;key_cols)];
     .qetl.io.write_keyed[.qetl.io.memory;`mbf_twin;f;`on_conflict`row_key!(`upsert;key_cols)];
@@ -265,17 +275,17 @@ test_the_target_key_names_the_fill_so_twins_are_not_collapsed:{[t]
 test_a_legacy_fill_without_an_id_still_scores_and_keys:{[t]
     / A partition written before the column holds null ids (hdb-check --fix):
     / the row scores, keyed as it was by sym and time.
-    f:.mbftest.scored .mbftest.twin_fills 2#`;
+    f:.mbftest.scored[.mbftest.twin_fills[2#`]];
     .qunit.assertEquals[(count f;distinct f`fill_id);(4;enlist `);"null ids pass through, unmapped"]};
 
 test_score_carries_each_fills_own_id_with_shuffled_fills:{[t]
     / fills out of time order: fill_id must come from the row, not from position
-    fills:([] time:2026.09.17D10:00:09 2026.09.17D10:00:00 2026.09.17D10:00:04; sym:`EURUSD`GBPUSD`EURUSD;
+    shuffled:([] time:2026.09.17D10:00:09 2026.09.17D10:00:00 2026.09.17D10:00:04; sym:`EURUSD`GBPUSD`EURUSD;
         side:1 1 1; trade_price:1.1 1.3 1.2; pip_factor:10000 10000 10000; fill_id:`f9`f0`f4);
-    quotes:([] time:2026.09.17D10:00:00; sym:`EURUSD; bid:1.1; ask:1.1);
-    r:.qpipe.transform.demo_markouts.score[fills;quotes];
+    quotes:([] time:enlist 2026.09.17D10:00:00; sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.1);
+    r:.qpipe.transform.demo_markouts.score[shuffled;quotes];
     pairs_in:.qsynth.pairs;
-    keep:fills where fills[`sym] in pairs_in;
+    keep:shuffled where shuffled[`sym] in pairs_in;
     .qunit.assertEquals[r`fill_id;raze (count .qpipe.transform.demo_markouts.horizons)#'keep`fill_id;"each row carries its own fill's id"];
     .qunit.assertEquals[r`trade_price;raze (count .qpipe.transform.demo_markouts.horizons)#'keep`trade_price;"and its own price"]};
 
