@@ -106,6 +106,27 @@ test_check_stale_quotes_reads_the_latest_time_not_the_last_row:{[t]
     .qunit.assertEquals[r`last_ts;enlist t0;"the latest quote time, wherever its row sits"];
     .qunit.assertEquals[r`status;enlist `ok;"3s old is within a 5s max_age, so ok - not a false stale"]};
 
+test_check_stale_quotes_flags_a_sym_whose_quotes_all_have_null_time:{[t]
+    / #1277: a null time passed time<=cutoff, max of all-null times is -0Wp and
+    / cutoff - -0Wp overflowed negative, so age>max_age was false and the sym
+    / read ok. No timed quote at or before the cutoff means stale, null last_ts.
+    t0:2026.01.01D10:00:00.000000000;
+    quotes:(mk_quotes_row[0Np;`EURUSD;1.0999;1.1001];mk_quotes_row[t0;`GBPUSD;1.2999;1.3001]);
+    r:.qdqc.check_stale_quotes[quotes;t0;0D00:05];
+    .qunit.assertEquals[exec sym!status from r;`EURUSD`GBPUSD!`stale`ok;"all-null-time EURUSD is stale, timed GBPUSD is ok"];
+    .qunit.assertTrue[null first exec last_ts from r where sym=`EURUSD;"no timed quote -> null last_ts"];
+    .qunit.assertTrue[null first exec age from r where sym=`EURUSD;"no timed quote -> null age, not an overflowed one"];
+    .qunit.assertEquals[first r`sym;`EURUSD;"stale sorts before ok"]};
+
+test_check_stale_quotes_ignores_null_time_rows_beside_real_quotes:{[t]
+    / null-time rows neither count as a quote nor mask the real ones.
+    t0:2026.01.01D10:00:00.000000000;
+    fresh:(mk_quotes_row[0Np;`EURUSD;1.0999;1.1001];mk_quotes_row[t0-0D00:00:02;`EURUSD;1.0999;1.1001]);
+    old:(mk_quotes_row[0Np;`GBPUSD;1.2999;1.3001];mk_quotes_row[t0-0D00:01;`GBPUSD;1.2999;1.3001]);
+    r:`sym xasc .qdqc.check_stale_quotes[fresh,old;t0;0D00:00:05];
+    .qunit.assertEquals[exec sym!status from r;`EURUSD`GBPUSD!`ok`stale;"judged on the timed quotes only"];
+    .qunit.assertEquals[exec sym!last_ts from r;`EURUSD`GBPUSD!(t0-0D00:00:02;t0-0D00:01);"last_ts ignores the null times"]};
+
 test_summarize_checks_includes_only_non_ok_rows:{[t]
     t0:2026.01.01D00:00:00.000000000;
     quotes:(enlist mk_quotes_row[t0;`EURUSD;1.1005;1.1000]),(enlist mk_quotes_row[t0;`GBPUSD;1.2999;1.3001]);
