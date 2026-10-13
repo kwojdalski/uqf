@@ -39,7 +39,7 @@ contract_driver:{[]
     .qetl.job.stream.reset `crypto_book_1s;
     `.crypto_book_1stest.clock set t0;
     stand_in_clock[];
-    feed upd[t0+0D00:00:00.300;`a;`BTC;62000f];
+    feed[upd[t0+0D00:00:00.300;`a;`BTC;62000f]];
     .qpipe.job.crypto_book_1s.on_endofday 2026.10.09;
     restore_clock[];
     }
@@ -70,9 +70,9 @@ test_the_declaration_is_the_one_second_source_time_job:{[t]
 
 test_out_of_order_updates_in_one_second_keep_the_latest_by_source_time:{[t]
     fresh[];
-    feed upd[t0+0D00:00:00.900;`a;`BTC;62001f];
-    feed upd[t0+0D00:00:00.100;`a;`BTC;61990f];
-    feed upd[t0+0D00:00:00.500;`a;`BTC;62000f];
+    feed[upd[t0+0D00:00:00.900;`a;`BTC;62001f]];
+    feed[upd[t0+0D00:00:00.100;`a;`BTC;61990f]];
+    feed[upd[t0+0D00:00:00.500;`a;`BTC;62000f]];
     .qpipe.job.crypto_book_1s.close_ready t0+0D00:00:01.5;
     b:published[];
     .qunit.assertEquals[count b;1;"one snapshot for one second"];
@@ -82,8 +82,8 @@ test_out_of_order_updates_in_one_second_keep_the_latest_by_source_time:{[t]
 
 test_an_update_exactly_on_a_second_boundary_opens_the_next_window:{[t]
     fresh[];
-    feed upd[t0+0D00:00:00.999999999;`a;`BTC;62000f];
-    feed upd[t0+0D00:00:01;`a;`BTC;62010f];
+    feed[upd[t0+0D00:00:00.999999999;`a;`BTC;62000f]];
+    feed[upd[t0+0D00:00:01;`a;`BTC;62010f]];
     .qpipe.job.crypto_book_1s.close_ready t0+0D00:00:09;
     b:`bar_start xasc published[];
     .qunit.assertEquals[b`bar_start;t0,t0+0D00:00:01;"two windows"];
@@ -91,9 +91,9 @@ test_an_update_exactly_on_a_second_boundary_opens_the_next_window:{[t]
 
 test_two_venues_for_one_sym_stay_separate:{[t]
     fresh[];
-    feed upd[t0+0D00:00:00.200;`a;`BTC;62000f];
-    feed upd[t0+0D00:00:00.800;`b;`BTC;61000f];
-    feed upd[t0+0D00:00:00.300;`a;`ETH;3000f];
+    feed[upd[t0+0D00:00:00.200;`a;`BTC;62000f]];
+    feed[upd[t0+0D00:00:00.800;`b;`BTC;61000f]];
+    feed[upd[t0+0D00:00:00.300;`a;`ETH;3000f]];
     .qpipe.job.crypto_book_1s.close_ready t0+0D00:00:09;
     b:`venue`sym xasc published[];
     .qunit.assertEquals[(b`venue;b`sym);(`a`a`b;`BTC`ETH`BTC);"a snapshot per (venue, sym)"];
@@ -101,14 +101,14 @@ test_two_venues_for_one_sym_stay_separate:{[t]
 
 test_a_second_with_no_update_has_no_row_and_nothing_is_carried_forward:{[t]
     fresh[];
-    feed upd[t0+0D00:00:00.500;`a;`BTC;62000f];
-    feed upd[t0+0D00:00:03.500;`a;`BTC;62003f];
+    feed[upd[t0+0D00:00:00.500;`a;`BTC;62000f]];
+    feed[upd[t0+0D00:00:03.500;`a;`BTC;62003f]];
     .qpipe.job.crypto_book_1s.close_ready t0+0D00:00:09;
     .qunit.assertEquals[(published[])`bar_start;t0,t0+0D00:00:03;"seconds 1 and 2 held no update: no row, no forward fill"]};
 
 test_a_window_closes_after_its_lateness_and_publishes_once:{[t]
     fresh[];
-    feed upd[t0+0D00:00:00.500;`a;`BTC;62000f];
+    feed[upd[t0+0D00:00:00.500;`a;`BTC;62000f]];
     .qunit.assertEquals[.qpipe.job.crypto_book_1s.close_ready t0+0D00:00:01.499999999;0;"one nanosecond inside the allowance: still open"];
     .qunit.assertEquals[.qpipe.job.crypto_book_1s.close_ready t0+0D00:00:01.5;1;"end plus 0.5s: closed"];
     .qunit.assertEquals[.qpipe.job.crypto_book_1s.close_ready t0+0D00:00:09;0;"never again"];
@@ -117,9 +117,9 @@ test_a_window_closes_after_its_lateness_and_publishes_once:{[t]
 
 test_a_late_update_within_the_allowance_amends_its_snapshot:{[t]
     fresh[];
-    feed upd[t0+0D00:00:00.200;`a;`BTC;62000f];
+    feed[upd[t0+0D00:00:00.200;`a;`BTC;62000f]];
     `.crypto_book_1stest.clock set t0+0D00:00:01.3;
-    feed upd[t0+0D00:00:00.700;`a;`BTC;62005f];
+    feed[upd[t0+0D00:00:00.700;`a;`BTC;62005f]];
     .qpipe.job.crypto_book_1s.close_ready t0+0D00:00:01.5;
     b:published[];
     .qunit.assertEquals[(first b`source_time;first first b`bid_prices);(t0+0D00:00:00.700;62005f);"the late update is the latest, and is folded in"];
@@ -127,10 +127,10 @@ test_a_late_update_within_the_allowance_amends_its_snapshot:{[t]
 
 test_an_update_after_its_snapshot_is_out_is_dropped_and_logged:{[t]
     fresh[];
-    feed upd[t0+0D00:00:00.200;`a;`BTC;62000f];
+    feed[upd[t0+0D00:00:00.200;`a;`BTC;62000f]];
     `.crypto_book_1stest.clock set t0+0D00:00:02;
     .qpipe.job.crypto_book_1s.close_ready clock;
-    feed upd[t0+0D00:00:00.700;`a;`BTC;62005f];
+    feed[upd[t0+0D00:00:00.700;`a;`BTC;62005f]];
     .qpipe.job.crypto_book_1s.close_ready t0+0D00:00:09;
     .qunit.assertEquals[count published[];1;"the published snapshot stands, not republished"];
     d:.qpipe.job.crypto_book_1s.dropped;

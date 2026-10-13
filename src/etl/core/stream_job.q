@@ -305,7 +305,7 @@ reset:{[job]
     def job;
     if[job in key initial;
         s:first initial job;
-        {[ns;k;v] (` sv ns,k) set v}[namespace job]'[key s;value s]];
+        {[ns;k;v] (` sv ns,k) set v}[namespace[job]]'[key s;value s]];
     / and what its carry knows of that state (#1015)
     carried_to::(enlist job) _ carried_to;
     carry_log::(enlist job) _ carry_log;
@@ -607,12 +607,12 @@ start:{[job;tr]
         today:plant_today tr;
         r:@[{[job;tr;tbls;h;replay]
                 if[replay and `carry in key def job; catch_up[job;tr;tbls;h]];
-                tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;handler job];
+                tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;handler[job]];
             replay;{[e] (0b;e)}];
         pub set live;
         `.qetl.job.stream.replaying set 0b;
         if[replay and `carry in key d; missed_end_of_day[job;today]];
-        replayed job;
+        replayed[job];
         if[not first r; 'last r];
         if[`on_replayed in key d; (d`on_replayed)[]];
         / Protected: a record that cannot be written must never stop the job
@@ -759,7 +759,7 @@ restore:{[job;h;x]
     r:$[job in key carry_log; carry_log job; (`recording;0;())];
     if[`full=r 0;
         .qetl.log.err[job;"carry snapshot arrived after its recording hit the cap - batches logged before it are not re-applied, so the restored state is missing them";
-            `table`held`cap!(c`table;r 1;carry_cap job)]];
+            `table`held`cap!(c`table;r 1;carry_cap[job])]];
     v:` sv (def[job]`ns),c`state;
     cur:get v;
     rows:(cols 0!cur)#x;

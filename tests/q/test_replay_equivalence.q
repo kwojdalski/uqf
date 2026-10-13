@@ -177,7 +177,7 @@ run:{[j;k]
     `.reqtest.pubs set (); `.reqtest.wal set ();
     .qetl.job.stream.wire[j;recorder[j]];
     step[j;spec] each k#evs;
-    if[k>0; restart j];
+    if[k>0; restart[j]];
     step[j;spec] each k _ evs;
     out:pubs;
     if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .z.p}];
@@ -194,22 +194,22 @@ equivalent:{[j]
     (base;bad)}
 
 test_a_restart_at_any_point_publishes_what_the_running_bars_job_did:{[t]
-    r:equivalent `exec_bars;
+    r:equivalent[`exec_bars];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes bars"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
 test_a_restart_at_any_point_publishes_what_the_running_crypto_book_1s_job_did:{[t]
-    r:equivalent `crypto_book_1s;
+    r:equivalent[`crypto_book_1s];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes snapshots"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
 test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]
-    r:equivalent `last_value;
+    r:equivalent[`last_value];
     .qunit.assertEquals[count first r;4;"the script publishes four changes: the older book is dropped"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
 test_a_restart_at_any_point_publishes_what_the_running_posbook_job_did:{[t]
-    r:equivalent `posbook;
+    r:equivalent[`posbook];
     pos:raze last each first r;
     / 1.11 = mid of 1.10/1.12 at +1s; 1.21 = mid of 1.20/1.22 at +10s; the
     / late +0s book (1.01) marks only the +0.5s fill, which precedes the +1s book
@@ -220,7 +220,7 @@ test_a_restart_at_any_point_publishes_what_the_running_posbook_job_did:{[t]
     .testutil.assertApprox[pos[4]`mark_price;1.01;1e-9;"the +0.5s fill is marked by the late +0s book (1.01), the newest at or before it"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the positions (restart points that differ)"]};
 test_a_restart_at_any_point_publishes_what_the_running_order_quality_job_did:{[t]
-    r:equivalent `order_quality;
+    r:equivalent[`order_quality];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes the rolling series"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 

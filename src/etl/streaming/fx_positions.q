@@ -185,7 +185,7 @@ read_limits:{[path]
 / @throws error when the file is missing or malformed: the job does not start
 on_start:{[]
     path:getenv `UQF_FX_POSITION_LIMITS;
-    if[count path; load_limits read_limits path];
+    if[count path; load_limits[read_limits[path]]];
     if[0=count .qpipe.job.fx_positions.limits;
         .qetl.log.warn[`fx_positions;"no limits loaded - fx_limit_breach stays empty and nothing is policed. Name a limits CSV in UQF_FX_POSITION_LIMITS, or load one over IPC with load_limits";
             enlist[`variable]!enlist "UQF_FX_POSITION_LIMITS"]];
@@ -203,7 +203,7 @@ on_batch:{[t;x]
     / The job's own output, read back only by a replay (restore_from): the
     / throttle must know what was published before the restart (#1197).
     if[t=`fx_limit_breach;
-        if[.qetl.job.stream.replaying; .qpipe.job.fx_positions.restore_throttle x];
+        if[.qetl.job.stream.replaying; .qpipe.job.fx_positions.restore_throttle[x]];
         :()];
     if[not t=`executions; :()];
     if[0=count x; :()];

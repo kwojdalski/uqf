@@ -96,7 +96,7 @@ test_fx_positions_carries_its_book_and_a_restart_agrees:{[t]
     / day 1 ends: the book is published as day 2 opens
     n:.qetl.job.stream.snapshot `fx_positions;
     .qunit.assertEquals[n;1;"one position carried"];
-    opening:sent_on `fx_position_open;
+    opening:sent_on[`fx_position_open];
     .qunit.assertEquals[exec base_qty from opening;enlist 1e6;"the day-1 position"];
     / day 2: one more fill, in the process that kept running
     day2:fill[`EURUSD;1;5e5;1.12;`london;`spot];
@@ -128,7 +128,7 @@ test_fx_positions_keeps_a_fill_logged_before_the_opening_row:{[t]
     on:.qpipe.job.fx_positions.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     .qetl.job.stream.snapshot `fx_positions;
-    opening:sent_on `fx_position_open;
+    opening:sent_on[`fx_position_open];
     / logged after the roll, so stamped later than anything the snapshot holds
     early:update time:.eodtest.t1+0D00:00:01 from fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;early];
@@ -155,7 +155,7 @@ test_posbook_carries_its_book_and_a_restart_agrees:{[t]
     on:.qpipe.job.posbook.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     .qetl.job.stream.snapshot `posbook;
-    opening:sent_on `position_open;
+    opening:sent_on[`position_open];
     day2:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;day2];
     running:.qpipe.job.posbook.book;
@@ -171,7 +171,7 @@ test_posbook_keeps_a_fill_logged_before_the_opening_row:{[t]
     on:.qpipe.job.posbook.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     .qetl.job.stream.snapshot `posbook;
-    opening:sent_on `position_open;
+    opening:sent_on[`position_open];
     / logged after the roll, so stamped later than anything the snapshot holds
     early:update time:.eodtest.t1+0D00:00:01 from fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;early];
@@ -198,7 +198,7 @@ test_posbook_restart_with_the_opening_row_first_is_unchanged:{[t]
     on:.qpipe.job.posbook.on_batch;
     on[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
     .qetl.job.stream.snapshot `posbook;
-    opening:sent_on `position_open;
+    opening:sent_on[`position_open];
     day2:fill[`EURUSD;-1;4e5;1.105;`london;`spot];
     on[`executions;day2];
     running:.qpipe.job.posbook.book;
@@ -248,7 +248,7 @@ late_snapshot_replay:{[]
 errors:{[lines] lines where `ERROR=first each lines}
 
 test_a_late_snapshot_still_restores_the_whole_book:{[t]
-    e:errors .testutil.captured_log[0b] .eodtest.late_snapshot_replay;
+    e:errors[.testutil.captured_log[0b] .eodtest.late_snapshot_replay];
     .qunit.assertEquals[.qpipe.job.fx_positions.positions;running_book;"restarted and kept-running books agree"];
     .qunit.assertEquals[count e;0;"and nothing is reported lost"]};
 
@@ -261,7 +261,7 @@ test_a_batch_the_snapshot_holds_is_not_applied_again:{[t]
     held:update time:.eodtest.t1+0D00:00:01 from fill[`EURUSD;1;2e5;1.1;`london;`spot];
     h[`executions;held];
     .qetl.job.stream.snapshot `fx_positions;
-    opening:sent_on `fx_position_open;
+    opening:sent_on[`fx_position_open];
     running:.qpipe.job.fx_positions.positions;
     .qetl.job.stream.reset `fx_positions;
     replay[`fx_positions;((`executions;held);(`fx_position_open;opening))];
@@ -281,7 +281,7 @@ capped:{[]
     }
 
 test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
-    e:errors .testutil.captured_log[0b] .eodtest.capped;
+    e:errors[.testutil.captured_log[0b] .eodtest.capped];
     .qunit.assertEquals[count e;1;"one error for the abandoned recording"];
     .qunit.assertEquals[e[0;1];`eod_cap;"naming the job"];
     .qunit.assertEquals[e[0;3]`cap;1;"and the cap it overran"]};
@@ -296,7 +296,7 @@ missed:{[marker;status]
     system "rm -f ",p,"*";
     if[not null marker; .qetl.job.bounded.state.durable_set[p;([] last_end_of_day:enlist marker)]];
     if[not null status; .qetl.job.stream.carry_log[`fx_positions]:(status;0;())];
-    e:errors .testutil.captured_log[0b] {.qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]};
+    e:errors[.testutil.captured_log[0b] {.qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]}];
     .qetl.job.stream.replayed `fx_positions;
     system "rm -f ",p,"*";
     e}
@@ -335,7 +335,7 @@ missed_logs_to:{[marker;seeded;through]
     record[`fx_positions];
     if[seeded; .qpipe.job.fx_positions.on_batch[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]]];
     .qetl.job.stream.snapshot `fx_positions;
-    opening:sent_on `fx_position_open;
+    opening:sent_on[`fx_position_open];
     dir:first system "mktemp -d";
     .qetl.tick.reset[];
     .qetl.tick.open_log[dir;`eodgap;marker+1];
@@ -365,19 +365,19 @@ gap_transport:{[]
 restart_after:{[marker]
     missed_logs marker;
     .qetl.job.stream.reset `fx_positions;
-    e:errors .testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;.eodtest.gap_transport[]]};
+    e:errors[.testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;.eodtest.gap_transport[]]}];
     book:exec base_qty from .qpipe.job.fx_positions.positions;
     system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
     .qetl.tick.reset[];
     (e;book)}
 
 test_a_job_down_across_one_end_of_day_restarts_with_its_carried_book:{[t]
-    r:restart_after .z.D-2;
+    r:restart_after[.z.D-2];
     .qunit.assertEquals[r 1;enlist 1.2e6;"1mm carried, plus yesterday's and today's 100k - not flat"];
     .qunit.assertEquals[count r 0;0;"and nothing is reported missing"]};
 
 test_a_job_down_across_two_end_of_days_restarts_with_its_carried_book:{[t]
-    r:restart_after .z.D-3;
+    r:restart_after[.z.D-3];
     .qunit.assertEquals[r 1;enlist 1.3e6;"1mm carried, plus three days' 100k fills"];
     .qunit.assertEquals[count r 0;0;"and nothing is reported missing"]};
 
@@ -385,7 +385,7 @@ test_a_job_down_across_two_end_of_days_restarts_with_its_carried_book:{[t]
 restart_flat:{[marker;seeded;through]
     missed_logs_to[marker;seeded;through];
     .qetl.job.stream.reset `fx_positions;
-    e:errors .testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;.eodtest.gap_transport[]]};
+    e:errors[.testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;.eodtest.gap_transport[]]}];
     book:exec base_qty from .qpipe.job.fx_positions.positions;
     system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
     .qetl.tick.reset[];
@@ -406,7 +406,7 @@ test_a_restart_before_the_plant_rolls_replays_each_log_once:{[t]
 test_a_transport_without_earlier_days_still_reports_the_gap:{[t]
     missed_logs .z.D-3;
     .qetl.job.stream.reset `fx_positions;
-    e:errors .testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;(`connect`publisher`subscribe`timer#.eodtest.gap_transport[]),enlist[`recovery]!enlist 0b]};
+    e:errors[.testutil.captured_log[0b] {.qetl.job.stream.start[`fx_positions;(`connect`publisher`subscribe`timer#.eodtest.gap_transport[]),enlist[`recovery]!enlist 0b]}];
     system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
     .qetl.tick.reset[];
     .qunit.assertEquals[count e;1;"the existing detection still speaks"];
@@ -425,7 +425,7 @@ plant_on:{[marker;plant]
     tr[`earlier_days]:{[tbls;a;b] `.eodtest.asked set (a;b); ()};
     tr[`has_log]:{[dt] 0b};
     tr[`subscribe]:{[tbls;h;replay] };
-    e:errors .testutil.captured_log[0b] {[tr;unused] .qetl.job.stream.start[`fx_positions;tr]}[tr];
+    e:errors[.testutil.captured_log[0b] {[tr;unused] .qetl.job.stream.start[`fx_positions;tr]}[tr]];
     system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
     .qetl.tick.reset[];
     (e;.eodtest.asked)}
@@ -449,7 +449,7 @@ test_a_plant_a_day_behind_the_job_replays_nothing_and_reports_nothing:{[t]
 start_with:{[alter]
     missed_logs .z.D-2;
     .qetl.job.stream.reset `fx_positions;
-    e:errors .testutil.captured_log[0b] {[alter;unused] .qetl.job.stream.start[`fx_positions;alter gap_transport[]]}[alter];
+    e:errors[.testutil.captured_log[0b] {[alter;unused] .qetl.job.stream.start[`fx_positions;alter gap_transport[]]}[alter]];
     system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
     .qetl.tick.reset[];
     e}

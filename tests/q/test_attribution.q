@@ -59,13 +59,13 @@ test_eurusd_is_direct_usdpln_goes_via_eur:{[t]
     .qunit.assertEquals[r`step;1 2;"steps are in chain order"]};
 
 test_em_bridge_rules:{[t]
-    .qunit.assertEquals[legs_of `EURPLN;enlist `EURPLN;"PLN against its bridge is direct"];
-    .qunit.assertEquals[legs_of `USDZAR;enlist `USDZAR;"ZAR against its USD bridge is direct"];
-    .qunit.assertEquals[legs_of `PLNHUF;`EURPLN`EURHUF;"two EUR-bridged EM currencies meet at EUR"];
-    .qunit.assertEquals[legs_of `GBPPLN;`EURGBP`EURPLN;"a G10 currency to PLN goes via EUR"];
-    .qunit.assertEquals[legs_of `PLNZAR;`EURPLN`EURUSD`USDZAR;"EUR-bridged and USD-bridged EM join through EUR/USD"];
-    .qunit.assertEquals[legs_of `EURZAR;enlist `EURZAR;"a designated direct pair stays direct"];
-    .qunit.assertEquals[legs_of `AUDZAR;`AUDUSD`USDZAR;"G10 to a USD-bridged EM currency goes via USD"]};
+    .qunit.assertEquals[legs_of[`EURPLN];enlist `EURPLN;"PLN against its bridge is direct"];
+    .qunit.assertEquals[legs_of[`USDZAR];enlist `USDZAR;"ZAR against its USD bridge is direct"];
+    .qunit.assertEquals[legs_of[`PLNHUF];`EURPLN`EURHUF;"two EUR-bridged EM currencies meet at EUR"];
+    .qunit.assertEquals[legs_of[`GBPPLN];`EURGBP`EURPLN;"a G10 currency to PLN goes via EUR"];
+    .qunit.assertEquals[legs_of[`PLNZAR];`EURPLN`EURUSD`USDZAR;"EUR-bridged and USD-bridged EM join through EUR/USD"];
+    .qunit.assertEquals[legs_of[`EURZAR];enlist `EURZAR;"a designated direct pair stays direct"];
+    .qunit.assertEquals[legs_of[`AUDZAR];`AUDUSD`USDZAR;"G10 to a USD-bridged EM currency goes via USD"]};
 
 test_inverse_pairs_reverse_and_flip:{[t]
     r:.qcross.attribution_route `PLNUSD;
@@ -82,7 +82,7 @@ test_exception_overrides_the_rules:{[t]
     .qunit.assertEquals[r`leg;`GBPUSD`USDPLN;"the exception's legs win over the EUR bridge rule"];
     .qunit.assertEquals[r`invert;00b;"orientation is derived from the legs"];
     .qunit.assertEquals[r`version;2#`desk_override;"and the route carries that convention's version"];
-    .qunit.assertEquals[legs_of `GBPPLN;`EURGBP`EURPLN;"the default convention is untouched"];
+    .qunit.assertEquals[legs_of[`GBPPLN];`EURGBP`EURPLN;"the default convention is untouched"];
     bad:c;
     bad[`exceptions]:([] pair:enlist `GBPPLN; legs:enlist `EURUSD`USDPLN);
     .qunit.assertThrows[{.qcross.attribution_route_with[x;`GBPPLN]};bad;"*does not continue from GBP*";"an exception that does not start at the base is refused"]};
@@ -140,14 +140,14 @@ test_generic_shortest_path_pricing_is_unchanged:{[t]
 
 / --- markout attribution -------------------------------------------------
 
-attribute:{[specs] .qexec.cross_markout_attribution[mk_quotes specs;`USDPLN;1;tm_zero;tm_one;10000;1]};
+attribute:{[specs] .qexec.cross_markout_attribution[mk_quotes[specs];`USDPLN;1;tm_zero;tm_one;10000;1]};
 
 test_attribution_reconciles_to_total:{[t]
-    r:attribute specs_route[];
+    r:attribute[specs_route[]];
     legs:select from r where kind=`leg;
     res:first exec pips from r where kind=`residual;
     total:first exec pips from r where kind=`total;
-    q:mk_quotes specs_route[];
+    q:mk_quotes[specs_route[]];
     expected:.qexec.markout[1;.qcross.cross_ref_price_at[q;`USDPLN;tm_zero;1];.qcross.cross_ref_price_at[q;`USDPLN;tm_one;1];10000];
     .testutil.assertApprox[total;expected;1e-9;"total is the signed markout of the pair's own reference price"];
     .testutil.assertApprox[(sum legs`pips)+res;total;1e-9;"legs plus residual reconcile to the total"];
@@ -156,13 +156,13 @@ test_attribution_reconciles_to_total:{[t]
     .qunit.assertEquals[first exec status from r where kind=`residual;`reconciled;"reconciled status"]};
 
 test_attribution_ignores_a_direct_book_but_reports_the_difference_as_residual:{[t]
-    base:attribute specs_route[];
-    with:attribute specs_with_direct[];
+    base:attribute[specs_route[]];
+    with:attribute[specs_with_direct[]];
     .qunit.assertEquals[(base`leg);(with`leg);"the legs do not change when a USDPLN book appears"];
     legs_b:select leg,pips from base where kind=`leg;
     legs_w:select leg,pips from with where kind=`leg;
     .qunit.assertEquals[legs_w;legs_b;"leg allocations are identical with or without the direct book"];
-    unrelated:attribute specs_route[],enlist (`AUDUSD;0.65;0.66);
+    unrelated:attribute[specs_route[],enlist (`AUDUSD;0.65;0.66)];
     .qunit.assertEquals[select leg,pips from unrelated where kind=`leg;legs_b;"an unrelated book changes nothing"];
     res_w:first exec pips from with where kind=`residual;
     total_w:first exec pips from with where kind=`total;
@@ -171,7 +171,7 @@ test_attribution_ignores_a_direct_book_but_reports_the_difference_as_residual:{[
 
 test_missing_prescribed_leg_is_unavailable_not_rerouted:{[t]
     / USDPLN is quoted directly and AUDUSD exists, but the prescribed EURPLN book does not
-    r:attribute ((`EURUSD;1.10;1.12);(`USDPLN;3.9;3.8));
+    r:attribute[((`EURUSD;1.10;1.12);(`USDPLN;3.9;3.8))];
     .qunit.assertEquals[(select from r where kind=`leg)`leg;`EURUSD`EURPLN;"the prescribed route is reported unchanged"];
     .qunit.assertEquals[(select from r where kind=`leg)`status;`ok`unavailable;"the missing leg is flagged"];
     .qunit.assertTrue[all null (select from r where kind=`leg)`pips;"every allocation is null"];
@@ -181,22 +181,22 @@ test_missing_prescribed_leg_is_unavailable_not_rerouted:{[t]
     .qunit.assertTrue[not null total;"the total still comes from the reference price"]};
 
 test_attribution_records_the_convention_version:{[t]
-    r:attribute specs_route[];
+    r:attribute[specs_route[]];
     .qunit.assertEquals[distinct r`version;enlist `proposed_v1;"every row records the version"];
     c:conv;
     c[`version]:`v_test;
-    r2:.qexec.cross_markout_attribution_with[c;mk_quotes specs_route[];`USDPLN;1;tm_zero;tm_one;10000;1];
+    r2:.qexec.cross_markout_attribution_with[c;mk_quotes[specs_route[]];`USDPLN;1;tm_zero;tm_one;10000;1];
     .qunit.assertEquals[distinct r2`version;enlist `v_test;"a replacement convention's version is what is recorded"];
     .qunit.assertEquals[r`time;(count r)#tm_one;"time leads and is t1"];
     .qunit.assertEquals[first cols r;`time;"time is the leading column"]};
 
 test_attribution_sell_side_flips_sign:{[t]
-    buy:attribute specs_route[];
-    sell:.qexec.cross_markout_attribution[mk_quotes specs_route[];`USDPLN;-1;tm_zero;tm_one;10000;1];
+    buy:attribute[specs_route[]];
+    sell:.qexec.cross_markout_attribution[mk_quotes[specs_route[]];`USDPLN;-1;tm_zero;tm_one;10000;1];
     .testutil.assertApprox[sell`pips;neg buy`pips;1e-9;"a sell is the buy with every sign flipped"]};
 
 test_attribution_refuses_unsupported_currency_and_unsorted_quotes:{[t]
-    q:mk_quotes specs_route[];
+    q:mk_quotes[specs_route[]];
     .qunit.assertThrows[{.qexec.cross_markout_attribution[x;`USDXYZ;1;tm_zero;tm_one;10000;1]};q;"*unsupported currency XYZ*";"unsupported currency"];
     .qunit.assertThrows[{.qexec.cross_markout_attribution[x;`USDPLN;1;tm_zero;tm_one;10000;1]};reverse q;"*must be sorted*";"unsorted quotes"]};
 

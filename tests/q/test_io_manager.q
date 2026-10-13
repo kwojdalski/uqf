@@ -126,7 +126,7 @@ hold_root:{[root]
 
 test_a_write_waits_for_another_writer_on_the_same_root:{[t]
     root:hdb_dir[];
-    held:hold_root root;
+    held:hold_root[root];
     saved:.qetl.io.hdb_lock_wait;
     `.qetl.io.hdb_lock_wait set 0D00:00:00.050;
     r:@[{.qetl.io.write[.qetl.io.hdb[x;`deal_time];`iodeals;.iotest.deals[]]; `wrote};root;{x}];
@@ -539,7 +539,7 @@ test_hdb_fast_path_writes_what_the_full_path_writes:{[t]
         `deal_time`notional xasc 0!a};
     seed:mk[enlist 2026.01.02D08:00:00.000000000;enlist `ZZZ;enlist 0e6];
     run:{[rows;seed;batches;s]
-        o:hdb_opts s;
+        o:hdb_opts[s];
         {[rows;seed;o;b]
             fast:hdb_dir[];
             .qetl.io.write_keyed[.qetl.io.hdb[fast;`deal_time];`iodeals;b;o];

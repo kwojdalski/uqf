@@ -19,7 +19,7 @@ carry_marker_path:{[job] (.qetl.job.bounded.state.lock_dir[]),"/carry_",string j
 / @return a date, or 0Nd
 / @eg .qetl.job.stream.last_end_seen `fx_positions
 last_end_seen:{[job]
-    p:carry_marker_path job;
+    p:carry_marker_path[job];
     if[()~key hsym `$p; :0Nd];
     @[{first (.qetl.job.bounded.state.durable_get x)`last_end_of_day};p;{[e] 0Nd}]}
 
@@ -79,8 +79,8 @@ plant_today:{[tr] $[`plant_day in key tr; tr[`plant_day][]; .z.D]}
 / @return how many messages were replayed
 / @eg .qetl.job.stream.catch_up[`fx_positions;()!();`executions`fx_position_open;{[t;x]}]  / a transport with no earlier_days: nothing to replay
 catch_up:{[job;tr;tbls;h]
-    last_eod:last_end_seen job;
-    today:plant_today tr;
+    last_eod:last_end_seen[job];
+    today:plant_today[tr];
     if[(null last_eod) or last_eod>=today-1; :0];
     if[not `earlier_days in key tr; :0];
     msgs:tr[`earlier_days][tbls;last_eod+1;today-1];
@@ -108,7 +108,7 @@ catch_up:{[job;tr;tbls;h]
 missed_end_of_day:{[job;today]
     if[`restored~first $[job in key carry_log; carry_log job; enlist `none]; :0b];
     if[job in key caught_up; if[caught_up job; :0b]];
-    last_eod:last_end_seen job;
+    last_eod:last_end_seen[job];
     if[(null last_eod) or last_eod>=today-1; :0b];
     .qetl.log.err[job;"replayed with no carried snapshot, and the last end of day this job saw was before yesterday - it was down at an end of day, so the state carried from before today is missing, and no earlier log held it";
         `last_end_of_day`today`table!(last_eod;today;def[job][`carry]`table)];

@@ -160,7 +160,7 @@ wkey:{[cs;t] flip value flip cs#t}
 / the windows it holds as published. A batch on any other table is ignored.
 / @private
 on_batch:{[name;t;x]
-    d:def name;
+    d:def[name];
     ns:.qetl.job.stream.namespace name;
     ck:d[`by],`bar_start;
     if[t=d`publishes; :mark_published[ns;ck;x]];
@@ -200,7 +200,7 @@ mark_published:{[ns;ck;x]
 / closed.
 / @private
 close_windows:{[name;pick]
-    d:def name;
+    d:def[name];
     ns:.qetl.job.stream.namespace name;
     pq:` sv ns,`pending; ck:d[`by],`bar_start;
     mask:pick get pq;
@@ -220,7 +220,7 @@ close_windows:{[name;pick]
 / @return the number of bars published
 / @eg .qpipe.job.exec_bars.close_ready 2026.10.09D10:01:30
 close_ready:{[name;now]
-    d:def name;
+    d:def[name];
     ns:.qetl.job.stream.namespace name; cq:` sv ns,`closed;
     n:close_windows[name;{[w;l;now;p] (p[`bar_start]+w+l)<=now}[d`width;d`lateness;now]];
     cq set (get cq) where (((get cq)`bar_start)+(d`width)+d`lateness)>now;

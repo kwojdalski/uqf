@@ -999,7 +999,7 @@ test_posbook_does_not_let_a_late_older_book_rewind_its_venue:{[t]
         update venue:v, source_time:st from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
     to_posbook[`market_data;book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f]];
     to_posbook[`market_data;book[`okx;d[0];90f;91f]];
-    .qunit.assertEquals[exec time from .qpipe.job.posbook.crypto_tob[`rows] where venue=`okx;d 0 1;
+    .qunit.assertEquals[exec time from .qpipe.job.posbook.crypto_tob[`rows] where venue=`okx;d[0 1];
         "okx's older book sits at its own time, behind the newer"];
     to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
         update time:.sjtest.d[2] from crypto_fill[s;1;100f;1f]]];
@@ -1274,14 +1274,14 @@ test_a_restart_does_not_republish_a_breach_inside_its_period:{[t]
     reset[];
     .qpipe.job.fx_positions.load_limits mk_limits[];
     to_fx_positions[orders_batch[]];
-    pub:d 0;
+    pub:d[0];
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches pub;1;"live, the breach publishes"];
     / the restart: state is lost, then the log is replayed - the fill, and the breach as published
     .qetl.job.stream.reset `fx_positions;
     .qpipe.job.fx_positions.load_limits mk_limits[];
     .qunit.assertEmpty[.qpipe.job.fx_positions.alerts;"a restart starts with no throttle state"];
-    replay_fx ((`executions;`time xcols update time:pub from .qetl.job.stream.normalizer.normalize[`executions;`orders;orders_batch[]]);
-               (`fx_limit_breach;logged_breach[pub;`EURUSD;`base_qty]));
+    replay_fx[((`executions;`time xcols update time:pub from .qetl.job.stream.normalizer.normalize[`executions;`orders;orders_batch[]]);
+               (`fx_limit_breach;logged_breach[pub;`EURUSD;`base_qty]))];
     .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches pub+0D00:01;
         "a minute after it was published, the standing breach is not published again"];
     .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches pub+0D00:04:59;"nor just inside the period"];
@@ -1293,22 +1293,22 @@ test_a_new_breach_after_a_restart_still_publishes_at_once:{[t]
     .qpipe.job.fx_positions.load_limits mk_limits[];
     to_fx_positions[orders_batch[]];
     / the log holds a breach of a DIFFERENT metric only: this one is new
-    replay_fx enlist (`fx_limit_breach;logged_breach[d 0;`EURUSD;`quote_qty]);
+    replay_fx[enlist (`fx_limit_breach;logged_breach[d[0];`EURUSD;`quote_qty])];
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 60;1;
         "a breach the log does not hold publishes immediately"]};
 
 test_the_job_s_own_live_echo_does_not_move_its_throttle:{[t]
     reset[];
-    .qpipe.job.fx_positions.on_batch[`fx_limit_breach;logged_breach[d 0;`EURUSD;`base_qty]];
+    .qpipe.job.fx_positions.on_batch[`fx_limit_breach;logged_breach[d[0];`EURUSD;`base_qty]];
     .qunit.assertEmpty[.qpipe.job.fx_positions.alerts;"live, the throttle already knows what it published"]};
 
 test_restoring_the_throttle_keeps_the_newest_time_per_identity:{[t]
     reset[];
-    rows:logged_breach[d 0;`EURUSD;`base_qty],logged_breach[d 30;`EURUSD;`base_qty],logged_breach[d 10;`EURUSD;`quote_qty];
-    replay_fx enlist (`fx_limit_breach;rows);
+    rows:logged_breach[d[0];`EURUSD;`base_qty],logged_breach[d[30];`EURUSD;`base_qty],logged_breach[d[10];`EURUSD;`quote_qty];
+    replay_fx[enlist (`fx_limit_breach;rows)];
     a:.qpipe.job.fx_positions.alerts;
     .qunit.assertEquals[count a;2;"one entry per (scope, metric)"];
-    .qunit.assertEquals[asc value a;asc (d 30;d 10);"each at its newest time"]};
+    .qunit.assertEquals[asc value a;asc (d[30];d[10]);"each at its newest time"]};
 
 test_fx_positions_declares_that_its_throttle_is_rebuilt_by_replay:{[t]
     dc:.qetl.job.stream.def `fx_positions;
@@ -1591,21 +1591,21 @@ start_fx:{[path]
     @[.qetl.job.stream.start[`fx_positions];tr;{x}]}
 
 test_fx_positions_loads_its_limits_file_at_start:{[t]
-    r:start_fx limits_file ("EURUSD,london,spot,base_qty,1000000,hard";"GBPUSD,london,spot,base_qty,2000000,soft");
+    r:start_fx[limits_file[("EURUSD,london,spot,base_qty,1000000,hard";"GBPUSD,london,spot,base_qty,2000000,soft")]];
     .qunit.assertEquals[(r;.sjtest.connected);(`fx_positions;1b);"started"];
     .qunit.assertEquals[exec cap from .qpipe.job.fx_positions.limits;1e6 2e6;"both limits are policed from the first tick"]};
 
 test_a_malformed_limits_file_stops_the_start_before_it_connects:{[t]
-    r:start_fx limits_file enlist "EURUSD,,spot,base_qty,1000000,hard";
+    r:start_fx[limits_file[enlist "EURUSD,,spot,base_qty,1000000,hard"]];
     .qunit.assertTrue[(10h=type r) and r like "load_limits: book is null on some limit*";"refused, as load_limits refuses it"];
     .qunit.assertEquals[.sjtest.connected;0b;"and nothing was opened: the job does not run blind"]};
 
 test_a_missing_limits_file_is_named:{[t]
-    r:start_fx "build/no_such_limits.csv";
+    r:start_fx["build/no_such_limits.csv"];
     .qunit.assertTrue[r like "read_limits: build/no_such_limits.csv does not exist*";"the path is in the refusal"]};
 
 test_no_limits_file_starts_and_polices_nothing:{[t]
-    .qunit.assertEquals[(start_fx "";count .qpipe.job.fx_positions.limits);(`fx_positions;0);
+    .qunit.assertEquals[(start_fx[""];count .qpipe.job.fx_positions.limits);(`fx_positions;0);
         "it still starts - limits can be loaded over IPC - and says so in a warning"]};
 
 test_fx_positions_limits_are_watched:{[t]
@@ -1674,15 +1674,15 @@ recovering:{[extra]
     (`procname`subscribe_to`publishes`on_batch`state!(`sjrec1;enlist `quote;`symbol$();{[t;x]};enlist `book)),extra}
 
 test_state_without_a_recovery_policy_is_refused:{[t]
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering ()!();
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering[()!()];
         "*declares state but not how it recovers*";"neither replay nor ephemeral"];
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering `replay`ephemeral!(1b;"why");
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering[`replay`ephemeral!(1b;"why")];
         "*declares replay 1b and ephemeral*";"both is a contradiction"];
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering enlist[`ephemeral]!enlist `why;
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering[enlist[`ephemeral]!enlist `why];
         "*ephemeral must be a string*";"a reason, in words"]};
 
 test_state_with_a_recovery_policy_is_accepted:{[t]
-    .qunit.assertEquals[.qetl.job.stream.define[`sj_rec;recovering enlist[`ephemeral]!enlist "a test fixture"];`sj_rec;"ephemeral, with its reason"];
+    .qunit.assertEquals[.qetl.job.stream.define[`sj_rec;recovering[enlist[`ephemeral]!enlist "a test fixture"]];`sj_rec;"ephemeral, with its reason"];
     `.qetl.job.stream.jobs set (enlist `sj_rec) _ .qetl.job.stream.jobs;
     `.qetl.job.stream.initial set (enlist `sj_rec) _ .qetl.job.stream.initial;
     `.qetl.job.stream.procnames set (enlist `sjrec1) _ .qetl.job.stream.procnames}
@@ -1734,7 +1734,7 @@ test_every_kind_accepts_and_forwards_every_passthrough_key:{[t]
     {[c]
         kind:c 0; k:c 1;
         nm:`$"sj_pt_",string[kind],"_",string k;
-        extra:passthrough_extra k;
+        extra:passthrough_extra[k];
         kind_declare[kind;nm;extra];
         d:.qetl.job.stream.def nm;
         .qunit.assertTrue[all (key extra) in key d;string[kind]," forwards ",string[k]];

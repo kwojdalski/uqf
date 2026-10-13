@@ -359,7 +359,7 @@ file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
 / @eg .qetl.job.bounded.state.with_file_lock[`etl_coverage;{[n] n};enlist 1]
 with_file_lock:{[name;f;args]
     system"mkdir -p ",shell_word[lock_dir[]];
-    with_lock_at[file_lock_path name;file_lock_wait;f;args]}
+    with_lock_at[file_lock_path[name];file_lock_wait;f;args]}
 
 / Take the lock at path for a holder, waiting up to wait while a live one
 / has it and breaking a dead one at once: with_lock_at's acquisition on its

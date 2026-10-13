@@ -191,7 +191,7 @@ test_leg_times_ignore_a_level_the_sweep_skips:{[t]
     stale:t0-0D03:00:00;
     mixed:`sym`as_of`bid_prices`bid_sizes`bid_sources`bid_times`ask_prices`ask_sizes`ask_sources`ask_times!
         (`EURUSD;t0;1.1000 1.0999 1.0998;1e6 0 1e6;`A`B`C;(t0;stale;t0);1.1002 1.1003 1.1004;1e6 0 1e6;`A`B`C;(t0;stale;t0));
-    state:(one mixed) upsert one row[`USDJPY;usdjpy 0;usdjpy 1;1e11;t0];
+    state:(one[mixed]) upsert one row[`USDJPY;usdjpy 0;usdjpy 1;1e11;t0];
     state:state upsert one row[`EURJPY;164.80;164.90;1e11;t0];
     r:.qpipe.job.cross_arbitrage.leg_times[state;`EURJPY;`EURUSD`USDJPY;1.5e6;`bid`ask;`bid`ask];
     .qunit.assertEquals[r`as_of;t0;"the skipped stale level is not part of the fill"];

@@ -194,7 +194,7 @@ market_data:.qetl.plant.shape `market_data
 / @param x the executions rows, as a table
 / @return nothing
 apply_fills:{[x]
-    trades:.qpipe.job.posbook.as_trades x;
+    trades:.qpipe.job.posbook.as_trades[x];
     fx:.qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;trades];
     cr:.qpipe.job.posbook.crypto_marks[.qpipe.job.posbook.crypto_tob;trades];
     / a crypto sym has no FX history (own_book_mids skips it), so the
@@ -238,7 +238,7 @@ note_unmarked:{[trades;marks]
 / @return nothing
 on_batch:{[t;x]
     $[t=`executions;
-        .qpipe.job.posbook.apply_fills x;
+        .qpipe.job.posbook.apply_fills[x];
       t=`market_data;
         [`.qpipe.job.posbook.mid_history set .qetl.enrich.add[.qpipe.job.posbook.mid_history;
             select sym, source_time, mid from .qmicro.own_book_mids x];

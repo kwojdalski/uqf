@@ -397,7 +397,7 @@ day_log:{[dt]
 / @param dt the date
 / @return 1b when that day's log file exists
 / @eg .qetl.tick.reset[]; .qetl.tick.has_log 2026.10.09  ->  0b
-has_log:{[dt] p:day_log dt; $[null p; 0b; not () ~ key p]}
+has_log:{[dt] p:day_log[dt]; $[null p; 0b; not () ~ key p]}
 
 / The day the plant's open log is for: the log a subscription replays, and so
 / the authority on which days are "earlier" (#1190). 0Nd when no log is open.
@@ -420,8 +420,8 @@ plant_day:{[] log_date}
 earlier_days:{[want;first_day;last_day]
     w:$[want~`; key schemas; (),want];
     `.qetl.tick.handoff set ();
-    {[w;dt] p:day_log dt;
-        if[has_log dt;
+    {[w;dt] p:day_log[dt];
+        if[has_log[dt];
             replay[p;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]]}[w] each first_day+til 0|1+last_day-first_day;
     m:handoff;
     `.qetl.tick.handoff set ();

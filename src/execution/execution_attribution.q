@@ -131,7 +131,7 @@ attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
     hh:raze n#'horizons;
     rows:raze one[conv;quotes;pip_factor;ref_size;trades;]'[ii;hh];
     agg:select n_trades:count i,n_unavailable:sum `long$not status in `ok`reconciled,
-        total_pips:.qexec.sum_or_null pips,mean_pips:avg pips
+        total_pips:.qexec.sum_or_null[pips],mean_pips:avg pips
         by pair,horizon,kind,step,leg,invert,version from rows;
     agg:0!agg;
     agg:update share:total_pips%sum total_pips where kind=`total by pair,horizon from agg;
