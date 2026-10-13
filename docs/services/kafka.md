@@ -67,13 +67,11 @@ Rows carry **both** clocks, for the reason `eq_orderbook` does: `time` is
 stamped by the tickerplant on receipt, `broker_time` is the broker's own, and
 their difference is the consumer's lag.
 
-## What it does not survive
+## Restarts
 
-The high-water marks are `kafka_flow1`'s own process state. Restart it and they
-are empty, so a replay straddling the restart is **not** caught. Seeding them
-from the plant on startup is the obvious fix and is deliberately not done: it
-needs a query against `rdb1` at wire time, which no other streaming job does,
-and inventing that seam for an example would be the tail wagging the dog.
+The high-water marks are `kafka_flow1`'s own process state. It declares replay,
+so on a restart it raises them from the `client_flow` rows in the log and then
+publishes the raw rows that arrived while it was down, once.
 
 The payload is JSON, one client trade per message. A real deployment would more
 likely carry Avro or protobuf against a schema registry --- decoded in the
