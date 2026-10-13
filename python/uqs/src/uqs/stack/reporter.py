@@ -23,12 +23,26 @@ runs - so no check is inferred from the outputs. Each activity check names its
 table, the window it looks back over, the rows it requires there, and the days
 and hours it runs.
 
+THE PLANT'S CLOCK, NOT THE QUERIED PROCESS'S. rdb1 and hdb1 run with
+-localtime 1, so `.proc.cp[]`/`.proc.cd[]` there are the host's local time,
+while the plant stamps `time` - and dates partitions - in TorQ's
+`.eodtime.datatimezone`/`rolltimezone` (GMT unless a site says otherwise). A
+query mixing the two is off by the zone offset: on a host east of UTC an
+activity check alerted on fresh data, west of it never on stale data (#1247).
+So an activity check looks back from `.z.p+.eodtime.getdailyadjustment[]`,
+the stamp the plant would give a row now, and an hdbdate check reads the
+partition before `.eodtime.getday[.z.p]`, the plant's current date - and
+tests that partition's weekday itself, since reporter1 schedules by its own
+local calendar.
+
 VALIDATED AT GENERATION, against the resolved deployment: the tables published
 by the runtime's processes and installed sidecar bundles, plus the external
-producers' tables it holds (`deployment_tables`). A check on a table this tree
-defines but this deployment does not publish - a profile runtime without that
-job, a sidecar bundle not installed for this runtime - is left out, and the
-reason logged. A table no part of this tree defines is refused outright: that
+producers' tables it holds (`deployment_tables`) - and, when a profile start
+wrote the deployment set (stack/deployment.py), only by the processes in it.
+A check on a table this tree defines but this deployment does not publish - a
+profile runtime without that job, a sidecar bundle not installed for this
+runtime, a `uqs start --profile` that did not select its producer (#1248) -
+is left out, and the reason logged. A table no part of this tree defines is refused outright: that
 is a typo or a stale name, and as a row it would be exactly the recurring
 query failure this module exists to remove.
 """
@@ -46,6 +60,7 @@ from uqs.model.dependencies import EXTERNAL_PRODUCERS, outputs_by_process
 from uqs.model.runtime_members import _bundle_split, pipeline_procnames, plant_tables
 from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import Runtime
+from uqs.stack import deployment
 
 log = get_logger(__name__)
 
@@ -66,12 +81,11 @@ REPORTER_FIELDS = (
     "daysofweek",
 )
 
-#: `.proc.cd[] mod 7`, which reporter.q matches daysofweek against:
-#: 2000.01.01 was a Saturday, so 0 is Saturday and 6 is Friday.
+#: A q date `mod 7` - `.proc.cd[] mod 7`, which reporter.q matches
+#: daysofweek against: 2000.01.01 was a Saturday, so 0 is Saturday and 6 is
+#: Friday.
 EVERY_DAY = (0, 1, 2, 3, 4, 5, 6)
 WEEKDAYS = (2, 3, 4, 5, 6)
-#: The mornings after a weekday: Tuesday to Saturday.
-AFTER_WEEKDAYS = (3, 4, 5, 6, 0)
 
 _KINDS = ("memory", "activity", "hdbdate")
 _HHMM = re.compile(r"^\d\d:\d\d$")
@@ -86,11 +100,14 @@ class ReporterCheck:
     `memory`   - `.checks.memorycheck[max_bytes]` on `procname`.
     `activity` - `.checks.tablecount`: fewer than `min_rows` rows in each of
                  `tables` with `timecol` inside the last `window` alerts.
-    `hdbdate`  - `.checks.hdbdatecheck`: yesterday's partition of each of
-                 `tables` is empty.
+    `hdbdate`  - `.checks.hdbdatecheck`: the plant's previous date's partition
+                 of each of `tables` is empty.
 
     `start`/`end`/`period` are minutes (HH:MM) - `period` 00:00 runs once at
-    `start`. `alert_every` throttles the warning a firing check logs.
+    `start`. `alert_every` throttles the warning a firing check logs. `days`
+    are the days reporter1 runs the check on - except for `hdbdate`, which
+    reporter1 runs every day, and whose `days` are the weekdays of the
+    partitions that must hold rows, in the plant's calendar.
     """
 
     name: str
@@ -141,17 +158,22 @@ class ReporterCheck:
 
     @property
     def query(self) -> str:
-        """The q reporter.q sends to the process. `(),` so one table is a list
-        too: hdbdatecheck indexes its table list by a `where`."""
+        """The q reporter.q sends to the process, on the plant's clock (see
+        the module docstring). `(),` so one table is a list too:
+        hdbdatecheck indexes its table list by a `where`."""
         tables = "(),`" + "`".join(self.tables)
         if self.kind == "memory":
             return f".checks.memorycheck[{self.max_bytes}]"
         if self.kind == "activity":
             return (
-                f".checks.tablecount[{tables};{self.window};.proc.cp[];"
-                f"`{self.timecol};{self.min_rows}]"
+                f".checks.tablecount[{tables};{self.window};"
+                f".z.p+.eodtime.getdailyadjustment[];`{self.timecol};{self.min_rows}]"
             )
-        return f".checks.hdbdatecheck[.proc.cd[]-1;{tables}]"
+        days = " ".join(str(d) for d in self.days)
+        return (
+            f"{{$[(x mod 7) in {days};.checks.hdbdatecheck[x;y];([]messages:())]}}"
+            f"[.eodtime.getday[.z.p]-1;{tables}]"
+        )
 
     def row(self) -> dict[str, str]:
         return {
@@ -168,7 +190,9 @@ class ReporterCheck:
             "end": self.end,
             "period": self.period,
             "timeoutinterval": self.timeout,
-            "daysofweek": " ".join(str(d) for d in self.days),
+            "daysofweek": " ".join(
+                str(d) for d in (EVERY_DAY if self.kind == "hdbdate" else self.days)
+            ),
         }
 
 
@@ -194,21 +218,27 @@ UQF_REPORTER_CHECKS: tuple[ReporterCheck, ...] = (
     ReporterCheck(
         name="fx_orderbook_hdbdate", kind="hdbdate", proctype="hdb", procname="hdb1",
         tables=("fx_orderbook",), start="05:00", end="05:00", period="00:00",
-        days=AFTER_WEEKDAYS, timeout="00:01:00",
+        days=WEEKDAYS, timeout="00:01:00",
     ),
 )  # fmt: skip
 
 
-def deployment_tables(runtime: Runtime) -> set[str]:
+def deployment_tables(runtime: Runtime, selected: Iterable[str] | None = None) -> set[str]:
     """The tables `runtime` has a producer for: those its pipeline processes
     publish, those of the sidecar bundles installed for it, and the tables it
-    holds that a producer outside the stack writes (EXTERNAL_PRODUCERS)."""
+    holds that a producer outside the stack writes (EXTERNAL_PRODUCERS).
+    `selected`, a deployment set (stack/deployment.py), narrows the processes
+    and bundles to those in it; None is every one."""
     members = pipeline_procnames(runtime)
+    chosen = None if selected is None else set(selected)
     outputs = outputs_by_process()
     published = {
-        t for proc, tables in outputs.items() if members is None or proc in members for t in tables
+        t
+        for proc, tables in outputs.items()
+        if (members is None or proc in members) and (chosen is None or proc in chosen)
+        for t in tables
     }
-    _, excluded_procs, excluded_tables, included_tables = _bundle_split(runtime)
+    _, excluded_procs, excluded_tables, included_tables = _bundle_split(runtime, chosen)
     published -= {t for p in excluded_procs for t in outputs.get(p, ())}
     published |= included_tables
     held = plant_tables(runtime)
@@ -225,14 +255,18 @@ def reporter_plan(
     runtime: Runtime,
     procnames: Iterable[str],
     checks: Iterable[ReporterCheck] = UQF_REPORTER_CHECKS,
+    selected: Iterable[str] | None = None,
 ) -> tuple[list[ReporterCheck], list[str]]:
     """(the checks reporter1 is given, why each other one was left out).
+    `selected` is the deployment set, as deployment_tables.
 
     Raises UqsError for a check that could never run anywhere: a table no
     part of this tree defines, or a time column the table does not have.
     """
     known = schemas.table_names()
-    available = deployment_tables(runtime)
+    chosen = None if selected is None else tuple(selected)
+    available = deployment_tables(runtime, chosen)
+    whole = available if chosen is None else deployment_tables(runtime)
     procs = set(procnames)
     kept: list[ReporterCheck] = []
     left_out: list[str] = []
@@ -260,6 +294,12 @@ def reporter_plan(
             )
             continue
         if absent := [t for t in check.tables if t not in available]:
+            if all(t in whole for t in absent):
+                left_out.append(
+                    f"{check.name}: {', '.join(absent)} - its producer is not among the "
+                    f"processes this {runtime.name} deployment was started with"
+                )
+                continue
             left_out.append(
                 f"{check.name}: {', '.join(absent)} - not published by any process or "
                 f"sidecar bundle of the {runtime.name} deployment"
@@ -269,9 +309,15 @@ def reporter_plan(
     return kept, left_out
 
 
-def write_reporter_config(paths: UqsPaths, procnames: Iterable[str]) -> list[ReporterCheck]:
-    """Write the file reporter1 reads (see the module docstring)."""
-    kept, left_out = reporter_plan(paths.runtime_declaration, procnames)
+def write_reporter_config(
+    paths: UqsPaths, procnames: Iterable[str], selected: Iterable[str] | None = None
+) -> list[ReporterCheck]:
+    """Write the file reporter1 reads (see the module docstring). `selected`
+    is the deployment set a start is about to record (deployment.planned);
+    None is the set already recorded, if any (deployment.members)."""
+    if selected is None:
+        selected = deployment.members(paths)
+    kept, left_out = reporter_plan(paths.runtime_declaration, procnames, selected=selected)
     for reason in left_out:
         log.info("reporter1: leaving out check {}", reason)
     with paths.generated_reporter_config.open("w", newline="") as f:
