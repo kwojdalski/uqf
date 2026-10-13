@@ -39,3 +39,5 @@ last_value1,53
 exec_bars1,54
 hdb_exec_bars_backfill1,55
 flink_vwap1,56
+crypto_book_1s1,57
+hdb_crypto_book_backfill1,58
