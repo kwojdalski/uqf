@@ -1349,6 +1349,43 @@ test_a_null_scope_value_is_refused_at_load:{[t]
         "*book is null on some limit*";
         "to cap the total across books, the book column is left out"]};
 
+/ London long 1mm EURUSD at 1.10 and short 1mm USDJPY at 150: EUR +1mm,
+/ USD -1mm (bought, then sold), JPY +150mm.
+two_pairs:{[]
+    ([] time:d[1 2]; order_id:1 2; sym:`EURUSD`USDJPY; book:`london`london;
+        product:`spot`spot; side:1 -1; size:1000000 1000000f; price:1.10 150f;
+        order_status:`filled`filled)}
+
+test_a_limit_with_no_sym_is_refused_at_load:{[t]
+    / #1260: base_qty is in each pair's base currency and quote_qty in its
+    / quote currency, so a scope without sym summed EUR with USD and USD
+    / with JPY. A 500k book cap on base_qty saw 1mm EUR - 1mm USD = 0 and
+    / passed two genuine breaches; a 5mm cap on quote_qty saw a figure
+    / that was mostly JPY. The job holds no rates to revalue with, so the
+    / limit is refused rather than compared with a meaningless number.
+    reset[];
+    to_fx_positions[two_pairs[]];
+    .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
+        ([] book:`london`london; metric:`base_qty`quote_qty; cap:500000 5000000f; severity:`hard`hard);
+        "load_limits: a limit without sym*";
+        "a book cap would add base quantities across currencies"];
+    .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
+        ([] product:enlist `spot; metric:enlist `base_qty; cap:enlist 500000f);
+        "load_limits: a limit without sym*";
+        "so would a product cap"];
+    .qunit.assertEmpty[.qpipe.job.fx_positions.limits;"nothing is loaded from a refused table"]};
+
+test_a_limit_with_sym_and_book_still_polices_each_pair:{[t]
+    / The refusal is about sym, not about book: the same desk caps written
+    / per pair are one currency each and police as before.
+    reset[];
+    .qpipe.job.fx_positions.load_limits ([] sym:`EURUSD`USDJPY; book:`london`london;
+        metric:`base_qty`base_qty; cap:500000 500000f);
+    to_fx_positions[two_pairs[]];
+    b:.qpipe.job.fx_positions.fresh_breaches d 0;
+    .qunit.assertEquals[asc b`sym;`s#`EURUSD`USDJPY;"EUR +1mm and USD -1mm each breach their own cap"];
+    .qunit.assertEquals[distinct b`product;enlist `;"rolled up across products, as scoped"]};
+
 / --- starting a job: .qetl.job.stream.start ------------------------------
 
 / A transport that delivers `replayed` - a list of (table; rows) - as the

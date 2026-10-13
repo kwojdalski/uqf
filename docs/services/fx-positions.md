@@ -47,8 +47,8 @@ uqs query --port 6089                    # an interactive qcon session
 
 Breaches need limits, and the job loads them when it starts: a CSV named by
 `UQF_FX_POSITION_LIMITS`, one row per limit, with a header naming the scope
-columns it caps on (any of `sym`, `book`, `product`), then `metric`, `cap` and
-`severity`:
+columns it caps on (`sym`, and any of `book` and `product`), then `metric`,
+`cap` and `severity`:
 
 ```text
 sym,book,product,metric,cap,severity
@@ -141,9 +141,17 @@ loadable and diffable rather than editable.
 
 There is deliberately no notion of a desk-level limit versus a pair-level one. A
 limits table scoped on `(sym, book, product)` polices each position; one scoped
-on `book` polices the desk. The caller rolls its book up to the level its limits
-are written at --- that is a `.qdesk.rollup` call --- so one mechanism serves
-every level.
+on `(sym, book)` caps each pair across a book's products, and one on `sym` alone
+caps each pair across the desk. The caller rolls its book up to the level its
+limits are written at --- that is a `.qdesk.rollup` call --- so one mechanism
+serves every level.
+
+Every scope keeps `sym`, and `load_limits` refuses one that does not (#1260).
+`base_qty` is in each pair's base currency and `quote_qty` in its quote
+currency, so a total across pairs would add EUR to USD and USD to JPY: a book
+long 1mm EURUSD and short 1mm USDJPY would show a `base_qty` of 0 against a
+book cap. The service holds no rates to revalue with --- no marks, by design ---
+so it refuses the limit rather than compare a meaningless number.
 
 ### 4. Breaches are states, so alerts throttle
 

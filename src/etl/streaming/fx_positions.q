@@ -85,8 +85,10 @@ positions:`sym`book`product xkey desk_book;
 / to run and better than inventing caps nobody agreed to.
 / .
 / Scoped on the same three dimensions as the book, so a limit is written
-/ per pair per book per product. A desk-wide limit is the same table at a
-/ coarser scope, evaluated against .qdesk.rollup - see limits.q.
+/ per pair per book per product. A cap on a total is the same table at a
+/ coarser scope, evaluated against .qdesk.rollup - see limits.q - but the
+/ scope always keeps sym: base_qty and quote_qty are in each pair's own
+/ currencies, so a total across pairs would add currencies (#1260).
 limits:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
     metric:`symbol$(); cap:`float$(); severity:`symbol$());
 
@@ -136,11 +138,13 @@ restore_throttle:{[x]
 / caps each pair across every book. fresh_breaches rolls the book up to
 / that scope before comparing. It used to compare per position whatever
 / the scope, so a sym cap of 10mm passed 6mm in each of two books (#733).
+/ The scope must keep sym: the quantities are in each pair's own
+/ currencies, so a total across pairs adds currencies together (#1260).
 / A NULL scope value is refused for the same reason: a null book matches
 / no position, and to mean "every book" the column is left out instead.
-/ @param limits the limits table, scoped on some of sym, book and product
+/ @param limits the limits table, scoped on sym and optionally book and product
 / @return the number of limits loaded
-/ @throws error naming a malformed limit, or a scope column that is not one of this book's dimensions
+/ @throws error naming a malformed limit, a scope column that is not one of this book's dimensions, or a scope without sym
 / @eg .qpipe.job.fx_positions.load_limits[([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6; severity:enlist `hard)] -> 1
 load_limits:{[limits]
     .qlimit.require_limits limits;
@@ -156,6 +160,13 @@ load_limits:{[limits]
          ", " sv string .qpipe.job.fx_positions.dimensions];
     if[0=count scope;
         '"load_limits: a limit needs at least one of ",(", " sv string .qpipe.job.fx_positions.dimensions)," to say what it caps"];
+    / base_qty is in each pair's base currency and quote_qty in its quote
+    / currency, so only a scope that keeps sym sums one currency. Without
+    / it a book cap added EUR to USD and USD to JPY (#1260). This job holds
+    / no rates to revalue with - no marks, by design (desk_positions.q) -
+    / so the limit is refused rather than compared with a meaningless sum.
+    if[not `sym in scope;
+        '"load_limits: a limit without sym would sum base_qty and quote_qty across pairs, adding different currencies - write the cap per sym"];
     blank:scope where {[limits;c] any null limits c}[limits] each scope;
     if[count blank;
         '"load_limits: ",(", " sv string blank)," is null on some limit, which matches no position - leave the column out to cap the total across it"];
@@ -163,7 +174,7 @@ load_limits:{[limits]
     count limits}
 
 / The limits file a running process loads (#1112): a CSV with a header, one
-/ row per limit - the scope columns it caps on (any of sym, book and
+/ row per limit - the scope columns it caps on (sym, and any of book and
 / product), then metric, cap and severity. Read as symbols but cap, and
 / handed to load_limits, so a malformed file is refused as a malformed table
 / would be. An empty scope cell is null, which load_limits refuses.
