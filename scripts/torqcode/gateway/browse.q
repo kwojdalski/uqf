@@ -68,7 +68,9 @@ browse_window:{[fc;fo;fv;span;now]
 /   policy allows: the policy is the one authority on size (#928), so a read
 /   asking for more is truncated to it rather than refused
 / @param procs the tiers to read, e.g. `rdb`hdb
-/ @return the rows, at most lim
+/ @return dict: rows, at most cap; cap, the row cap the read ran under -
+/   lim, or the policy's maxrows where that is lower - so the caller can tell
+/   a result cut by the policy from one that is simply complete (#1255)
 / @throws error naming an unknown operator, or the policy a request breaks
 browse:{[t;fc;fo;fv;lim;procs]
     if[count bad:fo except key browse_ops;
@@ -80,6 +82,6 @@ browse:{[t;fc;fo;fv;lim;procs]
     pairs:browse_pair'[fo;fv];
     req:`tablename`starttime`endtime`sublist`procs!(t;w 0;w 1;lim;(),procs);
     if[count fc; req[`filters]:{[fc;pairs;c] pairs where fc=c}[fc;pairs] each (distinct fc)!distinct fc];
-    .dataaccess.getdata req}
+    `rows`cap!(.dataaccess.getdata req;lim)}
 
 \d .
