@@ -33,9 +33,12 @@ def _ledger() -> dict[str, dict]:
         raise UqsError(f"{BUNDLE_LEDGER} is not JSON ({exc}) - fix or remove it") from None
 
 
-def _bundle_split(runtime: Runtime) -> tuple[set[str], set[str], set[str], set[str]]:
+def _bundle_split(
+    runtime: Runtime, selected: set[str] | None = None
+) -> tuple[set[str], set[str], set[str], set[str]]:
     """(procnames of bundles in `runtime`, procnames and tables of those not,
-    tables of those in it)."""
+    tables of those in it). `selected`, a deployment set, also takes out a
+    bundle none of whose processes it names; None takes out none."""
     included: set[str] = set()
     excluded: set[str] = set()
     excluded_tables: set[str] = set()
@@ -44,6 +47,8 @@ def _bundle_split(runtime: Runtime) -> tuple[set[str], set[str], set[str], set[s
         names = entry.get("runtimes")
         member = runtime.profile is None if names is None else runtime.name in names
         procs = {j["procname"] for j in entry.get("jobs", []) if "procname" in j}
+        if selected is not None and not procs & selected:
+            member = False
         if member:
             included |= procs
             included_tables |= set(entry.get("tables", []))

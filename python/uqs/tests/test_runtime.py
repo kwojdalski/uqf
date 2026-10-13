@@ -74,7 +74,9 @@ def test_run_torq_sh_extends_the_environment_rather_than_replacing_it(monkeypatc
     stop resolving though they are on PATH in the calling shell."""
     monkeypatch.delenv("UQS_TORQ_LAUNCHER", raising=False)
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: {"KDBBASEPORT": "7000"})
+    monkeypatch.setattr(
+        runtime, "bootstrap", lambda paths, base_port, selected=None: {"KDBBASEPORT": "7000"}
+    )
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, **kw) or "RESULT")
     assert runtime.run_torq_sh(_paths(), ["summary"], base_port=7000, capture=True) == "RESULT"
     assert seen["cmd"] == ["/repo/lib/torq/torq.sh", "summary"]
@@ -99,7 +101,7 @@ def test_run_torq_sh_runs_a_site_launcher_under_the_generated_env(monkeypatch, t
         "TORQPROCESSES": "/repo/output/uqs/process.csv",
     }
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: generated)
+    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port, selected=None: generated)
     # The launcher is under test, not the q-version guard (#882): with a real
     # q installed, the guard would ask it through the stubbed subprocess.run.
     monkeypatch.setattr(runtime.qtree, "refuse_unloadable", lambda paths, env: None)
