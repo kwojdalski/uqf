@@ -50,6 +50,22 @@ test_symbolize_columns_casts_string_to_symbol:{[t]
     .qunit.assertEquals[out`sym;`EURUSD`GBPUSD;"symbol values match the original strings"];
     .qunit.assertEquals[out`side;`buy`sell;"side values match the original strings"]};
 
+/ A one-char-per-row column is a flat char vector (10h), not a list of strings:
+/ `$ on it is ONE symbol that the amend broadcast to every row.
+test_symbolize_columns_casts_flat_char_column_one_symbol_per_row:{[t]
+    src:([] sym:("EURUSD";"GBPUSD";"EURUSD"); side:"BSB");
+    out:.qbook.symbolize_columns[src;`sym`side];
+    .qunit.assertEquals[out`side;`B`S`B;"each char becomes its own symbol, not `BSB on every row"]};
+
+test_symbolize_columns_casts_flat_char_column_in_one_row_table:{[t]
+    src:([] side:enlist "B"; n:enlist 1);
+    out:.qbook.symbolize_columns[src;enlist `side];
+    .qunit.assertEquals[out`side;enlist `B;"a 1-row flat char column casts to one symbol"]};
+
+test_symbolize_columns_leaves_symbol_column_unchanged:{[t]
+    src:([] side:`B`S`B);
+    .qunit.assertEquals[.qbook.symbolize_columns[src;enlist `side];src;"an already-symbol column is untouched"]};
+
 / An absent column is refused by name. Before, the same mistake gave a bare
 / 'type here and NOTHING AT ALL through book_from_wide_levels - q returns a
 / different placeholder for a missing column depending on the table's shape,

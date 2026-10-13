@@ -102,8 +102,9 @@ derive_level_groups:{[col_names;prefix_targets]
 
 / Cast the named columns of tbl from string (cells are char vectors) to
 / symbol. A column already type 11h is left untouched, so re-running this
-/ is idempotent. Uses `$` directly on the whole column (it maps over each
-/ char-vector cell automatically) rather than `string` first - see
+/ is idempotent. Uses `$` directly on a column of char-vector cells (it maps
+/ over each cell automatically); a flat char column (10h, one char per row)
+/ is split with `string` first so each char becomes its own symbol - see
 / kdb-q-conventions' string-vs-symbol gotcha.
 / @param tbl the table (already relevelled, if applicable)
 / @param sym_cols explicit list of column names to cast to symbol
@@ -124,7 +125,11 @@ symbolize_columns:{[tbl;sym_cols]
     i:0;
     while[i<count sym_cols;
         col:sym_cols i;
-        if[11h<>type tbl col; tbl:@[tbl;col;:;`$ tbl col]];
+        c:tbl col;
+        / A flat char vector (10h, one char per row) must be split into one
+        / string per row first: `$ on the whole vector is a single symbol
+        / that the amend would broadcast to every row.
+        if[11h<>type c; tbl:@[tbl;col;:;`$ $[10h=type c; string c; c]]];
         i+:1];
     tbl};
 
