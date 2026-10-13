@@ -135,6 +135,32 @@ test_date_only_detection_is_exported:{[t]
 test_a_malformed_timestamp_is_null:{[t]
     .qunit.assertEquals[null .qetl.coerce.to_timestamp["not a date"];1b;"garbage is null rather than a partial parse"]};
 
+/ "P"$ rolls an impossible hour into the next day (25:00 -> 01:00 tomorrow)
+/ though it nulls an impossible minute or second. A window bound that did
+/ that would silently move a backfill by a day.
+test_an_impossible_hour_is_null_not_a_later_day:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T25:00:00";"2026-09-15T48:00:00";"2026-09-15T99:00:00Z";"2026-09-15 25:00:00";"2026-09-15T24:30:00";"2026-09-15T25:00:00+02:00");
+    .qunit.assertEquals[null r;111111b;"each is null, none a later day"]};
+
+test_an_impossible_minute_or_second_is_still_null:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T12:60:00";"2026-09-15T12:00:60");
+    .qunit.assertEquals[null r;11b;"minutes and seconds were already refused"]};
+
+/ "05/09/2026" is 5 September or 9 May; q reads it as the latter without
+/ erroring, and "15/09/2026" as null. Refused for both, like "1,234".
+test_a_slashed_date_is_refused_as_ambiguous:{[t]
+    d:.qetl.coerce.to_date_as_midnight each ("05/09/2026";"15/09/2026";"2026/09/15");
+    p:.qetl.coerce.to_timestamp each ("05/09/2026 09:30:00";"15/09/2026 09:30:00";"2026/09/15D09:30:00");
+    .qunit.assertEquals[(null d;null p);(111b;111b);"no slashed date reaches a parse"]};
+
+test_unslashed_dates_still_parse:{[t]
+    d:.qetl.coerce.to_date_as_midnight each ("2026-09-15";"2026.09.15");
+    .qunit.assertEquals[d;2#2026.09.15D00:00:00.000000000;"ISO and dotted dates are unaffected"]};
+
+test_hour_edges_still_parse:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T00:00:00";"2026-09-15T23:59:59.999999999";"2026-09-15T24:00:00";"2026-09-15T24:00:00.000");
+    .qunit.assertEquals[r;2026.09.15D00:00:00.000000000 2026.09.15D23:59:59.999999999 2026.09.16D00:00:00.000000000 2026.09.16D00:00:00.000000000;"00:00, the last nanosecond and ISO's 24:00:00 are accepted"]};
+
 / --- symbols: case is the trap, whitespace is not -----------------------
 
 / Measured: `$"eurusd" does NOT match `EURUSD, and that is silent - every
