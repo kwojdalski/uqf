@@ -146,14 +146,17 @@ def test_table_reads_go_as_the_data_login_through_browse():
     from uqf_frontend.gateway import KolaGateway
 
     logins: list[tuple[str, str]] = []
+    sent: list[tuple[str, tuple]] = []
 
     class Spy(KolaGateway):
         def _exec(self, program, args):
             logins.append(self._login)
-            return (program, args)
+            sent.append((program, args))
+            return {"rows": [], "cap": 10}
 
     gw = Spy(Settings(user="admin", passwd="admin", data_user="browser", data_passwd="pw"))
-    program, args = gw.browse("trades", ["sym"], ["eq"], ["EURUSD"], 10, ["rdb"])
+    gw.browse("trades", ["sym"], ["eq"], ["EURUSD"], 10, ["rdb"])
+    [(program, args)] = sent
     assert program == queries.BROWSE == ".uqf.browse"
     assert args == ("trades", ["sym"], ["eq"], ["EURUSD"], 10, ["rdb"])
     assert logins == [("browser", "pw")], "the data login, not admin"

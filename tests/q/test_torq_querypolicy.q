@@ -76,6 +76,37 @@ test_instruments_or_a_filter_satisfies_the_required_filter:{[t]
     viafilter:(`instruments _ book),enlist[`filters]!enlist enlist[`sym]!enlist(=;`EURUSD);
     .qunit.assertEquals[refusal[policy`mkt_orderbook] each (book;viafilter);`passed`passed;"either names sym"]};
 
+/ #1254: a required filter keeps a request to the values it names, so only =
+/ or in satisfies it - as .uqf.browse spells them (browse_pair) and as a
+/ getdata caller sends one bare pair.
+symfilter:{[pairs] (`instruments _ book),enlist[`filters]!enlist enlist[`sym]!enlist pairs}
+
+test_eq_and_in_on_a_required_column_pass:{[t]
+    r:refusal[policy`mkt_orderbook] each symfilter each (
+        enlist .uqf.browse_pair[`eq;`EURUSD];enlist .uqf.browse_pair[`in;`EURUSD`GBPUSD];(in;`EURUSD`GBPUSD));
+    .qunit.assertEquals[r;`passed`passed`passed;"each keeps sym to the pairs it names"]};
+
+test_ne_gt_and_not_in_on_a_required_column_are_refused_naming_it:{[t]
+    f:symfilter each (enlist .uqf.browse_pair[`ne;`ZZZ];enlist .uqf.browse_pair[`gt;`];enlist (not;in;`ZZZ`YYY));
+    {[d] .qunit.assertThrows[.checkinputs.checkrequest[policy`mkt_orderbook;`sym;];d;
+        "querypolicy: mkt_orderbook needs sym narrowed with = or in - a not, <, >, within or like condition*";
+        "names sym and still reads every pair"]} each f};
+
+test_ne_beside_eq_on_a_required_column_passes:{[t]
+    .qunit.assertEquals[refusal[policy`mkt_orderbook] symfilter .uqf.browse_pair'[`eq`ne;`EURUSD`GBPUSD];`passed;
+        "the eq already narrows it"]};
+
+test_instruments_satisfies_a_required_column_whatever_else_filters_it:{[t]
+    d:book,enlist[`filters]!enlist enlist[`sym]!enlist enlist .uqf.browse_pair[`ne;`ZZZ];
+    .qunit.assertEquals[refusal[policy`mkt_orderbook] d;`passed;"instruments names the pair"]};
+
+test_a_comparison_on_a_column_no_policy_requires_is_unaffected:{[t]
+    d:book,enlist[`filters]!enlist `sym`bid!(enlist .uqf.browse_pair[`eq;`EURUSD];enlist .uqf.browse_pair[`gt;1.08]);
+    p:policy`demo_execution_quality;
+    e:`tablename`starttime`endtime`filters!(`demo_execution_quality;2026.01.01D00:00;2026.01.01D01:00;
+        enlist[`sym]!enlist enlist .uqf.browse_pair[`ne;`ZZZ]);
+    .qunit.assertEquals[(refusal[policy`mkt_orderbook] d;refusal[p] e);`passed`passed;"only required columns must narrow"]};
+
 test_an_empty_instruments_list_does_not_count_as_a_filter:{[t]
     .qunit.assertThrows[.checkinputs.checkrequest[policy`mkt_orderbook;`sym;];@[book;`instruments;:;none];
         "querypolicy: mkt_orderbook needs a filter on sym*";"an empty list filters nothing"]};
@@ -210,6 +241,13 @@ test_browse_never_asks_for_more_rows_than_the_policy_allows:{[t]
     / to the cap, not refused by checkresponsesize after the read.
     browse_with[`maxrange`maxrows!(1D;10);{[] .uqf.browse[`config_change;`symbol$();`symbol$();();50000;enlist `rdb]}];
     .qunit.assertEquals[asked`sublist;10;"the policy's maxrows, not the 50000 asked for"]};
+
+test_browse_returns_the_rows_and_the_cap_it_read_under:{[t]
+    / #1255: the caller compares what came back against this cap, so a cut
+    / the policy made is not mistaken for a complete result.
+    r:browse_with[`maxrange`maxrows!(1D;10);{[] .uqf.browse[`config_change;`symbol$();`symbol$();();50000;enlist `rdb]}];
+    .qunit.assertEquals[key r;`rows`cap;"rows and cap"];
+    .qunit.assertEquals[r`cap;10;"the policy's maxrows, not the 50000 asked for"]};
 
 test_browse_reads_the_latest_window_the_policy_allows:{[t]
     browse_with[`maxrange`maxrows!(0D01;10);{[] .uqf.browse[`mkt_orderbook;enlist `sym;enlist `eq;enlist `EURUSD;10;enlist `rdb]}];

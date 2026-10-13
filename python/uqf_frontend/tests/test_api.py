@@ -115,6 +115,42 @@ def test_caller_limit_is_respected_when_below_the_cap(gw):
     assert gw.last_args[-1] == 7
 
 
+def _query_n_rows(gw, n: int, *, max_rows: int, limit: int) -> dict:
+    from uqf_frontend import queries
+
+    gw._responses[queries.BROWSE] = [{"sym": "EURUSD"}] * n
+    c = TestClient(create_app(gateway=gw, settings=Settings(max_rows=max_rows)))
+    return c.post("/query", json={"table": "trades", "filters": [], "limit": limit}).json()
+
+
+def test_a_cut_made_by_the_gateway_policy_is_reported_as_truncated(gw):
+    """#1255: the policy's maxrows (10000) under the frontend's cap (50000)
+    cuts a 20000-row request to 10000. Comparing against the frontend's
+    own cap alone, that read as a complete result."""
+    gw.policy_maxrows = 10_000
+    body = _query_n_rows(gw, 10_000, max_rows=50_000, limit=20_000)
+    assert (body["row_count"], body["truncated"]) == (10_000, True)
+
+
+def test_a_cut_made_by_the_frontend_cap_is_reported_as_truncated(gw):
+    body = _query_n_rows(gw, 50, max_rows=50, limit=999)
+    assert body["truncated"] is True
+
+
+def test_a_result_that_fills_only_the_callers_own_limit_is_not_truncated(gw):
+    """The caller asked for 7 and got 7: that limit was theirs, not a cut -
+    even when the policy's cap is above it."""
+    gw.policy_maxrows = 10_000
+    body = _query_n_rows(gw, 7, max_rows=50, limit=7)
+    assert body["truncated"] is False
+
+
+def test_a_result_under_the_policy_cap_is_not_truncated(gw):
+    gw.policy_maxrows = 10_000
+    body = _query_n_rows(gw, 9_999, max_rows=50_000, limit=20_000)
+    assert body["truncated"] is False
+
+
 @pytest.mark.parametrize(
     ("exc", "status", "transient"),
     [

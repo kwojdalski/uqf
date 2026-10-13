@@ -111,7 +111,13 @@ BROWSE_Q = Path(__file__).resolve().parents[3] / "scripts" / "torqcode" / "gatew
 @pytest.fixture(scope="module")
 def browse_port(start_q, tmp_path_factory) -> Any:
     script = tmp_path_factory.mktemp("browse") / "browse.q"
-    script.write_text(BROWSE_Q.read_text())
+    # Stand-ins for what a TorQ gateway gives .uqf.browse: a policy capping a
+    # read at 3 rows, and a getdata that returns as many rows as it is asked.
+    stand_ins = (
+        "\n.checkinputs.querypolicyfor:{[t] `maxrange`maxrows!(1D;3)};"
+        "\n.dataaccess.getdata:{[req] ([] n:til req`sublist)};\n"
+    )
+    script.write_text(BROWSE_Q.read_text() + stand_ins)
     with start_q(str(script)) as port:
         yield port
 
@@ -134,6 +140,15 @@ def test_a_guid_filter_value_reaches_q_as_a_guid(browse_port):
     gw = KolaGateway(Settings(port=browse_port))
     types = gw.call("{[o;v] {type last x} each .uqf.browse_pair'[o;v]}", ["eq", "in"], [one, many])
     assert list(types) == [-2, 2]
+
+
+def test_browse_brings_back_the_cap_the_policy_set(browse_port):
+    """#1255: over a real kola connection .uqf.browse's answer is the rows
+    and the cap it read under - the policy's 3, not the 50 asked for - so
+    /query can tell a policy cut from a complete result."""
+    gw = KolaGateway(Settings(port=browse_port, data_user="browser", data_passwd="pw"))
+    read = gw.browse("t", [], [], [], 50, ["rdb"])
+    assert (read.cap, len(read.rows)) == (3, 3)
 
 
 @pytest.mark.parametrize(

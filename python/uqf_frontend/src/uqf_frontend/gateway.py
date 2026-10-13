@@ -13,6 +13,7 @@ from __future__ import annotations
 import socket
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from uqf_frontend.config import Settings
@@ -59,6 +60,17 @@ def kola_host(host: str, timeout: int) -> str:
     return str(found[0][4][0]) if found else host
 
 
+@dataclass(frozen=True)
+class Browsed:
+    """What ``.uqf.browse`` read: the rows, and the row cap the read ran
+    under - the limit asked for, or the query policy's maxrows where that is
+    lower (#928). Without the cap a cut the policy made is indistinguishable
+    from a complete result (#1255)."""
+
+    rows: Any
+    cap: int
+
+
 @runtime_checkable
 class Gateway(Protocol):
     """Everything the API layer needs from q. Deliberately tiny."""
@@ -85,7 +97,7 @@ class Gateway(Protocol):
         values: list[Any],
         limit: int,
         tiers: list[str],
-    ) -> Any:
+    ) -> Browsed:
         """Read one table as the data login, through the gateway's
         ``.uqf.browse`` - under that login's query policy (#889)."""
         ...
@@ -149,7 +161,7 @@ class KolaGateway:
         values: list[Any],
         limit: int,
         tiers: list[str],
-    ) -> Any:
+    ) -> Browsed:
         from uqf_frontend import queries
 
         s = self._settings
@@ -163,7 +175,8 @@ class KolaGateway:
                 connect = None if self._connect == self._kola_connect else self._connect
                 self._data = type(self)(s, connect, login=(s.data_user, s.data_passwd))
             data = self._data
-        return data._exec(queries.BROWSE, (table, columns, operators, values, limit, tiers))
+        read = data._exec(queries.BROWSE, (table, columns, operators, values, limit, tiers))
+        return Browsed(rows=read["rows"], cap=int(read["cap"]))
 
     def _exec(self, program: str, args: tuple[Any, ...]) -> Any:
         q = self._checkout()
@@ -340,6 +353,9 @@ class FakeGateway:
             **(responses or {}),
         }
         self.raises: Exception | None = None
+        #: The gateway query policy's maxrows for a browse, when a test wants
+        #: one below the limit asked for; None leaves the limit as the cap.
+        self.policy_maxrows: int | None = None
 
     def call(self, program: str, *args: Any) -> Any:
         self.calls.append((program, args))
@@ -361,13 +377,14 @@ class FakeGateway:
         values: list[Any],
         limit: int,
         tiers: list[str],
-    ) -> Any:
+    ) -> Browsed:
         from uqf_frontend import queries
 
         self.routed.append((queries.BROWSE, (table, columns, operators, values, limit), tiers))
         if self.raises is not None:
             raise self.raises
-        return self._responses.get(queries.BROWSE)
+        cap = limit if self.policy_maxrows is None else min(limit, self.policy_maxrows)
+        return Browsed(rows=self._responses.get(queries.BROWSE), cap=cap)
 
     @property
     def last_program(self) -> str:
