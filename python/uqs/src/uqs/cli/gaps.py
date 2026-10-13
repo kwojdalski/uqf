@@ -97,7 +97,7 @@ def gaps(
         for hole in advised:
             command = (
                 f"uqs backfill {worker} --from {stack_runs._as_bound(str(hole['range_from']))} "
-                f"--to {stack_runs._as_bound(str(hole['range_to']))}{version}"
+                f"--to {stack_runs._as_bound(str(hole['range_to']), upper=True)}{version}"
             )
             console.print(f"  {command}", soft_wrap=True)
     if cut:
