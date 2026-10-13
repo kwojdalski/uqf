@@ -98,9 +98,9 @@ test_book_from_wide_levels_composes_fold_then_symbolize:{[t]
 / #1020: an infinite level is no more a price than a zero one - superbook
 / already refuses it (price<0w), so the one top-of-book rule must too.
 test_top_sides_takes_no_infinite_level_as_a_price:{[t]
-    x:([] bid_prices:(enlist 0w;enlist 1.10;enlist -0w;enlist 1.10);
+    bk:([] bid_prices:(enlist 0w;enlist 1.10;enlist -0w;enlist 1.10);
         ask_prices:(enlist 1.12;enlist 0w;enlist 1.12;enlist 1.12));
-    r:.qbook.top_sides x;
+    r:.qbook.top_sides bk;
     .qunit.assertEquals[r`bid;0n 1.10 0n 1.10;"an infinite bid, either sign, is a null side"];
     .qunit.assertEquals[r`ask;1.12 0n 1.12 1.12;"and so is an infinite ask"]};
 
@@ -111,16 +111,16 @@ test_a_level_is_a_price_when_price_and_size_are_positive_and_finite:{[t]
         "zero, negative, infinite or null - in price or in size - is not a price"]};
 
 test_top_sides_takes_no_zero_size_level_as_a_price:{[t]
-    x:([] bid_prices:(enlist 1.10;enlist 1.10); bid_sizes:(enlist 1e6;enlist 0f);
+    bk:([] bid_prices:(enlist 1.10;enlist 1.10); bid_sizes:(enlist 1e6;enlist 0f);
         ask_prices:(enlist 1.12;enlist 1.12); ask_sizes:(enlist 0w;enlist 1e6));
-    r:.qbook.top_sides x;
+    r:.qbook.top_sides bk;
     .qunit.assertEquals[(r`bid;r`ask);(1.10 0n;0n 1.12);"a level with no usable size is a null side, as superbook drops it"]};
 
 test_superbook_and_top_sides_agree_on_level_0:{[t]
     px:(1.10;0w;1.10;0f;1.10);
     sz:(1e6;1e6;0f;1e6;0w);
-    x:([] bid_prices:enlist each px; bid_sizes:enlist each sz; ask_prices:5#enlist enlist 1.12; ask_sizes:5#enlist enlist 1e6);
+    bk:([] bid_prices:enlist each px; bid_sizes:enlist each sz; ask_prices:5#enlist enlist 1.12; ask_sizes:5#enlist enlist 1e6);
     sb:{first .qpipe.job.superbook.levels[enlist x;enlist y]`price}'[px;sz];
-    .qunit.assertEquals[sb;(.qbook.top_sides x)`bid;"superbook keeps exactly the level-0 prices top_sides does"]};
+    .qunit.assertEquals[sb;(.qbook.top_sides bk)`bid;"superbook keeps exactly the level-0 prices top_sides does"]};
 
 \d .

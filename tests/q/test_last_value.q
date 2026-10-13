@@ -115,22 +115,22 @@ agreement_rows:{[]
         ask_sizes:7#enlist enlist 1e6)}
 
 test_all_consumers_agree_on_a_withdrawn_or_non_positive_side:{[t]
-    x:agreement_rows[];
-    ref:.qbook.top_sides x;
+    rows:agreement_rows[];
+    ref:.qbook.top_sides rows;
     .qunit.assertEquals[ref`bid;1.10 0n 1.10 0n 1.10 0n 1.10;"an empty ladder, a zero level and an infinite one are all a null side (#1020)"];
     .qunit.assertEquals[ref`ask;1.12 1.12 0n 1.12 1.12 1.12 0n;"on either side"];
-    v:.qmicro.venue_tops update market:`crypto from x;
+    v:.qmicro.venue_tops update market:`crypto from rows;
     .qunit.assertEquals[(v`bid;v`ask);(ref`bid;ref`ask);"a venue's top keeps a withdrawn side, null"];
-    mk:.qpipe.job.crypto_markout.top_of_book update venue:source from x;
+    mk:.qpipe.job.crypto_markout.top_of_book update venue:source from rows;
     .qunit.assertEquals[(mk`bid;mk`ask);(ref`bid;ref`ask);"crypto_markout's top of book"];
-    own:.qmicro.own_book_mids x;
+    own:.qmicro.own_book_mids rows;
     both:where (not null ref`bid) & not null ref`ask;
-    .qunit.assertEquals[own`source;(x`source) both;"a book's own mid needs both sides"]};
+    .qunit.assertEquals[own`source;(rows`source) both;"a book's own mid needs both sides"]};
 
 test_a_market_with_no_price_rule_is_refused_by_name:{[t]
-    x:update market:`equity from agreement_rows[];
-    .qunit.assertThrows[.qmicro.venue_tops;x;"*no pricing rule for market equity*";"not priced by whichever branch a consumer wrote"];
-    .qunit.assertThrows[.qmicro.own_book_mids;x;"*no pricing rule for market equity*";"on either extraction"]};
+    rows:update market:`equity from agreement_rows[];
+    .qunit.assertThrows[.qmicro.venue_tops;rows;"*no pricing rule for market equity*";"not priced by whichever branch a consumer wrote"];
+    .qunit.assertThrows[.qmicro.own_book_mids;rows;"*no pricing rule for market equity*";"on either extraction"]};
 
 / #998: posbook marks and last_value publishes by the same rule, so they
 / agree when a venue withdraws a side and another goes stale. last_value
