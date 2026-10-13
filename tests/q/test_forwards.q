@@ -655,6 +655,13 @@ test_cross_impact_at_horizons_rejects_same_pair:{[t]
     wrapper:{[q;trade_time] .qexec.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0D00:00:00;1]}[;trade_time];
     .qunit.assertThrows[wrapper;quotes;"cross_impact_at_horizons: impact_sym must be different*";"impact_sym the same as traded_sym is rejected"]};
 
+test_cross_impact_at_horizons_rejects_the_inverse_pair:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    trade_time:t0+0D00:00:00.500;
+    wrapper:{[q;trade_time] .qexec.cross_impact_at_horizons[q;`EURPLN;`PLNEUR;trade_time;1;10000;enlist 0D00:00:00;1]}[;trade_time];
+    .qunit.assertThrows[wrapper;quotes;"cross_impact_at_horizons: impact_sym must be different*";"impact_sym the inverse of traded_sym is the same pair and is rejected"]};
+
 test_cross_impact_at_horizons_sym_column_is_impact_sym_not_traded_sym:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
