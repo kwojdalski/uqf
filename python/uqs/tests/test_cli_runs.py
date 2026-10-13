@@ -106,6 +106,38 @@ def test_a_sub_second_bound_keeps_every_digit_as_a_q_literal():
     assert parsed.microsecond == 123456
 
 
+@pytest.mark.parametrize(
+    ("ledger", "upper", "bound"),
+    [
+        # A whole microsecond is printed as it is, whichever end it bounds.
+        ("2026-09-13T06:30:00.123456000", False, "2026.09.13D06:30:00.123456000"),
+        ("2026-09-13T06:30:00.123456000", True, "2026.09.13D06:30:00.123456000"),
+        ("2026-09-13T06:30:00.000000000", True, "2026-09-13T06:30:00"),
+        # Finer than that (#1253): a start rounds down, an end up.
+        ("2026-09-13T06:30:00.123456789", False, "2026.09.13D06:30:00.123456000"),
+        ("2026-09-13T06:30:00.123456001", True, "2026.09.13D06:30:00.123457000"),
+        ("2026-09-13T06:30:00.000000001", False, "2026-09-13T06:30:00"),
+        ("2026-09-13T06:30:59.999999999", True, "2026-09-13T06:31:00"),
+    ],
+)
+def test_a_bound_is_rounded_outwards_to_the_microsecond(ledger, upper, bound):
+    from uqs.stack import backfill
+
+    assert stack_runs._as_bound(ledger, upper=upper) == bound
+    backfill.parse_bound("--to" if upper else "--from", bound)
+
+
+def test_a_nanosecond_run_range_reruns_over_a_range_that_covers_it():
+    run = {
+        **_FAILED_RUN,
+        "range_from": "2026-09-13T06:30:00.123456789",
+        "range_to": "2026-09-13T07:30:00.987654321",
+    }
+    command = stack_runs.rerun_command(run)
+    assert command is not None
+    assert "--from 2026.09.13D06:30:00.123456000 --to 2026.09.13D07:30:00.987655000" in command
+
+
 def test_no_rerun_command_without_a_recorded_range():
     """A run begun before the ledger recorded ranges cannot be re-run from its row."""
     assert stack_runs.rerun_command({**_FAILED_RUN, "range_from": None}) is None

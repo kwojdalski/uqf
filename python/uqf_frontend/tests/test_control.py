@@ -311,6 +311,26 @@ def test_a_value_torq_sh_would_split_is_refused_before_it_is_written(writeable, 
     assert written == []
 
 
+@pytest.mark.parametrize("ch", "#*?[]~{}!")
+def test_a_value_torq_sh_s_eval_would_act_on_is_refused_before_it_is_written(
+    writeable, monkeypatch, ch
+):
+    """#1252: the write API reaches the same setter, and the same refusal,
+    naming the character."""
+    written: list[Any] = []
+    _patch_core(
+        monkeypatch,
+        list_process_names=lambda p: ["fxfeed1"],
+        _write_overrides=lambda p, o: written.append(o),
+    )
+    resp = writeable.put(
+        "/control/process/fxfeed1/config", json={"field": "extras", "value": f"-note a{ch}b"}
+    )
+    assert resp.status_code == 422
+    assert f"shell metacharacters {ch!r}" in resp.json()["detail"]
+    assert written == []
+
+
 # ------------------------------------------------------- worker config
 
 

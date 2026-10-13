@@ -103,10 +103,11 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     return True
 
 
-def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
-    """Idempotently set up the writable data dir and generated config, and
-    return the full env dict torq.sh should run under.
-    """
+def bootstrap(
+    paths: UqsPaths, base_port: int | None = None, selected: Sequence[str] | None = None
+) -> dict[str, str]:
+    """Idempotently set up the writable data dir and generated config, and return the full
+    env dict torq.sh should run under. `selected`: as stack/reporter.write_reporter_config."""
     check_prerequisites(paths)
 
     if not paths.hdb_dir.is_dir():
@@ -157,7 +158,7 @@ def bootstrap(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
         # Same again for DQE's query list (stack/dqe.py), and for reporter1's checks,
         # validated against this deployment, not the site's reporter.csv (stack/reporter.py).
         write_dqe_config(paths)
-        write_reporter_config(paths, (r["procname"] for r in rows))
+        write_reporter_config(paths, (r["procname"] for r in rows), selected)
 
     # Make the HDB rectangular, now that database.q says what it should
     # hold. A partitioned kdb+ database needs every table in every
@@ -214,14 +215,13 @@ def run_torq_sh(
     `selected` is a profile start's set: what TorQ discovers (stack/deployment.py).
     """
     start_policy.refuse_start(paths, args, base_port)
-    # The launcher first: bootstrap writes the data directory, process.csv and
-    # setenv.sh, and a launcher that is going to be refused must not have
-    # had any of that written on its behalf.
+    # The launcher first: bootstrap writes the data directory, process.csv and setenv.sh,
+    # and a launcher that is going to be refused must not have had that written for it.
     launcher = torq_launcher(paths)
-    overrides = bootstrap(paths, base_port=base_port)
-    # subprocess.run's env= *replaces* the environment rather than extending
-    # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
-    # stop resolving even though they're on PATH in the calling shell.
+    plan = deployment.planned(paths, args, selected)
+    overrides = bootstrap(paths, base_port=base_port, selected=plan)
+    # subprocess.run's env= *replaces* the environment rather than extending it - merge onto
+    # the inherited one (PATH, etc.) or envsubst/rlwrap/q stop resolving, though on PATH.
     env = {**os.environ, **overrides}
     if args and args[0] in start_policy.STARTING_VERBS:
         # What a start or restart loads, converted and proven first - refused before
