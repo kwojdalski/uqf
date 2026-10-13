@@ -151,3 +151,74 @@ def test_a_gap_before_today_is_advised_whole_and_nothing_is_said_about_today(mon
     result = _gaps_cli(monkeypatch, [_HOLE], ["hdb_demo_markouts_backfill"])
     assert "--to 2026-09-13T10:20:00 --version <V>" in result.output
     assert "after end of day" not in result.output
+
+
+# --- a nanosecond gap, as .z.p records one on Linux (#1253) ------------------
+
+_NS_HOLE = {
+    "range_from": "2026-09-13T10:00:01.123456789",
+    "range_to": "2026-09-13T10:04:07.987654321",
+}
+
+
+def _printed_command(output: str) -> str:
+    return next(line.strip() for line in output.splitlines() if "uqs backfill" in line)
+
+
+def test_a_nanosecond_gap_is_widened_to_the_microsecond_backfill_carries(monkeypatch):
+    """The start rounds down and the end up: the refill covers the whole hole,
+    and `parse_bound`, which stops at the microsecond, accepts both."""
+    from uqs.stack import backfill
+
+    result = _gaps_cli(monkeypatch, [_NS_HOLE], ["hdb_demo_markouts_backfill"])
+    assert result.exit_code == 0, result.output
+    command = _printed_command(result.output)
+    assert "--from 2026.09.13D10:00:01.123456000 --to 2026.09.13D10:04:07.987655000" in command, (
+        command
+    )
+    assert backfill.parse_bound("--from", command.split("--from ")[1].split()[0]) == datetime(
+        2026, 9, 13, 10, 0, 1, 123456, tzinfo=UTC
+    )
+    assert backfill.parse_bound("--to", command.split("--to ")[1].split()[0]) == datetime(
+        2026, 9, 13, 10, 4, 7, 987655, tzinfo=UTC
+    )
+
+
+def test_the_printed_refill_runs_through_the_backfill_cli(monkeypatch):
+    """Pasted back into `uqs backfill`, the command reaches the start of a
+    run with the widened range, rather than a refusal of its bounds."""
+    import shlex
+
+    from uqs.cli import backfill as backfill_cli
+
+    command = _printed_command(
+        _gaps_cli(monkeypatch, [_NS_HOLE], ["hdb_demo_markouts_backfill"]).output
+    )
+    started = []
+
+    def start(paths, worker, version, bound_from, bound_to, **kw):
+        started.append((worker, version, bound_from, bound_to))
+        return subprocess.CompletedProcess([], 0)
+
+    monkeypatch.setattr(backfill_cli.stack_backfill, "start", start)
+    args = shlex.split(command.replace("<V>", "v1"))[1:]
+    result = runner.invoke(cli.app, args, env={"COLUMNS": "200"})
+    assert result.exit_code == 0, result.output
+    assert started == [
+        (
+            "hdb_demo_markouts_backfill",
+            "v1",
+            datetime(2026, 9, 13, 10, 0, 1, 123456, tzinfo=UTC),
+            datetime(2026, 9, 13, 10, 4, 7, 987655, tzinfo=UTC),
+        )
+    ]
+
+
+def test_an_end_a_nanosecond_before_midnight_rounds_up_into_the_next_day(monkeypatch):
+    monkeypatch.setattr(gaps_cli, "_utc_today", lambda: date(2026, 9, 20))
+    hole = {
+        "range_from": "2026-09-13T23:00:00.000000000",
+        "range_to": "2026-09-13T23:59:59.999999999",
+    }
+    result = _gaps_cli(monkeypatch, [hole], ["hdb_demo_markouts_backfill"])
+    assert "--from 2026-09-13T23:00:00 --to 2026-09-14T00:00:00 --version" in result.output
