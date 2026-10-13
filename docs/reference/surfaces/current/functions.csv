@@ -380,6 +380,7 @@ qetl.job.continuous,save_cursor,function,2,worker cursor
 qetl.job.continuous,save_cursor_value,function,2,worker cursor
 qetl.job.stream,at_bars,function,2,name decl
 qetl.job.stream,at_horizons,function,2,name decl
+qetl.job.stream,at_rolling,function,2,name decl
 qetl.job.stream,bars,dict,,
 qetl.job.stream,carried_to,dict,,
 qetl.job.stream,carry_log,dict,,
@@ -418,6 +419,7 @@ qetl.job.stream,replaying,value,,
 qetl.job.stream,require_recovery,function,2,job tr
 qetl.job.stream,required_declarations,value,,
 qetl.job.stream,reset,function,1,job
+qetl.job.stream,rolling,dict,,
 qetl.job.stream,running,value,,
 qetl.job.stream,snapshot,function,1,job
 qetl.job.stream,start,function,2,job tr
@@ -450,6 +452,18 @@ qetl.job.stream.normalizer,defined,function,1,
 qetl.job.stream.normalizer,normalize,function,3,name src batch
 qetl.job.stream.normalizer,registry,dict,,
 qetl.job.stream.normalizer,required_keys,value,,
+qetl.job.stream.rolling,compute,function,4,name rows as_of covered_from
+qetl.job.stream.rolling,def,function,1,name
+qetl.job.stream.rolling,define,function,2,name decl
+qetl.job.stream.rolling,defined,function,1,
+qetl.job.stream.rolling,end_of_day,function,2,name dt
+qetl.job.stream.rolling,evaluate,function,2,name now
+qetl.job.stream.rolling,installed,value,,
+qetl.job.stream.rolling,optional_keys,value,,
+qetl.job.stream.rolling,registry,dict,,
+qetl.job.stream.rolling,required_keys,value,,
+qetl.job.stream.rolling,series,function,3,name rows as_ofs
+qetl.job.stream.rolling,shell_columns,dict,,
 qetl.livecheck,check,function,2,source window
 qetl.livecheck,redact,function,2,text cred
 qetl.livecheck,secret_keys,value,,
@@ -519,6 +533,7 @@ qetl.plant,mkt_orderbook,table,,
 qetl.plant,names,function,1,
 qetl.plant,nested,function,2,table_name types
 qetl.plant,nested_columns,function,1,table_name
+qetl.plant,order_quality,table,,
 qetl.plant,order_routing,table,,
 qetl.plant,orders,table,,
 qetl.plant,own,function,1,
@@ -1267,6 +1282,20 @@ qpipe.job.market_data,market_data,table,,
 qpipe.job.market_data,on_batch,value,,
 qpipe.job.market_data,publish,value,,
 qpipe.job.market_data,quote,table,,
+qpipe.job.order_quality,covered_from,value,,
+qpipe.job.order_quality,dropped,table,,
+qpipe.job.order_quality,evaluate,value,,
+qpipe.job.order_quality,example_input,table,,
+qpipe.job.order_quality,example_orders,table,,
+qpipe.job.order_quality,last_as_of,value,,
+qpipe.job.order_quality,now,function,1,
+qpipe.job.order_quality,on_batch,value,,
+qpipe.job.order_quality,on_endofday,value,,
+qpipe.job.order_quality,on_timer,value,,
+qpipe.job.order_quality,order_rows,table,,
+qpipe.job.order_quality,pending,table,,
+qpipe.job.order_quality,publish,value,,
+qpipe.job.order_quality,withheld,value,,
 qpipe.job.posbook,apply_fills,function,1,x
 qpipe.job.posbook,as_trades,function,1,x
 qpipe.job.posbook,book,dict,,
@@ -1461,6 +1490,9 @@ qpipe.transform.eq_orderbook,to_book,function,1,batch
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
 qpipe.transform.exec_bars,width,value,,
+qpipe.transform.order_quality,lateness,value,,
+qpipe.transform.order_quality,stats,function,1,x
+qpipe.transform.order_quality,windows,value,,
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades
 qpos,ccy_exposure,function,1,pos

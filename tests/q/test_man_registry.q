@@ -152,6 +152,8 @@ test_documentation_coverage_does_not_regress:{[t]
         if[(last ` vs full) in .qetl.job.stream.horizons.defined[]; ks:ks except .qetl.job.stream.horizons.installed];
         / and a bars job's (#946), by .qetl.job.stream.bars.define.
         if[(last ` vs full) in .qetl.job.stream.bars.defined[]; ks:ks except .qetl.job.stream.bars.installed];
+        / and a rolling job's (#1224), by .qetl.job.stream.rolling.define.
+        if[(last ` vs full) in .qetl.job.stream.rolling.defined[]; ks:ks except .qetl.job.stream.rolling.installed];
         ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
         string ` sv/: full,/:ks} each nss;
     / A function tagged @private is plumbing, deliberately not registered (#627).

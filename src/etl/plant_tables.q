@@ -405,6 +405,16 @@ executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); 
 / publication; the backfill twin writes the window's end.
 exec_bar:([]time:`timestamp$(); sym:`g#`symbol$(); bar_start:`timestamp$(); open:`float$(); high:`float$(); low:`float$(); close:`float$(); volume:`float$(); vwap:`float$(); trades:`long$())
 
+/ order_quality1's output: rolling order outcomes per book (#1224), one row per
+/ book per window length per publication. window is the length (1m, 5m, 1h),
+/ as_of the instant the window ends at, (as_of-window, as_of] on the order's
+/ time. n_orders counts the orders in it, n_filled and n_rejected how many
+/ ended filled and rejected; fill_ratio and reject_ratio are their shares of
+/ n_orders, null when the book had no order in the window (a book that traded in
+/ the last hour but not the last minute publishes 0 and null for the minute,
+/ not a rate of 0). A book with no order in the last hour has no row.
+order_quality:([]time:`timestamp$(); book:`g#`symbol$(); window:`timespan$(); as_of:`timestamp$(); n_orders:`long$(); n_filled:`long$(); n_rejected:`long$(); fill_ratio:`float$(); reject_ratio:`float$())
+
 / fx_orders_feed's output: order flow, most of which never becomes a fill.
 / Wider than `trades` because a position keyed on more than sym needs the
 / dimensions to arrive with the order. The executions normalizer keeps the

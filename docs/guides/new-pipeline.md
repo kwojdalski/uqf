@@ -200,6 +200,36 @@ a typed example row, so the file loads while each mapping stays red.
     `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
 ```
 
+**Bars and rolling windows** --- two more shapes of continuous job whose shell
+owns the lifecycle, so an instance declares only what differs. A **bars** job
+(`.qetl.job.stream.at_bars`, [`src/etl/core/bars.q`](../../src/etl/core/bars.q))
+cuts a stream into fixed, non-overlapping windows and publishes each once it has
+closed: `exec_bars1`. A **rolling** job (`.qetl.job.stream.at_rolling`,
+[`src/etl/core/rolling.q`](../../src/etl/core/rolling.q)) keeps a statistic over
+the last N minutes up to date --- "the reject rate over the last five minutes,
+as of now" --- at several window lengths, re-evaluated every period:
+`order_quality1`. Choose bars when each interval is a row of its own (OHLC, a
+minute's volume); choose rolling when the question is about "right now". Both
+are a transform plus a declaration:
+
+```q
+.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`publishes`windows`lateness`period!(
+    `order_quality1;`orders;`book;`time;`order_quality;`order_quality;
+    0D00:01 0D00:05 0D01;0D00:00:05;0D00:00:05)];
+```
+
+The transform sees the rows of the longest window once per window length, each
+tagged `window`, `as_of` and `inside`, and returns one row per key per length.
+The windows are `(as_of-N, as_of]`: a row exactly N old is out and a row at
+`as_of` is in. A key quiet in a short window publishes the statistic's identity,
+a late row within `lateness` amends the next publication and an older one is
+dropped and logged, state is bounded by the longest window, and a restart
+replays the input to the publication an uninterrupted job would have made. The
+windows roll across midnight; after a restart past midnight a window longer than
+the day's log is withheld rather than published over part of its span. The full
+declaration is in
+[pipeline-declarations](../reference/pipeline-declarations.md#rolling-window-job-----qetljobstreamrolling).
+
 The rest of this guide is the bounded case.
 
 ## 1. Declare the source

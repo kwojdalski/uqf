@@ -24,6 +24,7 @@ STREAM_DEFINE = "qetl.job.stream.define"
 STREAM_NORMALIZE = "qetl.job.stream.normalize"
 STREAM_HORIZONS = "qetl.job.stream.at_horizons"
 STREAM_BARS = "qetl.job.stream.at_bars"
+STREAM_ROLLING = "qetl.job.stream.at_rolling"
 BOUNDED_DEFINE = "qetl.job.bounded.define"
 
 #: Every declaration verb. Add a kind's verb here first; the tests then name
@@ -33,6 +34,7 @@ VERBS: tuple[DeclarationVerb, ...] = (
     DeclarationVerb(STREAM_NORMALIZE),
     DeclarationVerb(STREAM_HORIZONS, "qetl.job.stream.horizons"),
     DeclarationVerb(STREAM_BARS, "qetl.job.stream.bars"),
+    DeclarationVerb(STREAM_ROLLING, "qetl.job.stream.rolling"),
     DeclarationVerb(BOUNDED_DEFINE),
 )
 
