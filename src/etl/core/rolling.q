@@ -67,7 +67,7 @@
 / previous day's last half hour. Nothing is published at the roll; there is
 / no day to close. The cost is on RESTART: the plant's log is per day, so a
 / replay after midnight holds only today's rows. The job records `covered_from`,
-/ the start of the day of the first clock it saw (the log begins at the roll),
+/ the plant's local midnight before the first clock it saw (the log begins at the roll),
 / and publishes a window length only when its whole span is covered - a 1h
 / window restarted at 00:30 is withheld until 01:00, logged when the set of
 / withheld windows changes, rather than publishing a rate over half the hour.
@@ -250,9 +250,16 @@ series:{[name;rows;as_ofs]
     outs:{[name;rows;a] compute[name;rows;a;0Np]}[name;rows] each as_ofs;
     $[count outs; raze outs; 0#t`output]}
 
-/ Private: the start of the day of an instant.
+/ Private: how far the host's clock is ahead of UTC, to the minute. The plant
+/ names and rolls its log by the local date (.z.D), so its day starts at local
+/ midnight. Read now, so on the two days a year the offset changes the start it
+/ gives can be an hour out. A seam: a test replaces it to be a zone of its own.
 / @private
-day_start:{[ts] `timestamp$`date$ts}
+zone_offset:{[] 0D00:01*"j"$(.z.P-.z.p)%0D00:01}  / noqa: QP003 the local offset is the point
+
+/ Private: the start of the plant's day for an instant - local midnight, in UTC.
+/ @private
+day_start:{[ts] o:zone_offset[]; (`timestamp$`date$ts+o)-o}
 
 / Private: buffer one batch of events - refuse the late and the unclocked, and
 / evict what no future window can hold - or, for the output table, record the
