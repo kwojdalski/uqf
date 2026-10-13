@@ -22,7 +22,7 @@ import os
 import re
 import subprocess
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from uqs.interpreter import q_interpreter
@@ -157,19 +157,28 @@ def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
     )
 
 
-def _as_bound(ledger_value: str) -> str:
+def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
     """A ledger timestamp as `uqs backfill --from/--to` takes it.
 
     The ledger's JSON spells nanoseconds - 2026-09-13T00:00:00.000000000 -
     which `datetime.fromisoformat` refuses, so the command would not run as
-    printed. A zero fraction is dropped (ISO, the common case); anything finer
-    becomes the q literal `parse_bound` reads, which keeps every digit.
+    printed. A whole second is printed as ISO (the common case); a fraction
+    becomes the q literal `parse_bound` reads.
+
+    `parse_bound` stops at the microsecond, and q's `.z.p` does not - on Linux
+    an uptime edge carries nine digits (#1253). So a finer value is rounded
+    outwards to the microsecond: down for a range's start, up (`upper`) for
+    its end. The range only widens, which is safe because a backfill skips
+    the windows already covered; narrowing it would leave a sliver unfilled.
     """
     stamp, _, fraction = ledger_value.partition(".")
-    if not fraction.strip("0"):
-        return stamp
-    date, _, clock = stamp.partition("T")
-    return f"{date.replace('-', '.')}D{clock}.{fraction}"
+    digits = fraction.ljust(9, "0")
+    moment = datetime.fromisoformat(stamp) + timedelta(microseconds=int(digits[:6]))
+    if upper and digits[6:].strip("0"):
+        moment += timedelta(microseconds=1)
+    if not moment.microsecond:
+        return moment.isoformat()
+    return f"{moment:%Y.%m.%dD%H:%M:%S}.{moment.microsecond:06d}000"
 
 
 #: What `.qetl.source.fixture_version` appends to the release a run on a
@@ -201,7 +210,7 @@ def rerun_command(run: dict) -> str | None:
     version = version.split(REVISION_TAG)[0]
     return (
         f"uqs backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
-        f"--to {_as_bound(str(run['range_to']))} --version {version}"
+        f"--to {_as_bound(str(run['range_to']), upper=True)} --version {version}"
         + (" --fixture" if fixture else "")
     )
 
