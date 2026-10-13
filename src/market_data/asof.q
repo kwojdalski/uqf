@@ -9,6 +9,8 @@
 / a live job and the backfill that re-derives its rows run the same code.
 / The stateful buffer a live job keeps its reference rows in is .qetl.enrich.
 / .
+/ A reference row with a null ref_time prevails at no instant and is ignored.
+/ .
 / NO LOOK-AHEAD. A reference row stamped after the event is never attached,
 / whatever its arrival order. The comparison is ref_time <= event_time, so a
 / reference row stamped EXACTLY at the event does count (aj's rule).
@@ -73,6 +75,10 @@ lookup:{[refs;events;spec]
     if[0=count events;
         :flip (flip events),names!((0#'refs each value attach),(enlist `timespan$()),enlist `symbol$())];
     r:?[refs;();0b;((ks,tt,rt,tmp)!(ks,spec[`ref_time],spec[`ref_time],value attach))];
+    / A null ref_time sorts FIRST, so aj would match it for any event with no
+    / earlier valid row and attach its values while status says missing (#1251):
+    / a row with no time prevails at no instant, so it is dropped.
+    r:r where not null r tt;
     r:(ks,tt) xasc r;
     probe:?[events;();0b;((ks,tt)!(ks,spec`event_time))];
     j:aj[ks,tt;probe;r];

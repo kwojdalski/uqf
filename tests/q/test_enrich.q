@@ -84,6 +84,17 @@ test_refusals:{[t]
     .qunit.assertThrows[{.qasof.lookup[refs[];ev[`a;1];spec[neg 0D00:00:01]]};();"qasof.lookup: tolerance must not be negative*";"a negative tolerance"];
     .qunit.assertThrows[{.qasof.lookup[refs[];ev[`a;1];spec[10]]};();"qasof.lookup: tolerance must be a timespan*";"a bare long is not a duration"]};
 
+test_null_time_reference_row_is_never_attached:{[t]
+    / A null-time row sorts first, so aj would match it for an event with no earlier
+    / valid row: the status said missing while the row's mid came along (#1251).
+    nr:([] sym:`a`a; time:(0Np;s 10); mid:1.3 1.2);
+    r:.qasof.lookup[nr;ev[`a`a;5 12];spec[0Nn]];
+    .qunit.assertEquals[r`status;`missing`ok;"the early event has no valid prevailing row"];
+    .qunit.assertEquals[r`mid;0n 1.2;"missing means null values: the null-time row's mid is not attached"];
+    .qunit.assertEquals[r`staleness;(0Nn;0D00:00:02);"missing means null staleness"];
+    r2:.qasof.lookup[nr;([] sym:enlist `a; time:enlist 0Np; id:enlist 0);spec[0Nn]];
+    .qunit.assertEquals[(r2`status;r2`mid);(enlist `missing;enlist 0n);"a null event time finds nothing either"]};
+
 / ------------------------------------------------------------- THE BUFFER
 
 mkbuf:{[ret] .qetl.enrich.new `keys`time`retention`schema!(enlist `sym;`time;ret;0#refs[])}

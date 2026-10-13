@@ -512,6 +512,13 @@ a_book:{[s;mid] ([] time:enlist d 0; sym:enlist s; source:enlist `UQFFX; market:
 / The mid posbook would mark a fill at the far future with: the newest book's.
 pb_latest_mid:{[s] first .qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;([] time:enlist 2100.01.01D00:00:00; sym:enlist s)]}
 
+test_posbook_fx_marks_ignores_a_null_time_mid_row:{[t]
+    / A mid_history row with a null source_time must not become the mark for a fill
+    / that precedes every timed row: the fill gets a null mark (fill-price fallback) (#1251).
+    hist:.qetl.enrich.add[.qpipe.job.posbook.mid_history;([] sym:3#`EURUSD; source_time:(0Np;2026.09.17D12:00:10;2026.09.17D12:00:20); mid:1.30 1.20 1.25)];
+    fl:([] time:2026.09.17D12:00:05 2026.09.17D12:00:15; sym:2#`EURUSD);
+    .qunit.assertEquals[.qpipe.job.posbook.fx_marks[hist;fl];0n,1.2;"the early fill is unmarked, not marked to the null-time 1.30"]};
+
 test_posbook_marks_a_fill_against_the_last_mid:{[t]
     reset[];
     .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
