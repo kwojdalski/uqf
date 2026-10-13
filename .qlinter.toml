@@ -27,7 +27,7 @@ ignore = ["QS001", "QS008", "QS010"]
 # These tests build legacy datetimes on purpose, to show the precision trap
 # and to prove a datetime column is refused.
 "tests/q/test_time_zone.q" = ["QP002"]
-"tests/q/test_execution.q" = ["QP002"]
+"tests/q/test_execution.q" = ["QP002", "QS006"]
 # TimeStored's qunit, vendored: kept as upstream wrote it.
 "tests/lib/qunit.q" = ["QF017", "QL001", "QS003"]
 # Test stubs stand in for real functions (.lg.l, connect_etl, a reaction
@@ -35,14 +35,60 @@ ignore = ["QS001", "QS008", "QS010"]
 # QF016 stays on for src/, where an unread parameter can be a real bug (#1243).
 "tests/**" = ["QF016"]
 # `l` is the line-hit probe the coverage tool injects into instrumented source.
-"scripts/dev/coverage.q" = ["QS003"]
+"scripts/dev/coverage.q" = ["QS003", "QS006"]
 # QP003 (wall-clock-temporal) flags `.z.D` since q-lint 0.14.13. Here it is the
 # plant's day by design, not a data timestamp: the standalone plant names and
 # rolls its log by `.z.D` (#943), recovery falls back to that same clock when a
 # transport cannot say which day its plant is on (#1190), and the tests build
 # their days from the clock the code under test reads. The data stays UTC.
-"scripts/processes/run_stream.q" = ["QP003"]
+"scripts/processes/run_stream.q" = ["QP003", "QS006"]
 "scripts/processes/torq_pipeline.q" = ["QP003"]
 "src/etl/core/stream_carry_recovery.q" = ["QP003"]
 "tests/q/test_endofday.q" = ["QP003"]
 "tests/q/test_torq_pipeline.q" = ["QP003"]
+
+# QS006 (lambda over 25 lines) accepted for the files that have long lambdas
+# today (#1245): mostly the job kinds' flat define checklists, fixtures and a
+# few procedural functions. A long lambda in any other file is still reported.
+# Files that already had an entry above carry QS006 there.
+"docs/man.q" = ["QS006"]
+"scripts/processes/torq_backfill.q" = ["QS006"]
+"scripts/processes/torq_stream.q" = ["QS006"]
+"scripts/processes/torq_tap.q" = ["QS006"]
+"src/etl/core/backfill_state.q" = ["QS006"]
+"src/etl/core/bars.q" = ["QS006"]
+"src/etl/core/bounded_worker.q" = ["QS006"]
+"src/etl/core/horizon.q" = ["QS006"]
+"src/etl/core/io_hdb.q" = ["QS006"]
+"src/etl/core/io_manager.q" = ["QS006"]
+"src/etl/core/live_check.q" = ["QS006"]
+"src/etl/core/normalizer.q" = ["QS006"]
+"src/etl/core/react.q" = ["QS006"]
+"src/etl/core/retention.q" = ["QS006"]
+"src/etl/core/rolling.q" = ["QS006"]
+"src/etl/core/source_credentials.q" = ["QS006"]
+"src/etl/core/source_registry.q" = ["QS006"]
+"src/etl/core/status.q" = ["QS006"]
+"src/etl/core/stream_job.q" = ["QS006"]
+"src/etl/core/stream_poll.q" = ["QS006"]
+"src/etl/core/tick.q" = ["QS006"]
+"src/etl/core/transform.q" = ["QS006"]
+"src/etl/core/worker_runtime.q" = ["QS006"]
+"src/etl/streaming/cross_arbitrage.q" = ["QS006"]
+"src/etl/streaming/market_data.q" = ["QS006"]
+"src/execution/execution_attribution.q" = ["QS006"]
+"src/execution/execution.q" = ["QS006"]
+"src/market_data/asof.q" = ["QS006"]
+"src/market_data/dqchecks.q" = ["QS006"]
+"src/market_data/microstructure.q" = ["QS006"]
+"src/metadata/metatables.q" = ["QS006"]
+"src/portfolio/allocation.q" = ["QS006"]
+"src/portfolio/positions.q" = ["QS006"]
+"src/pricing/cross.q" = ["QS006"]
+"src/pricing/forwards.q" = ["QS006"]
+"tests/q/test_backfill_state.q" = ["QS006"]
+"tests/q/test_dag.q" = ["QS006"]
+"tests/q/test_docstring_examples.q" = ["QS006"]
+"tests/q/test_man_registry.q" = ["QS006"]
+"tests/q/test_order_quality.q" = ["QS006"]
+"tests/q/test_registries.q" = ["QS006"]
