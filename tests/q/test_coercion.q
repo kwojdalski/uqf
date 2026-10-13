@@ -135,6 +135,21 @@ test_date_only_detection_is_exported:{[t]
 test_a_malformed_timestamp_is_null:{[t]
     .qunit.assertEquals[null .qetl.coerce.to_timestamp["not a date"];1b;"garbage is null rather than a partial parse"]};
 
+/ "P"$ rolls an impossible hour into the next day (25:00 -> 01:00 tomorrow)
+/ though it nulls an impossible minute or second. A window bound that did
+/ that would silently move a backfill by a day.
+test_an_impossible_hour_is_null_not_a_later_day:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T25:00:00";"2026-09-15T48:00:00";"2026-09-15T99:00:00Z";"2026-09-15 25:00:00";"2026-09-15T24:30:00";"2026-09-15T25:00:00+02:00");
+    .qunit.assertEquals[null r;111111b;"each is null, none a later day"]};
+
+test_an_impossible_minute_or_second_is_still_null:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T12:60:00";"2026-09-15T12:00:60");
+    .qunit.assertEquals[null r;11b;"minutes and seconds were already refused"]};
+
+test_hour_edges_still_parse:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T00:00:00";"2026-09-15T23:59:59.999999999";"2026-09-15T24:00:00";"2026-09-15T24:00:00.000");
+    .qunit.assertEquals[r;2026.09.15D00:00:00.000000000 2026.09.15D23:59:59.999999999 2026.09.16D00:00:00.000000000 2026.09.16D00:00:00.000000000;"00:00, the last nanosecond and ISO's 24:00:00 are accepted"]};
+
 / --- symbols: case is the trap, whitespace is not -----------------------
 
 / Measured: `$"eurusd" does NOT match `EURUSD, and that is silent - every

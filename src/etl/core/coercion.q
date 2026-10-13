@@ -148,7 +148,25 @@ to_timestamp:{[str]
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
     normalised:ssr[ssr[first zoned;"T";"D"];"-";"."];
-    @[{"P"$x};normalised;{0Np}] - last zoned}
+    parsed:@[{"P"$x};normalised;{0Np}];
+    if[not clock_in_range normalised; :0Np];
+    parsed - last zoned}
+
+/ Is the hour of this normalised timestamp text a real one? "P"$ rolls an
+/ impossible hour into the next day - "...D25:00:00" reads as 01:00 the day
+/ after - where it nulls an impossible minute or second. 24 is accepted only
+/ as ISO's end-of-day "24:00:00", never "24:30". Text with no clock reads as
+/ in range: whether it parses at all is "P"$'s call.
+/ @param str timestamp text with "D" or a space before the clock
+/ @return 1b when the hour field is 00-23, or 24 with nothing after it
+/ @eg .qetl.coerce.clock_in_range["2026.09.15D25:00:00"]  ->  0b
+/ @eg .qetl.coerce.clock_in_range["2026.09.15D24:00:00"]  ->  1b
+clock_in_range:{[str]
+    at:first where str in "D ";
+    if[null at; :1b];
+    hour:"J"$2#(at+1)_str;
+    if[null hour; :1b];
+    $[hour<24; 1b; hour=24; not any (at+4)_str in "123456789"; 0b]}
 
 / Split a timestamp's zone suffix off: (the text without it; its offset east
 / of UTC as a timespan). No suffix is an offset of 0D; one that is there and
