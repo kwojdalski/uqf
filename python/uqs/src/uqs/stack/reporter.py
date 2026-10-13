@@ -170,8 +170,9 @@ class ReporterCheck:
                 f".z.p+.eodtime.getdailyadjustment[];`{self.timecol};{self.min_rows}]"
             )
         days = " ".join(str(d) for d in self.days)
+        # `long$ first: PeachQ's `date mod 7` is a date, not KDB-X's int.
         return (
-            f"{{$[(x mod 7) in {days};.checks.hdbdatecheck[x;y];([]messages:())]}}"
+            f"{{$[((`long$x) mod 7) in {days};.checks.hdbdatecheck[x;y];([]messages:())]}}"
             f"[.eodtime.getday[.z.p]-1;{tables}]"
         )
 
