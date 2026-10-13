@@ -277,6 +277,14 @@ publishing others.
 A job must declare `on_batch`, `on_timer` or both; one with neither would run
 nothing and is refused.
 
+**Passthrough options.** Every job kind below (normalizer, horizon, bars,
+rolling) accepts `start_with_all`, `note`, `on_start`, `check` and `on_fail` in
+its own declaration and forwards them unchanged to `define`, which validates
+them once, at declaration time. The list is `.qetl.job.stream.passthrough_keys`,
+the one authority: a new `define` option is added there and every kind has it,
+and `tests/q/test_stream_job.q` iterates kinds against it. The kind tables below
+list only a kind's own keys.
+
 The namespace is always `.qpipe.job.<job>`. A job publishes by calling its own
 `publish`, never `.u.upd`: `publish` starts as a stub that throws, and
 `.qetl.job.stream.wire` points it at the tickerplant (the runner) or at a
@@ -304,6 +312,9 @@ table the normalizer publishes and its `.qpipe.job.<name>` namespace.
   | `input`          | yes      | dict: source table -> transform name         | for each tickerplant table it reads, the `.qetl.transform` transform that maps a batch of it onto `output`                          | empty; a transform not registered, taking more than one input, or whose `output` is not exactly the canonical table --- columns, order and types |
   | `start_with_all` | no       | boolean, default `0b`                        | as for a streaming job                                                                                                              | not a boolean                                                                                                                                    |
   | `note`           | no       | string                                       | as for a streaming job                                                                                                              | not a string                                                                                                                                     |
+
+Besides these, it accepts `on_start`, `check` and `on_fail` (the passthrough
+options, see the streaming job).
 
 `define` registers the streaming job itself: `subscribe_to` is the keys of
 `input`, `publishes` is `name`, and `on_batch` is a dispatcher that trims each
@@ -343,6 +354,9 @@ are horizon jobs.
   | `note`           | no                          | string                                     | as for a streaming job                                                                                                                                                                                                                              | as for a streaming job                                              |
   | `ephemeral`      | yes, in effect              | string                                     | as for a streaming job: the kind holds its queues as `state` and does not replay, so a horizon job says why losing its pending events on a restart is acceptable (#1073)                                                                            | as for a streaming job                                              |
 
+Besides these, it accepts `on_start`, `check` and `on_fail` (the passthrough
+options, see the streaming job).
+
 `define` registers the streaming job itself: `subscribe_to` is `events` and
 `reference`, `publishes` is `publishes`, and `transform` is declared so a
 backfill twin applies the same one. It installs into `.qpipe.job.<name>`: -
@@ -377,8 +391,8 @@ fixed-width time windows: OHLC, VWAP and volume per interval
 `crypto_book_1s` is another, a snapshot rather than an aggregate (the last
 `crypto_book` state per `venue, sym` per second, `by` `venue`sym).
 
-Declares `procname`, `period` (how often closed windows are looked for) and
-`start_with_all`/`note` as for a streaming job, and:
+Declares `procname`, `period` (how often closed windows are looked for) and the
+passthrough options (see the streaming job) and:
 
 - `events`: the table aggregated.
 - `transform`: a `.qetl.transform` with ONE input, the events plus a `bar_start`
@@ -413,8 +427,8 @@ fixed windows published once; this gives a window that slides, re-evaluated
 every period. `order_quality` is one: `orders` into `order_quality`, fill and
 reject ratios per book over 1m, 5m and 1h.
 
-Declares `procname`, `period` and `start_with_all`/`note` as for a streaming
-job, and:
+Declares `procname`, `period` and the passthrough options (see the streaming
+job), and:
 
 - `events`: the table read.
 - `transform`: a `.qetl.transform` with ONE input, the events plus three columns

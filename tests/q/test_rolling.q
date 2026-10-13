@@ -391,4 +391,25 @@ test_the_backfill_twin_computes_the_series_the_live_job_publishes:{[t]
     .qunit.assertEquals[(cell[final;`a;0D00:01])`n;2;"history is complete: the late-arriving row is in"];
     .qunit.assertEquals[(cell[published[];`a;0D00:01])`n;1;"live, at the time, it was not - the next publication carries it"]};
 
+/ --- the quality gate (#1232) -----------------------------------------------
+
+/ A quality gate that names the whole batch as offending when flagged, and
+/ passes when not (#1232: the kind forwards check/on_fail to define).
+gate:{[flag;x] n:$[flag;1;0]; ([] check:n#`always; status:n#`bad; detail:n#enlist "flagged")}
+
+test_a_rolling_job_can_declare_a_check_that_withholds_a_publication:{[t]
+    define_transform[];
+    .qetl.job.stream.at_rolling[`rt_chk;@[decl[];`procname;:;`rtchk1],`check`on_fail!(gate[1b];`hold)];
+    nm:job`rt_chk;
+    as_of:t0+0D00:10:00;
+    feed[nm;as_of;`a;1f];
+    ns[nm;`evaluate] as_of;
+    .qunit.assertEquals[count sent;0;"the failing check withheld the publication"];
+    .qunit.assertEquals[(.qetl.stream_health.of nm)`failed;1;"and counted it"];
+    .qetl.job.stream.at_rolling[`rt_chk_ok;@[decl[];`procname;:;`rtchkok1],`check`on_fail!(gate[0b];`hold)];
+    ok:job`rt_chk_ok;
+    feed[ok;as_of;`a;1f];
+    ns[ok;`evaluate] as_of;
+    .qunit.assertTrue[0<count sent;"a passing check lets it through"]};
+
 \d .

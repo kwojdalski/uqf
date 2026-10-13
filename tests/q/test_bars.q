@@ -241,4 +241,23 @@ test_the_backfill_twin_builds_the_live_bars_from_the_same_rows:{[t]
     .qunit.assertEquals[twin`time;twin[`bar_start]+0D00:01;"the twin stamps the window's end"];
     .qunit.assertEquals[count live;6;"EURUSD in minutes 0, 1, 2 and USDJPY in 0, 1, 3: no bar where a sym had no fill"]};
 
+/ --- the quality gate (#1232) -----------------------------------------------
+
+/ A quality gate that names the whole batch as offending when flagged, and
+/ passes when not (#1232: the kind forwards check/on_fail to define).
+gate:{[flag;x] n:$[flag;1;0]; ([] check:n#`always; status:n#`bad; detail:n#enlist "flagged")}
+
+test_a_bars_job_can_declare_a_check_that_withholds_a_bar:{[t]
+    bad:.qetl.job.stream.at_bars[`bt_chk;@[decl[];`procname;:;`btchk1],`check`on_fail!(gate[1b];`hold)];
+    nm:job`bt_chk;
+    feed[nm;fill[t0+0D00:00:30;`EURUSD;2f;1.1]];
+    .qunit.assertEquals[ns[nm;`close_ready][t0+0D00:02:00];1;"the window closed"];
+    .qunit.assertEquals[count sent;0;"but the failing check withheld the bar"];
+    .qunit.assertEquals[(.qetl.stream_health.of nm)`failed;1;"and counted it"];
+    .qetl.job.stream.at_bars[`bt_chk_ok;@[decl[];`procname;:;`btchkok1],`check`on_fail!(gate[0b];`hold)];
+    ok:job`bt_chk_ok;
+    feed[ok;fill[t0+0D00:00:30;`EURUSD;2f;1.1]];
+    ns[ok;`close_ready][t0+0D00:02:00];
+    .qunit.assertEquals[count sent;1;"a passing check lets the bar through"]};
+
 \d .

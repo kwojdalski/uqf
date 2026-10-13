@@ -412,6 +412,8 @@ qetl.job.stream,missed_end_of_day,function,2,job today
 qetl.job.stream,namespace,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
+qetl.job.stream,passthrough,function,1,decl
+qetl.job.stream,passthrough_keys,value,,
 qetl.job.stream,plant_today,function,1,tr
 qetl.job.stream,poll_keys,value,,
 qetl.job.stream,preview,function,2,job n

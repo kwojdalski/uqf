@@ -352,4 +352,23 @@ test_max_age_without_reference_readiness_still_drops_everything_old:{[t]
     (ns[nm;`score_ready]) t0+0D00:00:00.6;
     .qunit.assertEquals[exec time from ns[nm;`history];enlist t0+0D00:00:00.5;"wall readiness: unchanged"]};
 
+/ --- the quality gate (#1232) -----------------------------------------------
+
+/ A quality gate that names the whole batch as offending when flagged, and
+/ passes when not (#1232: the kind forwards check/on_fail to define).
+gate:{[flag;x] n:$[flag;1;0]; ([] check:n#`always; status:n#`bad; detail:n#enlist "flagged")}
+
+test_a_horizon_job_can_declare_a_check_that_withholds_a_score:{[t]
+    nm:job[`hz_chk;`check`on_fail!(gate[1b];`hold)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;enlist t0;enlist 1f]];
+    (ns[nm;`on_batch])[`hz_events;ev[`a;t0]];
+    (ns[nm;`score_ready]) t0+0D00:00:01;
+    .qunit.assertEquals[count sent;0;"the failing check withheld the score"];
+    .qunit.assertEquals[(.qetl.stream_health.of nm)`failed;1;"and counted it"];
+    ok:job[`hz_chk_ok;`check`on_fail!(gate[0b];`hold)];
+    (ns[ok;`on_batch])[`hz_refs;rf[`a;enlist t0;enlist 1f]];
+    (ns[ok;`on_batch])[`hz_events;ev[`a;t0]];
+    (ns[ok;`score_ready]) t0+0D00:00:01;
+    .qunit.assertEquals[count sent;1;"a passing check lets it through"]};
+
 \d .
