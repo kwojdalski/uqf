@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **33 uqf processes** — 56 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **35 uqf processes** — 58 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -48,6 +48,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `exec_bars1` | 6104 | etl | `processes/torq_stream.q` | `exec_bar` | `executions` | `exec_bar` |
 | `hdb_exec_bars_backfill1` | 6105 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `flink_vwap1` | 6106 | etl | `processes/torq_stream.q` | `flink_vwap` | `flink_vwap_raw` | `flink_vwap` |
+| `crypto_book_1s1` | 6107 | etl | `processes/torq_stream.q` | `crypto_book_1s` | `crypto_book` | `crypto_book_1s` |
+| `hdb_crypto_book_backfill1` | 6108 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -82,6 +84,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`exec_bars1`** — time bars over the unified fills tape; the window is the fill's source_time
 - **`hdb_exec_bars_backfill1`** — bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live
 - **`flink_vwap1`** — publishes each per-symbol VWAP window an Apache Flink job closes, once, dropping windows Flink emits again after a restart or replay. The raw rows come from an EXTERNAL Python process (external/flink_vwap_feed.py) - Flink runs outside q - so flink_vwap_raw has no producer in this list and this does not start with the stack. Start it with `uqs feed start flink_vwap`
+- **`crypto_book_1s1`** — last book state per venue and sym per second; the window is the update's source_time, not the plant's time
+- **`hdb_crypto_book_backfill1`** — bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live
 
 ## Tables these processes publish
 
@@ -92,6 +96,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `config_change` | `plant_tables.q` | `crossarb1`, `fxpositions1`, `superbook1` |
 | `cross_arbitrage` | `plant_tables.q` | `crossarb1` |
 | `crypto_book` | `plant_tables.q` | `cryptomock1` |
+| `crypto_book_1s` | `plant_tables.q` | `crypto_book_1s1` |
 | `crypto_execution_quality` | `plant_tables.q` | `crypto_markout1` |
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
 | `demo_execution_quality` | `plant_tables.q` | `demo_markout1` |

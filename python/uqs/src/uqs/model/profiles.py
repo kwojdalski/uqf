@@ -96,7 +96,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "depth": ("vectorize1", "cross1"),
     #: cryptorust's recorders replaced by the in-tree mock. INSTEAD of the
     #: real ones, never alongside - see the module docstring.
-    "crypto": ("cryptomock1", "crypto_markout1"),
+    "crypto": ("cryptomock1", "crypto_markout1", "crypto_book_1s1"),
     #: No uqf job at all: just ESSENTIAL_INFRA, via PROFILE_INFRA.
     "essential": (),
     #: The starter pack with its own demo feed: essential plus feed1, so the

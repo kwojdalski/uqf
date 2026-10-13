@@ -173,6 +173,17 @@ from another HDB's files, with notional added, into `trades_copy`. The worked
 example: `q scripts/examples/hdb_transfer_example.q` runs it end to end.
 [Details](../scaffolding/hdb-transfer.md)
 
+**`crypto_book_1s1` and `hdb_crypto_book_backfill1` · one-second book
+snapshots** --- the last book state per venue and sym per second, bucketed on
+the venue's `source_time` rather than the tickerplant's `time`. Reads
+`crypto_book`, publishes `crypto_book_1s`; a second with no update has no row
+(no forward fill). `crypto_book_1s1` is a bars job, a second closing half a
+second after it ends; the backfill rebuilds the same rows from the HDB's
+`crypto_book` with the same pick, replacing the live job's under
+`venue, sym, bar_start`. Profile `crypto`; not in `uqs start`. Start it with
+`uqs start crypto_book_1s1`; the worked example:
+`q scripts/examples/hdb_crypto_book_example.q`.
+
 ## Diagnostics
 
 **Tickerplant inspector · `tap1`** --- point it at any table and it prints what
