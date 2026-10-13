@@ -20,6 +20,22 @@
 / this job alone - a process, a plant connection and a stored table for
 / (bid+ask)%2.
 / .
+/ WHEN THE MARK IS TAKEN (#1229). A fill is marked to the newest mid this job
+/ has SEEN when it processes the fill, in delivery order - not to the mid
+/ prevailing at the fill's source_time. A position row is the position's value
+/ now, as the job knows it (#1058), so a book stamped after the fill but
+/ delivered ahead of it is a legitimate mark, and a fill reported with latency
+/ is marked to the fresh book rather than a stale one. Delivery order is the
+/ plant's log order, and a replay or catch-up (#1072) hands the job that same
+/ log message by message, so live and replay mark identically; the order is
+/ the only input to the mark. test_replay_equivalence.q scripts exactly that
+/ (a book stamped after a fill, delivered ahead of it; a late older book) and
+/ restarts at every point. An as-of-fill-time mark would need a history of
+/ mids per sym (unbounded, or pruned to a horizon), would still answer
+/ differently for a fill delivered before its own-time book, and would give
+/ up the freshness above; if a use arises that needs the value AT the fill
+/ (execution-quality scoring, not a position), it belongs in a markout job.
+/ .
 / WHAT IS IN THIS FILE: the schemas, the marking transform with its examples,
 / the batch handler, the book and the mark cache, and the declaration the
 / runner reads. Every step, in the order it runs.

@@ -58,15 +58,33 @@ last_value_script:{[]
      ev[t0+0D00:00:04;`market_data;book[t0+0D00:00:00;`EURUSD;1.00;1.02]];
      ev[t0+0D00:00:05;`market_data;book[t0+0D00:00:05;`GBPUSD;1.31;1.33]])}
 
+/ An executions row as posbook reads it: a buy of 1 at px, event time src.
+pb_fill:{[src;s;px]
+    ([] time:enlist src; source_time:enlist src; sym:enlist s; venue:enlist `fx; side:enlist 1;
+        size:enlist 1f; price:enlist px; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `)}
+
+/ posbook (#1229): a fill is marked to the last mid the job has SEEN, in log
+/ order. The script includes the look-ahead shape - a book stamped after a
+/ fill logged ahead of that fill (the 1.20 book at +10s before the +5s fill) -
+/ and a late older book that must not rewind the mark (the +0s 1.00 book).
+posbook_script:{[]
+    (ev[t0+0D00:00:01;`market_data;book[t0+0D00:00:01;`EURUSD;1.10;1.12]];
+     ev[t0+0D00:00:02;`executions;pb_fill[t0+0D00:00:02;`EURUSD;1.10]];
+     ev[t0+0D00:00:11;`market_data;book[t0+0D00:00:10;`EURUSD;1.20;1.22]];
+     ev[t0+0D00:00:12;`executions;pb_fill[t0+0D00:00:05;`EURUSD;1.15]];
+     ev[t0+0D00:00:13;`market_data;book[t0+0D00:00:00;`EURUSD;1.00;1.02]];
+     ev[t0+0D00:00:14;`executions;pb_fill[t0+0D00:00:14;`EURUSD;1.30]];
+     ev[t0+0D00:00:15;`executions;pb_fill[t0+0D00:00:15;`USDJPY;150f]])}
+
 / The scripted jobs: name -> the script and what to do on a tick.
-scripts:`exec_bars`last_value!(
+scripts:`exec_bars`last_value`posbook!(
     `script`tick!(bars_script;{[j;n] .qpipe.job.exec_bars.close_ready n});
-    `script`tick!(last_value_script;{[j;n] ::}))
+    `script`tick!(last_value_script;{[j;n] ::});
+    `script`tick!(posbook_script;{[j;n] ::}))
 
 / Replaying jobs deliberately not scripted: job -> why.
-excluded:`fx_positions`posbook`kafka_flow!(
+excluded:`fx_positions`kafka_flow!(
     "its time-based rule is the breach throttle on the timer's .z.p (fresh_breaches), and a tick is not a logged row; no event script yet";
-    "no time-based rule; the carried book is covered by its own replay tests; no event script yet";
     "no time-based rule; replayed rows are held for on_replayed (test_kafka_flow); no event script yet")
 
 recorder:{[j;t;x]
@@ -139,6 +157,14 @@ test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]
     r:equivalent `last_value;
     .qunit.assertEquals[count first r;4;"the script publishes four changes: the older book is dropped"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
+
+test_a_restart_at_any_point_publishes_what_the_running_posbook_job_did:{[t]
+    r:equivalent `posbook;
+    pos:raze last each first r;
+    / the +5s fill is logged after the +10s book, so it is marked to 1.20 (mid of 1.20/1.22 = 1.21)
+    .testutil.assertApprox[pos[1]`mark_price;1.21;1e-9;"a fill is marked to the newest book seen in log order, whatever its stamp (#1229)"];
+    .testutil.assertApprox[pos[2]`mark_price;1.21;1e-9;"the late older book did not rewind the mark (#1088)"];
+    .qunit.assertEquals[last r;`long$();"no restart point changes the positions (restart points that differ)"]};
 
 / The check is a check: a replay that judged lateness on the restart's process
 / clock - what the log clock replaces - is caught by the same script.
