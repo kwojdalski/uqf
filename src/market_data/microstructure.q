@@ -470,12 +470,17 @@ inter_event_time:{[quotes;target_sym]
 / writes the result at the index the window ends on. No builtin exists for
 / a rolling correlation, unlike rolling_ofi/spread_ratio, so this is a
 / genuine loop; every index before the first full window is left null (0n)
-/ - not enough history yet.
+/ - not enough history yet. A window of w gives w-1 lag pairs: w=2 gives one
+/ pair (cor is always null) and w=3 two points (cor is always +-1, a
+/ "perfect" correlation from noise), so windows under 4 are refused.
 / @param ofi_series an OFI vector, e.g. from ofi or ofi_multilevel
-/ @param window the moving-window size, in number of rows (needs >=2)
+/ @param window the moving-window size, in number of rows (needs >=4, i.e. at least 3 lag pairs)
 / @return a vector, same length as ofi_series, lag-1 autocorrelation per window ending at that index
-/ @eg .qmicro.ofi_autocorrelation[1 -1 2 0 -3 4;3]
+/ @throws error if window < 4
+/ @eg .qmicro.ofi_autocorrelation[1 -1 2 0 -3 4;4]
 ofi_autocorrelation:{[ofi_series;window]
+    if[window<4;
+        '"ofi_autocorrelation: window must be >= 4 - fewer than 3 lag pairs gives a null or a forced +-1 correlation"];
     n:count ofi_series;
     result:n#0n;
     i:window;
