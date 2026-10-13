@@ -134,7 +134,11 @@ to_long:{[str]
 / placing the row two hours off with nothing erroring, and the separator
 / rewrite below turned the "-" of "-05:00" into a null. A suffix that is
 / there but unreadable is a null, not a guess.
-/ @return the timestamp in UTC, or 0Np when empty, malformed, or date-only
+/ .
+/ A SLASHED date is refused: "05/09/2026" is 5 September or 9 May, q reads it
+/ as the latter, and "15/09/2026" as null - so which day a source meant would
+/ depend on the day of the month. Like "1,234" in to_float, ambiguous is null.
+/ @return the timestamp in UTC, or 0Np when empty, malformed, date-only or slashed
 / @eg .qetl.coerce.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15T11:30:00+02:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15"]           ->  0Np
@@ -142,6 +146,7 @@ to_timestamp:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Np];
     if[is_date_only[trimmed]; :0Np];
+    if[any trimmed="/"; :0Np];
     zoned:utc_offset[trimmed];
     if[null last zoned; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
@@ -206,10 +211,13 @@ is_date_only:{[str]
 / Text with a time part is refused, not truncated: "D"$ of a full timestamp
 / gave 0000.00.00, which is not null, and its cast -0Wp - a minus-infinity
 / timestamp that every null check let through to publish.
+/ A slashed date is refused as ambiguous (day-first or month-first), as in to_timestamp.
 / @eg .qetl.coerce.to_date_as_midnight["2026-09-15T12:00:00"]  ->  0Np
+/ @eg .qetl.coerce.to_date_as_midnight["05/09/2026"]  ->  0Np
 to_date_as_midnight:{[str]
     trimmed:trim str;
     if[not is_date_only trimmed; :0Np];
+    if[any trimmed="/"; :0Np];
     d:@[{"D"$x};ssr[trimmed;"-";"."];{0Nd}];
     if[null d; :0Np];
     p:`timestamp$d;
