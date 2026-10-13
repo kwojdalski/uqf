@@ -32,7 +32,9 @@
 / @return table `time`sym`kind`step`leg`invert`price_t0`price_t1`pips`status`version.
 /   time is t1. kind `leg rows follow the route: pips is that leg's signed
 /   allocation, status `ok or `unavailable (null pips for every leg if any leg
-/   is unavailable). One kind `residual row (pips = total less allocations,
+/   is unavailable, or if the pair has no total: the total's path is chosen from
+/   all books, so a direct book with no quote yet at t0 leaves it null while
+/   the route legs still price). One kind `residual row (pips = total less allocations,
 /   status `reconciled, or `unallocated when a leg is unavailable, or
 /   `unavailable when there is no total) and one kind `total row (the signed
 /   markout of the pair's reference price, null if it has no price at t0 or t1).
@@ -54,11 +56,14 @@ cross_markout_attribution_with:{[conv;quotes;sym;side;t0;t1;pip_factor;ref_size]
     d:$[all leg_books;
         decomp_legs[quotes;cross_sym;route`leg;t0;t1;ref_size];
         `price_t0`price_t1`contribution!(leg_price[quotes;ref_size;t0;;]'[route`leg;leg_books];leg_price[quotes;ref_size;t1;;]'[route`leg;leg_books];n#0n)];
-    alloc:side*pip_factor*d`contribution;
     ref_0:.qcross.cross_ref_price_at[quotes;cross_sym;t0;ref_size];
     ref_1:.qcross.cross_ref_price_at[quotes;cross_sym;t1;ref_size];
     total:markout[side;ref_0;ref_1;pip_factor];
-    leg_ok:not null (d`price_t0)+d`price_t1;
+    / no total means no allocation to reconcile: legs go null/unavailable too, so a
+    / review sums only trades that have a total (#1249)
+    has_total:not null total;
+    alloc:$[has_total;side*pip_factor*d`contribution;n#0n];
+    leg_ok:$[has_total;not null (d`price_t0)+d`price_t1;n#0b];
     residual:total-sum alloc;
     residual_status:$[null total;`unavailable;all leg_ok;`reconciled;`unallocated];
     total_status:$[null total;`unavailable;`ok];
