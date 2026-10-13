@@ -51,7 +51,7 @@ max_age:.qmicro.reference_max_age
 / The transform's inputs: fills as crypto_trades carries them, and books as
 / crypto_book does, narrowed to what scoring reads.
 real_fills:.qetl.plant.columns[`crypto_trades;`time`sym`venue`side`trade_price`exchange_fill_id]
-books:.qetl.plant.columns[`crypto_book;`time`sym`venue`bid_prices`ask_prices]
+books:.qetl.plant.columns[`crypto_book;`time`sym`venue`bid_prices`bid_sizes`ask_prices`ask_sizes]
 crypto_execution_quality:.qetl.plant.published `crypto_execution_quality
 
 / ---------------------------------------------------------- THE TRANSFORM
@@ -59,10 +59,12 @@ crypto_execution_quality:.qetl.plant.published `crypto_execution_quality
 / Each venue's top of book, one row per book update.
 / .
 / A side the venue did not quote is null, not an error: its first level is
-/ taken only when it has one.
+/ taken only when it has one. A level of zero size is not quoted either
+/ (.qbook.level_ok, #1261): the books carry bid_sizes and ask_sizes so a
+/ pulled top does not set the best price.
 / @param books crypto_book rows
 / @return table time, sym, venue, bid, ask
-/ @eg exec bid from .qpipe.job.crypto_markout.top_of_book[([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT"; venue:enlist `a; bid_prices:enlist 62000 61999f; ask_prices:enlist `float$())]  ->  ,62000f
+/ @eg exec bid from .qpipe.job.crypto_markout.top_of_book[([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT"; venue:enlist `a; bid_prices:enlist 62000 61999f; bid_sizes:enlist 1 1f; ask_prices:enlist `float$(); ask_sizes:enlist `float$())]  ->  ,62000f
 top_of_book:{[books]
     t:.qbook.top_sides books;
     select time, sym, venue, bid:t`bid, ask:t`ask from books}
@@ -102,7 +104,9 @@ score_markouts:{[real_fills;books]
             ([] time:2026.09.17D10:00:00 2026.09.17D10:00:00 2026.09.17D10:00:09;
                 sym:3#`$"BTC-USDT"; venue:`a`b`a;
                 bid_prices:(62000 61999f;enlist 62004f;enlist 62010f);
-                ask_prices:(62010 62011f;enlist 62008f;enlist 62020f)));
+                bid_sizes:(1 1f;enlist 1f;enlist 1f);
+                ask_prices:(62010 62011f;enlist 62008f;enlist 62020f);
+                ask_sizes:(1 1f;enlist 1f;enlist 1f)));
         ([] sym:2#`$"BTC-USDT"; venue:`a`a; fill_id:`f1`f1;
             trade_time:2#2026.09.17D10:00:00; horizon:0D00:00:01 0D00:00:10;
             side:1 1; trade_price:62000 62000f; ref_price:62006 62015f;

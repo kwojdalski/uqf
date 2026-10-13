@@ -47,6 +47,15 @@ test_the_reference_is_the_best_mid_across_venues:{[t]
     .qunit.assertTrue[null last r`ref_price;"and by the 10s horizon both books are past max_age"];
     .testutil.assertApprox[first r`markout_bps;10000*6%62000;1e-9;"a buy the market rose 6 above is +0.97 bps"]};
 
+test_a_zero_size_top_does_not_set_the_best_price:{[t]
+    / b's 62004/62008 top is pulled (size 0): a alone counts, mid 62005 (#1261)
+    pulled:([] time:enlist t0; source_time:enlist t0; venue:enlist `b; sym:enlist btc;
+        bid_prices:enlist enlist 62004f; bid_sizes:enlist enlist 0f;
+        ask_prices:enlist enlist 62008f; ask_sizes:enlist enlist 0f);
+    r:drive[1;(book[`a;62000f;62010f;t0]),pulled];
+    .qunit.assertEquals[first r`ref_price;62005f;"the zero-size level is absent, not a price"];
+    .testutil.assertApprox[first r`markout_bps;10000*5%62000;1e-9;"0.806 bps, not 0.968"]};
+
 test_a_sell_into_a_rising_market_is_negative:{[t]
     r:drive[-1;two_venues[]];
     .qunit.assertTrue[all 0>r`markout_bps;"same move, the other side: against the fill"]};
