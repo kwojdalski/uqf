@@ -201,7 +201,7 @@ test_next_book_matches_folding_the_fills_through_qpos:{[t]
     i:ex`inputs;
     out:.qetl.transform.apply[`position;i];
     book:.qpipe.job.posbook.next_book[i`book;out];
-    direct:0!.qpos.apply_fills[1!i`book;i`trades];
+    direct:0!.qpos.apply_fills[1!i`book;i`batch];
     .qunit.assertEquals[`sym xasc book;`sym xasc direct;"the book rebuilt from positions is the book .qpos folds to"]};
 
 \d .

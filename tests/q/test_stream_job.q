@@ -509,6 +509,9 @@ a_book:{[s;mid] ([] time:enlist d 0; sym:enlist s; source:enlist `UQFFX; market:
     bid_prices:enlist enlist mid; bid_sizes:enlist enlist 1e6;
     ask_prices:enlist enlist mid; ask_sizes:enlist enlist 1e6)}
 
+/ The mid posbook would mark a fill at the far future with: the newest book's.
+pb_latest_mid:{[s] first .qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;([] time:enlist 2100.01.01D00:00:00; sym:enlist s)]}
+
 test_posbook_marks_a_fill_against_the_last_mid:{[t]
     reset[];
     .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
@@ -544,8 +547,92 @@ test_posbook_keeps_its_mid_when_a_source_withdraws_its_book:{[t]
     reset[];
     .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
     .qpipe.job.posbook.on_batch[`market_data;update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from a_book[`EURUSD;1.2]];
-    .qunit.assertEquals[.qpipe.job.posbook.last_mid`EURUSD;1.104;
+    .qunit.assertEquals[pb_latest_mid`EURUSD;1.104;
         "the withdrawn book leaves the last real mid in place"]};
+
+/ --- posbook marks AS OF the fill's own time (#1229) -----------------------
+
+/ A book for sym s stamped at ts with a one-point touch at mid.
+pb_book_at:{[ts;s;mid] update source_time:ts, time:ts from a_book[s;mid]}
+
+/ A fill stamped (source_time) at ts, priced at px - far from any mid below.
+pb_fill_at:{[ts;s;px] an_execution[ts;s;1;px;1e6]}
+
+test_posbook_marks_a_fill_to_the_mid_as_of_its_time_not_a_later_book:{[t]
+    / Books at 12:00:00 (1.10) and 12:00:10 (1.20), a fill at 12:00:05
+    / delivered after both: marked 1.10, never 1.20.
+    reset[];
+    t0:2026.09.17D12:00:00;
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.10]];
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
+    .qunit.assertEquals[last_rows[]`mark_price;enlist 1.10;"the mid prevailing at 12:00:05"]};
+
+test_posbook_a_fill_exactly_at_a_books_time_takes_that_book:{[t]
+    reset[];
+    t0:2026.09.17D12:00:00;
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.10]];
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:10;`EURUSD;1.15]];
+    .qunit.assertEquals[last_rows[]`mark_price;enlist 1.20;"a book stamped at the fill's instant counts (aj's rule)"]};
+
+test_posbook_a_fill_before_any_book_is_marked_at_its_own_price:{[t]
+    reset[];
+    t0:2026.09.17D12:00:00;
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
+    .qunit.assertEquals[last_rows[]`mark_price;enlist 1.15;"no mid at or before the fill: the fill-price fallback, not the later book"];
+    .qunit.assertEquals[last_rows[]`unrealized_pnl;enlist 0f;"so nothing unrealized"]};
+
+test_posbook_a_late_older_book_does_not_change_later_marks:{[t]
+    / #1088: the 12:00:00 book arrives after the 12:00:10 one. A fill at
+    / 12:00:20 still sees 1.20; a fill at 12:00:05 sees the older book.
+    reset[];
+    t0:2026.09.17D12:00:00;
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.00]];
+    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:20;`EURUSD;1.15],pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
+    .qunit.assertEquals[last_rows[]`mark_price;1.20 1.00;"the newer book is not rewound; the older one marks only the fills before the newer"]};
+
+test_posbook_marks_each_fill_of_an_out_of_order_batch_at_its_own_time:{[t]
+    reset[];
+    t0:2026.09.17D12:00:00;
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.10]];
+    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:12;`EURUSD;1.15],pb_fill_at[t0+0D00:00:03;`EURUSD;1.15],pb_fill_at[t0+0D00:00:10;`EURUSD;1.15]];
+    .qunit.assertEquals[last_rows[]`mark_price;1.20 1.10 1.20;"marks follow each fill's time, rows follow arrival order"]};
+
+test_posbook_marks_a_crypto_fill_to_the_best_venue_mid_as_of_its_time:{[t]
+    / a at 10:00:00 (100/102), b at 10:00:02 (101/103), a again at 10:00:08
+    / (200/202). A fill at 10:00:03 sees a and b -> 101.5; a fill at 10:00:09
+    / sees a (200/202) and b, but b is 7s old: stale, so a alone -> 201; a
+    / fill at 10:00:01 sees only a.
+    reset[];
+    s:`$"BTC-USDT";
+    tob:{[s;v;ts;b;a] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        update venue:v, source_time:ts from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
+    t0:2026.09.17D10:00:00;
+    to_posbook[`market_data;tob[`a;t0;100f;102f],tob[`b;t0+0D00:00:02;101f;103f],tob[`a;t0+0D00:00:08;200f;202f]];
+    f:{[s;ts] update time:ts, source_time:ts from .sjtest.an_execution[ts;s;1;95f;1f]}[s];
+    .qpipe.job.posbook.on_batch[`executions;f[t0+0D00:00:03],f[t0+0D00:00:09],f[t0+0D00:00:01]];
+    .qunit.assertEquals[last_rows[]`mark_price;101.5 201 101f;"as of each fill: both venues; the stale one dropped; one venue"]};
+
+test_posbook_marks_identically_live_and_when_the_log_is_replayed:{[t]
+    / The same log, delivered twice from a reset job (a restart's replay
+    / rebuilds state from the log, as the first delivery did), marks every
+    / fill the same. The full restart-at-every-point check is
+    / test_replay_equivalence.q.
+    entries:(
+        (`market_data;pb_book_at[2026.09.17D12:00:00;`EURUSD;1.10]);
+        (`market_data;pb_book_at[2026.09.17D12:00:10;`EURUSD;1.20]);
+        (`executions;pb_fill_at[2026.09.17D12:00:05;`EURUSD;1.15]);
+        (`market_data;pb_book_at[2026.09.17D12:00:02;`EURUSD;1.05]);
+        (`executions;pb_fill_at[2026.09.17D12:00:12;`EURUSD;1.15]));
+    run:{[entries] reset[]; {.qpipe.job.posbook.on_batch . x} each entries; raze first each exec rows from .sjtest.published};
+    live:run entries;
+    replayed:run entries;
+    .qunit.assertEquals[live`mark_price;1.10 1.20;"as of each fill"];
+    .qunit.assertEquals[replayed;live;"replay reproduces live"]};
 
 / --- vectorize ------------------------------------------------------------
 
@@ -839,7 +926,7 @@ test_posbook_marks_to_whichever_book_market_data_saw:{[t]
     row:last_rows[];
     .testutil.assertApprox[first row`mark_price;62000f;1e-9;"the crypto mid, off the ladder's first level"];
     .testutil.assertApprox[first row`unrealized_pnl;1000f;1e-9;"bought at 61000, marked at 62000"];
-    .testutil.assertApprox[.qpipe.job.posbook.last_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
+    .testutil.assertApprox[pb_latest_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
 
 test_posbook_no_longer_reads_the_raw_tables:{[t]
     .qunit.assertEquals[.qetl.job.stream.def[`posbook]`subscribe_to;`executions`market_data;
@@ -864,7 +951,7 @@ test_the_mock_reaches_posbook_through_both_normalizers:{[t]
         "twenty ticks at a 30% touch share is enough for at least one fill to reach the book"];
     .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in .qpipe.job.crypto_mock.syms;
         "and every position is in a symbol the mock trades"];
-    .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in exec sym from .qpipe.job.posbook.crypto_tob;
+    .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in exec sym from .qpipe.job.posbook.crypto_tob`rows;
         "each marked against the mock's own books, through market_data"]};
 
 test_posbook_marks_a_crypto_fill_to_the_best_mid_across_venues:{[t]
@@ -912,8 +999,8 @@ test_posbook_does_not_let_a_late_older_book_rewind_its_venue:{[t]
         update venue:v, source_time:st from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
     to_posbook[`market_data;book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f]];
     to_posbook[`market_data;book[`okx;d[0];90f;91f]];
-    .qunit.assertEquals[(.qpipe.job.posbook.crypto_tob(s;`okx))`time`bid`ask;(d[1];100f;101f);
-        "okx's newer book stands"];
+    .qunit.assertEquals[exec time from .qpipe.job.posbook.crypto_tob[`rows] where venue=`okx;d 0 1;
+        "okx's older book sits at its own time, behind the newer"];
     to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
         update time:.sjtest.d[2] from crypto_fill[s;1;100f;1f]]];
     .testutil.assertApprox[first last_rows[]`mark_price;100.5;1e-9;
@@ -922,39 +1009,32 @@ test_posbook_does_not_let_a_late_older_book_rewind_its_venue:{[t]
         update time:.sjtest.d[3] from book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f],book[`okx;d[0];90f;91f]];
     .qunit.assertEquals[first exec mid from lv`state;100.5;"the price last_value publishes for the same books"]};
 
-test_posbook_marks_a_fill_reported_after_the_venues_requote:{[t]
-    / #1058: a fill executed at 10:00:00.000 is reported after binance
-    / requotes 100/102 at .100 and okx 101/103 at .200. Neither held top is
-    / at or before the execution, so pricing AT the fill's source_time found
-    / no venue and fell back to the fill's own 95. The mark is the reference
-    / as the books now stand - best bid 101 (okx), best ask 102 (binance):
-    / 101.5 - the price last_value publishes for the same books.
+test_posbook_marks_a_fill_reported_after_the_venues_requote_as_of_its_time:{[t]
+    / #1058 reversed (#1229): a fill executed at 10:00:00.000 is reported
+    / after binance requotes 100/102 at .100 and okx 101/103 at .200. No top
+    / is at or before the execution, so it takes its own price (95); a fill
+    / at .250 sees both venues: best bid 101, best ask 102 -> 101.5.
     reset[];
     s:`$"BTC-USDT";
     book:{[s;v;st;b;a] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
         update venue:v, source_time:st from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
     books:book[`binance;d[0]+0D00:00:00.100;100f;102f],book[`okx;d[0]+0D00:00:00.200;101f;103f];
     to_posbook[`market_data;books];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
-        crypto_fill[s;1;95f;1f]]];
-    .testutil.assertApprox[first last_rows[]`mark_price;101.5;1e-9;
-        "marked at the books as they stand, not at the fill's own 95"];
-    lv:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;
-        update time:.sjtest.d[1] from books];
-    .qunit.assertEquals[first exec mid from lv`state;101.5;"the price last_value publishes for the same books"]};
+    f:{[s;ts] update time:ts, source_time:ts from an_execution[ts;s;1;95f;1f]}[s];
+    .qpipe.job.posbook.on_batch[`executions;f[d[0]],f[d[0]+0D00:00:00.250]];
+    .qunit.assertEquals[last_rows[]`mark_price;95 101.5;"before every top: its own price; after both: the best mid then"]};
 
-test_posbook_marks_a_batch_at_its_newest_fill_whatever_the_order:{[t]
-    / #1058: fills in one batch need not be in source_time order. The
-    / venue quoted 100/101 at 10:00:01; the batch's newer fill (10:00:02)
-    / sees it, the older one (10:00:00) arriving last would not. The batch's
-    / newest time prices it: 100.5 for both rows, not the fill's own price.
+test_posbook_marks_a_crypto_batch_at_each_fills_own_time:{[t]
+    / The venue quoted 100/101 at 10:00:01. A fill stamped 10:00:02 sees it
+    / (100.5); one stamped 10:00:00, in the same batch, does not (own price).
     reset[];
     s:`$"BTC-USDT";
     to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
         update source_time:.sjtest.d[1] from crypto_book_row[s;100 99 98f;101 102 103f]]];
-    two:(update time:.sjtest.d[2] from crypto_fill[s;1;90f;1f]),crypto_fill[s;1;91f;1f];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;two]];
-    .qunit.assertEquals[last_rows[]`mark_price;100.5 100.5;"both rows marked to the live book"]};
+    f:{[s;ts;px] update time:ts, source_time:ts from an_execution[ts;s;1;px;1f]}[s];
+    .qpipe.job.posbook.on_batch[`executions;f[d[2];90f],f[d[0];91f]];
+    .qunit.assertEquals[last_rows[]`mark_price;100.5 91;"each fill at its own time, whatever the order"]};
+
 / --- fx orders feed -------------------------------------------------------
 
 test_the_orders_feed_publishes_one_order_a_tick:{[t]

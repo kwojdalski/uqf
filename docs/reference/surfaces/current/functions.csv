@@ -1302,15 +1302,15 @@ qpipe.job.posbook,book,dict,,
 qpipe.job.posbook,crypto_marks,function,2,tob batch
 qpipe.job.posbook,crypto_tob,dict,,
 qpipe.job.posbook,executions,table,,
-qpipe.job.posbook,last_mid,dict,,
-qpipe.job.posbook,last_mid_at,dict,,
-qpipe.job.posbook,mark_positions,function,3,book trades mids
+qpipe.job.posbook,fx_marks,function,2,hist batch
+qpipe.job.posbook,history_retention,value,,
+qpipe.job.posbook,mark_positions,function,2,book batch
 qpipe.job.posbook,market_data,table,,
+qpipe.job.posbook,mid_history,dict,,
 qpipe.job.posbook,next_book,function,2,book positions
 qpipe.job.posbook,on_batch,function,2,t x
 qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
-qpipe.job.posbook,position_mids,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
 qpipe.job.rebuild_positions,as_fills,function,1,deals

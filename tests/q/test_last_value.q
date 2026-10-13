@@ -146,10 +146,10 @@ test_posbook_and_last_value_agree_on_every_market:{[t]
         book ((`EURUSD;`LP_A;d[0];1.10;1.12);(`EURUSD;`LP_A;d[1];0n;1.12)));
     {.qpipe.job.last_value.on_batch[`market_data;x]; .qpipe.job.posbook.on_batch[`market_data;x]} each batches;
     lv:exec sym!mid from latest[];
-    pb:exec first mid from .qpipe.job.posbook.crypto_marks[0!.qpipe.job.posbook.crypto_tob;([] time:enlist d[1]; sym:enlist s)];
+    pb:first .qpipe.job.posbook.crypto_marks[.qpipe.job.posbook.crypto_tob;([] time:enlist d[1]; sym:enlist s)];
     .qunit.assertEquals[pb;100f;"posbook: binance's bid withdrawn, kraken stale - okx 99 against binance 101"];
     .qunit.assertEquals[lv s;pb;"last_value publishes the mark posbook uses"];
-    .qunit.assertEquals[(.qpipe.job.posbook.last_mid`EURUSD;lv`EURUSD);1.11 1.11;"FX: the withdrawn book leaves the last mid standing in both"]};
+    .qunit.assertEquals[(.sjtest.pb_latest_mid`EURUSD;lv`EURUSD);1.11 1.11;"FX: the withdrawn book leaves the last mid standing in both"]};
 
 test_no_consumer_re_derives_the_top_of_book:{[t]
     files:`$"src/etl/streaming/",/:("posbook";"crypto_markout";"last_value"),\:".q";
@@ -197,8 +197,8 @@ test_a_late_older_fx_book_moves_neither_mark:{[t]
     both book enlist (`EURUSD;`LP_A;d[2];1.20;1.22);
     both book enlist (`EURUSD;`LP_B;d[1];1.00;1.02);
     lv:(exec sym!mid from latest[])`EURUSD;
-    .testutil.assertApprox[.qpipe.job.posbook.last_mid`EURUSD;1.21;1e-12;"posbook keeps the newer book's mid"];
-    .qunit.assertEquals[.qpipe.job.posbook.last_mid`EURUSD;lv;"the mark last_value publishes"]};
+    .testutil.assertApprox[.sjtest.pb_latest_mid`EURUSD;1.21;1e-12;"posbook keeps the newer book's mid"];
+    .qunit.assertEquals[.sjtest.pb_latest_mid`EURUSD;lv;"the mark last_value publishes"]};
 
 test_fx_is_still_last_source_wins:{[t]
     reset[];

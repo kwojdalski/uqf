@@ -20,6 +20,40 @@
 / this job alone - a process, a plant connection and a stored table for
 / (bid+ask)%2.
 / .
+/ WHEN THE MARK IS TAKEN (#1229). A fill is marked to the last mid known AS OF
+/ THE FILL'S OWN EVENT TIME (its source_time): a book stamped after the fill
+/ never marks it, however early it was delivered. Books at 12:00:00 (1.10)
+/ and 12:00:10 (1.20) and a fill at 12:00:05 delivered after both: marked
+/ 1.10. The job keeps an event-time history of mids (.qetl.enrich buffers)
+/ and asks .qasof.lookup, the shared as-of rule. FX: a history per sym, the
+/ mid of the latest book at or before the fill (a book AT the fill's time
+/ counts), with no age limit, as the last mid never had one. Crypto: a
+/ history of each venue's top per sym and venue, and the best mid across the
+/ venues whose top at the fill's time is within .qmicro.reference_max_age of
+/ it (#886), so a venue silent for longer than that does not mark the fill.
+/ .
+/ A late, older book (#1088, #1049) is inserted at its own time. It marks only
+/ fills stamped between it and the next newer book, and cannot rewind a mark
+/ that a newer book already set for later fills. No mid at or before the fill
+/ - a sym never quoted, or the fill older than every book held - marks the
+/ fill at its own price (zero unrealized), the long-standing fallback.
+/ .
+/ HOW FAR BACK. history_retention (one minute) is how long before a sym's
+/ (or venue's) newest book its rows are kept, plus one anchor row older than
+/ that, so the latest book is never dropped. It is twelve times
+/ reference_max_age and far above how late an execution is reported
+/ (seconds). A fill stamped before the retained history cannot be marked as
+/ of its time, and takes the fill-price fallback rather than a mark from
+/ AFTER it; the job logs a warning counting such fills.
+/ .
+/ REPLAY. Live and replay mark identically: replay hands the job the same
+/ log in the same order, the history is rebuilt from the replayed books (it is
+/ declared state, not carried), and a mark depends only on the books seen
+/ before the fill, in that order. After a restart across end of day, catch-up
+/ replays earlier days' books before their fills, and a fill with no book yet
+/ replayed takes the fallback exactly as it did live. test_replay_equivalence.q
+/ restarts at every point.
+/ .
 / WHAT IS IN THIS FILE: the schemas, the marking transform with its examples,
 / the batch handler, the book and the mark cache, and the declaration the
 / runner reads. Every step, in the order it runs.
@@ -41,8 +75,9 @@ position_book:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_p
 / through the same select: a column the plant renames fails here, at load,
 / rather than in a trapped error on every batch (#817).
 as_trades:{[x] select time:source_time, sym, side, trade_price:price, size from x}
-position_trades:as_trades[.qetl.plant.shape `executions]
-position_mids:([] sym:`symbol$(); mid:`float$())
+/ The transform's trades also carry mark_mid: the mid prevailing at the
+/ fill's own time, null when there is none (the handler computes it).
+position_trades:update mark_mid:`float$() from as_trades[.qetl.plant.shape `executions]
 position:.qetl.plant.published `position
 
 / ---------------------------------------------------------- THE TRANSFORM
@@ -54,12 +89,12 @@ position:.qetl.plant.published `position
 / last row per sym is that sym's new position. That is what lets a batch of
 / fills against a given book have an expected answer at all.
 / .
-/ One output row per fill, in fill order, each marked to the sym's mid - or
-/ to the fill's own price for a sym never quoted, which is this job's
-/ long-standing fallback.
+/ One output row per fill, in fill order, each marked to its mark_mid - the
+/ mid prevailing at the fill's own time - or to the fill's own price when
+/ that is null, which is this job's long-standing fallback.
 / .
 / The declared input is exactly what this reads: time, sym, side,
-/ trade_price, size - the normalized `executions` table, renamed on the way
+/ trade_price, size, mark_mid - the normalized `executions` table, renamed on the way
 / in by on_batch (source_time to time, price to trade_price). It used to
 / carry pip_factor too, which nothing here touched - and a transform that
 / demands a column it does not read cannot serve a fill table that lacks
@@ -67,21 +102,20 @@ position:.qetl.plant.published `position
 / fills reach this transform through `executions` like any other. Declare
 / what you read.
 / @param book the current positions, unkeyed
-/ @param trades the batch of fills, in arrival order
-/ @param mids the last mid per sym, a table of sym and mid
+/ @param batch the fills, in arrival order, each with the mid
+/   prevailing at its time (null for none)
 / @return one position row per fill
-mark_positions:{[book;trades;mids]
-    if[0=count trades; :.qpipe.job.posbook.position];
-    mids:(exec sym from mids)!exec mid from mids;
-    step:{[mids;acc;trade]
+mark_positions:{[book;batch]
+    if[0=count batch; :.qpipe.job.posbook.position];
+    step:{[acc;trade]
         s:trade`sym;
         b:.qpos.apply_fill[acc 0;s;trade`size;trade`trade_price;trade`side];
         row:b s;
-        mark:$[s in key mids; mids s; trade`trade_price];
+        mark:$[null trade`mark_mid; trade`trade_price; trade`mark_mid];
         unrealized:.qrisk.pnl[abs row`qty;row`avg_price;mark;signum row`qty];
         (b;acc[1],enlist `sym`qty`avg_price`realized_pnl`mark_price`unrealized_pnl`total_pnl!
-            (s;row`qty;row`avg_price;row`realized_pnl;mark;unrealized;unrealized+row`realized_pnl))}[mids];
-    last step/[(1!book;.qpipe.job.posbook.position);trades]}
+            (s;row`qty;row`avg_price;row`realized_pnl;mark;unrealized;unrealized+row`realized_pnl))};
+    last step/[(1!book;.qpipe.job.posbook.position);batch]}
 
 / The book a position batch leaves behind: the last row per sym, over the
 / book it started from.
@@ -103,57 +137,52 @@ publish:.qetl.job.stream.unwired `posbook;
 / through a computation that has expected tables.
 book:1!position_book;
 
-/ NOT ON .qasof.lookup / .qetl.enrich (#1223). The shared as-of helper answers
-/ "the reference row prevailing AT the event's time"; this job marks a fill to
-/ the mid as the books stand NOW (the position's value now, not at its fill -
-/ see crypto_marks, #1058), refuses to let a late older book rewind a sym
-/ (.qmicro.newer_by_sym, #1088) and falls back to the fill's own price. Moving
-/ it onto the helper would change what a position row carries, so it keeps
-/ its own last_mid cache until that is a decision rather than a refactor.
-/ Last-seen mid per FX sym, off the `market_data` subscription - updated on
-/ every FX book, read (with a trade_price fallback for a sym never quoted
-/ yet) when marking a fill. A plain dict, not a table: only ever a point
-/ lookup by sym, never queried as a table.
-last_mid:(`symbol$())!`float$();
+/ How far back, before a sym's (or venue's) newest book, its history is kept
+/ - see HOW FAR BACK in the header.
+history_retention:0D00:01:00
 
-/ When each last_mid was quoted - its book's source_time - so a late, older
-/ book does not rewind the mark, as last_value's latest row is not rewound
-/ (#1088, .qmicro.newer_by_sym).
-last_mid_at:(`symbol$())!`timestamp$();
+/ The FX mid history: every own-book market's level-0 mid per sym, by the
+/ book's source_time, off the `market_data` subscription. A late older book
+/ is inserted at its own time (#1088).
+mid_history:.qetl.enrich.new`keys`time`retention`schema!(enlist `sym;`source_time;history_retention;([] sym:`symbol$(); source_time:`timestamp$(); mid:`float$()))
 
-/ Each crypto venue's latest top of book, keyed by sym and venue, off the
-/ same subscription. A crypto fill is marked to the BEST MID ACROSS VENUES
-/ that are fresh as the books now stand (crypto_marks) - the library's one
-/ reference price, which crypto_markout scores against too (#886) - not to
-/ whichever venue published last. One row per sym and venue, so it stays bounded.
-/ `time` is the venue's source_time, not the plant's arrival stamp, and a
-/ venue's top is never rewound by an older book that arrives late
-/ (.qmicro.newer_venue_tops, last_value's rule - #1049).
-crypto_tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$())
+/ Each crypto venue's top-of-book history, per sym and venue, off the same
+/ subscription. A crypto fill is marked to the BEST MID ACROSS VENUES whose
+/ top as of the fill's time is fresh (crypto_marks) - the library's one
+/ reference price, which crypto_markout scores against too (#886). `time` is
+/ the venue's source_time, not the plant's arrival stamp; an older book that
+/ arrives late is inserted at its own time (#1049).
+crypto_tob:.qetl.enrich.new`keys`time`retention`schema!(`sym`venue;`time;history_retention;([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$()))
 
-/ The crypto marks for a batch of fills: per crypto sym, the best mid across
-/ fresh venues as the books stand after the batch - priced at the later of
-/ the batch's newest fill and the sym's newest held top, the instant
-/ last_value prices the same books at, so the two publish one price
-/ (`max`, not `last`: one batch's fills need not be in source_time order).
-/ A sym with no fresh venue is left out, so the transform falls back to the
-/ fill's own price, as it does for a sym never quoted.
+/ The mid prevailing at each fill's own time, for the FX syms: .qasof.lookup
+/ over the history, no age limit. Null where no book is held at or before the
+/ fill.
+/ @param hist the mid_history buffer
+/ @param batch fills as as_trades gives them (time is the fill's source_time)
+/ @return a float list, one per fill, null for none
+/ @eg .qpipe.job.posbook.fx_marks[.qetl.enrich.add[.qpipe.job.posbook.mid_history;([] sym:2#`EURUSD; source_time:2026.09.17D12:00:00 2026.09.17D12:00:10; mid:1.10 1.20)];([] time:enlist 2026.09.17D12:00:05; sym:enlist `EURUSD)]  ->  enlist 1.1
+fx_marks:{[hist;batch]
+    ev:select sym, time from batch;
+    h:hist,enlist[`rows]!enlist select from hist[`rows] where sym in ev`sym;
+    (.qetl.enrich.lookup[h;ev;`event_time`attach`tolerance!(`time;enlist `mid;0Nn)])`mid}
+
+/ The crypto marks for a batch of fills: per fill, the best mid across the
+/ venues whose top AS OF THE FILL'S TIME is within .qmicro.reference_max_age
+/ of it. Null for a fill with no fresh venue, so the transform falls back to
+/ the fill's own price, as it does for a sym never quoted.
 / .
-/ NOT at the fill's own source_time (#1058). crypto_tob holds each venue's
-/ NEWEST top only, and a fill is reported with latency: when every venue
-/ requotes between an execution and its report, no held top is at or
-/ before the execution, and an as-of lookup there finds nothing. The mark a
-/ position row carries is the position's value now, not at its fill.
-/ @param tob crypto_tob, unkeyed
+/ This reverses #1058, which priced at the later of the batch's newest fill
+/ and the newest held top because only each venue's NEWEST top was held. The
+/ history is now held, so the mark is the value at the fill, not "now".
+/ @param tob the crypto_tob buffer
 / @param batch fills as as_trades gives them: `time` is the fill's
 /   source_time, the clock crypto_tob's books are stamped on
-/ @return a table of sym and mid
-/ @eg .qpipe.job.posbook.crypto_marks[([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2026.09.17D10:00:00.1 2026.09.17D10:00:00.2; bid:100 101f; ask:102 103f);([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT")]  ->  ([] sym:enlist `$"BTC-USDT"; mid:enlist 101.5)
+/ @return a float list, one per fill, null for none
+/ @eg .qpipe.job.posbook.crypto_marks[.qetl.enrich.add[.qpipe.job.posbook.crypto_tob;([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2026.09.17D10:00:00.1 2026.09.17D10:00:00.2; bid:100 101f; ask:102 103f)];([] time:enlist 2026.09.17D10:00:00.5; sym:enlist `$"BTC-USDT")]  ->  enlist 101.5
 crypto_marks:{[tob;batch]
-    f:select sym, time from batch where sym in tob`sym;
-    targets:0!select time:max time by sym from f,select sym, time from tob where sym in f`sym;
-    m:([] sym:targets`sym; mid:.qmicro.best_mid_across_venues[tob;`sym`time#targets;.qmicro.reference_max_age]);
-    select from m where not null mid}
+    t:select from (tob`rows) where sym in batch`sym;
+    if[(0=count t) or 0=count batch; :(count batch)#0n];
+    .qmicro.best_mid_across_venues[t;select sym, time from batch;.qmicro.reference_max_age]}
 
 / The canonical tables this job reads, as the plant delivers them - the
 / normalizers' outputs with `time` stamped in front. Declared so that
@@ -165,31 +194,45 @@ market_data:.qetl.plant.shape `market_data
 / @param x the executions rows, as a table
 / @return nothing
 apply_fills:{[x]
-    mids:0!(1!([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid)),
-         1!.qpipe.job.posbook.crypto_marks[0!.qpipe.job.posbook.crypto_tob;.qpipe.job.posbook.as_trades[x]];
-    out:.qetl.transform.apply[`position;`book`trades`mids!(
+    trades:.qpipe.job.posbook.as_trades x;
+    fx:.qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;trades];
+    cr:.qpipe.job.posbook.crypto_marks[.qpipe.job.posbook.crypto_tob;trades];
+    / a crypto sym has no FX history (own_book_mids skips it), so the
+    / crypto mark leads and the FX mark fills where it is null
+    marks:fx^cr;
+    .qpipe.job.posbook.note_unmarked[trades;marks];
+    out:.qetl.transform.apply[`position;`book`batch!(
         0!.qpipe.job.posbook.book;
-        .qpipe.job.posbook.as_trades[x];
-        mids)];
+        update mark_mid:marks from trades)];
     `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.next_book[0!.qpipe.job.posbook.book;out];
     .qpipe.job.posbook.publish[`position;out];
     }
 
-/ Executions: apply every fill in the batch in arrival order - already time
-/ order off the tickerplant - mark each to the current last_mid, and publish
-/ one position row per fill. The book is rebuilt from those rows BEFORE
+/ Warn about fills that took the fill-price fallback although their sym has
+/ history - a fill older than the retained history. A never-quoted sym is the
+/ ordinary fallback and is not warned about.
+/ @param trades the batch of fills
+/ @param marks their mids, null for none
+/ @return nothing
+/ @private
+note_unmarked:{[trades;marks]
+    held:distinct (.qpipe.job.posbook.mid_history[`rows]`sym),.qpipe.job.posbook.crypto_tob[`rows]`sym;
+    n:sum (null marks) & trades[`sym] in held;
+    if[n>0; .qetl.log.warn[`posbook;"fills older than the retained mid history were marked at their own price";`fills`retention!(n;.qpipe.job.posbook.history_retention)]];
+    }
+
+/ Executions: apply every fill in the batch in arrival order, mark each to the
+/ mid prevailing at its own source_time, and publish one position row per fill. The book is rebuilt from those rows BEFORE
 / publishing, as it was when this was inline: the fills will not be
 / redelivered, so a failed publish must not also lose them from the book.
-/ Market data: just refresh last_mid from each book's level-0 mid.
+/ Market data: just add each book's mid (FX) or top (crypto) to its history.
 / .
 / A fill's `time` for the transform is its source_time - when it happened -
 / not the plant's stamp on the normalized row, which is when it was
-/ reshaped. An FX mark is per sym and the last source to publish wins; .qpos
-/ keys a book on sym alone, so that is the resolution it has. A crypto mark
-/ is the best mid across venues fresh as the books now stand, judged on
-/ source_time - the clock the books are stamped on - rather than as of the
-/ fill (crypto_marks, #1058); a venue's book older than the one held for
-/ it is dropped, not upserted (#1049).
+/ reshaped. An FX mark is per sym and, of two books at the same time, the
+/ last to arrive wins; .qpos keys a book on sym alone, so that is the
+/ resolution it has. A crypto mark is the best mid across venues fresh at the
+/ fill's time (crypto_marks, #1229).
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
@@ -197,33 +240,32 @@ on_batch:{[t;x]
     $[t=`executions;
         .qpipe.job.posbook.apply_fills x;
       t=`market_data;
-        [m:.qmicro.newer_by_sym[.qpipe.job.posbook.last_mid_at;.qmicro.own_book_mids x];
-         .qpipe.job.posbook.last_mid[m`sym]:m`mid;
-         .qpipe.job.posbook.last_mid_at[m`sym]:m`source_time;
-         `.qpipe.job.posbook.crypto_tob upsert .qmicro.newer_venue_tops[.qpipe.job.posbook.crypto_tob;.qmicro.venue_tops x]];
+        [`.qpipe.job.posbook.mid_history set .qetl.enrich.add[.qpipe.job.posbook.mid_history;
+            select sym, source_time, mid from .qmicro.own_book_mids x];
+         `.qpipe.job.posbook.crypto_tob set .qetl.enrich.add[.qpipe.job.posbook.crypto_tob;.qmicro.venue_tops x]];
       ()];
     }
 
 \d .
 
 .qetl.transform.define[`position;`inputs`output`fn`examples!(
-    `book`trades`mids!(.qpipe.job.posbook.position_book;.qpipe.job.posbook.position_trades;.qpipe.job.posbook.position_mids);
+    `book`batch!(.qpipe.job.posbook.position_book;.qpipe.job.posbook.position_trades);
     .qpipe.job.posbook.position;
     .qpipe.job.posbook.mark_positions;
     (
     / From flat: buy 1mm EURUSD at 1.10, marked at 1.104 -> 1e6*0.004 = 4000
     / unrealized. Sell 400k at 1.105 -> 400000*0.005 = 2000 realized, 600k
-    / left open at 1.10, marked at 1.104 -> 6e5*0.004 = 2400 unrealized. A USDJPY sell with no mark
+    / left open at 1.10, marked at 1.104 -> 6e5*0.004 = 2400 unrealized. A USDJPY sell with a null mark_mid
     / is marked at its own price, so nothing unrealized.
     `inputs`expected!(
-        `book`trades`mids!(
+        `book`batch!(
             .qpipe.job.posbook.position_book;
             ([] time:2026.09.17D10:00:00 2026.09.17D10:00:01 2026.09.17D10:00:02;
                 sym:`EURUSD`EURUSD`USDJPY;
                 side:1 -1 -1;
                 trade_price:1.1 1.105 150;
-                size:1e6 4e5 1e6);
-            ([] sym:enlist `EURUSD; mid:enlist 1.104));
+                size:1e6 4e5 1e6;
+                mark_mid:1.104 1.104 0n));
         ([] sym:`EURUSD`EURUSD`USDJPY;
             qty:1e6 6e5 -1e6;
             avg_price:1.1 1.1 150;
@@ -235,10 +277,9 @@ on_batch:{[t;x]
     / 149 -> flat, 1mm*1 = 1,000,000 JPY realized. A flat position's
     / avg_price is 0 by .qpos.apply_fill's convention, not the closing price.
     `inputs`expected!(
-        `book`trades`mids!(
+        `book`batch!(
             ([] sym:enlist `USDJPY; qty:enlist -1e6; avg_price:enlist 150f; realized_pnl:enlist 0f);
-            ([] time:enlist 2026.09.17D10:00:05; sym:enlist `USDJPY; side:enlist 1; trade_price:enlist 149f; size:enlist 1e6);
-            ([] sym:enlist `USDJPY; mid:enlist 148.5));
+            ([] time:enlist 2026.09.17D10:00:05; sym:enlist `USDJPY; side:enlist 1; trade_price:enlist 149f; size:enlist 1e6; mark_mid:enlist 148.5));
         ([] sym:enlist `USDJPY; qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 1e6; mark_price:enlist 148.5; unrealized_pnl:enlist 0f; total_pnl:enlist 1e6))
     ))];
 
@@ -258,4 +299,4 @@ on_batch:{[t;x]
     1b;
     `state`table!(`book;`position_open);
     "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job";
-    `book`last_mid`last_mid_at`crypto_tob)];
+    `book`mid_history`crypto_tob)];
