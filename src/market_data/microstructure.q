@@ -679,9 +679,7 @@ volume_buckets:{[tape;bucket_volume]
     cum:sums trades`size;
     starts:cum-trades`size;
     total:last cum;
-    / The tolerance is RELATIVE: summation error grows with the number of
-    / trades, so a fixed 1e-9 drops the last bucket on a long tape (#1262).
-    n:"j"$floor (total%bucket_volume)*1f+1e-9;
+    n:"j"$floor (total%bucket_volume)*1f+1e-9;  / relative: rounding grows with the tape (#1262)
     if[0=n; :empty_buckets[]];
     / For bucket b spanning [lo;hi), each trade contributes the overlap of
     / its own [start;end) with that span - which is what splits a straddling
