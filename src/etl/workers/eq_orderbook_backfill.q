@@ -48,7 +48,9 @@ quality_check:{[batch]
     (`databento_mbp10;`eq_orderbook;0D00:10:00;`eq_orderbook;.qpipe.job.eq_orderbook_backfill.quality_check;
      `databento_backfill1;
      "bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live";
-     / The source's row_key, with symbol and ts_event under the transform's names.
-     `sym`time`sequence`action`side`price`size;
+     / The source's row_key, with symbol under the transform's name. ts_event, not
+     / time: the live job drops time (the plant stamps receipt time) while both
+     / writers carry ts_event, so only it matches a refill to live rows (#1282).
+     `sym`ts_event`sequence`action`side`price`size;
      / Historical market data is not restated, so a run needs no --version.
      `v1)];
