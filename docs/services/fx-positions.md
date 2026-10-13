@@ -187,6 +187,11 @@ does the rest (#943, #963):
   re-applies exactly the replayed fills later than that, however late the
   snapshot reached the log (#960, #1015).
 - **Live** it ignores the job's own opening rows.
+- **After downtime across one or more end of days** nothing was running to write
+  the snapshot, so it first replays the earlier days' logs in order, from the
+  day after the last end of day it saw (`catch_up`). If those logs are gone it
+  logs an ERROR naming what is lost. The transport must supply `earlier_days`,
+  `plant_day` and `has_log`, or state `recovery:0b`; TorQ's does.
 
 So a process restarted at noon holds the same book as one that ran through
 midnight. `posbook1` declares the same with `position_open`. Under

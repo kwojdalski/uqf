@@ -1,8 +1,8 @@
 / posbook.q - the whole of the position-book job (.qpipe.job.posbook).
 / .
 / Subscribes to `executions` and `market_data`, folds every fill through
-/ .qpos into a running book, marks each result to the last mid seen for that
-/ sym, and publishes `position`.
+/ .qpos into a running book, marks each fill to the mid as of its own
+/ source_time (see WHEN THE MARK IS TAKEN), and publishes `position`.
 / .
 / EXECUTIONS AND MARKET_DATA, NOT TRADES AND QUOTE. This job used to
 / subscribe to the FX tables directly, and a second job - crypto_posbook -

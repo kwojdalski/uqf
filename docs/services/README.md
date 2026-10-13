@@ -90,9 +90,9 @@ which takes the FX books only. Profile `fx`. [Details](superbook.md)
 ## Analytics
 
 **`posbook1` · positions and P&L** --- a running position per instrument from
-`executions`, valued from `market_data`: an FX position at its pair's last
-level-0 mid, a crypto position at the best mid across venues no more than five
-seconds old, the same reference `crypto_markout1` scores against. One book
+`executions`, each fill marked from `market_data` at the mid as of its own time:
+an FX pair's level-0 mid, a crypto sym's best mid across venues no more than
+five seconds old (the reference `crypto_markout1` scores against). One book
 carries FX and crypto, because it reads the normalisers rather than each market.
 Publishes `position`. Profile `fx`.
 
