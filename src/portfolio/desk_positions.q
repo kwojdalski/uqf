@@ -139,10 +139,9 @@ break_even:{[book]
     tol:flat_tolerance;
     update break_even:?[tol>abs base_qty; 0n; (neg quote_qty)%base_qty] from book}
 
-/ The base quantity below which a book counts as flat. Under the smallest
-/ unit anything here trades in - a satoshi is 1e-8 - so a position this
-/ small is float residue from netting, never a real holding.
-flat_tolerance:1e-9
+/ The base quantity below which a book counts as flat - the one constant
+/ in .qrisk, shared with .qpos and .qalloc.
+flat_tolerance:.qrisk.flat_tolerance
 
 / Net exposure per currency across a whole book.
 / .

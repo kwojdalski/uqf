@@ -470,4 +470,12 @@ test_an_empty_by_with_an_opening_table_does_not_mismatch:{[t]
     .qunit.assertEquals[first exec pnl from r`matches; 50000f; "the carried-in lot closes first"];
     .qunit.assertEquals[first exec price from r`residual; 1.12; "the day's buy is left"]};
 
+test_a_fractionally_closed_lot_leaves_no_residual:{[t]
+    tr:{([] time:2026.10.13D10:00:00.000000000+0D00:01*til count x; sym:(count x)#`BTCUSD;
+        side:y; size:x; trade_price:60000f+1000f*til count x)};
+    short_close:.qalloc.residual[tr[0.3 0.1 0.2;1 -1 -1];`fifo];
+    .qunit.assertEquals[count short_close; 0; "buy 0.3, sell 0.1 and 0.2 opens no 2.8e-17 short lot"];
+    long_close:.qalloc.residual[tr[0.1 0.2 0.3;1 1 -1];`fifo];
+    .qunit.assertEquals[count long_close; 0; "buy 0.1 and 0.2, sell 0.3 leaves no 5.6e-17 long lot"]};
+
 \d .

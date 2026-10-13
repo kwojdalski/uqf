@@ -52,7 +52,10 @@ apply_fill:{[pos;sym;qty;price;side]
     old_qty:old`qty;
     old_avg:old`avg_price;
     fill_qty:side*qty;
+    / Closing a fractional position nets to float residue, not 0f
+    / (0.1+0.2-0.3 is 5.6e-17): snap it flat so the exact-close branch runs.
     new_qty:old_qty+fill_qty;
+    if[.qrisk.is_flat new_qty; new_qty:0f];
     same_dir:(old_qty=0f) or (signum[old_qty]=signum[new_qty]);
     increasing:same_dir and (abs new_qty)>=abs old_qty;
     result:$[

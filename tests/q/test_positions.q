@@ -300,4 +300,30 @@ test_ccy_exposure_in_chains_through_a_bridge_currency:{[t]
     .testutil.assertApprox[pln_amount;-2125000f;1e-6;"PLN leg from the EURPLN position, at cost"];
     .testutil.assertApprox[pln_reporting;pln_amount*expected_mid;1e-6;"PLN leg converts to USD by chaining through the EUR bridge"]};
 
+/ Fractional fills that net to zero only up to float residue (#1278).
+mk_residue_trades:{[sizes;sides]
+    n:count sizes;
+    ([] time:2026.10.13D10:00:00.000000000+0D00:01*til n; sym:n#`BTCUSD; side:sides;
+        size:sizes; trade_price:60000f+1000f*til n)}
+
+test_fractional_close_leaves_a_flat_book_when_selling_in_pieces:{[t]
+    b:.qpos.apply_fills[.qpos.empty_book[];mk_residue_trades[0.3 0.1 0.2;1 -1 -1]];
+    .qunit.assertEquals[(b`BTCUSD)`qty; 0f; "buy 0.3, sell 0.1 and 0.2 is flat, not a 2.8e-17 short"];
+    .qunit.assertEquals[(b`BTCUSD)`avg_price; 0f; "a flat position carries no average price"];
+    .testutil.assertApprox[(b`BTCUSD)`realized_pnl; 500f; 1e-6; "0.1*(61000-60000)+0.2*(62000-60000) = 100+400"]};
+
+test_fractional_close_leaves_a_flat_book_when_buying_in_pieces:{[t]
+    b:.qpos.apply_fills[.qpos.empty_book[];mk_residue_trades[0.1 0.2 0.3;1 1 -1]];
+    .qunit.assertEquals[(b`BTCUSD)`qty; 0f; "buy 0.1 and 0.2, sell 0.3 is flat, not a 5.6e-17 long"];
+    .qunit.assertEquals[(b`BTCUSD)`avg_price; 0f; "a flat position carries no average price"]};
+
+test_reconcile_trades_matches_a_fractionally_closed_position:{[t]
+    ref:([sym:enlist `BTCUSD] qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 0f);
+    r:.qpos.reconcile_trades[ref;mk_residue_trades[0.3 0.1 0.2;1 -1 -1];0f;1e-6];
+    .qunit.assertEquals[first exec status from r; `match; "a closed position reconciles against a flat reference"]};
+
+test_a_real_position_below_one_unit_is_not_called_flat:{[t]
+    b:.qpos.apply_fill[.qpos.empty_book[];`BTCUSD;1e-6;60000f;1];
+    .qunit.assertEquals[(b`BTCUSD)`qty; 1e-6; "1e-6 is above the flat tolerance"]};
+
 \d .

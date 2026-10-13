@@ -337,9 +337,12 @@ step:{[m;state;row]
             (lot`trade_id; lot`time; lot`side; row`trade_id; row`time; take;
              lot`price; "f"$row`trade_price);
         qty-:take;
+        / Float residue is not a position: a sliver left on either side of
+        / the match is flat, so it opens no lot and leaves none behind (#1278).
+        if[.qrisk.is_flat qty; qty:0f];
         / Indexed, not `lots _ ix`: dropping a row from a table by position
         / throws 'type on PeachQ, and the two agree on KDB-X.
-        lots:$[take=lot`qty; lots (til count lots) except ix; @[lots;`qty;@[;ix;-;take]]];
+        lots:$[.qrisk.is_flat lot[`qty]-take; lots (til count lots) except ix; @[lots;`qty;@[;ix;-;take]]];
         ];
     if[0<qty;
         lots:(m`open)[lots;

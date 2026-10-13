@@ -4,6 +4,21 @@
 
 \d .qrisk
 
+/ The quantity below which a position or lot counts as flat. Under the
+/ smallest unit anything here trades in - a satoshi is 1e-8 - so a quantity
+/ this small is float residue from netting fractional fills, never a real
+/ holding (#811, #1278). The one constant behind is_flat, shared by
+/ .qpos, .qalloc and .qdesk.
+flat_tolerance:1e-9;
+
+/ Whether a quantity is flat: within flat_tolerance of zero. Netting
+/ fractional sizes rarely lands on an exact 0f (0.1+0.2-0.3 is 5.6e-17),
+/ so an exact `=0f` test calls a closed position open.
+/ @param qty a signed quantity (atom or list)
+/ @return a boolean, true where abs qty is under flat_tolerance
+/ @eg .qrisk.is_flat[0.1+0.2-0.3] -> 1b
+is_flat:{[qty] flat_tolerance>abs qty};
+
 / Money value of a 1-pip move on a given base-currency notional, in quote
 / currency.
 / @param notional position size in base currency units
