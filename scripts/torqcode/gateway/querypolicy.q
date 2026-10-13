@@ -124,6 +124,44 @@ resolvepolicy:{[policies;caps;table;roles]
 / @eg .checkinputs.requestspan[2026.01.01;2026.01.01]  ->  1D00:00:00.000000000
 requestspan:{[s;e] ((`timestamp$e)+$[-14h=type e;1D;0D])-`timestamp$s}
 
+/ Private: whether one getdata filter pair keeps a column to the values it
+/ names - (=;v) or (in;v). A not form, a comparison, within and like do not.
+narrows:{[pair] any (first pair)~/:(=;in)}
+
+/ The columns a request narrows to named values: those with an = or in
+/ filter, and the instrument column when instruments is non-empty. A column's
+/ value is a list of pairs or, before TorQ's checkfilters enlists it, one
+/ pair - told apart the way checkfilters does.
+/ @param instcol the table's instrument column, which `instruments` filters on
+/ @param dict the request
+/ @return symbols
+/ @eg .checkinputs.narrowedcols[`sym;enlist[`filters]!enlist `sym`px!((=;`EURUSD);(>;1.08))]  ->  enlist `sym
+narrowedcols:{[instcol;dict]
+    f:$[`filters in key dict;dict`filters;()!()];
+    pairs:{$[all 0h=type each x;x;enlist x]} each f;
+    (`symbol$where any each .checkinputs.narrows each' pairs),
+        $[(`instruments in key dict)&0<count dict`instruments;instcol;`symbol$()]}
+
+/ Private: refuse a request that leaves one of the policy's required
+/ columns unfiltered, or filters it without narrowing it. A required filter
+/ is there to keep a request to the values it names, so only = or in on the
+/ column (or instruments) satisfies it: `sym ne ZZZ` or `sym > `` names the
+/ column and still reads every pair (#1254).
+/ @param required the policy's requiredfilters
+/ @param instcol the table's instrument column, which `instruments` filters on
+/ @param dict the request
+checkrequired:{[required;instcol;dict]
+    t:string dict`tablename;
+    filtered:$[`filters in key dict;key dict`filters;`symbol$()],
+        $[(`instruments in key dict)&0<count dict`instruments;instcol;`symbol$()];
+    if[count missing:required except filtered;
+        '"querypolicy: ",t," needs a filter on ",(", "sv string missing),
+            $[instcol in missing;" - pass instruments (e.g. `EURUSD) or a filters condition on it";" - add a filters condition on it"]];
+    if[count wide:required except narrowedcols[instcol;dict];
+        '"querypolicy: ",t," needs ",(", "sv string wide)," narrowed with = or in",
+            " - a not, <, >, within or like condition on a required filter still reads every value",
+            $[instcol in wide;"; pass instruments (e.g. `EURUSD) or an = or in condition on it";""]];}
+
 / Check one request against its table's policy, after TorQ's own checks have
 / passed. Refuses with the reason and what to change; returns the request
 / with its timeout capped and the limits the merge is checked against.
@@ -137,11 +175,7 @@ checkrequest:{[policy;instcol;dict]
     if[span>policy`maxrange;
         '"querypolicy: ",t," allows at most ",string[policy`maxrange]," per request and this one covers ",
             string[span]," - narrow starttime/endtime or split the request"];
-    filtered:$[`filters in key dict;key dict`filters;`symbol$()],
-        $[(`instruments in key dict)&0<count dict`instruments;instcol;`symbol$()];
-    if[count missing:policy[`requiredfilters] except filtered;
-        '"querypolicy: ",t," needs a filter on ",(", "sv string missing),
-            $[instcol in missing;" - pass instruments (e.g. `EURUSD) or a filters condition on it";" - add a filters condition on it"]];
+    checkrequired[policy`requiredfilters;instcol;dict];
     op:$[any`aggregations`timebar`grouping in key dict;`aggregate;`raw];
     if[not op in policy`operations;
         '"querypolicy: ",t," allows ",("|"sv string policy`operations)," and this request is ",string[op],

@@ -57,7 +57,7 @@ def torq_runs(monkeypatch) -> list[list[str]]:
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(runtime, "torq_launcher", lambda _p: Path("torq.sh"))
-    monkeypatch.setattr(runtime, "bootstrap", lambda _p, base_port=None: {})
+    monkeypatch.setattr(runtime, "bootstrap", lambda _p, base_port=None, selected=None: {})
     monkeypatch.setattr(runtime.subprocess, "run", launch)
     monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a: None)
     return seen

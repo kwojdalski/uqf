@@ -244,6 +244,24 @@ test_review_counts_unavailable_legs_and_never_reroutes:{[t]
     .qunit.assertEquals[first exec route from g;`$"EURGBP(inv)+EURPLN";"route text shows the inversion"];
     .qunit.assertEquals[sum exec n_unavailable from r where pair<>`GBPPLN,kind in `leg`total;0;"no other pair has an unavailable leg"]};
 
+/ #1249: USDPLN is quoted only from the second trade's time, so the first trade
+/ has no total though its route legs price; it must not enter the leg sums.
+test_review_skips_trades_without_a_total:{[t]
+    t5:2026.01.01D00:00:00.500000000;
+    rows:(mk_row[tm_zero;`EURUSD;1.10];mk_row[t5;`EURUSD;1.11];mk_row[tm_one;`EURUSD;1.12];
+        mk_row[tm_zero;`EURPLN;4.30];mk_row[t5;`EURPLN;4.32];mk_row[tm_one;`EURPLN;4.35];
+        mk_row[t5;`USDPLN;3.8919];mk_row[tm_one;`USDPLN;3.8839]);
+    q:`sym`time xasc flip flip rows;
+    one:.qexec.cross_markout_attribution[q;`USDPLN;1;tm_zero;t5;10000;1];
+    .qunit.assertTrue[all null (select from one where kind=`leg)`pips;"no total: leg pips are null"];
+    .qunit.assertEquals[(select from one where kind=`leg)`status;`unavailable`unavailable;"no total: legs unavailable"];
+    .qunit.assertEquals[first exec status from one where kind=`residual;`unavailable;"no total: residual unavailable"];
+    tr:([] time:tm_zero,t5; sym:`USDPLN`USDPLN; side:1 1);
+    r:.qexec.attribution_review[q;tr;enlist 0D00:00:00.500000000;10000;1];
+    .testutil.assertApprox[sum exec share from r where kind<>`total;1f;1e-9;"shares over the trades with a total sum to 1"];
+    .qunit.assertEquals[exec n_unavailable from r where kind=`leg;1 1;"the trade without a total counts as unavailable on each leg"];
+    .qunit.assertEquals[first exec n_unavailable from r where kind=`total;1;"and on the total"]};
+
 test_review_horizons_and_pip_factor_dict:{[t]
     q:review_fixture_quotes[];
     t_zero:tm_zero;
