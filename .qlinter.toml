@@ -18,3 +18,13 @@ ignore = ["QS001", "QS010"]
 "tests/q/test_execution.q" = ["QP002"]
 # TimeStored's qunit, vendored: kept as upstream wrote it.
 "tests/lib/qunit.q" = ["QF017", "QL001", "QS003"]
+# QP003 (wall-clock-temporal) flags `.z.D` since q-lint 0.14.13. Here it is the
+# plant's day by design, not a data timestamp: the standalone plant names and
+# rolls its log by `.z.D` (#943), recovery falls back to that same clock when a
+# transport cannot say which day its plant is on (#1190), and the tests build
+# their days from the clock the code under test reads. The data stays UTC.
+"scripts/processes/run_stream.q" = ["QP003"]
+"scripts/processes/torq_pipeline.q" = ["QP003"]
+"src/etl/core/stream_carry_recovery.q" = ["QP003"]
+"tests/q/test_endofday.q" = ["QP003"]
+"tests/q/test_torq_pipeline.q" = ["QP003"]

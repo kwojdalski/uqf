@@ -62,7 +62,7 @@ VERSION_FILE = REPO / ".qlinter-version"
 
 
 def _pinned_version() -> str:
-    """The pinned release tag, e.g. `v0.14.10`."""
+    """The pinned release tag, e.g. `v0.14.13`."""
     return VERSION_FILE.read_text(encoding="utf-8").strip()
 
 
