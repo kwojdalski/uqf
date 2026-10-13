@@ -3,3 +3,4 @@ proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeof
 ,demo_execution_quality,time,sym,sym,,,,
 ,exec_bar,time,sym,sym,,,,
 ,duckdb_deals,time,sym,sym,,,,
+,order_quality,time,book,book,,,,

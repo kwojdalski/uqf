@@ -94,13 +94,34 @@ posbook_script:{[]
      ev[t0+0D00:00:14;`executions;pb_fill[t0+0D00:00:14;`EURUSD;1.30]];
      ev[t0+0D00:00:15;`executions;pb_fill[t0+0D00:00:15;`USDJPY;150f]];
      ev[t0+0D00:00:16;`executions;pb_fill[t0+0D00:00:00.5;`EURUSD;1.15]])}
+/ order_quality's own clock as the tree defined it, put back after a run.
+oq_now:()
 
 / The scripted jobs: name -> the script and what to do on a tick.
-scripts:`exec_bars`last_value`posbook`crypto_book_1s!(
+/ order_quality: orders over a few minutes, ticks between, and a book that goes
+/ quiet - a restart must publish the same rolling series, the quiet book's
+/ identity rows and its disappearance included (#1224).
+order:{[tm;bk;status] ([] time:enlist tm; order_id:enlist 1; sym:enlist `EURUSD; book:enlist bk;
+    product:enlist `spot; side:enlist 1; size:enlist 1e6; price:enlist 1.1; order_status:enlist status)}
+
+order_quality_script:{[]
+    (ev[t0+0D00:00:05;`orders;order[t0+0D00:00:05;`london;`filled]];
+     ev[t0+0D00:00:20;`orders;order[t0+0D00:00:20;`newyork;`rejected]];
+     ev[t0+0D00:00:30;`tick;()];
+     ev[t0+0D00:01:10;`orders;order[t0+0D00:01:10;`london;`rejected]];
+     ev[t0+0D00:01:30;`tick;()];
+     ev[t0+0D00:04:50;`orders;order[t0+0D00:04:50;`london;`filled]];
+     ev[t0+0D00:05:00;`tick;()];
+     ev[t0+0D00:05:30;`orders;order[t0+0D00:05:30;`london;`cancelled]];
+     ev[t0+0D00:06:10;`tick;()];
+     ev[t0+0D00:07:00;`tick;()])}
+
+scripts:`exec_bars`last_value`posbook`crypto_book_1s`order_quality!(
     `script`tick!(bars_script;{[j;n] .qpipe.job.exec_bars.close_ready n});
     `script`tick!(last_value_script;{[j;n] ::});
     `script`tick!(posbook_script;{[j;n] ::});
-    `script`tick!(cbook_script;{[j;n] .qpipe.job.crypto_book_1s.close_ready n}))
+    `script`tick!(cbook_script;{[j;n] .qpipe.job.crypto_book_1s.close_ready n});
+    `script`tick!(order_quality_script;{[j;n] .qpipe.job.order_quality.evaluate n}))
 
 / Replaying jobs deliberately not scripted: job -> why.
 excluded:`fx_positions`kafka_flow!(
@@ -150,6 +171,9 @@ run:{[j;k]
     keep:get pub;
     .qetl.job.stream.reset j;
     if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .reqtest.clock}];
+    if[j=`order_quality;
+        if[()~oq_now; `.reqtest.oq_now set .qpipe.job.order_quality.now];
+        `.qpipe.job.order_quality.now set {[] .reqtest.clock}];
     `.reqtest.pubs set (); `.reqtest.wal set ();
     .qetl.job.stream.wire[j;recorder[j]];
     step[j;spec] each k#evs;
@@ -157,6 +181,7 @@ run:{[j;k]
     step[j;spec] each k _ evs;
     out:pubs;
     if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .z.p}];
+    if[j=`order_quality; `.qpipe.job.order_quality.now set oq_now];
     pub set keep;
     .qetl.job.stream.reset j;
     out}
@@ -194,6 +219,10 @@ test_a_restart_at_any_point_publishes_what_the_running_posbook_job_did:{[t]
     .testutil.assertApprox[pos[3]`mark_price;150f;1e-9;"a sym never quoted: its own price"];
     .testutil.assertApprox[pos[4]`mark_price;1.01;1e-9;"the +0.5s fill is marked by the late +0s book (1.01), the newest at or before it"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the positions (restart points that differ)"]};
+test_a_restart_at_any_point_publishes_what_the_running_order_quality_job_did:{[t]
+    r:equivalent `order_quality;
+    .qunit.assertTrue[0<sum count each last each first r;"the script publishes the rolling series"];
+    .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
 / The check is a check: a replay that judged lateness on the restart's process
 / clock - what the log clock replaces - is caught by the same script.

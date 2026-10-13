@@ -224,8 +224,9 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             note,
             path,
         )
-    if fn == "qetl.job.stream.at_bars":
-        # A bars job (#946) subscribes to its events and publishes its bars.
+    if fn in ("qetl.job.stream.at_bars", "qetl.job.stream.at_rolling"):
+        # A bars job (#946) subscribes to its events and publishes its bars; a
+        # rolling job (#1224) likewise publishes its statistic.
         transform = symbols(fields.get("transform", ""))
         return Declaration(
             name,

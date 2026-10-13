@@ -253,13 +253,20 @@ its open minutes from the log on restart. `hdb_exec_bars_backfill1` rebuilds
 bars from the HDB's `executions` with the same aggregation, under the key
 `sym, bar_start`.
 
-`crypto_book_1s1` is a second bars job, this time a snapshot rather than an
-aggregate: it turns `crypto_book` into `crypto_book_1s`, the last book state per
-`venue, sym` per second, cut on the venue's `source_time` (not the plant's
-`time`). It closes a second half a second after it ends, and a second with no
-update has no row - nothing is forward-filled. `hdb_crypto_book_backfill1`
-rebuilds the snapshots from the HDB's `crypto_book` with the same pick, under
-the key `venue, sym, bar_start`. It is in the `crypto` profile.
+`order_quality1` keeps order outcomes over the last minute, five minutes and
+hour (`order_quality`: orders, fills, rejects and their ratios per book), a
+**rolling job** (`.qetl.job.stream.at_rolling`, `src/etl/core/rolling.q`). Where
+a bar is one interval published once, this re-evaluates sliding windows
+`(as_of-N, as_of]` every five seconds; a late order amends the next publication,
+the windows roll across midnight, and a restart replays `orders` and its own
+output to publish what an uninterrupted job would have. `crypto_book_1s1` is a
+second bars job, this time a snapshot rather than an aggregate: it turns
+`crypto_book` into `crypto_book_1s`, the last book state per `venue, sym` per
+second, cut on the venue's `source_time` (not the plant's `time`). It closes a
+second half a second after it ends, and a second with no update has no row -
+nothing is forward-filled. `hdb_crypto_book_backfill1` rebuilds the snapshots
+from the HDB's `crypto_book` with the same pick, under the key
+`venue, sym, bar_start`. It is in the `crypto` profile.
 
 `demo_markout1`'s buffers live in its process, so a fill it never saw goes
 unscored: it was down, restarting, or the fill came before it. A bounded
