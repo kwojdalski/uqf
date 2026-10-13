@@ -48,9 +48,13 @@ pip_factor:.qccy.pip_factor .qsynth.pairs
 / The sizes an order is drawn from. Float, matching the schema.
 sizes:500000 1000000 2000000 5000000f
 
-/ The order id last issued. Monotonic within a process, so a replayed log
-/ and a live session cannot collide within one run.
-last_id:0
+/ The order id last issued (#1265). Monotonic within a process, and SEEDED
+/ from the process start in nanoseconds rather than from 0: a feed restarted
+/ the same day would otherwise reissue 1,2,3... and executions' fill_id,
+/ which is derived from the order id, would repeat. The id stays a long, as
+/ orders declares it. One order a second cannot catch up with a clock that
+/ counts nanoseconds, so a later start always begins above an earlier run.
+last_id:`long$.z.p
 
 / One order's rows, for a given pair index, book, product, side, size,
 / status and slippage in pips.
