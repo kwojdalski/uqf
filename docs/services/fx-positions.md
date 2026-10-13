@@ -149,9 +149,9 @@ serves every level.
 Every scope keeps `sym`, and `load_limits` refuses one that does not (#1260).
 `base_qty` is in each pair's base currency and `quote_qty` in its quote
 currency, so a total across pairs would add EUR to USD and USD to JPY: a book
-long 1mm EURUSD and short 1mm USDJPY would show a `base_qty` of 0 against a
-book cap. The service holds no rates to revalue with --- no marks, by design ---
-so it refuses the limit rather than compare a meaningless number.
+long 1mm EURUSD and short 1mm USDJPY would show a `base_qty` of 0 against a book
+cap. The service holds no rates to revalue with --- no marks, by design --- so
+it refuses the limit rather than compare a meaningless number.
 
 ### 4. Breaches are states, so alerts throttle
 
