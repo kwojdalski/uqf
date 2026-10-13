@@ -95,7 +95,9 @@ check_market_data_quality:{[quotes;max_spread_bps]
 / @param as_of only consider quotes at or before this time
 / @param max_age a gap at or below this is `ok; above it is `stale
 / @return a table sym/last_ts/age/status (`ok` or `stale`), sorted
-/   status-ascending (`stale` sorts before `ok`)
+/   status-ascending (`stale` sorts before `ok`). A sym with rows but no
+/   timed quote at or before as_of (all times null) is `stale`, with null
+/   last_ts and age (#1277)
 / @throws error if quotes is missing a required column
 / @eg .qdqc.check_stale_quotes[quotes;.z.p;0D00:00:05]
 check_stale_quotes:{[quotes;as_of;max_age]
@@ -110,10 +112,19 @@ check_stale_quotes:{[quotes;as_of;max_age]
     / `max`, not `last`: the latest quote time whatever the row order. `last`
     / read the time of the last ROW, so a merged feed or an RDB+HDB union
     / out of order called a sym stale that had quoted seconds ago (#589).
-    latest:select last_ts:max time by sym from quotes where time<=cutoff;
-    result:([] sym:exec sym from latest; last_ts:exec last_ts from latest);
+    / A null time is not a quote time: it passes `time<=cutoff` (null sorts
+    / below everything), and a sym with only null times would get last_ts
+    / -0Wp and an age that overflows negative, reading `ok (#1277). So null
+    / rows are excluded here, and a sym whose rows are ALL untimed is added
+    / back with a null last_ts, which is `stale: no timed quote at or before
+    / the cutoff. (Syms with only quotes after the cutoff stay absent.)
+    latest:select last_ts:max time by sym from quotes where not null time, time<=cutoff;
+    untimed:exec distinct sym from quotes where null time;
+    untimed:untimed except exec sym from latest;
+    result:([] sym:(exec sym from latest),untimed; last_ts:(exec last_ts from latest),(count untimed)#0Np);
     result:update age:cutoff-last_ts from result;
-    result:update status:`ok`stale (age>max_age) from result;
+    / a null age (no timed quote) is stale; null>max_age is false, so say so.
+    result:update status:`ok`stale (null last_ts) | age>max_age from result;
     / xdesc: `stale` before `ok`, as documented - xasc sorted them alphabetically.
     `status xdesc result};
 
