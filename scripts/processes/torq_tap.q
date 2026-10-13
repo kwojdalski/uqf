@@ -108,8 +108,8 @@ upd:{[t;x]
 / deliberately does not load the adapter (loads_qtorq=False) - see
 / scripts/processes/torq_pipeline.q, invariant 9, for the reasoning behind
 / the empty bodies.
-endofperiod:{[current_period;next_period;data]
+endofperiod:{[current_period;next_period;data] / noqa: QF016 TorQ endofperiod signature
     .qetl.log.info[`qproc;"end of period";`from`to!(current_period;next_period)];
     }
 
-endofday:{[dt;data] .qetl.log.info[`qproc;"end of day";enlist[`date]!enlist dt]; }
+endofday:{[dt;data] .qetl.log.info[`qproc;"end of day";enlist[`date]!enlist dt]; } / noqa: QF016 TorQ endofday signature

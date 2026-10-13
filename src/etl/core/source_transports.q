@@ -118,7 +118,7 @@ register_transport[`local;transport_fields!(
 register_transport[`mock;transport_fields!(
     {[cred] .qetl.source.mock_seed cred};
     {[h] (::)};
-    {[h;table_name] .qetl.source.mock_meta table_name};
+    {[h;table_name] .qetl.source.mock_meta table_name}; / noqa: QF016 transport close signature
     "an integer seed: the same seed and window always give the same rows";
     "42";
     "/ `h` is the seed: the credential, opened as a long - there is nothing to\n/ connect to. Generate the window's rows from it and the bounds,\n/ deterministically: the same seed and window must give the same rows\n/ (sidecars/mockups/mock_trades.q).")];

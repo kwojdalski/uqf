@@ -146,7 +146,7 @@ enumerate_by_hand:{[file;v]
 
 / The source's attribute put back (`p# on sym, as the wdb sorts it) where
 / the interpreter has it; PeachQ does not, and the column stays plain.
-with_attr:{[a;v] $[null a; v; @[{x#y}[a];v;{[v;e] v}[v]]]}
+with_attr:{[a;v] $[null a; v; @[{x#y}[a];v;{[v;e] v}[v]]]} / noqa: QF016 trap handler takes the error
 
 / Write a splayed table column by column, then `.d` - the same bytes a `set`
 / of the table writes, without PeachQ's splayed set, which re-enumerates an

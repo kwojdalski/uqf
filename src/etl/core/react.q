@@ -193,7 +193,7 @@ on_worker:{[dataset;worker;spec_fn]
     if[(100h=type spec_fn) and not 2=count (value spec_fn) 1;
         '"on_worker: ",string[worker],"'s spec_fn must take exactly 2 arguments (range_from;range_to)"];
     ns:.qetl.job.bounded.namespace worker;
-    h:{[worker;ns;spec_fn;ds;range_from;range_to]
+    h:{[worker;ns;spec_fn;ds;range_from;range_to] / noqa: QF016 reaction handler signature
         / The publisher's run AND its drain are set aside, not shared: begin
         / refuses a second run in flight, finish would close the wrong row,
         / and the reacting worker's own reactions would otherwise queue
