@@ -360,12 +360,19 @@ test_inter_event_time_known_irregular_gaps:{[t]
 
 test_ofi_autocorrelation_known_window:{[t]
     series:1 -1 2 0 -3 4;
-    r:.qmicro.ofi_autocorrelation[series;3];
-    .qunit.assertTrue[null r 0;"fewer than window rows of history -> null"];
-    .qunit.assertTrue[null r 1;"fewer than window rows of history -> null"];
-    / window ending at index 2: segment 1 -1 2 -> lagged (1;-1), current (-1;2),
-    / a perfect 2-point negative relationship -> correlation exactly -1
-    .testutil.assertApprox[r 2;-1f;1e-9;"lag-1 correlation over the first full window"]};
+    r:.qmicro.ofi_autocorrelation[series;4];
+    .qunit.assertTrue[all null 3#r;"fewer than window rows of history -> null"];
+    / window ending at index 3: segment 1 -1 2 0 -> lagged 1 -1 2, current -1 2 0
+    expected:cor[1 -1 2f;-1 2 0f];
+    .testutil.assertApprox[r 3;expected;1e-9;"lag-1 correlation over the first full window"];
+    .testutil.assertApprox[r 5;cor[2 0 -3f;0 -3 4f];1e-9;"lag-1 correlation over the last window"]};
+
+test_ofi_autocorrelation_rejects_degenerate_windows:{[t]
+    / windows 2 and 3 give 1 or 2 lag pairs: a null or a forced +-1 correlation
+    pat:"ofi_autocorrelation: window must be >= 4*";
+    f:{[w] .qmicro.ofi_autocorrelation[1 2 3 5 8 13f;w]};
+    .qunit.assertThrows[f;2;pat;"window 2 (one pair, always null) is refused"];
+    .qunit.assertThrows[f;3;pat;"window 3 (two pairs, forced +-1) is refused"]};
 
 / ---- require_depth_quotes reuse ----
 

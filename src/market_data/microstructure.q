@@ -467,15 +467,15 @@ inter_event_time:{[quotes;target_sym]
 / Rolling lag-1 autocorrelation of an OFI series: for each window-sized
 / trailing slice, correlates the slice's first window-1 values against
 / its last window-1 values (a lag-1 pairing) with kdb+'s builtin cor, and
-/ writes the result at the index the window ends on. No builtin exists for
-/ a rolling correlation, unlike rolling_ofi/spread_ratio, so this is a
-/ genuine loop; every index before the first full window is left null (0n)
-/ - not enough history yet.
+/ writes the result at the index the window ends on. No builtin exists for a rolling correlation,
+/ unlike rolling_ofi/spread_ratio, so this is a genuine loop; every index before the first full window is null (0n).
 / @param ofi_series an OFI vector, e.g. from ofi or ofi_multilevel
-/ @param window the moving-window size, in number of rows (needs >=2)
+/ @param window the moving-window size, in rows (needs >=4: w rows give w-1 lag pairs, and 1 or 2 pairs give a null or a forced +-1 cor)
 / @return a vector, same length as ofi_series, lag-1 autocorrelation per window ending at that index
-/ @eg .qmicro.ofi_autocorrelation[1 -1 2 0 -3 4;3]
+/ @throws error if window < 4
+/ @eg .qmicro.ofi_autocorrelation[1 -1 2 0 -3 4;4]
 ofi_autocorrelation:{[ofi_series;window]
+    if[window<4; '"ofi_autocorrelation: window must be >= 4 - fewer than 3 lag pairs gives a null or a forced +-1 correlation"];
     n:count ofi_series;
     result:n#0n;
     i:window;
