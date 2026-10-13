@@ -183,4 +183,39 @@ test_implied_vol_of_an_impossible_price_is_null:{[t]
     / bisection used to return its lower bound (1e-05) as if it were an answer.
     .qunit.assertTrue[null .qopt.implied_vol[0.0001;1.25;1.10;0.045;0.02;0.75;1b];"no vol, so null"]};
 
+/ Zero variance exactly at the forward (#1256): 0%0 made d1 null, so the
+/ price and every Greek came out null. The limit is DFd*max(F-K,0) = 0.
+test_gk_atm_at_expiry_prices_zero:{[t]
+    c:.qopt.gk_call[1.10;1.10;0.045;0.02;0.10;0f];
+    p:.qopt.gk_put[1.10;1.10;0.045;0.02;0.10;0f];
+    .qunit.assertEquals[(c;p);0 0f;"ATM at t=0: call=put=0, not null"]};
+
+test_gk_zero_vol_at_forward_prices_zero:{[t]
+    c:.qopt.gk_call[1.10;1.10;0.03;0.03;0f;0.5];
+    p:.qopt.gk_put[1.10;1.10;0.03;0.03;0f;0.5];
+    .qunit.assertEquals[(c;p);0 0f;"vol=0 at K=F: call=put=0, not null"]};
+
+test_gk_zero_variance_off_forward_stays_intrinsic:{[t]
+    itm:.qopt.gk_call[1.10;1.10-1e-9;0.045;0.02;0.10;0f];
+    otm:.qopt.gk_call[1.10;1.10+1e-9;0.045;0.02;0.10;0f];
+    .testutil.assertApprox[itm;1e-9;1e-12;"ITM at t=0 is intrinsic"];
+    .qunit.assertEquals[otm;0f;"OTM at t=0 is 0"]};
+
+test_gk_zero_variance_parity_and_vector:{[t]
+    ks:1.05 1.10 1.15;
+    c:.qopt.gk_call[1.10;ks;0.045;0.02;0.10;0f];
+    p:.qopt.gk_put[1.10;ks;0.045;0.02;0.10;0f];
+    .testutil.assertApprox[c-p;1.10-ks;1e-12;"parity C-P = S-K at expiry, incl. the ATM element"];
+    .testutil.assertApprox[c;0.05 0 0f;1e-12;"vector of ITM/ATM/OTM calls at expiry"]};
+
+test_gk_greeks_finite_at_expiry_atm:{[t]
+    a:(1.10;1.10;0.045;0.02;0.10;0f);
+    .testutil.assertApprox[.qopt.gk_delta_call . a;0.5;1e-12;"call delta at the money at expiry is half the foreign df (t=0: 0.5)"];
+    .testutil.assertApprox[.qopt.gk_delta_put . a;-0.5;1e-12;"put delta mirrors it"];
+    .testutil.assertApprox[.qopt.gk_vega . a;0f;1e-12;"vega 0"];
+    .testutil.assertApprox[.qopt.gk_rho_call . a;0f;1e-12;"rho 0 (t=0)"]};
+
+test_gk_negative_t_refused:{[t]
+    .qunit.assertThrows[.qopt.gk_call[1.10;1.10;0.045;0.02;0.10;];-0.5;"qopt: t must be >= 0";"negative t refused by name"]};
+
 \d .
