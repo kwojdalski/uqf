@@ -8,23 +8,33 @@ Two separate hazards, refused separately so each message says which:
   shell-unsafe  torq.sh composes qcmd, extras, load, U, ... into one start
                 line and runs `eval "nohup $sline ..."`, so `;`, `|`, `$(..)`
                 and the like in an override run as whoever started the stack -
-                over HTTP, whoever holds the write token (#1041). `${NAME}` is
-                exempt: it is torq.sh's own placeholder, expanded by envsubst
-                before the eval, and the vendored rows depend on it.
+                over HTTP, whoever holds the write token (#1041). Refused by a
+                whitelist, not a blacklist: the #1041 blacklist let `#` through,
+                which comments out -procfile, the log redirect and the `&` so
+                the process starts in the foreground and `uqs start` blocks,
+                and `*` `?` `[` which glob against the working directory, and
+                `~` `{` `}` `!` (#1252). Only SHELL_SAFE_CHARS and the space
+                between words are allowed. Two placeholders are exempt: `${NAME}`,
+                torq.sh's own, expanded by envsubst before the eval, which the
+                vendored rows depend on; and `{NAME}`, the port column's, which
+                bash leaves alone (brace expansion needs a comma or `..`).
 """
 
 from __future__ import annotations
 
 import re
+import string
 
 from uqs.paths import UqsError
 
 UNCARRIABLE = ',"\n\r'
 
-#: Characters eval would act on rather than pass to q as text.
-SHELL_UNSAFE = ";&|$`<>()\\'\"\n\r"
+#: The only characters an override's word may hold: ones eval passes to q as
+#: text. Everything else - `;` `|` `$` `#` `*` `~` `{` ... - is refused.
+SHELL_SAFE_CHARS = frozenset(string.ascii_letters + string.digits + "_./:=+@%-")
 
-_PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+#: `${NAME}` (envsubst) and `{NAME}` (the port column's) - see the header.
+_PLACEHOLDER = re.compile(r"\$?\{[A-Za-z_][A-Za-z0-9_]*\}")
 
 
 def refuse_uncarriable(procname: str, field: str, value: str) -> None:
@@ -37,12 +47,13 @@ def refuse_uncarriable(procname: str, field: str, value: str) -> None:
 
 
 def refuse_shell_unsafe(procname: str, field: str, value: str) -> None:
-    found = sorted({ch for ch in _PLACEHOLDER.sub("", value) if ch in SHELL_UNSAFE})
+    found = sorted(set(_PLACEHOLDER.sub("", value)) - SHELL_SAFE_CHARS - {" "})
     if found:
         raise UqsError(
             f"{procname}.{field} value {value!r} contains shell metacharacters "
             f"{''.join(found)!r} - torq.sh runs a process's start line through eval, "
-            "so an override may hold only plain words (a ${NAME} placeholder is allowed)"
+            "so an override may hold only plain words of letters, digits and _./:=+@%- "
+            "separated by spaces (a ${NAME} or {NAME} placeholder is allowed)"
         )
 
 
