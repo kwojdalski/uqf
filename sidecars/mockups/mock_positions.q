@@ -29,7 +29,7 @@ positions:{[trades;range_from]
 / @param dataset the dataset published: mock_trades
 / @param range_from the window's start, inclusive
 / @param range_to the window's end, exclusive
-handler:{[dataset;range_from;range_to]
+handler:{[dataset;range_from;range_to] / noqa: QF016 reaction handler signature
     .qetl.reaction.write[`mock_positions;`sym`window;positions[.qetl.reaction.published[];range_from]]}
 
 \d .

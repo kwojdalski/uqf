@@ -167,7 +167,7 @@ define:{[name;decl]
     (` sv ns,`on_batch) set on_batch[name;;];
     (` sv ns,`evaluate) set evaluate[name;];
     (` sv ns,`on_endofday) set end_of_day[name;];
-    (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`evaluate) (get ` sv ns,`now)[]}[ns];
+    (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`evaluate) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`dropped`last_as_of`covered_from`withheld;
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
         decl`procname;

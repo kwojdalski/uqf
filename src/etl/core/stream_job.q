@@ -603,7 +603,7 @@ start:{[job;tr]
         wire[job;tr[`publisher][]]];
     if[count tbls;
         live:get pub:` sv (d`ns),`publish;
-        if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b];
+        if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b]; / noqa: QF016 publish signature, replay discards
         today:plant_today tr;
         r:@[{[job;tr;tbls;h;replay]
                 if[replay and `carry in key def job; catch_up[job;tr;tbls;h]];
@@ -793,6 +793,6 @@ snapshot:{[job]
     count rows}
 
 unwired:{[job]
-    {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qetl.job.stream.wire first"}[job]}
+    {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qetl.job.stream.wire first"}[job]} / noqa: QF016 publish signature, refuses
 
 \d .

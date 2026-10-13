@@ -527,12 +527,12 @@ install_period_handlers:{[]
     / plausible and only one of them is a handler:
     /   \d .ns  /  f:{`endofperiod set {..}}  ->  root type 100
     /   \d .ns  /  f:{`.endofday set {..}}    ->  root MISSING, .endofday 100
-    `endofperiod set {[current_period;next_period;data]
+    `endofperiod set {[current_period;next_period;data] / noqa: QF016 TorQ endofperiod signature
         .qetl.log.info[`qtorq;"end of period";`from`to!(current_period;next_period)];
         };
     / end of day is the jobs' to act on (#943): each declares on_endofday
     / for the state it carries. The plant has already rolled its log.
-    `endofday set {[dt;data]
+    `endofday set {[dt;data] / noqa: QF016 TorQ endofday signature
         .qetl.log.info[`qtorq;"end of day";enlist[`date]!enlist dt];
         .qetl.job.stream.end_of_day dt;
         };

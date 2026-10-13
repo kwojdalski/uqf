@@ -314,8 +314,8 @@ verify:{[name]
 / @private
 verify_example:{[name;d;ex]
     call:$[d`as_of;
-        {[name;ex;x] apply_as_of[name;ex`inputs;ex`as_of]}[name;ex];
-        {[name;ex;x] apply[name;ex`inputs]}[name;ex]];
+        {[name;ex;x] apply_as_of[name;ex`inputs;ex`as_of]}[name;ex]; / noqa: QF016 applied to :: by the trap
+        {[name;ex;x] apply[name;ex`inputs]}[name;ex]]; / noqa: QF016 applied to :: by the trap
     first_out:@[call;::;{[e] (`error;e)}];
     if[(0h=type first_out) and `error~first first_out;
         :(0b;"threw: ",last first_out)];

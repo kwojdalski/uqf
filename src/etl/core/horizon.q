@@ -202,7 +202,7 @@ define:{[name;decl]
     (` sv ns,`score_ready) set score_ready[name;];
     / a projection with its tick argument still open: applied in full
     / here, `{[ns] ...}[ns]` would run once, now, rather than per tick
-    (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`score_ready) (get ` sv ns,`now)[]}[ns];
+    (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`score_ready) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
     extra:((.qetl.job.stream.passthrough decl),(enlist[`ephemeral] inter key decl)#decl),enlist[`state]!enlist `pending`history`completed`expired;
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform!(

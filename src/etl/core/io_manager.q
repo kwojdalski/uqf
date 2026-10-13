@@ -220,7 +220,7 @@ memory:`write`write_keyed!(write_memory;write_memory_keyed)
 
 / Private: count the rows and write nothing.
 / @private
-write_discard:{[target;batch] count batch}
+write_discard:{[target;batch] count batch} / noqa: QF016 IO manager write signature
 
 / Writes nothing, reports what it would have written.
 / .
@@ -234,7 +234,7 @@ write_discard:{[target;batch] count batch}
 / Named `discard`, not `null` or `noop`: `null` is a q builtin, and a manager
 / called noop reads as "does nothing", which would be a fair description of
 / the dry-run gate and a wrong one for this.
-discard:`write`write_keyed!(write_discard;{[target;batch;opts] count batch})
+discard:`write`write_keyed!(write_discard;{[target;batch;opts] count batch}) / noqa: QF016 IO manager write_keyed signature
 
 / ---------------------------------------------------------------- USE
 

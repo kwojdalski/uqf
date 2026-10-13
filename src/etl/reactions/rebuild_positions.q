@@ -38,7 +38,7 @@
 / @param range_to exclusive upper bound
 / @return the number of rows written for this window
 / @eg .qetl.reaction.notify_published[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
-handler:{[dataset;range_from;range_to]
+handler:{[dataset;range_from;range_to] / noqa: QF016 reaction handler signature
     deals:.qetl.reaction.published[];
     / Netted by the library, not here (#885): .qdesk.apply_fills is the one
     / netting rule, and a change to its side convention reaches this too.

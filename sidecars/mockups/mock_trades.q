@@ -78,7 +78,7 @@ generate:{[seed;range_from;range_to]
     n:0|("j"$range_to-range_from) div "j"$step;
     slot:range_from+step*til n;
     cycle:1+0.002*sin 2*acos[-1]*("j"$range_from)%86400000000000*30;
-    rows:with_seed[window_seed[seed;range_from];{[slot;cycle;x] raze pair_trades[slot]'[syms;base*cycle]}[slot;cycle]];
+    rows:with_seed[window_seed[seed;range_from];{[slot;cycle;x] raze pair_trades[slot]'[syms;base*cycle]}[slot;cycle]]; / noqa: QF016 with_seed applies f to ::
     $[count rows; `time`sym xasc rows; 0#([] time:`timestamp$(); sym:`symbol$(); side:`symbol$(); qty:`float$(); px:`float$())]}
 
 / `seed` is what the `mock` transport opened: the source's credential.
