@@ -208,6 +208,12 @@ instead of restating them. Implementation detail belongs in the code.
 > little as possible, I don't want to have too much in docs, be concise".
 > `sidecar-bundles.md` went from 179 lines to about 90 with the same facts.
 
+> *2026-10-13.* Asked, for a catch-up over a day of merged PRs (#1236): "Could
+> you try to update documentation? Just remember that you should \[add\] as
+> little as possible to the main text. I prefer to have a concise docs".
+> Corrections and missing facts go in reference pages and tables; the README and
+> main guides get a line at most.
+
 **Continuous integration is ours, not the reader's.** How CI runs, which gates
 it applies and why are maintainer concerns; the documentation is for people
 running and building on the stack. How to run the tests locally belongs in the

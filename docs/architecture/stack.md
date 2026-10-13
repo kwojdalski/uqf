@@ -8,9 +8,9 @@ plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `databento1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
 `crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`, `flink_vwap1`,
-`crypto_book_1s1`), and ten bounded backfill processes (`deals_backfill1`,
-`events_backfill1`, `databento_backfill1`, `upstream_backfill1`,
-`duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
+`crypto_book_1s1`, `order_quality1`), and ten bounded backfill processes
+(`deals_backfill1`, `events_backfill1`, `databento_backfill1`,
+`upstream_backfill1`, `duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
 `hdb_demo_markouts_backfill1`, `hdb_transfer_backfill1`,
 `hdb_exec_bars_backfill1`, `hdb_crypto_book_backfill1`). Declared is not the
 same as running here - see [what starts with the
@@ -147,11 +147,11 @@ publishes one canonical table, with one declared `.qetl.transform` transform per
 source; `define` refuses a mapping whose output drifts from the canonical
 schema. `executions1` maps `trades` and `crypto_trades` onto `executions`;
 `marketdata1` maps `quote`, `fx_orderbook` and `crypto_book` onto `market_data`.
-`posbook1` reads those two and nothing else, marking to each book's level-0 mid,
-so one position book carries FX and crypto from one subscription each, and a new
-market is a mapping in a normalizer rather than a branch in the position job.
-(Note `executions`, not `fills`: `fills` is a q builtin, and a table by that
-name would shadow the verb in every process holding it.)
+`posbook1` reads those two and nothing else, marking each fill to the mid as of
+its own time, so one position book carries FX and crypto from one subscription
+each, and a new market is a mapping in a normalizer rather than a branch in the
+position job. (Note `executions`, not `fills`: `fills` is a q builtin, and a
+table by that name would shadow the verb in every process holding it.)
 
 `fxordersfeed1` and `fxpositions1` are the FX positions service: synthetic order
 flow in, through `executions1` as fills, net exposure by (sym, book, product)
@@ -231,8 +231,9 @@ uqf's actual eFX business logic (position/PnL and execution quality, not just
 market-data reshaping) against live data. `posbook1`'s `.qpipe.job.posbook.book`
 (a private, in-process `.qpos`-shaped keyed table, same "wrap a pure function
 with local mutable state" pattern `cross1`'s `.qpipe.job.cross.fx_orderbook`
-mirror uses) accumulates fills via `.qpos.apply_fill`, marked to a live mid
-tracked off its own `quote` subscription; `position` is a snapshot republished
+mirror uses) accumulates fills via `.qpos.apply_fill`, marked to the mid as of
+each fill's own `source_time` (`.qasof.lookup` over an event-time history, so a
+book stamped after a fill never marks it); `position` is a snapshot republished
 per fill. `demo_markout1` can't score a fill the instant it arrives -
 `.qexec.markout_at_horizons` needs a reference quote at trade_time+horizon,
 which by definition hasn't happened yet - so it buffers trades/quotes in
