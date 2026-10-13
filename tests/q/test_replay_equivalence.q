@@ -51,6 +51,24 @@ bars_script:{[]
      ev[t0+0D00:06:10;`tick;()];
      ev[t0+0D00:07:00;`tick;()])}
 
+/ A crypto_book row received at rcv, for the venue's stamp src.
+cbook:{[src;rcv;v;s;bid]
+    ([] time:enlist rcv; source_time:enlist src; venue:enlist v; sym:enlist s;
+        bid_prices:enlist bid-0 1f; bid_sizes:enlist 1 2f; ask_prices:enlist bid+10 11f; ask_sizes:enlist 3 4f)}
+
+/ crypto_book_1s: two updates of a second out of order, the second closing, a late
+/ update that amends an open second, one for a second already out, and a second venue.
+cbook_script:{[]
+    (ev[t0+0D00:00:00.900;`crypto_book;cbook[t0+0D00:00:00.800;t0+0D00:00:00.900;`a;`BTC;62001f]];
+     ev[t0+0D00:00:01.100;`crypto_book;cbook[t0+0D00:00:00.200;t0+0D00:00:01.100;`a;`BTC;62000f]];
+     ev[t0+0D00:00:01.600;`tick;()];
+     ev[t0+0D00:00:02.100;`crypto_book;cbook[t0+0D00:00:01.900;t0+0D00:00:02.100;`a;`BTC;62010f]];
+     ev[t0+0D00:00:02.200;`crypto_book;cbook[t0+0D00:00:02.300;t0+0D00:00:02.200;`b;`BTC;61000f]];
+     ev[t0+0D00:00:02.300;`crypto_book;cbook[t0+0D00:00:00.950;t0+0D00:00:02.300;`a;`BTC;62099f]];
+     ev[t0+0D00:00:02.700;`crypto_book;cbook[t0+0D00:00:02.600;t0+0D00:00:02.700;`b;`BTC;61005f]];
+     ev[t0+0D00:00:03.600;`tick;()];
+     ev[t0+0D00:00:09.000;`tick;()])}
+
 last_value_script:{[]
     (ev[t0+0D00:00:01;`market_data;book[t0+0D00:00:01;`EURUSD;1.10;1.12]];
      ev[t0+0D00:00:02;`market_data;book[t0+0D00:00:02;`GBPUSD;1.30;1.32]];
@@ -63,24 +81,26 @@ pb_fill:{[src;s;px]
     ([] time:enlist src; source_time:enlist src; sym:enlist s; venue:enlist `fx; side:enlist 1;
         size:enlist 1f; price:enlist px; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `)}
 
-/ posbook (#1229): a fill is marked to the last mid the job has SEEN, in log
-/ order. The script includes the look-ahead shape - a book stamped after a
-/ fill logged ahead of that fill (the 1.20 book at +10s before the +5s fill) -
-/ and a late older book that must not rewind the mark (the +0s 1.00 book).
+/ posbook (#1229): a fill is marked to the mid as of its own source_time. The
+/ script has a book stamped after a fill delivered ahead of it (+10s before
+/ the +5s fill), a late older book that must not rewind a later mark (+0s
+/ 1.00, delivered last) and a fill before any book.
 posbook_script:{[]
     (ev[t0+0D00:00:01;`market_data;book[t0+0D00:00:01;`EURUSD;1.10;1.12]];
-     ev[t0+0D00:00:02;`executions;pb_fill[t0+0D00:00:02;`EURUSD;1.10]];
+     ev[t0+0D00:00:02;`executions;pb_fill[t0+0D00:00:02;`EURUSD;1.15]];
      ev[t0+0D00:00:11;`market_data;book[t0+0D00:00:10;`EURUSD;1.20;1.22]];
      ev[t0+0D00:00:12;`executions;pb_fill[t0+0D00:00:05;`EURUSD;1.15]];
      ev[t0+0D00:00:13;`market_data;book[t0+0D00:00:00;`EURUSD;1.00;1.02]];
      ev[t0+0D00:00:14;`executions;pb_fill[t0+0D00:00:14;`EURUSD;1.30]];
-     ev[t0+0D00:00:15;`executions;pb_fill[t0+0D00:00:15;`USDJPY;150f]])}
+     ev[t0+0D00:00:15;`executions;pb_fill[t0+0D00:00:15;`USDJPY;150f]];
+     ev[t0+0D00:00:16;`executions;pb_fill[t0+0D00:00:00.5;`EURUSD;1.15]])}
 
 / The scripted jobs: name -> the script and what to do on a tick.
-scripts:`exec_bars`last_value`posbook!(
+scripts:`exec_bars`last_value`posbook`crypto_book_1s!(
     `script`tick!(bars_script;{[j;n] .qpipe.job.exec_bars.close_ready n});
     `script`tick!(last_value_script;{[j;n] ::});
-    `script`tick!(posbook_script;{[j;n] ::}))
+    `script`tick!(posbook_script;{[j;n] ::});
+    `script`tick!(cbook_script;{[j;n] .qpipe.job.crypto_book_1s.close_ready n}))
 
 / Replaying jobs deliberately not scripted: job -> why.
 excluded:`fx_positions`kafka_flow!(
@@ -129,14 +149,14 @@ run:{[j;k]
     pub:` sv ((.qetl.job.stream.def j)`ns),`publish;
     keep:get pub;
     .qetl.job.stream.reset j;
-    if[j=`exec_bars; `.qpipe.job.exec_bars.now set {[] .reqtest.clock}];
+    if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .reqtest.clock}];
     `.reqtest.pubs set (); `.reqtest.wal set ();
     .qetl.job.stream.wire[j;recorder[j]];
     step[j;spec] each k#evs;
     if[k>0; restart j];
     step[j;spec] each k _ evs;
     out:pubs;
-    if[j=`exec_bars; `.qpipe.job.exec_bars.now set {[] .z.p}];
+    if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .z.p}];
     pub set keep;
     .qetl.job.stream.reset j;
     out}
@@ -153,6 +173,11 @@ test_a_restart_at_any_point_publishes_what_the_running_bars_job_did:{[t]
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes bars"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
+test_a_restart_at_any_point_publishes_what_the_running_crypto_book_1s_job_did:{[t]
+    r:equivalent `crypto_book_1s;
+    .qunit.assertTrue[0<sum count each last each first r;"the script publishes snapshots"];
+    .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
+
 test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]
     r:equivalent `last_value;
     .qunit.assertEquals[count first r;4;"the script publishes four changes: the older book is dropped"];
@@ -161,9 +186,13 @@ test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]
 test_a_restart_at_any_point_publishes_what_the_running_posbook_job_did:{[t]
     r:equivalent `posbook;
     pos:raze last each first r;
-    / the +5s fill is logged after the +10s book, so it is marked to 1.20 (mid of 1.20/1.22 = 1.21)
-    .testutil.assertApprox[pos[1]`mark_price;1.21;1e-9;"a fill is marked to the newest book seen in log order, whatever its stamp (#1229)"];
-    .testutil.assertApprox[pos[2]`mark_price;1.21;1e-9;"the late older book did not rewind the mark (#1088)"];
+    / 1.11 = mid of 1.10/1.12 at +1s; 1.21 = mid of 1.20/1.22 at +10s; the
+    / late +0s book (1.01) marks only the +0.5s fill, which precedes the +1s book
+    .testutil.assertApprox[pos[0]`mark_price;1.11;1e-9;"the +2s fill sees the +1s book"];
+    .testutil.assertApprox[pos[1]`mark_price;1.11;1e-9;"the +5s fill is marked as of +5s, not at the +10s book delivered before it (#1229)"];
+    .testutil.assertApprox[pos[2]`mark_price;1.21;1e-9;"the +14s fill sees the +10s book; the late older book did not rewind it (#1088)"];
+    .testutil.assertApprox[pos[3]`mark_price;150f;1e-9;"a sym never quoted: its own price"];
+    .testutil.assertApprox[pos[4]`mark_price;1.01;1e-9;"the +0.5s fill is marked by the late +0s book (1.01), the newest at or before it"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the positions (restart points that differ)"]};
 
 / The check is a check: a replay that judged lateness on the restart's process

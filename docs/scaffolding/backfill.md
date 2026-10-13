@@ -62,6 +62,13 @@ transform gets the usual `--transform` scaffold.
 uqs job new crypto_markout_hist --kind backfill --twin-of crypto_markout
 ```
 
+NAME is the base the files are named from, twin or not: the worker is
+`NAME_backfill` (here `crypto_markout_hist_backfill`), its source `NAME` unless
+`--source` names another, and its example `scripts/examples/NAME_example.q` - as
+`hdb_transfer` is to `hdb_transfer_backfill`. So a NAME already ending in
+`_backfill` is refused, saying what to pass instead, rather than doubling the
+suffix.
+
 ```
 scaffold fxprobe_backfill:
   create src/etl/sources/fxprobe.q (60 lines)

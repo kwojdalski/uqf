@@ -64,7 +64,6 @@ markout_at_horizons:{[trades;quotes;horizons]
     .qschema.require_cols[`markout_at_horizons;`trades;trades;`sym`time`side`trade_price`pip_factor];
     .qschema.require_cols[`markout_at_horizons;`quotes;quotes;`sym`time`mid];
     horizon_list:$[0>type horizons; enlist horizons; horizons];
-    sorted_quotes:`sym`time xasc quotes;
     num_trades:count trades;
     num_horizons:count horizon_list;
     / Built from typed vectors, not `cross` - (til 0) cross ... is a general
@@ -76,7 +75,9 @@ markout_at_horizons:{[trades;quotes;horizons]
     exp_horizons:horizon_list horizon_idx;
     target_time:exp_trades[`time]+exp_horizons;
     lookup_tbl:([] sym:exp_trades`sym; time:target_time);
-    joined:aj[`sym`time;lookup_tbl;sorted_quotes];
+    / The prevailing quote at each target time: the shared as-of rule (.qasof,
+    / #1223) with no tolerance, sorting its own copy of quotes.
+    joined:.qasof.lookup[quotes;lookup_tbl;`keys`ref_time`event_time`attach`tolerance!(enlist `sym;`time;`time;enlist[`mid]!enlist `mid;0Nn)];
     ref_price:joined`mid;
     markout_pips:markout[exp_trades`side;exp_trades`trade_price;ref_price;exp_trades`pip_factor];
     base:flip markout_cols!(target_time;exp_trades`sym;exp_trades`time;exp_horizons;exp_trades`trade_price;ref_price;markout_pips);

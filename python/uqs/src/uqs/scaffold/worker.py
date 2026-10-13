@@ -88,6 +88,15 @@ def bounded_worker(
     """
     check_mode(transform)
     _check_name(name, "worker name")
+    if name.endswith("_backfill"):
+        # NAME is the base the worker, its source and its example are named
+        # from, as in the tree: hdb_transfer -> hdb_transfer_backfill (#1228).
+        base = name.removesuffix("_backfill")
+        raise UqsError(
+            f"NAME {name!r} already ends in _backfill, and the worker is NAME_backfill - "
+            f"pass {base}, and the worker is {base}_backfill (its source {base}, "
+            "or --source)"
+        )
     src = source or name
     _check_name(src, "source name")
     _check_name(dataset, "dataset")

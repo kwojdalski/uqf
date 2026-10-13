@@ -50,7 +50,11 @@ def test_a_subset_runtime_has_exactly_its_profile_s_pipelines(runtime):
 
 
 def test_crypto_has_only_the_crypto_chain():
-    assert pipeline_procnames(runtimes.RUNTIMES["crypto"]) == {"cryptomock1", "crypto_markout1"}
+    assert pipeline_procnames(runtimes.RUNTIMES["crypto"]) == {
+        "cryptomock1",
+        "crypto_markout1",
+        "crypto_book_1s1",
+    }
 
 
 def test_uqf_and_torq_are_unchanged_by_subsets():

@@ -126,7 +126,8 @@ newer_venue_tops:{[tob;tops]
 / batch by source_time (an equal time follows arrival order), kept only when
 / it is at least as new as the one held. newer_venue_tops' rule, one level
 / up - for a price held per sym rather than per venue: last_value's latest
-/ row and posbook's FX mark (#1088), so a late, older book moves neither.
+/ row (#1088), so a late, older book does not move it. posbook keeps an
+/ event-time history instead (#1229) and does not use this.
 / @param held sym -> the source_time of the price held now
 / @param rows a table with sym and source_time, any order
 / @return the rows to apply, one per sym at most
