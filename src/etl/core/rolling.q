@@ -255,7 +255,7 @@ series:{[name;rows;as_ofs]
 / midnight. Read now, so on the two days a year the offset changes the start it
 / gives can be an hour out. A seam: a test replaces it to be a zone of its own.
 / @private
-zone_offset:{[] 0D00:01*"j"$(.z.P-.z.p)%0D00:01}
+zone_offset:{[] 0D00:01*"j"$(.z.P-.z.p)%0D00:01}  / noqa: QP003 the local offset is the point
 
 / Private: the start of the plant's day for an instant - local midnight, in UTC.
 / @private
