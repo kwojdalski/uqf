@@ -194,7 +194,7 @@ def test_only_a_starting_verb_prepares_the_tree(monkeypatch, tmp_path):
     and restart both load it."""
     prepared: list[list[str]] = []
     monkeypatch.setattr(runtime.start_policy, "refuse_start", lambda *_a: None)
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: {"QCMD": "q"})
+    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port, selected=None: {"QCMD": "q"})
     monkeypatch.setattr(qtree, "prepare", lambda paths, qcmd, env: prepared.append(qcmd))
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)
     monkeypatch.delenv("UQS_TORQ_LAUNCHER", raising=False)

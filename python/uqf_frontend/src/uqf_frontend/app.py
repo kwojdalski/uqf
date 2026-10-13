@@ -417,15 +417,17 @@ def create_app(
 
         capped = min(req.limit, settings.max_rows)
         # As the data login, through the gateway's query policy (#889).
-        result = gateway.browse(tbl.name, columns, operators, values, capped, TIERS[req.tier])
-        rows = _rows(result)
+        read = gateway.browse(tbl.name, columns, operators, values, capped, TIERS[req.tier])
+        rows = _rows(read.rows)
         return QueryResponse(
             poll_seconds=ops.POLL_SECONDS["query"],
             table=tbl.name,
             tier=req.tier,
             rows=rows,
             row_count=len(rows),
-            truncated=len(rows) >= capped < req.limit,
+            # read.cap is capped lowered to the policy's maxrows where that is
+            # less (#928), so a cut either one made is reported (#1255).
+            truncated=len(rows) >= read.cap < req.limit,
         )
 
     # ------------------------------------------------------ control (writes)

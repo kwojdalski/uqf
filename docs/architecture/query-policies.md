@@ -54,6 +54,12 @@ has one row per table, plus a row for each role that needs an exception:
   | `timeout`             | the longest the gateway waits on the backends                                                              |
   | `basis`               | why the numbers are what they are                                                                          |
 
+A required filter has to narrow its column to named values: an `=` or `in`
+condition on it, or `instruments` for the instrument column. A `not`, `<`, `>`,
+`within` or `like` condition names the column and still reads every value of it,
+so a request whose only condition on a required column is one of those is
+refused (#1254).
+
 A separate file rather than more columns on TorQ's `tableproperties.csv`:
 `.checkinputs.readtableproperties` reads that file with a fixed type string, so
 a column it does not know is a column it drops.
@@ -116,11 +122,12 @@ call goes through `.pm.req`, and a login can run only what its roles grant.
   rows (10,000), within the ceiling's range, bytes and timeout. `.uqf.browse`
   never asks for more rows than the caller's policy allows, so a browser read is
   truncated to the policy's limit, never refused for size, whatever the
-  frontend's `max_rows`. A hidden table has no policy and is refused. An open
-  read covers the latest window its policy allows; a `time` filter sets the
-  window instead. Every plant table is listed for getdata (`tableproperties.csv`
-  gains a derived row for each), and listing a table grants nothing: the
-  policies decide.
+  frontend's `max_rows`. It returns the cap it read under with the rows, so
+  `/query` reports `truncated` for a cut the policy made too (#1255). A hidden
+  table has no policy and is refused. An open read covers the latest window its
+  policy allows; a `time` filter sets the window instead. Every plant table is
+  listed for getdata (`tableproperties.csv` gains a derived row for each), and
+  listing a table grants nothing: the policies decide.
 - **Ordinary users.** Each user in
   [`permissions/gateway_users.csv`](../../scripts/torqconfig/permissions/gateway_users.csv)
   gets only the role named there. The roles are defined in

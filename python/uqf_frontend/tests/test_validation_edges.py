@@ -187,7 +187,7 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
     from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
     from uqs.stack import runtime
 
-    def refuse(paths, base_port):
+    def refuse(paths, base_port, selected=None):
         raise UqsError("lib/torq not vendored")
 
     # torqhome: the launcher is resolved before bootstrap runs, from TORQHOME.
@@ -196,7 +196,10 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
         stack_paths,
         "default_paths",
         lambda: SimpleNamespace(
-            torqhome=Path("/repo/lib/torq"), runtime_declaration=RUNTIMES[DEFAULT_RUNTIME]
+            torqhome=Path("/repo/lib/torq"),
+            runtime_declaration=RUNTIMES[DEFAULT_RUNTIME],
+            # read for the deployment set a start is about to record (#1248)
+            generated_deployment=Path("/repo/data/deployment"),
         ),
     )
     monkeypatch.setattr(runtime, "bootstrap", refuse)

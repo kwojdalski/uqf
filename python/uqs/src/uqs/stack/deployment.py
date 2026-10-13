@@ -26,10 +26,11 @@ report, not a deselection.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from uqs.model import profiles
 from uqs.paths import UqsPaths
+from uqs.stack import start_policy
 from uqs.stack.procs import effective_process_rows
 
 
@@ -53,19 +54,38 @@ def select(paths: UqsPaths, procnames: Iterable[str]) -> None:
     _write(paths, procnames)
 
 
-def admit(paths: UqsPaths, procs: str) -> None:
-    """Any other start: add what `procs` starts - and what it reads - to a set
-    a profile start wrote. No set, nothing to add to: no filter either."""
+def _admitted(paths: UqsPaths, procs: str) -> tuple[str, ...] | None:
+    """The set after `admit(paths, procs)`, written or not."""
     current = members(paths)
     if current is None:
-        return
+        return None
     names = procs.split()
     if "all" in names:
         rows = effective_process_rows(paths)
         names = [row["procname"] for row in rows if row.get("startwithall") == "1"]
-    added = sorted(profiles.closure(names) - set(current))
-    if added:
-        _write(paths, (*current, *added))
+    return (*current, *sorted(profiles.closure(names) - set(current)))
+
+
+def admit(paths: UqsPaths, procs: str) -> None:
+    """Any other start: add what `procs` starts - and what it reads - to a set
+    a profile start wrote. No set, nothing to add to: no filter either."""
+    names = _admitted(paths, procs)
+    if names is not None and names != members(paths):
+        _write(paths, names)
+
+
+def planned(
+    paths: UqsPaths, args: Sequence[str], selected: Iterable[str] | None = None
+) -> tuple[str, ...] | None:
+    """The set the torq.sh command `args` records, without writing it: what
+    bootstrap validates reporter1's checks against before a start records it
+    (stack/reporter.py, #1248). None for a command that is not a start, and
+    for no set."""
+    if not args or args[0] not in start_policy.STARTING_VERBS:
+        return None
+    if selected is not None:
+        return tuple(dict.fromkeys(selected))
+    return _admitted(paths, start_policy.started_procs(args))
 
 
 def record(paths: UqsPaths, procs: str, selected: Iterable[str] | None = None) -> None:
