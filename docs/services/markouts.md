@@ -89,10 +89,10 @@ For each window `[from, to)`, one hour wide by default, the source
 
 The worker (`src/etl/workers/hdb_demo_markouts_backfill.q`) scores them in its
 transform, `hdb_demo_markouts_score`, with the shared function - no fills, no
-rows, whatever quotes there are. Then it does what every bounded worker does: -
-checks the rows (an infinite markout fails the window); - writes them into
-`demo_execution_quality`'s partitions; - records the window in the coverage
-ledger, so a rerun of the same range is idle; - asks the HDB to reload.
+rows, whatever quotes there are. Then it does what every bounded worker does: it
+checks the rows (an infinite markout fails the window), writes them into
+`demo_execution_quality`'s partitions, records the window in the coverage ledger
+(so a rerun of the same range is idle) and asks the HDB to reload.
 
 ### Fill identity and upgrading an existing HDB (#1080)
 

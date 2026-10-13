@@ -529,10 +529,6 @@ the starter pack's logins. To give it ordinary users, put your own file at
 `/opt/uqf/shared/config/scripts/torqconfig/permissions/gateway_users.csv`, and
 every release links it in.
 
-`shared/config/python/uqs/process_overrides.csv`, when present, is linked the
-same way. It holds the server's own `uqs config set` values, such as a site
-launcher's [CPU affinity](#columns-the-site-launcher-reads).
-
 ## A server on kdb+ 4.0
 
 kdb+ 4.0 has no nested working contexts (`\d .qetl.status`), and this tree uses
