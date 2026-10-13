@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import csv
 import dataclasses
+import datetime as dt
 import io
 import os
 import subprocess
@@ -14,12 +15,13 @@ from typing import Any
 
 import pytest
 
-from uqs.model import runtime_members
+from uqs.model import profiles, runtime_members
 from uqs.paths import UqsError, UqsPaths
 from uqs.paths import default_paths as real_paths
 from uqs.runtimes import RUNTIMES
+from uqs.stack import deployment, reporter
 from uqs.stack import procs as stack_procs
-from uqs.stack import reporter
+from uqs.stack import runtime as stack_runtime
 
 OVERLAY = "${UQF_SCRIPTS}/processes/uqs_reporter_config.q"
 PROCS = ("rdb1", "hdb1")
@@ -187,7 +189,9 @@ def test_every_uqf_check_is_valid_for_every_runtime_with_overlays():
 
 def test_explicit_thresholds_are_carried_into_the_row():
     row = _activity("fx_slow", "fx_orderbook").row()
-    assert row["query"] == ".checks.tablecount[(),`fx_orderbook;0D00:15;.proc.cp[];`time;3]"
+    assert row["query"] == (
+        ".checks.tablecount[(),`fx_orderbook;0D00:15;.z.p+.eodtime.getdailyadjustment[];`time;3]"
+    )
     assert (row["start"], row["end"], row["period"]) == ("08:00", "17:30", "00:15")
     assert row["daysofweek"] == "2 3 4 5 6"
 
@@ -210,6 +214,23 @@ def test_an_activity_check_without_explicit_thresholds_is_refused(override, mess
 # ------------------------------------------------------------- in q
 
 
+def _q_prelude(repo_root: Path) -> str:
+    """What a TorQ process with -localtime 1 has loaded when reporter.q's
+    query reaches it: `.proc.cp`/`.proc.cd` on the host's local clock, and
+    the common code the checks run against - the timezone table, `.eodtime`
+    at its GMT defaults, monitoringchecks.q."""
+    torq = repo_root / "lib" / "torq"
+    return f"""
+.proc.cp:{{.z.P}};.proc.cd:{{.z.D}};.proc.localtime:1b;
+.lg.o:{{[x;y]}};.lg.e:{{[x;y] -1 "ERR|",y}};
+.lg.w:{{[x;y] -1 "WARN|",y}};
+.proc.getconfigfile:{{enlist hsym `$"{torq}/config/",x}};
+\\l {torq}/code/common/timezone.q
+\\l {torq}/code/common/eodtime.q
+\\l {torq}/code/common/monitoringchecks.q
+"""
+
+
 def test_the_generated_file_loads_and_alerts_as_reporter_q_runs_it(q_binary, repo_root, tmp_path):
     """Read the file with csvloader's own format and checks, run the
     fx_orderbook activity row's query against a table whose last row is ten
@@ -220,11 +241,8 @@ def test_the_generated_file_loads_and_alerts_as_reporter_q_runs_it(q_binary, rep
     q, env = q_binary
     script = tmp_path / "run.q"
     script.write_text(
-        f"""
-.proc.cp:{{.z.p}};.proc.cd:{{.z.d}};.proc.localtime:0b;
-.lg.o:{{[x;y]}};
-.lg.w:{{[x;y] -1 "WARN|",y}};
-\\l {repo_root}/lib/torq/code/common/monitoringchecks.q
+        _q_prelude(repo_root)
+        + f"""
 \\l {repo_root}/scripts/processes/uqs_reporter_config.q
 t:("s**s*Ssuuun*";enlist "|") 0: .rp.inputcsv;
 t:update daysofweek:value each daysofweek, query:raze each query,
@@ -252,3 +270,120 @@ exit 0
     assert "fx_orderbook" in warns[0].split(":", 1)[1]
     assert lines[-1] == "days:2 3 4 5 6", out.stdout + out.stderr
     assert os.path.exists(paths.generated_reporter_config)
+
+
+# ---------------------------------------------- the plant's clock (#1247)
+
+
+def _check(name: str) -> reporter.ReporterCheck:
+    return next(c for c in reporter.UQF_REPORTER_CHECKS if c.name == name)
+
+
+def test_no_generated_query_reads_the_queried_process_clock():
+    """rdb1 and hdb1 run with -localtime 1: `.proc.cp[]`/`.proc.cd[]` there
+    are local time, the plant's stamps and partitions are not."""
+    for check in reporter.UQF_REPORTER_CHECKS:
+        assert ".proc.cp" not in check.query and ".proc.cd" not in check.query, check.query
+
+
+def test_an_hdbdate_check_runs_every_day_and_tests_the_partitions_weekday():
+    """reporter1 schedules by its own local calendar, so the weekday that
+    matters - the partition's - is tested in the query."""
+    check = _check("fx_orderbook_hdbdate")
+    assert check.row()["daysofweek"] == "0 1 2 3 4 5 6"
+    assert "in 2 3 4 5 6;" in check.query
+
+
+@pytest.mark.parametrize(
+    "tz", ["UTC", "Europe/London", "America/New_York", "Asia/Tokyo", "Pacific/Kiritimati"]
+)
+def test_the_checks_are_right_in_every_host_zone(q_binary, repo_root, tmp_path, tz):
+    """The generated queries, run on a host in `tz` against tables stamped as
+    the plant stamps them (UTC, datatimezone GMT): fresh rows never alert,
+    rows two hours old always do; a full previous partition never alerts, an
+    empty one does on a weekday. Before #1247 a host east of UTC alerted on
+    the fresh table and one west of it never on the stale one."""
+    activity, hdbdate = _check("fx_orderbook_activity"), _check("fx_orderbook_hdbdate")
+    script = tmp_path / "clock.q"
+    script.write_text(
+        _q_prelude(repo_root)
+        + f"""
+n:{{count (value x)`messages}};
+fx_orderbook:([] time:.z.p-0D00:00:01*til 100);
+-1 "fresh:",string n "{activity.query}";
+fx_orderbook:([] time:.z.p-0D02:00:00+0D00:00:01*til 100);
+-1 "stale:",string n "{activity.query}";
+fx_orderbook:([] date:enlist ("d"$.z.p)-1);
+-1 "full:",string n "{hdbdate.query}";
+fx_orderbook:([] date:enlist "d"$.z.p);
+-1 "empty:",string n "{hdbdate.query}";
+exit 0
+"""
+    )
+    q, env = q_binary
+    out = subprocess.run(
+        [q, str(script)], capture_output=True, text=True, timeout=60,
+        env={**env, "TZ": tz}, cwd=repo_root,
+    )  # fmt: skip
+    labels = ("fresh:", "stale:", "full:", "empty:")
+    got = dict(x.split(":", 1) for x in out.stdout.splitlines() if x.startswith(labels))
+    yesterday = dt.datetime.now(dt.UTC).date() - dt.timedelta(days=1)
+    weekday = (yesterday - dt.date(2000, 1, 1)).days % 7
+    assert got.keys() == {"fresh", "stale", "full", "empty"}, out.stdout + out.stderr
+    assert got["fresh"] == "0" and got["stale"] != "0", (tz, got)
+    assert got["full"] == "0", (tz, got)
+    assert (got["empty"] != "0") == (weekday in reporter.WEEKDAYS), (tz, got)
+
+
+# ---------------------------------------- the profile's processes (#1248)
+
+
+def test_a_profile_without_the_producer_leaves_its_checks_out():
+    """`--profile essential` starts no fxorderbookfeed1, fx_orderbook's only
+    producer: its checks go, with the reason; crypto_book's stays - an
+    external producer writes it."""
+    essential = profiles.resolve(["essential"])
+    kept, left_out = reporter.reporter_plan(RUNTIMES["uqf"], PROCS, selected=essential)
+    assert [c.name for c in kept] == ["rdbmemorycheck", "crypto_book_activity"]
+    assert left_out == [
+        f"{name}: fx_orderbook - its producer is not among the processes this uqf "
+        "deployment was started with"
+        for name in ("fx_orderbook_activity", "fx_orderbook_hdbdate")
+    ]
+
+
+def test_a_full_start_keeps_every_check():
+    kept, left_out = reporter.reporter_plan(RUNTIMES["uqf"], PROCS)
+    assert [c.name for c in kept] == [c.name for c in reporter.UQF_REPORTER_CHECKS]
+    assert left_out == []
+
+
+def test_the_recorded_deployment_set_is_used_when_none_is_given(tmp_path):
+    """A stop or summary bootstraps too: it rewrites the file for the set the
+    last start recorded, not for the whole runtime."""
+    paths = _paths(tmp_path, "uqf")
+    deployment.select(paths, profiles.resolve(["essential"]))
+    reporter.write_reporter_config(paths, PROCS)
+    assert [r["name"] for r in _rows(paths)] == ["rdbmemorycheck", "crypto_book_activity"]
+
+
+def test_a_profile_start_bootstraps_with_its_set(tmp_path, monkeypatch):
+    """bootstrap writes reporter.csv before the start records the set: it is
+    handed the set the start is about to record."""
+    paths = _paths(tmp_path, "uqf")
+    essential = profiles.resolve(["essential"])
+    seen: list[Any] = []
+    monkeypatch.setattr(stack_runtime.start_policy, "refuse_start", lambda *_a: None)
+    monkeypatch.setattr(stack_runtime, "torq_launcher", lambda _p: Path("torq.sh"))
+    monkeypatch.setattr(
+        stack_runtime,
+        "bootstrap",
+        lambda _p, base_port=None, selected=None: seen.append(selected) or {},
+    )
+    monkeypatch.setattr(
+        stack_runtime.subprocess, "run", lambda cmd, **_k: subprocess.CompletedProcess(cmd, 0)
+    )
+    stack_runtime.run_torq_sh(paths, ["start", " ".join(essential)], selected=essential)
+    stack_runtime.run_torq_sh(paths, ["summary"])
+    assert seen == [essential, None]
+    assert deployment.members(paths) == essential

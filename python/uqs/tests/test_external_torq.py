@@ -62,7 +62,7 @@ def test_each_runtime_keeps_its_own_directory_under_the_data_root(tmp_path, exte
 def test_the_launcher_runs_the_configured_torq_sh(tmp_path, external, monkeypatch):
     torq, _, _ = external
     seen = {}
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=None: {})
+    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=None, selected=None: {})
 
     def fake_run(cmd, **_):
         seen["cmd"] = cmd
