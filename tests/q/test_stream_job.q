@@ -1687,4 +1687,66 @@ test_state_with_a_recovery_policy_is_accepted:{[t]
     `.qetl.job.stream.initial set (enlist `sj_rec) _ .qetl.job.stream.initial;
     `.qetl.job.stream.procnames set (enlist `sjrec1) _ .qetl.job.stream.procnames}
 
+/ --- the options every job kind passes through to define (#1232) --------------
+
+/ A valid value for each passthrough key. check and on_fail only validate
+/ together, so each is declared with its partner.
+passthrough_values:`start_with_all`note`on_start`check`on_fail!(1b;"a note";{[] };neg_check;`hold)
+
+/ The declaration extras that exercise key k.
+passthrough_extra:{[k] $[k in `check`on_fail; `check`on_fail#passthrough_values; enlist[k]#passthrough_values]}
+
+/ Declare one instance of a kind with the extras. Each kind gets the smallest
+/ valid declaration its own suite uses, under a name and procname of its own.
+kind_declare:{[kind;nm;extra]
+    pn:`$string[nm],"1";
+    if[kind=`bars;
+        :.qetl.job.stream.at_bars[nm;@[.barstest.decl[];`procname;:;pn],extra]];
+    if[kind=`horizon;
+        .horizontest.define_transform[];
+        :.qetl.job.stream.at_horizons[nm;@[.horizontest.decl[];`procname;:;pn],extra]];
+    if[kind=`rolling;
+        .rollingtest.define_transform[];
+        :.qetl.job.stream.at_rolling[nm;@[.rollingtest.decl[];`procname;:;pn],extra]];
+    if[kind=`normalizer;
+        .normtest.mk_xf[`normtest_good;.normtest.canon;.normtest.good];
+        (` sv `.qpipe.job,nm,`publish) set .qetl.job.stream.unwired nm;
+        :.qetl.job.stream.normalize[nm;(`procname`output`input!(pn;.normtest.canon;(enlist `src)!enlist `normtest_good)),extra]];
+    '"kind_declare: no builder for kind ",string kind}
+
+passthrough_kinds:`bars`horizon`rolling`normalizer
+
+/ Forget a job kind_declare registered, so later suites (the job-output
+/ contracts drive every registered publishing job) do not inherit it.
+forget_kind_job:{[kind;nm]
+    reg:` sv `.qetl.job.stream,$[kind=`horizon;`horizons;kind],`registry;
+    reg set (enlist nm) _ get reg;
+    `.qetl.job.stream.procnames set (key[.qetl.job.stream.procnames] where nm=value .qetl.job.stream.procnames) _ .qetl.job.stream.procnames;
+    `.qetl.job.stream.jobs set (enlist nm) _ .qetl.job.stream.jobs;
+    `.qetl.job.stream.initial set (enlist nm) _ .qetl.job.stream.initial}
+
+test_every_passthrough_key_has_a_test_value:{[t]
+    .qunit.assertEquals[asc key passthrough_values;asc .qetl.job.stream.passthrough_keys;
+        "a new passthrough key fails here until a valid value is written for it"]};
+
+test_every_kind_accepts_and_forwards_every_passthrough_key:{[t]
+    cases:passthrough_kinds cross .qetl.job.stream.passthrough_keys;
+    {[c]
+        kind:c 0; k:c 1;
+        nm:`$"sj_pt_",string[kind],"_",string k;
+        extra:passthrough_extra k;
+        kind_declare[kind;nm;extra];
+        d:.qetl.job.stream.def nm;
+        .qunit.assertTrue[all (key extra) in key d;string[kind]," forwards ",string[k]];
+        .qunit.assertEquals[d each key extra;value extra;string[kind]," forwards ",string[k]," unchanged"];
+        forget_kind_job[kind;nm]} each cases};
+
+test_a_forwarded_key_is_validated_once_by_define_for_every_kind:{[t]
+    {[kind]
+        nm:`$"sj_ptbad_",string kind;
+        .qunit.assertThrows[kind_declare[kind;nm;];enlist[`on_fail]!enlist `drop;
+            "*on_fail without a check*";string[kind]," is refused by define, not by its own copy"];
+        .qunit.assertThrows[kind_declare[kind;nm;];enlist[`note]!enlist 5;
+            "*note must be a string*";string[kind]," note"]} each passthrough_kinds};
+
 \d .

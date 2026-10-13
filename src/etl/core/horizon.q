@@ -68,7 +68,7 @@ required_keys:`procname`events`reference`transform`publishes`horizon`period
 / What it may declare besides. The first five are the kind as #945 shipped
 / it; the rest (#952) are each OFF unless declared, so a declaration that
 / names none of them behaves exactly as before.
-optional_keys:`max_age`by`keep`start_with_all`note`ephemeral,
+optional_keys:`max_age`by`keep`ephemeral,.qetl.job.stream.passthrough_keys,
     `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after`max_lateness
 
 / What define installs in .qpipe.job.<name>. They are the shell's, documented
@@ -146,7 +146,8 @@ normalise:{[who;decl;ins]
 /   publishes (the table it publishes), horizon (how long an event waits, a
 /   timespan), period (the timer); optionally max_age (a timespan, see the
 /   header), max_lateness (a timespan, see the header), by (the reference's key columns, default `sym), keep (a function
-/   of a batch returning which rows to buffer), start_with_all, note,
+/   of a batch returning which rows to buffer), the passthrough options of .qetl.job.stream.define
+/   (start_with_all, note, on_start, check with on_fail),
 /   event_time and reference_time (the columns each table's clock is read
 /   from, default `time - e.g. `source_time), lookback (how far BEFORE an
 /   event its window reaches, default 0D), ready_on (`wall, the default, or
@@ -203,7 +204,7 @@ define:{[name;decl]
     / here, `{[ns] ...}[ns]` would run once, now, rather than per tick
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`score_ready) (get ` sv ns,`now)[]}[ns];
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
-    extra:((`start_with_all`note`ephemeral inter key decl)#decl),enlist[`state]!enlist `pending`history`completed`expired;
+    extra:((.qetl.job.stream.passthrough decl),(enlist[`ephemeral] inter key decl)#decl),enlist[`state]!enlist `pending`history`completed`expired;
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform!(
         decl`procname;
         decl`events`reference;

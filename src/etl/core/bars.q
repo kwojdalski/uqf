@@ -52,7 +52,7 @@ required_keys:`procname`events`transform`publishes`width`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
-optional_keys:`by`event_time`start_with_all`note
+optional_keys:`by`event_time,.qetl.job.stream.passthrough_keys
 
 / What define installs in .qpipe.job.<name>: pending (rows of windows still
 / open), closed (windows published, until their lateness has passed),
@@ -78,7 +78,8 @@ assign:{[width;tc;x]
 /   input, the events plus bar_start), publishes (the bar table), width and
 /   lateness (timespans, lateness may be 0D), period (the timer, how often
 /   closed windows are looked for); optionally by (grouping columns, default
-/   `sym), event_time (default `time), start_with_all, note
+/   `sym), event_time (default `time), and the passthrough options of
+/   .qetl.job.stream.define (start_with_all, note, on_start, check with on_fail)
 / @return the name
 / @throws error naming the first problem found
 define:{[name;decl]
@@ -120,7 +121,7 @@ define:{[name;decl]
     (` sv ns,`on_endofday) set end_of_day[name;];
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`close_ready) (get ` sv ns,`now)[]}[ns];
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
-    extra:((`start_with_all`note inter key decl)#decl),enlist[`state]!enlist `pending`closed`dropped;
+    extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`closed`dropped;
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
         decl`procname;
         enlist decl`events;

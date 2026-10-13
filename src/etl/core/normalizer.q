@@ -56,7 +56,7 @@ required_keys:`procname`output`input
 / positionally and a mapping that emits size before price lands as a
 / table whose sizes are prices.
 / @param name the normalizer's name, e.g. `executions - also its output table and its .qpipe.job namespace
-/ @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally start_with_all (boolean), note (string), and check with on_fail (see .qetl.job.stream.define)
+/ @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally the passthrough options of .qetl.job.stream.define (.qetl.job.stream.passthrough_keys: start_with_all, note, on_start, check with on_fail)
 / @return the name
 / @throws error naming every problem it finds first
 define:{[name;decl]
@@ -69,27 +69,22 @@ define:{[name;decl]
     if[0=count cols out; 'who,"'s output has no columns"];
     if[`time in cols out;
         'who,"'s output carries `time` - the plant stamps its own, and a source's own stamp belongs in a column named for what it is"];
-    / Deployment facts, as on .qetl.job.stream.define - optional, and read by the
-    / uqs process registry, which is derived from these declarations.
-    if[(`start_with_all in key decl) and not -1h=type decl`start_with_all;
-        'who,"'s start_with_all must be a boolean, 1b to start with the stack"];
-    if[(`note in key decl) and not 10h=type decl`note; 'who,"'s note must be a string"];
     srcs:decl`input;
     if[not (99h=type srcs) and (11h=type key srcs) and 11h=type value srcs;
         'who,"'s input must be a dictionary of source table -> transform name, symbols both"];
     if[0=count srcs; 'who," has no input - a normalizer of nothing normalizes nothing"];
     check_source[who;out]'[key srcs;value srcs];
-    registry[name]:enlist decl;
     / The dispatcher is ALSO set as .qpipe.job.<name>.on_batch, so a normalizer
     / instance has the same surface as every other job - a reader, a test
     / or the runner reaching for a job's handler finds it in the one place.
     handler:dispatch[name;;];
     (` sv (.qetl.job.stream.namespace name),`on_batch) set handler;
-    / check and on_fail pass straight through (#944): they gate what the
-    / normalizer publishes, and .qetl.job.stream.define validates them.
-    gate:`check`on_fail inter key decl;
+    / The passthrough options (start_with_all, note, on_start, check, on_fail)
+    / go straight to define, which validates them once (#1232).
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch!(
-        decl`procname; key srcs; enlist name; handler)),gate#decl];
+        decl`procname; key srcs; enlist name; handler)),.qetl.job.stream.passthrough decl];
+    / registered only once the streaming job is, as horizon does
+    registry[name]:enlist decl;
     name}
 
 / Private: one source's transform, held to the canonical output.
