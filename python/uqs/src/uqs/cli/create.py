@@ -169,7 +169,9 @@ def new_job(
         typer.Option(
             "--twin-of",
             help="A streaming job whose published table this backfill refills - the dataset "
-            "and columns are taken from it, and `uqs gaps JOB` then names this worker (backfill)",
+            "and columns are taken from it, and `uqs gaps JOB` then names this worker "
+            "NAME_backfill: pass NAME without the suffix, e.g. `uqs job new JOB_hist "
+            "--kind backfill --twin-of JOB` (backfill)",
         ),
     ] = None,
     transform: Annotated[
@@ -218,7 +220,9 @@ def new_job(
         uqs job new markout2 --subscribe-to trades,quote \\
             --publishes my_metric --columns "sym:symbol, value:float"
 
-    Bounded worker, with its source and transform:
+    Bounded worker, with its source and transform - NAME is the base, so this
+    writes worker fx_rates_backfill over source fx_rates (a NAME already ending
+    in _backfill is refused):
 
         uqs job new fx_rates --kind backfill --dataset fx_rates \\
             --columns "sym:symbol, mid:float" --width 1D
