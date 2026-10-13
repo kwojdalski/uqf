@@ -103,7 +103,7 @@ hdb_lock:{[root]
 / Private: run f . args holding root's write lock.
 / @private
 locked:{[root;f;args]
-    .qetl.job.bounded.state.with_lock_at[hdb_lock root;hdb_lock_wait;f;args]}
+    .qetl.job.bounded.state.with_lock_at[hdb_lock[root];hdb_lock_wait;f;args]}
 
 / Partitions written and not yet finished: root, date, table.
 touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())

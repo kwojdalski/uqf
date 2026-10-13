@@ -357,7 +357,7 @@ earlier_days:{[root;plant;want;first_day;last_day]
     want:(),want;
     {[root;plant;want;day]
         logs:day_logs[day_dir[root;plant;day];want];
-        `.qtorq.got set (.qtorq.got),raze log_messages[want;day]'[logs`seq;logs`logname;logs`schema];
+        `.qtorq.got set .qtorq.got,raze log_messages[want;day]'[logs`seq;logs`logname;logs`schema];
         }[root;plant;want] each first_day+til 0|1+last_day-first_day;
     msgs:got;
     `.qtorq.got set ();

@@ -291,7 +291,7 @@ top_sides:{[x]
 / @return boolean per row, 1b iff both tops are usable and bid > ask
 / @eg .qbook.crossed_top ([] bid_prices:(1.1005 1.1;1.1 1.1;1.1;`float$()); bid_sizes:(1e6 1e6;1e6 1e6;1e6;`float$()); ask_prices:(1.1000 1.2;1.1 1.2;`float$();1.2); ask_sizes:(1e6 1e6;1e6 1e6;`float$();1e6))  ->  1000b
 crossed_top:{[x]
-    t:top_sides x;
+    t:top_sides[x];
     b:t`bid;
     a:t`ask;
     (not null b) & (not null a) & b>a};

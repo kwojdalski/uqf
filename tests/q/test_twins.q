@@ -39,10 +39,10 @@ test_a_stream_job_with_a_twin_declares_its_transform:{[t]
         "every stream job a twin refills names the transform it applies"]};
 
 agrees:{[job]
-    p:pair job;
+    p:pair[job];
     s:.qetl.transform.registry p 0;
     if[(p 0)~p 1; :1b];
-    all {[p;s;ex]
+    all {[p;ex]
         ins:ex`inputs;
         named:$[count p 2; (p[2] key ins)!value ins; ins];
         / each input cut to the columns the twin's transform declares: a
@@ -54,7 +54,7 @@ agrees:{[job]
         c:cols want;
         / the comparison the stream transform's own examples are held to:
         / float columns within .qetl.transform.float_tolerance
-        0=count .qetl.transform.differences[c#want;c#got]}[p;s] each s`examples}
+        0=count .qetl.transform.differences[c#want;c#got]}[p] each s`examples}
 
 test_the_demo_markout_twin_scores_as_the_live_job_does:{[t]
     .qunit.assertTrue[agrees[`demo_markout];

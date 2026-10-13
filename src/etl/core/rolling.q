@@ -229,7 +229,7 @@ tag:{[tc;reach;lengths;as_of;rows]
 / @throws error when rows lack a column the transform reads
 / @eg count .qetl.job.stream.rolling.compute[`order_quality;([] time:enlist 2026.10.09D10:00:30; order_id:enlist 1; sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; side:enlist 1; size:enlist 1e6; price:enlist 1.1; order_status:enlist `filled);2026.10.09D10:01:00;0Np]  ->  3
 compute:{[name;rows;as_of;covered_from]
-    d:def name;
+    d:def[name];
     t:.qetl.transform.def d`transform;
     reach:last d`windows;
     lengths:(d`windows) where $[null covered_from; (count d`windows)#1b; covered_from<=as_of-d`windows];
@@ -246,7 +246,7 @@ compute:{[name;rows;as_of;covered_from]
 / @return the outputs of compute at each, stacked
 / @eg count .qetl.job.stream.rolling.series[`order_quality;([] time:enlist 2026.10.09D10:00:30; order_id:enlist 1; sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; side:enlist 1; size:enlist 1e6; price:enlist 1.1; order_status:enlist `filled);2026.10.09D10:01:00 2026.10.09D10:02:00]  ->  6
 series:{[name;rows;as_ofs]
-    t:.qetl.transform.def (def name)`transform;
+    t:.qetl.transform.def (def[name])`transform;
     outs:{[name;rows;a] compute[name;rows;a;0Np]}[name;rows] each as_ofs;
     $[count outs; raze outs; 0#t`output]}
 
@@ -259,7 +259,7 @@ day_start:{[ts] `timestamp$`date$ts}
 / grid points it holds as published. A batch on any other table is ignored.
 / @private
 on_batch:{[name;t;x]
-    d:def name;
+    d:def[name];
     ns:.qetl.job.stream.namespace name;
     if[t=d`publishes; :mark_published[ns;x]];
     if[(t<>d`events) or 0=count x; :()];
@@ -310,7 +310,7 @@ mark_published:{[ns;x]
 / @return the number of rows published
 / @eg .qpipe.job.order_quality.evaluate 2026.10.09D10:01:30
 evaluate:{[name;now]
-    d:def name;
+    d:def[name];
     ns:.qetl.job.stream.namespace name;
     pq:` sv ns,`pending; lq:` sv ns,`last_as_of;
     as_of:(d`period) xbar now;
@@ -330,7 +330,7 @@ evaluate:{[name;now]
 / changes, so a restart's gap is said once and its end too.
 / @private
 note_withheld:{[name;ns;as_of;cf]
-    d:def name;
+    d:def[name];
     wq:` sv ns,`withheld;
     now_withheld:(d`windows) where not cf<=as_of-d`windows;
     if[now_withheld~get wq; :()];

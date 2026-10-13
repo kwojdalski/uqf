@@ -135,14 +135,14 @@ test_summarize_checks_all_ok_checks_produce_an_empty_report:{[t]
 / #1176: "is this book crossed" has one rule (.qbook.crossed_top), so the live
 / check and both backfill gates agree on a locked, a one-sided and a crossed book.
 live_quotes:{[b] ([] time:count[b]#2026.01.01D00:00:00.000000000; sym:count[b]#`X; bid_prices:b`bid_prices; bid_sizes:b`bid_sizes; ask_prices:b`ask_prices; ask_sizes:b`ask_sizes)};
-live_crossed:{[b] count select from .qdqc.check_market_data_quality[live_quotes b;1000] where status=`crossed};
+live_crossed:{[b] count select from .qdqc.check_market_data_quality[live_quotes[b];1000] where status=`crossed};
 
 gates_crossed:{[crypto_f;eq_f]
     cb:.qpipe.transform.crypto_market_data.to_book crypto_f;
     eb:.qetl.transform.apply[`eq_orderbook;enlist[`batch]!enlist eq_f];
     c:count select from .qpipe.job.crypto_market_data_backfill.quality_check[cb] where check=`crossed_book;
     e:count select from .qpipe.job.eq_orderbook_backfill.quality_check[eb] where check=`crossed_top_of_book;
-    (live_crossed cb;c;live_crossed eb;e)};
+    (live_crossed[cb];c;live_crossed[eb];e)};
 
 test_a_locked_book_is_not_crossed_on_any_path:{[t]
     cf:update bid_price_1:ask_price_1 from .qpipe.source.crypto_market_data.fixture[];
@@ -167,7 +167,7 @@ test_a_zero_size_top_is_absent_not_crossed_on_any_path:{[t]
     ef:update bid_px_00:ask_px_00+1f, bid_sz_00:0 from .qpipe.source.databento_mbp10.fixture[] where i=3;
     .qunit.assertEquals[gates_crossed[cf;ef];0 0 0 0;"zero-size top bid: not crossed on the live check or either gate"];
     cb:.qpipe.transform.crypto_market_data.to_book cf;
-    r:.qdqc.check_market_data_quality[live_quotes cb;1000];
+    r:.qdqc.check_market_data_quality[live_quotes[cb];1000];
     .qunit.assertEquals[count select from r where status=`one_sided;1;"the live check calls the zero-size top one_sided"]};
 
 test_crossed_top_rule:{[t]

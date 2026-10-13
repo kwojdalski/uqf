@@ -195,7 +195,7 @@ unboundedpolicies:{[policies]
 
 / Every policy in force: the file's, and the browser's for unbounded tables.
 / @return the keyed policies
-allpolicies:{[] querypolicies,unboundedpolicies querypolicies}
+allpolicies:{[] querypolicies,unboundedpolicies[querypolicies]}
 
 / What the caller's getdata requests on a table are held to - so a refusal
 / can be understood without reading the file.

@@ -39,7 +39,7 @@ browse_value:{[v]
 / Private: one browser condition as a getdata filter pair.
 browse_pair:{[o;v]
     op:browse_ops o;
-    v:browse_value v;
+    v:browse_value[v];
     $[`ne=o; (op 0;op 1;enlist v); `in=o; (op;(),v); (op;v)]}
 
 / The time window a read covers: the browser's own bounds on `time` where it

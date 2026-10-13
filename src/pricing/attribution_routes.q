@@ -59,9 +59,9 @@ attr_orient_legs:{[ccy_a;ccy_b;legs]
     inverts:`boolean$();
     i:0;
     while[i<count legs;
-        l:.qccy.ccy_pair_legs legs i;
-        $[cur=l`base; [inverts,:0b; cur:l`quote];
-          cur=l`quote; [inverts,:1b; cur:l`base];
+        leg:.qccy.ccy_pair_legs legs i;
+        $[cur=leg`base; [inverts,:0b; cur:leg`quote];
+          cur=leg`quote; [inverts,:1b; cur:leg`base];
           '"attribution_route: exception leg ",(string legs i)," does not continue from ",string cur];
         if[cur in seen; '"attribution_route: exception route revisits ",string cur];
         seen,:cur;
@@ -186,8 +186,8 @@ attribution_usd_baseline:{[conv]
 / @eg count .qcross.attribution_route_table .qcross.attribution_convention  -> 435
 / @eg exec route from .qcross.attribution_route_table[.qcross.attribution_convention] where pair=`AUDPLN  -> enlist `$"EURAUD(inv)+EURPLN"
 attribution_route_table:{[conv]
-    pairs:attribution_pairs conv;
-    base_conv:attribution_usd_baseline conv;
+    pairs:attribution_pairs[conv];
+    base_conv:attribution_usd_baseline[conv];
     routes:attribution_route_with[conv;] each pairs;
     base_routes:attribution_route_with[base_conv;] each pairs;
     route_txt:attribution_route_text each routes;

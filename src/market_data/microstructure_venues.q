@@ -34,7 +34,7 @@ price_rule:{[markets]
 / @return table sym, venue, time, bid, ask, in batch order
 / @eg exec bid from .qmicro.venue_tops ([] sym:2#`$"BTC-USDT"; market:2#`crypto; source:`a`b; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 62000f;`float$()); ask_prices:(enlist 62010f;enlist 62008f))  ->  62000 0n
 venue_tops:{[x]
-    x:x where `across_venues=price_rule x`market;
+    x:x where `across_venues=price_rule[x`market];
     s:.qbook.top_sides x;
     ([] sym:x`sym; venue:x`source; time:x`source_time; bid:s`bid; ask:s`ask)}
 
@@ -46,7 +46,7 @@ venue_tops:{[x]
 / @return table sym, market, source, source_time, bid, ask, mid, in batch order
 / @eg exec mid from .qmicro.own_book_mids ([] sym:`EURUSD`GBPUSD; market:`fx`fx; source:`a`a; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ,1.085
 own_book_mids:{[x]
-    x:x where `own_book=price_rule x`market;
+    x:x where `own_book=price_rule[x`market];
     s:.qbook.top_sides x;
     t:([] sym:x`sym; market:x`market; source:x`source; source_time:x`source_time; bid:s`bid; ask:s`ask);
     t:t where (not null t`bid) & not null t`ask;

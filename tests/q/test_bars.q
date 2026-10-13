@@ -248,7 +248,7 @@ test_the_backfill_twin_builds_the_live_bars_from_the_same_rows:{[t]
 gate:{[flag;x] n:$[flag;1;0]; ([] check:n#`always; status:n#`bad; detail:n#enlist "flagged")}
 
 test_a_bars_job_can_declare_a_check_that_withholds_a_bar:{[t]
-    bad:.qetl.job.stream.at_bars[`bt_chk;@[decl[];`procname;:;`btchk1],`check`on_fail!(gate[1b];`hold)];
+    .qetl.job.stream.at_bars[`bt_chk;@[decl[];`procname;:;`btchk1],`check`on_fail!(gate[1b];`hold)];
     nm:job`bt_chk;
     feed[nm;fill[t0+0D00:00:30;`EURUSD;2f;1.1]];
     .qunit.assertEquals[ns[nm;`close_ready][t0+0D00:02:00];1;"the window closed"];

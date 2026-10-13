@@ -211,7 +211,7 @@ on_worker:{[dataset;worker;spec_fn]
                 '"on_worker: ",string[worker]," ended ",string[res`state]," (",
                  string[res`windows_failed]," windows failed), so the reaction is still owed"];
             1b}[worker;ns;spec_fn];(range_from;range_to);{[e] e}];
-        restore saved;
+        restore[saved];
         if[not 1b~r; 'r];
         1b}[worker;ns;spec_fn];
     register[dataset;worker;h;(),cfg`dataset;1b]}
