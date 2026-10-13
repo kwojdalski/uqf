@@ -18,6 +18,8 @@ qalloc,residual,function,2,trades opts
 qalloc,run,function,2,trades opts
 qalloc,summary,function,2,matches group_cols
 qalloc,unrealised,function,2,lots marks
+qasof,lookup,function,3,refs events spec
+qasof,result_cols,value,,
 qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
 qbook,crossed_top,function,1,x
@@ -196,6 +198,10 @@ qetl.dag,reset,function,1,
 qetl.dag,sinks,function,1,
 qetl.dag,to_json,function,1,
 qetl.dag,topological,function,1,
+qetl.enrich,add,function,2,state refs
+qetl.enrich,lookup,function,3,state events spec
+qetl.enrich,new,function,1,spec
+qetl.enrich,rows,function,1,state
 qetl.hb,attach,function,1,
 qetl.hb,beat,function,2,worker state
 qetl.hb,beat_window,function,1,worker
