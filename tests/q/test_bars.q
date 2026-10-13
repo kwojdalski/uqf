@@ -76,8 +76,8 @@ test_an_unknown_key_is_refused:{[t]
 / --- windows ---------------------------------------------------------------
 
 test_windows_are_half_open_on_the_event_time:{[t]
-    x:([] st:t0+0 -1 59999999999 60000000000 60000000001);
-    .qunit.assertEquals[(.qetl.job.stream.bars.assign[0D00:01;`st;x])`bar_start;
+    rows:([] st:t0+0 -1 59999999999 60000000000 60000000001);
+    .qunit.assertEquals[(.qetl.job.stream.bars.assign[0D00:01;`st;rows])`bar_start;
         (t0;t0-0D00:01:00;t0;t0+0D00:01:00;t0+0D00:01:00);
         "a row exactly on a boundary opens the window that starts there"]};
 

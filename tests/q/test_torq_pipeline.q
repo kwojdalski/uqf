@@ -295,8 +295,8 @@ test_no_fallback_to_adopt_is_reported_not_guessed:{[t]
     a:.pipetest.write_log[d1;`stp1_pos20261008000000;enlist (`pos;(enlist 2026.10.08D01:00:00;enlist `EURUSD;enlist 5e5))];
     b:.pipetest.write_log[d1;`stp1_pos20261008120000;enlist (`pos;(enlist 2026.10.08D13:00:00;enlist `EURUSD;enlist 1e5))];
     c:.pipetest.write_log[d1;`stp1_fill20261008000000;enlist (`fill;(enlist 2026.10.08D02:00:00;enlist `GBPUSD;enlist 2e5))];
-    z:.pipetest.write_log[d1;`stp1_other20261008000000;enlist (`other;(enlist 2026.10.08D03:00:00;enlist `X;enlist 1e0))];
-    listing:([] seq:1 2 1 1i; logname:a,b,c,z; tbls:(enlist `pos;enlist `pos;enlist `fill;enlist `other);
+    other_log:.pipetest.write_log[d1;`stp1_other20261008000000;enlist (`other;(enlist 2026.10.08D03:00:00;enlist `X;enlist 1e0))];
+    listing:([] seq:1 2 1 1i; logname:a,b,c,other_log; tbls:(enlist `pos;enlist `pos;enlist `fill;enlist `other);
         schema:.pipetest.schema_of each (enlist `pos;enlist `pos;enlist `fill;enlist `other));
     (` sv d1,`stpmeta) set listing;
     / day two: only a fill; its stpmeta lists a log that was lost

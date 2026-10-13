@@ -1112,11 +1112,11 @@ test_desk_exposure_and_pnl_net_the_same_fills:{[t]
     / #885: both views read executions, so a desk fill, an FX trades fill and
     / a crypto fill reach both, and their totals per sym agree.
     reset[];
-    x:raze {[tbl;rows] `time xcols update time:.sjtest.d[0] from .qetl.job.stream.normalizer.normalize[`executions;tbl;rows]}'[
+    execs:raze {[tbl;rows] `time xcols update time:.sjtest.d[0] from .qetl.job.stream.normalizer.normalize[`executions;tbl;rows]}'[
         `orders`trades`crypto_trades;
         (orders_batch[];fx_fill[`EURUSD;1;1.085;3e5];crypto_fill[`$"BTC-USDT";1;62000f;0.5])];
-    .qpipe.job.fx_positions.on_batch[`executions;x];
-    .qpipe.job.posbook.on_batch[`executions;x];
+    .qpipe.job.fx_positions.on_batch[`executions;execs];
+    .qpipe.job.posbook.on_batch[`executions;execs];
     exposure:exec sum base_qty by sym from .qpipe.job.fx_positions.positions;
     pnl:exec sym!qty from .qpipe.job.posbook.book;
     .qunit.assertEquals[asc key exposure;asc key pnl;"the same instruments in both"];
@@ -1482,14 +1482,14 @@ test_a_failing_dict_or_column_list_batch_is_withheld_whole_under_drop:{[t]
 
 test_a_column_dict_of_n_rows_is_counted_as_n_and_withheld:{[t]
     / #1164: every shape is read as rows once; a dict of 3 rows is 3, not 1
-    x:`sym`v!(`a`b`c;1 -1 2);
-    .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;x];3;"a column -> vector dict of 3 rows"];
+    cols_dict:`sym`v!(`a`b`c;1 -1 2);
+    .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;cols_dict];3;"a column -> vector dict of 3 rows"];
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;`sym`v!(`a;1)];1;"a dict of atoms is one row"];
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;(`a`b;1 -1)];2;"a column list of 2 rows"];
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;([] v:1 2 3 4)];4;"a table"];
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;`a`b!(1 2;1 2 3)];1;"a ragged dict is withheld whole as 1"];
     pub:check_probe[`sj_check_coldict;`sjcheckcoldict1;`drop;shape_check];
-    (get pub)[`probe_out;x];
+    (get pub)[`probe_out;cols_dict];
     .qunit.assertEquals[count .sjtest.published;0;"the failing column dict is withheld"];
     .qunit.assertEquals[(.qetl.stream_health.of`sj_check_coldict)`failed;1;"and counted as failed"]};
 
@@ -1642,8 +1642,8 @@ test_a_nested_column_of_the_wrong_type_is_withheld:{[t]
         "naming the table, column and row"]};
 
 test_columns_out_of_the_plant_order_are_withheld:{[t]
-    x:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
-    ob_publish[`fx_orderbook;`sym`ask_prices`ask_sizes`bid_prices`bid_sizes xcols x];
+    book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
+    ob_publish[`fx_orderbook;`sym`ask_prices`ask_sizes`bid_prices`bid_sizes xcols book_rows];
     .qunit.assertEquals[count .sjtest.published;0;"a tickerplant would have stored the asks as bids"];
     .qunit.assertTrue[(string (.qetl.stream_health.of`fx_orderbook_feed)`last_error) like "*fx_orderbook has columns sym ask_prices*";
         "and the columns are named"]};
@@ -1651,8 +1651,8 @@ test_columns_out_of_the_plant_order_are_withheld:{[t]
 / Every publisher drops a `time` the job sent - the plant stamps its own - so
 / the contract must not refuse one either (a bundle's feed sends it).
 test_a_batch_carrying_its_own_time_still_publishes:{[t]
-    x:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
-    ob_publish[`fx_orderbook;`time xcols update time:.z.p from x];
+    book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
+    ob_publish[`fx_orderbook;`time xcols update time:.z.p from book_rows];
     .qunit.assertEquals[count .sjtest.published;1;"the time is the publisher's to drop, not a reason to withhold"]};
 
 test_a_column_list_of_the_wrong_length_is_withheld:{[t]

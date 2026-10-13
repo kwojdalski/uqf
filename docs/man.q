@@ -86,7 +86,7 @@
 / ---- character classes and small parsers
 ws:" \t\r\n",`char$12 11
 alpha:{(x within "az") or x within "AZ"}
-wordc:{(alpha x) or (x within "09") or x="_"}
+wordc:{(alpha[x]) or (x within "09") or x="_"}
 strip:{[s] if[0=count s; :s]; k:where not s in ws; $[0=count k; ""; (first k)_(1+last k)#s]}
 lstrip:{[s] k:where not s in ws; $[0=count k; ""; (first k)_s]}
 / length of an identifier [A-Za-z][A-Za-z0-9_]* starting at i, 0 when none
@@ -115,7 +115,7 @@ nsline:{[s]
 slashes:{[s] i:skipws[s;0]; n:count s; if[not (i<n) and "/"=s i; :-1]; while[(i<n) and "/"=s i; i+:1]; i}
 / ^\s*/+\s*@(param|return|throws|eg|private)\b[ \t]*(.*)$   -> (kind;rest), or ()
 tag:{[s]
-    i:slashes s; if[i<0; :()]; i:skipws[s;i]; n:count s;
+    i:slashes[s]; if[i<0; :()]; i:skipws[s;i]; n:count s;
     if[not (i<n) and "@"=s i; :()]; i+:1;
     kinds:("param";"return";"throws";"eg";"private");
     hit:kinds where {[s;i;k] k~(count k)#i _s}[s;i] each kinds;
@@ -124,8 +124,8 @@ tag:{[s]
     while[(j<n) and s[j] in " \t"; j+:1];
     (k;j _s)}
 / ^\s*/+[ \t]?(.*)$   -> the body, or "" when not a comment
-comment:{[s] i:slashes s; if[i<0; :""]; if[(i<count s) and s[i] in " \t"; i+:1]; i _s}
-iscomment:{[s] 0<=slashes s}
+comment:{[s] i:slashes[s]; if[i<0; :""]; if[(i<count s) and s[i] in " \t"; i+:1]; i _s}
+iscomment:{[s] 0<=slashes[s]}
 
 / One file's (title; namespaces; docs), docs a list of dicts.
 parsefile:{[path]
@@ -134,41 +134,41 @@ parsefile:{[path]
     i:0;
     while[i<n;
         line:ls i;
-        nm:nsline line;
+        nm:nsline[line];
         if[count nm; if[not any nss~\:nm; nss,:enlist nm]; cur:nm; i+:1];
         if[not count nm;
-            q:qualified line;
+            q:qualified[line];
             $[count q; [nsthis:q 0; name:q 1; if[not any nss~\:nsthis; nss,:enlist nsthis]];
-              [name:funcname line; nsthis:cur]];
+              [name:funcname[line]; nsthis:cur]];
             ok:(0<count name) and 0<count nsthis;
             if[ok;
                 j:i-1;
                 while[(j>=0) and (0<count funcname ls j) or 0<count qualified ls j; j-:1];
                 blk:();
-                while[(j>=0) and ("/"=first lstrip ls j) and not "\\"~strip ls j; blk,:enlist ls j; j-:1];
+                while[(j>=0) and ("/"=first lstrip ls j) and not "\\"~strip[ls j]; blk,:enlist ls j; j-:1];
                 blk:reverse blk;
                 if[count blk;
                     d:`fullname`ns`description`params`returns`throws`examples`private!(nsthis,".",name;nsthis;"";();"";();();0b);
                     prose:(); seen:0b;
                     k:0;
                     while[k<count blk;
-                        raw:blk k; t:tag raw;
+                        raw:blk k; t:tag[raw];
                         $[count t;
-                            [seen:1b; kind:t 0; rest:strip t 1;
+                            [seen:1b; kind:t 0; rest:strip[t 1];
                              $[kind~"param";
-                                 [ws_:where rest in ws; pn:$[count ws_; (first ws_)#rest; rest]; pd:$[count ws_; lstrip (first ws_)_rest; ""];
+                                 [ws_:where rest in ws; pn:$[count ws_; (first ws_)#rest; rest]; pd:$[count ws_; lstrip[(first ws_)_rest]; ""];
                                   d[`params],:enlist (pn;pd)];
                                kind~"return"; d[`returns]:rest;
                                kind~"throws"; d[`throws],:enlist rest;
                                kind~"private"; d[`private]:1b;
                                d[`examples],:enlist rest]];
                           seen;
-                            [body:strip comment raw;
+                            [body:strip[comment[raw]];
                              if[(0<count body) and (not body~enlist ".") and 0<count d`examples;
-                                 d[`examples;-1+count d`examples]:strip (last d`examples)," ",body]];
-                          [body:strip comment raw; prose,:enlist $[body~enlist "."; ""; body]]];
+                                 d[`examples;-1+count d`examples]:strip[(last d`examples)," ",body]]];
+                          [body:strip[comment[raw]]; prose,:enlist $[body~enlist "."; ""; body]]];
                         k+:1];
-                    d[`description]:strip " " sv prose where 0<count each prose;
+                    d[`description]:strip[" " sv prose where 0<count each prose];
                     if[(d`private) or (count d`params) or (count d`returns) or (count d`examples) or (count d`throws) or count d`description;
                         out,:enlist d]]];
             i+:1]];
@@ -178,8 +178,8 @@ parsefile:{[path]
 header:{[path]
     ls:read0 hsym `$path; prose:();
     i:0; while[(i<count ls) and "/"=first lstrip ls i;
-        body:strip comment ls i; prose,:enlist $[body~enlist "."; ""; body]; i+:1];
-    strip " " sv prose where 0<count each prose}
+        body:strip[comment[ls i]]; prose,:enlist $[body~enlist "."; ""; body]; i+:1];
+    strip[" " sv prose where 0<count each prose]}
 
 / Every .q file under dir, in the generator's order: path parts compared in
 / turn, so a directory sorts before a same-named file (core/ before core.q).
@@ -194,16 +194,16 @@ qfiles:{[dir]
 / registers nothing.
 scansrc:{[dir]
     {[f]
-        r:parsefile f; docs:r 2;
+        r:parsefile[f]; docs:r 2;
         priv:docs where docs@\:`private;
         .man.private,:priv@\:`fullname;
         docs:docs where not docs@\:`private;
         if[0=count docs; :()];
-        registerFile (r 0;"";"|" sv r 1;header f);
+        registerFile[(r 0;"";"|" sv r 1;header[f])];
         {[d]
             registerFunc (d`fullname;d`ns;d`description;d`fullname;$[count d`examples; first d`examples; ""]);
             {[fn;p] registerArg (fn;"param";p 0;p 1)}[d`fullname] each d`params;
-            if[count d`returns; registerArg (d`fullname;"return";"";d`returns)];
+            if[count d`returns; registerArg[(d`fullname;"return";"";d`returns)]];
             {[fn;x] registerArg (fn;"throws";"";x)}[d`fullname] each d`throws;
             {[fn;x] registerArg (fn;"eg";"";x)}[d`fullname] each d`examples;
             } each docs} each qfiles dir;
@@ -212,4 +212,4 @@ scansrc:{[dir]
 \d .
 
 / Read every documented function under src/ into the registry.
-.man.scansrc "src";
+.man.scansrc["src"];

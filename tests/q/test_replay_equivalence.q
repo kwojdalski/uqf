@@ -236,14 +236,14 @@ test_the_check_catches_a_replay_that_reads_the_process_clock:{[t]
 
 / The log clock: the process clock live, the receipt stamp on replay.
 test_the_log_clock_is_the_process_clock_live_and_the_receipt_stamp_on_replay:{[t]
-    x:([] time:t0+0D00:00:01 0D00:00:02; a:1 2);
+    rows:([] time:t0+0D00:00:01 0D00:00:02; a:1 2);
     now:t0+1D;
-    .qunit.assertEquals[.qetl.job.stream.clock_of[now;x];2#now;"live: now, for every row"];
+    .qunit.assertEquals[.qetl.job.stream.clock_of[now;rows];2#now;"live: now, for every row"];
     `.qetl.job.stream.replaying set 1b;
-    r:.qetl.job.stream.clock_of[now;x];
+    r:.qetl.job.stream.clock_of[now;rows];
     n:.qetl.job.stream.clock_of[now;([] a:1 2)];
     `.qetl.job.stream.replaying set 0b;
-    .qunit.assertEquals[r;x`time;"replay: each row's own stamp"];
+    .qunit.assertEquals[r;rows`time;"replay: each row's own stamp"];
     .qunit.assertEquals[n;2#0Np;"replay without a stamp: null, which no comparison satisfies"]};
 
 / The replaying jobs the tree ships, read as this file loads - before any

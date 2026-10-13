@@ -1,7 +1,9 @@
 # qlinter's configuration (https://github.com/kwojdalski/q-lint), read by the
 # release CI pins (.github/workflows/ci.yml) and by a bare `qlinter` here. The
 # linter is installed separately and is not a dependency of this project.
-exclude = ["lib/torq/", ".claude/worktrees/"]
+# lib/ is vendored code (TorQ, its starter pack, kdb-parquet, qAutomatedTrading):
+# never edited here, so its findings are not this tree's to act on.
+exclude = ["lib/", ".claude/worktrees/"]
 
 # Named, not left to the default: the command line defaults to `uqf` but the
 # language server (the VS Code extension) to `style`, so without this the
@@ -14,7 +16,12 @@ profile = "uqf"
 # every file touching either is flagged for a choice it did not make.
 # QS001 (underscore-in-name) flags every name containing `_`, because `_` is
 # also q's drop operator - but snake_case is this tree's naming convention.
-ignore = ["QS001", "QS010"]
+# QS008 (implicit-name-out-of-position) flags `x` declared after other
+# parameters - but `{[t;x]}` is the handler signature here, TorQ's upd[t;x]
+# shape with `x` the batch, and `uqs job new` scaffolds every job with it.
+# With an explicit parameter list `x` is an ordinary name; position changes
+# nothing (all 121 findings checked, #1243).
+ignore = ["QS001", "QS008", "QS010"]
 
 [per-file-ignores]
 # These tests build legacy datetimes on purpose, to show the precision trap
@@ -23,6 +30,12 @@ ignore = ["QS001", "QS010"]
 "tests/q/test_execution.q" = ["QP002"]
 # TimeStored's qunit, vendored: kept as upstream wrote it.
 "tests/lib/qunit.q" = ["QF017", "QL001", "QS003"]
+# Test stubs stand in for real functions (.lg.l, connect_etl, a reaction
+# handler, a transport step) and must keep their signatures, read or not;
+# QF016 stays on for src/, where an unread parameter can be a real bug (#1243).
+"tests/**" = ["QF016"]
+# `l` is the line-hit probe the coverage tool injects into instrumented source.
+"scripts/dev/coverage.q" = ["QS003"]
 # QP003 (wall-clock-temporal) flags `.z.D` since q-lint 0.14.13. Here it is the
 # plant's day by design, not a data timestamp: the standalone plant names and
 # rolls its log by `.z.D` (#943), recovery falls back to that same clock when a
