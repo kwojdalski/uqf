@@ -65,6 +65,7 @@ ALLOWED = frozenset(
     {
         ("qalloc", "qrisk"),
         ("qalloc", "qschema"),
+        ("qasof", "qschema"),
         ("qbook", "qschema"),
         ("qcal", "qccy"),
         ("qcross", "qbook"),
@@ -75,6 +76,7 @@ ALLOWED = frozenset(
         ("qdqc", "qbook"),
         ("qdqc", "qrender"),
         ("qdqc", "qschema"),
+        ("qexec", "qasof"),
         ("qexec", "qccy"),
         ("qexec", "qcross"),
         ("qexec", "qschema"),

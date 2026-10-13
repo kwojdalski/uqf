@@ -346,6 +346,15 @@ kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`l
 crypto_book:([]time:`timestamp$(); source_time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 nested[`crypto_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
+/ crypto_book_1s1's output (#1222): the LAST book state per (venue, sym) per
+/ second, bucketed on the venue's source_time, not the plant's `time`. One row
+/ per window [bar_start, bar_start+1s) that saw an update; a second with none has
+/ no row (no forward fill). source_time is the last update's own stamp, so a
+/ reader can see how stale the snapshot is inside its second. `time` is the
+/ plant's, on publication; the backfill twin writes the window's end.
+crypto_book_1s:([]time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bar_start:`timestamp$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+nested[`crypto_book_1s;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+
 / Simulated fills from cryptorust's OMS. Distinct from crypto_trades below,
 / which carries real fills: conflating simulated and real execution in one
 / table is how a P&L number stops meaning anything.

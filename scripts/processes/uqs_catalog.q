@@ -40,6 +40,8 @@ describe[`cross_arbitrage]:
     "Synthetic-versus-direct cross-currency opportunities: one pair priced against a route through others (EURJPY against EURUSD x USDJPY). route carries the legs, skew how far apart they were quoted, fully_filled whether the notional can be worked through every leg. Like arbitrage, select the latest row per pair before filtering active";
 describe[`crypto_book]:
     "Live venue order books published by cryptorust's kdb-market-data-recorder (uqs feed start crypto): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as fx_orderbook. Two clocks: source_time is the venue's own stamp and time is the tickerplant's, stamped on receipt. Read source_time for when the market was in this state, and their difference for how long it took to get here";
+describe[`crypto_book_1s]:
+    "One-second snapshots of crypto_book, built by crypto_book_1s1 and rebuildable from the HDB by hdb_crypto_book_backfill: per venue and sym, the book (all four ladders) as of the last update inside [bar_start, bar_start+1s), cut on source_time (the venue's clock), not the tickerplant's. source_time here is that last update's own stamp, so bar_start+1s minus it is how stale the snapshot is. A second with no update has no row - nothing is forward-filled; the newest second lags about 0.5s past its end";
 describe[`crypto_sim_fills]:
     "Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from";
 describe[`crypto_trades]:
@@ -131,6 +133,8 @@ unbounded[`predictions`ccy_exposure`reference_data`order_routing`connections`eco
     6#enlist "declared, not yet produced: no rows to bound. Its policy row is due with its first producer";
 unbounded[`config_change]:
     enlist "one row per watched variable per change - a handful a day";
+unbounded[`crypto_book_1s]:
+    enlist "one row per venue and sym per second with an update - at most 86400 a day per pair, a downsample of crypto_book rather than ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`exec_bar]:
     enlist "one row per sym per minute - 1440 a day for a sym that trades all day, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`order_quality]:

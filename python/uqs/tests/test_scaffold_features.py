@@ -127,7 +127,9 @@ def test_a_profile_takes_the_process_and_the_module_still_compiles():
         "pulse1", profile="crypto", unprofiled=None, start_with_all=False, known_profiles=KNOWN
     )
     assert not notes
-    assert '"crypto": ("cryptomock1", "crypto_markout1", "pulse1"),' in _applied(actions)
+    assert '"crypto": ("cryptomock1", "crypto_markout1", "crypto_book_1s1", "pulse1"),' in _applied(
+        actions
+    )
 
 
 def test_start_with_all_puts_it_in_default_and_says_what_else_to_check():
@@ -314,3 +316,54 @@ def test_transform_beside_a_declared_one_is_refused():
 
 def test_a_job_that_declares_no_transform_leaves_its_twin_the_usual_scaffold():
     assert create_backfill.shared_transform(UQF_ROOT, "arbitrage", None) is None
+
+
+# ----------------------------------------------- what the generated names are
+
+
+@pytest.mark.parametrize("twin_of", [None, "crypto_markout"])
+def test_a_name_already_ending_in_backfill_is_refused(twin_of):
+    """#1228: the worker is NAME_backfill, so NAME foo_backfill made a worker
+    foo_backfill_backfill and a source foo_backfill. Refused, saying what to pass."""
+    with pytest.raises(UqsError, match="pass foo, and the worker is foo_backfill"):
+        create_backfill.backfill_plan(
+            UQF_ROOT, "foo_backfill", None if twin_of else "foo", None if twin_of else "px:float",
+            width=None, source=None, procname=None, transport=None, partition=None,
+            check=False, transform=None, start_with_all=False, twin_of=twin_of,
+            definitions=_plant() if twin_of else None,
+        )  # fmt: skip
+
+
+def _declared_namespaces(text: str) -> list[str]:
+    """tests/q/test_namespaces.q's declared_namespaces, for one file: every
+    `\\d .X` line except `\\d .`, as `.X`."""
+    lines = [ln for ln in text.splitlines() if ln.startswith("\\d .") and ln != "\\d ."]
+    return [ln[3:] for ln in lines]
+
+
+def _plans():
+    quote = "quote:([]time:`timestamp$(); sym:`g#`symbol$(); bid:`float$())"
+    yield backfill.bounded_worker("fx", "fx_rates", "px:float")
+    yield backfill.bounded_worker("fx", "fx_rates", "px:float", transport="local", check=True)
+    yield backfill.bounded_worker("fx", "fx_rates", "px:float", transform="derive")
+    yield jobs.streaming_job("f", [], "fo", "px:float", period="0D00:00:01")
+    yield jobs.streaming_job("m", ["trades"], "mo", "px:float", period="0D00:00:05")
+    yield normalizer(
+        "ticks", ["quote"], parse_columns("sym:symbol"), {"quote": definition_columns(quote)},
+        known_tables={"quote"}, unprofiled="test",
+    )  # fmt: skip
+
+
+def test_every_generated_q_namespace_passes_the_prefix_rule():
+    """#1228: test_namespaces.q holds every `\\d` in src/ and scripts/ to the
+    .q prefix, and the backfill example declared `.<name>ex`, so each
+    scaffold left the tree failing that gate."""
+    seen = []
+    for plan in _plans():
+        for action in plan.actions:
+            if action.path.parts[0] not in ("src", "scripts") or action.path.suffix != ".q":
+                continue
+            for ns in _declared_namespaces(action.body):
+                seen.append(ns)
+                assert ns.startswith(".q"), f"{action.path} declares {ns}"
+    assert any(ns.endswith("ex") for ns in seen), "the example script was among them"

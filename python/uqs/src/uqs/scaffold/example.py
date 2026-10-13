@@ -76,7 +76,9 @@ def example_body(
     `credential` is the variable a live run reads (`credential_var`), cleared
     here so the run is the fixture's whatever the operator's shell holds.
     """
-    ns = f"{name}ex"
+    # `.q`-prefixed, as tests/q/test_namespaces.q holds every `\d` under
+    # scripts/ to, so a scaffold does not leave the tree failing it (#1228).
+    ns = f"q{name}ex"
     local_defs, local_run = (
         _local_block(src, dataset, credential) if transport == "local" else ("", "")
     )

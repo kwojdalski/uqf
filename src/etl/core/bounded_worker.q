@@ -350,7 +350,7 @@ require_transform:{[worker;cfg]
         'who,"'s transform ",string[cfg`transform]," must read exactly one input, the fetched batch"];
     if[d`as_of;
         'who,"'s transform ",string[cfg`transform]," takes as_of, which a bounded window cannot supply"];
-    contract:flip (src`columns)!{[c] $[c within "AZ"; (); c$()]} each src`types;
+    contract:flip (src`columns)!{[c] $[(c=" ") or c within "AZ"; (); c$()]} each src`types;
     if[not several;
         p:.qetl.transform.problems[contract;first value d`inputs;0b];
         if[count p;

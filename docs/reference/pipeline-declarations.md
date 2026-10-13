@@ -373,7 +373,9 @@ Either way, what is evaluated is what the full history would have given.
 
 `.qetl.job.stream.at_bars[name;decl]`. A job that aggregates a stream into
 fixed-width time windows: OHLC, VWAP and volume per interval
-(`src/etl/core/bars.q`, #946). `exec_bars` is one: `executions` into `exec_bar`.
+(`src/etl/core/bars.q`, #946). `exec_bars` is one: `executions` into `exec_bar`;
+`crypto_book_1s` is another, a snapshot rather than an aggregate (the last
+`crypto_book` state per `venue, sym` per second, `by` `venue`sym).
 
 Declares `procname`, `period` (how often closed windows are looked for) and
 `start_with_all`/`note` as for a streaming job, and:
