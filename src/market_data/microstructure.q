@@ -679,7 +679,9 @@ volume_buckets:{[tape;bucket_volume]
     cum:sums trades`size;
     starts:cum-trades`size;
     total:last cum;
-    n:"j"$floor 1e-9+total%bucket_volume;
+    / The tolerance is RELATIVE: summation error grows with the number of
+    / trades, so a fixed 1e-9 drops the last bucket on a long tape (#1262).
+    n:"j"$floor (total%bucket_volume)*1f+1e-9;
     if[0=n; :empty_buckets[]];
     / For bucket b spanning [lo;hi), each trade contributes the overlap of
     / its own [start;end) with that span - which is what splits a straddling
@@ -693,7 +695,7 @@ volume_buckets:{[tape;bucket_volume]
         / end_time is the time of the trade that FILLED the bucket - the
         / instant the observation completed, which is what a series of VPIN
         / values should be indexed by.
-        filled:first where cum>=hi;
+        filled:(count[cum]-1)&first where cum>=hi*1f-1e-9;
         (b;trades[`time] filled;buys;sells;abs buys-sells)};
     rows:slice[trades;starts;cum;bucket_volume] each til n;
     flip `bucket`end_time`buy_volume`sell_volume`imbalance!flip rows}

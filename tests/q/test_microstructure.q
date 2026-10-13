@@ -732,6 +732,13 @@ test_tenth_sized_buckets_count_every_trade:{[t]
     .qunit.assertEquals[count .qmicro.volume_buckets[fr_tape[10#0.1];0.1];10;"ten 0.1 buckets, not 9"];
     .qunit.assertEquals[count .qmicro.volume_buckets[fr_tape[7#0.1];0.1];7;"seven 0.1 buckets, not 6"]};
 
+test_long_fractional_tape_keeps_its_last_bucket:{[t]
+    / 100000 trades of 0.07 sum to ~6999.9999999921: an absolute 1e-9 is too small at this scale (#1262).
+    tape:fr_tape[100000#0.07];
+    b:.qmicro.volume_buckets[tape;0.7];
+    .qunit.assertEquals[count b;10000;"10000 buckets, not 9999"];
+    .qunit.assertEquals[last b`end_time;last tape`time;"the last bucket ends at the last trade"]};
+
 test_the_threshold_rank_survives_float_noise:{[t]
     / 0.07*100 is 7.000000000000001, which a bare ceiling took to rank 8.
     tape:fr_tape[1f+til 100];
