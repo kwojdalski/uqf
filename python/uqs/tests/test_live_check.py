@@ -107,6 +107,28 @@ def test_a_diagnostic_is_redacted_again_on_the_way_out():
     assert "hunter2" not in r["diagnostic"] and "PWD=<redacted>" in r["diagnostic"]
 
 
+@pytest.mark.parametrize(
+    ("text", "secrets", "want"),
+    [
+        # the ordinary shapes, which already worked
+        ("login failed: PWD=hunter2;UID=me", (), "login failed: PWD=<redacted>"),
+        ("password: s3cret, again", (), "password=<redacted> again"),
+        ("denied for h:5010:me:s3cret", ("s3cret",), "denied for h:5010:me:<redacted>"),
+        # a known secret is replaced as the literal it is, glob characters and all
+        ("denied for db:5010:app:Xk[9]q", ("Xk[9]q",), "denied for db:5010:app:<redacted>"),
+        ("bad a?b and c*d", ("a?b", "c*d"), "bad <redacted> and <redacted>"),
+        # an ODBC {}-quoted value is masked whole: ; and spaces are data inside
+        # it, and }} is an escaped }
+        ("login failed: PWD={s3;cret};UID=me", (), "login failed: PWD=<redacted>;UID=me"),
+        ("login failed: PWD={s3 cret};UID=me", (), "login failed: PWD=<redacted>;UID=me"),
+        ("login failed: PWD={a}} b};UID=me", (), "login failed: PWD=<redacted>;UID=me"),
+        ("login failed: PWD={never closed", (), "login failed: PWD=<redacted>"),
+    ],
+)
+def test_redaction_masks_every_shape_of_secret(text, secrets, want):
+    assert redact.redact(text, *secrets) == want
+
+
 def test_a_source_that_overruns_is_a_timeout_and_the_rest_are_not_checked():
     clock = Clock()
 

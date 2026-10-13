@@ -51,14 +51,44 @@ tls_off:(!) . flip (
     (`tlsverify;`0`false`no);
     (`verifyservercertificate;`0`false`no))
 
+/ Private: a credential cut at every ";" outside ODBC {} quoting. A value
+/ that opens with { runs to its closing }: inside it ";" is data and "}}" an
+/ escaped "}" (#1270 - cut at every ";", a quoted password leaked its tail).
+/ @private
+split_parts:{[cred]
+    r:(); cur:""; quoted:0b; i:0;
+    while[i<count cred;
+        c:cred i;
+        $[quoted;
+            [cur,:c; if[c="}"; $["}"=cred i+1; [cur,:"}"; i+:1]; quoted:0b]]];
+          c=";"; [r,:enlist cur; cur:""];
+          [if[(c="{") and "="=last trim cur; quoted:1b]; cur,:c]];
+        i+:1];
+    r,enlist cur}
+
+/ Private: a value as the driver reads it - an ODBC {}-quoted one without its
+/ braces and with "}}" read as "}"; any other value as it is.
+/ @private
+unquote:{[v]
+    if[not "{"~first v; :v];
+    v:1_v;
+    if["}"~last v; v:-1_v];
+    ssr[v;"}}";"}"]}
+
 / Private: a credential's `key=value` parts as lower-case key symbol -> value.
 / Symbols, not strings: a dictionary looked up with a string indexes it by
 / each character.
 / @private
 settings:{[cred]
-    parts:{x where 0<count each x} ";" vs cred;
+    parts:{x where 0<count each x} split_parts[cred];
     parts:parts where "=" in/: parts;
-    (`$lower {trim (x?"=")#x} each parts)!{trim (1+x?"=")_x} each parts}
+    (`$lower {trim (x?"=")#x} each parts)!{unquote[trim (1+x?"=")_x]} each parts}
+
+/ Private: `s` as an ssr search string that matches only itself. ssr reads
+/ [ ? * as pattern syntax, so a password Xk[9]q!7 searched as it is matches
+/ Xk9q!7 and never its own text (#1270); each is bracketed to stand for itself.
+/ @private
+literal:{[s] raze {$[x in "[?*"; "[",x,"]"; enlist x]} each s}
 
 / Private: is `x` a trapped failure, (`error;message)?
 / @private
@@ -75,12 +105,14 @@ redact:{[text;cred]
     if[0=count cred; :text];
     s:settings[cred];
     secrets:value[s] where key[s] in secret_keys;
+    / a quoted secret also as it was written, }} and all
+    secrets,:{ssr[x;"}";"}}"]} each secrets;
     / an ipc credential host:port:user:password keeps its password last
     if[3<=sum cred=":"; secrets,:enlist last ":" vs cred];
-    hide:secrets where 0<count each secrets;
+    hide:distinct secrets where 0<count each secrets;
     / longest first, so one secret inside another is masked whole
     hide:hide idesc count each hide;
-    {ssr[x;y;"<redacted>"]}/[text;hide]}
+    {ssr[x;literal[y];"<redacted>"]}/[text;hide]}
 
 / Private: the first setting in `cred` that turns TLS verification off, or "".
 / @private

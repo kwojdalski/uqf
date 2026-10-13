@@ -26,8 +26,13 @@ SECRET_KEYS = (
     "access_key",
 )
 
+#: A value runs to the next whitespace - or, ODBC {}-quoted, to its closing }
+#: (where ; and spaces are data and }} is an escaped }), or to the line's end
+#: when it is never closed.
 _SECRETISH = re.compile(
-    r"(?i)\b(" + "|".join(sorted(SECRET_KEYS, key=len, reverse=True)) + r")\s*[=:]\s*\S+"
+    r"(?i)\b("
+    + "|".join(sorted(SECRET_KEYS, key=len, reverse=True))
+    + r")\s*[=:]\s*(?:\{(?:[^}\n]|\}\})*\}?|\S+)"
 )
 
 
