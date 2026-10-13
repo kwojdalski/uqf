@@ -214,6 +214,15 @@ instead of restating them. Implementation detail belongs in the code.
 > Corrections and missing facts go in reference pages and tables; the README and
 > main guides get a line at most.
 
+**The presentation's appendix is where exhaustive detail goes, when asked.** The
+narrative slides of `docs/presentation/uqf.qmd` stay short; a request for depth
+is answered in the appendix at its end, one area per slide.
+
+> *2026-10-13.* Asked (#1268) for a "very detailed description how this whole
+> stack differs from vendored torq" in the presentation, against the usual
+> preference for concise docs. Added as `# Appendix` slides after the existing
+> ones, which were left as they were.
+
 **Continuous integration is ours, not the reader's.** How CI runs, which gates
 it applies and why are maintainer concerns; the documentation is for people
 running and building on the stack. How to run the tests locally belongs in the
