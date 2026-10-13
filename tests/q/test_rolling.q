@@ -361,6 +361,20 @@ test_a_restart_after_midnight_withholds_the_windows_it_cannot_cover:{[t]
     .qunit.assertTrue[0D00:05 in (published[])`window;"covered from 00:05"];
     .qunit.assertEquals[ns[nm;`withheld];`timespan$();"and no longer withheld"]};
 
+test_a_restart_on_a_non_utc_host_covers_from_the_local_roll:{[t]
+    / the plant rolls its log at LOCAL midnight (run_stream names it by .z.D);
+    / on a host an hour ahead of UTC the 10-10 log begins at 10-09 23:00 UTC
+    old:.qetl.job.stream.rolling.zone_offset;
+    .qetl.job.stream.rolling.zone_offset:{0D01:00};
+    nm:job`rt_z;
+    lg:enlist (`rt_events;row[2026.10.09D23:02:30;2026.10.09D23:02:30;`a;1f]);
+    r:.[{[nm;lg] restart[nm;lg]; ns[nm;`covered_from]};(nm;lg);{x}];
+    .qetl.job.stream.rolling.zone_offset:old;
+    .qunit.assertEquals[r;2026.10.09D23:00:00;"covered from the local roll in UTC, not from the UTC date's midnight"];
+    `.rollingtest.clock set 2026.10.09D23:03:00;
+    ns[nm;`evaluate] clock;
+    .qunit.assertEquals[distinct (published[])`window;enlist 0D00:01;"the 5m window reaches before the roll: withheld"]};
+
 test_a_replayed_publication_is_not_published_again:{[t]
     nm:job`rt_r;
     as_of:t0+0D00:10:00;
