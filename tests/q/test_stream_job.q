@@ -1074,6 +1074,15 @@ test_an_order_id_is_unique_within_a_run:{[t]
     ids:raze first each first each exec rows from .sjtest.published;
     .qunit.assertEquals[count distinct ids;2;"two orders, two ids"]};
 
+test_an_order_id_does_not_restart_at_one:{[t]
+    / #1265: the counter was 0 in every process, so a feed restarted the same
+    / day reissued 1,2,3... and executions' fill_id (`$string order_id)
+    / repeated. A process's first id must sit at its start stamp, clear of
+    / any counter-from-zero run that came before it.
+    first_id:.qpipe.job.fx_orders_feed.last_id+1;
+    .qunit.assertTrue[first_id>`long$2026.01.01D00:00:00;
+        "the first order id is seeded from the process start, not from 0"]};
+
 / --- fx positions ---------------------------------------------------------
 
 / Four orders: a buy and a sell that net on one book, a cancel that must
