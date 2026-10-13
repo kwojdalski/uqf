@@ -37,4 +37,10 @@ test_simple_cont_equivalent_growth:{[t]
     cont_r:.qrates.simple_to_cont[r;tt];
     .testutil.assertApprox[.qrates.growth_cont[cont_r;tt];.qrates.growth_simple[r;tt];1e-6;"converted cont rate gives the same growth factor as the original simple rate"]};
 
+/ t->0 limit of both conversions is r itself (#1256), not the null 0%0.
+test_simple_cont_conversions_at_t_zero_return_r:{[t]
+    .qunit.assertEquals[.qrates.simple_to_cont[0.05;0f];0.05;"simple_to_cont at t=0"];
+    .qunit.assertEquals[.qrates.cont_to_simple[0.05;0f];0.05;"cont_to_simple at t=0"];
+    .testutil.assertApprox[.qrates.simple_to_cont[0.05 0.05;0 1f];0.05 0.04879016;1e-7;"vector t mixing 0 and 1"]};
+
 \d .

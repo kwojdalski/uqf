@@ -18,15 +18,24 @@
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return (d1;d2)
+/ @throws qopt: t must be >= 0 - when any year fraction is negative
 / @eg .qopt.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784 -0.0348547
+/ Zero variance (sigma*sqrt t = 0): d1 is +/-infinity off the forward, which
+/ makes the price intrinsic. Exactly at the forward the numerator is 0 too,
+/ and 0%0 would be null; the limit DFd*max(F-K,0) = 0 needs d1=0 there, so
+/ d1=d2=0. Delta is then half the foreign discount factor (call; the put
+/ is the call less it), vega and rho are 0, and gamma, vanna, volga and
+/ theta keep the 0%0 / x%0 results they already give at t=0 off the forward.
 / @private
 d1_d2:{[s;k;rd;rf;sigma;t]
+    if[any (t<0)&not null t; '"qopt: t must be >= 0"];
     log_moneyness:log[s%k];
     variance_adj:0.5*sigma*sigma;
     drift_rate:(rd-rf)+variance_adj;
     drift_term:drift_rate*t;
     vol_sqrt_t:sigma*sqrt[t];
-    d1v:(log_moneyness+drift_term)%vol_sqrt_t;
+    numer:log_moneyness+drift_term;
+    d1v:?[(vol_sqrt_t=0)&numer=0;0f;numer%vol_sqrt_t];
     d2v:d1v-vol_sqrt_t;
     (d1v;d2v)};
 
