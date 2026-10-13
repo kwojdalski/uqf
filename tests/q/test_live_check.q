@@ -244,6 +244,30 @@ test_redaction_masks_an_ipc_password:{[t]
     .qunit.assertEquals[.qetl.livecheck.redact["access denied for h:5010:me:s3cret (s3cret)";"h:5010:me:s3cret"];
         "access denied for h:5010:me:<redacted> (<redacted>)";"host:port:user:password keeps its password last"]};
 
+/ #1270: ssr reads [ ? * in its search string as a pattern, so a secret
+/ carrying one never matched its own text and was left in the message.
+test_redaction_masks_a_password_with_pattern_characters:{[t]
+    .qunit.assertEquals[.qetl.livecheck.redact["login failed: PWD=Xk[9]q!7;UID=me";"DRIVER=x;PWD=Xk[9]q!7"];
+        "login failed: PWD=<redacted>;UID=me";"[ ] are the password's own characters, not a character class"];
+    .qunit.assertEquals[.qetl.livecheck.redact["bad a?b";"PWD=a?b"];"bad <redacted>";"? is not any-character"];
+    .qunit.assertEquals[.qetl.livecheck.redact["bad c*d";"PWD=c*d"];"bad <redacted>";"* is not a wildcard"]};
+
+test_redaction_masks_an_ipc_password_with_pattern_characters:{[t]
+    .qunit.assertEquals[.qetl.livecheck.redact["access denied for db.example:5010:app:Xk[9]q";"db.example:5010:app:Xk[9]q"];
+        "access denied for db.example:5010:app:<redacted>";"host:port:user:password, brackets and all"]};
+
+/ #1270: an ODBC {}-quoted value is one value - ; inside it is data and }}
+/ is an escaped }. Split on every ; it leaked the tail of the password.
+test_redaction_masks_an_odbc_quoted_password_whole:{[t]
+    .qunit.assertEquals[.qetl.livecheck.redact["login failed for DRIVER=x;PWD={s3;cret};UID=me";"DRIVER=x;PWD={s3;cret};UID=me"];
+        "login failed for DRIVER=x;PWD={<redacted>};UID=me";"the ; inside the braces is part of the password"];
+    .qunit.assertEquals[.qetl.livecheck.redact["login failed for PWD={a}}b;c} and a}b;c";"DRIVER=x;PWD={a}}b;c};UID=me"];
+        "login failed for PWD={<redacted>} and <redacted>";"quoted as given, and as the driver reads it"]};
+
+test_an_odbc_quoted_value_is_read_as_one_setting:{[t]
+    s:.qetl.livecheck.settings "DRIVER={ODBC Driver 18};PWD={s3;cr}}et};SSLMode = disable";
+    .qunit.assertEquals[s;`driver`pwd`sslmode!("ODBC Driver 18";"s3;cr}et";"disable");"unquoted, }} read as }"]};
+
 test_a_credential_with_no_secret_is_shown_whole:{[t]
     .qunit.assertEquals[.qetl.livecheck.redact["local: /data/hdb does not exist";"/data/hdb"];
         "local: /data/hdb does not exist";"a path is what makes the message actionable"]};
