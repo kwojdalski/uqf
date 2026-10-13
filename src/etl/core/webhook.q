@@ -51,8 +51,8 @@ check:{[raw]
 / @eg .qetl.webhook.address ("http://";"";"hook.invalid:8080";"/t")
 address:{[u] `$":",u[0],u 2}
 
-/ ("c"$ keeps PeachQ's .Q.btoa, which is not a plain string there, concatenable.)
 / The Authorization header for URL credentials, or nothing without them.
+/ ("c"$ keeps PeachQ's .Q.btoa, which is not a plain string there, concatenable.)
 / @param cred the user:password text from the URL, "" when there is none
 / @return the header line with its CRLF, or ""
 / @eg .qetl.webhook.auth_header "user:secret"
