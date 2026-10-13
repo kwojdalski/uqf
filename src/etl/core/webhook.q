@@ -43,15 +43,31 @@ check:{[raw]
     i:raw ss "\r\n\r\n";
     $[count i; 4_(first i)_raw; ""]}
 
+/ The handle address for a split URL. .Q.hap's first element already carries
+/ the separator ("http://"), and hopen on it names host[:port] only: no
+/ credentials, no path (#1269).
+/ @param u the .Q.hap result: (scheme://; user:password; host[:port]; path)
+/ @return a `:http://host[:port] symbol
+/ @eg .qetl.webhook.address ("http://";"";"hook.invalid:8080";"/t")
+address:{[u] `$":",u[0],u 2}
+
+/ ("c"$ keeps PeachQ's .Q.btoa, which is not a plain string there, concatenable.)
+/ The Authorization header for URL credentials, or nothing without them.
+/ @param cred the user:password text from the URL, "" when there is none
+/ @return the header line with its CRLF, or ""
+/ @eg .qetl.webhook.auth_header "user:secret"
+auth_header:{[cred] $[count cred; "Authorization: Basic ",("c"$.Q.btoa cred),"\r\n"; ""]}
+
 / The HTTP request text for a JSON POST. Connection: close, so one request
 / is one handle.
 / @param host host[:port]
 / @param path the request path, from the slash
+/ @param cred the user:password text from the URL, "" when there is none
 / @param body the JSON text
 / @return the request as a string
-/ @eg .qetl.webhook.request["hook.invalid";"/t";"{}"]
-request:{[host;path;body]
-    "POST ",path," HTTP/1.1\r\nHost: ",host,"\r\nContent-Type: application/json\r\nContent-Length: ",
+/ @eg .qetl.webhook.request["hook.invalid";"/t";"";"{}"]
+request:{[host;path;cred;body]
+    "POST ",path," HTTP/1.1\r\nHost: ",host,"\r\n",auth_header[cred],"Content-Type: application/json\r\nContent-Length: ",
     string[count body],"\r\nConnection: close\r\n\r\n",body}
 
 / POST JSON and require a 2xx answer. The seam alert_sink's `post` calls.
@@ -64,9 +80,8 @@ post:{[target;body]
     url:$[-11h=type target; 1_string target; target];
     u:.Q.hap url;
     path:$[count u 3; u 3; "/"];
-    addr:`$":",u[0],"://",$[count u 1; u[1],"@"; ""],u 2;
-    h:hopen addr;
-    res:.[{[h;req] (1b;h req)}; (h;request[u 2;path;body]); {[e] (0b;e)}];
+    h:hopen address u;
+    res:.[{[h;req] (1b;h req)}; (h;request[u 2;path;u 1;body]); {[e] (0b;e)}];
     hclose h;
     if[not first res; 'last res];
     check[last res]}

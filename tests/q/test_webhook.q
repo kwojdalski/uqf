@@ -29,10 +29,20 @@ test_a_response_with_no_status_line_is_refused:{[t]
     .qunit.assertThrows[.qetl.webhook.check;4i;"webhook: no HTTP status line*";"not text at all"]};
 
 test_the_request_carries_the_length_of_the_body:{[t]
-    r:.qetl.webhook.request["hook.invalid:8080";"/t";"{\"a\":1}"];
+    r:.qetl.webhook.request["hook.invalid:8080";"/t";"";"{\"a\":1}"];
     .qunit.assertEquals[first "\r\n" vs r;"POST /t HTTP/1.1";"the request line"];
     .qunit.assertEquals[0<count r ss "Content-Length: 7\r\n";1b;"Content-Length is the body's byte count"];
     .qunit.assertEquals[r like "*Host: hook.invalid:8080\r\n*";1b;"and the Host the URL named"];
     .qunit.assertEquals[(-7#r);"{\"a\":1}";"the body ends it"]};
+
+test_the_address_is_scheme_host_and_port_only:{[t]
+    / .Q.hap's scheme element already ends in "://" (#1269: it was doubled)
+    .qunit.assertEquals[.qetl.webhook.address ("http://";"";"127.0.0.1:18431";"/hook");`:http://127.0.0.1:18431;"no doubled scheme, no path"];
+    .qunit.assertEquals[.qetl.webhook.address ("https://";"u:p";"hook.invalid";"/t");`:https://hook.invalid;"credentials stay out of the address"]};
+
+test_url_credentials_travel_as_a_basic_header:{[t]
+    r:.qetl.webhook.request["h";"/t";"user:secret";"{}"];
+    .qunit.assertEquals[0<count r ss "Authorization: Basic dXNlcjpzZWNyZXQ=\r\n";1b;"base64 of user:secret"];
+    .qunit.assertEquals[.qetl.webhook.auth_header "";"";"no credentials, no header"]};
 
 \d .
