@@ -9,6 +9,11 @@
 / live job also scored replaces those rows rather than counting the fills
 / twice.
 / .
+/ The worker declares on_conflict `replace (#1281). The live job stamps a row
+/ when it RECEIVES it, the twin at trade_time+horizon, so near midnight one key
+/ can sit in two date partitions, and only `replace clears across that
+/ boundary (the spill, io_hdb.q) - the default upsert would leave both rows.
+/ .
 / A window is on trade_time - see hdb_demo_markouts.q for why. The output's own
 / `time` is trade_time+horizon, so window_column says trade_time: `replace then
 / clears the rows the window produced, not a neighbour's late markouts (#972).
@@ -83,9 +88,9 @@ facts:{[batch]
         .qetl.plant.shape `demo_execution_quality)))];
 
 .qetl.job.bounded.define[`hdb_demo_markouts_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column!
+    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column`on_conflict!
     (`hdb_demo_markouts;`demo_execution_quality;0D01:00:00;`hdb_demo_markouts_score;
      .qpipe.job.hdb_demo_markouts_backfill.quality_check;.qpipe.job.hdb_demo_markouts_backfill.facts;
      `hdb_demo_markouts_backfill1;
      "bounded: marks out the HDB's fills against its quotes, into demo_execution_quality";
-     `sym`trade_time`fill_id`horizon;`trade_time)];
+     `sym`trade_time`fill_id`horizon;`trade_time;`replace)];

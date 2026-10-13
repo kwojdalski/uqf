@@ -235,6 +235,17 @@ test_the_facts_describe_a_scored_window:{[t]
     .qunit.assertEquals[f`scored_fills`horizons`unpriced;4 2 2;
         "four fills, two horizons, and the unpriced rows counted"]};
 
+/ #1281: the output's key leaves `time` out and its `time` is trade_time+horizon,
+/ so a fill in the last seconds of a day has its live rows in the NEXT day's
+/ partition and its twin's 1s row in this one. Only `replace clears across that
+/ boundary (io_hdb's spill) - an upsert would leave both rows. So the worker
+/ must DECLARE replace, or a plain refill duplicates fills near midnight.
+test_a_refill_replaces_so_the_live_copy_across_midnight_is_cleared:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.on_conflict `hdb_demo_markouts_backfill;`replace;
+        "declared replace: upsert does not clear the next day's live copy of a key"];
+    .qunit.assertEquals[`time in (),.qetl.job.bounded.def[`hdb_demo_markouts_backfill]`target_key;0b;
+        "the spill only applies while time is out of the key"]};
+
 \
 
 / --- fill identity (#1080) -----------------------------------------------

@@ -47,7 +47,10 @@ A fill with no quote after it keeps a row with a null `ref_price` and
 
 The backfill writes keyed on **`sym, trade_time, horizon`**. A fill that both
 jobs scored, or a window the backfill writes twice (a second `--version`), is
-replaced, not counted twice.
+replaced, not counted twice. The worker declares `on_conflict replace`: a fill
+in the last seconds of a day has its live rows in the next day's partition and
+the backfill's 1s row in this one, and only replace clears across that
+boundary, so a plain `uqs backfill` is safe to repeat.
 
 ## `demo_markout1`, live
 
