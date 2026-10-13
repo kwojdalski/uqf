@@ -3,6 +3,11 @@
 # linter is installed separately and is not a dependency of this project.
 exclude = ["lib/torq/", ".claude/worktrees/"]
 
+# Named, not left to the default: the command line defaults to `uqf` but the
+# language server (the VS Code extension) to `style`, so without this the
+# editor ran a different, much smaller rule set than the q-traps hook (#1238).
+profile = "uqf"
+
 # Rules this tree does not apply. QS010 (mixed-naming-convention) flags a
 # file that mixes naming styles - but this tree's q is snake_case beside
 # TorQ's and q's own camelCase (.proc.procname, .u.upd, .z.ts), so nearly
