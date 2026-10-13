@@ -28,7 +28,10 @@
 / polices the desk. Nothing here decides which - the caller rolls its book
 / up to the level its limits are written at, and that is a .qdesk.rollup
 / call. So one limit mechanism serves every level without a notion of
-/ hierarchy, and a desk-wide limit is not a special case.
+/ hierarchy, and a desk-wide limit is not a special case - provided the
+/ metric is in one unit across what is rolled up. A base_qty summed over
+/ pairs adds different currencies, so fxpositions1 keeps sym in every
+/ scope (#1260).
 / .
 / ABSOLUTE VALUES. A cap is on |value|: a desk short 20mm past a 15mm
 / limit is as far over as one long 20mm, and a signed comparison would
