@@ -4,8 +4,8 @@
 # Rendered by scripts/generate/render_diagrams.py, which CI runs with
 # --check. Embedded from docs/guides/new-pipeline.md.
 #
-# THE THING THIS DRAWS is that there is no registration step. Three
-# directories are globbed by src/etl/init.q and one by .testutil.load_suites,
+# THE THING THIS DRAWS is that there is no registration step. The
+# declaration directories are globbed by src/etl/init.q and one by .testutil.load_suites,
 # so a new file is loaded because it exists - and the process registry is
 # READ from the job files' own declarations, so a job needs no entry
 # anywhere else. The APPENDS are the facts that are NOT derivable from the
@@ -116,9 +116,9 @@ appended: "Appended, not created" {
 picked_up: "Picked up: no registration step" {
   class: band
 
-  init: "src/etl/init.q\nglobs the three\ndeclaration directories" { class: derived }
+  init: "src/etl/init.q\nglobs the declaration\ndirectories" { class: derived }
   suites: ".testutil.load_suites[]\nglobs tests/q/test_*.q" { class: derived }
-  consumers: "the process registry,\nread from the declarations;\nprocess.csv, processes.md,\npipeline_dag.q, the port lock -\nre-derived by uqs job new itself" { class: derived }
+  consumers: "the process registry,\nread from the declarations;\nprocess.csv, processes.md,\npipeline_dag.q, load_plan.q,\nthe port lock -\nre-derived by uqs job new itself" { class: derived }
 }
 
 todo: "Yours" {

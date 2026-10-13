@@ -11,9 +11,9 @@
 # to make impossible.
 #
 # The other thing worth seeing is that there is no setup step. bootstrap()
-# regenerates both outputs on EVERY command - start, stop, summary, all of
+# regenerates every output on EVERY command - start, stop, summary, all of
 # them - so the generated files are always a fresh function of the vendored
-# tree plus the three small tracked extension files. Nothing here is a state
+# tree plus the small tracked extension files. Nothing here is a state
 # you can get out of sync; the only way to change the output is to change an
 # input.
 
@@ -83,6 +83,7 @@ inputs: "Inputs — read, never written" {
   declarations: "src/etl/ job declarations\n.qetl.job.stream.define · .qetl.job.bounded.define,\nread into PIPELINES" { class: tracked }
   overrides: "process_overrides.csv\nwritten by `uqs config set`" { class: tracked }
   vendored_schema: "lib/torq-finance-starter-pack/\ndatabase.q" { class: vendored }
+  vendored_dqe: "lib/torq-finance-starter-pack/\nappconfig/dqengineconfig.csv" { class: vendored }
   tables: "src/etl/plant_tables.q\nevery table uqf puts\non the plant" { class: tracked }
 }
 
@@ -97,6 +98,8 @@ bootstrap: "bootstrap() — every command, not once" {
 
   rows: "_composed_rows()\nvendored rows + uqf's own,\ncounted from the PIPELINES registry" { class: step }
   schema: "_generated_schema_content()\nvendored tables + uqf's own" { class: step }
+  dqe: "write_dqe_config()\nvendored checks + the metatables" { class: step }
+  reporter: "write_reporter_config()\nuqf's own checks, validated\nagainst the deployment" { class: step }
 }
 
 outputs: "Generated — output/uqs/" {
@@ -111,6 +114,8 @@ outputs: "Generated — output/uqs/" {
   gen_csv: "process.csv" { class: generated }
   gen_schema: "database.q" { class: generated }
 
+  gen_dqe: "dqengineconfig.csv" { class: generated }
+  gen_reporter: "reporter.csv" { class: generated }
   gen_csv -> gen_schema: "stp1's -schemafile\npoints here" { style.stroke: "#3d7a5a" }
 }
 
@@ -120,9 +125,13 @@ inputs.vendored_csv -> bootstrap.rows
 inputs.vendored_schema -> bootstrap.schema
 inputs.declarations -> bootstrap.rows
 inputs.tables -> bootstrap.schema
+inputs.vendored_dqe -> bootstrap.dqe
+inputs.declarations -> bootstrap.reporter
 
 bootstrap.rows -> outputs.gen_csv
 bootstrap.schema -> outputs.gen_schema
+bootstrap.dqe -> outputs.gen_dqe
+bootstrap.reporter -> outputs.gen_reporter
 inputs.overrides -> outputs.gen_csv: "field overrides,\napplied last" { style.stroke: "#a8762f" }
 
 outputs.gen_csv -> torqsh

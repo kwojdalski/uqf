@@ -91,13 +91,13 @@ q_source: "Where do its rows\ncome from?" { class: question }
 
 feeds: "FEEDS - invent rows on a timer\n\nfxfeed1 -> quote (TorQ)\nfxorderbookfeed1 -> fx_orderbook\nwidefeed1 -> wide_orderbook\nfxtradesfeed1 -> trades\nfxordersfeed1 -> orders\ncryptomock1 -> crypto_book, crypto_trades" { class: group }
 
-external: "EXTERNAL PUBLISHERS - Python, outside q\n(q cannot hold these subscriptions)\n\ndatabento_feed.py -> databento_mbp10\nkafka_feed.py -> kafka_client_flow" { class: external }
+external: "EXTERNAL PUBLISHERS - Python, outside q\n(q cannot hold these subscriptions)\n\ndatabento_feed.py -> databento_mbp10\nkafka_feed.py -> kafka_client_flow\nflink_vwap_feed.py -> flink_vwap_raw" { class: external }
 
-backfills: "BACKFILLS - a past range, then exit\nrun on demand: uqs backfill ... [--wait]\n\na q process (IPC): deals, events, upstream,\nhdb_markouts (the stack's HDB)\nODBC / DuckDB: duckdb_deals, databento,\n crypto_market_data\nHDB files: hdb_transfer" { class: bounded }
+backfills: "BACKFILLS - a past range, then exit\nrun on demand: uqs backfill ... [--wait]\n\na q process (IPC): deals, events, upstream,\nhdb_markouts, hdb_exec_bars,\n hdb_crypto_book (the stack's HDB)\nODBC / DuckDB: duckdb_deals, databento,\n crypto_market_data\nHDB files: hdb_transfer" { class: bounded }
 
 q_publish: "Does it publish\nanything?" { class: question }
 
-quiet_leaves: "WATCHERS - publish nothing\n\ntap1: Tickerplant inspector,\nlogs every batch it sees\ncross1: keeps cross rates from fx_orderbook\nas its own state" { class: quiet }
+quiet_leaves: "WATCHERS - publish nothing\n\ntap1: Tickerplant inspector,\nlogs every batch it sees\ncross1: keeps cross rates from fx_orderbook\nas its own state\nalert_sink1: posts fx_limit_breach to a webhook" { class: quiet }
 
 q_same: "Several tables that mean\nthe same thing, into\none shape?" { class: question }
 
@@ -105,9 +105,9 @@ normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + cry
 
 q_join: "Does it combine several\ntables row by row?" { class: question }
 
-joins: "JOINS - more than one input\n\nmarkout1: trades + quote (TorQ) -> demo_execution_quality\nposbook1: executions + market_data -> position" { class: group }
+joins: "JOINS - more than one input\n\ndemo_markout1: trades + quote (TorQ) -> demo_execution_quality\ncrypto_markout1: crypto_trades + crypto_book -> crypto_execution_quality\nposbook1: executions + market_data -> position" { class: group }
 
-single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> eq_orderbook\nkafka_flow1: kafka_client_flow -> client_flow\nfxpositions1: executions -> fx_position, fx_limit_breach\nvectorize1: wide_orderbook -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage" { class: group }
+single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> eq_orderbook\nkafka_flow1: kafka_client_flow -> client_flow\nfxpositions1: executions -> fx_position, fx_limit_breach\nvectorize1: wide_orderbook -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage\nlast_value1: market_data -> last_value\nexec_bars1: executions -> exec_bar\norder_quality1: orders -> order_quality\ncrypto_book_1s1: crypto_book -> crypto_book_1s\nflink_vwap1: flink_vwap_raw -> flink_vwap" { class: group }
 
 start -> q_source
 q_source -> feeds: "it makes them"

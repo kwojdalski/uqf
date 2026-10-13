@@ -140,7 +140,7 @@ pipeline.norm -> pipeline.plant: "executions"
 pipeline.plant -> pipeline.service: "executions"
 pipeline.plant -> log: "log, then send"
 
-log -> pipeline.service: "replay on restart,\nBEFORE subscribing" { style.stroke-dash: 4 }
+log -> pipeline.service: "replay on restart, BEFORE\nsubscribing; earlier days first\nafter downtime" { style.stroke-dash: 4 }
 
 pipeline.service -> state.book: "net the filled ones"
 state.book -> state.snapshot: "on the timer"

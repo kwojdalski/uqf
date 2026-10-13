@@ -121,7 +121,7 @@ sources: "1 · sources — each arrives in its own market's shape" {
 
   fx: "FX venues\nfx_feed · fx_orderbook_feed\nfx_trades_feed · fx_orders_feed\nsynthetic here, an adapter in production" { class: source }
   crypto: "crypto venues\ncryptorust's two kdb recorders,\nor crypto_mock standing in" { class: source }
-  databento: "Databento MBP-10\ndatabento_feed.py, in Python\noutside q entirely" { class: source }
+  external: "Databento MBP-10 · Kafka · Flink\nPython handlers (databento_feed.py ...)\noutside q entirely" { class: source }
   history: "history\nbounded workers, .qetl.job.bounded\nODBC or an upstream q" { class: source }
 }
 
@@ -146,6 +146,9 @@ engines: "4 · engines — subscribe, hold state, republish" {
   markout: "markout\ntrades + quote → demo_execution_quality\n.qexec, at horizons on a timer" { class: job }
   superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
+  windows: "exec_bars · order_quality · crypto_book_1s\nexecutions, orders, crypto_book → bars\nand rolling ratios, by event time" { class: job }
+  lastvalue: "last_value\nmarket_data → the newest top of\nbook per sym" { class: job }
+  cryptomark: "crypto_markout\ncrypto_trades + crypto_book →\ncrypto_execution_quality, in bps" { class: job }
   reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_orderbook → mkt_orderbook" { class: job }
 }
 
@@ -177,7 +180,7 @@ surfaces: "7 · surfaces" {
 # --- sources reach the plant, except the one that deliberately does not ---
 sources.fx -> plant
 sources.crypto -> plant
-sources.databento -> plant
+sources.external -> plant
 sources.history -> store.ledger: "writes through .qetl.io, NEVER via the plant -\nand records what it covered" {
   style.stroke: "#a8762f"
   style.stroke-width: 2

@@ -8,8 +8,8 @@
 # crash in between redelivers rather than loses; kafka_flow1 then drops what
 # was redelivered by comparing (partition;offset) with a per-partition
 # high-water mark. The numbered labels carry the ordering. The mark is the
-# job's own process state, which is why a restart forgets it - drawn as its
-# own box so that limit is visible.
+# job's own process state, rebuilt on a restart from the client_flow rows in the
+# log - drawn as its own box so that is visible.
 
 direction: down
 
@@ -37,7 +37,7 @@ broker: "Kafka topic\nuqf.client.flow" { class: ext }
 consumer: "kafka_feed.py - uqs feed start kafka\nauto-commit off" { class: py }
 stp1: "stp1 - tickerplant" { class: plant }
 flow: "kafka_flow1 - kafka_flow.q\nkeeps rows above the mark" { class: job }
-mark: "high-water mark per partition\nprocess state - empty after a restart" { class: table }
+mark: "high-water mark per partition\nprocess state - rebuilt from the\nclient_flow log on a restart" { class: table }
 
 broker -> consumer: "poll" { style.stroke: "#8a7f6a" }
 consumer -> stp1: "1. .u.upd kafka_client_flow\n(partition and offset as columns)" { style.stroke: "#6f4aa5" }
