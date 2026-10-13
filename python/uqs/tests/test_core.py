@@ -4,6 +4,7 @@ import os
 import re
 import shlex
 import shutil
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -290,6 +291,114 @@ def test_set_process_config_refuses_what_torq_sh_would_eval(fake_paths: UqsPaths
     with pytest.raises(UqsError, match=rf"discovery1\.{field} value .* shell"):
         stack_procs.set_process_config(fake_paths, "discovery1", field, value)
     assert not fake_paths.overrides_path.exists(), "nothing written"
+
+
+#: Characters the #1041 blacklist let through and torq.sh's eval acts on (#1252).
+SHELL_CHARS_1252 = "#*?[]~{}!"
+
+
+@pytest.mark.parametrize("ch", SHELL_CHARS_1252)
+def test_set_process_config_refuses_what_eval_would_comment_or_glob(fake_paths: UqsPaths, ch):
+    """#1252: `-note #x` comments out -procfile, the log redirect and the `&`,
+    so the process runs in the foreground and `uqs start` blocks; `-pairs *`
+    becomes the working directory's filenames. Refused, naming the character."""
+    value = f"-note a{ch}b"
+    with pytest.raises(
+        UqsError, match=rf"discovery1\.extras value .* shell metacharacters {re.escape(repr(ch))}"
+    ):
+        stack_procs.set_process_config(fake_paths, "discovery1", "extras", value)
+    assert not fake_paths.overrides_path.exists(), "nothing written"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("extras", "-tables quote wide_orderbook"),
+        ("extras", "-pairs EURUSD USDJPY"),
+        ("extras", "-schemafile ${TORQDATA}/database.q -mine 1"),
+        ("load", "${KDBCODE}/processes/x.q ${UQF_SCRIPTS}/a_b-c.q"),
+        ("U", "${TORQDATA}/gateway_accesslist.txt"),
+        ("qcmd", "/opt/kdbx/q"),
+        ("port", "{KDBBASEPORT}+1"),
+        ("port", "9999"),
+        ("extras", "-cpus 3:5"),
+        ("startwithall", "0"),
+        ("host", "localhost"),
+        ("extras", "-user me@host -pct 50% -level=2"),
+        ("extras", ""),
+    ],
+)
+def test_set_process_config_still_accepts_every_plain_value(fake_paths: UqsPaths, field, value):
+    """The whitelist must not refuse what this tree writes: the documented
+    examples, the overlays' ${NAME} paths and the port column's {NAME}+N."""
+    stack_procs.set_process_config(fake_paths, "discovery1", field, value)
+    row = stack_procs.get_process_config(fake_paths, "discovery1", resolve=False)
+    assert row[field] == value
+
+
+def test_every_value_the_composed_process_csv_holds_would_be_accepted(fake_paths: UqsPaths):
+    """Writing back any value the vendored rows and the pipelines already
+    carry must not be refused - the whitelist is checked against all of them."""
+    from uqs.stack.carriable import refuse_shell_unsafe
+
+    rows = stack_procs._composed_rows(fake_paths) + stack_procs._pipeline_rows()
+    for row in rows:
+        for field, value in row.items():
+            refuse_shell_unsafe(row["procname"], field, value or "")
+
+
+def _torq_sh_eval(tmp_path: Path, extras: str) -> tuple[list[str] | None, str]:
+    """torq.sh's start, reproduced with a printer for q (lib/torq/torq.sh's
+    startline/start): `sline="$qcmd ... $extras -procfile $CSVPATH"` then
+    `eval "nohup $sline </dev/null >log 2>&1 &"`. Returns the argv q would
+    have got (None if the log was never written) and what reached stdout."""
+    printer = tmp_path / "printq"
+    printer.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+    printer.chmod(0o755)
+    for name in ("a", "b", "c"):
+        (tmp_path / name).write_text("")
+    log = tmp_path / "torqfeed1.txt"
+    script = (
+        f'sline="{printer} -procname feed1 $EXTRAS -procfile process.csv"\n'
+        f'eval "nohup $sline </dev/null >{log} 2>&1 &"\n'
+        "wait\n"
+    )
+    done = subprocess.run(
+        ["bash", "-c", script],
+        cwd=tmp_path,
+        env={**os.environ, "EXTRAS": extras, "HOME": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    argv = log.read_text().splitlines() if log.exists() else None
+    return argv, done.stdout
+
+
+@pytest.mark.parametrize(
+    "extras", ["-note #x", "-pairs *", "-pairs ?", "-pairs [ab]", "-dir ~", "-pairs {a..c}"]
+)
+def test_what_is_refused_would_have_broken_torq_sh_s_start_line(
+    fake_paths: UqsPaths, tmp_path: Path, extras
+):
+    """Not a hypothetical: each refused value, through torq.sh's own eval, is
+    not the words it was written as - and `#` loses -procfile, the redirect
+    and the `&`, so q runs in the foreground with its output on the terminal."""
+    meant = ["-procname", "feed1", *extras.split(), "-procfile", "process.csv"]
+    argv, stdout = _torq_sh_eval(tmp_path, extras)
+    assert argv != meant
+    if "#" in extras:
+        assert argv is None, "the log redirect was commented out"
+        assert "-procfile" not in stdout
+    with pytest.raises(UqsError, match="shell metacharacters"):
+        stack_procs.set_process_config(fake_paths, "discovery1", "extras", extras)
+
+
+def test_an_accepted_value_reaches_q_as_the_words_it_was_written_as(tmp_path: Path):
+    """The control for the test above: a plain value survives the eval intact."""
+    extras = "-tables quote wide_orderbook -user me@host -level=2 -pct 50%"
+    argv, _ = _torq_sh_eval(tmp_path, extras)
+    assert argv == ["-procname", "feed1", *extras.split(), "-procfile", "process.csv"]
 
 
 def test_an_env_placeholder_is_still_accepted(fake_paths: UqsPaths):

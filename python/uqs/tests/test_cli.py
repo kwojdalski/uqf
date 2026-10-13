@@ -982,6 +982,19 @@ def test_config_set_refuses_a_comma_before_writing(monkeypatch):
     assert write.calls == []
 
 
+@pytest.mark.parametrize("ch", "#*?[]~{}!")
+def test_config_set_refuses_a_character_torq_sh_s_eval_acts_on(monkeypatch, ch):
+    """#1252: refused by the real setter, naming the character, so `-note #x`
+    never reaches the overrides file and torq.sh's eval."""
+    monkeypatch.setattr(stack_procs, "list_process_names", lambda _p: ["fxfeed1"])
+    write = _patch(monkeypatch, stack_procs, "_write_overrides")
+    errors = _error_log(monkeypatch)
+    result = runner.invoke(cli.app, ["config", "set", "fxfeed1", "extras", "--", f"-note a{ch}b"])
+    assert result.exit_code == 1
+    assert any(f"shell metacharacters {ch!r}" in m for m in errors.messages), errors.messages
+    assert write.calls == []
+
+
 def test_config_set_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, stack_procs, "set_process_config", raises=UqsError("unknown field"))
     assert runner.invoke(cli.app, ["config", "set", "rdb1", "nope", "1"]).exit_code == 1
