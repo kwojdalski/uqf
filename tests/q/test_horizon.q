@@ -7,6 +7,10 @@
 
 \d .horizontest
 
+/ The jobs this suite defines are process-global; leave the registry as found (#1375).
+beforeNamespace_save_jobs:{[] .testutil.save_stream_jobs[`.horizontest]}
+afterNamespace_restore_jobs:{[] .testutil.restore_stream_jobs[`.horizontest]}
+
 t0:2026.10.09D10:00:00
 
 events:([] time:`timestamp$(); sym:`symbol$(); px:`float$())

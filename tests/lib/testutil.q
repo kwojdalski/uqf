@@ -228,6 +228,39 @@ with_procname:{[p;f]
     $[had; `.proc.procname set old; @[{![`.proc;();0b;enlist `procname]};::;::]];
     r}
 
+// ------------------------------------------------- STREAM JOB REGISTRY
+//
+// A suite that defines streaming jobs (.qetl.job.stream.define and the
+// horizon, rolling, bars and normalizer kinds built on it) writes the
+// process-global registries, and .jobouttest and .dagtest scan those live, so
+// whichever suite ran first decided what they saw (#1375). The per-test
+// isolation below deliberately leaves them alone - several suites define a job
+// once and reuse it across cases - so a suite brackets its WHOLE namespace:
+//   beforeNamespace_save_jobs:{[] .testutil.save_stream_jobs[`.mytest]}
+//   afterNamespace_restore_jobs:{[] .testutil.restore_stream_jobs[`.mytest]}
+
+// Every registry a stream job's definition writes.
+// @private
+stream_registries:`.qetl.job.stream.jobs`.qetl.job.stream.procnames`.qetl.job.stream.initial`.qetl.job.stream.normalizer.registry`.qetl.job.stream.horizons.registry`.qetl.job.stream.rolling.registry`.qetl.job.stream.bars.registry
+
+// Remember the stream registries, for the suite in namespace ns.
+// @param ns the suite's namespace, e.g. `.horizontest
+// @return the registries saved
+save_stream_jobs:{[ns]
+    r:.testutil.stream_registries where {@[{get x; 1b};x;{[e] 0b}]} each .testutil.stream_registries;
+    / each value enlisted: dicts that share keys would otherwise collapse into a table
+    (` sv ns,`saved_stream_registries) set r!{enlist get x} each r;
+    r}
+
+// Put back the stream registries save_stream_jobs took: a job the suite
+// defined is gone, and one it removed is back.
+// @param ns the suite's namespace, as given to save_stream_jobs
+// @return the registries restored
+restore_stream_jobs:{[ns]
+    s:get ` sv ns,`saved_stream_registries;
+    {x set first y}'[key s;value s];
+    key s}
+
 // ------------------------------------------------------------ ISOLATION
 //
 // Every suite runs in ONE q process, so whatever a test changes outlives it
