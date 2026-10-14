@@ -15,9 +15,16 @@
 
 / What this run SAW, beyond its row count: how many pairs, and the notional
 / moved - a partial extract changes both. Survives an empty batch.
+/ .
+/ Notional is price * size, in each pair's QUOTE currency, so it is one fact
+/ per quote currency (notional_USD, notional_JPY, ...): a single sum added
+/ USDJPY's yen to the dollars of every other pair (#1339).
 facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
-    `rows`syms`notional!(count batch;count distinct batch`sym;sum batch`notional)}
+    quote:{x!{(.qccy.ccy_pair_legs x)`quote} each x} distinct batch`sym;
+    / group, not exec ... by: PeachQ's exec-by returns a keyed table, not a dictionary
+    n:sum each batch[`notional] group quote batch`sym;
+    (`rows`syms,`$"notional_",/:string key n)!(count batch;count distinct batch`sym),value n}
 
 / The transform: the source's trades, plus notional = price * size, in
 / trades_copy's column order.
