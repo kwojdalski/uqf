@@ -109,9 +109,11 @@ def _is_this_run(
     range_to: datetime,
     launched_at: datetime,
 ) -> bool:
+    # The worker records the release tagged - `v1~fixture` on the fixture,
+    # `v1@r2` under a declared revision - while the launch named `v1` (#1315).
     try:
         return (
-            status["source_version"] == source_version
+            runs.untagged(str(status["source_version"])) == source_version
             and _ns_stamp(status["range_from"]) == range_from.astimezone(UTC)
             and _ns_stamp(status["range_to"]) == range_to.astimezone(UTC)
             and _ns_stamp(status["updated_at"]) >= launched_at.astimezone(UTC)

@@ -568,6 +568,27 @@ def test_wait_ignores_the_previous_runs_file_until_this_one_writes(tmp_path, mon
     assert len(calls) == 2
 
 
+@pytest.mark.parametrize("recorded", ["v1~fixture", "v1@r2", "v1@r2~fixture"])
+def test_wait_matches_the_release_the_worker_records_tagged(tmp_path, monkeypatch, recorded):
+    """#1315: the launch names `v1`; the worker records `v1~fixture` on the
+    fixture (#1082) or `v1@r2` under its revision (#1097). The file is this
+    run's all the same - `--fixture --wait` reported every finished run as
+    abandoned, since no file ever said plain `v1`."""
+    _status(tmp_path, state="completed", source_version=recorded)
+    assert _wait(tmp_path, monkeypatch, now=lambda: _LATER, is_up=lambda: False)[:2] == (
+        "completed",
+        0,
+    )
+
+
+def test_a_tagged_file_for_another_release_is_still_not_this_run(tmp_path, monkeypatch):
+    _status(tmp_path, state="completed", source_version="v2~fixture")
+    assert _wait(tmp_path, monkeypatch, now=lambda: _LATER, is_up=lambda: False)[:2] == (
+        "abandoned",
+        1,
+    )
+
+
 def test_a_process_that_died_before_writing_any_status_ends_the_wait(tmp_path, monkeypatch):
     """#768: no status file at all, the grace gone, the process down."""
     state, code, error = _wait(tmp_path, monkeypatch, now=lambda: _LATER, is_up=lambda: False)

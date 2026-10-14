@@ -190,6 +190,14 @@ FIXTURE_TAG = "~fixture"
 REVISION_TAG = "@r"
 
 
+def untagged(version: str) -> str:
+    """A run's recorded release without the tags `run_version` appends:
+    `v1@r2~fixture` -> `v1`. The release an operator names (`--version`, the
+    sensor's `source_version`) is the untagged one; what the worker writes to
+    its ledger and status file is the tagged one (#1315)."""
+    return version.removesuffix(FIXTURE_TAG).split(REVISION_TAG)[0]
+
+
 def rerun_command(run: dict) -> str | None:
     """The command that re-runs `run`'s range - which, because coverage skips
     what is already covered, is also how a failed or interrupted run resumes.
@@ -203,11 +211,9 @@ def rerun_command(run: dict) -> str | None:
     # A run records its release tagged: `@r<n>` for the worker's output
     # revision (#1097), which the worker declares, and `~fixture` for a run on
     # the fixture (#1082), which the command asks for again.
-    version = str(run["source_version"])
-    fixture = version.endswith(FIXTURE_TAG)
-    if fixture:
-        version = version.removesuffix(FIXTURE_TAG)
-    version = version.split(REVISION_TAG)[0]
+    recorded = str(run["source_version"])
+    fixture = recorded.endswith(FIXTURE_TAG)
+    version = untagged(recorded)
     return (
         f"uqs backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
         f"--to {_as_bound(str(run['range_to']), upper=True)} --version {version}"
