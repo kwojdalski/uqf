@@ -18,6 +18,8 @@ python/uqs/tests/test_fill_hdb_columns.py::test_the_query_fails_before_the_repai
 python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_is_idempotent  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_makes_the_query_run  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 
+python/uqs/tests/test_gaps.py::test_the_advised_exec_bars_refill_is_accepted_by_init  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_gaps.py::test_the_declared_grain_of_each_twin_is_read_from_its_declaration  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 python/uqs/tests/test_gaps.py::test_a_job_with_no_sessions_is_down_for_the_whole_range  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 python/uqs/tests/test_gaps.py::test_the_hole_between_two_sessions_and_the_twin_that_refills_it  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
