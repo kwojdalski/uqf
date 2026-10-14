@@ -22,9 +22,23 @@ from uqf_frontend.capture import (
 )
 from uqf_frontend.fleet import FakeFleet, ProcessResult
 
+#: q's epoch. A q timestamp cast with "j"$ is nanoseconds since this instant.
+Q_EPOCH = dt.datetime(2000, 1, 1, tzinfo=dt.UTC)
 
-def row(hour: int, status: str = "b") -> dict:
-    return {"time": dt.datetime(2026, 9, 15, hour), "status": status, "id": hour}
+
+def q_ns(when: dt.datetime, tail_ns: int = 0) -> int:
+    """`when` as the long q's ``"j"$`` makes of it, plus a sub-microsecond tail
+    that a Python datetime cannot carry - the precision #1316 is about."""
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=dt.UTC)
+    return (when - Q_EPOCH) // dt.timedelta(microseconds=1) * 1000 + tail_ns
+
+
+def row(hour: int, status: str = "b", tail_ns: int = 0) -> dict:
+    """A usage row as kola hands it back: ``time`` a datetime (microseconds
+    at best) and ``time_ns`` the exact long USAGE_SINCE adds to every row."""
+    when = dt.datetime(2026, 9, 15, hour)
+    return {"time": when, "time_ns": q_ns(when, tail_ns), "status": status, "id": hour}
 
 
 def test_first_pass_captures_everything_in_memory():
@@ -39,7 +53,7 @@ def test_watermark_advances_to_the_newest_row_captured():
     fleet = FakeFleet({"rdb1": [row(10), row(12)]})
     cap = UsageCapture(fleet, MemorySink())
     cap.capture_once()
-    assert cap.watermark("rdb1") == dt.datetime(2026, 9, 15, 12, tzinfo=dt.UTC)
+    assert cap.watermark("rdb1") == q_ns(dt.datetime(2026, 9, 15, 12))
 
 
 def test_the_watermark_is_passed_to_q_so_filtering_happens_there():
@@ -51,7 +65,37 @@ def test_the_watermark_is_passed_to_q_so_filtering_happens_there():
     assert program == ops.USAGE_SINCE
     assert args[0] == UsageCapture.EPOCH
     cap.capture_once()
-    assert fleet.calls[-1][2][0] == dt.datetime(2026, 9, 15, 10, tzinfo=dt.UTC)
+    assert fleet.calls[-1][2][0] == q_ns(dt.datetime(2026, 9, 15, 10))
+
+
+def test_the_watermark_is_a_q_long_never_a_datetime():
+    """#1316. The epoch and every watermark are the long q compares against,
+    taken from the row's ``time_ns`` - not from ``time``, which kola returns
+    as a datetime that has already lost the nanoseconds."""
+    assert isinstance(UsageCapture.EPOCH, int)
+    assert UsageCapture.EPOCH == q_ns(dt.datetime(1970, 1, 1)), "1970 as ns since 2000"
+    fleet = FakeFleet({"rdb1": [row(10, tail_ns=789)]})
+    cap = UsageCapture(fleet, MemorySink())
+    cap.capture_once()
+    assert isinstance(cap.watermark("rdb1"), int)
+    assert cap.watermark("rdb1") == q_ns(dt.datetime(2026, 9, 15, 10)) + 789, (
+        "the watermark keeps the nanosecond tail the datetime dropped"
+    )
+    cap.capture_once()
+    assert fleet.calls[-1][2][0] == q_ns(dt.datetime(2026, 9, 15, 10)) + 789
+
+
+def test_a_row_with_a_nanosecond_tail_is_not_re_fetched_by_the_next_sweep():
+    """#1316, the failure as it presented. The fleet filters exactly as
+    USAGE_SINCE does - on the long - so this is only correct when the
+    watermark the capture sends back is the long it was handed."""
+    newest = row(10, tail_ns=789)
+    fleet = FakeFleet({"rdb1": lambda since, lim: [r for r in [newest] if r["time_ns"] > since]})
+    sink = MemorySink()
+    cap = UsageCapture(fleet, sink)
+    assert cap.capture_once().captured == {"rdb1": 1}
+    assert cap.capture_once().captured == {"rdb1": 0}, "nothing new, nothing captured"
+    assert len(sink.rows["rdb1"]) == 1, "the newest row is in the sink exactly once"
 
 
 def test_a_second_pass_with_no_new_rows_captures_nothing():
@@ -171,8 +215,7 @@ class PruningFleet:
         live = [
             r
             for r in self._rows
-            if self.now - r["time"].replace(tzinfo=dt.UTC) <= self._window
-            and r["time"].replace(tzinfo=dt.UTC) > since
+            if self.now - r["time"].replace(tzinfo=dt.UTC) <= self._window and r["time_ns"] > since
         ]
         return ProcessResult(process=process, ok=True, value=live[:limit], error=None)
 

@@ -28,7 +28,6 @@ the ETL framework follows for cursors.
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import logging
 import threading
@@ -103,19 +102,32 @@ class CaptureResult:
 
 
 class UsageCapture:
-    """Captures each process's usage log into a sink before it is pruned."""
+    """Captures each process's usage log into a sink before it is pruned.
 
-    #: Epoch for a process never captured before. Deliberately far in the
+    The watermark is a q LONG - the newest captured row's ``time`` as
+    nanoseconds since 2000.01.01, which is what ``"j"$`` makes of a timestamp
+    - and it is held, compared and sent as that long from end to end. It is
+    never a ``datetime``: kola hands a timestamp column back as a Python
+    ``datetime``, which keeps microseconds, and ``.usage.usage.time`` is
+    ``.z.p`` with a nanosecond tail. A watermark that went through
+    ``datetime`` was up to 999 ns before the row it came from, so that row
+    was "newer than the watermark" again on every sweep and was appended to
+    the sink once per interval (#1316). ``USAGE_SINCE`` returns the long per
+    row as ``time_ns`` so nothing here has to reconstruct it.
+    """
+
+    #: Epoch for a process never captured before: 1970.01.01 as a q long
+    #: (nanoseconds since 2000.01.01, so negative). Deliberately far in the
     #: past so the first pass takes whatever is currently in memory.
-    EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
+    EPOCH = -946_684_800_000_000_000
 
     def __init__(self, fleet: Fleet, sink: Sink, *, batch: int = DEFAULT_BATCH) -> None:
         self._fleet = fleet
         self._sink = sink
         self._batch = batch
-        self._watermarks: dict[str, dt.datetime] = {}
+        self._watermarks: dict[str, int] = {}
 
-    def watermark(self, process: str) -> dt.datetime:
+    def watermark(self, process: str) -> int:
         return self._watermarks.get(process, self.EPOCH)
 
     def capture_once(self) -> CaptureResult:
@@ -124,7 +136,9 @@ class UsageCapture:
         A process whose sink write fails keeps its old watermark, so the next
         pass retries the same rows rather than losing them. A row exactly at
         the watermark is never re-fetched, because ``USAGE_SINCE`` filters
-        strictly greater - so a successful pass is idempotent.
+        strictly greater on the same long the watermark was taken from - so a
+        successful pass is idempotent, and a pass after a successful pass
+        with nothing new on the process captures nothing.
         """
         result = CaptureResult()
 
@@ -145,20 +159,16 @@ class UsageCapture:
                 result.failed[proc_result.process] = f"sink write failed: {exc}"
                 continue
             # Advance only after a successful write (publish, then acknowledge).
-            newest = max(_aware(r["time"]) for r in rows if r.get("time") is not None)
+            # From time_ns, the long q compared against - never from `time`,
+            # which lost its nanoseconds on the way into Python.
+            newest = max(
+                (int(r["time_ns"]) for r in rows if r.get("time_ns") is not None),
+                default=self.watermark(proc_result.process),
+            )
             self._watermarks[proc_result.process] = newest
             result.captured[proc_result.process] = len(rows)
 
         return result
-
-
-def _aware(value: Any) -> dt.datetime:
-    """q stores UTC and kola returns naive datetimes, so label rather than
-    convert.
-    """
-    if isinstance(value, dt.datetime):
-        return value if value.tzinfo else value.replace(tzinfo=dt.UTC)
-    return UsageCapture.EPOCH
 
 
 class CaptureScheduler:
