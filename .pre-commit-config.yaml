@@ -260,8 +260,9 @@ repos:
         language: system
         pass_filenames: false
         # q for functions and tables, the Python registry for processes, the
-        # env scan over both for variables.
-        files: '\.(q|py)$|^scripts/processes/'
+        # env scan over both for variables - and the committed surface the
+        # check compares them with, so a hand edit to it is checked too.
+        files: '\.(q|py)$|^scripts/processes/|^docs/reference/surfaces/'
 
       - id: q-facts
         name: Check uqs's generated q facts match the q tree
@@ -302,7 +303,8 @@ repos:
             # rather than dropping it: the check is cheap compared to
             # noticing months later that nothing calls a function.
             python3 scripts/test.py q-coverage
-        files: '\.q$'
+        # The baseline too: an edit to it alone changes what this judges.
+        files: '\.q$|^tests/q/coverage_baseline\.txt$'
         pass_filenames: false
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
