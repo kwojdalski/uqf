@@ -2430,6 +2430,7 @@ def test_bootstrap_plans_monitor1_for_the_set_it_is_handed(fake_paths: UqsPaths,
         seen.append(selected)
         return compose(paths, default_qcmd=default_qcmd, selected=selected)
 
+    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
     monkeypatch.setattr(runtime, "effective_process_rows", record)
     runtime.bootstrap(fake_paths, base_port=7000, selected=("discovery1", "stp1"))
     runtime.bootstrap(fake_paths, base_port=7000)
