@@ -59,12 +59,27 @@ FACTS = {
     "STATUS_FILE_SUFFIX": "a status file's name after the instance id - .qetl.status.file_suffix",
     "BOUNDED_DATASET_TIME_COLUMNS": "dataset -> time column getdata reads it by (#1363)",
     "BOUNDED_DATASET_INSTRUMENT_COLUMNS": "dataset -> its instrument column, empty if none (#1363)",
+    "CFG_SOURCES": "the worker-config layers, most significant first - .qetl.cfg.sources",
+    "CFG_ENV_LAYER": "the layer that outranks a worker-config override - .qetl.cfg.env_layer",
+    "CFG_OVERRIDE_LAYER": "the layer a worker-config override sits in - .qetl.cfg.override_layer",
+    "CFG_ENV_PREFIX": "a worker-config key's environment variable prefix - .qetl.cfg.env_prefix",
+    "SOURCE_CREDENTIAL_PREFIX": (
+        "what a source's credential variable starts with - .qetl.source.credential_prefix"
+    ),
+    "FIXTURE_TAG": "what a fixture run's release ends with - .qetl.source.fixture_tag",
+    "REVISION_TAG": (
+        "what precedes a worker's output revision in a release - "
+        ".qetl.job.bounded.runtime.revision_tag"
+    ),
 }
 
 #: Each generated module: the package that reads it, and the facts it carries.
 MODULES = {
     OUT: ("uqs", list(FACTS)),
-    PROVIDER_OUT: ("uqf_airflow_provider", [n for n in FACTS if n.startswith("STATUS_")]),
+    PROVIDER_OUT: (
+        "uqf_airflow_provider",
+        [n for n in FACTS if n.startswith("STATUS_") or n in ("FIXTURE_TAG", "REVISION_TAG")],
+    ),
 }
 
 HEADER = '''"""q facts {who} reads, generated from the q tree - DO NOT EDIT.

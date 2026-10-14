@@ -41,7 +41,15 @@ facts:(!) . flip (
     (`STATUS_FILE_SUFFIX;     .qetl.status.file_suffix);
     / The datasets bounded workers write, keyed by name (#1363).
     (`BOUNDED_DATASET_TIME_COLUMNS;       (!) . (asc datasets[]; string dataset_time each asc datasets[]));
-    (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string dataset_instrument each asc datasets[])))
+    (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string dataset_instrument each asc datasets[]));
+    / Names q computes and the browser and `uqs` repeat (#1368).
+    (`CFG_SOURCES;            .qetl.cfg.sources);
+    (`CFG_ENV_LAYER;          .qetl.cfg.env_layer);
+    (`CFG_OVERRIDE_LAYER;     .qetl.cfg.override_layer);
+    (`CFG_ENV_PREFIX;         .qetl.cfg.env_prefix);
+    (`SOURCE_CREDENTIAL_PREFIX; .qetl.source.credential_prefix);
+    (`FIXTURE_TAG;            .qetl.source.fixture_tag);
+    (`REVISION_TAG;           .qetl.job.bounded.runtime.revision_tag))
 
 \d .
 

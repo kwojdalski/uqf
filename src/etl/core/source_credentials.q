@@ -8,13 +8,21 @@
 
 / ---------------------------------------------------------- CREDENTIALS
 
+/ What every source'"'"'s credential variable starts with; uqs reads it from the
+/ generated python facts (#1368).
+credential_prefix:"UQF_SOURCE_CRED_"
+
+/ What fixture_version appends to a release, so a fixture'"'"'s coverage is never
+/ mistaken for a live run'"'"'s. uqs strips it again from the ledger (#1368).
+fixture_tag:"~fixture"
+
 / The environment variable holding a source's credential.
 / .
 / Mechanical from the source name, so an operator can guess it. Deliberately
 / a separate prefix from .qetl.cfg's UQF_: a credential is not configuration,
 / and keeping the namespaces apart means a credential can never arrive
 / through the YAML or overrides layer by accident.
-credential_var:{[source] "UQF_SOURCE_CRED_",upper string source}
+credential_var:{[source] credential_prefix,upper string source}
 
 / --------------------------------------------------- CONFIGURED SETTINGS
 / .
@@ -271,7 +279,7 @@ refuse_fixture_writes:{[who;source]
 / @eg .qetl.source.fixture_version `v1  ->  `$"v1~fixture"
 fixture_version:{[v]
     s:string v;
-    $[s like "*~fixture"; v; `$s,"~fixture"]}
+    $[s like "*",fixture_tag; v; `$s,fixture_tag]}
 
 / What this source's credential looks like, for an operator who has not set
 / one. The source's own `credential_example` when it declared one, and

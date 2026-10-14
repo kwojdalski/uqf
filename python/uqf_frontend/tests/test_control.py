@@ -392,9 +392,10 @@ def test_setting_a_worker_config_key_goes_through_the_gateway(writeable, gw):
 def test_an_override_in_effect_is_not_shadowed(writeable, gw):
     gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"true"]
     body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
-    assert (body["effective_layer"], body["shadowed"], body["env_var"]) == (
+    assert (body["effective_layer"], body["shadowed"], body["saved"], body["env_var"]) == (
         "overrides",
         False,
+        True,
         None,
     )
 
@@ -405,6 +406,7 @@ def test_an_environment_variable_that_outranks_the_override_is_reported(writeabl
     gw._responses[control.SET_WORKER_CONFIG] = ["env", b"false"]
     body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
     assert body["shadowed"] is True
+    assert body["saved"] is False
     assert (body["effective_layer"], body["effective_value"], body["env_var"]) == (
         "env",
         "false",
