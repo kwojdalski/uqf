@@ -6,6 +6,10 @@
 
 \d .barstest
 
+/ The jobs this suite defines are process-global; leave the registry as found (#1375).
+beforeNamespace_save_jobs:{[] .testutil.save_stream_jobs[`.barstest]}
+afterNamespace_restore_jobs:{[] .testutil.restore_stream_jobs[`.barstest]}
+
 d1:2026.10.09
 t0:2026.10.09D10:00:00
 
