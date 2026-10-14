@@ -184,6 +184,13 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
                 raise ValidationFailed(
                     f"column {column!r} is a timespan; expected nanoseconds as a number"
                 )
+            # A timedelta stops at the microsecond too, and would round the
+            # tail to the nearest one: the same silent move _utc refuses.
+            if float(value) % 1000:
+                raise ValidationFailed(
+                    f"column {column!r} is a timespan; {value!r} is finer than a "
+                    "microsecond, which this cannot carry"
+                )
             return dt.timedelta(microseconds=float(value) / 1000.0)
         case QType.GUID:
             # Validated here rather than passed through, so a malformed id is
@@ -209,10 +216,24 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
 
 
 def _utc(value: Any, column: str) -> dt.datetime:
-    """Parse an ISO-8601 string (or accept a datetime) as an aware UTC value."""
+    """Parse an ISO-8601 string (or accept a datetime) as an aware UTC value.
+
+    A datetime stops at the microsecond, and `fromisoformat` would keep the
+    first six digits of a finer fraction without a word - so a value past
+    that is refused, with the rule `uqs backfill` applies to its bounds
+    (uqs.stack.backfill.finer_than_a_microsecond): a filter or a coverage
+    bound moved by the parser is not the one the caller sent.
+    """
+    from uqs.stack.backfill import finer_than_a_microsecond
+
     if isinstance(value, dt.datetime):
         parsed = value
     elif isinstance(value, str):
+        if finer_than_a_microsecond(value):
+            raise ValidationFailed(
+                f"column {column!r} is a timestamp; {value!r} is finer than a microsecond, "
+                "which this cannot carry"
+            )
         try:
             parsed = dt.datetime.fromisoformat(value)
         except ValueError:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 from datetime import UTC, datetime, timedelta
@@ -64,6 +65,31 @@ def test_a_q_literal_finer_than_a_microsecond_is_refused_not_truncated():
     different range."""
     with pytest.raises(UqsError, match="finer than a microsecond"):
         backfill.parse_bound("--from", "2026.09.13D00:00:00.000000001")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2026-09-13T00:00:00.000000001",
+        "2026-09-13T00:00:00.0000001Z",
+        "2026-09-13T00:00:00.9999999+02:00",
+        "2026-09-13 00:00:00,1234567",
+    ],
+)
+def test_an_iso_bound_finer_than_a_microsecond_is_refused_like_the_q_literal(text):
+    """One rule for both spellings (#1317). `datetime.fromisoformat` keeps the
+    first six digits of a longer fraction without a word, so before this the
+    same instant was refused as a q literal and silently narrowed as ISO -
+    `--to ...123456789` ran the worker 789 ns short of what was typed."""
+    with pytest.raises(UqsError, match=re.escape(f"--to {text!r} is finer than a microsecond")):
+        backfill.parse_bound("--to", text)
+
+
+@pytest.mark.parametrize(
+    "text", ["2026-09-13T00:00:00.123456000Z", "2026.09.13D00:00:00.123456000"]
+)
+def test_trailing_zeros_past_the_microsecond_are_not_finer(text):
+    assert backfill.parse_bound("--from", text) == FROM.replace(microsecond=123456)
 
 
 def test_a_q_literal_that_is_not_a_real_date_is_refused():
