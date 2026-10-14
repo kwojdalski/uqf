@@ -41,7 +41,10 @@ reference](../reference/pipeline-declarations.md):
   not when the plant received it.
 - **`ready_on` `reference` with `legs`:** wait until every reference key the
   event needs, such as a cross pair's legs, has an as-of anchor and has advanced
-  through the horizon.
+  through the horizon. `both` also requires the horizon to have elapsed on the
+  plant clock.
+- **`retain_by`:** for a reference quoted by several sources, name the source as
+  well (`sym`source\`), so eviction keeps each source's latest older book.
 - **`lookback`:** a window that reaches back before the event, for a markout at
   -60s.
 - **`identity`:** a redelivered event replaces the pending one, and one already
