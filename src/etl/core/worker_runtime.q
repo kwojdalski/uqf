@@ -209,6 +209,55 @@ mode:{[]
     if[dry and m~`run; '"mode: run, but dry_run is also set - unset one of them"];
     m}
 
+/ Refuse a per-run flag that an environment variable would silently outrank
+/ (#1304). The flag is stored as a config override, and the order is env >
+/ overrides > yaml > default, so an exported UQF_MODE or UQF_ON_CONFLICT would
+/ win over an explicit -mode plan: the run would write to the HDB when a
+/ read-only plan was asked for. A variable that agrees with the flag is fine.
+/ Shared by both launchers (torq_backfill.q and scripts/dev/run_backfill.q),
+/ which differ only in the name the refusal carries.
+/ @param who the launcher's name, for the refusal text
+/ @param k the config key, `mode or `on_conflict
+/ @param v the flag's value, a string
+/ @return the flag's value
+/ @throws error when the environment holds a different value for k
+/ @eg .qetl.job.bounded.runtime.flag_vs_env["demo";`mode;"plan"]  ->  "plan"
+flag_vs_env:{[who;k;v]
+    e:getenv `$.qetl.cfg.env_name k;
+    if[count[e] and not (lower e)~lower v;
+        'who,": -",string[k]," ",v," would be ignored - ",.qetl.cfg.env_name[k],"=",e,
+         " outranks it; unset it or drop the flag"];
+    v}
+
+/ Apply -on_conflict, when given, as this run's strategy: the on_conflict
+/ config override, which .qetl.job.bounded.on_conflict reads ahead of the
+/ worker's declaration. Checked here, so a typo fails before the first fetch.
+/ @param who the launcher's name, for a refusal
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return the strategy in force (what .qetl.cfg.raw answers, not the request),
+/ or ` when none was given
+/ @throws error for an unknown strategy, or one an environment variable outranks
+use_on_conflict:{[who;opts]
+    if[not `on_conflict in key opts; :`];
+    v:first opts`on_conflict;
+    .qetl.io.require_strategy `$v;
+    flag_vs_env[who;`on_conflict;v];
+    .qetl.cfg.set_override[`on_conflict;v];
+    `$.qetl.cfg.raw `on_conflict}
+
+/ Apply -mode, when given, as this run's mode: the mode config override that
+/ mode[] reads. Resolved here, so a typo or a contradiction with dry_run
+/ fails before anything is opened.
+/ @param who the launcher's name, for a refusal
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return the mode this run is in
+/ @throws error for an unknown mode, or one an environment variable outranks
+use_mode:{[who;opts]
+    if[`mode in key opts;
+        flag_vs_env[who;`mode;first opts`mode];
+        .qetl.cfg.set_override[`mode;first opts`mode]];
+    mode[]}
+
 / Is this run diagnostic-only - any mode but `run?
 / .
 / Not protected: a mode that cannot be read throws here, and the effect it

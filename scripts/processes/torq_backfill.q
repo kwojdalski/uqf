@@ -87,46 +87,26 @@ verbose:{[opts] `verbose in key opts}
 trace:{[opts] `trace in key opts}
 
 / Refuse a per-run flag that an environment variable would silently outrank
-/ (#1304). The flag is stored as a config override, and the order is env >
-/ overrides > yaml > default, so an exported UQF_MODE or UQF_ON_CONFLICT would
-/ win over an explicit -mode plan: the run would write to the HDB when a
-/ read-only plan was asked for. A variable that agrees with the flag is fine.
+/ (#1304). Shared with scripts/dev/run_backfill.q (#1319): the logic is
+/ .qetl.job.bounded.runtime.flag_vs_env, this names the launcher in the text.
 / @param k the config key, `mode or `on_conflict
 / @param v the flag's value, a string
 / @return the flag's value
 / @throws flag_vs_env when the environment holds a different value for k
-flag_vs_env:{[k;v]
-    e:getenv `$.qetl.cfg.env_name k;
-    if[count[e] and not (lower e)~lower v;
-        '"torq_backfill: -",string[k]," ",v," would be ignored - ",.qetl.cfg.env_name[k],"=",e,
-         " outranks it; unset it or drop the flag"];
-    v}
+flag_vs_env:{[k;v] .qetl.job.bounded.runtime.flag_vs_env["torq_backfill";k;v]}
 
-/ Apply -on_conflict, when given, as this run's strategy - set as the
-/ on_conflict config override, which .qetl.job.bounded.on_conflict reads
-/ ahead of the worker's declaration. Checked here, so a typo fails before
-/ the first fetch rather than at the first write.
+/ Apply -on_conflict, when given, as this run's strategy (see
+/ .qetl.job.bounded.runtime.use_on_conflict).
 / @param opts the parsed command line, as .Q.opt returns it
 / @return the strategy in force (what .qetl.cfg.raw answers, not the request),
 / or ` when none was given
-use_on_conflict:{[opts]
-    if[not `on_conflict in key opts; :`];
-    v:first opts`on_conflict;
-    .qetl.io.require_strategy `$v;
-    flag_vs_env[`on_conflict;v];
-    .qetl.cfg.set_override[`on_conflict;v];
-    `$.qetl.cfg.raw `on_conflict}
+use_on_conflict:{[opts] .qetl.job.bounded.runtime.use_on_conflict["torq_backfill";opts]}
 
-/ Apply -mode, when given, as this run's mode - set as the mode config
-/ override, which .qetl.job.bounded.runtime.mode reads. Resolved here, so a
-/ typo or a contradiction with dry_run fails before anything is opened.
+/ Apply -mode, when given, as this run's mode (see
+/ .qetl.job.bounded.runtime.use_mode).
 / @param opts the parsed command line, as .Q.opt returns it
 / @return the mode this run is in
-use_mode:{[opts]
-    if[`mode in key opts;
-        flag_vs_env[`mode;first opts`mode];
-        .qetl.cfg.set_override[`mode;first opts`mode]];
-    .qetl.job.bounded.runtime.mode[]}
+use_mode:{[opts] .qetl.job.bounded.runtime.use_mode["torq_backfill";opts]}
 
 / Apply -fixture, when given, as the fixture_writes config override, which
 / .qetl.source.fixture_writes_allowed reads.

@@ -307,6 +307,7 @@ qetl.job.bounded.runtime,declared_dependencies,dict,,
 qetl.job.bounded.runtime,default_policy,dict,,
 qetl.job.bounded.runtime,finish_window,function,7,worker ds part spec from_ts to_ts publish
 qetl.job.bounded.runtime,fixture_claimed,function,2,worker w
+qetl.job.bounded.runtime,flag_vs_env,function,3,who k v
 qetl.job.bounded.runtime,is_dry_run,function,1,
 qetl.job.bounded.runtime,mode,function,1,
 qetl.job.bounded.runtime,modes,value,,
@@ -327,6 +328,8 @@ qetl.job.bounded.runtime,retryable,function,1,err
 qetl.job.bounded.runtime,run_version,function,2,cfg v
 qetl.job.bounded.runtime,suppressed_in_dry_run,value,,
 qetl.job.bounded.runtime,transport_patterns,value,,
+qetl.job.bounded.runtime,use_mode,function,2,who opts
+qetl.job.bounded.runtime,use_on_conflict,function,2,who opts
 qetl.job.bounded.runtime,windows,function,3,from_ts to_ts width
 qetl.job.bounded.runtime,with_retry,function,2,pol f
 qetl.job.bounded.runtime,write_strategy,function,2,worker w
