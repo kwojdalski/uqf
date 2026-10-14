@@ -186,6 +186,16 @@ test_rollup_nets_away_the_dimensions_not_asked_for:{[t]
         "london's EURUSD +600k and EURGBP -500k net to 100k, summed over its products"];
     .qunit.assertEquals[r[`london]`fill_count;3;"over all three of its fills"]};
 
+test_apply_fills_refuses_a_fill_it_cannot_net_on_both_sides:{[t]
+    b:.qdesk.empty_book[`sym];
+    f:([] sym:2#`EURUSD; side:1 1; size:1000000 400000f; price:1.085 0n);
+    .qunit.assertThrows[.qdesk.apply_fills[b];f;"*1 fill(s) have a null side, size or price*";
+        "a null price would net into base_qty but not quote_qty, and publish break_even 0.775 (#1309)"];
+    .qunit.assertThrows[.qdesk.apply_fills[b];update size:0n from f;"*null side, size or price*";
+        "a null size is refused too, not counted in fill_count alone"];
+    .qunit.assertThrows[.qdesk.apply_fills[b];update side:0N from f;"*null side, size or price*";
+        "and so is a null side"]};
+
 test_rolling_up_to_every_dimension_changes_nothing:{[t]
     b:.qdesk.apply_fills[.qdesk.empty_book[`sym`book`product];mk_fills[]];
     .qunit.assertEquals[.qdesk.rollup[b;`sym`book`product];b;
