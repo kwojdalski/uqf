@@ -15,6 +15,14 @@ two_window_books:{[]
         bid_prices:(62020 62019f;62030 62029f); bid_sizes:(1 1f;2 2f);
         ask_prices:(62021 62022f;62031 62032f); ask_sizes:(7 7f;8 8f))}
 
+/ The lock and checkpoint files go under the status directory; with none
+/ configured they went to /status and died, unless an earlier suite had set
+/ one (#1325).
+beforeNamespace_isolate:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"mkdir -p build/test-status";
+    }
+
 setUp_fresh:{[]
     .testutil.reset_coverage_ledger[];
     .qetl.cfg.reset[];
