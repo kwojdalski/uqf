@@ -94,21 +94,41 @@ _Q_TIMESTAMP = re.compile(
     r"(\d{4})\.(\d{2})\.(\d{2})(?:D(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?"
 )
 
+#: The fraction of a second in either spelling - 06:00:00.123456789 in a q
+#: literal, 06:00:00.1234567Z or 06:00:00,1234567 in ISO-8601. Matched on the
+#: text, before parsing, because `datetime.fromisoformat` takes any number of
+#: digits here and keeps the first six without a word.
+_SECOND_FRACTION = re.compile(r"\d{2}:\d{2}:\d{2}[.,](\d+)")
+
+
+def finer_than_a_microsecond(text: str) -> bool:
+    """Whether `text` spells a non-zero digit past the sixth of its seconds'
+    fraction - the part a datetime cannot hold.
+
+    One rule for both spellings a bound takes, and for the frontend's ISO
+    bounds (uqf_frontend.queries, uqf_frontend.control). Refused rather than
+    rounded, by every caller: these are values someone typed, and a bound
+    moved either way - truncated short or widened out - is a different range
+    from the one they typed. (runs._as_bound rounds outwards instead because
+    its input is the ledger's own `.z.p`, which nobody typed, and it is
+    building a command that has to run.) Trailing zeros are not finer:
+    .123456000 is .123456.
+    """
+    m = _SECOND_FRACTION.search(text)
+    return m is not None and bool(m.group(1)[6:].strip("0"))
+
 
 def _from_q_literal(name: str, text: str) -> datetime | None:
     """A q literal as a UTC datetime, or None when `text` is not one.
 
-    datetime stops at the microsecond, so a value with anything finer is
-    refused rather than truncated: a range whose end moved is a different
-    range.
+    `parse_bound` has already refused anything finer than a microsecond, so
+    the fraction here fits a datetime.
     """
     m = _Q_TIMESTAMP.fullmatch(text)
     if m is None:
         return None
     year, month, day, hour, minute, second, fraction = m.groups()
     digits = (fraction or "").ljust(9, "0")
-    if digits[6:] != "000":
-        raise UqsError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
     try:
         return datetime(
             int(year),
@@ -133,7 +153,13 @@ def parse_bound(name: str, text: str) -> datetime:
     rather than as the local time of whatever machine runs the command -
     which would cover a window an offset wide of the one meant. A value with
     an offset is converted. A q literal carries no offset, and is UTC.
+
+    datetime stops at the microsecond, so a value with anything finer is
+    refused rather than truncated, in either spelling: a range whose end
+    moved is a different range (`finer_than_a_microsecond`).
     """
+    if finer_than_a_microsecond(text):
+        raise UqsError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
     from_q = _from_q_literal(name, text)
     if from_q is not None:
         return from_q
