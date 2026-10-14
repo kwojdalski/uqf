@@ -4,7 +4,7 @@
 // one vectorized batch the way every other scripts/*.q example does.
 //
 // Adapted from lib/qAutomatedTrading/histTickData/timersvc.q's pattern:
-// load/generate historical data once, then a .z.time timer callback
+// load/generate historical data once, then a .z.ts timer callback
 // advances through it row-by-row on a fixed system timer ("t <ms>"),
 // simulating a live feed. That script publishes each row over IPC to a
 // tickerplant (hopen/neg[h]); this example appends each row directly to
@@ -45,11 +45,11 @@
 // open until you type something). But run non-interactively - stdin
 // closed/redirected from /dev/null, as any CI job or subprocess-launched
 // invocation would do - a genuine, confirmed kdb+ race exists between
-// "stdin hit EOF, exit the process" and the timer's next .z.time tick,
+// "stdin hit EOF, exit the process" and the timer's next .z.ts tick,
 // decided by scheduler timing: sometimes only tick 1 of n_ticks fires
 // before the process exits. Piping an infinite stream of blank lines
 // through stdin (evaluated as harmless no-ops) means it never reaches
-// EOF, so only this script's own explicit `exit 0` inside .z.time (once
+// EOF, so only this script's own explicit `exit 0` inside .z.ts (once
 // every historical row has replayed) ends the process - confirmed
 // reliable across repeated runs; without it, failed non-deterministically
 // (varied 1-5 of 5 ticks firing across identical runs).
@@ -147,7 +147,7 @@ cnt:0;
 / been replayed - see README's Requirements/Quick start for why every
 / scripts/*.q example ends this way rather than falling into an
 / interactive prompt.
-.z.time:{
+.z.ts:{
     wide_row:1#cnt _ hist_wide;
     .qetl.log.dbg[`timer_replay;"running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
     row:col_order#.qbook.book_from_wide_levels[wide_row;level_groups;`sym];
@@ -165,5 +165,17 @@ cnt:0;
 
 .qetl.log.info[`timer_replay;"starting replay - one historical tick appended every ",.Q.s1[tick_ms],"ms of wall-clock time";()!()];
 system "t ",string tick_ms;
+
+/ Self-check (#1338): the process ending before every tick replayed - stdin
+/ at EOF, or a handler that never fires, as when this was assigned to the
+/ read-only clock .z.time instead of .z.ts - must be a failure, not a quiet
+/ exit 0. The complete path exits 0 above, and q-scripts (scripts/test.py)
+/ keeps stdin open for this example so EOF cannot cut the replay short.
+replay_failed:0b;
+.z.exit:{[code]
+    if[(not replay_failed) and cnt<n_ticks;
+        replay_failed::1b;
+        .qetl.log.err[`timer_replay;"replayed ",.Q.s1[cnt]," of ",.Q.s1[n_ticks]," tick(s) before the process ended";()!()];
+        exit 1]};
 
 // exit 0
