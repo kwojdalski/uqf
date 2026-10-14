@@ -70,6 +70,7 @@ live:{[o;from_ts;to_ts]
 fixture_fn:{[] `orders`orders_before!(.hdb_order_qualitybftest.scn;.hdb_order_qualitybftest.scn)}
 
 setUp_fresh:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     .testutil.reset_coverage_ledger[];
     .qetl.cfg.reset[];
     .qetl.cfg.set_layers[(enlist `on_conflict)!enlist "replace";()!();()!()];
