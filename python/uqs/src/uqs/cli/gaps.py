@@ -38,6 +38,11 @@ def refillable(holes: list[dict], today: date) -> tuple[list[dict], bool]:
     return kept, cut
 
 
+#: 2000.01.01, q's epoch, in Unix nanoseconds: what `"j"$` of a timestamp
+#: counts from, and so the origin of every grid a worker's `align` is held to.
+Q_EPOCH_NS = 946_684_800 * 1_000_000_000
+
+
 def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = False) -> str:
     """A ledger timestamp moved outwards onto a bar grid (#1323).
 
@@ -51,11 +56,14 @@ def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = Fal
         return ledger_value
     stamp, _, fraction = ledger_value.partition(".")
     whole = datetime.fromisoformat(stamp).replace(tzinfo=UTC)
-    nanos = int(whole.timestamp()) * 1_000_000_000 + int(fraction.ljust(9, "0")[:9])
+    # On q's grid, not the Unix one (#1345): require_aligned tests `"j"$ts`,
+    # nanoseconds since 2000.01.01, and the epochs are 946,684,800 s apart -
+    # they agree only for an align that divides that, which nothing enforces.
+    nanos = int(whole.timestamp()) * 1_000_000_000 + int(fraction.ljust(9, "0")[:9]) - Q_EPOCH_NS
     low = nanos - nanos % align_ns
     if upper and low != nanos:
         low += align_ns
-    seconds, sub = divmod(low, 1_000_000_000)
+    seconds, sub = divmod(low + Q_EPOCH_NS, 1_000_000_000)
     return f"{datetime.fromtimestamp(seconds, UTC):%Y-%m-%dT%H:%M:%S}.{sub:09d}"
 
 
