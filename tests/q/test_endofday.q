@@ -286,6 +286,36 @@ test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
     .qunit.assertEquals[e[0;1];`eod_cap;"naming the job"];
     .qunit.assertEquals[e[0;3]`cap;1;"and the cap it overran"]};
 
+/ #1372: a recording that overflows between two snapshots has lost only the
+/ batches the later snapshot does not already hold. The job caps at 2 rows;
+/ replay s1, fills at t1+01:00..t1+03:00 (the third is dropped), then s2 with
+/ carried_to t1+03:00, after `extra` more fills later than that (log order
+/ before s2, as when the snapshot is published late).
+capped2:{[extra]
+    if[not `eod_cap2 in key .qetl.job.stream.jobs;
+        `.qpipe.job.eod_cap2.book set ([] sym:`symbol$(); qty:`float$());
+        .qetl.job.stream.define[`eod_cap2;`procname`subscribe_to`publishes`on_batch`replay`carry!(
+            `eodcap2;enlist `executions;enlist `eodx_open;{[t;x] `.qpipe.job.eod_cap2.book upsert select sym, qty:size from x};1b;
+            `state`table`cap!(`book;`eodx_open;2))]];
+    `.qpipe.job.eod_cap2.book set ([] sym:`symbol$(); qty:`float$());
+    fl:{[s;h] update time:.eodtest.t1+h from fill[s;1;1e6;1.1;`london;`spot]};
+    s1:([] time:enlist t1; sym:enlist `AAA; qty:enlist 1e6; carried_to:enlist 0Np);
+    s2:([] time:4#t1+0D04:00:00; sym:`AAA`BBB`CCC`DDD; qty:1e6 1e6 1e6 1e6; carried_to:4#t1+0D03:00:00);
+    seq:((`executions;fl[`BBB;0D01:00:00]);(`executions;fl[`CCC;0D02:00:00]);(`executions;fl[`DDD;0D03:00:00]));
+    if[extra; seq,:enlist (`executions;fl[`EEE;0D04:00:00])];
+    replay[`eod_cap2;(enlist (`eodx_open;s1)),seq,enlist (`eodx_open;s2)];
+    }
+
+test_a_snapshot_covering_every_dropped_batch_is_not_an_error:{[t]
+    e:errors[.testutil.captured_log[0b] {.eodtest.capped2[0b]}];
+    .qunit.assertEquals[count e;0;"the snapshot holds the dropped batch, so nothing is missing"];
+    .qunit.assertEquals[select from .qpipe.job.eod_cap2.book;([] sym:`AAA`BBB`CCC`DDD; qty:4#1e6);"and the book is the snapshot's"]};
+
+test_a_dropped_batch_later_than_the_snapshot_is_still_an_error:{[t]
+    e:errors[.testutil.captured_log[0b] {.eodtest.capped2[1b]}];
+    .qunit.assertEquals[count e;1;"a batch after the snapshot's carried_to was dropped: really missing"];
+    .qunit.assertEquals[e[0;1];`eod_cap2;"naming the job"]};
+
 / --- a missed end of day (#1072) -------------------------------------------
 
 / The errors missed_end_of_day logs for fx_positions with `marker` as the
@@ -295,7 +325,7 @@ missed:{[marker;status]
     system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
     system "rm -f ",p,"*";
     if[not null marker; .qetl.job.bounded.state.durable_set[p;([] last_end_of_day:enlist marker)]];
-    if[not null status; .qetl.job.stream.carry_log[`fx_positions]:(status;0;())];
+    if[not null status; .qetl.job.stream.carry_log[`fx_positions]:(status;0;();0Np)];
     e:errors[.testutil.captured_log[0b] {.qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]}];
     .qetl.job.stream.replayed `fx_positions;
     system "rm -f ",p,"*";
