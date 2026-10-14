@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 #: Where a query reads: today's session, completed partitions, or both. One
 #: name for the request and the response, which api.ts mirrors as `Tier`.
@@ -16,12 +16,21 @@ Tier = Literal["rdb", "hdb", "both"]
 #: as a string, a state q added fell through the browser to "In progress".
 RunState = Literal["starting", "running", "idle", "completed", "failed"]
 
+#: Every REQUEST model's config (#1361). Pydantic's default ignores a key it
+#: does not know and fills a default for one it does not get, so a field
+#: renamed on the caller's side returned 200 with the field silently gone -
+#: an unfiltered query, a dropped coverage check. A stale key is a 422 instead.
+#: test_api_types.py holds every request model to it.
+STRICT_REQUEST = ConfigDict(extra="forbid")
+
 
 class Filter(BaseModel):
     """One validated predicate. ``value`` stays ``Any`` here on purpose: the
     real type check happens in :func:`uqf_frontend.queries.coerce`, against
     the column's declared q type, which pydantic cannot know.
     """
+
+    model_config = STRICT_REQUEST
 
     column: str = Field(min_length=1)
     op: Literal["eq", "ne", "lt", "le", "gt", "ge", "in"]
@@ -43,6 +52,8 @@ class CoverageRequirement(BaseModel):
     the things they can say, but silence is not (#185).
     """
 
+    model_config = STRICT_REQUEST
+
     dataset: str = Field(min_length=1)
     partition: str = Field(
         description='the slice to check; "" for a dataset with no partition dimension'
@@ -53,6 +64,8 @@ class CoverageRequirement(BaseModel):
 
 
 class QueryRequest(BaseModel):
+    model_config = STRICT_REQUEST
+
     table: str = Field(min_length=1)
     filters: list[Filter] = Field(default_factory=list, max_length=16)
     limit: int = Field(default=1000, ge=1)
@@ -283,9 +296,15 @@ class LifecycleRequest(BaseModel):
     `procs` is torq.sh's own selector - a name, several separated by spaces,
     or "all" - and is passed through rather than reinterpreted, so the HTTP
     surface and the CLI cannot disagree about what "all" means.
+
+    Required, with no default (#1361): it defaulted to "all", so a body that
+    lost the field - renamed on the browser's side - made Stop stop the whole
+    fleet. A destructive action is never what silence means.
     """
 
-    procs: str = Field(default="all", min_length=1)
+    model_config = STRICT_REQUEST
+
+    procs: str = Field(min_length=1)
 
 
 class CommandResponse(BaseModel):
@@ -309,7 +328,7 @@ class ProcessConfigRequest(BaseModel):
     field_name: str = Field(min_length=1, alias="field", description="a process.csv column")
     value: str = Field(description='the new value; "" is legal and clears nothing')
 
-    model_config = {"populate_by_name": True}
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
 class ProcessConfigResponse(BaseModel):
@@ -327,6 +346,8 @@ class ProcessConfigResponse(BaseModel):
 
 class WorkerConfigRequest(BaseModel):
     """One `.qetl.cfg` override, set in a live process."""
+
+    model_config = STRICT_REQUEST
 
     key: str = Field(min_length=1)
     value: str
@@ -366,6 +387,8 @@ class BackfillRequest(BaseModel):
     surface: a backfill that guessed a range would publish the wrong window
     and record it as covered.
     """
+
+    model_config = STRICT_REQUEST
 
     worker: str = Field(min_length=1)
     source_version: str = Field(min_length=1)
