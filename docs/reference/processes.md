@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **36 uqf processes** — 59 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **37 uqf processes** — 60 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -50,7 +50,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `flink_vwap1` | 6106 | etl | `processes/torq_stream.q` | `flink_vwap` | `flink_vwap_raw` | `flink_vwap` |
 | `crypto_book_1s1` | 6107 | etl | `processes/torq_stream.q` | `crypto_book_1s` | `crypto_book` | `crypto_book_1s` |
 | `hdb_crypto_book_backfill1` | 6108 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `order_quality1` | 6109 | etl | `processes/torq_stream.q` | `order_quality` | `orders` | `order_quality` |
+| `order_quality1` | 6109 | etl | `processes/torq_stream.q` | `order_quality` | `order_outcomes` | `order_quality` |
+| `order_outcomes1` | 6110 | normalizer | `processes/torq_stream.q` | `order_outcomes` | `orders` | `order_outcomes` |
 
 ### Why a row deviates from the defaults
 
@@ -88,6 +89,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`crypto_book_1s1`** — last book state per venue and sym per second; the window is the update's source_time, not the plant's time
 - **`hdb_crypto_book_backfill1`** — bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live
 - **`order_quality1`** — rolling fill and reject ratios per book over the last 1m, 5m and 1h
+- **`order_outcomes1`** — every order source's status events as one contract: orders -> order_outcomes
 
 ## Tables these processes publish
 
@@ -113,6 +115,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `last_value` | `plant_tables.q` | `last_value1` |
 | `market_data` | `plant_tables.q` | `marketdata1` |
 | `mkt_orderbook` | `plant_tables.q` | `vectorize1` |
+| `order_outcomes` | `plant_tables.q` | `order_outcomes1` |
 | `order_quality` | `plant_tables.q` | `order_quality1` |
 | `orders` | `plant_tables.q` | `fxordersfeed1` |
 | `position` | `plant_tables.q` | `posbook1` |

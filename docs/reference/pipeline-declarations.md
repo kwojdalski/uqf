@@ -322,6 +322,69 @@ Besides these, it accepts the passthrough options (see the streaming job).
 batch to the columns its transform declares, applies it, and publishes. The
 normalizer's file never handles a batch.
 
+## Order-outcome contract --- `order_outcomes`
+
+The normalizer that makes order-quality analytics independent of the order
+source (#1396). `order_outcomes1` maps each order source's table, columns and
+status codes onto the plant table `order_outcomes`; `order_quality1` (a rolling
+job) reads only that. It is NOT `executions`: that tape is fills, and a reject
+rate needs the rejects, the cancels and the requests still open.
+
+  | column                     | meaning                                                                                                   |
+  | ---                        | ---                                                                                                       |
+  | `time`                     | the plant's receipt of the normalized row; never an event time                                            |
+  | `source_time`              | when the source says the event happened; the rolling job's event time                                     |
+  | `source`                   | the feed: the scope of `request_id`                                                                       |
+  | `request_id`               | the source's id of one request attempt, unique within `source`; a retry is a new request with a new id    |
+  | `source_status`            | the source's own code, verbatim                                                                           |
+  | `outcome`                  | `filled`, `rejected`, `cancelled` (the request ended), `unresolved` (a non-terminal update), `unmapped`   |
+  | `book`, `product`, `venue` | grouping dimensions, null where the source gives none; a venue is never inferred                          |
+
+Identity is the pair (`source`; `request_id`), two columns rather than a joined
+string, so ids of two sources cannot collide.
+
+**Counting policy.** One counted observation is one REQUEST, once, at its latest
+terminal outcome by `source_time` (ties by arrival). Per window the statistic
+(`.qpipe.transform.order_quality.stats_by`) takes, for each identity, its last
+terminal row and counts it if that row is inside the window.
+
+  | case                                              | counted                                                                        |
+  | ---                                               | ---                                                                            |
+  | transport redelivery of a row                     | once: same identity                                                            |
+  | new, partial fill, partial fill, filled           | once, `filled`, at the last update; the first three are `unresolved`           |
+  | partial fill then cancel of the remainder         | once, `cancelled`                                                              |
+  | amendment / replace                               | `unresolved` while open; same request, or the adapter maps the chain to one id |
+  | cancel                                            | once, `cancelled`, in the denominator                                          |
+  | reject then retry (new `request_id`)              | twice                                                                          |
+  | corrected outcome (rejected, then filled)         | once, the later one; an earlier publication is not republished                 |
+  | still open, or a status the adapter does not know | in no count; the row is in the table, so the exclusion is visible              |
+
+`n_orders` is the counted requests (filled + rejected + cancelled); `fill_ratio`
+and `reject_ratio` divide by it, and are null for a window with none. A group
+with an outcome in the longest window but none counted in a short one publishes
+0 and null, as before.
+
+There is no consolidation stage between the adapter and the statistic: the
+rolling job's buffer is the declared stateful stage (retention: the longest
+window plus the lateness; restart: the kind's replay). Its limit is that
+horizon: a redelivery keeps its source time, so one older than the horizon is in
+no window, and a correction of a request whose first outcome was evicted counts
+as a request of its own.
+
+**Adding a source** is a `status_map`, one `.qetl.transform` into
+`.qpipe.job.order_outcomes.order_outcomes`, and one entry in the normalizer's
+`input`; the quality transform, the plant table and `order_quality1` do not
+change. A row without an id, or a status the map lacks, is `unmapped`.
+
+**Intentional differences from the pre-contract statistic** (for the `orders`
+feed, whose rows are one per order at a terminal status and whose ids are
+unique, the series is unchanged): a status other than `filled`, `rejected` or
+`cancelled` used to be counted in `n_orders`; it is now `unmapped` and counted
+nowhere. Two `orders` rows with one `order_id` in the same hour used to be two
+orders; they are now one request. Lateness is now judged on the outcome's
+`source_time`, so an outcome the normalizer delivers more than 5 s after the
+order's stamp is dropped and logged rather than counted.
+
 ## Horizon job --- `.qetl.job.stream.at_horizons`
 
 `.qetl.job.stream.at_horizons[name;decl]`. A job that evaluates each event once
@@ -419,8 +482,9 @@ publish that throws is retried on the next tick. `define` installs `pending`,
 last N minutes, updated continuously: a venue's reject rate, a client's volume,
 at several window lengths at once (`src/etl/core/rolling.q`, #1224). Bars give
 fixed windows published once; this gives a window that slides, re-evaluated
-every period. `order_quality` is one: `orders` into `order_quality`, fill and
-reject ratios per book over 1m, 5m and 1h.
+every period. `order_quality` is one: `order_outcomes` into `order_quality`,
+fill and reject ratios per book over 1m, 5m and 1h, on the outcome's source
+time.
 
   | key          | required | type                    | meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | refused when                                                                                                                                                                                 |
   | ---          | ---      | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | ---                                                                                                                                                                                          |

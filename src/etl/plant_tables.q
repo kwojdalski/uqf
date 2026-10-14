@@ -531,3 +531,16 @@ flink_vwap_raw:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(
 
 / flink_vwap1's output: one closed Flink window per sym, published once.
 flink_vwap:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
+
+/ order_outcomes1's output: the normalized order-outcome contract (#1396), the one
+/ shape order_quality1 reads whatever OMS an order came from. One row per STATUS
+/ EVENT a source reported, not per order: `source_time` is the source's own stamp
+/ (`time` is the plant's receipt of the normalized row and is never an event
+/ time), `source` + `request_id` is the identity of one request attempt - a
+/ request_id is unique only within its source, so the pair is the key - and
+/ `outcome` is `filled, `rejected or `cancelled (terminal: the request ended),
+/ `unresolved (a non-terminal update: new, partial fill, amended) or `unmapped (a
+/ status code the adapter does not know, or a row without an id). `source_status`
+/ is the source's own code, verbatim. book, product and venue are the grouping
+/ dimensions and are null where the source gives none: venue is never inferred.
+order_outcomes:([]time:`timestamp$(); source_time:`timestamp$(); source:`symbol$(); request_id:`symbol$(); source_status:`symbol$(); outcome:`symbol$(); book:`symbol$(); product:`symbol$(); venue:`symbol$())
