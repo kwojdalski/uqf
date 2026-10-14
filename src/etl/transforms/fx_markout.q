@@ -394,7 +394,7 @@ calc:{[spec;exe;md]
             horizon:(4#0D00:00:01),4#0D00:00:10;
             kind:8#`total`execution`leg`residual; step:8#0 0 1 0; leg:8#``,`EURUSD,`;
             invert:8#0b; price_t0:8#1.1001 1.1001 1.1 0n; price_t1:1.1005 1.1 1.1005 0n,1.10095 1.1 1.10095 0n;
-            pips:4 -1 5 0f,8.5 -1 9.5 0f; status:8#`ok`ok`ok`reconciled; pip_factor:8#10000; version:8#`proposed_v1));
+            pips:4 -1 5 0f,8.5 -1 9.5 0f; status:8#`ok`ok`ok`reconciled; pip_factor:(8#.qccy.pip_factor `EURUSD); version:8#`proposed_v1));
      `inputs`expected!(
         `executions`market_data!(
             ([] source_time:enlist 2026.09.17D10:00:00; venue:enlist `a; sym:enlist `USDPLN; side:enlist -1;
@@ -407,5 +407,5 @@ calc:{[spec;exe;md]
             horizon:(5#0D00:00:01),5#0D00:00:10;
             kind:10#`total`execution`leg`leg`residual; step:10#0 0 1 2 0; leg:10#``,`EURUSD`EURPLN,`;
             invert:10#00100b; price_t0:10#3.99 3.99 1.25 5 0n; price_t1:10#5.5 4 1 5.5 0n;
-            pips:10#-15100 -100 -10000 -5000 0f; status:10#`ok`ok`ok`ok`reconciled; pip_factor:10#10000; version:10#`proposed_v1)))
+            pips:10#-15100 -100 -10000 -5000 0f; status:10#`ok`ok`ok`ok`reconciled; pip_factor:(10#.qccy.pip_factor `USDPLN); version:10#`proposed_v1)))
     )];
