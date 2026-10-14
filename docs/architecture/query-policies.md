@@ -125,9 +125,13 @@ call goes through `.pm.req`, and a login can run only what its roles grant.
   frontend's `max_rows`. It returns the cap it read under with the rows, so
   `/query` reports `truncated` for a cut the policy made too (#1255). A hidden
   table has no policy and is refused. An open read covers the latest window its
-  policy allows; a `time` filter sets the window instead. Every plant table is
-  listed for getdata (`tableproperties.csv` gains a derived row for each), and
-  listing a table grants nothing: the policies decide.
+  policy allows; a `time` filter sets the window instead. Every plant table and
+  every dataset a bounded worker writes is listed for getdata
+  (`tableproperties.csv` is generated, one derived row each; `order_quality`'s
+  instrument column `book` is the one override), and listing a table grants
+  nothing: the policies decide. A worker dataset that is not a plant table is
+  handed to a runtime only while its HDB's newest partition holds it, because
+  TorQ exits at start when the list names a table the HDB lacks.
 - **Ordinary users.** Each user in
   [`permissions/gateway_users.csv`](../../scripts/torqconfig/permissions/gateway_users.csv)
   gets only the role named there. The roles are defined in
