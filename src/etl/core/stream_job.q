@@ -426,6 +426,7 @@ withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
     .[{.qetl.log.err[x;y;z]};(job;"publish check withheld rows";
         `table`rows`withheld`failures!(t;row_count[t;x];n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
+    withheld_n::withheld_n+1;
     ::}
 
 / ------------------------------------------------------------ THE BUFFER
@@ -649,12 +650,8 @@ running:`symbol$()
 end_of_day:{[dt]
     / carried state first (#963): its snapshot opens the new day's log
     cs:running where {[j] `carry in key def j} each running;
-    {[dt;j] @[snapshot;j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]}[dt;j]]}[dt] each cs;
-    / and the day each carrying job saw end, for a restart to tell a flat
-    / book from one that missed an end of day (#1072)
-    / A one-row table, not a bare date: PeachQ cannot read a `set` atom back.
-    {[dt;j] @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path j;([] last_end_of_day:enlist dt)]}[dt];j;
-        {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]}[j]]}[dt] each cs;
+    / and, only for a snapshot that was published, the day it saw end (#1072, #1307)
+    carry_end_of_day[dt] each cs;
     js:running where {[j] `on_endofday in key def j} each running;
     ok:{[dt;j] @[{[dt;j] (def[j]`on_endofday) dt; 1b}[dt];j;
         {[dt;j;e] .qetl.log.err[j;"on_endofday failed";`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
@@ -744,9 +741,10 @@ carry_cap:{[job] $[`cap in key def[job]`carry; def[job][`carry]`cap; 100000]}
 / @private
 record:{[job;t;x]
     r:$[job in key carry_log; carry_log job; (`recording;0;())];
-    if[not `recording=r 0; :()];
-    if[carry_cap[job]<n:r[1]+count x; carry_log[job]:(`full;n;()); :()];
-    carry_log[job]:(`recording;n;r[2],enlist (t;x));
+    / a replay can meet several snapshots (#1308): recording goes on after a restore
+    if[not (r 0) in `recording`restored; :()];
+    if[carry_cap[job]<n:r[1]+count x; carry_log[job]:($[`restored=r 0; `restored_full; `full];n;()); :()];
+    carry_log[job]:(r 0;n;r[2],enlist (t;x));
     }
 
 / Private: set the carried state from its snapshot, then apply again the
@@ -757,7 +755,7 @@ record:{[job;t;x]
 restore:{[job;h;x]
     c:def[job]`carry;
     r:$[job in key carry_log; carry_log job; (`recording;0;())];
-    if[`full=r 0;
+    if[(r 0) in `full`restored_full;
         .qetl.log.err[job;"carry snapshot arrived after its recording hit the cap - batches logged before it are not re-applied, so the restored state is missing them";
             `table`held`cap!(c`table;r 1;carry_cap[job])]];
     v:` sv (def[job]`ns),c`state;
@@ -789,7 +787,10 @@ snapshot:{[job]
     if[count rows;
         hwm:$[job in key carried_to; carried_to job; 0Np];
         rows:update carried_to:hwm from rows;
-        (get ` sv (def[job]`ns),`publish)[c`table;rows]];
+        n0:withheld_n;
+        (get ` sv (def[job]`ns),`publish)[c`table;rows];
+        / a publish check that withheld the batch returns :: and no error (#1307)
+        if[n0<>withheld_n; '"carry snapshot withheld by the publish check"]];
     count rows}
 
 unwired:{[job]
