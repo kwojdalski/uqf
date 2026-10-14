@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **37 uqf processes** — 60 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **38 uqf processes** — 61 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -52,6 +52,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `hdb_crypto_book_backfill1` | 6108 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `order_quality1` | 6109 | etl | `processes/torq_stream.q` | `order_quality` | `order_outcomes` | `order_quality` |
 | `order_outcomes1` | 6110 | normalizer | `processes/torq_stream.q` | `order_outcomes` | `orders` | `order_outcomes` |
+| `hdb_order_quality_backfill1` | 6111 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -90,6 +91,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`hdb_crypto_book_backfill1`** — bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live
 - **`order_quality1`** — rolling fill and reject ratios per book over the last 1m, 5m and 1h
 - **`order_outcomes1`** — every order source's status events as one contract: orders -> order_outcomes
+- **`hdb_order_quality_backfill1`** — bounded: recomputes the rolling order-quality series from the HDB's orders with the adapter and statistic order_quality1 applies live
 
 ## Tables these processes publish
 
