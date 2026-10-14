@@ -17,8 +17,8 @@ exec_bars1,metrics,54,executions,exec_bar
 executions1,metrics,36,crypto_trades orders trades,executions
 flink_vwap1,metrics,56,flink_vwap_raw,flink_vwap
 fxfeed1,feed,19,,quote
-fxmarkout1,metrics,60,executions market_data,fx_markout
-fxmarkoutwide1,metrics,61,executions market_data,fx_markout_wide
+fxmarkout1,metrics,62,executions market_data,fx_markout
+fxmarkoutwide1,metrics,63,executions market_data,fx_markout_wide
 fxorderbookfeed1,feed,24,,fx_orderbook
 fxordersfeed1,feed,38,,orders
 fxpositions1,metrics,39,executions,config_change fx_limit_breach fx_position fx_position_open
@@ -26,13 +26,15 @@ fxtradesfeed1,feed,29,,trades
 hdb_crypto_book_backfill1,backfill,58,,
 hdb_demo_markouts_backfill1,backfill,49,,
 hdb_exec_bars_backfill1,backfill,55,,
-hdb_fx_markout_wide_backfill1,backfill,62,,
-hdb_fx_markouts_backfill1,backfill,63,,
+hdb_fx_markout_wide_backfill1,backfill,64,,
+hdb_fx_markouts_backfill1,backfill,65,,
+hdb_order_quality_backfill1,backfill,61,,
 hdb_transfer_backfill1,backfill,50,,
 kafka_flow1,metrics,47,kafka_client_flow,client_flow
 last_value1,metrics,53,market_data,last_value
 marketdata1,metrics,42,crypto_book fx_orderbook quote,market_data
-order_quality1,metrics,59,orders,order_quality
+order_outcomes1,metrics,60,orders,order_outcomes
+order_quality1,metrics,59,order_outcomes,order_quality
 posbook1,metrics,30,executions market_data,position position_open
 superbook1,metrics,43,market_data,config_change superbook
 tap1,metrics,28,,

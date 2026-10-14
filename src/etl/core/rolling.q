@@ -227,7 +227,7 @@ tag:{[tc;reach;lengths;as_of;rows]
 /   as_of-covered_from is left out. Null for no limit (a twin reading history)
 / @return the transform's output: one row per key per window length, sorted by key then window
 / @throws error when rows lack a column the transform reads
-/ @eg count .qetl.job.stream.rolling.compute[`order_quality;([] time:enlist 2026.10.09D10:00:30; order_id:enlist 1; sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; side:enlist 1; size:enlist 1e6; price:enlist 1.1; order_status:enlist `filled);2026.10.09D10:01:00;0Np]  ->  3
+/ @eg count .qetl.job.stream.rolling.compute[`order_quality;([] source_time:enlist 2026.10.09D10:00:30; source:enlist `a; request_id:enlist `r1; outcome:enlist `filled; book:enlist `london);2026.10.09D10:01:00;0Np]  ->  3
 compute:{[name;rows;as_of;covered_from]
     d:def[name];
     t:.qetl.transform.def d`transform;
@@ -244,7 +244,7 @@ compute:{[name;rows;as_of;covered_from]
 / @param rows the input rows
 / @param as_ofs the instants to evaluate at
 / @return the outputs of compute at each, stacked
-/ @eg count .qetl.job.stream.rolling.series[`order_quality;([] time:enlist 2026.10.09D10:00:30; order_id:enlist 1; sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; side:enlist 1; size:enlist 1e6; price:enlist 1.1; order_status:enlist `filled);2026.10.09D10:01:00 2026.10.09D10:02:00]  ->  6
+/ @eg count .qetl.job.stream.rolling.series[`order_quality;([] source_time:enlist 2026.10.09D10:00:30; source:enlist `a; request_id:enlist `r1; outcome:enlist `filled; book:enlist `london);2026.10.09D10:01:00 2026.10.09D10:02:00]  ->  6
 series:{[name;rows;as_ofs]
     t:.qetl.transform.def (def[name])`transform;
     outs:{[name;rows;a] compute[name;rows;a;0Np]}[name;rows] each as_ofs;

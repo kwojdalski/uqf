@@ -104,6 +104,7 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "fx_markout": "time",
     "fx_markout_wide": "time",
     "imported_trades": "time",
+    "order_quality": "time",
     "trades_copy": "time",
 }
 
@@ -120,6 +121,7 @@ BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "fx_markout": "sym",
     "fx_markout_wide": "sym",
     "imported_trades": "sym",
+    "order_quality": "",
     "trades_copy": "sym",
 }
 

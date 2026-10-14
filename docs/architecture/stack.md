@@ -16,6 +16,14 @@ bounded backfill processes (`deals_backfill1`, `events_backfill1`,
 `hdb_crypto_book_backfill1`, `hdb_fx_markouts_backfill1`,
 `hdb_fx_markout_wide_backfill1`). Declared is not the same as running here - see
 [what starts with the stack](#what-starts-and-why-not-all-of-it).
+`crypto_book_1s1`, `order_quality1`, `order_outcomes1`), and eleven bounded
+backfill processes (`deals_backfill1`, `events_backfill1`,
+`databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`,
+`crypto_market_data_backfill1`, `hdb_demo_markouts_backfill1`,
+`hdb_transfer_backfill1`, `hdb_exec_bars_backfill1`,
+`hdb_crypto_book_backfill1`, `hdb_order_quality_backfill1`). Declared is not the
+same as running here - see [what starts with the
+stack](#what-starts-and-why-not-all-of-it).
 
 Direct FX arbitrage flows through `marketdata1` (`quote`, `fx_orderbook` and
 `crypto_book` into `market_data`), `superbook1` (the FX source books merged into
@@ -256,19 +264,23 @@ bars from the HDB's `executions` with the same aggregation, under the key
 `sym, bar_start`.
 
 `order_quality1` keeps order outcomes over the last minute, five minutes and
-hour (`order_quality`: orders, fills, rejects and their ratios per book), a
-**rolling job** (`.qetl.job.stream.at_rolling`, `src/etl/core/rolling.q`). Where
-a bar is one interval published once, this re-evaluates sliding windows
-`(as_of-N, as_of]` every five seconds; a late order amends the next publication,
-the windows roll across midnight, and a restart replays `orders` and its own
-output to publish what an uninterrupted job would have. `crypto_book_1s1` is a
-second bars job, this time a snapshot rather than an aggregate: it turns
-`crypto_book` into `crypto_book_1s`, the last book state per `venue, sym` per
-second, cut on the venue's `source_time` (not the plant's `time`). It closes a
-second half a second after it ends, and a second with no update has no row -
-nothing is forward-filled. `hdb_crypto_book_backfill1` rebuilds the snapshots
-from the HDB's `crypto_book` with the same pick, under the key
-`venue, sym, bar_start`. It is in the `crypto` profile.
+hour (`order_quality`: requests, fills, rejects and their ratios per book), read
+from the order-outcome contract (`order_outcomes`, which `order_outcomes1`
+publishes: each order source is one declared mapping onto it), a **rolling job**
+(`.qetl.job.stream.at_rolling`, `src/etl/core/rolling.q`). Where a bar is one
+interval published once, this re-evaluates sliding windows `(as_of-N, as_of]`
+every five seconds; a late order amends the next publication, the windows roll
+across midnight, and a restart replays `order_outcomes` and its own output to
+publish what an uninterrupted job would have. `hdb_order_quality_backfill1`
+recomputes the same series from the HDB's `orders`, through the same adapter and
+statistic. `crypto_book_1s1` is a second bars job, this time a snapshot rather
+than an aggregate: it turns `crypto_book` into `crypto_book_1s`, the last book
+state per `venue, sym` per second, cut on the venue's `source_time` (not the
+plant's `time`). It closes a second half a second after it ends, and a second
+with no update has no row - nothing is forward-filled.
+`hdb_crypto_book_backfill1` rebuilds the snapshots from the HDB's `crypto_book`
+with the same pick, under the key `venue, sym, bar_start`. It is in the `crypto`
+profile.
 
 `demo_markout1`'s buffers live in its process, so a fill it never saw goes
 unscored: it was down, restarting, or the fill came before it. A bounded
