@@ -103,6 +103,7 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "event_tape": "time",
     "exec_bar": "time",
     "imported_trades": "time",
+    "order_quality": "time",
     "trades_copy": "time",
 }
 
@@ -118,6 +119,7 @@ BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "event_tape": "sym",
     "exec_bar": "sym",
     "imported_trades": "sym",
+    "order_quality": "",
     "trades_copy": "sym",
 }
 

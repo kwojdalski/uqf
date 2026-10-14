@@ -18,7 +18,12 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s`book_liquidity_1m)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;enlist[`books]!enlist `books)
+renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books)
+
+/ Twins whose equivalence is a live run, not an example: the twin reads the RAW orders and
+/ applies the adapter itself, so its inputs are not the stream transform's and `agrees` cannot
+/ feed it the stream's examples. Stream job -> where the equivalence is held.
+own_test:enlist[`order_quality]!enlist "tests/q/test_hdb_order_quality_backfill.q: the live job and the worker over one hour, row for row"
 
 / (the stream job's transform; its twin's; the input renaming), each
 / transform as the declaration names it.
@@ -39,6 +44,7 @@ test_a_stream_job_with_a_twin_declares_its_transform:{[t]
         "every stream job a twin refills names the transform it applies"]};
 
 agrees:{[job]
+    if[job in key own_test; :1b];
     p:pair[job];
     s:.qetl.transform.registry p 0;
     if[(p 0)~p 1; :1b];
@@ -81,5 +87,11 @@ test_the_crypto_book_1s_twin_picks_the_snapshots_as_the_live_job_does:{[t]
 
 test_the_book_liquidity_1m_twin_averages_the_books_as_the_live_job_does:{[t]
     .qunit.assertTrue[agrees[`book_liquidity_1m];"hdb_book_liquidity_1m gives the live minutes on the live transform's example"]};
+
+/ A twin excused from `agrees` names the test that holds it, and the test exists.
+test_a_twin_checked_by_its_own_test_names_it_and_it_exists:{[t]
+    .qunit.assertEquals[key own_test;enlist `order_quality;"listed"];
+    f:"tests/q/test_hdb_order_quality_backfill.q";
+    .qunit.assertTrue[any read0[hsym `$f] like "test_the_twin_gives_the_live_series_over_an_hour_row_for_row*";"the named test is in the named file"]};
 
 \d .

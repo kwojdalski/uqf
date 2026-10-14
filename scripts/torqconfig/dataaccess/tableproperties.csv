@@ -30,6 +30,7 @@ proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeof
 ,last_value,time,sym,sym,,,,
 ,market_data,time,sym,sym,,,,
 ,mkt_orderbook,time,sym,sym,,,,
+,order_outcomes,time,,,,,,
 ,order_quality,time,book,book,,,,
 ,order_routing,time,,,,,,
 ,orders,time,sym,sym,,,,

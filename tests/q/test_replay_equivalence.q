@@ -120,18 +120,25 @@ oq_now:()
 / order_quality: orders over a few minutes, ticks between, and a book that goes
 / quiet - a restart must publish the same rolling series, the quiet book's
 / identity rows and its disappearance included (#1224).
-order:{[tm;bk;status] ([] time:enlist tm; order_id:enlist 1; sym:enlist `EURUSD; book:enlist bk;
-    product:enlist `spot; side:enlist 1; size:enlist 1e6; price:enlist 1.1; order_status:enlist status)}
+order:{[tm;bk;status] ([] time:enlist tm; source_time:enlist tm; source:enlist `orders; request_id:enlist `$string tm;
+    source_status:enlist status; outcome:enlist status; book:enlist bk; product:enlist `spot; venue:enlist `)}
+
+/ A status event of a named request: the lifecycle and redelivery rows of the script.
+update_of:{[tm;rid;bk;status] ([] time:enlist tm; source_time:enlist tm; source:enlist `orders; request_id:enlist rid;
+    source_status:enlist status; outcome:enlist status; book:enlist bk; product:enlist `spot; venue:enlist `)}
 
 order_quality_script:{[]
-    (ev[t0+0D00:00:05;`orders;order[t0+0D00:00:05;`london;`filled]];
-     ev[t0+0D00:00:20;`orders;order[t0+0D00:00:20;`newyork;`rejected]];
+    (ev[t0+0D00:00:05;`order_outcomes;order[t0+0D00:00:05;`london;`filled]];
+     ev[t0+0D00:00:20;`order_outcomes;order[t0+0D00:00:20;`newyork;`rejected]];
      ev[t0+0D00:00:30;`tick;()];
-     ev[t0+0D00:01:10;`orders;order[t0+0D00:01:10;`london;`rejected]];
+     ev[t0+0D00:00:40;`order_outcomes;update_of[t0+0D00:00:40;`x1;`london;`unresolved]];
+     ev[t0+0D00:00:55;`order_outcomes;update_of[t0+0D00:00:55;`x1;`london;`filled]];
+     ev[t0+0D00:00:56;`order_outcomes;update_of[t0+0D00:00:55;`x1;`london;`filled]];
+     ev[t0+0D00:01:10;`order_outcomes;order[t0+0D00:01:10;`london;`rejected]];
      ev[t0+0D00:01:30;`tick;()];
-     ev[t0+0D00:04:50;`orders;order[t0+0D00:04:50;`london;`filled]];
+     ev[t0+0D00:04:50;`order_outcomes;order[t0+0D00:04:50;`london;`filled]];
      ev[t0+0D00:05:00;`tick;()];
-     ev[t0+0D00:05:30;`orders;order[t0+0D00:05:30;`london;`cancelled]];
+     ev[t0+0D00:05:30;`order_outcomes;order[t0+0D00:05:30;`london;`cancelled]];
      ev[t0+0D00:06:10;`tick;()];
      ev[t0+0D00:07:00;`tick;()])}
 

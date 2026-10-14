@@ -42,5 +42,7 @@ flink_vwap1,56
 crypto_book_1s1,57
 hdb_crypto_book_backfill1,58
 order_quality1,59
-book_liquidity_1m1,60
-hdb_book_liquidity_1m_backfill1,61
+order_outcomes1,60
+hdb_order_quality_backfill1,61
+book_liquidity_1m1,62
+hdb_book_liquidity_1m_backfill1,63

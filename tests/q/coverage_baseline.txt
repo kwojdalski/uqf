@@ -38,6 +38,8 @@
 .qpipe.source.duckdb_deals.query
 .qpipe.source.hdb_executions.query
 .qpipe.source.upstream_trades.query
+# hdb_orders.query reads orders over IPC from a live HDB (#1396), as hdb_executions does
+.qpipe.source.hdb_orders.query
 # hdb_executions.query reads executions over IPC from a live HDB (#946)
 # hdb_crypto_book.query reads crypto_book over IPC from a live HDB (#1222), as hdb_executions does
 # hdb_market_data.query reads market_data over IPC from a live HDB (#1397), as hdb_crypto_book does

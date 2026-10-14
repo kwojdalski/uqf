@@ -157,10 +157,17 @@ UNPROFILED: dict[str, str] = {
         "alongside whichever is running"
     ),
     "order_quality1": (
-        "on demand: it reads `orders`, which fxordersfeed1 publishes in the fx and "
-        "default sets, but fx already holds all fourteen plant slots, so the job "
-        "cannot join it - `uqs start order_quality1` once something else is stopped, "
-        "or on its own with fxordersfeed1"
+        "on demand: it reads `order_outcomes`, which order_outcomes1 derives from "
+        "the `orders` fxordersfeed1 publishes in the fx and default sets, but fx "
+        "already holds all fourteen plant slots, so the job cannot join it - "
+        "`uqs start order_quality1` once something else is stopped, or on its own "
+        "with fxordersfeed1 and order_outcomes1"
+    ),
+    "order_outcomes1": (
+        "on demand: it normalizes the `orders` fxordersfeed1 publishes into the "
+        "order-outcome contract for order_quality1, and fx already holds all "
+        "fourteen plant slots - `uqs start order_outcomes1` alongside "
+        "order_quality1"
     ),
     "book_liquidity_1m1": (
         "on demand: it reads `market_data`, which marketdata1 publishes in the fx and "
