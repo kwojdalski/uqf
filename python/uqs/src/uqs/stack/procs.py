@@ -20,6 +20,7 @@ import re
 from collections.abc import Iterable
 from string import Template
 
+from uqs import portexpr
 from uqs.logger import get_logger
 from uqs.model.pipelines import _pipeline_rows
 from uqs.model.runtime_members import pipeline_procnames
@@ -341,19 +342,16 @@ def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
 # process.csv's two placeholder styles: `${VAR}` / `$VAR` (shell parameter
 # expansion, resolved via envsubst at runtime - handled here by
 # string.Template, which uses the same syntax) inside e.g. `load`/`U`/
-# `extras`; and `{VAR}` / `{VAR}+N` / `{VAR}-N` (no `$`, only ever in
-# `port` - resolved at runtime by torq.sh stripping the braces and letting
-# bash arithmetic-context evaluate the bare variable name plus offset).
-_BRACE_ARITH_RE = re.compile(r"^\{(\w+)\}([+-]\d+)?$")
+# `extras`; and the `port` grammar (`{VAR}`, `{VAR}+N`, `{VAR}-N`, a literal),
+# which uqs.portexpr owns and the occupancy check and the frontend share.
+_BRACE_PLACEHOLDER = re.compile(r"^\{\w+\}(?:[+-]\d+)?$")
 
 
 def _resolve_value(value: str, env: dict[str, str]) -> str:
-    m = _BRACE_ARITH_RE.match(value)
-    if m:
-        var, offset = m.groups()
-        if var in env and env[var].lstrip("-").isdigit():
-            return str(int(env[var]) + int(offset or 0))
-        return value  # unknown/non-numeric var - leave the placeholder as-is
+    if _BRACE_PLACEHOLDER.match(value):
+        port = portexpr.resolve(value, env)
+        # unknown/non-numeric var - leave the placeholder as-is
+        return value if port is None else str(port)
     return Template(value).safe_substitute(env)
 
 
