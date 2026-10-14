@@ -4,11 +4,16 @@ import {
   type Catalog,
   type Coverage,
   type BackfillStarted,
+  type BackfillBody,
   type CommandResult,
   type ControlProcess,
   type ControlStatus,
   type CoverageRequest,
+  type FilterOp,
+  type LifecycleBody,
+  type ProcessConfigBody,
   type ProcessConfigResult,
+  type WorkerConfigBody,
   type WorkerConfigResult,
   mutate,
   type Health,
@@ -437,7 +442,7 @@ function DeskView() {
   const [tier, setTier] = useState<Tier>("rdb");
   const [limit, setLimit] = useState(100);
   const [filters, setFilters] = useState<
-    { column: string; op: string; raw: string }[]
+    { column: string; op: FilterOp; raw: string }[]
   >([]);
   const [coverage, setCoverage] = useState(initialRange);
   const [requireCoverage, setRequireCoverage] = useState(false);
@@ -631,7 +636,12 @@ function DeskView() {
                         setFilters(
                           filters.map((item, i) =>
                             i === index
-                              ? { ...item, op: event.target.value }
+                              ? {
+                                  ...item,
+                                  // the options are the catalog's operators,
+                                  // which the server derives from Filter.op
+                                  op: event.target.value as FilterOp,
+                                }
                               : item,
                           ),
                         )
@@ -1003,17 +1013,12 @@ function ControlView() {
   // picker is complete without it.
   const fleet = useResource<OpsData>("/ops/processes");
   const liveness = fleet.data?.processes
-    ? new Map(
-        fleet.data.processes.map((row) => [
-          String(row.procname),
-          Boolean(row.up),
-        ]),
-      )
+    ? new Map(fleet.data.processes.map((row) => [row.procname, row.up]))
     : null;
   const procs = selectorFor(mode, picked);
   const [cfg, setCfg] = useState({ procname: "", field: "", value: "" });
-  const [wcfg, setWcfg] = useState({ key: "", value: "" });
-  const [bf, setBf] = useState({
+  const [wcfg, setWcfg] = useState<WorkerConfigBody>({ key: "", value: "" });
+  const [bf, setBf] = useState<BackfillBody>({
     worker: "",
     source_version: "",
     range_from: "",
@@ -1121,7 +1126,7 @@ function ControlView() {
                   run(action, async () => {
                     const r = await mutate<CommandResult>(
                       `/control/process/${action}`,
-                      { procs },
+                      { procs } satisfies LifecycleBody,
                     );
                     return `${r.action} ${r.target}: exit ${r.exit_code}\n${r.output}`;
                   })
@@ -1141,7 +1146,10 @@ function ControlView() {
           run("config", async () => {
             const r = await mutate<ProcessConfigResult>(
               `/control/process/${cfg.procname}/config`,
-              { field: cfg.field, value: cfg.value },
+              {
+                field: cfg.field,
+                value: cfg.value,
+              } satisfies ProcessConfigBody,
               "PUT",
             );
             return `${r.procname} now: ${JSON.stringify(r.config, null, 2)}`;
