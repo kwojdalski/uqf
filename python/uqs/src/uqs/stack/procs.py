@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import re
+from collections.abc import Iterable
 from string import Template
 
 from uqs.logger import get_logger
@@ -197,13 +198,14 @@ def _defaulted(paths: UqsPaths, default_qcmd: str | None) -> list[dict[str, str]
 
 
 def effective_process_rows(
-    paths: UqsPaths, default_qcmd: str | None = None
+    paths: UqsPaths, default_qcmd: str | None = None, selected: Iterable[str] | None = None
 ) -> list[dict[str, str]]:
     """process.csv as torq.sh starts from it - THE one place it is composed.
 
     The vendored rows with their overlays, the pipelines appended, then the
     operator's process_overrides.csv applied field by field, and only THEN
-    monitor1's connection budget, decided against that effective fleet.
+    monitor1's connection budget, decided against that effective fleet - or
+    against `selected`, the set a start brings up (stack/deployment.py, #1318).
 
     It used to be decided before the overrides, inside the composition, and
     five call sites re-merged the overrides themselves (#624): so `uqs config
@@ -226,24 +228,22 @@ def effective_process_rows(
         return rows
     for row in rows:
         if row["procname"] == "monitor1" and "extras" not in overrides.get("monitor1", {}):
-            extras = monitor_connection_extras(paths, rows)
+            extras = monitor_connection_extras(paths, rows, selected)
             row["extras"] = " ".join(x for x in (row["extras"], extras, MONITOR_QUIET_EXTRAS) if x)
     return rows
 
 
-def monitor_dropped_proctypes(paths: UqsPaths) -> list[str]:
-    """The proctypes monitor1 gives up under the connection budget, for this
-    fleet as torq.sh will start it - [] when nothing is dropped, when monitor1
-    does not start with the stack, or when an override of monitor1's own
-    `extras` replaces the plan (it wins outright, as in effective_process_rows).
+def monitor_dropped_proctypes(paths: UqsPaths, selected: Iterable[str] | None = None) -> list[str]:
+    """The proctypes monitor1 gives up under the connection budget, for the
+    fleet `selected` brings up (as effective_process_rows, #1318) - [] when
+    nothing is dropped, when monitor1 is not in that fleet, or when an override
+    of monitor1's own `extras` replaces the plan (it wins outright, as there).
     """
     overrides = _read_overrides(paths)
     if "extras" in overrides.get("monitor1", {}):
         return []
     rows = [{**row, **overrides.get(row["procname"], {})} for row in _composed_rows(paths)]
-    if not any(r["procname"] == "monitor1" and r.get("startwithall") == "1" for r in rows):
-        return []
-    return monitor_dropped(paths, rows)
+    return monitor_dropped(paths, rows, selected)
 
 
 def _read_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:

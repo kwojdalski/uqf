@@ -31,7 +31,7 @@ from uqs.cli.shared import (
 )
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
-from uqs.stack import alive, listing, runtime, start_policy
+from uqs.stack import alive, deployment, listing, runtime, start_policy
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as procs_model
 
@@ -78,15 +78,21 @@ def _warn_about_unfed_inputs(procs: str, port: int | None) -> None:
         console.print(f"[yellow]warning[/] {line}")
 
 
-def _note_monitor_coverage() -> None:
+def _note_monitor_coverage(verb: str, names: str, profile: str | None = None) -> None:
     """Name the proctypes monitor1 gives up under the connection budget (#620).
 
     Their processes get no heartbeat subscription, and heartbeat.q cannot
     report what it never subscribed to - so without this the gap shows only
     as a `-` nobody can read. Advisory, and never blocks a start.
+
+    Planned for the fleet THIS start brings up - the set bootstrap is about
+    to be handed (stack/deployment.planned) - not the `startwithall=1` rows:
+    under `--profile crypto` those named a gap the profile's fleet does not
+    have, while the one it had went unnamed (#1318).
     """
     try:
-        dropped = procs_model.monitor_dropped_proctypes(_paths())
+        selected = deployment.planned(_paths(), [verb, *names.split()], _selected(names, profile))
+        dropped = procs_model.monitor_dropped_proctypes(_paths(), selected)
         limit = profiles.licence_limit()
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         log.debug("monitor coverage note skipped: {}", exc)
@@ -203,7 +209,7 @@ def _start(names: str, port: int | None, profile: str | None = None) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
-    _note_monitor_coverage()
+    _note_monitor_coverage("start", names, profile)
     _run_streaming(runtime.start, names, base_port=port, selected=_selected(names, profile))
 
 
@@ -213,7 +219,7 @@ def _start_in_foreground(names: str, port: int | None, profile: str | None = Non
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
-    _note_monitor_coverage()
+    _note_monitor_coverage("start", names, profile)
     selected = _selected(names, profile)
     result = runtime.start(_paths(), names, base_port=port, capture=False, selected=selected)
     if result.returncode != 0:
@@ -335,7 +341,7 @@ def restart(procs: ProcsArg = None, port: PortOpt = None) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
-    _note_monitor_coverage()
+    _note_monitor_coverage("restart", names)
     _run_streaming(runtime.restart, names, base_port=port)
 
 

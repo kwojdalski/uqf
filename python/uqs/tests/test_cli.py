@@ -65,7 +65,7 @@ from uqs.external.crypto import (
 from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import alive, listing, probe, runtime, stream_health
+from uqs.stack import alive, deployment, listing, probe, runtime, stream_health
 from uqs.stack import channel as stack_channel
 from uqs.stack import clean as stack_clean
 from uqs.stack import logs as stack_logs
@@ -124,6 +124,8 @@ class _Paths:
     runtime: str = "uqf"
     log_dir: Path = Path("TORQDATA/logs")
     orchestrator_dir: Path = Path("TORQDATA/orchestrator")
+    #: Never written here, so deployment.members() finds no set (#1318).
+    generated_deployment: Path = Path("TORQDATA/deployment.txt")
 
     @property
     def runtime_declaration(self) -> runtimes.Runtime:
@@ -726,6 +728,36 @@ def test_the_monitor_note_never_blocks_a_start(monkeypatch):
     _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", raises=UqsError("no settings"))
     assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
     assert rec.calls, "started anyway"
+
+
+def test_a_profile_start_plans_the_monitor_note_for_its_own_set(monkeypatch):
+    """#1318: the note is about the fleet THIS start brings up, so a profile
+    start hands its resolved set to the plan - not the startwithall=1 rows,
+    whose gap it does not have."""
+    _patch(monkeypatch, alive, "running", result=set())
+    _patch(monkeypatch, runtime, "start", result=Completed())
+    rec = _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=[])
+    assert runner.invoke(cli.app, ["start", "--profile", "crypto"]).exit_code == 0
+    assert set(rec.args[1]) == set(profiles.resolve(["crypto"]))
+
+
+def test_a_positional_start_plans_the_monitor_note_without_a_set(monkeypatch):
+    """No profile and nothing recorded: the startwithall=1 fleet, as before."""
+    _patch(monkeypatch, alive, "running", result=set())
+    _patch(monkeypatch, runtime, "start", result=Completed())
+    rec = _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=[])
+    assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
+    assert rec.args[1] is None
+
+
+def test_summary_plans_the_monitor_note_for_the_recorded_deployment(monkeypatch):
+    """The running monitor1 was planned for the set the last profile start
+    recorded, so that is the fleet `summary` explains its `-` cells with."""
+    _summary_ok(monkeypatch)
+    _patch(monkeypatch, deployment, "members", result=("stp1", "monitor1", "cryptomock1"))
+    rec = _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=[])
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert rec.args[1] == ("stp1", "monitor1", "cryptomock1")
 
 
 def test_summary_names_what_monitor1_cannot_watch(monkeypatch):
