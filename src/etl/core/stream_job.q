@@ -421,11 +421,18 @@ checked:{[job;chk;mode;publisher;t;x]
     $[tbl and count clean; publisher[t;clean]; ::]}
 
 / Private: log and count a batch the check withheld, in whole or part.
+/ .
+/ A job's carry table throws instead of returning (#1307): its snapshot is
+/ the whole book, restored by SETTING the state from it, so a snapshot with
+/ rows withheld - or one not published at all - must not pass for published.
+/ Throwing here, before `checked` sends a `drop` batch's clean rows, keeps a
+/ partial book off the plant and tells end_of_day not to record the marker.
 / @private
 withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
     .[{.qetl.log.err[x;y;z]};(job;"publish check withheld rows";
         `table`rows`withheld`failures!(t;row_count[t;x];n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
+    if[t~@[{(def[x]`carry)`table};job;{[e] `}]; '"carry snapshot withheld: ",msg];
     ::}
 
 / ------------------------------------------------------------ THE BUFFER
@@ -649,12 +656,18 @@ running:`symbol$()
 end_of_day:{[dt]
     / carried state first (#963): its snapshot opens the new day's log
     cs:running where {[j] `carry in key def j} each running;
-    {[dt;j] @[snapshot;j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]}[dt;j]]}[dt] each cs;
-    / and the day each carrying job saw end, for a restart to tell a flat
-    / book from one that missed an end of day (#1072)
+    / and, only once its snapshot is out, the day each carrying job saw end,
+    / for a restart to tell a flat book from one that missed an end of day
+    / (#1072). A snapshot that threw or was withheld leaves the marker where
+    / it was (#1307): the marker says the new day's log opens with the book,
+    / so catch_up skips the earlier logs and missed_end_of_day stays quiet -
+    / written over a failed snapshot, it lost the carried book in silence.
     / A one-row table, not a bare date: PeachQ cannot read a `set` atom back.
-    {[dt;j] @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path j;([] last_end_of_day:enlist dt)]}[dt];j;
-        {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]}[j]]}[dt] each cs;
+    {[dt;j]
+        ok:@[{snapshot[x]; 1b};j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]; 0b}[dt;j]];
+        if[ok; @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path j;([] last_end_of_day:enlist dt)]}[dt];j;
+            {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]}[j]]];
+        }[dt] each cs;
     js:running where {[j] `on_endofday in key def j} each running;
     ok:{[dt;j] @[{[dt;j] (def[j]`on_endofday) dt; 1b}[dt];j;
         {[dt;j;e] .qetl.log.err[j;"on_endofday failed";`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;

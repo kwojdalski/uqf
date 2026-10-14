@@ -321,6 +321,48 @@ test_end_of_day_records_the_day_a_carrying_job_saw_end:{[t]
     system "rm -f ",p,"*";
     .qunit.assertEquals[m;d0;"the date that ended, kept beside the ledgers"]};
 
+/ end_of_day d0 for fx_positions holding a 1mm fill, published through `pub`,
+/ with the marker first set to the day before: (marker after; errors logged;
+/ rows that reached fx_position_open).
+eod_through:{[pub]
+    record[`fx_positions];
+    .qpipe.job.fx_positions.on_batch[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    `.qpipe.job.fx_positions.publish set pub;
+    p:.qetl.job.stream.carry_marker_path `fx_positions;
+    system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    system "rm -f ",p,"*";
+    .qetl.job.bounded.state.durable_set[p;([] last_end_of_day:enlist d0-1)];
+    `.qetl.job.stream.running set enlist `fx_positions;
+    e:errors[.testutil.captured_log[0b] {.qetl.job.stream.end_of_day .eodtest.d0}];
+    m:first (.qetl.job.bounded.state.durable_get p)`last_end_of_day;
+    system "rm -f ",p,"*";
+    (m;e;sent_on`fx_position_open)}
+
+test_a_snapshot_that_throws_leaves_the_marker_where_it_was:{[t]
+    / #1307: the marker was written anyway, so a restart neither caught up
+    / nor reported the missed end of day, and the carried book was lost
+    r:eod_through[{[t;x] if[t=`fx_position_open; '"plant refused"]; .eodtest.sent,:enlist (t;x); count x}];
+    .qunit.assertEquals[r 0;d0-1;"the last end of day it carried across is still the one before"];
+    .qunit.assertTrue[any (r 1)[;2] like "carry snapshot failed";"and the failure is logged"]};
+
+test_a_snapshot_a_check_withholds_is_not_published_in_part_and_leaves_the_marker:{[t]
+    / a check failing one row under `drop`: publishing the rest would hand a
+    / restart a partial book to SET its state from
+    chk:{[x] ([] check:enlist `c; status:enlist `fail; detail:enlist "row 0"; row:enlist 0)};
+    pub:.qetl.job.stream.checked[`fx_positions;chk;`drop;{[t;x] .eodtest.sent,:enlist (t;x); count x}];
+    r:eod_through[pub];
+    .qunit.assertEquals[r 0;d0-1;"the marker stays: the book did not go out"];
+    .qunit.assertEquals[count r 2;0;"no row of the snapshot reached the plant, not even the clean ones"];
+    .qunit.assertTrue[any (r 1)[;2] like "carry snapshot failed";"logged as a failed snapshot"]};
+
+test_withhold_throws_only_for_a_jobs_carry_table:{[t]
+    / any other table keeps the drop/hold behaviour: logged, counted, quiet
+    rows:([] sym:enlist `EURUSD);
+    .qunit.assertThrows[{.qetl.job.stream.withhold[`fx_positions;`fx_position_open;x;"check failed";();1]};
+        rows;"carry snapshot withheld: check failed";"a carry snapshot is never withheld in silence"];
+    .qunit.assertEquals[.qetl.job.stream.withhold[`fx_positions;`fx_position;rows;"check failed";();1];::;
+        "a table the job does not carry is withheld as before"]};
+
 / --- the remedy: replay the days it was down across (#1072) ----------------
 
 / A plant whose logs run from the day after `marker` to today. The first log
