@@ -265,18 +265,20 @@ repos:
         files: '\.(q|py)$|^scripts/processes/|^docs/reference/surfaces/'
 
       - id: q-facts
-        name: Check uqs's generated q facts match the q tree
+        name: Check the generated q facts match the q tree
         # uqs runs without q, so the q values it needs (conflict strategies,
-        # run modes, log levels, ledger columns) are generated into
-        # python/uqs/src/uqs/generated/q_facts.py from the loaded tree - not
-        # hand-copied and regex-pinned one by one (#818). KDB-X only, like the
+        # run modes, log levels, ledger columns, the status file's states and
+        # name) are generated into python/uqs/src/uqs/generated/q_facts.py
+        # from the loaded tree - not hand-copied and regex-pinned one by one
+        # (#818). The status facts also go to the Airflow provider's
+        # q_facts.py, which cannot import uqs (#1362). KDB-X only, like the
         # contract surface: it FAILS without an interpreter rather than
         # skipping. To accept an intended change:
         #   uv run python scripts/generate/q_facts.py
         entry: uv run python scripts/generate/q_facts.py --check
         language: system
         pass_filenames: false
-        files: '\.q$|^python/uqs/src/uqs/generated/|^scripts/generate/(q_facts\.py|export_q_facts\.q)$'
+        files: '\.q$|^python/uqs/src/uqs/generated/|^python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts\.py$|^scripts/generate/(q_facts\.py|export_q_facts\.q)$'
 
       - id: q-coverage
         name: Check every function a test should reach is reached

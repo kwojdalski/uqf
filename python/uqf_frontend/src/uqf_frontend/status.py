@@ -17,38 +17,46 @@ exactly the cross-layer inference the split forbids. A caller wanting those must
 ask Airflow.
 
 The format is defined by ``.qetl.status.write_status`` in
-``src/etl/core/status.q``, not inherited from canonical: this tree has no
-Airflow provider to be compatible with. The two sides
-are kept honest by ``test_status.py``, which asserts this reader's field set
-against the writer's.
+``src/etl/core/status.q``. Its states and file name come from q itself,
+generated into ``uqs.generated.q_facts`` (#1362); its field set is held to
+the writer's by ``test_status.py``.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import socket
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from uqf_frontend.errors import ValidationFailed
 
-#: Filename shape q writes. The instance id is part of it so two instances of
-#: one worker do not overwrite each other — which also means a reader cannot
-#: identify a worker by filename alone, and must read the body.
-FILENAME_PREFIX = "airflow_status_"
-FILENAME_SUFFIX = ".txt"
+# Leaves of uqs, both importing nothing else from it: this module is on a
+# read path, which must not load the orchestrator (see pyproject.toml).
+from uqs.generated.q_facts import (
+    STATUS_FILE_PREFIX,
+    STATUS_FILE_SUFFIX,
+    STATUS_STATES,
+    STATUS_TERMINAL_STATES,
+)
+from uqs.liveness import process_gone
+
+#: Filename shape q writes (`.qetl.status.file_path`). The instance id is part
+#: of it so two instances of one worker do not overwrite each other — which
+#: also means a reader cannot identify a worker by filename alone, and must
+#: read the body.
+FILENAME_PREFIX = STATUS_FILE_PREFIX
+FILENAME_SUFFIX = STATUS_FILE_SUFFIX
 
 #: The lifecycle states ``.qetl.status.status_states`` defines. `idle` and
 #: `completed` are both successful terminal outcomes and must not be
 #: conflated: "ran, found no work" is not "ran, did work", and neither is a
 #: failure. An orchestrator that cannot tell them apart retries a successful
 #: no-op forever.
-STATES = ("starting", "running", "idle", "completed", "failed")
+STATES = STATUS_STATES
 
 #: Terminal states — a run in one of these will not change again.
-TERMINAL_STATES = ("idle", "completed", "failed")
+TERMINAL_STATES = STATUS_TERMINAL_STATES
 
 #: Every field the writer emits. Asserted against the q side in tests, so
 #: adding a field on one side without the other fails rather than silently
@@ -202,21 +210,10 @@ def _process_gone(status: WorkerStatus) -> bool:
     """A `starting`/`running` file whose process is provably dead.
 
     The heartbeat dies with its process, so without this a killed run read
-    as running forever. Provable only on the host that ran it - another
-    host's pid says nothing here. q's `.z.h` lower-cases the host name
-    `socket.gethostname()` may not, hence the comparison without case. The
-    same rule as the Airflow sensor's `process_gone`, kept separately because
-    that package must not depend on this one.
+    as running forever. Whether the process is gone is uqs.liveness's rule,
+    the one `uqs backfill --wait` and the Airflow sensor apply too (#1362).
     """
-    if status.terminal or status.host.lower() != socket.gethostname().lower():
-        return False
-    try:
-        os.kill(status.pid, 0)
-    except ProcessLookupError:
-        return True
-    except PermissionError:
-        return False
-    return False
+    return not status.terminal and process_gone(status.host, status.pid)
 
 
 def _or_none(value: Any) -> str | None:

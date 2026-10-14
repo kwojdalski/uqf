@@ -17,6 +17,7 @@ from uqf_airflow_provider.status_reader import (
     FILENAME_PREFIX,
     FILENAME_SUFFIX,
     STATES,
+    TERMINAL_STATES,
     MalformedStatusFile,
     read_status_file,
     status_file_path,
@@ -61,6 +62,22 @@ def test_states_match_the_q_writer():
     assert set(re.findall(r"`(\w+)", line)) == set(STATES)
 
 
+def q_terminal_states() -> set[str]:
+    """States `legal_transitions` lets go only to `starting` (begin again) or
+    `failed` - the q definition of a run that has ended."""
+    src = STATUS_Q.read_text()
+    block = src[src.index("legal_transitions:") :]
+    rows = re.findall(r"\(`(\w+);\s*((?:`\w+)+)\)", block[: block.index("))") + 2])
+    assert rows, "status.q no longer spells legal_transitions the way this test reads it"
+    return {s for s, nexts in rows if set(re.findall(r"`(\w+)", nexts)) <= {"starting", "failed"}}
+
+
+def test_terminal_states_match_the_q_transitions():
+    """#1362: a state q makes terminal that the sensor thinks is still running
+    is a task that pokes until Airflow's timeout."""
+    assert set(TERMINAL_STATES) == q_terminal_states()
+
+
 def test_every_field_this_reader_requires_is_one_q_writes():
     """A subset, not equality: this reader is narrower than the file on
     purpose. A required field q stopped writing would make every file
@@ -74,14 +91,15 @@ def test_every_field_this_reader_requires_is_one_q_writes():
 
 def test_status_file_name_matches_the_q_writer():
     """The file name is how a reader finds a status file at all. `status.q`
-    builds it in place (`"/airflow_status_",string[instance_id],".txt"`), so a
+    names it `file_prefix`,instance,`file_suffix` (`.qetl.status.file_path`), so a
     change there leaves every reader looking for files that are never
     written, reporting "no status yet" for a worker that is running.
     """
     src = STATUS_Q.read_text()
-    built = re.findall(r'"/(\w+)",string\[instance_id\],"([.\w]+)"', src)
-    assert built, "status.q no longer builds the path the way this test reads it"
-    assert set(built) == {(FILENAME_PREFIX, FILENAME_SUFFIX)}
+    prefix = re.search(r'^file_prefix:"([^"]+)"', src, re.M)
+    suffix = re.search(r'^file_suffix:"([^"]+)"', src, re.M)
+    assert prefix and suffix, "status.q no longer names the file the way this test reads it"
+    assert (FILENAME_PREFIX, FILENAME_SUFFIX) == (prefix.group(1), suffix.group(1))
 
 
 def test_reads_a_completed_run(tmp_path):
