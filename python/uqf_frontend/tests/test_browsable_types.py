@@ -165,7 +165,7 @@ def test_the_new_types_filter_correctly_over_a_real_kola_connection(
 def test_rows_of_the_new_types_serialise(browse_port):
     gw = KolaGateway(Settings(port=browse_port))
     got = gw.call(
-        '{[u] ([] i:1 2i; h:3 4h; c:"ab"; d:2026.01.01 2026.01.02; t:00:00:01.250 00:00:02)}', 0
+        '{[u] ([] i:1 2i; h:3 4h; c:"ab"; d:2026.01.01 2026.01.02; t:00:00:01.250 00:00:02.000)}', 0
     )
     assert _rows(got) == [
         {"i": 1, "h": 3, "c": "a", "d": dt.date(2026, 1, 1), "t": dt.time(0, 0, 1, 250000)},
