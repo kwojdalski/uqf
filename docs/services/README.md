@@ -87,6 +87,17 @@ become `executions`.
 own time. `posbook1` values positions from it, and it heads the arbitrage chain,
 which takes the FX books only. Profile `fx`. [Details](superbook.md)
 
+**`order_outcomes1` · every order source as one contract** --- normalizes each
+order source's status events onto `order_outcomes`: the source's own time, an
+identity scoped by source (`source` + `request_id`), a normalized outcome
+(`filled`, `rejected`, `cancelled`, `unresolved` or `unmapped`) and the book,
+product and venue where the source gives them (venue is never inferred). Today
+one source, `orders`; another is one declared `.qetl.transform` and an entry in
+its declaration. Unlike `executions` it keeps the rejects and cancels. Reads
+`orders`, publishes `order_outcomes`, which `order_quality1` reads. On demand,
+no profile. [Counting
+policy](../reference/pipeline-declarations.md#order-outcome-contract-----order_outcomes)
+
 ## Analytics
 
 **`posbook1` · positions and P&L** --- a running position per instrument from
@@ -133,12 +144,15 @@ no URL. On demand, no profile. See
 [pipeline-declarations](../reference/pipeline-declarations.md#sinks-----alert_sink).
 
 **`order_quality1` · rolling fill and reject rates** --- per book, over the last
-minute, five minutes and hour: how many orders, how many filled and rejected,
-and the two ratios, re-evaluated every five seconds from `orders`. A book quiet
-in a short window shows 0 orders and null ratios, not a rate of zero. A
-**rolling job** (`.qetl.job.stream.at_rolling`), so late orders amend it, it
+minute, five minutes and hour: how many requests, how many filled and rejected,
+and the two ratios, re-evaluated every five seconds from `order_outcomes`
+(`order_outcomes1`'s normalized order sources). A request counts once, at its
+latest terminal outcome, however many updates or redeliveries a source sends. A
+book quiet in a short window shows 0 orders and null ratios, not a rate of zero.
+A **rolling job** (`.qetl.job.stream.at_rolling`), so late orders amend it, it
 rolls across midnight and it rebuilds its window from the log on restart.
-Publishes `order_quality`. On demand, no profile (`fx` has no free plant slot).
+Publishes `order_quality`. On demand, no profile (`fx` has no free plant slot);
+start it with `order_outcomes1`, which feeds it.
 [Details](../reference/pipeline-declarations.md#rolling-window-job-----qetljobstreamrolling)
 
 **`last_value1` · the current price of every sym** --- the newest level-0 bid,

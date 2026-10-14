@@ -130,7 +130,8 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   crypto_markout1: "crypto_markout1 :6101\ncrypto fills marked out\nagainst the best mid, on demand" { class: job }
   alert_sink1: "alert_sink1 :6102\nfx_limit_breach out to a webhook,\nat least once, on demand" { class: job }
   exec_bars1: "exec_bars1 :6104\none-minute fill bars off\nexecutions, on demand" { class: job }
-  order_quality1: "order_quality1 :6109\nrolling fill and reject rates\noff orders, on demand" { class: job }
+  order_quality1: "order_quality1 :6109\nrolling fill and reject rates\noff order_outcomes, on demand" { class: job }
+  order_outcomes1: "order_outcomes1 :6110\nnormalizer: order sources\nas one contract, on demand" { class: job }
   crypto_book_1s1: "crypto_book_1s1 :6107\none-second book snapshots off\ncrypto_book, crypto profile" { class: job }
   legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\ndatabento1's, kafka_flow1's and\nflink_vwap1's inputs come from\nexternal Python handlers,\nnot from a process in this diagram." { class: band }
 }
