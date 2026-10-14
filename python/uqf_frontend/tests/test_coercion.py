@@ -89,6 +89,20 @@ def test_garbage_timestamp_is_rejected():
         coerce("not a time", QType.TIMESTAMP, "time", as_list=False)
 
 
+def test_a_timestamp_finer_than_a_microsecond_is_refused_not_truncated():
+    """`fromisoformat` keeps the first six digits of a nine-digit fraction
+    without a word, so a nanosecond filter value or coverage bound reached q
+    up to 999 ns earlier than sent (#1317). The rule `uqs backfill` applies to
+    its bounds, applied here."""
+    with pytest.raises(ValidationFailed, match="'time' is a timestamp; .*finer than a microsecond"):
+        coerce("2026-09-15T10:30:00.123456789Z", QType.TIMESTAMP, "time", as_list=False)
+
+
+def test_trailing_zeros_past_the_microsecond_are_not_finer():
+    got = coerce("2026-09-15T10:30:00.123456000Z", QType.TIMESTAMP, "time", as_list=False)
+    assert got == dt.datetime(2026, 9, 15, 10, 30, 0, 123456, tzinfo=dt.UTC)
+
+
 def test_in_operator_requires_a_non_empty_list():
     tbl = table("trades")
     with pytest.raises(ValidationFailed, match="non-empty list"):
