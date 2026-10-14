@@ -70,4 +70,15 @@ test_the_quality_check_refuses_ragged_ladders:{[t]
     r:.qpipe.job.hdb_crypto_book_backfill.quality_check bad;
     .qunit.assertEquals[first r`check;`book_shape;"a ladder shorter than its sizes fails"]};
 
+test_an_unaligned_range_is_refused_before_a_straddling_bar_is_built_twice:{[t]
+    msg:"init: hdb_crypto_book_backfill builds 0D00:00:01.000000000 bars - --from and --to must be multiples of it*";
+    .qunit.assertThrows[{.qpipe.job.hdb_crypto_book_backfill.init x};
+        .hdb_crypto_bookbftest.spec_for[`v1;2026.10.09D10:00:00.500;2026.10.09D12:00];msg;"an unaligned --from is refused"];
+    .qunit.assertThrows[{.qpipe.job.hdb_crypto_book_backfill.init x};
+        .hdb_crypto_bookbftest.spec_for[`v1;2026.10.09D10:00;2026.10.09D12:00:00.500];msg;"an unaligned --to is refused"]};
+
+test_the_declared_grain_is_the_live_bar_width:{[t]
+    .qunit.assertEquals[(.qetl.job.bounded.def `hdb_crypto_book_backfill)`align;.qpipe.transform.crypto_book_1s.width;
+        "the worker cuts to the live job's bar width"]};
+
 \d .

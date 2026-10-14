@@ -401,6 +401,42 @@ run_version:{[cfg;v]
     if[not null r:$[`revision in key cfg; cfg`revision; 0N]; v:`$string[v],"@r",string r];
     $[.qetl.source.has_credentials cfg`source; v; .qetl.source.fixture_version v]}
 
+/ The grain a worker's output is aggregated to, or 0Nn for none (#1303).
+/ A worker that builds bars keys its output on the bar's start, and a window
+/ edge inside a bar builds that bar twice, each time from part of its fills,
+/ the later write replacing the first. Declaring the grain lets a run that
+/ would do that be refused (see require_aligned) rather than store the partial bar.
+/ @param worker the worker's name
+/ @param decl its declaration
+/ @return the grain, a positive timespan that divides the width, or 0Nn
+/ @throws error when it is not a positive timespan, or the width is not a multiple of it
+/ @eg .qetl.job.bounded.runtime.require_align[`w;`width`align!(0D01:00;0D00:01)]  ->  0D00:01:00.000000000
+require_align:{[worker;decl]
+    if[not `align in key decl; :0Nn];
+    a:decl`align;
+    if[(-16h=type a) and null a; :0Nn];
+    / Type first, alone: q evaluates both sides of `and`.
+    if[not -16h=type a; '"define: ",string[worker],"'s align must be a timespan, e.g. 0D00:01"];
+    if[not a>0D00:00; '"define: ",string[worker],"'s align must be positive"];
+    if[0<("j"$decl`width) mod "j"$a;
+        '"define: ",string[worker],"'s width ",string[decl`width]," is not a multiple of its align ",string a];
+    a}
+
+/ Refuse a range whose edges fall inside a bar of the worker's grain (#1303).
+/ @param worker the worker's name
+/ @param cfg the worker's configuration (carries align)
+/ @param range_from range start
+/ @param range_to range end, exclusive
+/ @return the range
+/ @throws error naming the worker and the grain when either edge is not a multiple of it
+/ @eg .qetl.job.bounded.runtime.require_aligned[`w;enlist[`align]!enlist 0D00:01;2026.10.09D10:00;2026.10.09D11:00]  ->  2026.10.09D10:00 2026.10.09D11:00
+require_aligned:{[worker;cfg;range_from;range_to]
+    a:$[`align in key cfg; cfg`align; 0Nn];
+    if[null a; :(range_from;range_to)];
+    if[any 0<("j"$(range_from;range_to)) mod "j"$a;
+        '"init: ",string[worker]," builds ",string[a]," bars - --from and --to must be multiples of it, or the bar on an edge is built twice from part of its fills"];
+    (range_from;range_to)}
+
 / The output revision a worker declares (#1097), or 0N for none. Coverage
 / says which windows are done under a source release, and nothing about the
 / logic that made them: change a transform or a scoring rule under the same
