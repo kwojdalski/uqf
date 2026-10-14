@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from enum import Enum, auto
 
+from uqf_airflow_provider.q_facts import STATUS_SUCCESS_STATES
 from uqf_airflow_provider.status_reader import WorkerStatus
 
 
@@ -27,25 +28,27 @@ class PokeOutcome(Enum):
 
 
 #: `idle` (ran, found nothing to do) and `completed` (ran, did work) are
-#: both q-side successes — see uqf_frontend.status, which this
-#: mirrors. Neither may be conflated with `failed`, and Airflow has no
-#: business telling them apart further than "the task instance succeeded".
-_SUCCESS_STATES = ("idle", "completed")
+#: both q-side successes: the states the worker's process exits 0 for, as
+#: generated from `.qetl.job.bounded.exit_code` (#1362). Neither may be
+#: conflated with `failed`, and Airflow has no business telling them apart
+#: further than "the task instance succeeded".
+_SUCCESS_STATES = STATUS_SUCCESS_STATES
 
 
 def translate(status: WorkerStatus) -> PokeOutcome:
     """The whole mapping. `starting`/`running` are not terminal, so the
-    sensor must keep polling; `idle`/`completed` succeed; `failed` fails
+    sensor must keep polling; `idle`/`completed` succeed; `failed` (any other
+    terminal state) fails
     the task outright rather than exhausting the sensor's own retry
     budget on an outcome q has already reported as final — Airflow's task
     retry is a distinct concern from q's transport retry (see
     `src/etl/core/worker_runtime.q`'s note resolving that split), and a
     sensor that let a q-reported `failed` keep pending would blur the two.
     """
-    if status.state == "failed":
-        return PokeOutcome.FAILURE
     if status.state in _SUCCESS_STATES:
         return PokeOutcome.SUCCESS
+    if status.terminal:
+        return PokeOutcome.FAILURE
     return PokeOutcome.PENDING
 
 
@@ -54,16 +57,16 @@ def failure_reason(status: WorkerStatus) -> str:
     what q wrote (`error`, `worker`, `instance_id`, `pid`, `host`) — never a
     task-ordering or retry detail, since q's file has none to give.
 
-    A file that is not `failed` reaches here only when its process is gone
+    A file that is not terminal reaches here only when its process is gone
     (see `sensor.process_gone`): q never got to record an outcome, so the
     message says that, and where its log is, rather than inventing an error.
     """
     who = f"{status.worker}/{status.instance_id}"
-    if status.state != "failed":
+    if not status.terminal:
         return (
             f"{who} reported state={status.state}, but its process (pid {status.pid} on "
             f"{status.host}) is gone - it was killed or crashed before recording an "
             f"outcome; see `uqs logs {status.instance_id}`"
         )
     detail = status.error or "no error string was recorded"
-    return f"{who} reported state=failed: {detail}"
+    return f"{who} reported state={status.state}: {detail}"
