@@ -3,7 +3,7 @@
 / The pure snapshot and minute steps (src/etl/transforms/book_liquidity.q) and
 / the two adapters that feed them (in the same file), against values
 / worked by hand. The registered job and its backfill twin are tested in
-/ test_book_liquidity_job.q.
+/ test_book_liquidity_1m.q.
 
 \d .book_liquiditytest
 
@@ -64,6 +64,17 @@ test_insufficient_depth_on_both_sides_is_never_reported_full:{[t]
 test_one_side_can_be_deep_enough_while_the_other_is_not:{[t]
     r:at[snap[mk[t0;`LP_A;`spot;`standard;enlist 1.1;enlist 8e6;1.1002 1.1003;1e6 1e6];enlist 5e6];5e6];
     .qunit.assertEquals[(r`bid_qty;r`bid_full;r`ask_qty;r`ask_full);(5e6;1b;2e6;0b);"each side judged on its own depth"]};
+
+test_the_snapshot_is_what_sweep_price_says_of_each_ladder:{[t]
+    / the extraction adds identity, withdrawal and ordering rules around the sweep, not a second sweep
+    sizes:1e6 3e6 4.5e6 10e6;
+    got:snap[ref_book[];sizes];
+    check:{[got;s]
+        b:.qbook.sweep_price[bidp;bids;s];
+        a:.qbook.sweep_price[askp;asks;s];
+        r:at[got;s];
+        (r`bid_price;r`bid_qty;r`bid_full;r`ask_price;r`ask_qty;r`ask_full)~(b`avg_price;b`filled_size;b`fully_filled;a`avg_price;a`filled_size;a`fully_filled)}[got;];
+    .qunit.assertEquals[check each sizes;4#1b;"the same price, quantity and fill flag at every size, exactly"]};
 
 test_a_withdrawn_side_has_no_price_no_quantity_and_is_not_full:{[t]
     r:at[snap[mk[t0;`LP_A;`spot;`standard;`float$();`float$();askp;asks];enlist 1e6];1e6];

@@ -34,6 +34,8 @@ describe:(`symbol$())!();
 
 describe[`arbitrage]:
     "Gross direct cross-source bid-over-ask opportunities, one status per pair and snapshot. Select the latest row per pair before filtering active; inactive rows clear previous opportunities";
+describe[`book_liquidity_1m]:
+    "What each FX liquidity provider's book could fill, per requested size, averaged over one minute of book snapshots: built by book_liquidity_1m1 from market_data and rebuildable from the HDB by hdb_book_liquidity_1m_backfill, cut on the book's source_time. bid_price/ask_price are the mean sweep price over the snapshots that priced the side (bid_obs/ask_obs of the snapshots), bid_qty/ask_qty the mean quantity actually available (an empty side counts as zero), bid_full_ratio/ask_full_ratio the share of snapshots that filled req_size completely. The mean is over snapshots, each weighing the same - not weighted by how long a book stood. settlement and category are the liquidity_book eligibility dimensions, unspecified while market_data is the source";
 describe[`config_change]:
     "Runtime configuration changes, one row per watched variable per change. old is empty on a variable's first observation, which records what the process started with. Values are rendered rather than typed, because one column holds every config type. WHO made a change is not here - join TorQ's usage log at the same timestamp";
 describe[`cross_arbitrage]:
@@ -139,6 +141,8 @@ unbounded[`config_change]:
     enlist "one row per watched variable per change - a handful a day";
 unbounded[`crypto_book_1s]:
     enlist "one row per venue and sym per second with an update - at most 86400 a day per pair, a downsample of crypto_book rather than ticks; its policy row is due once a desk reads it through the gateway";
+unbounded[`book_liquidity_1m]:
+    enlist "one row per FX provider and requested size per minute with a book - a few thousand a day for a handful of providers and sizes, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`exec_bar]:
     enlist "one row per sym per minute - 1440 a day for a sym that trades all day, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`order_outcomes]:

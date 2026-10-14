@@ -355,6 +355,20 @@ nested[`crypto_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 crypto_book_1s:([]time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bar_start:`timestamp$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 nested[`crypto_book_1s;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
+/ book_liquidity_1m1's output (#1397): what each provider's FX book could fill
+/ at each requested size, averaged over the book snapshots of one minute. One
+/ row per (sym, source, settlement, category, req_size) per window
+/ [bar_start, bar_start+1m), cut on the book's source_time; a minute with no
+/ snapshot has no row. The averages are over SNAPSHOTS, each weighing the same,
+/ not over time. bid_price/ask_price average only the snapshots that priced the
+/ side (bid_obs/ask_obs of the `snapshots`), bid_qty/ask_qty over all of them, and
+/ the full ratios are the share of all snapshots that filled req_size completely
+/ - the semantics are in docs/reference/book-liquidity.md. settlement and
+/ category are the eligibility dimensions of the liquidity_book contract:
+/ `unspecified` while market_data, which cannot say, is the source. `time` is
+/ the plant's, on publication; the backfill twin writes the window's end.
+book_liquidity_1m:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); req_size:`float$(); bar_start:`timestamp$(); snapshots:`long$(); bid_obs:`long$(); ask_obs:`long$(); bid_price:`float$(); ask_price:`float$(); bid_qty:`float$(); ask_qty:`float$(); bid_full_ratio:`float$(); ask_full_ratio:`float$())
+
 / Simulated fills from cryptorust's OMS. Distinct from crypto_trades below,
 / which carries real fills: conflating simulated and real execution in one
 / table is how a P&L number stops meaning anything.

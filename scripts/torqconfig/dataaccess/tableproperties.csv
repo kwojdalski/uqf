@@ -1,5 +1,6 @@
 proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeoffset,rolltimezone,datatimezone,partitionfield
 ,arbitrage,time,sym,sym,,,,
+,book_liquidity_1m,time,sym,sym,,,,
 ,ccy_exposure,time,,,,,,
 ,client_flow,time,sym,sym,,,,
 ,config_change,time,,,,,,

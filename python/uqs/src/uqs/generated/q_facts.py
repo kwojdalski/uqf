@@ -93,6 +93,7 @@ STATUS_FILE_SUFFIX: str = ".txt"
 
 #: dataset -> time column getdata reads it by (#1363)
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
+    "book_liquidity_1m": "time",
     "crypto_book_1s": "time",
     "crypto_market_data": "source_time",
     "demo_deals": "deal_time",
@@ -108,6 +109,7 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
 
 #: dataset -> its instrument column, empty if none (#1363)
 BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
+    "book_liquidity_1m": "sym",
     "crypto_book_1s": "sym",
     "crypto_market_data": "sym",
     "demo_deals": "sym",

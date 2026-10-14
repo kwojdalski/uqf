@@ -1,6 +1,7 @@
 procname,proctype,offset,subscribe_to,publishes
 alert_sink1,metrics,52,fx_limit_breach,
 arbitrage1,metrics,44,superbook,arbitrage
+book_liquidity_1m1,metrics,62,market_data,book_liquidity_1m
 cross1,metrics,25,fx_orderbook,
 crossarb1,metrics,45,superbook,config_change cross_arbitrage
 crypto_book_1s1,metrics,57,crypto_book,crypto_book_1s
@@ -21,6 +22,7 @@ fxorderbookfeed1,feed,24,,fx_orderbook
 fxordersfeed1,feed,38,,orders
 fxpositions1,metrics,39,executions,config_change fx_limit_breach fx_position fx_position_open
 fxtradesfeed1,feed,29,,trades
+hdb_book_liquidity_1m_backfill1,backfill,63,,
 hdb_crypto_book_backfill1,backfill,58,,
 hdb_demo_markouts_backfill1,backfill,49,,
 hdb_exec_bars_backfill1,backfill,55,,

@@ -18,7 +18,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s`order_quality)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!())
+renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books)
 
 / Twins whose equivalence is a live run, not an example: the twin reads the RAW orders and
 / applies the adapter itself, so its inputs are not the stream transform's and `agrees` cannot
@@ -84,6 +84,9 @@ test_the_exec_bars_twin_cuts_and_aggregates_as_the_live_job_does:{[t]
 
 test_the_crypto_book_1s_twin_picks_the_snapshots_as_the_live_job_does:{[t]
     .qunit.assertTrue[agrees[`crypto_book_1s];"hdb_crypto_book_1s gives the live snapshots on the live transform's example"]};
+
+test_the_book_liquidity_1m_twin_averages_the_books_as_the_live_job_does:{[t]
+    .qunit.assertTrue[agrees[`book_liquidity_1m];"hdb_book_liquidity_1m gives the live minutes on the live transform's example"]};
 
 / A twin excused from `agrees` names the test that holds it, and the test exists.
 test_a_twin_checked_by_its_own_test_names_it_and_it_exists:{[t]
