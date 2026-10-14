@@ -547,6 +547,7 @@ qetl.plant,mkt_orderbook,table,,
 qetl.plant,names,function,1,
 qetl.plant,nested,function,2,table_name types
 qetl.plant,nested_columns,function,1,table_name
+qetl.plant,order_outcomes,table,,
 qetl.plant,order_quality,table,,
 qetl.plant,order_routing,table,,
 qetl.plant,orders,table,,
@@ -1305,17 +1306,24 @@ qpipe.job.market_data,market_data,table,,
 qpipe.job.market_data,on_batch,value,,
 qpipe.job.market_data,publish,value,,
 qpipe.job.market_data,quote,table,,
+qpipe.job.order_outcomes,from_orders,function,1,batch
+qpipe.job.order_outcomes,on_batch,value,,
+qpipe.job.order_outcomes,order_outcomes,table,,
+qpipe.job.order_outcomes,orders_read,table,,
+qpipe.job.order_outcomes,orders_source,value,,
+qpipe.job.order_outcomes,orders_status,dict,,
+qpipe.job.order_outcomes,publish,value,,
 qpipe.job.order_quality,covered_from,value,,
 qpipe.job.order_quality,dropped,table,,
 qpipe.job.order_quality,evaluate,value,,
+qpipe.job.order_quality,example_events,table,,
 qpipe.job.order_quality,example_input,table,,
-qpipe.job.order_quality,example_orders,table,,
 qpipe.job.order_quality,last_as_of,value,,
 qpipe.job.order_quality,now,function,1,
 qpipe.job.order_quality,on_batch,value,,
 qpipe.job.order_quality,on_endofday,value,,
 qpipe.job.order_quality,on_timer,value,,
-qpipe.job.order_quality,order_rows,table,,
+qpipe.job.order_quality,outcome_rows,table,,
 qpipe.job.order_quality,pending,table,,
 qpipe.job.order_quality,publish,value,,
 qpipe.job.order_quality,withheld,value,,
@@ -1513,8 +1521,16 @@ qpipe.transform.eq_orderbook,to_book,function,1,batch
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
 qpipe.transform.exec_bars,width,value,,
+qpipe.transform.order_outcome,dimensions,value,,
+qpipe.transform.order_outcome,outcomes,value,,
+qpipe.transform.order_outcome,status_map,function,2,codes outs
+qpipe.transform.order_outcome,terminal,value,,
+qpipe.transform.order_outcome,translate,function,2,map codes
+qpipe.transform.order_quality,frame,value,,
+qpipe.transform.order_quality,identity,value,,
 qpipe.transform.order_quality,lateness,value,,
 qpipe.transform.order_quality,stats,function,1,x
+qpipe.transform.order_quality,stats_by,function,2,dims x
 qpipe.transform.order_quality,windows,value,,
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades

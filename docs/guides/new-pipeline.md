@@ -214,7 +214,7 @@ are a transform plus a declaration:
 
 ```q
 .qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`publishes`windows`lateness`period!(
-    `order_quality1;`orders;`book;`time;`order_quality;`order_quality;
+    `order_quality1;`order_outcomes;`book;`source_time;`order_quality;`order_quality;
     0D00:01 0D00:05 0D01;0D00:00:05;0D00:00:05)];
 ```
 

@@ -60,6 +60,8 @@ describe[`exec_bar]:
     "One-minute bars of executions per sym, built by exec_bars1 and rebuildable from the HDB by hdb_exec_bars_backfill: open, high, low, close, size-weighted vwap, volume and fill count for [bar_start, bar_start+1m) on the fill's source_time. A minute with no fills has no row; the minute a fill can still amend is not yet published, so the newest bar lags by about 5s past its end";
 describe[`order_quality]:
     "Rolling order outcomes per book from order_quality1: over the last 1m, 5m and 1h ending at as_of, the orders in the window, how many ended filled and rejected, and the fill and reject ratios. Windows are (as_of-window, as_of] on the order's time, published every five seconds. A book quiet in a short window shows 0 orders and null ratios (no order says nothing about a rate); a book with no order in the last hour has no row";
+describe[`order_outcomes]:
+    "The normalized order-outcome contract from order_outcomes1: one row per status event an order source reported, whatever the source's own table, columns and status codes. source + request_id is the identity of one request attempt (a request_id is unique only within its source); outcome is filled, rejected or cancelled (the request ended), unresolved (a non-terminal update) or unmapped (a code the adapter does not know). source_time is the source's own stamp, time the plant's. book, product and venue are null where the source gives none - a venue is never inferred. This is what order_quality1 reads";
 describe[`executions]:
     "Every fill table the stack carries, spelled one way by the executions normalizer: the FX trades and cryptorust's crypto_trades. source_time is the source's own stamp, time the plant's on the normalized row. This is what posbook1 reads";
 describe[`fx_limit_breach]:
@@ -137,6 +139,8 @@ unbounded[`crypto_book_1s]:
     enlist "one row per venue and sym per second with an update - at most 86400 a day per pair, a downsample of crypto_book rather than ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`exec_bar]:
     enlist "one row per sym per minute - 1440 a day for a sym that trades all day, not ticks; its policy row is due once a desk reads it through the gateway";
+unbounded[`order_outcomes]:
+    enlist "one row per status event the order sources report - about one a second from the demo orders feed, a few a request from a real OMS: bounded by order flow, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`order_quality]:
     enlist "one row per book per window length every five seconds - 52 thousand a day for a book that has traded in the last hour: bounded by books and time, not by ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`fx_limit_breach]:
