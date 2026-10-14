@@ -27,7 +27,15 @@ facts:(!) . flip (
     / exits 0 for, so a reader and the exit code cannot disagree (#609).
     (`STATUS_SUCCESS_STATES;  .qetl.status.status_states where 0i=.qetl.job.bounded.exit_code each .qetl.status.status_states);
     (`STATUS_FILE_PREFIX;     .qetl.status.file_prefix);
-    (`STATUS_FILE_SUFFIX;     .qetl.status.file_suffix))
+    (`STATUS_FILE_SUFFIX;     .qetl.status.file_suffix);
+    / Names q computes and the browser and `uqs` repeat (#1368).
+    (`CFG_SOURCES;            .qetl.cfg.sources);
+    (`CFG_ENV_LAYER;          .qetl.cfg.env_layer);
+    (`CFG_OVERRIDE_LAYER;     .qetl.cfg.override_layer);
+    (`CFG_ENV_PREFIX;         .qetl.cfg.env_prefix);
+    (`SOURCE_CREDENTIAL_PREFIX; .qetl.source.credential_prefix);
+    (`FIXTURE_TAG;            .qetl.source.fixture_tag);
+    (`REVISION_TAG;           .qetl.job.bounded.runtime.revision_tag))
 
 \d .
 

@@ -15,17 +15,9 @@ where being unfinished would break the tree rather than the build - see
 from __future__ import annotations
 
 from uqs.model import transports
+from uqs.model.qnames import credential_var
 from uqs.scaffold.columns import TIME_COLUMN, raw_contract, sample_value, type_char
 from uqs.scaffold.transform import worker_transform
-
-
-def credential_var(source: str) -> str:
-    """The environment variable a live run reads the source's credential from.
-
-    `.qetl.source.credential_var` computes it in q; test_scaffold.py holds
-    the two to the same spelling.
-    """
-    return f"UQF_SOURCE_CRED_{source.upper()}"
 
 
 def test_stub(name: str, namespace: str, what: str, *, driver: bool = False) -> str:

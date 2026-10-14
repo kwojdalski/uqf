@@ -355,6 +355,8 @@ export interface WorkerConfigResult {
   effective_value: string | null;
   /** An environment variable outranks the override, which has no effect until it is unset. */
   shadowed: boolean;
+  /** The override is what the process now reads (the server compares q's layer name). */
+  saved: boolean;
   env_var: string | null;
   note: string;
 }

@@ -51,6 +51,11 @@
 / diagnostic can say WHERE a value came from, which is the question an
 / operator actually asks.
 sources:`env`overrides`yaml`default
+/ The two layers a caller must tell apart by name: the environment outranks an
+/ override, so setting one under the other is no change. Read, not retyped, by
+/ the control surface (#1368); `sources` above is where they sit.
+env_layer:sources 0
+override_layer:sources 1
 
 / Private: per-source lookup tables, populated by `set_layers`. Kept separate
 / rather than merged eagerly so `explain` below can report provenance.
@@ -80,18 +85,23 @@ set_layers:{[overrides;yaml;defaults]
     default_values::defaults;
     sources}
 
+/ What every config key'"'"'s environment variable starts with. A value, not just
+/ inside `env_name`, because the browser tells an operator which variable to
+/ unset and reads this prefix from the generated python facts (#1368).
+env_prefix:"UQF_"
+
 / Private: the environment variable name for a config key. UQF_BACKFILL_FROM
 / for `backfill_from, so the mapping is mechanical and an operator can guess
 / it without reading this file.
 / @private
-env_name:{[k] "UQF_",upper string k}
+env_name:{[k] env_prefix,upper string k}
 
 / Private: raw string value for a key from one named source, or "" when the
 / source does not carry it.
 / @private
 raw_from:{[source;k]
-    $[source=`env;      getenv `$env_name[k];
-      source=`overrides; $[k in key override_values; override_values k; ""];
+    $[source=env_layer;      getenv `$env_name[k];
+      source=override_layer; $[k in key override_values; override_values k; ""];
       source=`yaml;      $[k in key yaml_values; yaml_values k; ""];
       source=`default;   $[k in key default_values; default_values k; ""];
       ""]}
