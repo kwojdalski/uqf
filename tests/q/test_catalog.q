@@ -121,13 +121,26 @@ listed:{[]
     ls:1_read0 `$":scripts/torqconfig/dataaccess/tableproperties.csv";
     distinct `$ {(","vs x) 1} each ls where 0<count each ls}
 
+/ The tables an installed sidecar bundle added (src/etl/installed_bundles.json,
+/ empty in a checkout, filled in the PeachQ lane's bundle-installed copy). They
+/ are plant tables of the installed tree, so they are browsable - but the
+/ committed tableproperties.csv describes the BASE tree, and the gateway
+/ derives a row for a held plant table the file omits at bootstrap
+/ (gateway_access.table_properties_lines), which is how an installed bundle's
+/ tables reach getdata. So the two checks below hold the file to the base tree.
+bundled:{[]
+    f:`$":src/etl/installed_bundles.json";
+    if[()~key f; :`symbol$()];
+    b:.j.k "c"$read1 f;
+    distinct `symbol$raze {`$x`tables} each value b}
+
 test_every_browsable_table_has_a_getdata_row:{[t]
     / TorQ's checktablename refuses a table the file does not list, and
     / .uqf.browse reads through getdata - so a table the catalog describes and
     / the file omits is offered to the desk and then errors on every read. The
     / ledger is the one exemption, for the reason above.
     .qunit.assertEquals[
-        (.cattest.browsable[] except key .cattest.ledgers) except .cattest.listed[];
+        ((.cattest.browsable[] except key .cattest.ledgers) except .cattest.bundled[]) except .cattest.listed[];
         `symbol$();
         "each browsable table has a tableproperties.csv row (python/uqs/.../gateway_access.py derives them)"]};
 
@@ -172,7 +185,7 @@ test_getdata_accepts_every_browsable_table:{[t]
     / The positive half, over the whole derived set: every table a desk may
     / browse - including a worker dataset no plant table declares - gets past
     / checktablename, which it did not when the file held five hand rows.
-    t:(.cattest.browsable[] except key .cattest.ledgers);
+    t:(.cattest.browsable[] except key[.cattest.ledgers],.cattest.bundled[]);
     .qunit.assertEquals[t where not `accepted~/:.cattest.checked each t;`symbol$();
         "checktablename accepts each browsable table"]};
 
