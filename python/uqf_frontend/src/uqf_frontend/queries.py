@@ -181,6 +181,14 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
             if isinstance(value, bool) or not isinstance(value, int):
                 raise ValidationFailed(f"column {column!r} is a long; expected an integer")
             return value
+        case QType.INT:
+            return _bounded_integer(value, column, "int", _INT_LIMIT)
+        case QType.SHORT:
+            return _bounded_integer(value, column, "short", _SHORT_LIMIT)
+        case QType.DATE:
+            return _date(value, column)
+        case QType.TIME:
+            return _time_of_day(value, column)
         case QType.BOOLEAN:
             if not isinstance(value, bool):
                 raise ValidationFailed(f"column {column!r} is a boolean; expected true or false")
@@ -204,12 +212,63 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
                 raise ValidationFailed(
                     f"column {column!r} is a guid; {value!r} is not one"
                 ) from exc
-        case QType.LIST:  # pragma: no cover - blocked earlier by Table.filterable
-            raise ValidationFailed(
-                f"column {column!r} holds a vector per row and cannot be filtered"
-            )
+        case QType.LIST | QType.CHAR:  # pragma: no cover - blocked by Table.filterable
+            raise ValidationFailed(f"column {column!r} is a {qtype} column and cannot be filtered")
 
     raise ValidationFailed(f"column {column!r} has unsupported type {qtype}")  # pragma: no cover
+
+
+#: The widest int and short q holds, less the infinity and null it reserves
+#: at each end (0Wi, 0Ni): a filter value there would match a sentinel.
+_INT_LIMIT = 2**31 - 1
+_SHORT_LIMIT = 2**15 - 1
+
+
+def _bounded_integer(value: Any, column: str, name: str, limit: int) -> int:
+    """A JSON integer for an int or short column. Sent as a long, which q
+    compares with the column by value (`5i=5j`, `1 2i in 1 2j`), so no cast is
+    needed - only the range check, because a value q's int cannot hold would
+    otherwise match nothing and say nothing."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValidationFailed(f"column {column!r} is a {name}; expected an integer")
+    if not -limit <= value <= limit:
+        raise ValidationFailed(
+            f"column {column!r} is a {name}; {value!r} is outside -{limit} to {limit}"
+        )
+    return value
+
+
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TIME = re.compile(r"^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$")
+
+
+def _date(value: Any, column: str) -> dt.date:
+    """`YYYY-MM-DD` as the date kola sends as a q date."""
+    if not isinstance(value, str) or not _DATE.match(value):
+        raise ValidationFailed(f"column {column!r} is a date; expected YYYY-MM-DD")
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValidationFailed(f"column {column!r} is a date; {value!r} is not one") from exc
+
+
+def _time_of_day(value: Any, column: str) -> dt.time:
+    """`HH:MM:SS[.fff]` as the time kola sends as a q time.
+
+    q's `time` is milliseconds: kola truncates a finer fraction without a word
+    (4005 us arrives as 4 ms), so more than three digits are refused here
+    rather than moved.
+    """
+    m = _TIME.match(value) if isinstance(value, str) else None
+    if m is None:
+        raise ValidationFailed(
+            f"column {column!r} is a time; expected HH:MM:SS or HH:MM:SS.fff (milliseconds)"
+        )
+    hh, mm, ss, frac = m.groups()
+    try:
+        return dt.time(int(hh), int(mm), int(ss), int((frac or "").ljust(3, "0")) * 1000)
+    except ValueError as exc:
+        raise ValidationFailed(f"column {column!r} is a time; {value!r} is not one") from exc
 
 
 #: The widest timespan q holds, in nanoseconds: 0Wn. One further is 0Nn.

@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from uqs.external import flink_vwap_streamer
+from uqs.external.plant_contract import plant_table_fields
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -24,20 +25,47 @@ def test_each_row_is_published_as_its_own_batch_keyed_by_fields():
     assert out[0] == [dict(zip(flink_vwap_streamer.FIELDS, ROWS[0], strict=True))]
 
 
-def test_columns_follow_fields_order():
+def plant_text() -> str:
+    return (REPO / "src/etl/plant_tables.q").read_text()
+
+
+def plant_order(text: str | None = None) -> list[str]:
+    return plant_table_fields(str(REPO), "flink_vwap_raw", text=text)
+
+
+def test_columns_follow_the_plant_order():
     records = [r for b in flink_vwap_streamer.batches(ROWS) for r in b]
-    cols = flink_vwap_streamer.to_columns(records)
-    assert list(cols) == flink_vwap_streamer.FIELDS
+    cols = flink_vwap_streamer.to_columns(records, plant_order())
+    assert list(cols) == plant_order()
     assert cols["sym"] == ["EURUSD", "GBPUSD"]
     assert cols["n"] == [7, 4]
 
 
-def test_fields_match_the_raw_table_without_time():
-    """.u.upd places columns by position, so FIELDS must be the plant's order."""
-    text = (REPO / "src/etl/plant_tables.q").read_text()
-    line = next(x for x in text.splitlines() if x.startswith("flink_vwap_raw:([]"))
-    names = re.findall(r"(\w+):`", line)
-    assert names == ["time", *flink_vwap_streamer.FIELDS]
+def test_the_sql_selects_exactly_the_plants_columns():
+    """The SELECT names the same set of columns as the raw table (less `time`);
+    their ORDER is the plant's business, not the SQL's."""
+    assert sorted(flink_vwap_streamer.FIELDS) == sorted(plant_order())
+    # Column names live in the declaration line itself, so the parser and a
+    # regex over the raw line must agree on the real file.
+    line = next(x for x in plant_text().splitlines() if x.startswith("flink_vwap_raw:([]"))
+    assert re.findall(r"(\w+):`", line) == ["time", *plant_order()]
+
+
+def test_a_reordered_plant_reorders_what_is_sent():
+    """.u.upd places by position: swap vwap and volume in the plant and the
+    streamer must follow, or each value lands in the other's column."""
+    swapped = plant_text().replace(
+        "vwap:`float$(); volume:`float$()", "volume:`float$(); vwap:`float$()"
+    )
+    assert swapped != plant_text()
+    order = plant_order(swapped)
+    assert order == ["sym", "window_end", "volume", "vwap", "n"]
+    records = [r for b in flink_vwap_streamer.batches(ROWS) for r in b]
+    cols = flink_vwap_streamer.to_columns(records, order)
+    assert list(cols) == order
+    # Each value stays under its own name; only the position moves.
+    assert cols["vwap"] == [1.1012, 1.2701]
+    assert cols["volume"] == [3_000_000.0, 1_500_000.0]
 
 
 def test_the_window_query_selects_fields_in_order():

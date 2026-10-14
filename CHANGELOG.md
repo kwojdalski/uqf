@@ -2,6 +2,46 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-10-14
+
+**Overview.** Four days of bug and architecture fixes, 101 merged PRs. Most
+close bugfinder findings in the pipeline framework, the quant library and the
+desk frontend, each with a regression test that failed before the fix. New work:
+a rolling-window job kind, one-second crypto book snapshots, a shared as-of
+enrichment helper, offline HDB migrations and a TorQ recovery contract.
+
+**Changes by area**
+
+- **`src/etl/core`:** rolling-window job kind with fill/reject rates;
+  `.qasof.lookup` and `.qetl.enrich` for event-time marking; sources may declare
+  `complete_through`; coverage now means written, with a separate readiness
+  watermark. Fixes to keyed HDB fast paths, out-of-window replace refusal,
+  unaligned bar ranges, carry across end of day and the carry-cap restore error,
+  plant-day recovery, and `.qetl.tick.reset` forgetting the closed day.
+- **`src/etl/streaming`, `workers`, `transforms`:** posbook marks each fill as
+  of its own time; markouts, eq_orderbook and alert_sink no longer duplicate or
+  drop rows on refill or restart; stable FX `fill_id`s; crypto shards readable
+  while the recorder runs; bounded workers take their output shape from the
+  plant.
+- **`src/market_data`, `pricing`, `portfolio`, `execution`:** one crossed-book
+  rule (`.qbook.crossed_top`, price and size); `sweep_price` uses only usable
+  levels and reports `levels_used`; GK zero variance, `vwmp_skew`, OFI
+  autocorrelation, volume buckets and one flat-position tolerance fixed.
+- **`python/uqf_frontend`, `web/`:** timestamps and timespans carried to the
+  nanosecond, infinities as infinity; request bodies and ops rows held to the
+  API models, unknown fields refused, lifecycle requests must name processes.
+- **`python/uqs`, Airflow provider:** status-file states and liveness from one
+  q-derived source; `uqs gaps` refills aligned to the bar grid and the
+  microsecond; backfill flags no longer outranked by env; migrate takes the HDB
+  lock through q; deploy builds compose `hdb_shape` from the staged tree.
+- **Gates and tooling:** qlinter pinned at v0.14.14 with tree-wide cleanups;
+  four CI gate holes closed; hook and attestation scopes tightened;
+  reverse-order test isolation fixed.
+- **`docs/`:** diagrams and prose caught up with the merges; TorQ appendix added
+  to the presentation.
+
+**Files changed:** 331 files changed, 15269 insertions(+), 2077 deletions(-).
+
 ## stable/2026-10-10
 
 **Overview.** Five days of pipeline-framework hardening, two new streaming job

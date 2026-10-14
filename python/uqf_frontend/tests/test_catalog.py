@@ -46,13 +46,24 @@ def test_an_undescribed_table_with_columns_this_layer_cannot_type_is_ignored():
     assert set(cat.tables()) == {"fx_quotes"}
 
 
-def test_a_described_table_with_an_uncoercible_column_still_refuses():
+def test_a_described_table_with_an_unknown_column_type_is_skipped_not_fatal():
+    """#1364: one described table with a `meta` character this layer does not
+    know ('e', a real) used to raise for the whole catalog. It is now left out
+    - fail closed - with the reason kept and named when it is asked for."""
     cat = _catalog(
-        described=[{"table": "quote", "description": "vendored quotes"}],
-        schema=[{"table": "quote", "column": "mode", "kind": "c"}],
+        described=[
+            {"table": "quote", "description": "vendored quotes"},
+            {"table": "trades", "description": "Client fills"},
+        ],
+        schema=[
+            {"table": "quote", "column": "bid", "kind": "e"},
+            {"table": "trades", "column": "sym", "kind": "s"},
+        ],
     )
-    with pytest.raises(ValueError, match="quote.mode"):
-        cat.tables()
+    assert set(cat.tables()) == {"trades"}
+    assert "quote.bid" in cat.skipped["quote"] and "'e'" in cat.skipped["quote"]
+    with pytest.raises(ValidationFailed, match=r"not browsable: quote\.bid"):
+        cat.table("quote")
 
 
 def test_a_table_the_database_has_but_nobody_describes_is_not_browsable():
@@ -154,35 +165,6 @@ def test_a_populated_vector_column_is_a_list_not_an_error():
     assert tbl.columns["bid_prices"] is QType.LIST
     assert tbl.columns["notes"] is QType.LIST
     assert tbl.filterable == frozenset({"sym"})
-
-
-def test_one_unmappable_column_does_not_take_the_whole_catalog_down_silently():
-    """It raises, naming the column - the catalog is the allowlist, so it must
-    fail loudly rather than serve a table with a column quietly missing."""
-    cat = _catalog(
-        described=[
-            {"table": "trades", "description": "Client fills"},
-            {"table": "fx_orderbook", "description": "depth"},
-        ],
-        schema=[
-            {"table": "trades", "column": "sym", "kind": "s"},
-            {"table": "fx_orderbook", "column": "weird", "kind": "x"},
-        ],
-    )
-    with pytest.raises(ValueError, match="fx_orderbook.weird"):
-        cat.tables()
-
-
-def test_a_meta_type_this_layer_cannot_coerce_is_refused_by_name():
-    """Loudly, rather than by quietly dropping the column - a dropped column
-    reads to a caller as "no such column", which blames them for a gap here.
-    """
-    cat = _catalog(
-        described=[{"table": "trades", "description": "Client fills"}],
-        schema=[{"table": "trades", "column": "blob", "kind": "x"}],
-    )
-    with pytest.raises(ValueError, match="'x'"):
-        cat.tables()
 
 
 def test_filterable_is_derived_not_stored():
