@@ -531,3 +531,17 @@ flink_vwap_raw:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(
 
 / flink_vwap1's output: one closed Flink window per sym, published once.
 flink_vwap:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
+
+/ fxmarkout1's output (#1395): the normalized FX markout calculation, one row per execution,
+/ horizon and component. kind is `total (the markout against the reference mid), `execution (the
+/ execution residual), `leg (a cross leg's allocation, step 1 upward) or `residual (what the
+/ allocation left over); step is 0 for every kind but a leg, so (venue; fill_id; horizon; kind; step)
+/ is a key with no nulls. pips are signed so positive means the market moved in the execution's
+/ favour; price_t0 and price_t1 are per kind - see src/etl/transforms/fx_markout.q.
+fx_markout:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price_t0:`float$(); price_t1:`float$(); pips:`float$(); status:`symbol$(); pip_factor:`long$(); version:`symbol$())
+
+/ fxmarkoutwide1's output (#1395): fx_markout in a row per (venue; fill_id; horizon) - the markout,
+/ the execution residual and the reconciling residual side by side, and up to three legs in route
+/ order with their inversion and allocation. status is `ok, `partial (priced but a component is not),
+/ `unavailable (not priced) or `unreconciled (the legs do not add up).
+fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); price:`float$(); pip_factor:`long$(); ref_t0:`float$(); ref_t1:`float$(); total_pips:`float$(); execution_pips:`float$(); residual_pips:`float$(); leg1:`symbol$(); leg1_invert:`boolean$(); leg1_pips:`float$(); leg2:`symbol$(); leg2_invert:`boolean$(); leg2_pips:`float$(); leg3:`symbol$(); leg3_invert:`boolean$(); leg3_pips:`float$(); status:`symbol$(); version:`symbol$())

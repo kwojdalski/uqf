@@ -3,7 +3,9 @@
 How good was each fill? A markout compares a fill's price with the market mid a
 short time after it. If you bought and the mid then rose, the fill was good.
 
-Two markout paths, for two kinds of fill:
+Two markout paths, for two kinds of fill (a third, over the canonical
+`executions` and `market_data` and not tied to either, is [normalized FX
+markouts](fx-markout.md)):
 
 - **Real crypto fills**: `crypto_markout1` scores cryptorust's real fills
   (`crypto_trades`) in basis points into `crypto_execution_quality`. See [Real

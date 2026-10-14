@@ -147,6 +147,18 @@ older book never overwrites a newer one. Read the last row per sym for the one
 shared answer: `select by sym from last_value`, from the RDB or through the
 gateway. Publishes `last_value`. Profile `fx`; not in `uqs start`.
 
+**`fxmarkout1` · normalized FX markouts, long** --- scores each execution of
+`executions` against `market_data` at -1s, 0, +1s and +10s: the markout, the
+execution residual, each cross leg's allocation and the reconciling residual, a
+row per component. Nothing in it names a source; a deal tape or order book is an
+adapter onto those two tables. Publishes `fx_markout`. On demand, not in a
+profile. [Details](fx-markout.md)
+
+**`fxmarkoutwide1` · normalized FX markouts, wide** --- `fxmarkout1`'s
+calculation in a row per execution and horizon: the markout, the execution
+residual and the legs side by side. Publishes `fx_markout_wide`. On demand, not
+in a profile. [Details](fx-markout.md)
+
 ## Backfills
 
 A backfill takes a date range, fills it, records which windows are covered, and
@@ -192,6 +204,15 @@ second after it ends; the backfill rebuilds the same rows from the HDB's
 `venue, sym, bar_start`. Profile `crypto`; not in `uqs start`. Start it with
 `uqs start crypto_book_1s1`; the worked example:
 `q scripts/examples/hdb_crypto_book_example.q`.
+
+**`hdb_fx_markouts_backfill1` · FX markouts from the HDB** --- re-derives
+`fx_markout` for a window of the HDB's `executions` against its `market_data`,
+with the calculation `fxmarkout1` applies live, replacing its rows under (venue;
+fill_id; horizon; kind; step). [Details](fx-markout.md)
+
+**`hdb_fx_markout_wide_backfill1` · FX markouts from the HDB, wide** --- the
+same, into `fx_markout_wide` under (venue; fill_id; horizon).
+[Details](fx-markout.md)
 
 ## Diagnostics
 

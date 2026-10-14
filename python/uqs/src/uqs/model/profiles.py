@@ -174,6 +174,14 @@ UNPROFILED: dict[str, str] = {
         "a live external feed - its rows come from the Flink job (`uqs feed "
         "start flink_vwap`), so it is started with that or not at all"
     ),
+    "fxmarkout1": (
+        "on demand: it needs an executions and a market_data source a site "
+        "wires in, and the fx profile has no free connection slot"
+    ),
+    "fxmarkoutwide1": (
+        "on demand: the wide layout of fx_markout1, started with it when a site "
+        "wants both layouts; the fx profile has no free connection slot"
+    ),
 }
 
 #: The environment variable saying how many concurrent connections this

@@ -101,6 +101,8 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "eq_orderbook": "time",
     "event_tape": "time",
     "exec_bar": "time",
+    "fx_markout": "time",
+    "fx_markout_wide": "time",
     "imported_trades": "time",
     "trades_copy": "time",
 }
@@ -115,6 +117,8 @@ BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "eq_orderbook": "sym",
     "event_tape": "sym",
     "exec_bar": "sym",
+    "fx_markout": "sym",
+    "fx_markout_wide": "sym",
     "imported_trades": "sym",
     "trades_copy": "sym",
 }

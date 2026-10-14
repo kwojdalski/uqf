@@ -145,6 +145,10 @@ unbounded[`fx_limit_breach]:
     enlist "one row per limit newly crossed, throttled so a standing breach does not repeat";
 unbounded[`etl_coverage]:
     enlist "one ledger row per published window per dataset - hundreds a day, not ticks";
+unbounded[`fx_markout]:
+    enlist "a row per component per horizon per execution - about 18 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
+unbounded[`fx_markout_wide]:
+    enlist "a row per horizon per execution - about 4 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`flink_vwap]:
     enlist "one row per sym per one-minute window Flink closes - a few thousand a day";
 unbounded[`deal_positions]:
@@ -196,3 +200,7 @@ surface:{[]
     "the RAW flink_vwap records, published by flink_vwap_streamer.py outside q and read only by flink_vwap, which reshapes them into flink_vwap";
 .qcat.describe[`flink_vwap]:
     "Volume-weighted average price, total volume and trade count for one sym over one tumbling window, computed by an Apache Flink job outside q; each window appears once, keyed by its window_end";
+.qcat.describe[`fx_markout]:
+    "One component of one execution at one horizon, from the normalized FX markout calculation: the markout against the reference mid, the execution residual, each cross leg's allocation, or the reconciling residual (kind), in pips, with the prices behind it - a row per (venue, fill_id, horizon, kind, step)";
+.qcat.describe[`fx_markout_wide]:
+    "One execution at one horizon, from the normalized FX markout calculation: the markout, the execution residual and the reconciling residual side by side, with up to three cross legs and their allocations - the wide layout of fx_markout, a row per (venue, fill_id, horizon)";

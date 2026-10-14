@@ -42,3 +42,7 @@ flink_vwap1,56
 crypto_book_1s1,57
 hdb_crypto_book_backfill1,58
 order_quality1,59
+fxmarkout1,60
+fxmarkoutwide1,61
+hdb_fx_markout_wide_backfill1,62
+hdb_fx_markouts_backfill1,63

@@ -126,3 +126,87 @@ change. The tests hold two differently shaped sources to the claim: the deal
 tape and a level-per-row book on one side, the stack's own `trades` and `quote`
 on the other, normalize to the same `executions` and `market_data` rows and give
 identical markouts from the same calculation.
+
+## The jobs
+
+`fxmarkout1` (long layout, into `fx_markout`) and `fxmarkoutwide1` (wide layout,
+into `fx_markout_wide`) are horizon jobs (`.qetl.job.stream.at_horizons`) over
+`executions` and `market_data`. They differ in one name, the transform each
+declares, and which table it publishes; the queue, timer, readiness, retention,
+deduplication and expiry are the horizon kind's. Neither is in a start profile
+(the connection budget is full, and each needs an `executions` and a
+`market_data` source a site wires in).
+
+  | Declared                       | Value                                    | Why                                                                                                               |
+  | ---                            | ---                                      | ---                                                                                                               |
+  | `event_time`, `reference_time` | `source_time`                            | the source's clock, never the plant's receipt time                                                                |
+  | `ready_on`                     | `both`                                   | the horizon has elapsed on the plant clock **and** the books have covered it                                      |
+  | `legs`                         | the route of each execution              | readiness waits on exactly the legs scoring prices                                                                |
+  | `horizon`, `lookback`          | 10s, 1s                                  | the furthest horizon; the -1s horizon reaches one second back                                                     |
+  | `by`, `retain_by`              | `sym`, `sym` + `source`                  | readiness waits on a leg; eviction keeps each source's last book of a leg                                         |
+  | `identity`, `remember`         | `venue` + `fill_id`, 1 day               | a redelivery before scoring replaces the pending execution; one scored within a day is dropped                    |
+  | `max_lateness`                 | 30s                                      | how late an execution may arrive and still find its books; bounds the history (the kind's default is a day)       |
+  | `expire_after`                 | 5m10s                                    | an execution whose books never cover it is given up on, with the reason, in `.qpipe.job.<name>.expired`           |
+
+The horizons are `-1s, 0, +1s, +10s` (`job_spec` in
+`src/etl/transforms/fx_markout_outputs.q`). The job waits for the furthest, and
+publishes every horizon of an execution together.
+
+## What readiness costs, stated plainly
+
+A book covers an instant only once a row at or after it has arrived: a book not
+yet delivered could still be the one that supersedes the last, and scoring
+against the last would be a guess. So an execution on a leg that goes quiet is
+not scored until that leg next updates, and is given up on at `expire_after` if
+it never does, with the reason `reference has not reached ...` (or
+`no reference for ...` if a leg has never been quoted). This is the horizon
+kind's existing `reference` readiness, kept; the wall condition added by `both`
+stops an execution being scored early, it does not let one be scored without
+coverage.
+
+Under the same rule a live job and a refill can differ in one place only: an
+execution whose books never cover it is **not scored** live (and sits in
+`expired`), and is scored with status `unavailable` by a refill. For executions
+that are covered, the live row and the refill's are identical, and a test holds
+them to that.
+
+## Recovery
+
+The pending queue, the book history and the deduplication memory are
+**intentionally ephemeral**, as `demo_markout`'s and `crypto_markout`'s are: the
+jobs publish derived rows, not a book of record. Executions waiting for their
+horizons at a restart are not scored by the restarted job.
+`hdb_fx_markouts_backfill1` and `hdb_fx_markout_wide_backfill1` re-derive any
+window from the HDB with the same calculation and `replace` the rows under the
+same key, so a gap is a refill, not a loss. A failure in the calculation or in
+publishing leaves the eligible executions queued for the next tick (the horizon
+kind publishes before it evicts); a test forces each.
+
+## Deduplication has a bound
+
+Execution identity is `(venue; fill_id)`. A redelivery **before** scoring
+replaces the pending execution (the last delivery wins, within a batch too). A
+redelivery **after** scoring is dropped while the identity is remembered, which
+is `remember` (a day, on the plant clock). Past that, a redelivery is a new
+execution and is scored and published again; the bounded twin's key makes that
+an idempotent replace in the HDB.
+
+## The bounded twins
+
+`hdb_fx_markouts_backfill1` (long) and `hdb_fx_markout_wide_backfill1` (wide)
+read `hdb_fx_markouts`: the HDB's `executions` for the window and the
+`market_data` of the legs those executions route, from the window's start less
+the lookback to its end plus the furthest horizon, and each source's last book
+before that (looked back up to seven days). They apply the live job's
+calculation and layout and add one thing the live job cannot have: `time` is
+`source_time` plus the furthest horizon, the earliest a live row could have been
+stamped. `on_conflict` is `replace` on `source_time`, so a window the live job
+also scored is replaced, not doubled.
+
+## Adding a source
+
+1. Write the adapter (see above) and register it as a `.qetl.transform`.
+2. Add a line to the `executions` or `market_data` normalizer's `input`:
+   `` `your_table!`your_transform ``.
+3. Nothing else. The calculation, the layouts, the jobs and the horizon engine
+   are unchanged.

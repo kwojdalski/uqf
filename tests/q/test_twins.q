@@ -18,7 +18,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book)
+renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s`fx_markout`fx_markout_wide)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();()!())
 
 / (the stream job's transform; its twin's; the input renaming), each
 / transform as the declaration names it.
@@ -59,6 +59,10 @@ agrees:{[job]
 test_the_demo_markout_twin_scores_as_the_live_job_does:{[t]
     .qunit.assertTrue[agrees[`demo_markout];
         "hdb_demo_markouts_score gives the live transform's rows on its examples"]};
+
+test_the_fx_markout_twins_score_as_the_live_jobs_do:{[t]
+    .qunit.assertTrue[agrees[`fx_markout];"hdb_fx_markouts_long gives the live long layout's rows on its examples"];
+    .qunit.assertTrue[agrees[`fx_markout_wide];"hdb_fx_markouts_wide gives the live wide layout's rows on its examples"]};
 
 test_the_eq_orderbook_twin_applies_the_same_transform:{[t]
     .qunit.assertTrue[agrees[`eq_orderbook];"one transform, shared"]};
