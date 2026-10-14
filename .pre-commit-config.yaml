@@ -187,6 +187,13 @@ repos:
         files: ^docs/diagrams/
         always_run: false
 
+      - id: diagram-ports
+        name: Check the diagram port labels match the stack (#1369)
+        entry: uv run python scripts/gates/check_diagram_ports.py
+        language: system
+        pass_filenames: false
+        files: ^(docs/diagrams/.*\.d2|scripts/processes/|scripts/torqconfig/|python/uqs/src/uqs/(model|stack)/)
+
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash

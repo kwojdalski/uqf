@@ -21,6 +21,12 @@ contributor's d2 version, not a stale diagram, and the fix it implied
 different versions. So the gate runs only when the renderer matches
 D2_VERSION below; otherwise it says which version it wanted and passes.
 
+CI is the exception to both skips: it installs the pinned d2 and passes
+`--require`, under which an absent or different d2 FAILS. Before that CI never
+installed d2, so the skip above was taken on every run and the check was green
+over nothing (#1369). `--print-version` lets the workflow read D2_VERSION from
+here instead of keeping a second copy of it.
+
 Bumping d2: change D2_VERSION, re-render, and commit the SVG churn in its own
 commit so a real diagram change is never buried in it.
 """
@@ -68,7 +74,21 @@ def main() -> int:
         action="store_true",
         help="fail if a committed .svg differs from a fresh render",
     )
+    parser.add_argument(
+        "--require",
+        action="store_true",
+        help="fail, rather than skip, when d2 is absent or is not D2_VERSION (CI)",
+    )
+    parser.add_argument(
+        "--print-version",
+        action="store_true",
+        help="print D2_VERSION and exit (the CI workflow installs that release)",
+    )
     args = parser.parse_args()
+
+    if args.print_version:
+        print(D2_VERSION)
+        return 0
 
     srcs = sources()
     if not srcs:
@@ -79,6 +99,13 @@ def main() -> int:
         return 1
 
     version = installed_version()
+    if args.require and version != D2_VERSION:
+        print(
+            f"render_diagrams: --require needs d2 {D2_VERSION} but found "
+            f"{version or 'no d2 on PATH'}; refusing to skip the check",
+            file=sys.stderr,
+        )
+        return 1
     if version is None:
         print(f"render_diagrams: no d2 on PATH; {len(srcs)} diagram(s) left as committed")
         return 0
