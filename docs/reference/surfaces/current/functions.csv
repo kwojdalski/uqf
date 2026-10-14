@@ -128,6 +128,7 @@ qetl.cfg.audit,seen,dict,,
 qetl.cfg.audit,watch,function,2,owner names
 qetl.cfg.audit,watched,dict,,
 qetl.cfg.audit,watching,function,1,owner
+qetl.coerce,clock_in_range,function,1,str
 qetl.coerce,coerce_column,function,2,f col
 qetl.coerce,is_date_only,function,1,str
 qetl.coerce,numeric_chars,value,,
@@ -1522,6 +1523,8 @@ qrender,full,function,1,v
 qrender,quoted,function,1,s
 qrisk,carry_pnl,function,3,notional spot fwd
 qrisk,carry_return,function,2,spot fwd
+qrisk,flat_tolerance,value,,
+qrisk,is_flat,function,1,qty
 qrisk,pip_value,function,2,notional pip_factor
 qrisk,pnl,function,4,notional entry_rate exit_rate side
 qrisk,var_historical,function,2,pnl_series confidence
