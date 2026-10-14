@@ -43,9 +43,10 @@ facts:{[batch]
 
 \d .
 
-/ Pass-through: deals are copied as fetched. The example is the source's
-/ own fixture.
-.qetl.transform.passthrough[`duckdb_deals_passthrough;`batch;0#.qpipe.source.duckdb_deals.fixture[];.qpipe.source.duckdb_deals.fixture[]];
+/ Pass-through: deals are copied as fetched. The shape is the plant's minus
+/ `time`, which the HDB writer sets from deal_time (#1360); the source's
+/ columns are those, in that order. The example is the source's own fixture.
+.qetl.transform.passthrough[`duckdb_deals_passthrough;`batch;.qetl.plant.published `duckdb_deals;.qpipe.source.duckdb_deals.fixture[]];
 
 .qetl.job.bounded.define[`duckdb_deals_backfill;
     `source`dataset`width`transform`check`facts`procname`note!
