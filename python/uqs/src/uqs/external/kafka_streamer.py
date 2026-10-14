@@ -52,35 +52,25 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from uqs.external.plant_contract import PLANT_TABLES_Q, plant_table_fields
+
 #: The plant's declaration of the raw table, read at runtime for rule 3.
 #: `plant_tables.q` rather than a `.qetl.source` source contract, because this feed has
 #: no ODBC backfill to share a contract with - replaying a topic from offset 0
 #: is Kafka's own answer to backfill, and it needs a broker.
-CONTRACT_Q = "src/etl/plant_tables.q"
+CONTRACT_Q = PLANT_TABLES_Q
 
 #: The raw table this pushes onto. `kafka_flow1` subscribes to it.
 KAFKA_RAW_TABLE = "kafka_client_flow"
 
 
 def contract_fields(repo_root: str) -> list[str]:
-    """The raw table's column order, parsed out of its q declaration.
+    """The raw table's column order, read from its q declaration.
 
-    Reading the q rather than duplicating the list is the discipline
-    `databento_streamer.contract_fields` follows for the same reason: one
-    place to change, so a mismatch is impossible rather than merely unlikely.
-
-    `time` is dropped because the plant stamps it (rule 1).
+    `time` is dropped because the plant stamps it (rule 1). The parser is
+    `plant_contract.plant_table_fields`, shared with the other streamers.
     """
-    path = os.path.join(repo_root, CONTRACT_Q)
-    with open(path, encoding="utf-8") as fh:
-        text = fh.read()
-    # The `]` is part of the prefix: q's table literal opens `([]`, and a
-    # prefix of `([` leaves the first field named "]time".
-    prefix = f"{KAFKA_RAW_TABLE}:([]"
-    line = next(line for line in text.splitlines() if line.startswith(prefix))
-    body = line[len(prefix) : line.rindex(")")]
-    fields = [chunk.split(":", 1)[0].strip() for chunk in body.split(";")]
-    return [f for f in fields if f and f != "time"]
+    return plant_table_fields(repo_root, KAFKA_RAW_TABLE)
 
 
 def rows_from_messages(messages: list[Any], fields: list[str]) -> dict[str, list]:
