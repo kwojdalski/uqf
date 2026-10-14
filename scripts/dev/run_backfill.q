@@ -32,6 +32,9 @@
 // unchanged. -hdb is the one addition: without it the rows stay in this
 // process (.qetl.io.memory) and are gone at exit, which is what you want when
 // the question is "does the query work", not "fill the database".
+// -mode (validate, plan, dry_run, run) and -on_conflict are applied the way
+// torq_backfill.q applies them (#1319), by the same functions; -mode plan and
+// -mode validate open nothing and write nothing, whatever -hdb says.
 //
 // Run from the repository root: init.q's \l lines are root-relative.
 
@@ -85,6 +88,18 @@ ns:(.qetl.job.bounded.def worker)`ns;
 
 .qetl.log.info[worker;"run_backfill starting";s`spec];
 if[`fixture in key .Q.opt .z.x; .qetl.cfg.set_override[`fixture_writes;"1"]];
+/ -on_conflict then -mode, as torq_backfill.q does, and BEFORE any io is
+/ opened: a bad value, or a variable that outranks the flag, is refused here
+/ rather than ignored (#1319). A -mode plan the script dropped wrote rows
+/ into the -hdb root.
+@[{[o] .qetl.job.bounded.runtime.use_on_conflict["run_backfill";o]; .qetl.job.bounded.runtime.use_mode["run_backfill";o]};
+    .Q.opt .z.x;{[e] -1 e; exit 2}];
+/ A read-only mode stops here: nothing opened, nothing written.
+md:.qetl.job.bounded.runtime.mode[];
+if[md in `validate`plan;
+    r:$[md~`validate; .qetl.job.bounded.validate[worker;s`spec]; .qetl.job.bounded.plan_only[worker;s`spec]];
+    .qetl.log.info[worker;string[md]," - nothing opened, nothing written";`plan _ r];
+    exit 0];
 .qdev.runbackfill.use_io[.Q.opt .z.x;worker];
 
 / Three named parameters so {...}[ns;spec] is a PROJECTION: .Q.trp calls
