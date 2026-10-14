@@ -65,9 +65,17 @@ dimensions:`sym`book`product
 / @param batch executions rows
 / @return the new desk book, unkeyed
 net_fills:{[book;batch]
+    rows:select sym, book, product, side, size, price from batch;
+    / A fill with a null side, size or price cannot be netted (apply_fills
+    / refuses it, #1309); one bad row must not crash the stream job or take
+    / the batch with it, so it is dropped and said out loud.
+    bad:(null rows`side) or (null rows`size) or null rows`price;
+    if[any bad;
+        .qetl.log.warn[`fx_positions;"dropped fills with a null side, size or price - they cannot be netted";
+            enlist[`fills]!enlist `long$sum bad]];
     updated:.qdesk.apply_fills[
         .qpipe.job.fx_positions.dimensions xkey book;
-        select sym, book, product, side, size, price from batch];
+        rows where not bad];
     `sym`book`product xasc 0!updated}
 
 / --------------------------------------------------------------- THE JOB

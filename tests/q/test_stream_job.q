@@ -1112,6 +1112,21 @@ test_positions_net_only_filled_orders:{[t]
     .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;600000f;1e-9;
         "and it did not move london's, which is 1mm bought less 400k sold"]};
 
+test_positions_drop_and_log_a_null_priced_fill:{[t]
+    reset[];
+    saved:.qetl.log.warn;
+    `.qetl.log.warn set {[id;text;fields] `.sjtest.fx_warned set (id;text;fields);};
+    b:update price:0n from orders_batch[] where order_id=2;
+    r:@[{to_fx_positions x; 1b};b;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
+    `.qetl.log.warn set saved;
+    .qunit.assertEquals[r;1b;"a null-priced fill does not crash the stream job"];
+    .qunit.assertEquals[(.sjtest.fx_warned 0);`fx_positions;"it is logged"];
+    .qunit.assertEquals[(.sjtest.fx_warned 2)`fills;1j;"naming how many"];
+    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
+        "and the unpriced 400k sale is in neither leg of london's book"];
+    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`quote_qty;-1085000f;1e-6;
+        "the priced buy keeps both"]};
+
 test_positions_keep_the_books_apart:{[t]
     reset[];
     to_fx_positions[orders_batch[]];

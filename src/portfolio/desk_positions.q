@@ -94,13 +94,19 @@ dimensions:{[book] keys book}
 / @param batch the fills: a table with sym, side, size, price and every
 /   dimension (`batch`, because `fills` is a q builtin)
 / @return the updated book
-/ @throws error naming any missing column
+/ @throws error naming any missing column, or counting fills with a null side, size or price
 / @eg exec base_qty from .qdesk.apply_fills[.qdesk.empty_book[`sym];([] sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; price:1.085 1.086)] -> enlist 600000f
 apply_fills:{[book;batch]
     dims:dimensions[book];
     if[not 98h=type batch; '"apply_fills: fills must be a table"];
     .qschema.require_cols[`apply_fills;`fills;batch;distinct required_cols,dims];
     if[0=count batch; :book];
+    / sum skips a null, so a null price would net into base_qty and not
+    / quote_qty (a null size into neither, yet still count) - a book missing
+    / its cash leg, and a break_even that looks fine (#1309). Refused.
+    n_bad:sum (null batch`side) or (null batch`size) or null batch`price;
+    if[n_bad;
+        '"apply_fills: ",string[n_bad]," fill(s) have a null side, size or price - a fill that cannot be netted must not be netted on one side only"];
     netted:?[batch; (); {x!x} dims;
         `base_qty`quote_qty`fill_count!(
             (sum;(*;`side;`size));
