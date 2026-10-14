@@ -43,11 +43,22 @@ export type Tier = "rdb" | "hdb" | "both";
 /** A worker's state as status.q writes it - models.RunState, held to it by
  * test_api_types.py, and RunState to q by test_status.py (#820). */
 export type RunState = "starting" | "running" | "idle" | "completed" | "failed";
+/** A filter operator - models.Filter.op, held to it by test_api_types.py. */
+export type FilterOp = "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "in";
+/** One predicate of a query - models.Filter. The request bodies below are
+ * held to their models field for field by test_api_types.py, and the server
+ * refuses a key it does not know (#1361): a renamed field is a failing test
+ * and a 422, never a default the server quietly fills in. */
+export interface QueryFilter {
+  column: string;
+  op: FilterOp;
+  value: unknown;
+}
 export interface QueryInput {
   table: string;
   tier: Tier;
   limit: number;
-  filters: { column: string; op: string; value: unknown }[];
+  filters: QueryFilter[];
   require_coverage?: CoverageRequest;
 }
 export interface QueryResult extends Pollable {
@@ -89,11 +100,29 @@ export interface Backfill extends Pollable {
   unreadable: Row[];
   source: string | null;
 }
+/** One row of /ops/processes - models.ProcessHealthOut. Typed rather than a
+ * Row read by string key, so a renamed `up` is a compile error and a failing
+ * test_api_types.py, not every process shown Down (#1361). */
+export interface ProcessHealth {
+  procname: string;
+  proctype: string;
+  group: string;
+  host: string;
+  declared_port: number | null;
+  start_with_all: boolean;
+  up: boolean;
+  pid: number | null;
+  reported_port: number | null;
+  reported_procname: string | null;
+  error: string | null;
+  identity_mismatch: string | null;
+  port_unresolved: boolean;
+}
 export interface OpsData extends Pollable {
   rows?: Row[];
   servers?: Row[];
   clients?: Row[];
-  processes?: Row[];
+  processes?: ProcessHealth[];
   summary?: Record<string, number>;
   unreachable?: Row[];
   processes_configured?: number;
@@ -247,6 +276,29 @@ export interface ControlStatus extends Pollable {
   lifecycle_actions: string[];
   settable_fields: string[];
   processes: ControlProcess[];
+}
+/** POST /control/process/{action} - models.LifecycleRequest. `procs` is
+ * required on both sides: it once defaulted to "all" on the server, so a body
+ * without it stopped the whole fleet (#1361). */
+export interface LifecycleBody {
+  procs: string;
+}
+/** PUT /control/process/{procname}/config - models.ProcessConfigRequest. */
+export interface ProcessConfigBody {
+  field: string;
+  value: string;
+}
+/** PUT /control/worker-config - models.WorkerConfigRequest. */
+export interface WorkerConfigBody {
+  key: string;
+  value: string;
+}
+/** POST /control/backfill - models.BackfillRequest. */
+export interface BackfillBody {
+  worker: string;
+  source_version: string;
+  range_from: string;
+  range_to: string;
 }
 export interface CommandResult {
   action: string;
