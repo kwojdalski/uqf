@@ -142,6 +142,56 @@ def test_a_guid_filter_value_reaches_q_as_a_guid(browse_port):
     assert list(types) == [-2, 2]
 
 
+#: A timespan column as a table holds it, and a where clause built from one
+#: .uqf.browse_pair - the filter getdata would apply.
+SPAN_FILTER = """{[o;v]
+    t:([] s:"n"$1000 1234 1500 1999 2000);
+    p:.uqf.browse_pair[o;v];
+    exec "j"$s from ?[t;enlist (p 0;`s;p 1);0b;()]}"""
+
+
+@pytest.mark.parametrize(
+    ("op", "value", "matched"),
+    [
+        ("eq", 1234, [1234]),
+        ("lt", 1500, [1000, 1234]),
+        ("ge", 1500, [1500, 1999, 2000]),
+        ("in", [1234, 1999], [1234, 1999]),
+    ],
+)
+def test_a_timespan_filter_reaches_q_to_the_nanosecond(browse_port, op, value, matched):
+    """#1329: a timespan filter went to q as a timedelta, rounded to the
+    microsecond - `eq 1234` asked for 1000 ns and matched nothing, `lt 1500`
+    asked for < 2000 - and since #1317 it was refused instead. It now crosses
+    kola as nanoseconds, and .uqf.browse compares with the column exactly."""
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.queries import coerce
+
+    v = coerce(value, QType.TIMESPAN, "s", as_list=op == "in")
+    gw = KolaGateway(Settings(port=browse_port))
+    assert list(gw.call(SPAN_FILTER, op, v)) == matched
+
+
+def test_infinities_reach_the_browser_as_infinities_not_nulls(browse_port):
+    """#1330: kola turns a long's 0W into null, and pydantic writes a float's
+    inf as null, so an infinite level showed as a missing one. Through
+    .uqf.browse_infinite and _rows each comes out as INFINITY, signed, and a
+    null stays null."""
+    from uqf_frontend.app import _rows
+
+    gw = KolaGateway(Settings(port=browse_port))
+    got = gw.call(
+        '{[unused] .uqf.browse_infinite ([] l:1 0W -0W 0N; f:1.5 0w -0w 0n; s:"n"$5 0W -0W 0N)}',
+        0,
+    )
+    assert _rows(got) == [
+        {"l": 1.0, "f": 1.5, "s": 5},
+        {"l": "inf", "f": "inf", "s": "inf"},
+        {"l": "-inf", "f": "-inf", "s": "-inf"},
+        {"l": None, "f": None, "s": None},
+    ]
+
+
 def test_browse_brings_back_the_cap_the_policy_set(browse_port):
     """#1255: over a real kola connection .uqf.browse's answer is the rows
     and the cap it read under - the policy's 3, not the 50 asked for - so

@@ -39,9 +39,26 @@ type View = (typeof views)[number];
  *  everything past milliseconds, and these carry microseconds. */
 const ISO_INSTANT =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/;
-function text(value: unknown, decimals?: number | null) {
+/** The column types a number is shown for, and so the only ones whose
+ *  "inf" / "-inf" is the server's infinity rather than a symbol that happens
+ *  to be spelled that way (#1330). */
+const NUMERIC = new Set(["float", "long", "timespan"]);
+const INFINITY: Record<string, string> = { inf: "∞", "-inf": "-∞" };
+function text(value: unknown, decimals?: number | null, type?: string) {
   if (value == null) return "—";
   if (typeof value === "object") return JSON.stringify(value);
+  // The server sends an infinite number as a string, because JSON has none
+  // and would carry it as null - shown as missing, the one reading an
+  // operator takes as harmless.
+  if (
+    type &&
+    NUMERIC.has(type) &&
+    typeof value === "string" &&
+    value in INFINITY
+  )
+    return INFINITY[value];
+  if (type === "timespan" && typeof value === "number")
+    return timespan(value, decimals ?? 9);
   if (decimals == null) return String(value);
   if (typeof value === "number") {
     return Number.isFinite(value) ? value.toFixed(decimals) : String(value);
@@ -60,6 +77,41 @@ function text(value: unknown, decimals?: number | null) {
     }
   }
   return String(value);
+}
+/** A whole number of nanoseconds as q writes a timespan - 0D00:00:00.000 -
+ *  with its fraction cut to `decimals`, as an instant's is. The server sends
+ *  nanoseconds rather than a duration string because a Python timedelta
+ *  stops at the microsecond (#1329), and this is the form a timespan filter
+ *  takes back. */
+export function timespan(nanoseconds: number, decimals: number) {
+  const sign = nanoseconds < 0 ? "-" : "";
+  const ns = BigInt(Math.abs(Math.trunc(nanoseconds)));
+  const second = 1_000_000_000n;
+  const seconds = ns / second;
+  const two = (n: bigint) => String(n).padStart(2, "0");
+  const fraction = String(ns % second)
+    .padStart(9, "0")
+    .slice(0, decimals);
+  return (
+    sign +
+    String(seconds / 86400n) +
+    "D" +
+    two((seconds / 3600n) % 24n) +
+    ":" +
+    two((seconds / 60n) % 60n) +
+    ":" +
+    two(seconds % 60n) +
+    (decimals > 0 ? "." + fraction : "")
+  );
+}
+/** Column name -> q type for one queried table, from the catalog: what tells
+ *  a timespan's nanoseconds from a long, and an infinity from a symbol. */
+function typesFor(catalog: Catalog | undefined, table: string) {
+  const entry = catalog?.tables.find((item) => item.name === table);
+  if (!entry) return undefined;
+  return Object.fromEntries(
+    entry.columns.map((column) => [column.name, column.type]),
+  );
 }
 /** Column name -> decimal places for one queried table, from the catalog the
  *  server published. Keyed by the table the RESULT names rather than the one
@@ -84,9 +136,13 @@ export function Table({
   rows,
   empty = "No records returned.",
   decimals,
+  types,
 }: {
   rows: Row[];
   empty?: string;
+  /** Column name -> q type, from the catalog. Without it a timespan shows
+   *  as its nanoseconds and an infinity as "inf". */
+  types?: Record<string, string>;
   /** Column name -> decimal places, from the catalog. A table with no entry
    *  for a column shows it as it arrives, which is what every operational
    *  table here wants: those are counts, states and process names. */
@@ -112,7 +168,7 @@ export function Table({
                   {column === "state" ? (
                     <Badge value={text(row[column])} />
                   ) : (
-                    text(row[column], decimals?.[column])
+                    text(row[column], decimals?.[column], types?.[column])
                   )}
                 </td>
               ))}
@@ -490,6 +546,7 @@ function DeskView() {
                     rows={resource.data.rows}
                     empty="No rows match this query."
                     decimals={decimalsFor(catalog.data, resource.data.table)}
+                    types={typesFor(catalog.data, resource.data.table)}
                   />
                 </section>
               )}

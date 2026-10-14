@@ -96,6 +96,21 @@ test_ne_beside_eq_on_a_required_column_passes:{[t]
     .qunit.assertEquals[refusal[policy`mkt_orderbook] symfilter .uqf.browse_pair'[`eq`ne;`EURUSD`GBPUSD];`passed;
         "the eq already narrows it"]};
 
+/ #1329: the frontend sends a timespan as a one-item timespan vector, the
+/ only form kola gives nanoseconds; browse_pair compares with the atom, or
+/ with the vector for in, so 1234 ns is 1234 ns.
+test_a_timespan_value_is_compared_to_the_nanosecond:{[t]
+    s:"n"$1000 1234 1500;
+    one:.uqf.browse_pair[`eq;enlist 0D00:00:00.000001234];
+    many:.uqf.browse_pair[`in;(enlist 0D00:00:00.000001234;enlist 0D00:00:00.0000015)];
+    .qunit.assertEquals[(one[0][s;one 1];many[0][s;many 1]);(010b;011b);"an atom for eq, a vector for in"]};
+
+/ #1330: kola makes 0W and -0W null, so a column holding one goes as floats,
+/ where 0w and -0w survive; every other column is left exactly as it was.
+test_an_integral_infinity_goes_as_a_float_one:{[t]
+    r:.uqf.browse_infinite ([] l:1 0W -0W 0N; i:"i"$1 0W 2 3; j:1 2 3 4; f:1.5 0w 2 3);
+    .qunit.assertEquals[(r`l;r`i;r`j;r`f);(1 0w -0w 0n;1 0w 2 3f;1 2 3 4;1.5 0w 2 3);"0W as 0w, a column without one untouched"]};
+
 test_instruments_satisfies_a_required_column_whatever_else_filters_it:{[t]
     d:book,enlist[`filters]!enlist enlist[`sym]!enlist enlist .uqf.browse_pair[`ne;`ZZZ];
     .qunit.assertEquals[refusal[policy`mkt_orderbook] d;`passed;"instruments names the pair"]};

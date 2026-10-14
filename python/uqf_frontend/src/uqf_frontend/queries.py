@@ -45,6 +45,8 @@ import datetime as dt
 import uuid
 from typing import Any
 
+import polars as pl
+
 from uqf_frontend.catalog import LIST_OPERATORS, OPERATORS, QType, Table
 from uqf_frontend.errors import ValidationFailed
 
@@ -146,7 +148,8 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
 
     Verified kola conversions: ``str`` becomes a symbol atom, ``list[str]`` a
     symbol vector, ``float`` a float atom, ``int`` a long atom, ``bool`` a
-    boolean atom, and a **timezone-aware** ``datetime`` a timestamp.
+    boolean atom, a **timezone-aware** ``datetime`` a timestamp, and a polars
+    ``Duration("ns")`` series a timespan vector (`_nanoseconds`).
 
     A naive datetime is rejected by kola itself with an unhelpful TypeError,
     so this function requires UTC explicitly. That is not a workaround - it
@@ -180,18 +183,7 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
         case QType.TIMESTAMP:
             return _utc(value, column)
         case QType.TIMESPAN:
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ValidationFailed(
-                    f"column {column!r} is a timespan; expected nanoseconds as a number"
-                )
-            # A timedelta stops at the microsecond too, and would round the
-            # tail to the nearest one: the same silent move _utc refuses.
-            if float(value) % 1000:
-                raise ValidationFailed(
-                    f"column {column!r} is a timespan; {value!r} is finer than a "
-                    "microsecond, which this cannot carry"
-                )
-            return dt.timedelta(microseconds=float(value) / 1000.0)
+            return _nanoseconds(value, column)
         case QType.GUID:
             # Validated here rather than passed through, so a malformed id is
             # a 422 naming the column instead of a q-side type error the
@@ -213,6 +205,36 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
             )
 
     raise ValidationFailed(f"column {column!r} has unsupported type {qtype}")  # pragma: no cover
+
+
+#: The widest timespan q holds, in nanoseconds: 0Wn. One further is 0Nn.
+_SPAN_LIMIT = 2**63 - 1
+
+
+def _nanoseconds(value: Any, column: str) -> pl.Series:
+    """A whole number of nanoseconds as the one-item timespan vector kola
+    sends as a q timespan, exact.
+
+    Not a `timedelta`: that stops at the microsecond, so 1234 ns went to q as
+    1 us and `skew eq 1234` matched nothing (#1329). kola has no Python atom
+    that carries a nanosecond, but it sends a polars `Duration("ns")` series
+    as a q timespan vector, and .uqf.browse unwraps a one-item one
+    (browse_value). A fraction of a nanosecond is refused rather than
+    rounded, and so is a count q has no timespan for.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValidationFailed(f"column {column!r} is a timespan; expected nanoseconds as a number")
+    if isinstance(value, float):
+        if not value.is_integer():
+            raise ValidationFailed(
+                f"column {column!r} is a timespan; {value!r} is not a whole number of nanoseconds"
+            )
+        value = int(value)
+    if not -_SPAN_LIMIT <= value <= _SPAN_LIMIT:
+        raise ValidationFailed(
+            f"column {column!r} is a timespan; {value!r} nanoseconds is past what q can hold"
+        )
+    return pl.Series([value], dtype=pl.Int64).cast(pl.Duration("ns"))
 
 
 def _utc(value: Any, column: str) -> dt.datetime:

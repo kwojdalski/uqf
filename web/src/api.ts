@@ -170,13 +170,20 @@ export function filterValue(
         String(value).trim() === ""
       )
         throw new Error("Enter a number.");
-      const number = Number(value);
+      const span =
+        column.type === "timespan" ? qTimespan(String(value)) : undefined;
+      const number = span ?? Number(value);
+      // A timespan is a whole number of nanoseconds (#1329): a fraction has
+      // nowhere to go, and past 2^53 a JavaScript number is not the one typed.
       if (
         !Number.isFinite(number) ||
-        (column.type === "long" && !Number.isSafeInteger(number))
+        (["long", "timespan"].includes(column.type) &&
+          !Number.isSafeInteger(number))
       )
         throw new Error(
-          "Enter a valid number (a safe integer for long columns).",
+          column.type === "timespan"
+            ? "Enter a whole number of nanoseconds, or a timespan like 0D00:00:01.5."
+            : "Enter a valid number (a safe integer for long columns).",
         );
       return number;
     }
@@ -194,6 +201,21 @@ export function filterValue(
   if (!Array.isArray(values) || values.length === 0)
     throw new Error('Use a non-empty JSON list, e.g. ["EURUSD", "GBPUSD"].');
   return values.map(scalar);
+}
+/** A q timespan literal - 0D00:00:00.000001234, as the Desk shows one - as
+ *  nanoseconds, or undefined when `value` is not one (a plain number of
+ *  nanoseconds is read by the caller). Exact: summed as a BigInt. */
+export function qTimespan(value: string): number | undefined {
+  const parts = /^(-)?(\d+)D(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/.exec(
+    value.trim(),
+  );
+  if (!parts) return undefined;
+  const [, sign, days, hours, minutes, seconds, fraction] = parts;
+  const ns =
+    ((BigInt(days) * 24n + BigInt(hours)) * 60n + BigInt(minutes)) * 60n +
+    BigInt(seconds);
+  const total = ns * 1_000_000_000n + BigInt((fraction ?? "").padEnd(9, "0"));
+  return Number(sign ? -total : total);
 }
 export function validateTime(value: string) {
   if (

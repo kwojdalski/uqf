@@ -16,6 +16,7 @@ import datetime as dt
 from pathlib import Path
 from types import SimpleNamespace
 
+import polars as pl
 import pytest
 
 from uqf_frontend import control, health, queries
@@ -50,21 +51,67 @@ def test_a_timespan_takes_a_number_of_nanoseconds_only(bad):
         queries.coerce(bad, QType.TIMESPAN, "horizon", as_list=False)
 
 
+def _ns(series) -> list[int]:
+    """A coerced timespan as the nanoseconds kola sends; `to_list` would hand
+    back timedeltas, which stop at the microsecond."""
+    assert series.dtype == pl.Duration("ns")
+    return series.cast(pl.Int64).to_list()
+
+
 def test_a_timespan_is_read_as_nanoseconds():
     # 1.5 seconds = 1_500_000_000 ns. Reading it as microseconds would be a
     # thousand times too long and still a plausible-looking duration.
-    assert queries.coerce(1_500_000_000, QType.TIMESPAN, "h", as_list=False) == dt.timedelta(
-        seconds=1.5
-    )
+    assert _ns(queries.coerce(1_500_000_000, QType.TIMESPAN, "h", as_list=False)) == [1_500_000_000]
 
 
-@pytest.mark.parametrize("ns", [1, 999, 1500, 1_000_000_001])
-def test_a_timespan_finer_than_a_microsecond_is_refused_not_rounded(ns):
-    """A timedelta stops at the microsecond and rounds to the nearest one:
-    1 ns became 0, 1500 ns became 2 us (#1317). The same refusal a timestamp
-    gets, rather than a horizon quietly moved."""
-    with pytest.raises(ValidationFailed, match="'h' is a timespan; .* finer than a microsecond"):
+@pytest.mark.parametrize("ns", [1, 999, 1234, 1500, 2500, 1_000_000_001, -1234, 2**63 - 1])
+def test_a_timespan_keeps_its_nanoseconds(ns):
+    """A timedelta stops at the microsecond and rounds to the nearest one,
+    half to even: 1234 ns went to q as 1 us and `skew eq 1234` matched
+    nothing, 1500 and 2500 both as 2 us (#1329). #1317 refused these instead
+    of rounding them; carried as nanoseconds, there is nothing to refuse."""
+    assert _ns(queries.coerce(ns, QType.TIMESPAN, "h", as_list=False)) == [ns]
+
+
+def test_a_whole_float_is_a_number_of_nanoseconds():
+    assert _ns(queries.coerce(1234.0, QType.TIMESPAN, "h", as_list=False)) == [1234]
+
+
+def test_a_fraction_of_a_nanosecond_is_refused_not_rounded():
+    with pytest.raises(ValidationFailed, match="'h' is a timespan; 1234.5 is not a whole number"):
+        queries.coerce(1234.5, QType.TIMESPAN, "h", as_list=False)
+
+
+@pytest.mark.parametrize("ns", [2**63, -(2**63), 1e30])
+def test_a_timespan_q_cannot_hold_is_refused(ns):
+    with pytest.raises(ValidationFailed, match="'h' is a timespan; .* past what q can hold"):
         queries.coerce(ns, QType.TIMESPAN, "h", as_list=False)
+
+
+def test_a_row_carries_a_timespan_as_nanoseconds_and_an_infinity_as_a_string():
+    """What kola hands _rows for `s:0D00:00:01.5 0D00:00:00.000001234 0Nn` and
+    `f:0w -0w 0n`. Before: `PT1.5S`, `PT0.000001S` (#1329) and null, null
+    (#1330) - a value cut to the microsecond in a unit the filter does not
+    take, and an infinity indistinguishable from a missing value."""
+    from uqf_frontend.app import _rows
+    from uqf_frontend.models import QueryResponse
+
+    frame = pl.DataFrame(
+        {
+            "s": pl.Series([1_500_000_000, 1234, None], dtype=pl.Int64).cast(pl.Duration("ns")),
+            "f": [float("inf"), float("-inf"), None],
+        }
+    )
+    rows = _rows(frame)
+    assert rows == [
+        {"s": 1_500_000_000, "f": "inf"},
+        {"s": 1234, "f": "-inf"},
+        {"s": None, "f": None},
+    ]
+    wire = QueryResponse(
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=3, truncated=False
+    ).model_dump_json()
+    assert '"rows":[{"s":1500000000,"f":"inf"},{"s":1234,"f":"-inf"},{"s":null,"f":null}]' in wire
 
 
 def test_an_aware_datetime_is_normalised_to_utc():

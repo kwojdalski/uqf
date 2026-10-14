@@ -9,6 +9,10 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "kola>=2.5.0",
+    # kola's own frame library, imported directly since #1329: a timespan
+    # goes to q as a Duration("ns") series and comes back from one, because
+    # a Python timedelta stops at the microsecond.
+    "polars",
     "fastapi>=0.115",
     "pydantic>=2.9",
     "uvicorn>=0.32",

@@ -75,3 +75,53 @@ it("leaves a null as the placeholder rather than formatting it", () => {
   render(<Table rows={[{ rate: null }]} decimals={{ rate: 5 }} />);
   expect(screen.getByText("—")).toBeInTheDocument();
 });
+
+it("shows a timespan's nanoseconds as q does, at its declared decimals", () => {
+  // #1329: the server sends nanoseconds. It sent an ISO duration cut to the
+  // microsecond - 1234 ns as PT0.000001S - which the decimals never touched.
+  render(
+    <Table
+      rows={[{ skew: 1234 }, { skew: 93_600_000_123_456 }, { skew: -1500 }]}
+      decimals={{ skew: 9 }}
+      types={{ skew: "timespan" }}
+    />,
+  );
+  expect(screen.getByText("0D00:00:00.000001234")).toBeInTheDocument();
+  expect(screen.getByText("1D02:00:00.000123456")).toBeInTheDocument();
+  expect(screen.getByText("-0D00:00:00.000001500")).toBeInTheDocument();
+});
+
+it("cuts a timespan's fraction to three decimals by default", () => {
+  render(
+    <Table
+      rows={[{ window: 1_500_000_000 }]}
+      decimals={{ window: 3 }}
+      types={{ window: "timespan" }}
+    />,
+  );
+  expect(screen.getByText("0D00:00:01.500")).toBeInTheDocument();
+});
+
+it("shows an infinity as one, distinct from a missing value", () => {
+  // #1330: 0w, -0w and 0W reached the table as null and showed as "—".
+  render(
+    <Table
+      rows={[
+        { mid: "inf", size: "-inf", horizon: "inf", sym: "inf", gap: null },
+      ]}
+      decimals={{ mid: 5, size: null, horizon: 3, sym: null, gap: 5 }}
+      types={{
+        mid: "float",
+        size: "long",
+        horizon: "timespan",
+        sym: "symbol",
+        gap: "float",
+      }}
+    />,
+  );
+  const cells = [...document.querySelectorAll("td")].map(
+    (td) => td.textContent,
+  );
+  // A symbol spelled "inf" is a symbol, not an infinity.
+  expect(cells).toEqual(["∞", "-∞", "∞", "inf", "—"]);
+});
