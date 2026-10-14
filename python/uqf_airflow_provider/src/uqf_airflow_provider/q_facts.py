@@ -32,3 +32,9 @@ STATUS_FILE_PREFIX: str = "airflow_status_"
 
 #: a status file's name after the instance id - .qetl.status.file_suffix
 STATUS_FILE_SUFFIX: str = ".txt"
+
+#: what a fixture run's release ends with - .qetl.source.fixture_tag
+FIXTURE_TAG: str = "~fixture"
+
+#: what precedes a worker's output revision in a release - .qetl.job.bounded.runtime.revision_tag
+REVISION_TAG: str = "@r"

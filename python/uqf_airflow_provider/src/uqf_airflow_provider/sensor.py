@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from uqf_airflow_provider import liveness
+from uqf_airflow_provider.q_facts import FIXTURE_TAG, REVISION_TAG
 from uqf_airflow_provider.status_reader import (
     MalformedStatusFile,
     WorkerStatus,
@@ -26,15 +27,6 @@ from uqf_airflow_provider.status_reader import (
     status_file_path,
 )
 from uqf_airflow_provider.translate import PokeOutcome, failure_reason, translate
-
-#: What `.qetl.source.fixture_version` appends to the release a run on a
-#: source's fixture records under (#1082), and what
-#: `.qetl.job.bounded.runtime.run_version` puts between the release and a
-#: worker's declared output revision (#1097). Mirrors of uqs.stack.runs's
-#: FIXTURE_TAG and REVISION_TAG: this package does not depend on uqs, so, as
-#: with status_reader.STATES, the test suite holds them equal to the q source.
-FIXTURE_TAG = "~fixture"
-REVISION_TAG = "@r"
 
 
 def _untagged(version: str) -> str:

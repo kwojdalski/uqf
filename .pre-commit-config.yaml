@@ -187,6 +187,13 @@ repos:
         files: ^docs/diagrams/
         always_run: false
 
+      - id: diagram-ports
+        name: Check the diagram port labels match the stack (#1369)
+        entry: uv run python scripts/gates/check_diagram_ports.py
+        language: system
+        pass_filenames: false
+        files: ^(docs/diagrams/.*\.d2|scripts/processes/|scripts/torqconfig/|python/uqs/src/uqs/(model|stack)/)
+
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash
@@ -279,6 +286,19 @@ repos:
         language: system
         pass_filenames: false
         files: '\.q$|^python/uqs/src/uqs/generated/|^python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts\.py$|^scripts/generate/(q_facts\.py|export_q_facts\.q)$'
+
+      - id: table-properties
+        name: Check the getdata table list matches the plant tables and workers' datasets
+        # scripts/torqconfig/dataaccess/tableproperties.csv is generated (#1363):
+        # a row for every plant table and every bounded worker's dataset, so
+        # nothing the catalog offers is refused by TorQ's checktablename. It
+        # needs no q - the workers' datasets are in the committed q_facts.py.
+        # To accept an intended change:
+        #   uv run python scripts/generate/tableproperties.py
+        entry: uv run python scripts/generate/tableproperties.py --check
+        language: system
+        pass_filenames: false
+        files: '^src/etl/plant_tables\.q$|^scripts/torqconfig/dataaccess/tableproperties\.csv$|^python/uqs/src/uqs/(generated/q_facts|stack/gateway_access)\.py$|^scripts/generate/tableproperties\.py$'
 
       - id: q-coverage
         name: Check every function a test should reach is reached

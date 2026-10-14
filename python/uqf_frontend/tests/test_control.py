@@ -212,8 +212,8 @@ def test_the_process_list_is_empty_while_writes_are_off(client):
 def test_start_calls_the_orchestrator_with_the_selector(writeable, monkeypatch):
     seen: dict[str, Any] = {}
 
-    def fake_start(paths, procs, base_port=6050, capture=False):
-        seen.update(procs=procs, base_port=base_port, capture=capture)
+    def fake_start(paths, procs, base_port=6050, capture=False, timeout=None):
+        seen.update(procs=procs, base_port=base_port, capture=capture, timeout=timeout)
         return FakeCompleted()
 
     _patch_core(monkeypatch, start=fake_start)
@@ -221,6 +221,9 @@ def test_start_calls_the_orchestrator_with_the_selector(writeable, monkeypatch):
     assert resp.status_code == 200
     assert seen["procs"] == "rdb1 hdb1", "the selector passes through unreinterpreted"
     assert seen["capture"] is True, "an HTTP caller cannot read the server's stdout"
+    assert seen["timeout"] == Settings().lifecycle_timeout, (
+        "a lifecycle call is bounded just inside the browser's wait (#1370)"
+    )
 
 
 @pytest.mark.parametrize("action", ["start", "stop", "restart"])
@@ -392,9 +395,10 @@ def test_setting_a_worker_config_key_goes_through_the_gateway(writeable, gw):
 def test_an_override_in_effect_is_not_shadowed(writeable, gw):
     gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"true"]
     body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
-    assert (body["effective_layer"], body["shadowed"], body["env_var"]) == (
+    assert (body["effective_layer"], body["shadowed"], body["saved"], body["env_var"]) == (
         "overrides",
         False,
+        True,
         None,
     )
 
@@ -405,6 +409,7 @@ def test_an_environment_variable_that_outranks_the_override_is_reported(writeabl
     gw._responses[control.SET_WORKER_CONFIG] = ["env", b"false"]
     body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
     assert body["shadowed"] is True
+    assert body["saved"] is False
     assert (body["effective_layer"], body["effective_value"], body["env_var"]) == (
         "env",
         "false",

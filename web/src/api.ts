@@ -85,6 +85,8 @@ export interface QueryResult extends Pollable {
   truncated: boolean;
 }
 export interface Health extends Pollable {
+  /** seconds the browser waits for any request - the server's UQF_FRONTEND_TIMEOUT plus headroom */
+  request_timeout_seconds: number;
   ok: boolean;
   gateway: "up" | "reloading" | "unreachable" | "wrong_process";
   detail: string | null;
@@ -153,6 +155,24 @@ export class ApiError extends Error {
     super(message);
   }
 }
+/** How long a request may take before the browser gives up, until the server
+ * says otherwise. The server owns this (config.Settings.request_timeout,
+ * served on /health); this is only what applies before the first /health
+ * answer, and a pytest (test_request_timeout.py) holds it equal to the
+ * server's default. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 45000;
+let requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
+
+/** Adopt the timeout /health serves; anything not a positive number is ignored. */
+export function adoptRequestTimeout(seconds: unknown): void {
+  if (typeof seconds === "number" && seconds > 0)
+    requestTimeoutMs = seconds * 1000;
+}
+
+export function requestTimeout(): number {
+  return requestTimeoutMs;
+}
+
 export async function request<T>(
   path: string,
   signal: AbortSignal,
@@ -169,7 +189,7 @@ export async function request<T>(
   if (authorization) headers.Authorization = authorization;
   try {
     response = await fetch(path, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
       method: method ?? (body ? "POST" : "GET"),
       headers: Object.keys(headers).length ? headers : undefined,
       body,
@@ -199,6 +219,7 @@ export async function request<T>(
   }
   if (payload === null)
     throw new ApiError("The API returned an invalid response.", true);
+  if (path === "/health") adoptRequestTimeout(payload.request_timeout_seconds);
   return payload as T;
 }
 
@@ -355,6 +376,8 @@ export interface WorkerConfigResult {
   effective_value: string | null;
   /** An environment variable outranks the override, which has no effect until it is unset. */
   shadowed: boolean;
+  /** The override is what the process now reads (the server compares q's layer name). */
+  saved: boolean;
   env_var: string | null;
   note: string;
 }

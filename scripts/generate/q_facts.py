@@ -57,12 +57,29 @@ FACTS = {
     ),
     "STATUS_FILE_PREFIX": "a status file's name before the instance id - .qetl.status.file_prefix",
     "STATUS_FILE_SUFFIX": "a status file's name after the instance id - .qetl.status.file_suffix",
+    "BOUNDED_DATASET_TIME_COLUMNS": "dataset -> time column getdata reads it by (#1363)",
+    "BOUNDED_DATASET_INSTRUMENT_COLUMNS": "dataset -> its instrument column, empty if none (#1363)",
+    "CFG_SOURCES": "the worker-config layers, most significant first - .qetl.cfg.sources",
+    "CFG_ENV_LAYER": "the layer that outranks a worker-config override - .qetl.cfg.env_layer",
+    "CFG_OVERRIDE_LAYER": "the layer a worker-config override sits in - .qetl.cfg.override_layer",
+    "CFG_ENV_PREFIX": "a worker-config key's environment variable prefix - .qetl.cfg.env_prefix",
+    "SOURCE_CREDENTIAL_PREFIX": (
+        "what a source's credential variable starts with - .qetl.source.credential_prefix"
+    ),
+    "FIXTURE_TAG": "what a fixture run's release ends with - .qetl.source.fixture_tag",
+    "REVISION_TAG": (
+        "what precedes a worker's output revision in a release - "
+        ".qetl.job.bounded.runtime.revision_tag"
+    ),
 }
 
 #: Each generated module: the package that reads it, and the facts it carries.
 MODULES = {
     OUT: ("uqs", list(FACTS)),
-    PROVIDER_OUT: ("uqf_airflow_provider", [n for n in FACTS if n.startswith("STATUS_")]),
+    PROVIDER_OUT: (
+        "uqf_airflow_provider",
+        [n for n in FACTS if n.startswith("STATUS_") or n in ("FIXTURE_TAG", "REVISION_TAG")],
+    ),
 }
 
 HEADER = '''"""q facts {who} reads, generated from the q tree - DO NOT EDIT.
@@ -74,7 +91,7 @@ these in q fails the commit until this file is regenerated.
 '''
 
 
-def export() -> dict[str, list[str] | str]:
+def export() -> dict[str, list[str] | str | dict[str, str]]:
     """Run the q exporter and return its facts."""
     from uqs.interpreter import q_interpreter
 
@@ -102,7 +119,7 @@ def export() -> dict[str, list[str] | str]:
     return facts
 
 
-def render(facts: dict[str, list[str] | str], out_path: Path) -> str:
+def render(facts: dict[str, list[str] | str | dict[str, str]], out_path: Path) -> str:
     """The module, already ruff-formatted - the format hook would otherwise
     rewrite it, and --check would then call every commit's copy stale."""
     who, names = MODULES[out_path]
@@ -111,6 +128,10 @@ def render(facts: dict[str, list[str] | str], out_path: Path) -> str:
         value = facts[name]
         if isinstance(value, str):
             out.append(f"\n#: {FACTS[name]}\n{name}: str = {json.dumps(value)}\n")
+            continue
+        if isinstance(value, dict):
+            items = ", ".join(f"{json.dumps(k)}: {json.dumps(v)}" for k, v in value.items())
+            out.append(f"\n#: {FACTS[name]}\n{name}: dict[str, str] = {{{items}}}\n")
             continue
         words = ", ".join(f'"{w}"' for w in value)
         out.append(f"\n#: {FACTS[name]}\n{name}: tuple[str, ...] = ({words},)\n")

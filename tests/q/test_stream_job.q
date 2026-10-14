@@ -809,6 +809,13 @@ test_the_mock_publishes_a_book_and_then_fills:{[t]
     .qunit.assertEquals[first exec tbl from .sjtest.published;`crypto_book;
         "the book goes out first, so no fill prints at a price the tape has not shown"]};
 
+test_the_mock_converts_fill_hazards_over_its_declared_period:{[t]
+    / tick_seconds is the horizon the per-second hazards are scaled to; if it
+    / drifts from the declared period the simulated fill rate changes silently.
+    declared:.qetl.job.stream.def[`crypto_mock]`period;
+    .qunit.assertEquals[.qpipe.job.crypto_mock.tick_seconds;(`float$declared)%1e9;
+        "tick_seconds is the declared period in seconds"]};
+
 test_a_mock_fill_is_the_recorders_wire_shape:{[t]
     / One message per fill, every column a one-element typed vector, no
     / time. Not a table: the recorder does not send one, and a mock that

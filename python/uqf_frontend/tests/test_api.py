@@ -20,7 +20,13 @@ from uqf_frontend.errors import (
 
 def test_health_reports_up(client):
     body = client.get("/health").json()
-    assert body == {"ok": True, "gateway": "up", "detail": None, "poll_seconds": 5}
+    assert body == {
+        "ok": True,
+        "gateway": "up",
+        "detail": None,
+        "poll_seconds": 5,
+        "request_timeout_seconds": Settings().request_timeout,
+    }
 
 
 def test_health_refuses_a_process_that_is_not_a_gateway(gw):

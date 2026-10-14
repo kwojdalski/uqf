@@ -24,6 +24,22 @@ DEFAULT_CAPTURE_INTERVAL = 900
 
 DEFAULT_MAX_ROWS = 10_000
 
+#: Seconds a gateway query may take before kola gives up (UQF_FRONTEND_TIMEOUT).
+DEFAULT_TIMEOUT = 30
+
+#: Seconds the browser waits BEYOND the gateway timeout before it abandons a
+#: request: the API's own round trip, and a lifecycle route's torq.sh. The
+#: browser used to hard-code 45 s (web/src/api.ts), so raising
+#: UQF_FRONTEND_TIMEOUT changed nothing it saw; now it is served as
+#: `request_timeout_seconds` on /health and this is the one place the sum is
+#: made. DEFAULT_TIMEOUT + this = 45 s, what the browser always used.
+REQUEST_HEADROOM = 15
+
+#: How much sooner than the browser gives up a lifecycle subprocess is killed,
+#: so the operator sees the server's refusal, not an anonymous browser timeout
+#: while torq.sh is still running (#1370).
+LIFECYCLE_MARGIN = 5
+
 #: What ``{KDBBASEPORT}`` resolves to when the stack is started with defaults.
 DEFAULT_BASE_PORT = 6050
 
@@ -104,7 +120,7 @@ class Settings:
     data_passwd: str = ""
     #: Seconds. Passed to kola, which enforces it per query. Historical
     #: HDB queries are legitimately slower than current-session RDB ones.
-    timeout: int = 30
+    timeout: int = DEFAULT_TIMEOUT
     #: Hard cap on rows returned, whatever the caller asks for. A browser
     #: cannot usefully render more, and an unbounded select against an HDB
     #: is how a demo process runs out of memory.
@@ -163,6 +179,19 @@ class Settings:
     #: they refuse and say which variable is unset, rather than guessing a
     #: path and acting on the wrong stack.
     stack_root: Path | None = None
+
+    @property
+    def request_timeout(self) -> int:
+        """Seconds the browser should wait for any one request: the gateway
+        timeout plus headroom (a timeout of 0 means kola waits forever, so
+        the default stands in for it)."""
+        return (self.timeout or DEFAULT_TIMEOUT) + REQUEST_HEADROOM
+
+    @property
+    def lifecycle_timeout(self) -> int:
+        """Seconds a start/stop/restart may run before torq.sh is killed:
+        just inside the browser's own wait."""
+        return self.request_timeout - LIFECYCLE_MARGIN
 
     @classmethod
     def from_env(cls) -> Settings:

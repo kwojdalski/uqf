@@ -90,3 +90,57 @@ STATUS_FILE_PREFIX: str = "airflow_status_"
 
 #: a status file's name after the instance id - .qetl.status.file_suffix
 STATUS_FILE_SUFFIX: str = ".txt"
+
+#: dataset -> time column getdata reads it by (#1363)
+BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
+    "crypto_book_1s": "time",
+    "crypto_market_data": "source_time",
+    "demo_deals": "deal_time",
+    "demo_execution_quality": "time",
+    "duckdb_deals": "deal_time",
+    "eq_orderbook": "time",
+    "event_tape": "time",
+    "exec_bar": "time",
+    "imported_trades": "time",
+    "trades_copy": "time",
+}
+
+#: dataset -> its instrument column, empty if none (#1363)
+BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
+    "crypto_book_1s": "sym",
+    "crypto_market_data": "sym",
+    "demo_deals": "sym",
+    "demo_execution_quality": "sym",
+    "duckdb_deals": "sym",
+    "eq_orderbook": "sym",
+    "event_tape": "sym",
+    "exec_bar": "sym",
+    "imported_trades": "sym",
+    "trades_copy": "sym",
+}
+
+#: the worker-config layers, most significant first - .qetl.cfg.sources
+CFG_SOURCES: tuple[str, ...] = (
+    "env",
+    "overrides",
+    "yaml",
+    "default",
+)
+
+#: the layer that outranks a worker-config override - .qetl.cfg.env_layer
+CFG_ENV_LAYER: str = "env"
+
+#: the layer a worker-config override sits in - .qetl.cfg.override_layer
+CFG_OVERRIDE_LAYER: str = "overrides"
+
+#: a worker-config key's environment variable prefix - .qetl.cfg.env_prefix
+CFG_ENV_PREFIX: str = "UQF_"
+
+#: what a source's credential variable starts with - .qetl.source.credential_prefix
+SOURCE_CREDENTIAL_PREFIX: str = "UQF_SOURCE_CRED_"
+
+#: what a fixture run's release ends with - .qetl.source.fixture_tag
+FIXTURE_TAG: str = "~fixture"
+
+#: what precedes a worker's output revision in a release - .qetl.job.bounded.runtime.revision_tag
+REVISION_TAG: str = "@r"

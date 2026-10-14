@@ -102,6 +102,8 @@ qdqc,check_market_data_quality,function,2,quotes max_spread_bps
 qdqc,check_stale_quotes,function,3,quotes as_of max_age
 qdqc,summarize_checks,function,1,named_checks
 qetl.cfg,audit,dict,,
+qetl.cfg,env_layer,value,,
+qetl.cfg,env_prefix,value,,
 qetl.cfg,errors,value,,
 qetl.cfg,explain,function,1,k
 qetl.cfg,falsy,value,,
@@ -109,6 +111,7 @@ qetl.cfg,get_flag,function,1,k
 qetl.cfg,get_positive,function,1,k
 qetl.cfg,get_symbol,function,1,k
 qetl.cfg,get_timestamp,function,1,k
+qetl.cfg,override_layer,value,,
 qetl.cfg,raw,function,1,k
 qetl.cfg,require_valid,function,1,
 qetl.cfg,reset,function,1,
@@ -325,6 +328,7 @@ qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part vers
 qetl.job.bounded.runtime,retire_fixture_claims,function,2,worker rows
 qetl.job.bounded.runtime,retry_boundary,value,,
 qetl.job.bounded.runtime,retryable,function,1,err
+qetl.job.bounded.runtime,revision_tag,value,,
 qetl.job.bounded.runtime,run_version,function,2,cfg v
 qetl.job.bounded.runtime,suppressed_in_dry_run,value,,
 qetl.job.bounded.runtime,transport_patterns,value,,
@@ -655,6 +659,7 @@ qetl.source,complete_through_of,function,3,source h live
 qetl.source,configured,function,1,
 qetl.source,credential_example,function,1,source
 qetl.source,credential_origin,function,1,source
+qetl.source,credential_prefix,value,,
 qetl.source,credential_var,function,1,source
 qetl.source,def,function,1,source
 qetl.source,default_transport,value,,
@@ -662,6 +667,7 @@ qetl.source,define,function,2,source decl
 qetl.source,defined,function,1,
 qetl.source,expand_path_vars,function,2,who txt
 qetl.source,fetch_window,function,4,source h range_from range_to
+qetl.source,fixture_tag,value,,
 qetl.source,fixture_version,function,1,v
 qetl.source,fixture_writes_allowed,function,1,
 qetl.source,for_source,function,1,source
@@ -1035,6 +1041,7 @@ qpipe.job.crypto_mock,mid0,value,,
 qpipe.job.crypto_mock,n_levels,value,,
 qpipe.job.crypto_mock,n_market,value,,
 qpipe.job.crypto_mock,on_timer,function,1,
+qpipe.job.crypto_mock,period,value,,
 qpipe.job.crypto_mock,publish,value,,
 qpipe.job.crypto_mock,quote_ccy,function,1,s
 qpipe.job.crypto_mock,quote_share,value,,

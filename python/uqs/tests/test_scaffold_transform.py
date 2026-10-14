@@ -60,6 +60,9 @@ def test_a_backfill_is_still_a_passthrough_by_default():
     body = _body(backfill.bounded_worker("fx", "fx_hist", "sym:symbol, mid:float"), "fx_backfill.q")
     assert ".qetl.transform.passthrough[`fx_passthrough;" in body
     assert "`fx_passthrough;.qpipe.job.fx_backfill.facts" in body
+    # The shape is the plant's, never a copy of the fixture's (#1360).
+    assert "`batch;.qetl.plant.shape `fx_hist;" in body
+    assert "0#.qpipe.source" not in body
     assert "derive" not in body
 
 
