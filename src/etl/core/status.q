@@ -7,19 +7,24 @@
 / the transition table below so an illegal state change is refused rather
 / than recorded.
 / .
-/ THIS FORMAT IS A CROSS-REPOSITORY CONTRACT. Two other programs read these
+/ THIS FORMAT IS A CROSS-REPOSITORY CONTRACT. Three other programs read these
 / files without going through q:
 / .
 /   python/uqf_airflow_provider   status_reader.py, and the sensor built on
 /                                 it - what Airflow polls to decide whether a
 /                                 backfill task succeeded, idled or failed
 /   python/uqf_frontend           status.py - the Control view's worker list
+/   python/uqs                    stack/backfill_wait.py - `uqs backfill --wait`
 / .
-/ Both carry the filename shape and the state set as literals, deliberately,
-/ so they need no q to run. Renaming a key, adding a state or moving the
-/ file is therefore a change to three trees, not one. The status directory
-/ is also where bounded workers keep their locks and checkpoints and
-/ continuous workers their cursors (.qetl.job.bounded.state.lock_dir, .qetl.job.continuous.cursor_path),
+/ None of them can start q, so the state sets (status_states, terminal_states
+/ and the ones .qetl.job.bounded.exit_code exits 0 for) and the file name
+/ (file_prefix, file_suffix) reach them generated, by
+/ scripts/generate/export_q_facts.q, into uqs.generated.q_facts and
+/ uqf_airflow_provider.q_facts - which the q-facts hook regenerates and
+/ checks (#1362). Renaming a key is still a change to every reader.
+/ .
+/ The status directory is also where bounded workers keep their locks and
+/ checkpoints and continuous workers their cursors (.qetl.job.bounded.state.lock_dir, .qetl.job.continuous.cursor_path),
 / so status_dir is the one spelling of "this deployment's runtime state".
 / .
 / WHY THIS IS ITS OWN FILE (#229). These functions lived in
@@ -90,6 +95,11 @@ legal_transitions:(!). flip (
     (`completed; `starting`failed);
     (`failed;    `starting`failed))
 
+/ The states that end a run: those legal_transitions lets go only to
+/ `starting (begin again) or `failed - `idle`completed`failed. A reader
+/ waiting on a worker stops at one of these.
+terminal_states:status_states where {all x in `starting`failed} each legal_transitions status_states
+
 / Validate a transition, or throw naming what it would have hidden.
 / .
 / `from` of `` ` `` (no previous status) permits any state: a first write has
@@ -109,7 +119,7 @@ require_transition:{[from_state;to]
     allowed:legal_transitions from_state;
     if[not to in allowed;
         '"require_transition: ",string[from_state]," -> ",string[to]," is forbidden",
-         $[from_state in `idle`completed`failed;
+         $[from_state in terminal_states;
             / Consequence FIRST: q truncates a thrown string at 255 bytes,
             / so anything after that is silently lost - and what gets lost
             / is the part that explains the failure. This message was 254
@@ -123,11 +133,22 @@ require_transition:{[from_state;to]
 / having to remember what it last wrote - which it would get wrong precisely
 / when it matters, after a restart.
 previous_state:{[instance_id]
-    path:(status_dir[]),"/airflow_status_",string[instance_id],".txt";
-    raw:@[{first read0 hsym `$x};path;{""}];
+    raw:@[{first read0 hsym `$x};file_path[instance_id];{""}];
     if[0=count raw; :`];
     saved:@[{.j.k x};raw;{()!()}];
     $[`state in key saved; `$saved`state; `]}
+
+/ An instance's status file is <file_prefix><instance_id><file_suffix> in
+/ status_dir. The instance id is in the name so two instances of one worker
+/ do not overwrite each other.
+file_prefix:"airflow_status_"
+file_suffix:".txt"
+
+/ The path of an instance's status file.
+/ @param instance_id the process instance, e.g. `demo_markout1
+/ @return the path, as a string
+/ @eg .qetl.status.file_path[`demo_markout1] like "*/airflow_status_demo_markout1.txt"  ->  1b
+file_path:{[instance_id] (status_dir[]),"/",file_prefix,string[instance_id],file_suffix}
 
 / Where status files go. Overridden by UQF_STATUS_DIR so the demo and a real
 / deployment can differ without a code change; defaults under TORQDATA
@@ -208,7 +229,7 @@ write_status:{[worker;instance_id;state;spec;progress;err]
              progress`cursor;progress`rows_published;progress`windows_completed;
              $[`reactions_owed in key progress; progress`reactions_owed; 0];
              err;.z.p;.z.i;string .z.h;$[null run; ""; string run]);
-    target:dir,"/airflow_status_",string[instance_id],".txt";
+    target:file_path[instance_id];
     tmp:target,".tmp";
     (hsym `$tmp) 0: enlist .j.j payload!values_;
     / atomic on the same filesystem, so a polling reader sees the old file or

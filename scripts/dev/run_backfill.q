@@ -97,7 +97,11 @@ if[`fixture in key .Q.opt .z.x; .qetl.cfg.set_override[`fixture_writes;"1"]];
 / A read-only mode stops here: nothing opened, nothing written.
 md:.qetl.job.bounded.runtime.mode[];
 if[md in `validate`plan;
-    r:$[md~`validate; .qetl.job.bounded.validate[worker;s`spec]; .qetl.job.bounded.plan_only[worker;s`spec]];
+    / Caught like the flag refusals above (#1373): validate and plan_only throw
+    / on their first refusal - an unaligned range, a bad source row - and an
+    / untrapped throw is a raw trace, or a debug prompt on a terminal.
+    r:@[{[w;sp;m] $[m~`validate; .qetl.job.bounded.validate[w;sp]; .qetl.job.bounded.plan_only[w;sp]]}[worker;s`spec];
+        md;{[e] -1 "run_backfill: ",e; exit 2}];
     .qetl.log.info[worker;string[md]," - nothing opened, nothing written";`plan _ r];
     exit 0];
 .qdev.runbackfill.use_io[.Q.opt .z.x;worker];
