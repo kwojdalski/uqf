@@ -159,3 +159,25 @@ def test_run_id_is_filterable_on_the_coverage_table():
         ["eq"],
         [b"8c6b8b64-6815-6084-0a3e-178401251b68"],
     )
+
+
+def test_a_timestamp_filter_does_not_load_the_orchestrator():
+    """The read path checks a timestamp against uqs.timefmt, a leaf. Until
+    #1326 it imported uqs.stack.backfill, which pulls in uqs.stack.runtime and
+    the process-launch surface, so any import-time failure there turned a
+    read-only `/query` with a time filter into a 500. A fresh interpreter,
+    because this process may already have imported uqs.stack elsewhere."""
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys; "
+        "from uqf_frontend.catalog import QType; "
+        "from uqf_frontend.queries import coerce; "
+        "coerce('2026-09-15T10:30:00Z', QType.TIMESTAMP, 'time', as_list=False); "
+        "print(sorted(m for m in sys.modules if m.startswith('uqs.stack')))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert out == "[]"

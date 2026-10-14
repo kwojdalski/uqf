@@ -37,8 +37,12 @@ gate people learn to ignore.
 *Namespaces absent from the contract surface.* ``.qtorq`` lives in
 ``scripts/`` rather than ``src/`` and the exporter does not carry it, so its
 names cannot be confirmed OR denied here. Those are reported as skipped
-rather than silently passed, so the blind spot stays visible - and so a
-typo'd namespace shows up as an odd entry in that list.
+rather than silently passed, so the blind spot stays visible. That holds only
+for a ROOT the surface never carries (``.qtorq``, ``.qunit``): an unknown
+namespace under one it does carry - ``.qetl.coverag``, ``.qetl.job.boundd`` -
+is a typo or a stale name after a move, and is reported as one (#1337). The
+exception is ``.qpipe``, whose namespaces each declaration names
+(``DECLARED_ROOT``).
 
 *Documents about things that do not exist yet or no longer do.* Plans,
 proposals, agent run output and the generated decision pages are excluded by
@@ -157,6 +161,16 @@ ALLOWED_MISSING = {
         ".qetl.coerce.coerce",
     ): "quoted as a reference this gate caught - the real name is coerce_column",
 }
+
+#: The root whose namespaces each DECLARATION names: `.qpipe.job.<job>`,
+#: `.qpipe.source.<source>`, `.qpipe.transform.<transform>`, and the custom
+#: homes `.qpipe.io.<name>` and `.qpipe.reaction.<name>`. A guide walking
+#: through a new job names one that does not exist yet (`fx_rates_backfill`,
+#: `spreadmon`) - that is the guide working - so a namespace under it that the
+#: surface does not carry stays unverifiable. Under every OTHER root the
+#: surface carries, a namespace it does not carry is a typo or a stale name
+#: after a move, and is a problem (#1337).
+DECLARED_ROOT = "qpipe"
 
 #: A reference to this tree's own namespaces: a lowercase `.q` prefix, then a
 #: name. The namespace part may itself be dotted, because worker instances
@@ -285,6 +299,8 @@ def check() -> tuple[list[str], dict[str, int]]:
         for parts in [namespace.split(".")]
         for depth in range(1, len(parts) + 1)
     }
+    #: roots the surface carries: under these, an unknown namespace is wrong
+    roots = {namespace.split(".")[0] for namespace in surface} - {DECLARED_ROOT}
     problems: list[str] = []
     unverifiable: dict[str, int] = {}
 
@@ -301,6 +317,12 @@ def check() -> tuple[list[str], dict[str, int]]:
                 if ref[1:] in namespaces:
                     continue
                 if f"q{ns}" not in surface:
+                    if f"q{ns}" not in namespaces and f"q{ns}".split(".")[0] in roots:
+                        problems.append(
+                            f"{rel}:{line_no}: {ref} does not exist - namespace .q{ns} "
+                            "does not exist"
+                        )
+                        continue
                     unverifiable[f".q{ns}"] = unverifiable.get(f".q{ns}", 0) + 1
                     continue
                 if name not in surface[f"q{ns}"]:

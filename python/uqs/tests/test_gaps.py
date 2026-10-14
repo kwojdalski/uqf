@@ -252,6 +252,24 @@ def test_a_bound_is_moved_outwards_onto_the_grid(value, align, upper, expected):
     assert gaps_cli.widen_to_grain(value, align, upper=upper) == expected
 
 
+def _q_nanos(text: str) -> int:
+    """`"j"$` of a widened bound: nanoseconds since q's 2000.01.01."""
+    stamp, _, fraction = text.partition(".")
+    whole = datetime.fromisoformat(stamp).replace(tzinfo=UTC)
+    return int(whole.timestamp()) * 10**9 + int(fraction) - gaps_cli.Q_EPOCH_NS
+
+
+@pytest.mark.parametrize("upper", [False, True])
+def test_a_grain_that_does_not_divide_the_epoch_gap_lands_on_qs_grid(upper):
+    """#1345: 7 minutes does not divide 1970->2000, so the Unix grid's
+    09:57:00 is 240 s off q's - and require_aligned refused the very command
+    #1323 prints to refill the gap."""
+    align = 7 * _MINUTE_NS
+    got = gaps_cli.widen_to_grain("2026-10-09T10:03:00.000000000", align, upper=upper)
+    assert _q_nanos(got) % align == 0, got
+    assert got == ("2026-10-09T10:07:00.000000000" if upper else "2026-10-09T10:00:00.000000000")
+
+
 def test_the_advised_exec_bars_refill_is_minute_aligned_and_widened(monkeypatch):
     result = _gaps_cli(monkeypatch, [_NS_HOLE], {"hdb_exec_bars_backfill": _MINUTE_NS})
     command = _printed_command(result.output)

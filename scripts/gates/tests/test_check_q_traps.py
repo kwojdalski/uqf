@@ -626,7 +626,9 @@ def _py_rule(source: str):
 #: own tests - the same self-reference the rule already dodges for
 #: docstrings. Building the string at runtime means no `ast.Constant` here
 #: holds the pattern, so no exemption list is needed and the rule stays
-#: honest about what it finds.
+#: honest about what it finds. (The rule does read a `+` chain as one string,
+#: but with each non-literal operand - `_BAD_COL` here - standing in as a
+#: placeholder that is no builtin, so these fixtures stay invisible to it.)
 _BAD_COL = "col" + "s"
 
 
@@ -638,6 +640,56 @@ def test_a_builtin_as_a_column_name_in_an_embedded_literal_is_flagged():
     found = _py_rule(source)
     assert len(found) == 1
     assert _BAD_COL in found[0].detail
+
+
+# The four shapes #1332 found passing - each throws 'assign on KDB-X
+# (`value "([k:1 2] cols:3 4)"`, `value "([cols:1 2] v:3 4)"`). The test
+# SOURCE is built at runtime from `_BAD_COL`, so the Python handed to the rule
+# holds the shape whole while this file holds no constant the rule would read.
+
+
+def test_a_builtin_as_a_value_column_of_a_keyed_literal_is_flagged():
+    source = 'expr = "([name:string tables `] ' + _BAD_COL + ':count each x)"\n'
+    found = _py_rule(source)
+    assert len(found) == 1
+    assert _BAD_COL in found[0].detail
+
+
+def test_a_builtin_as_the_key_column_of_a_keyed_literal_is_flagged():
+    source = 'expr = "([' + _BAD_COL + ':`a`b] v:1 2)"\n'
+    found = _py_rule(source)
+    assert len(found) == 1
+    assert _BAD_COL in found[0].detail
+
+
+def test_a_builtin_after_an_f_string_placeholder_is_flagged():
+    # The text after an f-string's first `{...}` is a separate constant that
+    # does not contain `([`, so a rule reading constants one at a time never
+    # looked at it. python/uqs/src/uqs/stack/uptime.py builds q this way.
+    source = 'expr = f"([] name:{names}; ' + _BAD_COL + ':{counts})"\n'
+    found = _py_rule(source)
+    assert len(found) == 1
+    assert _BAD_COL in found[0].detail
+
+
+def test_a_builtin_in_a_concatenated_literal_is_flagged():
+    source = 'expr = "([] name:string tables `;" + " ' + _BAD_COL + ':count each x)"\n'
+    found = _py_rule(source)
+    assert len(found) == 1
+    assert _BAD_COL in found[0].detail
+    # Reported once, for the whole expression - not again for a piece of it.
+    assert found[0].line == 1
+
+
+def test_a_placeholder_in_a_column_position_is_not_flagged():
+    # What Python fills in at runtime is unknown here; reporting it would be
+    # a guess, so it reads as a name that is no builtin.
+    assert _py_rule('expr = f"([] {col}:1 2; n:{n})"\n') == []
+    assert _py_rule('expr = "([] " + name + ":1 2)"\n') == []
+
+
+def test_a_safe_keyed_literal_passes():
+    assert _py_rule('expr = "([sym:`a`b] px:1 2; n:3 4)"\n') == []
 
 
 def test_a_builtin_READ_inside_an_expression_is_not_flagged():

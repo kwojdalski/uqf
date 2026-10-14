@@ -321,6 +321,56 @@ test_end_of_day_records_the_day_a_carrying_job_saw_end:{[t]
     system "rm -f ",p,"*";
     .qunit.assertEquals[m;d0;"the date that ended, kept beside the ledgers"]};
 
+/ The carry marker of fx_positions after `end_of_day` with a seeded marker
+/ (d0-1) and a publisher that does `pub`; 0Nd when none was recorded.
+marker_after:{[pub]
+    p:.qetl.job.stream.carry_marker_path `fx_positions;
+    system "mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    system "rm -f ",p,"*";
+    .qetl.job.bounded.state.durable_set[p;([] last_end_of_day:enlist d0-1)];
+    .qetl.job.stream.wire[`fx_positions;pub];
+    (.qetl.job.stream.handler `fx_positions)[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    `.qetl.job.stream.running set enlist `fx_positions;
+    e:errors[.testutil.captured_log[0b] {.qetl.job.stream.end_of_day d0}];
+    m:.qetl.job.stream.last_end_seen `fx_positions;
+    system "rm -f ",p,"*";
+    (m;e)}
+
+test_a_snapshot_the_plant_refused_leaves_the_end_of_day_marker_alone:{[t]
+    r:marker_after {[t;x] '"plant refused: ",string t};
+    .qunit.assertEquals[r 0;d0-1;"the end of day was not carried, so it is not recorded"];
+    .qunit.assertEquals[count r 1;1;"and the failure is logged once"]};
+
+test_a_snapshot_the_publish_check_withheld_leaves_the_end_of_day_marker_alone:{[t]
+    r:marker_after {[t;x] .qetl.job.stream.withhold[`fx_positions;t;x;"test withhold";();count x]};
+    .qunit.assertEquals[r 0;d0-1;"a withheld snapshot did not carry the book across"];
+    .qunit.assertTrue[any {(x[3]`error) like "*withheld by the publish check*"} each r 1;"and the failure says it was withheld"]};
+
+test_a_withheld_snapshot_is_an_error_not_a_count:{[t]
+    .qetl.job.stream.wire[`fx_positions;{[t;x] .qetl.job.stream.withhold[`fx_positions;t;x;"test withhold";();count x]}];
+    (.qetl.job.stream.handler `fx_positions)[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qunit.assertThrows[{[j] .qetl.job.stream.snapshot j};`fx_positions;"*carry snapshot withheld by the publish check*";"snapshot refuses to report a withheld batch as published"]};
+
+/ Two snapshots in one replay (catch_up, then today's log, #1308): each is
+/ amended by the fills logged before it but not in it.
+test_every_snapshot_in_a_replay_is_amended_by_the_fills_it_lacks:{[t]
+    record[`fx_positions];
+    h:.qetl.job.stream.handler `fx_positions;
+    f1:fill[`EURUSD;1;1e6;1.1;`london;`spot];
+    f2:update time:.eodtest.t1+0D01 from fill[`GBPUSD;1;1e6;1.27;`london;`spot];
+    g:update time:.eodtest.t1+0D02 from fill[`USDJPY;1;1e6;150f;`london;`spot];
+    h[`executions;f1]; .qetl.job.stream.snapshot `fx_positions;
+    h[`executions;f2]; .qetl.job.stream.snapshot `fx_positions;
+    h[`executions;g];
+    s:sent_on[`fx_position_open];
+    s1:select from s where carried_to=.eodtest.t1;
+    s2:select from s where carried_to=.eodtest.t1+0D01;
+    live:.qpipe.job.fx_positions.positions;
+    .qetl.job.stream.reset `fx_positions;
+    replay[`fx_positions;((`fx_position_open;s1);(`executions;f2);(`executions;g);(`fx_position_open;s2))];
+    .qunit.assertEquals[.qpipe.job.fx_positions.positions;live;"the replayed book is the live one: the second snapshot did not drop g"];
+    .qunit.assertEquals[count .qpipe.job.fx_positions.positions;3;"three positions"]};
+
 / --- the remedy: replay the days it was down across (#1072) ----------------
 
 / A plant whose logs run from the day after `marker` to today. The first log

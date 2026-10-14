@@ -221,10 +221,12 @@ def _utc(value: Any, column: str) -> dt.datetime:
     A datetime stops at the microsecond, and `fromisoformat` would keep the
     first six digits of a finer fraction without a word - so a value past
     that is refused, with the rule `uqs backfill` applies to its bounds
-    (uqs.stack.backfill.finer_than_a_microsecond): a filter or a coverage
-    bound moved by the parser is not the one the caller sent.
+    (uqs.timefmt.finer_than_a_microsecond): a filter or a coverage bound
+    moved by the parser is not the one the caller sent. uqs.timefmt is a leaf
+    with no package imports, so this read path does not load the orchestrator
+    (#1326).
     """
-    from uqs.stack.backfill import finer_than_a_microsecond
+    from uqs.timefmt import finer_than_a_microsecond
 
     if isinstance(value, dt.datetime):
         parsed = value
