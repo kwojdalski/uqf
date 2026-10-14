@@ -39,3 +39,22 @@ it("rejects naive and reversed time ranges before requesting coverage", () => {
     /required/,
   );
 });
+it("sends a timespan as whole nanoseconds, typed either way the Desk shows it", () => {
+  // #1329: the server takes nanoseconds and no longer rounds them to the
+  // microsecond, so 1234 must leave as 1234 - and a timespan copied from the
+  // table, in q's own form, as the same number.
+  const span = column("timespan");
+  expect(filterValue("1234", span, "eq")).toBe(1234);
+  expect(filterValue("0D00:00:00.000001234", span, "eq")).toBe(1234);
+  expect(filterValue("0D00:00:01.5", span, "eq")).toBe(1_500_000_000);
+  expect(filterValue("-1D02:00:00", span, "eq")).toBe(-93_600_000_000_000);
+  expect(filterValue('["0D00:00:00.000001234", 2500]', span, "in")).toEqual([
+    1234, 2500,
+  ]);
+  expect(() => filterValue("1234.5", span, "eq")).toThrow(
+    "Enter a whole number of nanoseconds",
+  );
+  expect(() => filterValue("1e20", span, "eq")).toThrow(
+    "Enter a whole number of nanoseconds",
+  );
+});

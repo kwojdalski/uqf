@@ -29,11 +29,17 @@ browse_ops:`eq`ne`lt`le`gt`ge`in!((=);(not;in);(<);(<=);(>);(>=);(in))
 / a symbol, which a guid column refuses with 'type (#1042) - so a char vector,
 / or a list of them for `in`, is parsed with "G"$. No other column type is
 / sent as chars: the frontend sends symbols as str, which kola makes symbols.
+/ A timespan arrives as a one-item timespan vector - the only form kola gives
+/ a value of nanoseconds, where a Python timedelta stops at the microsecond
+/ (#1329) - so it, or a list of them for `in`, is unwrapped to the atom or
+/ the vector the column compares with.
 browse_value:{[v]
     $[10h=type v; "G"$v;
+      16h=type v; first v;
       0h<>type v; v;
       not count v; v;
       all 10h=type each v; "G"$v;
+      all 16h=type each v; raze v;
       v]}
 
 / Private: one browser condition as a getdata filter pair.
@@ -59,6 +65,23 @@ browse_window:{[fc;fo;fv;span;now]
     s:$[count lo; max `timestamp$fv lo; e-span];
     (s;e)}
 
+/ Private: an integral column with an infinity in it, as floats. kola turns
+/ 0W and -0W into null on the way to Python, where they would reach the
+/ browser as a missing value; 0w and -0w survive it, as inf (#1330). Only a
+/ column that holds one is converted, and a long past 2^53 loses nothing the
+/ browser's own numbers would have kept.
+browse_infinity:{[x]
+    if[not (k:abs type x) in 5 6 7h; :x];
+    w:("hij"!(0Wh;0Wi;0W)) .Q.t k;
+    if[not any w=abs x; :x];
+    f:"f"$x;
+    f[where x=w]:0w;
+    f[where x=neg w]:-0w;
+    f}
+
+/ Private: browse_infinity over every column of a table.
+browse_infinite:{[r] $[98h=type r; flip browse_infinity each flip r; r]}
+
 / Read a browsable table as the caller, under its query policy.
 / @param t the table
 / @param fc filter columns, symbols
@@ -68,7 +91,8 @@ browse_window:{[fc;fo;fv;span;now]
 /   policy allows: the policy is the one authority on size (#928), so a read
 /   asking for more is truncated to it rather than refused
 / @param procs the tiers to read, e.g. `rdb`hdb
-/ @return dict: rows, at most cap; cap, the row cap the read ran under -
+/ @return dict: rows, at most cap, an integral column holding 0W or -0W as
+/   floats so the infinity survives kola (browse_infinite); cap, the row cap the read ran under -
 /   lim, or the policy's maxrows where that is lower - so the caller can tell
 /   a result cut by the policy from one that is simply complete (#1255)
 / @throws error naming an unknown operator, or the policy a request breaks
@@ -82,6 +106,6 @@ browse:{[t;fc;fo;fv;lim;procs]
     pairs:browse_pair'[fo;fv];
     req:`tablename`starttime`endtime`sublist`procs!(t;w 0;w 1;lim;(),procs);
     if[count fc; req[`filters]:{[fc;pairs;c] pairs where fc=c}[fc;pairs] each (distinct fc)!distinct fc];
-    `rows`cap!(.dataaccess.getdata req;lim)}
+    `rows`cap!(browse_infinite[.dataaccess.getdata req];lim)}
 
 \d .

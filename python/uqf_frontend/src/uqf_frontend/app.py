@@ -8,11 +8,13 @@ poll-only, so a socket would add a moving part without adding liveness.
 from __future__ import annotations
 
 import datetime as dt
+import math
 import typing
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+import polars as pl
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -662,16 +664,56 @@ def _reported_proctype(identity: Any) -> str | None:
     return None if value is None else str(value)
 
 
+#: What an infinite number is sent as. JSON has no infinity, and pydantic
+#: writes one as null - the same as a missing value, which is the one thing
+#: an operator would read as harmless (#1330). A string, so the browser can
+#: tell it apart and show it as one.
+INFINITY = {1: "inf", -1: "-inf"}
+
+#: 0Wn as nanoseconds; -0Wn is its negation and 0Nn, one below, is null.
+_SPAN_INFINITY = 2**63 - 1
+
+
 def _rows(result: Any) -> list[dict[str, Any]]:
     """Normalise a kola result into JSON-serialisable rows.
 
     kola is a Polars interface to q, so a table-shaped result already arrives
-    as a DataFrame - no conversion layer needed, just a dict projection.
+    as a DataFrame - just a dict projection, after `_wire`.
     """
     if result is None:
         return []
+    if isinstance(result, pl.DataFrame):
+        return _wire(result)
     if hasattr(result, "to_dicts"):
         return result.to_dicts()
     if isinstance(result, list):
         return result
     return [{"value": result}]  # pragma: no cover - scalar result from a table query
+
+
+def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
+    """`frame`'s rows with the two values JSON would otherwise lose.
+
+    A timespan goes as a whole number of nanoseconds. As a Python timedelta
+    it stopped at the microsecond, so 1234 ns was shown as 1 us - in an
+    ISO-8601 duration the browser could not format - and could not be typed
+    back into a filter, which takes nanoseconds (#1329).
+
+    An infinity - a float's 0w or -0w, an integral column's 0W or -0W, which
+    .uqf.browse sends as floats because kola makes them null, or a timespan's
+    0Wn or -0Wn - goes as INFINITY, rather than as the null JSON would make
+    it (#1330).
+    """
+    spans = [name for name, kind in frame.schema.items() if isinstance(kind, pl.Duration)]
+    floats = [name for name, kind in frame.schema.items() if kind.is_float()]
+    frame = frame.with_columns(pl.col(name).dt.total_nanoseconds() for name in spans)
+    rows = frame.to_dicts()
+    infinite = [name for name in floats if frame.get_column(name).is_infinite().any()] + [
+        name for name in spans if (frame.get_column(name).abs() == _SPAN_INFINITY).any()
+    ]
+    for name in infinite:
+        for row in rows:
+            value = row[name]
+            if value is not None and abs(value) in (math.inf, _SPAN_INFINITY):
+                row[name] = INFINITY[1 if value > 0 else -1]
+    return rows

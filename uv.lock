@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 
 [manifest]
@@ -1445,6 +1445,7 @@ source = { editable = "python/uqf_frontend" }
 dependencies = [
     { name = "fastapi" },
     { name = "kola" },
+    { name = "polars" },
     { name = "pydantic" },
     { name = "uqs" },
     { name = "uvicorn" },
@@ -1461,6 +1462,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "kola", specifier = ">=2.5.0" },
+    { name = "polars" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "uqs", editable = "python/uqs" },
     { name = "uvicorn", specifier = ">=0.32" },
