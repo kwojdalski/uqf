@@ -1,7 +1,7 @@
 / test_book_liquidity.q - the source-independent liquidity transforms (#1397).
 / .
 / The pure snapshot and minute steps (src/etl/transforms/book_liquidity.q) and
-/ the two adapters that feed them (book_liquidity_adapters.q), against values
+/ the two adapters that feed them (in the same file), against values
 / worked by hand. The registered job and its backfill twin are tested in
 / test_book_liquidity_job.q.
 
@@ -332,9 +332,9 @@ code_of:{[f] l:trim each read0 hsym `$f; l where not l like "/*"}
 
 test_the_pure_steps_name_no_table_transport_credential_or_cursor:{[t]
     banned:("hopen";".qetl.source";".qpipe.source";".qpipe.job";".qetl.plant";".qetl.io";".qetl.cfg";".qtorq";"getenv";"checkpoint";"cursor";"mkt_";"local_merged";".z.pg";".z.ps";"hdb");
-    code:" " sv raze code_of each ("src/etl/transforms/book_liquidity.q";"src/etl/transforms/book_liquidity_adapters.q");
+    code:" " sv code_of "src/etl/transforms/book_liquidity.q";
     hits:banned where {[c;b] 0<count ss[c;b]}[code;] each banned;
-    .qunit.assertEquals[hits;();"neither the analytics nor the adapters reach a table, a handle or a secret"]};
+    .qunit.assertEquals[hits;();"neither the analytics nor the adapters (one file) reach a table, a handle or a secret"]};
 
 test_every_liquidity_transform_is_declared_and_verified:{[t]
     n:`book_liquidity_snapshot`book_liquidity_minute`liquidity_book_from_market_data`liquidity_book_from_levels;

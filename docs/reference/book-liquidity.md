@@ -2,9 +2,10 @@
 
 What a book can fill at a requested size, and its one-minute averages, computed
 from a normalized book and nothing else (#1397). The code is
-`src/etl/transforms/book_liquidity.q` (the pure steps) and
-`src/etl/transforms/book_liquidity_adapters.q` (how a source's rows become the
-contract); the tests are `tests/q/test_book_liquidity.q`.
+`src/etl/transforms/book_liquidity.q` (the pure steps, and below them the
+adapters that turn a source's rows into the contract; one file because a
+declaration may not depend on another file of its directory at load time); the
+tests are `tests/q/test_book_liquidity.q`.
 
 ## Layers
 
