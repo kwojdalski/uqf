@@ -295,6 +295,23 @@ test_the_report_counts_the_incomplete_functions:{[t]
     .qunit.assertTrue[any out like "1 function(s) with incomplete coverage*";
         "the summary says how many need attention"]};
 
+/ #1342: "100" must mean complete. Rounding printed 99.95 - one untaken
+/ character in 2000 - as 100, beside "partial: 1" for the same function.
+test_a_percent_short_of_100_never_prints_as_100:{[t]
+    .qunit.assertEquals[.cov.pct1 100f*1999%2000;"99.9";"1999 of 2000 is 99.9, not 100"];
+    .qunit.assertEquals[.cov.pct1 99.99;"99.9";"truncated, however close"];
+    .qunit.assertEquals[.cov.pct1 100f;"100";"and complete still says 100"]};
+
+test_a_percent_is_not_truncated_below_its_value_by_float_error:{[t]
+    .qunit.assertEquals[.cov.pct1 100f*29%100;"29";"28.999999999999996 is 29, not 28.9"];
+    .qunit.assertEquals[.cov.pct1 12.34;"12.3";"one decimal place"]};
+
+/ #1341: fewer than ten functions are each listed once - `10#` cycled a
+/ short table, so one function filled all ten lines.
+test_least_covered_lists_each_function_once:{[t]
+    out:.cov.format.summary .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
+    .qunit.assertEquals[(1+out?"Least covered:")_out;enlist "  .covfix.add  100%";"one function run, one line"]};
+
 test_display_prints_and_returns_nothing:{[t]
     .qunit.assertEquals[.cov.format.display .cov.run[.covfix.add;1 2;.covtest.only[`.covfix.add]];
         (::);
