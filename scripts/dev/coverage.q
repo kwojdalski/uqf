@@ -588,8 +588,11 @@ run:{[fn;params;settings]
         i+:1];
     out}
 
-/ Private: one decimal place, without scientific notation for round numbers.
-.cov.pct1:{[x] ssr[string 0.1*"j"$10*x;"e";"e"]}
+/ Private: one decimal place, truncated rather than rounded (#1342), so that
+/ "100" means every tracked character ran: rounding printed 99.95 as 100
+/ beside "partial: 1". The 1e-6 keeps a float such as 100*29%100
+/ (28.999999999999996) from truncating to 28.9.
+.cov.pct1:{[x] string 0.1*$[x<100f; 999&floor 1e-6+10*x; floor 10*x]}
 
 / Private: a function's source with <<<>>> marks and X-prefixed lines.
 .cov.annotate:{[text;m]
@@ -627,7 +630,8 @@ run:{[fn;params;settings]
     out,:enlist "  fully covered: ",string sum pcts=100f;
     out,:enlist "  partial:       ",string sum (pcts>0f) and pcts<100f;
     out,:enlist "  never entered: ",string sum 0=results`iterations;
-    worst:10#`percent xasc update percent:pcts from select name, iterations from results;
+    / sublist, not #: a take longer than the table cycles it (#1341)
+    worst:10 sublist `percent xasc update percent:pcts from select name, iterations from results;
     out,:enlist "";
     out,:enlist "Least covered:";
     out,:{[r] "  ",(string r`name),"  ",(.cov.pct1 r`percent),"%"} each worst;
