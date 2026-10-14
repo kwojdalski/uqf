@@ -247,6 +247,52 @@ def test_a_nonzero_exit_is_reported_rather_than_swallowed(writeable, monkeypatch
     assert "boom" in body["output"]
 
 
+@pytest.mark.parametrize("body", [{}, {"selector": "rdb1"}])
+def test_a_lifecycle_request_without_procs_is_refused_not_read_as_all(writeable, monkeypatch, body):
+    """#1361: `procs` used to default to "all", so a body without it - a field
+    renamed on the browser's side - stopped the whole fleet. Now it is a 422
+    and nothing runs."""
+    called: list[str] = []
+    _patch_core(monkeypatch, stop=lambda *a, **k: called.append("stop") or FakeCompleted())
+    resp = writeable.post("/control/process/stop", json=body)
+    assert resp.status_code == 422, resp.text
+    assert called == []
+    locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
+    assert ("body", "procs") in locs, "the refusal names the missing field"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("post", "/control/process/stop", {"procs": "rdb1"}),
+        ("put", "/control/process/rdb1/config", {"field": "startwithall", "value": "1"}),
+        ("put", "/control/worker-config", {"key": "dry_run", "value": "true"}),
+        (
+            "post",
+            "/control/backfill",
+            {
+                "worker": "demo_deals_backfill",
+                "source_version": "v1",
+                "range_from": "2026-09-11T00:00:00Z",
+                "range_to": "2026-09-12T00:00:00Z",
+            },
+        ),
+    ],
+)
+def test_a_control_request_with_an_unknown_key_is_refused(
+    writeable, monkeypatch, method, path, body
+):
+    """#1361: a stale field is a 422, not ignored in favour of a default."""
+    called: list[str] = []
+    _patch_core(monkeypatch, stop=lambda *a, **k: called.append("stop") or FakeCompleted())
+    resp = getattr(writeable, method)(path, json={**body, "stale": "x"})
+    assert resp.status_code == 422, resp.text
+    assert called == []
+    (error,) = resp.json()["detail"]
+    assert error["type"] == "extra_forbidden"
+    assert tuple(error["loc"]) == ("body", "stale")
+
+
 def test_an_unknown_action_is_refused(writeable, monkeypatch):
     _patch_core(monkeypatch, start=lambda *a, **k: FakeCompleted())
     resp = writeable.post("/control/process/obliterate", json={"procs": "all"})
