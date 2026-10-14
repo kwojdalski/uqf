@@ -16,18 +16,16 @@ needs no connection to anything.
 from __future__ import annotations
 
 import csv
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs import portexpr
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from uqs.stack import alive
 
 log = get_logger(__name__)
-
-_BASE_PLACEHOLDER = re.compile(r"\{KDBBASEPORT\}(?:\+(\d+))?")
 
 
 @dataclass(frozen=True)
@@ -56,10 +54,7 @@ def _port_in(procfile: Path, procname: str, stackid: int) -> int | None:
     except OSError:
         return None
     raw = (rows.get(procname) or {}).get("port", "")
-    match = _BASE_PLACEHOLDER.fullmatch(raw.strip())
-    if match:
-        return stackid + int(match.group(1) or 0)
-    return int(raw) if raw.strip().isdigit() else None
+    return portexpr.resolve(raw, {"KDBBASEPORT": str(stackid)})
 
 
 def holders(

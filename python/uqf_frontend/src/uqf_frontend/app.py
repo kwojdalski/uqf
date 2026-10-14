@@ -370,12 +370,13 @@ def create_app(
         see status.py on the authority boundary this deliberately does not cross.
         """
         authorise(request)
-        statuses, unreadable = status.read_dir(settings.status_dir)
+        directory = status.status_directory(settings)
+        statuses, unreadable = status.read_dir(directory)
         return BackfillStatusResponse(
             summary=status.summarise(statuses),
             workers=[_worker_status_out(s) for s in statuses],
             unreadable=unreadable,
-            source=str(settings.status_dir) if settings.status_dir else None,
+            source=str(directory) if directory else None,
             poll_seconds=ops.POLL_SECONDS["backfill"],
         )
 
