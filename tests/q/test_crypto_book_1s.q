@@ -140,7 +140,10 @@ test_the_pick_does_not_depend_on_arrival_order:{[t]
     / four updates, including two at one source_time: every arrival order gives the one snapshot
     rows:raze (upd[t0+0D00:00:00.200;`a;`BTC;62000f];upd[t0+0D00:00:00.800;`a;`BTC;62001f];
         upd[t0+0D00:00:00.800;`a;`BTC;62002f];upd[t0+0D00:00:00.100;`a;`BTC;61999f]);
-    rows:update bar_start:t0 from rows;
+    / bound first: a bare name inside a q-SQL template resolves from the ROOT
+    / context at run time, not this namespace (#1325)
+    anchor:t0;
+    rows:update bar_start:anchor from rows;
     shapes:{[rows;p] .qpipe.transform.crypto_book_1s.snapshots rows p}[rows] each (0 1 2 3;3 2 1 0;2 0 3 1;1 3 0 2);
     .qunit.assertTrue[all 1_(first shapes)~/:shapes;"the same snapshot under four arrival orders"];
     .qunit.assertEquals[first first (first shapes)`bid_prices;62002f;"the tie at one source_time goes to the greater content"]};
