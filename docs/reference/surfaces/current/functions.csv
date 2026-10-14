@@ -1035,6 +1035,7 @@ qpipe.job.crypto_mock,mid0,value,,
 qpipe.job.crypto_mock,n_levels,value,,
 qpipe.job.crypto_mock,n_market,value,,
 qpipe.job.crypto_mock,on_timer,function,1,
+qpipe.job.crypto_mock,period,value,,
 qpipe.job.crypto_mock,publish,value,,
 qpipe.job.crypto_mock,quote_ccy,function,1,s
 qpipe.job.crypto_mock,quote_share,value,,

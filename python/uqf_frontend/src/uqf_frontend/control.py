@@ -121,7 +121,16 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
 
     fn = {"start": runtime.start, "stop": runtime.stop, "restart": runtime.restart}[action]
     try:
-        result = fn(_paths(settings), procs, base_port=settings.base_port, capture=True)
+        # Bounded just inside the browser's own wait (config.lifecycle_timeout),
+        # so a slow `start all` is refused here rather than timing out in the
+        # browser while torq.sh is still running and inviting a second Start.
+        result = fn(
+            _paths(settings),
+            procs,
+            base_port=settings.base_port,
+            capture=True,
+            timeout=settings.lifecycle_timeout,
+        )
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
     return CommandResult(

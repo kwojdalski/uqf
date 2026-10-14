@@ -23,7 +23,11 @@ DONE = "DONE"
 
 
 def declared_schema(paths: UqsPaths) -> str:
-    """The database.q this runtime's bootstrap writes (stack/runtime.py)."""
+    """The database.q this runtime uses - the one place that choice is made.
+
+    The bootstrap writes it (stack/runtime.py), `uqs inspect` and the HDB
+    migration compare against it, and the runtime report lists its tables.
+    """
     if paths.runtime_declaration.overlays:
         return _generated_schema_content(paths)
     return (paths.torqapphome / "database.q").read_text()

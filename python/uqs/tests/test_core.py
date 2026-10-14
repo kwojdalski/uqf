@@ -27,7 +27,7 @@ from uqs.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths, check_data_dir_was_migrated
 from uqs.stack import clean as stack_clean
-from uqs.stack import deployment, listing, monitor_budget, runtime
+from uqs.stack import deployment, hdb_types, listing, monitor_budget, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
@@ -580,6 +580,9 @@ def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsP
     assert "quote:" in generated  # vendored table still present
     assert schemas.definition("fx_orderbook") in generated
     assert schemas.definition("trades") in generated
+    # The file the processes load is the schema `declared_schema` names, the one
+    # place "which database.q a runtime uses" is decided (#1370).
+    assert generated == hdb_types.declared_schema(fake_paths)
     assert schemas.definition("position") in generated
     assert schemas.definition("demo_execution_quality") in generated
 
@@ -651,6 +654,7 @@ def test_the_torq_runtime_bootstraps_on_the_vendored_schema(fake_paths: UqsPaths
     torq = _torq(fake_paths)
     runtime.bootstrap(torq)
     assert torq.generated_schema.read_text() == (fake_paths.torqapphome / "database.q").read_text()
+    assert torq.generated_schema.read_text() == hdb_types.declared_schema(torq)
     assert not torq.generated_dqe_config.exists(), "dqe1 is not pointed at it here"
     assert not torq.generated_gateway_access.exists(), "gateway1 keeps the vendored list"
     assert not fake_paths.torqdata.exists(), "the default runtime's data is untouched"
