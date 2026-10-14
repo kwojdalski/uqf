@@ -37,7 +37,7 @@ It also freed this package: the one thing tying it to the q tree was that
 copy and the test that policed it, and both are gone.
 
 `filterable` is DERIVED rather than stored: it is exactly "every column whose
-type is not LIST", and writing it down would create a second place for it to
+type is not in UNFILTERABLE (LIST, CHAR)", and writing it down would create a second place for it to
 disagree with the types beside it. Vector-valued columns
 (`fx_orderbook.bid_prices` and friends) are deliberately NOT filterable - a per-row
 list of level prices has no sensible scalar comparison, and offering one
@@ -55,12 +55,15 @@ are reachable through the dataclass and no longer have a source.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # queries imports Table and QType from here at runtime
     from uqf_frontend.gateway import Gateway
+
+log = logging.getLogger(__name__)
 
 #: How many decimal places a value of each type is shown with, when neither
 #: the column nor its table says otherwise.
@@ -82,14 +85,26 @@ DEFAULT_DECIMALS: dict[str, int] = {
 
 
 class QType(StrEnum):
-    """The q types this layer knows how to coerce a JSON value into."""
+    """The q types this layer knows how to coerce a JSON value into.
+
+    THE AUTHORITY for which column types the browser supports (#1364). The
+    other homes of the set are held to it by tests: uqs's scaffold
+    (`uqs.scaffold.columns.TYPES`) may only accept types listed here,
+    `models.ColumnInfo.type` is a Literal of exactly these values, and
+    web/src/api.ts `ColumnType` offers the same words (test_api_types.py).
+    """
 
     SYMBOL = "symbol"
     TIMESTAMP = "timestamp"
     TIMESPAN = "timespan"
     FLOAT = "float"
     LONG = "long"
+    INT = "int"
+    SHORT = "short"
     BOOLEAN = "boolean"
+    DATE = "date"
+    TIME = "time"  # time of day, to the millisecond - q's `time`, not a timestamp
+    CHAR = "char"  # shown, never filtered on: kola has no char atom to send (see Table.filterable)
     GUID = "guid"  # run identity: filtered by exact match, never by range
     LIST = "list"  # vector-valued column: returned, never filtered on
 
@@ -101,6 +116,13 @@ OPERATORS = frozenset({"eq", "ne", "lt", "le", "gt", "ge", "in"})
 
 #: Operators that take a list rather than a scalar.
 LIST_OPERATORS = frozenset({"in"})
+
+
+#: Types a column may have and still be shown but not filtered on: a list per
+#: row has no scalar comparison, and a char has no atom kola can send (a
+#: one-character str is a symbol, and bytes are a char VECTOR that
+#: .uqf.browse already reads as a guid).
+UNFILTERABLE = frozenset({QType.LIST, QType.CHAR})
 
 
 @dataclass(frozen=True)
@@ -123,7 +145,7 @@ class Table:
         object.__setattr__(
             self,
             "filterable",
-            frozenset(c for c, t in self.columns.items() if t is not QType.LIST),
+            frozenset(c for c, t in self.columns.items() if t not in UNFILTERABLE),
         )
 
     def decimals_for(self, column: str) -> int | None:
@@ -168,6 +190,11 @@ _QTYPE_BY_CHAR: dict[str, QType] = {
     "n": QType.TIMESPAN,
     "f": QType.FLOAT,
     "j": QType.LONG,
+    "i": QType.INT,
+    "h": QType.SHORT,
+    "c": QType.CHAR,
+    "d": QType.DATE,
+    "t": QType.TIME,
     "s": QType.SYMBOL,
     "b": QType.BOOLEAN,
     "g": QType.GUID,
@@ -221,6 +248,9 @@ class Catalog:
     def __init__(self, gateway: Gateway) -> None:
         self._gateway = gateway
         self._tables: dict[str, Table] | None = None
+        #: `table -> why`, for each described table left out because a
+        #: column's type is not one this layer knows. Filled by `tables()`.
+        self.skipped: dict[str, str] = {}
 
     def tables(self) -> dict[str, Table]:
         """Every browsable table, built once and cached.
@@ -242,6 +272,10 @@ class Catalog:
         try:
             return tables[name]
         except KeyError:
+            if name in self.skipped:
+                raise ValidationFailed(
+                    f"table {name!r} is not browsable: {self.skipped[name]}"
+                ) from None
             known = ", ".join(sorted(tables))
             raise ValidationFailed(
                 f"unknown table {name!r}; queryable tables are: {known}"
@@ -249,7 +283,9 @@ class Catalog:
 
     def _build(self) -> dict[str, Table]:
         described = self._described()
-        columns = self._columns(set(described))
+        columns, self.skipped = self._columns(set(described))
+        for name, why in sorted(self.skipped.items()):
+            log.warning("table %s is not browsable: %s", name, why)
         return {
             name: Table(
                 name=name,
@@ -266,33 +302,44 @@ class Catalog:
         rows = ops._as_rows(self._gateway.call(queries.CATALOG))
         return {str(r["table"]): _text(r["description"]) for r in rows}
 
-    def _columns(self, described: set[str]) -> dict[str, dict[str, QType]]:
-        """`table -> {column: type}`, from `meta` on a data tier - for the
-        DESCRIBED tables only.
+    def _columns(self, described: set[str]) -> tuple[dict[str, dict[str, QType]], dict[str, str]]:
+        """`(table -> {column: type}, table -> why it is skipped)`, from
+        `meta` on a data tier - for the DESCRIBED tables only.
 
         `meta` covers every table on the rdb, the vendored `quote`/`trade`
-        included, whose char and int columns this layer has no coercion for.
-        Typing those first and raising made /catalog and every /query a 500
-        on any real stack; a table .qcat does not describe is never exposed,
-        so its columns are never looked at. A described table with an
-        uncoercible column still refuses, loudly.
+        included; a table .qcat does not describe is never exposed, so its
+        columns are never looked at.
+
+        A described table with a column whose `meta` character is not in
+        _QTYPE_BY_CHAR is SKIPPED, not fatal (#1364): it was a ValueError
+        that took /catalog and every /query down for all the other tables
+        too. Skipping fails closed - the table is simply not browsable, and
+        `Catalog.table` names the column when someone asks for it - and
+        the reason is logged and kept in `Catalog.skipped`.
         """
         from uqf_frontend import ops, queries
 
         out: dict[str, dict[str, QType]] = {}
+        skipped: dict[str, str] = {}
         for row in ops._as_rows(self._gateway.route(queries.SCHEMA, (), ["rdb"])):
-            if str(row["table"]) not in described:
+            table = str(row["table"])
+            if table not in described:
                 continue
             char = _text(row["kind"])
             qtype = _qtype(char)
             if qtype is None:
-                raise ValueError(
-                    f"{row['table']}.{row['column']}: meta reports type character "
-                    f"{char!r}, which this layer cannot coerce - add it to "
-                    "_QTYPE_BY_CHAR, or the column cannot be filtered on safely"
+                skipped.setdefault(
+                    table,
+                    f"{table}.{row['column']}: meta reports type character {char!r}, "
+                    "which this layer cannot coerce - add it to QType and "
+                    "_QTYPE_BY_CHAR (and web/src/api.ts ColumnType), or the column "
+                    "cannot be filtered on safely",
                 )
-            out.setdefault(str(row["table"]), {})[str(row["column"])] = qtype
-        return out
+                continue
+            out.setdefault(table, {})[str(row["column"])] = qtype
+        for table in skipped:
+            out.pop(table, None)
+        return out, skipped
 
 
 def _text(value: object) -> str:

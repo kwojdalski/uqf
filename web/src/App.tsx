@@ -47,7 +47,14 @@ const ISO_INSTANT =
 /** The column types that hold an infinity, and so the only ones whose
  *  "inf" / "-inf" is the server's infinity rather than a symbol that happens
  *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371). */
-const NUMERIC = new Set(["float", "long", "timespan", "timestamp"]);
+const NUMERIC = new Set([
+  "float",
+  "long",
+  "int",
+  "short",
+  "timespan",
+  "timestamp",
+]);
 const INFINITY: Record<string, string> = { inf: "∞", "-inf": "-∞" };
 function text(value: unknown, decimals?: number | null, type?: string) {
   if (value == null) return "—";

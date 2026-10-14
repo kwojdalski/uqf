@@ -10,9 +10,13 @@ copy and nothing to keep in step. What is left is the one thing that cannot
 be derived, the prose, and it goes to `.qcat` in
 scripts/processes/uqs_catalog.q beside the tables it describes.
 
-A consequence worth naming: a table with an exotic column type is no longer
-un-cataloguable. The old writer refused when a column had no catalog type,
-because it had to write that type down. It does not any more.
+A consequence worth naming: the columns' types are no longer written down
+here, so nothing in this writer refuses an exotic one. The browser's catalog
+(uqf_frontend.catalog.QType) is where the set of browsable types lives; the
+scaffold's types are held to it by uqf_frontend's test_browsable_types.py, so
+a type `uqs job new` accepts is one the browser can show. A described table
+whose column the catalog still cannot type is skipped, with the reason logged
+and named when asked for, rather than failing the other tables (#1364).
 """
 
 from __future__ import annotations
