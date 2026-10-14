@@ -407,6 +407,114 @@ test_max_age_reference_readiness_keeps_the_latest_anchor_by_reference_time:{[t]
     (ns[nm;`score_ready]) t0+0D00:00:42;
     .qunit.assertEquals[exec ref from last last sent;enlist 1.1;"the anchor is the latest quote by source_time"]};
 
+/ --- ready_on `both, and retention per source (#1395) -----------------------
+/ .
+/ `wall` alone scores on the plant clock, `reference` alone on the reference's
+/ own coverage. A job that must see both - the horizon has elapsed AND the
+/ reference reaches it - declares `both`.
+
+test_both_waits_for_the_wall_even_when_the_reference_already_covers_it:{[t]
+    nm:sjob[`hz_b1;`event_time`ready_on!(`source_time;`both)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:01 0D00:00:01.2;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:00.5;
+    .qunit.assertEquals[count sent;0;"covered through T+1s, but only half a second has elapsed"];
+    (ns[nm;`score_ready]) t0+0D00:00:01;
+    .qunit.assertEquals[count sent;1;"scored once the horizon has elapsed too"]};
+
+test_both_waits_for_the_reference_even_when_the_wall_has_elapsed:{[t]
+    nm:sjob[`hz_b2;`event_time`ready_on!(`source_time;`both)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:01 0D00:00:00.5;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D01;
+    .qunit.assertEquals[count sent;0;"an hour on the wall clock, but the reference stops at T+0.5s"];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;enlist t0+0D00:00:01.2;enlist 3f]];
+    (ns[nm;`score_ready]) t0+0D01;
+    .qunit.assertEquals[count sent;1;"scored once the reference has advanced through the horizon"]};
+
+test_both_expires_an_uncovered_event_with_the_coverage_reason:{[t]
+    nm:sjob[`hz_b3;`event_time`ready_on`expire_after!(`source_time;`both;0D00:00:05)];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:01 0D00:00:00.5;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:03;
+    .qunit.assertEquals[(count sent;count ns[nm;`pending]);0 1;"waiting, not yet given up on"];
+    (ns[nm;`score_ready]) t0+0D00:00:06;
+    gone:ns[nm;`expired];
+    .qunit.assertEquals[(count gone;count sent);1 0;"given up on, never scored"];
+    .qunit.assertTrue[(string first gone`reason) like "reference has not reached*";
+        "the wall had elapsed, so the reason is the reference's coverage"]};
+
+test_both_reads_legs_like_reference:{[t]
+    nm:sjob[`hz_b4;`event_time`ready_on`legs!(`source_time;`both;{[e] (count e)#enlist `a`b})];
+    (ns[nm;`on_batch])[`hz_refs;rf[`a;t0+-0D00:00:01 0D00:00:02;1 2f]];
+    (ns[nm;`on_batch])[`hz_events;sev[`a;t0;`e1]];
+    (ns[nm;`score_ready]) t0+0D00:00:03;
+    .qunit.assertEquals[count sent;0;"leg b has no reference"];
+    (ns[nm;`on_batch])[`hz_refs;rf[`b;t0+-0D00:00:01 0D00:00:02;1 2f]];
+    (ns[nm;`score_ready]) t0+0D00:00:03;
+    .qunit.assertEquals[count sent;1;"both legs anchored and advanced, and the wall has elapsed"]};
+
+test_both_is_refused_without_a_one_column_by:{[t]
+    define_src_transform[];
+    d:@[decl_for[`hz_b5];`transform;:;`horizontest_src];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_b5;];d,`event_time`ready_on`by!(`source_time;`both;`sym`mid);
+        "*ready_on `both needs a one-column by*";"the key its legs name"]};
+
+/ a reference quoted by two sources
+mrefs:([] time:`timestamp$(); sym:`symbol$(); source:`symbol$(); mid:`float$())
+
+mprice:{[e;r]
+    q:select sym, time:time+0D00:00:01, event_time:time, px from e;
+    j:aj[`sym`time;q;`sym`time xasc r];
+    select sym, event_time, px, ref:mid from j}
+
+define_ms_transform:{[]
+    if[`horizontest_ms in .qetl.transform.defined[]; :()];
+    .qetl.transform.define[`horizontest_ms;`inputs`output`fn`examples!(
+        `events`refs!(.horizontest.events;.horizontest.mrefs);
+        .horizontest.priced;
+        .horizontest.mprice;
+        enlist `inputs`expected!(
+            `events`refs!(([] time:enlist .horizontest.t0; sym:enlist `a; px:enlist 1f);
+                ([] time:enlist .horizontest.t0+0D00:00:00.5; sym:enlist `a; source:enlist `s1; mid:enlist 1.5));
+            ([] sym:enlist `a; event_time:enlist .horizontest.t0; px:enlist 1f; ref:enlist 1.5)))];
+    }
+
+msjob:{[nm;extra]
+    define_ms_transform[];
+    d:@[decl_for[nm];`transform;:;`horizontest_ms];
+    .qetl.job.stream.at_horizons[nm;d,extra];
+    `.horizontest.sent set ();
+    .qetl.job.stream.wire[nm;{[t;x] .horizontest.sent,:enlist (t;x); count x}];
+    nm}
+
+/ source s1 last quoted a at T-8s, s2 at T-7s, then both older rows
+ms_refs:{[] ([] time:t0+-0D00:00:10 -0D00:00:09 -0D00:00:08 -0D00:00:07; sym:4#`a; source:`s1`s2`s1`s2; mid:1 2 3 4f)}
+
+test_retain_by_keeps_the_latest_pre_cutoff_row_of_every_source:{[t]
+    nm:msjob[`hz_t1;enlist[`retain_by]!enlist `sym`source];
+    (ns[nm;`on_batch])[`hz_refs;ms_refs[]];
+    (ns[nm;`on_batch])[`hz_events;ev[`a;t0]];
+    (ns[nm;`score_ready]) t0+0D00:00:00.5;
+    .qunit.assertEquals[asc exec mid from ns[nm;`history];3 4f;"s1's T-8s book and s2's T-7s book: each source's as-of answer"]};
+
+test_without_retain_by_only_the_latest_row_per_key_is_kept:{[t]
+    nm:msjob[`hz_t2;()!()];
+    (ns[nm;`on_batch])[`hz_refs;ms_refs[]];
+    (ns[nm;`on_batch])[`hz_events;ev[`a;t0]];
+    (ns[nm;`score_ready]) t0+0D00:00:00.5;
+    .qunit.assertEquals[exec mid from ns[nm;`history];enlist 4f;"the control: by alone drops s1's quiet book"]};
+
+test_retain_by_is_refused_when_malformed:{[t]
+    define_ms_transform[];
+    d:@[decl_for[`hz_t3];`transform;:;`horizontest_ms];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_t3;];d,enlist[`retain_by]!enlist `sym`feed;
+        "*retain_by names feed, which the reference input does not carry*";"a reference column"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_t3;];d,enlist[`retain_by]!enlist enlist `source;
+        "*retain_by must include by (sym)*";"it extends by, it does not replace it"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_t3;];d,enlist[`retain_by]!enlist 5;
+        "*retain_by must be reference column names, symbols*";"symbols"]};
+
 / --- the quality gate (#1232) -----------------------------------------------
 
 / A quality gate that names the whole batch as offending when flagged, and
