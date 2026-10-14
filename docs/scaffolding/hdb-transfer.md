@@ -39,11 +39,9 @@ q scripts/examples/hdb_transfer_example.q -keep    # keep both databases to look
   ok    rows written: 310 then 0 then 170 - the re-run wrote nothing, the last only the new day
 
 == 4. read the destination back from disk
-date      | trades notional
-----------| -------------------
-2026.01.05| 150    1.638325e+10
-2026.01.06| 160    1.592609e+10
-2026.01.07| 170    1.142484e+10
+(trades and notional by date and quote currency: JPY for USDJPY, USD for the
+ other three pairs - notional is in each pair's quote currency, so it is never
+ summed across them)
   ok    every source trade arrived: 480
   ok    each row exactly as the source holds it
   ok    notional = price * size on every row
@@ -63,11 +61,11 @@ uqs job new hdb_transfer --kind backfill --transport local --dataset trades_copy
 That wrote the skeleton: a source, a worker, the `trades_copy` table in
 `plant_tables.q`, a catalog entry and a failing test. The parts written by hand:
 
-  | file                                                                                       | what was filled in                                                                                                                                                                                                                                                  |
-  | -------------------------------------------------------------------------------------      | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | [`src/etl/sources/hdb_transfer.q`](../../src/etl/sources/hdb_transfer.q)                   | the columns it reads (no `notional`: the worker adds it); `trade_id` as the row key; the query, which reads the window's partitions with `.qetl.source.local` and keeps `time>=from` and `time<to`; a deterministic fixture                                         |
-  | [`src/etl/workers/hdb_transfer_backfill.q`](../../src/etl/workers/hdb_transfer_backfill.q) | the transform `with_notional` (price × size, in the quote currency, so USDJPY's is in yen), with an example `.qetl.transform` runs; facts recording rows, pairs and notional for each window                                                                        |
-  | [`tests/q/test_hdb_transfer_backfill.q`](../../tests/q/test_hdb_transfer_backfill.q)       | the window's half-open edge, the declared shape, the transform and the facts                                                                                                                                                                                        |
+  | file                                                                                       | what was filled in                                                                                                                                                                                                                                                                     |
+  | -------------------------------------------------------------------------------------      | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------                    |
+  | [`src/etl/sources/hdb_transfer.q`](../../src/etl/sources/hdb_transfer.q)                   | the columns it reads (no `notional`: the worker adds it); `trade_id` as the row key; the query, which reads the window's partitions with `.qetl.source.local` and keeps `time>=from` and `time<to`; a deterministic fixture                                                            |
+  | [`src/etl/workers/hdb_transfer_backfill.q`](../../src/etl/workers/hdb_transfer_backfill.q) | the transform `with_notional` (price × size, in the quote currency, so USDJPY's is in yen), with an example `.qetl.transform` runs; facts recording rows, pairs and notional per quote currency for each window                                                                        |
+  | [`tests/q/test_hdb_transfer_backfill.q`](../../tests/q/test_hdb_transfer_backfill.q)       | the window's half-open edge, the declared shape, the transform and the facts                                                                                                                                                                                                           |
 
 ## Pointing it at a real database
 

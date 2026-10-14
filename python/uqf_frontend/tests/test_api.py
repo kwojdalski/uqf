@@ -553,3 +553,40 @@ def test_query_is_refused_when_coverage_is_written_but_not_loaded(client_for):
     assert "not yet loaded by the HDB" in resp.json()["detail"]
     assert queries.READY_CLAIMS in [program for program, _ in gw.calls]
     assert queries.BROWSE not in [program for program, *_ in gw.routed], "nothing was queried"
+
+
+# -------------------------------------------- request bodies held to their models (#1361)
+
+_COVERAGE = {
+    "dataset": "trades",
+    "partition": "",
+    "source_version": "v1",
+    "range_from": "2026-09-11T00:00:00Z",
+    "range_to": "2026-09-12T00:00:00Z",
+}
+
+
+@pytest.mark.parametrize(
+    ("body", "loc"),
+    [
+        # `filters` renamed: every query used to come back unfiltered.
+        ({"table": "trades", "filter": [{"column": "sym", "op": "eq", "value": "X"}]}, ("filter",)),
+        # `require_coverage` renamed: the completeness check was silently dropped.
+        ({"table": "trades", "requireCoverage": _COVERAGE}, ("requireCoverage",)),
+        (
+            {"table": "trades", "filters": [{"column": "sym", "op": "eq", "val": "X"}]},
+            ("filters", 0, "val"),
+        ),
+        (
+            {"table": "trades", "require_coverage": {**_COVERAGE, "partitions": "EURUSD"}},
+            ("require_coverage", "partitions"),
+        ),
+    ],
+)
+def test_a_query_with_an_unknown_key_is_refused_rather_than_read_without_it(gw, body, loc):
+    c = TestClient(create_app(gateway=gw))
+    resp = c.post("/query", json=body)
+    assert resp.status_code == 422, resp.text
+    extra = [e for e in resp.json()["detail"] if e["type"] == "extra_forbidden"]
+    assert [tuple(e["loc"]) for e in extra] == [("body", *loc)]
+    assert gw.routed == [], "nothing reached the gateway"
