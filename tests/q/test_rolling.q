@@ -363,10 +363,14 @@ test_a_restart_publishes_what_the_running_job_did:{[t]
 
 test_a_restart_after_midnight_withholds_the_windows_it_cannot_cover:{[t]
     / the new day's log holds 00:02:30 onward; the job restarts at 00:03 and ticks
+    / the roll is local midnight, so pin the zone to UTC: the test must not depend on the host's
+    old:.qetl.job.stream.rolling.zone_offset;
+    .qetl.job.stream.rolling.zone_offset:{0D00:00};
     nm:job`rt_q;
     lg:enlist (`rt_events;row[2026.10.10D00:02:30;2026.10.10D00:02:30;`a;1f]);
-    restart[nm;lg];
-    .qunit.assertEquals[ns[nm;`covered_from];2026.10.10D00:00:00;"covered from the roll, which the log begins at"];
+    r:.[{[nm;lg] restart[nm;lg]; ns[nm;`covered_from]};(nm;lg);{x}];
+    .qetl.job.stream.rolling.zone_offset:old;
+    .qunit.assertEquals[r;2026.10.10D00:00:00;"covered from the roll, which the log begins at"];
     `.rollingtest.clock set 2026.10.10D00:03:00;
     ns[nm;`evaluate] clock;
     p:published[];
