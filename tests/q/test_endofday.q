@@ -286,6 +286,34 @@ test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
     .qunit.assertEquals[e[0;1];`eod_cap;"naming the job"];
     .qunit.assertEquals[e[0;3]`cap;1;"and the cap it overran"]};
 
+/ #1308: catch_up replays yesterday's log, then today's, through one handler
+/ before `replayed` clears the recording. Yesterday's snapshot S0 restores;
+/ today's S1 was taken before fill g, which is logged ahead of it. Before the
+/ fix nothing was recorded after S0's restore, so S1 replaced the book
+/ without g: 2mm where the job that kept running holds 3mm.
+test_every_snapshot_in_one_replay_is_amended_by_the_rows_logged_ahead_of_it:{[t]
+    record[`fx_positions];
+    h:.qetl.job.stream.handler `fx_positions;
+    h[`executions;fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qetl.job.stream.snapshot `fx_positions;
+    s0:sent_on[`fx_position_open];
+    f:update time:.eodtest.t1+0D10 from fill[`EURUSD;1;1e6;1.1;`london;`spot];
+    h[`executions;f];
+    `.eodtest.sent set ();
+    .qetl.job.stream.snapshot `fx_positions;
+    s1:sent_on[`fx_position_open];
+    / logged after the roll, ahead of S1, applied live on top of it
+    g:update time:.eodtest.t1+0D11 from fill[`EURUSD;1;1e6;1.1;`london;`spot];
+    h[`executions;g];
+    running:.qpipe.job.fx_positions.positions;
+    .qetl.job.stream.reset `fx_positions;
+    e:errors[.testutil.captured_log[0b] {[s0;f;g;s1]
+        .eodtest.replay[`fx_positions;((`fx_position_open;s0);(`executions;f);(`executions;g);(`fx_position_open;s1))]}[s0;f;g;s1]];
+    .qunit.assertEquals[exec base_qty from s1;enlist 2e6;"S1 holds the first two fills, not g"];
+    .qunit.assertEquals[exec base_qty from .qpipe.job.fx_positions.positions;enlist 3e6;"S1 restored, then g applied again"];
+    .qunit.assertEquals[.qpipe.job.fx_positions.positions;running;"restarted and kept-running books agree"];
+    .qunit.assertEquals[count e;0;"and nothing is reported lost"]};
+
 / --- a missed end of day (#1072) -------------------------------------------
 
 / The errors missed_end_of_day logs for fx_positions with `marker` as the

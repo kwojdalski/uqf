@@ -672,7 +672,7 @@ end_of_day:{[dt]
 /                   Each row carries `carried_to`, the plant `time` of the
 /                   last batch the state had applied (#1015).
 /   on replay       batches are applied as they come, and also recorded
-/                   until the snapshot arrives. The state is then SET from
+/                   for the next snapshot. The state is then SET from
 /                   it and the recorded rows later than its `carried_to`
 /                   applied again: the plant tells the job its day ended
 /                   asynchronously, so a batch can be logged ahead of the
@@ -740,13 +740,17 @@ carried:{[job;h;t;x]
 / @private
 carry_cap:{[job] $[`cap in key def[job]`carry; def[job][`carry]`cap; 100000]}
 
-/ Private: keep a replayed batch until the snapshot arrives, up to the cap.
+/ Private: keep a replayed batch for the next snapshot to amend, up to the cap.
 / @private
 record:{[job;t;x]
     r:$[job in key carry_log; carry_log job; (`recording;0;())];
-    if[not `recording=r 0; :()];
+    / still recording after a restore (#1308): since #1072 one replay can
+    / meet several snapshots - catch_up's logs, then today's - and each must
+    / be amended by the rows logged ahead of it. The status stays `restored,
+    / which is what missed_end_of_day reads as "a snapshot was found".
+    if[not (r 0) in `recording`restored; :()];
     if[carry_cap[job]<n:r[1]+count x; carry_log[job]:(`full;n;()); :()];
-    carry_log[job]:(`recording;n;r[2],enlist (t;x));
+    carry_log[job]:(r 0;n;r[2],enlist (t;x));
     }
 
 / Private: set the carried state from its snapshot, then apply again the
