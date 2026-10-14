@@ -1531,6 +1531,17 @@ qpipe.transform.fx_markout,scoreable,function,2,spec exe
 qpipe.transform.fx_markout,tops,function,1,md
 qpipe.transform.fx_markout,unscoreable,function,2,spec exe
 qpipe.transform.fx_markout,wait,function,2,spec settle
+qpipe.transform.fx_source_adapters,book_category,value,,
+qpipe.transform.fx_source_adapters,book_levels,table,,
+qpipe.transform.fx_source_adapters,deal_tape,table,,
+qpipe.transform.fx_source_adapters,executions,table,,
+qpipe.transform.fx_source_adapters,from_book_levels,function,1,batch
+qpipe.transform.fx_source_adapters,from_deal_tape,function,1,batch
+qpipe.transform.fx_source_adapters,market_data,table,,
+qpipe.transform.fx_source_adapters,pairs_of,function,1,codes
+qpipe.transform.fx_source_adapters,positive,function,1,x
+qpipe.transform.fx_source_adapters,spot_codes,value,,
+qpipe.transform.fx_source_adapters,tape_sides,value,,
 qpipe.transform.order_quality,lateness,value,,
 qpipe.transform.order_quality,stats,function,1,x
 qpipe.transform.order_quality,windows,value,,

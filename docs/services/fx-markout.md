@@ -93,3 +93,36 @@ reason; the live job's `keep` drops the same rows so a queue never holds one.
 **Not migrated.** `demo_markout` and `crypto_markout` keep their own, different
 policies (a single-quote pip mid; a best mid in basis points). They are not
 rebuilt on this calculation, so their outputs are unchanged.
+
+## Source adapters
+
+An adapter is a declared `.qetl.transform` from one source's table to
+`executions` or `market_data`, written as `executions.q` and `market_data.q`
+write theirs: the normalizer shell holds it to the canonical table, column for
+column and type for type. It selects what is eligible in its source, names and
+signs what that source calls things, keeps the source's own times and
+identifiers, and refuses what it cannot represent. It owns no queue, no
+reference-price choice and no markout arithmetic.
+
+`src/etl/transforms/fx_source_adapters.q` holds two worked analogues, shaped to
+differ from the tables the stack already normalizes (neither is a port of any
+real source):
+
+  | Adapter                               | Source shape                                                                                             | Decides                                                                                                                                                                                         |
+  | ---                                   | ---                                                                                                      | ---                                                                                                                                                                                             |
+  | `executions_from_deal_tape`           | a row per deal **event**: `id`, `security_code`, `side` B/S, `price`, `last_qty`, `cum_qty`, `exec_type` | only `fill` rows are executions; `status` rows carry the order's **cumulative** quantity and are dropped, so an order's fills sum to its final `cum_qty`; the id is kept exact from its integer |
+  | `market_data_from_book_levels`        | a row per **level**, with a liquidity `category` and a `settle` code                                     | only `FULL_AMOUNT` spot levels are reference liquidity; levels are reshaped to a snapshot per (pair, feed, time), best first; an emptied or unlisted side is an empty ladder                    |
+
+Eligibility is not malformation. A row the source carries but the contract is
+not about (a status update, a forward, an equity) is dropped. A row that claims
+to be about it and cannot be (a fill with an unknown side, a level with a
+negative price) is refused, by name and count: a vendor changing a code is a
+break to see, not rows to lose. Trade busts are not modelled; a site that needs
+them filters at its source.
+
+Adding a source is an adapter plus its line in the normalizer's `input`
+dictionary: the markout calculation, the layouts and the horizon jobs do not
+change. The tests hold two differently shaped sources to the claim: the deal
+tape and a level-per-row book on one side, the stack's own `trades` and `quote`
+on the other, normalize to the same `executions` and `market_data` rows and give
+identical markouts from the same calculation.
