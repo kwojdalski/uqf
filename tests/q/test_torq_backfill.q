@@ -4,21 +4,21 @@
 // torq_backfill.q starts a process and exits, so it cannot be loaded whole.
 // Like test_torq_pipeline.q, this loads the definitions it tests from the
 // file itself: flag_vs_env, use_on_conflict and use_mode, qualified instead
-// of entered by a context switch.
+// of entered by a context switch; a flattened copy arrives qualified already.
 
 \d .backfillproctest
 
 load_flag_handling:{[]
     ls:read0 `:scripts/processes/torq_backfill.q;
-    from_i:first where ls like "flag_vs_env:{*";
-    to_i:first where ls like "use_fixture:{*";
+    from_i:first where ls like "*flag_vs_env:{*";
+    to_i:first where ls like "*use_fixture:{*";
     / back up over the comment block that documents use_fixture
-    isc:(ls til to_i) like "/*";
+    isc:"/"={first x} each ls til to_i;
     to_i:1+last where not isc;
     body:from_i _ to_i # ls;
     body:{$[(first x) in .Q.a; ".qproc.backfill.",x; x]} each body;
-    / the bodies call flag_vs_env by its bare name ([[] is a literal [ to like and ssr), which means nothing outside the context
-    body:{$[x like "*flag_vs_env[[]*"; ssr[x;"flag_vs_env[[]";".qproc.backfill.flag_vs_env["]; x]} each body;
+    / the bodies call flag_vs_env by its bare name (a flattened copy has done this already; [[] is a literal [ to like and ssr), which means nothing outside the context
+    body:{$[(x like "*flag_vs_env[[]*") and not x like "*.flag_vs_env[[]*"; ssr[x;"flag_vs_env[[]";".qproc.backfill.flag_vs_env["]; x]} each body;
     f:hsym `$(first system "mktemp -d"),"/flag_handling.q";
     f 0: body;
     system "l ",1_string f}
