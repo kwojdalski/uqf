@@ -77,8 +77,19 @@ USAGE = """{[lim]
 #:
 #: Strictly greater than the watermark so a row already captured is never
 #: captured twice, which makes the capture idempotent under retry.
+#:
+#: The watermark is a LONG - ``time`` as nanoseconds since 2000.01.01 - on
+#: both sides of the wire, never a timestamp (#1316). ``.usage.usage.time``
+#: is ``.z.p``, so nearly every row has a non-zero nanosecond tail, and a
+#: timestamp handed to Python arrives as a ``datetime``, which stops at the
+#: microsecond. Sent back as ``since``, that truncated value is up to 999 ns
+#: EARLIER than the row it was taken from, so ``time>since`` matched that row
+#: again on every sweep and the newest row of an idle process was appended to
+#: the sink once per interval, forever. Each row carries its own ``time_ns``
+#: so the caller can advance the watermark without ever touching ``time``.
 USAGE_SINCE = """{[since;lim]
-  r:`time xasc select from .usage.usage where time>since;
+  r:`time xasc select from .usage.usage where ("j"$time)>since;
+  r:update time_ns:"j"$time from r;
   $[lim>0; lim sublist r; r]}"""
 
 #: What a process can say about itself over IPC.
