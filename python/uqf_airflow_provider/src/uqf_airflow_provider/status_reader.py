@@ -4,10 +4,12 @@ Deliberately independent of `uqf_frontend.status`, even though the two
 parse the same file format: this package is meant to run inside Airflow's
 own environment, which need not have `uqf-frontend` (a FastAPI service)
 installed, and nothing here may pull in a dependency that
-narrows where this package is importable. The two readers are kept honest
-against the same q source independently — see `tests/test_status_reader.py`
-and `python/uqf_frontend/tests/test_status.py`, which both parse
-`src/etl/core/status.q` rather than trusting each other.
+narrows where this package is importable. The states and the file name come
+from q itself, generated into this package's `q_facts` by the same generator
+that writes uqs's (#1362) - a vendored copy rather than an import, because
+this package must not depend on uqs; the q-facts hook regenerates and checks
+it, and `tests/test_status_reader.py` holds it to `src/etl/core/status.q`
+where no q is installed.
 
 Only the fields a sensor actually needs are exposed here — this is a
 narrower reader than uqf_frontend's, on purpose: the authority split says q
@@ -25,15 +27,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-#: Filename shape `.qetl.status.write_status` writes — see src/etl/core/status.q.
-FILENAME_PREFIX = "airflow_status_"
-FILENAME_SUFFIX = ".txt"
+from uqf_airflow_provider.q_facts import (
+    STATUS_FILE_PREFIX,
+    STATUS_FILE_SUFFIX,
+    STATUS_STATES,
+    STATUS_TERMINAL_STATES,
+)
 
-#: `.qetl.status.status_states` in src/etl/core/status.q. Kept as a literal
-#: tuple, not derived at import time, so this module never needs a q
-#: process or a checked-out uqf tree to be importable — only the test suite
-#: (which has this whole repository checked out) verifies it still matches.
-STATES = ("starting", "running", "idle", "completed", "failed")
+#: Filename shape `.qetl.status.write_status` writes - `.qetl.status.file_path`.
+FILENAME_PREFIX = STATUS_FILE_PREFIX
+FILENAME_SUFFIX = STATUS_FILE_SUFFIX
+
+#: `.qetl.status.status_states`.
+STATES = STATUS_STATES
 
 #: The keys this reader requires - a subset of what status.q writes; the
 #: test suite checks each one is written.
@@ -51,8 +57,9 @@ FIELDS = (
     "run_id",
 )
 
-#: A run in one of these states will not change again.
-TERMINAL_STATES = ("idle", "completed", "failed")
+#: A run in one of these states will not change again -
+#: `.qetl.status.terminal_states`.
+TERMINAL_STATES = STATUS_TERMINAL_STATES
 
 
 class MalformedStatusFile(ValueError):

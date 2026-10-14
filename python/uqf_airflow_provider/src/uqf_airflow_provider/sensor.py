@@ -13,13 +13,12 @@ without Airflow) rather than one this package should paper over.
 
 from __future__ import annotations
 
-import os
-import socket
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from uqf_airflow_provider import liveness
 from uqf_airflow_provider.status_reader import (
     MalformedStatusFile,
     WorkerStatus,
@@ -102,20 +101,10 @@ def process_gone(status: WorkerStatus) -> bool:
     """Is the process that wrote this non-terminal file provably dead?
 
     Only provable on the host that ran it: another host's pid says nothing
-    here, so that is not gone - the sensor keeps waiting, as before. Host
-    names are compared without case, because q's `.z.h` lower-cases what
-    `socket.gethostname()` does not. A pid owned by another user raises
-    PermissionError, and that one IS running.
+    here, so that is not gone - the sensor keeps waiting, as before. The rule
+    is `liveness.process_gone`, a copy of uqs.liveness held equal to it.
     """
-    if status.terminal or status.host.lower() != socket.gethostname().lower():
-        return False
-    try:
-        os.kill(status.pid, 0)
-    except ProcessLookupError:
-        return True
-    except PermissionError:
-        return False
-    return False
+    return not status.terminal and liveness.process_gone(status.host, status.pid)
 
 
 def poke_worker_status(

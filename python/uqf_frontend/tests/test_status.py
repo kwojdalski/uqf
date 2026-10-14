@@ -108,14 +108,15 @@ def test_terminal_states_match_the_q_transitions():
 
 def test_status_file_name_matches_the_q_writer():
     """The file name is how a reader finds a status file at all. `status.q`
-    builds it in place (`"/airflow_status_",string[instance_id],".txt"`), so a
+    names it `file_prefix`,instance,`file_suffix` (`.qetl.status.file_path`), so a
     change there leaves every reader looking for files that are never
     written, reporting "no status yet" for a worker that is running.
     """
     src = STATUS_Q.read_text()
-    built = re.findall(r'"/(\w+)",string\[instance_id\],"([.\w]+)"', src)
-    assert built, "status.q no longer builds the path the way this test reads it"
-    assert set(built) == {(status.FILENAME_PREFIX, status.FILENAME_SUFFIX)}
+    prefix = re.search(r'^file_prefix:"([^"]+)"', src, re.M)
+    suffix = re.search(r'^file_suffix:"([^"]+)"', src, re.M)
+    assert prefix and suffix, "status.q no longer names the file the way this test reads it"
+    assert (status.FILENAME_PREFIX, status.FILENAME_SUFFIX) == (prefix.group(1), suffix.group(1))
 
 
 # --- reading ---------------------------------------------------------------

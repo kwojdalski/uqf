@@ -737,33 +737,34 @@ carried:{[job;h;t;x]
 / @private
 carry_cap:{[job] $[`cap in key def[job]`carry; def[job][`carry]`cap; 100000]}
 
-/ Private: keep a replayed batch until the snapshot arrives, up to the cap.
+/ Private: keep a replayed batch until the snapshot arrives, up to the cap; past it,
+/ note the latest `time` dropped (#1372; none counts as latest).
 / @private
 record:{[job;t;x]
-    r:$[job in key carry_log; carry_log job; (`recording;0;())];
-    / a replay can meet several snapshots (#1308): recording goes on after a restore
-    if[not (r 0) in `recording`restored; :()];
-    if[carry_cap[job]<n:r[1]+count x; carry_log[job]:($[`restored=r 0; `restored_full; `full];n;()); :()];
-    carry_log[job]:(r 0;n;r[2],enlist (t;x));
+    r:$[job in key carry_log; carry_log job; (`recording;0;();0Np)];
+    d:$[not (`time in cols x) and count x; 0Np; `time in cols x; max x`time; 0Wp];
+    if[(r 0) in `full`restored_full; carry_log[job]:(r 0;r 1;();max (r 3;d)); :()];
+    if[carry_cap[job]<n:r[1]+count x; carry_log[job]:($[`restored=r 0; `restored_full; `full];n;();max (r 3;d)); :()];
+    carry_log[job]:(r 0;n;r[2],enlist (t;x);r 3);
     }
 
 / Private: set the carried state from its snapshot, then apply again the
 / recorded rows the snapshot does not hold - those later than its
-/ `carried_to`. A recording that hit its cap has lost rows the state needs,
-/ which is logged as an error, never silent (#1015).
+/ `carried_to`. A recording that hit its cap and dropped rows later than that
+/ has lost rows the state needs: logged as an error, never silent (#1015, #1372).
 / @private
 restore:{[job;h;x]
     c:def[job]`carry;
-    r:$[job in key carry_log; carry_log job; (`recording;0;())];
-    if[(r 0) in `full`restored_full;
+    r:$[job in key carry_log; carry_log job; (`recording;0;();0Np)];
+    hwm:$[(`carried_to in cols x) and count x; max x`carried_to; 0Np];
+    if[((r 0) in `full`restored_full) and (null hwm) or hwm<r 3;
         .qetl.log.err[job;"carry snapshot arrived after its recording hit the cap - batches logged before it are not re-applied, so the restored state is missing them";
             `table`held`cap!(c`table;r 1;carry_cap[job])]];
     v:` sv (def[job]`ns),c`state;
     cur:get v;
     rows:(cols 0!cur)#x;
     v set $[99h=type cur; (keys cur) xkey rows; rows];
-    hwm:$[(`carried_to in cols x) and count x; max x`carried_to; 0Np];
-    carry_log[job]:(`restored;0;());
+    carry_log[job]:(`restored;0;();0Np);
     {[h;hwm;b] rs:b 1; if[(not null hwm) and `time in cols rs; rs:select from rs where time>hwm]; if[count rs; h[b 0;rs]]}[h;hwm] each r 2;
     }
 
