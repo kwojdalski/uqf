@@ -78,7 +78,7 @@ run_dev:{[extra;envs]
     root:first system "mktemp -d";
     cmd:"env -u UQF_MODE -u UQF_ON_CONFLICT ",envs,"UQF_STATUS_DIR=",root,"/st ",
         $[""~getenv `QCMD; "q"; getenv `QCMD],
-        " scripts/dev/run_backfill.q -worker demo_deals_backfill -version v2 -from 2026.09.13D00:00 -to 2026.09.14D00:00 -fixture ",
+        " scripts/dev/run_backfill.q -worker demo_deals_backfill -version v2 -from 2026.09.13D00:00:00.000000000 -to 2026.09.14D00:00:00.000000000 -fixture ",
         extra," -hdb ",root,"/hdb < /dev/null > ",root,"/out.txt 2>&1; echo $?";
     code:"J"$first system cmd;
     / the child's own logging goes to the file: q's stdout capture misses it
