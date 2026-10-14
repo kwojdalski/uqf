@@ -28,6 +28,21 @@ from uqf_airflow_provider.status_reader import (
 )
 from uqf_airflow_provider.translate import PokeOutcome, failure_reason, translate
 
+#: What `.qetl.source.fixture_version` appends to the release a run on a
+#: source's fixture records under (#1082), and what
+#: `.qetl.job.bounded.runtime.run_version` puts between the release and a
+#: worker's declared output revision (#1097). Mirrors of uqs.stack.runs's
+#: FIXTURE_TAG and REVISION_TAG: this package does not depend on uqs, so, as
+#: with status_reader.STATES, the test suite holds them equal to the q source.
+FIXTURE_TAG = "~fixture"
+REVISION_TAG = "@r"
+
+
+def _untagged(version: str) -> str:
+    """A status file's `source_version` without the tags the runtime appends:
+    `v1@r2~fixture` -> `v1`, the release the DAG named (#1315)."""
+    return version.removesuffix(FIXTURE_TAG).split(REVISION_TAG)[0]
+
 
 @dataclass(frozen=True)
 class ExpectedRun:
@@ -38,6 +53,10 @@ class ExpectedRun:
     `starting`, read the PREVIOUS run's `completed` and succeeded - or its
     `failed`, and failed an Airflow retry before q had started. A file whose
     source_version or range differs belongs to another run, and is PENDING.
+
+    `source_version` is the release the DAG launched the worker with (`v1`);
+    the file records it tagged - `v1~fixture` for a run on the fixture,
+    `v1@r2` under the worker's declared revision - and matches untagged.
 
     `not_before` covers the case the spec cannot: a retry of the SAME range,
     where the last run's file matches. A file last written before it is the
@@ -70,7 +89,7 @@ def _utc(value: str | datetime) -> datetime:
 
 def is_expected_run(status: WorkerStatus, expect: ExpectedRun) -> bool:
     """Was this file written by the run `expect` describes?"""
-    if status.source_version != expect.source_version:
+    if _untagged(status.source_version) != expect.source_version:
         return False
     if _utc(status.range_from) != _utc(expect.range_from):
         return False

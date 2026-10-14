@@ -479,6 +479,32 @@ def test_a_malformed_range_bound_says_what_it_wanted(writeable):
     assert "ISO-8601" in resp.json()["detail"]
 
 
+def test_a_range_bound_finer_than_a_microsecond_is_refused_not_truncated(writeable, monkeypatch):
+    """`fromisoformat` keeps the first six digits of a nine-digit fraction
+    without a word, so `range_to ...123456789Z` started a worker 789 ns short
+    of the range the caller sent, and recorded that as covered (#1317). The
+    rule `uqs backfill` applies to its own bounds, applied at this surface."""
+    seen = _patch_torq_sh(monkeypatch)
+    resp = writeable.post(
+        "/control/backfill", json=_backfill_body(range_to="2026-09-12T00:00:00.123456789Z")
+    )
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert "range_to '2026-09-12T00:00:00.123456789Z' is finer than a microsecond" in detail
+    assert "args" not in seen, "refused before any process starts"
+
+
+def test_a_microsecond_range_bound_reaches_the_process_intact(writeable, monkeypatch):
+    seen = _patch_torq_sh(monkeypatch)
+    resp = writeable.post(
+        "/control/backfill", json=_backfill_body(range_to="2026-09-12T00:00:00.123456Z")
+    )
+    assert resp.status_code == 200, resp.text
+    extras = seen["args"][3:]
+    flags = dict(zip(extras[0::2], extras[1::2], strict=True))
+    assert flags["-to"] == "2026.09.12D00:00:00.123456000"
+
+
 # ------------------------------------------------------------- helpers
 
 
