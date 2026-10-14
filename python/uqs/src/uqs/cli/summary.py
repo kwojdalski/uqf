@@ -35,8 +35,8 @@ from uqs.interpreter import interpreter_status
 from uqs.logger import configure_logging
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
+from uqs.stack import deployment, listing, probe, startup
 from uqs.stack import env as stack_env
-from uqs.stack import listing, probe, startup
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import (
     MONITOR_PROCNAME,
@@ -86,9 +86,11 @@ def _print_startups(log_dir: Path, procnames: list[str]) -> None:
 
 def _note_monitor_coverage() -> None:
     """One dim line naming what monitor1 gives up under the budget (#620): a
-    `-` in the Heartbeat column for those processes is that, not a fault."""
+    `-` in the Heartbeat column for those processes is that, not a fault.
+    Planned for the recorded deployment's set, the fleet the running monitor1
+    was started for, when a profile start recorded one (#1318)."""
     try:
-        dropped = stack_procs.monitor_dropped_proctypes(_paths())
+        dropped = stack_procs.monitor_dropped_proctypes(_paths(), deployment.members(_paths()))
     except Exception as exc:  # noqa: BLE001 - advisory; never fail the table
         log.debug("monitor coverage note skipped: {}", exc)
         return

@@ -15,6 +15,8 @@ that nothing can read, because it has no slot left to ACCEPT the query.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from uqs.logger import get_logger
 from uqs.model import profiles
 from uqs.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
@@ -86,6 +88,34 @@ def _vendored_monitor_connections(paths: UqsPaths) -> list[str]:
         if stripped.startswith("CONNECTIONS:`"):
             return [part for part in stripped[len("CONNECTIONS:") :].split("`") if part]
     return []
+
+
+def planned_fleet(
+    rows: list[dict[str, str]], selected: Iterable[str] | None
+) -> list[dict[str, str]]:
+    """`rows` as the start that brings up `selected` leaves them: startwithall
+    1 for exactly its members, 0 for the rest. None - a start with no set, or
+    no start at all - is the rows as composed, the `startwithall=1` fleet.
+
+    The plan below counts handles per `startwithall=1` row, which is the
+    default start's fleet - and under `uqs start --profile crypto` it is not
+    the fleet monitor1 faces. That start brings up seventeen processes, four
+    of them in proctypes the default fleet's plan gives up, and since #1207 a
+    profile start also narrows what monitor1 can discover to exactly that
+    set. Planned from the default rows, monitor1 dropped `feed` under
+    `--profile crypto` - cryptomock1, the only producer in the set, had no
+    heartbeat subscription - with four handles spare (#1318). The reverse
+    is as silent: a set that starts more of a kept type than the default
+    fleet has is not trimmed for it.
+
+    So a start's set is written over the column, and the plan reads the
+    column it always read; reporter1's checks are validated against the same
+    set (#1248).
+    """
+    if selected is None:
+        return rows
+    chosen = set(selected)
+    return [{**r, "startwithall": "1" if r.get("procname") in chosen else "0"} for r in rows]
 
 
 def monitor_connection_plan(
@@ -173,7 +203,9 @@ def _monitor_connections(paths: UqsPaths) -> list[str]:
     return connections + [p for p in MONITOR_EXTRA_CONNECTIONS if p not in connections]
 
 
-def monitor_dropped(paths: UqsPaths, rows: list[dict[str, str]]) -> list[str]:
+def monitor_dropped(
+    paths: UqsPaths, rows: list[dict[str, str]], selected: Iterable[str] | None = None
+) -> list[str]:
     """The proctypes monitor1 gives up for the fleet in `rows` - the same plan
     monitor_connection_extras applies, so what is reported is what happens.
 
@@ -181,20 +213,29 @@ def monitor_dropped(paths: UqsPaths, rows: list[dict[str, str]]) -> list[str]:
     proctype's processes have no heartbeat subscription, which `heartbeat.q`
     cannot report because it never subscribed - the gap is otherwise invisible
     exactly where it matters.
+
+    `selected` is the fleet the start brings up, as planned_fleet; [] when
+    monitor1 is not among what starts - no collector, nothing given up.
     """
+    fleet = planned_fleet(rows, selected)
+    if not any(r.get("procname") == "monitor1" and r.get("startwithall") == "1" for r in fleet):
+        return []
     connections = _monitor_connections(paths)
     if not connections:
         return []
-    dropped = monitor_connection_plan(connections, rows, profiles.licence_limit())[1]
+    dropped = monitor_connection_plan(connections, fleet, profiles.licence_limit())[1]
     # Only proctypes something actually runs as. The plan gives up a type in
     # sacrifice order whether or not any process has it - harmless there,
     # but reported it would name a gap nothing falls into.
-    running = {r.get("proctype") for r in rows if r.get("startwithall") == "1"}
+    running = {r.get("proctype") for r in fleet if r.get("startwithall") == "1"}
     return [p for p in dropped if p in running]
 
 
-def monitor_connection_extras(paths: UqsPaths, rows: list[dict[str, str]]) -> str:
-    """`.servers.CONNECTIONS` as a command-line override for monitor1.
+def monitor_connection_extras(
+    paths: UqsPaths, rows: list[dict[str, str]], selected: Iterable[str] | None = None
+) -> str:
+    """`.servers.CONNECTIONS` as a command-line override for monitor1, planned
+    for the fleet `selected` brings up (planned_fleet).
 
      `.proc.override[]` runs after every config layer, including the vendored
      appconfig, so a command-line value wins without that file being edited
@@ -204,7 +245,8 @@ def monitor_connection_extras(paths: UqsPaths, rows: list[dict[str, str]]) -> st
     connections = _monitor_connections(paths)
     if not connections:
         return ""
-    kept, dropped = monitor_connection_plan(connections, rows, profiles.licence_limit())
+    fleet = planned_fleet(rows, selected)
+    kept, dropped = monitor_connection_plan(connections, fleet, profiles.licence_limit())
     if dropped:
         # DEBUG, not INFO: process.csv is composed several times per command,
         # so at INFO this printed three times above every `summary` table. It

@@ -8,6 +8,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,7 +16,7 @@ from uqs import paths as stack_paths
 from uqs.external import crypto
 from uqs.external.crypto import CRYPTORUST_ROOT_ENV
 from uqs.external.lifecycle import process_identity
-from uqs.model import dependencies, pipeline_edges, plant_schema, schemas
+from uqs.model import dependencies, pipeline_edges, plant_schema, profiles, schemas
 from uqs.model.pipeline import (
     FROM_DECLARATION,
     PIPELINE_LIB_SCRIPT,
@@ -26,7 +27,7 @@ from uqs.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths, check_data_dir_was_migrated
 from uqs.stack import clean as stack_clean
-from uqs.stack import listing, runtime
+from uqs.stack import deployment, listing, monitor_budget, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
@@ -2337,7 +2338,7 @@ def test_monitor1_plans_its_connections_from_the_overridden_fleet(
     `config set X startwithall ...` never reached it."""
     seen: list[list[dict[str, str]]] = []
 
-    def plan(paths, rows):
+    def plan(paths, rows, selected=None):
         seen.append([dict(r) for r in rows])
         return ""
 
@@ -2361,6 +2362,80 @@ def test_an_override_of_monitor1s_own_extras_still_wins(fake_paths: UqsPaths):
     stack_procs.set_process_config(fake_paths, "monitor1", "extras", "-mine 1")
     rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
     assert rows["monitor1"]["extras"] == "-mine 1"
+
+
+def _monitor_connections(rows: list[dict[str, str]]) -> list[str]:
+    """The proctypes monitor1's composed `extras` subscribe it to."""
+    extras = next(r["extras"] for r in rows if r["procname"] == "monitor1")
+    match = re.search(r"-\.servers\.CONNECTIONS ((?:\S+ )*?)(?=-|$)", extras)
+    assert match, extras
+    return match.group(1).split()
+
+
+@pytest.fixture
+def _community_licence(monkeypatch):
+    """The real tree on the community licence, with no operator overrides:
+    the budget the committed profiles are sized for."""
+    for name in ("UQF_Q_IMPL", "UQS_LICENCE_CONNECTIONS", "UQS_RUNTIME"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(stack_procs, "_read_overrides", lambda paths: {})
+
+
+@pytest.mark.usefixtures("_community_licence")
+def test_a_profile_start_plans_monitor1_against_the_profiles_fleet():
+    """#1318, over the real tree. The default start's fleet is over budget
+    and gives up `feed`; `--profile crypto` starts seventeen processes whose
+    handles fit with room to spare, and its only producer - cryptomock1, a
+    `feed` - got no heartbeat subscription because the plan it was handed
+    was the default fleet's. Essential lost reporter1 and housekeeping1 the
+    same way. (tpreplay1's `tickerlogreplay` is not on the vendored list, so
+    no plan hears it.)"""
+    real = stack_paths.default_paths()
+    default = _monitor_connections(stack_procs.effective_process_rows(real))
+    assert "feed" not in default, "the default fleet does give feed up"
+    crypto = _monitor_connections(
+        stack_procs.effective_process_rows(real, selected=profiles.resolve(["crypto"]))
+    )
+    assert "feed" in crypto, "cryptomock1 is heard under the profile it belongs to"
+    essential = _monitor_connections(
+        stack_procs.effective_process_rows(real, selected=profiles.resolve(["essential"]))
+    )
+    assert {"reporter", "housekeeping"} <= set(essential)
+    assert stack_procs.monitor_dropped_proctypes(real, profiles.resolve(["crypto"])) == []
+
+
+@pytest.mark.usefixtures("_community_licence")
+def test_a_start_with_no_set_keeps_the_default_fleets_plan():
+    """`uqs start` with nothing recorded is the `startwithall=1` fleet, as
+    before: the plan written and the gap reported are unchanged."""
+    real = stack_paths.default_paths()
+    rows = stack_procs.effective_process_rows(real)
+    kept, dropped = monitor_budget.monitor_connection_plan(
+        monitor_budget._monitor_connections(real), rows, profiles.licence_limit()
+    )
+    assert _monitor_connections(rows) == kept
+    assert _monitor_connections(stack_procs.effective_process_rows(real, selected=None)) == kept
+    running = {r["proctype"] for r in rows if r["startwithall"] == "1"}
+    assert stack_procs.monitor_dropped_proctypes(real) == [p for p in dropped if p in running]
+
+
+def test_bootstrap_plans_monitor1_for_the_set_it_is_handed(fake_paths: UqsPaths, monkeypatch):
+    """bootstrap composes process.csv for every command and used to never
+    see a profile start's set: the plan is now made for the set the start is
+    about to record, or the recorded one when a stop or summary bootstraps."""
+    seen: list[Any] = []
+    compose = stack_procs.effective_process_rows
+
+    def record(paths, default_qcmd=None, selected=None):
+        seen.append(selected)
+        return compose(paths, default_qcmd=default_qcmd, selected=selected)
+
+    monkeypatch.setattr(runtime, "effective_process_rows", record)
+    runtime.bootstrap(fake_paths, base_port=7000, selected=("discovery1", "stp1"))
+    runtime.bootstrap(fake_paths, base_port=7000)
+    deployment.select(fake_paths, ["stp1"])
+    runtime.bootstrap(fake_paths, base_port=7000)
+    assert seen == [("discovery1", "stp1"), None, ("stp1",)]
 
 
 def test_no_module_outside_procs_merges_the_overrides_itself():

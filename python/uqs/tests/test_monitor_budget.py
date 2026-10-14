@@ -22,6 +22,7 @@ from uqs.stack import monitor_budget, procs
 from uqs.stack.monitor_budget import (
     MONITOR_CONNECTION_SACRIFICE_ORDER,
     monitor_connection_plan,
+    planned_fleet,
 )
 
 ALLOWANCE = LICENCE_CONNECTION_LIMIT - INBOUND_RESERVE
@@ -173,3 +174,48 @@ def test_a_config_set_override_reaches_the_report(monkeypatch):
     assert procs.monitor_dropped_proctypes(_NO_PATHS) == ["feed"]
     _fleet(monkeypatch, rows, overrides=off)
     assert procs.monitor_dropped_proctypes(_NO_PATHS) == []
+
+
+# ------------------------------------------------- the fleet a start brings up (#1318)
+
+
+def test_a_starts_set_is_written_over_the_startwithall_column():
+    """The plan counts `startwithall=1` rows, so a profile's set becomes
+    exactly those rows - its members on, every other row off, whatever the
+    column said - and None leaves the rows as composed."""
+    rows = [_MONITOR, *_rows(rdb=1, feed=2)]
+    for row in rows[-2:]:
+        row["startwithall"] = "0"
+    fleet = planned_fleet(rows, ["monitor1", "feed0"])
+    assert [r["startwithall"] for r in fleet] == ["1", "0", "1", "0"]
+    assert planned_fleet(rows, None) is rows
+    assert [r["startwithall"] for r in rows] == ["1", "1", "0", "0"], "the rows are untouched"
+
+
+def test_a_profile_start_is_planned_against_its_own_set(monkeypatch):
+    """The default fleet is over budget and gives up feed; a profile that
+    starts one rdb and one feed fits with room to spare, and used to be
+    handed the default fleet's plan - its only producer unheard."""
+    rows = [_MONITOR, *_rows(rdb=ALLOWANCE - 1, feed=4)]
+    _fleet(monkeypatch, rows)
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == ["feed"]
+    assert procs.monitor_dropped_proctypes(_NO_PATHS, ["monitor1", "rdb0", "feed0"]) == []
+
+
+def test_a_profile_that_starts_more_than_the_default_fleet_is_trimmed_for_it(monkeypatch):
+    """The other direction: feeds the default start leaves stopped, started by
+    a profile, hold handles the default fleet's plan never counted."""
+    feeds = _rows(feed=4)
+    for row in feeds:
+        row["startwithall"] = "0"
+    rows = [_MONITOR, *_rows(rdb=ALLOWANCE - 1), *feeds]
+    _fleet(monkeypatch, rows)
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == []
+    everything = [r["procname"] for r in rows]
+    assert procs.monitor_dropped_proctypes(_NO_PATHS, everything) == ["feed"]
+
+
+def test_a_set_without_monitor1_reports_nothing(monkeypatch):
+    """No monitor1 in the set, no subscriptions to give up."""
+    _fleet(monkeypatch, [_MONITOR, *_rows(rdb=ALLOWANCE - 1, feed=4)])
+    assert procs.monitor_dropped_proctypes(_NO_PATHS, ["rdb0", "feed0", "feed1"]) == []

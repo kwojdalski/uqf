@@ -727,8 +727,11 @@ collected" on a healthy stack.
   `sortworker`, `reporter`, `housekeeping`, `feed`, then `metrics` processes
   until the rest fit. Those show `-` in the Heartbeat column. `uqs start`,
   `restart`, `up` and `summary` each print one line naming the proctypes given
-  up, counting only types something in the fleet runs as. On a fully licensed
-  kdb+/KDB-X, or on PeachQ, nothing is dropped.
+  up, counting only types something in the fleet runs as. The fleet is the one
+  the start brings up - a profile's resolved set, or the set the last profile
+  start recorded - not the `startwithall=1` rows, so `--profile crypto`, whose
+  seventeen processes fit, keeps `feed` and hears `cryptomock1`. On a fully
+  licensed kdb+/KDB-X, or on PeachQ, nothing is dropped.
 - **uqf's standing ETLs (`metrics`) are monitored too**; `backfill` workers are
   not, because a finished job's heartbeat would age into a false `error`.
 

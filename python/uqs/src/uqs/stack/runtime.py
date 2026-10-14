@@ -107,8 +107,10 @@ def bootstrap(
     paths: UqsPaths, base_port: int | None = None, selected: Sequence[str] | None = None
 ) -> dict[str, str]:
     """Idempotently set up the writable data dir and generated config, and return the full
-    env dict torq.sh should run under. `selected`: as stack/reporter.write_reporter_config."""
+    env dict torq.sh should run under. `selected` is the set the start brings up, else the
+    recorded one: what reporter1's checks (#1248) and monitor1's budget (#1318) are made for."""
     check_prerequisites(paths)
+    selected = deployment.members(paths) if selected is None else selected
 
     if not paths.hdb_dir.is_dir():
         log.info("Bootstrapping {} (first run) - copying sample hdb/dqe data...", paths.torqdata)
@@ -119,16 +121,14 @@ def bootstrap(
     for sub in ("logs", "tplogs", "wdbhdb"):
         (paths.torqdata / sub).mkdir(parents=True, exist_ok=True)
 
-    # Extend (never edit in place) the vendored process.csv with uqf's own
-    # extra processes (fxfeed1) and any process_overrides.csv fields set via
-    # set_process_config()/`config set`/uqs_set_config.
-    # Each row TorQ leaves to its default interpreter - an empty qcmd, or `q`
-    # spelled out, as the starter pack and the pipeline rows both do - names
-    # the configured one: QCMD, or the runtime's own (#764). torq.sh prefers
-    # a row's qcmd to $QCMD, so a row saying `q` ran PATH's q whatever QCMD
-    # named, and a site launcher need not fall back to $QCMD at all. An
-    # operator's override still wins, even one to bare `q`.
-    rows = effective_process_rows(paths, default_qcmd=q_command(with_interpreter(paths)))
+    # Extend (never edit in place) the vendored process.csv with uqf's own extra processes
+    # (fxfeed1) and any process_overrides.csv fields set via set_process_config()/`config
+    # set`/uqs_set_config. Each row TorQ leaves to its default interpreter - an empty qcmd, or `q`
+    # spelled out, as the starter pack and the pipeline rows both do - names the configured one:
+    # QCMD, or the runtime's own (#764). torq.sh prefers a row's qcmd to $QCMD, so a row saying
+    # `q` ran PATH's q whatever QCMD named, and a site launcher need not fall back to $QCMD at
+    # all. An operator's override still wins, even one to bare `q`.
+    rows = effective_process_rows(paths, q_command(with_interpreter(paths)), selected)
     check_carriable(rows)
     with paths.generated_procs.open("w", newline="") as f:
         # torq.sh's own field lookups are a naive awk -F, parse expecting
