@@ -24,10 +24,7 @@ contract:flip .qpipe.source.crypto_market_data.columns!{[c] c$()} each .qpipe.so
 / worker never fills. .qetl.io.hdb copies source_time into it (and a
 / tickerplant would stamp its own), so a `time` written here would be either
 / overwritten or wrong.
-book:([] sym:`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$();
-    is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:();
-    latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$();
-    trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())
+book:.qetl.plant.published `crypto_market_data
 
 / One side and quantity's five level columns, as a vector per row. `flip`
 / over the columns rather than `each` over rows: one pass per column.
