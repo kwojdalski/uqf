@@ -38,7 +38,9 @@ published:{[]
     / `name:([]` exactly, as uqs and .qetl.plant.adopt_vendored read it: a
     / looser "*:(*" also caught the keyed `elements:([table:...]...)` lookup.
     ls:ls where (not ls like "/*") and {[l] (0<count l) and "([]"~3#(1+l?":")_l} each ls;
-    asc `$ {x til x?":"} each ls}
+    / The flattened copy the PeachQ lane runs writes each name qualified
+    / (`.qetl.plant.arbitrage:([]`, as uqs reads it too), so the prefix is dropped.
+    asc `$ {n:x til x?":"; $[n like ".qetl.plant.*"; 12_n; n]} each ls}
 
 test_every_published_table_is_described_or_hidden:{[t]
     / The gate. A table the tickerplant carries that nobody has described is
