@@ -97,7 +97,9 @@ r3:.qhdbtx.run[2026.01.05D00:00;2026.01.08D00:00];
 
 -1 "\n== 4. read the destination back from disk";
 copied:raze {.qetl.source.local_read[.qhdbtx.dst;`trades_copy;`timestamp$x;`timestamp$x+1]} each .qhdbtx.days;
-show select trades:count i, notional:sum notional by date:`date$time from copied;
+/ Notional is in each pair's quote currency - USDJPY's is yen - so it is
+/ summed per quote currency, never across them (#1339).
+show select trades:count i, notional:sum notional by date:`date$time, quote:`$-3#'string sym from copied;
 .qhdbtx.check[(count copied)=count source;"every source trade arrived: ",string count copied];
 .qhdbtx.check[(`trade_id xasc delete notional from copied)~`trade_id xasc source;"each row exactly as the source holds it"];
 .qhdbtx.check[all 1e-9>abs (copied`notional)-(copied`price)*copied`size;"notional = price * size on every row"];
