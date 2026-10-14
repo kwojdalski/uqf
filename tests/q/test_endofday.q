@@ -8,6 +8,10 @@
 
 \d .eodtest
 
+/ The jobs this suite defines are process-global; leave the registry as found (#1375).
+beforeNamespace_save_jobs:{[] .testutil.save_stream_jobs[`.eodtest]}
+afterNamespace_restore_jobs:{[] .testutil.restore_stream_jobs[`.eodtest]}
+
 d0:2026.10.08
 t1:2026.10.09D09:00:00
 
