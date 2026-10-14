@@ -322,4 +322,12 @@ test_reset_forgets_everything:{[t]
     .qunit.assertEmpty[.qetl.tick.schemas;"no schemas"];
     .qunit.assertEquals[.qetl.tick.msg_count;0;"and no message count carried over"]};
 
+test_reset_forgets_which_day_the_closed_log_was_for:{[t]
+    fresh_log[];
+    .qunit.assertEquals[.qetl.tick.plant_day[];2026.01.01;"an open log names its day"];
+    .qetl.tick.reset[];
+    .qunit.assertEquals[.qetl.tick.plant_day[];0Nd;"a reset plant has no day"];
+    .qunit.assertEquals[.qetl.tick.day_log 2026.01.01;`;"and no log file for the day it had"];
+    .qunit.assertFalse[.qetl.tick.has_log 2026.01.01;"and holds no log for it"]};
+
 \d .

@@ -300,4 +300,17 @@ test_the_excuses_still_describe_something_real:{[t]
     .qunit.assertEquals[(key unowned) inter key shapes;`symbol$();
         "and none has since gained a table in plant_tables.q, which would make the excuse wrong"]};
 
+/ --- a suite's jobs do not outlive it (#1375) ----------------------------
+
+test_restoring_the_stream_registries_removes_what_a_suite_defined:{[t]
+    before:key .qetl.job.stream.jobs;
+    .testutil.save_stream_jobs[`.jobouttest];
+    .qetl.job.stream.define[`jo_scratch;`procname`subscribe_to`publishes`on_batch!(
+        `joscratch1;enlist `jo_in;enlist `jo_out;{[t;x] }[::])];
+    .qunit.assertTrue[`jo_scratch in key .qetl.job.stream.jobs;"defined"];
+    .testutil.restore_stream_jobs[`.jobouttest];
+    .qunit.assertEquals[key .qetl.job.stream.jobs;before;"the registry is as it was"];
+    .qunit.assertFalse[`joscratch1 in key .qetl.job.stream.procnames;"and its procname is free again"];
+    .qunit.assertFalse[`jo_scratch in key .qetl.job.stream.initial;"and so is its initial state"]};
+
 \d .

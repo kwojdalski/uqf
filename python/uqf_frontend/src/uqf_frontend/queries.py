@@ -42,6 +42,7 @@ debugging sessions (``desc`` and ``tables`` in scripts/processes/torq_pipeline.q
 from __future__ import annotations
 
 import datetime as dt
+import re
 import uuid
 from typing import Any
 
@@ -139,8 +140,11 @@ READY_CLAIMS = ".qetl.coverage.ready_claims"
 #: lambdas - the arithmetic is the one copy a backfill also trusts, never a
 #: second one here. `range_to>range_from` in COVERAGE drops a damaged row (the
 #: ledger refuses one at write) rather than letting it fail the whole read.
+#: GAPS is the one lambda: its bounds come from `coerce` as one-item
+#: timestamp vectors, the only form kola carries a nanosecond in (#1371), and
+#: it unwraps them for .qetl.coverage.gaps, which compares atoms.
 COMPOSE = ".qetl.coverage.compose"
-GAPS = ".qetl.coverage.gaps"
+GAPS = "{[s;e;c] .qetl.coverage.gaps[first s;first e;c]}"
 
 
 def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
@@ -148,11 +152,12 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
 
     Verified kola conversions: ``str`` becomes a symbol atom, ``list[str]`` a
     symbol vector, ``float`` a float atom, ``int`` a long atom, ``bool`` a
-    boolean atom, a **timezone-aware** ``datetime`` a timestamp, and a polars
-    ``Duration("ns")`` series a timespan vector (`_nanoseconds`).
+    boolean atom, a polars ``Datetime("ns", "UTC")`` series a timestamp
+    vector (`_utc`), and a polars ``Duration("ns")`` series a timespan vector
+    (`_nanoseconds`).
 
-    A naive datetime is rejected by kola itself with an unhelpful TypeError,
-    so this function requires UTC explicitly. That is not a workaround - it
+    A timestamp must carry its timezone: this function requires UTC
+    explicitly. That is not a workaround - it
     is the everything-is-UTC-internally rule enforced at the boundary
     where a browser's local time would otherwise leak in.
     """
@@ -237,29 +242,42 @@ def _nanoseconds(value: Any, column: str) -> pl.Series:
     return pl.Series([value], dtype=pl.Int64).cast(pl.Duration("ns"))
 
 
-def _utc(value: Any, column: str) -> dt.datetime:
-    """Parse an ISO-8601 string (or accept a datetime) as an aware UTC value.
+#: The span a q timestamp covers, as nanoseconds since 1970, both ends
+#: exclusive: -0Wp and 0Wp. q counts from 2000, so its range is shifted by
+#: this; kola holds 0Wp at the widest a polars datetime goes.
+_Q_EPOCH = 946_684_800 * 10**9
+_STAMP_LIMITS = (-(2**63 - 1) + _Q_EPOCH, 2**63 - 1)
 
-    A datetime stops at the microsecond, and `fromisoformat` would keep the
-    first six digits of a finer fraction without a word - so a value past
-    that is refused, with the rule `uqs backfill` applies to its bounds
-    (uqs.timefmt.finer_than_a_microsecond): a filter or a coverage bound
-    moved by the parser is not the one the caller sent. uqs.timefmt is a leaf
-    with no package imports, so this read path does not load the orchestrator
-    (#1326).
+#: The fraction of a second, matched on the text: `fromisoformat` takes any
+#: number of digits there and keeps the first six without a word (#1317).
+_FRACTION = re.compile(r"^(.*?\d{2}:\d{2}:\d{2})[.,](\d+)(.*)$")
+
+
+def _utc(value: Any, column: str) -> pl.Series:
+    """An ISO-8601 string (or an aware datetime) as the one-item timestamp
+    vector kola sends as a q timestamp, exact to the nanosecond.
+
+    Not a `datetime`: that stops at the microsecond, so a `.z.p`-stamped row
+    could not be asked for by the time the Desk shows for it - since #1317
+    the value was refused rather than truncated (#1371). The fraction is read
+    from the text, up to nine digits; a tenth that is not zero is refused, as
+    is an instant q has no timestamp for. .uqf.browse unwraps the vector
+    (browse_value), as it does a timespan's.
     """
-    from uqs.timefmt import finer_than_a_microsecond
-
     if isinstance(value, dt.datetime):
-        parsed = value
+        parsed, nanoseconds = value, value.microsecond * 1000
+        parsed = parsed.replace(microsecond=0)
     elif isinstance(value, str):
-        if finer_than_a_microsecond(value):
+        match = _FRACTION.match(value)
+        head, digits, tail = match.groups() if match else (value, "", "")
+        if digits[9:].strip("0"):
             raise ValidationFailed(
-                f"column {column!r} is a timestamp; {value!r} is finer than a microsecond, "
-                "which this cannot carry"
+                f"column {column!r} is a timestamp; {value!r} is finer than a nanosecond, "
+                "which q cannot hold"
             )
+        nanoseconds = int(digits[:9].ljust(9, "0"))
         try:
-            parsed = dt.datetime.fromisoformat(value)
+            parsed = dt.datetime.fromisoformat(head + tail)
         except ValueError:
             raise ValidationFailed(
                 f"column {column!r} is a timestamp; expected an ISO-8601 datetime, got {value!r}"
@@ -273,7 +291,16 @@ def _utc(value: Any, column: str) -> dt.datetime:
             f"'2026-09-15T10:30:00Z'); everything is stored in UTC and a naive "
             f"local time would be silently wrong"
         )
-    return parsed.astimezone(dt.UTC)
+    # Whole seconds as an exact integer, then the fraction added: a float
+    # timestamp() would round the nanoseconds away.
+    since = parsed - dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
+    total = (since // dt.timedelta(seconds=1)) * 10**9 + nanoseconds
+    low, high = _STAMP_LIMITS
+    if not low < total < high:
+        raise ValidationFailed(
+            f"column {column!r} is a timestamp; {value!r} is past what q can hold"
+        )
+    return pl.Series([total], dtype=pl.Int64).cast(pl.Datetime("ns", "UTC"))
 
 
 def build_filters(

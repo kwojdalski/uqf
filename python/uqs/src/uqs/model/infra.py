@@ -16,6 +16,11 @@ from __future__ import annotations
 #: chosen afresh, so a profile start produces the same infrastructure a
 #: `start all` does and nothing moves underneath this change. Four of these
 #: hold a plant slot (VENDORED_PLANT_CLIENTS); the rest do not subscribe.
+#:
+#: A COPY. The authority is the starter pack's appconfig/process.csv
+#: (startwithall=1) plus VENDORED_STARTWITHALL_OVERLAY (stack/procs.py);
+#: tests/test_infra_gates.py fails when they differ, for this set, FULL_INFRA
+#: and the names in the sets below.
 CORE_INFRA: tuple[str, ...] = (
     "discovery1",
     "stp1",

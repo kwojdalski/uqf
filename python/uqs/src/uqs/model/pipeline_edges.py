@@ -90,6 +90,9 @@ INBOUND_RESERVE = 2
 #: starter pack's random demo feed, VENDORED_STARTWITHALL_OVERLAY turns it
 #: off, and this set counts only what a default start actually runs. Put it
 #: back here if that overlay ever does.
+#:
+#: A COPY of which default processes subscribe; tests/test_infra_gates.py reads
+#: the vendored settings files and fails when this set differs.
 VENDORED_PLANT_CLIENTS: frozenset[str] = frozenset({"rdb1", "wdb1", "sctp1", "metrics1"})
 
 
