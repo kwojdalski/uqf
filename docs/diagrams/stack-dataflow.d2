@@ -126,6 +126,7 @@ client_flow: "client_flow\nclient FX flow, each record once" { class: table }
 flink_vwap_raw: "flink_vwap_raw\nwindows as Flink emits them" { class: table }
 flink_vwap: "flink_vwap\nVWAP per sym per window, once" { class: table }
 crypto_book_1s: "crypto_book_1s\nvenue · sym · bar_start · source_time\nthe last book state per second" { class: table }
+book_liquidity_1m: "book_liquidity_1m\nsym · source · req_size · bar_start\nmean sweep price, quantity, full ratio" { class: table }
 exec_bar: "exec_bar\nsym · bar_start · open · high · low\nclose · volume · vwap · trades" { class: table }
 order_outcomes: "order_outcomes\nsource · request_id · outcome\nbook · product · venue" { class: table }
 order_quality: "order_quality\nbook · window · as_of · n_orders\nfill_ratio · reject_ratio" { class: table }
@@ -154,6 +155,7 @@ exec_bars1: "exec_bars1\nopen/high/low/close/vwap per\nminute; late fills amend 
 order_outcomes1: "order_outcomes1\nnormalizer: every order source\nas one outcome contract" { class: job }
 order_quality1: "order_quality1\nrolling fill and reject rate per\nbook over 1m, 5m and 1h" { class: job }
 crypto_book_1s1: "crypto_book_1s1\nlast book state per venue, sym\nand second; no forward fill" { class: job }
+book_liquidity_1m1: "book_liquidity_1m1\nwhat each FX provider's book can fill,\naveraged over a minute's snapshots" { class: job }
 fxmarkout1: "fxmarkout1\nnormalized FX markouts: one calculation,\nlong layout; scored once covered" { class: job }
 fxmarkoutwide1: "fxmarkoutwide1\nthe same calculation, wide layout" { class: job }
 
@@ -240,6 +242,9 @@ order_outcomes -> order_quality1: "subscribe"
 order_quality1 -> order_quality: "republish, every 5 s"
 crypto_book -> crypto_book_1s1: "subscribe"
 crypto_book_1s1 -> crypto_book_1s: "republish, each snapshot once"
+
+market_data -> book_liquidity_1m1: "subscribe"
+book_liquidity_1m1 -> book_liquidity_1m: "republish, each minute once"
 executions -> fxmarkout1: "subscribe"
 market_data -> fxmarkout1: "books"
 fxmarkout1 -> fx_markout: "republish"
@@ -260,6 +265,7 @@ executions -> storage
 exec_bar -> storage
 order_quality -> storage
 crypto_book_1s -> storage
+book_liquidity_1m -> storage
 mkt_orderbook -> storage
 position -> storage
 demo_execution_quality -> storage

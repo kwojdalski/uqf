@@ -69,6 +69,25 @@ cbook_script:{[]
      ev[t0+0D00:00:03.600;`tick;()];
      ev[t0+0D00:00:09.000;`tick;()])}
 
+/ A market_data row of a provider's two-level FX book, received at rcv, for the book's stamp src.
+lbook:{[src;rcv;p;bid]
+    ([] time:enlist rcv; sym:enlist `EURUSD; market:enlist `fx; source:enlist p; source_time:enlist src;
+        bid_prices:enlist bid-0 0.0001; bid_sizes:enlist 1e6 2e6; ask_prices:enlist bid+0.0002 0.0003; ask_sizes:enlist 1e6 2e6)}
+
+/ book_liquidity_1m: two books of a minute out of order, the minute closing, a late book
+/ for a minute that has its row, a book for a minute that is still open and one that
+/ amends it, and a second provider.
+liquidity_script:{[]
+    (ev[t0+0D00:00:10;`market_data;lbook[t0+0D00:00:10;t0+0D00:00:10;`LP_A;1.1000]];
+     ev[t0+0D00:00:40;`market_data;lbook[t0+0D00:00:35;t0+0D00:00:40;`LP_A;1.1002]];
+     ev[t0+0D00:01:10;`tick;()];
+     ev[t0+0D00:05:00;`market_data;lbook[t0+0D00:00:30;t0+0D00:05:00;`LP_A;1.1003]];
+     ev[t0+0D00:05:00;`market_data;lbook[t0+0D00:03:30;t0+0D00:05:00;`LP_B;1.2000]];
+     ev[t0+0D00:05:10;`market_data;lbook[t0+0D00:05:10;t0+0D00:05:10;`LP_A;1.1004]];
+     ev[t0+0D00:05:50;`market_data;lbook[t0+0D00:05:20;t0+0D00:05:50;`LP_A;1.1005]];
+     ev[t0+0D00:06:10;`tick;()];
+     ev[t0+0D00:07:00;`tick;()])}
+
 last_value_script:{[]
     (ev[t0+0D00:00:01;`market_data;book[t0+0D00:00:01;`EURUSD;1.10;1.12]];
      ev[t0+0D00:00:02;`market_data;book[t0+0D00:00:02;`GBPUSD;1.30;1.32]];
@@ -123,12 +142,13 @@ order_quality_script:{[]
      ev[t0+0D00:06:10;`tick;()];
      ev[t0+0D00:07:00;`tick;()])}
 
-scripts:`exec_bars`last_value`posbook`crypto_book_1s`order_quality!(
+scripts:`exec_bars`last_value`posbook`crypto_book_1s`order_quality`book_liquidity_1m!(
     `script`tick!(bars_script;{[j;n] .qpipe.job.exec_bars.close_ready n});
     `script`tick!(last_value_script;{[j;n] ::});
     `script`tick!(posbook_script;{[j;n] ::});
     `script`tick!(cbook_script;{[j;n] .qpipe.job.crypto_book_1s.close_ready n});
-    `script`tick!(order_quality_script;{[j;n] .qpipe.job.order_quality.evaluate n}))
+    `script`tick!(order_quality_script;{[j;n] .qpipe.job.order_quality.evaluate n});
+    `script`tick!(liquidity_script;{[j;n] .qpipe.job.book_liquidity_1m.close_ready n}))
 
 / Replaying jobs deliberately not scripted: job -> why.
 excluded:`fx_positions`kafka_flow!(
@@ -177,7 +197,7 @@ run:{[j;k]
     pub:` sv ((.qetl.job.stream.def j)`ns),`publish;
     keep:get pub;
     .qetl.job.stream.reset j;
-    if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .reqtest.clock}];
+    if[j in `exec_bars`crypto_book_1s`book_liquidity_1m; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .reqtest.clock}];
     if[j=`order_quality;
         if[()~oq_now; `.reqtest.oq_now set .qpipe.job.order_quality.now];
         `.qpipe.job.order_quality.now set {[] .reqtest.clock}];
@@ -187,7 +207,7 @@ run:{[j;k]
     if[k>0; restart[j]];
     step[j;spec] each k _ evs;
     out:pubs;
-    if[j in `exec_bars`crypto_book_1s; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .z.p}];
+    if[j in `exec_bars`crypto_book_1s`book_liquidity_1m; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .z.p}];
     if[j=`order_quality; `.qpipe.job.order_quality.now set oq_now];
     pub set keep;
     .qetl.job.stream.reset j;
@@ -208,6 +228,11 @@ test_a_restart_at_any_point_publishes_what_the_running_bars_job_did:{[t]
 test_a_restart_at_any_point_publishes_what_the_running_crypto_book_1s_job_did:{[t]
     r:equivalent[`crypto_book_1s];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes snapshots"];
+    .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
+
+test_a_restart_at_any_point_publishes_what_the_running_book_liquidity_1m_job_did:{[t]
+    r:equivalent[`book_liquidity_1m];
+    .qunit.assertTrue[0<sum count each last each first r;"the script publishes minutes"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
 test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]

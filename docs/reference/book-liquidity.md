@@ -76,3 +76,25 @@ The aggregation does not depend on arrival order. Late data is handled by the
 caller: the streaming bars kind drops, and logs, a snapshot arriving after the
 window's lateness; a backfill reads the whole window and so includes it, and its
 rows replace the live job's. That difference is intended.
+
+## The registered job
+
+`book_liquidity_1m1` (`src/etl/streaming/book_liquidity_1m.q`, a bars job) reads
+`market_data` and publishes `book_liquidity_1m`; its backfill twin
+`hdb_book_liquidity_1m_backfill1` reads the HDB's `market_data` through the
+`hdb_market_data` source. Both apply `.qpipe.transform.book_liquidity_1m.bars`,
+which is the market_data adapter, `snapshot` at the sizes in
+`.qpipe.transform.book_liquidity_1m.sizes` (1m, 5m, 10m), the window cut, and
+`minute`. A test replaces those three with recorders and drives the registered
+job to show it calls them.
+
+The bars kind needed no extension: it already supplies half-open windows on an
+event-time column, lateness, end-of-day close and replay, and its transform is
+the aggregation. Its `by` columns must be in the events table, so the window
+groups are `(sym, source)`; `settlement`, `category` and `req_size` are columns
+of the result.
+
+Process: `book_liquidity_1m1`, in no profile and not in `uqs start`
+(`python/uqs/src/uqs/model/profiles.py`, `UNPROFILED`): a new standing process
+costs one plant connection against the community licence's sixteen, and the fx
+profile that runs `marketdata1` already holds them all.

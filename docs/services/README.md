@@ -237,6 +237,21 @@ publishes nothing (a bounded worker runs no transform on an empty window); the
 live job would still publish identity rows after a quiet start. Worked example:
 `q scripts/examples/hdb_order_quality_example.q`.
 
+**`book_liquidity_1m1` and `hdb_book_liquidity_1m_backfill1` · one-minute FX
+book liquidity** --- per FX liquidity provider and requested size (1m, 5m, 10m),
+the minute's average sweep price, quantity actually available and full-fill
+ratio on each side, from `market_data`, bucketed on the book's `source_time`.
+The average is over book snapshots, each weighing the same, not over time; an
+empty side counts as zero quantity and a partial sweep is never full (see [the
+reference](../reference/book-liquidity.md)). Reads `market_data`, publishes
+`book_liquidity_1m`. `book_liquidity_1m1` is a bars job, a minute closing five
+seconds after it ends; the backfill rebuilds the same rows from the HDB's
+`market_data` with the same composition of the extracted transforms, replacing
+the live job's under `sym, source, settlement, category, req_size, bar_start`.
+In no profile and not in `uqs start` (the fx profile already uses every plant
+connection the community licence has): `uqs start book_liquidity_1m1` alongside
+a running `marketdata1`.
+
 ## Diagnostics
 
 **Tickerplant inspector · `tap1`** --- point it at any table and it prints what

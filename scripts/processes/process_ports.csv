@@ -44,7 +44,9 @@ hdb_crypto_book_backfill1,58
 order_quality1,59
 order_outcomes1,60
 hdb_order_quality_backfill1,61
-fxmarkout1,62
-fxmarkoutwide1,63
-hdb_fx_markout_wide_backfill1,64
-hdb_fx_markouts_backfill1,65
+book_liquidity_1m1,62
+hdb_book_liquidity_1m_backfill1,63
+fxmarkout1,64
+fxmarkoutwide1,65
+hdb_fx_markout_wide_backfill1,66
+hdb_fx_markouts_backfill1,67

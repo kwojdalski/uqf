@@ -1,6 +1,7 @@
 procname,proctype,offset,subscribe_to,publishes
 alert_sink1,metrics,52,fx_limit_breach,
 arbitrage1,metrics,44,superbook,arbitrage
+book_liquidity_1m1,metrics,62,market_data,book_liquidity_1m
 cross1,metrics,25,fx_orderbook,
 crossarb1,metrics,45,superbook,config_change cross_arbitrage
 crypto_book_1s1,metrics,57,crypto_book,crypto_book_1s
@@ -17,17 +18,18 @@ exec_bars1,metrics,54,executions,exec_bar
 executions1,metrics,36,crypto_trades orders trades,executions
 flink_vwap1,metrics,56,flink_vwap_raw,flink_vwap
 fxfeed1,feed,19,,quote
-fxmarkout1,metrics,62,executions market_data,fx_markout
-fxmarkoutwide1,metrics,63,executions market_data,fx_markout_wide
+fxmarkout1,metrics,64,executions market_data,fx_markout
+fxmarkoutwide1,metrics,65,executions market_data,fx_markout_wide
 fxorderbookfeed1,feed,24,,fx_orderbook
 fxordersfeed1,feed,38,,orders
 fxpositions1,metrics,39,executions,config_change fx_limit_breach fx_position fx_position_open
 fxtradesfeed1,feed,29,,trades
+hdb_book_liquidity_1m_backfill1,backfill,63,,
 hdb_crypto_book_backfill1,backfill,58,,
 hdb_demo_markouts_backfill1,backfill,49,,
 hdb_exec_bars_backfill1,backfill,55,,
-hdb_fx_markout_wide_backfill1,backfill,64,,
-hdb_fx_markouts_backfill1,backfill,65,,
+hdb_fx_markout_wide_backfill1,backfill,66,,
+hdb_fx_markouts_backfill1,backfill,67,,
 hdb_order_quality_backfill1,backfill,61,,
 hdb_transfer_backfill1,backfill,50,,
 kafka_flow1,metrics,47,kafka_client_flow,client_flow
