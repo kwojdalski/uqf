@@ -440,6 +440,11 @@ reset:{[]
     `.qetl.tick.schemas set (`symbol$())!();
     `.qetl.tick.log_handle set 0N;
     `.qetl.tick.log_path set `;
+    / What open_log remembered goes with the log: plant_day and day_log read
+    / these, and a closed day must not still be reported as the plant's.
+    `.qetl.tick.log_dir set "";
+    `.qetl.tick.log_name set `;
+    `.qetl.tick.log_date set 0Nd;
     `.qetl.tick.msg_count set 0;
     was}
 

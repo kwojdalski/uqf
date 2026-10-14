@@ -74,3 +74,29 @@ it("sends a timespan as whole nanoseconds, typed either way the Desk shows it", 
     "Enter a whole number of nanoseconds",
   );
 });
+it("takes a timestamp to the nanosecond, and orders a range by it", () => {
+  // #1371: the Desk now shows nine digits. A filter must take that value as
+  // shown, and a coverage range 765 ns long is a range - Date.parse, which
+  // stops at the millisecond, read it as an empty one.
+  const stamp = column("timestamp");
+  expect(filterValue("2026-10-14T10:00:00.000001234Z", stamp, "eq")).toBe(
+    "2026-10-14T10:00:00.000001234Z",
+  );
+  const range = {
+    dataset: "trades",
+    partition: "",
+    source_version: "v1",
+    range_from: "2026-10-14T10:00:00.000001234Z",
+    range_to: "2026-10-14T12:00:00.000001999+02:00",
+  };
+  expect(() => validateRange(range)).not.toThrow();
+  expect(() =>
+    validateRange({ ...range, range_to: "2026-10-14T10:00:00.000001234Z" }),
+  ).toThrow(/after/);
+  expect(() =>
+    validateRange({
+      ...range,
+      range_to: "2026-10-14T12:00:00.000001233+02:00",
+    }),
+  ).toThrow(/after/);
+});
