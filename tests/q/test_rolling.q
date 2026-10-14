@@ -48,10 +48,16 @@ decl:{[] `procname`events`by`event_time`transform`publishes`windows`lateness`per
     `rtd1;`rt_events;`k;`t;`rollingtest_stat;`rt_out;0D00:01 0D00:05;0D00:00:10;0D00:00:01)}
 
 / A rolling job named nm over the test statistic: state emptied, publish recorded.
-job:{[nm]
+job:{[nm] jobwith[nm;decl[]]}
+
+/ job over a declaration of its own (a different lateness or period).
+/ @param nm the job name
+/ @param dc the declaration
+/ @return the name
+jobwith:{[nm;dc]
     define_transform[];
     if[not nm in .qetl.job.stream.rolling.defined[];
-        .qetl.job.stream.at_rolling[nm;@[decl[];`procname;:;`$string[nm],"1"]]];
+        .qetl.job.stream.at_rolling[nm;@[dc;`procname;:;`$string[nm],"1"]]];
     ns:.qetl.job.stream.namespace nm;
     .qetl.job.stream.reset nm;
     (` sv ns,`now) set {[] .rollingtest.clock};
@@ -217,6 +223,16 @@ test_a_replay_is_bounded_too:{[t]
     `.qetl.job.stream.replaying set 0b;
     .qunit.assertEquals[r;1b;"the replay ran"];
     .qunit.assertTrue[310>=count ns[nm;`pending];"the log's own clock evicts: a day's log is not a day's buffer"]};
+
+test_a_batch_after_the_boundary_does_not_evict_what_the_next_grid_point_needs:{[t]
+    / no lateness, a 10s grid: a batch lands 0.5s after the boundary, before the timer
+    nm:jobwith[`rt_m;@[decl[];`lateness`period;:;(0D;0D00:00:10)]];
+    as_of:t0+0D00:10:10;
+    feed[nm;as_of-0D00:04:59.8;`a;1f];
+    feed[nm;as_of+0D00:00:00.5;`b;1f];
+    .qunit.assertEquals[count ns[nm;`pending];2;"the row still inside the 5m window of the grid point is kept"];
+    ns[nm;`evaluate] as_of+0D00:00:00.6;
+    .qunit.assertEquals[(cell[published[];`a;0D00:05])`n`total;(1;1f);"and is published"]};
 
 / --- lateness -------------------------------------------------------------
 
