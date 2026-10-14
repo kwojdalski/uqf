@@ -38,6 +38,8 @@ from typing import Any
 
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed, WritesDisabled
+from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
+from uqs.model.qnames import config_env_var
 
 #: The three lifecycle verbs this seam exposes. `clean` is excluded on
 #: purpose - see the module docstring.
@@ -215,9 +217,9 @@ def set_worker_config(gateway: Any, settings: Settings, key: str, value: str) ->
     raw = gateway.route(SET_WORKER_CONFIG, (key, value), TIERS["rdb"])
     explain = _plain(raw)
     layer, effective = _layer_of(explain)
-    # Only the environment outranks an override (`.qetl.cfg.sources` is
-    # env, overrides, yaml, default), so "shadowed" means exactly that.
-    shadowed = layer == "env"
+    # Only the environment outranks an override (`.qetl.cfg.sources` puts it
+    # first), so "shadowed" means exactly that. The layer names are q's.
+    shadowed = layer == CFG_ENV_LAYER
     return {
         "key": key,
         "value": value,
@@ -225,7 +227,8 @@ def set_worker_config(gateway: Any, settings: Settings, key: str, value: str) ->
         "effective_layer": layer,
         "effective_value": effective,
         "shadowed": shadowed,
-        "env_var": f"UQF_{key.upper()}" if shadowed else None,
+        "saved": layer == CFG_OVERRIDE_LAYER,
+        "env_var": config_env_var(key) if shadowed else None,
     }
 
 

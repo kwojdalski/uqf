@@ -997,7 +997,7 @@ export function workerConfigOutcome(r: WorkerConfigResult): string {
       `(${r.env_var}=${r.effective_value ?? ""}). The override applies only once that variable is unset.`
     );
   }
-  if (r.effective_layer === "overrides") {
+  if (r.saved) {
     return `Saved: ${r.key} = ${r.value}, and the process now reads it.`;
   }
   return (

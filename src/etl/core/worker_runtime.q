@@ -437,6 +437,10 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
 / run's plan. The live run that follows still finds the fixture's ROWS in
 / the dataset, and these clear them and withdraw the fixture's claims.
 
+/ What run_version puts between the release and the worker's output revision;
+/ uqs strips it again from the ledger, reading it from the generated facts (#1368).
+revision_tag:"@r"
+
 / The release a run records coverage under: the one asked for, with the
 / worker's output revision when it declares one (#1097), and tagged when the
 / source has no credential (#1082) - so validate, plan, the run and its
@@ -447,7 +451,7 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
 / @eg .qetl.job.bounded.runtime.run_version[`source`revision!(`demo_deals;2);`v1]  ->  `$"v1@r2~fixture"
 run_version:{[cfg;v]
     if[null v; :v];
-    if[not null r:$[`revision in key cfg; cfg`revision; 0N]; v:`$string[v],"@r",string r];
+    if[not null r:$[`revision in key cfg; cfg`revision; 0N]; v:`$string[v],revision_tag,string r];
     $[.qetl.source.has_credentials cfg`source; v; .qetl.source.fixture_version v]}
 
 / The grain a worker's output is aggregated to, or 0Nn for none (#1303).
