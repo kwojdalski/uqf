@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
-import { filterValue, validateRange, type Column } from "./api";
-const column = (type: string): Column => ({
+import {
+  filterValue,
+  validateRange,
+  type Column,
+  type ColumnType,
+} from "./api";
+const column = (type: ColumnType): Column => ({
   name: "value",
   type,
   filterable: true,
@@ -16,6 +21,17 @@ it("sends typed numbers, booleans and lists; preserves symbol text without query
   expect(() => filterValue("", column("float"), "eq")).toThrow();
   expect(() => filterValue("1.2", column("long"), "eq")).toThrow();
   expect(() => filterValue("[true]", column("long"), "in")).toThrow();
+});
+it("coerces the int, short, date and time columns the scaffold can create (#1364)", () => {
+  expect(filterValue("5", column("int"), "eq")).toBe(5);
+  expect(filterValue("[1,2]", column("short"), "in")).toEqual([1, 2]);
+  expect(() => filterValue("1.5", column("int"), "eq")).toThrow();
+  expect(filterValue("2026-09-16", column("date"), "eq")).toBe("2026-09-16");
+  expect(() => filterValue("16/09/2026", column("date"), "eq")).toThrow();
+  expect(filterValue("14:30:00.250", column("time"), "ge")).toBe(
+    "14:30:00.250",
+  );
+  expect(() => filterValue("14:30", column("time"), "ge")).toThrow();
 });
 it("rejects naive and reversed time ranges before requesting coverage", () => {
   const range = {

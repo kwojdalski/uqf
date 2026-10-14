@@ -2,9 +2,25 @@ export type Row = Record<string, unknown>;
 export interface Pollable {
   poll_seconds: number;
 }
+/** The column types the server reports: catalog.QType, held to this list by
+ *  test_api_types.py. A new type needs a branch in filterValue. */
+export type ColumnType =
+  | "symbol"
+  | "timestamp"
+  | "timespan"
+  | "float"
+  | "long"
+  | "int"
+  | "short"
+  | "boolean"
+  | "date"
+  | "time"
+  | "char"
+  | "guid"
+  | "list";
 export interface Column {
   name: string;
-  type: string;
+  type: ColumnType;
   filterable: boolean;
   /** Decimal places this column is shown with, resolved server-side from the
    * column, then its table, then its type. Null means show it as it arrives. */
@@ -192,7 +208,7 @@ export function filterValue(
   operator: string,
 ): unknown {
   const scalar = (value: unknown): unknown => {
-    if (["float", "long", "timespan"].includes(column.type)) {
+    if (["float", "long", "int", "short", "timespan"].includes(column.type)) {
       if (
         !["number", "string"].includes(typeof value) ||
         value === null ||
@@ -206,13 +222,13 @@ export function filterValue(
       // nowhere to go, and past 2^53 a JavaScript number is not the one typed.
       if (
         !Number.isFinite(number) ||
-        (["long", "timespan"].includes(column.type) &&
+        (["long", "int", "short", "timespan"].includes(column.type) &&
           !Number.isSafeInteger(number))
       )
         throw new Error(
           column.type === "timespan"
             ? "Enter a whole number of nanoseconds, or a timespan like 0D00:00:01.5."
-            : "Enter a valid number (a safe integer for long columns).",
+            : "Enter a valid number (a whole number for long, int and short columns).",
         );
       return number;
     }
@@ -223,6 +239,15 @@ export function filterValue(
     }
     if (typeof value !== "string") throw new Error("Enter a string value.");
     if (column.type === "timestamp") validateTime(value);
+    if (column.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value))
+      throw new Error("Use a date like 2026-09-16.");
+    if (
+      column.type === "time" &&
+      !/^\d{2}:\d{2}:\d{2}(\.\d{1,3})?$/.test(value)
+    )
+      throw new Error(
+        "Use a time like 14:30:00 or 14:30:00.250 (milliseconds).",
+      );
     return value;
   };
   if (operator !== "in") return scalar(raw);

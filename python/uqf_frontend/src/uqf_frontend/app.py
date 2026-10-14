@@ -251,7 +251,7 @@ def create_app(
                     columns=[
                         ColumnInfo(
                             name=c,
-                            type=str(qt),
+                            type=qt.value,  # held to ColumnType by test_browsable_types
                             filterable=c in t.filterable,
                             decimals=t.decimals_for(c),
                         )
