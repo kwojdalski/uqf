@@ -288,7 +288,8 @@ def start_backfill(
     for name, raw in (("range_from", range_from), ("range_to", range_to)):
         if not raw:
             raise ValidationFailed(f"{name} is required - a backfill with no range is not a range")
-        _require_utc(name, raw)
+    bound_from = _require_utc("range_from", range_from)
+    bound_to = _require_utc("range_to", range_to)
 
     from uqf_frontend.errors import BackfillNotStarted
     from uqs.paths import UqsError
@@ -306,8 +307,8 @@ def start_backfill(
             paths,
             worker,
             source_version,
-            dt.datetime.fromisoformat(range_from),
-            dt.datetime.fromisoformat(range_to),
+            bound_from,
+            bound_to,
             base_port=settings.base_port,
         )
     except UqsError as exc:
@@ -327,13 +328,24 @@ def start_backfill(
     }
 
 
-def _require_utc(name: str, raw: str) -> None:
-    """Reject a bound without an explicit offset.
+def _require_utc(name: str, raw: str) -> dt.datetime:
+    """The bound parsed, or a refusal: no explicit offset, or finer than a
+    microsecond.
 
     Identical reasoning to the coverage endpoint's: a naive timestamp is read
     as the server's local time, and a backfill an hour wide of where the
-    caller meant records coverage for the wrong window.
+    caller meant records coverage for the wrong window. And the rule
+    `uqs backfill` applies to its own bounds (uqs.stack.backfill): a datetime
+    stops at the microsecond, and `fromisoformat` would keep the first six
+    digits of a finer fraction without a word - a range 789 ns short of the
+    one the caller sent, recorded as covered.
     """
+    from uqs.timefmt import finer_than_a_microsecond
+
+    if finer_than_a_microsecond(raw):
+        raise ValidationFailed(
+            f"{name} {raw!r} is finer than a microsecond, which this cannot carry"
+        )
     try:
         parsed = dt.datetime.fromisoformat(raw)
     except ValueError:
@@ -345,3 +357,4 @@ def _require_utc(name: str, raw: str) -> None:
             f"{name} needs an explicit timezone offset; {raw!r} would be read as "
             "the server's local time and cover the wrong window"
         )
+    return parsed

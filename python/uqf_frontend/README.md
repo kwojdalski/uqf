@@ -234,8 +234,8 @@ covered window, so `/coverage` cannot disagree with what a backfill would do.
 this tree is the authority for it. The block there carries the full column list ---
 `dataset`, `partition`, `source_version`, `range_from`, `range_to`,
 `rows_published`, `recorded_at`, `superseded_at`, `run_id` --- and
-`scripts/dev/verify_coverage_schema.q -local 1` confirms the code and the table
-agree. The `COVERAGE` program reads the first five.
+`.qetl.coverage.require_schema[]` confirms the code and the table agree. The
+`COVERAGE` program reads the first five.
 
 ## Ops views
 

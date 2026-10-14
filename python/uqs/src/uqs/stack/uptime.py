@@ -27,8 +27,13 @@ _TREE = ("src/init.q", "src/etl/init.q")
 
 def gaps(
     paths: UqsPaths, job: str, range_from: datetime, range_to: datetime
-) -> tuple[list[dict], list[str], int]:
+) -> tuple[list[dict], dict[str, int | None], int]:
     """(the gaps in [range_from, range_to), the job's twins, its session count).
+
+    The twins map each worker to the `align` it declares, in nanoseconds, or
+    None when it builds no bars (#1323): a worker that refuses a range off its
+    grain (#1306) must be advised one on it, and the declaration is the one
+    place that grain is written.
 
     No session at all is not an error - it is a job that never ran here, or
     ran before uptime was recorded - and the whole range is then one gap.
@@ -45,11 +50,18 @@ def gaps(
     holes = runs.query(
         paths, f"{{{attach} .qetl.uptime.gaps[`{job};{bounds}]}}[]", attach=False, loads=_TREE
     )
-    twins = runs.query(paths, f"([] worker:.qetl.uptime.twins`{job})", attach=False, loads=_TREE)
+    twins = runs.query(
+        paths,
+        '{([] worker:x; align:{"j"$(.qetl.job.bounded.def x)`align} each x)} '
+        f".qetl.uptime.twins`{job}",
+        attach=False,
+        loads=_TREE,
+    )
     seen = runs.query(
         paths,
         f"{{{attach} ([] n:enlist count select from .qetl.uptime.sessions[] where job=`{job})}}[]",
         attach=False,
         loads=_TREE,
     )
-    return holes, [str(t["worker"]) for t in twins], int(seen[0]["n"])
+    grains = {str(t["worker"]): t["align"] for t in twins}
+    return holes, grains, int(seen[0]["n"])

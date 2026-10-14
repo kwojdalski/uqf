@@ -74,7 +74,10 @@ uvx vulture python/uqs/src python/uqf_frontend/src python/uqf_airflow_provider/s
     scripts --min-confidence 60 --ignore-decorators "..."
 
 # q: definitions under src/ nothing references, and those only tests reference.
-python3 scripts/dev/find_unreferenced_q.py
+# A definition is `name:{` inside a `\d .ns` block or a dotted `.ns.name:{`;
+# grep each fully qualified name (and the bare name in its own file) across
+# src/ scripts/ tests/ python/ web/src/, skipping comment lines, the
+# definition line and docs/man.q, which registers every function.
 
 # Compatibility shims, by what they say about themselves.
 grep -rniE "backward|compat|legacy|deprecat|re-export|keeps? working|kept (as|for|so)|stable public surface|alias|shim|noqa: F401" \

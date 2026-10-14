@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep `src/etl/core/` from depending on `sources/`, `workers/` or `streaming/`.
+"""Keep `src/etl/core/` from depending on the declaring directories under src/etl/.
 
 Question the question bank settled the split: `core/` is framework, `sources/` and
 `workers/` are declarations, and the question bank names the property that
@@ -62,7 +62,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 CORE = REPO / "src" / "etl" / "core"
 ETL = REPO / "src" / "etl"
-DECLARING_DIRS = ("sources", "transforms", "workers", "streaming")
+#: The subdirectories of src/etl/ that hold no declarations: the framework
+#: itself, and what is generated from the declarations. EVERY other
+#: subdirectory is a declaring one - sources/, transforms/, workers/,
+#: streaming/, reactions/ - derived rather than listed, because a list left
+#: out reactions/ and core could reach into a reaction unnoticed (#1333).
+NON_DECLARING_DIRS = frozenset({"core", "generated"})
 
 #: The TorQ adapter. Lives in scripts/ because it is the one place TorQ is
 #: allowed; nothing under src/etl/ may reach it.
@@ -89,21 +94,40 @@ NAMESPACE_RE = re.compile(
 )
 
 
-def declaring_namespaces() -> dict[str, str]:
-    """namespace -> the file that declares it, for every sources/ and
-    workers/ module. Discovered rather than listed, so a new declaration is
-    covered the day it is added.
+def declaring_dirs(root: Path = REPO) -> list[Path]:
+    """Every subdirectory of `root`'s src/etl/ except core/ and generated/."""
+    etl = root / "src" / "etl"
+    return sorted(d for d in etl.iterdir() if d.is_dir() and d.name not in NON_DECLARING_DIRS)
+
+
+def declaring_namespaces(root: Path = REPO) -> dict[str, str]:
+    """namespace -> the file that declares it, for every module in a
+    declaring directory. Discovered rather than listed, so a new declaration
+    is covered the day it is added.
     """
     found: dict[str, str] = {}
-    for sub in DECLARING_DIRS:
-        directory = REPO / "src" / "etl" / sub
-        if not directory.is_dir():
-            continue
-        for path in sorted(directory.glob("*.q")):
+    for directory in declaring_dirs(root):
+        for path in sorted(directory.rglob("*.q")):
             for ns in NAMESPACE_RE.findall(path.read_text(encoding="utf-8")):
                 if ns != ".":
-                    found[ns] = str(path.relative_to(REPO))
+                    found[ns] = path.relative_to(root).as_posix()
     return found
+
+
+def core_reach(root: Path = REPO) -> list[str]:
+    """Every line of `root`'s src/etl/core/ that names a declaring namespace."""
+    declared = declaring_namespaces(root)
+    violations: list[str] = []
+    for path in sorted((root / "src" / "etl" / "core").glob("*.q")):
+        code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
+        for lineno, line in enumerate(code.splitlines(), 1):
+            for ns, owner in declared.items():
+                if re.search(rf"{re.escape(ns)}\b", line):
+                    violations.append(
+                        f"{path.relative_to(root).as_posix()}:{lineno}: core reaches into "
+                        f"{ns} (declared by {owner})"
+                    )
+    return violations
 
 
 def strip_comments_and_strings(text: str) -> str:
@@ -185,20 +209,11 @@ def main() -> int:
 
     declared = declaring_namespaces()
     if not declared:
-        print("error: no sources/ or workers/ namespaces found - has the", file=sys.stderr)
+        print("error: no declaring namespaces found under src/etl/ - has the", file=sys.stderr)
         print("layout changed? refusing to report success over an empty set.", file=sys.stderr)
         return 1
 
-    violations: list[str] = []
-    for path in sorted(CORE.glob("*.q")):
-        code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
-        for lineno, line in enumerate(code.splitlines(), 1):
-            for ns, owner in declared.items():
-                if re.search(rf"{re.escape(ns)}\b", line):
-                    violations.append(
-                        f"{path.relative_to(REPO)}:{lineno}: core reaches into "
-                        f"{ns} (declared by {owner})"
-                    )
+    violations = core_reach(REPO)
 
     adapter_hits: list[str] = []
     for path in sorted(ETL.rglob("*.q")):
@@ -249,7 +264,10 @@ def main() -> int:
         return 1
 
     if violations:
-        print("src/etl/core/ must not depend on sources/ or workers/:", file=sys.stderr)
+        print(
+            "src/etl/core/ must not depend on a declaring directory (sources/, workers/, ...):",
+            file=sys.stderr,
+        )
         for v in violations:
             print(f"  {v}", file=sys.stderr)
         print(

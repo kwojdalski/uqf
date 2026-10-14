@@ -12,8 +12,12 @@ dependencies = [
     "fastapi>=0.115",
     "pydantic>=2.9",
     "uvicorn>=0.32",
-    # For the /control/* routes only, and imported lazily inside them so a
-    # read-only deployment never pays for it. This package deliberately did
+    # For the /control/* routes, imported lazily inside them so a read-only
+    # deployment never pays for it. The one exception is uqs.timefmt, which
+    # queries.py's read path imports: a leaf with no package imports, gated by
+    # uqs's test_timefmt.py and test_coercion.py's orchestrator test (#1326).
+    # Anything else from uqs on a read path loads the orchestrator's whole
+    # stack - and its import-time failures - onto /query. This package deliberately did
     # NOT depend on the orchestrator before - procfile.py records that rule
     # and its reason, which was about not coupling a hot read path for two
     # lines of regex. That reasoning does not survive contact with STARTING A

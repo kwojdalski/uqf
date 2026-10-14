@@ -124,7 +124,8 @@ can resume and fill gaps.
 your own loader.
 
 **Normalizers** (`.qetl.job.stream.normalizer`) map one vendor's schema onto the
-house tables.
+house tables. **Bars, horizons and rolling windows** (`at_bars`, `at_horizons`,
+`at_rolling`) are streaming jobs whose windowing the shell owns.
 :::::
 :::
 
@@ -144,10 +145,12 @@ replaced or queried on its own.
 
 ![](../diagrams/scaffolding.svg){.r-stretch}
 
-`uqs job new <name> [--kind streaming|normalizer|backfill]` writes the job, its
-table and a test that fails until you fill it in. A streaming job that
-subscribes to nothing is a feed. `uqs job install` brings in jobs kept outside
-the tree. The next `uqs` command picks up either.
+`uqs job new <name> [--kind streaming|backfill|normalizer|external|horizon]`
+writes the job, its table and a test that fails until you fill it in. A
+streaming job that subscribes to nothing is a feed; `external` pairs a Python
+publisher outside q with the job that reshapes what it sends. `uqs job install`
+brings in jobs kept outside the tree, and `uqs job remove` undoes a scaffold.
+The next `uqs` command picks up any of them.
 
 ## Operating it: `uqs` in place of `torq.sh` {.smaller}
 
@@ -320,16 +323,17 @@ policy applies to ordinary users.
 
 ## Deployment {.smaller .scrollable}
 
-  |               | TorQ                            | uqf                                                                                                            |
-  | ---           | ---                             | ---                                                                                                            |
-  | install       | `installtorqapp.sh`, copy trees | `uqs deploy build` makes one artifact: the tree, uqs and every pinned wheel, with a manifest of sha256s        |
-  | push          | by hand                         | `uqs deploy push`: artifact, preflight, transfer, prepare, smoke, start, verify, activate                      |
-  | releases      | one tree                        | `releases/<id>/`, each with its own offline `.venv` and `deploy.env`; `current` moves in one rename            |
-  | failure       | n/a                             | the previous release's processes are started again; the report says whether that worked                        |
-  | other actions | n/a                             | `status`, `rollback`, `prune`, a deploy lock with a heartbeat that `--break-lock` respects                     |
-  | TorQ itself   | the tree you run                | the server's own: `--torq-home`, `--torq-app-home`, `--qcmd`; the artifact carries none of TorQ                |
-  | older kdb+    | n/a                             | `--q-target 4.0` flattens nested contexts at build; a startup guard checks the manifest and each file's hash   |
-  | shared HDB    | n/a                             | prepare judges it by the release's schema: a changed column type refuses, missing tables need `--fix-hdb`      |
+  |               | TorQ                            | uqf                                                                                                                                  |
+  | ---           | ---                             | ---                                                                                                                                  |
+  | install       | `installtorqapp.sh`, copy trees | `uqs deploy build` makes one artifact: the tree, uqs and every pinned wheel, with a manifest of sha256s                              |
+  | push          | by hand                         | `uqs deploy push`: preflight, transfer, prepare, smoke, start, verify, then `--live-check` and `--soak`, activate                    |
+  | releases      | one tree                        | `releases/<id>/`, each with its own offline `.venv` and `deploy.env`; `current` moves in one rename                                  |
+  | failure       | n/a                             | before `current` moves: the previous release's processes are started again; the report says whether that worked                      |
+  | other actions | n/a                             | `status`, `verify`, `list`, `rollback`, `prune` (or `--keep N` on push), a deploy lock with a heartbeat that `--break-lock` respects |
+  | upgrades      | stop, then start                | an upgrade records its downtime, from stopping the old release to the new one verified                                               |
+  | TorQ itself   | the tree you run                | the server's own: `--torq-home`, `--torq-app-home`, `--qcmd`; the artifact carries none of TorQ                                      |
+  | older kdb+    | n/a                             | `--q-target 4.0` flattens nested contexts at build; a startup guard checks the manifest and each file's hash                         |
+  | shared HDB    | n/a                             | prepare judges it by the release's schema: a changed column type refuses, missing tables need `--fix-hdb`                            |
 
 The `peachq` runtime runs the starter pack on PeachQ, a different q. The
 experimental `peachq-etl` adds a profile's jobs, from a copy of the q tree

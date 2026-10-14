@@ -13,8 +13,9 @@ the tree as an empty commit carrying
 which scripts/gates/check_kdbx_attestation.py reads in CI. Run it last, after
 the final rebase: a rebase changes the tree and the attestation with it.
 
-Refuses a dirty tree (what is tested must be what is committed) and any
-interpreter scripts/test.py does not identify as KDB-X.
+Refuses a dirty tree, untracked files included since the hooks see them (what
+is tested must be what is committed), and any interpreter scripts/test.py
+does not identify as KDB-X.
 
     uv run python scripts/dev/attest_kdbx.py
 """
@@ -57,10 +58,36 @@ def run_hook(hook: str) -> bool:
     return subprocess.run(cmd, cwd=REPO, check=False).returncode == 0
 
 
+def dirt() -> str | None:
+    """What makes the working tree differ from HEAD's tree, or None.
+
+    Untracked files count. The hooks run q over the WORKING TREE, so a new
+    `src/foo.q` that a tracked file loads but nobody `git add`ed passes them
+    here and is absent from the tree the trailer names - which then fails
+    wherever it is checked out (#1340). Ignored files do not count:
+    `git status --porcelain` leaves them out, so build output and the venv
+    are no obstacle.
+    """
+    lines = git("status", "--porcelain").splitlines()
+    untracked = [line[3:] for line in lines if line.startswith("??")]
+    if len(untracked) < len(lines):
+        return "uncommitted changes - commit them, so what is tested is what is pushed"
+    if untracked:
+        shown = ", ".join(untracked[:5]) + (
+            f" and {len(untracked) - 5} more" if len(untracked) > 5 else ""
+        )
+        return (
+            f"untracked files ({shown}) - add or remove them, so what is tested is "
+            "what is pushed: the hooks see them, the attested tree would not"
+        )
+    return None
+
+
 def refusal() -> str | None:
     """Why this tree cannot be attested here, or None."""
-    if git("status", "--porcelain", "--untracked-files=no").strip():
-        return "uncommitted changes - commit them, so what is tested is what is pushed"
+    why = dirt()
+    if why:
+        return why
     impl = _test_py().check_interpreter()
     if impl is None:
         return "no q interpreter ($QCMD, else q on PATH)"
@@ -80,10 +107,7 @@ def main() -> int:
         if not run_hook(hook):
             print(f"attest_kdbx: {hook} failed - nothing recorded", file=sys.stderr)
             return 1
-    if (
-        git("rev-parse", "HEAD^{tree}").strip() != tree
-        or git("status", "--porcelain", "--untracked-files=no").strip()
-    ):
+    if git("rev-parse", "HEAD^{tree}").strip() != tree or dirt():
         print(
             "attest_kdbx: a hook changed the tree - commit that, then run this again",
             file=sys.stderr,

@@ -58,6 +58,15 @@ def test_a_timespan_is_read_as_nanoseconds():
     )
 
 
+@pytest.mark.parametrize("ns", [1, 999, 1500, 1_000_000_001])
+def test_a_timespan_finer_than_a_microsecond_is_refused_not_rounded(ns):
+    """A timedelta stops at the microsecond and rounds to the nearest one:
+    1 ns became 0, 1500 ns became 2 us (#1317). The same refusal a timestamp
+    gets, rather than a horizon quietly moved."""
+    with pytest.raises(ValidationFailed, match="'h' is a timespan; .* finer than a microsecond"):
+        queries.coerce(ns, QType.TIMESPAN, "h", as_list=False)
+
+
 def test_an_aware_datetime_is_normalised_to_utc():
     cet = dt.timezone(dt.timedelta(hours=2))
     out = queries.coerce(

@@ -38,6 +38,35 @@ def refillable(holes: list[dict], today: date) -> tuple[list[dict], bool]:
     return kept, cut
 
 
+#: 2000.01.01, q's epoch, in Unix nanoseconds: what `"j"$` of a timestamp
+#: counts from, and so the origin of every grid a worker's `align` is held to.
+Q_EPOCH_NS = 946_684_800 * 1_000_000_000
+
+
+def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = False) -> str:
+    """A ledger timestamp moved outwards onto a bar grid (#1323).
+
+    A worker that declares `align` refuses a bound that is not a multiple of
+    it (#1306), and an uptime edge is a wall-clock instant. So a range's
+    start is floored to the grid and its end (`upper`) ceiled - the same
+    widening `_as_bound` does for the microsecond, safe for the same reason:
+    covered windows are skipped. A worker without `align` is left as is.
+    """
+    if not align_ns:
+        return ledger_value
+    stamp, _, fraction = ledger_value.partition(".")
+    whole = datetime.fromisoformat(stamp).replace(tzinfo=UTC)
+    # On q's grid, not the Unix one (#1345): require_aligned tests `"j"$ts`,
+    # nanoseconds since 2000.01.01, and the epochs are 946,684,800 s apart -
+    # they agree only for an align that divides that, which nothing enforces.
+    nanos = int(whole.timestamp()) * 1_000_000_000 + int(fraction.ljust(9, "0")[:9]) - Q_EPOCH_NS
+    low = nanos - nanos % align_ns
+    if upper and low != nanos:
+        low += align_ns
+    seconds, sub = divmod(low + Q_EPOCH_NS, 1_000_000_000)
+    return f"{datetime.fromtimestamp(seconds, UTC):%Y-%m-%dT%H:%M:%S}.{sub:09d}"
+
+
 @app.command()
 def gaps(
     job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
@@ -87,7 +116,7 @@ def gaps(
     advised, cut = refillable(holes, _utc_today())
     if advised:
         console.print("\n[bold]refill[/] - re-running is idempotent: covered windows are skipped")
-    for worker in twins if advised else ():
+    for worker, align in twins.items() if advised else ():
         try:
             version = f" --version {stack_backfill.resolve_version(worker, None)}"
         except UqsError:
@@ -95,9 +124,11 @@ def gaps(
             # name, so it is shown as one to fill in, not guessed.
             version = " --version <V>"
         for hole in advised:
+            start = widen_to_grain(str(hole["range_from"]), align)
+            end = widen_to_grain(str(hole["range_to"]), align, upper=True)
             command = (
-                f"uqs backfill {worker} --from {stack_runs._as_bound(str(hole['range_from']))} "
-                f"--to {stack_runs._as_bound(str(hole['range_to']), upper=True)}{version}"
+                f"uqs backfill {worker} --from {stack_runs._as_bound(start)} "
+                f"--to {stack_runs._as_bound(end, upper=True)}{version}"
             )
             console.print(f"  {command}", soft_wrap=True)
     if cut:

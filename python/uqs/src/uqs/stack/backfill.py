@@ -27,6 +27,7 @@ from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import capabilities, runs, runtime
 from uqs.stack.backfill_wait import pid_alive
+from uqs.timefmt import finer_than_a_microsecond
 
 #: What a flag value may contain. torq.sh builds the start line into a string
 #: and `eval`s it, so anything a shell would interpret - a space, a `;`, a
@@ -98,17 +99,14 @@ _Q_TIMESTAMP = re.compile(
 def _from_q_literal(name: str, text: str) -> datetime | None:
     """A q literal as a UTC datetime, or None when `text` is not one.
 
-    datetime stops at the microsecond, so a value with anything finer is
-    refused rather than truncated: a range whose end moved is a different
-    range.
+    `parse_bound` has already refused anything finer than a microsecond, so
+    the fraction here fits a datetime.
     """
     m = _Q_TIMESTAMP.fullmatch(text)
     if m is None:
         return None
     year, month, day, hour, minute, second, fraction = m.groups()
     digits = (fraction or "").ljust(9, "0")
-    if digits[6:] != "000":
-        raise UqsError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
     try:
         return datetime(
             int(year),
@@ -133,7 +131,13 @@ def parse_bound(name: str, text: str) -> datetime:
     rather than as the local time of whatever machine runs the command -
     which would cover a window an offset wide of the one meant. A value with
     an offset is converted. A q literal carries no offset, and is UTC.
+
+    datetime stops at the microsecond, so a value with anything finer is
+    refused rather than truncated, in either spelling: a range whose end
+    moved is a different range (`finer_than_a_microsecond`).
     """
+    if finer_than_a_microsecond(text):
+        raise UqsError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
     from_q = _from_q_literal(name, text)
     if from_q is not None:
         return from_q

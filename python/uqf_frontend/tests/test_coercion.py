@@ -89,6 +89,20 @@ def test_garbage_timestamp_is_rejected():
         coerce("not a time", QType.TIMESTAMP, "time", as_list=False)
 
 
+def test_a_timestamp_finer_than_a_microsecond_is_refused_not_truncated():
+    """`fromisoformat` keeps the first six digits of a nine-digit fraction
+    without a word, so a nanosecond filter value or coverage bound reached q
+    up to 999 ns earlier than sent (#1317). The rule `uqs backfill` applies to
+    its bounds, applied here."""
+    with pytest.raises(ValidationFailed, match="'time' is a timestamp; .*finer than a microsecond"):
+        coerce("2026-09-15T10:30:00.123456789Z", QType.TIMESTAMP, "time", as_list=False)
+
+
+def test_trailing_zeros_past_the_microsecond_are_not_finer():
+    got = coerce("2026-09-15T10:30:00.123456000Z", QType.TIMESTAMP, "time", as_list=False)
+    assert got == dt.datetime(2026, 9, 15, 10, 30, 0, 123456, tzinfo=dt.UTC)
+
+
 def test_in_operator_requires_a_non_empty_list():
     tbl = table("trades")
     with pytest.raises(ValidationFailed, match="non-empty list"):
@@ -145,3 +159,25 @@ def test_run_id_is_filterable_on_the_coverage_table():
         ["eq"],
         [b"8c6b8b64-6815-6084-0a3e-178401251b68"],
     )
+
+
+def test_a_timestamp_filter_does_not_load_the_orchestrator():
+    """The read path checks a timestamp against uqs.timefmt, a leaf. Until
+    #1326 it imported uqs.stack.backfill, which pulls in uqs.stack.runtime and
+    the process-launch surface, so any import-time failure there turned a
+    read-only `/query` with a time filter into a 500. A fresh interpreter,
+    because this process may already have imported uqs.stack elsewhere."""
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys; "
+        "from uqf_frontend.catalog import QType; "
+        "from uqf_frontend.queries import coerce; "
+        "coerce('2026-09-15T10:30:00Z', QType.TIMESTAMP, 'time', as_list=False); "
+        "print(sorted(m for m in sys.modules if m.startswith('uqs.stack')))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert out == "[]"
