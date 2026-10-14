@@ -85,6 +85,7 @@ alt_status:.qpipe.transform.order_outcome.status_map[`N`P`E`F`R`C`X;`unresolved`
 
 / AltOMS messages as order outcomes: a rename, a status table and nothing else.
 from_alt:{[b]
+    if[0=count b; :.qpipe.job.order_outcomes.order_outcomes];
     out:.qpipe.transform.order_outcome.translate[.order_outcomestest.alt_status;b`ord_state];
     select source_time:msg_time, source:`alt_oms, request_id:cl_ord_id, source_status:ord_state,
         outcome:?[null cl_ord_id;`unmapped;out], book:desk, product:instr_class, venue:lp from b}

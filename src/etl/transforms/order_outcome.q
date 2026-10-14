@@ -46,6 +46,7 @@ status_map:{[codes;outs]
 / @return an outcome per row
 / @eg .qpipe.transform.order_outcome.translate[.qpipe.transform.order_outcome.status_map[enlist `F;enlist `filled];`F`Z]  ->  `filled`unmapped
 translate:{[map;codes]
+    if[0=count codes; :`symbol$()];
     o:map codes;
     ?[null o;`unmapped;o]}
 

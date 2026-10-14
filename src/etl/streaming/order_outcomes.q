@@ -71,6 +71,7 @@ orders_status:.qpipe.transform.order_outcome.status_map[`filled`rejected`cancell
 / @return canonical order_outcomes
 / @eg .qpipe.job.order_outcomes.from_orders[([] time:enlist 2026.10.09D10:00:00; order_id:enlist 7; book:enlist `london; product:enlist `spot; order_status:enlist `filled)]`request_id  ->  enlist `7
 from_orders:{[batch]
+    if[0=count batch; :.qpipe.job.order_outcomes.order_outcomes];
     rid:?[null batch`order_id;`;`$string batch`order_id];
     out:.qpipe.transform.order_outcome.translate[.qpipe.job.order_outcomes.orders_status;batch`order_status];
     select source_time:time, source:.qpipe.job.order_outcomes.orders_source, request_id:rid, source_status:order_status,
