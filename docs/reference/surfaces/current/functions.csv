@@ -1622,6 +1622,26 @@ qpipe.source.upstream_trades,source_name,value,,
 qpipe.source.upstream_trades,time_column,value,,
 qpipe.source.upstream_trades,types,value,,
 qpipe.source.upstream_trades,tz,value,,
+qpipe.transform.book_liquidity,book_shape,table,,
+qpipe.transform.book_liquidity,eligible_categories,value,,
+qpipe.transform.book_liquidity,eligible_markets,value,,
+qpipe.transform.book_liquidity,eligible_settlements,value,,
+qpipe.transform.book_liquidity,example_books,function,1,
+qpipe.transform.book_liquidity,from_levels,function,1,x
+qpipe.transform.book_liquidity,from_market_data,function,1,x
+qpipe.transform.book_liquidity,lateness,value,,
+qpipe.transform.book_liquidity,level_shape,table,,
+qpipe.transform.book_liquidity,market_data_shape,table,,
+qpipe.transform.book_liquidity,minute,function,1,x
+qpipe.transform.book_liquidity,minute_shape,table,,
+qpipe.transform.book_liquidity,one_observation,function,1,books
+qpipe.transform.book_liquidity,qty_scale,value,,
+qpipe.transform.book_liquidity,request_shape,table,,
+qpipe.transform.book_liquidity,snapshot,function,2,books requests
+qpipe.transform.book_liquidity,snapshot_shape,table,,
+qpipe.transform.book_liquidity,unspecified,value,,
+qpipe.transform.book_liquidity,width,value,,
+qpipe.transform.book_liquidity,windowed_shape,table,,
 qpipe.transform.crypto_book_1s,lateness,value,,
 qpipe.transform.crypto_book_1s,order_by,value,,
 qpipe.transform.crypto_book_1s,snapshots,function,1,x
