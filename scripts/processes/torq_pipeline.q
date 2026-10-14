@@ -669,7 +669,10 @@ reload_handles:{[registered;hs]
 / @return dict: source (`own, `adopted or `missing) and userpass (` unless adopted)
 / @eg .qtorq.credential_from[();`:/no/such/file]  ->  `source`userpass!(`missing;`)
 credential_from:{[specific;fallback]
-    if[any {not ()~key x} each specific,(); :`source`userpass!(`own;`)];
+    / TorQ's .proc.getconfig[..;2] returns colon-less symbols, which key cannot
+    / see on KDB-X; hsym of one that has the colon is a no-op (#1305).
+    exists:{[x] s:string x; not ()~key hsym `$$[":"=first s; 1_s; s]};
+    if[any exists each specific,(); :`source`userpass!(`own;`)];
     if[()~key fallback; :`source`userpass!(`missing;`)];
     `source`userpass!(`adopted;first `$read0 fallback)}
 
