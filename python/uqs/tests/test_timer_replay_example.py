@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.interpreter import q_interpreter
+from uqs.interpreter import PEACHQ, q_impl, q_interpreter
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = UQF_ROOT / "scripts" / "examples" / "timer_replay_example.q"
@@ -26,6 +26,8 @@ def _q() -> tuple[str, dict[str, str]]:
     q = q_interpreter(env)
     if q is None:
         pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    if q_impl(env) == PEACHQ:
+        pytest.skip("PeachQ cannot load a nested `\\d` such as log.q's .qetl.log")
     env.setdefault("QHOME", str(Path.home() / ".kx"))
     return str(q), env
 
