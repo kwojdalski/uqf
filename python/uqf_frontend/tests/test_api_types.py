@@ -117,7 +117,7 @@ def _type_aliases() -> dict[str, str]:
     """`name -> TypeScript type` for each `export type X = ...;` in api.ts, so a
     field typed by a named union (`tier: Tier`) is compared by its words, as an
     inline union is (#820)."""
-    return dict(re.findall(r"^export type (\w+) = ([^;]+);", API_TS.read_text(), re.M))
+    return dict(re.findall(r"^export type (\w+) =\s*([^;]+);", API_TS.read_text(), re.M))
 
 
 def _literal_words(annotation: object) -> set[str] | None:

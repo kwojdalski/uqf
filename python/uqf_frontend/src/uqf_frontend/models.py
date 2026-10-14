@@ -105,9 +105,29 @@ class CoverageResponse(BaseModel):
     complete: bool = Field(description="True when the requested range has no gaps")
 
 
+#: The words catalog.QType has, spelled out for the type checker; the
+#: browser's api.ts ColumnType must offer the same (test_api_types.py), and
+#: test_catalog.py holds this to QType.
+ColumnType = Literal[
+    "symbol",
+    "timestamp",
+    "timespan",
+    "float",
+    "long",
+    "int",
+    "short",
+    "boolean",
+    "date",
+    "time",
+    "char",
+    "guid",
+    "list",
+]
+
+
 class ColumnInfo(BaseModel):
     name: str
-    type: str
+    type: ColumnType
     filterable: bool
     decimals: int | None = Field(
         default=None,

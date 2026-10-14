@@ -29,12 +29,20 @@ repeat is never a correction.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Iterable, Iterator
 from typing import Any
 
-#: The raw table `flink_vwap_raw`'s columns in plant order. `time` is not sent:
-#: .u.upd stamps it.
+from uqs.external.plant_contract import plant_table_fields
+
+#: The raw table this pushes onto.
+RAW_TABLE = "flink_vwap_raw"
+
+#: The columns WINDOW_SQL selects, in the SELECT's order - the order Flink's
+#: rows arrive in. NOT the plant's order: that is read from plant_tables.q by
+#: `plant_table_fields` and applied in `to_columns`, so a reorder in q cannot
+#: put a value in the wrong column.
 FIELDS = ["sym", "window_end", "vwap", "volume", "n"]
 
 #: Synthetic trades for three pairs. `ts` is the processing-time clock, made an
@@ -79,10 +87,10 @@ def batches(rows: Iterable[Any]) -> Iterator[list[dict[str, Any]]]:
         yield [dict(zip(FIELDS, tuple(row), strict=True))]
 
 
-def to_columns(records: list[dict[str, Any]]) -> dict[str, list[Any]]:
-    """Records as .u.upd wants them: one list per column, in FIELDS order -
-    .u.upd places columns by position, not by name."""
-    return {field: [record[field] for record in records] for field in FIELDS}
+def to_columns(records: list[dict[str, Any]], plant_order: list[str]) -> dict[str, list[Any]]:
+    """Records as .u.upd wants them: one list per column, in the plant's order
+    (`plant_table_fields`) - .u.upd places columns by position, not by name."""
+    return {field: [record[field] for record in records] for field in plant_order}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -90,8 +98,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--credential", required=True)
-    parser.add_argument("--table", default="flink_vwap_raw")
+    parser.add_argument("--table", default=RAW_TABLE)
+    parser.add_argument("--repo-root", default=os.getcwd())
     args = parser.parse_args(argv)
+    plant_order = plant_table_fields(args.repo_root, args.table)
     try:
         import kola
         from pyflink.table import (  # ty: ignore[unresolved-import]
@@ -114,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     with env.sql_query(WINDOW_SQL).execute().collect() as rows:
         for batch in batches(rows):
             # `sync`: the call returns once the plant has the rows.
-            q.sync(".u.upd", args.table, to_columns(batch))
+            q.sync(".u.upd", args.table, to_columns(batch, plant_order))
     return 0
 
 
