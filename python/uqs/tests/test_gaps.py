@@ -62,7 +62,7 @@ def test_the_hole_between_two_sessions_and_the_twin_that_refills_it(status, monk
     assert [(h["range_from"], h["range_to"]) for h in holes] == [
         ("2026-09-13T10:00:00.000000000", "2026-09-13T10:20:00.000000000")
     ]
-    assert twins == ["hdb_demo_markouts_backfill"]
+    assert twins == {"hdb_demo_markouts_backfill": None}
     assert sessions == 2
 
 
@@ -70,7 +70,7 @@ def test_a_job_with_no_sessions_is_down_for_the_whole_range(status, monkeypatch)
     monkeypatch.setenv("UQF_STATUS_DIR", str(status))
     holes, twins, sessions = uptime.gaps(paths_for_root(UQF_ROOT), "posbook", *DAY)
     assert len(holes) == 1 and sessions == 0
-    assert twins == []
+    assert twins == {}
 
 
 @pytest.mark.parametrize("job", ["markout;exit 0", "", "1abc", "a b"])
@@ -85,7 +85,8 @@ def test_an_empty_range_is_refused():
 
 
 def _gaps_cli(monkeypatch, holes, twins, sessions=1):
-    monkeypatch.setattr(uptime, "gaps", lambda *a: (holes, twins, sessions))
+    grains = twins if isinstance(twins, dict) else dict.fromkeys(twins)
+    monkeypatch.setattr(uptime, "gaps", lambda *a: (holes, grains, sessions))
     return runner.invoke(
         cli.app,
         ["gaps", "demo_markout", "--from", "2026-09-13", "--to", "2026-09-14"],
@@ -222,3 +223,68 @@ def test_an_end_a_nanosecond_before_midnight_rounds_up_into_the_next_day(monkeyp
     }
     result = _gaps_cli(monkeypatch, [hole], ["hdb_demo_markouts_backfill"])
     assert "--from 2026-09-13T23:00:00 --to 2026-09-14T00:00:00 --version" in result.output
+
+
+# --- a bar-building twin is advised a range on its grid (#1323) --------------
+
+_MINUTE_NS = 60 * 10**9
+
+
+def test_the_declared_grain_of_each_twin_is_read_from_its_declaration(status, monkeypatch):
+    monkeypatch.setenv("UQF_STATUS_DIR", str(status))
+    _, twins, _ = uptime.gaps(paths_for_root(UQF_ROOT), "exec_bars", *DAY)
+    assert twins == {"hdb_exec_bars_backfill": _MINUTE_NS}
+    _, twins, _ = uptime.gaps(paths_for_root(UQF_ROOT), "crypto_book_1s", *DAY)
+    assert twins == {"hdb_crypto_book_backfill": 10**9}
+
+
+@pytest.mark.parametrize(
+    ("value", "align", "upper", "expected"),
+    [
+        ("2026-09-13T10:00:01.123456789", _MINUTE_NS, False, "2026-09-13T10:00:00.000000000"),
+        ("2026-09-13T10:04:07.987654321", _MINUTE_NS, True, "2026-09-13T10:05:00.000000000"),
+        ("2026-09-13T10:05:00.000000000", _MINUTE_NS, True, "2026-09-13T10:05:00.000000000"),
+        ("2026-09-13T23:59:59.500000000", 10**9, True, "2026-09-14T00:00:00.000000000"),
+        ("2026-09-13T10:00:01.123456789", None, False, "2026-09-13T10:00:01.123456789"),
+    ],
+)
+def test_a_bound_is_moved_outwards_onto_the_grid(value, align, upper, expected):
+    assert gaps_cli.widen_to_grain(value, align, upper=upper) == expected
+
+
+def test_the_advised_exec_bars_refill_is_minute_aligned_and_widened(monkeypatch):
+    result = _gaps_cli(monkeypatch, [_NS_HOLE], {"hdb_exec_bars_backfill": _MINUTE_NS})
+    command = _printed_command(result.output)
+    assert "--from 2026-09-13T10:00:00 --to 2026-09-13T10:05:00 --version" in command, command
+
+
+def test_the_advised_exec_bars_refill_is_accepted_by_init(monkeypatch, status):
+    """The printed bounds, handed to the real `init`, are not refused."""
+    q = q_interpreter(os.environ)
+    if q is None:
+        pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    command = _printed_command(
+        _gaps_cli(monkeypatch, [_NS_HOLE], {"hdb_exec_bars_backfill": _MINUTE_NS}).output
+    )
+    lo = command.split("--from ")[1].split()[0].replace("T", "D")
+    hi = command.split("--to ")[1].split()[0].replace("T", "D")
+    lo, hi = (v.replace("-", ".") if "D" in v else v for v in (lo, hi))
+    script = status / "init.q"
+    script.write_text(
+        "\\l src/init.q\n\\l src/etl/init.q\n"
+        ".qpipe.job.hdb_exec_bars_backfill.init "
+        f"`source_version`range_from`range_to!(`v1;{lo};{hi});\n"
+        '-1 "INIT_OK"; exit 0\n'
+    )
+    result = subprocess.run(
+        [str(q), str(script), "-q"],
+        cwd=UQF_ROOT,
+        env={**os.environ, "UQF_STATUS_DIR": str(status), "UQF_FIXTURE_WRITES": "1"},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert "must be multiples of it" not in result.stdout + result.stderr, result.stdout
+    assert "INIT_OK" in result.stdout, result.stdout + result.stderr
