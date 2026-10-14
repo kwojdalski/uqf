@@ -23,6 +23,8 @@ proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeof
 ,flink_vwap,time,sym,sym,,,,
 ,flink_vwap_raw,time,sym,sym,,,,
 ,fx_limit_breach,time,sym,sym,,,,
+,fx_markout,time,sym,sym,,,,
+,fx_markout_wide,time,sym,sym,,,,
 ,fx_orderbook,time,sym,sym,,,,
 ,fx_position,time,sym,sym,,,,
 ,fx_position_open,time,sym,sym,,,,

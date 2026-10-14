@@ -46,3 +46,7 @@ order_outcomes1,60
 hdb_order_quality_backfill1,61
 book_liquidity_1m1,62
 hdb_book_liquidity_1m_backfill1,63
+fxmarkout1,64
+fxmarkoutwide1,65
+hdb_fx_markout_wide_backfill1,66
+hdb_fx_markouts_backfill1,67

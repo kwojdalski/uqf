@@ -34,9 +34,13 @@
 /                    per `by` key: it is still the as-of answer for any
 /                    horizon before that key's next row.
 / .
-/ Under ready_on `reference the latest pre-cutoff row per key is kept with
-/ max_age too: readiness needs an anchor at or before event_time - lookback,
-/ and a tick that ran before the reference caught up must not delete it (#959).
+/ Under ready_on `reference (or `both) the latest pre-cutoff row per series is
+/ kept with max_age too: readiness needs an anchor at or before event_time -
+/ lookback, and a tick that ran before the reference caught up must not delete
+/ it (#959). A SERIES is a `by` key, or with retain_by (#1395) the `by` key and
+/ whatever else makes rows independent - a source: a reference quoted by
+/ several sources has an as-of answer per source, and keeping only the latest
+/ row per key would evict a quiet source's book when another one ticks.
 / .
 / Either way the history is bounded by the events still waiting, and the
 / answer for every pending event is the one the full history would give.
@@ -69,7 +73,7 @@ required_keys:`procname`events`reference`transform`publishes`horizon`period
 / it; the rest (#952) are each OFF unless declared, so a declaration that
 / names none of them behaves exactly as before.
 optional_keys:`max_age`by`keep`ephemeral,.qetl.job.stream.passthrough_keys,
-    `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after`max_lateness
+    `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after`max_lateness`retain_by
 
 / What define installs in .qpipe.job.<name>. They are the shell's, documented
 / here and in define, as a bounded worker's inherited methods are
@@ -82,8 +86,17 @@ installed:`pending`history`publish`now`on_batch`score_ready`on_timer`completed`e
 / The readiness rules: `wall`, an event is ready once horizon has elapsed
 / since its event_time; `reference`, once every reference key it needs has an
 / as-of anchor at or before event_time - lookback and has advanced to
-/ event_time + horizon.
-ready_rules:`wall`reference
+/ event_time + horizon; `both` (#1395), only when both hold - the horizon has
+/ elapsed on the plant clock AND the reference covers it. `reference` alone can
+/ be satisfied by a reference row stamped far ahead of the plant's clock, and
+/ `wall` alone by an hour of silence; a job that must not score before either
+/ has happened declares both.
+ready_rules:`wall`reference`both
+
+/ Private: does this readiness rule read the reference's coverage (anchor and
+/ advance), and so need an as-of anchor kept and a legs/by it can resolve?
+/ @private
+reads_reference:{[rule] rule in `reference`both}
 
 / Private: the declaration with every default filled in, `by` and identity
 / normalised to lists - or a refusal naming what is wrong. Apart from define
@@ -115,12 +128,23 @@ normalise:{[who;decl;ins]
     if[not (d`ready_on) in ready_rules;
         'who,"'s ready_on must be one of ",", " sv string ready_rules];
     if[$[`legs in key d; not 100h<=type d`legs; 0b]; 'who,"'s legs must be a function of the pending events"];
-    if[(`legs in key d) and not `reference=d`ready_on;
-        'who," declares legs, which only ready_on `reference reads"];
-    if[`reference=d`ready_on;
-        if[1<>count key_cols; 'who,"'s ready_on `reference needs a one-column by - the key its legs name"];
+    if[(`legs in key d) and not reads_reference[d`ready_on];
+        'who," declares legs, which only ready_on `reference reads (or `both)"];
+    if[reads_reference[d`ready_on];
+        if[1<>count key_cols; 'who,"'s ready_on `",string[d`ready_on]," needs a one-column by - the key its legs name"];
         if[(not `legs in key d) and not (first key_cols) in ev_cols;
             'who,"'s events carry no ",string[first key_cols],", so each event's reference key must come from legs"]];
+    / retain_by (#1395): the columns that identify one as-of series in the
+    / reference. `by` is the key an event WAITS on (a leg); a reference with
+    / several independent sources per key needs the latest pre-cutoff row of
+    / EACH source kept, so retention groups by `by` plus the source.
+    rb:$[`retain_by in key decl; (),decl`retain_by; key_cols];
+    if[not 11h=type rb; 'who,"'s retain_by must be reference column names, symbols"];
+    if[count rb except ref_cols;
+        'who,"'s retain_by names ",(", " sv string rb except ref_cols),", which the reference input does not carry"];
+    if[count key_cols except rb;
+        'who,"'s retain_by must include by (",(", " sv string key_cols),") - a series is a source's rows for one key"];
+    d[`retain_by]:rb;
     if[`identity in key d;
         idc:(),d`identity;
         if[not 11h=type idc; 'who,"'s identity must be event column names, symbols"];
@@ -150,9 +174,11 @@ normalise:{[who;decl;ins]
 /   (start_with_all, note, on_start, check with on_fail),
 /   event_time and reference_time (the columns each table's clock is read
 /   from, default `time - e.g. `source_time), lookback (how far BEFORE an
-/   event its window reaches, default 0D), ready_on (`wall, the default, or
-/   `reference), legs (a function of the pending events giving each one's
-/   reference keys, for ready_on `reference; default its own `by` value),
+/   event its window reaches, default 0D), ready_on (`wall, the default;
+/   `reference; or `both: the horizon has elapsed AND the reference covers it),
+/   retain_by (reference columns naming one as-of series, default `by`; must
+/   include it), legs (a function of the pending events giving each one's
+/   reference keys, for ready_on `reference or `both; default its own `by` value),
 /   identity (event columns naming one event: a redelivery replaces the
 /   pending one, and one already scored is dropped), remember (how long a
 /   scored identity is remembered, default 0D01) and expire_after (how long
@@ -294,6 +320,18 @@ not_ready:{[d;r;et;legs]
         if[count short; :"reference has not reached ",string[t+d`horizon]," for ",", " sv string short];
         ""}[d;lo;hi]'[et;legs]}
 
+/ Private: why each pending event is not ready under the job's rule - "" when
+/ it is. `wall` reads the plant clock, `reference` the reference's coverage,
+/ `both` the wall first (it is the cheaper to explain: nothing can have
+/ arrived yet) and then the coverage.
+/ @private
+why_not_ready:{[d;hist;pending;now]
+    et:pending d`event_time;
+    wall:{$[x;"";"horizon has not elapsed"]} each et<=now-d`horizon;
+    if[`wall=d`ready_on; :wall];
+    cover:not_ready[d;reach[d;hist];et;legs_of[d;pending]];
+    $[`reference=d`ready_on; cover; {$[count x;x;y]}'[wall;cover]]}
+
 / Private: the as-of-safe reference rows to keep, given the earliest instant
 / any pending event can still ask about (see the header).
 / @private
@@ -304,11 +342,11 @@ retain:{[d;hist;earliest]
     if[0=count old; :hist];
     / with max_age a row below the cutoff is never an answer - except as the
     / anchor ready_on `reference needs (#959)
-    if[(`max_age in key d) and not `reference=d`ready_on; :hist where rt>=cutoff];
+    if[(`max_age in key d) and not reads_reference[d`ready_on]; :hist where rt>=cutoff];
     / the latest pre-cutoff row per key is still an as-of answer
     / by reference time, not arrival: out-of-order rows must not evict the true as-of row (#1283)
     o:old iasc rt old;
-    latest:o last each value group (d`by)#hist o;
+    latest:o last each value group (d`retain_by)#hist o;
     hist asc (til[count hist] except old),latest}
 
 / Private: score every event that is ready by `now`, publish the rows, then
@@ -324,9 +362,7 @@ score_ready:{[name;now]
     pq:` sv ns,`pending; hq:` sv ns,`history; cq:` sv ns,`completed; xq:` sv ns,`expired;
     pending:get pq;
     et:pending d`event_time;
-    why:$[`reference=d`ready_on;
-        not_ready[d;reach[d;get hq];et;legs_of[d;pending]];
-        {$[x;"";"horizon has not elapsed"]} each et<=now-d`horizon];
+    why:why_not_ready[d;get hq;pending;now];
     mask:0=count each why;
     if[any mask;
         ins:key .qetl.transform.def[d`transform]`inputs;
@@ -341,8 +377,8 @@ score_ready:{[name;now]
         lapsed:et<=now-d`expire_after;
         if[any lapsed;
             gone:pending where lapsed;
-            reasons:$[`reference=d`ready_on;
-                not_ready[d;reach[d;get hq];gone d`event_time;legs_of[d;gone]];
+            reasons:$[reads_reference[d`ready_on];
+                why_not_ready[d;get hq;gone;now];
                 (count gone)#enlist "horizon has not elapsed"];
             xq insert update expired_at:now, reason:`$reasons from gone;
             {[name;r] .qetl.log.warn[name;"event expired unresolved";enlist[`reason]!enlist r]}[name] each distinct reasons;

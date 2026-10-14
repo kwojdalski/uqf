@@ -541,6 +541,8 @@ qetl.plant,executions,table,,
 qetl.plant,flink_vwap,table,,
 qetl.plant,flink_vwap_raw,table,,
 qetl.plant,fx_limit_breach,table,,
+qetl.plant,fx_markout,table,,
+qetl.plant,fx_markout_wide,table,,
 qetl.plant,fx_orderbook,table,,
 qetl.plant,fx_position,table,,
 qetl.plant,fx_position_open,table,,
@@ -1183,6 +1185,28 @@ qpipe.job.fx_feed,on_timer,function,1,
 qpipe.job.fx_feed,publish,value,,
 qpipe.job.fx_feed,spot,value,,
 qpipe.job.fx_feed,tick_rows,function,1,levels
+qpipe.job.fx_markout,completed,table,,
+qpipe.job.fx_markout,expired,table,,
+qpipe.job.fx_markout,history,table,,
+qpipe.job.fx_markout,keep,function,1,x
+qpipe.job.fx_markout,legs,function,1,pending
+qpipe.job.fx_markout,now,function,1,
+qpipe.job.fx_markout,on_batch,value,,
+qpipe.job.fx_markout,on_timer,value,,
+qpipe.job.fx_markout,pending,table,,
+qpipe.job.fx_markout,publish,value,,
+qpipe.job.fx_markout,score_ready,value,,
+qpipe.job.fx_markout_wide,completed,table,,
+qpipe.job.fx_markout_wide,expired,table,,
+qpipe.job.fx_markout_wide,history,table,,
+qpipe.job.fx_markout_wide,keep,function,1,x
+qpipe.job.fx_markout_wide,legs,function,1,pending
+qpipe.job.fx_markout_wide,now,function,1,
+qpipe.job.fx_markout_wide,on_batch,value,,
+qpipe.job.fx_markout_wide,on_timer,value,,
+qpipe.job.fx_markout_wide,pending,table,,
+qpipe.job.fx_markout_wide,publish,value,,
+qpipe.job.fx_markout_wide,score_ready,value,,
 qpipe.job.fx_orderbook_feed,n_levels,value,,
 qpipe.job.fx_orderbook_feed,on_timer,function,1,
 qpipe.job.fx_orderbook_feed,publish,value,,
@@ -1302,6 +1326,44 @@ qpipe.job.hdb_exec_bars_backfill,range_to,value,,
 qpipe.job.hdb_exec_bars_backfill,run,function,1,
 qpipe.job.hdb_exec_bars_backfill,source_version,value,,
 qpipe.job.hdb_exec_bars_backfill,spec,function,1,
+qpipe.job.hdb_fx_markout_wide_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_fx_markout_wide_backfill,cleanup,function,1,
+qpipe.job.hdb_fx_markout_wide_backfill,facts,function,1,batch
+qpipe.job.hdb_fx_markout_wide_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_fx_markout_wide_backfill,handle,value,,
+qpipe.job.hdb_fx_markout_wide_backfill,init,function,1,run_spec
+qpipe.job.hdb_fx_markout_wide_backfill,last_batch,value,,
+qpipe.job.hdb_fx_markout_wide_backfill,last_window,dict,,
+qpipe.job.hdb_fx_markout_wide_backfill,live,value,,
+qpipe.job.hdb_fx_markout_wide_backfill,phase,value,,
+qpipe.job.hdb_fx_markout_wide_backfill,plan,function,1,cursor
+qpipe.job.hdb_fx_markout_wide_backfill,progress,dict,,
+qpipe.job.hdb_fx_markout_wide_backfill,publish,function,1,batch
+qpipe.job.hdb_fx_markout_wide_backfill,quality_check,function,1,batch
+qpipe.job.hdb_fx_markout_wide_backfill,range_from,value,,
+qpipe.job.hdb_fx_markout_wide_backfill,range_to,value,,
+qpipe.job.hdb_fx_markout_wide_backfill,run,function,1,
+qpipe.job.hdb_fx_markout_wide_backfill,source_version,value,,
+qpipe.job.hdb_fx_markout_wide_backfill,spec,function,1,
+qpipe.job.hdb_fx_markouts_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_fx_markouts_backfill,cleanup,function,1,
+qpipe.job.hdb_fx_markouts_backfill,facts,function,1,batch
+qpipe.job.hdb_fx_markouts_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_fx_markouts_backfill,handle,value,,
+qpipe.job.hdb_fx_markouts_backfill,init,function,1,run_spec
+qpipe.job.hdb_fx_markouts_backfill,last_batch,value,,
+qpipe.job.hdb_fx_markouts_backfill,last_window,dict,,
+qpipe.job.hdb_fx_markouts_backfill,live,value,,
+qpipe.job.hdb_fx_markouts_backfill,phase,value,,
+qpipe.job.hdb_fx_markouts_backfill,plan,function,1,cursor
+qpipe.job.hdb_fx_markouts_backfill,progress,dict,,
+qpipe.job.hdb_fx_markouts_backfill,publish,function,1,batch
+qpipe.job.hdb_fx_markouts_backfill,quality_check,function,1,batch
+qpipe.job.hdb_fx_markouts_backfill,range_from,value,,
+qpipe.job.hdb_fx_markouts_backfill,range_to,value,,
+qpipe.job.hdb_fx_markouts_backfill,run,function,1,
+qpipe.job.hdb_fx_markouts_backfill,source_version,value,,
+qpipe.job.hdb_fx_markouts_backfill,spec,function,1,
 qpipe.job.hdb_order_quality_backfill,checkpoint,function,1,cursor
 qpipe.job.hdb_order_quality_backfill,cleanup,function,1,
 qpipe.job.hdb_order_quality_backfill,example_at,function,2,ws a
@@ -1550,6 +1612,18 @@ qpipe.source.hdb_executions,source_name,value,,
 qpipe.source.hdb_executions,time_column,value,,
 qpipe.source.hdb_executions,types,value,,
 qpipe.source.hdb_executions,tz,value,,
+qpipe.source.hdb_fx_markouts,columns,value,,
+qpipe.source.hdb_fx_markouts,fixture,function,1,
+qpipe.source.hdb_fx_markouts,lookback,value,,
+qpipe.source.hdb_fx_markouts,query,function,3,h range_from range_to
+qpipe.source.hdb_fx_markouts,raw_executions,function,1,
+qpipe.source.hdb_fx_markouts,raw_market_data,function,1,
+qpipe.source.hdb_fx_markouts,row_key,value,,
+qpipe.source.hdb_fx_markouts,source_name,value,,
+qpipe.source.hdb_fx_markouts,supporting,dict,,
+qpipe.source.hdb_fx_markouts,time_column,value,,
+qpipe.source.hdb_fx_markouts,types,value,,
+qpipe.source.hdb_fx_markouts,tz,value,,
 qpipe.source.hdb_market_data,columns,value,,
 qpipe.source.hdb_market_data,fixture,function,1,
 qpipe.source.hdb_market_data,query,function,3,h range_from range_to
@@ -1629,6 +1703,48 @@ qpipe.transform.eq_orderbook,to_book,function,1,batch
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
 qpipe.transform.exec_bars,width,value,,
+qpipe.transform.fx_markout,calc,function,3,spec exe md
+qpipe.transform.fx_markout,chain_mid,function,5,b0 a0 b1 a1 s
+qpipe.transform.fx_markout,default_spec,dict,,
+qpipe.transform.fx_markout,executions_in,table,,
+qpipe.transform.fx_markout,kinds,value,,
+qpipe.transform.fx_markout,last_delivery,function,1,exe
+qpipe.transform.fx_markout,leg_at,function,5,tob max_age syms inverted times
+qpipe.transform.fx_markout,legs_of,function,2,spec pending
+qpipe.transform.fx_markout,lookback,function,1,spec
+qpipe.transform.fx_markout,market_data_in,table,,
+qpipe.transform.fx_markout,require_spec,function,1,spec
+qpipe.transform.fx_markout,result,table,,
+qpipe.transform.fx_markout,routable,function,2,conv syms
+qpipe.transform.fx_markout,route,function,2,conv sym
+qpipe.transform.fx_markout,scoreable,function,2,spec exe
+qpipe.transform.fx_markout,tops,function,1,md
+qpipe.transform.fx_markout,unscoreable,function,2,spec exe
+qpipe.transform.fx_markout,wait,function,2,spec settle
+qpipe.transform.fx_markout_outputs,expire_after,value,,
+qpipe.transform.fx_markout_outputs,identity,value,,
+qpipe.transform.fx_markout_outputs,job_spec,dict,,
+qpipe.transform.fx_markout_outputs,long,function,1,res
+qpipe.transform.fx_markout_outputs,long_out,table,,
+qpipe.transform.fx_markout_outputs,max_lateness,value,,
+qpipe.transform.fx_markout_outputs,remember,value,,
+qpipe.transform.fx_markout_outputs,score_with,function,4,spec layout exe md
+qpipe.transform.fx_markout_outputs,settle,value,,
+qpipe.transform.fx_markout_outputs,stamped,function,2,spec rows
+qpipe.transform.fx_markout_outputs,wide,function,1,res
+qpipe.transform.fx_markout_outputs,wide_legs,value,,
+qpipe.transform.fx_markout_outputs,wide_out,table,,
+qpipe.transform.fx_source_adapters,book_category,value,,
+qpipe.transform.fx_source_adapters,book_levels,table,,
+qpipe.transform.fx_source_adapters,deal_tape,table,,
+qpipe.transform.fx_source_adapters,executions,table,,
+qpipe.transform.fx_source_adapters,from_book_levels,function,1,batch
+qpipe.transform.fx_source_adapters,from_deal_tape,function,1,batch
+qpipe.transform.fx_source_adapters,market_data,table,,
+qpipe.transform.fx_source_adapters,pairs_of,function,1,codes
+qpipe.transform.fx_source_adapters,positive,function,1,x
+qpipe.transform.fx_source_adapters,spot_codes,value,,
+qpipe.transform.fx_source_adapters,tape_sides,value,,
 qpipe.transform.order_outcome,dimensions,value,,
 qpipe.transform.order_outcome,outcomes,value,,
 qpipe.transform.order_outcome,status_map,function,2,codes outs

@@ -106,6 +106,7 @@ website:
           - services/cross-arbitrage.md
           - services/fx-positions.md
           - services/markouts.md
+          - services/fx-markout.md
           - services/databento.md
           - services/kafka.md
           - services/crypto-recorder.md

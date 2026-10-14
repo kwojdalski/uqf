@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **40 uqf processes** — 63 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **44 uqf processes** — 67 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -55,6 +55,10 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `hdb_order_quality_backfill1` | 6111 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `book_liquidity_1m1` | 6112 | etl | `processes/torq_stream.q` | `book_liquidity_1m` | `market_data` | `book_liquidity_1m` |
 | `hdb_book_liquidity_1m_backfill1` | 6113 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `fxmarkout1` | 6114 | etl | `processes/torq_stream.q` | `fx_markout` | `executions`, `market_data` | `fx_markout` |
+| `fxmarkoutwide1` | 6115 | etl | `processes/torq_stream.q` | `fx_markout_wide` | `executions`, `market_data` | `fx_markout_wide` |
+| `hdb_fx_markout_wide_backfill1` | 6116 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `hdb_fx_markouts_backfill1` | 6117 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -96,6 +100,10 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`hdb_order_quality_backfill1`** — bounded: recomputes the rolling order-quality series from the HDB's orders with the adapter and statistic order_quality1 applies live
 - **`book_liquidity_1m1`** — per FX provider and requested size, the minute's average sweep price, available quantity and full-fill ratio from market_data; an average over book snapshots, not over time; the window is the book's source_time
 - **`hdb_book_liquidity_1m_backfill1`** — bounded: rebuilds the one-minute book liquidity from the HDB's market_data with the calculation book_liquidity_1m1 applies live
+- **`fxmarkout1`** — normalized FX markouts, long layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in
+- **`fxmarkoutwide1`** — normalized FX markouts, wide layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in
+- **`hdb_fx_markout_wide_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout_wide, with the calculation fxmarkoutwide1 applies live
+- **`hdb_fx_markouts_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live
 
 ## Tables these processes publish
 
@@ -116,6 +124,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `executions` | `plant_tables.q` | `executions1` |
 | `flink_vwap` | `plant_tables.q` | `flink_vwap1` |
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
+| `fx_markout` | `plant_tables.q` | `fxmarkout1` |
+| `fx_markout_wide` | `plant_tables.q` | `fxmarkoutwide1` |
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |
 | `fx_position` | `plant_tables.q` | `fxpositions1` |
 | `fx_position_open` | `plant_tables.q` | `fxpositions1` |
