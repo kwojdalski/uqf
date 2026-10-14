@@ -13,15 +13,23 @@
 
 \d .qfacts
 
-/ name -> a list of symbols, in q's own order.
+/ name -> a list of symbols, in q's own order, or a string.
 facts:(!) . flip (
     (`IO_STRATEGIES;        .qetl.io.strategies);
     (`RUN_MODES;            .qetl.job.bounded.runtime.modes);
     (`LOG_LEVELS;           .qetl.log.levels);
     (`ETL_RUNS_COLUMNS;     cols .qetl.run.init_runs[]);
-    (`ETL_RUN_META_COLUMNS; cols .qetl.run.init_meta[]))
+    (`ETL_RUN_META_COLUMNS; cols .qetl.run.init_meta[]);
+    / The status file every worker writes and four readers poll (#1362).
+    (`STATUS_STATES;          .qetl.status.status_states);
+    (`STATUS_TERMINAL_STATES; .qetl.status.terminal_states);
+    / The states a reader may call success: the ones the worker's process
+    / exits 0 for, so a reader and the exit code cannot disagree (#609).
+    (`STATUS_SUCCESS_STATES;  .qetl.status.status_states where 0i=.qetl.job.bounded.exit_code each .qetl.status.status_states);
+    (`STATUS_FILE_PREFIX;     .qetl.status.file_prefix);
+    (`STATUS_FILE_SUFFIX;     .qetl.status.file_suffix))
 
 \d .
 
--1 .j.j string each .qfacts.facts;
+-1 .j.j {$[11h=type x; string x; x]} each .qfacts.facts;
 exit 0

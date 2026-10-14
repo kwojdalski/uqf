@@ -17,16 +17,15 @@ from __future__ import annotations
 
 import json
 import re
-import socket
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
 from uqs.generated import q_facts
+from uqs.liveness import on_this_host, pid_alive
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import capabilities, runs, runtime
-from uqs.stack.backfill_wait import pid_alive
 from uqs.timefmt import finer_than_a_microsecond
 
 #: What a flag value may contain. torq.sh builds the start line into a string
@@ -269,10 +268,8 @@ def _live_holder(lock: Path) -> str | None:
 
     The same rule as `.qetl.job.bounded.state.lock_is_stale`, and in the same
     direction: anything it cannot prove dead - no owner file yet, an owner
-    with no pid or host, another host's pid - counts as live. Host names are
-    compared without case: q records `.z.h`, which is lower-case where
-    `socket.gethostname()` may not be, and comparing them with case made
-    every local lock look like another host's - live forever.
+    with no pid or host, another host's pid - counts as live. Whether the
+    owner is gone is uqs.liveness's rule, shared with the status readers.
     """
     if not lock.is_dir():
         return None
@@ -283,7 +280,7 @@ def _live_holder(lock: Path) -> str | None:
     pid, host = owner.get("pid"), owner.get("host")
     if pid is None or host is None:
         return "a holder that recorded no pid or host"
-    if str(host).lower() != socket.gethostname().lower():
+    if not on_this_host(str(host)):
         return f"pid {pid} on {host}"
     return f"pid {pid}" if pid_alive(int(pid)) else None
 

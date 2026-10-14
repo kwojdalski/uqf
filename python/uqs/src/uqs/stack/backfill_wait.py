@@ -8,12 +8,17 @@ anything (#637, #768).
 from __future__ import annotations
 
 import json
-import os
-import socket
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+from uqs.generated.q_facts import (
+    STATUS_FILE_PREFIX,
+    STATUS_FILE_SUFFIX,
+    STATUS_SUCCESS_STATES,
+    STATUS_TERMINAL_STATES,
+)
+from uqs.liveness import process_gone
 from uqs.paths import UqsPaths
 from uqs.stack import alive, runs
 
@@ -52,10 +57,13 @@ def wait_for_outcome(
     exit code says only that. This waits for what the worker reports - the
     same file the Airflow sensor reads, with the sensor's rules: a file for
     another run (version, range, or written before this launch) is not this
-    one's; `idle`/`completed` exit 0, `failed` 1; and a `starting`/`running`
-    file whose process is gone on this host is `abandoned`, 1, because it
-    will never be written again. The error is the file's own - why a `failed`
-    run failed, e.g. which reactions it left owed (#632) - and "" otherwise.
+    one's; a state q's worker exits 0 for (`idle`/`completed`) exits 0, any
+    other terminal state (`failed`) 1; and a `starting`/`running` file whose
+    process is gone on this host is `abandoned`, 1, because it will never be
+    written again. The state sets are q's own, generated into
+    uqs.generated.q_facts (#1362), so a state q adds cannot read as
+    abandoned. The error is the file's own - why a `failed` run failed, e.g.
+    which reactions it left owed (#632) - and "" otherwise.
 
     A process that dies before it writes any status for this run - the tree
     fails to load, the HDB root is missing, the claim is refused - is
@@ -63,7 +71,7 @@ def wait_for_outcome(
     this run, the process listing is asked whether it is still up, and if it
     is not, the wait ends rather than polling an absent file forever.
     """
-    path = runs.status_dir(paths) / f"airflow_status_{procname}.txt"
+    path = runs.status_dir(paths) / f"{STATUS_FILE_PREFIX}{procname}{STATUS_FILE_SUFFIX}"
     if is_up is None:
 
         def is_up() -> bool:
@@ -91,13 +99,11 @@ def wait_for_outcome(
                 )
         if status is not None:
             state = str(status["state"])
-            if state in ("idle", "completed"):
+            if state in STATUS_SUCCESS_STATES:
                 return state, 0, ""
-            if state == "failed":
+            if state in STATUS_TERMINAL_STATES:
                 return state, 1, str(status.get("error") or "")
-            if str(status.get("host", "")).lower() == socket.gethostname().lower() and not (
-                pid_alive(int(status["pid"]))
-            ):
+            if process_gone(str(status.get("host", "")), int(status["pid"])):
                 return "abandoned", 1, "its process is gone and it never recorded an outcome"
         sleep(poll_seconds)
 
@@ -120,16 +126,3 @@ def _is_this_run(
         )
     except KeyError, ValueError:
         return False
-
-
-def pid_alive(pid: int) -> bool:
-    """Is `pid` running on this machine? A process owned by another user
-    raises PermissionError, and that one IS running - the reason
-    `.qetl.job.bounded.state.pid_alive` uses `ps -p` rather than `kill -0`."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
