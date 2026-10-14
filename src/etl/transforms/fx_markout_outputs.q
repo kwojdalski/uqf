@@ -68,6 +68,7 @@ by_step:{[res;n]
 / @throws error when a route has more legs than the layout has columns
 / @eg count .qpipe.transform.fx_markout_outputs.wide[0#.qpipe.transform.fx_markout.result]  ->  0
 wide:{[res]
+    if[0=count res; :0#.qpipe.transform.fx_markout_outputs.wide_out];
     id:.qpipe.transform.fx_markout_outputs.identity;
     deep:max 0,exec step from res where kind=`leg;
     if[deep>.qpipe.transform.fx_markout_outputs.wide_legs;

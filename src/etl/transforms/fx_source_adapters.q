@@ -116,6 +116,7 @@ from_deal_tape:{[batch]
     .qpipe.transform.fx_source_adapters.refuse["deal_tape";"with a price that is not positive and finite";taken`price;not .qpipe.transform.fx_source_adapters.positive[taken`price]];
     .qpipe.transform.fx_source_adapters.refuse["deal_tape";"with a last_qty that is not positive and finite";taken`last_qty;not .qpipe.transform.fx_source_adapters.positive[taken`last_qty]];
     .qpipe.transform.fx_source_adapters.refuse["deal_tape";"with no id";taken`order_id;null taken`id];
+    if[0=count taken; :0#.qpipe.transform.fx_source_adapters.executions];
     select source_time:deal_time, sym:pair, venue:venue_code, side:?[side=`B;1;-1], size:last_qty, price,
         fee:0f, fee_ccy:`, fill_id:`$string id, book:`, product:` from taken}
 
@@ -152,6 +153,7 @@ from_book_levels:{[batch]
     marker:null[kept`px] & (null[kept`qty] | 0f>=kept`qty);
     .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a price that is not positive and finite";kept`px;(not marker) & not .qpipe.transform.fx_source_adapters.positive[kept`px]];
     levels:select from kept where not marker;
+    if[0=count kept; :0#.qpipe.transform.fx_source_adapters.market_data];
     snaps:0!select by sym:pair, source:feed, source_time:ts from kept;
     n:count snaps;
     rows:{[levels;snaps;want] .qpipe.transform.fx_source_adapters.ladder[levels;;want] each snaps}[levels;snaps];
