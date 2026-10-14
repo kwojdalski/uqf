@@ -82,8 +82,11 @@ does not exist. The API continues to run without the web directory configured.
 Only mounted views poll. Each successful response supplies `poll_seconds`;
 requests are scheduled after completion, so slow HDB calls never overlap.
 The browser cancels requests on navigation, replacement or refresh, and ignores
-late responses. A browser request times out after 45 seconds (the API's default
-gateway timeout is 30 seconds).
+late responses. A browser request times out after
+`UQF_FRONTEND_TIMEOUT` plus 15 seconds, which `/health` serves as
+`request_timeout_seconds` (45 seconds with the default 30 until the first
+answer); start/stop/restart are killed 5 seconds sooner, so the server's
+refusal arrives before the browser gives up.
 
 Transient errors retry on the last returned cadence, or after 5 seconds before
 the first successful response. Permanent errors wait for manual refresh or

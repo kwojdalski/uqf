@@ -11,11 +11,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths, paths_for_root, runtime_from_env
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES, UQF_ONLY_COMMANDS
 from uqs.stack import alive
 from uqs.stack.env import build_env
+from uqs.stack.hdb_types import declared_schema
 from uqs.stack.procs import effective_process_rows
 
 #: A table definition at the start of a line in a q schema: `trade:([]...`.
@@ -36,11 +36,7 @@ def processes(paths: UqsPaths) -> list[str]:
 
 def tables(paths: UqsPaths) -> list[str]:
     """The tables the runtime's schema defines: the one stp1 is given."""
-    if paths.runtime_declaration.overlays:
-        schema = _generated_schema_content(paths)
-    else:
-        schema = (paths.torqapphome / "database.q").read_text()
-    return sorted(set(_TABLE.findall(schema)))
+    return sorted(set(_TABLE.findall(declared_schema(paths))))
 
 
 def layers(paths: UqsPaths) -> list[str]:

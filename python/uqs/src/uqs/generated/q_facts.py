@@ -90,3 +90,29 @@ STATUS_FILE_PREFIX: str = "airflow_status_"
 
 #: a status file's name after the instance id - .qetl.status.file_suffix
 STATUS_FILE_SUFFIX: str = ".txt"
+
+#: the worker-config layers, most significant first - .qetl.cfg.sources
+CFG_SOURCES: tuple[str, ...] = (
+    "env",
+    "overrides",
+    "yaml",
+    "default",
+)
+
+#: the layer that outranks a worker-config override - .qetl.cfg.env_layer
+CFG_ENV_LAYER: str = "env"
+
+#: the layer a worker-config override sits in - .qetl.cfg.override_layer
+CFG_OVERRIDE_LAYER: str = "overrides"
+
+#: a worker-config key's environment variable prefix - .qetl.cfg.env_prefix
+CFG_ENV_PREFIX: str = "UQF_"
+
+#: what a source's credential variable starts with - .qetl.source.credential_prefix
+SOURCE_CREDENTIAL_PREFIX: str = "UQF_SOURCE_CRED_"
+
+#: what a fixture run's release ends with - .qetl.source.fixture_tag
+FIXTURE_TAG: str = "~fixture"
+
+#: what precedes a worker's output revision in a release - .qetl.job.bounded.runtime.revision_tag
+REVISION_TAG: str = "@r"

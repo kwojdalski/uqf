@@ -9,8 +9,9 @@
 / The source contract, as the empty table the transform reads.
 contract:flip .qpipe.source.databento_mbp10.columns!{[c] c$()} each .qpipe.source.databento_mbp10.types
 
-book:([] time:`timestamp$(); sym:`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$();
-    bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+/ The plant's own shape, `time` kept: a backfill has no receipt time, so the
+/ event time is what it writes (see to_book). Derived, not copied (#1360).
+book:.qetl.plant.shape `eq_orderbook
 
 / Private: one side and quantity's ten level columns, as a vector per row.
 / `flip` over the columns rather than `each` over rows: one pass per column.

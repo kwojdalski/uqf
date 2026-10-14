@@ -71,9 +71,11 @@ def worker_transform(
     check_mode(mode)
     if mode == "passthrough":
         after = f"""/ Pass-through until a real transform is needed: the batch is published as
-/ fetched. The example tables are what .qetl.transform checks the shape against.
-.qetl.transform.passthrough[`{src}_passthrough;`batch;0#.qpipe.source.{src}.fixture[];.qpipe.source.{src}.fixture[]];
-"""
+/ fetched. Its shape is {dataset}'s, `time` kept (the fixture carries it), taken
+/ from the plant rather than copied from the fixture (#1360); the example is
+/ what .qetl.transform checks it against.
+.qetl.transform.passthrough[`{src}_passthrough;`batch;.qetl.plant.shape `{dataset};.qpipe.source.{src}.fixture[]];
+"""  # noqa: E501
         return "", after, f"{src}_passthrough"
     name = f"{worker}_transform"
     inside = f"""

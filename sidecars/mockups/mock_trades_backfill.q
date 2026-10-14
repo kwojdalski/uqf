@@ -17,7 +17,7 @@ facts:{[batch]
 \d .
 
 / Published as generated.
-.qetl.transform.passthrough[`mock_trades_passthrough;`mock_trades;0#.qpipe.source.mock_trades.fixture[];.qpipe.source.mock_trades.fixture[]];
+.qetl.transform.passthrough[`mock_trades_passthrough;`mock_trades;.qetl.plant.shape `mock_trades;.qpipe.source.mock_trades.fixture[]];
 
 .qetl.job.bounded.define[`mock_trades_backfill;
     `source`dataset`width`transform`facts`procname`note!

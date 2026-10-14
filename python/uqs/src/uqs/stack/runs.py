@@ -25,6 +25,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from uqs.generated.q_facts import FIXTURE_TAG, REVISION_TAG
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 
@@ -179,15 +180,6 @@ def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
     if not moment.microsecond:
         return moment.isoformat()
     return f"{moment:%Y.%m.%dD%H:%M:%S}.{moment.microsecond:06d}000"
-
-
-#: What `.qetl.source.fixture_version` appends to the release a run on a
-#: source's fixture records under.
-FIXTURE_TAG = "~fixture"
-
-#: What `.qetl.job.bounded.runtime.run_version` puts between the release and
-#: a worker's declared output revision.
-REVISION_TAG = "@r"
 
 
 def untagged(version: str) -> str:
