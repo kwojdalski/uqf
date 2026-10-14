@@ -352,6 +352,57 @@ test_max_age_without_reference_readiness_still_drops_everything_old:{[t]
     (ns[nm;`score_ready]) t0+0D00:00:00.6;
     .qunit.assertEquals[exec time from ns[nm;`history];enlist t0+0D00:00:00.5;"wall readiness: unchanged"]};
 
+/ --- the as-of row kept by eviction is the latest by reference time (#1283) ---
+
+trefs:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); mid:`float$())
+
+/ each event priced at the latest mid, by the reference's own clock, at or before event time
+rtprice:{[e;r]
+    q:select sym, source_time:time, event_time:time, px from e;
+    j:aj[`sym`source_time;q;`sym`source_time xasc r];
+    select sym, event_time, px, ref:mid from j}
+
+define_rt_transform:{[]
+    if[`horizontest_rt in .qetl.transform.defined[]; :()];
+    .qetl.transform.define[`horizontest_rt;`inputs`output`fn`examples!(
+        `events`refs!(.horizontest.events;.horizontest.trefs);
+        .horizontest.priced;
+        .horizontest.rtprice;
+        enlist `inputs`expected!(
+            `events`refs!(([] time:enlist .horizontest.t0; sym:enlist `a; px:enlist 1f);
+                ([] time:enlist .horizontest.t0; source_time:enlist .horizontest.t0; sym:enlist `a; mid:enlist 1.5));
+            ([] sym:enlist `a; event_time:enlist .horizontest.t0; px:enlist 1f; ref:enlist 1.5)))];
+    }
+
+rtjob:{[nm;extra]
+    define_rt_transform[];
+    d:@[decl_for[nm];`transform`reference_time;:;(`horizontest_rt;`source_time)];
+    .qetl.job.stream.at_horizons[nm;d,extra];
+    `.horizontest.sent set ();
+    .qetl.job.stream.wire[nm;{[t;x] .horizontest.sent,:enlist (t;x); count x}];
+    nm}
+
+/ two quotes delivered out of source_time order: the 10:00:00 one first, a delayed 09:59:00 one second
+rt_quotes:{[] ([] time:t0+0D00:00:01 0D00:00:02; source_time:t0+0D00:00:00 -0D00:01:00; sym:`a`a; mid:1.1 0.9)}
+
+test_eviction_keeps_the_latest_reference_by_reference_time_not_arrival:{[t]
+    nm:rtjob[`hz_r1;enlist[`horizon]!enlist 0D00:00:10];
+    (ns[nm;`on_batch])[`hz_refs;rt_quotes[]];
+    (ns[nm;`on_batch])[`hz_events;([] time:enlist t0+0D00:00:30; sym:enlist `a; px:enlist 1f)];
+    (ns[nm;`score_ready]) t0+0D00:00:31;
+    .qunit.assertEquals[exec source_time from ns[nm;`history];enlist t0;"the 10:00:00 quote, not the last-arrived 09:59:00 one"];
+    (ns[nm;`score_ready]) t0+0D00:00:41;
+    .qunit.assertEquals[exec ref from last last sent;enlist 1.1;"the answer the full history gives"]};
+
+test_max_age_reference_readiness_keeps_the_latest_anchor_by_reference_time:{[t]
+    nm:rtjob[`hz_r2;`horizon`ready_on`max_age`expire_after!(0D00:00:10;`reference;0D00:00:05;0D00:05)];
+    (ns[nm;`on_batch])[`hz_refs;rt_quotes[]];
+    (ns[nm;`on_batch])[`hz_events;([] time:enlist t0+0D00:00:30; sym:enlist `a; px:enlist 1f)];
+    (ns[nm;`score_ready]) t0+0D00:00:31;
+    (ns[nm;`on_batch])[`hz_refs;([] time:enlist t0+0D00:00:41; source_time:enlist t0+0D00:00:41; sym:enlist `a; mid:enlist 3f)];
+    (ns[nm;`score_ready]) t0+0D00:00:42;
+    .qunit.assertEquals[exec ref from last last sent;enlist 1.1;"the anchor is the latest quote by source_time"]};
+
 / --- the quality gate (#1232) -----------------------------------------------
 
 / A quality gate that names the whole batch as offending when flagged, and

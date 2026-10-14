@@ -306,7 +306,9 @@ retain:{[d;hist;earliest]
     / anchor ready_on `reference needs (#959)
     if[(`max_age in key d) and not `reference=d`ready_on; :hist where rt>=cutoff];
     / the latest pre-cutoff row per key is still an as-of answer
-    latest:old last each value group (d`by)#hist old;
+    / by reference time, not arrival: out-of-order rows must not evict the true as-of row (#1283)
+    o:old iasc rt old;
+    latest:o last each value group (d`by)#hist o;
     hist asc (til[count hist] except old),latest}
 
 / Private: score every event that is ready by `now`, publish the rows, then
