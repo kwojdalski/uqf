@@ -307,13 +307,33 @@ etl_code:{[]
     fs:raze {[d] (d,"/"),/:string[f] where (string f:key hsym `$d) like "*.q"} each ("src/etl/transforms";"src/etl/workers";"src/etl/sources");
     fs!{[f] ls:read0 hsym `$f; ls where not "/"=first each ls} each fs}
 
+/ Whether a file is an installed bundle's copy: an operator's addition, not the
+/ tree's, listed in the ledger `uqs job` writes. CI installs the mockups
+/ bundle before the PeachQ lane, and a scaffolded worker passes its source
+/ fixture through, which is not this tree's code to hold to the rule.
+/ @param ledger the ledger's lines, empty when no bundle is installed
+/ @param path a file path
+/ @return 1b when the ledger names the path
+bundle_owned:{[ledger;path] any ledger like "*",path,"*"}
+
+/ The code of the files an installed bundle does not own.
+/ @param code a dictionary of file path (a string) -> its code lines
+/ @param ledger the bundle ledger's lines
+/ @return code without the ledger's files
+without_bundles:{[code;ledger]
+    keep:key[code] where not .wruntest.bundle_owned[ledger] each key code;
+    keep!code keep}
+
 / The workers whose dataset is a plant table but whose transform is declared
 / in a file that never asks .qetl.plant for a shape. Equal today is not
 / derived: a hand-written copy matches the plant until the day the plant
 / moves, and the structural check above cannot see it before then.
 / @return a list of strings, one per worker whose transform does not derive its output
 underived:{[]
+    lf:`$":src/etl/installed_bundles.json";
+    ledger:$[0<count key lf; read0 lf; ()];
     code:.wruntest.etl_code[];
+    code:.wruntest.without_bundles[code;ledger];
     r:{[code;w]
         cfg:.qetl.job.bounded.def w;
         if[not cfg[`dataset] in .qetl.plant.names[]; :""];
@@ -321,8 +341,16 @@ underived:{[]
         decl:"*`",string[cfg`transform],";*";
         homes:key[code] where {[decl;ls] any (ls like decl) and ((ls like "*define*") or ls like "*passthrough*")}[decl] each value code;
         derives:{[ls] any ls like "*.qetl.plant.*"} each code homes;
-        $[all derives; ""; (string w),": ",string[cfg`transform]," is declared in ",(", " sv homes)," without .qetl.plant"]}[code] each .wruntest.workers[];
+        $[(0=count homes) or all derives; ""; (string w),": ",string[cfg`transform]," is declared in ",(", " sv homes)," without .qetl.plant"]}[code] each .wruntest.workers[];
     r where 0<count each r}
+
+test_an_installed_bundles_file_is_not_the_trees_to_gate:{[t]
+    ledger:enlist "{\"mockups\": {\"files\": {\"src/etl/workers/mock_a.q\": \"x\"}}}";
+    .qunit.assertTrue[.wruntest.bundle_owned[ledger;"src/etl/workers/mock_a.q"];"a ledger-listed file is a bundle's"];
+    .qunit.assertTrue[not .wruntest.bundle_owned[ledger;"src/etl/workers/eq_orderbook_backfill.q"];"a tree file is not"];
+    .qunit.assertTrue[not .wruntest.bundle_owned[();"src/etl/workers/mock_a.q"];"no ledger, no bundle"];
+    code:("src/etl/workers/mock_a.q";"src/etl/workers/b.q")!(enlist "x";enlist "y");
+    .qunit.assertEquals[key .wruntest.without_bundles[code;ledger];enlist "src/etl/workers/b.q";"only the bundle's file is dropped"]};
 
 test_a_plant_table_worker_derives_its_output_from_the_plant:{[t]
     .qunit.assertEquals[.wruntest.underived[];();
