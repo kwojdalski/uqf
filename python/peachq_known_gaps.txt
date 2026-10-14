@@ -10,6 +10,10 @@ python/uqs/tests/test_columns.py::test_every_type_agrees_with_q  # PeachQ result
 python/uqs/tests/test_contract_surface.py::test_the_committed_baseline_matches_this_tree  # the q exporter loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 python/uqs/tests/test_contract_surface.py::test_the_export_is_deterministic  # the q exporter loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
+python/uqs/tests/test_qnames.py::test_the_config_env_name_is_what_q_computes  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_qnames.py::test_the_credential_variable_is_what_q_computes  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+python/uqs/tests/test_qnames.py::test_q_appends_the_tags_in_the_order_runs_strips_them  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
+
 python/uqs/tests/test_declarations_match_q.py::test_the_parser_reads_every_job_the_way_q_loads_it  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
 python/uqs/tests/test_etl_standalone_load.py::test_the_etl_tree_loads_outside_the_test_harness  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)

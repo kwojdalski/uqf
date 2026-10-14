@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import socket
 import subprocess
 import sys
@@ -184,26 +183,12 @@ def test_a_tagged_file_for_another_release_is_still_pending(tmp_path):
     assert poke_worker_status(tmp_path, WORKER, INSTANCE, EXPECT) is PokeOutcome.PENDING
 
 
-def test_the_tags_are_the_ones_the_q_runtime_appends():
-    """FIXTURE_TAG and REVISION_TAG mirror uqs.stack.runs (this package does
-    not depend on uqs), so, as with status_reader.STATES, each is held to
-    the q source that appends it - and to the order it appends them in."""
-
-    def quoted(pattern: str, src: str) -> str:
-        found = re.search(pattern, src)
-        assert found, f"the q source no longer reads the way this test does: {pattern}"
-        return found.group(1)
-
-    fixture_src = (ETL_CORE_Q / "source_credentials.q").read_text()
-    fixture_body = fixture_src[fixture_src.index("fixture_version:{") :]
-    assert quoted(r'`\$s,"([^"]+)"', fixture_body) == FIXTURE_TAG
-    runtime_src = (ETL_CORE_Q / "worker_runtime.q").read_text()
-    runtime_body = runtime_src[runtime_src.index("run_version:{") :]
-    assert quoted(r'string\[v\],"([^"]+)",string r', runtime_body) == REVISION_TAG
-    # run_version's own example: revised first, then tagged for the fixture.
-    example = quoted(r'run_version\[.*?\]\s+->\s+`\$"([^"]+)"', runtime_src)
-    assert example == f"v1{REVISION_TAG}2{FIXTURE_TAG}"
-    assert _untagged(example) == "v1"
+def test_untagged_strips_what_the_q_runtime_appends():
+    """The tags are q's, generated into this package's q_facts (#1368); the
+    order `run_version` appends them in is gated by its own @eg."""
+    assert _untagged(f"v1{REVISION_TAG}2{FIXTURE_TAG}") == "v1"
+    assert _untagged(f"v1{FIXTURE_TAG}") == "v1"
+    assert _untagged("v1") == "v1"
 
 
 def test_a_retry_of_the_same_range_ignores_a_file_written_before_it(tmp_path):

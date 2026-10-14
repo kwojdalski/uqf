@@ -22,13 +22,26 @@ from uqf_frontend.app import _coverage
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import KolaGateway
 from uqs.interpreter import PEACHQ, q_impl
+from uqs.stack.procs import VENDORED_LOAD_OVERLAY
 
-SERVER_SCRIPT = """
+# What gateway1 loads from src/ is declared once, in VENDORED_LOAD_OVERLAY. This
+# test stands in for gateway1, so it loads exactly that list (#1370): dropping
+# a file from the overlay now fails here instead of breaking /coverage at
+# runtime. The uqs_catalog.q entry is under ${UQF_SCRIPTS}, not src/, and
+# serves the catalog endpoints this server does not exercise.
+_ROOT = "${UQF_ROOT}/"
+GATEWAY_SRC_LOADS = [
+    path.removeprefix(_ROOT)
+    for path in VENDORED_LOAD_OVERLAY["gateway1"][1]
+    if path.startswith(_ROOT)
+]
+
+SERVER_SCRIPT = (
+    """
 setenv[`UQF_STATUS_DIR;"{status}"];
-\\l src/etl/core/status.q
-\\l src/etl/core/backfill_state.q
-\\l src/etl/core/intervals.q
-\\l src/etl/core/materialisation.q
+"""
+    + "".join(f"\\l {path}\n" for path in GATEWAY_SRC_LOADS)
+    + """
 / The ledger a worker would have persisted: the 13th and the 14th, v1.
 row:{{[f;t] ([] dataset:enlist `trades; partition:enlist `; source_version:enlist `v1;
     range_from:enlist f; range_to:enlist t; rows_published:enlist 1;
@@ -36,6 +49,7 @@ row:{{[f;t] ([] dataset:enlist `trades; partition:enlist `; source_version:enlis
 .qetl.job.bounded.state.durable_set[.qetl.coverage.ledger_path[];
     row[2026.09.13D00:00;2026.09.14D00:00],row[2026.09.14D00:00;2026.09.15D00:00]];
 """
+)
 
 
 @pytest.fixture(scope="module")

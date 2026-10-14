@@ -156,6 +156,9 @@ class CatalogResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     poll_seconds: int
+    #: How long the browser waits for any request - Settings.request_timeout,
+    #: served so the client does not keep its own copy (#1370).
+    request_timeout_seconds: int
     ok: bool
     gateway: Literal["up", "reloading", "unreachable", "wrong_process"]
     detail: str | None = None
@@ -392,6 +395,10 @@ class WorkerConfigResponse(BaseModel):
     #: True when an environment variable outranks the override just set, so
     #: the override has no effect until that variable is unset (#634).
     shadowed: bool
+    #: True when the override layer is what the process now reads. The server
+    #: says so because the layer's name is q's (`.qetl.cfg.override_layer`),
+    #: not something the browser should retype.
+    saved: bool
     #: The variable that wins, e.g. UQF_DRY_RUN, when shadowed.
     env_var: str | None
     note: str = (

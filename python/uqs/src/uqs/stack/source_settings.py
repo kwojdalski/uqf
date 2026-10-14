@@ -29,6 +29,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.model.qnames import credential_var
 from uqs.paths import SOURCE_DIR, UqsError, UqsPaths
 from uqs.stack.env import build_env
 
@@ -132,11 +133,6 @@ def read(path: Path, transports: tuple[str, ...]) -> list[Row]:
         seen[row.source] = line
         rows.append(row)
     return rows
-
-
-def credential_var(source: str) -> str:
-    """The per-source override, `.qetl.source.credential_var`."""
-    return f"UQF_SOURCE_CRED_{source.upper()}"
 
 
 def problems(row: Row, path_vars: dict[str, str], environ: dict[str, str]) -> list[str]:

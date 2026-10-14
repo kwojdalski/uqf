@@ -22,7 +22,8 @@ boot, elsewhere ps's lstart (see `process_identity`, #1167). A pid alone
 outlives the process: once the OS gives it to something else, `running` would say the feed
 is up and `stop` would SIGTERM a stranger (#1043). A pid whose identity no
 longer matches, or a file with no identity to check, is stale: it is never
-signalled.
+signalled. On Linux only the start ticks are compared: they are fixed at fork,
+while the argv can be recorded mid-exec, before the kernel has set it (#1398).
 
 `ps` prints the start time in the caller's locale and timezone, so the
 identity is always read under a fixed one: a feed started from an en_GB
@@ -149,6 +150,15 @@ class DetachedProcess:
         if recorded is None or not self._alive(recorded[0]):
             return False
         pid, identity = recorded
+        if identity.startswith("boot+"):
+            # Linux: the kernel's start ticks alone. They are set at fork and
+            # never change, and no two processes holding one pid share them.
+            # The argv beside them can be read before it exists: Popen returns
+            # once exec closes the child's close-on-exec fds, but the kernel
+            # sets the new argv only later in that exec, so a start read in
+            # between records ps's "[comm]" - and would disown its own feed
+            # on every later look (#1398).
+            return identity.split(" ", 1)[0] == _boot_ticks(pid)
         # The second read is a pid file from before #1055, in the caller's
         # environment: it still matches when read back in the same one.
         return bool(identity) and identity in (

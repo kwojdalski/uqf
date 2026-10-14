@@ -211,6 +211,7 @@ def create_app(
                 gateway="reloading",
                 detail=str(exc),
                 poll_seconds=ops.POLL_SECONDS["health"],
+                request_timeout_seconds=settings.request_timeout,
             )
         except GatewayUnavailable as exc:
             return HealthResponse(
@@ -218,6 +219,7 @@ def create_app(
                 gateway="unreachable",
                 detail=str(exc),
                 poll_seconds=ops.POLL_SECONDS["health"],
+                request_timeout_seconds=settings.request_timeout,
             )
         proctype = _reported_proctype(identity)
         # Only a POSITIVE reading of the wrong type is a refusal. A process
@@ -236,8 +238,14 @@ def create_app(
                     f".gw.*, which only a gateway has. Set UQF_FRONTEND_GATEWAY_PORT."
                 ),
                 poll_seconds=ops.POLL_SECONDS["health"],
+                request_timeout_seconds=settings.request_timeout,
             )
-        return HealthResponse(ok=True, gateway="up", poll_seconds=ops.POLL_SECONDS["health"])
+        return HealthResponse(
+            ok=True,
+            gateway="up",
+            poll_seconds=ops.POLL_SECONDS["health"],
+            request_timeout_seconds=settings.request_timeout,
+        )
 
     @app.get("/catalog", response_model=CatalogResponse)
     def get_catalog() -> CatalogResponse:

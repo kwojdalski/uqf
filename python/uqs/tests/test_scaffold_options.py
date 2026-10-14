@@ -28,7 +28,6 @@ from uqs.scaffold import jobs
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.columns import definition_columns, parse_columns, parse_raw_columns
 from uqs.scaffold.normalizer import normalizer
-from uqs.scaffold.templates import credential_var
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 CORE = UQF_ROOT / "src" / "etl" / "core"
@@ -239,16 +238,6 @@ def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
     if not t.default:
         assert f'credential_example:"SCAFFOLDED: e.g. {t.example}"' in body
     assert any(t.expects in n for n in plan.notes), "and what its credential is"
-
-
-def test_the_credential_variable_is_spelled_as_q_spells_it():
-    """q: `credential_var:{[source] "UQF_SOURCE_CRED_",upper string source}`."""
-    line = next(
-        ln for ln in CREDENTIALS_Q.read_text().splitlines() if ln.startswith("credential_var:")
-    )
-    prefix = re.search(r'"(\w+)",upper string source', line)
-    assert prefix, "credential_var no longer reads the way this test expects"
-    assert credential_var("duckdb_deals") == prefix.group(1) + "DUCKDB_DEALS"
 
 
 # ----------------------------------------------------------------- the command

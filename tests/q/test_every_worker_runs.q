@@ -265,4 +265,88 @@ test_every_worker_checkpoints_through_its_own_delegator:{[t]
     .qunit.assertEquals[count raze bad;0;
         "the cursor written through each delegator is the cursor the shell stores"]};
 
+/ --- one home for a plant table's shape (#1360) ---------------------------
+
+/ The columns and types of a table, as one comparable value: name and meta
+/ type character, in order. Attributes are the plant's and the RDB's business
+/ (.qetl.plant.shape strips them), so they are not compared.
+/ @param t a table
+/ @return a table of column and type
+signature:{[t] select c, t from meta t}
+
+/ How a transform output departs from the plant table it writes.
+/ .
+/ The plant has two conventions for a job's output, and a worker may follow
+/ either: `shape` (a writer that keeps `time` - eq_orderbook, the hdb_* bar
+/ workers) or `published` (the plant table minus `time`, which the HDB writer
+/ sets from the source's clock). Anything else is a hand-written copy that
+/ will not follow the plant when a column is added, retyped or reordered.
+/ @param output a transform's declared output table
+/ @param dataset the plant table the worker writes
+/ @return a short description of the departure, or an empty string when the output is either plant shape
+departure:{[output;dataset]
+    sig:signature output;
+    $[(sig~signature .qetl.plant.shape dataset) or sig~signature .qetl.plant.published dataset;
+      "";
+      string[dataset]," output is ",(", " sv string cols output),
+        " - neither .qetl.plant.shape nor .qetl.plant.published of it"]}
+
+/ The workers whose dataset is a plant table, with their departure from it.
+/ @return a list of strings, one per worker whose output is a hand-written copy
+departures:{[]
+    r:{[w]
+        cfg:.qetl.job.bounded.def w;
+        $[cfg[`dataset] in .qetl.plant.names[];
+          $[0<count d:departure[(.qetl.transform.def cfg`transform)`output;cfg`dataset]; (string w),": ",d; ""];
+          ""]} each .wruntest.workers[];
+    r where 0<count each r}
+
+/ The source lines of every .q file under src/etl, comments dropped.
+/ @return a dictionary of file path -> its code lines
+etl_code:{[]
+    fs:raze {[d] (d,"/"),/:string[f] where (string f:key hsym `$d) like "*.q"} each ("src/etl/transforms";"src/etl/workers";"src/etl/sources");
+    fs!{[f] ls:read0 hsym `$f; ls where not "/"=first each ls} each fs}
+
+/ The workers whose dataset is a plant table but whose transform is declared
+/ in a file that never asks .qetl.plant for a shape. Equal today is not
+/ derived: a hand-written copy matches the plant until the day the plant
+/ moves, and the structural check above cannot see it before then.
+/ @return a list of strings, one per worker whose transform does not derive its output
+underived:{[]
+    code:.wruntest.etl_code[];
+    r:{[code;w]
+        cfg:.qetl.job.bounded.def w;
+        if[not cfg[`dataset] in .qetl.plant.names[]; :""];
+        / No bracket in the pattern: `like` reads [ ] as a character class.
+        decl:"*`",string[cfg`transform],";*";
+        homes:key[code] where {[decl;ls] any (ls like decl) and ((ls like "*define*") or ls like "*passthrough*")}[decl] each value code;
+        derives:{[ls] any ls like "*.qetl.plant.*"} each code homes;
+        $[(0=count homes) or all derives; ""; (string w),": ",string[cfg`transform]," is declared in ",(", " sv homes)," without .qetl.plant"]}[code] each .wruntest.workers[];
+    r where 0<count each r}
+
+test_a_plant_table_worker_derives_its_output_from_the_plant:{[t]
+    .qunit.assertEquals[.wruntest.underived[];();
+        "declare the transform's output with .qetl.plant.shape or .qetl.plant.published, not a copy"]};
+
+test_a_workers_output_is_its_plant_tables_shape:{[t]
+    / `prepare` takes the target shape from the transform's declared output,
+    / which is only as good as its source. Three transforms hand-copied the plant schema
+    / (#1360) and each would have kept writing the old shape into HDB
+    / partitions after a column moved in plant_tables.q.
+    .qunit.assertEquals[.wruntest.departures[];();
+        "derive the output with .qetl.plant.shape or .qetl.plant.published"]};
+
+test_a_hand_copied_output_is_a_departure:{[t]
+    / The gate must be able to fail: each way a copy drifts.
+    base:.qetl.plant.published `crypto_market_data;
+    .qunit.assertEquals[.wruntest.departure[base;`crypto_market_data];"";"the derived output agrees"];
+    .qunit.assertEquals[.wruntest.departure[.qetl.plant.shape `eq_orderbook;`eq_orderbook];"";"the time-keeping convention agrees"];
+    retyped:update latency_count:`float$() from base;
+    reordered:(reverse cols base)#base;
+    extra:update added:`long$() from base;
+    dropped:(cols[base] except `trade_side)#base;
+    found:.wruntest.departure[;`crypto_market_data] each (retyped;reordered;extra;dropped);
+    .qunit.assertTrue[all 0<count each found;"a retyped, reordered, extended or shortened copy is each refused"];
+    .qunit.assertTrue[(first found) like "crypto_market_data output is *";"and the message names the table"]};
+
 \d .
