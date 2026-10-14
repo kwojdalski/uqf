@@ -27,6 +27,7 @@ from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import capabilities, runs, runtime
 from uqs.stack.backfill_wait import pid_alive
+from uqs.timefmt import finer_than_a_microsecond
 
 #: What a flag value may contain. torq.sh builds the start line into a string
 #: and `eval`s it, so anything a shell would interpret - a space, a `;`, a
@@ -93,29 +94,6 @@ def procname_for(worker: str) -> str:
 _Q_TIMESTAMP = re.compile(
     r"(\d{4})\.(\d{2})\.(\d{2})(?:D(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?"
 )
-
-#: The fraction of a second in either spelling - 06:00:00.123456789 in a q
-#: literal, 06:00:00.1234567Z or 06:00:00,1234567 in ISO-8601. Matched on the
-#: text, before parsing, because `datetime.fromisoformat` takes any number of
-#: digits here and keeps the first six without a word.
-_SECOND_FRACTION = re.compile(r"\d{2}:\d{2}:\d{2}[.,](\d+)")
-
-
-def finer_than_a_microsecond(text: str) -> bool:
-    """Whether `text` spells a non-zero digit past the sixth of its seconds'
-    fraction - the part a datetime cannot hold.
-
-    One rule for both spellings a bound takes, and for the frontend's ISO
-    bounds (uqf_frontend.queries, uqf_frontend.control). Refused rather than
-    rounded, by every caller: these are values someone typed, and a bound
-    moved either way - truncated short or widened out - is a different range
-    from the one they typed. (runs._as_bound rounds outwards instead because
-    its input is the ledger's own `.z.p`, which nobody typed, and it is
-    building a command that has to run.) Trailing zeros are not finer:
-    .123456000 is .123456.
-    """
-    m = _SECOND_FRACTION.search(text)
-    return m is not None and bool(m.group(1)[6:].strip("0"))
 
 
 def _from_q_literal(name: str, text: str) -> datetime | None:

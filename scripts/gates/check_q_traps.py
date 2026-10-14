@@ -254,18 +254,54 @@ def _python_files() -> list[Path]:
     return [REPO / q for q in paths if not q.startswith(EXCLUDED_PREFIXES)]
 
 
-#: A q table literal opens with `([]`. Deliberately the only thing treated as
-#: embedded q: it is unambiguous, it is where a column name is written, and it
-#: is exactly where the collision this rule exists for occurred. A broader
-#: heuristic - "contains a colon", "is passed to query()" - would start firing
-#: on English prose, and a documentation gate that cries wolf gets switched
-#: off rather than fixed.
-_TABLE_LITERAL = "([]"
+#: A q table literal opens with `([` - `([]` unkeyed, `([k:...]` keyed.
+#: Deliberately the only thing treated as embedded q: it is unambiguous, it is
+#: where a column name is written, and it is exactly where the collision this
+#: rule exists for occurred. A broader heuristic - "contains a colon", "is
+#: passed to query()" - would start firing on English prose, and a
+#: documentation gate that cries wolf gets switched off rather than fixed.
+_TABLE_LITERAL = "(["
 
-#: `name:` immediately after `([]` or after a `;` inside one - the positions a
-#: q table literal takes a COLUMN NAME, which is an assignment as far as q is
-#: concerned.
-_EMBEDDED_COLUMN = re.compile(r"(?:\(\[\]|;)\s*([a-zA-Z][a-zA-Z0-9_]*)\s*:")
+#: `name:` in a position a q table literal takes a COLUMN NAME, which is an
+#: assignment as far as q is concerned: right after `([]`, after `([` (a keyed
+#: literal's first key column), after the `]` that closes the key columns, or
+#: after a `;` inside one. A keyed literal throws `'assign` for a builtin in
+#: either half, key or value.
+_EMBEDDED_COLUMN = re.compile(r"(?:\(\[\]?|;|\])\s*([a-zA-Z][a-zA-Z0-9_]*)\s*:")
+
+#: What stands in for a value Python fills in at runtime - an f-string's
+#: `{...}`, or a non-literal operand of `+`. A plain name that is no builtin,
+#: so a placeholder in a column position is never reported, while the text on
+#: either side of it is still read as the one string q will receive.
+_PLACEHOLDER = "x"
+
+
+def _as_q_text(node: ast.AST) -> str | None:
+    """The string `node` builds, with each runtime value as `_PLACEHOLDER`.
+
+    A string constant, an f-string, or a `+` chain with at least one string
+    in it; None for anything else. An f-string's literal text after its first
+    `{...}` is a SEPARATE constant, and so is each operand of a `+`, so reading
+    constants one at a time misses a column name that is not in the same piece
+    as the `([` that opens the literal.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, str) else None
+    if isinstance(node, ast.JoinedStr):
+        return "".join(
+            part.value
+            if isinstance(part, ast.Constant) and isinstance(part.value, str)
+            else _PLACEHOLDER
+            for part in node.values
+        )
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _as_q_text(node.left), _as_q_text(node.right)
+        if left is None and right is None:
+            return None
+        return (left if left is not None else _PLACEHOLDER) + (
+            right if right is not None else _PLACEHOLDER
+        )
+    return None
 
 
 def rule_reserved_name_in_embedded_q(path: str, text: str) -> list[Finding]:
@@ -283,6 +319,10 @@ def rule_reserved_name_in_embedded_q(path: str, text: str) -> list[Finding]:
     `cols` was ALREADY in RISKY_PARAM_NAMES. The literal threw `'assign`
     against a live process, because a table literal's column names are
     assignments and the checker was not looking in Python.
+
+    Keyed literals count (`([k:..] v:..)` throws for a builtin in either
+    half), and so does q assembled from pieces - an f-string, or a `+` chain
+    of strings - which is read as the one string q receives (#1332).
 
     Only the column-name position is checked. A builtin READ inside an
     expression (`count each cols each tables`) is correct and common - it is
@@ -316,14 +356,20 @@ def rule_reserved_name_in_embedded_q(path: str, text: str) -> list[Finding]:
         ):
             docstrings.add(id(body[0].value))
 
+    # The pieces of an f-string or a `+` chain already read as part of the
+    # whole. `ast.walk` visits a parent before its children, so the whole is
+    # read first and its pieces are then skipped, not reported a second time.
+    read: set[int] = set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+        if not isinstance(node, ast.expr) or id(node) in read or id(node) in docstrings:
             continue
-        if id(node) in docstrings:
+        q_text = _as_q_text(node)
+        if q_text is None:
             continue
-        if _TABLE_LITERAL not in node.value:
+        read.update(id(sub) for sub in ast.walk(node))
+        if _TABLE_LITERAL not in q_text:
             continue
-        for match in _EMBEDDED_COLUMN.finditer(node.value):
+        for match in _EMBEDDED_COLUMN.finditer(q_text):
             name = match.group(1)
             if name not in RISKY_PARAM_NAMES:
                 continue

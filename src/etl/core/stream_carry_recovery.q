@@ -23,6 +23,26 @@ last_end_seen:{[job]
     if[()~key hsym `$p; :0Nd];
     @[{first (.qetl.job.bounded.state.durable_get x)`last_end_of_day};p;{[e] 0Nd}]}
 
+/ How many batches the publish seam has withheld (a check or the plant's
+/ contract): `withhold` returns :: like a publisher that sent nothing, so
+/ `snapshot` reads this to tell a withheld snapshot from a published one.
+withheld_n:0
+
+/ At the end of a day, record that a carrying job carried across it (#1072) -
+/ but only once its snapshot was published (#1307). A failed or withheld
+/ snapshot leaves the marker where it was, so a restart catches up from the
+/ earlier log, or says what is missing.
+/ @param dt the date that ended
+/ @param j the job's name
+/ @return 1b when the marker was recorded
+/ @eg .qetl.job.stream.carry_end_of_day[2026.10.09;`no_such_job]  / 0b: the snapshot failed, so no marker
+carry_end_of_day:{[dt;j]
+    ok:@[{snapshot x; 1b};j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]; 0b}[dt;j]];
+    if[not ok; :0b];
+    / A one-row table, not a bare date: PeachQ cannot read a `set atom back.
+    @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path[j];([] last_end_of_day:enlist dt)]; 1b}[dt];j;
+        {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]; 0b}[j]]}
+
 / The keys of a transport that can recover a carrying job across an end of day.
 recovery_keys:`earlier_days`plant_day`has_log
 
@@ -106,7 +126,7 @@ catch_up:{[job;tr;tbls;h]
 / @return 1b when an end of day was missed, after logging it as an ERROR
 / @eg .qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]
 missed_end_of_day:{[job;today]
-    if[`restored~first $[job in key carry_log; carry_log job; enlist `none]; :0b];
+    if[(first $[job in key carry_log; carry_log job; enlist `none]) in `restored`restored_full; :0b];
     if[job in key caught_up; if[caught_up job; :0b]];
     last_eod:last_end_seen[job];
     if[(null last_eod) or last_eod>=today-1; :0b];

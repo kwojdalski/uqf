@@ -393,6 +393,7 @@ qetl.job.stream,at_horizons,function,2,name decl
 qetl.job.stream,at_rolling,function,2,name decl
 qetl.job.stream,bars,dict,,
 qetl.job.stream,carried_to,dict,,
+qetl.job.stream,carry_end_of_day,function,2,dt j
 qetl.job.stream,carry_log,dict,,
 qetl.job.stream,carry_marker_path,function,1,job
 qetl.job.stream,catch_up,function,4,job tr tbls h
@@ -440,6 +441,7 @@ qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
+qetl.job.stream,withheld_n,value,,
 qetl.job.stream.bars,assign,function,3,width tc x
 qetl.job.stream.bars,close_ready,function,2,name now
 qetl.job.stream.bars,def,function,1,name

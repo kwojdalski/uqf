@@ -94,13 +94,12 @@ def scoped_hooks(config_text: str) -> list[tuple[str, str, str | None]]:
     dependencies and can run as a plain system hook. The config's shape is
     stable and this only needs three fields.
 
-    `exclude` is read as well as `files`, and that matters for honesty rather
-    than correctness: without it the per-hook diagnostic below counted the 5
-    vendored files under `lib/` that every hook excludes, and so reported "54
-    file(s)" for a gate that actually enforces on 49. The coverage assertion
-    was right either way, because it filters through LINT_EXEMPT separately -
-    but a diagnostic line that disagrees with the number being enforced is
-    the kind of small lie that costs someone an afternoon.
+    `exclude` is read as well as `files`, and both halves of the check apply
+    it. The per-hook diagnostic once counted the 5 vendored files under `lib/`
+    that every hook excludes, reporting "54 file(s)" for a gate that enforced
+    on 49. The coverage half ignored it for longer, and that was not cosmetic:
+    an exclude widened to `^(lib|python)/` took nearly all Python out of the
+    lint, test and type gates while coverage still read 396/396 (#1335).
     """
     hooks: list[tuple[str, str, str | None]] = []
     current: str | None = None
@@ -188,15 +187,27 @@ def main() -> int:
         ("test", TEST_HOOKS),
         ("type", TYPE_HOOKS),
     ):
-        patterns = [re.compile(p) for hook_id, p, _ in hooks if hook_id in gate_hooks]
-        if not patterns:
+        # A hook reaches a file its `files:` matches AND its `exclude:` does
+        # not. Reading `files:` alone reported 396/396 covered while an
+        # exclude of `^(lib|python)/` had taken 356 of them out of every gate
+        # (#1335) - a narrowed scope, the very thing this half exists to see.
+        scopes = [
+            (re.compile(p), re.compile(x) if x else None)
+            for hook_id, p, x in hooks
+            if hook_id in gate_hooks
+        ]
+        if not scopes:
             print(
                 f"  NO {gate_name.upper()} GATE  none of {gate_hooks} is configured",
                 file=sys.stderr,
             )
             ungated.extend(py_files)
             continue
-        missed = [f for f in py_files if not any(p.search(f) for p in patterns)]
+        missed = [
+            f
+            for f in py_files
+            if not any(m.search(f) and not (x and x.search(f)) for m, x in scopes)
+        ]
         print(
             f"check_hook_scopes: {len(py_files) - len(missed)}/{len(py_files)} "
             f"tracked .py file(s) covered by the {gate_name} gate {gate_hooks}"

@@ -59,9 +59,52 @@ def repo(tmp_path, monkeypatch):
 
 def test_a_change_the_gates_do_not_judge_needs_nothing(repo):
     base = sh(repo, "rev-parse", "HEAD")
-    head = commit(repo, "python/uqs/x.py", "y = 1\n")
+    head = commit(repo, "web/src/app.ts", "export const y = 1;\n")
     ok, why = check.report(base, head)
     assert ok and "no attestation needed" in why
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        # q-tests runs the ```q blocks in docs/ (#1334).
+        "docs/guide.md",
+        # contract-surface reads the process registry and Python (#1334).
+        "scripts/processes/process.csv",
+        "python/uqs/x.py",
+        # What the hooks compare against, not only what they run.
+        "tests/q/coverage_baseline.txt",
+        "docs/reference/surfaces/current/functions.csv",
+    ],
+)
+def test_a_change_a_kdbx_hook_runs_on_needs_an_attestation(repo, path):
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, path, "x\n")
+    ok, why = check.report(base, head)
+    assert not ok
+    assert path in why and "attest_kdbx.py" in why
+
+
+def test_what_is_judged_is_read_from_the_hooks_own_scopes():
+    """Every attested hook's `files:` less `exclude:` is judged - and nothing
+    else - so the scope is the hooks', not a second list kept here."""
+    scopes = check.judged_scopes(
+        "repos:\n  - repo: local\n    hooks:\n"
+        + "".join(
+            f"      - id: {hook}\n        files: '^only/{hook}/'\n        exclude: 'skip'\n"
+            for hook in attest.HOOKS
+        )
+    )
+    for hook in attest.HOOKS:
+        assert check.is_judged(f"only/{hook}/a.txt", scopes)
+        assert not check.is_judged(f"only/{hook}/skip.txt", scopes)
+    assert not check.is_judged("src/a.q", scopes)
+
+
+def test_an_attested_hook_without_a_scope_is_refused_not_guessed():
+    config = "repos:\n  - repo: local\n    hooks:\n      - id: q-tests\n        files: 'x'\n"
+    with pytest.raises(SystemExit, match="no `files:` scope for q-coverage"):
+        check.judged_scopes(config)
 
 
 def test_a_q_change_without_an_attestation_is_reported(repo):
@@ -104,6 +147,27 @@ def test_attest_refuses_a_dirty_tree(repo, monkeypatch):
     monkeypatch.setattr(attest, "REPO", repo)
     (repo / "README.md").write_text("changed\n")
     assert "uncommitted" in attest.refusal()
+
+
+def test_attest_refuses_an_untracked_file(repo, monkeypatch):
+    """The hooks run q over the working tree, so an untracked file they used
+    would be missing from the tree the trailer names (#1340)."""
+    monkeypatch.setattr(attest, "REPO", repo)
+    (repo / "src").mkdir()
+    (repo / "src" / "untracked_new.q").write_text("a:1\n")
+    why = attest.refusal()
+    assert why is not None
+    assert "untracked files (src/" in why
+
+
+def test_attest_allows_an_ignored_file(repo, monkeypatch):
+    monkeypatch.setattr(attest, "REPO", repo)
+    commit(repo, ".gitignore", "build/\n")
+    (repo / "build").mkdir()
+    (repo / "build" / "out.q").write_text("a:1\n")
+    fake = type("T", (), {"check_interpreter": staticmethod(lambda: "kdbx")})
+    monkeypatch.setattr(attest, "_test_py", lambda: fake)
+    assert attest.refusal() is None
 
 
 def test_attest_refuses_an_interpreter_that_is_not_kdbx(repo, monkeypatch):

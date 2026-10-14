@@ -340,7 +340,7 @@ def _require_utc(name: str, raw: str) -> dt.datetime:
     digits of a finer fraction without a word - a range 789 ns short of the
     one the caller sent, recorded as covered.
     """
-    from uqs.stack.backfill import finer_than_a_microsecond
+    from uqs.timefmt import finer_than_a_microsecond
 
     if finer_than_a_microsecond(raw):
         raise ValidationFailed(
