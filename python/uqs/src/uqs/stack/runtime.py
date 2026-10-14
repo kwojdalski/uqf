@@ -18,7 +18,6 @@ from typing import Any
 
 from uqs.interpreter import q_command, q_interpreter
 from uqs.logger import get_logger
-from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive, deployment, gateway_access, qtree, start_policy
 from uqs.stack import procs as stack_procs
@@ -26,6 +25,7 @@ from uqs.stack import render as stack_render
 from uqs.stack.carriable import check_carriable
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
+from uqs.stack.hdb_types import declared_schema
 from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import effective_process_rows
 from uqs.stack.reporter import write_reporter_config
@@ -147,14 +147,14 @@ def bootstrap(
     # every runtime keeps it. Its gateway1 keeps the vendored access list, so
     # there is none to write.
     if not paths.runtime_declaration.overlays:
-        shutil.copyfile(paths.torqapphome / "database.q", paths.generated_schema)
+        paths.generated_schema.write_text(declared_schema(paths))
     else:
         # gateway1's and sctp1's access lists, and the data-access table list
         # the rdbs, hdbs and gateways are started with (stack/gateway_access.py).
         gateway_access.write(paths)
         # Same extend-never-edit approach as process.csv above, for stp1's
         # -schemafile (see _generated_schema_content/_composed_rows).
-        paths.generated_schema.write_text(_generated_schema_content(paths))
+        paths.generated_schema.write_text(declared_schema(paths))
         # Same again for DQE's query list (stack/dqe.py), and for reporter1's checks,
         # validated against this deployment, not the site's reporter.csv (stack/reporter.py).
         write_dqe_config(paths)
@@ -254,20 +254,20 @@ def run_torq_sh(
 
 
 def start(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
-    """`selected=` a profile's resolved set, `capture=` as run_torq_sh."""
+    """`selected=` a profile's resolved set; `capture=`, `timeout=` as run_torq_sh."""
     kw.setdefault("capture", False)
     return run_torq_sh(paths, ["start", procs], base_port=base_port, **kw)
 
 
-def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False):
+def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
     stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
-    return run_torq_sh(paths, ["stop", procs], base_port=base_port, capture=capture)
+    kw.setdefault("capture", False)
+    return run_torq_sh(paths, ["stop", procs], base_port=base_port, **kw)
 
 
-def restart(
-    paths: UqsPaths, procs: str = "all", base_port: int | None = None, capture: bool = False
-):
-    return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
+def restart(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
+    kw.setdefault("capture", False)
+    return run_torq_sh(paths, ["restart", procs], base_port=base_port, **kw)
 
 
 def summary(

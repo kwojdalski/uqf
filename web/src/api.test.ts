@@ -1,5 +1,9 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  adoptRequestTimeout,
+  request,
+  requestTimeout,
   filterValue,
   validateRange,
   type Column,
@@ -99,4 +103,20 @@ it("takes a timestamp to the nanosecond, and orders a range by it", () => {
       range_to: "2026-10-14T12:00:00.000001233+02:00",
     }),
   ).toThrow(/after/);
+});
+it("takes its request timeout from what /health serves, not a copy of its own (#1370)", async () => {
+  const timeout = vi.spyOn(AbortSignal, "timeout");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ ok: true, request_timeout_seconds: 90 })),
+  );
+  expect(requestTimeout()).toBe(DEFAULT_REQUEST_TIMEOUT_MS);
+  await request("/health", new AbortController().signal);
+  expect(requestTimeout()).toBe(90000);
+  await request("/health", new AbortController().signal);
+  expect(timeout).toHaveBeenLastCalledWith(90000);
+  adoptRequestTimeout(undefined);
+  adoptRequestTimeout(0);
+  expect(requestTimeout()).toBe(90000);
+  adoptRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MS / 1000);
 });

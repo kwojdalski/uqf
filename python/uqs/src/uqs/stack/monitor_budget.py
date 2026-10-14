@@ -19,7 +19,9 @@ from collections.abc import Iterable
 
 from uqs.logger import get_logger
 from uqs.model import profiles
+from uqs.model.pipeline import PipelineKind
 from uqs.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
+from uqs.model.registry import PIPELINES
 from uqs.paths import UqsPaths
 
 log = get_logger(__name__)
@@ -41,7 +43,14 @@ log = get_logger(__name__)
 # then `error` - reporting a job that SUCCEEDED as a fault, permanently.
 # Absence is the expected end state for a bounded worker, so the thing to
 # monitor is its run record, not its heartbeat.
-MONITOR_EXTRA_CONNECTIONS = ("metrics",)
+#
+# Derived from the registry, not typed: it is the proctype of every standing
+# pipeline (everything but a backfill), so a change to `Pipeline.proctype`
+# cannot silently stop heartbeats being collected (#1370). `feed` comes along
+# and is a no-op where the vendored list already has it.
+MONITOR_EXTRA_CONNECTIONS = tuple(
+    sorted({p.proctype for p in PIPELINES if p.kind is not PipelineKind.BACKFILL})
+)
 
 # The licence's per-process connection cap and the inbound slots held back
 # below it are the same two numbers the plant is budgeted with, so they are

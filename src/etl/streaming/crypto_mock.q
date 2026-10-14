@@ -244,9 +244,14 @@ publish_fills:{[horizon;row]
                 .qpipe.job.crypto_mock.next_id[row`venue]]]}[row] each decided;
     count decided}
 
-/ The tick length, in seconds - the horizon the fill hazards are converted
-/ over. Kept beside the declaration's period, which it must match.
-tick_seconds:1f
+/ The timer period, written once: the declaration below uses it, and
+/ tick_seconds is derived from it, so changing the period cannot leave the
+/ fill hazards converted over a different horizon (which would silently change
+/ the simulated fill rate).
+period:0D00:00:01.000
+
+/ The tick length, in seconds - the horizon the fill hazards are converted over.
+tick_seconds:(`float$period)%1e9
 
 / Walk the market, publish its book, then the fills against it.
 / .
@@ -265,7 +270,7 @@ on_timer:{[]
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;
-    0D00:00:01.000;
+    .qpipe.job.crypto_mock.period;
     .qpipe.job.crypto_mock.on_timer;
     "stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one";
     enlist `last_id;

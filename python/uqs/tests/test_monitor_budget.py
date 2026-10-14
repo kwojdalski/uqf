@@ -16,7 +16,9 @@ from __future__ import annotations
 
 from typing import cast
 
+from uqs.model.pipeline import PipelineKind
 from uqs.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
+from uqs.model.registry import PIPELINES
 from uqs.paths import UqsPaths
 from uqs.stack import monitor_budget, procs
 from uqs.stack.monitor_budget import (
@@ -108,6 +110,17 @@ def test_no_cap_keeps_every_subscription():
     """On PeachQ (licence_limit() None) monitor1 watches the whole fleet."""
     connections = ["rdb", "metrics", "sortworker", "reporter"]
     assert monitor_connection_plan(connections, _rows(rdb=40), None) == (connections, [])
+
+
+def test_the_extra_connections_cover_every_standing_pipeline_proctype():
+    """Heartbeats are collected only for proctypes monitor1 subscribes to, so
+    the extras follow what `Pipeline.proctype` returns (#1370). A backfill is
+    the one kind deliberately absent: its heartbeat would outlive the job."""
+    standing = {p.proctype for p in PIPELINES if p.kind is not PipelineKind.BACKFILL}
+    backfill = {p.proctype for p in PIPELINES if p.kind is PipelineKind.BACKFILL}
+    assert standing and backfill
+    assert standing <= set(monitor_budget.MONITOR_EXTRA_CONNECTIONS)
+    assert not backfill & set(monitor_budget.MONITOR_EXTRA_CONNECTIONS)
 
 
 # ------------------------------------------------- reporting what is dropped (#620)
