@@ -370,12 +370,13 @@ def create_app(
         see status.py on the authority boundary this deliberately does not cross.
         """
         authorise(request)
-        statuses, unreadable = status.read_dir(settings.status_dir)
+        directory = status.status_directory(settings)
+        statuses, unreadable = status.read_dir(directory)
         return BackfillStatusResponse(
             summary=status.summarise(statuses),
             workers=[_worker_status_out(s) for s in statuses],
             unreadable=unreadable,
-            source=str(settings.status_dir) if settings.status_dir else None,
+            source=str(directory) if directory else None,
             poll_seconds=ops.POLL_SECONDS["backfill"],
         )
 
@@ -551,18 +552,13 @@ def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
 
 
 def _iso(row: dict[str, Any]) -> IntervalOut:
-    return IntervalOut(
-        range_from=_utc(row["range_from"]).isoformat(), range_to=_utc(row["range_to"]).isoformat()
-    )
-
-
-def _utc(value: dt.datetime) -> dt.datetime:
-    """A naive timestamp from q, labelled UTC - everything is UTC internally.
-
-    kola hands back naive datetimes for a timestamp column and q stores UTC,
-    so this is a re-labelling rather than a conversion.
-    """
-    return value if value.tzinfo is not None else value.replace(tzinfo=dt.UTC)
+    """An interval's bounds as the Desk shows a timestamp (`_wire`): to the
+    nanosecond, where `datetime.isoformat` stopped at the microsecond and
+    read two `.z.p` bounds 765 ns apart as one instant (#1371). A row from
+    `_rows` already is; any other is put through `_wire` too."""
+    if not all(isinstance(row[k], str) for k in ("range_from", "range_to")):
+        row = _wire(pl.DataFrame([row]))[0]
+    return IntervalOut(range_from=row["range_from"], range_to=row["range_to"])
 
 
 def _coverage(
@@ -593,13 +589,14 @@ def _coverage(
     if range_from is not None and range_to is not None:
         start = queries.coerce(range_from, catalog.QType.TIMESTAMP, "range_from", as_list=False)
         end = queries.coerce(range_to, catalog.QType.TIMESTAMP, "range_to", as_list=False)
-        if not end > start:
+        requested = _wire(pl.DataFrame({"range_from": start, "range_to": end}))[0]
+        if not (end > start).item():
             from uqf_frontend.errors import ValidationFailed
 
             raise ValidationFailed(
-                f"an interval must be non-empty and forward-going, got [{start}, {end})"
+                "an interval must be non-empty and forward-going, got "
+                f"[{requested['range_from']}, {requested['range_to']})"
             )
-        requested = {"range_from": start, "range_to": end}
         missing = _rows(gateway.call(queries.GAPS, start, end, raw))
 
     return CoverageResponse(
@@ -673,6 +670,15 @@ INFINITY = {1: "inf", -1: "-inf"}
 #: 0Wn as nanoseconds; -0Wn is its negation and 0Nn, one below, is null.
 _SPAN_INFINITY = 2**63 - 1
 
+#: 0Wp and -0Wp as kola hands them over, in nanoseconds since 1970: the first
+#: held at the widest a polars datetime goes, the second shifted from q's
+#: 2000 epoch.
+_STAMP_INFINITY = {2**63 - 1: 1, -(2**63 - 1) + 946_684_800 * 10**9: -1}
+
+#: A timestamp on the wire: UTC, to the nanosecond. A Python datetime stops
+#: at the microsecond (#1371).
+_STAMP_TEXT = "%Y-%m-%dT%H:%M:%S.%9fZ"
+
 
 def _rows(result: Any) -> list[dict[str, Any]]:
     """Normalise a kola result into JSON-serialisable rows.
@@ -702,12 +708,31 @@ def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
     An infinity - a float's 0w or -0w, an integral column's 0W or -0W, which
     .uqf.browse sends as floats because kola makes them null, or a timespan's
     0Wn or -0Wn - goes as INFINITY, rather than as the null JSON would make
-    it (#1330).
+    it (#1330); so does a timestamp's 0Wp or -0Wp, rather than as the dates
+    in 2262 and 1707 its bits spell.
+
+    A timestamp goes as UTC text to the nanosecond (_STAMP_TEXT). As a Python
+    datetime it stopped at the microsecond, so two `.z.p` stamps 765 ns
+    apart were sent as one instant, and the value shown could not be typed
+    back into a filter (#1371).
     """
     spans = [name for name, kind in frame.schema.items() if isinstance(kind, pl.Duration)]
     floats = [name for name, kind in frame.schema.items() if kind.is_float()]
     frame = frame.with_columns(pl.col(name).dt.total_nanoseconds() for name in spans)
+    stamps = {}
+    for name, kind in frame.schema.items():
+        if isinstance(kind, pl.Datetime):
+            column = pl.col(name)
+            if kind.time_zone is not None:
+                column = column.dt.convert_time_zone("UTC").dt.replace_time_zone(None)
+            nanoseconds = frame.select(column.dt.cast_time_unit("ns").cast(pl.Int64)).to_series()
+            stamps[name] = nanoseconds.replace_strict(_STAMP_INFINITY, default=None)
+            frame = frame.with_columns(column.dt.cast_time_unit("ns").dt.to_string(_STAMP_TEXT))
     rows = frame.to_dicts()
+    for name, sign in stamps.items():
+        for row, infinite in zip(rows, sign, strict=True):
+            if infinite is not None:
+                row[name] = INFINITY[infinite]
     infinite = [name for name in floats if frame.get_column(name).is_infinite().any()] + [
         name for name in spans if (frame.get_column(name).abs() == _SPAN_INFINITY).any()
     ]

@@ -7,30 +7,22 @@ list twice.
 
 The file is *generated* by ``uqs.stack.runtime.bootstrap()`` from
 vendored inputs plus uqf's own additions, and its port column carries
-unresolved placeholders: ``{KDBBASEPORT}`` or ``{KDBBASEPORT}+N``. Resolving
-them here duplicates a few lines of the orchestrator rather than importing it,
-deliberately: the placeholder grammar is two forms wide, and this is the path
-every fleet-health poll takes.
-
-This module's header used to state a stronger rule - that the package must not
-depend on ``uqs`` at all - and that is no longer true.
-``control.py`` depends on it, because starting a process and writing a
-process.csv override are its work and reimplementing them would make a second
-writer to one file. The narrow reason still holds and is why this module keeps
-its own resolver: a dependency is not worth taking for two lines of regex on a
-read path. The broad rule was overtaken by the write surface.
+unresolved placeholders: ``{KDBBASEPORT}``, ``{KDBBASEPORT}+N``, or any other
+``{NAME}`` with an offset. They are resolved by ``uqs.portexpr`` - the one
+reader of that grammar, shared with the orchestrator's own resolver and the
+port-occupancy check. It is a leaf (it imports nothing else from ``uqs``), so
+this fleet-health path, which every poll takes, still does not load the
+orchestrator. A variable this package cannot know the value of resolves to
+None, reported as undetermined, rather than to the base port.
 """
 
 from __future__ import annotations
 
 import csv
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
-#: ``{NAME}`` optionally followed by ``+N`` or ``-N``. The same grammar
-#: uqs.stack.procs' own _BRACE_ARITH_RE accepts.
-_BRACE_ARITH = re.compile(r"^\{(\w+)\}([+-]\d+)?$")
+from uqs import portexpr
 
 
 @dataclass(frozen=True)
@@ -58,16 +50,7 @@ def resolve_port(raw: str, base_port: int) -> int | None:
     Returns None rather than raising: one unresolvable row must not make the
     whole fleet view unavailable. The caller reports it as undetermined.
     """
-    raw = (raw or "").strip()
-    if not raw:
-        return None
-    if raw.isdigit():
-        return int(raw)
-    m = _BRACE_ARITH.match(raw)
-    if m is None:
-        return None
-    offset = int(m.group(2)) if m.group(2) else 0
-    return base_port + offset
+    return portexpr.resolve(raw, {"KDBBASEPORT": str(base_port)})
 
 
 def read(path: Path, base_port: int) -> list[DeclaredProcess]:

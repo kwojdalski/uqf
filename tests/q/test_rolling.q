@@ -8,6 +8,10 @@
 
 \d .rollingtest
 
+/ The jobs this suite defines are process-global; leave the registry as found (#1375).
+beforeNamespace_save_jobs:{[] .testutil.save_stream_jobs[`.rollingtest]}
+afterNamespace_restore_jobs:{[] .testutil.restore_stream_jobs[`.rollingtest]}
+
 t0:2026.10.09D10:00:00
 
 / The clock the jobs read, which the tests move.

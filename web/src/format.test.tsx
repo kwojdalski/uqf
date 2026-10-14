@@ -125,3 +125,27 @@ it("shows an infinity as one, distinct from a missing value", () => {
   // A symbol spelled "inf" is a symbol, not an infinity.
   expect(cells).toEqual(["∞", "-∞", "∞", "inf", "—"]);
 });
+
+it("shows a timestamp's nine digits, and its infinities as infinities", () => {
+  // #1371: the server sends a timestamp to the nanosecond, and 0Wp / -0Wp
+  // as infinities rather than as dates in 2262 and 1707.
+  render(
+    <Table
+      rows={[
+        { time: "2026-10-14T10:00:00.000001234Z", at: "inf" },
+        { time: "2026-10-14T10:00:00.000001999Z", at: "-inf" },
+      ]}
+      decimals={{ time: 9, at: 3 }}
+      types={{ time: "timestamp", at: "timestamp" }}
+    />,
+  );
+  const cells = [...document.querySelectorAll("td")].map(
+    (td) => td.textContent,
+  );
+  expect(cells).toEqual([
+    "2026-10-14T10:00:00.000001234Z",
+    "∞",
+    "2026-10-14T10:00:00.000001999Z",
+    "-∞",
+  ]);
+});
