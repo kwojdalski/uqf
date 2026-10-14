@@ -172,6 +172,71 @@ def test_a_timespan_filter_reaches_q_to_the_nanosecond(browse_port, op, value, m
     assert list(gw.call(SPAN_FILTER, op, v)) == matched
 
 
+#: A `.z.p`-stamped column, and a where clause built from one
+#: .uqf.browse_pair - the filter getdata would apply.
+STAMP_FILTER = """{[o;v]
+    t:([] p:2026.10.14D10:00:00.000001 + 0 1234 1999 2000);
+    p:.uqf.browse_pair[o;v];
+    exec "j"$p-2026.10.14D10:00:00.000001 from ?[t;enlist (p 0;`p;p 1);0b;()]}"""
+
+
+@pytest.mark.parametrize(
+    ("op", "value", "matched"),
+    [
+        ("eq", "2026-10-14T10:00:00.000002234Z", [1234]),
+        ("lt", "2026-10-14T12:00:00.000002999+02:00", [0, 1234]),
+        ("ge", "2026-10-14T10:00:00.000002999Z", [1999, 2000]),
+        ("in", ["2026-10-14T10:00:00.000002234Z", "2026-10-14T10:00:00.000002999Z"], [1234, 1999]),
+    ],
+)
+def test_a_timestamp_filter_reaches_q_to_the_nanosecond(browse_port, op, value, matched):
+    """#1371: a timestamp filter went to q as a datetime, which stops at the
+    microsecond, and since #1317 a finer one was refused - so the time the
+    Desk showed for a `.z.p`-stamped row could not be asked for. It now
+    crosses kola as nanoseconds, and .uqf.browse compares with the column
+    exactly."""
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.queries import coerce
+
+    v = coerce(value, QType.TIMESTAMP, "p", as_list=op == "in")
+    gw = KolaGateway(Settings(port=browse_port))
+    assert list(gw.call(STAMP_FILTER, op, v)) == matched
+
+
+def test_a_timestamp_bound_sets_the_read_window_to_the_nanosecond(browse_port):
+    """The `time` filters also bound getdata's window (browse_window), which
+    a one-item timestamp vector must not turn into a vector."""
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.queries import coerce
+
+    lo = coerce("2026-10-14T10:00:00.000001234Z", QType.TIMESTAMP, "time", as_list=False)
+    hi = coerce("2026-10-14T10:00:00.000001999Z", QType.TIMESTAMP, "time", as_list=False)
+    gw = KolaGateway(Settings(port=browse_port))
+    window = gw.call("{[a;b] .Q.s1 .uqf.browse_window[`time`time;`ge`lt;(a;b);1D;.z.p]}", lo, hi)
+    assert window == "2026.10.14D10:00:00.000001234 2026.10.14D10:00:00.000001999"
+
+
+def test_a_timestamp_reaches_the_browser_to_the_nanosecond(browse_port):
+    """#1371: through real kola and _rows, two `.z.p` stamps 765 ns apart
+    stay apart, and 0Wp/-0Wp go as infinities rather than as the dates of
+    2262 and 1707 their bit patterns spell."""
+    from uqf_frontend.app import _rows
+
+    gw = KolaGateway(Settings(port=browse_port))
+    got = gw.call(
+        "{[unused] ([] p:2026.10.14D10:00:00.000001234 2026.10.14D10:00:00.000001999,"
+        '("p"$0W -0W),0Np)}',
+        0,
+    )
+    assert _rows(got) == [
+        {"p": "2026-10-14T10:00:00.000001234Z"},
+        {"p": "2026-10-14T10:00:00.000001999Z"},
+        {"p": "inf"},
+        {"p": "-inf"},
+        {"p": None},
+    ]
+
+
 def test_infinities_reach_the_browser_as_infinities_not_nulls(browse_port):
     """#1330: kola turns a long's 0W into null, and pydantic writes a float's
     inf as null, so an infinite level showed as a missing one. Through

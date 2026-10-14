@@ -1,9 +1,10 @@
 """Time-text rules shared with readers that must not load the orchestrator.
 
 A leaf: this module imports nothing from `uqs`, so importing it costs one
-regex. uqf_frontend's read path (queries.py) calls it on every timestamp
-filter, and a module that pulled in `uqs.stack` would load the process-launch
-surface - and any import-time failure in it - onto a read-only `/query` (#1326).
+regex. uqf_frontend.control calls it on a backfill's bounds, and a module that
+pulled in `uqs.stack` would load the process-launch surface - and any
+import-time failure in it - onto the frontend (#1326). Its read path
+(queries.py) takes nanoseconds and no longer needs it (#1371).
 python/uqs/tests/test_timefmt.py holds it to that.
 """
 
@@ -23,7 +24,7 @@ def finer_than_a_microsecond(text: str) -> bool:
     fraction - the part a datetime cannot hold.
 
     One rule for both spellings a bound takes (uqs.stack.backfill), and for
-    the frontend's ISO bounds (uqf_frontend.queries, uqf_frontend.control).
+    the frontend's ISO bounds (uqf_frontend.control).
     Refused rather than rounded, by every caller: these are values someone
     typed, and a bound moved either way - truncated short or widened out - is
     a different range from the one they typed. (runs._as_bound rounds
