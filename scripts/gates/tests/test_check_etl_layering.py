@@ -10,6 +10,7 @@ bounded_worker.q and uptime.q, and nothing else.
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -98,3 +99,29 @@ def test_the_transport_file_may_speak_http_and_a_comment_may_name_it(tmp_path):
         },
     )
     assert layering.http_reach(root) == []
+
+
+@pytest.mark.parametrize("sub", ["workers", "reactions"])
+def test_core_reaching_into_a_declaration_is_flagged(tmp_path, sub):
+    # #1333: reactions/ was not a declaring directory, so core could reach a
+    # reaction's namespace and the gate passed.
+    root = _tree(
+        tmp_path,
+        {
+            f"src/etl/{sub}/job.q": "\\d .qpipe.job.job\ncfg:1\n\\d .\n",
+            "src/etl/core/react.q": "reach:{.qpipe.job.job.cfg}\n",
+        },
+    )
+    (hit,) = layering.core_reach(root)
+    assert hit.startswith("src/etl/core/react.q:1: core reaches into .qpipe.job.job")
+    assert f"src/etl/{sub}/job.q" in hit
+
+
+def test_every_directory_uqs_scaffolds_into_is_a_declaring_one():
+    # The directories `uqs job new` writes a declaration into, from the one
+    # place uqs keeps them, read as text so this does not need uqs installed.
+    paths = (layering.REPO / "python/uqs/src/uqs/paths.py").read_text()
+    scaffolded = set(re.findall(r'^\w+_DIR = ETL_DIR / "(\w+)"', paths, re.MULTILINE))
+    assert {"sources", "workers", "streaming", "reactions"} <= scaffolded
+    declaring = {d.name for d in layering.declaring_dirs()}
+    assert scaffolded <= declaring

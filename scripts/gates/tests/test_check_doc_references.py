@@ -117,6 +117,24 @@ def test_an_unknown_namespace_is_counted_not_flagged(scan):
     assert unverifiable == {".qtorq": 2}
 
 
+@pytest.mark.parametrize("ref", ["`.qetl.coverag.gaps[x]`", "`.qetl.job.boundd.define[n;d]`"])
+def test_a_misspelled_namespace_under_a_carried_root_is_reported(scan, ref):
+    # #1337: the namespace, not the name, is what went stale. The surface
+    # carries `.qetl`, so `.qetl.coverag` is a typo, not a blind spot.
+    problems, unverifiable = scan(f"see {ref}\n")
+    assert len(problems) == 1
+    assert "namespace" in problems[0] and "does not exist" in problems[0]
+    assert unverifiable == {}
+
+
+def test_a_job_namespace_a_guide_invents_stays_unverifiable(scan):
+    # `.qpipe.job.<name>` is named by each declaration, and a guide walking
+    # through a new job names one that does not exist yet.
+    problems, unverifiable = scan("`.qpipe.job.spreadmon.on_batch` and `.qpipe.io.mine`\n")
+    assert problems == []
+    assert unverifiable == {".qpipe.job.spreadmon": 1, ".qpipe.io": 1}
+
+
 def test_nested_modules_and_their_containers_are_verified(scan):
     problems, unverifiable = scan("`.qetl.cfg`, `.qetl.cfg.audit`, `.qetl.job`, `.qpipe.job`\n")
     assert problems == []
