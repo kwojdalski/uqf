@@ -74,11 +74,19 @@ test_the_flags_alone_set_the_mode_and_report_the_strategy_in_force:{[t]
 / @param extra the flags after the range, as one string
 / @param envs "VAR=value " prefixes for the child's environment
 / @return (output lines; the scratch HDB root; the exit code)
-run_dev:{[extra;envs]
+run_dev:{[extra;envs] .backfillproctest.run_dev_for["demo_deals_backfill";"2026.09.13D00:00:00.000000000";extra;envs]}
+
+/ run_dev for any worker and start of range (the end stays 2026.09.14D00:00).
+/ @param wk the worker name
+/ @param start the range start, as a timestamp literal
+/ @param extra the flags after the range, as one string
+/ @param envs "VAR=value " prefixes for the child's environment
+/ @return (output lines; the scratch HDB root; the exit code)
+run_dev_for:{[wk;start;extra;envs]
     root:first system "mktemp -d";
     cmd:"env -u UQF_MODE -u UQF_ON_CONFLICT ",envs,"UQF_STATUS_DIR=",root,"/st ",
         $[""~getenv `QCMD; "q"; getenv `QCMD],
-        " scripts/dev/run_backfill.q -worker demo_deals_backfill -version v2 -from 2026.09.13D00:00:00.000000000 -to 2026.09.14D00:00:00.000000000 -fixture ",
+        " scripts/dev/run_backfill.q -worker ",wk," -version v2 -from ",start," -to 2026.09.14D00:00:00.000000000 -fixture ",
         extra," -hdb ",root,"/hdb < /dev/null > ",root,"/out.txt 2>&1; echo $?";
     code:"J"$first system cmd;
     / the child's own logging goes to the file: q's stdout capture misses it
@@ -92,6 +100,13 @@ test_a_dev_run_with_mode_plan_writes_nothing_to_the_hdb:{[t]
     .qunit.assertEquals[r 2;0;"a plan is a clean exit"];
     .qunit.assertFalse[.backfillproctest.hdb_written r 1;"the -hdb root is untouched by a read-only plan"];
     .qunit.assertTrue[any (r 0) like\: "*plan - nothing opened, nothing written*";"and says what it did"]}
+
+test_a_dev_run_refuses_a_plan_over_an_unaligned_range_cleanly:{[t]
+    r:.backfillproctest.run_dev_for["hdb_exec_bars_backfill";"2026.09.13D00:00:30.000000000";"-mode plan";""];
+    .qunit.assertEquals[r 2;2;"a refusal exits 2, as the flag refusals do"];
+    .qunit.assertTrue[any (r 0) like\: "run_backfill: init: *";"one refusal line, in the launcher's voice"];
+    .qunit.assertTrue[any (r 0) like\: "*must be multiples of*";"naming the cause"];
+    .qunit.assertFalse[any (r 0) like\: "*worker_runtime.q*";"and no backtrace"]}
 
 test_a_dev_run_without_a_mode_still_writes_the_hdb:{[t]
     r:.backfillproctest.run_dev["";""];
