@@ -111,10 +111,12 @@ def findings(lines: list[str]) -> list[tuple[str, str]]:
     return out
 
 
-#: A markdown link with a fragment: [text](path/to/doc.md#some-anchor).
-#: Absolute URLs and bare in-page "#anchor" links are left alone - the first
-#: is not ours to verify, the second Quarto's own rendering would catch.
-ANCHOR_LINK = re.compile(r"\]\((?!https?:|#)([^)\s#]+)#([^)\s]+)\)")
+#: A markdown link with a fragment: [text](path/to/doc.md#some-anchor), or a
+#: same-page [text](#some-anchor), whose empty path is the document itself.
+#: Absolute URLs are left alone - they are not ours to verify. Same-page links
+#: were left alone too, on the belief that Quarto checked them; it does not
+#: (#1336), so a renamed heading broke every in-page link to it silently.
+ANCHOR_LINK = re.compile(r"\]\((?!https?:)([^)\s#]*)#([^)\s]+)\)")
 
 #: Setext and ATX headings. Fenced code is stripped first, so a "# comment"
 #: inside a q block is not mistaken for one.
@@ -152,22 +154,23 @@ def anchors_in(path: Path) -> set[str]:
     return found
 
 
-def broken_anchors() -> list[tuple[str, str]]:
+def broken_anchors(docs: Path = DOCS) -> list[tuple[str, str]]:
     """(document, "target#anchor") for every fragment that resolves to no
-    heading in the document it points at."""
+    heading in the document it points at - "#anchor" alone for a same-page
+    link."""
     out: list[tuple[str, str]] = []
     cache: dict[Path, set[str]] = {}
-    for doc in sorted(DOCS.rglob("*.md")):
+    for doc in sorted(docs.rglob("*.md")):
         if "_site" in doc.parts:
             continue
         for target, anchor in ANCHOR_LINK.findall(doc.read_text(encoding="utf-8")):
-            dest = (doc.parent / target).resolve()
+            dest = (doc.parent / target).resolve() if target else doc.resolve()
             if dest.suffix != ".md" or not dest.is_file():
                 continue  # a missing FILE is Quarto's finding, not this one
             if dest not in cache:
                 cache[dest] = anchors_in(dest)
             if anchor not in cache[dest]:
-                out.append((str(doc.relative_to(DOCS)), f"{target}#{anchor}"))
+                out.append((str(doc.relative_to(docs)), f"{target}#{anchor}"))
     return out
 
 
