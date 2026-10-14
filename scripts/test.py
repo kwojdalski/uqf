@@ -170,23 +170,38 @@ def _run(
     *,
     env: dict[str, str] | None = None,
     timeout: float | None = None,
+    stdin_open: bool = False,
 ) -> None:
     """Run a command, streaming its output as it happens.
 
     stdin is /dev/null for every lane: a q script that ends without `exit`
     would otherwise stop at the q prompt and wait for a terminal - forever,
     when run from one (#891). With it, q exits at the end of the script.
-    `timeout` bounds a lane whose process might wait on something else."""
+    `timeout` bounds a lane whose process might wait on something else.
+    `stdin_open` keeps stdin a pipe that never reaches EOF, for the one
+    script that must end by its own `exit` (see STDIN_OPEN_EXAMPLES)."""
     # QCMD passed on, so a lane that starts its own q processes
     # (q-backfill-process, q-two-instances) starts the same interpreter.
     merged = {**os.environ, "QHOME": QHOME, "QCMD": Q_CMD, **(env or {})}
+    read_fd = write_fd = -1
+    if stdin_open:
+        read_fd, write_fd = os.pipe()
     try:
         result = subprocess.run(
-            argv, cwd=REPO, env=merged, stdin=subprocess.DEVNULL, timeout=timeout, check=False
+            argv,
+            cwd=REPO,
+            env=merged,
+            stdin=read_fd if stdin_open else subprocess.DEVNULL,
+            timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         print(f"{lane}: still running after {timeout:g}s - stopped", flush=True)
         raise LaneFailed(lane, 124) from None
+    finally:
+        if stdin_open:
+            os.close(read_fd)
+            os.close(write_fd)
     if result.returncode != 0:
         raise LaneFailed(lane, result.returncode)
 
@@ -197,11 +212,12 @@ def _q(
     *args: str,
     env: dict[str, str] | None = None,
     timeout: float | None = None,
+    stdin_open: bool = False,
 ) -> None:
     q = shutil.which(Q_CMD)
     if q is None:
         raise LaneFailed(lane, 127)
-    _run(lane, [q, script, *args], env=env, timeout=timeout)
+    _run(lane, [q, script, *args], env=env, timeout=timeout, stdin_open=stdin_open)
 
 
 def _banner(text: str) -> None:
@@ -278,6 +294,10 @@ def lane_q_examples() -> None:
 #: is waiting on something - a timer, a connection - and a hung lane is not a
 #: useful way to say so.
 EXAMPLE_TIMEOUT = 120
+# Examples whose own `exit` is the only way out: a timer replay that races
+# stdin EOF against its next tick (#1338). They get a stdin that never ends
+# and check themselves in .z.exit, so a replay cut short exits non-zero.
+STDIN_OPEN_EXAMPLES = frozenset({"timer_replay_example"})
 
 
 def lane_q_scripts() -> None:
@@ -319,6 +339,7 @@ def lane_q_scripts() -> None:
                 str(script),
                 env={"UQF_STATUS_DIR": statusdir},
                 timeout=EXAMPLE_TIMEOUT,
+                stdin_open=script.stem in STDIN_OPEN_EXAMPLES,
             )
 
 
