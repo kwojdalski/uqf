@@ -1272,6 +1272,35 @@ qpipe.job.hdb_exec_bars_backfill,range_to,value,,
 qpipe.job.hdb_exec_bars_backfill,run,function,1,
 qpipe.job.hdb_exec_bars_backfill,source_version,value,,
 qpipe.job.hdb_exec_bars_backfill,spec,function,1,
+qpipe.job.hdb_order_quality_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_order_quality_backfill,cleanup,function,1,
+qpipe.job.hdb_order_quality_backfill,example_at,function,2,ws a
+qpipe.job.hdb_order_quality_backfill,example_before,table,,
+qpipe.job.hdb_order_quality_backfill,example_orders,table,,
+qpipe.job.hdb_order_quality_backfill,expected_rows,function,1,
+qpipe.job.hdb_order_quality_backfill,facts,function,1,batch
+qpipe.job.hdb_order_quality_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_order_quality_backfill,grid,function,1,ws
+qpipe.job.hdb_order_quality_backfill,handle,value,,
+qpipe.job.hdb_order_quality_backfill,init,function,1,run_spec
+qpipe.job.hdb_order_quality_backfill,last_batch,value,,
+qpipe.job.hdb_order_quality_backfill,last_window,dict,,
+qpipe.job.hdb_order_quality_backfill,live,value,,
+qpipe.job.hdb_order_quality_backfill,outcomes_of,function,1,rows
+qpipe.job.hdb_order_quality_backfill,period,value,,
+qpipe.job.hdb_order_quality_backfill,phase,value,,
+qpipe.job.hdb_order_quality_backfill,plan,function,1,cursor
+qpipe.job.hdb_order_quality_backfill,progress,dict,,
+qpipe.job.hdb_order_quality_backfill,publish,function,1,batch
+qpipe.job.hdb_order_quality_backfill,quality_check,function,1,batch
+qpipe.job.hdb_order_quality_backfill,range_from,value,,
+qpipe.job.hdb_order_quality_backfill,range_to,value,,
+qpipe.job.hdb_order_quality_backfill,run,function,1,
+qpipe.job.hdb_order_quality_backfill,series,function,2,orders before
+qpipe.job.hdb_order_quality_backfill,source_version,value,,
+qpipe.job.hdb_order_quality_backfill,spec,function,1,
+qpipe.job.hdb_order_quality_backfill,width,value,,
+qpipe.job.hdb_order_quality_backfill,window_start,function,1,rows
 qpipe.job.hdb_transfer_backfill,checkpoint,function,1,cursor
 qpipe.job.hdb_transfer_backfill,cleanup,function,1,
 qpipe.job.hdb_transfer_backfill,facts,function,1,batch
@@ -1491,6 +1520,16 @@ qpipe.source.hdb_executions,source_name,value,,
 qpipe.source.hdb_executions,time_column,value,,
 qpipe.source.hdb_executions,types,value,,
 qpipe.source.hdb_executions,tz,value,,
+qpipe.source.hdb_orders,columns,value,,
+qpipe.source.hdb_orders,fixture,function,1,
+qpipe.source.hdb_orders,query,function,3,h range_from range_to
+qpipe.source.hdb_orders,reach,function,1,
+qpipe.source.hdb_orders,row_key,value,,
+qpipe.source.hdb_orders,source_name,value,,
+qpipe.source.hdb_orders,supporting,dict,,
+qpipe.source.hdb_orders,time_column,value,,
+qpipe.source.hdb_orders,types,value,,
+qpipe.source.hdb_orders,tz,value,,
 qpipe.source.hdb_transfer,columns,value,,
 qpipe.source.hdb_transfer,credential_example,value,,
 qpipe.source.hdb_transfer,fixture,function,1,
@@ -1536,6 +1575,7 @@ qpipe.transform.order_outcome,translate,function,2,map codes
 qpipe.transform.order_quality,frame,value,,
 qpipe.transform.order_quality,identity,value,,
 qpipe.transform.order_quality,lateness,value,,
+qpipe.transform.order_quality,period,value,,
 qpipe.transform.order_quality,stats,function,1,x
 qpipe.transform.order_quality,stats_by,function,2,dims x
 qpipe.transform.order_quality,windows,value,,

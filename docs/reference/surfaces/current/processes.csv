@@ -24,6 +24,7 @@ fxtradesfeed1,feed,29,,trades
 hdb_crypto_book_backfill1,backfill,58,,
 hdb_demo_markouts_backfill1,backfill,49,,
 hdb_exec_bars_backfill1,backfill,55,,
+hdb_order_quality_backfill1,backfill,61,,
 hdb_transfer_backfill1,backfill,50,,
 kafka_flow1,metrics,47,kafka_client_flow,client_flow
 last_value1,metrics,53,market_data,last_value

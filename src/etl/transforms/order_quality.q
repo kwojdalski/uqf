@@ -37,6 +37,10 @@
 / The window lengths the series is published at.
 windows:0D00:01 0D00:05 0D01
 
+/ How often the live job publishes, and so the grid its windows end on; a backfill of the
+/ series cuts the same instants.
+period:0D00:00:05
+
 / How long after an outcome's source time it may be received and still count. For
 / the orders feed the source time is the plant's stamp of the order, the normalizer
 / re-stamps it a few milliseconds later, and this is the slack for a stalled hop.

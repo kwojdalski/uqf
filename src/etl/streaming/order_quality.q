@@ -76,6 +76,6 @@ example_input:raze {update inside:source_time>as_of-window from update window:x,
     `order_quality;
     .qpipe.transform.order_quality.windows;
     .qpipe.transform.order_quality.lateness;
-    0D00:00:05;
+    .qpipe.transform.order_quality.period;
     0b;
     "rolling fill and reject ratios per book over the last 1m, 5m and 1h")];
