@@ -25,10 +25,12 @@ the writer's by ``test_status.py``.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 
 # Leaves of uqs, both importing nothing else from it: this module is on a
@@ -124,6 +126,48 @@ class WorkerStatus:
         return self.state != "failed"
 
 
+log = logging.getLogger(__name__)
+
+#: (explicit, workers') pairs already warned about, so a poll does not repeat it.
+_WARNED: set[tuple[Path, Path]] = set()
+
+
+def status_directory(settings: Settings) -> Path | None:
+    """The directory this view reads, from the same rule the workers write by.
+
+    `uqs.stack.runs.status_dir` is that rule (`$UQF_STATUS_DIR`, else
+    `$TORQDATA/status`, as `.qetl.status.status_dir` in q): the frontend asks
+    it rather than carrying a second configuration that can drift, which sent
+    a worker started by POST /control/backfill to one directory and the
+    `/ops/backfill` view to another with nothing erroring (#1367).
+
+    With a stack root configured (UQF_FRONTEND_STACK_ROOT) and no explicit
+    UQF_FRONTEND_STATUS_DIR, the workers' directory is used. An explicit
+    setting still wins - it is the escape hatch for a reader that sees the
+    directory under another mount - but is logged when it differs. With
+    neither, None: the view reports itself unconfigured. Imported lazily, as
+    control.py does, so a deployment without a stack root never loads uqs.stack.
+    """
+    if settings.stack_root is None:
+        return settings.status_dir
+    from uqf_frontend import control
+    from uqs.stack import runs
+
+    workers = runs.status_dir(control._paths(settings))
+    explicit = settings.status_dir
+    if explicit is None:
+        return workers
+    if explicit != workers and (explicit, workers) not in _WARNED:
+        _WARNED.add((explicit, workers))
+        log.warning(
+            "UQF_FRONTEND_STATUS_DIR=%s differs from %s, where workers started "
+            "from this stack root write their status files",
+            explicit,
+            workers,
+        )
+    return explicit
+
+
 def read_dir(directory: Path | None) -> tuple[list[WorkerStatus], list[dict[str, str]]]:
     """Read every status file in *directory*.
 
@@ -137,8 +181,8 @@ def read_dir(directory: Path | None) -> tuple[list[WorkerStatus], list[dict[str,
     """
     if directory is None:
         raise ValidationFailed(
-            "backfill status needs UQF_FRONTEND_STATUS_DIR set to the directory "
-            "q writes status files into (see .qetl.status.status_dir in "
+            "backfill status needs UQF_FRONTEND_STATUS_DIR (or UQF_FRONTEND_STACK_ROOT) "
+            "set to the directory q writes status files into (see .qetl.status.status_dir in "
             "src/etl/core/status.q, which honours UQF_STATUS_DIR)"
         )
     if not directory.is_dir():

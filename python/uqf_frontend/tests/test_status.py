@@ -259,6 +259,54 @@ def test_summary_counts_failed_separately_from_running(tmp_path):
     }
 
 
+def test_a_stack_root_defaults_the_status_dir_to_the_workers(tmp_path, monkeypatch):
+    """#1367: workers write where uqs.stack.runs.status_dir says. A frontend told
+    only the stack root must read there, not report itself unconfigured."""
+    from uqs import paths as stack_paths
+    from uqs.stack import runs
+
+    monkeypatch.delenv("UQF_STATUS_DIR", raising=False)
+    root = stack_paths.repo_root()
+    settings = Settings(stack_root=root)
+    assert status.status_directory(settings) == runs.status_dir(stack_paths.paths_for_root(root))
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    assert status.status_directory(settings) == tmp_path
+
+
+def test_an_explicit_status_dir_wins_but_a_difference_is_logged(tmp_path, caplog, monkeypatch):
+    from uqs import paths as stack_paths
+
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path / "workers"))
+    elsewhere = tmp_path / "elsewhere"
+    settings = Settings(stack_root=stack_paths.repo_root(), status_dir=elsewhere)
+    status._WARNED.clear()
+    with caplog.at_level("WARNING", logger="uqf_frontend.status"):
+        assert status.status_directory(settings) == elsewhere
+    assert "differs" in caplog.text
+
+
+def test_without_a_stack_root_the_explicit_setting_is_all_there_is(tmp_path):
+    assert status.status_directory(Settings(status_dir=tmp_path)) == tmp_path
+    assert status.status_directory(Settings()) is None
+
+
+def test_the_endpoint_reads_the_workers_directory_given_only_a_stack_root(tmp_path, monkeypatch):
+    from uqs import paths as stack_paths
+
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    write_status_file(tmp_path, "demo_markout1")
+    client = TestClient(
+        create_app(
+            gateway=FakeGateway(),
+            settings=Settings(stack_root=stack_paths.repo_root()),
+            fleet=FakeFleet(),
+        )
+    )
+    body = client.get("/ops/backfill").json()
+    assert body["workers"][0]["instance_id"] == "demo_markout1"
+    assert body["source"] == str(tmp_path)
+
+
 # --- the endpoint ----------------------------------------------------------
 
 

@@ -118,10 +118,12 @@ class Settings:
     #: probe targets the wrong port - and, since `port` is derived from it,
     #: so does the gateway connection itself.
     base_port: int = DEFAULT_BASE_PORT
-    #: Directory q writes backfill status files into. None means the
+    #: Directory q writes backfill status files into. Read through
+    #: status.status_directory, which defaults it to the workers' own
+    #: (uqs.stack.runs.status_dir) when stack_root is set; an explicit value
+    #: wins and is logged if it differs. None with no stack root means the
     #: backfill view reports itself unconfigured rather than returning an
     #: empty list, which would be indistinguishable from an idle fleet.
-    #: Pairs with UQF_STATUS_DIR on the q side - see .qetl.status.status_dir.
     status_dir: Path | None = None
     #: Processes to fan out to for the per-process query log. Empty by
     #: default: the fleet view then reports that it has nothing configured,
