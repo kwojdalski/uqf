@@ -61,7 +61,10 @@ prepare:{[w]
     / The primary input's rows: a source with supporting inputs returns them
     / all from its fixture as a dict of name -> table (#617).
     ts:(.qetl.source.primary[cfg`source;(src`fixture)[]]) src`time_column;
-    `source_version`range_from`range_to!(`wrunv1;min ts;(max ts)+cfg`width)}
+    lo:min ts; hi:(max ts)+cfg`width;
+    / A bar-building worker declares align and refuses a range off its grain (#1303).
+    if[not null a:cfg`align; n:"j"$a; lo:lo-`timespan$("j"$lo) mod n; hi:hi+`timespan$(neg "j"$hi) mod n];
+    `source_version`range_from`range_to!(`wrunv1;lo;hi)}
 
 / Call one of a worker's stamped methods.
 call:{[w;nm] (` sv (.qetl.job.bounded.worker_root,w),nm)}
