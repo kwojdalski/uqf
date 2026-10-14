@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); revision:`long$())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); revision:`long$(); align:`timespan$())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -210,7 +210,7 @@ optional_cfg:`check`io`facts`partition
 /   window_column (the OUTPUT column that carries the window's time - see
 /   require_window_column) and
 /   source_version (the default release a run records coverage under; none
-/   by default, so a run must name one) and revision (the output logic's, #1097)
+/   by default, so a run must name one), revision (the output logic's, #1097) and align (bar width; an unaligned run is refused, #1303)
 / @throws error naming every missing or malformed field at once
 define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -300,7 +300,7 @@ define:{[worker;decl]
     decl[`source_version]:dv;
     decl[`target_key]:require_target_key[worker;decl];
     decl[`window_column]:require_window_column[worker;decl];
-    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl];
+    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -782,7 +782,7 @@ check_static:{[worker;run_spec]
 
     if[null run_spec`source_version;
         '"init: source_version must be set - coverage under one source release says nothing about another"];
-    .qetl.coverage.require_interval[run_spec`range_from;run_spec`range_to];
+    .qetl.coverage.require_interval[run_spec`range_from;run_spec`range_to]; .qetl.job.bounded.runtime.require_aligned[worker;cfg;run_spec`range_from;run_spec`range_to];
 
     .qetl.job.bounded.state.register[worker;cfg`ns];
     .qetl.job.bounded.state.require_contract worker;

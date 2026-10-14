@@ -8,9 +8,10 @@
 / table. The target key is (sym;bar_start), so writing a window the live job
 / also bars replaces those rows.
 / .
-/ A window should start and end on a multiple of the bar width: a bar is
-/ never split across windows, so one that straddles a boundary is built twice,
-/ each time from half its fills, and the later write wins.
+/ A bar is never split across windows, so one that straddled a boundary would be
+/ built twice, each time from part of its fills, and the later write would win.
+/ The worker declares align (the bar width) and a run whose --from or --to is
+/ not a multiple of it is refused (#1303).
 / .
 / The output's own `time` is bar_start+width, the bar's END, so window_column
 / says bar_start: `replace then clears the bars the window produced, not the
@@ -57,9 +58,9 @@ quality_check:{[batch]
             volume:6e6 1e6 5e5; vwap:(6.68%6;1.20;150.0); trades:3 1 1)))];
 
 .qetl.job.bounded.define[`hdb_exec_bars_backfill;
-    `source`dataset`width`transform`check`procname`note`target_key`window_column!
+    `source`dataset`width`transform`check`procname`note`target_key`window_column`align!
     (`hdb_executions;`exec_bar;0D01:00:00;`hdb_exec_bars;
      .qpipe.job.hdb_exec_bars_backfill.quality_check;
      `hdb_exec_bars_backfill1;
      "bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live";
-     `sym`bar_start;`bar_start)];
+     `sym`bar_start;`bar_start;.qpipe.transform.exec_bars.width)];

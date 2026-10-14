@@ -44,4 +44,15 @@ test_replace_across_windows_keeps_the_previous_windows_last_bar:{[t]
     .qunit.assertEquals[b`bar_start;2026.10.09D10:59 2026.10.09D11:00;"the 10:59 bar survives the 11:00 window's replace"];
     .qunit.assertEquals[b`volume;1e6 2e6;"each bar from its own fill"]};
 
+test_an_unaligned_range_is_refused_before_a_straddling_bar_is_built_twice:{[t]
+    msg:"init: hdb_exec_bars_backfill builds 0D00:01:00.000000000 bars - --from and --to must be multiples of it*";
+    .qunit.assertThrows[{.qpipe.job.hdb_exec_bars_backfill.init x};
+        .ebbtest.spec_for[`v1;2026.10.09D10:00:30;2026.10.09D12:00];msg;"an unaligned --from is refused"];
+    .qunit.assertThrows[{.qpipe.job.hdb_exec_bars_backfill.init x};
+        .ebbtest.spec_for[`v1;2026.10.09D10:00;2026.10.09D12:00:30];msg;"an unaligned --to is refused"]};
+
+test_the_declared_grain_is_the_live_bar_width:{[t]
+    .qunit.assertEquals[(.qetl.job.bounded.def `hdb_exec_bars_backfill)`align;.qpipe.transform.exec_bars.width;
+        "the worker cuts to the live job's bar width"]};
+
 \d .
