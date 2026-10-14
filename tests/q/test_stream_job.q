@@ -1080,8 +1080,19 @@ test_an_order_id_does_not_restart_at_one:{[t]
     / repeated. A process's first id must sit at its start stamp, clear of
     / any counter-from-zero run that came before it.
     first_id:.qpipe.job.fx_orders_feed.last_id+1;
-    .qunit.assertTrue[first_id>`long$2026.01.01D00:00:00;
-        "the first order id is seeded from the process start, not from 0"]};
+    .qunit.assertTrue[first_id>"j"$1e6*86400;
+        "the first order id is seeded from the process start, not from 0"];
+    / #1324: nanoseconds since 2000 put ids above 2^53, which a JSON consumer
+    / cannot hold exactly.
+    .qunit.assertTrue[first_id<"j"$2 xexp 53;"an id a JSON consumer can hold exactly"];
+    / A restart: orders issued by this run, then a fresh seed taken later.
+    / The new run must begin above everything the old one published.
+    reset[];
+    .qpipe.job.fx_orders_feed.on_timer[];
+    .qpipe.job.fx_orders_feed.on_timer[];
+    .qpipe.job.fx_orders_feed.on_timer[];
+    .qunit.assertTrue[.qpipe.job.fx_orders_feed.seed_id[]>.qpipe.job.fx_orders_feed.last_id;
+        "a restarted feed's seed is above every id the previous run issued"]};
 
 / --- fx positions ---------------------------------------------------------
 
