@@ -156,6 +156,9 @@ class CatalogResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     poll_seconds: int
+    #: How long the browser waits for any request - Settings.request_timeout,
+    #: served so the client does not keep its own copy (#1370).
+    request_timeout_seconds: int
     ok: bool
     gateway: Literal["up", "reloading", "unreachable", "wrong_process"]
     detail: str | None = None
