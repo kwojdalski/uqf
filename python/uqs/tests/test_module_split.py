@@ -114,9 +114,10 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: `paths` and `logger` are omitted from every list because everything may
 #: import them: they are leaves that import nothing from this package, so they
 #: cannot take part in a cycle. `interpreter` is too - it imports `paths` and
-#: nothing else, which test_the_leaves_stay_leaves holds it to - and so is
-#: `runtimes`, which imports nothing at all.
-LEAVES = {"paths", "logger", "interpreter", "runtimes"}
+#: nothing else, which test_the_leaves_stay_leaves holds it to - and so are
+#: `runtimes` and `timefmt`, which import nothing at all. `timefmt` must stay
+#: that way: uqf_frontend's read path imports it (#1326).
+LEAVES = {"paths", "logger", "interpreter", "runtimes", "timefmt"}
 #: `generated` sits under everything: modules written from the q tree
 #: (uqs.generated.q_facts, #818), which import nothing from this package -
 #: so any layer may read them and none of them can close a cycle.
@@ -170,8 +171,9 @@ def test_the_leaves_stay_leaves():
     source = (PKG / "src" / "uqs" / "interpreter.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
     assert reached <= {"paths"}, reached
-    source = (PKG / "src" / "uqs" / "runtimes.py").read_text()
-    assert not {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
+    for leaf in ("runtimes.py", "timefmt.py"):
+        source = (PKG / "src" / "uqs" / leaf).read_text()
+        assert not {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}, leaf
 
 
 @pytest.mark.parametrize("folder", sorted(ALLOWED_IMPORTS))
