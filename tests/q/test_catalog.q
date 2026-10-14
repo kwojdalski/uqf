@@ -56,19 +56,41 @@ test_no_table_is_both_described_and_hidden:{[t]
         `symbol$();
         "a table is described or hidden, never both"]};
 
-/ Described tables whose declaration lives somewhere other than
-/ plant_tables.q, and the file that owns each.
+/ The datasets the tree's bounded workers write (#1363). Read from the
+/ registry, intersected with the workers declared in a FILE: tests register
+/ fixture workers at run time (see test_namespaces.q), and a fixture's dataset
+/ is not something a desk may browse. A worker can fill a table that is not in
+/ plant_tables.q - imported_trades, demo_deals, event_tape - and the desk reads
+/ it all the same, so it is as much a part of the browsable set as a plant
+/ table is.
+datasets:{[]
+    asc exec distinct dataset from .qetl.job.bounded.worker_cfg
+        where name in .testutil.etl_declaration_names["src/etl/workers"]}
+
+/ Described tables that are neither in plant_tables.q nor a worker's dataset,
+/ and the file that owns each. One today: the coverage ledger, declared by the
+/ framework. It is not in any tier's tables - the process keeps it in a lock
+/ directory file (src/etl/core/materialisation.q's ledger_path) - so there is
+/ nothing for getdata to serve and no tableproperties.csv row, which would make
+/ an HDB that lacks the table refuse to start.
 / .
-/ Carried over from the drift test's _Q_OWNED, because the fact survived the
-/ test that recorded it: plant_tables.q holds what the tickerplant is
-/ configured to carry, and these three are declared by the ETL tree instead -
-/ the coverage ledger by the framework, the other two by their source
-/ contracts. A desk browses all three, so they belong in the catalog; they
-/ are simply not declared where the others are.
-elsewhere:`etl_coverage`demo_deals`event_tape!(
-    "src/etl/core/materialisation.q";
-    "src/etl/sources/demo_deals.q";
-    "src/etl/sources/demo_events.q")
+/ The other two tables this list used to carry, demo_deals and event_tape, are
+/ worker datasets and now come from `datasets`; the hand list was the second
+/ home of a fact the workers declare.
+ledgers:(enlist `etl_coverage)!enlist "src/etl/core/materialisation.q"
+
+/ Every table a desk may browse, before the catalog's decision: the plant
+/ tables, the workers' datasets and the ledger.
+browsable:{[] asc distinct .cattest.published[],.cattest.datasets[],key .cattest.ledgers}
+
+test_every_worker_dataset_is_described_or_hidden:{[t]
+    / The same gate as for a plant table, for the tables only a worker writes.
+    / imported_trades was in no list at all, which is what "nobody described
+    / it" looks like when the list of exemptions is kept by hand.
+    .qunit.assertEquals[
+        .cattest.datasets[] except (key .qcat.describe),key .qcat.hidden;
+        `symbol$();
+        "every dataset a bounded worker writes is either described or explicitly hidden"]};
 
 test_the_catalog_describes_no_table_that_does_not_exist:{[t]
     / The other direction. An entry for a table nothing declares exposes
@@ -76,20 +98,81 @@ test_the_catalog_describes_no_table_that_does_not_exist:{[t]
     / meta - but it is either a typo or a table somebody forgot to publish,
     / and both are worth one line of thought.
     .qunit.assertEquals[
-        (key .qcat.describe) except .cattest.published[],key .cattest.elsewhere;
+        (key .qcat.describe) except .cattest.browsable[];
         `symbol$();
-        "every described table is declared somewhere in this tree"]};
+        "every described table is a plant table, a worker's dataset or the ledger"]};
 
-test_each_elsewhere_table_is_declared_where_it_claims:{[t]
-    / Without this, `elsewhere` is an exemption list that grows whenever the
+test_each_ledger_is_declared_where_it_claims:{[t]
+    / Without this, `ledgers` is an exemption list that grows whenever the
     / check above is inconvenient - which is the shape this repository keeps
     / finding and deleting. Reading the named file means a table that MOVED
     / fails here rather than sitting exempt from both directions forever.
-    missing:(key .cattest.elsewhere) where not
+    missing:(key .cattest.ledgers) where not
         {[nm;path] any (read0 hsym `$path) like "*",(string nm),"*"}'
-            [key .cattest.elsewhere; value .cattest.elsewhere];
+            [key .cattest.ledgers; value .cattest.ledgers];
     .qunit.assertEquals[missing;`symbol$();
-        "each table in `elsewhere` is named by the file said to declare it"]};
+        "each table in `ledgers` is named by the file said to declare it"]};
+
+/ The tables scripts/torqconfig/dataaccess/tableproperties.csv lists: its
+/ tablename column, read as text.
+listed:{[]
+    ls:1_read0 `$":scripts/torqconfig/dataaccess/tableproperties.csv";
+    distinct `$ {(","vs x) 1} each ls where 0<count each ls}
+
+test_every_browsable_table_has_a_getdata_row:{[t]
+    / TorQ's checktablename refuses a table the file does not list, and
+    / .uqf.browse reads through getdata - so a table the catalog describes and
+    / the file omits is offered to the desk and then errors on every read. The
+    / ledger is the one exemption, for the reason above.
+    .qunit.assertEquals[
+        (.cattest.browsable[] except key .cattest.ledgers) except .cattest.listed[];
+        `symbol$();
+        "each browsable table has a tableproperties.csv row (python/uqs/.../gateway_access.py derives them)"]};
+
+/ --- TorQ's own refusal, run against the shipped file (#1363) -------------
+/ .
+/ The two consequences above are TorQ's, not ours, so this runs TorQ's
+/ checktablename itself: lib/torq/code/dataaccess/checkinputs.q is loaded as
+/ it is and given the rows readtableproperties reads from the shipped file,
+/ and its metadata join is stood in for - the check under test is only
+/ "is this table listed". What TorQ needs around it (a logger, the process
+/ type, the error messages) is put in place for the run and put back.
+
+torqnames:`.proc.proctype`.checkinputs.tablepropertiesconfig`.checkinputs.jointableproperties`.schema.errors`.lg.o
+
+/ A refused request's message, or `accepted.
+checked:{[tbl]
+    old:{@[get;x;{::}]} each .cattest.torqnames;
+    .proc.proctype:`hdb;
+    if[not 100h=type @[get;`.lg.o;{::}]; .lg.o:{[a;b]}];
+    .eodtime.datatimezone:`$"Europe/London";.eodtime.rolltimeoffset:0D;.eodtime.rolltimezone:`$"Europe/London";
+    system"l lib/torq/code/dataaccess/dataaccessutils.q";
+    system"l lib/torq/code/dataaccess/checkinputs.q";
+    .checkinputs.tablepropertiesconfig:.checkinputs.readtableproperties `:scripts/torqconfig/dataaccess/tableproperties.csv;
+    .schema.errors:1!.checkinputs.readcsv[`:lib/torq/config/dataaccess/errormessages.csv;"s*"];
+    .checkinputs.jointableproperties:{[d] d};
+    d:`tablename`starttime`endtime`metainfo!(tbl;2020.01.01D;2020.01.02D;()!());
+    r:@[{.dataaccess.checktablename x;`accepted};d;{[e] e}];
+    .cattest.restore'[.cattest.torqnames;old];
+    r}
+
+/ Put a name back as it was: set to its old value, or removed if it had none.
+restore:{[n;old]
+    if[not (::)~old; n set old; :(::)];
+    parts:"." vs string n;
+    ![`$"." sv -1_ parts;();0b;enlist `$last parts]}
+
+test_getdata_refuses_a_table_the_file_does_not_list:{[t]
+    .qunit.assertEquals[.cattest.checked`not_a_table;"Table:`not_a_table doesn't exist";
+        "TorQ's checktablename refuses an unlisted table - the consequence the file's rows prevent"]};
+
+test_getdata_accepts_every_browsable_table:{[t]
+    / The positive half, over the whole derived set: every table a desk may
+    / browse - including a worker dataset no plant table declares - gets past
+    / checktablename, which it did not when the file held five hand rows.
+    t:(.cattest.browsable[] except key .cattest.ledgers);
+    .qunit.assertEquals[t where not `accepted~/:.cattest.checked each t;`symbol$();
+        "checktablename accepts each browsable table"]};
 
 test_every_hidden_table_states_a_reason:{[t]
     / The reason is DATA rather than a comment precisely so this can require
