@@ -37,4 +37,14 @@ test_the_facts_say_more_than_a_row_count:{[t]
     .qunit.assertEquals[.qpipe.job.hdb_transfer_backfill.facts 0#.qetl.plant.shape `trades_copy;(enlist `window)!enlist "empty window";
         "an empty window is legal, and said so"]};
 
+/ #1339: notional is in each pair's quote currency. One sum added the
+/ fixture's USDJPY yen (151.20 * 500000) to the dollars of the other pairs.
+test_the_facts_keep_notional_per_quote_currency:{[t]
+    f:.qpipe.job.hdb_transfer_backfill.facts .qpipe.job.hdb_transfer_backfill.with_notional .qpipe.source.hdb_transfer.fixture[];
+    .qunit.assertEquals[`notional_USD`notional_JPY inter key f;`notional_USD`notional_JPY;"a notional per quote currency"];
+    .qunit.assertEquals[`notional in key f;0b;"and no sum across currencies"];
+    .qunit.assertEquals[f`notional_JPY;151.20*500000;"USDJPY's notional is its yen alone"];
+    .qunit.assertTrue[1e-6>abs f[`notional_USD]-sum 1.0842 1.0851 1.2655*1000000 250000 750000;
+        "and the dollars are the three USD-quoted trades"]};
+
 \d .
