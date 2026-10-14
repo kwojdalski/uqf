@@ -1169,6 +1169,7 @@ qpipe.job.fx_orders_feed,order_rows,function,8,id i bk pr side size status slip_
 qpipe.job.fx_orders_feed,pip_factor,value,,
 qpipe.job.fx_orders_feed,products,value,,
 qpipe.job.fx_orders_feed,publish,value,,
+qpipe.job.fx_orders_feed,seed_id,function,1,
 qpipe.job.fx_orders_feed,sizes,value,,
 qpipe.job.fx_orders_feed,statuses,value,,
 qpipe.job.fx_positions,alert_period,value,,

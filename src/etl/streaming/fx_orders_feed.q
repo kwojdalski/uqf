@@ -48,13 +48,22 @@ pip_factor:.qccy.pip_factor .qsynth.pairs
 / The sizes an order is drawn from. Float, matching the schema.
 sizes:500000 1000000 2000000 5000000f
 
+/ The first order id a process issues: microseconds since 2026.01.01.
+/ @return the seed, a long
+/ @eg .qpipe.job.fx_orders_feed.seed_id[]>0 -> 1b
+seed_id:{[] "j"$(.z.p-2026.01.01D00:00:00)%1000}
+
 / The order id last issued (#1265). Monotonic within a process, and SEEDED
-/ from the process start in nanoseconds rather than from 0: a feed restarted
-/ the same day would otherwise reissue 1,2,3... and executions' fill_id,
-/ which is derived from the order id, would repeat. The id stays a long, as
-/ orders declares it. One order a second cannot catch up with a clock that
-/ counts nanoseconds, so a later start always begins above an earlier run.
-last_id:`long$.z.p
+/ from the process start rather than from 0: a feed restarted the same day
+/ would otherwise reissue 1,2,3... and executions' fill_id, which is derived
+/ from the order id, would repeat. The id stays a long, as orders declares it.
+/ The seed is MICROSECONDS since 2026.01.01, not nanoseconds since 2000 (#1324):
+/ nanoseconds put every id near 8.5e17, above 2^53, so a JSON consumer (the web,
+/ Grafana) collapses neighbouring ids and the web refuses to filter on one.
+/ Microseconds stay under 2^53 for about 285 years. A restart cannot collide
+/ while the feed issues fewer than a million orders a second: a later start
+/ begins 1e6 per second above an earlier one, which only gains 1 per second.
+last_id:.qpipe.job.fx_orders_feed.seed_id[]
 
 / One order's rows, for a given pair index, book, product, side, size,
 / status and slippage in pips.
