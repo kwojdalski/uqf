@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **36 uqf processes** — 59 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **38 uqf processes** — 61 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -51,6 +51,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `crypto_book_1s1` | 6107 | etl | `processes/torq_stream.q` | `crypto_book_1s` | `crypto_book` | `crypto_book_1s` |
 | `hdb_crypto_book_backfill1` | 6108 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `order_quality1` | 6109 | etl | `processes/torq_stream.q` | `order_quality` | `orders` | `order_quality` |
+| `book_liquidity_1m1` | 6110 | etl | `processes/torq_stream.q` | `book_liquidity_1m` | `market_data` | `book_liquidity_1m` |
+| `hdb_book_liquidity_1m_backfill1` | 6111 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -88,12 +90,15 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`crypto_book_1s1`** — last book state per venue and sym per second; the window is the update's source_time, not the plant's time
 - **`hdb_crypto_book_backfill1`** — bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live
 - **`order_quality1`** — rolling fill and reject ratios per book over the last 1m, 5m and 1h
+- **`book_liquidity_1m1`** — per FX provider and requested size, the minute's average sweep price, available quantity and full-fill ratio from market_data; an average over book snapshots, not over time; the window is the book's source_time
+- **`hdb_book_liquidity_1m_backfill1`** — bounded: rebuilds the one-minute book liquidity from the HDB's market_data with the calculation book_liquidity_1m1 applies live
 
 ## Tables these processes publish
 
 | table | defined by | published by |
 |---|---|---|
 | `arbitrage` | `plant_tables.q` | `arbitrage1` |
+| `book_liquidity_1m` | `plant_tables.q` | `book_liquidity_1m1` |
 | `client_flow` | `plant_tables.q` | `kafka_flow1` |
 | `config_change` | `plant_tables.q` | `crossarb1`, `fxpositions1`, `superbook1` |
 | `cross_arbitrage` | `plant_tables.q` | `crossarb1` |

@@ -8,12 +8,13 @@ plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `databento1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
 `crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`, `flink_vwap1`,
-`crypto_book_1s1`, `order_quality1`), and ten bounded backfill processes
-(`deals_backfill1`, `events_backfill1`, `databento_backfill1`,
-`upstream_backfill1`, `duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
-`hdb_demo_markouts_backfill1`, `hdb_transfer_backfill1`,
-`hdb_exec_bars_backfill1`, `hdb_crypto_book_backfill1`). Declared is not the
-same as running here - see [what starts with the
+`crypto_book_1s1`, `order_quality1`, `book_liquidity_1m1`), and eleven bounded
+backfill processes (`deals_backfill1`, `events_backfill1`,
+`databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`,
+`crypto_market_data_backfill1`, `hdb_demo_markouts_backfill1`,
+`hdb_transfer_backfill1`, `hdb_exec_bars_backfill1`,
+`hdb_crypto_book_backfill1`, `hdb_book_liquidity_1m_backfill1`). Declared is not
+the same as running here - see [what starts with the
 stack](#what-starts-and-why-not-all-of-it).
 
 Direct FX arbitrage flows through `marketdata1` (`quote`, `fx_orderbook` and
@@ -268,6 +269,17 @@ second half a second after it ends, and a second with no update has no row -
 nothing is forward-filled. `hdb_crypto_book_backfill1` rebuilds the snapshots
 from the HDB's `crypto_book` with the same pick, under the key
 `venue, sym, bar_start`. It is in the `crypto` profile.
+
+`book_liquidity_1m1` is a third bars job, and the one built on the extracted
+liquidity transforms (`src/etl/transforms/book_liquidity.q`,
+[reference](../reference/book-liquidity.md)): it turns `market_data` into
+`book_liquidity_1m`, what each FX provider's book could fill at 1m, 5m and 10m,
+averaged over the minute's book snapshots (an average over snapshots, not over
+time). It calls the market_data adapter, the pure snapshot and the pure minute
+average, and `hdb_book_liquidity_1m_backfill1` calls the same composition over
+the HDB's `market_data`, replacing the live rows under
+`sym, source, settlement, category, req_size, bar_start`. On demand
+(`uqs start book_liquidity_1m1`), in no profile.
 
 `demo_markout1`'s buffers live in its process, so a fill it never saw goes
 unscored: it was down, restarting, or the fill came before it. A bounded

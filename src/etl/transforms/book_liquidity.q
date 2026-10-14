@@ -362,3 +362,43 @@ from_levels:{[x]
             settlement:`FWD`SPOT; category:2#`FULL_AMOUNT;
             bid_prices:(enlist 1.0990;1.0999 1.0998); bid_sizes:(enlist 5e6;1e6 2e6);
             ask_prices:(`float$();1.1001 1.1002); ask_sizes:(`float$();1e6 2e6))))];
+
+/ ------------------------------------------------------- THE ONE-MINUTE JOB
+/ .
+/ What the streaming job book_liquidity_1m and its backfill twin
+/ hdb_book_liquidity_1m_backfill both apply: market_data rows in, one-minute
+/ liquidity rows out, through the steps above and nothing else - the market_data
+/ adapter, the snapshot, the window cut, the minute average. They write
+/ book_liquidity_1m under one key, (sym; source; settlement; category; req_size;
+/ bar_start), and a backfill REPLACES the live job's rows, so they share this one
+/ function and this one `width`.
+
+\d .qpipe.transform.book_liquidity_1m
+
+/ The window width. The live job declares it and the twin cuts by it; a backfill
+/ window should start on a multiple of it, or its first and last rows are partial.
+width:.qpipe.transform.book_liquidity.width
+
+/ How long after a minute's end a book may arrive and still amend its row. Later
+/ ones are dropped and logged by the bars kind, not folded in; a backfill reads
+/ the whole window and so includes them.
+lateness:.qpipe.transform.book_liquidity.lateness
+
+/ The sizes priced, in market_data's units (base currency) - FX books only,
+/ which the adapter enforces. One row per size per provider per minute.
+sizes:1e6 5e6 10e6
+
+/ One row per provider, size and minute from a batch of market_data rows: the
+/ adapter keeps the eligible, well-formed FX books, the snapshot prices each at
+/ every size, the minute averages them. bar_start on the input is not read: the
+/ window is cut here from the snapshot's source_time, by the same function the
+/ bars kind uses, so a live and a backfilled book land in one window.
+/ @param x market_data rows: source_time, sym, source, market and the four ladders (any bar_start is ignored)
+/ @return rows of .qpipe.transform.book_liquidity.minute_shape
+/ @eg count .qpipe.transform.book_liquidity_1m.bars 0#.qpipe.transform.book_liquidity.market_data_shape  ->  0
+bars:{[x]
+    books:.qpipe.transform.book_liquidity.from_market_data[x];
+    snaps:.qpipe.transform.book_liquidity.snapshot[books;([] req_size:sizes)];
+    .qpipe.transform.book_liquidity.minute[.qetl.job.stream.bars.assign[width;`source_time;snaps]]}
+
+\d .

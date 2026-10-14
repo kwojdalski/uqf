@@ -40,8 +40,10 @@
 .qpipe.source.upstream_trades.query
 # hdb_executions.query reads executions over IPC from a live HDB (#946)
 # hdb_crypto_book.query reads crypto_book over IPC from a live HDB (#1222), as hdb_executions does
+# hdb_market_data.query reads market_data over IPC from a live HDB (#1397), as hdb_crypto_book does
 .qpipe.source.hdb_crypto_book.query
 .qpipe.source.hdb_executions.query
+.qpipe.source.hdb_market_data.query
 
 # --- Needs a running TorQ process --------------------------------------
 # .qtorq is the TorQ block library and .qpipe.job the subscriber processes. Both

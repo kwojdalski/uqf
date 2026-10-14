@@ -18,7 +18,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book)
+renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s`book_liquidity_1m)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;enlist[`books]!enlist `books)
 
 / (the stream job's transform; its twin's; the input renaming), each
 / transform as the declaration names it.
@@ -78,5 +78,8 @@ test_the_exec_bars_twin_cuts_and_aggregates_as_the_live_job_does:{[t]
 
 test_the_crypto_book_1s_twin_picks_the_snapshots_as_the_live_job_does:{[t]
     .qunit.assertTrue[agrees[`crypto_book_1s];"hdb_crypto_book_1s gives the live snapshots on the live transform's example"]};
+
+test_the_book_liquidity_1m_twin_averages_the_books_as_the_live_job_does:{[t]
+    .qunit.assertTrue[agrees[`book_liquidity_1m];"hdb_book_liquidity_1m gives the live minutes on the live transform's example"]};
 
 \d .

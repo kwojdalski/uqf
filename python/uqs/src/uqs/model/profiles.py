@@ -162,6 +162,12 @@ UNPROFILED: dict[str, str] = {
         "cannot join it - `uqs start order_quality1` once something else is stopped, "
         "or on its own with fxordersfeed1"
     ),
+    "book_liquidity_1m1": (
+        "on demand: it reads `market_data`, which marketdata1 publishes in the fx and "
+        "default sets, but fx already holds all fourteen plant slots, so the job cannot "
+        "join it - `uqs start book_liquidity_1m1` once something else is stopped, or "
+        "alongside a market_data feed"
+    ),
     "tap1": (
         "a diagnostic subscriber chosen at runtime: which table it taps is an "
         "argument, so there is no standing set it belongs to"

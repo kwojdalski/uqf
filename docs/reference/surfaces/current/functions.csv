@@ -516,6 +516,7 @@ qetl.log,warn,function,3,id text fields
 qetl.log,with_context,function,3,ctx f args
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
+qetl.plant,book_liquidity_1m,table,,
 qetl.plant,ccy_exposure,table,,
 qetl.plant,client_flow,table,,
 qetl.plant,columns,function,2,t cs
@@ -952,6 +953,16 @@ qpipe.job.arbitrage,evaluate,function,1,batch
 qpipe.job.arbitrage,on_batch,function,2,t x
 qpipe.job.arbitrage,opportunity,function,1,book
 qpipe.job.arbitrage,publish,value,,
+qpipe.job.book_liquidity_1m,book_rows,table,,
+qpipe.job.book_liquidity_1m,close_ready,value,,
+qpipe.job.book_liquidity_1m,closed,table,,
+qpipe.job.book_liquidity_1m,dropped,table,,
+qpipe.job.book_liquidity_1m,now,function,1,
+qpipe.job.book_liquidity_1m,on_batch,value,,
+qpipe.job.book_liquidity_1m,on_endofday,value,,
+qpipe.job.book_liquidity_1m,on_timer,value,,
+qpipe.job.book_liquidity_1m,pending,table,,
+qpipe.job.book_liquidity_1m,publish,value,,
 qpipe.job.cross,cross_pairs,value,,
 qpipe.job.cross,cross_quotes,table,,
 qpipe.job.cross,crosses,table,,
@@ -1213,6 +1224,25 @@ qpipe.job.fx_trades_feed,publish,value,,
 qpipe.job.fx_trades_feed,run_id,value,,
 qpipe.job.fx_trades_feed,sizes,value,,
 qpipe.job.fx_trades_feed,spot,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_book_liquidity_1m_backfill,cleanup,function,1,
+qpipe.job.hdb_book_liquidity_1m_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_book_liquidity_1m_backfill,handle,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,init,function,1,run_spec
+qpipe.job.hdb_book_liquidity_1m_backfill,last_batch,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,last_window,dict,,
+qpipe.job.hdb_book_liquidity_1m_backfill,live,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,minutes,function,1,book_rows
+qpipe.job.hdb_book_liquidity_1m_backfill,phase,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,plan,function,1,cursor
+qpipe.job.hdb_book_liquidity_1m_backfill,progress,dict,,
+qpipe.job.hdb_book_liquidity_1m_backfill,publish,function,1,batch
+qpipe.job.hdb_book_liquidity_1m_backfill,quality_check,function,1,batch
+qpipe.job.hdb_book_liquidity_1m_backfill,range_from,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,range_to,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,run,function,1,
+qpipe.job.hdb_book_liquidity_1m_backfill,source_version,value,,
+qpipe.job.hdb_book_liquidity_1m_backfill,spec,function,1,
 qpipe.job.hdb_crypto_book_backfill,checkpoint,function,1,cursor
 qpipe.job.hdb_crypto_book_backfill,cleanup,function,1,
 qpipe.job.hdb_crypto_book_backfill,fetch,function,2,from_ts to_ts
@@ -1483,6 +1513,14 @@ qpipe.source.hdb_executions,source_name,value,,
 qpipe.source.hdb_executions,time_column,value,,
 qpipe.source.hdb_executions,types,value,,
 qpipe.source.hdb_executions,tz,value,,
+qpipe.source.hdb_market_data,columns,value,,
+qpipe.source.hdb_market_data,fixture,function,1,
+qpipe.source.hdb_market_data,query,function,3,h range_from range_to
+qpipe.source.hdb_market_data,row_key,value,,
+qpipe.source.hdb_market_data,source_name,value,,
+qpipe.source.hdb_market_data,time_column,value,,
+qpipe.source.hdb_market_data,types,value,,
+qpipe.source.hdb_market_data,tz,value,,
 qpipe.source.hdb_transfer,columns,value,,
 qpipe.source.hdb_transfer,credential_example,value,,
 qpipe.source.hdb_transfer,fixture,function,1,
@@ -1521,6 +1559,10 @@ qpipe.transform.book_liquidity,snapshot_shape,table,,
 qpipe.transform.book_liquidity,unspecified,value,,
 qpipe.transform.book_liquidity,width,value,,
 qpipe.transform.book_liquidity,windowed_shape,table,,
+qpipe.transform.book_liquidity_1m,bars,function,1,x
+qpipe.transform.book_liquidity_1m,lateness,value,,
+qpipe.transform.book_liquidity_1m,sizes,value,,
+qpipe.transform.book_liquidity_1m,width,value,,
 qpipe.transform.crypto_book_1s,lateness,value,,
 qpipe.transform.crypto_book_1s,order_by,value,,
 qpipe.transform.crypto_book_1s,snapshots,function,1,x
