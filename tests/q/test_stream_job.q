@@ -135,7 +135,7 @@ test_state_naming_a_variable_the_job_lacks_is_refused:{[t]
 test_reset_restores_every_declared_variable_to_its_defined_value:{[t]
     / the identity: whatever a batch left behind, reset gives back what the file defined
     before:.qpipe.job.cross.unpriced;
-    `.qpipe.job.cross.unpriced set `EURJPY`GBPJPY;
+    `.qpipe.job.cross.unpriced set `EURGBP`GBPJPY;
     `.qpipe.job.cross.crosses set 3#.qpipe.job.cross.crosses;
     .qetl.job.stream.reset `cross;
     .qunit.assertEquals[.qpipe.job.cross.unpriced;before;"a symbol list is back to empty"];
@@ -437,17 +437,17 @@ quote_row:{[ts;sym;bid;ask]
 
 test_cross_mirrors_its_quotes:{[t]
     reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`GBPUSD;1.3;1.3002]];
     .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;1;"the batch lands in the mirror"]};
 
 test_cross_reprices_a_pair_it_can_chain:{[t]
-    / EURUSD and USDJPY quoted -> EURJPY is buildable; the other three
+    / GBPUSD and USDJPY quoted -> GBPJPY is buildable; the other two
     / declared crosses are not, and are left out rather than published null.
     reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`GBPUSD;1.3;1.3002]];
     .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`USDJPY;150f;150.02]];
     out:.qpipe.job.cross.reprice[d[1]];
-    .qunit.assertEquals[out`sym;enlist `EURJPY;
+    .qunit.assertEquals[out`sym;enlist `GBPJPY;
         "only the cross whose legs are quoted comes out"]};
 
 / Every log line `f` writes under `id`, as (level;text;fields), through a
@@ -462,14 +462,14 @@ logged:{[id;f]
     1_/:.sjtest.lines where id=first each .sjtest.lines}
 
 test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
-    / Only EURUSD is quoted, so every cross is unpriced. The first reprice
+    / Only GBPUSD is quoted, so every cross is unpriced. The first reprice
     / warns; the same set again is DEBUG - at INFO or WARNING it repeated on every
-    / batch. Quoting USDJPY prices EURJPY, which is logged as priced again,
+    / batch. Quoting USDJPY prices GBPJPY, which is logged as priced again,
     / and the smaller unpriced set warns afresh.
     / The mirror is fed directly: on_batch reprices on its own, which would
     / spend the first warning before it could be observed.
     reset[];
-    `.qpipe.job.cross.fx_orderbook insert quote_row[d[0];`EURUSD;1.1;1.1002];
+    `.qpipe.job.cross.fx_orderbook insert quote_row[d[0];`GBPUSD;1.3;1.3002];
     first_lines:logged[`cross;{.qpipe.job.cross.reprice d 1}];
     again:logged[`cross;{.qpipe.job.cross.reprice d 1}];
     `.qpipe.job.cross.fx_orderbook insert quote_row[d[0];`USDJPY;150f;150.02];
@@ -478,14 +478,14 @@ test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
     .qunit.assertEquals[again[;0];enlist `DEBUG;"the same set again is only DEBUG"];
     .qunit.assertEquals[fixed[;0 1];((`WARNING;"pairs could not be priced");(`INFO;"pairs priced again"));
         "a smaller set warns, and the recovered pair is named"];
-    .qunit.assertEquals[(last fixed)[2]`pairs;enlist `EURJPY;"EURJPY is the pair priced again"]};
+    .qunit.assertEquals[(last fixed)[2]`pairs;enlist `GBPJPY;"GBPJPY is the pair priced again"]};
 
 test_cross_accumulates_rather_than_publishing:{[t]
     / cross1 declares no published table: its output is process-local, and
     / a test that saw rows on the recorder would mean the job had started
     / publishing without declaring it.
     reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`GBPUSD;1.3;1.3002]];
     .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`USDJPY;150f;150.02]];
     .qunit.assertEquals[(0<count .qpipe.job.cross.crosses;count .sjtest.published);(1b;0);
         "the crosses stay in the process and nothing is published"]};
@@ -494,6 +494,15 @@ test_cross_ignores_a_table_it_did_not_subscribe_to:{[t]
     reset[];
     .qpipe.job.cross.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD)];
     .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;0;"a batch from another table is ignored"]};
+
+test_cross_pairs_are_none_of_the_directly_quoted_pairs:{[t]
+    / #1366. .qcross.cross_book_at prices a directly quoted pair as ONE leg, so a
+    / cross_pairs entry that .qsynth.pairs also quotes just echoes the direct
+    / quote instead of chaining through USD. EURJPY was exactly that.
+    .qunit.assertEquals[.qpipe.job.cross.cross_pairs inter .qsynth.pairs;`symbol$();
+        "no cross pair is also quoted directly by the synthetic feed"];
+    .qunit.assertEquals[.qpipe.job.cross.cross_pairs;`GBPJPY`EURGBP`AUDJPY;
+        "the three genuine crosses survive the derivation"]};
 
 / --- posbook --------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 / cross.q - the whole of the cross-rate reprice job (.qpipe.job.cross).
 / .
-/ Subscribes to `fx_orderbook`, mirrors it, and after every batch reprices four
+/ Subscribes to `fx_orderbook`, mirrors it, and after every batch reprices three
 / synthetic cross pairs through USD, keeping the result as private process
 / state. It publishes nothing: the crosses are there to be queried on the
 / process itself.
@@ -21,8 +21,13 @@
 / ------------------------------------------------------------- THE SHAPES
 
 / The synthetic pairs this job reprices - deliberately none of the directly
-/ quoted pairs, so every one has to chain through USD.
-cross_pairs:`EURJPY`GBPJPY`EURGBP`AUDJPY
+/ quoted pairs, so every one has to chain through USD. .qcross.cross_book_at
+/ prices a quoted pair as a single leg, so a pair in .qsynth.pairs would just
+/ echo its own quote. EURJPY is quoted directly (to close the triangle
+/ cross_arbitrage.q checks) and is therefore not here (#1366). The except keeps
+/ the set clear of .qsynth.pairs if that list grows; .qsynth is a plain module
+/ loaded before the streaming declarations, not a peer job (#731).
+cross_pairs:(`GBPJPY`EURGBP`AUDJPY) except .qsynth.pairs
 
 / The fx_orderbook table as the plant delivers it - what this process receives
 / via its subscription, and exactly what the transform reads. Read from the
@@ -136,18 +141,18 @@ now:{[] .z.p}
     enlist[`fx_orderbook]!enlist .qpipe.job.cross.fx_orderbook_in;
     .qpipe.job.cross.cross_quotes;
     .qpipe.job.cross.reprice_crosses;
-    / EURUSD and USDJPY are quoted, so only EURJPY can be built:
-    / bid 1.10*150 = 165, ask 1.1002*150.02 = 165.052004, mid their average.
-    / The EURUSD quote AFTER as_of must not move the price - that is the
+    / GBPUSD and USDJPY are quoted, so only GBPJPY can be built:
+    / bid 1.30*150 = 195, ask 1.3002*150.02 = 195.056004, mid their average.
+    / The GBPUSD quote AFTER as_of must not move the price - that is the
     / whole reason as_of is an argument.
     enlist `inputs`expected`as_of!(
         enlist[`fx_orderbook]!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:00 2026.09.17D10:00:05;
-            sym:`EURUSD`USDJPY`EURUSD;
-            bid_prices:(enlist 1.1;enlist 150f;enlist 1.2);
+            sym:`GBPUSD`USDJPY`GBPUSD;
+            bid_prices:(enlist 1.3;enlist 150f;enlist 1.4);
             bid_sizes:(enlist 5e6;enlist 5e6;enlist 5e6);
-            ask_prices:(enlist 1.1002;enlist 150.02;enlist 1.2002);
+            ask_prices:(enlist 1.3002;enlist 150.02;enlist 1.4002);
             ask_sizes:(enlist 5e6;enlist 5e6;enlist 5e6));
-        ([] time:enlist 2026.09.17D10:00:01; sym:enlist `EURJPY; bid:enlist 165f; ask:enlist 165.052004; mid:enlist 165.026002);
+        ([] time:enlist 2026.09.17D10:00:01; sym:enlist `GBPJPY; bid:enlist 195f; ask:enlist 195.056004; mid:enlist 195.028002);
         2026.09.17D10:00:01);
     1b)];
 
