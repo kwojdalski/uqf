@@ -266,6 +266,16 @@ test_load_source_settings_with_no_file_in_any_layer_configures_nothing:{[t]
     r:.pipetest.with_config_file[`:/no/such/dir/sources.csv;{.qtorq.load_source_settings[]}];
     .qunit.assertEquals[r;0;"no file is not an error: every source runs as before"]};
 
+/ TorQ's .proc.getconfig[path;2] returns PLAIN symbols (no leading colon), and
+/ key of one is () even when the file exists (#1305).
+test_a_password_file_given_as_torqs_plain_symbol_stands:{[t]
+    own:pwfile["backfill.txt";"backfill:secret"];
+    plain:`$1_string own;
+    .qunit.assertEquals[key plain;();"precondition: key sees nothing at a colon-less path"];
+    fb:pwfile["metrics.txt";"metrics:pass"];
+    c:.qtorq.credential_from[enlist plain;fb];
+    .qunit.assertEquals[c;`source`userpass!(`own;`);"an existing file stands whichever way the path is spelled"]};
+
 test_no_fallback_to_adopt_is_reported_not_guessed:{[t]
     .qunit.assertEquals[.qtorq.credential_from[();`:/no/such/metrics.txt];`source`userpass!(`missing;`);
         "missing, so the caller warns rather than connecting as torquser"]};
