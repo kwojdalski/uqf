@@ -114,12 +114,61 @@ def test_a_row_carries_a_timespan_as_nanoseconds_and_an_infinity_as_a_string():
     assert '"rows":[{"s":1500000000,"f":"inf"},{"s":1234,"f":"-inf"},{"s":null,"f":null}]' in wire
 
 
+#: 0Wp and -0Wp as kola hands them to Python: nanoseconds since 1970, the
+#: first held at the widest a polars datetime goes, the second shifted from
+#: q's 2000 epoch.
+_STAMP_INFINITIES = [2**63 - 1, -(2**63 - 1) + 946_684_800 * 10**9]
+
+
+def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string():
+    """What kola hands _rows for `time:.z.p`-stamped rows 1234 ns and 1999 ns
+    past a microsecond, 0Wp, -0Wp and 0Np (#1371). Before, `to_dicts` made
+    each a Python datetime - both rows `10:00:00.000001`, and the infinities
+    `2262-04-11T23:47:16.854775` and `1707-09-22T00:12:43.145224`."""
+    from uqf_frontend.app import _rows
+    from uqf_frontend.models import QueryResponse
+
+    base = int(dt.datetime(2026, 10, 14, 10, tzinfo=dt.UTC).timestamp()) * 10**9
+    frame = pl.DataFrame(
+        {
+            "time": pl.Series(
+                [base + 1234, base + 1999, *_STAMP_INFINITIES, None], dtype=pl.Int64
+            ).cast(pl.Datetime("ns"))
+        }
+    )
+    rows = _rows(frame)
+    assert rows == [
+        {"time": "2026-10-14T10:00:00.000001234Z"},
+        {"time": "2026-10-14T10:00:00.000001999Z"},
+        {"time": "inf"},
+        {"time": "-inf"},
+        {"time": None},
+    ]
+    wire = QueryResponse(
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=5, truncated=False
+    ).model_dump_json()
+    assert (
+        '{"time":"2026-10-14T10:00:00.000001234Z"},{"time":"2026-10-14T10:00:00.000001999Z"}'
+    ) in wire
+
+
+def test_a_zoned_or_coarser_timestamp_column_is_sent_as_utc_nanoseconds():
+    from uqf_frontend.app import _rows
+
+    when = dt.datetime(2026, 10, 14, 12, 0, 0, 5, tzinfo=dt.timezone(dt.timedelta(hours=2)))
+    frame = pl.DataFrame({"t": pl.Series([when], dtype=pl.Datetime("us", "Europe/Warsaw"))})
+    assert _rows(frame) == [{"t": "2026-10-14T10:00:00.000005000Z"}]
+
+
 def test_an_aware_datetime_is_normalised_to_utc():
     cet = dt.timezone(dt.timedelta(hours=2))
     out = queries.coerce(
-        dt.datetime(2026, 9, 15, 12, 0, tzinfo=cet), QType.TIMESTAMP, "t", as_list=False
+        dt.datetime(2026, 9, 15, 12, 0, 0, 7, tzinfo=cet), QType.TIMESTAMP, "t", as_list=False
     )
-    assert out == dt.datetime(2026, 9, 15, 10, 0, tzinfo=dt.UTC)
+    assert out.dtype == pl.Datetime("ns", "UTC")
+    assert out.cast(pl.Int64).to_list() == [
+        int(dt.datetime(2026, 9, 15, 10, 0, tzinfo=dt.UTC).timestamp()) * 10**9 + 7000
+    ]
 
 
 def test_a_naive_datetime_object_is_refused_like_a_naive_string():

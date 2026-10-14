@@ -32,14 +32,15 @@ browse_ops:`eq`ne`lt`le`gt`ge`in!((=);(not;in);(<);(<=);(>);(>=);(in))
 / A timespan arrives as a one-item timespan vector - the only form kola gives
 / a value of nanoseconds, where a Python timedelta stops at the microsecond
 / (#1329) - so it, or a list of them for `in`, is unwrapped to the atom or
-/ the vector the column compares with.
+/ the vector the column compares with. A timestamp arrives the same way, for
+/ the same reason: a Python datetime stops at the microsecond (#1371).
 browse_value:{[v]
     $[10h=type v; "G"$v;
-      16h=type v; first v;
+      (type v) in 12 16h; first v;
       0h<>type v; v;
       not count v; v;
       all 10h=type each v; "G"$v;
-      all 16h=type each v; raze v;
+      all (type each v) in 12 16h; raze v;
       v]}
 
 / Private: one browser condition as a getdata filter pair.
@@ -52,7 +53,8 @@ browse_pair:{[o;v]
 / gave them, else the latest window the caller's policy allows.
 / @param fc the filter columns
 / @param fo their operators
-/ @param fv their values
+/ @param fv their values; a timestamp as an atom or a one-item vector, the
+/   form the frontend sends one in (#1371)
 / @param span how far back an open window reaches
 / @param now the window's end when none is given
 / @return (starttime;endtime)
@@ -61,8 +63,8 @@ browse_window:{[fc;fo;fv;span;now]
     t:where fc=`time;
     lo:t where fo[t] in `ge`gt`eq;
     hi:t where fo[t] in `le`lt`eq;
-    e:$[count hi; min `timestamp$fv hi; now];
-    s:$[count lo; max `timestamp$fv lo; e-span];
+    e:$[count hi; min raze `timestamp$fv hi; now];
+    s:$[count lo; max raze `timestamp$fv lo; e-span];
     (s;e)}
 
 / Private: an integral column with an infinity in it, as floats. kola turns
