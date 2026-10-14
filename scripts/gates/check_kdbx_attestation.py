@@ -25,22 +25,60 @@ It is ADVISORY: CI reports the answer on the PR and never fails on it.
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
 
 TRAILER = "KDB-X-gates"
 
-#: The paths the KDB-X gates judge that no other CI lane does: q source and
-#: tests, the generators and what they generate. A change to none of them
-#: needs no attestation.
-JUDGED = re.compile(
-    r"\.q$"
-    r"|^tests/q/"
-    r"|^scripts/generate/"
-    r"|^docs/reference/surfaces/"
-    r"|^python/uqs/src/uqs/generated/"
-)
+
+def _load(rel: str):
+    spec = importlib.util.spec_from_file_location(Path(rel).stem, REPO / rel)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def judged_scopes(config_text: str | None = None) -> list[tuple[re.Pattern, re.Pattern | None]]:
+    """The (files, exclude) scope of each hook attest_kdbx.py runs.
+
+    Read from .pre-commit-config.yaml, the way check_hook_scopes.py reads it,
+    for the hooks attest_kdbx.py names - not kept here as a second list. A
+    hand-kept copy had already drifted narrower than the hooks: q-tests runs
+    the ```q blocks in docs/ (`.md`), contract-surface reads Python and
+    scripts/processes/, and a change to only those was reported as needing no
+    attestation (#1334). A hook with no `files:` would match every path, and
+    one that is not in the config at all is a rename this must not paper
+    over, so both stop here rather than guess.
+    """
+    hooks = _load("scripts/dev/attest_kdbx.py").HOOKS
+    scopes_mod = _load("scripts/gates/check_hook_scopes.py")
+    if config_text is None:
+        config_text = scopes_mod.CONFIG.read_text()
+    scoped = {
+        hook: (files, exclude) for hook, files, exclude in scopes_mod.scoped_hooks(config_text)
+    }
+    missing = [hook for hook in hooks if hook not in scoped]
+    if missing:
+        raise SystemExit(
+            f"check_kdbx_attestation: no `files:` scope for {', '.join(missing)} in "
+            ".pre-commit-config.yaml - cannot tell which paths the KDB-X gates judge"
+        )
+    return [
+        (re.compile(files), re.compile(exclude) if exclude else None)
+        for files, exclude in (scoped[hook] for hook in hooks)
+    ]
+
+
+def is_judged(path: str, scopes: list[tuple[re.Pattern, re.Pattern | None]]) -> bool:
+    """Whether any KDB-X hook's scope - `files:` less `exclude:` - takes `path`."""
+    return any(files.search(path) and not (ex and ex.search(path)) for files, ex in scopes)
+
 
 ATTEST = "uv run python scripts/dev/attest_kdbx.py"
 
@@ -51,7 +89,8 @@ def git(*args: str) -> str:
 
 def judged_paths(base: str, head: str) -> list[str]:
     changed = git("diff", "--name-only", f"{base}...{head}").split()
-    return [p for p in changed if JUDGED.search(p)]
+    scopes = judged_scopes()
+    return [p for p in changed if is_judged(p, scopes)]
 
 
 def attested(head: str) -> bool:
