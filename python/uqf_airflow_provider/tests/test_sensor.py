@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -38,12 +39,21 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from uqf_airflow_provider.sensor import ExpectedRun, build_sensor_class, poke_worker_status
+from uqf_airflow_provider.sensor import (
+    FIXTURE_TAG,
+    REVISION_TAG,
+    ExpectedRun,
+    _untagged,
+    build_sensor_class,
+    poke_worker_status,
+)
 from uqf_airflow_provider.status_reader import MalformedStatusFile, status_file_path
 from uqf_airflow_provider.translate import PokeOutcome
 
 WORKER = "markout_backfill"
 INSTANCE = "demo_markout1"
+
+ETL_CORE_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core"
 
 
 #: The run every test's sensor waits for, and every file's default spec.
@@ -157,6 +167,43 @@ def test_the_previous_runs_terminal_file_is_pending_not_its_outcome(tmp_path, sp
     one's - success before q began, or a retry failed by the old error."""
     write_status(tmp_path, state=state, error="old", **spec)
     assert poke_worker_status(tmp_path, WORKER, INSTANCE, EXPECT) is PokeOutcome.PENDING
+
+
+@pytest.mark.parametrize("recorded", ["v1~fixture", "v1@r2", "v1@r2~fixture"])
+def test_the_release_the_worker_records_tagged_is_the_one_the_dag_named(tmp_path, recorded):
+    """#1315: the DAG launches `v1`; the worker records `v1~fixture` on the
+    fixture (#1082) or `v1@r2` under its declared revision (#1097). Compared
+    verbatim, no file ever matched and the sensor stayed PENDING until its
+    own timeout for a run whose file said `completed`."""
+    write_status(tmp_path, state="completed", source_version=recorded)
+    assert poke_worker_status(tmp_path, WORKER, INSTANCE, EXPECT) is PokeOutcome.SUCCESS
+
+
+def test_a_tagged_file_for_another_release_is_still_pending(tmp_path):
+    write_status(tmp_path, state="completed", source_version="v2~fixture")
+    assert poke_worker_status(tmp_path, WORKER, INSTANCE, EXPECT) is PokeOutcome.PENDING
+
+
+def test_the_tags_are_the_ones_the_q_runtime_appends():
+    """FIXTURE_TAG and REVISION_TAG mirror uqs.stack.runs (this package does
+    not depend on uqs), so, as with status_reader.STATES, each is held to
+    the q source that appends it - and to the order it appends them in."""
+
+    def quoted(pattern: str, src: str) -> str:
+        found = re.search(pattern, src)
+        assert found, f"the q source no longer reads the way this test does: {pattern}"
+        return found.group(1)
+
+    fixture_src = (ETL_CORE_Q / "source_credentials.q").read_text()
+    fixture_body = fixture_src[fixture_src.index("fixture_version:{") :]
+    assert quoted(r'`\$s,"([^"]+)"', fixture_body) == FIXTURE_TAG
+    runtime_src = (ETL_CORE_Q / "worker_runtime.q").read_text()
+    runtime_body = runtime_src[runtime_src.index("run_version:{") :]
+    assert quoted(r'string\[v\],"([^"]+)",string r', runtime_body) == REVISION_TAG
+    # run_version's own example: revised first, then tagged for the fixture.
+    example = quoted(r'run_version\[.*?\]\s+->\s+`\$"([^"]+)"', runtime_src)
+    assert example == f"v1{REVISION_TAG}2{FIXTURE_TAG}"
+    assert _untagged(example) == "v1"
 
 
 def test_a_retry_of_the_same_range_ignores_a_file_written_before_it(tmp_path):
