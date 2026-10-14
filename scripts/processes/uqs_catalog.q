@@ -82,6 +82,8 @@ describe[`superbook]:
     "Latest fresh direct FX liquidity merged across sources, bids descending and asks ascending, with aligned source and original timestamp vectors. Empty snapshots clear expired books";
 describe[`trades]:
     "Client fills, shaped to match .qpos.apply_fill and .qexec.markout_at_horizons exactly";
+describe[`imported_trades]:
+    "One trade moved over IPC from another kdb+ process's HDB by upstream_trades_backfill, with the upstream's int size widened to long, its buy/sell side as 1/-1 and its zero-size rows dropped. Written by a bounded worker rather than a feed, so it is only as complete as the windows etl_coverage says were run";
 describe[`wide_orderbook]:
     "The unfolded book widefeed1 publishes: one column per level per side, bids0..bids10 and asks0..asks10. vectorize1 folds it into mkt_orderbook; a reader wanting a book usually wants that one instead";
 
@@ -151,6 +153,8 @@ unbounded[`flink_vwap]:
     enlist "one row per sym per one-minute window Flink closes - a few thousand a day";
 unbounded[`deal_positions]:
     enlist "one row per pair per published window of demo_deals";
+unbounded[`imported_trades]:
+    enlist "NOT YET ASSESSED (#1363): found by the catalog gate once it counted worker datasets; a backfilled sample, not a feed - its policy row is due with a measured basis";
 unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`eq_orderbook`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`crypto_market_data`trades_copy]:
     20#enlist "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this";
 

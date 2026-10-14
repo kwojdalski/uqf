@@ -17,10 +17,6 @@
 # reports a difference as not comparable rather than as a verdict (#968).
 platform: Linux-x86_64
 
-.cattest.test_every_published_table_is_described_or_hidden  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.cattest.test_the_catalog_describes_no_table_that_does_not_exist  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-
-
 .dagtest.test_a_derived_reaction_is_not_drawn_asserted  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .dagtest.test_d2_declares_every_external_node_before_using_it  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .dagtest.test_d2_draws_an_asserted_reaction_dashed  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
