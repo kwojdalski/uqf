@@ -316,6 +316,8 @@ qetl.job.bounded.runtime,policy,function,1,
 qetl.job.bounded.runtime,q_owned,value,,
 qetl.job.bounded.runtime,refuse_fixture,function,2,who source
 qetl.job.bounded.runtime,remaining,function,6,ds part version as_of from_ts to_ts
+qetl.job.bounded.runtime,require_align,function,2,worker decl
+qetl.job.bounded.runtime,require_aligned,function,4,worker cfg range_from range_to
 qetl.job.bounded.runtime,require_dependencies,function,1,worker
 qetl.job.bounded.runtime,require_revision,function,2,worker decl
 qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts

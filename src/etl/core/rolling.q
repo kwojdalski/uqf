@@ -290,7 +290,10 @@ on_batch:{[name;t;x]
     if[count stamps;
         mark_covered[ns;min stamps];
         span:(last d`windows)+d`lateness;
-        keep_from:(max stamps)-span;
+        / anchored on the grid point the next publication cuts at, as evaluate is:
+        / a batch landing after a boundary but before the timer must not evict
+        / rows that publication's window still holds (#1302)
+        keep_from:((d`period) xbar max stamps)-span;
         .qetl.job.stream.evict[pq;((get pq) tc)<=keep_from]];
     }
 

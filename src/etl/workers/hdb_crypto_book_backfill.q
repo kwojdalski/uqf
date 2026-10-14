@@ -8,9 +8,10 @@
 / `crypto_book_1s` table. The target key is (venue;sym;bar_start), so writing a
 / window the live job also snapshotted replaces those rows.
 / .
-/ A window should start and end on a whole second: a snapshot is never split
-/ across windows, so one that straddles a boundary is built twice, each time
-/ from part of its updates, and the later write wins.
+/ A snapshot is never split across windows, so one that straddled a boundary
+/ would be built twice, each time from part of its updates, and the later write
+/ would win. The worker declares align (the snapshot width) and a run whose
+/ --from or --to is not a whole second is refused (#1303).
 / .
 / The output's own `time` is bar_start+width, the snapshot's END, so window_column
 / says bar_start: `replace then clears the rows the window produced, not the
@@ -65,9 +66,9 @@ quality_check:{[batch]
             ask_sizes:(2 2f;6 6f;5 5f;4 4f;7 7f;8 8f))))];
 
 .qetl.job.bounded.define[`hdb_crypto_book_backfill;
-    `source`dataset`width`transform`check`procname`note`target_key`window_column!
+    `source`dataset`width`transform`check`procname`note`target_key`window_column`align!
     (`hdb_crypto_book;`crypto_book_1s;0D01:00:00;`hdb_crypto_book_1s;
      .qpipe.job.hdb_crypto_book_backfill.quality_check;
      `hdb_crypto_book_backfill1;
      "bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live";
-     `venue`sym`bar_start;`bar_start)];
+     `venue`sym`bar_start;`bar_start;.qpipe.transform.crypto_book_1s.width)];
