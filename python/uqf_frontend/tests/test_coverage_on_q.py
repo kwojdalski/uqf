@@ -54,15 +54,15 @@ def gateway(start_q, tmp_path_factory) -> Any:
 def test_two_claims_in_the_ledger_compose_into_one_interval(gateway):
     body = _coverage(gateway, "trades", "", "v1", None, None)
     assert [(c.range_from, c.range_to) for c in body.covered] == [
-        ("2026-09-13T00:00:00+00:00", "2026-09-15T00:00:00+00:00")
+        ("2026-09-13T00:00:00.000000000Z", "2026-09-15T00:00:00.000000000Z")
     ]
 
 
 def test_the_gap_is_what_no_claim_covers(gateway):
     body = _coverage(gateway, "trades", "", "v1", "2026-09-12T00:00:00Z", "2026-09-16T00:00:00Z")
     assert [(g.range_from, g.range_to) for g in body.gaps] == [
-        ("2026-09-12T00:00:00+00:00", "2026-09-13T00:00:00+00:00"),
-        ("2026-09-15T00:00:00+00:00", "2026-09-16T00:00:00+00:00"),
+        ("2026-09-12T00:00:00.000000000Z", "2026-09-13T00:00:00.000000000Z"),
+        ("2026-09-15T00:00:00.000000000Z", "2026-09-16T00:00:00.000000000Z"),
     ]
     assert body.complete is False
 
@@ -78,5 +78,18 @@ def test_another_release_has_no_coverage_at_all(gateway):
     body = _coverage(gateway, "trades", "", "v2", "2026-09-13T00:00:00Z", "2026-09-14T00:00:00Z")
     assert body.covered == []
     assert [(g.range_from, g.range_to) for g in body.gaps] == [
-        ("2026-09-13T00:00:00+00:00", "2026-09-14T00:00:00+00:00")
+        ("2026-09-13T00:00:00.000000000Z", "2026-09-14T00:00:00.000000000Z")
+    ]
+
+
+def test_a_requested_range_finer_than_a_microsecond_is_answered_exactly(gateway):
+    """#1371: a bound the coverage view shows - nine digits - crosses kola as
+    nanoseconds and comes back as it went; 1 ns either side of a covered
+    range is the gap, rather than a refusal or an empty interval."""
+    lo, hi = "2026-09-14T23:59:59.999999999Z", "2026-09-15T00:00:00.000000001Z"
+    body = _coverage(gateway, "trades", "", "v1", lo, hi)
+    assert body.requested is not None
+    assert (body.requested.range_from, body.requested.range_to) == (lo, hi)
+    assert [(g.range_from, g.range_to) for g in body.gaps] == [
+        ("2026-09-15T00:00:00.000000000Z", hi)
     ]

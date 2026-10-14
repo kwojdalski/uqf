@@ -231,8 +231,17 @@ export function validateRange(value: CoverageRequest) {
     throw new Error("Dataset and source version are required.");
   validateTime(value.range_from);
   validateTime(value.range_to);
-  if (Date.parse(value.range_from) >= Date.parse(value.range_to))
+  if (instant(value.range_from) >= instant(value.range_to))
     throw new Error("Range end must be after range start.");
+}
+/** An ISO instant as nanoseconds since 1970, exact: the server takes nine
+ *  fractional digits (#1371), and Date.parse stops at the millisecond, so
+ *  two bounds within one would read as an empty range. */
+function instant(value: string): bigint {
+  const parts = /^(.*?\d{2}:\d{2}:\d{2})(?:[.,](\d+))?(.*)$/.exec(value);
+  const [, head, fraction, zone] = parts ?? [, value, "", ""];
+  const fine = BigInt((fraction ?? "").padEnd(9, "0").slice(0, 9));
+  return BigInt(Date.parse(head + zone)) * 1_000_000n + fine;
 }
 
 // --- control (writes) ------------------------------------------------------

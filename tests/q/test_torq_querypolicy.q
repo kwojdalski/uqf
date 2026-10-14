@@ -105,6 +105,19 @@ test_a_timespan_value_is_compared_to_the_nanosecond:{[t]
     many:.uqf.browse_pair[`in;(enlist 0D00:00:00.000001234;enlist 0D00:00:00.0000015)];
     .qunit.assertEquals[(one[0][s;one 1];many[0][s;many 1]);(010b;011b);"an atom for eq, a vector for in"]};
 
+/ #1371: a timestamp crosses kola the same way, for the same reason - a
+/ Python datetime stops at the microsecond - so a `.z.p` stamp is compared
+/ to the nanosecond.
+test_a_timestamp_value_is_compared_to_the_nanosecond:{[t]
+    p:2026.10.14D10:00:00.000001+0 1234 1999;
+    one:.uqf.browse_pair[`eq;enlist 2026.10.14D10:00:00.000002234];
+    many:.uqf.browse_pair[`in;(enlist 2026.10.14D10:00:00.000002234;enlist 2026.10.14D10:00:00.000002999)];
+    .qunit.assertEquals[(one[0][p;one 1];many[0][p;many 1]);(010b;011b);"an atom for eq, a vector for in"]};
+
+test_a_timestamp_bound_sent_as_a_vector_sets_an_atom_window:{[t]
+    w:.uqf.browse_window[`time`time;`ge`lt;(enlist 2026.10.14D10:00:00.000001234;enlist 2026.10.14D10:00:00.000001999);1D;2026.10.15D00:00];
+    .qunit.assertEquals[w;2026.10.14D10:00:00.000001234 2026.10.14D10:00:00.000001999;"the bounds to the nanosecond, as atoms"]};
+
 / #1330: kola makes 0W and -0W null, so a column holding one goes as floats,
 / where 0w and -0w survive; every other column is left exactly as it was.
 test_an_integral_infinity_goes_as_a_float_one:{[t]

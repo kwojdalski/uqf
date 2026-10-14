@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import polars as pl
 import pytest
 
 from uqf_frontend.catalog import QType, Table
@@ -73,15 +74,27 @@ def test_naive_timestamp_is_rejected_with_a_reason_a_caller_can_act_on():
         coerce("2026-09-15T10:30:00", QType.TIMESTAMP, "time", as_list=False)
 
 
+def _ns(series) -> int:
+    """A coerced timestamp as the nanoseconds since 1970 kola sends; `item`
+    would hand back a datetime, which stops at the microsecond."""
+    assert series.dtype == pl.Datetime("ns", "UTC")
+    assert len(series) == 1
+    return series.cast(pl.Int64).item()
+
+
+def _at(*args: int) -> int:
+    """A UTC wall time as nanoseconds since 1970, exact."""
+    return int(dt.datetime(*args, tzinfo=dt.UTC).timestamp()) * 10**9
+
+
 def test_utc_timestamp_is_accepted_and_aware():
     got = coerce("2026-09-15T10:30:00Z", QType.TIMESTAMP, "time", as_list=False)
-    assert got.tzinfo is not None
-    assert got == dt.datetime(2026, 9, 15, 10, 30, tzinfo=dt.UTC)
+    assert _ns(got) == _at(2026, 9, 15, 10, 30)
 
 
 def test_offset_timestamp_is_normalised_to_utc():
     got = coerce("2026-09-15T12:30:00+02:00", QType.TIMESTAMP, "time", as_list=False)
-    assert got == dt.datetime(2026, 9, 15, 10, 30, tzinfo=dt.UTC)
+    assert _ns(got) == _at(2026, 9, 15, 10, 30)
 
 
 def test_garbage_timestamp_is_rejected():
@@ -89,18 +102,42 @@ def test_garbage_timestamp_is_rejected():
         coerce("not a time", QType.TIMESTAMP, "time", as_list=False)
 
 
-def test_a_timestamp_finer_than_a_microsecond_is_refused_not_truncated():
-    """`fromisoformat` keeps the first six digits of a nine-digit fraction
-    without a word, so a nanosecond filter value or coverage bound reached q
-    up to 999 ns earlier than sent (#1317). The rule `uqs backfill` applies to
-    its bounds, applied here."""
-    with pytest.raises(ValidationFailed, match="'time' is a timestamp; .*finer than a microsecond"):
-        coerce("2026-09-15T10:30:00.123456789Z", QType.TIMESTAMP, "time", as_list=False)
+@pytest.mark.parametrize(
+    ("text", "tail"),
+    [
+        ("2026-09-15T10:30:00.123456789Z", 123_456_789),
+        ("2026-09-15T12:30:00.000001234+02:00", 1234),
+        ("2026-09-15T10:30:00,5Z", 500_000_000),
+        ("2026-09-15T10:30:00.000000001Z", 1),
+    ],
+)
+def test_a_timestamp_keeps_its_nanoseconds(text, tail):
+    """#1371: a timestamp went to q as a datetime, which stops at the
+    microsecond - and since #1317 a finer value was refused, so the time the
+    Desk showed for a `.z.p`-stamped row could not be asked for at all. It
+    now crosses kola as nanoseconds."""
+    got = coerce(text, QType.TIMESTAMP, "time", as_list=False)
+    assert _ns(got) == _at(2026, 9, 15, 10, 30) + tail
 
 
-def test_trailing_zeros_past_the_microsecond_are_not_finer():
-    got = coerce("2026-09-15T10:30:00.123456000Z", QType.TIMESTAMP, "time", as_list=False)
-    assert got == dt.datetime(2026, 9, 15, 10, 30, 0, 123456, tzinfo=dt.UTC)
+def test_a_timestamp_finer_than_a_nanosecond_is_refused_not_truncated():
+    """q has nothing past the ninth digit; cutting it would ask for a
+    different instant from the one typed."""
+    with pytest.raises(ValidationFailed, match="'time' is a timestamp; .*finer than a nanosecond"):
+        coerce("2026-09-15T10:30:00.1234567891Z", QType.TIMESTAMP, "time", as_list=False)
+
+
+def test_trailing_zeros_past_the_nanosecond_are_not_finer():
+    got = coerce("2026-09-15T10:30:00.1234567890000Z", QType.TIMESTAMP, "time", as_list=False)
+    assert _ns(got) == _at(2026, 9, 15, 10, 30) + 123_456_789
+
+
+@pytest.mark.parametrize(
+    "text", ["1707-01-01T00:00:00Z", "2262-04-12T00:00:00Z", "9999-01-01T00:00:00Z"]
+)
+def test_a_timestamp_q_cannot_hold_is_refused(text):
+    with pytest.raises(ValidationFailed, match="'time' is a timestamp; .* past what q can hold"):
+        coerce(text, QType.TIMESTAMP, "time", as_list=False)
 
 
 def test_in_operator_requires_a_non_empty_list():

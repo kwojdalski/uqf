@@ -261,9 +261,73 @@ def test_coverage_reports_what_q_composed(client_for):
     assert gw.calls[-1] == (queries.COMPOSE, (rows,))
     assert gw.routed == [], "the ledger is read on the gateway, never routed to a tier"
     assert body["covered"] == [
-        {"range_from": "2026-09-13T00:00:00+00:00", "range_to": "2026-09-15T00:00:00+00:00"}
+        {
+            "range_from": "2026-09-13T00:00:00.000000000Z",
+            "range_to": "2026-09-15T00:00:00.000000000Z",
+        }
     ]
     assert body["complete"] is False, "no range was requested, so nothing is complete"
+
+
+def _stamps(*ns: int):
+    """Timestamps as kola hands them over: a polars datetime[ns] column."""
+    import polars as pl
+
+    return pl.Series(list(ns), dtype=pl.Int64).cast(pl.Datetime("ns"))
+
+
+def test_a_covered_interval_keeps_its_nanoseconds(client_for):
+    """#1371: kola hands coverage bounds over as datetime[ns], and `_iso` made
+    each a Python datetime - so `.z.p`-stamped claims 765 ns apart read as
+    range_from == range_to, a non-empty interval shown as an empty one."""
+    import polars as pl
+
+    base = 1_791_972_000_000_000_000  # 2026-10-14T10:00:00Z
+    composed = pl.DataFrame({"range_from": _stamps(base + 1234), "range_to": _stamps(base + 1999)})
+    body = (
+        client_for(_cov([], covered=composed))
+        .get("/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"})
+        .json()
+    )
+    assert body["covered"] == [
+        {
+            "range_from": "2026-10-14T10:00:00.000001234Z",
+            "range_to": "2026-10-14T10:00:00.000001999Z",
+        }
+    ]
+
+
+def test_a_requested_range_reaches_q_and_comes_back_to_the_nanosecond(client_for):
+    """#1371: a bound the coverage view shows - nine digits - is the one the
+    gaps are worked out for, rather than refused as finer than a microsecond,
+    and is echoed back as it was sent."""
+    import polars as pl
+
+    from uqf_frontend import queries
+
+    gw = _cov([])
+    body = (
+        client_for(gw)
+        .get(
+            "/coverage",
+            params={
+                "dataset": "trades",
+                "partition": "",
+                "source_version": "v1",
+                "range_from": "2026-10-14T10:00:00.000001234Z",
+                "range_to": "2026-10-14T12:00:00.000001999+02:00",
+            },
+        )
+        .json()
+    )
+    assert body["requested"] == {
+        "range_from": "2026-10-14T10:00:00.000001234Z",
+        "range_to": "2026-10-14T10:00:00.000001999Z",
+    }
+    program, (start, end, _) = gw.calls[-1]
+    assert program == queries.GAPS
+    base = 1_791_972_000_000_000_000
+    assert [start.cast(pl.Int64).item(), end.cast(pl.Int64).item()] == [base + 1234, base + 1999]
 
 
 def test_coverage_reports_gaps_for_a_requested_range(client_for):
@@ -290,9 +354,13 @@ def test_coverage_reports_gaps_for_a_requested_range(client_for):
     assert body["complete"] is False
     assert len(body["gaps"]) == 1
     assert body["gaps"][0]["range_from"].startswith("2026-09-14")
-    program, args = gw.calls[-1]
-    start, end = dt.datetime(2026, 9, 13, tzinfo=dt.UTC), dt.datetime(2026, 9, 15, tzinfo=dt.UTC)
-    assert (program, args) == (queries.GAPS, (start, end, rows))
+    program, (start, end, raw) = gw.calls[-1]
+    assert (program, raw) == (queries.GAPS, rows)
+    # One-item timestamp vectors, the form kola carries nanoseconds in (#1371).
+    assert [start.item(), end.item()] == [
+        dt.datetime(2026, 9, 13, tzinfo=dt.UTC),
+        dt.datetime(2026, 9, 15, tzinfo=dt.UTC),
+    ]
 
 
 def test_an_empty_requested_range_is_refused_before_q(client_for):
