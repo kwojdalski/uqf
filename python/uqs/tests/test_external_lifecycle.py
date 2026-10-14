@@ -193,6 +193,43 @@ def test_a_start_time_ps_recomputes_on_each_call_does_not_disown_the_feed(
     assert stranger.wait(timeout=5) == -15, "the feed itself was stopped"
 
 
+def test_a_feed_whose_argv_was_read_mid_exec_is_still_recognised_as_itself(proc, monkeypatch):
+    """#1398: Popen returns once exec has closed the child's close-on-exec
+    fds, but Linux sets the new image's argv (/proc/<pid>/cmdline) only later
+    in that same exec. Read in between, ps prints the bare command name,
+    "[python3]", and every later read the real argv - so the feed start had
+    just spawned read as "now another process": running said False and stop
+    refused it. The kernel's start ticks are fixed at fork; they decide."""
+    args = " ".join(" ".join(SLEEP).split())
+    reads = iter(range(1_000_000))
+
+    def ps(pid, *fields, fixed=True):
+        argv = "[python3]" if next(reads) == 0 else args
+        return f"Mon Oct 12 09:40:27 2026 {argv}" if "lstart" in fields else argv
+
+    monkeypatch.setattr(lifecycle, "_ps", ps)
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: "boot+4242")
+    pid = proc.start(SLEEP, cwd=proc.pid_path.parent)
+    assert proc.pid_path.read_text().split("\n")[1] == "boot+4242 [python3]", "recorded mid-exec"
+
+    assert proc.running() and proc.running(), "its own feed, on every later look"
+    assert proc.status()["running"] == "True"
+    assert proc.stop(missing_ok=False) == pid, "stopped, not refused as a stranger"
+    assert not proc.pid_path.exists()
+
+
+def test_on_linux_a_reused_pid_with_other_start_ticks_is_never_ours(proc, stranger, monkeypatch):
+    """The ticks alone decide on Linux, so they must still tell a pid's new
+    holder from the feed that had it (#1043)."""
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: "boot+5000")
+    proc.pid_path.write_text(f"{stranger.pid}\nboot+4242 /bin/the-old-feed\n")
+    assert not proc.running()
+    stale = rf"stale pid file: pid {stranger.pid} is now another process"
+    with pytest.raises(UqsError, match=stale):
+        proc.stop(missing_ok=False)
+    assert stranger.poll() is None, "never signalled"
+
+
 def test_the_start_time_is_field_22_even_when_the_command_name_holds_a_paren(monkeypatch, tmp_path):
     """A command name is the process's to choose: "(a) b)" must not shift the
     fields after it."""

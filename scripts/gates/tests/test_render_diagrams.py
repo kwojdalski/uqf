@@ -137,6 +137,27 @@ def test_a_different_d2_version_skips_and_names_both(diagram_dir, monkeypatch, c
     assert "v9.9.9" in out and render_diagrams.D2_VERSION in out
 
 
+def test_require_fails_when_d2_is_absent(diagram_dir, monkeypatch, capsys):
+    """CI passes --require: a skip there is the gate green over nothing."""
+    _write_source(diagram_dir)
+    monkeypatch.setattr(render_diagrams, "installed_version", lambda: None)
+    assert _run("--check", "--require") == 1
+    assert "--require needs d2" in capsys.readouterr().err
+
+
+def test_require_fails_on_a_different_d2_version(diagram_dir, monkeypatch, capsys):
+    _write_source(diagram_dir)
+    monkeypatch.setattr(render_diagrams, "installed_version", lambda: "v9.9.9")
+    assert _run("--check", "--require") == 1
+    err = capsys.readouterr().err
+    assert "v9.9.9" in err and render_diagrams.D2_VERSION in err
+
+
+def test_print_version_is_the_pin(capsys):
+    assert _run("--print-version") == 0
+    assert capsys.readouterr().out.strip() == render_diagrams.D2_VERSION
+
+
 def test_an_empty_diagram_directory_is_an_error(diagram_dir, capsys):
     """A moved directory must fail loudly rather than gate nothing - the same
     refusal check_etl_layering.py makes over an empty namespace set."""
