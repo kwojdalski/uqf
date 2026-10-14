@@ -67,6 +67,10 @@ The q details this rests on, verified against a live KDB-X process:
   | `PUT /control/worker-config`                   | One `.qetl.cfg` override in the live process the gateway addresses, lost when it restarts. Returns `.qetl.cfg.explain`, and `shadowed` with the `UQF_<KEY>` variable when the environment outranks the override                                                                                                                                                                      |
   | `POST /control/backfill`                       | Launch a bounded worker over a range. **Detached** — watch `/ops/backfill` for the outcome                                                                                                                                                                                                                                                                                           |
 
+Every request body is held to its model: a key the model does not know is a 422,
+never ignored, and the lifecycle body's `procs` is required. It once defaulted
+to `all`, so a body that lost the field stopped the whole fleet (#1361).
+
 **They are off by default, and that is the security posture rather than
 caution.** `UQF_FRONTEND_ENABLE_WRITES` must be set on the server or every one
 of them returns 403 naming that variable. The reason: this deployment has one
