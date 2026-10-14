@@ -1513,6 +1513,24 @@ qpipe.transform.eq_orderbook,to_book,function,1,batch
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
 qpipe.transform.exec_bars,width,value,,
+qpipe.transform.fx_markout,calc,function,3,spec exe md
+qpipe.transform.fx_markout,chain_mid,function,5,b0 a0 b1 a1 s
+qpipe.transform.fx_markout,default_spec,dict,,
+qpipe.transform.fx_markout,executions_in,table,,
+qpipe.transform.fx_markout,kinds,value,,
+qpipe.transform.fx_markout,last_delivery,function,1,exe
+qpipe.transform.fx_markout,leg_at,function,5,tob max_age syms inverted times
+qpipe.transform.fx_markout,legs_of,function,2,spec pending
+qpipe.transform.fx_markout,lookback,function,1,spec
+qpipe.transform.fx_markout,market_data_in,table,,
+qpipe.transform.fx_markout,require_spec,function,1,spec
+qpipe.transform.fx_markout,result,table,,
+qpipe.transform.fx_markout,routable,function,2,conv syms
+qpipe.transform.fx_markout,route,function,2,conv sym
+qpipe.transform.fx_markout,scoreable,function,2,spec exe
+qpipe.transform.fx_markout,tops,function,1,md
+qpipe.transform.fx_markout,unscoreable,function,2,spec exe
+qpipe.transform.fx_markout,wait,function,2,spec settle
 qpipe.transform.order_quality,lateness,value,,
 qpipe.transform.order_quality,stats,function,1,x
 qpipe.transform.order_quality,windows,value,,
