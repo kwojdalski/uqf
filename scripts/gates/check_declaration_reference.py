@@ -51,7 +51,12 @@ BLOCKS: dict[str, tuple[str, tuple[str, ...], frozenset[str]]] = {
 #: A key list in a declaring file. Every one under src/etl/core/ must be some
 #: block's (`test_check_declaration_reference.py`), so a new kind cannot be
 #: left out of BLOCKS the way Horizon, Bars and Rolling were (#1331).
-DECLARATION_LIST = re.compile(r"^((?:required|optional)_(?:keys|declarations|cfg)):", re.MULTILINE)
+#: A name is defined fully qualified from the root (`.qetl.job.stream.required_keys:`),
+#: so the owning namespace may precede it (#1411).
+_OWNER = r"(?:\.[A-Za-z_][\w.]*\.)?"
+DECLARATION_LIST = re.compile(
+    rf"^{_OWNER}((?:required|optional)_(?:keys|declarations|cfg)):", re.MULTILINE
+)
 
 _ROW_KEY = re.compile(r"^\s*\|\s*`(\w+)`\s*\|")
 
@@ -59,7 +64,7 @@ _ROW_KEY = re.compile(r"^\s*\|\s*`(\w+)`\s*\|")
 def q_list(source: str, name: str) -> list[str]:
     """The symbols of the q list `name:`, including its indented continuation
     lines (horizon.q's optional_keys runs onto a second line)."""
-    m = re.search(rf"^{name}:(.*(?:\n[ \t]+\S.*)*)", source, re.MULTILINE)
+    m = re.search(rf"^{_OWNER}{name}:(.*(?:\n[ \t]+\S.*)*)", source, re.MULTILINE)
     if not m:
         raise SystemExit(f"{name} not found - has the declaring file changed shape?")
     return re.findall(r"`(\w+)", m.group(1))

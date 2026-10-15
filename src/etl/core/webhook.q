@@ -17,14 +17,14 @@
 / Retry and dead-letter policy stays with the caller (alert_sink): this is
 / the transport only, and a second sink reuses it rather than copying it.
 
-\d .qetl.webhook
+\d .
 
 / The HTTP status of a raw response.
 / @param raw the response text, from the status line on
 / @return the status code as a long
 / @throws error when the text does not begin with an HTTP status line
 / @eg .qetl.webhook.status_of "HTTP/1.1 500 Internal Server Error\r\n\r\nwebhook down"
-status_of:{[raw]
+.qetl.webhook.status_of:{[raw]
     if[not 10h=type raw; '"webhook: no HTTP status line in the response"];
     line:first "\r\n" vs raw;
     parts:" " vs line;
@@ -37,8 +37,8 @@ status_of:{[raw]
 / @return the response body, after the blank line
 / @throws error naming the status when it is not 2xx, or when there is none
 / @eg .qetl.webhook.check "HTTP/1.1 204 No Content\r\n\r\n"
-check:{[raw]
-    s:status_of[raw];
+.qetl.webhook.check:{[raw]
+    s:.qetl.webhook.status_of[raw];
     if[not s within 200 299; '"webhook: answered ",string[s]];
     i:raw ss "\r\n\r\n";
     $[count i; 4_(first i)_raw; ""]}
@@ -49,14 +49,14 @@ check:{[raw]
 / @param u the .Q.hap result: (scheme://; user:password; host[:port]; path)
 / @return a `:http://host[:port] symbol
 / @eg .qetl.webhook.address ("http://";"";"hook.invalid:8080";"/t")
-address:{[u] `$":",u[0],u 2}
+.qetl.webhook.address:{[u] `$":",u[0],u 2}
 
 / The Authorization header for URL credentials, or nothing without them.
 / ("c"$ keeps PeachQ's .Q.btoa, which is not a plain string there, concatenable.)
 / @param cred the user:password text from the URL, "" when there is none
 / @return the header line with its CRLF, or ""
 / @eg .qetl.webhook.auth_header "user:secret"
-auth_header:{[cred] $[count cred; "Authorization: Basic ",("c"$.Q.btoa cred),"\r\n"; ""]}
+.qetl.webhook.auth_header:{[cred] $[count cred; "Authorization: Basic ",("c"$.Q.btoa cred),"\r\n"; ""]}
 
 / The HTTP request text for a JSON POST. Connection: close, so one request
 / is one handle.
@@ -66,8 +66,8 @@ auth_header:{[cred] $[count cred; "Authorization: Basic ",("c"$.Q.btoa cred),"\r
 / @param body the JSON text
 / @return the request as a string
 / @eg .qetl.webhook.request["hook.invalid";"/t";"";"{}"]
-request:{[host;path;cred;body]
-    "POST ",path," HTTP/1.1\r\nHost: ",host,"\r\n",auth_header[cred],"Content-Type: application/json\r\nContent-Length: ",
+.qetl.webhook.request:{[host;path;cred;body]
+    "POST ",path," HTTP/1.1\r\nHost: ",host,"\r\n",.qetl.webhook.auth_header[cred],"Content-Type: application/json\r\nContent-Length: ",
     string[count body],"\r\nConnection: close\r\n\r\n",body}
 
 / POST JSON and require a 2xx answer. The seam alert_sink's `post` calls.
@@ -76,14 +76,14 @@ request:{[host;path;cred;body]
 / @return the response body
 / @throws error on a connection failure, or when the status is not 2xx
 / @eg .qetl.webhook.post["http://localhost:9/hook";"{}"]
-post:{[target;body]
+.qetl.webhook.post:{[target;body]
     url:$[-11h=type target; 1_string target; target];
     u:.Q.hap url;
     path:$[count u 3; u 3; "/"];
-    h:hopen address u;
-    res:.[{[h;req] (1b;h req)}; (h;request[u 2;path;u 1;body]); {[e] (0b;e)}];
+    h:hopen .qetl.webhook.address u;
+    res:.[{[h;req] (1b;h req)}; (h;.qetl.webhook.request[u 2;path;u 1;body]); {[e] (0b;e)}];
     hclose h;
     if[not first res; 'last res];
-    check[last res]}
+    .qetl.webhook.check[last res]}
 
 \d .

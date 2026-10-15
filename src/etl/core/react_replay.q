@@ -10,7 +10,7 @@
 / .qetl.job.bounded because it reads a worker through that namespace's own
 / def, spec, own and transform_batch, so run_body calls it as it always has.
 
-\d .qetl.job.bounded
+\d .
 
 / Private: fire again the reactions an earlier run never completed.
 / .
@@ -28,13 +28,13 @@
 / @param worker the worker's name
 / @return how many windows were announced again
 / @private
-replay_reactions:{[worker]
-    owed:owed_reactions[worker];
+.qetl.job.bounded.replay_reactions:{[worker]
+    owed:.qetl.job.bounded.owed_reactions[worker];
     ws:distinct select range_from, range_to from owed;
     if[0=count ws; :0];
     .qetl.log.warn[worker;"re-firing reactions for windows covered without a successful reaction";
         `windows`reactions!(count ws;distinct owed`name)];
-    sum replay_window[worker] each ws}
+    sum .qetl.job.bounded.replay_window[worker] each ws}
 
 / The reactions this run's range still owes: (name; range_from; range_to) for
 / every covered window whose reaction has no successful outcome since it was
@@ -52,11 +52,11 @@ replay_reactions:{[worker]
 / @param worker the worker's name
 / @return a table of name, range_from, range_to; empty when nothing is owed
 / @throws error naming the worker and why the reaction ledgers could not be read
-owed_reactions:{[worker]
+.qetl.job.bounded.owed_reactions:{[worker]
     none:([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$());
     if[not .qetl.job.bounded.runtime.allows`notify_reactions; :none];
-    cfg:def worker;
-    s:spec worker;
+    cfg:.qetl.job.bounded.def worker;
+    s:.qetl.job.bounded.spec worker;
     r:@[{[a] (1b;.qetl.reaction.pending . a)};
         (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
         {[e] (0b;e)}];
@@ -69,7 +69,7 @@ owed_reactions:{[worker]
 / @param owed owed_reactions' table, not empty
 / @return the message, naming the reactions and how many windows they owe
 / @private
-owed_error:{[owed]
+.qetl.job.bounded.owed_error:{[owed]
     string[count owed]," reaction(s) owed over ",string[count distinct select range_from, range_to from owed],
     " window(s) (",(", " sv string distinct owed`name),
     ") - a dataset derived from this one is stale; the next run re-fires them first"}
@@ -79,20 +79,20 @@ owed_error:{[owed]
 / logged and left owed, for the next run.
 / @return 1 when announced, else 0
 / @private
-replay_window:{[worker;w]
-    cfg:def worker;
-    f:own[worker;`fetch][w`range_from;w`range_to];
+.qetl.job.bounded.replay_window:{[worker;w]
+    cfg:.qetl.job.bounded.def worker;
+    f:.qetl.job.bounded.own[worker;`fetch][w`range_from;w`range_to];
     if[`failed~f`state;
         .qetl.log.err[worker;"could not re-fetch a window to re-fire its reactions";
             `range_from`range_to`error!(w`range_from;w`range_to;f`error)];
         :0];
-    out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
+    out:@[.qetl.job.bounded.transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
         .qetl.log.err[worker;"could not transform a window to re-fire its reactions";
             `range_from`range_to`error!(w`range_from;w`range_to;last out)];
         :0];
     @[{[a] .qetl.reaction.notify_published_for . a};
-      (cfg`dataset;cfg`partition;(spec worker)`source_version;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
+      (cfg`dataset;cfg`partition;(.qetl.job.bounded.spec worker)`source_version;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
       {[e] (::)}];
     1}
 

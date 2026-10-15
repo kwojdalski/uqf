@@ -10,7 +10,7 @@
 / work to a day of deals, and a window that takes an hour of wall-clock to
 / fetch is a window whose failure costs an hour.
 
-\d .qpipe.job.demo_events_backfill
+\d .
 
 / Materialisation metadata for one window.
 / .
@@ -34,7 +34,7 @@
 / every aggregate here must survive it - hence the count guard rather than
 / min/max over an empty column, which would yield infinities and record them
 / as though they were observations.
-facts:{[batch]
+.qpipe.job.demo_events_backfill.facts:{[batch]
     if[0=count batch; :(enlist `event_span)!enlist "empty window"];
     `event_span`distinct_syms`trade_events!
         ((string min batch`time),"/",string max batch`time;

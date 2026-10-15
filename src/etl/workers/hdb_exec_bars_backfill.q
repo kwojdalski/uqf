@@ -18,7 +18,7 @@
 / previous window's last bar, whose end is this window's first instant (#1143;
 / the same class as hdb_demo_markouts_backfill's #972).
 
-\d .qpipe.job.hdb_exec_bars_backfill
+\d .
 
 / Bars for a window of fills with the shared aggregation. Kept: `time`, the
 / bar's end, which the live job leaves for the plant to stamp; a backfill has
@@ -26,7 +26,7 @@
 / @param fill_rows rows of the HDB's executions: source_time sym size price
 / @return one row per sym per bar, in exec_bar's columns
 / @eg count .qpipe.job.hdb_exec_bars_backfill.bars .qpipe.source.hdb_executions.fixture[]  ->  3
-bars:{[fill_rows]
+.qpipe.job.hdb_exec_bars_backfill.bars:{[fill_rows]
     windowed:.qetl.job.stream.bars.assign[.qpipe.transform.exec_bars.width;`source_time;fill_rows];
     b:.qpipe.transform.exec_bars.bars windowed;
     (cols .qetl.plant.shape `exec_bar) xcols update time:bar_start+.qpipe.transform.exec_bars.width from b}
@@ -35,7 +35,7 @@ bars:{[fill_rows]
 / means a fill was mis-keyed.
 / @param batch the transformed bars
 / @return no failures, or the offending bars
-quality_check:{[batch]
+.qpipe.job.hdb_exec_bars_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     bad:select from batch where not (volume>0) and high>=low;
     $[0=count bad;

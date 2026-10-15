@@ -66,26 +66,26 @@
 /   refuses a cycle among DECLARED outputs when src/etl/init.q finishes loading
 /   (not at `register`), but a handler can always publish anywhere.
 
-\d .qetl.reaction
+\d .
 
 / ------------------------------------------------------------ REGISTRY
 
 / dataset -> table of (name; handler).
-reactions:(`symbol$())!();
+.qetl.reaction.reactions:(`symbol$())!();
 
 / Private: the empty reaction table, so every path has one shape.
 / .
 / `outputs` is what this reaction writes and `derived` says where that claim
 / came from - see `on` and `on_worker`.
 / @private
-no_reactions:{[] ([] name:`symbol$(); handler:(); outputs:(); derived:`boolean$(); revision:`symbol$())}
+.qetl.reaction.no_reactions:{[] ([] name:`symbol$(); handler:(); outputs:(); derived:`boolean$(); revision:`symbol$())}
 
 / How far a chain of reactions may travel before it is refused.
 / .
 / A publication that triggers a job that publishes is depth 1, its own
 / downstream depth 2. Eight is far past any graph this tree has (the longest
 / real chain is two) and short enough that a runaway stops promptly.
-max_depth:8
+.qetl.reaction.max_depth:8
 
 / Register a reaction: when `dataset` gains rows, call `handler`.
 / .
@@ -116,9 +116,9 @@ max_depth:8
 / and re-registering appended a second handler instead of replacing the
 / first - measured, not theorised. A parameter that shares a column's name
 / is the trap leg_book_as_of and quotes_for_sym already name around.
-on:{[dataset;nm;handler]
-    require_handler[dataset;nm;handler];
-    register[dataset;nm;handler;`$();0b]}
+.qetl.reaction.on:{[dataset;nm;handler]
+    .qetl.reaction.require_handler[dataset;nm;handler];
+    .qetl.reaction.register[dataset;nm;handler;`$();0b]}
 
 / Private: what every reaction's arguments must satisfy, wherever registered.
 / .
@@ -127,7 +127,7 @@ on:{[dataset;nm;handler]
 / ran, which may be hours later and is attributed to that job rather than to
 / this wiring.
 / @private
-require_handler:{[dataset;nm;handler]
+.qetl.reaction.require_handler:{[dataset;nm;handler]
     if[not -11h=type dataset; '"on: dataset must be a symbol"];
     if[not -11h=type nm; '"on: name must be a symbol"];
     if[not (type handler) within 100 112h;
@@ -145,11 +145,11 @@ require_handler:{[dataset;nm;handler]
 / @throws error when outputs is not a symbol or symbol vector, or when no
 /   bounded worker fills `dataset`
 / @eg .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time within (f;t-1)}]
-on_writing:{[dataset;nm;outputs;handler]
-    require_handler[dataset;nm;handler];
+.qetl.reaction.on_writing:{[dataset;nm;outputs;handler]
+    .qetl.reaction.require_handler[dataset;nm;handler];
     if[not 11h=abs type outputs;
         '"on_writing: ",string[nm],"'s outputs must be a symbol or symbol vector naming what it writes"];
-    register[dataset;nm;handler;(),outputs;0b]}
+    .qetl.reaction.register[dataset;nm;handler;(),outputs;0b]}
 
 / Register a reaction that runs a REGISTERED WORKER over the published range.
 / .
@@ -183,7 +183,7 @@ on_writing:{[dataset;nm;outputs;handler]
 / @throws error when the worker is not registered, spec_fn is not binary,
 /   no bounded worker fills `dataset`, or this is a TorQ process
 / @eg .qetl.reaction.on_worker[`imported_trades;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
-on_worker:{[dataset;worker;spec_fn]
+.qetl.reaction.on_worker:{[dataset;worker;spec_fn]
     cfg:.qetl.job.bounded.def worker;
     if[not null .qetl.run.proc_name[];
         '"on_worker: ",string[worker]," cannot run as a reaction inside TorQ process ",
@@ -198,7 +198,7 @@ on_worker:{[dataset;worker;spec_fn]
         / refuses a second run in flight, finish would close the wrong row,
         / and the reacting worker's own reactions would otherwise queue
         / behind this one and leave it ending `partial with them owed.
-        saved:isolate[];
+        saved:.qetl.reaction.isolate[];
         / run returns its summary rather than throwing when windows fail, so
         / the state is checked: a `partial run recorded as ok would leave
         / .qetl.reaction.pending and never be re-fired (#1141). Cleanup runs
@@ -211,25 +211,25 @@ on_worker:{[dataset;worker;spec_fn]
                 '"on_worker: ",string[worker]," ended ",string[res`state]," (",
                  string[res`windows_failed]," windows failed), so the reaction is still owed"];
             1b}[worker;ns;spec_fn];(range_from;range_to);{[e] e}];
-        restore[saved];
+        .qetl.reaction.restore[saved];
         if[not 1b~r; 'r];
         1b}[worker;ns;spec_fn];
-    register[dataset;worker;h;(),cfg`dataset;1b]}
+    .qetl.reaction.register[dataset;worker;h;(),cfg`dataset;1b]}
 
 / Private: set the publisher's run and drain aside, so a worker run inside a
 / reaction starts from a clean process-local state (#973).
 / @return what `restore` needs to put it all back
 / @private
-isolate:{[]
-    saved:(.qetl.run.release[];queue;draining;depth_now;rows_now;io_now;window_now);
-    `.qetl.reaction.queue set empty_queue[];
+.qetl.reaction.isolate:{[]
+    saved:(.qetl.run.release[];.qetl.reaction.queue;.qetl.reaction.draining;.qetl.reaction.depth_now;.qetl.reaction.rows_now;.qetl.reaction.io_now;.qetl.reaction.window_now);
+    `.qetl.reaction.queue set .qetl.reaction.empty_queue[];
     `.qetl.reaction.draining set 0b;
     `.qetl.reaction.depth_now set 0;
     saved}
 
 / Private: put back what `isolate` set aside.
 / @private
-restore:{[saved]
+.qetl.reaction.restore:{[saved]
     `.qetl.run.current_run set saved 0;
     `.qetl.reaction.queue set saved 1;
     `.qetl.reaction.draining set saved 2;
@@ -249,7 +249,7 @@ restore:{[saved]
 / complete by the time the first reaction registers.
 / @return the datasets, empty when .qetl.job.bounded is not loaded
 / @eg `demo_deals in .qetl.reaction.fillable[]  ->  1b
-fillable:{[]
+.qetl.reaction.fillable:{[]
     if[not `worker_cfg in key `.qetl.job.bounded; :`$()];
     exec distinct dataset from .qetl.job.bounded.worker_cfg}
 
@@ -257,8 +257,8 @@ fillable:{[]
 / ways to register, and not only in `uqs job new --triggered-by`: a reaction
 / written or edited by hand must be refused just the same (#531).
 / @private
-require_fillable:{[dataset;nm]
-    if[not dataset in fillable[];
+.qetl.reaction.require_fillable:{[dataset;nm]
+    if[not dataset in .qetl.reaction.fillable[];
         '"on: ",string[nm]," watches ",string[dataset],
             ", which no bounded worker fills - only a bounded worker's published window",
             " (.qetl.job.bounded.do_window) fires a reaction, so it would never run"];
@@ -266,11 +266,11 @@ require_fillable:{[dataset;nm]
 
 / Private: store one reaction, replacing any of the same name.
 / @private
-register:{[dataset;nm;handler;outputs;derived]
-    require_fillable[dataset;nm];
-    existing:$[dataset in key reactions; reactions dataset; no_reactions[]];
+.qetl.reaction.register:{[dataset;nm;handler;outputs;derived]
+    .qetl.reaction.require_fillable[dataset;nm];
+    existing:$[dataset in key .qetl.reaction.reactions; .qetl.reaction.reactions dataset; .qetl.reaction.no_reactions[]];
     existing:select from existing where not name=nm;
-    reactions[dataset]:existing upsert
+    .qetl.reaction.reactions[dataset]:existing upsert
         ([] name:enlist nm; handler:enlist handler; outputs:enlist outputs; derived:enlist derived; revision:enlist `);
     nm}
 
@@ -295,32 +295,32 @@ register:{[dataset;nm;handler;outputs;derived]
 / @return the reaction's name
 / @throws error when rev is not a symbol, or no such reaction is registered
 / @eg .qetl.reaction.revise[`demo_deals;`rebuild_positions;`v2]
-revise:{[dataset;nm;rev]
+.qetl.reaction.revise:{[dataset;nm;rev]
     if[not -11h=type rev; '"revise: revision must be a symbol"];
-    if[not nm in exec name from for_dataset dataset;
+    if[not nm in exec name from .qetl.reaction.for_dataset dataset;
         '"revise: ",string[nm]," is not a reaction on ",string dataset];
-    reactions[dataset]:update revision:rev from reactions[dataset] where name=nm;
+    .qetl.reaction.reactions[dataset]:update revision:rev from .qetl.reaction.reactions[dataset] where name=nm;
     nm}
 
 / Stop reacting. Unknown names are ignored: removing a reaction that is not
 / there is the state the caller wanted either way.
 / @return the reactions still registered for that dataset
-off:{[dataset;nm]
-    if[not dataset in key reactions; :no_reactions[]];
-    reactions[dataset]:select from reactions dataset where not name=nm;
-    reactions dataset}
+.qetl.reaction.off:{[dataset;nm]
+    if[not dataset in key .qetl.reaction.reactions; :.qetl.reaction.no_reactions[]];
+    .qetl.reaction.reactions[dataset]:select from .qetl.reaction.reactions dataset where not name=nm;
+    .qetl.reaction.reactions dataset}
 
 / Every reaction registered for a dataset.
-for_dataset:{[dataset] $[dataset in key reactions; reactions dataset; no_reactions[]]}
+.qetl.reaction.for_dataset:{[dataset] $[dataset in key .qetl.reaction.reactions; .qetl.reaction.reactions dataset; .qetl.reaction.no_reactions[]]}
 
 / Forget every reaction, the queue and the history. For tests, and for
 / rebuilding the wiring after the registries change.
-reset:{[] reactions::(`symbol$())!(); `.qetl.reaction.queue set empty_queue[]; `.qetl.reaction.history set empty_history[]; ()}
+.qetl.reaction.reset:{[] .qetl.reaction.reactions::(`symbol$())!(); `.qetl.reaction.queue set .qetl.reaction.empty_queue[]; `.qetl.reaction.history set .qetl.reaction.empty_history[]; ()}
 
 / Forget every durable outcome - for tests, which must not inherit another
 / test's ledger.
 / @eg .qetl.reaction.reset_outcomes[]
-reset_outcomes:{[] @[{system"rm -f ",x,"*"};outcomes_path[];{[e] (::)}]; ()}
+.qetl.reaction.reset_outcomes:{[] @[{system"rm -f ",x,"*"};.qetl.reaction.outcomes_path[];{[e] (::)}]; ()}
 
 / ------------------------------------------------------- THE DAG WIRING
 
@@ -336,7 +336,7 @@ reset_outcomes:{[] @[{system"rm -f ",x,"*"};outcomes_path[];{[e] (::)}]; ()}
 / @return the job names that declared it as an input, empty when .qetl.dag is
 /   not loaded or nothing reads it
 / @eg .qetl.reaction.dag_consumers `demo_deals
-dag_consumers:{[dataset]
+.qetl.reaction.dag_consumers:{[dataset]
     if[not `jobs in key @[value;`.qetl.dag;{()}]; :`$()];
     @[{.qetl.dag.consumers x};dataset;{[e] `$()}]}
 
@@ -354,19 +354,19 @@ dag_consumers:{[dataset]
 / @return dict of `unwired (dataset -> consumer jobs with no reaction),
 /   `undeclared (datasets with a reaction that no job reads) and `asserted
 /   (dataset~reaction names whose output is a claim)
-audit:{[]
-    reacting:key reactions;
+.qetl.reaction.audit:{[]
+    reacting:key .qetl.reaction.reactions;
     datasets:distinct reacting,$[`jobs in key @[value;`.qetl.dag;{()}]; raze {(.qetl.dag.def x)`outputs} each .qetl.dag.defined[]; `$()];
     / Empty in the healthy case - every dataset has a reaction - where
     / (!). flip () is a 'type; so the empty dict is built, not derived.
-    pairs:{[d] (d;dag_consumers[d])} each datasets where 0=count each for_dataset each datasets;
+    pairs:{[d] (d;.qetl.reaction.dag_consumers[d])} each datasets where 0=count each .qetl.reaction.for_dataset each datasets;
     unwired:$[count pairs; (!). flip pairs; (`symbol$())!()];
-    undeclared:reacting where 0=count each dag_consumers each reacting;
+    undeclared:reacting where 0=count each .qetl.reaction.dag_consumers each reacting;
     / `count each value unwired` on an EMPTY dict throws 'type - value of an
     / empty dict is a general empty list, not a list of lists - so the filter
     / is written against the keys instead, where the empty case is a plain
     / empty symbol vector.
-    wired_keys:(key unwired) where 0<count each dag_consumers each key unwired;
+    wired_keys:(key unwired) where 0<count each .qetl.reaction.dag_consumers each key unwired;
     asserted:raze {[ds]
         rs:.qetl.reaction.for_dataset[ds];
         bad:select from rs where not derived, 0<count each outputs;
@@ -381,43 +381,43 @@ audit:{[]
 / when a notification carried none. `io` is the IO manager the publisher
 / wrote through, which `write` writes a reaction's output through too, or
 / (::) when the notifier named none.
-empty_queue:{[] ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
+.qetl.reaction.empty_queue:{[] ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
     range_from:`timestamp$(); range_to:`timestamp$(); depth:`long$(); rows:(); io:())}
 
-queue:empty_queue[]
+.qetl.reaction.queue:.qetl.reaction.empty_queue[]
 
 / Whether a drain is already running. The reentrancy guard: a handler that
 / publishes notifies from inside the first notify, and that notification must
 / join the queue rather than start a second, nested drain.
-draining:0b
+.qetl.reaction.draining:0b
 
-empty_history:{[]
+.qetl.reaction.empty_history:{[]
     ([] at:`timestamp$(); dataset:`symbol$(); name:`symbol$(); depth:`long$();
         range_from:`timestamp$(); range_to:`timestamp$(); outcome:`symbol$(); detail:())}
 
-history:empty_history[]
+.qetl.reaction.history:.qetl.reaction.empty_history[]
 
 / How many history rows to keep - the most RECENT ones. Bounded because a
 / long-running process would otherwise grow it without limit, and the recent
 / end is the useful one: a positive sublist kept the first 1000 instead, so
 / every outcome after them was silently dropped.
-history_limit:1000
+.qetl.reaction.history_limit:1000
 
 / Private: the revision a reaction is registered under, null when unrevised
 / or no longer registered.
 / @private
-revision_of:{[dataset;nm] exec first revision from for_dataset[dataset] where name=nm}
+.qetl.reaction.revision_of:{[dataset;nm] exec first revision from .qetl.reaction.for_dataset[dataset] where name=nm}
 
 / Private: record one reaction's outcome - in `history`, and durably.
 / @private
-record:{[item;name;outcome;detail]
-    `.qetl.reaction.history set neg[history_limit] sublist history,
+.qetl.reaction.record:{[item;name;outcome;detail]
+    `.qetl.reaction.history set neg[.qetl.reaction.history_limit] sublist .qetl.reaction.history,
         ([] at:enlist .z.p; dataset:enlist item`dataset; name:enlist name; depth:enlist item`depth;
             range_from:enlist item`range_from; range_to:enlist item`range_to;
             outcome:enlist outcome; detail:enlist detail);
     / Never fails the reaction it records: a ledger that cannot be written is
     / logged, and the next run's `pending` simply sees the window as not done.
-    @[persist_outcome;(item`dataset;item`partition;item`source_version;name;item`range_from;item`range_to;outcome;.z.p;revision_of[item`dataset;name]);
+    @[.qetl.reaction.persist_outcome;(item`dataset;item`partition;item`source_version;name;item`range_from;item`range_to;outcome;.z.p;.qetl.reaction.revision_of[item`dataset;name]);
       {[e] @[{.qetl.log.err[`qetl.reaction;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
     }
 
@@ -440,20 +440,20 @@ record:{[item;name;outcome;detail]
 / of the coverage it answers (#1099): `pending` matches coverage on both, so
 / an outcome for another partition or release cannot stand in for this
 / one's. Null when the notifier did not say - a plain notify, or a cascade.
-empty_outcomes:{[] ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
+.qetl.reaction.empty_outcomes:{[] ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
     name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); outcome:`symbol$(); at:`timestamp$();
     revision:`symbol$())}
 
 / Where it lives: the status dir, beside etl_coverage and etl_runs.
 / @return the file path
-outcomes_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_reactions"}
+.qetl.reaction.outcomes_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_reactions"}
 
 / Every outcome recorded so far, by any process.
 / @return the ledger, or an empty one when none has been written
 / @eg .qetl.reaction.outcomes[]
-outcomes:{[]
-    p:outcomes_path[];
-    t:$[()~key hsym `$p; empty_outcomes[]; .qetl.job.bounded.state.durable_get p];
+.qetl.reaction.outcomes:{[]
+    p:.qetl.reaction.outcomes_path[];
+    t:$[()~key hsym `$p; .qetl.reaction.empty_outcomes[]; .qetl.job.bounded.state.durable_get p];
     / A ledger written before #1099 has no partition or source_version: its
     / outcomes prove nothing for a specific one, so they read as null and
     / their windows are owed once more - conservative, and self-healing.
@@ -461,14 +461,14 @@ outcomes:{[]
     / Likewise a ledger written before #1100 has no revision: null, which
     / matches only an unrevised reaction.
     if[not `revision in cols t; t:update revision:` from t];
-    cols[empty_outcomes[]]#t}
+    cols[.qetl.reaction.empty_outcomes[]]#t}
 
 / Private: append one outcome, read-modify-write under its own mutex - the
 / same pattern as the coverage and run ledgers.
 / @private
-persist_outcome:{[row]
+.qetl.reaction.persist_outcome:{[row]
     .qetl.job.bounded.state.with_file_lock[`etl_reactions;
-        {[row] .qetl.job.bounded.state.durable_set[outcomes_path[];outcomes[],enlist cols[empty_outcomes[]]!row]};
+        {[row] .qetl.job.bounded.state.durable_set[.qetl.reaction.outcomes_path[];.qetl.reaction.outcomes[],enlist cols[.qetl.reaction.empty_outcomes[]]!row]};
         enlist row]}
 
 / The (reaction; window) pairs still owed: covered windows of `ds` in
@@ -484,9 +484,9 @@ persist_outcome:{[row]
 / @param to_ts exclusive upper bound
 / @return a table of name, range_from, range_to
 / @eg .qetl.reaction.pending[`demo_deals;`;`v1;2026.09.11D00:00;2026.09.13D00:00]
-pending:{[ds;part;version;from_ts;to_ts]
+.qetl.reaction.pending:{[ds;part;version;from_ts;to_ts]
     none:([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$());
-    rs:for_dataset[ds];
+    rs:.qetl.reaction.for_dataset[ds];
     if[0=count rs; :none];
     .qetl.coverage.init_ledger[];
     now:.z.p;
@@ -494,7 +494,7 @@ pending:{[ds;part;version;from_ts;to_ts]
         where dataset=ds, partition=part, source_version=version,
               recorded_at<=now, now<superseded_at, range_from<to_ts, range_to>from_ts;
     if[0=count covered; :none];
-    done:select name, range_from, range_to, at, revision from outcomes[]
+    done:select name, range_from, range_to, at, revision from .qetl.reaction.outcomes[]
         where dataset=ds, partition=part, source_version=version, outcome=`ok;
     pairs:raze {[covered;nm;rev] update name:nm, revision:rev from covered}[covered]'[rs`name;rs`revision];
     ok:{[done;p] any (done[`name]=p`name) and (done[`revision]=p`revision) and (done[`range_from]=p`range_from) and
@@ -519,15 +519,15 @@ pending:{[ds;part;version;from_ts;to_ts]
 / @param range_to exclusive upper bound
 / @return the number of reactions run by this call
 / @eg .qetl.reaction.notify[`demo_deals;2026.09.11D00:00;2026.09.12D00:00]
-notify:{[dataset;range_from;range_to] enqueue[dataset;`;`;range_from;range_to;0;();(::)]}
+.qetl.reaction.notify:{[dataset;range_from;range_to] .qetl.reaction.enqueue[dataset;`;`;range_from;range_to;0;();(::)]}
 
 / Private: queue one notification and, unless a drain is already running,
 / drain the queue.
 / @private
-enqueue:{[dataset;part;version;range_from;range_to;depth;rows;io]
-    queue,:([] dataset:enlist dataset; partition:enlist part; source_version:enlist version; range_from:enlist range_from;
+.qetl.reaction.enqueue:{[dataset;part;version;range_from;range_to;depth;rows;io]
+    .qetl.reaction.queue,:([] dataset:enlist dataset; partition:enlist part; source_version:enlist version; range_from:enlist range_from;
               range_to:enlist range_to; depth:enlist depth; rows:enlist rows; io:enlist io);
-    $[draining; 0; drain[]]}
+    $[.qetl.reaction.draining; 0; .qetl.reaction.drain[]]}
 
 / Private: run queued notifications until none are left.
 / .
@@ -540,13 +540,13 @@ enqueue:{[dataset;part;version;range_from;range_to;depth;rows;io]
 / rather than global on purpose - the same range published again later is a
 / new event and must fire again.
 / @private
-drain:{[]
+.qetl.reaction.drain:{[]
     `.qetl.reaction.draining set 1b;
     done:();
     ran:0;
-    while[count queue;
-        item:first queue;
-        `.qetl.reaction.queue set 1_queue;
+    while[count .qetl.reaction.queue;
+        item:first .qetl.reaction.queue;
+        `.qetl.reaction.queue set 1_.qetl.reaction.queue;
         k:(item`dataset;item`range_from;item`range_to);
         / `not any done~\:k`, not `not k in done`: `in` tests ATOM
         / membership, and k is a triple - it throws 'type rather than
@@ -554,21 +554,21 @@ drain:{[]
         / cascade rather than on a repeat.
         if[not any done~\:k;
             done,:enlist k;
-            ran+:dispatch[item]]];
+            ran+:.qetl.reaction.dispatch[item]]];
     `.qetl.reaction.draining set 0b;
     ran}
 
 / Private: run every reaction registered for one queued item.
 / @private
-dispatch:{[item]
-    rs:for_dataset[item`dataset];
+.qetl.reaction.dispatch:{[item]
+    rs:.qetl.reaction.for_dataset[item`dataset];
     if[0=count rs; :0];
-    if[item[`depth]>=max_depth;
-        {[item;nm] record[item;nm;`refused;
-            "cascade deeper than .qetl.reaction.max_depth (",string[max_depth],") - refusing rather than continuing"]
+    if[item[`depth]>=.qetl.reaction.max_depth;
+        {[item;nm] .qetl.reaction.record[item;nm;`refused;
+            "cascade deeper than .qetl.reaction.max_depth (",string[.qetl.reaction.max_depth],") - refusing rather than continuing"]
           }[item] each rs`name;
         :0];
-    count {[item;nm;h] run_one[item;nm;h]}[item] .' flip (rs`name;rs`handler)}
+    count {[item;nm;h] .qetl.reaction.run_one[item;nm;h]}[item] .' flip (rs`name;rs`handler)}
 
 / Private: run one handler, trapped.
 / .
@@ -581,22 +581,22 @@ dispatch:{[item]
 / rather than an argument because a handler calls .qetl.job.bounded / .qetl.reaction.notify
 / through the ordinary path and cannot be asked to thread a depth through.
 / @private
-depth_now:0
+.qetl.reaction.depth_now:0
 
 / What the publication being reacted to published, while its reactions run.
 / A global for the reason depth_now is: a handler's signature stays
 / (dataset;range_from;range_to), and this is how it reaches the rows.
-rows_now:()
+.qetl.reaction.rows_now:()
 
 / The IO manager the publication being reacted to was written through, for
 / `write`. (::) when the notifier named none.
-io_now:(::)
+.qetl.reaction.io_now:(::)
 
 / The window being reacted to, as range_from range_to, for `write`: what it
 / replaces is this window's output and nothing else.
-window_now:0#0Np
+.qetl.reaction.window_now:0#0Np
 
-run_one:{[item;nm;h]
+.qetl.reaction.run_one:{[item;nm;h]
     `.qetl.reaction.depth_now set item`depth;
     `.qetl.reaction.rows_now set item`rows;
     `.qetl.reaction.io_now set item`io;
@@ -607,9 +607,9 @@ run_one:{[item;nm;h]
     `.qetl.reaction.io_now set (::);
     `.qetl.reaction.window_now set 0#0Np;
     $[`ok~r;
-        record[item;nm;`ok;""];
-        [record[item;nm;`failed;last r];
-         log_failure[item;nm;last r]]];
+        .qetl.reaction.record[item;nm;`ok;""];
+        [.qetl.reaction.record[item;nm;`failed;last r];
+         .qetl.reaction.log_failure[item;nm;last r]]];
     1b}
 
 / Private: log a failed reaction, tolerating an absent .qetl.log.
@@ -618,7 +618,7 @@ run_one:{[item;nm;h]
 / pull in part of the tree, and a reaction must degrade to an unlogged
 / failure rather than an error inside an error handler.
 / @private
-log_failure:{[item;nm;e]
+.qetl.reaction.log_failure:{[item;nm;e]
     @[{.qetl.log.err[`qetl.reaction;"reaction failed";
         `dataset`reaction`range_from`range_to`error!
         (x`dataset;y;x`range_from;x`range_to;z)]}[item;nm];e;{[e] (::)}]}
@@ -630,7 +630,7 @@ log_failure:{[item;nm;e]
 / .qetl.job.bounded.do_window calls this rather than `notify` directly, so a chain
 / triggered by a reaction is counted: at depth 0 the two are identical, and
 / inside a handler this is what makes max_depth bite.
-notify_from_here:{[dataset;range_from;range_to] notify_rows[dataset;range_from;range_to;()]}
+.qetl.reaction.notify_from_here:{[dataset;range_from;range_to] .qetl.reaction.notify_rows[dataset;range_from;range_to;()]}
 
 / Announce a publication together with the rows it published.
 / .
@@ -644,7 +644,7 @@ notify_from_here:{[dataset;range_from;range_to] notify_rows[dataset;range_from;r
 / the IO manager is, and a reaction only ever runs in the publishing process.
 / @param rows the published rows, as a table
 / @eg .qetl.reaction.notify_rows[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;.qpipe.source.demo_deals.fixture[]]
-notify_rows:{[dataset;range_from;range_to;rows] notify_published[dataset;range_from;range_to;rows;::]}
+.qetl.reaction.notify_rows:{[dataset;range_from;range_to;rows] .qetl.reaction.notify_published[dataset;range_from;range_to;rows;::]}
 
 / Announce a publication with its rows AND the IO manager it was written
 / through - what .qetl.job.bounded.do_window calls. The manager is what
@@ -652,8 +652,8 @@ notify_rows:{[dataset;range_from;range_to;rows] notify_published[dataset;range_f
 / `uqs backfill` writes the HDB exactly as its worker did (#541).
 / @param io the IO manager the rows were written with, or (::)
 / @eg .qetl.reaction.notify_published[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
-notify_published:{[dataset;range_from;range_to;rows;io]
-    notify_published_for[dataset;`;`;range_from;range_to;rows;io]}
+.qetl.reaction.notify_published:{[dataset;range_from;range_to;rows;io]
+    .qetl.reaction.notify_published_for[dataset;`;`;range_from;range_to;rows;io]}
 
 / notify_published, naming the partition and source_version whose coverage
 / the publication is (#1099) - what a bounded worker calls, so the outcomes
@@ -661,8 +661,8 @@ notify_published:{[dataset;range_from;range_to;rows;io]
 / @param part the partition, or ` for a dataset with none
 / @param version the source_version
 / @eg .qetl.reaction.notify_published_for[`demo_deals;`;`v1;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
-notify_published_for:{[dataset;part;version;range_from;range_to;rows;io]
-    enqueue[dataset;part;version;range_from;range_to;$[draining; depth_now+1; 0];rows;io]}
+.qetl.reaction.notify_published_for:{[dataset;part;version;range_from;range_to;rows;io]
+    .qetl.reaction.enqueue[dataset;part;version;range_from;range_to;$[.qetl.reaction.draining; .qetl.reaction.depth_now+1; 0];rows;io]}
 
 / The rows the publication being reacted to published - call it from a
 / handler.
@@ -675,11 +675,11 @@ notify_published_for:{[dataset;part;version;range_from;range_to;rows;io]
 / @return the published rows, as a table
 / @throws error outside a reaction, or when the notification carried no rows
 / @eg .qetl.reaction.on[`demo_deals;`count_deals;{[ds;f;t] count .qetl.reaction.published[]}]
-published:{[]
-    if[not draining; '"published: only a reaction's handler can ask what was published"];
-    if[not 98h=type rows_now;
+.qetl.reaction.published:{[]
+    if[not .qetl.reaction.draining; '"published: only a reaction's handler can ask what was published"];
+    if[not 98h=type .qetl.reaction.rows_now;
         '"published: this notification carried no rows - it was made with notify, not notify_rows"];
-    rows_now}
+    .qetl.reaction.rows_now}
 
 / Write a reaction's output through the IO manager its publication was
 / written with - call it from a handler.
@@ -712,15 +712,15 @@ published:{[]
 / @throws error outside a reaction, without a `time` column, or with a row
 /   outside the window
 / @eg .qetl.reaction.on[`demo_deals;`copy_out;{[ds;f;t] .qetl.reaction.write[`demo_copy;`deal_id;.qetl.reaction.published[]]}]
-write:{[target;row_key;rows]
-    if[not draining; '"write: only a reaction's handler writes a reaction's output"];
+.qetl.reaction.write:{[target;row_key;rows]
+    if[not .qetl.reaction.draining; '"write: only a reaction's handler writes a reaction's output"];
     if[not `time in cols rows;
         '"write: ",string[target],"'s rows need a time column - the window is cleared by it"];
-    w:window_now;
+    w:.qetl.reaction.window_now;
     if[count outside:select from rows where not time within (w 0;w[1]-1);
         '"write: ",string[count outside]," row(s) of ",string[target],
          " lie outside the window being reacted to, ",string[w 0]," to ",string w 1];
-    mgr:$[99h=type io_now; io_now; .qetl.io.default];
+    mgr:$[99h=type .qetl.reaction.io_now; .qetl.reaction.io_now; .qetl.io.default];
     .qetl.io.write_keyed[mgr;target;rows;
         `on_conflict`row_key`time_column`range_from`range_to!(`replace;row_key;`time;w 0;w 1)]}
 

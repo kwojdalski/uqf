@@ -88,9 +88,13 @@ TORQ_RE = re.compile(r"(?<![\w.])(" + "|".join(re.escape(ns) for ns in TORQ_OWNE
 HTTP_OWNER = "src/etl/core/webhook.q"
 HTTP_RE = re.compile(r"\.Q\.(?:hp|hg|hmb|hap)\b|`:https?://")
 
-#: A namespace declaration, e.g. `\d .qpipe.job.demo_deals_backfill`.
+#: A namespace a declaration owns, read from its first name, e.g.
+#: `.qpipe.job.demo_deals_backfill.quality_check:{...}` owns
+#: `.qpipe.job.demo_deals_backfill`. Declarations write names fully qualified
+#: from the root and open no `\\d` context (#1411).
 NAMESPACE_RE = re.compile(
-    r"^\\d\s+(\.[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*)\s*$", re.MULTILINE
+    r"^(\.[a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z][a-zA-Z0-9_]*)\.[a-zA-Z_][\w.]*\s*::?",
+    re.MULTILINE,
 )
 
 

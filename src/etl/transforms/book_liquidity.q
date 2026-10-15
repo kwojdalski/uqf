@@ -38,39 +38,39 @@
 /   average      the minute is the mean over snapshots, each weighing the same -
 /                NOT weighted by how long a book stood.
 
-\d .qpipe.transform.book_liquidity
+\d .
 
 / The normalized book the pure steps read. `source` is the independent
 / liquidity provider (two adapters carrying one liquidity use one value), never
 / a physical table label. Ladders are best-first float vectors per row.
-book_shape:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+.qpipe.transform.book_liquidity.book_shape:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / The sizes to price, in the books' quantity units.
-request_shape:([] req_size:`float$())
+.qpipe.transform.book_liquidity.request_shape:([] req_size:`float$())
 
 / One row per book per requested size: what a sweep of req_size gets on each side.
-snapshot_shape:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); req_size:`float$(); bid_price:`float$(); bid_qty:`float$(); bid_full:`boolean$(); ask_price:`float$(); ask_qty:`float$(); ask_full:`boolean$())
+.qpipe.transform.book_liquidity.snapshot_shape:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); req_size:`float$(); bid_price:`float$(); bid_qty:`float$(); bid_full:`boolean$(); ask_price:`float$(); ask_qty:`float$(); ask_full:`boolean$())
 
 / Snapshots with the window the kind (or the backfill) cut for them.
-windowed_shape:update bar_start:`timestamp$() from snapshot_shape
+.qpipe.transform.book_liquidity.windowed_shape:update bar_start:`timestamp$() from .qpipe.transform.book_liquidity.snapshot_shape
 
 / One row per book identity, requested size and window.
-minute_shape:([] sym:`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); req_size:`float$(); bar_start:`timestamp$(); snapshots:`long$(); bid_obs:`long$(); ask_obs:`long$(); bid_price:`float$(); ask_price:`float$(); bid_qty:`float$(); ask_qty:`float$(); bid_full_ratio:`float$(); ask_full_ratio:`float$())
+.qpipe.transform.book_liquidity.minute_shape:([] sym:`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); req_size:`float$(); bar_start:`timestamp$(); snapshots:`long$(); bid_obs:`long$(); ask_obs:`long$(); bid_price:`float$(); ask_price:`float$(); bid_qty:`float$(); ask_qty:`float$(); bid_full_ratio:`float$(); ask_full_ratio:`float$())
 
 / The snapshot width of the minute aggregation. The live job declares it and
 / the twin cuts by it; a backfill window should start on a multiple of it.
-width:0D00:01:00
+.qpipe.transform.book_liquidity.width:0D00:01:00
 
 / How long after a minute's end a snapshot may arrive and still amend its row.
 / A book's source_time can precede its arrival (quote and fx_orderbook keep the
 / original plant stamp), so a few seconds absorb ordinary jitter.
-lateness:0D00:00:05
+.qpipe.transform.book_liquidity.lateness:0D00:00:05
 
 / Private: whether the usable levels of one ladder are best-first. dir is 1 for
 / asks (prices rise with depth), -1 for bids (they fall). Equal prices are
 / fine. Fewer than two levels are trivially ordered.
 / @private
-ordered:{[dir;p]
+.qpipe.transform.book_liquidity.ordered:{[dir;p]
     if[2>count p; :1b];
     later:1_p;
     earlier:(neg 1)_p;
@@ -81,27 +81,27 @@ ordered:{[dir;p]
 / usable levels are not best-first, is an empty side - never an error, so one
 / malformed book cannot take a whole batch down, and never a guess.
 / @private
-sweep_side:{[dir;prices;sizes;target]
+.qpipe.transform.book_liquidity.sweep_side:{[dir;prices;sizes;target]
     none:(0n;0f;0b);
     if[(0>type prices) or 0>type sizes; :none];
     if[not (count prices)=count sizes; :none];
     p:"f"$prices;
     q:"f"$sizes;
     usable:.qf.mkt.level_ok[p;q];
-    if[not ordered[dir;p where usable]; :none];
+    if[not .qpipe.transform.book_liquidity.ordered[dir;p where usable]; :none];
     r:.qf.mkt.sweep_price[p;q;target];
     (r`avg_price;r`filled_size;r`fully_filled)}
 
 / Private: one side of every book for one requested size, as three columns.
 / @private
-side_columns:{[dir;ps;zs;target]
-    flip {[dir;target;p;z] sweep_side[dir;p;z;target]}[dir;target]'[ps;zs]}
+.qpipe.transform.book_liquidity.side_columns:{[dir;ps;zs;target]
+    flip {[dir;target;p;z] .qpipe.transform.book_liquidity.sweep_side[dir;p;z;target]}[dir;target]'[ps;zs]}
 
 / Private: every book for one requested size.
 / @private
-one_size:{[books;target]
-    bid:side_columns[-1;books`bid_prices;books`bid_sizes;target];
-    ask:side_columns[1;books`ask_prices;books`ask_sizes;target];
+.qpipe.transform.book_liquidity.one_size:{[books;target]
+    bid:.qpipe.transform.book_liquidity.side_columns[-1;books`bid_prices;books`bid_sizes;target];
+    ask:.qpipe.transform.book_liquidity.side_columns[1;books`ask_prices;books`ask_sizes;target];
     ([] source_time:books`source_time; sym:books`sym; source:books`source;
         settlement:books`settlement; category:books`category;
         req_size:(count books)#target;
@@ -114,12 +114,12 @@ one_size:{[books;target]
 / @param books rows of book_shape
 / @return rows of book_shape, one per identity and source_time
 / @eg count .qpipe.transform.book_liquidity.one_observation 2#1#.qpipe.transform.book_liquidity.example_books[]  ->  1
-one_observation:{[books]
+.qpipe.transform.book_liquidity.one_observation:{[books]
     if[0=count books; :books];
     sorted:`source_time`bid_prices`bid_sizes`ask_prices`ask_sizes xasc books;
     b:0!select bid_prices:last bid_prices, bid_sizes:last bid_sizes, ask_prices:last ask_prices,
         ask_sizes:last ask_sizes by source_time, sym, source, settlement, category from sorted;
-    (cols book_shape) xcols b}
+    (cols .qpipe.transform.book_liquidity.book_shape) xcols b}
 
 / What a sweep of each requested size gets on each side of each book.
 / .
@@ -132,12 +132,12 @@ one_observation:{[books]
 / @return rows of snapshot_shape, ordered by source_time, identity and req_size
 / @throws error if a requested size is not positive and finite
 / @eg count .qpipe.transform.book_liquidity.snapshot[.qpipe.transform.book_liquidity.example_books[];([] req_size:1e6 5e6)]  ->  4
-snapshot:{[books;requests]
+.qpipe.transform.book_liquidity.snapshot:{[books;requests]
     sizes:distinct requests`req_size;
     if[not all (sizes>0) and sizes<0w; '"snapshot: every requested size must be positive and finite"];
-    b:one_observation[books];
-    if[(0=count b) or 0=count sizes; :snapshot_shape];
-    out:raze one_size[b;] each sizes;
+    b:.qpipe.transform.book_liquidity.one_observation[books];
+    if[(0=count b) or 0=count sizes; :.qpipe.transform.book_liquidity.snapshot_shape];
+    out:raze .qpipe.transform.book_liquidity.one_size[b;] each sizes;
     `source_time`sym`source`settlement`category`req_size xasc out}
 
 / One row per book identity, requested size and window: the averages over the
@@ -155,21 +155,21 @@ snapshot:{[books;requests]
 / @param x rows of windowed_shape (snapshots plus bar_start)
 / @return rows of minute_shape
 / @eg count .qpipe.transform.book_liquidity.minute update bar_start:source_time from .qpipe.transform.book_liquidity.snapshot[.qpipe.transform.book_liquidity.example_books[];([] req_size:enlist 1e6)]  ->  2
-minute:{[x]
-    if[0=count x; :minute_shape];
+.qpipe.transform.book_liquidity.minute:{[x]
+    if[0=count x; :.qpipe.transform.book_liquidity.minute_shape];
     / by arrival-independent order: the float sums below then do not depend on it
     x:`source_time xasc x;
     b:0!select snapshots:count i, bid_obs:"j"$sum not null bid_price, ask_obs:"j"$sum not null ask_price,
         bid_price:avg bid_price, ask_price:avg ask_price, bid_qty:avg bid_qty, ask_qty:avg ask_qty,
         bid_full_ratio:avg bid_full, ask_full_ratio:avg ask_full
         by sym, source, settlement, category, req_size, bar_start from x;
-    `bar_start`sym`source`settlement`category`req_size xasc (cols minute_shape) xcols b}
+    `bar_start`sym`source`settlement`category`req_size xasc (cols .qpipe.transform.book_liquidity.minute_shape) xcols b}
 
 / Two providers' spot, standard-category books of EURUSD at one instant, for the
 / examples above.
 / @return rows of book_shape
 / @eg count .qpipe.transform.book_liquidity.example_books[]  ->  2
-example_books:{[]
+.qpipe.transform.book_liquidity.example_books:{[]
     ([] source_time:2#2026.10.09D10:00:00; sym:2#`EURUSD; source:`LP_A`LP_B;
         settlement:2#`spot; category:2#`standard;
         bid_prices:(1.0999 1.0998;1.0997 1.0996); bid_sizes:(1e6 2e6;3e6 4e6);
@@ -199,32 +199,32 @@ example_books:{[]
 / market_data's `market` values the liquidity analytics are about. Requested
 / sizes are in base-currency units (millions of a currency), which only an FX
 / pair's book is quoted in; a crypto book is in coins.
-eligible_markets:enlist `fx
+.qpipe.transform.book_liquidity.eligible_markets:enlist `fx
 
 / What market_data cannot say about a book: its settlement and category. They are
 / not guessed - a book with a single, undifferentiated population carries this.
-unspecified:`unspecified
+.qpipe.transform.book_liquidity.unspecified:`unspecified
 
 / The settlements and categories the levels adapter keeps. EMPTY means all, kept
 / apart; a site wanting only spot, or only one book category, sets these to filter
 / in the adapter instead of collapsing populations downstream.
-eligible_settlements:`symbol$()
-eligible_categories:`symbol$()
+.qpipe.transform.book_liquidity.eligible_settlements:`symbol$()
+.qpipe.transform.book_liquidity.eligible_categories:`symbol$()
 
 / The levels feed quotes quantity in millions of the base currency.
-qty_scale:1e6
+.qpipe.transform.book_liquidity.qty_scale:1e6
 
 / The levels feed's rows: one per ladder level.
 / table_label is the physical table the row was read from. It is recorded by the
 / feed and deliberately NOT part of a book's identity: provider is.
-level_shape:([] source_time:`timestamp$(); sym:`symbol$(); provider:`symbol$(); table_label:`symbol$(); settlement:`symbol$(); category:`symbol$(); side:`symbol$(); price:`float$(); qty:`float$())
+.qpipe.transform.book_liquidity.level_shape:([] source_time:`timestamp$(); sym:`symbol$(); provider:`symbol$(); table_label:`symbol$(); settlement:`symbol$(); category:`symbol$(); side:`symbol$(); price:`float$(); qty:`float$())
 
 / The market_data shape the first adapter reads.
-market_data_shape:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); market:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+.qpipe.transform.book_liquidity.market_data_shape:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); market:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / Private: whether a ladder side is a pair of equal-length lists.
 / @private
-aligned:{[px;sz] (0h<=type px) and (0h<=type sz) and (count px)=count sz}
+.qpipe.transform.book_liquidity.aligned:{[px;sz] (0h<=type px) and (0h<=type sz) and (count px)=count sz}
 
 / market_data books as liquidity_book rows.
 / .
@@ -236,15 +236,15 @@ aligned:{[px;sz] (0h<=type px) and (0h<=type sz) and (count px)=count sz}
 / @param x rows of market_data_shape
 / @return rows of book_shape
 / @eg count .qpipe.transform.book_liquidity.from_market_data 0#.qpipe.transform.book_liquidity.market_data_shape  ->  0
-from_market_data:{[x]
-    if[0=count x; :0#book_shape];
+.qpipe.transform.book_liquidity.from_market_data:{[x]
+    if[0=count x; :0#.qpipe.transform.book_liquidity.book_shape];
     well_formed:not (null x`source_time) or (null x`sym) or null x`source;
-    bids:aligned'[x`bid_prices;x`bid_sizes];
-    asks:aligned'[x`ask_prices;x`ask_sizes];
-    keep:(x[`market] in eligible_markets) and well_formed and bids and asks;
+    bids:.qpipe.transform.book_liquidity.aligned'[x`bid_prices;x`bid_sizes];
+    asks:.qpipe.transform.book_liquidity.aligned'[x`ask_prices;x`ask_sizes];
+    keep:(x[`market] in .qpipe.transform.book_liquidity.eligible_markets) and well_formed and bids and asks;
     t:x where keep;
-    (cols book_shape) xcols ([] source_time:t`source_time; sym:t`sym; source:t`source;
-        settlement:(count t)#unspecified; category:(count t)#unspecified;
+    (cols .qpipe.transform.book_liquidity.book_shape) xcols ([] source_time:t`source_time; sym:t`sym; source:t`source;
+        settlement:(count t)#.qpipe.transform.book_liquidity.unspecified; category:(count t)#.qpipe.transform.book_liquidity.unspecified;
         bid_prices:t`bid_prices; bid_sizes:t`bid_sizes; ask_prices:t`ask_prices; ask_sizes:t`ask_sizes)}
 
 / Level rows as liquidity_book rows: the ladders are rebuilt from the levels.
@@ -264,24 +264,24 @@ from_market_data:{[x]
 / @param x rows of level_shape
 / @return rows of book_shape
 / @eg count .qpipe.transform.book_liquidity.from_levels 0#.qpipe.transform.book_liquidity.level_shape  ->  0
-from_levels:{[x]
+.qpipe.transform.book_liquidity.from_levels:{[x]
     well_formed:not (null x`source_time) or (null x`sym) or (null x`provider) or (null x`settlement) or null x`category;
     sided:(x`side) in `bid`ask;
-    wanted_s:$[count eligible_settlements; (x`settlement) in eligible_settlements; (count x)#1b];
-    wanted_c:$[count eligible_categories; (x`category) in eligible_categories; (count x)#1b];
+    wanted_s:$[count .qpipe.transform.book_liquidity.eligible_settlements; (x`settlement) in .qpipe.transform.book_liquidity.eligible_settlements; (count x)#1b];
+    wanted_c:$[count .qpipe.transform.book_liquidity.eligible_categories; (x`category) in .qpipe.transform.book_liquidity.eligible_categories; (count x)#1b];
     t:x where well_formed and sided and wanted_s and wanted_c;
-    if[0=count t; :0#book_shape];
+    if[0=count t; :0#.qpipe.transform.book_liquidity.book_shape];
     t:update level:.qf.mkt.level_ok[price;qty] from t;
     / one row per level price within a book side, the last delivered winning
     t:0!select level:last level, qty:last qty by source_time, sym, source:provider, settlement, category, side, price from t;
     / a local: a qSQL expression resolves a global against the session's namespace, not this one
-    scale:qty_scale;
+    scale:.qpipe.transform.book_liquidity.qty_scale;
     t:`price xasc update qty:qty*scale from t;
     t:update bids:level and side=`bid, asks:level and side=`ask from t;
     b:0!select bid_prices:(reverse price where bids), bid_sizes:(reverse qty where bids),
         ask_prices:(price where asks), ask_sizes:(qty where asks)
         by source_time, sym, source, settlement, category from t;
-    `source_time`sym`source`settlement`category xasc (cols book_shape) xcols b}
+    `source_time`sym`source`settlement`category xasc (cols .qpipe.transform.book_liquidity.book_shape) xcols b}
 
 \d .
 
@@ -373,20 +373,20 @@ from_levels:{[x]
 / bar_start), and a backfill REPLACES the live job's rows, so they share this one
 / function and this one `width`.
 
-\d .qpipe.transform.book_liquidity_1m
+\d .
 
 / The window width. The live job declares it and the twin cuts by it; a backfill
 / window should start on a multiple of it, or its first and last rows are partial.
-width:.qpipe.transform.book_liquidity.width
+.qpipe.transform.book_liquidity_1m.width:.qpipe.transform.book_liquidity.width
 
 / How long after a minute's end a book may arrive and still amend its row. Later
 / ones are dropped and logged by the bars kind, not folded in; a backfill reads
 / the whole window and so includes them.
-lateness:.qpipe.transform.book_liquidity.lateness
+.qpipe.transform.book_liquidity_1m.lateness:.qpipe.transform.book_liquidity.lateness
 
 / The sizes priced, in market_data's units (base currency) - FX books only,
 / which the adapter enforces. One row per size per provider per minute.
-sizes:1e6 5e6 10e6
+.qpipe.transform.book_liquidity_1m.sizes:1e6 5e6 10e6
 
 / One row per provider, size and minute from a batch of market_data rows: the
 / adapter keeps the eligible, well-formed FX books, the snapshot prices each at
@@ -396,9 +396,9 @@ sizes:1e6 5e6 10e6
 / @param x market_data rows: source_time, sym, source, market and the four ladders (any bar_start is ignored)
 / @return rows of .qpipe.transform.book_liquidity.minute_shape
 / @eg count .qpipe.transform.book_liquidity_1m.bars 0#.qpipe.transform.book_liquidity.market_data_shape  ->  0
-bars:{[x]
+.qpipe.transform.book_liquidity_1m.bars:{[x]
     books:.qpipe.transform.book_liquidity.from_market_data[x];
-    snaps:.qpipe.transform.book_liquidity.snapshot[books;([] req_size:sizes)];
-    .qpipe.transform.book_liquidity.minute[.qetl.job.stream.bars.assign[width;`source_time;snaps]]}
+    snaps:.qpipe.transform.book_liquidity.snapshot[books;([] req_size:.qpipe.transform.book_liquidity_1m.sizes)];
+    .qpipe.transform.book_liquidity.minute[.qetl.job.stream.bars.assign[.qpipe.transform.book_liquidity_1m.width;`source_time;snaps]]}
 
 \d .

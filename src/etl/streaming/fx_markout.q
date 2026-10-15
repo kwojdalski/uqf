@@ -34,14 +34,14 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qpipe.job.fx_markout
+\d .
 
 / What this job keeps of a batch of either table: executions it can score, and books
 / of the pairs the convention routes. Fully qualified, as every global a job reads is.
 / @param x a batch of executions or of market_data
 / @return a boolean per row
 / @eg .qpipe.job.fx_markout.keep[([] sym:`EURUSD`BTCUSDT)]  ->  10b
-keep:{[x]
+.qpipe.job.fx_markout.keep:{[x]
     spec:.qpipe.transform.fx_markout_outputs.job_spec;
     $[`fill_id in cols x;
         .qpipe.transform.fx_markout.scoreable[spec;x];
@@ -51,7 +51,7 @@ keep:{[x]
 / @param pending the pending executions
 / @return a list of symbol lists
 / @eg .qpipe.job.fx_markout.legs[([] sym:enlist `USDPLN)]  ->  enlist `EURUSD`EURPLN
-legs:{[pending] .qpipe.transform.fx_markout.legs_of[.qpipe.transform.fx_markout_outputs.job_spec;pending]}
+.qpipe.job.fx_markout.legs:{[pending] .qpipe.transform.fx_markout.legs_of[.qpipe.transform.fx_markout_outputs.job_spec;pending]}
 
 \d .
 

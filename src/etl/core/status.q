@@ -36,7 +36,7 @@
 / the guard is gone. Same convention as materialisation.q, run.q and heartbeat.q:
 / one file per persisted artefact that something outside this process reads.
 
-\d .qetl.status
+\d .
 
 / The lifecycle states a worker may report. Three of them are terminal, and
 / the distinction between the first two is the important one - "nothing
@@ -47,7 +47,7 @@
 /   idle      - ran, found no work, nothing wrong (terminal for this run)
 /   completed - ran, did work, finished the window (terminal)
 /   failed    - error set, see the error field (terminal)
-status_states:`starting`running`idle`completed`failed
+.qetl.status.status_states:`starting`running`idle`completed`failed
 
 / Which states may legally follow which.
 / .
@@ -87,7 +87,7 @@ status_states:`starting`running`idle`completed`failed
 / start.
 / .
 / running -> running is legal and normal: it is the next window.
-legal_transitions:(!). flip (
+.qetl.status.legal_transitions:(!). flip (
     (`starting;  `running`idle`completed`failed);
     (`running;   `running`idle`completed`failed);
     / terminal states: begin again, or report a failure
@@ -98,7 +98,7 @@ legal_transitions:(!). flip (
 / The states that end a run: those legal_transitions lets go only to
 / `starting (begin again) or `failed - `idle`completed`failed. A reader
 / waiting on a worker stops at one of these.
-terminal_states:status_states where {all x in `starting`failed} each legal_transitions status_states
+.qetl.status.terminal_states:.qetl.status.status_states where {all x in `starting`failed} each .qetl.status.legal_transitions .qetl.status.status_states
 
 / Validate a transition, or throw naming what it would have hidden.
 / .
@@ -112,14 +112,14 @@ terminal_states:status_states where {all x in `starting`failed} each legal_trans
 / it cannot run `select ... from ...` in its own body - `{[from] select x from
 / t where x>from}` throws a bare 'type. Nothing here runs qSQL today, so this
 / was latent rather than broken; the linter's QF001 found it.
-require_transition:{[from_state;to]
+.qetl.status.require_transition:{[from_state;to]
     if[null from_state; :1b];
-    if[not from_state in key legal_transitions;
+    if[not from_state in key .qetl.status.legal_transitions;
         '"require_transition: unknown previous state ",string from_state];
-    allowed:legal_transitions from_state;
+    allowed:.qetl.status.legal_transitions from_state;
     if[not to in allowed;
         '"require_transition: ",string[from_state]," -> ",string[to]," is forbidden",
-         $[from_state in terminal_states;
+         $[from_state in .qetl.status.terminal_states;
             / Consequence FIRST: q truncates a thrown string at 255 bytes,
             / so anything after that is silently lost - and what gets lost
             / is the part that explains the failure. This message was 254
@@ -132,8 +132,8 @@ require_transition:{[from_state;to]
 / none. Exists so write_status can validate a transition without the caller
 / having to remember what it last wrote - which it would get wrong precisely
 / when it matters, after a restart.
-previous_state:{[instance_id]
-    raw:@[{first read0 hsym `$x};file_path[instance_id];{""}];
+.qetl.status.previous_state:{[instance_id]
+    raw:@[{first read0 hsym `$x};.qetl.status.file_path[instance_id];{""}];
     if[0=count raw; :`];
     saved:@[{.j.k x};raw;{()!()}];
     $[`state in key saved; `$saved`state; `]}
@@ -141,19 +141,19 @@ previous_state:{[instance_id]
 / An instance's status file is <file_prefix><instance_id><file_suffix> in
 / status_dir. The instance id is in the name so two instances of one worker
 / do not overwrite each other.
-file_prefix:"airflow_status_"
-file_suffix:".txt"
+.qetl.status.file_prefix:"airflow_status_"
+.qetl.status.file_suffix:".txt"
 
 / The path of an instance's status file.
 / @param instance_id the process instance, e.g. `demo_markout1
 / @return the path, as a string
 / @eg .qetl.status.file_path[`demo_markout1] like "*/airflow_status_demo_markout1.txt"  ->  1b
-file_path:{[instance_id] (status_dir[]),"/",file_prefix,string[instance_id],file_suffix}
+.qetl.status.file_path:{[instance_id] (.qetl.status.status_dir[]),"/",.qetl.status.file_prefix,string[instance_id],.qetl.status.file_suffix}
 
 / Where status files go. Overridden by UQF_STATUS_DIR so the demo and a real
 / deployment can differ without a code change; defaults under TORQDATA
 / alongside the other generated state.
-status_dir:{[]
+.qetl.status.status_dir:{[]
     d:getenv`UQF_STATUS_DIR;
     $[0<count d; d; (getenv[`TORQDATA]),"/status"]}
 
@@ -192,9 +192,9 @@ status_dir:{[]
 /       `source_version`range_from`range_to!(`v1;2026.09.13D00:00;2026.09.14D00:00);
 /       `cursor`rows_published`windows_completed!(2026.09.14D00:00;1234;1);
 /       ""]
-write_status:{[worker;instance_id;state;spec;progress;err]
-    if[not state in status_states;
-        '"write_status: unknown state ",string[state]," - expected one of ",", " sv string status_states];
+.qetl.status.write_status:{[worker;instance_id;state;spec;progress;err]
+    if[not state in .qetl.status.status_states;
+        '"write_status: unknown state ",string[state]," - expected one of ",", " sv string .qetl.status.status_states];
     req:`source_version`range_from`range_to;
     missing:req where not req in key spec;
     if[count missing; '"write_status: spec is missing ",", " sv string missing];
@@ -210,8 +210,8 @@ write_status:{[worker;instance_id;state;spec;progress;err]
     / HERE rather than left to the caller, because the caller gets it wrong
     / exactly when it matters - after a restart, when it no longer remembers
     / what it last wrote.
-    require_transition[previous_state[instance_id];state];
-    dir:status_dir[];
+    .qetl.status.require_transition[.qetl.status.previous_state[instance_id];state];
+    dir:.qetl.status.status_dir[];
     / mkdir -p is idempotent, and cheaper than checking first.
     system"mkdir -p ",dir;
     / pid and host say WHICH process wrote it: a reader on the same host whose
@@ -229,7 +229,7 @@ write_status:{[worker;instance_id;state;spec;progress;err]
              progress`cursor;progress`rows_published;progress`windows_completed;
              $[`reactions_owed in key progress; progress`reactions_owed; 0];
              err;.z.p;.z.i;string .z.h;$[null run; ""; string run]);
-    target:file_path[instance_id];
+    target:.qetl.status.file_path[instance_id];
     tmp:target,".tmp";
     (hsym `$tmp) 0: enlist .j.j payload!values_;
     / atomic on the same filesystem, so a polling reader sees the old file or

@@ -22,7 +22,7 @@
 / computations were moved out to src/ in the first place (nothing in
 / src/etl/ may depend on TorQ).
 
-\d .qetl.job.stream
+\d .
 
 / job -> its declaration, ENLISTED. Keyed by the job's own name, which is
 / also the segment of its namespace: `demo_markout` is `.qpipe.job.demo_markout`.
@@ -36,15 +36,15 @@
 / declaration keeps the values a general list, so a job may declare whatever
 / its shape needs. scripts/gates/check_registry_enlist.py holds every
 / registry under src/ to this (#1030).
-jobs:(`symbol$())!();
+.qetl.job.stream.jobs:(`symbol$())!();
 
 / procname -> the job that runs there. A second index rather than a scan:
 / the runner looks itself up by procname on every start, and a scan over
 / declarations to answer it would have to reach inside each one.
-procnames:(`symbol$())!`symbol$();
+.qetl.job.stream.procnames:(`symbol$())!`symbol$();
 
 / job -> its declared state at define time, ENLISTED as `jobs` is (#967).
-initial:(`symbol$())!();
+.qetl.job.stream.initial:(`symbol$())!();
 
 / What every job must declare.
 / .
@@ -59,7 +59,7 @@ initial:(`symbol$())!();
 / drift. `procname` is the TorQ process that runs this job, and is how the
 / runner knows which job it is: one generic process script, and the name it
 / was started under decides. `on_batch` is the job itself.
-required_declarations:`ns`procname`subscribe_to`publishes
+.qetl.job.stream.required_declarations:`ns`procname`subscribe_to`publishes
 
 / The options of `define` that every job KIND (bars, horizon, rolling,
 / normalizer) accepts and forwards unchanged: job-level facts independent of
@@ -71,13 +71,13 @@ required_declarations:`ns`procname`subscribe_to`publishes
 / iterates kinds x this list. A kind that must refuse one says so, with the
 / reason, in that test. `ephemeral` is not here: only horizon, which keeps
 / state it does not replay, has a use for it.
-passthrough_keys:`start_with_all`note`on_start`check`on_fail
+.qetl.job.stream.passthrough_keys:`start_with_all`note`on_start`check`on_fail
 
 / The passthrough options a declaration carries, to forward to `define`.
 / @param decl a kind instance's declaration dict
 / @return the sub-dictionary of decl on `passthrough_keys`
 / @eg .qetl.job.stream.passthrough `a`note!(1;"n")  ->  enlist[`note]!enlist "n"
-passthrough:{[decl] (passthrough_keys inter key decl)#decl}
+.qetl.job.stream.passthrough:{[decl] (.qetl.job.stream.passthrough_keys inter key decl)#decl}
 
 / Private: can this value be called?
 / .
@@ -88,20 +88,20 @@ passthrough:{[decl] (passthrough_keys inter key decl)#decl}
 / writes. 100-112h covers lambdas, operators, projections, compositions and
 / q's own iterators.
 / @private
-is_callable:{[v] (type v) within 100 112h}
+.qetl.job.stream.is_callable:{[v] (type v) within 100 112h}
 
 / The namespace every job instance lives under, as .qpipe.job.<job>.
 / .
 / Separate from this framework's own `.qetl.job.stream` for the reason `.qpipe.job` is
 / separate from `.qetl.job.bounded`: a job called `jobs` or `define` nested inside the
 / framework would overwrite it.
-job_root:`.qpipe.job
+.qetl.job.stream.job_root:`.qpipe.job
 
 / The namespace a job's implementation lives in.
 / @param job the job's name
 / @return the namespace symbol, e.g. `.qpipe.job.demo_markout
 / @eg .qetl.job.stream.namespace `demo_markout  ->  `.qpipe.job.demo_markout
-namespace:{[job] ` sv job_root,job}
+.qetl.job.stream.namespace:{[job] ` sv .qetl.job.stream.job_root,job}
 
 / Private: refuse a malformed optional key - deployment facts, transform,
 / check and on_fail. Split out of `define`, whose single body was too big
@@ -110,7 +110,7 @@ namespace:{[job] ` sv job_root,job}
 / @param decl its declaration
 / @return nothing - it throws naming the job and the key
 / @private
-check_optional:{[job;decl]
+.qetl.job.stream.check_optional:{[job;decl]
     / Deployment facts, both optional. uqs derives its process registry
     / from these declarations, so this is where a job says whether it starts
     / with the stack (default: on demand) and why it is deployed as it is.
@@ -120,11 +120,11 @@ check_optional:{[job;decl]
         '"define: ",string[job],"'s note must be a string"];
     / What the job does when the plant's day ends (#943): roll, snapshot or
     / reset whatever state it carries. Called with the date that ended.
-    if[(`on_endofday in key decl) and not is_callable decl`on_endofday;
+    if[(`on_endofday in key decl) and not .qetl.job.stream.is_callable decl`on_endofday;
         '"define: ",string[job],"'s on_endofday must be a function of the date that ended"];
     / What the job loads before it runs (#1112): configuration a running
     / process needs and a declaration cannot hold, such as a limits file.
-    if[(`on_start in key decl) and not is_callable decl`on_start;
+    if[(`on_start in key decl) and not .qetl.job.stream.is_callable decl`on_start;
         '"define: ",string[job],"'s on_start must be a niladic function"];
     / The shared transform the job applies, when it applies one: what a twin
     / refilling its table must apply too, and what `uqs job new --twin-of`
@@ -142,7 +142,7 @@ check_optional:{[job;decl]
     if[(`on_fail in key decl) and not `check in key decl;
         '"define: ",string[job]," declares on_fail without a check - there is nothing to fail"];
     if[`check in key decl;
-        if[not is_callable decl`check;
+        if[not .qetl.job.stream.is_callable decl`check;
             '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
         if[not (`on_fail in key decl) and -11h=type decl`on_fail;
             '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
@@ -156,7 +156,7 @@ check_optional:{[job;decl]
 / @param decl its declaration, `ns` set
 / @return nothing - it throws naming the job and the key
 / @private
-check_replay:{[job;decl]
+.qetl.job.stream.check_replay:{[job;decl]
     / Restoring state at start - see `start` below.
     if[(`replay in key decl) and not -1h=type decl`replay;
         '"define: ",string[job],"'s replay must be a boolean, 1b to rebuild state from the day's log at start"];
@@ -168,9 +168,9 @@ check_replay:{[job;decl]
             '"define: ",string[job]," declares restore_from without replay 1b - those tables are read only by a replay"];
         if[not `on_batch in key decl;
             '"define: ",string[job]," declares restore_from but no on_batch to read it with"]];
-    if[`carry in key decl; check_carry[job;decl;replays]];
+    if[`carry in key decl; .qetl.job.stream.check_carry[job;decl;replays]];
     if[`on_replayed in key decl;
-        if[not is_callable decl`on_replayed;
+        if[not .qetl.job.stream.is_callable decl`on_replayed;
             '"define: ",string[job],"'s on_replayed must be a niladic function"];
         if[not replays;
             '"define: ",string[job]," declares on_replayed without replay 1b - it would never be called"]];
@@ -184,7 +184,7 @@ check_replay:{[job;decl]
             '"define: ",string[job],"'s state must be a symbol list naming variables in ",string[decl`ns]];
         absent:decl[`state] where not (decl`state) in key decl`ns;
         if[count absent; '"define: ",string[job],"'s state names ",(", " sv string absent),", which ",string[decl`ns]," does not define"];
-        initial[job]:enlist (decl`state)!get each ` sv'decl[`ns],/:decl`state;
+        .qetl.job.stream.initial[job]:enlist (decl`state)!get each ` sv'decl[`ns],/:decl`state;
         / State says how it survives a restart (#1073): rebuilt by replay, or
         / declared ephemeral with the reason losing it is acceptable. Neither
         / was the default - a markout's pending fills, a superbook's books -
@@ -214,19 +214,19 @@ check_replay:{[job;decl]
 /   as the job's file leaves them are what `reset` restores)
 / @return the job name
 / @throws error naming every missing or malformed field at once
-define:{[job;decl]
+.qetl.job.stream.define:{[job;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
     if[job in @[{.qetl.job.bounded.defined[]};::;{[e] `symbol$()}];
         '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
-    decl[`ns]:namespace[job];
-    missing:required_declarations where not required_declarations in key decl;
+    decl[`ns]:.qetl.job.stream.namespace[job];
+    missing:.qetl.job.stream.required_declarations where not .qetl.job.stream.required_declarations in key decl;
     if[count missing;
         '"define: ",string[job]," is missing ",", " sv string missing];
     if[not -11h=type decl`procname;
         '"define: ",string[job],"'s procname must be a symbol naming the TorQ process that runs it, e.g. `demo_markout1"];
-    if[(decl`procname) in key procnames;
-        '"define: ",string[job]," claims procname ",string[decl`procname]," which ",(string procnames decl`procname)," already runs - one process runs one job"];
+    if[(decl`procname) in key .qetl.job.stream.procnames;
+        '"define: ",string[job]," claims procname ",string[decl`procname]," which ",(string .qetl.job.stream.procnames decl`procname)," already runs - one process runs one job"];
     if[not 11h=abs type decl`subscribe_to;
         '"define: ",string[job],"'s subscribe_to must be a symbol list of table names"];
     if[not 11h=abs type decl`publishes;
@@ -234,8 +234,8 @@ define:{[job;decl]
     / A polling feed declares its steps rather than its timer, and gets the
     / timer built from them (stream_poll.q) - before the checks below, which
     / then see an ordinary feed.
-    if[`poll in key decl; decl:poll_declared[job;decl]];
-    if[(`on_batch in key decl) and not is_callable decl`on_batch;
+    if[`poll in key decl; decl:.qetl.job.stream.poll_declared[job;decl]];
+    if[(`on_batch in key decl) and not .qetl.job.stream.is_callable decl`on_batch;
         '"define: ",string[job],"'s on_batch must be a function taking (table name; rows), [t;x] as in TorQ's upd"];
     / A subscriber with no handler receives every batch and drops it, and a
     / job with neither handler nor timer runs nothing at all - both look
@@ -255,12 +255,12 @@ define:{[job;decl]
             '"define: ",string[job],"'s period must be a timespan, e.g. 0D00:00:01"];
         if[not (decl`period)>0D00:00;
             '"define: ",string[job],"'s period must be positive"];
-        if[not is_callable decl`on_timer;
+        if[not .qetl.job.stream.is_callable decl`on_timer;
             '"define: ",string[job],"'s on_timer must be a niladic function"]];
-    check_optional[job;decl];
-    check_replay[job;decl];
-    jobs[job]:enlist decl;
-    procnames[decl`procname]:job;
+    .qetl.job.stream.check_optional[job;decl];
+    .qetl.job.stream.check_replay[job;decl];
+    .qetl.job.stream.jobs[job]:enlist decl;
+    .qetl.job.stream.procnames[decl`procname]:job;
     .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";
         `procname`subscribe_to`publishes`timer!(decl`procname;decl`subscribe_to;decl`publishes;
             $[has_period; decl`period; 0Nn]));::];
@@ -271,10 +271,10 @@ define:{[job;decl]
 / @return the declaration dict
 / @throws error naming the job when register was never called for it
 / @eg .qetl.job.stream.def[`demo_markout]`subscribe_to  ->  `trades`quote
-def:{[job]
-    if[not job in key jobs;
+.qetl.job.stream.def:{[job]
+    if[not job in key .qetl.job.stream.jobs;
         '"def: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
-    first jobs job}
+    first .qetl.job.stream.jobs job}
 
 / The job a TorQ process runs, by the name the process was started under.
 / .
@@ -286,10 +286,10 @@ def:{[job]
 / @return the job's name
 / @throws error when no registered job claims that process
 / @eg .qetl.job.stream.for_procname `demo_markout1  ->  `demo_markout
-for_procname:{[procname]
-    if[not procname in key procnames;
-        '"for_procname: no streaming job runs as ",string[procname]," - registered processes: ",", " sv string key procnames];
-    procnames procname}
+.qetl.job.stream.for_procname:{[procname]
+    if[not procname in key .qetl.job.stream.procnames;
+        '"for_procname: no streaming job runs as ",string[procname]," - registered processes: ",", " sv string key .qetl.job.stream.procnames];
+    .qetl.job.stream.procnames procname}
 
 / Put a job's declared state back to what its file defined (#967).
 / .
@@ -301,20 +301,20 @@ for_procname:{[procname]
 / @return the job name
 / @throws error when the job is not registered
 / @eg .qetl.job.stream.reset `cross  ->  `cross
-reset:{[job]
-    def job;
-    if[job in key initial;
-        s:first initial job;
-        {[ns;k;v] (` sv ns,k) set v}[namespace[job]]'[key s;value s]];
+.qetl.job.stream.reset:{[job]
+    .qetl.job.stream.def job;
+    if[job in key .qetl.job.stream.initial;
+        s:first .qetl.job.stream.initial job;
+        {[ns;k;v] (` sv ns,k) set v}[.qetl.job.stream.namespace[job]]'[key s;value s]];
     / and what its carry knows of that state (#1015)
-    carried_to::(enlist job) _ carried_to;
-    carry_log::(enlist job) _ carry_log;
-    caught_up::(enlist job) _ caught_up;
+    .qetl.job.stream.carried_to::(enlist job) _ .qetl.job.stream.carried_to;
+    .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log;
+    .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up;
     job}
 
 / Every registered job, for the runner and for tests.
 / @return symbol list of job names
-defined:{[] key jobs}
+.qetl.job.stream.defined:{[] key .qetl.job.stream.jobs}
 
 / Point a job's `publish` at something that can actually publish.
 / .
@@ -325,15 +325,15 @@ defined:{[] key jobs}
 / @param job the job's name
 / @param publisher a function of (table name; rows)
 / @return the job name
-wire:{[job;publisher]
-    if[not is_callable publisher;
+.qetl.job.stream.wire:{[job;publisher]
+    if[not .qetl.job.stream.is_callable publisher;
         '"wire: ",string[job],"'s publisher must be callable as (table; rows) - a lambda or a projection over one"];
-    d:def[job];
+    d:.qetl.job.stream.def[job];
     / A declared check sits in the seam itself, so every route a row takes out
     / of the job - batch handler, timer, poll, on_replayed - passes through it.
     / The plant's contract sits under the check, at the transport (#1074).
-    p:contracted[job;(),(d`publishes) inter .qetl.plant.names[];publisher];
-    (` sv (d`ns),`publish) set $[`check in key d; checked[job;d`check;d`on_fail;p]; p];
+    p:.qetl.job.stream.contracted[job;(),(d`publishes) inter .qetl.plant.names[];publisher];
+    (` sv (d`ns),`publish) set $[`check in key d; .qetl.job.stream.checked[job;d`check;d`on_fail;p]; p];
     .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist d`publishes);::];
     job}
 
@@ -347,10 +347,10 @@ wire:{[job;publisher]
 / like one a job's own check fails. A table the plant does not carry is the
 / job's own business and passes as it is.
 / @private
-contracted:{[job;plant;publisher;t;x]
+.qetl.job.stream.contracted:{[job;plant;publisher;t;x]
     if[not t in plant; :publisher[t;x]];
-    if[count f:contract_problems[t;x];
-        :withhold[job;t;x;"plant contract: ","; " sv f;();row_count[t;x]]];
+    if[count f:.qetl.job.stream.contract_problems[t;x];
+        :.qetl.job.stream.withhold[job;t;x;"plant contract: ","; " sv f;();.qetl.job.stream.row_count[t;x]]];
     publisher[t;x]}
 
 / Private: what is wrong with `x` as a batch for plant table `t`: a table,
@@ -358,7 +358,7 @@ contracted:{[job;plant;publisher;t;x]
 / vectors in the plant's order, the shapes a publisher takes. A list is held
 / to the types its positions name, which is all it can be held to.
 / @private
-contract_problems:{[t;x]
+.qetl.job.stream.contract_problems:{[t;x]
     c:cols .qetl.plant.published t;
     if[(0h=type x) and not count[x]=count c;
         :enlist string[t]," was given ",string[count x]," column vector(s) - the plant takes ",string count c];
@@ -366,7 +366,7 @@ contract_problems:{[t;x]
         :enlist string[t],"'s rows must be a table, a dict or a list of column vectors"];
     / Trapped: a ragged list or dict cannot be made a table, and says so. A
     / `time` is dropped, as every publisher drops it: the plant stamps its own.
-    @[{[t;c;x] r:as_rows[c;x];
+    @[{[t;c;x] r:.qetl.job.stream.as_rows[c;x];
             .qetl.plant.problems[t] (cols[r] except `time)#r}[t;c];x;{[e] enlist "could not be checked: ",e}]}
 
 / Private: a batch in any shape a publisher takes, as a table (#1164): a table
@@ -374,14 +374,14 @@ contract_problems:{[t;x]
 / list of column vectors flipped under the names in `c`. The one reading of
 / "the rows of this batch"; throws on a ragged dict or list.
 / @private
-as_rows:{[c;x] 0!$[.Q.qt x; x; 99h=type x; $[all 0>type each value x; enlist x; flip x]; flip c!x]}
+.qetl.job.stream.as_rows:{[c;x] 0!$[.Q.qt x; x; 99h=type x; $[all 0>type each value x; enlist x; flip x]; flip c!x]}
 
 / Private: how many rows a batch holds, whatever its shape (#1164). A batch
 / that cannot be made a table (ragged) counts as 1: it is withheld whole.
 / @private
-row_count:{[t;x]
+.qetl.job.stream.row_count:{[t;x]
     c:$[t in .qetl.plant.names[]; cols .qetl.plant.published t; `$"c",/:string til count x];
-    @[{[c;x] count as_rows[c;x]}[c];x;{[e] 1}]}
+    @[{[c;x] count .qetl.job.stream.as_rows[c;x]}[c];x;{[e] 1}]}
 
 / Private: a publisher that runs the job's declared check first (#944).
 / .
@@ -398,35 +398,35 @@ row_count:{[t;x]
 / logged with its failures and counted in .qetl.stream_health, which is what
 / shows the job as failing in `uqs summary`.
 / @private
-checked:{[job;chk;mode;publisher;t;x]
+.qetl.job.stream.checked:{[job;chk;mode;publisher;t;x]
     r:@[{[chk;x] (1b;chk x)}[chk];x;{[e] (0b;e)}];
     if[not first r;
-        :withhold[job;t;x;"check threw: ",last r;();row_count[t;x]]];
+        :.qetl.job.stream.withhold[job;t;x;"check threw: ",last r;();.qetl.job.stream.row_count[t;x]]];
     f:last r;
     if[not .Q.qt f;
-        :withhold[job;t;x;"check returned something other than a table of failures";();row_count[t;x]]];
+        :.qetl.job.stream.withhold[job;t;x;"check returned something other than a table of failures";();.qetl.job.stream.row_count[t;x]]];
     if[0=count f; :publisher[t;x]];
     / Only a table has rows a check can name by index and a publisher can be
     / handed a subset of. A dict row or a list of column vectors that fails is
     / withheld whole, under drop as under hold: no clean subset is rebuilt in
     / a shape the check never indexed.
     tbl:98h=type x;
-    n:row_count[t;x];
+    n:.qetl.job.stream.row_count[t;x];
     / `row is read only once it is known to be there: `and evaluates both
     / sides, and indexing a missing column throws on PeachQ
     named:$[tbl and (`drop=mode) and `row in cols f; not any null f`row; 0b];
     rows:$[named; distinct "j"$f`row; til n];
     clean:$[tbl; x where not (til n) in rows; ()];
-    withhold[job;t;x;"check failed: ",string[count f]," failure(s)";f;count rows];
+    .qetl.job.stream.withhold[job;t;x;"check failed: ",string[count f]," failure(s)";f;count rows];
     $[tbl and count clean; publisher[t;clean]; ::]}
 
 / Private: log and count a batch the check withheld, in whole or part.
 / @private
-withhold:{[job;t;x;msg;f;n]
+.qetl.job.stream.withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
     .[{.qetl.log.err[x;y;z]};(job;"publish check withheld rows";
-        `table`rows`withheld`failures!(t;row_count[t;x];n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
-    withheld_n::withheld_n+1;
+        `table`rows`withheld`failures!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
+    .qetl.job.stream.withheld_n::.qetl.job.stream.withheld_n+1;
     ::}
 
 / ------------------------------------------------------------ THE BUFFER
@@ -446,7 +446,7 @@ withhold:{[job;t;x;msg;f;n]
 / @eg `.qetl.job.stream.eg_buffer set ([] a:1 2 3); .qetl.job.stream.drain[`.qetl.job.stream.eg_buffer;101b]  ->  ([] a:1 3)
 / @see .qetl.job.stream.evict - use that instead when a failed publish should retry
 /   the batch rather than lose it (drain is at-most-once, evict at-least-once)
-drain:{[table_name;mask]
+.qetl.job.stream.drain:{[table_name;mask]
     buffer:get table_name;
     if[0=count buffer; :buffer];
     ready:buffer where mask;
@@ -466,7 +466,7 @@ drain:{[table_name;mask]
 / @param mask the boolean vector already used to read the batch
 / @return the number of rows removed
 / @eg `.qetl.job.stream.eg_buffer set ([] a:1 2 3); .qetl.job.stream.evict[`.qetl.job.stream.eg_buffer;101b]  ->  2i
-evict:{[table_name;mask]
+.qetl.job.stream.evict:{[table_name;mask]
     buffer:get table_name;
     if[0=count buffer; :0];
     table_name set buffer where not mask;
@@ -487,7 +487,7 @@ evict:{[table_name;mask]
 / the difference matters to it - kafka_flow holds replayed rows until the
 / replay has shown it everything it already published. Most jobs need not
 / look: during a replay their publish is muted anyway.
-replaying:0b
+.qetl.job.stream.replaying:0b
 
 / The log clock: the time a stream decision uses for each row of a batch (#994).
 / .
@@ -509,14 +509,14 @@ replaying:0b
 / @param x the batch, a table
 / @return a timestamp per row of x
 / @eg .qetl.job.stream.clock_of[2026.10.09D10:00:00;([] a:1 2)]  ->  2026.10.09D10:00:00 2026.10.09D10:00:00
-clock_of:{[now;x]
-    $[replaying; $[`time in cols x; x`time; count[x]#0Np]; count[x]#now]}
+.qetl.job.stream.clock_of:{[now;x]
+    $[.qetl.job.stream.replaying; $[`time in cols x; x`time; count[x]#0Np]; count[x]#now]}
 
 / The log clock with the process clock for `now`.
 / @param x the batch, a table
 / @return a timestamp per row of x
 / @eg count .qetl.job.stream.clock ([] a:1 2)  ->  2
-clock:{[x] clock_of[.z.p;x]}
+.qetl.job.stream.clock:{[x] .qetl.job.stream.clock_of[.z.p;x]}
 
 / What a runner must hand `start`: the transport, as functions.
 / .
@@ -536,15 +536,15 @@ clock:{[x] clock_of[.z.p;x]}
 / contract (#1220), judged by `start` once connected, for a job with carry and
 / replay: all three, or the transport states `recovery` as 0b to say it
 / cannot recover; some but not all is refused, and none is an ERROR.
-transport_keys:`connect`publisher`subscribe`timer
+.qetl.job.stream.transport_keys:`connect`publisher`subscribe`timer
 
 / Every table a job subscribes to: its inputs, and those it reads only to
 / restore state. The second are not inputs - .qetl.dag reads subscribe_to
 / alone, so a job restoring from its own output does not draw a cycle.
 / @param job the job's name
 / @return the tables, as a symbol list
-subscriptions:{[job]
-    d:def[job];
+.qetl.job.stream.subscriptions:{[job]
+    d:.qetl.job.stream.def[job];
     distinct (),(d`subscribe_to),$[`restore_from in key d; d`restore_from; `symbol$()],
         $[`carry in key d; enlist d[`carry]`table; `symbol$()]}
 
@@ -554,7 +554,7 @@ subscriptions:{[job]
 / a gap in `uqs gaps` and `failing` in `uqs summary` rather than a process
 / that looks healthy (#832).
 / @private
-guarded:{[job;f;t;x]
+.qetl.job.stream.guarded:{[job;f;t;x]
     r:.[f;(t;x);{[job;t;e]
         .[.qetl.stream_health.record;(job;0b;e);::];
         .[{.qetl.log.err[x;y;z]};(job;"on_batch failed";`table`error!(t;e));::];
@@ -587,33 +587,33 @@ guarded:{[job;f;t;x]
 / @param tr the transport, a dictionary of transport_keys
 / @return the job name
 / @throws error when the transport lacks a key, or any step fails
-start:{[job;tr]
-    missing:transport_keys where not transport_keys in key tr;
+.qetl.job.stream.start:{[job;tr]
+    missing:.qetl.job.stream.transport_keys where not .qetl.job.stream.transport_keys in key tr;
     if[count missing; '"start: the transport is missing ",", " sv string missing];
-    d:def[job];
+    d:.qetl.job.stream.def[job];
     replay:$[`replay in key d; d`replay; 0b];
-    tbls:subscriptions[job];
+    tbls:.qetl.job.stream.subscriptions[job];
     .[{.qetl.log.info[x;y;z]};(job;"starting streaming job";
         `subscribe_to`publishes`replay`timer!(tbls;d`publishes;replay;
             $[`period in key d; d`period; 0Nn]));::];
     if[`on_start in key d; (d`on_start)[]];
     tr[`connect][];
-    require_recovery[job;tr];
+    .qetl.job.stream.require_recovery[job;tr];
     if[count d`publishes;
         if[`check_publishable in key tr; tr[`check_publishable] d`publishes];
-        wire[job;tr[`publisher][]]];
+        .qetl.job.stream.wire[job;tr[`publisher][]]];
     if[count tbls;
         live:get pub:` sv (d`ns),`publish;
         if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b]; / noqa: QF016 publish signature, replay discards
-        today:plant_today tr;
+        today:.qetl.job.stream.plant_today tr;
         r:@[{[job;tr;tbls;h;replay]
-                if[replay and `carry in key def job; catch_up[job;tr;tbls;h]];
-                tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;handler[job]];
+                if[replay and `carry in key .qetl.job.stream.def job; .qetl.job.stream.catch_up[job;tr;tbls;h]];
+                tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;.qetl.job.stream.handler[job]];
             replay;{[e] (0b;e)}];
         pub set live;
         `.qetl.job.stream.replaying set 0b;
-        if[replay and `carry in key d; missed_end_of_day[job;today]];
-        replayed[job];
+        if[replay and `carry in key d; .qetl.job.stream.missed_end_of_day[job;today]];
+        .qetl.job.stream.replayed[job];
         if[not first r; 'last r];
         if[`on_replayed in key d; (d`on_replayed)[]];
         / Protected: a record that cannot be written must never stop the job
@@ -633,7 +633,7 @@ start:{[job;tr]
 
 / The jobs this process has started, in the order it started them: whom
 / end_of_day tells.
-running:`symbol$()
+.qetl.job.stream.running:`symbol$()
 
 / The plant's day has ended: call each running job's on_endofday with it.
 / .
@@ -647,13 +647,13 @@ running:`symbol$()
 / @param dt the date that ended
 / @return the jobs whose on_endofday ran without throwing
 / @eg .qetl.job.stream.end_of_day 2026.10.09
-end_of_day:{[dt]
+.qetl.job.stream.end_of_day:{[dt]
     / carried state first (#963): its snapshot opens the new day's log
-    cs:running where {[j] `carry in key def j} each running;
+    cs:.qetl.job.stream.running where {[j] `carry in key .qetl.job.stream.def j} each .qetl.job.stream.running;
     / and, only for a snapshot that was published, the day it saw end (#1072, #1307)
-    carry_end_of_day[dt] each cs;
-    js:running where {[j] `on_endofday in key def j} each running;
-    ok:{[dt;j] @[{[dt;j] (def[j]`on_endofday) dt; 1b}[dt];j;
+    .qetl.job.stream.carry_end_of_day[dt] each cs;
+    js:.qetl.job.stream.running where {[j] `on_endofday in key .qetl.job.stream.def j} each .qetl.job.stream.running;
+    ok:{[dt;j] @[{[dt;j] (.qetl.job.stream.def[j]`on_endofday) dt; 1b}[dt];j;
         {[dt;j;e] .qetl.log.err[j;"on_endofday failed";`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
     js where ok}
 
@@ -688,18 +688,18 @@ end_of_day:{[dt]
 
 / Every carry's recording during a replay: job -> (status; rows held;
 / batches), status `recording, `full once the cap was hit, `restored.
-carry_log:(`symbol$())!()
+.qetl.job.stream.carry_log:(`symbol$())!()
 
 / job -> 1b once catch_up replayed the log of the day after the job's last end
 / of day (#1189): the state is then complete even though no log held a snapshot.
-caught_up:(`symbol$())!`boolean$()
+.qetl.job.stream.caught_up:(`symbol$())!`boolean$()
 
 / job -> the plant `time` of the last batch its carried state applied.
-carried_to:(`symbol$())!`timestamp$()
+.qetl.job.stream.carried_to:(`symbol$())!`timestamp$()
 
 / Private: refuse a malformed carry, naming it.
 / @private
-check_carry:{[job;decl;replays]
+.qetl.job.stream.check_carry:{[job;decl;replays]
     c:decl`carry;
     who:"define: ",string[job],"'s carry";
     if[not 99h=type c; 'who," must be a dict of state and table"];
@@ -717,35 +717,35 @@ check_carry:{[job;decl;replays]
 / @param job the job's name
 / @return a function of (table;rows)
 / @eg .qetl.job.stream.handler[`fx_positions]
-handler:{[job]
-    h:guarded[job;def[job]`on_batch];
-    $[`carry in key def job; carried[job;h;;]; h]}
+.qetl.job.stream.handler:{[job]
+    h:.qetl.job.stream.guarded[job;.qetl.job.stream.def[job]`on_batch];
+    $[`carry in key .qetl.job.stream.def job; .qetl.job.stream.carried[job;h;;]; h]}
 
 / Private: route one batch for a job that carries state.
 / @private
-carried:{[job;h;t;x]
-    c:def[job]`carry;
+.qetl.job.stream.carried:{[job;h;t;x]
+    c:.qetl.job.stream.def[job]`carry;
     if[t=c`table;
-        if[replaying; restore[job;h;x]];
+        if[.qetl.job.stream.replaying; .qetl.job.stream.restore[job;h;x]];
         :()];
     h[t;x];
-    if[(`time in cols x) and count x; carried_to[job]:max (carried_to job;max x`time)];
-    if[replaying; record[job;t;x]];
+    if[(`time in cols x) and count x; .qetl.job.stream.carried_to[job]:max (.qetl.job.stream.carried_to job;max x`time)];
+    if[.qetl.job.stream.replaying; .qetl.job.stream.record[job;t;x]];
     }
 
 / Private: how many rows a job's carry may hold during a replay.
 / @private
-carry_cap:{[job] $[`cap in key def[job]`carry; def[job][`carry]`cap; 100000]}
+.qetl.job.stream.carry_cap:{[job] $[`cap in key .qetl.job.stream.def[job]`carry; .qetl.job.stream.def[job][`carry]`cap; 100000]}
 
 / Private: keep a replayed batch until the snapshot arrives, up to the cap; past it,
 / note the latest `time` dropped (#1372; none counts as latest).
 / @private
-record:{[job;t;x]
-    r:$[job in key carry_log; carry_log job; (`recording;0;();0Np)];
+.qetl.job.stream.record:{[job;t;x]
+    r:$[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; (`recording;0;();0Np)];
     d:$[not (`time in cols x) and count x; 0Np; `time in cols x; max x`time; 0Wp];
-    if[(r 0) in `full`restored_full; carry_log[job]:(r 0;r 1;();max (r 3;d)); :()];
-    if[carry_cap[job]<n:r[1]+count x; carry_log[job]:($[`restored=r 0; `restored_full; `full];n;();max (r 3;d)); :()];
-    carry_log[job]:(r 0;n;r[2],enlist (t;x);r 3);
+    if[(r 0) in `full`restored_full; .qetl.job.stream.carry_log[job]:(r 0;r 1;();max (r 3;d)); :()];
+    if[.qetl.job.stream.carry_cap[job]<n:r[1]+count x; .qetl.job.stream.carry_log[job]:($[`restored=r 0; `restored_full; `full];n;();max (r 3;d)); :()];
+    .qetl.job.stream.carry_log[job]:(r 0;n;r[2],enlist (t;x);r 3);
     }
 
 / Private: set the carried state from its snapshot, then apply again the
@@ -753,18 +753,18 @@ record:{[job;t;x]
 / `carried_to`. A recording that hit its cap and dropped rows later than that
 / has lost rows the state needs: logged as an error, never silent (#1015, #1372).
 / @private
-restore:{[job;h;x]
-    c:def[job]`carry;
-    r:$[job in key carry_log; carry_log job; (`recording;0;();0Np)];
+.qetl.job.stream.restore:{[job;h;x]
+    c:.qetl.job.stream.def[job]`carry;
+    r:$[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; (`recording;0;();0Np)];
     hwm:$[(`carried_to in cols x) and count x; max x`carried_to; 0Np];
     if[((r 0) in `full`restored_full) and (null hwm) or hwm<r 3;
         .qetl.log.err[job;"carry snapshot arrived after its recording hit the cap - batches logged before it are not re-applied, so the restored state is missing them";
-            `table`held`cap!(c`table;r 1;carry_cap[job])]];
-    v:` sv (def[job]`ns),c`state;
+            `table`held`cap!(c`table;r 1;.qetl.job.stream.carry_cap[job])]];
+    v:` sv (.qetl.job.stream.def[job]`ns),c`state;
     cur:get v;
     rows:(cols 0!cur)#x;
     v set $[99h=type cur; (keys cur) xkey rows; rows];
-    carry_log[job]:(`restored;0;();0Np);
+    .qetl.job.stream.carry_log[job]:(`restored;0;();0Np);
     {[h;hwm;b] rs:b 1; if[(not null hwm) and `time in cols rs; rs:select from rs where time>hwm]; if[count rs; h[b 0;rs]]}[h;hwm] each r 2;
     }
 
@@ -772,7 +772,7 @@ restore:{[job;h;x]
 / @param job the job's name
 / @return the job's name
 / @eg .qetl.job.stream.replayed[`fx_positions]  ->  `fx_positions
-replayed:{[job] carry_log::(enlist job) _ carry_log; caught_up::(enlist job) _ caught_up; job}
+.qetl.job.stream.replayed:{[job] .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log; .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up; job}
 
 / Publish a job's carried state onto its snapshot table - what end_of_day
 / does for each running job that carries one - each row stamped with the
@@ -782,19 +782,19 @@ replayed:{[job] carry_log::(enlist job) _ carry_log; caught_up::(enlist job) _ c
 / @param job the job's name
 / @return how many rows were published
 / @eg .qetl.job.stream.snapshot[`fx_positions]
-snapshot:{[job]
-    c:def[job]`carry;
-    rows:0!get ` sv (def[job]`ns),c`state;
+.qetl.job.stream.snapshot:{[job]
+    c:.qetl.job.stream.def[job]`carry;
+    rows:0!get ` sv (.qetl.job.stream.def[job]`ns),c`state;
     if[count rows;
-        hwm:$[job in key carried_to; carried_to job; 0Np];
+        hwm:$[job in key .qetl.job.stream.carried_to; .qetl.job.stream.carried_to job; 0Np];
         rows:update carried_to:hwm from rows;
-        n0:withheld_n;
-        (get ` sv (def[job]`ns),`publish)[c`table;rows];
+        n0:.qetl.job.stream.withheld_n;
+        (get ` sv (.qetl.job.stream.def[job]`ns),`publish)[c`table;rows];
         / a publish check that withheld the batch returns :: and no error (#1307)
-        if[n0<>withheld_n; '"carry snapshot withheld by the publish check"]];
+        if[n0<>.qetl.job.stream.withheld_n; '"carry snapshot withheld by the publish check"]];
     count rows}
 
-unwired:{[job]
+.qetl.job.stream.unwired:{[job]
     {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qetl.job.stream.wire first"}[job]} / noqa: QF016 publish signature, refuses
 
 \d .

@@ -4,7 +4,7 @@
 / several files, loaded in order by src/etl/init.q after source_contract.q, which
 / carries the design record. Public names are unchanged by the split (#970).
 
-\d .qetl.source
+\d .
 
 / ---------------------------------------------------------------- ZONES
 
@@ -21,21 +21,21 @@
 / lib/torq/config/tzinfo (631 zones, 70381 transitions), in exactly this
 / shape. src/ deliberately does not reach into lib/, so the PATH is the
 / caller's to supply - tests and processes pass it in.
-zone_table:0#([] timezoneID:`symbol$(); gmtDateTime:`timestamp$(); adjustment:`timespan$())
+.qetl.source.zone_table:0#([] timezoneID:`symbol$(); gmtDateTime:`timestamp$(); adjustment:`timespan$())
 
 / Cached so require_zone_table is not a 70k-row scan per fetch.
-zone_names:`symbol$()
+.qetl.source.zone_names:`symbol$()
 
 / Load a zone table from a serialised q table.
 / @param path a file path, e.g. "lib/torq/config/tzinfo"
 / @return the number of transitions loaded
 / @throws error when the file does not hold a table of the expected shape
-load_zone_table:{[path]
+.qetl.source.load_zone_table:{[path]
     zt:@[get;hsym `$path;{'"load_zone_table: cannot read a zone table from ",x," (",y,")"}[path]];
     if[not .Q.qt zt;
         '"load_zone_table: ",path," does not hold a table"];
     needed:`timezoneID`gmtDateTime`adjustment;
-    absent:needed where not needed in column_names zt;
+    absent:needed where not needed in .qetl.source.column_names zt;
     if[count absent;
         '"load_zone_table: ",path," is missing ",(", " sv string absent),
          " - a zone table needs a zone name, the UTC instant a rule takes effect, and the offset it applies"];
@@ -45,9 +45,9 @@ load_zone_table:{[path]
     / than erroring. Sort FIRST and group after - `xasc` reorders rows, so a
     / `g` attribute applied beforehand would be dropped, or worse, stale.
     sorted:`gmtDateTime xasc trimmed;
-    zone_table::update `g#timezoneID from sorted;
-    zone_names::exec distinct timezoneID from zone_table;
-    count zone_table}
+    .qetl.source.zone_table::update `g#timezoneID from sorted;
+    .qetl.source.zone_names::exec distinct timezoneID from .qetl.source.zone_table;
+    count .qetl.source.zone_table}
 
 / Refuse to convert without a table, or for a zone it does not know.
 / .
@@ -55,29 +55,29 @@ load_zone_table:{[path]
 / correct for part of the year and an hour wrong for the rest, which puts
 / rows in the wrong window without ever failing - and a coverage ledger then
 / records both windows as complete.
-require_zone_table:{[tz]
-    if[0=count zone_table;
+.qetl.source.require_zone_table:{[tz]
+    if[0=count .qetl.source.zone_table;
         / Consequence first, then the fix: the 255-byte truncation would
         / otherwise cut the reason, which is the part that matters.
         '"require_zone_table: no zone table loaded, and ",string[tz],
          " needs one - a fixed-offset fallback would be an hour wrong for half the year and never error. See load_zone_table"];
-    if[not tz in zone_names;
+    if[not tz in .qetl.source.zone_names;
         '"require_zone_table: zone ",string[tz]," is not in the loaded zone table (",
-         string[count zone_names]," zones) - check the tz-database spelling, e.g. `$\"Europe/London\""];
+         string[count .qetl.source.zone_names]," zones) - check the tz-database spelling, e.g. `$\"Europe/London\""];
     tz}
 
 / Private: the offsets this zone has ever used. At most 8 in tzdata, so the
 / candidate search in local_to_utc is cheap and fully vectorised.
 / @private
-offsets_for:{[tz] distinct exec adjustment from zone_table where timezoneID=tz}
+.qetl.source.offsets_for:{[tz] distinct exec adjustment from .qetl.source.zone_table where timezoneID=tz}
 
 / Private: the offset in effect at each UTC instant. Unambiguous by
 / construction - every UTC instant has exactly one offset.
 / @private
-offset_at:{[tz;ts]
+.qetl.source.offset_at:{[tz;ts]
     exec adjustment from aj[`timezoneID`gmtDateTime;
         ([] timezoneID:(count ts)#tz; gmtDateTime:ts);
-        zone_table]}
+        .qetl.source.zone_table]}
 
 / UTC -> the source's local wall clock.
 / .
@@ -86,10 +86,10 @@ offset_at:{[tz;ts]
 / @throws error when an instant predates the zone table's coverage - a null
 /   offset would otherwise propagate as a null timestamp, which reads as "no
 /   data" rather than as "the lookup missed"
-utc_to_local:{[tz;ts]
+.qetl.source.utc_to_local:{[tz;ts]
     tsv:(),ts;
     if[0=count tsv; :ts];
-    a:offset_at[tz;tsv];
+    a:.qetl.source.offset_at[tz;tsv];
     if[any null a;
         '"utc_to_local: ",string[tz]," has no rule covering ",
          (-3!min tsv where null a)," - it predates the zone table's coverage"];
@@ -127,16 +127,16 @@ utc_to_local:{[tz;ts]
 / @param ts local wall-clock timestamp(s)
 / @return the corresponding UTC timestamp(s), same shape as ts
 / @throws error on a nonexistent or an ambiguous local time
-local_to_utc:{[tz;ts]
+.qetl.source.local_to_utc:{[tz;ts]
     tsv:(),ts;
     if[0=count tsv; :ts];
-    cs:local_candidates[tz;tsv];
+    cs:.qetl.source.local_candidates[tz;tsv];
     nvalid:count each cs;
     if[any 0=nvalid;
-        '"local_to_utc: ",nonexistent_message[tz;first tsv where 0=nvalid]];
+        '"local_to_utc: ",.qetl.source.nonexistent_message[tz;first tsv where 0=nvalid]];
     if[any 1<nvalid;
         pos:first where 1<nvalid;
-        '"local_to_utc: ",ambiguous_message[tz;tsv pos;cs pos]];
+        '"local_to_utc: ",.qetl.source.ambiguous_message[tz;tsv pos;cs pos]];
     $[0>type ts; first; ::] first each cs}
 
 / Private: every UTC instant a local reading could denote, per row.
@@ -148,24 +148,24 @@ local_to_utc:{[tz;ts]
 / @return a list, one ragged entry per input row: 1 instant normally, 0 in a
 /   spring-forward gap, 2 in an autumn repeated hour
 / @private
-local_candidates:{[tz;tsv]
-    offs:offsets_for[tz];
+.qetl.source.local_candidates:{[tz;tsv]
+    offs:.qetl.source.offsets_for[tz];
     if[0=count offs;
         '"local_candidates: no offsets for zone ",string tz];
     cands:tsv -\: offs;
-    ok:flip {[tz;tsv;o] tsv = utc_to_local[tz;tsv-o]}[tz;tsv] each offs;
+    ok:flip {[tz;tsv;o] tsv = .qetl.source.utc_to_local[tz;tsv-o]}[tz;tsv] each offs;
     cands @' where each ok}
 
 / Private: the two error texts, shared by local_to_utc and narrow_to_utc so
 / the two paths cannot explain the same failure differently.
 / @private
-nonexistent_message:{[tz;bad]
+.qetl.source.nonexistent_message:{[tz;bad]
     "local time ",(-3!bad)," does not exist in ",string[tz],
     " - it falls in a spring-forward gap, so no UTC instant maps to it. Either the ",
     "declared tz is wrong for this source, or the source is emitting ",
     "wall-clock readings its own calendar never had"}
 
-ambiguous_message:{[tz;bad;cs]
+.qetl.source.ambiguous_message:{[tz;bad;cs]
     "local time ",(-3!bad)," is ambiguous in ",string[tz],
     " - it occurs twice on an autumn transition, at ",(" and " sv -3!'asc cs),
     " UTC. Refusing to pick: either choice can move the row into a neighbouring ",

@@ -26,7 +26,7 @@
 / ones its procname runs (#902), so a job it does not run cannot stop it.
 .qtorq.load_uqf $[`job in key o:.Q.opt .z.x; `$first o`job; .proc.procname];
 
-\d .qproc.stream
+\d .
 
 / The job this process runs: the one `-job` names, otherwise whichever job
 / claims this process's own name - which is how the stack starts every one.
@@ -35,7 +35,7 @@
 / outlived the run it was exported for.
 / @return the job name as a symbol
 / @throws error when -job names nothing registered, or no job claims this process
-which_job:{[]
+.qproc.stream.which_job:{[]
     opts:.Q.opt .z.x;
     raw:$[`job in key opts; first opts`job; ""];
     if[count raw;
@@ -58,7 +58,7 @@ which_job:{[]
 / it for a subscription it never wanted.
 / @param job the job's name
 / @return the transport dictionary
-transport:{[job]
+.qproc.stream.transport:{[job]
     feed:0=count .qetl.job.stream.subscriptions job;
     base:`connect`publisher`check_publishable`subscribe`timer!(
         / A projection still owed its one argument: start calls connect[]. Fully

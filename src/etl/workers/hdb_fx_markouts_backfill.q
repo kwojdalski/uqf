@@ -19,7 +19,7 @@
 / that boundary. window_column is source_time, so `replace clears the rows the window
 / produced and not a neighbour's late ones.
 
-\d .qpipe.job.hdb_fx_markouts_backfill
+\d .
 
 / A markout is missing only where no book covered a leg: kept, as the live job's
 / expiry would otherwise hide it. Anything infinite is broken, and a residual that does
@@ -27,7 +27,7 @@
 / @param batch the transformed rows
 / @return no failures, or the offending rows' count by reason
 / @eg count .qpipe.job.hdb_fx_markouts_backfill.quality_check[0#.qetl.plant.shape `fx_markout]  ->  0
-quality_check:{[batch]
+.qpipe.job.hdb_fx_markouts_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     inf:sum batch[`pips] in -0w 0w;
     unrec:sum batch[`status]=`unreconciled;
@@ -42,7 +42,7 @@ quality_check:{[batch]
 / @param batch the transformed rows
 / @return executions scored, horizons, and those whose markout could not be priced
 / @eg .qpipe.job.hdb_fx_markouts_backfill.facts[0#.qetl.plant.shape `fx_markout]  ->  (enlist `span)!enlist "empty window"
-facts:{[batch]
+.qpipe.job.hdb_fx_markouts_backfill.facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
     `executions`horizons`unpriced!(count distinct `venue`fill_id#batch;count distinct batch`horizon;
         "j"$sum (batch[`kind]=`total) & batch[`status]=`unavailable)}

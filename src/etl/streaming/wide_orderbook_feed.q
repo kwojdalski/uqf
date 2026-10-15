@@ -15,20 +15,20 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qpipe.job.wide_orderbook_feed
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `wide_orderbook_feed;
+.qpipe.job.wide_orderbook_feed.publish:.qetl.job.stream.unwired `wide_orderbook_feed;
 
 / This process's own moving mid per pair, aligned with .qf.demo.pairs.
-spot:.qf.demo.spot
+.qpipe.job.wide_orderbook_feed.spot:.qf.demo.spot
 
 / Eleven levels a side, which is what wide_orderbook's bids0..bids10 and
 / asks0..asks10 columns hold. The consuming job derives its column groups
 / from its own schema rather than from this number, so the two cannot drift
 / silently - a mismatch is a column count error on insert.
-n_levels:11
+.qpipe.job.wide_orderbook_feed.n_levels:11
 
 / One tick's worth of wide book rows, from a given mid per pair.
 / .
@@ -39,14 +39,14 @@ n_levels:11
 / @param mids one mid per pair, in .qf.demo.pairs order
 / @return 1 + 11 + 11 columns: sym, then the bid levels, then the ask levels
 / @eg count .qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot  ->  23
-tick_rows:{[mids]
+.qpipe.job.wide_orderbook_feed.tick_rows:{[mids]
     levels:.qpipe.job.wide_orderbook_feed.n_levels;
     bid_cols:flip .qf.demo.levels_one[;;-1;levels] .' flip (mids;.qf.demo.pip);
     ask_cols:flip .qf.demo.levels_one[;;1;levels] .' flip (mids;.qf.demo.pip);
     (enlist .qf.demo.pairs),bid_cols,ask_cols}
 
 / Walk every pair's mid, then publish the tick built from it.
-on_timer:{[]
+.qpipe.job.wide_orderbook_feed.on_timer:{[]
     `.qpipe.job.wide_orderbook_feed.spot set .qf.demo.drift_one each .qpipe.job.wide_orderbook_feed.spot;
     .qpipe.job.wide_orderbook_feed.publish[`wide_orderbook;.qpipe.job.wide_orderbook_feed.tick_rows[.qpipe.job.wide_orderbook_feed.spot]];
     }

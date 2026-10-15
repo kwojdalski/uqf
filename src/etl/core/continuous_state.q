@@ -30,7 +30,7 @@
 / continuous output can actually use. That it is not a cross-worker contract
 / is #62's open question, and `freshness` says so at the point of use.
 
-\d .qetl.job.continuous
+\d .
 
 / ----------------------------------------------------------------- STATE
 
@@ -38,7 +38,7 @@
 / bounded workers' checkpoints, but the FILENAME differs (.cursor, not
 / .checkpoint) so the two can never be read for each other - a bounded
 / resume reading a tailer's cursor would skip history it never published.
-cursor_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".cursor"}
+.qetl.job.continuous.cursor_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".cursor"}
 
 / Load the cursor at startup.
 / .
@@ -58,8 +58,8 @@ cursor_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".
 / an earlier cursor, so a page is fetched again rather than skipped - and is
 / refused when that is unreadable too.
 / @throws error when the cursor file and its .bak are both unreadable
-load_cursor:{[worker]
-    path:cursor_path[worker];
+.qetl.job.continuous.load_cursor:{[worker]
+    path:.qetl.job.continuous.cursor_path[worker];
     if[()~key hsym `$path; :0Np];
     saved:.qetl.job.bounded.state.durable_read["load_cursor";path;.qetl.job.bounded.state.read_json_dict];
     if[not `cursor in key saved;
@@ -77,9 +77,9 @@ load_cursor:{[worker]
 / .
 / Written through durable_lines, never 0: onto the file: 0: truncates first,
 / so a kill mid-write left a file load_cursor could not read.
-save_cursor:{[worker;cursor]
+.qetl.job.continuous.save_cursor:{[worker;cursor]
     system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
-    .qetl.job.bounded.state.durable_lines[cursor_path[worker];enlist .j.j `cursor`saved_at!(cursor;.z.p)]}
+    .qetl.job.bounded.state.durable_lines[.qetl.job.continuous.cursor_path[worker];enlist .j.j `cursor`saved_at!(cursor;.z.p)]}
 
 / Forget a feeder's saved cursor, so its next run starts from the source's
 / own beginning.
@@ -91,9 +91,9 @@ save_cursor:{[worker;cursor]
 / @param worker the feeder's name, as a symbol
 / @return the worker's name
 / @eg .qetl.job.continuous.clear_cursor `fx_feed_2
-clear_cursor:{[worker]
-    .qetl.job.bounded.state.durable_remove each (cursor_path;cursor_value_path)@\:worker;
-    cursor_path[worker]}
+.qetl.job.continuous.clear_cursor:{[worker]
+    .qetl.job.bounded.state.durable_remove each (.qetl.job.continuous.cursor_path;.qetl.job.continuous.cursor_value_path)@\:worker;
+    .qetl.job.continuous.cursor_path[worker]}
 
 / ------------------------------------------------------ COMPOUND CURSORS
 / .
@@ -104,7 +104,7 @@ clear_cursor:{[worker]
 / and none changes type on the way through a file.
 
 / Where a compound cursor lives: beside the timestamp one, a different suffix.
-cursor_value_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".cursorq"}
+.qetl.job.continuous.cursor_value_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".cursorq"}
 
 / A compound cursor, or (::) when the worker has none yet - a first run.
 / An unreadable file is not a first run: see load_cursor.
@@ -112,8 +112,8 @@ cursor_value_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[work
 / @return the saved cursor as it was saved, or (::)
 / @throws error when the cursor file and its .bak are both unreadable
 / @eg .qetl.job.continuous.load_cursor_value `nosuchworker  ->  (::)
-load_cursor_value:{[worker]
-    path:cursor_value_path[worker];
+.qetl.job.continuous.load_cursor_value:{[worker]
+    path:.qetl.job.continuous.cursor_value_path[worker];
     $[()~key hsym `$path; (::); .qetl.job.bounded.state.durable_read["load_cursor_value";path;{get hsym `$x}]]}
 
 / Save a compound cursor - any q value - after the page it acknowledges is
@@ -121,9 +121,9 @@ load_cursor_value:{[worker]
 / @param worker the worker's name
 / @param cursor the cursor, e.g. `time`securityId`priceBookType!(...)
 / @return the path written
-save_cursor_value:{[worker;cursor]
+.qetl.job.continuous.save_cursor_value:{[worker;cursor]
     system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
-    .qetl.job.bounded.state.durable_set[cursor_value_path[worker];cursor]}
+    .qetl.job.bounded.state.durable_set[.qetl.job.continuous.cursor_value_path[worker];cursor]}
 
 / Is `proposed` strictly after `current`, comparing the fields `ks` in order?
 / .
@@ -137,7 +137,7 @@ save_cursor_value:{[worker;cursor]
 / @return 1b when proposed is strictly after current
 / @eg .qetl.job.continuous.lexically_after[`t`id;`t`id!(1;`a);`t`id!(1;`b)]  ->  1b
 / @eg .qetl.job.continuous.lexically_after[`t`id;`t`id!(1;`b);`t`id!(1;`b)]  ->  0b
-lexically_after:{[ks;current;proposed]
+.qetl.job.continuous.lexically_after:{[ks;current;proposed]
     if[(::)~current; :1b];
     a:current ks;
     b:proposed ks;
@@ -159,14 +159,14 @@ lexically_after:{[ks;current;proposed]
 / idle tick - turning a quiet source into constant disk churn, and making
 / `saved_at` useless as a signal of when progress last actually happened.
 / @throws error when the new cursor is not strictly ahead
-advance:{[worker;current;next_cursor]
+.qetl.job.continuous.advance:{[worker;current;next_cursor]
     if[null next_cursor;
         '"advance: refusing a null cursor for ",string[worker]," - a cursor that cannot be compared cannot be trusted to move forward"];
     if[(not null current) and not next_cursor>current;
         '"advance: refusing to move ",string[worker],"'s cursor from ",
          string[current]," to ",string[next_cursor],
          " - a continuous cursor that does not move strictly forward re-publishes pages, and continuous output has no coverage ledger to notice"];
-    save_cursor[worker;next_cursor];
+    .qetl.job.continuous.save_cursor[worker;next_cursor];
     next_cursor}
 
 / ------------------------------------------------------------- FRESHNESS
@@ -184,8 +184,8 @@ advance:{[worker;current;next_cursor]
 / sanctioned way to ask "is this fresh enough". Reporting the gap in the
 / return value beats leaving a caller to assume there is a guarantee.
 / @return dict of cursor, lag (now minus cursor) and a stated caveat
-freshness:{[worker]
-    c:load_cursor[worker];
+.qetl.job.continuous.freshness:{[worker]
+    c:.qetl.job.continuous.load_cursor[worker];
     `worker`cursor`lag`is_completeness_claim!
         (worker;c;$[null c; 0Nn; .z.p-c];0b)}
 
@@ -197,15 +197,15 @@ freshness:{[worker]
 / have, and it is deliberately NOT a contract: registering says which
 / dataset a tailer feeds, nothing about how it must behave. #62's
 / "no enforced lifecycle for continuous workers" stands.
-feeds:(`symbol$())!`symbol$()
+.qetl.job.continuous.feeds:(`symbol$())!`symbol$()
 
 / Declare which dataset a continuous worker feeds.
 / @eg .qetl.job.continuous.register_feeder[`fx_feed_2;`quotes]
-register_feeder:{[worker;dataset]
-    feeds[worker]:dataset;
+.qetl.job.continuous.register_feeder:{[worker;dataset]
+    .qetl.job.continuous.feeds[worker]:dataset;
     worker}
 
-feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
+.qetl.job.continuous.feeders_of:{[dataset] key[.qetl.job.continuous.feeds] where value[.qetl.job.continuous.feeds]=dataset}
 
 / How current is a DATASET, across every worker that feeds it?
 / .
@@ -230,12 +230,12 @@ feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
 / @throws error when no worker is registered as feeding the dataset - a
 /   dataset with no declared feeder cannot have a freshness, and reporting
 /   one would be the silent kind of wrong
-dataset_freshness:{[dataset]
-    ws:feeders_of[dataset];
+.qetl.job.continuous.dataset_freshness:{[dataset]
+    ws:.qetl.job.continuous.feeders_of[dataset];
     if[0=count ws;
         '"dataset_freshness: no worker is registered as feeding ",string[dataset],
          " - call register_feeder first, because a freshness for an unfed dataset would be invented"];
-    fs:freshness each ws;
+    fs:.qetl.job.continuous.freshness each ws;
     cursors:fs[;`cursor];
     / null sorts first under min? No - `min` ignores nulls. A null cursor
     / must WIN (it is the worst lag), so pick the laggard explicitly.
@@ -245,8 +245,8 @@ dataset_freshness:{[dataset]
         (dataset;c;$[null c; 0Nn; .z.p-c];laggard;ws;0b)}
 
 / Is a dataset within `tolerance` of now, across all its feeders?
-dataset_is_fresh:{[dataset;tolerance]
-    f:dataset_freshness[dataset];
+.qetl.job.continuous.dataset_is_fresh:{[dataset;tolerance]
+    f:.qetl.job.continuous.dataset_freshness[dataset];
     $[null f`cursor; 0b; (f`lag)<=tolerance]}
 
 / Is this worker's output within `tolerance` of now?
@@ -254,8 +254,8 @@ dataset_is_fresh:{[dataset;tolerance]
 / A missing cursor is NOT fresh, and that matters: a worker that has never
 / run has no cursor, and defaulting the answer to true would report a
 / never-started tailer as up to date.
-is_fresh:{[worker;tolerance]
-    f:freshness[worker];
+.qetl.job.continuous.is_fresh:{[worker;tolerance]
+    f:.qetl.job.continuous.freshness[worker];
     $[null f`cursor; 0b; (f`lag)<=tolerance]}
 
 / ------------------------------------------------------------------ POLL
@@ -280,14 +280,14 @@ is_fresh:{[worker;tolerance]
 / @param next_cursor a unary function taking the page and returning the
 /   cursor that acknowledges it
 / @return dict of state (`idle or `published), rows and cursor
-poll_once:{[worker;fetch_page;publish_page;next_cursor]
-    current:load_cursor[worker];
+.qetl.job.continuous.poll_once:{[worker;fetch_page;publish_page;next_cursor]
+    current:.qetl.job.continuous.load_cursor[worker];
     page:fetch_page current;
     if[0=count page;
         :`state`rows`cursor!(`idle;0;current)];
     / publish, THEN advance. See save_cursor on why this order.
     rows:publish_page page;
-    c:advance[worker;current;next_cursor page];
+    c:.qetl.job.continuous.advance[worker;current;next_cursor page];
     `state`rows`cursor!(`published;rows;c)}
 
 \d .

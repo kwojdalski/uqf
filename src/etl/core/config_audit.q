@@ -26,13 +26,13 @@
 / variables makes "what counts as configuration here" a fact in the tree
 / rather than a judgement each reader makes again.
 
-\d .qetl.cfg.audit
+\d .
 
 / owner -> the fully-qualified globals watched on its behalf. Keyed by
 / OWNER, not flat, because src/etl/init.q loads every job into every
 / streaming process: a flat registry would make each process poll - and
 / report on - the config of fourteen jobs it is not running.
-watched:(`symbol$())!()
+.qetl.cfg.audit.watched:(`symbol$())!()
 
 / fully-qualified name -> its last observed VALUE. The whole memory of this
 / module: a change is a disagreement with this.
@@ -42,19 +42,19 @@ watched:(`symbol$())!()
 / equal, and an edit to a watched list or dictionary went unrecorded (#604).
 / The null-symbol entry keeps the values a generic list - without it, the
 / first atom stored would type them, and a later list would throw 'type.
-seen:(enlist `)!enlist (::)
+.qetl.cfg.audit.seen:(enlist `)!enlist (::)
 
 / A row per observed change, as its consumers see it. `old` is empty on the
 / FIRST observation of a name, which is deliberate - that row says what the
 / process started with, and a log that only records later edits cannot tell
 / you what they were edits from.
-config_change:([] owner:`symbol$(); name:`symbol$(); old:(); new:(); as_of:`timestamp$())
+.qetl.cfg.audit.config_change:([] owner:`symbol$(); name:`symbol$(); old:(); new:(); as_of:`timestamp$())
 
 / The globals watched for one owner, empty when it declares none.
 / @param owner the job
 / @return the fully-qualified names
 / @eg .qetl.cfg.audit.watching[`nothing_declares_this] -> `symbol$()
-watching:{[owner] $[owner in key watched; watched owner; `symbol$()]}
+.qetl.cfg.audit.watching:{[owner] $[owner in key .qetl.cfg.audit.watched; .qetl.cfg.audit.watched owner; `symbol$()]}
 
 / Declare the configuration an owner wants audited.
 / .
@@ -67,7 +67,7 @@ watching:{[owner] $[owner in key watched; watched owner; `symbol$()]}
 / @throws error if a name is not fully qualified, which would resolve
 /   against whatever namespace happened to be current at poll time
 / @eg .qetl.cfg.audit.watch[`demo;`.qetl.cfg.audit.max_render] -> enlist `.qetl.cfg.audit.max_render
-watch:{[owner;names]
+.qetl.cfg.audit.watch:{[owner;names]
     names:(),names;
     bare:names where not (string names) like ".*";
     if[count bare;
@@ -80,9 +80,9 @@ watch:{[owner;names]
     / `already`, not `prior`: `prior` is a q keyword, and assigning to one
     / inside a lambda fails at LOAD time - the same trap torq_pipeline.q
     / documents for `desc` and `tables`.
-    already:watching[owner];
+    already:.qetl.cfg.audit.watching[owner];
     .qetl.cfg.audit.watched[owner]:distinct already,names;
-    watched owner}
+    .qetl.cfg.audit.watched owner}
 
 / How a value is recorded: its -3! rendering, truncated.
 / .
@@ -93,13 +93,13 @@ watch:{[owner;names]
 / @param name a fully-qualified global
 / @return its rendering, or a marker when nothing is defined at that name
 / @eg .qetl.cfg.audit.render[`.qetl.cfg.audit.nothing.is.here] -> "(undefined)"
-render:{[name] shown @[get;name;{.qetl.cfg.audit.UNDEF}]}
+.qetl.cfg.audit.render:{[name] .qetl.cfg.audit.shown @[get;name;{.qetl.cfg.audit.UNDEF}]}
 
 / Private: what an undefined name reads as. Not the symbol `undefined, which
 / a watched global may legitimately hold - a change to that value was not
 / recorded, and a defined `undefined showed as "(undefined)".
 / @private
-UNDEF:(enlist `.qetl.cfg.audit.UNDEF)!enlist (::)
+.qetl.cfg.audit.UNDEF:(enlist `.qetl.cfg.audit.UNDEF)!enlist (::)
 
 / Private: a value as the old/new columns show it - in full up to the widest
 / console (.qetl.log.value1, not -3!, which stops at 80 columns), then cut at
@@ -107,11 +107,11 @@ UNDEF:(enlist `.qetl.cfg.audit.UNDEF)!enlist (::)
 / @param v a value, or UNDEF
 / @return its rendering
 / @private
-shown:{[v] $[v~UNDEF; "(undefined)"; max_render sublist .qetl.log.value1 v]}
+.qetl.cfg.audit.shown:{[v] $[v~.qetl.cfg.audit.UNDEF; "(undefined)"; .qetl.cfg.audit.max_render sublist .qetl.log.value1 v]}
 
 / The longest rendering recorded. A watched name is meant to be a scalar or
 / a short list; this bounds the damage when one is not.
-max_render:200
+.qetl.cfg.audit.max_render:200
 
 / Compare an owner's watched globals against what was last seen, and record
 / the differences.
@@ -123,17 +123,17 @@ max_render:200
 / @param as_of the observation timestamp
 / @return the change rows, empty when nothing moved
 / @eg count .qetl.cfg.audit.poll[`nothing_declares_this;2026.09.19D12:00:00.0] -> 0
-poll:{[owner;as_of]
-    names:watching[owner];
-    if[0=count names; :0#config_change];
-    rows:0#config_change;
+.qetl.cfg.audit.poll:{[owner;as_of]
+    names:.qetl.cfg.audit.watching[owner];
+    if[0=count names; :0#.qetl.cfg.audit.config_change];
+    rows:0#.qetl.cfg.audit.config_change;
     i:0;
     while[i<count names;
         name:names i;
         now:@[get;name;{.qetl.cfg.audit.UNDEF}];
-        fresh:not name in key seen;
-        if[fresh or not now~seen name;
-            rows:rows upsert (owner;name;$[fresh; ""; shown[seen name]];shown[now];as_of);
+        fresh:not name in key .qetl.cfg.audit.seen;
+        if[fresh or not now~.qetl.cfg.audit.seen name;
+            rows:rows upsert (owner;name;$[fresh; ""; .qetl.cfg.audit.shown[.qetl.cfg.audit.seen name]];.qetl.cfg.audit.shown[now];as_of);
             / fully qualified, for watch's reason
             .qetl.cfg.audit.seen[name]:now];
         i+:1];
@@ -142,7 +142,7 @@ poll:{[owner;as_of]
 / How often a watching process re-reads its configuration. A change made
 / over IPC shows up within this; a change made and reverted inside it does
 / not show up at all, which is the cost of having no assignment hook.
-period:0D00:00:05.000
+.qetl.cfg.audit.period:0D00:00:05.000
 
 / The job whose configuration THIS process audits, set by the runner.
 / .
@@ -154,7 +154,7 @@ period:0D00:00:05.000
 / version of this ran the poll exactly once, at wiring time, and left the
 / timer pointing at `()` (#295). One process runs one job, so a global is
 / also simply the truth.
-owner_here:`
+.qetl.cfg.audit.owner_here:`
 
 / Poll this process's own job and publish whatever moved.
 / .
@@ -166,11 +166,11 @@ owner_here:`
 / up any earlier captures the unwired stub.
 / @return nothing
 / @eg .qetl.cfg.audit.poll_and_publish[]
-poll_and_publish:{[]
-    if[null owner_here; :()];
-    rows:poll[owner_here;.z.p];
+.qetl.cfg.audit.poll_and_publish:{[]
+    if[null .qetl.cfg.audit.owner_here; :()];
+    rows:.qetl.cfg.audit.poll[.qetl.cfg.audit.owner_here;.z.p];
     if[0=count rows; :()];
-    (get ` sv (.qetl.job.stream.def[owner_here]`ns),`publish)[`config_change;rows];
+    (get ` sv (.qetl.job.stream.def[.qetl.cfg.audit.owner_here]`ns),`publish)[`config_change;rows];
     }
 
 / Forget every observation, so the next poll reports each watched name as
@@ -178,6 +178,6 @@ poll_and_publish:{[]
 / running process calls it.
 / @return nothing
 / @eg .qetl.cfg.audit.forget[]
-forget:{[] seen::(enlist `)!enlist (::); }
+.qetl.cfg.audit.forget:{[] .qetl.cfg.audit.seen::(enlist `)!enlist (::); }
 
 \d .

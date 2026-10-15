@@ -30,22 +30,22 @@
 / applying epoch_ns() to the column: a function on the column stops DuckDB
 / skipping row groups by their min/max, so every window would scan every row.
 
-\d .qpipe.source.databento_mbp10
+\d .
 
-source_name:`databento_mbp10
+.qpipe.source.databento_mbp10.source_name:`databento_mbp10
 
 / "00".."09", Databento's level suffixes.
-levels:{-2#"0",string x} each til 10
+.qpipe.source.databento_mbp10.levels:{-2#"0",string x} each til 10
 
 / Per level: bid price, bid size, ask price, ask size. Counts (bid_ct_*)
 / are not read - nothing downstream uses them (columns are what you READ).
-level_fields:raze {`$("bid_px_";"bid_sz_";"ask_px_";"ask_sz_"),\:x} each levels
+.qpipe.source.databento_mbp10.level_fields:raze {`$("bid_px_";"bid_sz_";"ask_px_";"ask_sz_"),\:x} each .qpipe.source.databento_mbp10.levels
 
-columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
-types:"psssfjj",raze 10#enlist "fjfj"
+.qpipe.source.databento_mbp10.columns:`ts_event`symbol`action`side`price`size`sequence,.qpipe.source.databento_mbp10.level_fields
+.qpipe.source.databento_mbp10.types:"psssfjj",raze 10#enlist "fjfj"
 
-table_name:`mbp10
-time_column:`ts_event
+.qpipe.source.databento_mbp10.table_name:`mbp10
+.qpipe.source.databento_mbp10.time_column:`ts_event
 
 / NOT Databento's documented key, and deliberately said so. (symbol,
 / ts_event, sequence) is the obvious candidate and is not unique - one event
@@ -54,20 +54,20 @@ time_column:`ts_event
 / that load (2026-09-17). An observation about this data, then, not a
 / guarantee from the vendor: re-check it on a new extract before relying on
 / it to deduplicate.
-row_key:`symbol`ts_event`sequence`action`side`price`size
+.qpipe.source.databento_mbp10.row_key:`symbol`ts_event`sequence`action`side`price`size
 
-tz:`UTC
-transport:`odbc
+.qpipe.source.databento_mbp10.tz:`UTC
+.qpipe.source.databento_mbp10.transport:`odbc
 
 / What UQF_SOURCE_CRED_DATABENTO_MBP10 looks like. Declared rather than
 / left to the per-transport default, which is a networked-database string:
 / DuckDB is embedded, so this is a file path and a mode, with no host, user
 / or password to supply.
-credential_example:"DRIVER=DuckDB;Database=/path/databento.duckdb;access_mode=READ_ONLY"
+.qpipe.source.databento_mbp10.credential_example:"DRIVER=DuckDB;Database=/path/databento.duckdb;access_mode=READ_ONLY"
 
 / Private: the SQL expression selecting each field, in `columns` order.
 / @private
-select_list:{[]
+.qpipe.source.databento_mbp10.select_list:{[]
     exprs:{[f]
         s:string f;
         $[f=`ts_event; "epoch_ns(ts_event) AS ts_event";
@@ -77,7 +77,7 @@ select_list:{[]
 
 / Private: the driver's table in the declared types.
 / @private
-adapt:{[raw]
+.qpipe.source.databento_mbp10.adapt:{[raw]
     t:update ts_event:1970.01.01D00:00+ts_event from raw;
     t:@[t;`symbol`action`side;{`$x}];
     `ts_event`symbol`action`side`price`size`sequence xcols t}
@@ -89,21 +89,21 @@ adapt:{[raw]
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the records in the window, in the contract's shape
-query:{[h;range_from;range_to]
-    sql:"SELECT ",select_list[]," FROM mbp10",
+.qpipe.source.databento_mbp10.query:{[h;range_from;range_to]
+    sql:"SELECT ",.qpipe.source.databento_mbp10.select_list[]," FROM mbp10",
         " WHERE ts_event >= ",.qetl.io.odbc.duckdb_timestamp[range_from],
         " AND ts_event < ",.qetl.io.odbc.duckdb_timestamp[range_to],
         " ORDER BY symbol, ts_event, sequence";
-    adapt[.qetl.io.odbc.run_sql[h;sql]]}
+    .qpipe.source.databento_mbp10.adapt[.qetl.io.odbc.run_sql[h;sql]]}
 
 / Private: one fixture row's ten levels, flattened in level_fields order.
 / Prices step one cent away from the touch per level, sizes by 100.
 / @private
-fixture_levels:{[bid;ask;sz] raze {[bid;ask;sz;i] (bid-0.01*i;sz+100*i;ask+0.01*i;sz+100*i)}[bid;ask;sz] each til 10}
+.qpipe.source.databento_mbp10.fixture_levels:{[bid;ask;sz] raze {[bid;ask;sz;i] (bid-0.01*i;sz+100*i;ask+0.01*i;sz+100*i)}[bid;ask;sz] each til 10}
 
 / Four records for two symbols, taken from the shape of the real data: an
 / add on each side and a trade, with the touch moving between them.
-fixture:{[]
+.qpipe.source.databento_mbp10.fixture:{[]
     base:([] ts_event:2026.02.25D14:30:00.016039462 2026.02.25D14:30:00.024566996 2026.02.25D14:30:00.003676482 2026.02.25D14:30:01.000000000;
         symbol:`AAPL`AAPL`META`META;
         action:`A`T`A`C;
@@ -111,7 +111,7 @@ fixture:{[]
         price:271.2 271.65 643.48 643.48;
         size:200 21 10 10;
         sequence:28151775 28158778 29559422 29563793);
-    lv:flip level_fields!raze each flip (fixture_levels[271.45;271.66;500];fixture_levels[271.45;271.66;479];fixture_levels[642;643.;100];fixture_levels[642;643.01;100]);
+    lv:flip .qpipe.source.databento_mbp10.level_fields!raze each flip (.qpipe.source.databento_mbp10.fixture_levels[271.45;271.66;500];.qpipe.source.databento_mbp10.fixture_levels[271.45;271.66;479];.qpipe.source.databento_mbp10.fixture_levels[642;643.;100];.qpipe.source.databento_mbp10.fixture_levels[642;643.01;100]);
     base,'lv}
 
 / The physical table, as the live check reads it (#1077): the same names the
@@ -121,10 +121,10 @@ fixture:{[]
 / 32-bit ints, so those are general - their types the output contract's to
 / check after `adapt`. Without this the live check failed a correctly
 / configured source at `schema`.
-raw:enlist[table_name]!enlist flip columns!{$[x="f"; `float$(); ()]} each types
+.qpipe.source.databento_mbp10.raw:enlist[.qpipe.source.databento_mbp10.table_name]!enlist flip .qpipe.source.databento_mbp10.columns!{$[x="f"; `float$(); ()]} each .qpipe.source.databento_mbp10.types
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.databento_mbp10.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
-    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
+    (.qpipe.source.databento_mbp10.source_name;.qpipe.source.databento_mbp10.table_name;.qpipe.source.databento_mbp10.time_column;.qpipe.source.databento_mbp10.row_key;.qpipe.source.databento_mbp10.columns;.qpipe.source.databento_mbp10.types;.qpipe.source.databento_mbp10.query;.qpipe.source.databento_mbp10.fixture;.qpipe.source.databento_mbp10.tz;.qpipe.source.databento_mbp10.transport;.qpipe.source.databento_mbp10.credential_example;.qpipe.source.databento_mbp10.raw)];
 
 \d .

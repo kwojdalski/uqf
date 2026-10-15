@@ -138,5 +138,9 @@ def test_the_dedupe_coordinates_are_declared_on_the_plant_table(missing: str) ->
     and a future restart-seeding fix would have nothing to read.
     """
     tables = (REPO / "src" / "etl" / "plant_tables.q").read_text()
-    line = next(line for line in tables.splitlines() if line.startswith("client_flow:([]"))
+    line = next(
+        line
+        for line in tables.splitlines()
+        if line.removeprefix(".qetl.plant.").startswith("client_flow:([]")
+    )
     assert f"{missing}:" in line

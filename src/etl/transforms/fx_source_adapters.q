@@ -37,14 +37,14 @@
 / Time stays the source's. deal_time and ts become source_time; the plant's
 / receipt `time` is not an input.
 
-\d .qpipe.transform.fx_source_adapters
+\d .
 
 / ------------------------------------------------------------- THE SOURCES
 
 / The deal tape as its feed delivers it. exec_type is `fill (an individual
 / fill, last_qty is its size), `status (an order update, cum_qty is the order's
 / running total) or `cancel. side is `B or `S.
-deal_tape:([] id:`long$(); order_id:`long$(); deal_time:`timestamp$(); security_code:`symbol$();
+.qpipe.transform.fx_source_adapters.deal_tape:([] id:`long$(); order_id:`long$(); deal_time:`timestamp$(); security_code:`symbol$();
     venue_code:`symbol$(); exec_type:`symbol$(); side:`symbol$(); price:`float$();
     last_qty:`float$(); cum_qty:`float$())
 
@@ -52,17 +52,17 @@ deal_tape:([] id:`long$(); order_id:`long$(); deal_time:`timestamp$(); security_
 / null price (or a zero quantity) marks a side the feed has emptied. category
 / `FULL_AMOUNT is liquidity for the whole quoted size; settle `SP and `T2 are
 / spot.
-book_levels:([] ts:`timestamp$(); instrument:`symbol$(); feed:`symbol$(); category:`symbol$();
+.qpipe.transform.fx_source_adapters.book_levels:([] ts:`timestamp$(); instrument:`symbol$(); feed:`symbol$(); category:`symbol$();
     settle:`symbol$(); side:`symbol$(); lvl:`long$(); px:`float$(); qty:`float$())
 
 / The deal tape's sides, and the one category and the settlement codes the book keeps.
-tape_sides:`B`S
-book_category:`FULL_AMOUNT
-spot_codes:`SP`T2
+.qpipe.transform.fx_source_adapters.tape_sides:`B`S
+.qpipe.transform.fx_source_adapters.book_category:`FULL_AMOUNT
+.qpipe.transform.fx_source_adapters.spot_codes:`SP`T2
 
 / The canonical outputs, from the tables that own them.
-executions:.qetl.plant.published `executions
-market_data:.qetl.plant.published `market_data
+.qpipe.transform.fx_source_adapters.executions:.qetl.plant.published `executions
+.qpipe.transform.fx_source_adapters.market_data:.qetl.plant.published `market_data
 
 / --------------------------------------------------------------- HELPERS
 
@@ -71,7 +71,7 @@ market_data:.qetl.plant.published `market_data
 / @param codes instrument codes, e.g. `$"EUR/USD"
 / @return canonical CURCUR symbols, null where the code is not a currency pair
 / @eg .qpipe.transform.fx_source_adapters.pairs_of[(`$"EUR/USD";`AAPL;`$"usd-jpy")]  ->  `EURUSD``USDJPY
-pairs_of:{[codes]
+.qpipe.transform.fx_source_adapters.pairs_of:{[codes]
     if[0=count codes; :`symbol$()];
     u:distinct codes;
     cleaned:{[c] upper (string c) except "/-_ "} each u;
@@ -82,7 +82,7 @@ pairs_of:{[codes]
 / @param x floats
 / @return a boolean per value; a null is not
 / @eg .qpipe.transform.fx_source_adapters.positive[1.1 0 0n 0w -1]  ->  10000b
-positive:{[x] (x>0f) & x<0w}
+.qpipe.transform.fx_source_adapters.positive:{[x] (x>0f) & x<0w}
 
 / Refuse rows by name: how many, what is wrong, and the first offending value.
 / @param who the source
@@ -91,7 +91,7 @@ positive:{[x] (x>0f) & x<0w}
 / @param bad a boolean per row, 1b where it is wrong
 / @throws error when any row is wrong
 / @private
-refuse:{[who;what;shown;bad]
+.qpipe.transform.fx_source_adapters.refuse:{[who;what;shown;bad]
     if[any bad; '"fx_source_adapters: ",who," has ",string[sum bad]," fill/level row(s) ",what," - first: ",.Q.s1 first shown where bad];
     }
 
@@ -109,7 +109,7 @@ refuse:{[who;what;shown;bad]
 / @return canonical executions, one per eligible fill, venue the feed's own code
 / @throws error naming a fill that cannot be represented
 / @eg count .qpipe.transform.fx_source_adapters.from_deal_tape[.qpipe.transform.fx_source_adapters.deal_tape]  ->  0
-from_deal_tape:{[batch]
+.qpipe.transform.fx_source_adapters.from_deal_tape:{[batch]
     pair:.qpipe.transform.fx_source_adapters.pairs_of[batch`security_code];
     taken:select from (update pair:pair from batch) where exec_type=`fill, not null pair;
     .qpipe.transform.fx_source_adapters.refuse["deal_tape";"with a side other than B or S";taken`side;not taken[`side] in .qpipe.transform.fx_source_adapters.tape_sides];
@@ -124,7 +124,7 @@ from_deal_tape:{[batch]
 
 / One side of one snapshot: the live levels of a side, best first.
 / @private
-ladder:{[levels;key_row;want]
+.qpipe.transform.fx_source_adapters.ladder:{[levels;key_row;want]
     lv:select px, qty from levels where pair=key_row`sym, feed=key_row`source, ts=key_row`source_time, side=want;
     lv:$[want=`bid; `px xdesc lv; `px xasc lv];
     `px`qty!(lv`px;lv`qty)}
@@ -143,7 +143,7 @@ ladder:{[levels;key_row;want]
 / @return canonical market_data, market `fx
 / @throws error naming a level that cannot be represented
 / @eg count .qpipe.transform.fx_source_adapters.from_book_levels[.qpipe.transform.fx_source_adapters.book_levels]  ->  0
-from_book_levels:{[batch]
+.qpipe.transform.fx_source_adapters.from_book_levels:{[batch]
     pair:.qpipe.transform.fx_source_adapters.pairs_of[batch`instrument];
     wanted:.qpipe.transform.fx_source_adapters.book_category;
     spot:.qpipe.transform.fx_source_adapters.spot_codes;

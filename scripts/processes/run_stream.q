@@ -54,21 +54,21 @@ if[all `job`tp in key .Q.opt .z.x;
     .qetl.load.only:{x where not null x} `$"," vs "," sv raze each (.Q.opt .z.x)`job`feed];
 \l src/etl/init.q
 
-\d .qproc.standalone
+\d .
 
 / The parsed command line: -job, -tp, -port, -plant, -feed, -logdir.
-opts:.Q.opt .z.x
+.qproc.standalone.opts:.Q.opt .z.x
 
 / -verbose switches DEBUG on, the same flag every uqf process script takes.
-if[`verbose in key opts; .qetl.log.debug 1b];
+if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 
 / Private: one option's value, or a default. .Q.opt gives a list per key,
 / so a flag given once is a one-element list and a flag given twice is
 / two - taking `first` quietly accepts the second spelling, which is how
 / a typo'd duplicate becomes a silently ignored setting.
-opt:{[nm;dflt]
-    if[not nm in key opts; :dflt];
-    v:opts nm;
+.qproc.standalone.opt:{[nm;dflt]
+    if[not nm in key .qproc.standalone.opts; :dflt];
+    v:.qproc.standalone.opts nm;
     if[1<count v;
         '"run_stream: -",string[nm]," was given ",string[count v]," times - which one binds would depend on argument order"];
     first v}
@@ -80,12 +80,12 @@ opt:{[nm;dflt]
 / tickerplant does, so a job publishes identical rows either way. A plant
 / that invented its own schemas would be a second declaration of every
 / table, and the two would drift.
-stack_tables:{[] .qetl.plant.names[]}
+.qproc.standalone.stack_tables:{[] .qetl.plant.names[]}
 
 / Declare every stack table to the plant.
 / @return the table names declared
-declare_schemas:{[]
-    t:stack_tables[];
+.qproc.standalone.declare_schemas:{[]
+    t:.qproc.standalone.stack_tables[];
     .qetl.tick.schema'[t;.qetl.plant.schema each t];
     t}
 
@@ -96,9 +96,9 @@ declare_schemas:{[]
 / plants on one machine cannot write into each other's log.
 / @param port the port to listen on, or 0N for an in-process plant
 / @return the number of messages already in today's log
-start_plant:{[port]
-    declare_schemas[];
-    existing:.qetl.tick.open_log[opt[`logdir;"tplog"];`$"uqf",$[null port;"local";string port];.z.D];
+.qproc.standalone.start_plant:{[port]
+    .qproc.standalone.declare_schemas[];
+    existing:.qetl.tick.open_log[.qproc.standalone.opt[`logdir;"tplog"];`$"uqf",$[null port;"local";string port];.z.D];
     if[not null port; system "p ",string port];
     .qetl.log.info[`run_stream;"plant started";
         `port`log`existing_messages!(port;.qetl.tick.log_path;existing)];
@@ -112,7 +112,7 @@ start_plant:{[port]
 / ONE q timer driving many jobs, rather than one timer each - q has a
 / single \t, so a process running a feed and a service has to multiplex
 / them itself. Each job's period is honoured independently.
-timers:();
+.qproc.standalone.timers:();
 
 / Fire whichever timers are due. Installed as .z.ts by start.
 / .
@@ -120,7 +120,7 @@ timers:();
 / other job's timer, and must not stop its own next tick either - a
 / service that goes quiet after one bad batch is worse than one that
 / complains every five seconds.
-tick:{[]
+.qproc.standalone.tick:{[]
     now:.z.p;
     / A plant in this process rolls its own day (#943): TorQ's tickerplant
     / does that for a deployed stack. .z.D, the clock its log is named by.
@@ -132,7 +132,7 @@ tick:{[]
         .qproc.standalone.timers[i;3]:now;
         @[row 1;::;{[job;e] .qetl.log.err[job;"timer function failed";enlist[`error]!enlist e];}[row 0]];
         }[now];
-    fire each til count timers;
+    fire each til count .qproc.standalone.timers;
     }
 
 / End the plant's day in this process: roll the log to `today`, then hand
@@ -140,14 +140,14 @@ tick:{[]
 / publish opens the new day's log. Remote subscribers are told by the plant.
 / @param today the new date
 / @return the date that ended
-end_day:{[today]
+.qproc.standalone.end_day:{[today]
     ended:.qetl.tick.roll today;
     .qetl.log.info[`run_stream;"end of day";`ended`today!(ended;today)];
     .qetl.job.stream.end_of_day ended;
     ended}
 
 / Private: the timer half both transports share.
-add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timers,enlist (name;f;period;0Np);}
+.qproc.standalone.add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timers,enlist (name;f;period;0Np);}
 
 / The transport for a plant IN this process: .qetl.tick directly.
 / .
@@ -160,7 +160,7 @@ add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timer
 / NOT `1 2#m`, which is a RESHAPE: a one-element list, so `.` would apply
 / the handler to one argument and make a projection rather than an error.
 / @return the transport dictionary
-local_transport:{[]
+.qproc.standalone.local_transport:{[]
     `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log!(
         {[] };
         {[] {[t;r] .qetl.tick.publish[t;r]}};
@@ -169,7 +169,7 @@ local_transport:{[]
                 n:.qetl.tick.replay[.qetl.tick.log_path;{[tbls;h;t;r] if[t in tbls; h[t;r]];}[tbls;handler]];
                 if[0<n; -1 "run_stream: recovered ",string[n]," message(s) from ",string .qetl.tick.log_path]];
             .qetl.tick.subscribe[tbls;{[h;m] h . 1_m}[handler]];};
-        add_timer;
+        .qproc.standalone.add_timer;
         {[tbls;first_day;last_day] .qetl.tick.earlier_days[tbls;first_day;last_day]};
         {[] .qetl.tick.plant_day[]};
         {[dt] .qetl.tick.has_log dt})}
@@ -202,7 +202,7 @@ local_transport:{[]
 / flat with the plant in another.
 / @param tp the plant's port
 / @return the transport dictionary
-remote_transport:{[tp]
+.qproc.standalone.remote_transport:{[tp]
     `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log!(
         {[tp]
             .qetl.log.info[`run_stream;"connecting to the plant";enlist[`port]!enlist tp];
@@ -215,7 +215,7 @@ remote_transport:{[tp]
             msgs:.qproc.standalone.h({[want] .qetl.tick.replay_then_subscribe[want;neg .z.w]};tbls);
             {[h;m] h . m}[handler] each msgs;
             if[count msgs; -1 "run_stream: recovered ",string[count msgs]," message(s) from the plant's log"];};
-        add_timer;
+        .qproc.standalone.add_timer;
         {[tbls;first_day;last_day] .qproc.standalone.h({[w;a;b] .qetl.tick.earlier_days[w;a;b]};tbls;first_day;last_day)};
         {[] .qproc.standalone.h({[] .qetl.tick.plant_day[]};())};
         {[dt] .qproc.standalone.h({[d] .qetl.tick.has_log d};dt)})}
@@ -233,7 +233,7 @@ remote_transport:{[tp]
 / @param jobs a job name, or a symbol list of them
 / @return symbol list: the upstream jobs, nearest-to-source first, then jobs.
 /   For `fx_positions it is `executions`fx_positions (test_run_stream.py)
-with_upstream:{[jobs]
+.qproc.standalone.with_upstream:{[jobs]
     jobs:(),jobs;
     reg:.qetl.job.stream.jobs;
     known:key reg;
@@ -252,13 +252,13 @@ with_upstream:{[jobs]
 
 / Start everything this process was asked to run.
 / @return the jobs started
-start:{[]
-    plant_port:"J"$opt[`plant;""];
+.qproc.standalone.start:{[]
+    plant_port:"J"$.qproc.standalone.opt[`plant;""];
     / -job takes a comma list: a job and the normalizer feeding it, say.
-    jobs:{x where not null x} `$"," vs opt[`job;""];
-    feed:`$opt[`feed;""];
-    tp:"J"$opt[`tp;""];
-    listen:"J"$opt[`port;""];
+    jobs:{x where not null x} `$"," vs .qproc.standalone.opt[`job;""];
+    feed:`$.qproc.standalone.opt[`feed;""];
+    tp:"J"$.qproc.standalone.opt[`tp;""];
+    listen:"J"$.qproc.standalone.opt[`port;""];
     if[(0=count jobs) and null plant_port;
         '"run_stream: give -job <name>, or -plant <port> to run a bare tickerplant"];
     / A process with no -tp carries its own plant, so the bare-plant role
@@ -266,14 +266,14 @@ start:{[]
     local:null tp;
     if[local;
         asked:jobs;
-        jobs:with_upstream jobs;
+        jobs:.qproc.standalone.with_upstream jobs;
         if[count added:jobs except asked;
             .qetl.log.info[`run_stream;"starting what the jobs subscribe to";
                 `asked`upstream!(asked;added)]];
-        start_plant plant_port];
+        .qproc.standalone.start_plant plant_port];
     if[not null listen; system "p ",string listen];
     started:();
-    tr:$[local; local_transport[]; remote_transport tp];
+    tr:$[local; .qproc.standalone.local_transport[]; .qproc.standalone.remote_transport tp];
     started,:raze .qetl.job.stream.start[;tr] each jobs;
     if[not null feed; started,:.qetl.job.stream.start[feed;tr]];
     / A process carrying its own plant needs the tick even with no job
@@ -281,7 +281,7 @@ start:{[]
     / a bare -plant process - the separate-process deployment - has no job to
     / install it, so its log never rolled and a restart after midnight found
     / nothing to replay (#1075).
-    if[local or count timers;
+    if[local or count .qproc.standalone.timers;
         `.z.ts set {[] .qproc.standalone.tick[]};
         / A fixed 250ms wakeup that each job's own period is checked
         / against, rather than \t set to some job's period: q has one

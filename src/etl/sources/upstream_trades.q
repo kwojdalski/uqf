@@ -15,19 +15,19 @@
 / declaration describes what the OTHER side has, and the transform is where
 / it becomes ours.
 
-\d .qpipe.source.upstream_trades
+\d .
 
-source_name:`upstream_trades
+.qpipe.source.upstream_trades.source_name:`upstream_trades
 
 / The columns read, and their q types AS THE UPSTREAM HAS THEM. `size` is
 / int (i), not long, and `ex` is a single char - validate_live checks this
 / against the real process and would refuse the declaration if it lied.
-columns:`time`sym`ex`price`size`side
-types:"pscfis"
+.qpipe.source.upstream_trades.columns:`time`sym`ex`price`size`side
+.qpipe.source.upstream_trades.types:"pscfis"
 
 / Where the rows land locally - a name that says they came from elsewhere.
 
-time_column:`time
+.qpipe.source.upstream_trades.time_column:`time
 
 / THE WHOLE ROW, because nothing smaller identifies one. Measured on the
 / real data: of 196,519 trades on 2015.01.07, only 183,660 (time;sym) pairs
@@ -36,14 +36,14 @@ time_column:`time
 / with no trade id, and a key that pretended otherwise would silently merge
 / distinct trades on restatement. Declaring the truth costs nothing
 / here and is exactly what the row_key exists to make explicit.
-row_key:`time`sym`ex`price`size`side
+.qpipe.source.upstream_trades.row_key:`time`sym`ex`price`size`side
 
 / The starter pack's timestamps are wall-clock New York with no zone recorded
 / anywhere. This declaration says UTC because the DATA says nothing, and a
 / zone claimed with no evidence is worse than a zone stated as unknown - the
 / two days of sample data are used as intervals, never as instants that must
 / line up with anything else.
-tz:`UTC
+.qpipe.source.upstream_trades.tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
@@ -66,7 +66,7 @@ tz:`UTC
 / @param range_from inclusive lower bound, in the source's own clock
 / @param range_to exclusive upper bound
 / @return the upstream's rows in the window, in its own shape
-query:{[h;range_from;range_to]
+.qpipe.source.upstream_trades.query:{[h;range_from;range_to]
     .qetl.source.ipc[h;{[from_ts;to_ts]
         select time, sym, ex, price, size, side from `trade
             where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts
@@ -83,7 +83,7 @@ query:{[h;range_from;range_to]
 / the window logic requires.
 / @return ten real upstream rows, sorted by time
 / @eg .qpipe.source.upstream_trades.fixture[]
-fixture:{[]
+.qpipe.source.upstream_trades.fixture:{[]
     `time xasc ([]
         time:2015.01.07D00:00:02.038247000 2015.01.07D00:00:02.838234000 2015.01.07D00:00:01.638238000
              2015.01.07D00:00:01.438268000 2015.01.07D00:00:01.638238000 2015.01.07D00:00:01.838143000
@@ -95,8 +95,8 @@ fixture:{[]
         size:41 19 1 2 41 47 9 32 7 42i;
         side:`side`buy`side`side`buy`side`buy`buy`buy`buy)}
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.upstream_trades.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`trade;time_column;row_key;columns;types;query;fixture;tz)];
+    (.qpipe.source.upstream_trades.source_name;`trade;.qpipe.source.upstream_trades.time_column;.qpipe.source.upstream_trades.row_key;.qpipe.source.upstream_trades.columns;.qpipe.source.upstream_trades.types;.qpipe.source.upstream_trades.query;.qpipe.source.upstream_trades.fixture;.qpipe.source.upstream_trades.tz)];
 
 \d .

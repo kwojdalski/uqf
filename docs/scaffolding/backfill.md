@@ -103,14 +103,14 @@ the same distinction `profiles.plant_slots` draws when it counts the budget.
 ## Source
 
 ```q
-\d .qpipe.source.fxprobe
+\d .
 
-source_name:`fxprobe
+.qpipe.source.fxprobe.source_name:`fxprobe
 
 / The columns this adapter READS - not everything the source has. Declaring
 / one the worker never touches means an upstream change to an unused column
 / breaks the run.
-columns:`time`sym`mid
+.qpipe.source.fxprobe.columns:`time`sym`mid
 ```
 
 Two things to write, and both notes are warnings earned the hard way:

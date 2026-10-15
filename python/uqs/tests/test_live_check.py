@@ -59,7 +59,7 @@ def _run(sources, runner, **kw):
 def test_the_q_and_python_secret_lists_are_the_same():
     """Two languages mask secrets; this holds them to one list."""
     text = (REPO / "src/etl/core/live_check.q").read_text()
-    m = re.search(r"^secret_keys:(.*)$", text, re.M)
+    m = re.search(r"^(?:\.[A-Za-z_][\w.]*\.)?secret_keys:(.*)$", text, re.M)
     assert m, "live_check.q declares secret_keys"
     assert m.group(1).strip().strip("`").split("`") == list(redact.SECRET_KEYS)
 

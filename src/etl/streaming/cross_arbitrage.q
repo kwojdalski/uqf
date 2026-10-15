@@ -29,14 +29,14 @@
 / reported inactive - present in the output, so it can be seen, rather
 / than silently dropped.
 
-\d .qpipe.job.cross_arbitrage
+\d .
 
-publish:.qetl.job.stream.unwired `cross_arbitrage;
+.qpipe.job.cross_arbitrage.publish:.qetl.job.stream.unwired `cross_arbitrage;
 
 / The notional every edge is quoted at, in the cross pair's BASE currency.
 / One size rather than a ladder: an edge is only meaningful at a size, and
 / a detector that reports several invites reading the best one.
-notional:1000000f
+.qpipe.job.cross_arbitrage.notional:1000000f
 
 / How far apart the legs of one synthetic route may be quoted and still be
 / treated as one price - a route is only as fresh as its stalest leg.
@@ -47,21 +47,21 @@ notional:1000000f
 / seconds "superbook's own expiry window" while max_age was five: nothing
 / ties the two values together, and neither should be read as the other
 / (#730).
-max_skew:0D00:00:02
+.qpipe.job.cross_arbitrage.max_skew:0D00:00:02
 
 / Latest superbook snapshot per pair. Keyed, so a new snapshot replaces
 / rather than accumulates - and never published directly (invariant 2).
 / From the plant, not from .qpipe.job.superbook, so this file does not have
 / to load after superbook.q (#731).
-books:`sym xkey .qetl.plant.published `superbook
+.qpipe.job.cross_arbitrage.books:`sym xkey .qetl.plant.published `superbook
 
-cross_arbitrage:.qetl.plant.published `cross_arbitrage
+.qpipe.job.cross_arbitrage.cross_arbitrage:.qetl.plant.published `cross_arbitrage
 
 / The four vectors forwards.q's sweep functions want, out of a superbook row.
 / @param row one superbook snapshot
 / @return dict `bid_prices`bid_sizes`ask_prices`ask_sizes
 / @eg .qpipe.job.cross_arbitrage.leg_book[`bid_prices`bid_sizes`ask_prices`ask_sizes`sym!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6;`EURUSD)] -> `bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6)
-leg_book:{[row]
+.qpipe.job.cross_arbitrage.leg_book:{[row]
     `bid_prices`bid_sizes`ask_prices`ask_sizes!
         (row`bid_prices;row`bid_sizes;row`ask_prices;row`ask_sizes)}
 
@@ -71,7 +71,7 @@ leg_book:{[row]
 / @param state the keyed book state
 / @return the quotable pair symbols
 / @eg .qpipe.job.cross_arbitrage.quotable[`sym xkey 0#.qpipe.job.superbook.superbook] -> `symbol$()
-quotable:{[state]
+.qpipe.job.cross_arbitrage.quotable:{[state]
     rows:0!state;
     / The empty case needs its own arm. `bid_prices` is an untyped empty
     / list on an empty table, so `0<count each bid_prices` is a 'type
@@ -90,7 +90,7 @@ quotable:{[state]
 / @param sym the pair to find a synthetic route for
 / @return the route's legs in traversal order, empty when none exists
 / @eg .qpipe.job.cross_arbitrage.route_for[`EURUSD`USDJPY`EURJPY;`EURJPY] -> `EURUSD`USDJPY
-route_for:{[avail;sym]
+.qpipe.job.cross_arbitrage.route_for:{[avail;sym]
     legs:.qf.px.ccy_pair_legs sym;
     @[{.qf.mkt.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
 
@@ -104,7 +104,7 @@ route_for:{[avail;sym]
 / @return the oldest consumed level time, 0Wp if none
 / @eg .qpipe.job.cross_arbitrage.used_time[`timestamp$1 2;enlist 1] -> 2000.01.01D00:00:00.000000002
 / @private
-used_time:{[times;used] $[count used; min times used; 0Wp]}
+.qpipe.job.cross_arbitrage.used_time:{[times;used] $[count used; min times used; 0Wp]}
 
 / The oldest level time each leg of a chain sweep consumed, from the legs
 / .qf.mkt.cross_sweep_chain reports: each leg's own levels_used indexes the
@@ -116,10 +116,10 @@ used_time:{[times;used] $[count used; min times used; 0Wp]}
 / @param size the notional, in leg 0's currency
 / @return one oldest-consumed time per leg
 / @private
-chain_times:{[books;inverts;side;size]
-    r:.qf.mkt.cross_sweep_chain[leg_book each books;side;size;inverts];
+.qpipe.job.cross_arbitrage.chain_times:{[books;inverts;side;size]
+    r:.qf.mkt.cross_sweep_chain[.qpipe.job.cross_arbitrage.leg_book each books;side;size;inverts];
     leg_ladder_times:{[side;bk;iv] $[iv; $[side=`bid; bk`ask_times; bk`bid_times]; $[side=`ask; bk`ask_times; bk`bid_times]]}[side]'[books;inverts];
-    used_time'[leg_ladder_times;r[`legs]`levels_used]}
+    .qpipe.job.cross_arbitrage.used_time'[leg_ladder_times;r[`legs]`levels_used]}
 
 / When each of a set of books was last quoted, and how far apart those
 / moments are. A leg is as old as the OLDEST level its sweep consumes, not
@@ -135,15 +135,15 @@ chain_times:{[books;inverts;side;size]
 / @param direct_sides sides of the direct book that are priced
 / @return dict `as_of`skew - the OLDEST leg time, and oldest-to-newest
 / @eg .qpipe.job.cross_arbitrage.leg_times[`sym xkey 0#.qpipe.job.superbook.superbook;`EURJPY;`symbol$();1e6;`bid`ask;`bid`ask] -> `as_of`skew!(0Np;0Nn)
-leg_times:{[state;sym;route;size;route_sides;direct_sides]
+.qpipe.job.cross_arbitrage.leg_times:{[state;sym;route;size;route_sides;direct_sides]
     if[0=count route; :`as_of`skew!(0Np;0Nn)];
     inverts:(.qf.mkt.ccy_orient_chain route)`inverts;
     books:state ([] sym:route);
-    rt:{[books;inverts;size;side] chain_times[books;inverts;side;size]}[books;inverts;size] each (),route_sides;
+    rt:{[books;inverts;size;side] .qpipe.job.cross_arbitrage.chain_times[books;inverts;side;size]}[books;inverts;size] each (),route_sides;
     d:state sym;
     dt:{[d;size;side]
         swept:.qf.mkt.sweep_price[$[side=`bid; d`bid_prices; d`ask_prices];$[side=`bid; d`bid_sizes; d`ask_sizes];size];
-        used_time[$[side=`bid; d`bid_times; d`ask_times];swept`levels_used]}[d;size] each (),direct_sides;
+        .qpipe.job.cross_arbitrage.used_time[$[side=`bid; d`bid_times; d`ask_times];swept`levels_used]}[d;size] each (),direct_sides;
     ts:(min each flip rt),min dt;
     `as_of`skew!(min ts;(max ts)-min ts)}
 
@@ -154,7 +154,7 @@ leg_times:{[state;sym;route;size;route_sides;direct_sides]
 / @return dict `price`fully_filled
 / @throws error if side isn't `bid or `ask
 / @eg (.qpipe.job.cross_arbitrage.direct_side[`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6);`bid;1e6])`price -> 1.1
-direct_side:{[row;side;size]
+.qpipe.job.cross_arbitrage.direct_side:{[row;side;size]
     if[not $[-11h=type side; side in `bid`ask; 0b];
         '"direct_side: side must be `bid or `ask, got ",.Q.s1 side];
     prices:$[side=`bid; row`bid_prices; row`ask_prices];
@@ -175,9 +175,9 @@ direct_side:{[row;side;size]
 / @param size the notional
 / @param as_of the evaluation timestamp
 / @return one cross_arbitrage status row
-opportunity:{[state;avail;sym;size;as_of]
+.qpipe.job.cross_arbitrage.opportunity:{[state;avail;sym;size;as_of]
     idle:(sym;as_of;0b;`;`symbol$();0n;0n;size;0n;0n;0b;0Nn);
-    route:route_for[avail;sym];
+    route:.qpipe.job.cross_arbitrage.route_for[avail;sym];
     if[0=count route; :idle];
     / The direct book is timed with the route: it is one side of the
     / comparison, so a stale direct quote against fresh legs is the same
@@ -185,21 +185,21 @@ opportunity:{[state;avail;sym;size;as_of]
     / direct book seconds old as an active edge with skew 0 (#727).
     / Timed at the levels each sweep consumes, not the top of book (#1147).
     both:`bid`ask;
-    times:leg_times[state;sym;route;size;both;both];
+    times:.qpipe.job.cross_arbitrage.leg_times[state;sym;route;size;both;both];
     / `state ([] sym:route)`, not `state route`: a keyed table indexed by a
     / symbol VECTOR is a 'length, even though the same table indexed by one
     / symbol is the row you expect. Indexing by a table of keys is the form
     / that takes several, and it preserves the route's order - which matters,
     / because the legs are matched to syms by position.
     syn:first .qf.mkt.cross_book_chain_at_sizes[route;
-        leg_book each state ([] sym:route);enlist size;`bid`ask];
+        .qpipe.job.cross_arbitrage.leg_book each state ([] sym:route);enlist size;`bid`ask];
     / A route whose ends do not spell this pair is a routing bug, not an
     / opportunity - refuse rather than compare two different markets.
     if[not (syn`sym)~sym;
         '"cross_arbitrage: route ",(", " sv string route)," orients to ",
             (string syn`sym),", not ",string sym];
-    direct_bid:direct_side[state sym;`bid;size];
-    direct_ask:direct_side[state sym;`ask;size];
+    direct_bid:.qpipe.job.cross_arbitrage.direct_side[state sym;`bid;size];
+    direct_ask:.qpipe.job.cross_arbitrage.direct_side[state sym;`ask;size];
     buy_direct:(syn`bid)-direct_ask`price;
     buy_synthetic:(direct_bid`price)-syn`ask;
     edge:buy_direct|buy_synthetic;
@@ -207,11 +207,11 @@ opportunity:{[state;avail;sym;size;as_of]
     $[buy_direct>=buy_synthetic;
         [dir:`buy_direct; direct_px:direct_ask`price; syn_px:syn`bid;
             filled:(direct_ask`fully_filled) and syn`bid_fully_filled;
-            times:leg_times[state;sym;route;size;`bid;`ask]];
+            times:.qpipe.job.cross_arbitrage.leg_times[state;sym;route;size;`bid;`ask]];
         [dir:`buy_synthetic; direct_px:direct_bid`price; syn_px:syn`ask;
             filled:(direct_bid`fully_filled) and syn`ask_fully_filled;
-            times:leg_times[state;sym;route;size;`ask;`bid]]];
-    fresh:(times`skew)<=max_skew;
+            times:.qpipe.job.cross_arbitrage.leg_times[state;sym;route;size;`ask;`bid]]];
+    fresh:(times`skew)<=.qpipe.job.cross_arbitrage.max_skew;
     (sym;times`as_of;fresh;dir;route;direct_px;syn_px;size;edge;size*edge;filled;times`skew)}
 
 / Status for every pair that has both a direct book and a synthetic route.
@@ -219,12 +219,12 @@ opportunity:{[state;avail;sym;size;as_of]
 / @param size the notional
 / @param as_of the evaluation timestamp
 / @return the cross_arbitrage status table
-evaluate:{[state;size;as_of]
-    avail:quotable[state];
+.qpipe.job.cross_arbitrage.evaluate:{[state;size;as_of]
+    avail:.qpipe.job.cross_arbitrage.quotable[state];
     result:0#.qpipe.job.cross_arbitrage.cross_arbitrage;
     i:0;
     while[i<count avail;
-        result:result upsert opportunity[state;avail;avail i;size;as_of];
+        result:result upsert .qpipe.job.cross_arbitrage.opportunity[state;avail;avail i;size;as_of];
         i+:1];
     / A pair with no route contributes an all-null row with no route, which
     / is noise on every snapshot rather than news - drop those, and keep the
@@ -236,7 +236,7 @@ evaluate:{[state;size;as_of]
 / @param x superbook rows
 / @return nothing
 / @eg .qpipe.job.cross_arbitrage.on_batch[`unrelated;()]
-on_batch:{[t;x]
+.qpipe.job.cross_arbitrage.on_batch:{[t;x]
     if[not t=`superbook; :()];
     if[0=count x; :()];
     / `![...;enlist `time]`, not `` `time _ batch ``: `_` drops a key from a
@@ -246,7 +246,7 @@ on_batch:{[t;x]
     / runs under run_stream.q, where the plant has not stamped a `time`.
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
     `.qpipe.job.cross_arbitrage.books upsert `sym xkey rows;
-    rows:evaluate[books;notional;.z.p];
+    rows:.qpipe.job.cross_arbitrage.evaluate[.qpipe.job.cross_arbitrage.books;.qpipe.job.cross_arbitrage.notional;.z.p];
     if[count rows; .qpipe.job.cross_arbitrage.publish[`cross_arbitrage;rows]];
     }
 

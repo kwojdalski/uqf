@@ -10,11 +10,11 @@
 / the snapshot is shared with crypto_book_1s_backfill
 / (src/etl/transforms/crypto_book_1s.q).
 
-\d .qpipe.job.crypto_book_1s
+\d .
 
 / The updates the pick reads, with the window the kind cuts for it. `time` (the
 / plant's receipt stamp) is left out: the window is the venue's source_time.
-book_rows:update bar_start:`timestamp$() from .qetl.plant.columns[`crypto_book;`source_time`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes]
+.qpipe.job.crypto_book_1s.book_rows:update bar_start:`timestamp$() from .qetl.plant.columns[`crypto_book;`source_time`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes]
 
 \d .
 

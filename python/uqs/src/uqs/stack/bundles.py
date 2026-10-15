@@ -63,9 +63,10 @@ OVERRIDES_FILE = PACKAGE_DIR / "process_overrides.csv"
 NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
 _MANIFEST_KEYS = frozenset({"name", "version", "description"})
-#: The same `name:([]...)` convention uqs.model.schemas reads the plant with.
-_TABLE = re.compile(r"^([a-z_][a-z0-9_]*):\(\[\]")
-_NESTED = re.compile(r"^nested\[`([a-z_][a-z0-9_]*);")
+#: `name:([]...)` as uqs.model.schemas reads the plant: a bundle writes it bare, the
+#: tree holds it qualified (#1411), so both match and `table_lines` qualifies.
+_TABLE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
+_NESTED = re.compile(r"^(?:\.qetl\.plant\.)?nested\[`([a-z_][a-z0-9_]*);")
 _DESCRIBE = re.compile(r"^\.qcat\.describe\[`([a-z_][a-z0-9_]*)\]:")
 #: A bundle cannot add querypolicy.csv rows, so a reason its table is browsable
 #: unbounded is how it meets the catalog's policy-or-reason rule (#889).
@@ -147,7 +148,12 @@ def table_lines(bundle: Bundle, known: set[str]) -> tuple[list[str], list[str]]:
             raise BundleError(
                 f"{where}: expected `name:([]...)`, `nested[...]` or a `/ ` comment, one per line"
             )
-    return lines, tables
+    return [_qualified(line) for line in lines], tables
+
+
+def _qualified(line: str) -> str:  # a tables.q line as the tree holds it
+    matched = (_TABLE.match(line) or _NESTED.match(line)) and not line.startswith(".qetl.")
+    return ".qetl.plant." + line if matched else line
 
 
 def catalog_lines(bundle: Bundle, tables: list[str], described: set[str]) -> list[str]:

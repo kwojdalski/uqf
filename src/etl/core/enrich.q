@@ -21,7 +21,7 @@
 / key's latest row is always kept (it is within retention of itself), and a
 / buffer never holds more than the retention window plus one row per key.
 
-\d .qetl.enrich
+\d .
 
 / A new, empty buffer.
 / @param spec dict: `keys (symbol list), `time (the reference time column),
@@ -31,7 +31,7 @@
 / @throws error if a spec key is missing, the schema lacks a key or time
 /   column, or the retention is not a non-negative timespan
 / @eg count .qetl.enrich.rows .qetl.enrich.new[`keys`time`retention`schema!(enlist `sym;`time;0D00:01:00;([] sym:`symbol$(); time:`timestamp$(); mid:`float$()))]  ->  0
-new:{[spec]
+.qetl.enrich.new:{[spec]
     miss:`keys`time`retention`schema except key spec;
     if[count miss; '"qetl.enrich.new: spec is missing ",", " sv string miss];
     if[not -16h=type spec`retention; '"qetl.enrich.new: retention must be a timespan"];
@@ -43,7 +43,7 @@ new:{[spec]
 / @param state a buffer from new or add
 / @return the held rows
 / @eg .qetl.enrich.rows .qetl.enrich.new[`keys`time`retention`schema!(enlist `sym;`time;0D00:01:00;([] sym:`symbol$(); time:`timestamp$()))]  ->  ([] sym:`symbol$(); time:`timestamp$())
-rows:{[state] state`rows}
+.qetl.enrich.rows:{[state] state`rows}
 
 / Add reference rows, keeping the buffer sorted and bounded.
 / .
@@ -57,7 +57,7 @@ rows:{[state] state`rows}
 / @return the next buffer state
 / @throws error naming every column of the schema the rows lack
 / @eg count .qetl.enrich.rows .qetl.enrich.add[.qetl.enrich.new[`keys`time`retention`schema!(enlist `sym;`time;0D00:00:10;([] sym:`symbol$(); time:`timestamp$(); mid:`float$()))];([] sym:3#`a; time:2026.10.01D10:00:00 + 0D00:00:01 * 0 5 30; mid:1 2 3f)]  ->  2
-add:{[state;refs]
+.qetl.enrich.add:{[state;refs]
     held:cols state`rows;
     .qf.util.require_cols[`qetl_enrich_add;`refs;refs;held];
     if[0=count refs; :state];
@@ -79,7 +79,7 @@ add:{[state;refs]
 / @return events, then attached columns, staleness, status (see .qf.mkt.lookup)
 / @throws error as .qf.mkt.lookup does
 / @eg .qetl.enrich.lookup[.qetl.enrich.add[.qetl.enrich.new[`keys`time`retention`schema!(enlist `sym;`time;0D00:01:00;([] sym:`symbol$(); time:`timestamp$(); mid:`float$()))];([] sym:enlist `a; time:enlist 2026.10.01D10:00:00; mid:enlist 1f)];([] sym:enlist `a; time:enlist 2026.10.01D10:00:01);`event_time`attach`tolerance!(`time;enlist `mid;0D00:00:05)]  ->  ([] sym:enlist `a; time:enlist 2026.10.01D10:00:01; mid:enlist 1f; staleness:enlist 0D00:00:01; status:enlist `ok)
-lookup:{[state;events;spec]
+.qetl.enrich.lookup:{[state;events;spec]
     .qf.mkt.lookup[state`rows;events;(`keys`ref_time!(state`keys;state`time)),spec]}
 
 / Private: drop what is outside each key's retention window, keeping one
@@ -88,7 +88,7 @@ lookup:{[state;events;spec]
 / @param r the sorted rows
 / @return the trimmed rows
 / @private
-bound:{[state;r]
+.qetl.enrich.bound:{[state;r]
     ks:state`keys;
     t:r state`time;
     newest:(max;t) fby ks#r;

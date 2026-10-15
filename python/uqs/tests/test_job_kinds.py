@@ -15,8 +15,7 @@ from uqs.cli.create_kinds import SHAPES
 from uqs.model.kinds import DECLARATION_VERBS, SCAFFOLD_KINDS, VERBS
 
 ROOT = Path(__file__).resolve().parents[3]
-_NS = re.compile(r"^\\d\s+(\.\S*)\s*$")
-_ENTRY = re.compile(r"^(\w+):\{\[\w+;decl\]")
+_ENTRY = re.compile(r"^(\.qetl\.job\.(?:stream|bounded))\.(\w+):\{\[\w+;decl\]")
 _CALL = re.compile(r"\.(qetl\.job\.(?:stream|bounded)\.\w+)\[\s*`")
 
 
@@ -24,13 +23,10 @@ def _q_entry_points() -> set[str]:
     """Every public `ns.verb:{[name;decl]` the ETL core defines in the job namespaces."""
     found: set[str] = set()
     for path in sorted((ROOT / "src/etl/core").glob("*.q")):
-        ns, before = ".", ""
+        before = ""
         for line in path.read_text().splitlines():
-            if m := _NS.match(line):
-                ns = m.group(1)
-            elif (e := _ENTRY.match(line)) and ns in (".qetl.job.stream", ".qetl.job.bounded"):
-                if before.strip() != "/ @private":
-                    found.add(f"{ns[1:]}.{e.group(1)}")
+            if (e := _ENTRY.match(line)) and before.strip() != "/ @private":
+                found.add(f"{e.group(1)[1:]}.{e.group(2)}")
             before = line
     return found
 

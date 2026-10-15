@@ -24,16 +24,16 @@
 / and replay are the rolling kind's (src/etl/core/rolling.q); the statistic and what
 / it counts are shared with a backfill (src/etl/transforms/order_quality.q).
 
-\d .qpipe.job.order_quality
+\d .
 
 / The outcomes the statistic reads, with the columns the kind adds to them. Named
 / recent_outcomes, not order_outcomes: an input named after a plant table must be that table.
-outcome_rows:update window:`timespan$(), as_of:`timestamp$(), inside:`boolean$() from .qetl.plant.columns[`order_outcomes;`source_time`source`request_id`outcome`book]
+.qpipe.job.order_quality.outcome_rows:update window:`timespan$(), as_of:`timestamp$(), inside:`boolean$() from .qetl.plant.columns[`order_outcomes;`source_time`source`request_id`outcome`book]
 
 / The example's outcomes: london's five requests and newyork's one, with the ways a
 / real feed reports them - r3 delivered twice, r4 pending at 10:04:40 and cancelled
 / at 10:04:45 - none of which makes a request twice or an open one counted.
-example_events:([] source_time:2026.10.09D10:01:00 2026.10.09D10:04:00 2026.10.09D10:04:30 2026.10.09D10:04:30 2026.10.09D10:04:40 2026.10.09D10:04:45 2026.10.09D10:05:00 2026.10.09D10:01:30;
+.qpipe.job.order_quality.example_events:([] source_time:2026.10.09D10:01:00 2026.10.09D10:04:00 2026.10.09D10:04:30 2026.10.09D10:04:30 2026.10.09D10:04:40 2026.10.09D10:04:45 2026.10.09D10:05:00 2026.10.09D10:01:30;
     source:8#`feed_a;
     request_id:`r1`r2`r3`r3`r4`r4`r5`r6;
     outcome:`rejected`filled`filled`filled`unresolved`cancelled`filled`rejected;
@@ -41,7 +41,7 @@ example_events:([] source_time:2026.10.09D10:01:00 2026.10.09D10:04:00 2026.10.0
 
 / The example's outcomes, once per window length as the kind stacks them, and
 / whether each is inside that window: (as_of-1m, as_of] holds the last five rows.
-example_input:raze {update inside:source_time>as_of-window from update window:x, as_of:2026.10.09D10:05:00 from .qpipe.job.order_quality.example_events} each 0D00:01 0D00:05
+.qpipe.job.order_quality.example_input:raze {update inside:source_time>as_of-window from update window:x, as_of:2026.10.09D10:05:00 from .qpipe.job.order_quality.example_events} each 0D00:01 0D00:05
 
 \d .
 

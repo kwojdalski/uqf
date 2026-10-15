@@ -22,13 +22,9 @@ REPO = Path(__file__).resolve().parents[3]
 #: A sidecar with its own source, as a bundle installs one: nothing in it
 #: names a demo job, so nothing of the demo may load with it.
 SIDECAR = {
-    "src/etl/sources/zz_side_src.q": (
-        "\\d .qpipe.source.zz_side_src\nsource_name:`zz_side_src\n\\d .\n"
-    ),
+    "src/etl/sources/zz_side_src.q": (".qpipe.source.zz_side_src.source_name:`zz_side_src\n"),
     "src/etl/streaming/zz_side.q": (
-        "\\d .qpipe.job.zz_side\n"
-        "read:{[h] .qpipe.source.zz_side_src.source_name}\n"
-        "\\d .\n"
+        ".qpipe.job.zz_side.read:{[h] .qpipe.source.zz_side_src.source_name}\n"
         ".qetl.job.stream.define[`zz_side;`procname`subscribe_to`publishes`note!"
         '(`zzside1;`symbol$();enlist `zz_tape;"a sidecar")];\n'
     ),

@@ -26,7 +26,10 @@ def plant_table_fields(repo_root: str, table: str, *, text: str | None = None) -
     # The `]` is part of the prefix: q's table literal opens `([]`, and a
     # prefix of `([` leaves the first field named "]time".
     prefix = f"{table}:([]"
-    line = next(line for line in text.splitlines() if line.startswith(prefix))
+    line = next(
+        line for line in text.splitlines() if line.removeprefix(".qetl.plant.").startswith(prefix)
+    )
+    line = line.removeprefix(".qetl.plant.")
     body = line[len(prefix) : line.rindex(")")]
     fields = [chunk.split(":", 1)[0].strip() for chunk in body.split(";")]
     return [f for f in fields if f and f != "time"]

@@ -47,7 +47,11 @@ def test_the_sql_selects_exactly_the_plants_columns():
     assert sorted(flink_vwap_streamer.FIELDS) == sorted(plant_order())
     # Column names live in the declaration line itself, so the parser and a
     # regex over the raw line must agree on the real file.
-    line = next(x for x in plant_text().splitlines() if x.startswith("flink_vwap_raw:([]"))
+    line = next(
+        x
+        for x in plant_text().splitlines()
+        if x.removeprefix(".qetl.plant.").startswith("flink_vwap_raw:([]")
+    )
     assert re.findall(r"(\w+):`", line) == ["time", *plant_order()]
 
 

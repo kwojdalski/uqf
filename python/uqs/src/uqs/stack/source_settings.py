@@ -209,7 +209,7 @@ def add_stub(paths: UqsPaths, source: str, transport: str, transports: tuple[str
     return f"added a {STUB} row for {source} to {app}{copied}"
 
 
-_TRANSPORT_LINE = re.compile(r"^transport:`(\w+)", re.MULTILINE)
+_TRANSPORT_LINE = re.compile(r"^(?:\.[A-Za-z_][\w.]*\.)?transport:`(\w+)", re.MULTILINE)
 
 
 def declared_transport(repo_root: Path, source: str, default: str) -> str:

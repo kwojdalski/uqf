@@ -43,35 +43,35 @@
 / in any process that loads this file before torq.q - and q's late binding
 / of names is precisely what makes the call-time check cheap.
 
-\d .qetl.log
+\d .
 
 / Level names, in severity order - the full words, and the only five a log
 / line carries. TorQ's own logger writes INF, WARN and ERR; every TorQ
 / process this stack starts loads scripts/torqconfig/settings/default.q,
 / which renames those three on their way into the file, so a log reads one
 / vocabulary whichever layer wrote the line.
-levels:`TRACE`DEBUG`INFO`WARNING`ERROR
+.qetl.log.levels:`TRACE`DEBUG`INFO`WARNING`ERROR
 
 / The levels off unless a process switches them on, each with its own switch.
-quiet:`TRACE`DEBUG
+.qetl.log.quiet:`TRACE`DEBUG
 
 / How TorQ routes the levels it already knows, for the names this file uses
 / instead: (TorQ's name; this file's). outmap and pubmap are keyed by level,
 / so a level they do not hold is neither printed nor published - INFO
 / unregistered would silence every line.
-torq_names:`INF`WARN`ERR!`INFO`WARNING`ERROR
+.qetl.log.torq_names:`INF`WARN`ERR!`INFO`WARNING`ERROR
 
 / Register this file's levels with TorQ's routing tables if TorQ is loaded
 / and has not heard of them: INFO, WARNING and ERROR routed as TorQ routes
 / INF, WARN and ERR; TRACE and DEBUG off (0), so nothing changes for a
 / process until it opts in. Idempotent, and called by the first line logged.
-register:{[]
-    if[not torq_loaded[]; :0b];
+.qetl.log.register:{[]
+    if[not .qetl.log.torq_loaded[]; :0b];
     {[torq;ours]
         if[not ours in key .lg.outmap; .lg.outmap[ours]:0^.lg.outmap torq];
-        if[not ours in key .lg.pubmap; .lg.pubmap[ours]:0^.lg.pubmap torq]}'[key torq_names;value torq_names];
+        if[not ours in key .lg.pubmap; .lg.pubmap[ours]:0^.lg.pubmap torq]}'[key .qetl.log.torq_names;value .qetl.log.torq_names];
     {if[not x in key .lg.outmap; .lg.outmap[x]:0];
-     if[not x in key .lg.pubmap; .lg.pubmap[x]:0]} each quiet;
+     if[not x in key .lg.pubmap; .lg.pubmap[x]:0]} each .qetl.log.quiet;
     1b}
 
 / Switch debug output on (or off) for THIS process.
@@ -80,37 +80,37 @@ register:{[]
 / worker - turning it on fleet-wide is how you lose the signal in the noise
 / you switched it on to find.
 / @param on 1b to emit DEBUG lines, 0b to suppress them
-debug:{[on]
-    register[];
-    if[torq_loaded[]; .lg.outmap[`DEBUG]:$[on;1;0]];
-    debug_enabled::on;
+.qetl.log.debug:{[on]
+    .qetl.log.register[];
+    if[.qetl.log.torq_loaded[]; .lg.outmap[`DEBUG]:$[on;1;0]];
+    .qetl.log.debug_enabled::on;
     on}
 
-debug_enabled:0b
+.qetl.log.debug_enabled:0b
 
 / Switch trace output - every query a source sends - on (or off) for THIS
 / process. Independent of debug: either can be on without the other.
 / @param on 1b to emit TRACE lines, 0b to suppress them
-trace:{[on]
-    register[];
-    if[torq_loaded[]; .lg.outmap[`TRACE]:$[on;1;0]];
-    trace_enabled::on;
+.qetl.log.trace:{[on]
+    .qetl.log.register[];
+    if[.qetl.log.torq_loaded[]; .lg.outmap[`TRACE]:$[on;1;0]];
+    .qetl.log.trace_enabled::on;
     on}
 
-trace_enabled:0b
+.qetl.log.trace_enabled:0b
 
 / Private: is a quiet level switched on, outside TorQ?
 / @private
-switched:{[level] $[level=`DEBUG; debug_enabled; level=`TRACE; trace_enabled; 1b]}
+.qetl.log.switched:{[level] $[level=`DEBUG; .qetl.log.debug_enabled; level=`TRACE; .qetl.log.trace_enabled; 1b]}
 
 / Private: render a field dict as space-separated k=v, values via .Q.s1 so a
 / symbol, a timestamp and a string all render unambiguously and a list does
 / not spread across the line. Field ORDER is preserved, so a worker that
 / always logs (worker;window;rows) produces columns a human can scan.
 / @private
-render:{[fields]
+.qetl.log.render:{[fields]
     if[0=count fields; :""];
-    " " sv {[k;v] string[k],"=",value1[v]}'[key fields;value fields]}
+    " " sv {[k;v] string[k],"=",.qetl.log.value1[v]}'[key fields;value fields]}
 
 / Private: one field's value as q text, IN FULL.
 / .
@@ -123,8 +123,8 @@ render:{[fields]
 / @param v any value
 / @return its q literal, as .Q.s1 spells it
 / @private
-value1:{[v]
-    if[10h=type v; :quoted[v]];
+.qetl.log.value1:{[v]
+    if[10h=type v; :.qetl.log.quoted[v]];
     c:@[system;"c";{[e] ()}];
     if[2<>count c; :.Q.s1 v];
     @[system;"c ",string[c 0]," 2000";::];
@@ -139,7 +139,7 @@ value1:{[v]
 / @param s a string
 / @return the literal, e.g. "\"a\\nb\""
 / @private
-quoted:{[s]
+.qetl.log.quoted:{[s]
     esc:{[ch] i:`int$ch;
         $[ch in "\\\""; "\\",ch;
           ch="\n"; "\\n";
@@ -159,7 +159,7 @@ quoted:{[s]
 / against TorQ's real .lg definitions and noticing the line had three
 / fields where TorQ's format has six.
 / @private
-torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
+.qetl.log.torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 
 / Private: the transport. TorQ's .lg.l when loaded, stdout otherwise.
 / .
@@ -168,10 +168,10 @@ torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 / That way a test that asserts "this DEBUG line was not emitted" gets the same
 / answer whether or not torq.q happens to be loaded.
 / @private
-emit:{[level;id;msg]
-    $[torq_loaded[];
+.qetl.log.emit:{[level;id;msg]
+    $[.qetl.log.torq_loaded[];
         .lg.l[level;`etl;id;id;msg;()!()];
-      not switched level;
+      not .qetl.log.switched level;
         ::;
       -1 "|" sv string[(.z.p;level;id)],enlist msg]}
 
@@ -180,11 +180,11 @@ emit:{[level;id;msg]
 / Split out so `line` can check BEFORE rendering. Mirrors the transport's own
 / gating: TorQ's outmap when it is loaded, the debug switch when it is not.
 / @private
-enabled:{[level]
-    if[torq_loaded[]; if[not level in key .lg.outmap; register[]]];
-    $[torq_loaded[];
+.qetl.log.enabled:{[level]
+    if[.qetl.log.torq_loaded[]; if[not level in key .lg.outmap; .qetl.log.register[]]];
+    $[.qetl.log.torq_loaded[];
         0<0^.lg.outmap level;
-      switched[level]]}
+      .qetl.log.switched[level]]}
 
 / Private: assemble and emit one line.
 / .
@@ -204,10 +204,10 @@ enabled:{[level]
 / and the rendering happened anyway. The gate read as correct and did
 / nothing. Wrapping the emit has no such ambiguity.
 / @private
-line:{[level;id;text;fields]
-    if[enabled[level];
-        f:with_scope[fields];
-        emit[level;id;$[0=count f; text; text," ",render[f]]]];
+.qetl.log.line:{[level;id;text;fields]
+    if[.qetl.log.enabled[level];
+        f:.qetl.log.with_scope[fields];
+        .qetl.log.emit[level;id;$[0=count f; text; text," ",.qetl.log.render[f]]]];
     }
 
 / ------------------------------------------------------- SCOPED CONTEXT
@@ -244,14 +244,14 @@ line:{[level;id;text;fields]
 /     the middle of a scope would break this: a handler it let run would
 /     inherit the window's fields.
 
-context:()!()
+.qetl.log.context:()!()
 
 / Private: a line's fields, then whatever context it does not set itself.
 / @private
-with_scope:{[fields]
-    if[0=count context; :fields];
+.qetl.log.with_scope:{[fields]
+    if[0=count .qetl.log.context; :fields];
     f:$[0=count fields; ()!(); fields];
-    f,(key[context] except key f)#context}
+    f,(key[.qetl.log.context] except key f)#.qetl.log.context}
 
 / Run f[args] with `ctx` added to the context, and restore the context
 / afterwards - on success or on error, which is rethrown.
@@ -260,11 +260,11 @@ with_scope:{[fields]
 / @param args its arguments, as a list; enlist(::) for a niladic f
 / @return what f returns
 / @eg .qetl.log.with_context[enlist[`worker]!enlist `w;{x+1};enlist 1] -> 2
-with_context:{[ctx;f;args]
+.qetl.log.with_context:{[ctx;f;args]
     / `outer`, not `prev`: prev is a q builtin, and assigning it throws
     / 'assign when the file loads.
-    outer:context;
-    context::outer,ctx;
+    outer:.qetl.log.context;
+    .qetl.log.context::outer,ctx;
     restore:{[outer;e] .qetl.log.context:outer; 'e}[outer];
     / A niladic f through @, not `.`: on KDB-X `.[f;enlist ::;handler]` throws
     / an UNCATCHABLE 'type - the handler never runs, and the context leaked
@@ -274,7 +274,7 @@ with_context:{[ctx;f;args]
     / niladic case enlist(::) - `enlist ::` is a bare primitive, not a list.
     niladic:(args~(::)) or (1=count args) and (::)~first args;
     r:$[niladic; @[f;::;restore]; .[f;args;restore]];
-    context::outer;
+    .qetl.log.context::outer;
     r}
 
 / Number one outgoing request, so its sent, returned and failed lines carry
@@ -287,8 +287,8 @@ with_context:{[ctx;f;args]
 / emit passes the worker id in TorQ's proc slot, and the stdout fallback
 / writes no process at all.
 / @return the next request number in this process
-request_seq:0
-next_request:{[] request_seq::request_seq+1; request_seq}
+.qetl.log.request_seq:0
+.qetl.log.next_request:{[] .qetl.log.request_seq::.qetl.log.request_seq+1; .qetl.log.request_seq}
 
 / The five levels. `id` is the worker or component name - it becomes
 / TorQ's `id` column, so `select from logmsg where id=`demo_deals_backfill`
@@ -298,15 +298,15 @@ next_request:{[] request_seq::request_seq+1; request_seq}
 / @param fields a dict of the values, rendered k=v after the text
 / @eg .qetl.log.info[`demo_deals_backfill;"window published";
 /        `range_from`range_to`rows!(2026.09.11D00:00;2026.09.12D00:00;1234)]
-trc:{[id;text;fields]  line[`TRACE;id;text;fields]}
-dbg:{[id;text;fields]  line[`DEBUG;id;text;fields]}
-info:{[id;text;fields] line[`INFO;id;text;fields]}
-warn:{[id;text;fields] line[`WARNING;id;text;fields]}
+.qetl.log.trc:{[id;text;fields]  .qetl.log.line[`TRACE;id;text;fields]}
+.qetl.log.dbg:{[id;text;fields]  .qetl.log.line[`DEBUG;id;text;fields]}
+.qetl.log.info:{[id;text;fields] .qetl.log.line[`INFO;id;text;fields]}
+.qetl.log.warn:{[id;text;fields] .qetl.log.line[`WARNING;id;text;fields]}
 
 / Log an error. Does NOT throw and does NOT exit - TorQ's .lg.e does both
 / depending on .proc state, which is right for an init failure and wrong
 / for a worker recording that one window failed and moving on. A
 / worker that wants to abort throws itself; this only records.
-err:{[id;text;fields]  line[`ERROR;id;text;fields]}
+.qetl.log.err:{[id;text;fields]  .qetl.log.line[`ERROR;id;text;fields]}
 
 \d .

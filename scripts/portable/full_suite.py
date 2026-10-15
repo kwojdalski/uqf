@@ -50,8 +50,10 @@ REPO = Path(__file__).resolve().parents[2]
 GAPS = REPO / "tests" / "q" / "peachq_known_gaps.txt"
 FLATTENER = REPO / "scripts" / "portable" / "flatten_contexts.py"
 BUNDLE_SUITE = REPO / "scripts" / "dev" / "bundle_suite.py"
-#: What is flattened. lib/ is not: the flattener leaves vendored code alone.
-CONVERTED = ("src", "scripts", "tests")
+#: What is flattened. Only tests/: src/ and scripts/ open no nested context any
+#: more (#1411, check_nested_contexts.py) and load on PeachQ as they stand; this
+#: shrinks to nothing when tests/ follows (#1412). lib/ is never flattened.
+CONVERTED = ("tests",)
 #: How a reason starts (#986): PeachQ lacks something, this tree relies on
 #: something it should not, or the flattened copy fails on KDB-X too.
 KINDS = ("peachq-lacks: ", "tree-bug: #", "flattening: ")

@@ -42,35 +42,35 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qpipe.job.executions
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `executions;
+.qpipe.job.executions.publish:.qetl.job.stream.unwired `executions;
 
 / The canonical output. No `time`: the plant stamps it.
-executions:.qetl.plant.published `executions
+.qpipe.job.executions.executions:.qetl.plant.published `executions
 
 / What each mapping reads - the source table as the plant delivers it.
-trades:.qetl.plant.shape `trades
-crypto_trades:.qetl.plant.shape `crypto_trades
-orders:.qetl.plant.shape `orders
+.qpipe.job.executions.trades:.qetl.plant.shape `trades
+.qpipe.job.executions.crypto_trades:.qetl.plant.shape `crypto_trades
+.qpipe.job.executions.orders:.qetl.plant.shape `orders
 
 / The status that makes an order a fill. One value, named once: an order
 / cancelled or rejected never traded, and netting one into a position is
 / wrong in a way that looks like nothing until someone reconciles.
-filled_status:`filled
+.qpipe.job.executions.filled_status:`filled
 
 / The venue an FX fill is attributed to. The demo's FX feed is one venue,
 / and naming it is what lets a downstream group by venue without a null
 / standing in for "the FX one".
-fx_venue:`fx
+.qpipe.job.executions.fx_venue:`fx
 
 / An FX fill as a canonical execution: the venue is fixed, there is no fee;
 / the id is the feed's own (#1080), null for a fill from before the column.
 / @param batch a trades batch
 / @return canonical executions
-from_trades:{[batch]
+.qpipe.job.executions.from_trades:{[batch]
     select source_time:time, sym, venue:.qpipe.job.executions.fx_venue, side, size, price:trade_price,
         fee:0f, fee_ccy:`, fill_id, book:`, product:` from batch}
 
@@ -78,7 +78,7 @@ from_trades:{[batch]
 / is already the canonical one with different spellings.
 / @param batch a crypto_trades batch
 / @return canonical executions
-from_crypto_trades:{[batch]
+.qpipe.job.executions.from_crypto_trades:{[batch]
     select source_time:time, sym, venue, side, size, price:trade_price,
         fee, fee_ccy:fee_currency, fill_id:exchange_fill_id, book:`, product:` from batch}
 
@@ -87,7 +87,7 @@ from_crypto_trades:{[batch]
 / id is the fill's. Every other status is dropped: it never traded.
 / @param batch an orders batch, any statuses
 / @return canonical executions, filled orders only
-from_orders:{[batch]
+.qpipe.job.executions.from_orders:{[batch]
     fs:.qpipe.job.executions.filled_status;
     select source_time:time, sym, venue:.qpipe.job.executions.fx_venue, side, size, price,
         fee:0f, fee_ccy:`, fill_id:`$string order_id, book, product from batch where order_status=fs}
