@@ -60,14 +60,13 @@ Scan for the following, in order of severity:
   definition time
 - Single-key dict construction via `` `key!value `` on an atom key --- collides
   with q's enum overload (type 20h); must be `(enlist key)!(enlist value)`
-- A new namespace, or one nested under a domain (` \d .qf.px.sub `) --- the
-  quant library is the seven `.qf.<domain>` namespaces and nothing else; a new
-  file declares one of them and defines names no other file of the domain
-  defines. The exceptions are the ETL tree's instances: a bounded worker
-  (` \d .qpipe.job.<worker name> `), whose namespace `.qetl.job.bounded.define`
-  derives from the registered name, and a source
-  (` \d .qpipe.source.<source name> `), checked against the file's own
-  `source_name`
+- A `\d` that names more than one level (` \d .qf.px `, ` \d .qpipe.job.x `) ---
+  PeachQ cannot load one and `check_nested_contexts.py` refuses it. Define names
+  fully qualified from the root (`.qpipe.job.<worker name>.facts:{...}`), with a
+  `\d .` at most. A new namespace beside the seven `.qf.<domain>` ones is the
+  same mistake; a bounded worker's namespace is `.qpipe.job.<worker name>`,
+  derived by `.qetl.job.bounded.define`, and a source's
+  `.qpipe.source.<source name>`, checked against the file's own `source_name`
 
 ### 4. Cross-Interpreter Portability Gaps
 

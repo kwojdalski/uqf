@@ -41,22 +41,22 @@
 / .
 / Definition order is immaterial to q - these are independent declarations.
 
-\d .qetl.plant
+\d .
 
 / Every plant table's name, in definition order.
 / @return the table names, as a symbol list
 / @eg 0<count .qetl.plant.names[]  ->  1b
-names:{[] (key `.qetl.plant) where 98h=type each get each ` sv' `.qetl.plant,'key `.qetl.plant}
+.qetl.plant.names:{[] (key `.qetl.plant) where 98h=type each get each ` sv' `.qetl.plant,'key `.qetl.plant}
 
 / A plant table's schema: its empty table, `time` first.
 / @param t the table's name, as a symbol
 / @return the empty table
 / @throws error naming the table when the plant does not carry it
 / @eg cols .qetl.plant.schema `quote
-schema:{[t]
-    if[not t in names[];
+.qetl.plant.schema:{[t]
+    if[not t in .qetl.plant.names[];
         '"plant: no table ",string[t]," - neither src/etl/plant_tables.q nor the starter-pack schema ",
-            vendored_path," defines it"];
+            .qetl.plant.vendored_path," defines it"];
     0#get ` sv `.qetl.plant,t}
 
 / A plant table's shape as a job holds it: the schema without its storage
@@ -66,14 +66,14 @@ schema:{[t]
 / @param t the table's name, as a symbol
 / @return the empty table, time first, no attributes
 / @eg attr (.qetl.plant.shape `quote)`sym  ->  `
-shape:{[t] s:schema[t]; @[s;cols s;`#]}
+.qetl.plant.shape:{[t] s:.qetl.plant.schema[t]; @[s;cols s;`#]}
 
 / A plant table's shape without `time`: what a job publishes, since the
 / tickerplant stamps `time` itself (.u.upd, and .qetl.tick the same).
 / @param t the table's name, as a symbol
 / @return the empty table, without its time column
 / @eg `time in cols .qetl.plant.published `quote  ->  0b
-published:{[t] (cols[s] except `time)#s:shape[t]}
+.qetl.plant.published:{[t] (cols[s] except `time)#s:.qetl.plant.shape[t]}
 
 / Some of a plant table's columns, in the order given: the shape of a job
 / that reads only what it uses. A column the plant table does not carry is
@@ -83,11 +83,11 @@ published:{[t] (cols[s] except `time)#s:shape[t]}
 / @return the empty table with those columns
 / @throws error naming a column the table does not carry
 / @eg cols .qetl.plant.columns[`quote;`time`sym`bid`ask]  ->  `time`sym`bid`ask
-columns:{[t;cs]
-    s:shape[t];
+.qetl.plant.columns:{[t;cs]
+    s:.qetl.plant.shape[t];
     if[count bad:cs where not cs in cols s;
         '"plant: ",string[t]," carries no ",(", " sv string bad)," - its schema is ",
-            $[t in vendored; vendored_path; "src/etl/plant_tables.q"]];
+            $[t in .qetl.plant.vendored; .qetl.plant.vendored_path; "src/etl/plant_tables.q"]];
     cs#s}
 
 / ------------------------------------------------------ NESTED COLUMNS
@@ -107,13 +107,13 @@ columns:{[t;cs]
 / ones that are not, and a test holds it empty.
 
 / Declared element types: (table; column) -> meta type character.
-elements:([table:`symbol$(); column:`symbol$()] element:`char$())
+.qetl.plant.elements:([table:`symbol$(); column:`symbol$()] element:`char$())
 
 / A table's nested columns: the ones its schema declares as ().
 / @param table_name the table, as a symbol
 / @return the columns, as a symbol list
 / @eg .qetl.plant.nested_columns `mkt_orderbook  ->  `bid_prices`ask_prices
-nested_columns:{[table_name] exec c from 0!meta schema table_name where t=" "}
+.qetl.plant.nested_columns:{[table_name] exec c from 0!meta .qetl.plant.schema table_name where t=" "}
 
 / Declare what a table's nested columns hold. Call it after the table's line.
 / @param table_name the table, as a symbol
@@ -122,14 +122,14 @@ nested_columns:{[table_name] exec c from 0!meta schema table_name where t=" "}
 / @return table_name
 / @throws error naming a column that is not nested, or a type that is not one
 / @eg .qetl.plant.nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"]
-nested:{[table_name;types]
+.qetl.plant.nested:{[table_name;types]
     / Two checks, not one `and`: q evaluates both sides, and `value` on a
     / symbol looks up a variable of that name.
     if[not 99h=type types;
         '"nested: ",string[table_name],"'s element types must be a dictionary of column -> type character, e.g. `bid_prices`ask_prices!\"FF\""];
     if[not 10h=type value types;
         '"nested: ",string[table_name],"'s element types must be type characters, e.g. `bid_prices`ask_prices!\"FF\" - one column needs enlist: (enlist `route)!enlist \"S\""];
-    ok:nested_columns[table_name];
+    ok:.qetl.plant.nested_columns[table_name];
     if[count bad:(key types) except ok;
         '"nested: ",string[table_name]," has no nested column ",(", " sv string bad),
          " - nested columns are the ones declared as (): ",$[count ok; ", " sv string ok; "it has none"]];
@@ -141,10 +141,10 @@ nested:{[table_name;types]
 / This tree's own nested columns with no declared element type.
 / @return a symbol list of `table.column`, empty when every one is declared
 / @eg .qetl.plant.undeclared[]  ->  `symbol$()
-undeclared:{[]
+.qetl.plant.undeclared:{[]
     / Cast, so "none" is `symbol$() - raze over empty results need not be.
-    `symbol$raze {[t] cs:nested_columns[t] except exec column from elements where table=t;
-        `$(string[t],"."),/:string cs} each own[]}
+    `symbol$raze {[t] cs:.qetl.plant.nested_columns[t] except exec column from .qetl.plant.elements where table=t;
+        `$(string[t],"."),/:string cs} each .qetl.plant.own[]}
 
 / What is wrong with `rows` as a page for plant table `table_name`: its
 / columns and their order against what a job publishes there, each column's
@@ -159,20 +159,20 @@ undeclared:{[]
 / @return messages naming the table and column, empty when the page fits
 / @throws error when the plant carries no such table
 / @eg .qetl.plant.problems[`mkt_orderbook;.qetl.plant.published `mkt_orderbook]  ->  ()
-problems:{[table_name;rows]
-    want:published[table_name];
+.qetl.plant.problems:{[table_name;rows]
+    want:.qetl.plant.published[table_name];
     rows:0!rows;
     if[not (cols want)~cols rows;
         :enlist string[table_name]," has columns ",(" " sv string cols rows),
             " - the plant takes ",(" " sv string cols want)];
-    declared:exec column!element from elements where table=table_name;
+    declared:exec column!element from .qetl.plant.elements where table=table_name;
     wt:exec c!t from meta want;
     gt:exec c!t from meta rows;
-    raze column_problems[table_name;declared;count rows]'[cols want;wt cols want;gt cols want;rows cols want]}
+    raze .qetl.plant.column_problems[table_name;declared;count rows]'[cols want;wt cols want;gt cols want;rows cols want]}
 
 / Private: one column's problems, for `problems`.
 / @private
-column_problems:{[table_name;declared;n;c;want;got;vals]
+.qetl.plant.column_problems:{[table_name;declared;n;c;want;got;vals]
     name:string[table_name],".",string c;
     if[not want=" ";
         :$[(got=want) or (n=0) and got=" "; ();
@@ -197,7 +197,7 @@ column_problems:{[table_name;declared;n;c;want;got;vals]
 / lambda on this build (see .qtorq.safe_timer).
 / @param path the vendored database.q, relative to the repository root
 / @return the table names registered
-adopt_vendored:{[path]
+.qetl.plant.adopt_vendored:{[path]
     / A tree loaded without the vendored pack - a minimal copy, as the scaffold
     / tests make - has no vendored tables to register, which is not an error.
     if[()~key hsym `$path; :`symbol$()];
@@ -213,14 +213,14 @@ adopt_vendored:{[path]
 / the release does not ship (#773) - and the vendored copy otherwise.
 / vendored_path is kept so an error can name the schema a table was missing
 / from: on a deployment that is a managed install's, not this tree's (#902).
-vendored_path:$[count getenv`TORQAPPHOME; getenv[`TORQAPPHOME],"/database.q";
+.qetl.plant.vendored_path:$[count getenv`TORQAPPHOME; getenv[`TORQAPPHOME],"/database.q";
     "lib/torq-finance-starter-pack/database.q"];
-vendored:adopt_vendored[vendored_path];
+.qetl.plant.vendored:.qetl.plant.adopt_vendored[.qetl.plant.vendored_path];
 
 / This tree's own plant tables: every one except the vendored three.
 / @return the table names
 / @eg `quote in .qetl.plant.own[]  ->  0b
-own:{[] names[] except vendored}
+.qetl.plant.own:{[] .qetl.plant.names[] except .qetl.plant.vendored}
 
 / Define root tables of these names, empty, from their schemas.
 / .
@@ -231,7 +231,7 @@ own:{[] names[] except vendored}
 / @param ts the table names
 / @return ts
 / @eg .qetl.plant.materialise enlist `orders
-materialise:{[ts] {[t] t set schema t} each ts; ts}
+.qetl.plant.materialise:{[ts] {[t] t set .qetl.plant.schema t} each ts; ts}
 
 / The order book shape every pricing and execution function in src/ expects:
 / vector-valued price and size columns, one row per (time, sym). Matches
@@ -245,21 +245,21 @@ materialise:{[ts] {[t] t set schema t} each ts; ts}
 / reshaping" went unchallenged because nothing ever called a pricing
 / function with a tickerplant table. scripts/examples/scenario_example.q
 / now does, on every commit, and the timestamp column is `time everywhere.
-fx_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-nested[`fx_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+.qetl.plant.fx_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+.qetl.plant.nested[`fx_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / Every venue's book, FX and crypto, with its source and original timestamp
 / kept across normalization. posbook1 marks to its level-0 mids; superbook1
 / merges the FX ones.
-market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+.qetl.plant.market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+.qetl.plant.nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / Complete per-pair snapshots; level provenance stays aligned with prices and sizes.
-superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())
-nested[`superbook;`bid_prices`bid_sizes`bid_sources`bid_times`ask_prices`ask_sizes`ask_sources`ask_times!"FFSPFFSP"];
+.qetl.plant.superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())
+.qetl.plant.nested[`superbook;`bid_prices`bid_sizes`bid_sources`bid_times`ask_prices`ask_sizes`ask_sources`ask_times!"FFSPFFSP"];
 
 / Status snapshots, including active=0b to clear an earlier gross opportunity.
-arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); buy_source:`symbol$(); sell_source:`symbol$(); ask:`float$(); bid:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$())
+.qetl.plant.arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); buy_source:`symbol$(); sell_source:`symbol$(); ask:`float$(); bid:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$())
 
 / Synthetic-versus-direct cross opportunities: one pair priced against a
 / route through others (EURJPY against EURUSD x USDJPY). `route` carries the
@@ -267,8 +267,8 @@ arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:
 / quoted - a synthetic price is only as fresh as its stalest leg. Like
 / `arbitrage`, an append-only status history: read the latest row per sym
 / BEFORE filtering on active.
-cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$(); fully_filled:`boolean$(); skew:`timespan$())
-nested[`cross_arbitrage;(enlist `route)!enlist "S"];
+.qetl.plant.cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$(); fully_filled:`boolean$(); skew:`timespan$())
+.qetl.plant.nested[`cross_arbitrage;(enlist `route)!enlist "S"];
 
 / An audit trail of runtime configuration changes (.qetl.cfg.audit). `old` is
 / empty on a name's first observation, which is the row that says what the
@@ -276,8 +276,8 @@ nested[`cross_arbitrage;(enlist `route)!enlist "S"];
 / hold a timespan, a float and a symbol list. WHO made a change is not here:
 / join to TorQ's own usage log at the same timestamp, which records .z.u,
 / .z.a and the command text for every incoming query.
-config_change:([]time:`timestamp$(); owner:`g#`symbol$(); name:`symbol$(); old:(); new:(); as_of:`timestamp$())
-nested[`config_change;`old`new!"  "];
+.qetl.plant.config_change:([]time:`timestamp$(); owner:`g#`symbol$(); name:`symbol$(); old:(); new:(); as_of:`timestamp$())
+.qetl.plant.nested[`config_change;`old`new!"  "];
 
 / A deliberately "incorrectly-shaped" wide book: one scalar column per level
 / rather than vector columns, which is the shape real venue feeds arrive in
@@ -290,14 +290,14 @@ nested[`config_change;`old`new!"  "];
 / look. The bids<n>/asks<n> naming is not free choice - it matches
 / .qf.mkt.derive_level_groups' prefix-plus-contiguous-digit-suffix
 / convention, which is what folds these into bid_prices/ask_prices.
-wide_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bids0:`float$();bids1:`float$();bids2:`float$();bids3:`float$();bids4:`float$();bids5:`float$();bids6:`float$();bids7:`float$();bids8:`float$();bids9:`float$();bids10:`float$();asks0:`float$();asks1:`float$();asks2:`float$();asks3:`float$();asks4:`float$();asks5:`float$();asks6:`float$();asks7:`float$();asks8:`float$();asks9:`float$();asks10:`float$())
+.qetl.plant.wide_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bids0:`float$();bids1:`float$();bids2:`float$();bids3:`float$();bids4:`float$();bids5:`float$();bids6:`float$();bids7:`float$();bids8:`float$();bids9:`float$();bids10:`float$();asks0:`float$();asks1:`float$();asks2:`float$();asks3:`float$();asks4:`float$();asks5:`float$();asks6:`float$();asks7:`float$();asks8:`float$();asks9:`float$();asks10:`float$())
 
 / vectorize1's output: wide_orderbook's bids*/asks* folded into vector columns by
 / .qf.mkt.book_from_wide_levels, then republished onto the tickerplant - an
 / ordinary database table flowing through rdb1/wdb1/hdb, not private state
 / on vectorize1's own process.
-mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_prices:())
-nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
+.qetl.plant.mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_prices:())
+.qetl.plant.nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
 
 / Databento MBP-10 as the live feed handler publishes it - the source
 / contract's own fields, so a live row and an ODBC-backfilled row are the
@@ -307,14 +307,14 @@ nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
 / .
 / Forty per-level columns because that is what Databento sends; folding
 / them into four vectors is databento1's job, not this table's.
-databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_px_00:`float$(); bid_sz_00:`long$(); ask_px_00:`float$(); ask_sz_00:`long$(); bid_px_01:`float$(); bid_sz_01:`long$(); ask_px_01:`float$(); ask_sz_01:`long$(); bid_px_02:`float$(); bid_sz_02:`long$(); ask_px_02:`float$(); ask_sz_02:`long$(); bid_px_03:`float$(); bid_sz_03:`long$(); ask_px_03:`float$(); ask_sz_03:`long$(); bid_px_04:`float$(); bid_sz_04:`long$(); ask_px_04:`float$(); ask_sz_04:`long$(); bid_px_05:`float$(); bid_sz_05:`long$(); ask_px_05:`float$(); ask_sz_05:`long$(); bid_px_06:`float$(); bid_sz_06:`long$(); ask_px_06:`float$(); ask_sz_06:`long$(); bid_px_07:`float$(); bid_sz_07:`long$(); ask_px_07:`float$(); ask_sz_07:`long$(); bid_px_08:`float$(); bid_sz_08:`long$(); ask_px_08:`float$(); ask_sz_08:`long$(); bid_px_09:`float$(); bid_sz_09:`long$(); ask_px_09:`float$(); ask_sz_09:`long$())
+.qetl.plant.databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_px_00:`float$(); bid_sz_00:`long$(); ask_px_00:`float$(); ask_sz_00:`long$(); bid_px_01:`float$(); bid_sz_01:`long$(); ask_px_01:`float$(); ask_sz_01:`long$(); bid_px_02:`float$(); bid_sz_02:`long$(); ask_px_02:`float$(); ask_sz_02:`long$(); bid_px_03:`float$(); bid_sz_03:`long$(); ask_px_03:`float$(); ask_sz_03:`long$(); bid_px_04:`float$(); bid_sz_04:`long$(); ask_px_04:`float$(); ask_sz_04:`long$(); bid_px_05:`float$(); bid_sz_05:`long$(); ask_px_05:`float$(); ask_sz_05:`long$(); bid_px_06:`float$(); bid_sz_06:`long$(); ask_px_06:`float$(); ask_sz_06:`long$(); bid_px_07:`float$(); bid_sz_07:`long$(); ask_px_07:`float$(); ask_sz_07:`long$(); bid_px_08:`float$(); bid_sz_08:`long$(); ask_px_08:`float$(); ask_sz_08:`long$(); bid_px_09:`float$(); bid_sz_09:`long$(); ask_px_09:`float$(); ask_sz_09:`long$())
 
 / The folded book, republished by databento1 - the shape .qf.mkt and
 / .qf.mkt.cross_book_at read. Carries `ts_event` as well as `time`: the
 / tickerplant stamps `time` on receipt, and a book that knew only when it
 / ARRIVED could not tell a stale feed from a fast one.
-eq_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-nested[`eq_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
+.qetl.plant.eq_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+.qetl.plant.nested[`eq_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
 
 / Client FX flow as the external Kafka consumer publishes it - one row per
 / consumed record, in the source contract's own field order. Written by
@@ -331,7 +331,7 @@ nested[`eq_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
 / `broker_time` is the broker's own timestamp, kept for the reason
 / databento_mbp10 keeps ts_event: `time` says when we heard about the
 / record, not when it happened, and their difference is the lag.
-kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`long$(); offset:`long$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$())
+.qetl.plant.kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`long$(); offset:`long$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$())
 
 / Written by the external cryptorust recorder rather than by any
 / scripts/torq_*.q process - see start_crypto_recorder. Carries `venue`
@@ -343,8 +343,8 @@ kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`l
 / source_time, so the plant's clock reached a downstream consumer wearing the
 / venue's name, and no reader could tell them apart. cryptorust's BookUpdate
 / has carried the venue stamp all along - see kdb_market_data_recorder.rs.
-crypto_book:([]time:`timestamp$(); source_time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-nested[`crypto_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+.qetl.plant.crypto_book:([]time:`timestamp$(); source_time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+.qetl.plant.nested[`crypto_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / crypto_book_1s1's output (#1222): the LAST book state per (venue, sym) per
 / second, bucketed on the venue's source_time, not the plant's `time`. One row
@@ -352,8 +352,8 @@ nested[`crypto_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 / no row (no forward fill). source_time is the last update's own stamp, so a
 / reader can see how stale the snapshot is inside its second. `time` is the
 / plant's, on publication; the backfill twin writes the window's end.
-crypto_book_1s:([]time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bar_start:`timestamp$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-nested[`crypto_book_1s;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+.qetl.plant.crypto_book_1s:([]time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bar_start:`timestamp$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+.qetl.plant.nested[`crypto_book_1s;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / book_liquidity_1m1's output (#1397): what each provider's FX book could fill
 / at each requested size, averaged over the book snapshots of one minute. One
@@ -367,17 +367,17 @@ nested[`crypto_book_1s;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 / category are the eligibility dimensions of the liquidity_book contract:
 / `unspecified` while market_data, which cannot say, is the source. `time` is
 / the plant's, on publication; the backfill twin writes the window's end.
-book_liquidity_1m:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); req_size:`float$(); bar_start:`timestamp$(); snapshots:`long$(); bid_obs:`long$(); ask_obs:`long$(); bid_price:`float$(); ask_price:`float$(); bid_qty:`float$(); ask_qty:`float$(); bid_full_ratio:`float$(); ask_full_ratio:`float$())
+.qetl.plant.book_liquidity_1m:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); settlement:`symbol$(); category:`symbol$(); req_size:`float$(); bar_start:`timestamp$(); snapshots:`long$(); bid_obs:`long$(); ask_obs:`long$(); bid_price:`float$(); ask_price:`float$(); bid_qty:`float$(); ask_qty:`float$(); bid_full_ratio:`float$(); ask_full_ratio:`float$())
 
 / Simulated fills from cryptorust's OMS. Distinct from crypto_trades below,
 / which carries real fills: conflating simulated and real execution in one
 / table is how a P&L number stops meaning anything.
-crypto_sim_fills:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); realized_delta_pnl:`float$())
+.qetl.plant.crypto_sim_fills:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); realized_delta_pnl:`float$())
 
 / Real fills, via cryptorust's get_recent_real_fills. Normalised to the
 / trades shape below - side as a long, not the raw "buy"/"sell" string - so
 / execution analytics reads one convention.
-crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$(); exchange_fill_id:`symbol$())
+.qetl.plant.crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$(); exchange_fill_id:`symbol$())
 
 / The trades shape src/execution/execution.q's markout family consumes
 / (sym/time/side/trade_price/pip_factor), so demo_markout1 and posbook1 read
@@ -385,22 +385,22 @@ crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`
 / fill_id (#1080) is the fill's identity: unique per fill, so a keyed consumer
 / never collapses two fills that share a time, sym and price. Null in a
 / partition written before the column existed (uqs data hdb-check --fix adds it).
-trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$(); fill_id:`symbol$())
+.qetl.plant.trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$(); fill_id:`symbol$())
 
 / posbook1's output: weighted-average-cost positions, republished onto the
 / tickerplant like mkt_orderbook rather than kept as process-private state.
-position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); mark_price:`float$(); unrealized_pnl:`float$(); total_pnl:`float$())
+.qetl.plant.position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); mark_price:`float$(); unrealized_pnl:`float$(); total_pnl:`float$())
 
 / posbook1's book as a day opens (#943): published at end of day into the
 / new day's log, and restored from by a restart's replay, so positions carry
 / across days and a restart agrees with a process left running. carried_to is
 / the plant time of the last batch the book had applied (#1015).
-position_open:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); carried_to:`timestamp$())
+.qetl.plant.position_open:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); carried_to:`timestamp$())
 
 / demo_markout1's output: per-trade execution quality at each horizon.
 / fill_id (#1080) is the scored fill's trades.fill_id, so (fill_id; horizon)
 / identifies a row; null for a fill that predates the column.
-demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$(); fill_id:`symbol$())
+.qetl.plant.demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$(); fill_id:`symbol$())
 
 / executions1's output: every fill the stack carries, as one tape (#885). The
 / `executions` normalizer (src/etl/streaming/executions.q) maps `trades`,
@@ -410,14 +410,14 @@ demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`tim
 / null for a fill that carries none. source_time is the source's own stamp,
 / `time` the plant's on the normalized row. Named `executions` because
 / `fills` is a q builtin.
-executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$(); book:`symbol$(); product:`symbol$())
+.qetl.plant.executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$(); book:`symbol$(); product:`symbol$())
 
 / exec_bars1's output: time bars of `executions` (#946), one row per sym per
 / window [bar_start, bar_start+width), on the fill's source_time. open and close
 / are the first and last fill by source_time, vwap is size-weighted, volume the
 / summed size. A window with no fills has no row. `time` is the plant's, on
 / publication; the backfill twin writes the window's end.
-exec_bar:([]time:`timestamp$(); sym:`g#`symbol$(); bar_start:`timestamp$(); open:`float$(); high:`float$(); low:`float$(); close:`float$(); volume:`float$(); vwap:`float$(); trades:`long$())
+.qetl.plant.exec_bar:([]time:`timestamp$(); sym:`g#`symbol$(); bar_start:`timestamp$(); open:`float$(); high:`float$(); low:`float$(); close:`float$(); volume:`float$(); vwap:`float$(); trades:`long$())
 
 / order_quality1's output: rolling order outcomes per book (#1224), one row per
 / book per window length per publication. window is the length (1m, 5m, 1h),
@@ -427,24 +427,24 @@ exec_bar:([]time:`timestamp$(); sym:`g#`symbol$(); bar_start:`timestamp$(); open
 / n_orders, null when the book had no order in the window (a book that traded in
 / the last hour but not the last minute publishes 0 and null for the minute,
 / not a rate of 0). A book with no order in the last hour has no row.
-order_quality:([]time:`timestamp$(); book:`g#`symbol$(); window:`timespan$(); as_of:`timestamp$(); n_orders:`long$(); n_filled:`long$(); n_rejected:`long$(); fill_ratio:`float$(); reject_ratio:`float$())
+.qetl.plant.order_quality:([]time:`timestamp$(); book:`g#`symbol$(); window:`timespan$(); as_of:`timestamp$(); n_orders:`long$(); n_filled:`long$(); n_rejected:`long$(); fill_ratio:`float$(); reject_ratio:`float$())
 
 / fx_orders_feed's output: order flow, most of which never becomes a fill.
 / Wider than `trades` because a position keyed on more than sym needs the
 / dimensions to arrive with the order. The executions normalizer keeps the
 / filled ones, by order_status.
-orders:([]time:`timestamp$(); order_id:`long$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); side:`long$(); size:`float$(); price:`float$(); order_status:`symbol$())
+.qetl.plant.orders:([]time:`timestamp$(); order_id:`long$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); side:`long$(); size:`float$(); price:`float$(); order_status:`symbol$())
 
 / fxpositions1's snapshot: net exposure per (sym, book, product), the
 / whole book on every timer tick rather than only what moved.
-fx_position:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); base_qty:`float$(); quote_qty:`float$(); fill_count:`long$(); break_even:`float$())
+.qetl.plant.fx_position:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); base_qty:`float$(); quote_qty:`float$(); fill_count:`long$(); break_even:`float$())
 
 / fxpositions1's book as a day opens (#943), as position_open is posbook1's.
-fx_position_open:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); base_qty:`float$(); quote_qty:`float$(); fill_count:`long$(); carried_to:`timestamp$())
+.qetl.plant.fx_position_open:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); base_qty:`float$(); quote_qty:`float$(); fill_count:`long$(); carried_to:`timestamp$())
 
 / fxpositions1's alerts: one row per limit newly crossed, throttled so a
 / standing breach does not republish on every tick.
-fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); metric:`symbol$(); observed:`float$(); cap:`float$(); severity:`symbol$(); utilisation:`float$())
+.qetl.plant.fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); metric:`symbol$(); observed:`float$(); cap:`float$(); severity:`symbol$(); utilisation:`float$())
 
 / ------------------------------------------------- declared, not yet produced
 / .
@@ -485,66 +485,66 @@ fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); produ
 
 / Model output, one row per (time, sym, horizon_ms, model). horizon_ms
 / matches the horizon convention markout_at_horizons uses.
-predictions:([]time:`timestamp$(); sym:`g#`symbol$(); horizon_ms:`long$(); model:`symbol$(); predicted_mid:`float$(); confidence:`float$())
+.qetl.plant.predictions:([]time:`timestamp$(); sym:`g#`symbol$(); horizon_ms:`long$(); model:`symbol$(); predicted_mid:`float$(); confidence:`float$())
 
 / Net exposure per currency at an instant, revalued into one reporting
 / currency - .qf.port.ccy_exposure_in's output shape, with the time and the
 / reporting currency it was computed against.
-ccy_exposure:([]time:`timestamp$(); ccy:`g#`symbol$(); amount:`float$(); reporting_ccy:`symbol$(); reporting_amount:`float$())
+.qetl.plant.ccy_exposure:([]time:`timestamp$(); ccy:`g#`symbol$(); amount:`float$(); reporting_ccy:`symbol$(); reporting_amount:`float$())
 
 / Static instrument reference, one row per pair. base_ccy/quote_ccy are
 / .qf.px.ccy_pair_legs' field names, so a row here feeds it unchanged.
-reference_data:([]time:`timestamp$(); sym:`g#`symbol$(); base_ccy:`symbol$(); quote_ccy:`symbol$(); pip_factor:`long$(); min_size:`float$(); active:`boolean$())
+.qetl.plant.reference_data:([]time:`timestamp$(); sym:`g#`symbol$(); base_ccy:`symbol$(); quote_ccy:`symbol$(); pip_factor:`long$(); min_size:`float$(); active:`boolean$())
 
 / Routing decisions, one row per (order, venue). NOT 1:1 with `orders` - an
 / order can split across venues, which is the whole reason this is its own
 / table rather than columns on that one.
-order_routing:([]time:`timestamp$(); order_id:`long$(); venue:`symbol$(); routed_size:`float$(); routing_reason:`symbol$())
+.qetl.plant.order_routing:([]time:`timestamp$(); order_id:`long$(); venue:`symbol$(); routed_size:`float$(); routing_reason:`symbol$())
 
 / Venue connection registry - one row per venue link, not per process.
 / Process liveness is .qetl.hb's heartbeat and `uqs summary`; this is the
 / upstream side, which nothing in this tree talks to yet.
-connections:([]time:`timestamp$(); venue:`g#`symbol$(); host:`symbol$(); port:`long$(); status:`symbol$(); last_heartbeat:`timestamp$())
+.qetl.plant.connections:([]time:`timestamp$(); venue:`g#`symbol$(); host:`symbol$(); port:`long$(); status:`symbol$(); last_heartbeat:`timestamp$())
 
 / Scheduled macro releases, one row per event. `actual` is null until the
 / event fires, which is what distinguishes a forecast row from a fired one.
-economic_calendar:([]time:`timestamp$(); event_id:`long$(); ccy:`symbol$(); event_name:`symbol$(); importance:`symbol$(); forecast:`float$(); previous:`float$(); actual:`float$())
+.qetl.plant.economic_calendar:([]time:`timestamp$(); event_id:`long$(); ccy:`symbol$(); event_name:`symbol$(); importance:`symbol$(); forecast:`float$(); previous:`float$(); actual:`float$())
 
 / duckdb_deals_backfill1's target: one mock FX deal read from DuckDB over ODBC.
 / deal_time is when it was dealt; time, as on every plant table, is the plant's.
-duckdb_deals:([]time:`timestamp$(); deal_time:`timestamp$(); deal_id:`long$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
+.qetl.plant.duckdb_deals:([]time:`timestamp$(); deal_time:`timestamp$(); deal_id:`long$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
 
 / kafka_flow1's output. <one line: what a row means>
-client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())
+.qetl.plant.client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())
 
 / crypto_market_data_backfill1's target: one recorded crypto book-and-trade
 / update, replayed from cryptorust's data/live.duckdb. Carries BOTH
 / clocks - source_time is the venue's stamp, local_time the recorder's, and
 / `time` is the plant's - because the lag between them is what a recorded
 / capture exists to measure, and crypto_book above has room for none of it.
-crypto_market_data:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$(); trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())
-nested[`crypto_market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+.qetl.plant.crypto_market_data:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$(); trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())
+.qetl.plant.nested[`crypto_market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / rebuild_positions' output (a reaction on demo_deals): the net notional per
 / pair for each published window, written through demo_deals_backfill's own
 / IO manager - so into the HDB under `uqs backfill`. `time` is the window's
 / start, which is what the HDB writer partitions by.
-deal_positions:([]time:`timestamp$(); sym:`g#`symbol$(); window:`timestamp$(); net_notional:`float$(); deals:`long$())
+.qetl.plant.deal_positions:([]time:`timestamp$(); sym:`g#`symbol$(); window:`timestamp$(); net_notional:`float$(); deals:`long$())
 
 / hdb_transfer_backfill1's target. <one line: what a row means>
-trades_copy:([]time:`timestamp$(); trade_id:`long$(); sym:`g#`symbol$(); price:`float$(); size:`long$(); side:`symbol$(); notional:`float$())
+.qetl.plant.trades_copy:([]time:`timestamp$(); trade_id:`long$(); sym:`g#`symbol$(); price:`float$(); size:`long$(); side:`symbol$(); notional:`float$())
 
 / crypto_markout1's output. <one line: what a row means>
-crypto_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); fill_id:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); side:`long$(); trade_price:`float$(); ref_price:`float$(); markout_bps:`float$())
+.qetl.plant.crypto_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); fill_id:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); side:`long$(); trade_price:`float$(); ref_price:`float$(); markout_bps:`float$())
 
 / last_value1's output. <one line: what a row means>
-last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())
+.qetl.plant.last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())
 
 / flink_vwap's raw records, as flink_vwap_streamer.py publishes them from outside q.
-flink_vwap_raw:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
+.qetl.plant.flink_vwap_raw:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
 
 / flink_vwap1's output: one closed Flink window per sym, published once.
-flink_vwap:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
+.qetl.plant.flink_vwap:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
 
 / fxmarkout1's output (#1395): the normalized FX markout calculation, one row per execution,
 / horizon and component. kind is `total (the markout against the reference mid), `execution (the
@@ -552,13 +552,13 @@ flink_vwap:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); v
 / allocation left over); step is 0 for every kind but a leg, so (venue; fill_id; horizon; kind; step)
 / is a key with no nulls. pips are signed so positive means the market moved in the execution's
 / favour; price_t0 and price_t1 are per kind - see src/etl/transforms/fx_markout.q.
-fx_markout:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price_t0:`float$(); price_t1:`float$(); pips:`float$(); status:`symbol$(); pip_factor:`long$(); version:`symbol$())
+.qetl.plant.fx_markout:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price_t0:`float$(); price_t1:`float$(); pips:`float$(); status:`symbol$(); pip_factor:`long$(); version:`symbol$())
 
 / fxmarkoutwide1's output (#1395): fx_markout in a row per (venue; fill_id; horizon) - the markout,
 / the execution residual and the reconciling residual side by side, and up to three legs in route
 / order with their inversion and allocation. status is `ok, `partial (priced but a component is not),
 / `unavailable (not priced) or `unreconciled (the legs do not add up).
-fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); price:`float$(); pip_factor:`long$(); ref_t0:`float$(); ref_t1:`float$(); total_pips:`float$(); execution_pips:`float$(); residual_pips:`float$(); leg1:`symbol$(); leg1_invert:`boolean$(); leg1_pips:`float$(); leg2:`symbol$(); leg2_invert:`boolean$(); leg2_pips:`float$(); leg3:`symbol$(); leg3_invert:`boolean$(); leg3_pips:`float$(); status:`symbol$(); version:`symbol$())
+.qetl.plant.fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); price:`float$(); pip_factor:`long$(); ref_t0:`float$(); ref_t1:`float$(); total_pips:`float$(); execution_pips:`float$(); residual_pips:`float$(); leg1:`symbol$(); leg1_invert:`boolean$(); leg1_pips:`float$(); leg2:`symbol$(); leg2_invert:`boolean$(); leg2_pips:`float$(); leg3:`symbol$(); leg3_invert:`boolean$(); leg3_pips:`float$(); status:`symbol$(); version:`symbol$())
 / order_outcomes1's output: the normalized order-outcome contract (#1396), the one
 / shape order_quality1 reads whatever OMS an order came from. One row per STATUS
 / EVENT a source reported, not per order: `source_time` is the source's own stamp
@@ -570,4 +570,4 @@ fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$
 / status code the adapter does not know, or a row without an id). `source_status`
 / is the source's own code, verbatim. book, product and venue are the grouping
 / dimensions and are null where the source gives none: venue is never inferred.
-order_outcomes:([]time:`timestamp$(); source_time:`timestamp$(); source:`symbol$(); request_id:`symbol$(); source_status:`symbol$(); outcome:`symbol$(); book:`symbol$(); product:`symbol$(); venue:`symbol$())
+.qetl.plant.order_outcomes:([]time:`timestamp$(); source_time:`timestamp$(); source:`symbol$(); request_id:`symbol$(); source_status:`symbol$(); outcome:`symbol$(); book:`symbol$(); product:`symbol$(); venue:`symbol$())

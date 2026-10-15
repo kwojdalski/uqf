@@ -214,6 +214,34 @@
 .qt.qf.util.namespaces.outside_the_prefix[`.cov]:"the coverage tool, in KX's published .cov API shape. .qetl.coverage is already the ETL coverage LEDGER, so the obvious rename collides with an unrelated namespace.";
 .qt.qf.util.namespaces.outside_the_prefix[`.surface]:"the contract-surface exporter, which enumerates this tree's namespaces. Inside the prefix it would export itself - a tool appearing in the artifact it produces.";
 
+/ Namespaces a file WRITES INTO without declaring them: names it assigns in q's or
+/ TorQ's own namespace (.z.ts, .servers.x) or in a check script's private one.
+/ Only the qualified-definition form can see these, which is why they are listed
+/ apart from outside_the_prefix: that list is for namespaces uqf declares.
+.qt.qf.util.namespaces.writes_into:(`symbol$())!();
+.qt.qf.util.namespaces.writes_into[`.z]:"q's own handlers (.z.ts, .z.po ...), assigned by the process scripts that need one.";
+.qt.qf.util.namespaces.writes_into[`.servers]:"TorQ's connection settings, set by scripts/processes/torq_tap.q where TorQ reads them.";
+.qt.qf.util.namespaces.writes_into[`.pc]:"scripts/portable/checks/status_intervals.q's own helpers - a check that runs on a 4.0 build and so cannot use the prefix convention's tooling.";
+
+/ Private: the top segment of a namespace, `.qpipe.job.cross -> `.qpipe.
+.qt.qf.util.namespaces.top:{[n] `$"." sv 2#"." vs string n}
+
+/ Private: the namespaces a file's lines declare. A file declares a namespace
+/ either by opening it (`\d .qtorq`, one level at most) or, as the tree writes
+/ nearly all of its own q since #1411, by defining a name in it fully qualified
+/ from the root (`.qpipe.job.cross.upd:{...}` declares `.qpipe.job.cross`).
+/ @param lines the file's lines
+/ @return the symbols, leading dot kept, with repeats
+.qt.qf.util.namespaces.namespaces_in:{[lines]
+    opened:lines where lines like "\\d .*";
+    opened:`$3_/:opened where not opened like "\\d .";
+    defs:lines where lines like ".[a-zA-Z]*";
+    / the name a line defines: the text up to its first ":", when nothing else comes first
+    names:{[l] i:first where l in ":[ ("; $[(null i) or not ":"=l i; ""; i#l]} each defs;
+    names:names where 0<count each names;
+    owned:{[n] p:"." vs n; $[3>count p; `symbol$(); `$"." sv -1_p]} each names;
+    opened,raze owned}
+
 / Private: every namespace declared by a file under src/ or scripts/.
 .qt.qf.util.namespaces.declared_namespaces:{[]
     / scripts/torqcode/ and scripts/torqconfig/ are TorQ's OWN code (#711, #712):
@@ -221,11 +249,7 @@
     / .lg, .checkinputs ...) where TorQ reads them, so they cannot carry uqf's
     / prefix and are not this rule's to judge.
     files:system"find src scripts -name '*.q' -not -path 'scripts/torqcode/*' -not -path 'scripts/torqconfig/*'";
-    raze {[f]
-        lines:read0 hsym `$f;
-        decls:lines where lines like "\\d .*";
-        decls:decls where not decls like "\\d .";
-        `$3_/:decls} each files}
+    raze {[f] .qt.qf.util.namespaces.namespaces_in read0 hsym `$f} each files}
 
 .qt.qf.util.namespaces.test_every_shipped_namespace_is_inside_the_prefix_or_listed:{[t]
     / The ratchet. A new `\d .something` in src/ or scripts/ either carries
@@ -233,7 +257,8 @@
     / makes the exception a decision someone wrote down rather than a file
     / nobody noticed.
     all_ns:distinct .qt.qf.util.namespaces.declared_namespaces[];
-    stray:all_ns where not (all_ns like ".q*") or all_ns in key .qt.qf.util.namespaces.outside_the_prefix;
+    tops:distinct .qt.qf.util.namespaces.top each all_ns;
+    stray:tops where not (tops like ".q*") or (tops in key .qt.qf.util.namespaces.outside_the_prefix) or tops in key .qt.qf.util.namespaces.writes_into;
     .qunit.assertEquals[stray;`symbol$();
         "every namespace in src/ and scripts/ is .q-prefixed, or listed in outside_the_prefix with its reason"]};
 
@@ -275,7 +300,7 @@
     / at the root, and demanding a namespace of them would be a rule about
     / the wrong files.
     bare:.qt.qf.util.namespaces.process_scripts[] where not {[f]
-        any (read0 hsym `$"scripts/processes/",f) like "\\d .*"} each .qt.qf.util.namespaces.process_scripts[];
+        0<count .qt.qf.util.namespaces.namespaces_in read0 hsym `$"scripts/processes/",f} each .qt.qf.util.namespaces.process_scripts[];
     .qunit.assertEquals[bare;();
         "every scripts/processes/torq_*.q declares the namespace it owns, rather than working at the root"]};
 

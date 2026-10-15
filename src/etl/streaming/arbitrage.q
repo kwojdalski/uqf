@@ -5,10 +5,10 @@
 / checks, execution or synthetic crosses. Size is the smaller base quantity
 / at the two selected levels, not a sum that reuses the same liquidity.
 
-\d .qpipe.job.arbitrage
+\d .
 
-publish:.qetl.job.stream.unwired `arbitrage;
-arbitrage:.qetl.plant.published `arbitrage
+.qpipe.job.arbitrage.publish:.qetl.job.stream.unwired `arbitrage;
+.qpipe.job.arbitrage.arbitrage:.qetl.plant.published `arbitrage
 
 / Find the widest strictly positive bid-minus-ask across distinct sources.
 / A crossed single source is not a cross-source opportunity; still consider
@@ -16,7 +16,7 @@ arbitrage:.qetl.plant.published `arbitrage
 / @param book one sorted superbook row
 / @return one arbitrage status row, inactive with null prices when none exists
 / @eg (.qpipe.job.arbitrage.opportunity[first 1#.qpipe.job.superbook.superbook]) 2 -> 0b
-opportunity:{[book]
+.qpipe.job.arbitrage.opportunity:{[book]
     result:(book`sym;book`as_of;0b;`;`;0n;0n;0n;0n;0n);
     best_edge:0f;
     i:0;
@@ -38,10 +38,10 @@ opportunity:{[book]
 / @param batch superbook rows
 / @return the arbitrage status table
 / @eg count .qpipe.job.arbitrage.evaluate[.qpipe.job.superbook.superbook] -> 0
-evaluate:{[batch]
+.qpipe.job.arbitrage.evaluate:{[batch]
     result:0#.qpipe.job.arbitrage.arbitrage;
     i:0;
-    while[i<count batch; result:result upsert opportunity batch i; i+:1];
+    while[i<count batch; result:result upsert .qpipe.job.arbitrage.opportunity batch i; i+:1];
     result}
 
 / Publish status for every updated pair, including clears.
@@ -49,9 +49,9 @@ evaluate:{[batch]
 / @param x superbook rows
 / @return nothing
 / @eg .qpipe.job.arbitrage.on_batch[`unrelated;()]
-on_batch:{[t;x]
+.qpipe.job.arbitrage.on_batch:{[t;x]
     if[not t=`superbook; :()];
-    if[count x; .qpipe.job.arbitrage.publish[`arbitrage;evaluate[x]]];
+    if[count x; .qpipe.job.arbitrage.publish[`arbitrage;.qpipe.job.arbitrage.evaluate[x]]];
     }
 
 \d .

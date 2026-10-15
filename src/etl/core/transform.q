@@ -45,7 +45,7 @@
 / tests/q/test_transform.q verifies every registered transform on every run
 / of the suite, so a transform whose examples fail fails the build.
 
-\d .qetl.transform
+\d .
 
 / name -> declaration, as a KEYED TABLE declared with its columns (#512).
 / .
@@ -58,27 +58,27 @@
 / so a row's default is a boolean false rather than whatever the first
 / registration happened to store. A row is .qetl.transform.def; the names are
 / .qetl.transform.defined.
-registry:([name:`symbol$()] inputs:(); output:(); fn:(); examples:(); as_of:`boolean$())
+.qetl.transform.registry:([name:`symbol$()] inputs:(); output:(); fn:(); examples:(); as_of:`boolean$())
 
 / Every registered transform's name.
 / @return a symbol vector, empty when nothing has registered
 / @eg .qetl.transform.defined[]
-defined:{[] (key registry)`name}
+.qetl.transform.defined:{[] (key .qetl.transform.registry)`name}
 
-required_keys:`inputs`output`fn`examples
+.qetl.transform.required_keys:`inputs`output`fn`examples
 
 / Absolute tolerance for float columns when comparing an output to its
 / expected table. Hand-written expected values are decimal literals, and a
 / product like 1.0842*149.82 does not land on the same binary value as the
 / literal a person types for it. 1e-9 is far below any price or P&L
 / precision this library reports, and far above the rounding noise.
-float_tolerance:1e-9
+.qetl.transform.float_tolerance:1e-9
 
 / ----------------------------------------------------------------- SCHEMA
 
 / Private: column -> meta type character.
 / @private
-col_types:{[tbl] exec c!t from meta tbl}
+.qetl.transform.col_types:{[tbl] exec c!t from meta tbl}
 
 / Private: the problems stopping `tbl` from matching a declared schema, as
 / strings - empty when it matches.
@@ -92,11 +92,11 @@ col_types:{[tbl] exec c!t from meta tbl}
 / @param ordered 1b when column order must match too (outputs)
 / @return list of strings, empty when tbl conforms
 / @private
-problems:{[schema;tbl;ordered]
+.qetl.transform.problems:{[schema;tbl;ordered]
     if[not 98h=type tbl;
         :enlist "expected an unkeyed table, got type ",string type tbl];
-    want:col_types[schema];
-    got:col_types[tbl];
+    want:.qetl.transform.col_types[schema];
+    got:.qetl.transform.col_types[tbl];
     missing:(key want) except key got;
     extra:(key got) except key want;
     out:();
@@ -106,14 +106,14 @@ problems:{[schema;tbl;ordered]
     if[ordered and not (key want)~key got;
         :enlist "columns out of order: expected ",(" " sv string key want),", got ",(" " sv string key got)];
     shared:key want;
-    bad:shared where not type_ok'[want shared;got shared;count tbl];
+    bad:shared where not .qetl.transform.type_ok'[want shared;got shared;count tbl];
     $[count bad;
         enlist "wrong type(s): ",", " sv {[w;g;c] string[c],"(expected '",w,"', got '",g,"')"}'[want bad;got bad;bad];
         ()]}
 
 / Private: does an actual meta type satisfy a declared one?
 / @private
-type_ok:{[declared;actual;n]
+.qetl.transform.type_ok:{[declared;actual;n]
     if[declared=actual; :1b];
     if[declared=" "; :1b];
     (actual=" ") and n=0}
@@ -125,27 +125,27 @@ type_ok:{[declared;actual;n]
 / its rows in a deterministic order, and a consumer that publishes them
 / sees that order.
 / @private
-differences:{[expected;actual]
+.qetl.transform.differences:{[expected;actual]
     if[not (count expected)=count actual;
         :enlist "expected ",string[count expected]," row(s), got ",string count actual];
-    s:problems[expected;actual;1b];
+    s:.qetl.transform.problems[expected;actual;1b];
     if[count s; :s];
-    t:col_types[expected];
-    bad:(key t) where not col_equal'[t key t;expected key t;actual key t];
+    t:.qetl.transform.col_types[expected];
+    bad:(key t) where not .qetl.transform.col_equal'[t key t;expected key t;actual key t];
     if[0=count bad; :()];
     / Name the first differing value, not just the column: "mismatched column(s)
     / unrealized_pnl" sends the reader back to recompute every row by hand.
     c:first bad;
-    row:first where not {[typ;e;a] col_equal[typ;enlist e;enlist a]}[t c]'[expected c;actual c];
+    row:first where not {[typ;e;a] .qetl.transform.col_equal[typ;enlist e;enlist a]}[t c]'[expected c;actual c];
     enlist "mismatched column(s) ",(", " sv string bad),
         " - first at row ",string[row]," of ",string[c],
         ": expected ",(.qf.util.full expected[c] row),", got ",.qf.util.full actual[c] row}
 
 / Private: one column's values equal, with float tolerance.
 / @private
-col_equal:{[typ;e;a]
+.qetl.transform.col_equal:{[typ;e;a]
     if[not typ in "fe"; :e~a];
-    all (null[e]=null a) and (null e) or float_tolerance>=abs e-a}
+    all (null[e]=null a) and (null e) or .qetl.transform.float_tolerance>=abs e-a}
 
 / -------------------------------------------------------------- DECLARING
 
@@ -160,10 +160,10 @@ col_equal:{[typ;e;a]
 / @return name
 / @throws error naming what is wrong with the declaration
 / @eg .qetl.transform.define[`mid_quotes;`inputs`output`fn`examples!(enlist[`quotes]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`quotes]!enlist ([] sym:enlist`EURUSD; bid:1.1; ask:1.2); ([] sym:enlist`EURUSD; mid:1.15)))]
-define:{[name;decl]
+.qetl.transform.define:{[name;decl]
     who:"define: transform ",string[name];
     if[not 99h=type decl; '"define: a transform declaration must be a dictionary"];
-    missing:required_keys where not required_keys in key decl;
+    missing:.qetl.transform.required_keys where not .qetl.transform.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     ins:decl`inputs;
     if[not (99h=type ins) and 11h=type key ins;
@@ -183,7 +183,7 @@ define:{[name;decl]
          (", " sv string key ins),$[clock;", as_of";""]];
     exs:decl`examples;
     if[0=count exs; 'who," has no examples - a transform with no expected output asserts nothing"];
-    check_example[name;ins;decl`output;clock] each exs;
+    .qetl.transform.check_example[name;ins;decl`output;clock] each exs;
     if[not any {[e] any 0<count each value e`inputs} each exs;
         'who,"'s examples are all empty - at least one must carry rows"];
     / upsert, so a second define of one name replaces its row
@@ -192,7 +192,7 @@ define:{[name;decl]
 
 / Private: an example is well-formed against its transform's declaration.
 / @private
-check_example:{[name;ins;output;clock;ex]
+.qetl.transform.check_example:{[name;ins;output;clock;ex]
     who:"define: transform ",string[name];
     if[not 99h=type ex; 'who,"'s examples must be dictionaries of inputs and expected"];
     if[not all `inputs`expected in key ex; 'who," has an example without inputs and expected"];
@@ -202,10 +202,10 @@ check_example:{[name;ins;output;clock;ex]
     if[not (99h=type given) and (asc key given)~asc key ins;
         'who," has an example whose inputs are not exactly ",", " sv string key ins];
     {[who;schema;input_name;tbl]
-        p:problems[schema;tbl;0b];
+        p:.qetl.transform.problems[schema;tbl;0b];
         if[count p; 'who,"'s example input ",string[input_name],": ","; " sv p]
       }[who]'[ins key given;key given;value given];
-    p:problems[output;ex`expected;1b];
+    p:.qetl.transform.problems[output;ex`expected;1b];
     if[count p; 'who,"'s example expected output: ","; " sv p];
     }
 
@@ -221,8 +221,8 @@ check_example:{[name;ins;output;clock;ex]
 / @param rows a non-empty example of that table
 / @return name
 / @eg .qetl.transform.passthrough[`demo_deals_passthrough;`batch;0#.qpipe.source.demo_deals.fixture[];.qpipe.source.demo_deals.fixture[]]
-passthrough:{[name;input_name;schema;rows]
-    define[name;`inputs`output`fn`examples!(
+.qetl.transform.passthrough:{[name;input_name;schema;rows]
+    .qetl.transform.define[name;`inputs`output`fn`examples!(
         (enlist input_name)!enlist schema;
         schema;
         {[batch] batch};
@@ -230,16 +230,16 @@ passthrough:{[name;input_name;schema;rows]
 
 / A transform's declaration, or an error naming it.
 / @throws error when no such transform is registered
-def:{[name]
-    if[not name in defined[];
+.qetl.transform.def:{[name]
+    if[not name in .qetl.transform.defined[];
         '"transform ",string[name]," is not registered - declare it with .qetl.transform.define"];
-    registry name}
+    .qetl.transform.registry name}
 
 / The input names a transform reads, in the order its fn takes them.
-input_names:{[name] key (def[name])`inputs}
+.qetl.transform.input_names:{[name] key (.qetl.transform.def[name])`inputs}
 
 / The empty output table a transform produces.
-output_schema:{[name] (def[name])`output}
+.qetl.transform.output_schema:{[name] (.qetl.transform.def[name])`output}
 
 / --------------------------------------------------------------- APPLYING
 
@@ -255,10 +255,10 @@ output_schema:{[name] (def[name])`output}
 / @throws error when an input or the output does not match the declaration
 / @eg .qetl.transform.define[`eg_mid;`inputs`output`fn`examples!(enlist[`q]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`q]!enlist ([] sym:enlist `EURUSD; bid:1.1; ask:1.2); ([] sym:enlist `EURUSD; mid:1.15)))];
 /   .qetl.transform.apply[`eg_mid;enlist[`q]!enlist ([] sym:`EURUSD`GBPUSD; bid:1.10 1.25; ask:1.12 1.27)]  ->  ([] sym:`EURUSD`GBPUSD; mid:1.11 1.26)
-apply:{[name;given]
-    d:def[name];
+.qetl.transform.apply:{[name;given]
+    d:.qetl.transform.def[name];
     if[d`as_of; '"apply: transform ",string[name]," takes as_of - use .qetl.transform.apply_as_of"];
-    run[name;d;given;()]}
+    .qetl.transform.run[name;d;given;()]}
 
 / Run a transform that takes the instant as its last argument.
 / @param name the transform
@@ -266,26 +266,26 @@ apply:{[name;given]
 / @param as_of the instant, read once by the caller
 / @return the output table
 / @throws error when an input or the output does not match the declaration
-apply_as_of:{[name;given;as_of]
-    d:def[name];
+.qetl.transform.apply_as_of:{[name;given;as_of]
+    d:.qetl.transform.def[name];
     if[not d`as_of; '"apply_as_of: transform ",string[name]," takes no as_of - use .qetl.transform.apply"];
     if[not -12h=type as_of; '"apply_as_of: as_of must be a timestamp"];
-    run[name;d;given;enlist as_of]}
+    .qetl.transform.run[name;d;given;enlist as_of]}
 
 / Private: check inputs, call, check the output.
 / @private
-run:{[name;d;given;extra]
+.qetl.transform.run:{[name;d;given;extra]
     ins:d`inputs;
     if[not (99h=type given) and (asc key given)~asc key ins;
         '"transform ",string[name]," takes inputs ",(", " sv string key ins),
          " - got ",$[99h=type given; ", " sv string key given; "a non-dictionary"]];
     {[name;schema;input_name;tbl]
-        p:problems[schema;tbl;0b];
+        p:.qetl.transform.problems[schema;tbl;0b];
         if[count p; '"transform ",string[name]," input ",string[input_name],": ","; " sv p]
       }[name]'[ins key ins;key ins;given key ins];
     args:(given key ins),extra;
     out:(d`fn) . args;
-    p:problems[d`output;out;1b];
+    p:.qetl.transform.problems[d`output;out;1b];
     if[count p; '"transform ",string[name]," output: ","; " sv p];
     .[{.qetl.log.dbg[x;y;z]};(name;"transform applied";
         `rows_in`rows_out!(count each given key ins;count out));::];
@@ -298,28 +298,28 @@ run:{[name;d;given;extra]
 / @return table of example (index, or `empty), passed and detail - one row
 /   per example plus one for the empty case
 / @eg .qetl.transform.verify `mid_quotes
-verify:{[name]
-    d:def[name];
+.qetl.transform.verify:{[name]
+    d:.qetl.transform.def[name];
     exs:d`examples;
-    rows:verify_example[name;d] each exs;
+    rows:.qetl.transform.verify_example[name;d] each exs;
     empty_inputs:{0#x} each d`inputs;
     empty_case:`inputs`expected!(empty_inputs;d`output);
     if[d`as_of; empty_case[`as_of]:$[count exs; first exs`as_of; 0Np]];
-    rows,:enlist verify_example[name;d;empty_case];
+    rows,:enlist .qetl.transform.verify_example[name;d;empty_case];
     ([] example:(`$string til count exs),`empty;
         passed:rows[;0];
         detail:rows[;1])}
 
 / Private: (passed; detail) for one example.
 / @private
-verify_example:{[name;d;ex]
+.qetl.transform.verify_example:{[name;d;ex]
     call:$[d`as_of;
-        {[name;ex;x] apply_as_of[name;ex`inputs;ex`as_of]}[name;ex]; / noqa: QF016 applied to :: by the trap
-        {[name;ex;x] apply[name;ex`inputs]}[name;ex]]; / noqa: QF016 applied to :: by the trap
+        {[name;ex;x] .qetl.transform.apply_as_of[name;ex`inputs;ex`as_of]}[name;ex]; / noqa: QF016 applied to :: by the trap
+        {[name;ex;x] .qetl.transform.apply[name;ex`inputs]}[name;ex]]; / noqa: QF016 applied to :: by the trap
     first_out:@[call;::;{[e] (`error;e)}];
     if[(0h=type first_out) and `error~first first_out;
         :(0b;"threw: ",last first_out)];
-    diff:differences[ex`expected;first_out];
+    diff:.qetl.transform.differences[ex`expected;first_out];
     if[count diff; :(0b;"; " sv diff)];
     second_out:@[call;::;{[e] (`error;e)}];
     if[not first_out~second_out;
@@ -328,13 +328,13 @@ verify_example:{[name;d;ex]
 
 / Verify every registered transform.
 / @return table of transform, example, passed, detail
-verify_all:{[]
-    raze {[name] update transform:name from verify name} each defined[]}
+.qetl.transform.verify_all:{[]
+    raze {[name] update transform:name from .qetl.transform.verify name} each .qetl.transform.defined[]}
 
 / Verify one transform, or throw naming the first failure.
 / @throws error naming the transform, the example and why it failed
-require_verified:{[name]
-    r:select from verify name where not passed;
+.qetl.transform.require_verified:{[name]
+    r:select from .qetl.transform.verify name where not passed;
     if[count r;
         '"transform ",string[name]," failed example ",string[first r`example],": ",first r`detail];
     name}

@@ -9,10 +9,10 @@
 / aggregation is shared with hdb_exec_bars_backfill
 / (src/etl/transforms/exec_bars.q).
 
-\d .qpipe.job.exec_bars
+\d .
 
 / The fills the aggregation reads, with the window the kind cuts for it.
-fill_rows:update bar_start:`timestamp$() from .qetl.plant.columns[`executions;`source_time`sym`size`price]
+.qpipe.job.exec_bars.fill_rows:update bar_start:`timestamp$() from .qetl.plant.columns[`executions;`source_time`sym`size`price]
 
 \d .
 

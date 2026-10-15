@@ -24,7 +24,7 @@
 / WITHOUT `time`, which .u.upd stamps on receipt (invariant 1).
 / tests/q/test_transform.q holds the two to each other.
 
-\d .qpipe.job.demo_markout
+\d .
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -33,11 +33,11 @@
 / re-derives this job's rows and replaces them, so the two must compute
 / them one way. The timer reads max_horizon from there.
 
-trades:.qetl.plant.shape `trades
+.qpipe.job.demo_markout.trades:.qetl.plant.shape `trades
 / `quotes` is the transform's NAME for its quote input, not the plant table
 / `quotes` (the vector book): its rows are plant `quote` ticks, these four columns.
-quotes:.qetl.plant.columns[`quote;`time`sym`bid`ask]
-demo_execution_quality:.qetl.plant.published `demo_execution_quality
+.qpipe.job.demo_markout.quotes:.qetl.plant.columns[`quote;`time`sym`bid`ask]
+.qpipe.job.demo_markout.demo_execution_quality:.qetl.plant.published `demo_execution_quality
 
 / ---------------------------------------------------------- THE TRANSFORM
 
@@ -47,7 +47,7 @@ demo_execution_quality:.qetl.plant.published `demo_execution_quality
 / @param trades fills, as the batch handler buffers them
 / @param quotes quote ticks, as the batch handler mirrors them
 / @return one row per fill per horizon, in fill order then horizon order
-score_markouts:{[trades;quotes]
+.qpipe.job.demo_markout.score_markouts:{[trades;quotes]
     scored:.qpipe.transform.demo_markouts.score[trades;quotes];
     select sym, trade_time, horizon, trade_price, ref_price, markout_pips, fill_id from scored}
 

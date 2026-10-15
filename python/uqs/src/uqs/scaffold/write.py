@@ -8,12 +8,52 @@ job there, a new file with its own idea of where an appended line goes here.
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from pathlib import Path
 
+from uqs import paths
 from uqs.paths import STACK_TABLES_LIST, STACK_TABLES_TEST, UqsError
 from uqs.scaffold import external, profile
 from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
+
+CONVERTER = Path("scripts") / "portable" / "flatten_contexts.py"
+
+
+def flat_source(text: str, repo_root: Path) -> str:
+    """A scaffolded src/ file with no `\\d` more than a root switch (#1411).
+
+    The templates write a job as `\\d .qpipe.job.<name>` and bare names, which is
+    how it reads; this tree keeps no q with a context two levels deep, so the
+    file is written the way every other declaration in src/ is: each name fully
+    qualified from the root. The repository's own converter does it - the same
+    lexer that wrote the rest of the tree - so a template cannot disagree with
+    it. The tree being written to may be a partial copy without the converter, so
+    the one uqs itself was installed from is the fallback.
+    """
+    path = next(
+        (p for p in (repo_root / CONVERTER, paths.repo_root() / CONVERTER) if p.is_file()), None
+    )
+    if "\\d ." not in text or path is None:
+        return text
+    spec = importlib.util.spec_from_file_location("flatten_contexts_scaffold", path)
+    if spec is None or spec.loader is None:  # pragma: no cover - a broken checkout
+        return text
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    module = sys.modules[spec.name]
+    converter = module.Converter("4.0", False)
+    converter.collect("scaffold.q", text)
+    converter.propagate()
+    result = converter.convert("scaffold.q", text)
+    if result.refusals:
+        raise UqsError(
+            "the scaffolded file cannot be written with fully qualified names: "
+            + "; ".join(f"line {r.line}: {r.reason}" for r in result.refusals)
+        )
+    return result.output
 
 
 def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
@@ -37,7 +77,8 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
         match action.mode:
             case WriteMode.CREATE:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(action.body)
+                is_src = action.path.parts[:1] == ("src",) and action.path.suffix == ".q"
+                target.write_text(flat_source(action.body, repo_root) if is_src else action.body)
             case WriteMode.APPEND:
                 target.write_text(_appended(target.read_text(), action))
             case _:  # pragma: no cover - unreachable while WriteMode has two members

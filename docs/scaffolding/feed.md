@@ -31,13 +31,13 @@ scaffold pulsefeed:
 ## What you get
 
 ```q
-\d .qpipe.job.pulsefeed
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qetl.job.stream.unwired `pulsefeed;
+.qpipe.job.pulsefeed.publish:.qetl.job.stream.unwired `pulsefeed;
 
-on_timer:{[]
+.qpipe.job.pulsefeed.on_timer:{[]
     '"pulsefeed.on_timer: not implemented";
     }
 

@@ -23,8 +23,8 @@ from uqs.scaffold.columns import (
     TIME_COLUMN,
     is_known,
     nested_declaration,
+    plant_table_definition,
     sample_value,
-    table_definition,
 )
 from uqs.scaffold.docs import NORMALISERS, doc_stub_actions
 from uqs.scaffold.jobs import (
@@ -161,7 +161,7 @@ publish:.qetl.job.stream.unwired `{name};
         FileAction(
             TABLES_FILE,
             f"\n/ {proc}'s canonical output. <one line: what a row means>\n"
-            f"{table_definition(name, columns)}\n{nested_declaration(name, columns)}",
+            f"{plant_table_definition(name, columns)}\n{nested_declaration(name, columns)}",
             mode=WriteMode.APPEND,
         ),
         _expected_table_action(name),

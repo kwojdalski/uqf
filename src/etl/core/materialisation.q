@@ -36,7 +36,7 @@
 /      another, so every read filters on it and intervals from different
 /      versions are NEVER merged to satisfy a dependency.
 
-\d .qetl.coverage
+\d .
 
 / ---------------------------------------------------------------- SCHEMA
 
@@ -106,7 +106,7 @@
 / .
 / Deliberately one constant in one place: changing it should be an edit here
 / plus the writer's column list, not a hunt through the file.
-schema:`dataset`partition`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id
+.qetl.coverage.schema:`dataset`partition`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id
 
 / Create the ledger if absent.
 / .
@@ -137,7 +137,7 @@ schema:`dataset`partition`source_version`range_from`range_to`rows_published`reco
 / That is the classic bitemporal encoding and it is chosen here specifically
 / because this repository keeps being bitten by null comparisons that return
 / a plausible answer instead of erroring.
-still_current:0Wp
+.qetl.coverage.still_current:0Wp
 
 / Create the root ledger table if it is absent, and return its name.
 / .
@@ -147,8 +147,8 @@ still_current:0Wp
 / ledger[] rather than naming the table directly.
 / @return the ledger table name
 / @eg .qetl.coverage.init_ledger[]
-init_ledger:{[]
-    if[not `etl_coverage in tables `.; `etl_coverage set empty_ledger[]];
+.qetl.coverage.init_ledger:{[]
+    if[not `etl_coverage in tables `.; `etl_coverage set .qetl.coverage.empty_ledger[]];
     `etl_coverage}
 
 / The ledger's shape, typed and empty: what init_ledger creates and what
@@ -156,7 +156,7 @@ init_ledger:{[]
 / (#1101).
 / @return the empty ledger
 / @eg cols .qetl.coverage.empty_ledger[]
-empty_ledger:{[] ([] dataset:`symbol$(); partition:`symbol$();
+.qetl.coverage.empty_ledger:{[] ([] dataset:`symbol$(); partition:`symbol$();
     source_version:`symbol$();
     range_from:`timestamp$(); range_to:`timestamp$();
     rows_published:`long$(); recorded_at:`timestamp$();
@@ -164,7 +164,7 @@ empty_ledger:{[] ([] dataset:`symbol$(); partition:`symbol$();
 
 / The root ledger table. Exists so no read below names `etl_coverage` bare -
 / see init_ledger's note on namespace resolution.
-ledger:{[] value `etl_coverage}
+.qetl.coverage.ledger:{[] value `etl_coverage}
 
 / Attach to the ledger, validating its shape only if it already existed.
 / .
@@ -194,10 +194,10 @@ ledger:{[] value `etl_coverage}
 / @throws error, via require_schema, when an existing ledger has a
 /   different shape
 / @eg .qetl.coverage.attach[]
-attach:{[]
+.qetl.coverage.attach:{[]
     existed:`etl_coverage in tables `.;
-    init_ledger[];
-    if[existed; require_schema[]];
+    .qetl.coverage.init_ledger[];
+    if[existed; .qetl.coverage.require_schema[]];
     / Pick up what earlier processes recorded. THIS is what makes the ledger's
     / "durable cross-process completeness" true rather than aspirational: the
     / ledger used to be an in-memory table that died with the worker, so a
@@ -205,7 +205,7 @@ attach:{[]
     / with it and skip-what-is-covered could never fire across runs.
     / reload validates the shape it finds, so an older file is refused by
     / name rather than read.
-    reload[];
+    .qetl.coverage.reload[];
     `etl_coverage}
 
 / Refuse to trust a ledger whose shape is not the one this file declares.
@@ -229,10 +229,10 @@ attach:{[]
 / ever confirm itself.
 / @return 1b when the live shape matches
 / @throws error naming the difference, and what it would silently do
-require_schema:{[]
-    live:exec c from 0!meta ledger[];
-    missing:schema where not schema in live;
-    extra:live where not live in schema;
+.qetl.coverage.require_schema:{[]
+    live:exec c from 0!meta .qetl.coverage.ledger[];
+    missing:.qetl.coverage.schema where not .qetl.coverage.schema in live;
+    extra:live where not live in .qetl.coverage.schema;
     if[count missing;
         '"require_schema: etl_coverage is missing ",(", " sv string missing),
          " - this ledger was built to a different shape, and reads here would fail or return nulls"];
@@ -245,7 +245,7 @@ require_schema:{[]
          " - an extra column that distinguishes rows makes reads aggregate across it and report a gap-ridden range as complete"];
     / The same names with another type pass a names check and fail later, in
     / a timestamp comparison or a guid match far from here (#1101).
-    .qetl.job.bounded.state.require_types[`etl_coverage;ledger[];empty_ledger[]];
+    .qetl.job.bounded.state.require_types[`etl_coverage;.qetl.coverage.ledger[];.qetl.coverage.empty_ledger[]];
     1b}
 
 / -------------------------------------------------------------- INTERVALS
@@ -267,7 +267,7 @@ require_schema:{[]
 / persist; a process that cannot fails the same way it already failed.
 / @return the ledger file path
 / @eg .qetl.coverage.ledger_path[]
-ledger_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_coverage"}
+.qetl.coverage.ledger_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_coverage"}
 
 / Private: this ledger's mutex path. Distinct from .qetl.job.bounded.state's per-worker
 / INSTANCE lock, which guards something else entirely (one instance of one
@@ -275,7 +275,7 @@ ledger_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_coverage"}
 / short critical section several workers legitimately contend for, so that
 / one waits - see .qetl.job.bounded.state.with_file_lock.
 / @private
-lock_path:{[] .qetl.job.bounded.state.file_lock_path `etl_coverage}
+.qetl.coverage.lock_path:{[] .qetl.job.bounded.state.file_lock_path `etl_coverage}
 
 / Run `f . args` holding this ledger's mutex.
 / .
@@ -286,7 +286,7 @@ lock_path:{[] .qetl.job.bounded.state.file_lock_path `etl_coverage}
 / @param args its arguments, as a list
 / @return whatever f returns
 / @eg .qetl.coverage.with_lock[{[n] n};enlist 1]
-with_lock:{[f;args] .qetl.job.bounded.state.with_file_lock[`etl_coverage;f;args]}
+.qetl.coverage.with_lock:{[f;args] .qetl.job.bounded.state.with_file_lock[`etl_coverage;f;args]}
 
 / Write the in-memory ledger to disk.
 / .
@@ -299,7 +299,7 @@ with_lock:{[f;args] .qetl.job.bounded.state.with_file_lock[`etl_coverage;f;args]
 / .
 / Call only under with_lock.
 / @return the path written
-persist:{[] .qetl.job.bounded.state.durable_set[ledger_path[];ledger[]]}
+.qetl.coverage.persist:{[] .qetl.job.bounded.state.durable_set[.qetl.coverage.ledger_path[];.qetl.coverage.ledger[]]}
 
 / Replace the in-memory ledger with the one on disk, if there is one.
 / .
@@ -311,11 +311,11 @@ persist:{[] .qetl.job.bounded.state.durable_set[ledger_path[];ledger[]]}
 / No file is not an error: a first run has nothing to reload.
 / @return the ledger table name
 / @eg .qetl.coverage.reload[]
-reload:{[]
-    p:hsym `$ledger_path[];
-    if[()~key p; :init_ledger[]];
-    `etl_coverage set .qetl.job.bounded.state.durable_get ledger_path[];
-    require_schema[];
+.qetl.coverage.reload:{[]
+    p:hsym `$.qetl.coverage.ledger_path[];
+    if[()~key p; :.qetl.coverage.init_ledger[]];
+    `etl_coverage set .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[];
+    .qetl.coverage.require_schema[];
     `etl_coverage}
 
 / The claims one dataset, partition and release holds at `at`, read from
@@ -337,11 +337,11 @@ reload:{[]
 / @param at the as-of: claims recorded by then and not yet superseded
 / @return table range_from, range_to - for compose and gaps
 / @eg count .qetl.coverage.claims[`no_such_dataset;`;`v1;.z.p]  ->  0
-claims:{[ds;part;release;at]
-    p:hsym `$ledger_path[];
+.qetl.coverage.claims:{[ds;part;release;at]
+    p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
           range_from:`timestamp$(); range_to:`timestamp$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
-        .qetl.job.bounded.state.durable_get ledger_path[]];
+        .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     select range_from, range_to from t
         where dataset=ds, partition=part, source_version=release,
               recorded_at<=at, at<superseded_at, range_to>range_from}
@@ -359,7 +359,7 @@ claims:{[ds;part;release;at]
 / passes no argument list q can match, and the error handler swallows the
 / resulting rank error instead of the failure it was written for.
 / @private
-current_run:{[] @[{.qetl.run.current[]};::;0Ng]}
+.qetl.coverage.current_run:{[] @[{.qetl.run.current[]};::;0Ng]}
 
 / Stage a completion event for one completed bounded window.
 / .
@@ -384,24 +384,24 @@ current_run:{[] @[{.qetl.run.current[]};::;0Ng]}
 / @return the number of rows now in the ledger
 / @throws error if source_version is null, or the interval is empty/reversed
 / @eg .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
-stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_published]
+.qetl.coverage.stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_published]
     if[null source_version;
         '"stage_completion: source_version must be set - coverage under one source release says nothing about another"];
-    require_interval[range_from;range_to];
-    init_ledger[];
+    .qetl.coverage.require_interval[range_from;range_to];
+    .qetl.coverage.init_ledger[];
     / Reload, insert, persist - all three under the lock, so a second process
     / staging concurrently cannot lose this row by writing a copy of the
     / ledger it read before this insert existed.
-    with_lock[{[row]
-        reload[];
+    .qetl.coverage.with_lock[{[row]
+        .qetl.coverage.reload[];
         `etl_coverage insert row;
-        persist[]};
+        .qetl.coverage.persist[]};
         enlist (dataset;partition;source_version;range_from;range_to;
-                "j"$rows_published;.z.p;still_current;current_run[])];
+                "j"$rows_published;.z.p;.qetl.coverage.still_current;.qetl.coverage.current_run[])];
     .[{.qetl.log.dbg[x;y;z]};(dataset;"coverage recorded";
         `partition`source_version`range_from`range_to`rows!
             (partition;source_version;range_from;range_to;"j"$rows_published));::];
-    count ledger[]}
+    count .qetl.coverage.ledger[]}
 
 / ------------------------------------------------------------------ READ
 
@@ -424,9 +424,9 @@ stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_pub
 / "no read unions across partitions" a property of the code rather than a
 / rule someone has to keep.
 / @private
-valid_at:{[ds;part;version;as_of]
-    init_ledger[];
-    select range_from, range_to from ledger[]
+.qetl.coverage.valid_at:{[ds;part;version;as_of]
+    .qetl.coverage.init_ledger[];
+    select range_from, range_to from .qetl.coverage.ledger[]
         where dataset=ds, partition=part, source_version=version,
               recorded_at<=as_of, as_of<superseded_at}
 
@@ -446,8 +446,8 @@ valid_at:{[ds;part;version;as_of]
 / names, and `where dataset=dataset` compares the column to itself and
 / matches every row. Same trap as gaps above.
 / @eg .qetl.coverage.intervals[`demo_deals;`;`v1;.z.p]
-intervals:{[ds;part;version;as_of]
-    compose valid_at[ds;part;version;as_of]}
+.qetl.coverage.intervals:{[ds;part;version;as_of]
+    .qetl.coverage.compose .qetl.coverage.valid_at[ds;part;version;as_of]}
 
 / Is [range_from;range_to) fully covered for this dataset, partition and
 / release?
@@ -457,13 +457,13 @@ intervals:{[ds;part;version;as_of]
 / naming a partition would rebuild exactly the bug the column exists to
 / prevent - which is why there is no such overload.
 / @return 1b when there are no gaps
-is_covered:{[ds;part;version;as_of;from_ts;to_ts]
-    0=count gaps[from_ts;to_ts;intervals[ds;part;version;as_of]]}
+.qetl.coverage.is_covered:{[ds;part;version;as_of;from_ts;to_ts]
+    0=count .qetl.coverage.gaps[from_ts;to_ts;.qetl.coverage.intervals[ds;part;version;as_of]]}
 
 / The uncovered sub-ranges of a requested range, for a caller that wants to
 / narrow its request rather than be refused outright.
-missing:{[ds;part;version;as_of;from_ts;to_ts]
-    gaps[from_ts;to_ts;intervals[ds;part;version;as_of]]}
+.qetl.coverage.missing:{[ds;part;version;as_of;from_ts;to_ts]
+    .qetl.coverage.gaps[from_ts;to_ts;.qetl.coverage.intervals[ds;part;version;as_of]]}
 
 / Admission check: refuse the caller unless the range is fully covered.
 / .
@@ -474,8 +474,8 @@ missing:{[ds;part;version;as_of;from_ts;to_ts]
 / and simply no longer in memory. Callers must therefore route this read,
 / not run it against a single tier.
 / @throws error naming the missing ranges when not fully covered
-require_covered:{[ds;part;version;as_of;from_ts;to_ts]
-    m:missing[ds;part;version;as_of;from_ts;to_ts];
+.qetl.coverage.require_covered:{[ds;part;version;as_of;from_ts;to_ts]
+    m:.qetl.coverage.missing[ds;part;version;as_of;from_ts;to_ts];
     .[{.qetl.log.dbg[x;y;z]};(ds;"upstream coverage check";
         `partition`source_version`range_from`range_to`gaps!(part;version;from_ts;to_ts;count m));::];
     if[count m;
@@ -501,10 +501,10 @@ require_covered:{[ds;part;version;as_of;from_ts;to_ts]
 / @param id the run id
 / @return the coverage rows that run staged
 / @eg .qetl.coverage.materialisations_of[.qetl.run.current[]]
-materialisations_of:{[id]
-    init_ledger[];
+.qetl.coverage.materialisations_of:{[id]
+    .qetl.coverage.init_ledger[];
     target:id;
-    select from ledger[] where run_id=target}
+    select from .qetl.coverage.ledger[] where run_id=target}
 
 / Which runs contributed to a dataset's coverage at one release.
 / .
@@ -522,9 +522,9 @@ materialisations_of:{[id]
 / @param version the source release
 / @return the distinct run ids, in first-recorded order
 / @eg .qetl.coverage.contributing_runs[`demo_deals;`;`v1]
-contributing_runs:{[ds;part;version]
-    init_ledger[];
-    distinct exec run_id from `recorded_at xasc ledger[]
+.qetl.coverage.contributing_runs:{[ds;part;version]
+    .qetl.coverage.init_ledger[];
+    distinct exec run_id from `recorded_at xasc .qetl.coverage.ledger[]
         where dataset=ds, partition=part, source_version=version}
 
 / Withdraw the coverage claims overlapping [from_ts;to_ts), as of now.
@@ -563,17 +563,17 @@ contributing_runs:{[ds;part;version]
 / @return the number of claims withdrawn
 / @throws error when the interval is not a proper half-open range
 / @eg .qetl.coverage.supersede[`demo_deals;`;`v1;2026.09.12D00:00;2026.09.13D00:00]
-supersede:{[ds;part;version;from_ts;to_ts]
-    require_interval[from_ts;to_ts];
-    init_ledger[];
+.qetl.coverage.supersede:{[ds;part;version;from_ts;to_ts]
+    .qetl.coverage.require_interval[from_ts;to_ts];
+    .qetl.coverage.init_ledger[];
     / Read-modify-write under the lock, like stage_completion. A supersession
     / applied to a stale copy of the ledger would be lost by the next writer,
     / and a withdrawn claim silently coming back is the worst failure this
     / file has.
-    with_lock[{[ds;part;version;from_ts;to_ts]
-        reload[];
-        n:supersede_locked[ds;part;version;from_ts;to_ts];
-        persist[];
+    .qetl.coverage.with_lock[{[ds;part;version;from_ts;to_ts]
+        .qetl.coverage.reload[];
+        n:.qetl.coverage.supersede_locked[ds;part;version;from_ts;to_ts];
+        .qetl.coverage.persist[];
         n};
         (ds;part;version;from_ts;to_ts)]}
 
@@ -581,23 +581,23 @@ supersede:{[ds;part;version;from_ts;to_ts]
 / already reloaded. Split out so the locked wrapper above reads as what it is
 / rather than burying the interval algebra inside a lambda.
 / @private
-supersede_locked:{[ds;part;version;from_ts;to_ts]
+.qetl.coverage.supersede_locked:{[ds;part;version;from_ts;to_ts]
     now:.z.p;
     / `cur` is a LOCAL copy of still_current, not the namespace global.
     / Inside \d .qetl.coverage a bare name in a qSQL where-clause does not resolve to
     / the namespace's own global - the same trap this file documents at
     / length for `etl_coverage`, and it throws 'still_current rather than
     / silently matching nothing, which is the better of the two failures.
-    cur:still_current;
+    cur:.qetl.coverage.still_current;
     / Half-open overlap: two intervals overlap when each starts before the
     / other ends. Both bounds are strict for that reason - [1;2) and [2;3)
     / share an endpoint and do NOT overlap.
-    idx:exec i from ledger[]
+    idx:exec i from .qetl.coverage.ledger[]
         where dataset=ds, partition=part, source_version=version,
               superseded_at=cur,
               range_from<to_ts, from_ts<range_to;
     if[0=count idx; :0];
-    `etl_coverage set update superseded_at:now from ledger[] where i in idx;
+    `etl_coverage set update superseded_at:now from .qetl.coverage.ledger[] where i in idx;
     count idx}
 
 / Every claim ever made for a dataset and source_version, withdrawn or not.
@@ -609,9 +609,9 @@ supersede_locked:{[ds;part;version;from_ts;to_ts]
 / @param version the source release
 / @return the ledger rows for this dataset/partition/version, in record order
 / @eg .qetl.coverage.history[`demo_deals;`;`v1]
-history:{[ds;part;version]
-    init_ledger[];
-    select from ledger[]
+.qetl.coverage.history:{[ds;part;version]
+    .qetl.coverage.init_ledger[];
+    select from .qetl.coverage.ledger[]
         where dataset=ds, partition=part, source_version=version}
 
 / ------------------------------------------------------- QUERY READINESS
@@ -639,40 +639,40 @@ history:{[ds;part;version]
 
 / Where the readiness watermarks are kept, beside the coverage ledger.
 / @return the path, as a string
-ready_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_ready"}
+.qetl.coverage.ready_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_ready"}
 
 / Private: the watermarks as stored, or none.
 / @private
-ready_table:{[]
-    if[()~key hsym `$ready_path[]; :empty_ready[]];
-    t:.qetl.job.bounded.state.durable_get ready_path[];
+.qetl.coverage.ready_table:{[]
+    if[()~key hsym `$.qetl.coverage.ready_path[]; :.qetl.coverage.empty_ready[]];
+    t:.qetl.job.bounded.state.durable_get .qetl.coverage.ready_path[];
     / held to its typed shape like the coverage ledger (#1101)
-    .qetl.job.bounded.state.require_types[`etl_ready;0!t;0!empty_ready[]];
+    .qetl.job.bounded.state.require_types[`etl_ready;0!t;0!.qetl.coverage.empty_ready[]];
     t}
 
 / The readiness watermarks' shape, typed and empty.
 / @return the empty keyed table
 / @eg cols .qetl.coverage.empty_ready[]
-empty_ready:{[] ([dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$()] ready_at:`timestamp$())}
+.qetl.coverage.empty_ready:{[] ([dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$()] ready_at:`timestamp$())}
 
 / Whether this process's writes become queryable only when its deployment
 / says so (release_ready). Set by the deployment, never by a worker.
-defer_ready:0b
+.qetl.coverage.defer_ready:0b
 
 / The (dataset, partition, source_version) written since the last release,
 / while readiness is deferred.
-unready:([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$())
+.qetl.coverage.unready:([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$())
 
 / Advance the watermarks of `keys` to `at`. Never moves one back.
 / @param ks table dataset, partition, source_version
 / @param at the time up to which their claims are queryable
 / @return the number of keys advanced
-mark_ready:{[ks;at]
+.qetl.coverage.mark_ready:{[ks;at]
     if[0=count ks; :0];
     .qetl.job.bounded.state.with_file_lock[`etl_ready;{[ks;at]
-        t:ready_table[];
+        t:.qetl.coverage.ready_table[];
         new:update ready_at:ready_at|at from distinct[ks] lj t;
-        .qetl.job.bounded.state.durable_set[ready_path[];t upsert `dataset`partition`source_version xkey new];
+        .qetl.job.bounded.state.durable_set[.qetl.coverage.ready_path[];t upsert `dataset`partition`source_version xkey new];
         count new};(ks;at)]}
 
 / A window's coverage was just staged: queryable now, or once the deployment
@@ -681,9 +681,9 @@ mark_ready:{[ks;at]
 / @param part the partition, or `
 / @param version the release the claim is under
 / @return nothing
-note_written:{[ds;part;version]
+.qetl.coverage.note_written:{[ds;part;version]
     k:([] dataset:enlist ds; partition:enlist part; source_version:enlist version);
-    $[defer_ready; `.qetl.coverage.unready set distinct unready,k; mark_ready[k;.z.p]];
+    $[.qetl.coverage.defer_ready; `.qetl.coverage.unready set distinct .qetl.coverage.unready,k; .qetl.coverage.mark_ready[k;.z.p]];
     }
 
 / The deployment's readers have caught up with everything written before
@@ -691,9 +691,9 @@ note_written:{[ds;part;version]
 / an unreleased window is reported not queryable, which is the safe side.
 / @param at the time the readers' view was taken (before a reload was asked)
 / @return the number of keys released
-release_ready:{[at]
-    n:mark_ready[unready;at];
-    `.qetl.coverage.unready set 0#unready;
+.qetl.coverage.release_ready:{[at]
+    n:.qetl.coverage.mark_ready[.qetl.coverage.unready;at];
+    `.qetl.coverage.unready set 0#.qetl.coverage.unready;
     n}
 
 / Has this key coverage its readers may not yet see - a claim recorded after
@@ -703,9 +703,9 @@ release_ready:{[at]
 / @param part the partition, or `
 / @param version the release
 / @return 1b when some current claim is newer than the watermark
-outstanding:{[ds;part;version]
-    w:(ready_table[])[`dataset`partition`source_version!(ds;part;version)]`ready_at;
-    c:claims_at[ds;part;version;.z.p];
+.qetl.coverage.outstanding:{[ds;part;version]
+    w:(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(ds;part;version)]`ready_at;
+    c:.qetl.coverage.claims_at[ds;part;version;.z.p];
     $[0=count c; 0b; null w; 1b; any w<c`recorded_at]}
 
 / The coverage claims a reader can query now: claims as `claims` returns
@@ -717,18 +717,18 @@ outstanding:{[ds;part;version]
 / @param at the as-of
 / @return table range_from, range_to - for compose and gaps
 / @eg count .qetl.coverage.ready_claims[`no_such_dataset;`;`v1;.z.p]  ->  0
-ready_claims:{[ds;part;release;at]
-    w:(ready_table[])[`dataset`partition`source_version!(ds;part;release)]`ready_at;
+.qetl.coverage.ready_claims:{[ds;part;release;at]
+    w:(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(ds;part;release)]`ready_at;
     w:at&0Np^w;
-    select range_from, range_to from claims_at[ds;part;release;at] where recorded_at<=w}
+    select range_from, range_to from .qetl.coverage.claims_at[ds;part;release;at] where recorded_at<=w}
 
 / Private: the current claims with their recorded_at - claims' read.
 / @private
-claims_at:{[ds;part;release;at]
-    p:hsym `$ledger_path[];
+.qetl.coverage.claims_at:{[ds;part;release;at]
+    p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
           range_from:`timestamp$(); range_to:`timestamp$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
-        .qetl.job.bounded.state.durable_get ledger_path[]];
+        .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     select range_from, range_to, recorded_at from t
         where dataset=ds, partition=part, source_version=release,
               recorded_at<=at, at<superseded_at, range_to>range_from}

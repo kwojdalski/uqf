@@ -12,7 +12,7 @@
 / reload. Loaded in plain q - a test, or an operator at the prompt - it is
 / .qetl.io.memory, and the rows are in a duckdb_deals table in that process.
 
-\d .qpipe.job.duckdb_deals_backfill
+\d .
 
 / Refuse a batch that is shaped correctly but cannot be true: a
 / non-positive rate or notional, or a null deal_id - conditions no correct
@@ -20,7 +20,7 @@
 / @param batch the transformed rows of one window
 / @return a table check/status/detail, one row per offending deal; empty when the batch passes
 / @eg .qpipe.job.duckdb_deals_backfill.quality_check[.qpipe.source.duckdb_deals.fixture[]]  ->  an empty table
-quality_check:{[batch]
+.qpipe.job.duckdb_deals_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     bad_rate:select from batch where not rate>0;
     bad_notional:select from batch where not notional>0;
@@ -37,7 +37,7 @@ quality_check:{[batch]
 / @param batch the transformed rows of one window
 / @return a dictionary of labels for the window's materialisation
 / @eg .qpipe.job.duckdb_deals_backfill.facts[.qpipe.source.duckdb_deals.fixture[]]
-facts:{[batch]
+.qpipe.job.duckdb_deals_backfill.facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     `deals`pairs`first_deal`last_deal!(count batch;count distinct batch`sym;min batch`deal_time;max batch`deal_time)}
 

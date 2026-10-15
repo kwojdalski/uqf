@@ -49,7 +49,11 @@ def test_torqs_renamed_levels_are_among_the_five():
     """scripts/torqconfig/settings/default.q renames TorQ's INF, WARN and ERR
     in every TorQ process; each must land on a name `--level` takes."""
     settings = UQF_ROOT / "scripts" / "torqconfig" / "settings" / "default.q"
-    line = next(ln for ln in settings.read_text().splitlines() if ln.startswith("uqf_names:"))
+    line = next(
+        ln
+        for ln in settings.read_text().splitlines()
+        if re.match(r"(?:\.[A-Za-z_][\w.]*\.)?uqf_names:", ln)
+    )
     torq, ours = line.split(":", 1)[1].split("!")
     assert re.findall(r"`(\w+)", torq) == ["INF", "WARN", "ERR"]
     assert set(re.findall(r"`(\w+)", ours)) <= set(logs.LEVEL_CHOICES)
@@ -95,7 +99,9 @@ def q_definition(file: str, name: str) -> str:
     """The text of `name:`'s definition in src/etl/core/`file`, from its first
     line to the next top-level line - enough to read a list or a body."""
     lines = (CORE / file).read_text().splitlines()
-    start = next((i for i, ln in enumerate(lines) if ln.startswith(f"{name}:")), None)
+    start = next(
+        (i for i, ln in enumerate(lines) if re.match(rf"(?:\.[A-Za-z_][\w.]*\.)?{name}:", ln)), None
+    )
     assert start is not None, f"{file} no longer defines `{name}:` the way this test reads it"
     end = next(
         (i for i in range(start + 1, len(lines)) if lines[i] and not lines[i][0].isspace()),
@@ -126,9 +132,12 @@ def test_status_dir_is_qs_rule(tmp_path):
 def test_checkpoint_path_is_qs_rule(tmp_path, monkeypatch):
     """`uqs remove checkpoint` deletes the file q's checkpoint_path names:
     `<worker>.checkpoint` in lock_dir, which is the status directory."""
-    assert q_definition("backfill_state.q", "lock_dir") == "lock_dir:{[] .qetl.status.status_dir[]}"
+    state = ".qetl.job.bounded.state"
+    assert q_definition("backfill_state.q", "lock_dir") == (
+        f"{state}.lock_dir:{{[] .qetl.status.status_dir[]}}"
+    )
     body = q_definition("backfill_state.q", "checkpoint_path")
-    assert '(lock_dir[]),"/",string[worker],".checkpoint"' in body
+    assert f'({state}.lock_dir[]),"/",string[worker],".checkpoint"' in body
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
     paths: Any = SimpleNamespace(torqdata=tmp_path / "unused")
     assert backfill.checkpoint_path(paths, "w") == tmp_path / "w.checkpoint"

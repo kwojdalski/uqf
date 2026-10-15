@@ -25,7 +25,7 @@ ROOT = repo_root()
 
 #: A table only the staged tree declares, as an installed bundle's would be.
 STAGED_ONLY = "staged_only_tbl"
-STAGED_DEF = f"{STAGED_ONLY}:([]time:`timestamp$(); sym:`symbol$(); px:`float$())"
+STAGED_DEF = f".qetl.plant.{STAGED_ONLY}:([]time:`timestamp$(); sym:`symbol$(); px:`float$())"
 
 
 def _copy_tree(into: Path) -> Path:
@@ -84,14 +84,17 @@ def test_the_vendored_only_runtime_reads_the_builders_starter_pack(staged, monke
 
 
 def test_q_4_0_converted_declarations_are_read(staged, monkeypatch):
-    """--q-target 4.0 qualifies plant_tables.q's names under `.qetl.plant`
-    (#861); the shape still has every table, under its own name."""
+    """plant_tables.q holds its names qualified under `.qetl.plant` (#1411; a
+    4.0 build used to do that to them, #861), so converting leaves them be; the
+    shape still has every table, under its own name."""
     from uqs.deploy import portable
     from uqs.model import schemas
 
     portable.convert(staged, [str(TABLES_FILE)], "4.0", [], False)
     text = (staged / TABLES_FILE).read_text()
-    assert f".qetl.plant.{STAGED_ONLY}:([]" in text, "the converter no longer qualifies names"
+    assert f".qetl.plant.{STAGED_ONLY}:([]" in text, (
+        "plant_tables.q no longer holds its names qualified"
+    )
     monkeypatch.delenv(TORQAPPHOME_ENV, raising=False)
     shape = declared_shape(staged, "uqf", ROOT)
     assert shape is not None
@@ -114,9 +117,7 @@ STREAM = """\
 .qetl.job.stream.define[`piggy_spread;
     `procname`subscribe_to`publishes`note!(`piggy_spread1;enlist `quote;enlist `piggy_quote;
         "copies quotes into piggy_quote")];
-\\d .qpipe.job.piggy_spread
-upd:{[t;x] .qpipe.job.piggy_spread.publish[`piggy_quote;x]}
-\\d .
+.qpipe.job.piggy_spread.upd:{[t;x] .qpipe.job.piggy_spread.publish[`piggy_quote;x]}
 """
 
 

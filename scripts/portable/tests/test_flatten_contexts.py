@@ -44,6 +44,20 @@ def convert(files: dict[str, str], target: str = "4.0", allow: bool = False):
     return {path: conv.convert(path, text) for path, text in files.items()}
 
 
+def nested_corpus() -> dict[str, str]:
+    """Every tracked q file as a nested-context file, the form 4.0/PeachQ cannot
+    load. The tree writes its own q flat (#1411), so the real-world cases below
+    take the --target 5.0 view of it: the same code, with each flat block put
+    back inside its context."""
+    files = subprocess.run(
+        ["git", "-C", str(REPO), "ls-files", "*.q"], capture_output=True, text=True, check=True
+    ).stdout.split()
+    originals = {
+        p: (REPO / p).read_text(encoding="utf-8") for p in files if not p.startswith("lib/")
+    }
+    return {p: r.output for p, r in convert(originals, target="5.0").items()}
+
+
 def one(text: str, **kw) -> fc.FileResult:
     return convert({"f.q": text}, **kw)["f.q"]
 
@@ -244,9 +258,13 @@ def test_every_tracked_q_file_lexes_back_to_itself():
 
 def test_the_status_and_interval_modules_convert_without_refusal():
     paths = ["src/etl/core/status.q", "src/etl/core/intervals.q"]
-    results = convert({p: (REPO / p).read_text(encoding="utf-8") for p in paths})
+    corpus = nested_corpus()
+    results = convert({p: corpus[p] for p in paths})
     for p in paths:
-        assert results[p].action == "transformed" and not results[p].refusals, p
+        assert not results[p].refusals, p
+    # intervals.q stays flat in the 5.0 view (a qSQL column is also a global
+    # there), so only status.q arrives nested and needs converting.
+    assert results["src/etl/core/status.q"].action == "transformed"
     gaps = results["src/etl/core/intervals.q"].output
     assert ".qetl.coverage.require_interval[from_ts;to_ts];" in gaps
     assert "merged:.qetl.coverage.compose[covered];" in gaps
@@ -761,8 +779,13 @@ def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_p
 def test_the_converted_status_and_interval_modules_work(interp, tmp_path, capsys):
     q, nested_ok = _q_for(interp)
     out = tmp_path / "portable"
+    corpus = nested_corpus()
+    root = tmp_path / "nested"
+    for rel in ("src/etl/core/status.q", "src/etl/core/intervals.q"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(corpus[rel], encoding="utf-8")
     code, report = _run(
-        REPO,
+        root,
         "src/etl/core/status.q",
         "src/etl/core/intervals.q",
         "--out",
@@ -775,7 +798,7 @@ def test_the_converted_status_and_interval_modules_work(interp, tmp_path, capsys
     )
     assert (code, report["status"]) == (0, "ok"), report["validation"]
     assert report["validation"][0]["output"][-1] == "PORTABLE_CHECK_OK status_intervals"
-    original = _run_q(q, REPO, CHECK)
+    original = _run_q(q, root, CHECK)
     if nested_ok:
         assert "PORTABLE_CHECK_OK" in original.stdout, original.stderr
     else:
@@ -806,10 +829,11 @@ def test_bindings_agree_with_qs_own_parser(interp, tmp_path):
         ["git", "-C", str(REPO), "ls-files", "*.q"], capture_output=True, text=True, check=True
     ).stdout.split()
     cases = []
+    corpus = nested_corpus()
     for rel in files:
         if rel.startswith("lib/"):
             continue
-        toks = fc.lex((REPO / rel).read_text(encoding="utf-8"))
+        toks = fc.lex(corpus[rel])
         for lo, hi, ctx in fc._contexts(toks):
             if toks[lo].kind in ("sys", "tail") or not fc._nested(ctx):
                 continue

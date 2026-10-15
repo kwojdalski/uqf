@@ -5,14 +5,14 @@
 / live job's rows. So they aggregate with this one function, and cut windows
 / with the one `width`, here.
 
-\d .qpipe.transform.exec_bars
+\d .
 
 / The bar width. The live job declares it and the twin cuts by it; a backfill
 / window should start on a multiple of it, or its first and last bars are partial.
-width:0D00:01:00
+.qpipe.transform.exec_bars.width:0D00:01:00
 
 / How long after a window's end a fill may arrive and still amend its bar.
-lateness:0D00:00:05
+.qpipe.transform.exec_bars.lateness:0D00:00:05
 
 / One bar per sym per window: open and close are the first and last fill by
 / source_time (not arrival order), vwap is size-weighted, volume the summed size.
@@ -20,7 +20,7 @@ lateness:0D00:00:05
 / @param x fills carrying source_time, sym, size, price and bar_start
 / @return the bars, in exec_bar's columns without time
 / @eg count .qpipe.transform.exec_bars.bars ([] source_time:2#2026.10.09D10:00:05; sym:2#`EURUSD; size:1 2f; price:1.1 1.2; bar_start:2#2026.10.09D10:00:00)  ->  1
-bars:{[x]
+.qpipe.transform.exec_bars.bars:{[x]
     shape:.qetl.plant.published `exec_bar;
     if[0=count x; :shape];
     x:`source_time xasc x;

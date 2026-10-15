@@ -52,21 +52,21 @@
 / plant stamps its receipt time, so a venue time carried in `time` would be
 / overwritten the day these rows are published.
 
-\d .qpipe.source.crypto_market_data
+\d .
 
-source_name:`crypto_market_data
+.qpipe.source.crypto_market_data.source_name:`crypto_market_data
 
 / "1".."5" - cryptorust records five levels a side, where Databento records ten.
-levels:string 1+til 5
+.qpipe.source.crypto_market_data.levels:string 1+til 5
 
 / Per level: bid price, bid size, ask price, ask size, named as the DuckDB
 / table names them.
-level_fields:raze {`$("bid_price_";"bid_size_";"ask_price_";"ask_size_"),\:x} each levels
+.qpipe.source.crypto_market_data.level_fields:raze {`$("bid_price_";"bid_size_";"ask_price_";"ask_size_"),\:x} each .qpipe.source.crypto_market_data.levels
 
 / The columns this adapter READS, in the order the contract declares them.
-columns:`source_time`local_time`venue`sym`is_snapshot,level_fields,`latency_ms`latency_min_ms`latency_count`trade_price`trade_size`trade_side
+.qpipe.source.crypto_market_data.columns:`source_time`local_time`venue`sym`is_snapshot,.qpipe.source.crypto_market_data.level_fields,`latency_ms`latency_min_ms`latency_count`trade_price`trade_size`trade_side
 / p,p,s,s,b then twenty floats then f,f,j,f,f,s
-types:"ppssb",(raze 5#enlist "ffff"),"ffjffs"
+.qpipe.source.crypto_market_data.types:"ppssb",(raze 5#enlist "ffff"),"ffjffs"
 
 / The table in the DuckDB file, and the table its rows land in here.
 / .
@@ -97,7 +97,7 @@ types:"ppssb",(raze 5#enlist "ffff"),"ffjffs"
 /   READ_ONLY does NOT get around it. A backfill over live data therefore
 /   wants the parquet shards, which are append-only and unlocked, rather than
 /   the database file that indexes them.
-table_name:`market_data_live
+.qpipe.source.crypto_market_data.table_name:`market_data_live
 
 / READING WHILE THE RECORDER RUNS (#1079). The recorder writes each shard as
 / a hidden `.live*.tmp.*` file and renames it to live_N.parquet only when it
@@ -118,14 +118,14 @@ table_name:`market_data_live
 / @return the table name, or read_parquet over the configured shard glob
 / @throws error when the glob is not absolute
 / @eg .qpipe.source.crypto_market_data.from_expr[]  ->  "market_data_live"
-from_expr:{[]
+.qpipe.source.crypto_market_data.from_expr:{[]
     g:getenv `UQF_CRYPTO_CAPTURE_GLOB;
     if[0=count g; :string .qpipe.source.crypto_market_data.table_name];
     if[not "/"=first g;
         '"crypto_market_data: UQF_CRYPTO_CAPTURE_GLOB must be an absolute glob, not ",g," - a relative one resolves against the process's directory, which is not the recorder's"];
     "read_parquet(",.qetl.io.odbc.literal[g],", union_by_name=true)"}
 
-time_column:`source_time
+.qpipe.source.crypto_market_data.time_column:`source_time
 
 / NOT a key cryptorust guarantees, and deliberately said so. The recorder
 / writes one row per update it receives, so (venue; sym; source_time) is NOT
@@ -135,26 +135,26 @@ time_column:`source_time
 / the recorder stamps a row, not a record id. An observation about this
 / capture, then, not a promise from cryptorust - re-check it on a new one
 / before relying on it to deduplicate.
-row_key:`venue`sym`source_time`latency_count
+.qpipe.source.crypto_market_data.row_key:`venue`sym`source_time`latency_count
 
-tz:`UTC
-transport:`odbc
+.qpipe.source.crypto_market_data.tz:`UTC
+.qpipe.source.crypto_market_data.transport:`odbc
 
 / What UQF_SOURCE_CRED_CRYPTO_MARKET_DATA looks like. Declared rather than
 / left to the per-transport default, which is a networked-database string:
 / DuckDB is embedded, so this is a file path and a mode, with no host, user
 / or password to supply.
-credential_example:"DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY"
+.qpipe.source.crypto_market_data.credential_example:"DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY"
 
 / The physical column each output column is read from, where they differ:
 / what select_list renames, and what `raw` names (#1077).
-renamed:`source_time`local_time`sym!`timestamp_ms`local_timestamp_ms`symbol
+.qpipe.source.crypto_market_data.renamed:`source_time`local_time`sym!`timestamp_ms`local_timestamp_ms`symbol
 
 / The SQL expression selecting each field, in `columns` order. Only four of
 / them need one; the level and latency columns are read as they stand.
 / @return the comma-separated select list
 / @eg .qpipe.source.crypto_market_data.select_list[] like "timestamp_ms AS source_time, *"  ->  1b
-select_list:{[]
+.qpipe.source.crypto_market_data.select_list:{[]
     exprs:{[f]
         s:string f;
         $[f in key .qpipe.source.crypto_market_data.renamed; string[.qpipe.source.crypto_market_data.renamed f]," AS ",s;
@@ -179,7 +179,7 @@ select_list:{[]
 / Integer arithmetic only: floor division on the long, plus one when a
 / remainder is left. The earlier neg-div-neg trick leaned on `div` flooring a
 / negative operand, which PeachQ truncates (#985).
-epoch_ms_bound:{[ts]
+.qpipe.source.crypto_market_data.epoch_ms_bound:{[ts]
     ns:"j"$ts-1970.01.01D00:00;
     .qetl.io.odbc.literal (ns div 1000000)+0<ns mod 1000000}
 
@@ -189,33 +189,33 @@ epoch_ms_bound:{[ts]
 / @param range_to exclusive upper bound
 / @return the SELECT statement text
 / @eg .qpipe.source.crypto_market_data.sql_for[2026.09.11D21:00:00.000000000;2026.09.11D22:00:00.000000000]
-sql_for:{[range_from;range_to]
-    "SELECT ",select_list[]," FROM ",from_expr[],
-    " WHERE timestamp_ms >= ",epoch_ms_bound[range_from],
-    " AND timestamp_ms < ",epoch_ms_bound[range_to],
+.qpipe.source.crypto_market_data.sql_for:{[range_from;range_to]
+    "SELECT ",.qpipe.source.crypto_market_data.select_list[]," FROM ",.qpipe.source.crypto_market_data.from_expr[],
+    " WHERE timestamp_ms >= ",.qpipe.source.crypto_market_data.epoch_ms_bound[range_from],
+    " AND timestamp_ms < ",.qpipe.source.crypto_market_data.epoch_ms_bound[range_to],
     " ORDER BY timestamp_ms, symbol, latency_count"}
 
 / The driver's table in the declared types and column order.
 / @param raw the table .qetl.io.odbc.run_sql returns for sql_for's statement
 / @return the same rows as the contract declares them
 / @eg .qpipe.source.crypto_market_data.adapt[update source_time:1789160662231,local_time:1789160662231,venue:enlist "coinbase_spot",sym:enlist "BTC-USD",is_snapshot:1i,trade_side:enlist "buy" from 1#.qpipe.source.crypto_market_data.fixture[]]  ->  the same row with source_time 2026.09.11D21:04:22.231000000 and the four text columns as symbols
-adapt:{[raw]
+.qpipe.source.crypto_market_data.adapt:{[raw]
     t:@[raw;`source_time`local_time;{1970.01.01D00:00+1000000*x}];
     t:@[t;`venue`sym`trade_side;{`$x}];
     t:@[t;`is_snapshot;{1=x}];
-    columns xcols t}
+    .qpipe.source.crypto_market_data.columns xcols t}
 
 / One window of recorded rows from DuckDB.
 / @param h an ODBC handle from .qetl.io.odbc.open
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the rows in the window, in the contract's shape
-query:{[h;range_from;range_to] adapt .qetl.io.odbc.run_sql[h;sql_for[range_from;range_to]]}
+.qpipe.source.crypto_market_data.query:{[h;range_from;range_to] .qpipe.source.crypto_market_data.adapt .qetl.io.odbc.run_sql[h;.qpipe.source.crypto_market_data.sql_for[range_from;range_to]]}
 
 / The SQL for the newest millisecond the finished shards hold.
 / @return the SELECT statement text
 / @eg .qpipe.source.crypto_market_data.newest_sql[]  ->  "SELECT MAX(timestamp_ms) AS newest FROM market_data_live"
-newest_sql:{[] "SELECT MAX(timestamp_ms) AS newest FROM ",from_expr[]}
+.qpipe.source.crypto_market_data.newest_sql:{[] "SELECT MAX(timestamp_ms) AS newest FROM ",.qpipe.source.crypto_market_data.from_expr[]}
 
 / The instant, exclusive, through which a shard-glob read holds every row (#1186).
 / .
@@ -232,9 +232,9 @@ newest_sql:{[] "SELECT MAX(timestamp_ms) AS newest FROM ",from_expr[]}
 / @param h an ODBC handle from .qetl.io.odbc.open
 / @return the bound as a timestamp; 0Wp when no glob is set, null when no shard holds a row
 / @eg .qpipe.source.crypto_market_data.complete_through 0i  ->  0Wp
-complete_through:{[h]
+.qpipe.source.crypto_market_data.complete_through:{[h]
     if[0=count getenv `UQF_CRYPTO_CAPTURE_GLOB; :0Wp];
-    r:.qetl.io.odbc.run_sql[h;newest_sql[]];
+    r:.qetl.io.odbc.run_sql[h;.qpipe.source.crypto_market_data.newest_sql[]];
     ms:first r`newest;
     $[null ms; 0Np; 1970.01.01D00:00+1000000*"j"$ms]}
 
@@ -245,7 +245,7 @@ complete_through:{[h]
 / @param sz the size at every level
 / @return the twenty level values, bid price/size then ask price/size per level
 / @private
-fixture_levels:{[bid;ask;tick;sz]
+.qpipe.source.crypto_market_data.fixture_levels:{[bid;ask;tick;sz]
     raze {[bid;ask;tick;sz;i] (bid-tick*i;sz;ask+tick*i;sz)}[bid;ask;tick;sz] each til 5}
 
 / @return six recorded rows in the contract's shape
@@ -269,7 +269,7 @@ fixture_levels:{[bid;ask;tick;sz]
 / latency_ms/latency_min_ms are 0 throughout (venue and recorder clocks agreed
 / to the millisecond). A fixture that invented variation there would assert
 / something the source has never produced.
-fixture:{[]
+.qpipe.source.crypto_market_data.fixture:{[]
     base:([] source_time:2026.09.11D21:04:21.968000000 2026.09.11D21:04:21.989000000 2026.09.11D21:04:22.231000000
                           2026.09.11D22:04:21.968000000 2026.09.11D22:04:21.989000000 2026.09.11D22:04:22.231000000;
         local_time:2026.09.11D21:04:21.968000000 2026.09.11D21:04:21.989000000 2026.09.11D21:04:22.231000000
@@ -277,12 +277,12 @@ fixture:{[]
         venue:6#`$"coinbase_spot";
         sym:6#`$("SOL-USD";"ETH-USD";"BTC-USD");
         is_snapshot:6#1b);
-    lv:flip level_fields!flip (fixture_levels[121.5;121.51;0.01;200f];
-        fixture_levels[2681.9;2681.91;0.1;1f];
-        fixture_levels[83823.74;83823.75;1.68;0.09];
-        fixture_levels[121.62;121.63;0.01;200f];
-        fixture_levels[2682.4;2682.41;0.1;1f];
-        fixture_levels[83830.02;83830.03;1.68;0.09]);
+    lv:flip .qpipe.source.crypto_market_data.level_fields!flip (.qpipe.source.crypto_market_data.fixture_levels[121.5;121.51;0.01;200f];
+        .qpipe.source.crypto_market_data.fixture_levels[2681.9;2681.91;0.1;1f];
+        .qpipe.source.crypto_market_data.fixture_levels[83823.74;83823.75;1.68;0.09];
+        .qpipe.source.crypto_market_data.fixture_levels[121.62;121.63;0.01;200f];
+        .qpipe.source.crypto_market_data.fixture_levels[2682.4;2682.41;0.1;1f];
+        .qpipe.source.crypto_market_data.fixture_levels[83830.02;83830.03;1.68;0.09]);
     tail:([] latency_ms:6#0f; latency_min_ms:6#0f; latency_count:2 3 3 4 5 6j;
         trade_price:121.54 2681.98 83827.89 121.66 2682.48 83834.17;
         trade_size:0.01 0.558313 0.00000009 0.01 0.558313 0.00000009;
@@ -295,10 +295,10 @@ fixture:{[]
 / typed; the rest - epoch-millisecond BIGINTs, strings, a boolean - are
 / general, their types the output contract's to check after `adapt`. Without
 / this the live check failed a correctly configured source at `schema`.
-raw:enlist[table_name]!enlist flip ({x^renamed x} columns)!{$[x="f"; `float$(); ()]} each types
+.qpipe.source.crypto_market_data.raw:enlist[.qpipe.source.crypto_market_data.table_name]!enlist flip ({x^.qpipe.source.crypto_market_data.renamed x} .qpipe.source.crypto_market_data.columns)!{$[x="f"; `float$(); ()]} each .qpipe.source.crypto_market_data.types
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.crypto_market_data.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw`complete_through!
-    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw;complete_through)];
+    (.qpipe.source.crypto_market_data.source_name;.qpipe.source.crypto_market_data.table_name;.qpipe.source.crypto_market_data.time_column;.qpipe.source.crypto_market_data.row_key;.qpipe.source.crypto_market_data.columns;.qpipe.source.crypto_market_data.types;.qpipe.source.crypto_market_data.query;.qpipe.source.crypto_market_data.fixture;.qpipe.source.crypto_market_data.tz;.qpipe.source.crypto_market_data.transport;.qpipe.source.crypto_market_data.credential_example;.qpipe.source.crypto_market_data.raw;.qpipe.source.crypto_market_data.complete_through)];
 
 \d .

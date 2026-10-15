@@ -17,12 +17,12 @@
 / .
 / The worked example belongs to the transform, as eq_orderbook.q's does.
 
-\d .qpipe.transform.demo_markouts
+\d .
 
 / The horizons each fill is scored at, and the furthest of them, which the
 / live job's timer waits out before scoring a fill.
-horizons:0D00:00:01 0D00:00:10
-max_horizon:max horizons
+.qpipe.transform.demo_markouts.horizons:0D00:00:01 0D00:00:10
+.qpipe.transform.demo_markouts.max_horizon:max .qpipe.transform.demo_markouts.horizons
 
 / Score fills at every horizon against the mid of the latest quote at or
 / before trade_time+horizon - only the demo's own pairs (.qf.demo.pairs), in
@@ -39,7 +39,7 @@ max_horizon:max horizons
 / @param quotes time sym bid ask
 / @return time (trade_time+horizon) sym trade_time horizon trade_price ref_price markout_pips fill_id
 / @eg count .qpipe.transform.demo_markouts.score[([] time:enlist 2026.09.17D10:00:00; sym:`EURUSD; side:1; trade_price:1.1; pip_factor:10000; fill_id:enlist `f1);([] time:enlist 2026.09.17D10:00:00.5; sym:`EURUSD; bid:1.1004; ask:1.1006)] -> 2
-score:{[fill_rows;quotes]
+.qpipe.transform.demo_markouts.score:{[fill_rows;quotes]
     shape:.qetl.plant.shape `demo_execution_quality;
     fill_rows:fill_rows where fill_rows[`sym] in .qf.demo.pairs;
     if[0=count fill_rows; :0#shape];

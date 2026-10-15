@@ -63,22 +63,22 @@
 / The output schema is the published table in src/etl/plant_tables.q
 / WITHOUT `time`, which .u.upd stamps on receipt (invariant 1).
 
-\d .qpipe.job.posbook
+\d .
 
 / ------------------------------------------------------------- THE SHAPES
 
-position_book:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$())
+.qpipe.job.posbook.position_book:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$())
 / The fills the transform reads: an `executions` row renamed - when it
 / happened (source_time, not the plant's stamp) as time, its price as
 / trade_price. ONE reshaping, used both for the transform's declared input
 / and for every live batch, so the declaration is the plant's own table run
 / through the same select: a column the plant renames fails here, at load,
 / rather than in a trapped error on every batch (#817).
-as_trades:{[x] select time:source_time, sym, side, trade_price:price, size from x}
+.qpipe.job.posbook.as_trades:{[x] select time:source_time, sym, side, trade_price:price, size from x}
 / The transform's trades also carry mark_mid: the mid prevailing at the
 / fill's own time, null when there is none (the handler computes it).
-position_trades:update mark_mid:`float$() from as_trades[.qetl.plant.shape `executions]
-position:.qetl.plant.published `position
+.qpipe.job.posbook.position_trades:update mark_mid:`float$() from .qpipe.job.posbook.as_trades[.qetl.plant.shape `executions]
+.qpipe.job.posbook.position:.qetl.plant.published `position
 
 / ---------------------------------------------------------- THE TRANSFORM
 
@@ -105,7 +105,7 @@ position:.qetl.plant.published `position
 / @param batch the fills, in arrival order, each with the mid
 /   prevailing at its time (null for none)
 / @return one position row per fill
-mark_positions:{[book;batch]
+.qpipe.job.posbook.mark_positions:{[book;batch]
     if[0=count batch; :.qpipe.job.posbook.position];
     step:{[acc;trade]
         s:trade`sym;
@@ -122,29 +122,29 @@ mark_positions:{[book;batch]
 / @param book the book before the batch, unkeyed
 / @param positions mark_positions' output for that batch
 / @return the new book, unkeyed
-next_book:{[book;positions]
+.qpipe.job.posbook.next_book:{[book;positions]
     0!(1!book),select last qty, last avg_price, last realized_pnl by sym from positions}
 
 / --------------------------------------------------------------- THE JOB
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `posbook;
+.qpipe.job.posbook.publish:.qetl.job.stream.unwired `posbook;
 
 / The running book - .qf.port's own keyed shape (sym -> qty/avg_price/
 / realized_pnl). The transform takes it as an input and the batch handler
 / rebuilds it from the transform's output, so the book only ever changes
 / through a computation that has expected tables.
-book:1!position_book;
+.qpipe.job.posbook.book:1!.qpipe.job.posbook.position_book;
 
 / How far back, before a sym's (or venue's) newest book, its history is kept
 / - see HOW FAR BACK in the header.
-history_retention:0D00:01:00
+.qpipe.job.posbook.history_retention:0D00:01:00
 
 / The FX mid history: every own-book market's level-0 mid per sym, by the
 / book's source_time, off the `market_data` subscription. A late older book
 / is inserted at its own time (#1088).
-mid_history:.qetl.enrich.new`keys`time`retention`schema!(enlist `sym;`source_time;history_retention;([] sym:`symbol$(); source_time:`timestamp$(); mid:`float$()))
+.qpipe.job.posbook.mid_history:.qetl.enrich.new`keys`time`retention`schema!(enlist `sym;`source_time;.qpipe.job.posbook.history_retention;([] sym:`symbol$(); source_time:`timestamp$(); mid:`float$()))
 
 / Each crypto venue's top-of-book history, per sym and venue, off the same
 / subscription. A crypto fill is marked to the BEST MID ACROSS VENUES whose
@@ -152,7 +152,7 @@ mid_history:.qetl.enrich.new`keys`time`retention`schema!(enlist `sym;`source_tim
 / reference price, which crypto_markout scores against too (#886). `time` is
 / the venue's source_time, not the plant's arrival stamp; an older book that
 / arrives late is inserted at its own time (#1049).
-crypto_tob:.qetl.enrich.new`keys`time`retention`schema!(`sym`venue;`time;history_retention;([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$()))
+.qpipe.job.posbook.crypto_tob:.qetl.enrich.new`keys`time`retention`schema!(`sym`venue;`time;.qpipe.job.posbook.history_retention;([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$()))
 
 / The mid prevailing at each fill's own time, for the FX syms: .qf.mkt.lookup
 / over the history, no age limit. Null where no book is held at or before the
@@ -161,7 +161,7 @@ crypto_tob:.qetl.enrich.new`keys`time`retention`schema!(`sym`venue;`time;history
 / @param batch fills as as_trades gives them (time is the fill's source_time)
 / @return a float list, one per fill, null for none
 / @eg .qpipe.job.posbook.fx_marks[.qetl.enrich.add[.qpipe.job.posbook.mid_history;([] sym:2#`EURUSD; source_time:2026.09.17D12:00:00 2026.09.17D12:00:10; mid:1.10 1.20)];([] time:enlist 2026.09.17D12:00:05; sym:enlist `EURUSD)]  ->  enlist 1.1
-fx_marks:{[hist;batch]
+.qpipe.job.posbook.fx_marks:{[hist;batch]
     ev:select sym, time from batch;
     h:hist,enlist[`rows]!enlist select from hist[`rows] where sym in ev`sym;
     (.qetl.enrich.lookup[h;ev;`event_time`attach`tolerance!(`time;enlist `mid;0Nn)])`mid}
@@ -179,7 +179,7 @@ fx_marks:{[hist;batch]
 /   source_time, the clock crypto_tob's books are stamped on
 / @return a float list, one per fill, null for none
 / @eg .qpipe.job.posbook.crypto_marks[.qetl.enrich.add[.qpipe.job.posbook.crypto_tob;([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2026.09.17D10:00:00.1 2026.09.17D10:00:00.2; bid:100 101f; ask:102 103f)];([] time:enlist 2026.09.17D10:00:00.5; sym:enlist `$"BTC-USDT")]  ->  enlist 101.5
-crypto_marks:{[tob;batch]
+.qpipe.job.posbook.crypto_marks:{[tob;batch]
     t:select from (tob`rows) where sym in batch`sym;
     if[(0=count t) or 0=count batch; :(count batch)#0n];
     .qf.mkt.best_mid_across_venues[t;select sym, time from batch;.qf.mkt.reference_max_age]}
@@ -187,13 +187,13 @@ crypto_marks:{[tob;batch]
 / The canonical tables this job reads, as the plant delivers them - the
 / normalizers' outputs with `time` stamped in front. Declared so that
 / tests/q/test_stack_tables.q can hold them to the plant's own.
-executions:.qetl.plant.shape `executions
-market_data:.qetl.plant.shape `market_data
+.qpipe.job.posbook.executions:.qetl.plant.shape `executions
+.qpipe.job.posbook.market_data:.qetl.plant.shape `market_data
 
 / Net one executions batch into the book and publish its position rows.
 / @param x the executions rows, as a table
 / @return nothing
-apply_fills:{[x]
+.qpipe.job.posbook.apply_fills:{[x]
     trades:.qpipe.job.posbook.as_trades[x];
     fx:.qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;trades];
     cr:.qpipe.job.posbook.crypto_marks[.qpipe.job.posbook.crypto_tob;trades];
@@ -215,7 +215,7 @@ apply_fills:{[x]
 / @param marks their mids, null for none
 / @return nothing
 / @private
-note_unmarked:{[trades;marks]
+.qpipe.job.posbook.note_unmarked:{[trades;marks]
     held:distinct (.qpipe.job.posbook.mid_history[`rows]`sym),.qpipe.job.posbook.crypto_tob[`rows]`sym;
     n:sum (null marks) & trades[`sym] in held;
     if[n>0; .qetl.log.warn[`posbook;"fills older than the retained mid history were marked at their own price";`fills`retention!(n;.qpipe.job.posbook.history_retention)]];
@@ -236,7 +236,7 @@ note_unmarked:{[trades;marks]
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.posbook.on_batch:{[t;x]
     $[t=`executions;
         .qpipe.job.posbook.apply_fills[x];
       t=`market_data;

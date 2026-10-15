@@ -42,23 +42,23 @@
 / REGISTERED AS A STREAMING JOB: define performs .qetl.job.stream.define
 / itself, so an instance cannot declare its edges apart from its contract.
 
-\d .qetl.job.stream.bars
+\d .
 
 / name -> its declaration, ENLISTED, for the reason .qetl.job.stream.jobs enlists.
-registry:(`symbol$())!();
+.qetl.job.stream.bars.registry:(`symbol$())!();
 
 / What every bars job declares.
-required_keys:`procname`events`transform`publishes`width`lateness`period
+.qetl.job.stream.bars.required_keys:`procname`events`transform`publishes`width`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
-optional_keys:`by`event_time,.qetl.job.stream.passthrough_keys
+.qetl.job.stream.bars.optional_keys:`by`event_time,.qetl.job.stream.passthrough_keys
 
 / What define installs in .qpipe.job.<name>: pending (rows of windows still
 / open), closed (windows published, until their lateness has passed),
 / dropped (late rows, with the reason), publish (the seam), now (the clock),
 / on_batch, close_ready[now], on_timer and on_endofday[date].
-installed:`pending`closed`dropped`publish`now`on_batch`close_ready`on_timer`on_endofday
+.qetl.job.stream.bars.installed:`pending`closed`dropped`publish`now`on_batch`close_ready`on_timer`on_endofday
 
 / The window start of each row: its event time floored to a multiple of width.
 / The twin's transform calls this too, so a window is cut one way.
@@ -67,7 +67,7 @@ installed:`pending`closed`dropped`publish`now`on_batch`close_ready`on_timer`on_e
 / @param x a table carrying tc
 / @return x with a bar_start column
 / @eg (.qetl.job.stream.bars.assign[0D00:01;`t;([] t:enlist 2026.10.09D10:00:59)])`bar_start  ->  ,2026.10.09D10:00:00
-assign:{[width;tc;x]
+.qetl.job.stream.bars.assign:{[width;tc;x]
     / xbar, not `div`: PeachQ divides longs through floats, which at a
     / nanosecond timestamp's magnitude moves a row across a window boundary
     update bar_start:width xbar x tc from x}
@@ -82,12 +82,12 @@ assign:{[width;tc;x]
 /   .qetl.job.stream.define (start_with_all, note, on_start, check with on_fail)
 / @return the name
 / @throws error naming the first problem found
-define:{[name;decl]
+.qetl.job.stream.bars.define:{[name;decl]
     who:"define: bars job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
-    missing:required_keys where not required_keys in key decl;
+    missing:.qetl.job.stream.bars.required_keys where not .qetl.job.stream.bars.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
-    unknown:(key decl) except required_keys,optional_keys;
+    unknown:(key decl) except .qetl.job.stream.bars.required_keys,.qetl.job.stream.bars.optional_keys;
     if[count unknown; 'who," declares ",(", " sv string unknown),", which a bars job does not take"];
     if[not all -11h=type each decl`events`transform`publishes;
         'who,"'s events, transform and publishes must each be one table or transform name, a symbol"];
@@ -116,9 +116,9 @@ define:{[name;decl]
     (` sv ns,`publish) set .qetl.job.stream.unwired name;
     / .z.p, as horizon.q: .u.upd stamps rows in UTC. A function, so a test can stand a time in.
     (` sv ns,`now) set {[] .z.p};
-    (` sv ns,`on_batch) set on_batch[name;;];
-    (` sv ns,`close_ready) set close_ready[name;];
-    (` sv ns,`on_endofday) set end_of_day[name;];
+    (` sv ns,`on_batch) set .qetl.job.stream.bars.on_batch[name;;];
+    (` sv ns,`close_ready) set .qetl.job.stream.bars.close_ready[name;];
+    (` sv ns,`on_endofday) set .qetl.job.stream.bars.end_of_day[name;];
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`close_ready) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
     extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`closed`dropped;
@@ -133,7 +133,7 @@ define:{[name;decl]
         get ` sv ns,`on_endofday;
         1b;
         enlist decl`publishes)),extra];
-    registry[name]:enlist d;
+    .qetl.job.stream.bars.registry[name]:enlist d;
     name}
 
 / One bars job's declaration, or a refusal naming it.
@@ -141,29 +141,29 @@ define:{[name;decl]
 / @return the declaration dict, with its defaults filled in
 / @throws error when nothing was defined under that name
 / @eg .qetl.job.stream.bars.def[`exec_bars]`width  ->  0D00:01:00.000000000
-def:{[name]
-    if[not name in key registry;
-        '"def: ",string[name]," is not a defined bars job - defined: ",", " sv string key registry];
-    first registry name}
+.qetl.job.stream.bars.def:{[name]
+    if[not name in key .qetl.job.stream.bars.registry;
+        '"def: ",string[name]," is not a defined bars job - defined: ",", " sv string key .qetl.job.stream.bars.registry];
+    first .qetl.job.stream.bars.registry name}
 
 / Every defined bars job.
 / @return a symbol vector
 / @eg `exec_bars in .qetl.job.stream.bars.defined[]  ->  1b
-defined:{[] key registry}
+.qetl.job.stream.bars.defined:{[] key .qetl.job.stream.bars.registry}
 
 / Private: a table's key columns as a list of rows, so membership is one `in`.
 / @private
-wkey:{[cs;t] flip value flip cs#t}
+.qetl.job.stream.bars.wkey:{[cs;t] flip value flip cs#t}
 
 / Private: buffer one batch of events - cut to the window each row belongs to,
 / and refused when that window is already out - or, for the bar table, record
 / the windows it holds as published. A batch on any other table is ignored.
 / @private
-on_batch:{[name;t;x]
-    d:def[name];
+.qetl.job.stream.bars.on_batch:{[name;t;x]
+    d:.qetl.job.stream.bars.def[name];
     ns:.qetl.job.stream.namespace name;
     ck:d[`by],`bar_start;
-    if[t=d`publishes; :mark_published[ns;ck;x]];
+    if[t=d`publishes; :.qetl.job.stream.bars.mark_published[ns;ck;x]];
     if[(t<>d`events) or 0=count x; :()];
     pq:` sv ns,`pending;
     now:(get ` sv ns,`now)[];
@@ -173,10 +173,10 @@ on_batch:{[name;t;x]
     / only the log's own bars say a window is out.
     / Read before the projection below, which drops `time` when the job does not keep it.
     rcv:.qetl.job.stream.clock_of[now;x];
-    x:assign[d`width;d`event_time;(cols[get pq] except `bar_start)#x];
+    x:.qetl.job.stream.bars.assign[d`width;d`event_time;(cols[get pq] except `bar_start)#x];
     x:(cols get pq)#x;
     stale:(x[`bar_start]+(d`width)+d`lateness)<=rcv;
-    out:stale | wkey[ck;x] in wkey[ck;get ` sv ns,`closed];
+    out:stale | .qetl.job.stream.bars.wkey[ck;x] in .qetl.job.stream.bars.wkey[ck;get ` sv ns,`closed];
     if[any out;
         gone:x where out;
         (` sv ns,`dropped) set -1000 sublist (get ` sv ns,`dropped),update reason:`late from gone;
@@ -187,11 +187,11 @@ on_batch:{[name;t;x]
 / Private: windows the log or the plant says are published: evict their
 / rows (a restart re-buffered them) and remember them as closed.
 / @private
-mark_published:{[ns;ck;x]
+.qetl.job.stream.bars.mark_published:{[ns;ck;x]
     if[0=count x; :()];
     pq:` sv ns,`pending; cq:` sv ns,`closed;
-    .qetl.job.stream.evict[pq;wkey[ck;get pq] in wkey[ck;x]];
-    new:distinct (ck#x) where not wkey[ck;x] in wkey[ck;get cq];
+    .qetl.job.stream.evict[pq;.qetl.job.stream.bars.wkey[ck;get pq] in .qetl.job.stream.bars.wkey[ck;x]];
+    new:distinct (ck#x) where not .qetl.job.stream.bars.wkey[ck;x] in .qetl.job.stream.bars.wkey[ck;get cq];
     cq insert new;
     }
 
@@ -199,8 +199,8 @@ mark_published:{[ns;ck;x]
 / whole windows, so a window is never published twice - and remember them as
 / closed.
 / @private
-close_windows:{[name;pick]
-    d:def[name];
+.qetl.job.stream.bars.close_windows:{[name;pick]
+    d:.qetl.job.stream.bars.def[name];
     ns:.qetl.job.stream.namespace name;
     pq:` sv ns,`pending; ck:d[`by],`bar_start;
     mask:pick get pq;
@@ -219,10 +219,10 @@ close_windows:{[name;pick]
 / @param now the time to close by
 / @return the number of bars published
 / @eg .qpipe.job.exec_bars.close_ready 2026.10.09D10:01:30
-close_ready:{[name;now]
-    d:def[name];
+.qetl.job.stream.bars.close_ready:{[name;now]
+    d:.qetl.job.stream.bars.def[name];
     ns:.qetl.job.stream.namespace name; cq:` sv ns,`closed;
-    n:close_windows[name;{[w;l;now;p] (p[`bar_start]+w+l)<=now}[d`width;d`lateness;now]];
+    n:.qetl.job.stream.bars.close_windows[name;{[w;l;now;p] (p[`bar_start]+w+l)<=now}[d`width;d`lateness;now]];
     cq set (get cq) where (((get cq)`bar_start)+(d`width)+d`lateness)>now;
     n}
 
@@ -231,16 +231,16 @@ close_ready:{[name;now]
 / @param dt the date that ended
 / @return the number of bars published
 / @eg .qpipe.job.exec_bars.on_endofday 2026.10.09
-end_of_day:{[name;dt]
-    close_windows[name;{[before;p] p[`bar_start]<before}[`timestamp$dt+1]]}
+.qetl.job.stream.bars.end_of_day:{[name;dt]
+    .qetl.job.stream.bars.close_windows[name;{[before;p] p[`bar_start]<before}[`timestamp$dt+1]]}
 
-\d .qetl.job.stream
+\d .
 
 / Declare a streaming job that aggregates its input into time bars.
 / @param name the job name
 / @param decl events, transform, publishes, width, lateness, period and the process declaration
 / @return the registered streaming job name
 / @throws error when the transform is not a one-input contract carrying the window
-at_bars:{[name;decl] .qetl.job.stream.bars.define[name;decl]}
+.qetl.job.stream.at_bars:{[name;decl] .qetl.job.stream.bars.define[name;decl]}
 
 \d .

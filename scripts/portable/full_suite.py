@@ -5,14 +5,11 @@ PeachQ rejects nested working contexts (`\\d .a.b`), so it cannot load this tree
 as written. flatten_contexts.py rewrites a copy that needs none; this runs the
 full suite - tests/run_tests.q, every suite - on that copy:
 
-  1. flatten src/ and scripts/ into a scratch directory. A refusal fails the
-     lane: the tree must stay convertible, and a new construct the flattener
-     cannot rewrite is caught here rather than on a 4.0 server. tests/ is NOT
-     flattened (#1412): a suite defines everything from the root by its whole
-     path, so it needs no conversion and runs here exactly as written - which
-     is the nearest executable evidence, without a 4.0 binary, that it runs on
-     4.0. (test_the_test_tree_needs_no_context_conversion holds the converter
-     to a no-op there.)
+  1. flatten what still needs it (CONVERTED, now nothing): src/, scripts/,
+     sidecars/ and tests/ open no nested context (check_nested_contexts.py), so
+     every file loads on PeachQ exactly as written. That is also the nearest
+     executable evidence, without a 4.0 binary, that the tests run on 4.0
+     (#1412).
   2. lay the flattened files over a copy of every tracked file - lib/ included
      as it is, never converted or edited - so the suite runs as in a checkout.
   3. run the suite there with UQF_TEST_FAILURES set, so it writes the tests
@@ -55,9 +52,10 @@ REPO = Path(__file__).resolve().parents[2]
 GAPS = REPO / "tests" / "q" / "peachq_known_gaps.txt"
 FLATTENER = REPO / "scripts" / "portable" / "flatten_contexts.py"
 BUNDLE_SUITE = REPO / "scripts" / "dev" / "bundle_suite.py"
-#: What is flattened. lib/ is not: the flattener leaves vendored code alone.
-#: tests/ is not either (#1412): no test file enters a nested namespace.
-CONVERTED = ("src", "scripts")
+#: What is flattened: nothing. src/, scripts/ and sidecars/ open no nested context
+#: (#1411, check_nested_contexts.py) and neither does tests/ (#1412); every file loads
+#: on PeachQ as it stands. lib/ is never flattened.
+CONVERTED: tuple[str, ...] = ()
 #: How a reason starts (#986): PeachQ lacks something, this tree relies on
 #: something it should not, or the flattened copy fails on KDB-X too.
 KINDS = ("peachq-lacks: ", "tree-bug: #", "flattening: ")
@@ -148,7 +146,7 @@ def compare(failed: dict[str, str], gaps: dict[str, str]) -> tuple[list[str], li
 
 
 def build_tree(into: Path, bundles: bool = False) -> None:
-    """A runnable copy of the checkout with src/ and scripts/ flattened.
+    """A runnable copy of the checkout, with CONVERTED flattened.
     With `bundles`, every bundle under sidecars/ is installed into the copy,
     its tests included, BEFORE flattening, so its jobs are converted and run
     like the tree's own (#925). Raises SystemExit when the flattener refuses."""
@@ -172,6 +170,8 @@ def build_tree(into: Path, bundles: bool = False) -> None:
         if r.returncode:
             raise SystemExit(f"a bundle would not install:\n{(r.stdout + r.stderr).strip()}")
         print(r.stdout.strip(), flush=True)
+    if not CONVERTED:
+        return
     flat = into / "flat"
     r = subprocess.run(
         [sys.executable, str(FLATTENER), *CONVERTED, "--root", str(tree), "--out", str(flat),
@@ -197,7 +197,7 @@ def run(q: str, timeout: float, keep: Path | None = None, bundles: bool = False)
     with tempfile.TemporaryDirectory() as tmp:
         work = keep or Path(tmp)
         work.mkdir(parents=True, exist_ok=True)
-        print(f"flattening {', '.join(CONVERTED)} into {work}", flush=True)
+        print(f"flattening {', '.join(CONVERTED) or 'nothing'} into {work}", flush=True)
         build_tree(work, bundles)
         failures = work / "failures.txt"
         env = {**os.environ, "UQF_Q_IMPL": "peachq", "QCMD": q, "UQF_TEST_FAILURES": str(failures)}

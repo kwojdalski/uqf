@@ -37,22 +37,22 @@
 / `time` is not published - .u.upd stamps its own (invariant 1). Every global
 / a function reads is fully qualified (torq_pipeline.q's invariant 5).
 
-\d .qpipe.job.crypto_markout
+\d .
 
 / ------------------------------------------------------------- THE SHAPES
 
 / The horizons each fill is scored at, and the oldest a venue's top of book
 / may be at a horizon and still count toward the best mid - the library's
 / one cross-venue staleness policy, which posbook's crypto marks share.
-horizons:0D00:00:01 0D00:00:10
-max_horizon:max horizons
-max_age:.qf.mkt.reference_max_age
+.qpipe.job.crypto_markout.horizons:0D00:00:01 0D00:00:10
+.qpipe.job.crypto_markout.max_horizon:max .qpipe.job.crypto_markout.horizons
+.qpipe.job.crypto_markout.max_age:.qf.mkt.reference_max_age
 
 / The transform's inputs: fills as crypto_trades carries them, and books as
 / crypto_book does, narrowed to what scoring reads.
-real_fills:.qetl.plant.columns[`crypto_trades;`time`sym`venue`side`trade_price`exchange_fill_id]
-books:.qetl.plant.columns[`crypto_book;`time`sym`venue`bid_prices`bid_sizes`ask_prices`ask_sizes]
-crypto_execution_quality:.qetl.plant.published `crypto_execution_quality
+.qpipe.job.crypto_markout.real_fills:.qetl.plant.columns[`crypto_trades;`time`sym`venue`side`trade_price`exchange_fill_id]
+.qpipe.job.crypto_markout.books:.qetl.plant.columns[`crypto_book;`time`sym`venue`bid_prices`bid_sizes`ask_prices`ask_sizes]
+.qpipe.job.crypto_markout.crypto_execution_quality:.qetl.plant.published `crypto_execution_quality
 
 / ---------------------------------------------------------- THE TRANSFORM
 
@@ -65,7 +65,7 @@ crypto_execution_quality:.qetl.plant.published `crypto_execution_quality
 / @param books crypto_book rows
 / @return table time, sym, venue, bid, ask
 / @eg exec bid from .qpipe.job.crypto_markout.top_of_book[([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT"; venue:enlist `a; bid_prices:enlist 62000 61999f; bid_sizes:enlist 1 1f; ask_prices:enlist `float$(); ask_sizes:enlist `float$())]  ->  ,62000f
-top_of_book:{[books]
+.qpipe.job.crypto_markout.top_of_book:{[books]
     t:.qf.mkt.top_sides books;
     select time, sym, venue, bid:t`bid, ask:t`ask from books}
 
@@ -74,7 +74,7 @@ top_of_book:{[books]
 / @param real_fills crypto_trades rows, as the batch handler buffers them
 / @param books crypto_book rows, as the batch handler mirrors them
 / @return one row per fill per horizon, in fill order then horizon order
-score_markouts:{[real_fills;books]
+.qpipe.job.crypto_markout.score_markouts:{[real_fills;books]
     if[0=count real_fills; :.qpipe.job.crypto_markout.crypto_execution_quality];
     hs:.qpipe.job.crypto_markout.horizons;
     n:count real_fills;

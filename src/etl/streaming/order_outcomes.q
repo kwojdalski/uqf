@@ -44,25 +44,25 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qpipe.job.order_outcomes
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `order_outcomes;
+.qpipe.job.order_outcomes.publish:.qetl.job.stream.unwired `order_outcomes;
 
 / The canonical output. No `time`: the plant stamps it.
-order_outcomes:.qetl.plant.published `order_outcomes
+.qpipe.job.order_outcomes.order_outcomes:.qetl.plant.published `order_outcomes
 
 / What the orders mapping reads - only the columns from_orders uses. Not named `orders`:
 / a table in a job's namespace named after a plant table is held to that table's whole shape.
-orders_read:.qetl.plant.columns[`orders;`time`order_id`book`product`order_status]
+.qpipe.job.order_outcomes.orders_read:.qetl.plant.columns[`orders;`time`order_id`book`product`order_status]
 
 / The scope of an orders request id.
-orders_source:`orders
+.qpipe.job.order_outcomes.orders_source:`orders
 
 / The orders feed's statuses. It reports one row per order, at its final status,
 / so none is unresolved; any other code is `unmapped.
-orders_status:.qpipe.transform.order_outcome.status_map[`filled`rejected`cancelled;`filled`rejected`cancelled]
+.qpipe.job.order_outcomes.orders_status:.qpipe.transform.order_outcome.status_map[`filled`rejected`cancelled;`filled`rejected`cancelled]
 
 / An orders batch as order outcomes. The feed's rows carry the plant's stamp and no
 / venue (`order_routing` has no producer): source_time is the row's time and venue
@@ -70,7 +70,7 @@ orders_status:.qpipe.transform.order_outcome.status_map[`filled`rejected`cancell
 / @param batch an orders batch: time, order_id, book, product, order_status
 / @return canonical order_outcomes
 / @eg .qpipe.job.order_outcomes.from_orders[([] time:enlist 2026.10.09D10:00:00; order_id:enlist 7; book:enlist `london; product:enlist `spot; order_status:enlist `filled)]`request_id  ->  enlist `7
-from_orders:{[batch]
+.qpipe.job.order_outcomes.from_orders:{[batch]
     if[0=count batch; :.qpipe.job.order_outcomes.order_outcomes];
     rid:?[null batch`order_id;`;`$string batch`order_id];
     out:.qpipe.transform.order_outcome.translate[.qpipe.job.order_outcomes.orders_status;batch`order_status];

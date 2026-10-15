@@ -35,21 +35,21 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - the plant stamps it (invariant 1).
 
-\d .qpipe.job.fx_positions
+\d .
 
 / ------------------------------------------------------------- THE SHAPES
 
 / The fills, narrowed to what netting reads. Not named `executions`: that
 / name is held to the plant's whole table (tests/q/test_stack_tables.q).
-desk_fills:.qetl.plant.columns[`executions;`time`sym`side`size`price`book`product]
-desk_book:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
+.qpipe.job.fx_positions.desk_fills:.qetl.plant.columns[`executions;`time`sym`side`size`price`book`product]
+.qpipe.job.fx_positions.desk_book:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
     base_qty:`float$(); quote_qty:`float$(); fill_count:`long$())
-fx_position:.qetl.plant.published `fx_position
-fx_limit_breach:.qetl.plant.published `fx_limit_breach
+.qpipe.job.fx_positions.fx_position:.qetl.plant.published `fx_position
+.qpipe.job.fx_positions.fx_limit_breach:.qetl.plant.published `fx_limit_breach
 
 / The dimensions the book is keyed on - the blog's (currency_pair,
 / product, book), in this repository's own column names.
-dimensions:`sym`book`product
+.qpipe.job.fx_positions.dimensions:`sym`book`product
 
 / ---------------------------------------------------------- THE TRANSFORM
 
@@ -64,7 +64,7 @@ dimensions:`sym`book`product
 / @param book the current desk book, unkeyed
 / @param batch executions rows
 / @return the new desk book, unkeyed
-net_fills:{[book;batch]
+.qpipe.job.fx_positions.net_fills:{[book;batch]
     rows:select sym, book, product, side, size, price from batch;
     / A fill with a null side, size or price cannot be netted (apply_fills
     / refuses it, #1309); one bad row must not crash the stream job or take
@@ -82,11 +82,11 @@ net_fills:{[book;batch]
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (a runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `fx_positions;
+.qpipe.job.fx_positions.publish:.qetl.job.stream.unwired `fx_positions;
 
 / The running book, keyed on its dimensions. Only ever changed through
 / net_fills, which has expected tables.
-positions:`sym`book`product xkey desk_book;
+.qpipe.job.fx_positions.positions:`sym`book`product xkey .qpipe.job.fx_positions.desk_book;
 
 / The desk's limits. Empty until something loads them - a service with no
 / limits reports positions and polices nothing, which is a legitimate way
@@ -97,24 +97,24 @@ positions:`sym`book`product xkey desk_book;
 / coarser scope, evaluated against .qf.port.rollup - see limits.q - but the
 / scope always keeps sym: base_qty and quote_qty are in each pair's own
 / currencies, so a total across pairs would add currencies (#1260).
-limits:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
+.qpipe.job.fx_positions.limits:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
     metric:`symbol$(); cap:`float$(); severity:`symbol$());
 
 / The metrics the limits are allowed to police. Named rather than "every
 / numeric column", so adding a column to the book cannot silently start
 / policing it - see .qf.port.measure.
-policed:`base_qty`quote_qty
+.qpipe.job.fx_positions.policed:`base_qty`quote_qty
 
 / How long a breach stays quiet after alerting. A breach is a state that
 / persists until someone trades out of it, so without this the desk gets
 / one alert per timer tick and stops reading them.
-alert_period:0D00:05;
+.qpipe.job.fx_positions.alert_period:0D00:05;
 
 / Throttle state: breach identity -> when it was last alerted. Rebuilt on a
 / restart from this job's own fx_limit_breach rows in the replayed log
 / (restore_throttle, #1197), so a standing breach published inside the
 / period before the restart is not published again until the period is out.
-alerts:.qf.port.no_alerts[];
+.qpipe.job.fx_positions.alerts:.qf.port.no_alerts[];
 
 / Fold replayed fx_limit_breach rows into the throttle state: each breach
 / identity is remembered at the newest plant `time` it was published at.
@@ -129,7 +129,7 @@ alerts:.qf.port.no_alerts[];
 / @param x fx_limit_breach rows as the plant logged them, with `time`
 / @return the number of identities now held
 / @eg .qpipe.job.fx_positions.restore_throttle 0#.qpipe.job.fx_positions.fx_limit_breach  ->  count .qpipe.job.fx_positions.alerts
-restore_throttle:{[x]
+.qpipe.job.fx_positions.restore_throttle:{[x]
     if[(0=count x) or not `time in cols x; :count .qpipe.job.fx_positions.alerts];
     keyed:.qpipe.job.fx_positions.dimensions,`metric;
     ids:.qf.port.identity ?[x;();0b;keyed!keyed];
@@ -154,7 +154,7 @@ restore_throttle:{[x]
 / @return the number of limits loaded
 / @throws error naming a malformed limit, a scope column that is not one of this book's dimensions, or a scope without sym
 / @eg .qpipe.job.fx_positions.load_limits[([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6; severity:enlist `hard)] -> 1
-load_limits:{[limits]
+.qpipe.job.fx_positions.load_limits:{[limits]
     .qf.port.require_limits limits;
     / .qf.port cannot check this: it is not told which columns are meant to
     / be scope, so a stray column simply becomes one and the limit matches
@@ -190,7 +190,7 @@ load_limits:{[limits]
 / @return the limits table
 / @throws error naming a file that does not exist
 / @eg .qpipe.job.fx_positions.read_limits "no/such/fx_limits.csv"  ->  throws
-read_limits:{[path]
+.qpipe.job.fx_positions.read_limits:{[path]
     f:hsym `$path;
     if[()~key f; '"read_limits: ",path," does not exist - UQF_FX_POSITION_LIMITS names the limits file"];
     hdr:`$"," vs first read0 f;
@@ -202,9 +202,9 @@ read_limits:{[path]
 / UQF_FX_POSITION_LIMITS is loaded here, and no file is said out loud.
 / @return the number of limits loaded
 / @throws error when the file is missing or malformed: the job does not start
-on_start:{[]
+.qpipe.job.fx_positions.on_start:{[]
     path:getenv `UQF_FX_POSITION_LIMITS;
-    if[count path; load_limits[read_limits[path]]];
+    if[count path; .qpipe.job.fx_positions.load_limits[.qpipe.job.fx_positions.read_limits[path]]];
     if[0=count .qpipe.job.fx_positions.limits;
         .qetl.log.warn[`fx_positions;"no limits loaded - fx_limit_breach stays empty and nothing is policed. Name a limits CSV in UQF_FX_POSITION_LIMITS, or load one over IPC with load_limits";
             enlist[`variable]!enlist "UQF_FX_POSITION_LIMITS"]];
@@ -218,7 +218,7 @@ on_start:{[]
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.fx_positions.on_batch:{[t;x]
     / The job's own output, read back only by a replay (restore_from): the
     / throttle must know what was published before the restart (#1197).
     if[t=`fx_limit_breach;
@@ -240,7 +240,7 @@ on_batch:{[t;x]
 / makes sense across calls; everything it depends on is an argument.
 / @param now the time to throttle against
 / @return the breaches to publish, possibly none
-fresh_breaches:{[now]
+.qpipe.job.fx_positions.fresh_breaches:{[now]
     if[0=count .qpipe.job.fx_positions.limits; :0#.qpipe.job.fx_positions.fx_limit_breach];
     / Measured at the limits' own scope: a cap on a total is compared with
     / the total, not with each position under it.
@@ -267,7 +267,7 @@ fresh_breaches:{[now]
 / wrong on the first dropped message. The book is one row per (pair, book,
 / product) and a desk has hundreds, not millions.
 / @return nothing
-on_timer:{[]
+.qpipe.job.fx_positions.on_timer:{[]
     snapshot:0!.qf.port.break_even .qpipe.job.fx_positions.positions;
     if[count snapshot;
         .qpipe.job.fx_positions.publish[`fx_position;

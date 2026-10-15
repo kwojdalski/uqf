@@ -108,7 +108,7 @@ def test_core_reaching_into_a_declaration_is_flagged(tmp_path, sub):
     root = _tree(
         tmp_path,
         {
-            f"src/etl/{sub}/job.q": "\\d .qpipe.job.job\ncfg:1\n\\d .\n",
+            f"src/etl/{sub}/job.q": ".qpipe.job.job.cfg:1\n",
             "src/etl/core/react.q": "reach:{.qpipe.job.job.cfg}\n",
         },
     )

@@ -48,14 +48,14 @@
 /   folded by `$, so a lower-case source symbol misses every join and
 /   returns an empty table that reads as "no data for that pair".
 
-\d .qetl.coerce
+\d .
 
 / ------------------------------------------------------------------ FLOAT
 
 / Characters that are legitimately part of a number, once a decimal comma
 / has been normalised. Anything else means the field is not a number at all
 / rather than a number needing cleanup.
-numeric_chars:".-+eE0123456789"
+.qetl.coerce.numeric_chars:".-+eE0123456789"
 
 / Coerce text to a float, normalising a European decimal comma.
 / .
@@ -84,7 +84,7 @@ numeric_chars:".-+eE0123456789"
 / @eg .qetl.coerce.to_float["1,0842"]  ->  1.0842
 / @eg .qetl.coerce.to_float["1,234"]   ->  0n
 / @eg .qetl.coerce.to_float[""]        ->  0n
-to_float:{[str]
+.qetl.coerce.to_float:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0n];
     / a decimal comma, only when there is no dot - "1,234.56" is a thousands
@@ -92,8 +92,8 @@ to_float:{[str]
     if[any trimmed=","; if[any trimmed="."; :0n]];
     if[1=sum trimmed=","; if[3=count (1+first where trimmed=",")_trimmed; :0n]];
     normalised:$[any trimmed=","; ssr[trimmed;",";"."]; trimmed];
-    if[not all normalised in numeric_chars; :0n];
-    if[not signs_placed normalised; :0n];
+    if[not all normalised in .qetl.coerce.numeric_chars; :0n];
+    if[not .qetl.coerce.signs_placed normalised; :0n];
     v:"F"$normalised;
     / "F"$ on garbage also gives 0n, so this is belt-and-braces rather than
     / the primary check - but it costs nothing and covers a form the
@@ -104,14 +104,14 @@ to_float:{[str]
 / exponent? "--1", "1-2" and "+-3" are not numbers, though every character is.
 / @eg .qetl.coerce.signs_placed each ("-1";"1e-5";"--1";"1-2")  ->  1100b
 / (),s: one character is a char ATOM in q - "5" - and `where` of an atom is 'type.
-signs_placed:{[s] s:(),s; i:where s in "+-"; all (i=0) or (s i-1) in "eE"}
+.qetl.coerce.signs_placed:{[s] s:(),s; i:where s in "+-"; all (i=0) or (s i-1) in "eE"}
 
 / Coerce text to a long, mapping empty to null rather than zero.
-to_long:{[str]
+.qetl.coerce.to_long:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Nj];
-    if[not all trimmed in numeric_chars; :0Nj];
-    if[not signs_placed trimmed; :0Nj];
+    if[not all trimmed in .qetl.coerce.numeric_chars; :0Nj];
+    if[not .qetl.coerce.signs_placed trimmed; :0Nj];
     "J"$trimmed}
 
 / ------------------------------------------------------------- TIMESTAMP
@@ -142,19 +142,19 @@ to_long:{[str]
 / @eg .qetl.coerce.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15T11:30:00+02:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15"]           ->  0Np
-to_timestamp:{[str]
+.qetl.coerce.to_timestamp:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Np];
-    if[is_date_only[trimmed]; :0Np];
+    if[.qetl.coerce.is_date_only[trimmed]; :0Np];
     if[any trimmed="/"; :0Np];
-    zoned:utc_offset[trimmed];
+    zoned:.qetl.coerce.utc_offset[trimmed];
     if[null last zoned; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
     normalised:ssr[ssr[first zoned;"T";"D"];"-";"."];
     parsed:@[{"P"$x};normalised;{0Np}];
-    if[not clock_in_range normalised; :0Np];
+    if[not .qetl.coerce.clock_in_range normalised; :0Np];
     parsed - last zoned}
 
 / Is the hour of this normalised timestamp text a real one? "P"$ rolls an
@@ -166,7 +166,7 @@ to_timestamp:{[str]
 / @return 1b when the hour field is 00-23, or 24 with nothing after it
 / @eg .qetl.coerce.clock_in_range["2026.09.15D25:00:00"]  ->  0b
 / @eg .qetl.coerce.clock_in_range["2026.09.15D24:00:00"]  ->  1b
-clock_in_range:{[str]
+.qetl.coerce.clock_in_range:{[str]
     at:first where str in "D ";
     if[null at; :1b];
     hour:"J"$2#(at+1)_str;
@@ -178,7 +178,7 @@ clock_in_range:{[str]
 / unreadable is 0Nn. Only the CLOCK is searched for a sign - the "-"s of an
 / ISO date come before the T, D or space that starts it.
 / @eg .qetl.coerce.utc_offset["2026-09-15T09:30:00-05:00"]  ->  ("2026-09-15T09:30:00";-0D05:00)
-utc_offset:{[str]
+.qetl.coerce.utc_offset:{[str]
     if[last[str] in "Zz"; :(-1_str;0D)];
     clock:first where str in "TD ";
     if[null clock; :(str;0D)];
@@ -196,7 +196,7 @@ utc_offset:{[str]
 / timestamp" is a question worth answering explicitly, and because
 / to_timestamp's refusal is otherwise indistinguishable from a parse
 / failure.
-is_date_only:{[str]
+.qetl.coerce.is_date_only:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0b];
     / no time separator at all, and short enough to be just a date
@@ -214,9 +214,9 @@ is_date_only:{[str]
 / A slashed date is refused as ambiguous (day-first or month-first), as in to_timestamp.
 / @eg .qetl.coerce.to_date_as_midnight["2026-09-15T12:00:00"]  ->  0Np
 / @eg .qetl.coerce.to_date_as_midnight["05/09/2026"]  ->  0Np
-to_date_as_midnight:{[str]
+.qetl.coerce.to_date_as_midnight:{[str]
     trimmed:trim str;
-    if[not is_date_only trimmed; :0Np];
+    if[not .qetl.coerce.is_date_only trimmed; :0Np];
     if[any trimmed="/"; :0Np];
     d:@[{"D"$x};ssr[trimmed;"-";"."];{0Nd}];
     if[null d; :0Np];
@@ -241,7 +241,7 @@ to_date_as_midnight:{[str]
 / q behaviour and should not be cited as doing so.
 / @eg .qetl.coerce.to_symbol["EURUSD "]  ->  `EURUSD
 / @eg .qetl.coerce.to_symbol[" eurusd"]  ->  `EURUSD
-to_symbol:{[str]
+.qetl.coerce.to_symbol:{[str]
     trimmed:trim str;
     if[0=count trimmed; :` ];
     `$upper trimmed}
@@ -249,7 +249,7 @@ to_symbol:{[str]
 / Coerce text to a symbol WITHOUT case folding, for identifiers where case
 / is meaningful - an exchange order id, say. Still trims, because trailing
 / whitespace is never meaningful and always silent.
-to_symbol_cased:{[str]
+.qetl.coerce.to_symbol_cased:{[str]
     trimmed:trim str;
     if[0=count trimmed; :` ];
     `$trimmed}
@@ -267,7 +267,7 @@ to_symbol_cased:{[str]
 / @param field the column name, for the message
 / @param v the coerced value
 / @throws error when v is null
-require_present:{[field;v]
+.qetl.coerce.require_present:{[field;v]
     if[null v;
         '"require_present: ",string[field]," coerced to null - the source text was empty or malformed, and this column cannot be null"];
     v}
@@ -286,7 +286,7 @@ require_present:{[field;v]
 / miscount rather than a type mismatch. Second time this exact trap has bitten
 / in this session, after .qt.fixture.etl.call_count; it needs types to detect
 / statically, so it stays a reviewer-attention item rather than a checker rule.
-coerce_column:{[f;col]
+.qetl.coerce.coerce_column:{[f;col]
     vals:f each col;
     `values`failed!(vals;"j"$sum null vals)}
 

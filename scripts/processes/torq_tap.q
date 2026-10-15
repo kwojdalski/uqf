@@ -26,19 +26,19 @@ system"l ",getenv[`UQF_ROOT],"/src/etl/core/log.q";
 / -verbose switches DEBUG on, the same flag every uqf process script takes.
 if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
 
-\d .qproc.tap
+\d .
 
-opts:.Q.opt[.z.x];
+.qproc.tap.opts:.Q.opt[.z.x];
 / blank symbol = subscribe to every table - same "no filter" convention
 / .sub.subscribe/RDB's own default subtabs already use.
-tap_tables:$[`tables in key opts; `$opts[`tables]; `];
+.qproc.tap.tap_tables:$[`tables in key .qproc.tap.opts; `$.qproc.tap.opts[`tables]; `];
 
-tickerplanttypes:`segmentedtickerplant;
-requiredprocs:tickerplanttypes;
-tpconsleep:10;
-tpcheckcycles:0W;
+.qproc.tap.tickerplanttypes:`segmentedtickerplant;
+.qproc.tap.requiredprocs:.qproc.tap.tickerplanttypes;
+.qproc.tap.tpconsleep:10;
+.qproc.tap.tpcheckcycles:0W;
 
-subscribe:{
+.qproc.tap.subscribe:{
   / Said rather than returned silently: a tap with nothing to subscribe to
   / otherwise sits idle with no line in its log to say why.
   if[0=count s:.sub.getsubscriptionhandles[.qproc.tap.tickerplanttypes;();()!()];
@@ -65,7 +65,7 @@ subscribe:{
   r
  };
 
-init:{
+.qproc.tap.init:{
   / startupdepcycles with 0W cycles blocks forever and says nothing, so say
   / what it is waiting for first - see .qtorq.wait_for_tickerplant.
   .qetl.log.info[`tap;"waiting for the tickerplant - if this is the last line, it is not running";

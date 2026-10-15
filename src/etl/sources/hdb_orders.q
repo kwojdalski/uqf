@@ -23,32 +23,32 @@
 / Live: export UQF_SOURCE_CRED_HDB_ORDERS=localhost:<hdb1's port> in the shell
 / `uqs backfill` runs from. Without it, the fixture below is used.
 
-\d .qpipe.source.hdb_orders
+\d .
 
-source_name:`hdb_orders
+.qpipe.source.hdb_orders.source_name:`hdb_orders
 
 / The primary input's columns: what the adapter reads. Not `sym`, `side`, `size`
 / or `price`: a column nothing reads is one more thing an upstream change breaks.
-columns:`time`order_id`book`product`order_status
-types:"pjsss"
+.qpipe.source.hdb_orders.columns:`time`order_id`book`product`order_status
+.qpipe.source.hdb_orders.types:"pjsss"
 
-time_column:`time
+.qpipe.source.hdb_orders.time_column:`time
 
 / The feed's ids are unique (seeded from the process start, #1265).
-row_key:`order_id`time
+.qpipe.source.hdb_orders.row_key:`order_id`time
 
 / The supporting input: the orders before the window, read by the transform as
 / `orders_before`.
-supporting:enlist[`orders_before]!enlist .qetl.plant.columns[`orders;columns]
+.qpipe.source.hdb_orders.supporting:enlist[`orders_before]!enlist .qetl.plant.columns[`orders;.qpipe.source.hdb_orders.columns]
 
 / .u.upd stamps `time` in UTC.
-tz:`UTC
+.qpipe.source.hdb_orders.tz:`UTC
 
 / How far before a window its orders are read: the longest window published.
 / A function, not a value, so it follows the statistic.
 / @return a timespan
 / @eg .qpipe.source.hdb_orders.reach[]  ->  0D01
-reach:{[] last .qpipe.transform.order_quality.windows}
+.qpipe.source.hdb_orders.reach:{[] last .qpipe.transform.order_quality.windows}
 
 / The window's orders, and the longest window's worth before it. The tables are
 / date-partitioned, so the partition is constrained first, one date either side.
@@ -56,19 +56,19 @@ reach:{[] last .qpipe.transform.order_quality.windows}
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return `orders`orders_before!(the window's orders; the orders before it)
-query:{[h;range_from;range_to]
+.qpipe.source.hdb_orders.query:{[h;range_from;range_to]
     f:{[from_ts;to_ts]
         `time xasc select time, order_id, book, product, order_status from `orders
             where date within (-1 1)+`date$(from_ts;to_ts), time>=from_ts, time<to_ts};
     `orders`orders_before!(.qetl.source.ipc[h;f;range_from;range_to];
-        .qetl.source.ipc[h;f;range_from-reach[];range_from])}
+        .qetl.source.ipc[h;f;range_from-.qpipe.source.hdb_orders.reach[];range_from])}
 
 / The fixture's orders on 2026.10.09: ten orders between 09:20 and 10:40, one id
 / delivered twice, a cancel, a reject and a status the adapter does not know.
 / The fixture is not cut for the context: the transform does that.
 / @return orders as the HDB holds them
 / @eg count .qpipe.source.hdb_orders.fixture[]`orders  ->  11
-fixture:{[]
+.qpipe.source.hdb_orders.fixture:{[]
     o:([] time:2026.10.09D09:20:00 2026.10.09D09:40:00 2026.10.09D09:55:00 2026.10.09D10:05:00 2026.10.09D10:05:00 2026.10.09D10:10:00 2026.10.09D10:12:30 2026.10.09D10:20:00 2026.10.09D10:31:00 2026.10.09D10:35:00 2026.10.09D10:40:00;
         order_id:1 2 3 4 4 5 6 7 8 9 10;
         book:`london`newyork`london`london`london`newyork`london`london`newyork`london`london;
@@ -76,8 +76,8 @@ fixture:{[]
         order_status:`filled`rejected`filled`filled`filled`cancelled`rejected`pending`filled`filled`rejected);
     `orders`orders_before!(o;o)}
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.hdb_orders.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting!
-    (source_name;`orders;time_column;row_key;columns;types;query;fixture;tz;supporting)];
+    (.qpipe.source.hdb_orders.source_name;`orders;.qpipe.source.hdb_orders.time_column;.qpipe.source.hdb_orders.row_key;.qpipe.source.hdb_orders.columns;.qpipe.source.hdb_orders.types;.qpipe.source.hdb_orders.query;.qpipe.source.hdb_orders.fixture;.qpipe.source.hdb_orders.tz;.qpipe.source.hdb_orders.supporting)];
 
 \d .

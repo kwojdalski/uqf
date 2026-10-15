@@ -14,35 +14,35 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qpipe.job.fx_trades_feed
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `fx_trades_feed;
+.qpipe.job.fx_trades_feed.publish:.qetl.job.stream.unwired `fx_trades_feed;
 
 / This process's own level per pair, aligned with .qf.demo.pairs. Not walked:
 / this feed prices around the quote feeds' own starting levels rather than
 / drifting independently, so a fill and a quote for the same pair stay in
 / the same neighbourhood.
-spot:.qf.demo.spot
+.qpipe.job.fx_trades_feed.spot:.qf.demo.spot
 
 / Pips per unit, which is the form .qf.exec and the trades schema take - the
 / reciprocal of .qf.demo.pip, which is the size of one pip.
-pip_factor:.qf.px.pip_factor .qf.demo.pairs
+.qpipe.job.fx_trades_feed.pip_factor:.qf.px.pip_factor .qf.demo.pairs
 
 / The sizes a fill is drawn from. Float, matching the trades table's
 / size:`float$() - a long here inserts as the wrong type rather than failing.
-sizes:500000 1000000 2000000 5000000f
+.qpipe.job.fx_trades_feed.sizes:500000 1000000 2000000 5000000f
 
 / Fill ids (#1080): `fx-<run>-<n>`. The run is this process's start, so a
 / restarted feed cannot reissue an id the HDB already holds; n counts fills
 / within the run, so no two fills of a run share one.
-run_id:`long$.z.p
-last_id:0
+.qpipe.job.fx_trades_feed.run_id:`long$.z.p
+.qpipe.job.fx_trades_feed.last_id:0
 
 / Private: issue the next fill id.
 / @private
-next_id:{[]
+.qpipe.job.fx_trades_feed.next_id:{[]
     .qpipe.job.fx_trades_feed.last_id+:1;
     `$"fx-",string[.qpipe.job.fx_trades_feed.run_id],"-",string .qpipe.job.fx_trades_feed.last_id}
 
@@ -59,14 +59,14 @@ next_id:{[]
 / @param fill_id the fill's id, unique per fill (next_id)
 / @return one fill's rows: sym, side, price, size, pip_factor, fill_id
 / @eg count .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1]  ->  6
-fill_rows:{[i;side;size;slip_pips;fill_id]
+.qpipe.job.fx_trades_feed.fill_rows:{[i;side;size;slip_pips;fill_id]
     price:.qpipe.job.fx_trades_feed.spot[i]+slip_pips%.qpipe.job.fx_trades_feed.pip_factor[i];
     (enlist .qf.demo.pairs i;enlist side;enlist price;enlist size;
         enlist .qpipe.job.fx_trades_feed.pip_factor i;enlist fill_id)}
 
 / Draw one fill and publish it. The draws are here rather than in fill_rows
 / so that the row builder stays deterministic.
-on_timer:{[]
+.qpipe.job.fx_trades_feed.on_timer:{[]
     i:rand count .qf.demo.pairs;
     / 1 or -1, always an atom - indexing `1 -1` with a possibly-empty vector
     / is how this produced a list instead, and .u.upd took it as two rows.

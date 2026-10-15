@@ -43,7 +43,11 @@ LAUNCH = datetime(2026, 10, 4, 12, 0, tzinfo=UTC)
 
 
 def q_status_states() -> set[str]:
-    line = next(ln for ln in STATUS_Q.read_text().splitlines() if ln.startswith("status_states:"))
+    line = next(
+        ln
+        for ln in STATUS_Q.read_text().splitlines()
+        if re.match(r"(?:\.[A-Za-z_][\w.]*\.)?status_states:", ln)
+    )
     return set(re.findall(r"`(\w+)", line))
 
 
@@ -59,7 +63,9 @@ def q_terminal_states() -> set[str]:
 def q_exit_successes() -> set[str]:
     """The states `.qetl.job.bounded.exit_code` exits 0 for."""
     src = (CORE / "bounded_worker.q").read_text()
-    line = next(ln for ln in src.splitlines() if ln.startswith("exit_code:"))
+    line = next(
+        ln for ln in src.splitlines() if re.match(r"(?:\.[A-Za-z_][\w.]*\.)?exit_code:", ln)
+    )
     m = re.search(r"state in ((?:`\w+)+);\s*0i", line)
     assert m, "bounded_worker.q's exit_code is no longer spelled the way this test reads it"
     return set(re.findall(r"`(\w+)", m.group(1)))
@@ -81,8 +87,8 @@ def test_the_success_states_are_the_ones_qs_worker_exits_0_for():
 
 def test_the_status_file_name_is_qs():
     src = STATUS_Q.read_text()
-    prefix = re.search(r'^file_prefix:"([^"]+)"', src, re.M)
-    suffix = re.search(r'^file_suffix:"([^"]+)"', src, re.M)
+    prefix = re.search(r'^(?:\.[A-Za-z_][\w.]*\.)?file_prefix:"([^"]+)"', src, re.M)
+    suffix = re.search(r'^(?:\.[A-Za-z_][\w.]*\.)?file_suffix:"([^"]+)"', src, re.M)
     assert prefix and suffix, "status.q no longer names the file the way this test reads it"
     assert (q_facts.STATUS_FILE_PREFIX, q_facts.STATUS_FILE_SUFFIX) == (
         prefix.group(1),

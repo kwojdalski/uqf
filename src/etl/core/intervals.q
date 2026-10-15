@@ -14,7 +14,7 @@
 / this file and nothing else from src/etl. Every other loader loads it just
 / before materialisation.q, which defines the ledger in the same namespace.
 
-\d .qetl.coverage
+\d .
 
 / Validate a half-open [from;to) interval.
 / .
@@ -22,7 +22,7 @@
 / zero-width backfill reporting success: a window where from=to covers
 / nothing, so recording it as coverage would claim completeness for no data.
 / @throws error if the interval is empty or reversed
-require_interval:{[range_from;range_to]
+.qetl.coverage.require_interval:{[range_from;range_to]
     if[not range_to>range_from;
         '"require_interval: must be non-empty and forward-going, got [",
          string[range_from],"; ",string[range_to],")"];
@@ -40,7 +40,7 @@ require_interval:{[range_from;range_to]
 / @param intervals a table with range_from and range_to columns
 / @return a table of composed intervals, ordered by range_from
 / @eg .qetl.coverage.compose[([] range_from:2026.09.11D00:00 2026.09.12D00:00; range_to:2026.09.12D00:00 2026.09.13D00:00)]
-compose:{[intervals]
+.qetl.coverage.compose:{[intervals]
     if[0=count intervals; :intervals];
     sorted:`range_from xasc 0!intervals;
     / fold: extend the open interval when the next one touches it, else
@@ -75,9 +75,9 @@ compose:{[intervals]
 / @param to_ts end of the requested range, exclusive
 / @param covered a table of intervals, need not be composed
 / @return a table of uncovered sub-ranges; empty means fully covered
-gaps:{[from_ts;to_ts;covered]
-    require_interval[from_ts;to_ts];
-    merged:compose[covered];
+.qetl.coverage.gaps:{[from_ts;to_ts;covered]
+    .qetl.coverage.require_interval[from_ts;to_ts];
+    merged:.qetl.coverage.compose[covered];
     if[0=count merged;
         :([] range_from:enlist from_ts; range_to:enlist to_ts)];
     / overlapping intervals only, each clipped to the requested range

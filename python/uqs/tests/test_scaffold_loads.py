@@ -300,9 +300,13 @@ _SUITES = """
 want:{[jobs] .qt.support.job_suite each jobs};
 found:.qt.support.suites[];
 -1 "SUITES:",", " sv string found;
-res:.qunit.runTests[found];
--1 "ERRORED:",", " sv string exec name from res where status=`error;
--1 "RAN:",", " sv string distinct exec namespace from res;
+/ one suite at a time, not .qunit.runTests: it razes every result table, and
+/ joining tables whose same-named columns hold different types is 'type on
+/ PeachQ (a table of one bool, joined to a table of one symbol) where KDB-X
+/ makes a mixed list
+res:.qunit.runNsTests each found;
+-1 "ERRORED:",", " sv string raze {exec name from x where status=`error} each res;
+-1 "RAN:",", " sv string distinct raze {exec namespace from x} each res;
 exit 0
 """
 

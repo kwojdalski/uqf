@@ -384,22 +384,24 @@
 / disagree, since only one of them is left.
 .qt.qetl.source.source_file_names:{[file]
     lines:read0 ` sv `:src/etl/sources,file;
-    ns:first lines where lines like "\\d .*";
-    nm:first lines where lines like "source_name:*";
-    (`$3_ns; `$1_(1+first ss[nm;":"])_nm)}
+    / The file defines its names fully qualified from the root, so its namespace is
+    / what precedes `.source_name:` in the line that registers the name.
+    nm:first lines where (lines like ".qpipe.source.*") and lines like "*.source_name:*";
+    marker:".source_name:";
+    (`$(first ss[nm;marker])#nm; `$1_(first[ss[nm;marker]]+count marker)_nm)}
 
 .qt.qetl.source.source_files:{[] key `:src/etl/sources}
 
 .qt.qetl.source.test_every_source_file_declares_the_namespace_its_name_implies:{[t]
     / The rule this whole section exists for: a source's namespace is
-    / .qpipe.source.<registered name>, so the file's `\d` and its `source_name`
+    / .qpipe.source.<registered name>, so the file's namespace and its `source_name`
     / are one fact written twice and must agree. Before .qpipe.source they could
     / not: the namespace was an abbreviation (.qsdemo for demo_deals) that
     / no check compared with anything.
     pairs:.qt.qetl.source.source_file_names each .qt.qetl.source.source_files[];
     wrong:pairs where not {[p] p[0]=` sv `.qpipe.source,p 1} each pairs;
     .qunit.assertEquals[wrong;();
-        "every source declares \\d .qpipe.source.<source_name> - the namespace and the registered name are the same word"]};
+        "every source defines its names under .qpipe.source.<source_name> - the namespace and the registered name are the same word"]};
 
 .qt.qetl.source.test_the_scan_actually_found_the_source_files:{[t]
     / Without this, a renamed directory would make every test above pass

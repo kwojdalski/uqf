@@ -22,36 +22,36 @@
 / A route longer than three legs does not fit the wide layout and is refused, not
 / truncated: dropping a leg would break the reconciliation the layout exists to show.
 
-\d .qpipe.transform.fx_markout_outputs
+\d .
 
 / The long output: the plant table, without `time`.
-long_out:.qetl.plant.published `fx_markout
+.qpipe.transform.fx_markout_outputs.long_out:.qetl.plant.published `fx_markout
 
 / The wide output: the plant table, without `time`.
-wide_out:.qetl.plant.published `fx_markout_wide
+.qpipe.transform.fx_markout_outputs.wide_out:.qetl.plant.published `fx_markout_wide
 
 / How many legs the wide layout has columns for.
-wide_legs:3
+.qpipe.transform.fx_markout_outputs.wide_legs:3
 
 / The identity of a (execution, horizon): what the long and wide rows are keyed on.
-identity:`venue`fill_id`horizon
+.qpipe.transform.fx_markout_outputs.identity:`venue`fill_id`horizon
 
 / The long layout of a calculation result.
 / @param res the calculation result
 / @return the plant table's columns, one row per component
 / @eg count .qpipe.transform.fx_markout_outputs.long[0#.qpipe.transform.fx_markout.result]  ->  0
-long:{[res] (cols .qpipe.transform.fx_markout_outputs.long_out)#res}
+.qpipe.transform.fx_markout_outputs.long:{[res] (cols .qpipe.transform.fx_markout_outputs.long_out)#res}
 
 / One component kind of a result, keyed on the identity, its value columns renamed.
 / @private
-by_kind:{[res;knd;want;names]
+.qpipe.transform.fx_markout_outputs.by_kind:{[res;knd;want;names]
     id:.qpipe.transform.fx_markout_outputs.identity;
     t:?[res;enlist (=;`kind;enlist knd);0b;(id,want)!id,want];
     id xkey (id,names) xcol t}
 
 / One route step of a result, keyed on the identity.
 / @private
-by_step:{[res;n]
+.qpipe.transform.fx_markout_outputs.by_step:{[res;n]
     id:.qpipe.transform.fx_markout_outputs.identity;
     t:select venue, fill_id, horizon, leg, invert, pips from res where kind=`leg, step=n;
     sfx:string n;
@@ -67,7 +67,7 @@ by_step:{[res;n]
 / @return the plant table's columns, one row per (execution, horizon)
 / @throws error when a route has more legs than the layout has columns
 / @eg count .qpipe.transform.fx_markout_outputs.wide[0#.qpipe.transform.fx_markout.result]  ->  0
-wide:{[res]
+.qpipe.transform.fx_markout_outputs.wide:{[res]
     if[0=count res; :0#.qpipe.transform.fx_markout_outputs.wide_out];
     id:.qpipe.transform.fx_markout_outputs.identity;
     deep:max 0,exec step from res where kind=`leg;
@@ -99,24 +99,24 @@ wide:{[res]
 / definition, so a live row and a refilled one cannot differ. The horizons are
 / signed: one second BEFORE the execution, at it, and one and ten seconds after.
 / Everything else is fx_markout's default spec.
-job_spec:.qpipe.transform.fx_markout.default_spec,enlist[`horizons]!enlist(-0D00:00:01;0D00:00:00;0D00:00:01;0D00:00:10)
+.qpipe.transform.fx_markout_outputs.job_spec:.qpipe.transform.fx_markout.default_spec,enlist[`horizons]!enlist(-0D00:00:01;0D00:00:00;0D00:00:01;0D00:00:10)
 
 / The least a job waits before scoring, however early its horizons are.
-settle:0D00:00:01
+.qpipe.transform.fx_markout_outputs.settle:0D00:00:01
 
 / How long a job waits for an execution's references before giving up on it: the
 / wait for its horizons, and five minutes more.
-expire_after:.qpipe.transform.fx_markout.wait[job_spec;settle]+0D00:05
+.qpipe.transform.fx_markout_outputs.expire_after:.qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]+0D00:05
 
 / How long a job remembers an execution it has scored, to drop a redelivery.
-remember:0D01
+.qpipe.transform.fx_markout_outputs.remember:0D01
 
 / How much older than its arrival an execution's source_time can be: the bound on
 / the books the horizon kind keeps for a late execution. Declared, not left to the
 / kind's day-long default for an event on source_time, which would hold a day of
 / every pair's books. An execution that arrives later than this after it happened
 / may find its books evicted and expires unscored, with the reason.
-max_lateness:0D00:00:30
+.qpipe.transform.fx_markout_outputs.max_lateness:0D00:00:30
 
 / The calculation and one layout, as the horizon job's and the bounded twin's transform.
 / @param spec the spec
@@ -126,7 +126,7 @@ max_lateness:0D00:00:30
 / @return the layout's rows, without `time`
 / @throws error when the layout is neither
 / @eg count .qpipe.transform.fx_markout_outputs.score_with[.qpipe.transform.fx_markout_outputs.job_spec;`long;0#.qpipe.transform.fx_markout.executions_in;0#.qpipe.transform.fx_markout.market_data_in]  ->  0
-score_with:{[spec;layout;exe;md]
+.qpipe.transform.fx_markout_outputs.score_with:{[spec;layout;exe;md]
     if[not layout in `long`wide; '"fx_markout_outputs: layout must be long or wide, got ",.Q.s1 layout];
     res:.qpipe.transform.fx_markout.calc[spec;exe;md];
     $[layout=`long; .qpipe.transform.fx_markout_outputs.long[res]; .qpipe.transform.fx_markout_outputs.wide[res]]}
@@ -138,7 +138,7 @@ score_with:{[spec;layout;exe;md]
 / @param rows a layout's rows, with source_time
 / @return the rows with `time` first
 / @eg count .qpipe.transform.fx_markout_outputs.stamped[.qpipe.transform.fx_markout_outputs.job_spec;0#.qpipe.transform.fx_markout_outputs.long_out]  ->  0
-stamped:{[spec;rows]
+.qpipe.transform.fx_markout_outputs.stamped:{[spec;rows]
     (`time,cols rows) xcols update time:source_time+max spec`horizons from rows}
 
 / ------------------------------------------------ THE EXAMPLES' INPUTS AND ROWS
@@ -148,7 +148,7 @@ stamped:{[spec;rows]
 
 / One USDPLN sell, as the calculation leaves it.
 / @private
-sample_result:{[]
+.qpipe.transform.fx_markout_outputs.sample_result:{[]
     ([] source_time:5#2026.09.17D10:00:00; venue:5#`a; fill_id:5#`y1; sym:5#`USDPLN; side:5#-1; size:5#1e6;
         horizon:5#0D00:00:01; kind:`total`execution`leg`leg`residual; step:0 0 1 2 0;
         leg:``,`EURUSD`EURPLN,`; invert:0b,0b,1b,0b,0b;
@@ -157,13 +157,13 @@ sample_result:{[]
 
 / A EURUSD buy at 1.1001, as the executions normalizer publishes it.
 / @private
-sample_executions:{[]
+.qpipe.transform.fx_markout_outputs.sample_executions:{[]
     ([] source_time:enlist 2026.09.17D10:00:00; venue:enlist `a; sym:enlist `EURUSD; side:enlist 1;
         size:enlist 1e6; price:enlist 1.1001; fill_id:enlist `x1)}
 
 / Two sources' books around it.
 / @private
-sample_books:{[]
+.qpipe.transform.fx_markout_outputs.sample_books:{[]
     ([] source_time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00.5 2026.09.17D10:00:08;
         sym:5#`EURUSD; source:`a`a`a`b`b;
         bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008);
@@ -173,7 +173,7 @@ sample_books:{[]
 
 / Its long rows under the job grid.
 / @private
-sample_long:{[]
+.qpipe.transform.fx_markout_outputs.sample_long:{[]
     ([] source_time:16#2026.09.17D10:00:00; venue:16#`a; fill_id:16#`x1; sym:16#`EURUSD; side:16#1; size:16#1e6;
         horizon:(4#-0D00:00:01),(4#0D00:00:00),(4#0D00:00:01),4#0D00:00:10;
         kind:16#`total`execution`leg`residual; step:16#0 0 1 0; leg:16#``,`EURUSD,`; invert:16#0b;
@@ -184,7 +184,7 @@ sample_long:{[]
 
 / Its wide rows under the job grid.
 / @private
-sample_wide:{[]
+.qpipe.transform.fx_markout_outputs.sample_wide:{[]
     ([] source_time:4#2026.09.17D10:00:00; venue:4#`a; fill_id:4#`x1; sym:4#`EURUSD; side:4#1; size:4#1e6;
         horizon:(-0D00:00:01;0D00:00:00;0D00:00:01;0D00:00:10); price:4#1.1001; pip_factor:(4#.qf.px.pip_factor `EURUSD);
         ref_t0:4#1.1; ref_t1:1.1 1.1 1.1005 1.10095; total_pips:-1 -1 4 8.5; execution_pips:4#-1f; residual_pips:4#0f;

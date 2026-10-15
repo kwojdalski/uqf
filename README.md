@@ -94,10 +94,11 @@ interpreters are compatible enough for one to stand for both. A block that
 cannot run on PeachQ yet is marked `kdbx-only` with the reason (the markers are
 defined in [`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
 
-**The whole suite runs on PeachQ in CI, flattened.** PeachQ rejects nested
-contexts (`\d .a.b`), so `scripts/test.py q-unit-peachq` first writes a copy of
-`src/` and `scripts/` without them (`tests/` needs none: a suite defines
-everything from the root by its whole path)
+**The whole suite runs on PeachQ in CI.** PeachQ rejects nested contexts
+(`\d .a.b`), so this tree opens none in `src/`, `scripts/`, `sidecars/` or
+`tests/` (`scripts/gates/check_nested_contexts.py`): every name is defined fully
+qualified from the root and every file loads on PeachQ as it is. The lane still
+writes a copy of the tree through the converter, which now has nothing to change
 ([`scripts/portable/flatten_contexts.py`](scripts/portable/flatten_contexts.py)),
 then runs every suite on it. The tests that cannot pass there are listed, each
 with why, in [`tests/q/peachq_known_gaps.txt`](tests/q/peachq_known_gaps.txt). A

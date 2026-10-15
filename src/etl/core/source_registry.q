@@ -4,7 +4,7 @@
 / several files, loaded in order by src/etl/init.q after source_contract.q, which
 / carries the design record. Public names are unchanged by the split (#970).
 
-\d .qetl.source
+\d .
 
 / ---------------------------------------------------- SUPPORTING INPUTS
 / .
@@ -66,7 +66,7 @@
 / .
 / `source` stays a column beside the `name` key, so .qetl.source.def returns
 / the declaration it always did.
-sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
+.qetl.source.sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
     tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:())
 
@@ -126,13 +126,13 @@ sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
 /     default, {[h] 0Wp}, is closed data: complete forever.
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
-define:{[source;decl]
+.qetl.source.define:{[source;decl]
     / Where rows go is the WORKER's dataset (#769), so a source naming a
     / destination was a second answer to that question, shown and never used
     / (#1092).
     if[`target in key decl;
         '"define: ",string[source]," declares target, which is gone (#1092) - rows go to the worker's dataset; drop it"];
-    missing:required_declarations where not required_declarations in key decl;
+    missing:.qetl.source.required_declarations where not .qetl.source.required_declarations in key decl;
     if[count missing;
         '"define: ",string[source]," is missing declaration(s): ",", " sv string missing];
     if[not 11h=abs type decl`columns;
@@ -230,17 +230,17 @@ define:{[source;decl]
         params:(value ct) 1;
         if[(not 1=count params) or null first params;
             '"define: ",string[source],"'s complete_through must take exactly one argument, the source's handle"]];
-    tr:$[`transport in key decl; decl`transport; default_transport];
-    if[not tr in transports[];
-        '"define: ",string[source],"'s transport must be one of ",(", " sv string transports[])];
+    tr:$[`transport in key decl; decl`transport; .qetl.source.default_transport];
+    if[not tr in .qetl.source.transports[];
+        '"define: ",string[source],"'s transport must be one of ",(", " sv string .qetl.source.transports[])];
     / Every declaration is stored with every column: a key no column holds
     / would have nowhere to go, so it is refused by name rather than dropped.
     decl[`transport]:tr;
-    unknown:(key decl) except required_declarations,key optional_declarations;
+    unknown:(key decl) except .qetl.source.required_declarations,key .qetl.source.optional_declarations;
     if[count unknown;
         '"define: ",string[source]," declares ",(", " sv string unknown),
          ", which a source does not take - the declarations are ",
-         ", " sv string (required_declarations,key optional_declarations)];
+         ", " sv string (.qetl.source.required_declarations,key .qetl.source.optional_declarations)];
     / Store row_key NORMALISED to a vector, always.
     / .
     / Two reasons, and the second is not obvious. Semantically it means no
@@ -251,8 +251,8 @@ define:{[source;decl]
     / one shape keeps every declaration mutually assignable.
     / columns and types to vectors too: one field's atom would otherwise type
     / a general column on the first registration and refuse the next one.
-    decl:optional_declarations,@[decl;`row_key`columns`types;:;(key_cols;(),decl`columns;(),decl`types)];
-    `.qetl.source.sources upsert (source,decl cols value sources);
+    decl:.qetl.source.optional_declarations,@[decl;`row_key`columns`types;:;(key_cols;(),decl`columns;(),decl`types)];
+    `.qetl.source.sources upsert (source,decl cols value .qetl.source.sources);
     .[{.qetl.log.dbg[x;y;z]};(source;"source registered";
         `columns`time_column`tz`transport`row_key!(decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
@@ -264,7 +264,7 @@ define:{[source;decl]
 / registration, with no core change.
 / @return a symbol vector, empty when nothing has registered yet
 / @eg .qetl.source.defined[]
-defined:{[] (key sources)`name}
+.qetl.source.defined:{[] (key .qetl.source.sources)`name}
 
 / The inputs a source hands its worker, primary first: its table_name, then
 / each supporting input's name. One name for a source with no supporting
@@ -272,7 +272,7 @@ defined:{[] (key sources)`name}
 / @param source a registered source name
 / @return a symbol vector
 / @eg .qetl.source.input_names `demo_deals  ->  enlist `demo_deals
-input_names:{[source] d:def[source]; (enlist d`table_name),key d`supporting}
+.qetl.source.input_names:{[source] d:.qetl.source.def[source]; (enlist d`table_name),key d`supporting}
 
 / The primary input of what a source returned: the window's own rows, which
 / are counted and which own the window. The batch itself for a source with
@@ -280,7 +280,7 @@ input_names:{[source] d:def[source]; (enlist d`table_name),key d`supporting}
 / @param source a registered source name
 / @param fetched what the source's query or fixture returned
 / @return a table
-primary:{[source;fetched] d:def[source]; $[count d`supporting; fetched d`table_name; fetched]}
+.qetl.source.primary:{[source;fetched] d:.qetl.source.def[source]; $[count d`supporting; fetched d`table_name; fetched]}
 
 / The column(s) identifying a row uniquely, always as a vector.
 / .
@@ -290,7 +290,7 @@ primary:{[source;fetched] d:def[source]; $[count d`supporting; fetched d`table_n
 / Stored normalised by `define`, so this is already a vector - the `(),`
 / is belt-and-braces for a declaration written directly into `sources` by a
 / test rather than through register.
-row_key:{[source] (),(def[source])`row_key}
+.qetl.source.row_key:{[source] (),(.qetl.source.def[source])`row_key}
 
 / One source's full declaration, or a refusal naming it.
 / .
@@ -304,9 +304,9 @@ row_key:{[source] (),(def[source])`row_key}
 /   supporting)
 / @throws error naming the source when it was never registered
 / @eg .qetl.source.def `demo_deals
-def:{[source]
-    if[not source in defined[];
+.qetl.source.def:{[source]
+    if[not source in .qetl.source.defined[];
         '"def: ",string[source]," is not a registered source - sources register centrally, so an unregistered source is a wiring bug rather than a lookup miss"];
-    sources source}
+    .qetl.source.sources source}
 
 \d .

@@ -20,20 +20,20 @@
 / largely already served by hit_ratio_by and markout_at_horizons. See
 / docs/architecture/event-tape.md for the comparison.
 
-\d .qpipe.source.demo_events
+\d .
 
-source_name:`demo_events
+.qpipe.source.demo_events.source_name:`demo_events
 
 / The columns this adapter reads, and their q types.
 / p=timestamp, s=symbol, j=long, f=float. Note `j` for a long, not `l`:
 / that is what `meta` reports, and validate compares against meta - the
 / first draft wrote "l" and was refused at registration, correctly.
-columns:`time`sym`action`side`size`price`order_id`pip_factor
-types:"pssjffjj"
+.qpipe.source.demo_events.columns:`time`sym`action`side`size`price`order_id`pip_factor
+.qpipe.source.demo_events.types:"pssjffjj"
 
 
 / The window is taken on event time.
-time_column:`time
+.qpipe.source.demo_events.time_column:`time
 
 / An event is identified by its order and its action: one order_id produces
 / an add and then exactly one terminal event (a cancel or a trade), so the
@@ -42,16 +42,16 @@ time_column:`time
 / Worth stating because it is the first COMPOSITE key in this tree, and it
 / is what the restatement path will key on if a venue ever corrects an
 / event.
-row_key:`order_id`action
+.qpipe.source.demo_events.row_key:`order_id`action
 
-tz:`UTC
+.qpipe.source.demo_events.tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
 / Parameterised, never concatenated. Half-open
 / [range_from;range_to) - >= on the lower bound and < on the
 / upper, so a boundary event is published exactly once.
-query:{[h;range_from;range_to]
+.qpipe.source.demo_events.query:{[h;range_from;range_to]
     .qetl.source.ipc[h;{[from_ts;to_ts]
         select time, sym, action, side, size, price, order_id, pip_factor
             from `event_tape
@@ -72,7 +72,7 @@ query:{[h;range_from;range_to]
 /     cancel_to_trade_ratio is > 1 rather than a coin flip
 /   - one order_id adds then cancels, another adds then trades, so the
 /     composite row_key has both terminal shapes present
-fixture:{[]
+.qpipe.source.demo_events.fixture:{[]
     ([] time:2026.09.11D09:00:00.000000000+1000000000*til 10;
         sym:10#`EURUSD;
         action:`add`add`trade`cancel`add`cancel`add`trade`add`cancel;
@@ -83,8 +83,8 @@ fixture:{[]
         pip_factor:.qf.px.pip_factor 10#`EURUSD)}
 
 / Register on load, so the declaration and the implementation cannot drift.
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.demo_events.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`event_tape;time_column;row_key;columns;types;query;fixture;tz)];
+    (.qpipe.source.demo_events.source_name;`event_tape;.qpipe.source.demo_events.time_column;.qpipe.source.demo_events.row_key;.qpipe.source.demo_events.columns;.qpipe.source.demo_events.types;.qpipe.source.demo_events.query;.qpipe.source.demo_events.fixture;.qpipe.source.demo_events.tz)];
 
 \d .

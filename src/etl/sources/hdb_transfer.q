@@ -8,34 +8,34 @@
 / and runs the whole thing end to end; docs/scaffolding/hdb-transfer.md
 / walks through it.
 
-\d .qpipe.source.hdb_transfer
+\d .
 
-source_name:`hdb_transfer
+.qpipe.source.hdb_transfer.source_name:`hdb_transfer
 
 / The columns this adapter READS - not everything the source has. Declaring
 / one the worker never touches means an upstream change to an unused column
 / breaks the run.
-columns:`time`trade_id`sym`price`size`side
-types:"pjsfjs"
+.qpipe.source.hdb_transfer.columns:`time`trade_id`sym`price`size`side
+.qpipe.source.hdb_transfer.types:"pjsfjs"
 
 
 / The column the window is taken on.
-time_column:`time
+.qpipe.source.hdb_transfer.time_column:`time
 
 / What identifies a row uniquely. Only correct if the source guarantees it:
 / a source that reuses ids after a purge silently merges unrelated rows.
 / The source's trade ids are unique across the whole table.
-row_key:`trade_id
+.qpipe.source.hdb_transfer.row_key:`trade_id
 
 / A claim, not a default. An unstated zone is the shape of the bug - every
 / later reader assumes UTC while the source hands over local wall-clock time.
-tz:`UTC
+.qpipe.source.hdb_transfer.tz:`UTC
 
-transport:`local
+.qpipe.source.hdb_transfer.transport:`local
 
 / What UQF_SOURCE_CRED_HDB_TRANSFER looks like: the source HDB's root
 / directory, the one holding the sym file and the date partitions.
-credential_example:"/data/source_hdb"
+.qpipe.source.hdb_transfer.credential_example:"/data/source_hdb"
 
 / `h` is the HDB directory, read from its files with no process in between.
 / Send the query with .qetl.source.local[h;{[read;from_ts;to_ts] ...};range_from;range_to]:
@@ -45,7 +45,7 @@ credential_example:"/data/source_hdb"
 / .
 / Half-open [range_from;range_to) - a DIFFERENT rule: >= on the lower
 / bound and < on the upper, so a boundary row is published exactly once.
-query:{[h;range_from;range_to]
+.qpipe.source.hdb_transfer.query:{[h;range_from;range_to]
     .qetl.source.local[h;{[read;from_ts;to_ts]
         / Whole partitions come back; keep [from_ts;to_ts) and the declared
         / columns. Indexed rather than select-from: a bare name after `from`
@@ -59,7 +59,7 @@ query:{[h;range_from;range_to]
 / to attribute. Used when no credential is configured - a stated demo path,
 / never a fallback for a failed connection.
 / .
-fixture:{[]
+.qpipe.source.hdb_transfer.fixture:{[]
     ([] time:2026.01.05D09:00 2026.01.05D09:30 2026.01.05D14:00 2026.01.06D10:15;
         trade_id:1 2 3 4;
         sym:`EURUSD`USDJPY`EURUSD`GBPUSD;
@@ -68,8 +68,8 @@ fixture:{[]
         side:`buy`sell`sell`buy)}
 
 / Register on load, so the declaration and the implementation cannot drift.
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.hdb_transfer.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
-    (source_name;`trades;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
+    (.qpipe.source.hdb_transfer.source_name;`trades;.qpipe.source.hdb_transfer.time_column;.qpipe.source.hdb_transfer.row_key;.qpipe.source.hdb_transfer.columns;.qpipe.source.hdb_transfer.types;.qpipe.source.hdb_transfer.query;.qpipe.source.hdb_transfer.fixture;.qpipe.source.hdb_transfer.tz;.qpipe.source.hdb_transfer.transport;.qpipe.source.hdb_transfer.credential_example)];
 
 \d .

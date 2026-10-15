@@ -120,24 +120,26 @@ message changed.
 
 ## PeachQ
 
-PeachQ v0.88 cannot switch into a nested context, so no library file contains
-`\d .qf.px`. Every name is defined from the root, fully qualified
-(`.qf.px.growth_simple:{[r;t] ...}`), and a lambda names its own siblings and
-constants in full too, because a lambda defined from the root resolves an
-unqualified global at the root. The result loads natively on PeachQ:
-`\l src/init.q` works, the two `docs/` blocks that load it run on PeachQ, and
-the library needs no flattening there (the ETL's `.qetl.*` and `.qpipe.*` still
-do). [`check_module_deps.py`](../../scripts/gates/check_module_deps.py) fails a
-`\d .a.b` in a library file so this cannot regress.
+PeachQ v0.88 cannot switch into a nested context, and this tree opens none: no
+`\d` names more than one level, in `src/`, `scripts/`, `sidecars/` or the q
+blocks of `docs/`
+([`check_nested_contexts.py`](../../scripts/gates/check_nested_contexts.py)
+holds the one list of what it scans). Every name is defined from the root, fully
+qualified (`.qf.px.growth_simple:{[r;t] ...}`), and a lambda names its own
+siblings and constants in full too, because a lambda defined from the root
+resolves an unqualified global at the root. `\l src/init.q` and
+`\l src/etl/init.q` therefore load on PeachQ as they stand, the docs blocks run
+there, and the PeachQ lane flattens only what `tests/` still nests.
 
 Two consequences of writing names in full:
 
 - Inside a function, a bare name is a parameter, a local or a q built-in, never
   a sibling. Read `.qf.px.growth_simple[r;t]`, not `growth_simple[r;t]`.
 - A qSQL phrase that names a column which is also a function in the namespace is
-  ambiguous to the flattener the ETL lane still runs, so a helper called `step`
-  or a function called `rolling_ofi` beside a column of that name is worth
-  avoiding; that is another reason to give helpers narrow names.
+  ambiguous to the flattener (`flatten_contexts.py --target 5.0`, which reads
+  the tree back as nested), so a helper called `step` or a function called
+  `rolling_ofi` beside a column of that name is worth avoiding; that is another
+  reason to give helpers narrow names.
 
 ## Adding to a domain
 

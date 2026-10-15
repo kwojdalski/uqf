@@ -11,7 +11,7 @@
 / under Rosetta; a wider window makes a failed window expensive to redo and
 / holds more of the book in memory at once.
 
-\d .qpipe.job.eq_orderbook_backfill
+\d .
 
 / --- the data-quality gate ------------------------------------------------
 
@@ -32,7 +32,7 @@
 / #734; here #1148).
 / @param batch the transformed book
 / @return a table check/status/detail, one row per offending record
-quality_check:{[batch]
+.qpipe.job.eq_orderbook_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     crossed:batch where .qf.mkt.crossed_top batch;
     bad_price:select from batch where (not null price) & not price>0;

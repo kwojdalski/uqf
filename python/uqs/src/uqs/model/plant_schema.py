@@ -41,7 +41,7 @@ def _published_tables(pipelines: Iterable[Any]) -> set[str]:
 #: `name:([]...)` at the start of a line in a generated database.q. Same
 #: convention model/schemas.py reads plant_tables.q by, applied to the merged
 #: file so vendored definitions count too.
-_GENERATED_DEFINITION = re.compile(r"^([a-z_0-9]+):\(\[\]", re.MULTILINE)
+_GENERATED_DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_0-9]+):\(\[\]", re.MULTILINE)
 
 
 def undefined_published_tables(paths: UqsPaths) -> list[str]:

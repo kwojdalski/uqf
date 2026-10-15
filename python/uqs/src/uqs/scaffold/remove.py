@@ -301,7 +301,9 @@ def _drop_definition(text: str, table: str) -> str:
     """`text` without `table`'s definition, the comment above it, and the
     blank line a scaffold puts before that comment."""
     lines = text.splitlines(keepends=True)
-    at = [i for i, line in enumerate(lines) if line.startswith(f"{table}:([]")]
+    at = [
+        i for i, line in enumerate(lines) if re.match(rf"(?:\.qetl\.plant\.)?{table}:\(\[\]", line)
+    ]
     if len(at) != 1:
         return text
     start = at[0]
