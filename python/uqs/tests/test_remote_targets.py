@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 
 import pytest
+import typer
+import typer.core
 from typer.testing import CliRunner
 
 from uqs.cli import app
@@ -338,14 +340,29 @@ def test_recording_never_fails_the_deployment(server, monkeypatch):
     history.record(Path("."), _cfg("svc@x", "/srv/x"), _report("r1"))  # warns, does not raise
 
 
-def test_deploy_list_marks_each_servers_default(server):
+def test_deploy_history_marks_each_servers_default(server):
     root = Path(".")
     history.record(root, _cfg("svc@box", "/srv/a"), _report("r1"))
     history.record(root, _cfg("svc@box", "/srv/a"), _report("r2"))
-    out = CliRunner().invoke(app, ["deploy", "list"], terminal_width=200).output
+    out = CliRunner().invoke(app, ["deploy", "history"], terminal_width=200).output
     lines = [ln for ln in out.splitlines() if " r1 " in ln or " r2 " in ln]
     assert "*" in lines[0] and "r2" in lines[0], "newest first, and it is the default"
     assert "*" not in lines[1]
+
+
+def test_deploy_list_is_gone_and_deploy_help_names_history(server):
+    """`deploy list` was renamed `deploy history` (#1418) with no alias: the old
+    path is refused, and the group's help offers the new one, saying the
+    history is this machine's."""
+    old = CliRunner().invoke(app, ["deploy", "list"])
+    assert old.exit_code != 0 and "No such command" in old.output
+    root = typer.main.get_command(app)
+    assert isinstance(root, typer.core.TyperGroup)
+    deploy = root.commands["deploy"]
+    assert isinstance(deploy, typer.core.TyperGroup)
+    assert "history" in deploy.commands and "list" not in deploy.commands
+    summary = (deploy.commands["history"].help or "").splitlines()[0]
+    assert summary == "Show deployment history recorded on this machine, newest first."
 
 
 def test_shell_opens_in_the_release_with_its_environment(server):
