@@ -38,7 +38,7 @@
 / none because it still reads as protection.
 / .
 / Returns FAILURES, so an empty table means the batch passed - the shape
-/ .qdqc.summarize_checks already uses.
+/ .qf.mkt.summarize_checks already uses.
 / @param batch the fetched rows, before publication
 / @return a table check/status/detail, one row per offending row
 / @eg .qpipe.job.demo_deals_backfill.quality_check[.qpipe.source.demo_deals.fixture[]]  ->  an empty table
@@ -49,7 +49,7 @@ quality_check:{[batch]
     bad_id:select from batch where null deal_id;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qf.util.full each t)
       }'[`nonpositive_rate`nonpositive_notional`null_deal_id;
          (bad_rate;bad_notional;bad_id)]}
 

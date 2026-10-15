@@ -94,7 +94,7 @@
 \l src/etl/plant_tables.q
 
 / The invented market the demo's feeds publish and its jobs consume. Before
-/ the core declarations, because a job filters on .qsynth.pairs.
+/ the core declarations, because a job filters on .qf.demo.pairs.
 \l src/etl/synthetic_market.q
 
 / Declarations last. Each registers itself on load, so that a declaration and

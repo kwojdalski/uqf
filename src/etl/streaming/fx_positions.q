@@ -16,7 +16,7 @@
 / not trade. The timer decouples how often the desk wants to see the book
 / from how fast the market happens to be going, which is what a snapshot
 / is for. Breaches go out on the same timer for the same reason, and are
-/ throttled on top of it (see .qlimit.throttle).
+/ throttled on top of it (see .qf.port.throttle).
 / .
 / WHY IT IS NOT posbook. .qpipe.job.posbook answers "what did we make", per
 / sym, at weighted-average cost, marked to mid. This answers "what are we
@@ -73,7 +73,7 @@ net_fills:{[book;batch]
     if[any bad;
         .qetl.log.warn[`fx_positions;"dropped fills with a null side, size or price - they cannot be netted";
             enlist[`fills]!enlist `long$sum bad]];
-    updated:.qdesk.apply_fills[
+    updated:.qf.port.apply_desk_fills[
         .qpipe.job.fx_positions.dimensions xkey book;
         rows where not bad];
     `sym`book`product xasc 0!updated}
@@ -94,7 +94,7 @@ positions:`sym`book`product xkey desk_book;
 / .
 / Scoped on the same three dimensions as the book, so a limit is written
 / per pair per book per product. A cap on a total is the same table at a
-/ coarser scope, evaluated against .qdesk.rollup - see limits.q - but the
+/ coarser scope, evaluated against .qf.port.rollup - see limits.q - but the
 / scope always keeps sym: base_qty and quote_qty are in each pair's own
 / currencies, so a total across pairs would add currencies (#1260).
 limits:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
@@ -102,7 +102,7 @@ limits:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
 
 / The metrics the limits are allowed to police. Named rather than "every
 / numeric column", so adding a column to the book cannot silently start
-/ policing it - see .qlimit.measure.
+/ policing it - see .qf.port.measure.
 policed:`base_qty`quote_qty
 
 / How long a breach stays quiet after alerting. A breach is a state that
@@ -114,15 +114,15 @@ alert_period:0D00:05;
 / restart from this job's own fx_limit_breach rows in the replayed log
 / (restore_throttle, #1197), so a standing breach published inside the
 / period before the restart is not published again until the period is out.
-alerts:.qlimit.no_alerts[];
+alerts:.qf.port.no_alerts[];
 
 / Fold replayed fx_limit_breach rows into the throttle state: each breach
 / identity is remembered at the newest plant `time` it was published at.
 / .
 / The identity is built exactly as fresh_breaches builds it (the dimensions
-/ and the metric, rendered by .qlimit.identity) and the time is the plant's
+/ and the metric, rendered by .qf.port.identity) and the time is the plant's
 / stamp on the row, the moment the breach was last published, so after the
-/ restart `.qlimit.throttle` sees what it saw before it: quiet until the
+/ restart `.qf.port.throttle` sees what it saw before it: quiet until the
 / period has run from that stamp. Merged with `|` so a state already held is
 / never moved back in time. Only a replay folds: live, a row of this table is
 / the job's own echo and the throttle already knows it.
@@ -132,7 +132,7 @@ alerts:.qlimit.no_alerts[];
 restore_throttle:{[x]
     if[(0=count x) or not `time in cols x; :count .qpipe.job.fx_positions.alerts];
     keyed:.qpipe.job.fx_positions.dimensions,`metric;
-    ids:.qlimit.identity ?[x;();0b;keyed!keyed];
+    ids:.qf.port.identity ?[x;();0b;keyed!keyed];
     seen:exec max time by id from ([] id:ids; time:x`time);
     `.qpipe.job.fx_positions.alerts set .qpipe.job.fx_positions.alerts|seen;
     count .qpipe.job.fx_positions.alerts}
@@ -155,13 +155,13 @@ restore_throttle:{[x]
 / @throws error naming a malformed limit, a scope column that is not one of this book's dimensions, or a scope without sym
 / @eg .qpipe.job.fx_positions.load_limits[([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6; severity:enlist `hard)] -> 1
 load_limits:{[limits]
-    .qlimit.require_limits limits;
-    / .qlimit cannot check this: it is not told which columns are meant to
+    .qf.port.require_limits limits;
+    / .qf.port cannot check this: it is not told which columns are meant to
     / be scope, so a stray column simply becomes one and the limit matches
     / nothing. THIS file knows the dimensions, so it can say so at load -
     / and a limit that matches nothing is exactly the failure that looks
     / like a quiet day.
-    scope:.qlimit.scope_cols limits;
+    scope:.qf.port.scope_cols limits;
     stray:scope where not scope in .qpipe.job.fx_positions.dimensions;
     if[count stray;
         '"load_limits: ",(", " sv string stray)," is not a dimension of this book, so a limit carrying it would be scoped on something no position has - the dimensions are ",
@@ -244,10 +244,10 @@ fresh_breaches:{[now]
     if[0=count .qpipe.job.fx_positions.limits; :0#.qpipe.job.fx_positions.fx_limit_breach];
     / Measured at the limits' own scope: a cap on a total is compared with
     / the total, not with each position under it.
-    scope:.qlimit.scope_cols .qpipe.job.fx_positions.limits;
-    rolled:.qdesk.rollup[.qpipe.job.fx_positions.positions;scope];
-    measured:.qlimit.measure[rolled;.qpipe.job.fx_positions.policed];
-    breaches:.qlimit.evaluate[measured;.qpipe.job.fx_positions.limits];
+    scope:.qf.port.scope_cols .qpipe.job.fx_positions.limits;
+    rolled:.qf.port.rollup[.qpipe.job.fx_positions.positions;scope];
+    measured:.qf.port.measure[rolled;.qpipe.job.fx_positions.policed];
+    breaches:.qf.port.evaluate[measured;.qpipe.job.fx_positions.limits];
     / A breach always names every dimension, null where it covers them all,
     / so fx_limit_breach keeps one shape and the throttle one identity. The
     / dimensions lead, in the book's order, so the identity renders the same
@@ -255,7 +255,7 @@ fresh_breaches:{[now]
     / builds it from the published row, which is always in that order.
     breaches:{[t;c] $[c in cols t; t; ![t;();0b;(enlist c)!enlist enlist `]]}/[breaches;.qpipe.job.fx_positions.dimensions];
     breaches:(.qpipe.job.fx_positions.dimensions,cols[breaches] except .qpipe.job.fx_positions.dimensions)#breaches;
-    r:.qlimit.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
+    r:.qf.port.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
     `.qpipe.job.fx_positions.alerts set r`state;
     r`alerts}
 
@@ -268,7 +268,7 @@ fresh_breaches:{[now]
 / product) and a desk has hundreds, not millions.
 / @return nothing
 on_timer:{[]
-    snapshot:0!.qdesk.break_even .qpipe.job.fx_positions.positions;
+    snapshot:0!.qf.port.break_even .qpipe.job.fx_positions.positions;
     if[count snapshot;
         .qpipe.job.fx_positions.publish[`fx_position;
             select sym, book, product, base_qty, quote_qty, fill_count, break_even from snapshot]];

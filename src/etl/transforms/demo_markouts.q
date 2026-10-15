@@ -25,14 +25,14 @@ horizons:0D00:00:01 0D00:00:10
 max_horizon:max horizons
 
 / Score fills at every horizon against the mid of the latest quote at or
-/ before trade_time+horizon - only the demo's own pairs (.qsynth.pairs), in
+/ before trade_time+horizon - only the demo's own pairs (.qf.demo.pairs), in
 / fill order then horizon order.
 / .
 / A fill whose horizon quote never arrived gets a null ref_price and
 / markout_pips rather than being dropped, so a gap shows in the table.
-/ The empty guard is not tidiness: .qexec.markout_at_horizons throws `type`
+/ The empty guard is not tidiness: .qf.exec.markout_at_horizons throws `type`
 / on zero trades.
-/ The fill's id (#1080) rides along: .qexec.markout_at_horizons carries extra
+/ The fill's id (#1080) rides along: .qf.exec.markout_at_horizons carries extra
 / trade columns through, so fill_id is read from each row, not paired by
 / position (#1188).
 / @param fill_rows time sym side trade_price pip_factor fill_id, at least
@@ -41,10 +41,10 @@ max_horizon:max horizons
 / @eg count .qpipe.transform.demo_markouts.score[([] time:enlist 2026.09.17D10:00:00; sym:`EURUSD; side:1; trade_price:1.1; pip_factor:10000; fill_id:enlist `f1);([] time:enlist 2026.09.17D10:00:00.5; sym:`EURUSD; bid:1.1004; ask:1.1006)] -> 2
 score:{[fill_rows;quotes]
     shape:.qetl.plant.shape `demo_execution_quality;
-    fill_rows:fill_rows where fill_rows[`sym] in .qsynth.pairs;
+    fill_rows:fill_rows where fill_rows[`sym] in .qf.demo.pairs;
     if[0=count fill_rows; :0#shape];
     mids:select sym, time, mid:0.5*bid+ask from quotes;
-    out:.qexec.markout_at_horizons[fill_rows;mids;.qpipe.transform.demo_markouts.horizons];
+    out:.qf.exec.markout_at_horizons[fill_rows;mids;.qpipe.transform.demo_markouts.horizons];
     (cols shape)#out}
 
 \d .

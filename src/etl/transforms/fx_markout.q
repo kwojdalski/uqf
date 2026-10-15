@@ -39,19 +39,19 @@
 /   time        both inputs are read on source_time. The plant's receipt `time`
 /               is not an input, so it cannot leak into the clock.
 /   route       a pure function of the instrument under the spec's convention
-/               (.qcross.attribution_route_with), never of which books exist.
+/               (.qf.mkt.attribution_route_with), never of which books exist.
 /               The horizon job's `legs` callback is the same function, so
 /               readiness waits for exactly the legs scoring uses. A pair with
 /               a direct book is still priced along its route when the
-/               convention says so (.qcross.cross_ref_price_at would take the
+/               convention says so (.qf.mkt.cross_ref_price_at would take the
 /               shortest chain of books present).
 /   reference   per source the latest book at or before the instant, level 0
-/               only (.qbook.top_sides: sizes decide whether a level is usable,
+/               only (.qf.mkt.top_sides: sizes decide whether a level is usable,
 /               never what the price is); a source that has withdrawn a side
 /               contributes nothing on it; best bid and best ask across the
-/               sources no older than max_age (.qmicro.best_across_venues);
+/               sources no older than max_age (.qf.mkt.best_across_venues);
 /               each leg oriented by the route and chained
-/               (.qcross.invert_book, .qcross.combine_oriented_books); the
+/               (.qf.mkt.invert_book, .qf.mkt.combine_oriented_books); the
 /               reference is the mid of that chain. max_age 0Wn, the default,
 /               is "as of however old", demo_markout's policy.
 /   missing     a leg with no book at the execution or the horizon gives a null
@@ -88,11 +88,11 @@ kinds:`total`execution`leg`residual
 / ------------------------------------------------------------------- SPEC
 
 / The default spec: what a job declares to change. horizons are timespans, signed;
-/ convention is a .qcross attribution convention (the proposed default is
+/ convention is a .qf.mkt attribution convention (the proposed default is
 / unapproved, which is why it is a parameter and every row records its version);
 / max_age is the oldest a source's book may be and still count (0Wn: however
 / old); tolerance is the residual, in pips, that still counts as reconciled.
-default_spec:`horizons`convention`max_age`tolerance!(0D00:00:01 0D00:00:10;.qcross.attribution_convention;0Wn;1e-6)
+default_spec:`horizons`convention`max_age`tolerance!(0D00:00:01 0D00:00:10;.qf.mkt.attribution_convention;0Wn;1e-6)
 
 / Refuse a spec the calculation cannot honour, naming the first problem.
 / @param spec dict horizons, convention, max_age, tolerance
@@ -107,7 +107,7 @@ require_spec:{[spec]
     if[not (16h=type hs) and 0<count hs; '"fx_markout: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
     if[any null hs; '"fx_markout: horizons must not contain a null timespan"];
     if[not (count hs)=count distinct hs; '"fx_markout: horizons must be distinct"];
-    if[not 99h=type spec`convention; '"fx_markout: convention must be a .qcross attribution convention dictionary"];
+    if[not 99h=type spec`convention; '"fx_markout: convention must be a .qf.mkt attribution convention dictionary"];
     if[count `version`currencies`direct`exceptions except key spec`convention;
         '"fx_markout: convention must carry version, currencies, direct and exceptions"];
     if[not (-16h=type spec`max_age) and spec[`max_age]>0D; '"fx_markout: max_age must be a positive timespan, 0Wn for as of however old"];
@@ -136,12 +136,12 @@ lookback:{[spec] 0D|neg min spec`horizons}
 / @param conv the convention
 / @param syms instruments
 / @return a boolean per instrument
-/ @eg .qpipe.transform.fx_markout.routable[.qcross.attribution_convention;`EURUSD`BTCUSDT`EURXXX]  ->  100b
+/ @eg .qpipe.transform.fx_markout.routable[.qf.mkt.attribution_convention;`EURUSD`BTCUSDT`EURXXX]  ->  100b
 routable:{[conv;syms]
     ccys:conv[`currencies]`ccy;
     one:{[ccys;s]
-        if[not .qccy.is_ccy_pair s; :0b];
-        ends:.qccy.ccy_pair_legs s;
+        if[not .qf.px.is_ccy_pair s; :0b];
+        ends:.qf.px.ccy_pair_legs s;
         $[(ends`base)=ends`quote; 0b; all (ends`base`quote) in ccys]}[ccys];
     "b"$one each syms}
 
@@ -152,8 +152,8 @@ routable:{[conv;syms]
 / @param sym a routable instrument
 / @return table leg, invert, one row per leg
 / @throws error when the convention cannot route the instrument
-/ @eg .qpipe.transform.fx_markout.route[.qcross.attribution_convention;`USDPLN]`leg  ->  `EURUSD`EURPLN
-route:{[conv;sym] select leg, invert from .qcross.attribution_route_with[conv;sym]}
+/ @eg .qpipe.transform.fx_markout.route[.qf.mkt.attribution_convention;`USDPLN]`leg  ->  `EURUSD`EURPLN
+route:{[conv;sym] select leg, invert from .qf.mkt.attribution_route_with[conv;sym]}
 
 / The horizon kind's `legs` callback: for each pending execution, the legs its
 / reference must cover. An execution with no route has none (and is never queued:
@@ -205,14 +205,14 @@ last_delivery:{[exe]
     exe asc last each value group ids}
 
 / The level-0 top of each source's book, one row per snapshot: the input of
-/ .qmicro.best_across_venues. A snapshot with an empty or unusable side keeps
+/ .qf.mkt.best_across_venues. A snapshot with an empty or unusable side keeps
 / its row with that side null, which is how a withdrawal outlives the older book.
 / @param md market_data rows
 / @return table time, sym, venue (the source), bid, ask
 / @eg count .qpipe.transform.fx_markout.tops[0#.qpipe.transform.fx_markout.market_data_in]  ->  0
 tops:{[md]
     md:md where not null md`source_time;
-    s:.qbook.top_sides md;
+    s:.qf.mkt.top_sides md;
     ([] time:md`source_time; sym:md`sym; venue:md`source; bid:s`bid; ask:s`ask)}
 
 / One leg's book at each instant, oriented for the route. An absent leg (a
@@ -227,7 +227,7 @@ tops:{[md]
 leg_at:{[tob;max_age;syms;inverted;times]
     n:count syms;
     live:where not null syms;
-    b:.qmicro.best_across_venues[tob;([] sym:syms live; time:times live);max_age];
+    b:.qf.mkt.best_across_venues[tob;([] sym:syms live; time:times live);max_age];
     flip_it:inverted live;
     bid:@[n#1f;live;:;?[flip_it;1f%b`ask;b`bid]];
     ask:@[n#1f;live;:;?[flip_it;1f%b`bid;b`ask]];
@@ -260,7 +260,7 @@ frame:{[spec;exe]
     m:count hs;
     rows:exe "j"$raze m#'til n;
     pairs:distinct exe`sym;
-    pf:(pairs!.qccy.pip_factor pairs) rows`sym;
+    pf:(pairs!.qf.px.pip_factor pairs) rows`sym;
     ([] ri:til n*m; source_time:rows`source_time; venue:rows`venue; fill_id:rows`fill_id; sym:rows`sym;
         side:rows`side; size:rows`size; price:rows`price; horizon:hs (n*m)#til m; pip_factor:`long$pf;
         version:(n*m)#spec[`convention]`version)}
@@ -347,8 +347,8 @@ rows_of:{[spec;fr;lg;refs;a]
 / @eg count .qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;0#.qpipe.transform.fx_markout.executions_in;0#.qpipe.transform.fx_markout.market_data_in]  ->  0
 calc:{[spec;exe;md]
     spec:.qpipe.transform.fx_markout.require_spec[spec];
-    .qschema.require_cols[`fx_markout;`executions;exe;cols .qpipe.transform.fx_markout.executions_in];
-    .qschema.require_cols[`fx_markout;`market_data;md;cols .qpipe.transform.fx_markout.market_data_in];
+    .qf.util.require_cols[`fx_markout;`executions;exe;cols .qpipe.transform.fx_markout.executions_in];
+    .qf.util.require_cols[`fx_markout;`market_data;md;cols .qpipe.transform.fx_markout.market_data_in];
     exe:.qpipe.transform.fx_markout.last_delivery[exe where .qpipe.transform.fx_markout.scoreable[spec;exe]];
     if[0=count exe; :0#.qpipe.transform.fx_markout.result];
     fr:.qpipe.transform.fx_markout.frame[spec;exe];
@@ -394,7 +394,7 @@ calc:{[spec;exe;md]
             horizon:(4#0D00:00:01),4#0D00:00:10;
             kind:8#`total`execution`leg`residual; step:8#0 0 1 0; leg:8#``,`EURUSD,`;
             invert:8#0b; price_t0:8#1.1001 1.1001 1.1 0n; price_t1:1.1005 1.1 1.1005 0n,1.10095 1.1 1.10095 0n;
-            pips:4 -1 5 0f,8.5 -1 9.5 0f; status:8#`ok`ok`ok`reconciled; pip_factor:(8#.qccy.pip_factor `EURUSD); version:8#`proposed_v1));
+            pips:4 -1 5 0f,8.5 -1 9.5 0f; status:8#`ok`ok`ok`reconciled; pip_factor:(8#.qf.px.pip_factor `EURUSD); version:8#`proposed_v1));
      `inputs`expected!(
         `executions`market_data!(
             ([] source_time:enlist 2026.09.17D10:00:00; venue:enlist `a; sym:enlist `USDPLN; side:enlist -1;
@@ -407,5 +407,5 @@ calc:{[spec;exe;md]
             horizon:(5#0D00:00:01),5#0D00:00:10;
             kind:10#`total`execution`leg`leg`residual; step:10#0 0 1 2 0; leg:10#``,`EURUSD`EURPLN,`;
             invert:10#00100b; price_t0:10#3.99 3.99 1.25 5 0n; price_t1:10#5.5 4 1 5.5 0n;
-            pips:10#-15100 -100 -10000 -5000 0f; status:10#`ok`ok`ok`ok`reconciled; pip_factor:(10#.qccy.pip_factor `USDPLN); version:10#`proposed_v1)))
+            pips:10#-15100 -100 -10000 -5000 0f; status:10#`ok`ok`ok`ok`reconciled; pip_factor:(10#.qf.px.pip_factor `USDPLN); version:10#`proposed_v1)))
     )];

@@ -14,7 +14,7 @@ description: >-
 uqf is a framework that sits **around** TorQ, not a replacement for it. TorQ's
 tickerplant, RDB/WDB/HDB, discovery and gateway run unchanged from the vendored
 `lib/torq` and `lib/torq-finance-starter-pack`. uqf adds: - a pure-q quant
-library (`src/`, flat `.q<abbrev>` namespaces); - a declaration-driven ETL
+library (`src/`, seven `.qf.<domain>` namespaces); - a declaration-driven ETL
 framework (`src/etl/`, `.qetl.*`); - one TorQ adapter (`.qtorq`,
 `scripts/processes/torq_pipeline.q`); - the `uqs` CLI that generates TorQ's
 configuration from the declarations and runs the stack.
@@ -89,10 +89,12 @@ Apply the rules below. Each cites the file that holds or enforces it.
   every `uqs` command, from the declarations and `src/etl/plant_tables.q`
   (`docs/faq.md`, "Can I edit...").
 
-- **L6** The quant library is flat: one `.q<abbrev>` namespace per file, loaded
-  by `src/init.q`. Pure functions only, with no state, no I/O and no logging.
-  ETL instances nest under `.qpipe.job.<name>` and `.qpipe.source.<name>`; those
-  are the only nested namespaces (`src/init.q` header, `src/namespaces.q`).
+- **L6** The quant library is seven namespaces, `.qf.px`, `.qf.mkt`, `.qf.exec`,
+  `.qf.port`, `.qf.math`, `.qf.util` and `.qf.demo`, loaded by `src/init.q`;
+  several files share a domain and none adds a namespace of its own. Pure
+  functions only, with no state, no I/O and no logging. ETL instances nest under
+  `.qpipe.job.<name>` and `.qpipe.source.<name>` (`src/init.q` header,
+  `src/namespaces.q`).
 
 ## Jobs and declarations (J)
 

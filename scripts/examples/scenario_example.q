@@ -7,9 +7,9 @@
 // NOT A RANDOM ASSORTMENT. The rows reference each other - same order_id,
 // same syms, same instants - so this reads as one scenario rather than
 // eleven unrelated tables. And the derived rows are COMPUTED, not typed:
-// positions come from a real .qpos.apply_fills, the markout from a real
-// .qexec.markout_at_horizons, the exposure from a real
-// .qpos.ccy_exposure_in. That is what makes this a demonstration that the
+// positions come from a real .qf.port.apply_fills, the markout from a real
+// .qf.exec.markout_at_horizons, the exposure from a real
+// .qf.port.ccy_exposure_in. That is what makes this a demonstration that the
 // library's shapes actually connect end to end, which no unit test shows.
 //
 // It came from env/seed.q, which did the same thing against env/schemas.q's
@@ -46,8 +46,8 @@ fill_times:t0+0D 0D00:00:00.500 0D00:00:00.700;
 snap_time:t0+0D00:00:01;
 
 / ==== reference_data: the pairs the rest of this scenario touches ====
-.qetl.log.dbg[`seed;"running: .qccy.ccy_pair_legs each pairs";()!()];
-legs:.qccy.ccy_pair_legs each pairs;
+.qetl.log.dbg[`seed;"running: .qf.px.ccy_pair_legs each pairs";()!()];
+legs:.qf.px.ccy_pair_legs each pairs;
 `reference_data insert ([]
     time:(count pairs)#t0; sym:pairs;
     base_ccy:legs`base; quote_ccy:legs`quote;
@@ -60,8 +60,8 @@ legs:.qccy.ccy_pair_legs each pairs;
 mk_book_row:{[spot]
     levels:til 3;
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(
-        spot-.qexdef.pip_size*levels;.qexdef.size_unit*1+levels;
-        (spot+.qexdef.pip_size)+.qexdef.pip_size*levels;.qexdef.size_unit*1+levels)};
+        spot-.qf.demo.pip_size*levels;.qf.demo.level_size_unit*1+levels;
+        (spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;.qf.demo.level_size_unit*1+levels)};
 `market_data insert (([] time:3#t0; sym:pairs; source:3#`demo; source_time:3#t0),'
     (mk_book_row each 1.0850 0.6550 4.2500));
 .qetl.log.info[`seed;"market_data - ",.Q.s1[count market_data]," book snapshots";()!()];
@@ -88,19 +88,19 @@ mo_quotes:([] sym:5#`EURUSD;
     time:t0+0D 0D00:00:00.100 0D00:00:00.300 0D00:00:00.500 0D00:00:01;
     mid:1.0850 1.08505 1.08508 1.08512 1.08515);
 trades_for_markout:`sym`time`side`trade_price`pip_factor#select from trades where sym=`EURUSD;
-.qetl.log.dbg[`seed;"running: .qexec.markout_at_horizons[trades;mo_quotes;100ms 500ms]";()!()];
-markouts:.qexec.markout_at_horizons[trades_for_markout;mo_quotes;0D00:00:00.100 0D00:00:00.500];
+.qetl.log.dbg[`seed;"running: .qf.exec.markout_at_horizons[trades;mo_quotes;100ms 500ms]";()!()];
+markouts:.qf.exec.markout_at_horizons[trades_for_markout;mo_quotes;0D00:00:00.100 0D00:00:00.500];
 .qetl.log.info[`seed;"markouts - ",.Q.s1[count markouts]," horizon(s) for the EURUSD fill";()!()];
 
 / ==== position: the open positions, marked to later rates ====
-/ Built from `trades` via .qpos.apply_fills, not typed - the same
+/ Built from `trades` via .qf.port.apply_fills, not typed - the same
 / real-call-not-fake-result approach the markout above takes.
 mark_rates:pairs!1.0855 0.6555 4.2550;
-.qetl.log.dbg[`seed;"running: .qpos.apply_fills[.qpos.empty_book[];trades]";()!()];
-book:.qpos.apply_fills[.qpos.empty_book[];trades];
+.qetl.log.dbg[`seed;"running: .qf.port.apply_fills[.qf.port.empty_book[];trades]";()!()];
+book:.qf.port.apply_fills[.qf.port.empty_book[];trades];
 pos_rows:0!book;
 pos_syms:exec sym from pos_rows;
-pos_unrealized:{[book;mark_rates;sym] .qpos.unrealized_pnl[book;sym;mark_rates sym]}[book;mark_rates] each pos_syms;
+pos_unrealized:{[book;mark_rates;sym] .qf.port.unrealized_pnl[book;sym;mark_rates sym]}[book;mark_rates] each pos_syms;
 `position insert ([]
     time:(count pos_syms)#snap_time; sym:pos_syms;
     qty:pos_rows`qty; avg_price:pos_rows`avg_price;
@@ -121,8 +121,8 @@ pos_unrealized:{[book;mark_rates;sym] .qpos.unrealized_pnl[book;sym;mark_rates s
 / explicitly anyway, because market_data carries source and source_time
 / that the quotes shape does not.
 quotes_for_exposure:`sym`time xasc select time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from market_data;
-.qetl.log.dbg[`seed;"running: .qpos.ccy_exposure_in[book;quotes;`USD;snap_time]";()!()];
-exposure:.qpos.ccy_exposure_in[book;quotes_for_exposure;`USD;snap_time];
+.qetl.log.dbg[`seed;"running: .qf.port.ccy_exposure_in[book;quotes;`USD;snap_time]";()!()];
+exposure:.qf.port.ccy_exposure_in[book;quotes_for_exposure;`USD;snap_time];
 `ccy_exposure insert update time:snap_time, reporting_ccy:`USD from exposure;
 .qetl.log.info[`seed;"ccy_exposure - ",.Q.s1[count exposure]," currencies, reporting in USD";()!()];
 

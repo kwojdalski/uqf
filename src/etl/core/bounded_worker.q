@@ -1281,7 +1281,7 @@ run_counts:{[planned;completed;failed;rows]
 / Private: run a worker's declared data-quality check over one batch.
 / .
 / Returns the FAILURES, so an empty result means the batch passed - the same
-/ convention .qdqc.summarize_checks already uses, and reusing it means a
+/ convention .qf.mkt.summarize_checks already uses, and reusing it means a
 / worker can hand that function's output straight back with no adapter.
 / .
 / A worker that declares no check returns no failures. That is deliberate:
@@ -1484,7 +1484,7 @@ stage_transform:{[worker;s]
 stage_check:{[worker;s]
     bad:run_check[worker;s`batch];
     if[count bad;
-        :failed_with[s;"window failed data quality";`failures`detail!(count bad;.qrender.full bad)]];
+        :failed_with[s;"window failed data quality";`failures`detail!(count bad;.qf.util.full bad)]];
     s}
 
 / Private: PUBLISH the batch through finish_window, which owns the dry-run

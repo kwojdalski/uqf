@@ -7,7 +7,7 @@
 / .
 / Requires stats.q (ncdf/npdf) and rates.q (df_cont) to be loaded first.
 
-\d .qopt
+\d .qf.px
 
 / Private: (d1;d2) computed together so callers never duplicate the
 / underlying arithmetic (see src/foundation/stats.q for why that matters in q).
@@ -18,8 +18,8 @@
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return (d1;d2)
-/ @throws qopt: t must be >= 0 - when any year fraction is negative
-/ @eg .qopt.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784 -0.0348547
+/ @throws options: t must be >= 0 - when any year fraction is negative
+/ @eg .qf.px.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784 -0.0348547
 / Zero variance (sigma*sqrt t = 0): d1 is +/-infinity off the forward, which
 / makes the price intrinsic. Exactly at the forward the numerator is 0 too,
 / and 0%0 would be null; the limit DFd*max(F-K,0) = 0 needs d1=0 there, so
@@ -28,7 +28,7 @@
 / theta keep the 0%0 / x%0 results they already give at t=0 off the forward.
 / @private
 d1_d2:{[s;k;rd;rf;sigma;t]
-    if[any (t<0)&not null t; '"qopt: t must be >= 0"];
+    if[any (t<0)&not null t; '"options: t must be >= 0"];
     log_moneyness:log[s%k];
     variance_adj:0.5*sigma*sigma;
     drift_rate:(rd-rf)+variance_adj;
@@ -47,7 +47,7 @@ d1_d2:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the Garman-Kohlhagen d1 term
-/ @eg .qopt.d1[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784
+/ @eg .qf.px.d1[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784
 d1:{[s;k;rd;rf;sigma;t] first d1_d2[s;k;rd;rf;sigma;t]};
 
 / The Garman-Kohlhagen d2 term.
@@ -58,7 +58,7 @@ d1:{[s;k;rd;rf;sigma;t] first d1_d2[s;k;rd;rf;sigma;t]};
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the Garman-Kohlhagen d2 term
-/ @eg .qopt.d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.0348547
+/ @eg .qf.px.d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.0348547
 d2:{[s;k;rd;rf;sigma;t] last d1_d2[s;k;rd;rf;sigma;t]};
 
 / European call premium, in domestic/quote currency per unit of base notional.
@@ -69,12 +69,12 @@ d2:{[s;k;rd;rf;sigma;t] last d1_d2[s;k;rd;rf;sigma;t]};
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call premium
-/ @eg .qopt.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03781082
+/ @eg .qf.px.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03781082
 gk_call:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
-    domestic_df:.qrates.df_cont[rd;t]; foreign_df:.qrates.df_cont[rf;t];
-    call_leg1:s*foreign_df*.qstats.ncdf[d1v];
-    call_leg2:k*domestic_df*.qstats.ncdf[d2v];
+    domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
+    call_leg1:s*foreign_df*.qf.math.ncdf[d1v];
+    call_leg2:k*domestic_df*.qf.math.ncdf[d2v];
     call_leg1-call_leg2};
 
 / European put premium, in domestic/quote currency per unit of base notional.
@@ -85,12 +85,12 @@ gk_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put premium
-/ @eg .qopt.gk_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03701845
+/ @eg .qf.px.gk_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03701845
 gk_put:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
-    domestic_df:.qrates.df_cont[rd;t]; foreign_df:.qrates.df_cont[rf;t];
-    put_leg1:k*domestic_df*.qstats.ncdf[neg d2v];
-    put_leg2:s*foreign_df*.qstats.ncdf[neg d1v];
+    domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
+    put_leg1:k*domestic_df*.qf.math.ncdf[neg d2v];
+    put_leg2:s*foreign_df*.qf.math.ncdf[neg d1v];
     put_leg1-put_leg2};
 
 / Dispatch to gk_call/gk_put by an is_call boolean.
@@ -102,7 +102,7 @@ gk_put:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return the call or put premium
-/ @eg .qopt.gk_price[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.03781082
+/ @eg .qf.px.gk_price[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.03781082
 / ? not $: a vector of is_call flags prices calls and puts element by element.
 gk_price:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_call[s;k;rd;rf;sigma;t];gk_put[s;k;rd;rf;sigma;t]]};
 
@@ -114,11 +114,11 @@ gk_price:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_call[s;k;rd;rf;sigma;t];gk_pu
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call delta, in (0, exp(-rf*t))
-/ @eg .qopt.gk_delta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.512884
+/ @eg .qf.px.gk_delta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.512884
 gk_delta_call:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
-    foreign_df:.qrates.df_cont[rf;t];
-    foreign_df*.qstats.ncdf[d1v]};
+    foreign_df:.qf.px.df_cont[rf;t];
+    foreign_df*.qf.math.ncdf[d1v]};
 
 / Put delta: sensitivity of the premium to a change in spot.
 / @param s spot rate
@@ -128,11 +128,11 @@ gk_delta_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put delta, in (-exp(-rf*t), 0)
-/ @eg .qopt.gk_delta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4722279
+/ @eg .qf.px.gk_delta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4722279
 gk_delta_put:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
-    foreign_df:.qrates.df_cont[rf;t];
-    foreign_df*(.qstats.ncdf[d1v]-1)};
+    foreign_df:.qf.px.df_cont[rf;t];
+    foreign_df*(.qf.math.ncdf[d1v]-1)};
 
 / Delta: sensitivity of the premium to a change in spot.
 / @param s spot rate
@@ -143,8 +143,8 @@ gk_delta_put:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return the call or put delta
-/ @eg .qopt.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.512884
-/ @eg .qopt.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4722279
+/ @eg .qf.px.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.512884
+/ @eg .qf.px.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4722279
 gk_delta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_delta_call[s;k;rd;rf;sigma;t];gk_delta_put[s;k;rd;rf;sigma;t]]};
 
 / Gamma: sensitivity of delta to a change in spot. Identical for call and put.
@@ -155,11 +155,11 @@ gk_delta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_delta_call[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return gamma (always positive)
-/ @eg .qopt.gk_gamma[1.10;1.12;0.045;0.02;0.10;0.75]  -> 4.11994
+/ @eg .qf.px.gk_gamma[1.10;1.12;0.045;0.02;0.10;0.75]  -> 4.11994
 gk_gamma:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
-    foreign_df:.qrates.df_cont[rf;t];
-    numerator:foreign_df*.qstats.npdf[d1v];
+    foreign_df:.qf.px.df_cont[rf;t];
+    numerator:foreign_df*.qf.math.npdf[d1v];
     denominator:s*sigma*sqrt[t];
     numerator%denominator};
 
@@ -173,11 +173,11 @@ gk_gamma:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return vega (always positive)
-/ @eg .qopt.gk_vega[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3738845
+/ @eg .qf.px.gk_vega[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3738845
 gk_vega:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
-    foreign_df:.qrates.df_cont[rf;t];
-    s*foreign_df*.qstats.npdf[d1v]*sqrt[t]};
+    foreign_df:.qf.px.df_cont[rf;t];
+    s*foreign_df*.qf.math.npdf[d1v]*sqrt[t]};
 
 / Vanna: sensitivity of delta to vol, equivalently of vega to spot
 / (d2V/dS dsigma). Identical for call and put, like gamma and vega - it is a
@@ -195,12 +195,12 @@ gk_vega:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return vanna
-/ @eg .qopt.gk_vanna[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.1367967
+/ @eg .qf.px.gk_vanna[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.1367967
 gk_vanna:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
     d2v:d2[s;k;rd;rf;sigma;t];
-    foreign_df:.qrates.df_cont[rf;t];
-    density:foreign_df*.qstats.npdf[d1v];
+    foreign_df:.qf.px.df_cont[rf;t];
+    density:foreign_df*.qf.math.npdf[d1v];
     neg density*d2v%sigma};
 
 / Volga (vomma): sensitivity of vega to vol (d2V/dsigma2). Identical for
@@ -218,7 +218,7 @@ gk_vanna:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return volga
-/ @eg .qopt.gk_volga[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.006743588
+/ @eg .qf.px.gk_volga[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.006743588
 gk_volga:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
     d2v:d2[s;k;rd;rf;sigma;t];
@@ -234,12 +234,12 @@ gk_volga:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call's theta
-/ @eg .qopt.gk_theta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.03732846
+/ @eg .qf.px.gk_theta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.03732846
 gk_theta_call:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
-    domestic_df:.qrates.df_cont[rd;t]; foreign_df:.qrates.df_cont[rf;t];
-    decay_term:(s*foreign_df*.qstats.npdf[d1v]*sigma)%(2*sqrt[t]);
-    drift_term:(rf*s*foreign_df*.qstats.ncdf[d1v])-(rd*k*domestic_df*.qstats.ncdf[d2v]);
+    domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
+    decay_term:(s*foreign_df*.qf.math.npdf[d1v]*sigma)%(2*sqrt[t]);
+    drift_term:(rf*s*foreign_df*.qf.math.ncdf[d1v])-(rd*k*domestic_df*.qf.math.ncdf[d2v]);
     drift_term-decay_term};
 
 / Put theta: time decay per year (-dV/dT); divide by 365 for a
@@ -251,12 +251,12 @@ gk_theta_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put's theta
-/ @eg .qopt.gk_theta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.01027354
+/ @eg .qf.px.gk_theta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.01027354
 gk_theta_put:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
-    domestic_df:.qrates.df_cont[rd;t]; foreign_df:.qrates.df_cont[rf;t];
-    decay_term:(s*foreign_df*.qstats.npdf[d1v]*sigma)%(2*sqrt[t]);
-    drift_term:(rd*k*domestic_df*.qstats.ncdf[neg d2v])-(rf*s*foreign_df*.qstats.ncdf[neg d1v]);
+    domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
+    decay_term:(s*foreign_df*.qf.math.npdf[d1v]*sigma)%(2*sqrt[t]);
+    drift_term:(rd*k*domestic_df*.qf.math.ncdf[neg d2v])-(rf*s*foreign_df*.qf.math.ncdf[neg d1v]);
     drift_term-decay_term};
 
 / Theta: time decay per year (-dV/dT); divide by 365 for a per-calendar-day figure.
@@ -268,8 +268,8 @@ gk_theta_put:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return the call or put theta
-/ @eg .qopt.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> -0.03732846
-/ @eg .qopt.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.01027354
+/ @eg .qf.px.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> -0.03732846
+/ @eg .qf.px.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.01027354
 gk_theta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_theta_call[s;k;rd;rf;sigma;t];gk_theta_put[s;k;rd;rf;sigma;t]]};
 
 / Call rho: sensitivity to the domestic rate rd.
@@ -280,11 +280,11 @@ gk_theta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_theta_call[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call's rho
-/ @eg .qopt.gk_rho_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3947712
+/ @eg .qf.px.gk_rho_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3947712
 gk_rho_call:{[s;k;rd;rf;sigma;t]
     d2v:d2[s;k;rd;rf;sigma;t];
-    domestic_df:.qrates.df_cont[rd;t];
-    k*t*domestic_df*.qstats.ncdf[d2v]};
+    domestic_df:.qf.px.df_cont[rd;t];
+    k*t*domestic_df*.qf.math.ncdf[d2v]};
 
 / Put rho: sensitivity to the domestic rate rd.
 / @param s spot rate
@@ -294,11 +294,11 @@ gk_rho_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put's rho
-/ @eg .qopt.gk_rho_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4173519
+/ @eg .qf.px.gk_rho_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4173519
 gk_rho_put:{[s;k;rd;rf;sigma;t]
     d2v:d2[s;k;rd;rf;sigma;t];
-    domestic_df:.qrates.df_cont[rd;t];
-    neg (k*t*domestic_df*.qstats.ncdf[neg d2v])};
+    domestic_df:.qf.px.df_cont[rd;t];
+    neg (k*t*domestic_df*.qf.math.ncdf[neg d2v])};
 
 / Rho: sensitivity to the domestic rate rd.
 / @param s spot rate
@@ -309,8 +309,8 @@ gk_rho_put:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return the call or put rho
-/ @eg .qopt.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.3947712
-/ @eg .qopt.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4173519
+/ @eg .qf.px.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.3947712
+/ @eg .qf.px.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4173519
 gk_rho:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_rho_call[s;k;rd;rf;sigma;t];gk_rho_put[s;k;rd;rf;sigma;t]]};
 
 / Configurable search bracket/iteration cap for bisect_vol's fallback
@@ -320,7 +320,7 @@ gk_rho:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_rho_call[s;k;rd;rf;sigma;t];gk_
 / gets sigma's precision down to (hi-lo)/2^200, far past float64 - the
 / cap exists to bound worst-case work, not because convergence is in
 / doubt. Override before calling if a narrower/wider bracket fits your
-/ instrument universe better, e.g. .qopt.BISECT_VOL_HI:2.0.
+/ instrument universe better, e.g. .qf.px.BISECT_VOL_HI:2.0.
 BISECT_VOL_LO:0.00001;
 BISECT_VOL_HI:5.0;
 BISECT_VOL_MAX_ITER:200;
@@ -336,7 +336,7 @@ BISECT_VOL_MAX_ITER:200;
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
-/ @eg .qopt.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.09999999
+/ @eg .qf.px.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.09999999
 /   (0.1 to the eye. The residual is the bisection's own tolerance, so the
 /   exact digits are a property of BISECT_VOL_TOL rather than of the option)
 / @private
@@ -361,7 +361,7 @@ bisect_vol:{[price;s;k;rd;rf;t;is_call]
 / hands off to bisect_vol instead; sigma_floor keeps a single NR step
 / from driving sigma negative or to exactly 0 (where vega is itself 0).
 / Override before calling if your instruments need tighter/looser
-/ convergence, e.g. .qopt.IMPLIED_VOL_PRICE_TOL:1e-6 for faster, coarser fits.
+/ convergence, e.g. .qf.px.IMPLIED_VOL_PRICE_TOL:1e-6 for faster, coarser fits.
 IMPLIED_VOL_INITIAL_SIGMA:0.20;
 IMPLIED_VOL_MAX_ITER:100;
 IMPLIED_VOL_PRICE_TOL:1e-10;
@@ -378,7 +378,7 @@ IMPLIED_VOL_SIGMA_FLOOR:0.0001;
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
-/ @eg .qopt.implied_vol[.qopt.gk_call[1.10;1.12;0.045;0.02;0.12;0.75];1.10;1.12;0.045;0.02;0.75;1b]  -> 0.12
+/ @eg .qf.px.implied_vol[.qf.px.gk_call[1.10;1.12;0.045;0.02;0.12;0.75];1.10;1.12;0.045;0.02;0.75;1b]  -> 0.12
 implied_vol:{[price;s;k;rd;rf;t;is_call]
     sigma:IMPLIED_VOL_INITIAL_SIGMA;
     i:0;

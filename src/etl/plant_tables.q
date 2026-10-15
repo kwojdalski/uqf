@@ -288,12 +288,12 @@ nested[`config_change;`old`new!"  "];
 / WIDE_BOOK_LEVELS; a generated schema is harder to read than the 22 lines
 / it saves, and a reader checking whether bids10 exists should be able to
 / look. The bids<n>/asks<n> naming is not free choice - it matches
-/ .qbook.derive_level_groups' prefix-plus-contiguous-digit-suffix
+/ .qf.mkt.derive_level_groups' prefix-plus-contiguous-digit-suffix
 / convention, which is what folds these into bid_prices/ask_prices.
 wide_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bids0:`float$();bids1:`float$();bids2:`float$();bids3:`float$();bids4:`float$();bids5:`float$();bids6:`float$();bids7:`float$();bids8:`float$();bids9:`float$();bids10:`float$();asks0:`float$();asks1:`float$();asks2:`float$();asks3:`float$();asks4:`float$();asks5:`float$();asks6:`float$();asks7:`float$();asks8:`float$();asks9:`float$();asks10:`float$())
 
 / vectorize1's output: wide_orderbook's bids*/asks* folded into vector columns by
-/ .qbook.book_from_wide_levels, then republished onto the tickerplant - an
+/ .qf.mkt.book_from_wide_levels, then republished onto the tickerplant - an
 / ordinary database table flowing through rdb1/wdb1/hdb, not private state
 / on vectorize1's own process.
 mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_prices:())
@@ -309,8 +309,8 @@ nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
 / them into four vectors is databento1's job, not this table's.
 databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_px_00:`float$(); bid_sz_00:`long$(); ask_px_00:`float$(); ask_sz_00:`long$(); bid_px_01:`float$(); bid_sz_01:`long$(); ask_px_01:`float$(); ask_sz_01:`long$(); bid_px_02:`float$(); bid_sz_02:`long$(); ask_px_02:`float$(); ask_sz_02:`long$(); bid_px_03:`float$(); bid_sz_03:`long$(); ask_px_03:`float$(); ask_sz_03:`long$(); bid_px_04:`float$(); bid_sz_04:`long$(); ask_px_04:`float$(); ask_sz_04:`long$(); bid_px_05:`float$(); bid_sz_05:`long$(); ask_px_05:`float$(); ask_sz_05:`long$(); bid_px_06:`float$(); bid_sz_06:`long$(); ask_px_06:`float$(); ask_sz_06:`long$(); bid_px_07:`float$(); bid_sz_07:`long$(); ask_px_07:`float$(); ask_sz_07:`long$(); bid_px_08:`float$(); bid_sz_08:`long$(); ask_px_08:`float$(); ask_sz_08:`long$(); bid_px_09:`float$(); bid_sz_09:`long$(); ask_px_09:`float$(); ask_sz_09:`long$())
 
-/ The folded book, republished by databento1 - the shape .qbook and
-/ .qcross.cross_book_at read. Carries `ts_event` as well as `time`: the
+/ The folded book, republished by databento1 - the shape .qf.mkt and
+/ .qf.mkt.cross_book_at read. Carries `ts_event` as well as `time`: the
 / tickerplant stamps `time` on receipt, and a book that knew only when it
 / ARRIVED could not tell a stale feed from a fast one.
 eq_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
@@ -466,10 +466,10 @@ fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); produ
 / .
 / What each still needs, so the gap is legible rather than implied:
 / .
-/   ccy_exposure     .qpos.ccy_exposure_in already computes this. Needs a job
+/   ccy_exposure     .qf.port.ccy_exposure_in already computes this. Needs a job
 /                    that runs it over `position` and `market_data` and
 /                    publishes the result - the nearest of the six.
-/   reference_data   .qccy.ccy_pair_legs already derives base/quote. Needs a
+/   reference_data   .qf.px.ccy_pair_legs already derives base/quote. Needs a
 /                    loader, and a decision on where the static data lives.
 /   connections      VENUE connections, not process ones: .qetl.hb and
 /                    `uqs summary` already answer process liveness, and this
@@ -488,12 +488,12 @@ fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); produ
 predictions:([]time:`timestamp$(); sym:`g#`symbol$(); horizon_ms:`long$(); model:`symbol$(); predicted_mid:`float$(); confidence:`float$())
 
 / Net exposure per currency at an instant, revalued into one reporting
-/ currency - .qpos.ccy_exposure_in's output shape, with the time and the
+/ currency - .qf.port.ccy_exposure_in's output shape, with the time and the
 / reporting currency it was computed against.
 ccy_exposure:([]time:`timestamp$(); ccy:`g#`symbol$(); amount:`float$(); reporting_ccy:`symbol$(); reporting_amount:`float$())
 
 / Static instrument reference, one row per pair. base_ccy/quote_ccy are
-/ .qccy.ccy_pair_legs' field names, so a row here feeds it unchanged.
+/ .qf.px.ccy_pair_legs' field names, so a row here feeds it unchanged.
 reference_data:([]time:`timestamp$(); sym:`g#`symbol$(); base_ccy:`symbol$(); quote_ccy:`symbol$(); pip_factor:`long$(); min_size:`float$(); active:`boolean$())
 
 / Routing decisions, one row per (order, venue). NOT 1:1 with `orders` - an

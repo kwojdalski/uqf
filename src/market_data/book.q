@@ -6,7 +6,7 @@
 / first) list per row.
 / .
 
-\d .qbook
+\d .qf.mkt
 
 / Fold N per-level source columns into one vector-valued column, for each
 / group in level_groups. Each row of the resulting column holds the N
@@ -18,7 +18,7 @@
 / @param level_groups dict target_col!ordered_source_cols - one entry per
 /   group to fold, source columns listed in the desired fold order
 / @return tbl with each group's source columns replaced by one target_col
-/ @eg .qbook.fold_level_columns[tbl;(enlist `bid_prices)!(enlist `bid0`bid1)]
+/ @eg .qf.mkt.fold_level_columns[tbl;(enlist `bid_prices)!(enlist `bid0`bid1)]
 fold_level_columns:{[tbl;level_groups]
     target_cols:(key level_groups),();
     i:0;
@@ -83,8 +83,8 @@ sorted_source_cols_for_prefix:{[col_names;col_strs;prefix_target]
 / @return dict target_col!ordered_source_cols, ready for fold_level_columns
 / @throws error if a group's parsed level indices aren't a contiguous
 /   0..N-1 run, naming the prefix and the levels actually found
-/ @eg .qbook.derive_level_groups[`bid0`bid1`bidSize0`bidSize1;enlist ("bid";`bid_prices)]
-/ @eg .qbook.derive_level_groups[`bid_px_00`bid_px_01`ask_px_00`ask_px_01;(("bid_px_";`bid_prices);("ask_px_";`ask_prices))]  -> Databento-style zero-padded prefixes, two rules at once
+/ @eg .qf.mkt.derive_level_groups[`bid0`bid1`bidSize0`bidSize1;enlist ("bid";`bid_prices)]
+/ @eg .qf.mkt.derive_level_groups[`bid_px_00`bid_px_01`ask_px_00`ask_px_01;(("bid_px_";`bid_prices);("ask_px_";`ask_prices))]  -> Databento-style zero-padded prefixes, two rules at once
 derive_level_groups:{[col_names;prefix_targets]
     col_names:col_names,();
     prefix_targets:prefix_targets,();
@@ -110,7 +110,7 @@ derive_level_groups:{[col_names;prefix_targets]
 / @param sym_cols explicit list of column names to cast to symbol
 / @return tbl with sym_cols cast to symbol
 / @throws error naming any column in sym_cols that tbl does not have
-/ @eg .qbook.symbolize_columns[tbl;enlist `sym]
+/ @eg .qf.mkt.symbolize_columns[tbl;enlist `sym]
 symbolize_columns:{[tbl;sym_cols]
     sym_cols:sym_cols,();
     / Refuse an absent column BY NAME. q does not agree with itself about
@@ -121,7 +121,7 @@ symbolize_columns:{[tbl;sym_cols]
     / book_from_wide_levels handed back a table without the column it had
     / been asked to cast. Found by running this file's own @eg examples,
     / which passed `side to a table that has none.
-    .qschema.require_cols[`symbolize_columns;`tbl;tbl;sym_cols];
+    .qf.util.require_cols[`symbolize_columns;`tbl;tbl;sym_cols];
     i:0;
     while[i<count sym_cols;
         col:sym_cols i;
@@ -152,7 +152,7 @@ is_string_column:{[tbl;col] (count tbl col) and all 10h=type each tbl col};
 / @param allowlist column names always flagged when present and string-typed, e.g. `sym`side`exchange`venue`ccy
 / @param cardinality_ratio flag a string column when (distinct count / row count) is below this ratio
 / @return list of column names likely to be mis-typed symbol columns
-/ @eg .qbook.candidate_symbol_columns[tbl;`sym`side;0.1]
+/ @eg .qf.mkt.candidate_symbol_columns[tbl;`sym`side;0.1]
 candidate_symbol_columns:{[tbl;allowlist;cardinality_ratio]
     allowlist:allowlist,();
     all_cols:cols tbl;
@@ -175,7 +175,7 @@ candidate_symbol_columns:{[tbl;allowlist;cardinality_ratio]
 /   resolved - run derive_level_groups first, or build it by hand)
 / @param sym_cols explicit list of column names to cast string->symbol
 / @return the corrected table
-/ @eg .qbook.book_from_wide_levels[tbl;.qbook.derive_level_groups[cols tbl;prefix_targets];enlist `sym]
+/ @eg .qf.mkt.book_from_wide_levels[tbl;.qf.mkt.derive_level_groups[cols tbl;prefix_targets];enlist `sym]
 book_from_wide_levels:{[tbl;level_groups;sym_cols]
     folded:fold_level_columns[tbl;level_groups];
     symbolize_columns[folded;sym_cols]};
@@ -183,7 +183,7 @@ book_from_wide_levels:{[tbl;level_groups;sym_cols]
 / ------------------------------------------------------- SHARED BOOK MATHS
 / .
 / Arithmetic on a book's price and size levels that both synthetic cross
-/ pricing (.qcross) and execution analytics (.qexec, .qmicro) use. It lives
+/ pricing (cross.q) and execution analytics (.qf.exec, microstructure.q) use. It lives
 / here, with the book's shape, so neither of those depends on the other for
 / it (#626).
 
@@ -196,7 +196,7 @@ book_from_wide_levels:{[tbl;level_groups;sym_cols]
 / @param prices level prices, best-first
 / @param sizes level sizes in the ladder's own base currency, aligned to prices
 / @return (invertedPrices;rescaledSizes), still best-first
-/ @eg .qbook.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200f)
+/ @eg .qf.mkt.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200f)
 invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 
 / Walk a stack of order book levels to price a sweep of target_size: the
@@ -220,7 +220,7 @@ invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 /   consumed - so a caller can look up any parallel column (e.g. level
 /   times) for exactly the levels that priced the fill (#1181)
 / @throws error if target_size is not positive, or prices/sizes differ in length
-/ @eg .qbook.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled`levels_used!(1.100233;1.1005;3000000;1b;0 1 2)
+/ @eg .qf.mkt.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled`levels_used!(1.100233;1.1005;3000000;1b;0 1 2)
 sweep_price:{[prices;sizes;target_size]
     if[target_size<=0; '"sweep_price: size must be positive"];
     if[(count prices)<>count sizes; '"sweep_price: prices and sizes must be the same length"];
@@ -250,7 +250,7 @@ sweep_price:{[prices;sizes;target_size]
 / @param price level price(s)
 / @param size the matching size(s)
 / @return boolean, aligned
-/ @eg .qbook.level_ok[1.1 0 0w 1.1 1.1;1e6 1e6 1e6 0 0w]  ->  10000b
+/ @eg .qf.mkt.level_ok[1.1 0 0w 1.1 1.1;1e6 1e6 1e6 0 0w]  ->  10000b
 level_ok:{[price;size] (0<price) & (0w>price) & (0<size) & 0w>size}
 
 / Each book's level-0 bid and ask: the ONE top-of-book extraction every
@@ -264,7 +264,7 @@ level_ok:{[price;size] (0<price) & (0w>price) & (0<size) & 0w>size}
 / @param x table with bid_prices and ask_prices list columns, best level
 /   first, and optionally bid_sizes and ask_sizes
 / @return table bid, ask (float), aligned with x
-/ @eg .qbook.top_sides ([] bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] bid:1.0849 0n; ask:1.0851 1.27)
+/ @eg .qf.mkt.top_sides ([] bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] bid:1.0849 0n; ask:1.0851 1.27)
 top_sides:{[x]
     n:count x;
     bsz:$[`bid_sizes in cols x; x`bid_sizes; n#enlist enlist 1f];
@@ -273,8 +273,8 @@ top_sides:{[x]
     ([] bid:"f"$side'[x`bid_prices;bsz]; ask:"f"$side'[x`ask_prices;asz])};
 
 / Whether each book's top is CROSSED: its best bid strictly above its best ask.
-/ The ONE rule for it (#1176) - the live market_data check (.qdqc), both
-/ backfill quality gates and .qcross.book_crossed all call it, so a book
+/ The ONE rule for it (#1176) - the live market_data check (.qf.mkt), both
+/ backfill quality gates and .qf.mkt.book_crossed all call it, so a book
 / cannot be valid through one path and a breach through another.
 / .
 / LOCKED (bid = ask) is NOT crossed. A locked book is a legitimate, common
@@ -294,7 +294,7 @@ top_sides:{[x]
 /   best-first ladder per row) and, where the caller has them, bid_sizes and
 /   ask_sizes - pass them
 / @return boolean per row, 1b iff both tops are usable and bid > ask
-/ @eg .qbook.crossed_top ([] bid_prices:(1.1005 1.1;1.1 1.1;1.1;`float$()); bid_sizes:(1e6 1e6;1e6 1e6;1e6;`float$()); ask_prices:(1.1000 1.2;1.1 1.2;`float$();1.2); ask_sizes:(1e6 1e6;1e6 1e6;`float$();1e6))  ->  1000b
+/ @eg .qf.mkt.crossed_top ([] bid_prices:(1.1005 1.1;1.1 1.1;1.1;`float$()); bid_sizes:(1e6 1e6;1e6 1e6;1e6;`float$()); ask_prices:(1.1000 1.2;1.1 1.2;`float$();1.2); ask_sizes:(1e6 1e6;1e6 1e6;`float$();1e6))  ->  1000b
 crossed_top:{[x]
     t:top_sides[x];
     b:t`bid;

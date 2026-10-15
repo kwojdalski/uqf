@@ -339,7 +339,7 @@ commit:{[dry;effect;action;args]
 / guessed at, and tests/q/test_time_zone.q pins it: whoever adds a venue
 / calendar has to change a failing test rather than a comment. Nothing else
 / here has a business-date notion either - .qetl.coverage composes half-open
-/ intervals and .qdcf counts actual calendar days - and the only day roll
+/ intervals and .qf.px counts actual calendar days - and the only day roll
 / this tree knows about is TorQ's EOD reload, which is an operational state
 / rather than a business date.
 / .

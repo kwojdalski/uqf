@@ -27,7 +27,7 @@ not applicable here.
 
 **Atom vs vector**: `type 42` is `-7h` (negative = atom); `type 42 43` is `7h`
 (positive = vector). This matters in this repo because most `src/*.q` functions
-are written to work on either - see how `.qstats.inv_ncdf` branches on
+are written to work on either - see how `.qf.math.inv_ncdf` branches on
 `0>type p` to decide atom vs each-mapped vector handling.
 
 **Mixed-list promotion**: `1 2 3` is a long vector (`7h`); `1 2 3.0` is promoted
@@ -51,7 +51,7 @@ f each 1 2 3          / same as f'[1 2 3]
 ```
 
 **Fold (over, `/`) with vs without a seed** - this is the exact mechanism
-`.qstats.horner_eval` uses:
+`.qf.math.horner_eval` uses:
 
 ```
 (+/) 1 2 3     / 6   - no seed: first element used as seed
@@ -100,9 +100,10 @@ myfunc:{x+1}   / becomes .qmodule.myfunc
 otherfunc:{x+1}  / becomes .otherfunc (root)
 ```
 
-This is exactly the pattern every file in `src/` uses - each with its own
-distinct flat namespace (`.qstats`, `.qfwd`, `.qexec`, etc. - see this skill's
-Layout section for the full list). Two traps worth knowing:
+This is exactly the pattern every file in `src/` uses - each declaring one of
+the seven domain namespaces (`.qf.math`, `.qf.px`, `.qf.exec`, etc. - see this
+skill's Layout section for the full list), which several files share. Two traps
+worth knowing:
 
 - **`\d` persists for the rest of the file** until the next `\d` - forgetting
   the closing `\d .` at the bottom of a `src/*.q` file would leak later

@@ -136,18 +136,18 @@ crypto_execution_quality: "crypto_execution_quality\ntrade_time · horizon · ve
 
 # --------------------------------------------------------------- the jobs
 
-cross1: "cross1\n.qfwd.cross_book_at" { class: job }
-vectorize1: "vectorize1\n.qbook.book_from_wide_levels" { class: job }
-posbook1: "posbook1\n.qpos.apply_fill + .qrisk.pnl" { class: job }
+cross1: "cross1\n.qf.mkt.cross_book_at" { class: job }
+vectorize1: "vectorize1\n.qf.mkt.book_from_wide_levels" { class: job }
+posbook1: "posbook1\n.qf.port.apply_fill + .qf.port.pnl" { class: job }
 executions1: "executions1\nnormalizer: every fill\ntable as one" { class: job }
-demo_markout1: "demo_markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
-fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets executions, on a timer" { class: job }
+demo_markout1: "demo_markout1\n.qf.exec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
+fxpositions1: "fxpositions1\n.qf.port desk book + limits\nnets executions, on a timer" { class: job }
 marketdata1: "marketdata1\nnormalizer" { class: job }
 superbook1: "superbook1\n.qpipe.job.superbook merge\nacross sources" { class: job }
 databento1: "databento1\nthe same .qetl.transform fold\nthe backfill declares" { class: job }
 arbitrage1: "arbitrage1\ncrossed levels in the merged book" { class: job }
 last_value1: "last_value1\nnewest top of book per sym\nolder books are dropped" { class: job }
-crossarb1: "crossarb1\n.qfwd.cross_book_chain_at_sizes" { class: job }
+crossarb1: "crossarb1\n.qf.mkt.cross_book_chain_at_sizes" { class: job }
 kafka_flow1: "kafka_flow1\ndeduplicates on (partition;offset)\nstarted with its consumer" { class: job }
 flink_vwap1: "flink_vwap1\ndeduplicates on (sym;window_end)\nstarted with its Flink job" { class: job }
 crypto_markout1: "crypto_markout1\nmarkouts in bps against the\nbest mid across venues" { class: job }

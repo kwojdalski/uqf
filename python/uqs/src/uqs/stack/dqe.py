@@ -3,7 +3,7 @@
 TorQ's DQE process (dqe1) reads `dqengineconfig.csv` at start and at every end
 of day, arms one timer per row, and at that time sends the row's `.dqe`
 function to the row's process, storing what comes back in DQEDB. That is the
-scheduling, transport and persistence `.qmeta` deliberately does not have
+scheduling, transport and persistence `.qf.util` deliberately does not have
 (docs/guides/metatables.md), so a metatable is wired in as one more row here.
 
 EXTEND, NEVER EDIT - the same approach as process.csv in stack/procs.py. The

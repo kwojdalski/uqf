@@ -110,7 +110,7 @@ max_depth:8
 / @return the reaction's name
 / @throws error when the handler is not a 3-argument function, or when no
 /   bounded worker fills `dataset` (see `fillable`)
-/ @eg .qetl.reaction.on[`demo_deals;`rebuild_positions;{[ds;f;t] .qpos.rebuild[f;t]}]
+/ @eg .qetl.reaction.on[`demo_deals;`rebuild_positions;{[ds;f;t] .qf.port.rebuild[f;t]}]
 / `nm`, not `name`: inside the where-clause below BOTH sides of a comparison
 / written `name~/:name` resolve to the COLUMN, so the filter matched nothing
 / and re-registering appended a second handler instead of replacing the

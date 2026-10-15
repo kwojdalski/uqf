@@ -201,7 +201,7 @@ test_leg_times_ignore_a_level_the_sweep_skips:{[t]
 test_cross_sweep_chain_reports_each_legs_levels_used:{[t]
     bk1:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.10 0n 1.09;1e6 1e6 1e9;1.11 1.12;1e9 1e9);
     bk2:`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 150.0;enlist 1e9;enlist 150.1;enlist 1e9);
-    r:.qcross.cross_sweep_chain[(bk1;bk2);`bid;1.5e6;00b];
+    r:.qf.mkt.cross_sweep_chain[(bk1;bk2);`bid;1.5e6;00b];
     .qunit.assertEquals[r[`legs][0]`levels_used;0 2;"leg 0 skips its null level and reports original indices"];
     .qunit.assertEquals[r[`legs][1]`levels_used;enlist 0;"leg 1 consumed its single level"];
     .qunit.assertEquals[r[`legs][0]`notional;1.5e6;"leg 0 is swept at the size"];

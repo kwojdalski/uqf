@@ -62,7 +62,7 @@ would never surface.
 hand where a named function for it already exists.
 
 ```bash
-# mid price: is 0.5*(bid+ask) written inline where .qmicro.mid_price exists?
+# mid price: is 0.5*(bid+ask) written inline where .qf.mkt.mid_price exists?
 grep -rnE '0\.5\*\(?[a-z_]*(bid|ask)' --include="*.q" src
 grep -rn 'mid_price:' --include="*.q" src
 ```
@@ -143,8 +143,9 @@ Never propose any of these, and say why if asked:
   bodies. `init`, `register`, `attach`, `cleanup`, `spec`, `publish` recur
   across `src/etl/core/` as a lifecycle *interface*.
 - **Proposing a rename to resolve duplication.** A rename is
-  `abbreviation-auditor`'s subject, and the convention ties module, namespace
-  and test filename together, so it is a migration rather than a tidy.
+  `abbreviation-auditor`'s subject, and the convention ties a module's file, its
+  `.qf.<domain>` namespace and its test filename together, so it is a migration
+  rather than a tidy.
 - **Treating deliberate convention-mirroring as duplication.**
   `microstructure.q:178` states it mirrors `sweep_price`'s `(prices;sizes)`
   argument order *on purpose, without reusing its validation*. Shared shape with
@@ -181,7 +182,7 @@ request". It could - the frontend already ran the catalog there - so the copy
 was removed and the gateway now loads `src/etl/core/intervals.q`. A stated
 reason for a duplicate is a claim to check, not a verdict.
 
-**Do not report this one.** `forwards.q` calls `.qbook.sweep_price`
+**Do not report this one.** `forwards.q` calls `.qf.mkt.sweep_price`
 (`src/pricing/forwards.q:207`, `:310`, `:478`) rather than re-walking depth
 itself. Two modules, one implementation, a cross-namespace call. That is reuse,
 and finding it should *raise* your confidence in the tree, not lower it --- say

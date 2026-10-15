@@ -22,7 +22,7 @@
 /   basis points             pips mean nothing for BTC-USDT. bps =
 /                            side * 10000 * (ref - trade) / trade, positive
 /                            when the market moved in the fill's favour, the
-/                            same sign convention as .qexec.markout.
+/                            same sign convention as .qf.exec.markout.
 /   plant time on both       a fill's `time` and a book's `time` are both
 /                            this tickerplant's receipt stamps, so they are
 /                            on one clock. crypto_trades carries no venue
@@ -46,7 +46,7 @@
 / one cross-venue staleness policy, which posbook's crypto marks share.
 horizons:0D00:00:01 0D00:00:10
 max_horizon:max horizons
-max_age:.qmicro.reference_max_age
+max_age:.qf.mkt.reference_max_age
 
 / The transform's inputs: fills as crypto_trades carries them, and books as
 / crypto_book does, narrowed to what scoring reads.
@@ -60,13 +60,13 @@ crypto_execution_quality:.qetl.plant.published `crypto_execution_quality
 / .
 / A side the venue did not quote is null, not an error: its first level is
 / taken only when it has one. A level of zero size is not quoted either
-/ (.qbook.level_ok, #1261): the books carry bid_sizes and ask_sizes so a
+/ (.qf.mkt.level_ok, #1261): the books carry bid_sizes and ask_sizes so a
 / pulled top does not set the best price.
 / @param books crypto_book rows
 / @return table time, sym, venue, bid, ask
 / @eg exec bid from .qpipe.job.crypto_markout.top_of_book[([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT"; venue:enlist `a; bid_prices:enlist 62000 61999f; bid_sizes:enlist 1 1f; ask_prices:enlist `float$(); ask_sizes:enlist `float$())]  ->  ,62000f
 top_of_book:{[books]
-    t:.qbook.top_sides books;
+    t:.qf.mkt.top_sides books;
     select time, sym, venue, bid:t`bid, ask:t`ask from books}
 
 / Score each fill's markout, in bps, at every horizon, against the best mid
@@ -82,7 +82,7 @@ score_markouts:{[real_fills;books]
     f:real_fills "j"$raze m#'til n;
     h:hs (n*m)#til m;
     targets:([] sym:f`sym; time:(f`time)+h);
-    ref:.qmicro.best_mid_across_venues[.qpipe.job.crypto_markout.top_of_book[books];targets;.qpipe.job.crypto_markout.max_age];
+    ref:.qf.mkt.best_mid_across_venues[.qpipe.job.crypto_markout.top_of_book[books];targets;.qpipe.job.crypto_markout.max_age];
     move:(ref-f`trade_price)%f`trade_price;
     bps:(f`side)*10000*move;
     ([] sym:f`sym; venue:f`venue; fill_id:f`exchange_fill_id; trade_time:f`time; horizon:h;

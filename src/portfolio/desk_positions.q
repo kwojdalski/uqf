@@ -1,16 +1,17 @@
 / desk_positions.q - net FX exposure along whatever dimensions a desk
-/ reports on (.qdesk). Requires ccy.q (ccy_pair_legs) to be loaded first.
+/ reports on (loads into .qf.port). Requires ccy.q (ccy_pair_legs) to be loaded first.
 / .
 / WHY THIS IS NOT positions.q, AND NOT allocation.q. Three position
 / modules sounds like two too many, so here is what each is for:
 / .
-/   .qpos    a running book per SYM, weighted-average-cost, carrying
-/            realised P&L. One dimension, and P&L is the point.
-/   .qalloc  lot matching, which recomputes from the trades under a
-/            chosen method. Any dimensions, but O(trades) every time.
-/   .qdesk   a running NETTED book along declared dimensions. No lots, no
-/            average cost, no P&L - just what the desk is long and short,
-/            and in which currencies.
+/   positions.q          a running book per SYM, weighted-average-cost, carrying
+/                        realised P&L. One dimension, and P&L is the point.
+/   allocation.q         (.qf.exec) lot matching, which recomputes from the trades
+/                        under a chosen method. Any dimensions, but O(trades)
+/                        every time.
+/   desk_positions.q     a running NETTED book along declared dimensions. No lots,
+/                        no average cost, no P&L - just what the desk is long and
+/                        short, and in which currencies.
 / .
 / A risk engine asks a different question from a P&L engine. "What is the
 / EURUSD desk's net EUR exposure across every product it trades" does not
@@ -18,7 +19,7 @@
 / it would be paying for a fact nobody asked for. So this nets, and it
 / nets along dimensions that are DECLARED rather than fixed at `sym: a
 / book keyed on (sym, product, book) is the shape a trading desk actually
-/ reports, and .qpos cannot hold one.
+/ reports, and positions.q cannot hold one.
 / .
 / WHAT A BOOK CARRIES. Two quantities, because an FX position is two
 / currencies and reporting only one of them is how a cross position hides:
@@ -41,12 +42,12 @@
 / view. Two modules marking the same book two ways would drift. Exposure
 / is a fact about the fills alone, and that is what this file computes.
 
-\d .qdesk
+\d .qf.port
 
 / The columns a fill table must carry, on top of the dimensions.
 / .
 / `side is +1 buy / -1 sell and `size is unsigned, the same convention
-/ .qpos.apply_fills and .qalloc take - so one fill table feeds the book,
+/ .qf.port.apply_fills and .qf.exec take - so one fill table feeds the book,
 / the attribution and the exposure without a translation step. A venue
 / that spells it `BUY/`SELL converts once, at the edge that reads it.
 / fxpositions1 feeds this module `executions`, the one fill tape posbook
@@ -58,23 +59,23 @@ required_cols:`sym`side`size`price
 / The dimensions are an ARGUMENT rather than a constant because that is
 / the whole point of this module, and they are carried in the book's own
 / key rather than remembered somewhere else - so a book and the dimensions
-/ it is keyed on cannot come apart, and apply_fills can read them back off
+/ it is keyed on cannot come apart, and apply_desk_fills can read them back off
 / the book it was handed.
 / @param dims the grouping columns, e.g. `sym or `sym`product`book
 / @return an empty keyed table: dims -> base_qty, quote_qty, fill_count
 / @throws error when dims is empty - a book with no dimensions is one row and says nothing
-/ @eg cols .qdesk.empty_book[`sym`book] -> `sym`book`base_qty`quote_qty`fill_count
-empty_book:{[dims]
+/ @eg cols .qf.port.empty_desk_book[`sym`book] -> `sym`book`base_qty`quote_qty`fill_count
+empty_desk_book:{[dims]
     d:(),dims;
-    if[0=count d; '"empty_book: a book needs at least one dimension to be keyed on"];
-    if[not 11h=abs type d; '"empty_book: dimensions must be column names, as symbols"];
+    if[0=count d; '"empty_desk_book: a book needs at least one dimension to be keyed on"];
+    if[not 11h=abs type d; '"empty_desk_book: dimensions must be column names, as symbols"];
     d xkey flip (d,`base_qty`quote_qty`fill_count)!
         ((count d)#enlist `symbol$()),(`float$();`float$();`long$())}
 
 / The dimensions a book is keyed on.
-/ @param book a book from empty_book
+/ @param book a book from empty_desk_book
 / @return the dimension columns, in key order
-/ @eg .qdesk.dimensions .qdesk.empty_book[`sym`book] -> `sym`book
+/ @eg .qf.port.dimensions .qf.port.empty_desk_book[`sym`book] -> `sym`book
 dimensions:{[book] keys book}
 
 / Net a batch of fills into a book.
@@ -87,7 +88,7 @@ dimensions:{[book] keys book}
 / dimension combinations, so netting the batch down before touching the
 / book turns one pass over the batch plus one over its distinct keys into
 / the whole cost. The alternative - folding fill by fill - is the shape
-/ .qpos.apply_fills has, and it is right there because average cost is
+/ .qf.port.apply_fills has, and it is right there because average cost is
 / path-dependent. Netting is not: sums commute, so a batch has one answer
 / however it is ordered, and that is worth exploiting.
 / @param book the book to add to, keyed on its own dimensions
@@ -95,18 +96,18 @@ dimensions:{[book] keys book}
 /   dimension (`batch`, because `fills` is a q builtin)
 / @return the updated book
 / @throws error naming any missing column, or counting fills with a null side, size or price
-/ @eg exec base_qty from .qdesk.apply_fills[.qdesk.empty_book[`sym];([] sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; price:1.085 1.086)] -> enlist 600000f
-apply_fills:{[book;batch]
+/ @eg exec base_qty from .qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym];([] sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; price:1.085 1.086)] -> enlist 600000f
+apply_desk_fills:{[book;batch]
     dims:dimensions[book];
-    if[not 98h=type batch; '"apply_fills: fills must be a table"];
-    .qschema.require_cols[`apply_fills;`fills;batch;distinct required_cols,dims];
+    if[not 98h=type batch; '"apply_desk_fills: fills must be a table"];
+    .qf.util.require_cols[`apply_desk_fills;`fills;batch;distinct required_cols,dims];
     if[0=count batch; :book];
     / sum skips a null, so a null price would net into base_qty and not
     / quote_qty (a null size into neither, yet still count) - a book missing
     / its cash leg, and a break_even that looks fine (#1309). Refused.
     n_bad:sum (null batch`side) or (null batch`size) or null batch`price;
     if[n_bad;
-        '"apply_fills: ",string[n_bad]," fill(s) have a null side, size or price - a fill that cannot be netted must not be netted on one side only"];
+        '"apply_desk_fills: ",string[n_bad]," fill(s) have a null side, size or price - a fill that cannot be netted must not be netted on one side only"];
     netted:?[batch; (); {x!x} dims;
         `base_qty`quote_qty`fill_count!(
             (sum;(*;`side;`size));
@@ -136,18 +137,17 @@ apply_fills:{[book;batch]
 / floats, and fractional sizes rarely net to an exact zero: buying 0.1 and
 / 0.2 BTC and selling 0.3 leaves 5.6e-17, and dividing quote cash by that
 / published a break-even of -7.2e17 for a closed position (#811).
-/ @param book a book from apply_fills
+/ @param book a book from apply_desk_fills
 / @return the book with a break_even column added
-/ @eg exec break_even from .qdesk.break_even .qdesk.apply_fills[.qdesk.empty_book[`sym];([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; price:enlist 1.085)] -> enlist 1.085
+/ @eg exec break_even from .qf.port.break_even .qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym];([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; price:enlist 1.085)] -> enlist 1.085
 break_even:{[book]
     / A local, not the global by name: inside qSQL KDB-X resolves a bare
-    / global at the ROOT, where no flat_tolerance exists.
-    tol:flat_tolerance;
+    / global at the ROOT, where no flat_tolerance exists. The constant is
+    / risk.q's - this file used to keep an alias of it, which became the same
+    / name twice in one namespace when the two merged (#1411) - so it is named
+    / in full, which is also how check_module_deps.py sees the dependency.
+    tol:.qf.port.flat_tolerance;
     update break_even:?[tol>abs base_qty; 0n; (neg quote_qty)%base_qty] from book}
-
-/ The base quantity below which a book counts as flat - the one constant
-/ in .qrisk, shared with .qpos and .qalloc.
-flat_tolerance:.qrisk.flat_tolerance
 
 / Net exposure per currency across a whole book.
 / .
@@ -157,19 +157,19 @@ flat_tolerance:.qrisk.flat_tolerance
 / long two things, it is long GBP and flat-ish EUR, and only a
 / per-currency netting says so.
 / .
-/ This is .qpos.ccy_exposure's question asked of a netted book rather than
+/ This is .qf.port.ccy_exposure's question asked of a netted book rather than
 / an average-cost one. It decomposes through the same ccy.q primitive, so
 / the two agree about which currency is which; what differs is the input,
 / because a netted book already carries both legs and has no average price
 / to re-derive them from.
 / .
 / Raw currency units, not comparable across currencies - revalue with
-/ .qpos.ccy_exposure_in when one reporting number is wanted.
-/ @param book a book from apply_fills
+/ .qf.port.ccy_exposure_in when one reporting number is wanted.
+/ @param book a book from apply_desk_fills
 / @param group_cols the dimensions to report within, e.g. `book, or () for the whole desk
 / @return a table of group_cols plus ccy and amount
-/ @eg exec amount from .qdesk.ccy_exposure[.qdesk.apply_fills[.qdesk.empty_book[`sym];([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; price:enlist 1.085)];()] -> 1000000 -1085000f
-ccy_exposure:{[book;group_cols]
+/ @eg exec amount from .qf.port.desk_ccy_exposure[.qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym];([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; price:enlist 1.085)];()] -> 1000000 -1085000f
+desk_ccy_exposure:{[book;group_cols]
     g:(),group_cols;
     rows:0!book;
     / Empty, but the SAME shape as a non-empty result: keyed on the group
@@ -179,7 +179,7 @@ ccy_exposure:{[book;group_cols]
     / over two empty tables, which PeachQ returns as () - this suite is in the
     / PeachQ-portable set.
     if[0=count rows; :(g,`ccy) xkey flip (g,`ccy`amount)!(rows g),(`symbol$();`float$())];
-    legs:.qccy.ccy_pair_legs each rows`sym;
+    legs:.qf.px.ccy_pair_legs each rows`sym;
     / Two rows out of every one in - the base leg and the quote leg - so
     / the group columns are taken twice, in the same order the amounts are.
     long_form:?[rows;();0b;(g,`sym)!g,`sym] ,' ([] ccy:legs`base; amount:rows`base_qty);
@@ -192,11 +192,11 @@ ccy_exposure:{[book;group_cols]
 / a desk-level figure is the sum over the desk's products, not one of
 / them. The result is keyed on what was asked for, so it is a book of the
 / same kind and every function here still applies to it.
-/ @param book a book from apply_fills
+/ @param book a book from apply_desk_fills
 / @param group_cols the dimensions to keep - a subset of the book's own
 / @return a book keyed on group_cols
 / @throws error when a requested column is not one of the book's dimensions
-/ @eg .qdesk.dimensions .qdesk.rollup[.qdesk.empty_book[`sym`book];enlist `book] -> enlist `book
+/ @eg .qf.port.dimensions .qf.port.rollup[.qf.port.empty_desk_book[`sym`book];enlist `book] -> enlist `book
 rollup:{[book;group_cols]
     g:(),group_cols;
     unknown:g where not g in dimensions book;

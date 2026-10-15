@@ -11,7 +11,7 @@
 / torq_cross_etl.q/torq_vectorize_etl.q wrap other uqf pure functions with
 / their own local state and glue.
 
-\d .qpos
+\d .qf.port
 
 / An empty position book: one row per sym once opened, running signed
 / qty, volume-weighted average entry price of the *currently open*
@@ -19,7 +19,7 @@
 / is never stored - see unrealized_pnl, computed on demand against a
 / current market price.
 / @return an empty keyed table, ready for apply_fill
-/ @eg .qpos.empty_book[]
+/ @eg .qf.port.empty_book[]
 empty_book:{[] ([sym:`symbol$()] qty:`float$(); avg_price:`float$(); realized_pnl:`float$())};
 
 / Apply one fill to a position book, weighted-average-cost style:
@@ -41,8 +41,8 @@ empty_book:{[] ([sym:`symbol$()] qty:`float$(); avg_price:`float$(); realized_pn
 / @param price the fill price
 / @param side 1 for a buy, -1 for a sell
 / @return pos with sym's row updated (or added, if new)
-/ @eg .qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1] -> qty 1000000, avg_price 1.1, realized_pnl 0
-/ @eg .qpos.apply_fill[.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];`EURUSD;400000;1.1050;-1] -> qty 600000, avg_price 1.1 (unchanged), realized_pnl 2000 (400000 closed at a 50-pip gain)
+/ @eg .qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1] -> qty 1000000, avg_price 1.1, realized_pnl 0
+/ @eg .qf.port.apply_fill[.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1];`EURUSD;400000;1.1050;-1] -> qty 600000, avg_price 1.1 (unchanged), realized_pnl 2000 (400000 closed at a 50-pip gain)
 apply_fill:{[pos;sym;qty;price;side]
     / exec sym from pos, not key pos: `key` on a single-key-column keyed
     / table does not always give a plain symbol vector, and `in` against
@@ -55,7 +55,7 @@ apply_fill:{[pos;sym;qty;price;side]
     / Closing a fractional position nets to float residue, not 0f
     / (0.1+0.2-0.3 is 5.6e-17): snap it flat so the exact-close branch runs.
     new_qty:old_qty+fill_qty;
-    if[.qrisk.is_flat new_qty; new_qty:0f];
+    if[.qf.port.is_flat new_qty; new_qty:0f];
     same_dir:(old_qty=0f) or (signum[old_qty]=signum[new_qty]);
     increasing:same_dir and (abs new_qty)>=abs old_qty;
     result:$[
@@ -71,13 +71,13 @@ apply_fill:{[pos;sym;qty;price;side]
             `qty`avg_price`realized_pnl!(
                 new_qty;
                 old_avg;
-                old[`realized_pnl]+.qrisk.pnl[abs fill_qty;old_avg;price;signum old_qty]);
+                old[`realized_pnl]+.qf.port.pnl[abs fill_qty;old_avg;price;signum old_qty]);
         / else: exact close (new_qty=0) or a flip past flat - either way
         / the whole old position closes here, at this fill's price
         `qty`avg_price`realized_pnl!(
             new_qty;
             $[new_qty=0f; 0f; price];
-            old[`realized_pnl]+.qrisk.pnl[abs old_qty;old_avg;price;signum old_qty])
+            old[`realized_pnl]+.qf.port.pnl[abs old_qty;old_avg;price;signum old_qty])
     ];
     pos upsert enlist `sym`qty`avg_price`realized_pnl!(sym;result`qty;result`avg_price;result`realized_pnl)};
 
@@ -96,7 +96,7 @@ apply_fill:{[pos;sym;qty;price;side]
 /   -1 sell), and time (sorted into time order before folding - the table
 /   need not already be sorted)
 / @return pos with every trade in trades applied, oldest first
-/ @eg .qpos.apply_fills[.qpos.empty_book[];trades]
+/ @eg .qf.port.apply_fills[.qf.port.empty_book[];trades]
 apply_fills:{[pos;trades]
     {[pos;row] apply_fill[pos;row`sym;row`size;row`trade_price;row`side]}/[pos;`time xasc trades]};
 
@@ -123,7 +123,7 @@ apply_fills:{[pos;trades]
 /   computed_avg_price/reference_avg_price/avg_price_diff/qty_break/
 /   avg_price_break/status (`break`match), one row per sym seen in
 /   either side, sorted breaks-first
-/ @eg .qpos.reconcile_trades[broker_book;trades;0f;1e-6]
+/ @eg .qf.port.reconcile_trades[broker_book;trades;0f;1e-6]
 reconcile_trades:{[reference_book;trades;qty_tol;price_tol]
     computed_book:apply_fills[empty_book[];trades];
     ref_syms:exec sym from reference_book;
@@ -150,18 +150,18 @@ reconcile_trades:{[reference_book;trades;qty_tol;price_tol]
 / @param sym the symbol to mark
 / @param mkt_price the current market price to mark against
 / @return unrealized P&L, in quote currency (0 if sym isn't in pos or is flat)
-/ @eg .qpos.unrealized_pnl[.qpos.apply_fill[.qpos.empty_book[];`EURUSD;600000;1.1000;1];`EURUSD;1.1100] -> 6000f
+/ @eg .qf.port.unrealized_pnl[.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;600000;1.1000;1];`EURUSD;1.1100] -> 6000f
 unrealized_pnl:{[pos;sym;mkt_price]
     if[not sym in exec sym from pos; :0f];
     row:pos sym;
-    .qrisk.pnl[abs row`qty;row`avg_price;mkt_price;signum row`qty]};
+    .qf.port.pnl[abs row`qty;row`avg_price;mkt_price;signum row`qty]};
 
 / Total P&L (realized + mark-to-market unrealized) of sym's position.
 / @param pos a position book (see empty_book)
 / @param sym the symbol to mark
 / @param mkt_price the current market price to mark against
 / @return total P&L, in quote currency
-/ @eg .qpos.total_pnl[b;`EURUSD;1.1100]
+/ @eg .qf.port.total_pnl[b;`EURUSD;1.1100]
 total_pnl:{[pos;sym;mkt_price]
     realized:$[sym in exec sym from pos; pos[sym]`realized_pnl; 0f];
     realized+unrealized_pnl[pos;sym;mkt_price]};
@@ -177,9 +177,9 @@ total_pnl:{[pos;sym;mkt_price]
 / @param avg_price the position's average entry/cost-basis rate
 / @return a 2-row table `ccy`amount - the base currency's leg is +qty,
 /   the quote currency's leg is -(qty*avg_price)
-/ @eg .qpos.ccy_legs[`EURAUD;1000000;1.6000] -> +`ccy`amount!(`EUR`AUD;(1000000;-1600000f))
+/ @eg .qf.port.ccy_legs[`EURAUD;1000000;1.6000] -> +`ccy`amount!(`EUR`AUD;(1000000;-1600000f))
 ccy_legs:{[sym;qty;avg_price]
-    legs:.qccy.ccy_pair_legs sym;
+    legs:.qf.px.ccy_pair_legs sym;
     ([] ccy:(legs`base;legs`quote); amount:(qty;neg qty*avg_price))};
 
 / Net exposure per currency across an entire position book - decomposes
@@ -194,13 +194,13 @@ ccy_legs:{[sym;qty;avg_price]
 / open position; leaving the realised cash out reported a book bought at
 / 1.10 and half sold at 1.11 as USD -550,000 when it holds -545,000, and a
 / book closed flat at a profit as no USD exposure at all (#805). This is the
-/ same net cash .qdesk.ccy_exposure reports for the same fills.
+/ same net cash .qf.port.desk_ccy_exposure reports for the same fills.
 / @param pos a position book (see empty_book)
 / @return a table `ccy`amount, one row per currency touched by the book
 / For a book long 1mm EURAUD @ 1.60 and long 500k AUDUSD @ 0.65, AUD nets
 / across both pairs: -1,600,000 from the EURAUD leg plus +500,000 from the
 / AUDUSD leg is -1,100,000.
-/ @eg .qpos.ccy_exposure[.qpos.apply_fill[.qpos.apply_fill[.qpos.empty_book[];`EURAUD;1000000;1.6000;1];`AUDUSD;500000;0.6500;1]] -> +`ccy`amount!(`s#`AUD`EUR`USD;-1100000 1000000 -325000f)
+/ @eg .qf.port.ccy_exposure[.qf.port.apply_fill[.qf.port.apply_fill[.qf.port.empty_book[];`EURAUD;1000000;1.6000;1];`AUDUSD;500000;0.6500;1]] -> +`ccy`amount!(`s#`AUD`EUR`USD;-1100000 1000000 -325000f)
 ccy_exposure:{[pos]
     legs:raze {[row]
         open:ccy_legs[row`sym;row`qty;row`avg_price];
@@ -234,7 +234,7 @@ ccy_exposure:{[pos]
 /   (reporting_ccy's own row converts at 1, trivially)
 / @throws error (from cross_book_at) if some currency has no chain of
 /   available pairs connecting it to reporting_ccy in quotes
-/ @eg .qpos.ccy_exposure_in[b;quotes;`USD;.z.p]
+/ @eg .qf.port.ccy_exposure_in[b;quotes;`USD;.z.p]
 ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
     exposure:ccy_exposure[pos];
     convert_one:{[quotes;reporting_ccy;as_of;ccy;amount]
@@ -242,8 +242,8 @@ ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
         / Nothing to convert, and nothing to sweep: a book that closed a
         / position keeps the flat row, and pricing it at size 0 threw.
         if[0=amount; :0f];
-        pair:.qccy.ccy_pair_symbol[ccy;reporting_ccy];
-        mid:first exec mid from .qcross.cross_book_at[quotes;pair;as_of;enlist abs amount;enlist `mid];
+        pair:.qf.px.ccy_pair_symbol[ccy;reporting_ccy];
+        mid:first exec mid from .qf.mkt.cross_book_at[quotes;pair;as_of;enlist abs amount;enlist `mid];
         amount*mid};
     update reporting_amount:convert_one[quotes;reporting_ccy;as_of]'[ccy;amount] from exposure};
 

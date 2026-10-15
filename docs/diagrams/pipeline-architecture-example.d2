@@ -141,9 +141,9 @@ engines: "4 · engines — subscribe, hold state, republish" {
   grid-columns: 3
   grid-gap: 20
 
-  posbook: "posbook\nexecutions + market_data → position\n.qpos, FX and crypto in one book" { class: job }
-  fxpos: "fx_positions\nexecutions → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
-  markout: "markout\ntrades + quote → demo_execution_quality\n.qexec, at horizons on a timer" { class: job }
+  posbook: "posbook\nexecutions + market_data → position\n.qf.port, FX and crypto in one book" { class: job }
+  fxpos: "fx_positions\nexecutions → fx_position · fx_limit_breach\n.qf.port exposure and caps" { class: job }
+  markout: "markout\ntrades + quote → demo_execution_quality\n.qf.exec, at horizons on a timer" { class: job }
   superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
   windows: "exec_bars · order_quality · crypto_book_1s\nexecutions, orders, crypto_book → bars\nand rolling ratios, by event time" { class: job }
@@ -164,9 +164,9 @@ ondemand: "6 · on demand — pure functions over whatever the store holds" {
   grid-columns: 3
   grid-gap: 20
 
-  alloc: ".qalloc\nP&L attribution: FIFO / LIFO /\nweighted, carried, as-of" { class: library }
-  risk: ".qrisk · .qpos.ccy_exposure_in\nVaR, carry, per-currency exposure\nin one reporting currency" { class: library }
-  micro: ".qmicro · .qexec\nbook pressure, VPIN, markout -\nover quotes or the event tape" { class: library }
+  alloc: ".qf.exec\nP&L attribution: FIFO / LIFO /\nweighted, carried, as-of" { class: library }
+  risk: ".qf.port · .qf.port.ccy_exposure_in\nVaR, carry, per-currency exposure\nin one reporting currency" { class: library }
+  micro: ".qf.mkt · .qf.exec\nbook pressure, VPIN, markout -\nover quotes or the event tape" { class: library }
 }
 
 surfaces: "7 · surfaces" {

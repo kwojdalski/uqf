@@ -1,4 +1,4 @@
-/ render.q - a value as q text, without the console-width cut (.qrender).
+/ render.q - a value as q text, without the console-width cut (.qf.util).
 / .
 / .Q.s1 and -3! stop at the console width (\c: 80 columns by default, 200
 / under TorQ) and end the text with "..". Anything that RECORDS a rendering
@@ -12,7 +12,7 @@
 / worked example - and tests/q/test_render.q holds the two to the same
 / output.
 
-\d .qrender
+\d .qf.util
 
 / A value as q text, IN FULL: a string escaped with no length limit, anything
 / else with the console widened to its 2000-column maximum for the one call
@@ -20,7 +20,7 @@
 / ends in "..", which is q's own limit.
 / @param v any value
 / @return its q literal, as .Q.s1 spells it
-/ @eg count .qrender.full 300#"a"  ->  302
+/ @eg count .qf.util.full 300#"a"  ->  302
 full:{[v]
     if[10h=type v; :quoted[v]];
     c:@[system;"c";{[e] ()}];
@@ -35,7 +35,7 @@ full:{[v]
 / three-digit octal escape - exactly as -3! spells it, without its cut.
 / @param s a string
 / @return the literal
-/ @eg .qrender.quoted "a\nb"  ->  "\"a\\nb\""
+/ @eg .qf.util.quoted "a\nb"  ->  "\"a\\nb\""
 quoted:{[s]
     esc:{[ch] i:`int$ch;
         $[ch in "\\\""; "\\",ch;

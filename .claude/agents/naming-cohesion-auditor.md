@@ -85,13 +85,15 @@ Check:
   `integrations`, `examples`. Does each module's content match its area? A
   pricing function living in `market_data` is a finding; so is an area with one
   module that is really part of another.
-- **Namespace derivation.** The convention is `.q` + an abbreviation of the
-  filename. Verify it is *predictable*. Two things to look hard at: a namespace
-  that cannot be derived from its filename at all (`daycount.q` → `.qdcf`), and
-  any pair where one namespace is a **prefix of another** (`.qex` for
-  `example_defaults.q` sits one character inside `.qexec` for `execution.q`) ---
-  that is a real hazard when reading a call site, not a style nit. Report
-  prefix-collisions as HIGH.
+- **Namespace derivation.** The quant library's namespaces are the seven
+  `.qf.<domain>` domains (`docs/reference/qf-domains.md`); a file's domain is
+  *not* derivable from its filename, so verify the file sits in the domain its
+  content belongs to (a book-derived calculation in `.qf.px`, or a model price
+  in `.qf.mkt`, is the `px`/`mkt` boundary crossed). Also look hard at any pair
+  where one namespace is a **prefix of another** --- that is a real hazard when
+  reading a call site, not a style nit. Report prefix-collisions as HIGH. A name
+  defined in two files of one domain is a finding too (`check_module_deps.py`
+  fails it).
 - **Test pairing.** Every `src/<area>/<module>.q` should have
   `tests/q/test_<module>.q`, which is how qUnit discovers it. Note that `src/`
   is nested and `tests/q/` is flat: two modules in different areas with the same
@@ -210,7 +212,7 @@ NAMING & COHESION AUDIT — <branch> — <date>
  # | Surface   | Impact | Finding                                  | Outlier -> Majority
 ---|-----------|--------|------------------------------------------|---------------------------------
  1 | cohesion  | HIGH   | args flipped vs own helper               | microstructure.q:197 -> :214
- 2 | layout    | HIGH   | .qex is a prefix of .qexec               | example_defaults.q -> execution.q
+ 2 | layout    | HIGH   | .qex is a prefix of .qf.exec               | example_defaults.q -> execution.q
  3 | cohesion  | MED    | `t` is table, years, and timestamp       | 3 modules, 41 uses
 ```
 

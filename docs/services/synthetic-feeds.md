@@ -6,7 +6,7 @@ The two feeds that invent market data for the demo, and how to add another.
 Starting, stopping and inspecting the stack as a whole is in [running the uqf
 stack](../guides/uqs.md).
 
-![The two feed declarations, both walking the same .qsynth spot, publish quote and fx_orderbook to stp1; the schema file from bootstrap is what lets the unchanged rdb1, wdb1 and hdb store the new table](../diagrams/synthetic-feeds.svg)
+![The two feed declarations, both walking the same .qf.demo spot, publish quote and fx_orderbook to stp1; the schema file from bootstrap is what lets the unchanged rdb1, wdb1 and hdb store the new table](../diagrams/synthetic-feeds.svg)
 
 ## fxfeed1
 
@@ -48,8 +48,8 @@ code understands - rather than the vendored pack's generic `quote`/`trade`
 tables. It publishes synthetic depth-aware FX quotes (3 levels per side,
 level-0-first vectors) into a new `fx_orderbook` table:
 `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes - the shape
-`.qschema.require_depth_quotes` checks, so its rows go to
-`.qcross.cross_book_at` and the other depth functions as they are.
+`.qf.util.require_depth_quotes` checks, so its rows go to
+`.qf.mkt.cross_book_at` and the other depth functions as they are.
 
 Getting this table into a real, on-disk database took no changes to
 `rdb.q`/`wdb.q`/`hdb.q` at all - the vendored RDB's default `subscribeto:`

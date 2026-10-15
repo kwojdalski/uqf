@@ -7,7 +7,7 @@
 # WHAT THIS DIAGRAM IS FOR. Two things the page argues: a feed is a
 # DECLARATION run by one generic runner, not a script of its own; and a new
 # table reached the HDB with no change to rdb.q, wdb.q or hdb.q - only a
-# schema line in the generated database.q. Both feeds walk the same .qsynth
+# schema line in the generated database.q. Both feeds walk the same .qf.demo
 # spot, so the top of book and the depth agree on the mid.
 
 direction: down
@@ -34,7 +34,7 @@ classes: {
 
 decl: "the feeds - a declaration each, run by torq_stream.q" {
   class: band
-  synth: ".qsynth\none random walk per pair\nEURUSD GBPUSD USDJPY AUDUSD EURJPY" { class: feed }
+  synth: ".qf.demo\none random walk per pair\nEURUSD GBPUSD USDJPY AUDUSD EURJPY" { class: feed }
   fx: "fxfeed1 - fx_feed.q\ntop of book, 1 pip each side\nevery 0.5s" { class: job }
   depth: "fxorderbookfeed1 - fx_orderbook_feed.q\n3 levels a side, level 0 first\nevery 0.5s" { class: job }
   synth -> fx: "spot" { style.stroke: "#a8762f" }

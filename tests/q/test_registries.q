@@ -20,7 +20,7 @@
 / .
 / The registries in this tree defend in one of two ways. .qetl.job.stream and
 / .qetl.job.stream.normalizer ENLIST every declaration, which is
-/ shape-independent. The rest DECLARE the table: .qalloc.methods,
+/ shape-independent. The rest DECLARE the table: .qf.exec.methods,
 / .qetl.transform.registry, .qetl.source.sources, .qetl.job.bounded.worker_cfg
 / and .qetl.dag.jobs are keyed tables from the start, with every column typed
 / or general and every optional field given its default by define (#512), so
@@ -37,7 +37,7 @@
 / .sjtest's "every job is registered" both fail if it runs first.
 forget:{[reg;names]
     r:get reg;
-    / A registry is a dict, or a keyed table (.qalloc.methods), whose `key`
+    / A registry is a dict, or a keyed table (.qf.exec.methods), whose `key`
     / is a table - `names inter` it would match nothing and forget nothing.
     reg set $[98h=type key r;
         ![r;enlist (in;first cols key r;enlist names);0b;`symbol$()];
@@ -75,10 +75,10 @@ test_the_trap_is_real_and_has_two_halves:{[t]
 / They have a registry's shape - so dict_registries[] finds them - but nothing
 / registers into them, so there is no second declaration whose shape could
 / collapse or be refused. An exemption is a claim; this keeps it argued.
-not_registries:(enlist `.qcal.mock_conventions)!enlist
-    "sample FX conventions, passed as an argument to .qcal.spot_date and friends; nothing registers into it"
+not_registries:(enlist `.qf.px.mock_conventions)!enlist
+    "sample FX conventions, passed as an argument to .qf.px.spot_date and friends; nothing registers into it"
 
-covered:`.qetl.job.stream.jobs`.qetl.transform.registry`.qalloc.methods`.qetl.job.stream.normalizer.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
+covered:`.qetl.job.stream.jobs`.qetl.transform.registry`.qf.exec.methods`.qetl.job.stream.normalizer.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
 
 empty_in:([] time:`timestamp$(); x:`long$())
 rows_in:([] time:enlist 2026.01.01D00:00:00; x:enlist 1)
@@ -117,12 +117,12 @@ test_a_transform_without_as_of_does_not_gain_one:{[t]
 test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]
     / The case that would have reintroduced the bug: an optional key on a
     / registry that normalises rather than enlists.
-    .qalloc.define[`regtest_described;`open`pick`why!(.qalloc.append_lot;.qalloc.pick_first;"a reason")];
-    .qalloc.define[`regtest_bare;`open`pick!(.qalloc.append_lot;.qalloc.pick_first)];
-    .qunit.assertEquals[.qalloc.def[`regtest_bare]`why;"";
+    .qf.exec.define[`regtest_described;`open`pick`why!(.qf.exec.append_lot;.qf.exec.pick_first;"a reason")];
+    .qf.exec.define[`regtest_bare;`open`pick!(.qf.exec.append_lot;.qf.exec.pick_first)];
+    .qunit.assertEquals[.qf.exec.def[`regtest_bare]`why;"";
         "an omitted description is an empty string, not a null - and `why` is still present, so every stored method is one shape"];
-    .qunit.assertEquals[.qalloc.def[`regtest_described]`why;"a reason";"and a given one survives"];
-    forget[`.qalloc.methods;`regtest_described`regtest_bare]};
+    .qunit.assertEquals[.qf.exec.def[`regtest_described]`why;"a reason";"and a given one survives"];
+    forget[`.qf.exec.methods;`regtest_described`regtest_bare]};
 
 test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
     / .qetl.source stores row_key as a VECTOR whatever the spelling, so no
@@ -184,7 +184,7 @@ test_the_four_registries_are_declared_keyed_tables:{[t]
     .qunit.assertEquals[{98h=type key get x} each keyed;1111b;
         "each registry's key is a table: declared, not a dictionary that collapsed"];
     .qunit.assertEquals[{first cols key get x} each keyed;4#`name;
-        "keyed on `name, as .qalloc.methods is"]};
+        "keyed on `name, as .qf.exec.methods is"]};
 
 test_no_keyed_registry_is_classified_as_a_collapsed_dictionary:{[t]
     .qunit.assertEquals[keyed inter .regtest.dict_registries[];`symbol$();
@@ -302,7 +302,7 @@ test_a_job_graph_declaration_normalises_its_edges:{[t]
 / Every symbol-keyed registry in src/ whose values are dictionaries, read
 / from the live namespaces rather than from a list kept by hand.
 dict_registries:{[]
-    nss:.qns.functional[] except `.q`.qunit;
+    nss:.qf.util.functional[] except `.q`.qunit;
     raze {[ns]
         nms:key[ns] except `;
         hits:nms where {[ns;nm]

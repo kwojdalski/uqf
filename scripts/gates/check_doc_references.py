@@ -135,26 +135,38 @@ ALLOWED_MISSING = {
     ): _CALLER_SET,
     (
         ".claude/agents/uqf-quant-developer.md",
-        ".qfwd.sub",
+        ".qf.px.options",
+    ): "the intermediate public namespace the rule forbids, named as the example",
+    (
+        ".claude/skills/kdb-q-conventions/SKILL.md",
+        ".qf.px.options",
+    ): "the intermediate public namespace the rule forbids, named as the example",
+    (
+        "docs/reference/qf-domains.md",
+        ".qf.px.options",
+    ): "the intermediate public namespace the page says does not exist",
+    (
+        ".claude/agents/uqf-quant-developer.md",
+        ".qf.px.sub",
     ): "the same nested-namespace illustration, in the rule that forbids it",
     (
         ".claude/skills/antipattern/SKILL.md",
-        ".qfwd.sub",
+        ".qf.px.sub",
     ): "the same nested-namespace illustration",
     (
         ".claude/agents/extension-brainstormer.md",
-        ".qfwd.sub",
+        ".qf.px.sub",
     ): "the same nested-namespace illustration",
     (
         ".claude/agents/extension-brainstormer.md",
-        ".qmicro.example_fn",
+        ".qf.mkt.example_fn",
     ): "a placeholder in the template an idea must fill in, not a real name",
     # These two are the examples of what this gate catches, quoted in the
     # philosophy note. Both MUST stay non-existent: the sentence is about the
     # fact that they do not exist, so fixing them would delete the point.
     (
         "docs/architecture/pipeline-philosophy.md",
-        ".qmicro.require_sorted_tape",
+        ".qf.mkt.require_sorted_tape",
     ): "quoted as a reference this gate caught - the real name is require_tape",
     (
         "docs/architecture/pipeline-philosophy.md",

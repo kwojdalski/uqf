@@ -1,5 +1,5 @@
 / attribution_routes.q - markout ATTRIBUTION routes from a compact, versioned
-/ convention set (.qcross, #1213). Shares the namespace of cross.q.
+/ convention set (.qf.mkt, #1213). Shares the namespace of cross.q.
 / .
 / WHAT THIS IS FOR. cross_decomp (cross.q) picks the shortest chain through the
 / books that happen to exist, which is right for PRICING a cross and wrong for
@@ -34,7 +34,7 @@
 / Reference-price selection is separate and lives in cross.q; a route says how
 / to ATTRIBUTE a move, not what the cross was worth.
 
-\d .qcross
+\d .qf.mkt
 
 / The proposed default convention. A dict of version, status, currencies
 / (ordered table ccy, tier, bridge), direct (symbols) and exceptions
@@ -59,7 +59,7 @@ attr_orient_legs:{[ccy_a;ccy_b;legs]
     inverts:`boolean$();
     i:0;
     while[i<count legs;
-        leg:.qccy.ccy_pair_legs legs i;
+        leg:.qf.px.ccy_pair_legs legs i;
         $[cur=leg`base; [inverts,:0b; cur:leg`quote];
           cur=leg`quote; [inverts,:1b; cur:leg`base];
           '"attribution_route: exception leg ",(string legs i)," does not continue from ",string cur];
@@ -74,7 +74,7 @@ attr_orient_legs:{[ccy_a;ccy_b;legs]
 attr_canonical:{[conv;ccy_a;ccy_b]
     tbl:conv`currencies;
     ccys:tbl`ccy;
-    canon:.qccy.ccy_pair_symbol[ccy_a;ccy_b];
+    canon:.qf.px.ccy_pair_symbol[ccy_a;ccy_b];
     ex_i:(conv[`exceptions]`pair)?canon;
     if[ex_i<count conv[`exceptions]`pair;
         legs:(),conv[`exceptions][`legs] ex_i;
@@ -88,7 +88,7 @@ attr_canonical:{[conv;ccy_a;ccy_b]
     inverts:(ccys?from_c)>ccys?to_c;
     base_c:?[inverts;to_c;from_c];
     quote_c:?[inverts;from_c;to_c];
-    `legs`inverts!(.qccy.ccy_pair_symbol'[base_c;quote_c];inverts)};
+    `legs`inverts!(.qf.px.ccy_pair_symbol'[base_c;quote_c];inverts)};
 
 / The attribution route of a pair under a given convention: the ordered legs
 / that chain from the pair's base currency to its quote currency, and whether
@@ -101,11 +101,11 @@ attr_canonical:{[conv;ccy_a;ccy_b]
 /   a direct pair is one row. Deterministic and acyclic.
 / @throws error naming the currency if either currency is not in the
 /   convention, if both are the same currency, or if an exception route is malformed
-/ @eg .qcross.attribution_route_with[.qcross.attribution_convention;`USDPLN]`leg  -> `EURUSD`EURPLN
-/ @eg .qcross.attribution_route_with[.qcross.attribution_convention;`USDPLN]`invert  -> 10b
+/ @eg .qf.mkt.attribution_route_with[.qf.mkt.attribution_convention;`USDPLN]`leg  -> `EURUSD`EURPLN
+/ @eg .qf.mkt.attribution_route_with[.qf.mkt.attribution_convention;`USDPLN]`invert  -> 10b
 attribution_route_with:{[conv;pair]
-    pair:.qccy.normalize_ccy_pair pair;
-    ends:.qccy.ccy_pair_legs pair;
+    pair:.qf.px.normalize_ccy_pair pair;
+    ends:.qf.px.ccy_pair_legs pair;
     ccys:conv[`currencies]`ccy;
     bad:(ends`base`quote) where not (ends`base`quote) in ccys;
     if[count bad;
@@ -125,27 +125,27 @@ attribution_route_with:{[conv;pair]
 / @param pair the pair, any format ccy.q's normalize_ccy_pair accepts
 / @return table `pair`step`leg`invert`version
 / @throws error if a currency is unsupported (see attribution_route_with)
-/ @eg .qcross.attribution_route[`EURUSD]`leg  -> enlist `EURUSD
-/ @eg .qcross.attribution_route[`USDPLN]`leg  -> `EURUSD`EURPLN
-/ @eg .qcross.attribution_route[`PLNUSD]`invert  -> 10b
-/ @eg first .qcross.attribution_route[`GBPPLN]`version  -> `proposed_v1
+/ @eg .qf.mkt.attribution_route[`EURUSD]`leg  -> enlist `EURUSD
+/ @eg .qf.mkt.attribution_route[`USDPLN]`leg  -> `EURUSD`EURPLN
+/ @eg .qf.mkt.attribution_route[`PLNUSD]`invert  -> 10b
+/ @eg first .qf.mkt.attribution_route[`GBPPLN]`version  -> `proposed_v1
 attribution_route:{[pair] attribution_route_with[attribution_convention;pair]};
 
 / Every supported pair, canonical order (the earlier currency is the base).
 / @param conv a convention dict
 / @return symbol list, n*(n-1)/2 pairs for n currencies
-/ @eg count .qcross.attribution_pairs .qcross.attribution_convention  -> 435
+/ @eg count .qf.mkt.attribution_pairs .qf.mkt.attribution_convention  -> 435
 attribution_pairs:{[conv]
     ccys:conv[`currencies]`ccy;
     n:count ccys;
-    raze {[c;i] .qccy.ccy_pair_symbol[c i;] each c (i+1)+til (count c)-i+1}[ccys;] each til n};
+    raze {[c;i] .qf.px.ccy_pair_symbol[c i;] each c (i+1)+til (count c)-i+1}[ccys;] each til n};
 
 / Refuse a malformed convention before it is used for attribution.
 / @param conv a convention dict `version`status`currencies`direct`exceptions
 / @return conv, unchanged, if every rule holds and every supported pair routes
 / @throws error if currencies repeat, a bridge is missing or is not its own
 /   bridge, a direct pair is not canonical, or any pair fails to route
-/ @eg .qcross.attribution_convention_check[.qcross.attribution_convention]`version  -> `proposed_v1
+/ @eg .qf.mkt.attribution_convention_check[.qf.mkt.attribution_convention]`version  -> `proposed_v1
 attribution_convention_check:{[conv]
     tbl:conv`currencies;
     if[not (count tbl`ccy)=count distinct tbl`ccy; '"attribution_convention: duplicate currency"];
@@ -160,8 +160,8 @@ attribution_convention_check:{[conv]
 / inverted leg suffixed (inv), joined by +. A direct pair is just its own name.
 / @param route a table from attribution_route_with, `leg and `invert columns
 / @return a symbol, e.g. `EURAUD(inv)+EURPLN
-/ @eg .qcross.attribution_route_text .qcross.attribution_route `AUDPLN  -> `$"EURAUD(inv)+EURPLN"
-/ @eg .qcross.attribution_route_text .qcross.attribution_route `EURUSD  -> `EURUSD
+/ @eg .qf.mkt.attribution_route_text .qf.mkt.attribution_route `AUDPLN  -> `$"EURAUD(inv)+EURPLN"
+/ @eg .qf.mkt.attribution_route_text .qf.mkt.attribution_route `EURUSD  -> `EURUSD
 attribution_route_text:{[route]
     parts:(string route`leg),'?[route`invert;count[route]#enlist "(inv)";count[route]#enlist ""];
     `$"+" sv parts};
@@ -173,7 +173,7 @@ attribution_route_text:{[route]
 / never appear as differences.
 / @param conv a convention dict
 / @return conv with every EM bridge replaced by USD
-/ @eg first exec bridge from .qcross.attribution_usd_baseline[.qcross.attribution_convention]`currencies where ccy=`PLN  -> `USD
+/ @eg first exec bridge from .qf.mkt.attribution_usd_baseline[.qf.mkt.attribution_convention]`currencies where ccy=`PLN  -> `USD
 attribution_usd_baseline:{[conv]
     conv[`currencies]:update bridge:`USD from conv`currencies where tier=`EM;
     conv};
@@ -183,8 +183,8 @@ attribution_usd_baseline:{[conv]
 / @param conv a convention dict
 / @return table `pair`n_legs`route`usd_route`differs_from_usd`version, one row
 /   per pair of attribution_pairs, route and usd_route as attribution_route_text
-/ @eg count .qcross.attribution_route_table .qcross.attribution_convention  -> 435
-/ @eg exec route from .qcross.attribution_route_table[.qcross.attribution_convention] where pair=`AUDPLN  -> enlist `$"EURAUD(inv)+EURPLN"
+/ @eg count .qf.mkt.attribution_route_table .qf.mkt.attribution_convention  -> 435
+/ @eg exec route from .qf.mkt.attribution_route_table[.qf.mkt.attribution_convention] where pair=`AUDPLN  -> enlist `$"EURAUD(inv)+EURPLN"
 attribution_route_table:{[conv]
     pairs:attribution_pairs[conv];
     base_conv:attribution_usd_baseline[conv];
@@ -201,6 +201,6 @@ attribution_route_table:{[conv]
 / other end makes the routes coincide.
 / @param conv a convention dict
 / @return the rows of attribution_route_table where differs_from_usd
-/ @eg `AUDPLN in exec pair from .qcross.attribution_route_differences .qcross.attribution_convention  -> 1b
+/ @eg `AUDPLN in exec pair from .qf.mkt.attribution_route_differences .qf.mkt.attribution_convention  -> 1b
 attribution_route_differences:{[conv]
     select from attribution_route_table[conv] where differs_from_usd};

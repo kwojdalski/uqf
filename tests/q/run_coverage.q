@@ -43,7 +43,7 @@ nsList:.testutil.suite_namespaces[];
 / vanished from this report the day they nested, silently, which is exactly
 / the failure this tool exists to reveal. `qunit` is the vendored test
 / framework, not this library's code.
-namespaces:.qns.functional[] except `.qunit;
+namespaces:.qf.util.functional[] except `.qunit;
 
 -1 "== coverage: instrumenting ",string[count namespaces]," namespace(s) ==";
 

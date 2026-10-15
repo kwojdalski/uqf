@@ -85,8 +85,8 @@ def test_a_path_is_bold_rather_than_read_as_a_number_or_word(path):
 
 
 def test_a_dotted_word_that_is_not_a_known_extension_is_not_a_path():
-    # `.qfwd` is a namespace, not a file; only the listed extensions count.
-    assert "<bold>" not in logcore._highlight_kv("ns=a.qfwd")
+    # `.qf.px` is a namespace, not a file; only the listed extensions count.
+    assert "<bold>" not in logcore._highlight_kv("ns=a.qf.px")
 
 
 def test_text_without_key_value_pairs_is_untouched():

@@ -68,7 +68,7 @@
 
 / ==== Step 1: pre-generate the "historical" tick series, once ====
 / Same EURUSD single-pair spot/scale as cross_markout_example.q's
-/ mk_book, scaled by .qexdef.pip_size/.qexdef.size_unit (src/examples/example_defaults.q)
+/ mk_book, scaled by .qf.demo.pip_size/.qf.demo.level_size_unit (src/examples/example_defaults.q)
 / - stands in for timersvc.q's tradeGE.N0821.csv, a fixed dataset with
 / its own recorded timestamps, generated/loaded once before replay
 / starts. Unlike mk_book elsewhere, this builds one WIDE row (a dict of
@@ -81,10 +81,10 @@ mk_wide_row:{[spot]
     bid_sz_names:`$"bid_sz_",/:lvl_suffix;
     ask_px_names:`$"ask_px_",/:lvl_suffix;
     ask_sz_names:`$"ask_sz_",/:lvl_suffix;
-    bid_px_vals:spot-.qexdef.pip_size*levels;
-    bid_sz_vals:.qexdef.size_unit*1+levels;
-    ask_px_vals:(spot+.qexdef.pip_size)+.qexdef.pip_size*levels;
-    ask_sz_vals:.qexdef.size_unit*1+levels;
+    bid_px_vals:spot-.qf.demo.pip_size*levels;
+    bid_sz_vals:.qf.demo.level_size_unit*1+levels;
+    ask_px_vals:(spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;
+    ask_sz_vals:.qf.demo.level_size_unit*1+levels;
     (bid_px_names,bid_sz_names,ask_px_names,ask_sz_names)!(bid_px_vals,bid_sz_vals,ask_px_vals,ask_sz_vals)};
 
 / derive_level_groups' (prefix;target_col) rules for the wide columns
@@ -113,8 +113,8 @@ system "mkdir -p ",output_dir;
 
 mean_gap:0D00:00:00.200; std_gap:0D00:00:00.050; min_gap:0D00:00:00.050;
 p:1e-9+(1-2e-9)*n_ticks?1.0;
-.qetl.log.dbg[`timer_replay;"running: .qstats.inv_ncdf p";()!()];
-z:.qstats.inv_ncdf p;
+.qetl.log.dbg[`timer_replay;"running: .qf.math.inv_ncdf p";()!()];
+z:.qf.math.inv_ncdf p;
 gaps:min_gap|mean_gap+std_gap*z;
 hist_ts:.z.p+sums gaps;
 hist_spots:1.0850+0.00002*til n_ticks;
@@ -126,8 +126,8 @@ hist_spots:1.0850+0.00002*til n_ticks;
 / real CSV/vendor feed would actually arrive.
 hist_wide:([] time:hist_ts; sym:n_ticks#enlist "EURUSD"),'(mk_wide_row each hist_spots);
 .qetl.log.info[`timer_replay;"historical - ",.Q.s1[n_ticks]," pre-generated EURUSD ticks in wide column form, ready to replay";()!()];
-.qetl.log.dbg[`timer_replay;"running: .qbook.derive_level_groups[cols hist_wide;level_prefix_targets]";()!()];
-level_groups:.qbook.derive_level_groups[cols hist_wide;level_prefix_targets];
+.qetl.log.dbg[`timer_replay;"running: .qf.mkt.derive_level_groups[cols hist_wide;level_prefix_targets]";()!()];
+level_groups:.qf.mkt.derive_level_groups[cols hist_wide;level_prefix_targets];
 
 / ==== Step 2: replay onto a live, growing quotes table on a timer ====
 / quotes starts empty - unlike every other scripts/*.q example, which
@@ -142,18 +142,18 @@ cnt:0;
 / book_from_wide_levels - the same function reshape_wide_order_book_
 / example.q applies to a whole table upfront, here applied to one row at
 / a time as it "arrives" - then append the result to the live quotes
-/ table, then re-run .qmicro.mid_price against the table as it now
+/ table, then re-run .qf.mkt.mid_price against the table as it now
 / stands. Stops its own timer and exits once every historical row has
 / been replayed - see README's Requirements/Quick start for why every
 / scripts/*.q example ends this way rather than falling into an
 / interactive prompt.
 .z.ts:{
     wide_row:1#cnt _ hist_wide;
-    .qetl.log.dbg[`timer_replay;"running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
-    row:col_order#.qbook.book_from_wide_levels[wide_row;level_groups;`sym];
+    .qetl.log.dbg[`timer_replay;"running: .qf.mkt.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
+    row:col_order#.qf.mkt.book_from_wide_levels[wide_row;level_groups;`sym];
     quotes,:row;
-    .qetl.log.dbg[`timer_replay;"running: .qmicro.mid_price[quotes`bid_prices;quotes`ask_prices]";()!()];
-    mid:.qmicro.mid_price[quotes`bid_prices;quotes`ask_prices];
+    .qetl.log.dbg[`timer_replay;"running: .qf.mkt.mid_price[quotes`bid_prices;quotes`ask_prices]";()!()];
+    mid:.qf.mkt.mid_price[quotes`bid_prices;quotes`ask_prices];
     output_path set quotes;
     .qetl.log.info[`timer_replay;"tick ",.Q.s1[cnt+1],"/",.Q.s1[n_ticks]," - quotes has ",.Q.s1[count quotes]," row(s) now, latest mid ",.Q.s1[last mid],", persisted to ",.Q.s1[output_path];()!()];
     cnt+:1;

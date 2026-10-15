@@ -70,8 +70,8 @@ test_the_snapshot_is_what_sweep_price_says_of_each_ladder:{[t]
     sizes:1e6 3e6 4.5e6 10e6;
     got:snap[ref_book[];sizes];
     check:{[got;s]
-        b:.qbook.sweep_price[bidp;bids;s];
-        a:.qbook.sweep_price[askp;asks;s];
+        b:.qf.mkt.sweep_price[bidp;bids;s];
+        a:.qf.mkt.sweep_price[askp;asks;s];
         r:at[got;s];
         (r`bid_price;r`bid_qty;r`bid_full;r`ask_price;r`ask_qty;r`ask_full)~(b`avg_price;b`filled_size;b`fully_filled;a`avg_price;a`filled_size;a`fully_filled)}[got;];
     .qunit.assertEquals[check each sizes;4#1b;"the same price, quantity and fill flag at every size, exactly"]};

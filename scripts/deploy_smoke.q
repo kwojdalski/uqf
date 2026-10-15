@@ -37,11 +37,11 @@ expect:{[name;got;want]
 / the same Abramowitz-Stegun normal CDF the library uses.
 / @return a boolean per check
 checks:{[]
-    (expect["fwd_simple";.qfwd.fwd_simple[1.1;0.05;0.02;1f];1.1323529411764708];
-     expect["df_cont";.qrates.df_cont[0.05;2f];0.9048374180359595];
-     expect["ncdf at 0";.qstats.ncdf 0f;0.5];
-     expect["gk_call at the money";.qopt.gk_call[1.1;1.1;0.05;0.02;0.1;1f];0.06018482163918004];
-     expect["pip_factor USDJPY";"f"$.qccy.pip_factor`USDJPY;100f])}
+    (expect["fwd_simple";.qf.px.fwd_simple[1.1;0.05;0.02;1f];1.1323529411764708];
+     expect["df_cont";.qf.px.df_cont[0.05;2f];0.9048374180359595];
+     expect["ncdf at 0";.qf.math.ncdf 0f;0.5];
+     expect["gk_call at the money";.qf.px.gk_call[1.1;1.1;0.05;0.02;0.1;1f];0.06018482163918004];
+     expect["pip_factor USDJPY";"f"$.qf.px.pip_factor`USDJPY;100f])}
 
 \d .
 

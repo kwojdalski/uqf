@@ -93,7 +93,7 @@ bind_fixtures:{[]
     / books, each defined only in a parenthetical gloss. The three that
     / assert a value now build their own book inline, so this binding serves
     / only the two that assert nothing - a book with one open position.
-    `b set .qpos.apply_fill[.qpos.empty_book[];`EURUSD;600000;1.1000;1];
+    `b set .qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;600000;1.1000;1];
 
     / Every binding below serves an @eg with no `->` - one that claims no
     / value, and so was never run by anything until tests/q/run_examples.q.
@@ -106,7 +106,7 @@ bind_fixtures:{[]
     / `value `trades`, not `trades`: inside \d .egtest a bare name resolves
     / to .egtest.trades, which does not exist. Every read of a root binding
     / below goes through `value` for the same reason.
-    `broker_book set .qpos.apply_fills[.qpos.empty_book[];value `trades];
+    `broker_book set .qf.port.apply_fills[.qf.port.empty_book[];value `trades];
     books:.forwardstest.mk_books[];
     `eurusd_book set books`eurusd;
     `usdjpy_book set books`usdjpy;
@@ -117,8 +117,8 @@ bind_fixtures:{[]
     `prefix_targets set .booktest.level_prefix_targets;
     .metatest.setUp[::];
     `trade set .metatest.source;
-    `spec set .qmeta.definition[`trade;`date;enlist `sym;()!()];
-    `stored set .qmeta.collect[value `spec;2026.09.01 2026.09.02];
+    `spec set .qf.util.definition[`trade;`date;enlist `sym;()!()];
+    `stored set .qf.util.collect[value `spec;2026.09.01 2026.09.02];
     / The markout job's own buffer, with two rows in it. It used to be read
     / out of scripts/torq_markout_etl.q as TEXT and re-evaluated, because
     / that file could not be loaded outside TorQ; the job is a src/ file now,
@@ -305,7 +305,7 @@ test_assertions_are_found_at_all:{[t]
 / whose code was "named `pqModule`.".
 test_prose_mentioning_eg_is_not_an_example:{[t]
     .qunit.assertEquals[is_tag["/ while their own @eg named `pqModule`."];0b;"prose is not a tag"];
-    .qunit.assertEquals[is_tag["/ @eg .qfwd.fwd_cont[1.1;0.02;0.01;0.5]"];1b;"the tag is"]};
+    .qunit.assertEquals[is_tag["/ @eg .qf.px.fwd_cont[1.1;0.02;0.01;0.5]"];1b;"the tag is"]};
 
 / Reading the tag line alone cut multi-line examples off mid-bracket, so
 / they failed to parse and were reported as broken rather than half-read.

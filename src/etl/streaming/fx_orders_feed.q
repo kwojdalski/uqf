@@ -43,7 +43,7 @@ products:`spot`fwd
 statuses:`filled`filled`cancelled`rejected
 
 / Pips per unit, matching the trades schema's convention.
-pip_factor:.qccy.pip_factor .qsynth.pairs
+pip_factor:.qf.px.pip_factor .qf.demo.pairs
 
 / The sizes an order is drawn from. Float, matching the schema.
 sizes:500000 1000000 2000000 5000000f
@@ -72,7 +72,7 @@ last_id:.qpipe.job.fx_orders_feed.seed_id[]
 / takes its row count from column length, so an atom makes a one-row batch
 / read as a one-column one.
 / @param id the order id
-/ @param i which pair, as an index into .qsynth.pairs
+/ @param i which pair, as an index into .qf.demo.pairs
 / @param bk the book
 / @param pr the product
 / @param side 1 for a buy, -1 for a sell
@@ -82,15 +82,15 @@ last_id:.qpipe.job.fx_orders_feed.seed_id[]
 / @return one order's rows: order_id, sym, book, product, side, size, price, order_status
 / @eg count .qpipe.job.fx_orders_feed.order_rows[1;0;`london;`spot;1;1e6;`filled;0] -> 8
 order_rows:{[id;i;bk;pr;side;size;status;slip_pips]
-    price:.qsynth.spot[i]+slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i];
-    (enlist id;enlist .qsynth.pairs i;enlist bk;enlist pr;enlist side;
+    price:.qf.demo.spot[i]+slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i];
+    (enlist id;enlist .qf.demo.pairs i;enlist bk;enlist pr;enlist side;
         enlist size;enlist price;enlist status)}
 
 / Draw one order and publish it. The draws live here so that order_rows
 / stays deterministic and its shape can be asserted.
 on_timer:{[]
     `.qpipe.job.fx_orders_feed.last_id set .qpipe.job.fx_orders_feed.last_id+1;
-    i:rand count .qsynth.pairs;
+    i:rand count .qf.demo.pairs;
     / 1 or -1, always an ATOM: indexing `1 -1` with a possibly-empty
     / vector is how a sibling feed once produced a list, and the plant
     / read it as two rows.

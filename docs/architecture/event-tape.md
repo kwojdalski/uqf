@@ -87,7 +87,7 @@ tree:
   already sorted by construction, for every call.
 
 So: the ingesting worker publishes in event order, and a function given an
-unsorted tape **throws**. `.qmicro.require_tape` is that check.
+unsorted tape **throws**. `.qf.mkt.require_tape` is that check.
 
 ## What it unblocks
 

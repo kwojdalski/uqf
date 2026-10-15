@@ -70,7 +70,7 @@ facts:{[batch]
     (`inputs`expected!(
         `trades`quote!(
             ([] time:2026.09.17D10:00:00 2026.09.17D10:00:05; sym:`EURUSD`EURUSD; side:1 -1;
-                trade_price:1.1001 1.1003; pip_factor:.qccy.pip_factor `EURUSD`EURUSD; fill_id:`f1`f2);
+                trade_price:1.1001 1.1003; pip_factor:.qf.px.pip_factor `EURUSD`EURUSD; fill_id:`f1`f2);
             ([] time:2026.09.17D09:59:59 2026.09.17D10:00:01 2026.09.17D10:00:06.5 2026.09.17D10:00:12;
                 sym:4#`EURUSD; bid:1.1000 1.1004 1.1006 1.1010; ask:1.1002 1.1006 1.1008 1.1012));
         ([] time:2026.09.17D10:00:01 2026.09.17D10:00:10 2026.09.17D10:00:06 2026.09.17D10:00:15;

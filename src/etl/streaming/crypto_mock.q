@@ -123,10 +123,10 @@ skewed:{[p;tox]
     f:.qpipe.job.crypto_mock.toxicity_factor;
     1&0|(p*1+f*0|neg tox; p*1+f*0|tox)}
 
-/ Walk one mid: the same symmetric random walk .qsynth uses for FX, +/-5bp.
+/ Walk one mid: the same symmetric random walk .qf.demo uses for FX, +/-5bp.
 / @param m the current mid
 / @return the next
-walk:{[m] .qsynth.drift_one m}
+walk:{[m] .qf.demo.drift_one m}
 
 / Drift one toxicity reading: pulled back toward zero and nudged, so it
 / wanders in [-1;1] and changes sign every so often rather than sitting on
@@ -139,7 +139,7 @@ drift_toxicity:{[toxicity] 1&-1|(0.9*toxicity)+0.1*-1+2*rand 1f}
 / ------------------------------------------------------------ THE BOOK
 
 / One tick's crypto_book rows from the current market: a ladder each side,
-/ level-0-first, the shape .qbook and the frontend consume.
+/ level-0-first, the shape .qf.mkt and the frontend consume.
 / .
 / Takes the market as an argument and returns rows, so a tick's shape is
 / checkable with no tickerplant. Every column is a vector as long as the
@@ -158,9 +158,9 @@ book_rows:{[mkt]
     unit:.qpipe.job.crypto_mock.quote_size .qpipe.job.crypto_mock.syms?mkt`sym;
     step:.qpipe.job.crypto_mock.level_step*mkt`mid;
     (count[mkt]#.z.p; mkt`venue; mkt`sym;
-        .qsynth.levels_one[;;-1;n] .' flip (mkt`mid;step);
+        .qf.demo.levels_one[;;-1;n] .' flip (mkt`mid;step);
         {[u;n] u*1+til n}[;n] each unit;
-        .qsynth.levels_one[;;1;n] .' flip (mkt`mid;step);
+        .qf.demo.levels_one[;;1;n] .' flip (mkt`mid;step);
         {[u;n] u*1+til n}[;n] each unit)}
 
 / ------------------------------------------------------------ THE FILLS

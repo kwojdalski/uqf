@@ -40,8 +40,8 @@ Every public function in `src/*.q` carries a qDoc block ending in one or more
 `@eg` lines, and most of those assert a concrete result:
 
 ```
-/ @eg .qexec.markout[1;1.1000;1.1010;10000]  -> 10f
-/ @eg .qexec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625
+/ @eg .qf.exec.markout[1;1.1000;1.1010;10000]  -> 10f
+/ @eg .qf.exec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625
 ```
 
 These are the library's most-read documentation and its only worked examples.
@@ -94,8 +94,8 @@ system"l src/init.q";
 close:{[e;a] $[(type e)in -9 9h; all 1e-6>abs(a-e)%1|abs e; e~a]};
 chk:{[label;e;a] -1 label," ",$[close[e;a];"PASS";"FAIL  expected: ",.Q.s1[e],"  actual: ",.Q.s1 a];};
 
-chk[".qexec.markout";10f;.qexec.markout[1;1.1000;1.1010;10000]];
-chk[".qexec.vwap";1.100625;.qexec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]];
+chk[".qf.exec.markout";10f;.qf.exec.markout[1;1.1000;1.1010;10000]];
+chk[".qf.exec.vwap";1.100625;.qf.exec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]];
 exit 0
 ```
 
@@ -183,9 +183,9 @@ DOCSTRING EXAMPLE AUDIT   (rows below are format illustrations, not findings)
 =======================
  # | Module:line        | Documented @eg                              | Expected  | Computed    | KDB-X | Verdict        | Proposed test
 ---|--------------------|---------------------------------------------|-----------|-------------|-------|----------------|---------------
- 1 | execution.q:23      | .qexec.markout[1;1.1000;1.1010;10000]      | 10f       | 10f         | PASS  | TEST-CANDIDATE | .qexectest.test_markout_doc_eg in tests/q/test_execution.q (paste-ready below)
- 2 | forwards.q:NNN      | .qcross.cross_book_at[...]                   | (table)   | throws rank | FAIL  | THROWS         | signature gained a 4th param; comment not updated
- 3 | microstructure.q:245| .qmicro.vamp[...]                          | 1.1001    | 1.10009999  | PASS  | TEST-CANDIDATE | display artifact, documented value correct
+ 1 | execution.q:23      | .qf.exec.markout[1;1.1000;1.1010;10000]      | 10f       | 10f         | PASS  | TEST-CANDIDATE | .qexectest.test_markout_doc_eg in tests/q/test_execution.q (paste-ready below)
+ 2 | forwards.q:NNN      | .qf.mkt.cross_book_at[...]                   | (table)   | throws rank | FAIL  | THROWS         | signature gained a 4th param; comment not updated
+ 3 | microstructure.q:245| .qf.mkt.vamp[...]                          | 1.1001    | 1.10009999  | PASS  | TEST-CANDIDATE | display artifact, documented value correct
 ```
 
 Close with: how many `@eg` lines scanned and how many carried an assertion; the

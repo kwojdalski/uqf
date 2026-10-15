@@ -40,7 +40,7 @@ ALLOWED: dict[str, tuple[int, str]] = {
     ),
     "src/market_data/microstructure.q": (
         1227,
-        "one .qmicro namespace of independent analytics (spread, depth, impact, flow); "
+        "one .qf.mkt namespace of independent analytics (spread, depth, impact, flow); "
         "a split is possible along those lines but nothing is forcing it",
     ),
 }

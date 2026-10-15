@@ -1,84 +1,4 @@
 namespace,name,kind,rank,params
-qalloc,all_rows,function,1,t
-qalloc,allocate,function,2,trades opts
-qalloc,by_cols,function,1,d
-qalloc,by_trade,function,1,matches
-qalloc,def,function,1,name
-qalloc,default_opts,dict,,
-qalloc,define,function,2,name decl
-qalloc,defined,function,1,
-qalloc,methods,dict,,
-qalloc,position,function,2,lots group_cols
-qalloc,position_at,function,3,trades opts ts
-qalloc,require_method,function,1,decl
-qalloc,required,value,,
-qalloc,required_cols,value,,
-qalloc,required_lot_cols,value,,
-qalloc,residual,function,2,trades opts
-qalloc,run,function,2,trades opts
-qalloc,summary,function,2,matches group_cols
-qalloc,unrealised,function,2,lots marks
-qasof,lookup,function,3,refs events spec
-qasof,result_cols,value,,
-qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
-qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
-qbook,crossed_top,function,1,x
-qbook,derive_level_groups,function,2,col_names prefix_targets
-qbook,fold_level_columns,function,2,tbl level_groups
-qbook,invert_book_depth,function,2,prices sizes
-qbook,level_ok,function,2,price size
-qbook,sweep_price,function,3,prices sizes target_size
-qbook,symbolize_columns,function,2,tbl sym_cols
-qbook,top_sides,function,1,x
-qcal,add_business_days,function,5,d n ccys calendars weekend
-qcal,add_months,function,2,d n
-qcal,adjust,function,5,d roll ccys calendars weekend
-qcal,convention_defaults,dict,,
-qcal,convention_keys,value,,
-qcal,forward_date,function,5,spot_date tenor pair calendars conventions
-qcal,is_business_day,function,4,d ccys calendars weekend
-qcal,mock_calendars,dict,,
-qcal,mock_conventions,dict,,
-qcal,month_end_business_day,function,4,d ccys calendars weekend
-qcal,rolls,value,,
-qcal,spot_date,function,4,trade_date pair calendars conventions
-qcal,weekday,function,1,d
-qcal,weekdays,value,,
-qccy,ccy_pair_legs,function,1,pair
-qccy,ccy_pair_symbol,function,2,base quote
-qccy,is_ccy_pair,function,1,x
-qccy,normalize_ccy_pair,function,1,x
-qccy,pip_factor,function,1,pair
-qccy,pip_size,function,1,pair
-qccy,pip_size_by_quote,dict,,
-qcross,CROSS_SIZE_MAX_DOUBLINGS,value,,
-qcross,CROSS_SIZE_MAX_HALVINGS,value,,
-qcross,CROSS_SIZE_REL_TOL,value,,
-qcross,attribution_convention,dict,,
-qcross,attribution_convention_check,function,1,conv
-qcross,attribution_pairs,function,1,conv
-qcross,attribution_route,function,1,pair
-qcross,attribution_route_differences,function,1,conv
-qcross,attribution_route_table,function,1,conv
-qcross,attribution_route_text,function,1,route
-qcross,attribution_route_with,function,2,conv pair
-qcross,attribution_usd_baseline,function,1,conv
-qcross,book_crossed,function,1,book
-qcross,ccy_orient_chain,function,1,syms
-qcross,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
-qcross,combine_oriented_books,function,2,book_ab book_bc
-qcross,cross_book,function,4,sym1 book1 sym2 book2
-qcross,cross_book_at,function,5,quotes sym as_of sizes sides
-qcross,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
-qcross,cross_book_chain_at_one_size,function,3,syms books size
-qcross,cross_book_chain_at_sizes,function,4,syms books sizes sides
-qcross,cross_decomp,function,2,avail_syms sym
-qcross,cross_ref_price_at,function,4,quotes sym as_of ref_size
-qcross,cross_size_at_price,function,5,quotes sym as_of side price_limit
-qcross,invert_book,function,1,book
-qcross,leg_book_as_of,function,3,quotes as_of target_sym
-qcross,leg_inverts,function,2,leg cross_sym
-qcross,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qdata,cfg,function,2,k dflt
 qdata,databentoDir,function,1,
 qdata,databentoFile,function,2,sym date
@@ -86,21 +6,6 @@ qdata,env,dict,,
 qdata,getBySymbolDate,function,2,sym date
 qdata,parseEnv,function,1,file
 qdata,pqModule,function,1,
-qdcf,dcf_30e_360,function,2,d1 d2
-qdcf,dcf_act_360,function,2,d1 d2
-qdcf,dcf_act_365,function,2,d1 d2
-qdcf,year_frac,function,3,conv d1 d2
-qdesk,apply_fills,function,2,book batch
-qdesk,break_even,function,1,book
-qdesk,ccy_exposure,function,2,book group_cols
-qdesk,dimensions,function,1,book
-qdesk,empty_book,function,1,dims
-qdesk,flat_tolerance,value,,
-qdesk,required_cols,value,,
-qdesk,rollup,function,2,book group_cols
-qdqc,check_market_data_quality,function,2,quotes max_spread_bps
-qdqc,check_stale_quotes,function,3,quotes as_of max_age
-qdqc,summarize_checks,function,1,named_checks
 qetl.cfg,audit,dict,,
 qetl.cfg,env_layer,value,,
 qetl.cfg,env_prefix,value,,
@@ -789,156 +694,293 @@ qetl.webhook,check,function,1,raw
 qetl.webhook,post,function,2,target body
 qetl.webhook,request,function,4,host path cred body
 qetl.webhook,status_of,function,1,raw
-qexec,attribution_review,function,5,quotes trades horizons pip_factor ref_size
-qexec,attribution_review_with,function,6,conv quotes trades horizons pip_factor ref_size
-qexec,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
-qexec,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
-qexec,cross_markout_attribution,function,7,quotes sym side t0 t1 pip_factor ref_size
-qexec,cross_markout_attribution_with,function,8,conv quotes sym side t0 t1 pip_factor ref_size
-qexec,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
-qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
-qexec,fill_order_time_cols,value,,
-qexec,fill_probability_by,function,5,orders horizons bucket_cols as_of opts
-qexec,fill_probability_cols,value,,
-qexec,fill_probability_defaults,dict,,
-qexec,fill_ratio,function,2,num_fills num_quotes
-qexec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
-qexec,markout,function,4,side trade_price ref_price pip_factor
-qexec,markout_at_horizons,function,3,trades quotes horizons
-qexec,markout_cols,value,,
-qexec,reject_ratio,function,2,num_rejects num_requests
-qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
-qexec,slippage,function,4,side arrival_price exec_price pip_factor
-qexec,venue_quality,function,5,quotes requests trades window config
-qexec,venue_quality_defaults,dict,,
-qexec,vwap,function,2,prices sizes
-qexec,vwap_expanding,function,2,prices sizes
-qfwd,convert_quotes,function,3,quotes target_conventions opts
-qfwd,cross_rate,function,2,ab_rate bc_rate
-qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay
-qfwd,extrapolations,value,,
-qfwd,forward_at_date,function,5,spot curve value_date pip_factor opts
-qfwd,fwd_cont,function,4,spot rd rf t
-qfwd,fwd_points,function,3,fwd spot pip_factor
-qfwd,fwd_simple,function,4,spot rd rf t
-qfwd,implied_domestic_rate,function,4,spot fwd rf t
-qfwd,implied_foreign_rate,function,4,spot fwd rd t
-qfwd,inverse_pair,function,1,pair
-qfwd,invert_rate,function,1,rate
-qfwd,mock_fwd_curve,table,,
-qfwd,mock_quotes,table,,
-qfwd,mock_swap,dict,,
-qfwd,mock_swap_market,dict,,
-qfwd,points_to_outright,function,3,spot points pip_factor
-qfwd,swap_cashflows,function,1,swap
-qfwd,swap_keys,value,,
-qfwd,swap_value,function,4,swap market valuation_date opts
-qlimit,evaluate,function,2,measured limits
-qlimit,measure,function,2,book metrics
-qlimit,no_alerts,function,1,
-qlimit,non_scope_cols,value,,
-qlimit,require_limits,function,1,limits
-qlimit,required_limit_cols,value,,
-qlimit,required_measured_cols,value,,
-qlimit,scope_cols,function,1,limits
-qlimit,throttle,function,4,state breaches now period
-qlimit,unmatched_limits,function,2,measured limits
-qmeta,collect,function,2,spec partitions
-qmeta,count_bad,function,2,violations row_count
-qmeta,definition,function,4,tab partition_col group_cols aggregates
-qmeta,fingerprint,function,1,spec
-qmeta,prefix,value,,
-qmeta,profile,function,3,time_cols null_cols rules
-qmeta,reconcile,function,5,metatable dates ds part version
-qmeta,refresh,function,3,current spec partitions
-qmeta,require_name,function,1,name
-qmicro,best_across_venues,function,3,tob targets max_age
-qmicro,best_mid_across_venues,function,3,tob targets max_age
-qmicro,book_convexity,function,2,prices side
-qmicro,book_pressure_at_level,function,3,bid_sizes ask_sizes level
-qmicro,book_slope,function,2,prices sizes
-qmicro,cancel_to_trade_ratio,function,1,tape
-qmicro,cancel_to_trade_ratio_by,function,3,tape bucket_size group_cols
-qmicro,cumulative_trade_flow,function,1,tape
-qmicro,depth_ratio,function,2,bid_sizes ask_sizes
-qmicro,empty_buckets,function,1,
-qmicro,inter_event_time,function,2,quotes target_sym
-qmicro,large_trade_ratio,function,2,tape q
-qmicro,large_trade_threshold,function,2,tape q
-qmicro,large_trade_volume_share,function,2,tape q
-qmicro,max_clock_lead,value,,
-qmicro,microprice,function,4,bid_prices bid_sizes ask_prices ask_sizes
-qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_sizes
-qmicro,mid_price,function,2,bid_prices ask_prices
-qmicro,mid_price_acceleration,function,2,quotes target_sym
-qmicro,mid_price_velocity,function,2,quotes target_sym
-qmicro,newer_by_sym,function,2,held rows
-qmicro,newer_venue_tops,function,2,tob tops
-qmicro,odd_lot_imbalance,function,2,tape threshold
-qmicro,odd_lot_trade_ratio,function,2,tape threshold
-qmicro,ofi,function,2,quotes target_sym
-qmicro,ofi_autocorrelation,function,2,ofi_series window
-qmicro,ofi_multilevel,function,3,quotes target_sym n_levels
-qmicro,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
-qmicro,own_book_mids,function,1,x
-qmicro,price_rule,function,1,markets
-qmicro,price_rules,dict,,
-qmicro,queue_depletion_rate,function,3,quotes target_sym side
-qmicro,reference_max_age,value,,
-qmicro,require_tape,function,1,tape
-qmicro,rolling_ofi,function,2,ofi_series window
-qmicro,rolling_return_variance,function,3,quotes target_sym window
-qmicro,signed_trade_flow,function,1,tape
-qmicro,spread_bps,function,2,bid_prices ask_prices
-qmicro,spread_ratio,function,3,quotes target_sym window
-qmicro,stream_defaults,dict,,
-qmicro,stream_init,function,2,metrics config
-qmicro,stream_metrics,value,,
-qmicro,stream_quote_metrics,value,,
-qmicro,stream_reset,function,2,state syms
-qmicro,stream_snapshot,function,1,state
-qmicro,stream_tape_metrics,value,,
-qmicro,stream_update,function,3,state batch config
-qmicro,stream_version,value,,
-qmicro,tape_actions,value,,
-qmicro,tape_cols,value,,
-qmicro,trade_arrival_rate,function,1,tape
-qmicro,trade_arrival_rate_by,function,3,tape bucket_size group_cols
-qmicro,vamp,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
-qmicro,venue_tops,function,1,x
-qmicro,volume_buckets,function,2,tape bucket_volume
-qmicro,vpin,function,3,tape bucket_volume n_buckets
-qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
-qns,functional,function,1,
-qns,is_namespace,function,1,v
-qns,owned,function,1,
-qopt,BISECT_VOL_HI,value,,
-qopt,BISECT_VOL_LO,value,,
-qopt,BISECT_VOL_MAX_ITER,value,,
-qopt,IMPLIED_VOL_INITIAL_SIGMA,value,,
-qopt,IMPLIED_VOL_MAX_ITER,value,,
-qopt,IMPLIED_VOL_PRICE_TOL,value,,
-qopt,IMPLIED_VOL_SIGMA_FLOOR,value,,
-qopt,IMPLIED_VOL_VEGA_FLOOR,value,,
-qopt,d1,function,6,s k rd rf sigma t
-qopt,d2,function,6,s k rd rf sigma t
-qopt,gk_call,function,6,s k rd rf sigma t
-qopt,gk_delta,function,7,s k rd rf sigma t is_call
-qopt,gk_delta_call,function,6,s k rd rf sigma t
-qopt,gk_delta_put,function,6,s k rd rf sigma t
-qopt,gk_gamma,function,6,s k rd rf sigma t
-qopt,gk_price,function,7,s k rd rf sigma t is_call
-qopt,gk_put,function,6,s k rd rf sigma t
-qopt,gk_rho,function,7,s k rd rf sigma t is_call
-qopt,gk_rho_call,function,6,s k rd rf sigma t
-qopt,gk_rho_put,function,6,s k rd rf sigma t
-qopt,gk_theta,function,7,s k rd rf sigma t is_call
-qopt,gk_theta_call,function,6,s k rd rf sigma t
-qopt,gk_theta_put,function,6,s k rd rf sigma t
-qopt,gk_vanna,function,6,s k rd rf sigma t
-qopt,gk_vega,function,6,s k rd rf sigma t
-qopt,gk_volga,function,6,s k rd rf sigma t
-qopt,implied_vol,function,7,price s k rd rf t is_call
+qf.demo,drift_one,function,1,s
+qf.demo,level_size_unit,value,,
+qf.demo,levels_one,function,4,mid step dir levels
+qf.demo,levels_size,function,1,levels
+qf.demo,pairs,value,,
+qf.demo,pip,value,,
+qf.demo,pip_size,value,,
+qf.demo,size_row_drift,value,,
+qf.demo,size_unit,value,,
+qf.demo,spot,value,,
+qf.exec,all_rows,function,1,t
+qf.exec,allocate,function,2,trades opts
+qf.exec,attribution_review,function,5,quotes trades horizons pip_factor ref_size
+qf.exec,attribution_review_with,function,6,conv quotes trades horizons pip_factor ref_size
+qf.exec,by_cols,function,1,d
+qf.exec,by_trade,function,1,matches
+qf.exec,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons ref_size
+qf.exec,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons ref_size
+qf.exec,cross_markout_attribution,function,7,quotes sym side t0 t1 pip_factor ref_size
+qf.exec,cross_markout_attribution_with,function,8,conv quotes sym side t0 t1 pip_factor ref_size
+qf.exec,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
+qf.exec,def,function,1,name
+qf.exec,default_opts,dict,,
+qf.exec,define,function,2,name decl
+qf.exec,defined,function,1,
+qf.exec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
+qf.exec,fill_order_time_cols,value,,
+qf.exec,fill_probability_by,function,5,orders horizons bucket_cols as_of opts
+qf.exec,fill_probability_cols,value,,
+qf.exec,fill_probability_defaults,dict,,
+qf.exec,fill_ratio,function,2,num_fills num_quotes
+qf.exec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
+qf.exec,markout,function,4,side trade_price ref_price pip_factor
+qf.exec,markout_at_horizons,function,3,trades quotes horizons
+qf.exec,markout_cols,value,,
+qf.exec,methods,dict,,
+qf.exec,position,function,2,lots group_cols
+qf.exec,position_at,function,3,trades opts ts
+qf.exec,reject_ratio,function,2,num_rejects num_requests
+qf.exec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
+qf.exec,require_method,function,1,decl
+qf.exec,required,value,,
+qf.exec,required_cols,value,,
+qf.exec,required_lot_cols,value,,
+qf.exec,residual,function,2,trades opts
+qf.exec,run,function,2,trades opts
+qf.exec,slippage,function,4,side arrival_price exec_price pip_factor
+qf.exec,summary,function,2,matches group_cols
+qf.exec,unrealised,function,2,lots marks
+qf.exec,venue_quality,function,5,quotes requests trades window config
+qf.exec,venue_quality_defaults,dict,,
+qf.exec,vwap,function,2,prices sizes
+qf.exec,vwap_expanding,function,2,prices sizes
+qf.math,PI,value,,
+qf.math,horner_eval,function,2,coeffs x
+qf.math,inv_ncdf,function,1,p
+qf.math,ncdf,function,1,x
+qf.math,npdf,function,1,x
+qf.mkt,CROSS_SIZE_MAX_DOUBLINGS,value,,
+qf.mkt,CROSS_SIZE_MAX_HALVINGS,value,,
+qf.mkt,CROSS_SIZE_REL_TOL,value,,
+qf.mkt,attribution_convention,dict,,
+qf.mkt,attribution_convention_check,function,1,conv
+qf.mkt,attribution_pairs,function,1,conv
+qf.mkt,attribution_route,function,1,pair
+qf.mkt,attribution_route_differences,function,1,conv
+qf.mkt,attribution_route_table,function,1,conv
+qf.mkt,attribution_route_text,function,1,route
+qf.mkt,attribution_route_with,function,2,conv pair
+qf.mkt,attribution_usd_baseline,function,1,conv
+qf.mkt,best_across_venues,function,3,tob targets max_age
+qf.mkt,best_mid_across_venues,function,3,tob targets max_age
+qf.mkt,book_convexity,function,2,prices side
+qf.mkt,book_crossed,function,1,book
+qf.mkt,book_from_wide_levels,function,3,tbl level_groups sym_cols
+qf.mkt,book_pressure_at_level,function,3,bid_sizes ask_sizes level
+qf.mkt,book_slope,function,2,prices sizes
+qf.mkt,cancel_to_trade_ratio,function,1,tape
+qf.mkt,cancel_to_trade_ratio_by,function,3,tape bucket_size group_cols
+qf.mkt,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
+qf.mkt,ccy_orient_chain,function,1,syms
+qf.mkt,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
+qf.mkt,check_market_data_quality,function,2,quotes max_spread_bps
+qf.mkt,check_stale_quotes,function,3,quotes as_of max_age
+qf.mkt,combine_oriented_books,function,2,book_ab book_bc
+qf.mkt,cross_book,function,4,sym1 book1 sym2 book2
+qf.mkt,cross_book_at,function,5,quotes sym as_of sizes sides
+qf.mkt,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
+qf.mkt,cross_book_chain_at_one_size,function,3,syms books size
+qf.mkt,cross_book_chain_at_sizes,function,4,syms books sizes sides
+qf.mkt,cross_decomp,function,2,avail_syms sym
+qf.mkt,cross_ref_price_at,function,4,quotes sym as_of ref_size
+qf.mkt,cross_size_at_price,function,5,quotes sym as_of side price_limit
+qf.mkt,crossed_top,function,1,x
+qf.mkt,cumulative_trade_flow,function,1,tape
+qf.mkt,depth_ratio,function,2,bid_sizes ask_sizes
+qf.mkt,derive_level_groups,function,2,col_names prefix_targets
+qf.mkt,empty_buckets,function,1,
+qf.mkt,fold_level_columns,function,2,tbl level_groups
+qf.mkt,inter_event_time,function,2,quotes target_sym
+qf.mkt,invert_book,function,1,book
+qf.mkt,invert_book_depth,function,2,prices sizes
+qf.mkt,large_trade_ratio,function,2,tape q
+qf.mkt,large_trade_threshold,function,2,tape q
+qf.mkt,large_trade_volume_share,function,2,tape q
+qf.mkt,leg_book_as_of,function,3,quotes as_of target_sym
+qf.mkt,leg_inverts,function,2,leg cross_sym
+qf.mkt,level_ok,function,2,price size
+qf.mkt,lookup,function,3,refs events spec
+qf.mkt,max_clock_lead,value,,
+qf.mkt,microprice,function,4,bid_prices bid_sizes ask_prices ask_sizes
+qf.mkt,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_sizes
+qf.mkt,mid_price,function,2,bid_prices ask_prices
+qf.mkt,mid_price_acceleration,function,2,quotes target_sym
+qf.mkt,mid_price_velocity,function,2,quotes target_sym
+qf.mkt,newer_by_sym,function,2,held rows
+qf.mkt,newer_venue_tops,function,2,tob tops
+qf.mkt,odd_lot_imbalance,function,2,tape threshold
+qf.mkt,odd_lot_trade_ratio,function,2,tape threshold
+qf.mkt,ofi,function,2,quotes target_sym
+qf.mkt,ofi_autocorrelation,function,2,ofi_series window
+qf.mkt,ofi_multilevel,function,3,quotes target_sym n_levels
+qf.mkt,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
+qf.mkt,own_book_mids,function,1,x
+qf.mkt,price_rule,function,1,markets
+qf.mkt,price_rules,dict,,
+qf.mkt,queue_depletion_rate,function,3,quotes target_sym side
+qf.mkt,reference_max_age,value,,
+qf.mkt,require_tape,function,1,tape
+qf.mkt,result_cols,value,,
+qf.mkt,rolling_ofi,function,2,ofi_series window
+qf.mkt,rolling_return_variance,function,3,quotes target_sym window
+qf.mkt,signed_trade_flow,function,1,tape
+qf.mkt,single_leg_at_one_size,function,4,cross_sym leg_book invert size
+qf.mkt,spread_bps,function,2,bid_prices ask_prices
+qf.mkt,spread_ratio,function,3,quotes target_sym window
+qf.mkt,stream_defaults,dict,,
+qf.mkt,stream_init,function,2,metrics config
+qf.mkt,stream_metrics,value,,
+qf.mkt,stream_quote_metrics,value,,
+qf.mkt,stream_reset,function,2,state syms
+qf.mkt,stream_snapshot,function,1,state
+qf.mkt,stream_tape_metrics,value,,
+qf.mkt,stream_update,function,3,state batch config
+qf.mkt,stream_version,value,,
+qf.mkt,summarize_checks,function,1,named_checks
+qf.mkt,sweep_price,function,3,prices sizes target_size
+qf.mkt,symbolize_columns,function,2,tbl sym_cols
+qf.mkt,tape_actions,value,,
+qf.mkt,tape_cols,value,,
+qf.mkt,top_sides,function,1,x
+qf.mkt,trade_arrival_rate,function,1,tape
+qf.mkt,trade_arrival_rate_by,function,3,tape bucket_size group_cols
+qf.mkt,vamp,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
+qf.mkt,venue_tops,function,1,x
+qf.mkt,volume_buckets,function,2,tape bucket_volume
+qf.mkt,vpin,function,3,tape bucket_volume n_buckets
+qf.mkt,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
+qf.port,apply_desk_fills,function,2,book batch
+qf.port,apply_fill,function,5,pos sym qty price side
+qf.port,apply_fills,function,2,pos trades
+qf.port,break_even,function,1,book
+qf.port,carry_pnl,function,3,notional spot fwd
+qf.port,carry_return,function,2,spot fwd
+qf.port,ccy_exposure,function,1,pos
+qf.port,ccy_exposure_in,function,4,pos quotes reporting_ccy as_of
+qf.port,ccy_legs,function,3,sym qty avg_price
+qf.port,desk_ccy_exposure,function,2,book group_cols
+qf.port,dimensions,function,1,book
+qf.port,empty_book,function,1,
+qf.port,empty_desk_book,function,1,dims
+qf.port,evaluate,function,2,measured limits
+qf.port,flat_tolerance,value,,
+qf.port,is_flat,function,1,qty
+qf.port,measure,function,2,book metrics
+qf.port,no_alerts,function,1,
+qf.port,non_scope_cols,value,,
+qf.port,pip_value,function,2,notional pip_factor
+qf.port,pnl,function,4,notional entry_rate exit_rate side
+qf.port,reconcile_trades,function,4,reference_book trades qty_tol price_tol
+qf.port,require_limits,function,1,limits
+qf.port,required_cols,value,,
+qf.port,required_limit_cols,value,,
+qf.port,required_measured_cols,value,,
+qf.port,rollup,function,2,book group_cols
+qf.port,scope_cols,function,1,limits
+qf.port,throttle,function,4,state breaches now period
+qf.port,total_pnl,function,3,pos sym mkt_price
+qf.port,unmatched_limits,function,2,measured limits
+qf.port,unrealized_pnl,function,3,pos sym mkt_price
+qf.port,var_historical,function,2,pnl_series confidence
+qf.port,var_parametric,function,4,notional vol t confidence
+qf.px,BISECT_VOL_HI,value,,
+qf.px,BISECT_VOL_LO,value,,
+qf.px,BISECT_VOL_MAX_ITER,value,,
+qf.px,IMPLIED_VOL_INITIAL_SIGMA,value,,
+qf.px,IMPLIED_VOL_MAX_ITER,value,,
+qf.px,IMPLIED_VOL_PRICE_TOL,value,,
+qf.px,IMPLIED_VOL_SIGMA_FLOOR,value,,
+qf.px,IMPLIED_VOL_VEGA_FLOOR,value,,
+qf.px,add_business_days,function,5,d n ccys calendars weekend
+qf.px,add_months,function,2,d n
+qf.px,adjust,function,5,d roll ccys calendars weekend
+qf.px,ccy_pair_legs,function,1,pair
+qf.px,ccy_pair_symbol,function,2,base quote
+qf.px,cont_to_simple,function,2,r t
+qf.px,convention_defaults,dict,,
+qf.px,convention_keys,value,,
+qf.px,convert_quotes,function,3,quotes target_conventions opts
+qf.px,cross_rate,function,2,ab_rate bc_rate
+qf.px,cross_rate_shared_base,function,2,rate_ax rate_ay
+qf.px,d1,function,6,s k rd rf sigma t
+qf.px,d2,function,6,s k rd rf sigma t
+qf.px,dcf_30e_360,function,2,d1 d2
+qf.px,dcf_act_360,function,2,d1 d2
+qf.px,dcf_act_365,function,2,d1 d2
+qf.px,df_cont,function,2,r t
+qf.px,df_simple,function,2,r t
+qf.px,extrapolations,value,,
+qf.px,forward_at_date,function,5,spot curve value_date pip_factor opts
+qf.px,forward_date,function,5,spot_date tenor pair calendars conventions
+qf.px,fwd_cont,function,4,spot rd rf t
+qf.px,fwd_points,function,3,fwd spot pip_factor
+qf.px,fwd_simple,function,4,spot rd rf t
+qf.px,gk_call,function,6,s k rd rf sigma t
+qf.px,gk_delta,function,7,s k rd rf sigma t is_call
+qf.px,gk_delta_call,function,6,s k rd rf sigma t
+qf.px,gk_delta_put,function,6,s k rd rf sigma t
+qf.px,gk_gamma,function,6,s k rd rf sigma t
+qf.px,gk_price,function,7,s k rd rf sigma t is_call
+qf.px,gk_put,function,6,s k rd rf sigma t
+qf.px,gk_rho,function,7,s k rd rf sigma t is_call
+qf.px,gk_rho_call,function,6,s k rd rf sigma t
+qf.px,gk_rho_put,function,6,s k rd rf sigma t
+qf.px,gk_theta,function,7,s k rd rf sigma t is_call
+qf.px,gk_theta_call,function,6,s k rd rf sigma t
+qf.px,gk_theta_put,function,6,s k rd rf sigma t
+qf.px,gk_vanna,function,6,s k rd rf sigma t
+qf.px,gk_vega,function,6,s k rd rf sigma t
+qf.px,gk_volga,function,6,s k rd rf sigma t
+qf.px,growth_cont,function,2,r t
+qf.px,growth_simple,function,2,r t
+qf.px,implied_domestic_rate,function,4,spot fwd rf t
+qf.px,implied_foreign_rate,function,4,spot fwd rd t
+qf.px,implied_vol,function,7,price s k rd rf t is_call
+qf.px,inverse_pair,function,1,pair
+qf.px,invert_rate,function,1,rate
+qf.px,is_business_day,function,4,d ccys calendars weekend
+qf.px,is_ccy_pair,function,1,x
+qf.px,mock_calendars,dict,,
+qf.px,mock_conventions,dict,,
+qf.px,mock_fwd_curve,table,,
+qf.px,mock_quotes,table,,
+qf.px,mock_swap,dict,,
+qf.px,mock_swap_market,dict,,
+qf.px,month_end_business_day,function,4,d ccys calendars weekend
+qf.px,normalize_ccy_pair,function,1,x
+qf.px,pip_factor,function,1,pair
+qf.px,pip_size,function,1,pair
+qf.px,pip_size_by_quote,dict,,
+qf.px,points_to_outright,function,3,spot points pip_factor
+qf.px,rolls,value,,
+qf.px,simple_to_cont,function,2,r t
+qf.px,spot_date,function,4,trade_date pair calendars conventions
+qf.px,swap_cashflows,function,1,swap
+qf.px,swap_keys,value,,
+qf.px,swap_value,function,4,swap market valuation_date opts
+qf.px,weekday,function,1,d
+qf.px,weekdays,value,,
+qf.px,year_frac,function,3,conv d1 d2
+qf.util,collect,function,2,spec partitions
+qf.util,count_bad,function,2,violations row_count
+qf.util,definition,function,4,tab partition_col group_cols aggregates
+qf.util,depth_quote_cols,value,,
+qf.util,fingerprint,function,1,spec
+qf.util,full,function,1,v
+qf.util,functional,function,1,
+qf.util,is_namespace,function,1,v
+qf.util,owned,function,1,
+qf.util,prefix,value,,
+qf.util,profile,function,3,time_cols null_cols rules
+qf.util,quoted,function,1,s
+qf.util,reconcile,function,5,metatable dates ds part version
+qf.util,refresh,function,3,current spec partitions
+qf.util,require_cols,function,4,fn_name table_name tbl req
+qf.util,require_depth_quotes,function,2,fn_name quotes
+qf.util,require_name,function,1,name
 qpipe.job.alert_sink,alert_period,value,,
 qpipe.job.alert_sink,alerts,dict,,
 qpipe.job.alert_sink,breach_cols,value,,
@@ -1757,43 +1799,3 @@ qpipe.transform.order_quality,period,value,,
 qpipe.transform.order_quality,stats,function,1,x
 qpipe.transform.order_quality,stats_by,function,2,dims x
 qpipe.transform.order_quality,windows,value,,
-qpos,apply_fill,function,5,pos sym qty price side
-qpos,apply_fills,function,2,pos trades
-qpos,ccy_exposure,function,1,pos
-qpos,ccy_exposure_in,function,4,pos quotes reporting_ccy as_of
-qpos,ccy_legs,function,3,sym qty avg_price
-qpos,empty_book,function,1,
-qpos,reconcile_trades,function,4,reference_book trades qty_tol price_tol
-qpos,total_pnl,function,3,pos sym mkt_price
-qpos,unrealized_pnl,function,3,pos sym mkt_price
-qrates,cont_to_simple,function,2,r t
-qrates,df_cont,function,2,r t
-qrates,df_simple,function,2,r t
-qrates,growth_cont,function,2,r t
-qrates,growth_simple,function,2,r t
-qrates,simple_to_cont,function,2,r t
-qrender,full,function,1,v
-qrender,quoted,function,1,s
-qrisk,carry_pnl,function,3,notional spot fwd
-qrisk,carry_return,function,2,spot fwd
-qrisk,flat_tolerance,value,,
-qrisk,is_flat,function,1,qty
-qrisk,pip_value,function,2,notional pip_factor
-qrisk,pnl,function,4,notional entry_rate exit_rate side
-qrisk,var_historical,function,2,pnl_series confidence
-qrisk,var_parametric,function,4,notional vol t confidence
-qschema,depth_quote_cols,value,,
-qschema,require_cols,function,4,fn_name table_name tbl req
-qschema,require_depth_quotes,function,2,fn_name quotes
-qstats,PI,value,,
-qstats,horner_eval,function,2,coeffs x
-qstats,inv_ncdf,function,1,p
-qstats,ncdf,function,1,x
-qstats,npdf,function,1,x
-qsynth,drift_one,function,1,s
-qsynth,levels_one,function,4,mid step dir levels
-qsynth,levels_size,function,1,levels
-qsynth,pairs,value,,
-qsynth,pip,value,,
-qsynth,size_unit,value,,
-qsynth,spot,value,,

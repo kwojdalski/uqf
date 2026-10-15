@@ -133,7 +133,7 @@ test_an_emptied_side_is_an_empty_ladder_not_a_price:{[tc]
     b:raze (lvl[t;eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(0n;0f)];lvl[t;eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1005;1e6)]);
     r:first from_levels[b];
     .qunit.assertEquals[(count r`bid_prices;r`ask_prices);(0;enlist 1.1005);"the marker row empties the bid side and is not a level"];
-    .qunit.assertTrue[null first (.qbook.top_sides enlist r)`bid;"and top-of-book reads no bid"]};
+    .qunit.assertTrue[null first (.qf.mkt.top_sides enlist r)`bid;"and top-of-book reads no bid"]};
 
 test_a_side_the_snapshot_does_not_list_is_empty_too:{[tc]
     r:first from_levels[lvl[t;eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1005;1e6)]];

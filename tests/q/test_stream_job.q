@@ -198,7 +198,7 @@ test_the_fx_feed_publishes_one_quote_per_pair:{[t]
     .qpipe.job.fx_feed.on_timer[];
     rows:last_rows[];
     .qunit.assertEquals[(first exec tbl from .sjtest.published;count first rows);
-        (`quote;count .qsynth.pairs);
+        (`quote;count .qf.demo.pairs);
         "a tick quotes every pair the demo trades"]};
 
 test_the_fx_feed_quotes_a_pip_either_side:{[t]
@@ -207,8 +207,8 @@ test_the_fx_feed_quotes_a_pip_either_side:{[t]
     / Compared within a tolerance, not with ~: (mid+pip)-(mid-pip) is not
     / bit-identical to 2*pip for any of these levels, so an exact match here
     / fails on arithmetic rather than on the spread being wrong.
-    rows:.qpipe.job.fx_feed.tick_rows .qsynth.spot;
-    .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-2*.qsynth.pip;1b;
+    rows:.qpipe.job.fx_feed.tick_rows .qf.demo.spot;
+    .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-2*.qf.demo.pip;1b;
         "ask minus bid is two pips, pair by pair"]};
 
 test_the_fx_feed_walks_its_level:{[t]
@@ -219,28 +219,28 @@ test_the_fx_feed_walks_its_level:{[t]
         "each tick moves the level rather than republishing the same one"]};
 
 test_the_depth_feed_quotes_three_levels_a_side:{[t]
-    rows:.qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
+    rows:.qpipe.job.fx_orderbook_feed.tick_rows .qf.demo.spot;
     .qunit.assertEquals[distinct count each raze rows 1 3;enlist .qpipe.job.fx_orderbook_feed.n_levels;
         "every pair's bid and ask ladder is n_levels deep"]};
 
 test_the_depth_feeds_ladders_are_level_zero_first:{[t]
-    / .qbook and .qcross.cross_book_at both read level 0 as the touch, so a
+    / book.q and .qf.mkt.cross_book_at both read level 0 as the touch, so a
     / ladder built outwards-in prices every cross off the wrong level.
-    rows:.qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
+    rows:.qpipe.job.fx_orderbook_feed.tick_rows .qf.demo.spot;
     bids:first rows 1;
     .qunit.assertEquals[bids~desc bids;1b;"the bid ladder descends from the touch"]};
 
 test_the_wide_feed_publishes_one_column_per_level:{[t]
     / 1 sym + 11 bids + 11 asks. The vectorize job derives its groups from
     / its own schema, so a mismatch here is a column-count error on insert.
-    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qsynth.spot;
+    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot;
     .qunit.assertEquals[count rows;1+2*.qpipe.job.wide_orderbook_feed.n_levels;
         "the wide book is published as one column per level per side"]};
 
 test_the_wide_feed_column_is_as_long_as_the_pair_list:{[t]
     / The transpose that makes this a wide table rather than a nested one.
-    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qsynth.spot;
-    .qunit.assertEquals[distinct count each rows;enlist count .qsynth.pairs;
+    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot;
+    .qunit.assertEquals[distinct count each rows;enlist count .qf.demo.pairs;
         "every column carries one value per pair"]};
 
 test_a_fill_prices_around_its_pairs_level:{[t]
@@ -248,7 +248,7 @@ test_a_fill_prices_around_its_pairs_level:{[t]
     / and some improve.
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;3;`fx1];
     .qunit.assertEquals[first rows 2;
-        (first .qsynth.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
+        (first .qf.demo.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
         "the fill prints its slippage in pips from the pair's own level"]};
 
 test_a_fill_is_published_as_one_element_vectors:{[t]
@@ -380,7 +380,7 @@ test_markout_ignores_a_pair_this_demo_does_not_trade:{[t]
     .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `AAPL;
         bid:enlist 150f; ask:enlist 150.1)];
     .qunit.assertEquals[count .qpipe.job.demo_markout.history;0;
-        "a quote outside .qsynth.pairs is not buffered"]};
+        "a quote outside .qf.demo.pairs is not buffered"]};
 
 test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
     / The horizon has not passed, so there is nothing to score yet - and
@@ -496,10 +496,10 @@ test_cross_ignores_a_table_it_did_not_subscribe_to:{[t]
     .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;0;"a batch from another table is ignored"]};
 
 test_cross_pairs_are_none_of_the_directly_quoted_pairs:{[t]
-    / #1366. .qcross.cross_book_at prices a directly quoted pair as ONE leg, so a
-    / cross_pairs entry that .qsynth.pairs also quotes just echoes the direct
+    / #1366. .qf.mkt.cross_book_at prices a directly quoted pair as ONE leg, so a
+    / cross_pairs entry that .qf.demo.pairs also quotes just echoes the direct
     / quote instead of chaining through USD. EURJPY was exactly that.
-    .qunit.assertEquals[.qpipe.job.cross.cross_pairs inter .qsynth.pairs;`symbol$();
+    .qunit.assertEquals[.qpipe.job.cross.cross_pairs inter .qf.demo.pairs;`symbol$();
         "no cross pair is also quoted directly by the synthetic feed"];
     .qunit.assertEquals[.qpipe.job.cross.cross_pairs;`GBPJPY`EURGBP`AUDJPY;
         "the three genuine crosses survive the derivation"]};
@@ -755,7 +755,7 @@ test_the_adapter_recognises_the_list_of_columns_form:{[t]
     / the runner, because the old per-feed scripts sent to .u.upd directly.
     .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
         "a fill's rows are the list-of-columns form"];
-    .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
+    .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_orderbook_feed.tick_rows .qf.demo.spot;
         "and so is a depth tick, whose ladder columns are lists of vectors"];
     .qunit.assertTrue[.qtorq.is_columns .qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x];
         "and a mock crypto fill"]};
@@ -1294,7 +1294,7 @@ test_a_malformed_limits_table_is_refused_at_load:{[t]
         "a limits table that polices nothing is indistinguishable from a quiet day, so it is refused where it is loaded"]};
 
 test_a_limit_scoped_on_a_non_dimension_is_refused_at_load:{[t]
-    / .qlimit cannot catch this - it is never told which columns are meant
+    / .qf.port cannot catch this - it is never told which columns are meant
     / to be scope, so a stray one silently becomes scope and the limit
     / matches nothing. The job knows its own dimensions, so it can.
     reset[];
@@ -1646,20 +1646,20 @@ test_market_data_check_names_bad_levels_and_future_stamps:{[t]
     .qunit.assertEquals[exec row from f where check=`bad_time;enlist 4;"a book stamped a minute ahead of this host"];
     .qunit.assertEquals[3 in f`row;0b;"an empty ladder is still a withdrawal, not a failure"];
     / lead less a millisecond: timespan arithmetic only, as `%` gives a float on PeachQ
-    lead:book[enlist 1.10;enlist 1e6;now+.qmicro.max_clock_lead-0D00:00:00.001];
+    lead:book[enlist 1.10;enlist 1e6;now+.qf.mkt.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
 
 / #1063: superbook reads the shared lead when a batch arrives, not a copy
 / taken at load, so tuning it moves superbook and market_data's check together.
 test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
-    saved:.qmicro.max_clock_lead;
-    `.qmicro.max_clock_lead set 0D00:00:01;
+    saved:.qf.mkt.max_clock_lead;
+    `.qf.mkt.max_clock_lead set 0D00:00:01;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
     .qetl.job.stream.wire[`superbook;{[t;x]}];
     row:([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist .z.p+0D00:00:00.600;
         bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6);
     r:@[{.qpipe.job.superbook.on_batch[`market_data;x]; count .qpipe.job.superbook.books};row;{x}];
-    `.qmicro.max_clock_lead set saved;
+    `.qf.mkt.max_clock_lead set saved;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
     .qunit.assertEquals[r;1;"a row 600ms ahead counts once the shared lead is a second"];
     .qunit.assertEquals[`max_clock_lead in key `.qpipe.job.superbook;0b;"and superbook keeps no copy of it"]};

@@ -104,7 +104,7 @@ raw_fills:{[]
         sym:`EURUSD`EURUSD`USDJPY`GBPUSD;
         side:1 -1 1 1;
         trade_price:1.1001 1.1003 150.02 1.2701;
-        pip_factor:.qccy.pip_factor `EURUSD`EURUSD`USDJPY`GBPUSD;
+        pip_factor:.qf.px.pip_factor `EURUSD`EURUSD`USDJPY`GBPUSD;
         fill_id:`f1`f2`f3`f4)}
 
 / Quotes around raw_fills, as the HDB's quote holds them.

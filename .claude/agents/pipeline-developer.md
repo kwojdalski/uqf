@@ -160,8 +160,8 @@ Two registry facts that changed under you, and that a job no longer states:
   Both job modes share `.qpipe.job.<name>` and must have unique names. Shared
   transforms belong in `src/etl/transforms/`, loaded after sources and before
   jobs. The TorQ adapter is `.qtorq`, and runner-local state is `.qproc`.
-  Nothing in `src/` may call `.qtorq`. Namespace enumeration uses `.qns.owned` /
-  `.qns.functional`, never a root-only scan. See
+  Nothing in `src/` may call `.qtorq`. Namespace enumeration uses
+  `.qf.util.owned` / `.qf.util.functional`, never a root-only scan. See
   `docs/reference/pipeline-declarations.md` for the API map.
 - Prefer a named intermediate to a bare mixed `*`/`+`/`-` chain: q has no
   operator precedence and evaluates right to left.
@@ -201,10 +201,10 @@ Two registry facts that changed under you, and that a job no longer states:
   have seen up to here", not "everything up to here is published and complete".
   `.qetl.job.continuous` deliberately has no such path, and that is the single
   sentence that file exists to enforce.
-- **Don't add a check function nobody calls.** `.qdqc` sat with nine check
-  functions wired to nothing, which meant the coverage ledger could record a
-  window as complete that had failed its own checks. A check that is not on the
-  publish path is decoration.
+- **Don't add a check function nobody calls.** `dqchecks.q` (`.qf.mkt`) sat with
+  nine check functions wired to nothing, which meant the coverage ledger could
+  record a window as complete that had failed its own checks. A check that is
+  not on the publish path is decoration.
 - **Don't widen a signature to carry a value that is always the same** --- but
   do widen it the moment the value stops being the same. The partition key was
   left out of `etl_coverage` on that reasoning, and `.qetl.coverage.schema`'s
