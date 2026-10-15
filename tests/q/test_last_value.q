@@ -102,8 +102,8 @@ test_a_replay_rebuilds_the_state_without_publishing_it_again:{[t]
     .qunit.assertEquals[count .sjtest.published;1;"a newer live book publishes again"]};
 
 / The one rule for "the top of book" (#998): posbook and last_value read a
-/ market_data book's sides through .qmicro's per-market extractions, and
-/ crypto_markout a crypto_book's through .qbook.top_sides. This drives one
+/ market_data book's sides through .qf.mkt's per-market extractions, and
+/ crypto_markout a crypto_book's through .qf.mkt.top_sides. This drives one
 / sequence, with a withdrawn side and a non-positive level, through all of
 / them and holds them to it.
 agreement_rows:{[]
@@ -116,21 +116,21 @@ agreement_rows:{[]
 
 test_all_consumers_agree_on_a_withdrawn_or_non_positive_side:{[t]
     rows:agreement_rows[];
-    ref:.qbook.top_sides rows;
+    ref:.qf.mkt.top_sides rows;
     .qunit.assertEquals[ref`bid;1.10 0n 1.10 0n 1.10 0n 1.10;"an empty ladder, a zero level and an infinite one are all a null side (#1020)"];
     .qunit.assertEquals[ref`ask;1.12 1.12 0n 1.12 1.12 1.12 0n;"on either side"];
-    v:.qmicro.venue_tops update market:`crypto from rows;
+    v:.qf.mkt.venue_tops update market:`crypto from rows;
     .qunit.assertEquals[(v`bid;v`ask);(ref`bid;ref`ask);"a venue's top keeps a withdrawn side, null"];
     mk:.qpipe.job.crypto_markout.top_of_book update venue:source from rows;
     .qunit.assertEquals[(mk`bid;mk`ask);(ref`bid;ref`ask);"crypto_markout's top of book"];
-    own:.qmicro.own_book_mids rows;
+    own:.qf.mkt.own_book_mids rows;
     both:where (not null ref`bid) & not null ref`ask;
     .qunit.assertEquals[own`source;(rows`source) both;"a book's own mid needs both sides"]};
 
 test_a_market_with_no_price_rule_is_refused_by_name:{[t]
     rows:update market:`equity from agreement_rows[];
-    .qunit.assertThrows[.qmicro.venue_tops;rows;"*no pricing rule for market equity*";"not priced by whichever branch a consumer wrote"];
-    .qunit.assertThrows[.qmicro.own_book_mids;rows;"*no pricing rule for market equity*";"on either extraction"]};
+    .qunit.assertThrows[.qf.mkt.venue_tops;rows;"*no pricing rule for market equity*";"not priced by whichever branch a consumer wrote"];
+    .qunit.assertThrows[.qf.mkt.own_book_mids;rows;"*no pricing rule for market equity*";"on either extraction"]};
 
 / #998: posbook marks and last_value publishes by the same rule, so they
 / agree when a venue withdraws a side and another goes stale. last_value
@@ -168,9 +168,9 @@ test_a_crypto_sym_publishes_the_best_bid_and_ask_across_venues:{[t]
     r:first latest[];
     .qunit.assertEquals[r`bid`ask`mid;101 102 101.5;"best bid okx, best ask binance"];
     .qunit.assertEquals[(r`source;r`source_time);(`venues;d[1]);"a reference, as of the newest venue"];
-    want:.qmicro.best_mid_across_venues[select time:source_time, sym, venue:source, bid, ask from
+    want:.qf.mkt.best_mid_across_venues[select time:source_time, sym, venue:source, bid, ask from
         ([] sym:2#s; source:`binance`okx; source_time:d[0 1]; bid:100 101.; ask:102 103.);
-        ([] sym:enlist s; time:enlist d 1);.qmicro.reference_max_age];
+        ([] sym:enlist s; time:enlist d 1);.qf.mkt.reference_max_age];
     .qunit.assertEquals[r`mid;first want;"the shared reference, the one crypto_markout prices from"]};
 
 test_a_stale_venue_drops_out_of_the_crypto_reference:{[t]
@@ -189,7 +189,7 @@ test_an_older_crypto_book_does_not_rewind_its_venue:{[t]
 
 / #1088: FX's rule is the newest book's own mid, and "newest" is the
 / source's clock, not arrival: a late, older book moves neither posbook's
-/ mark nor last_value's row - one rule, .qmicro.newer_by_sym.
+/ mark nor last_value's row - one rule, .qf.mkt.newer_by_sym.
 test_a_late_older_fx_book_moves_neither_mark:{[t]
     reset[];
     .qetl.job.stream.reset `posbook;

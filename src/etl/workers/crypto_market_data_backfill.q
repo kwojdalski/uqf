@@ -45,7 +45,7 @@
 / Refuse a batch that is shaped correctly but cannot be true. Three
 / conditions, each one a thing no correct recorded row can meet:
 / .
-/   crossed_book        the best bid above the best ask (.qbook.crossed_top,
+/   crossed_book        the best bid above the best ask (.qf.mkt.crossed_top,
 /                       #1176; a LOCKED book, bid = ask, is legitimate and
 /                       passes). A book can be crossed for a moment on a
 /                       real venue, but not in a snapshot the recorder assembled from one
@@ -56,7 +56,7 @@
 /   negative_latency    a latency sample below zero, or a running minimum
 /                       above the sample it is supposed to bound.
 / .
-/ A level nobody quoted is absent, not wrong: .qbook.crossed_top never calls a
+/ A level nobody quoted is absent, not wrong: .qf.mkt.crossed_top never calls a
 / side with no usable level crossed (q says `0n>=0n` is 1b, so a naive test
 / would fail every such row).
 / .
@@ -68,7 +68,7 @@
 / @eg .qpipe.job.crypto_market_data_backfill.quality_check[.qpipe.transform.crypto_market_data.example_book[]]  ->  an empty table
 quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    crossed:batch where .qbook.crossed_top batch;
+    crossed:batch where .qf.mkt.crossed_top batch;
     bad_trade:select from batch where (not null trade_price) & not (trade_price>0) & (trade_size>0);
     sample:batch`latency_ms;
     floor_ms:batch`latency_min_ms;
@@ -77,7 +77,7 @@ quality_check:{[batch]
     bad_latency:batch where negative_sample | floor_above_sample;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qf.util.full each t)
       }'[`crossed_book`nonpositive_trade`negative_latency;
          (crossed;bad_trade;bad_latency)]}
 

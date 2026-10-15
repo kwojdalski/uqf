@@ -32,7 +32,7 @@
 /   withdrawal   an empty ladder is a side with nothing: null price, zero
 /                quantity, not full - and the book is still a snapshot.
 /   invalid      null, non-positive or infinite price or size are skipped by
-/                .qbook.level_ok (inside .qbook.sweep_price).
+/                .qf.mkt.level_ok (inside .qf.mkt.sweep_price).
 /   duplicates   rows with one (sym, source, settlement, category, source_time)
 /                are one observation; distinct requested sizes are used once.
 /   average      the minute is the mean over snapshots, each weighing the same -
@@ -77,7 +77,7 @@ ordered:{[dir;p]
     $[dir>0; all later>=earlier; all later<=earlier]}
 
 / Private: (avg price; filled quantity; full) for one side, through
-/ .qbook.sweep_price. A side that is not a pair of equal-length lists, or whose
+/ .qf.mkt.sweep_price. A side that is not a pair of equal-length lists, or whose
 / usable levels are not best-first, is an empty side - never an error, so one
 / malformed book cannot take a whole batch down, and never a guess.
 / @private
@@ -87,9 +87,9 @@ sweep_side:{[dir;prices;sizes;target]
     if[not (count prices)=count sizes; :none];
     p:"f"$prices;
     q:"f"$sizes;
-    usable:.qbook.level_ok[p;q];
+    usable:.qf.mkt.level_ok[p;q];
     if[not ordered[dir;p where usable]; :none];
-    r:.qbook.sweep_price[p;q;target];
+    r:.qf.mkt.sweep_price[p;q;target];
     (r`avg_price;r`filled_size;r`fully_filled)}
 
 / Private: one side of every book for one requested size, as three columns.
@@ -271,7 +271,7 @@ from_levels:{[x]
     wanted_c:$[count eligible_categories; (x`category) in eligible_categories; (count x)#1b];
     t:x where well_formed and sided and wanted_s and wanted_c;
     if[0=count t; :0#book_shape];
-    t:update level:.qbook.level_ok[price;qty] from t;
+    t:update level:.qf.mkt.level_ok[price;qty] from t;
     / one row per level price within a book side, the last delivered winning
     t:0!select level:last level, qty:last qty by source_time, sym, source:provider, settlement, category, side, price from t;
     / a local: a qSQL expression resolves a global against the session's namespace, not this one

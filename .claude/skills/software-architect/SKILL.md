@@ -24,12 +24,12 @@ looking for the kind of problems that experienced architects spot when they ask
 Not one codebase. Four layers with different rules, and most real architectural
 findings live on the seams between them:
 
-  | Layer                     | Where                                                                                                 | Shape                                                                                                                                                                                                                                                                                                              |
-  | ---                       | ---                                                                                                   | ---                                                                                                                                                                                                                                                                                                                |
-  | **Quant library**         | `src/foundation/`, `src/pricing/`, `src/portfolio/`, `src/execution/`, `src/market_data/`             | pure functions, one flat namespace per file (`.qfwd`, `.qexec`, `.qpos`, `.qalloc`, …), no state, no I/O                                                                                                                                                                                                           |
-  | **Pipeline framework**    | `src/etl/core/` (18 files)                                                                            | shells and contracts: `.qetl.job.bounded` bounded workers, `.qetl.job.stream` streaming jobs, `.qetl.job.stream.normalizer` normalizers, `.qetl.transform` transforms, `.qetl.source` source contracts, `.qetl.coverage` coverage, `.qetl.io`, `.qetl.dag`, `.qetl.job.bounded.runtime`, `.qetl.run`, `.qetl.tick` |
-  | **Declarations**          | `src/etl/sources/`, `workers/`, `streaming/`                                                          | one file per instance; registers itself on load                                                                                                                                                                                                                                                                    |
-  | **Adapters and surfaces** | `scripts/processes/` (`.qtorq`), `python/` (orchestrator, frontend, airflow provider, client), `web/` | the only places that know TorQ, HTTP, Airflow or a browser exist                                                                                                                                                                                                                                                   |
+  | Layer                     | Where                                                                                                 | Shape                                                                                                                                                                                                                                                                                                                                                    |
+  | ---                       | ---                                                                                                   | ---                                                                                                                                                                                                                                                                                                                                                      |
+  | **Quant library**         | `src/foundation/`, `src/pricing/`, `src/portfolio/`, `src/execution/`, `src/market_data/`             | pure functions in seven `.qf.<domain>` namespaces (`.qf.px`, `.qf.mkt`, `.qf.exec`, `.qf.port`, …), several files per domain, no state, no I/O                                                                                                                                                                                                           |
+  | **Pipeline framework**    | `src/etl/core/` (18 files)                                                                            | shells and contracts: `.qetl.job.bounded` bounded workers, `.qetl.job.stream` streaming jobs, `.qetl.job.stream.normalizer` normalizers, `.qetl.transform` transforms, `.qetl.source` source contracts, `.qetl.coverage` coverage, `.qetl.io`, `.qetl.dag`, `.qetl.job.bounded.runtime`, `.qetl.run`, `.qetl.tick`                                       |
+  | **Declarations**          | `src/etl/sources/`, `workers/`, `streaming/`                                                          | one file per instance; registers itself on load                                                                                                                                                                                                                                                                                                          |
+  | **Adapters and surfaces** | `scripts/processes/` (`.qtorq`), `python/` (orchestrator, frontend, airflow provider, client), `web/` | the only places that know TorQ, HTTP, Airflow or a browser exist                                                                                                                                                                                                                                                                                         |
 
 Two rules are load-bearing and enforced:
 
@@ -108,7 +108,7 @@ wrong", that is the finding
   read at call time or captured once, and is its blast radius contained?
 - Registries (`.qetl.source.sources`, `.qetl.transform.registry`,
   `.qetl.job.stream.jobs`, `.qetl.job.stream.normalizer.registry`, `.qetl.io`,
-  `.qalloc.methods`) are shared mutable state too. Same shape, same trap: q
+  `.qf.exec.methods`) are shared mutable state too. Same shape, same trap: q
   collapses a dict of same-keyed dicts into a table, so a later
   differently-shaped entry is refused with a bare `type`. Check each registry
   normalises what it stores
@@ -127,11 +127,11 @@ wrong", that is the finding
   boundary kola cannot cross, a vendored tree that must not be edited) --- say
   which, and why
 - Missing abstraction where one would prevent drift. Worked example: the
-  position modules --- `.qpos` (running book, weighted average, O(1) per fill),
-  `.qalloc` (lot matching, any dimensions, recomputed) and `.qdesk` (running
-  netted book, any dimensions, no cost basis). Three that look alike and each
-  answers a different question; a fourth would have to justify itself the same
-  way
+  position modules --- `.qf.port` (running book, weighted average, O(1) per
+  fill), `.qf.exec` (lot matching, any dimensions, recomputed) and `.qf.port`
+  (running netted book, any dimensions, no cost basis). Three that look alike
+  and each answers a different question; a fourth would have to justify itself
+  the same way
 
 ### 6. Configuration, dependencies and load order
 
@@ -196,13 +196,13 @@ wrong", that is the finding
    - `scripts/gates/` --- read what each gate enforces, because the architecture
      is partly *defined* by what CI refuses
 
-   **The quant library --- flat, pure, and mostly stable:**
+   **The quant library --- seven domains, pure, and mostly stable:**
    - `src/pricing/forwards.q` (the largest; how much reuses
      `ccy_orient_cross`/`oriented_levels` vs reinvents it),
      `src/execution/execution.q`, `src/market_data/microstructure.q`,
      `src/market_data/book.q`, and the position modules:
-     `src/portfolio/positions.q` (`.qpos`) and `allocation.q` (`.qalloc`),
-     joined by `desk_positions.q` (`.qdesk`) with PR #256
+     `src/portfolio/positions.q` (`.qf.port`) and `allocation.q` (`.qf.exec`),
+     joined by `desk_positions.q` (`.qf.port`) with PR #256
 
    For each: what are its responsibilities? who depends on it? what does it
    depend on? how hard is it to extend, replace, or test alone?

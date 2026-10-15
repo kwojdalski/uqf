@@ -3,7 +3,7 @@
 / Subscribes to nothing and publishes `quote` twice a second: one row per
 / pair, bid and ask one pip either side of a level that walks on every tick.
 / It stands in for a venue's top-of-book feed in this demo; the market
-/ it invents is .qsynth's, shared with every other feed here.
+/ it invents is .qf.demo's, shared with every other feed here.
 / .
 / WHAT IS IN THIS FILE: the level this process walks, the row builder, and
 / the declaration the runner reads. It was scripts/torq_fx_feed.q (deleted in
@@ -24,11 +24,11 @@
 publish:.qetl.job.stream.unwired `fx_feed;
 
 / This process's own moving level per pair, walked on every tick. Plain
-/ parallel VECTORS, aligned with .qsynth.pairs: a dict here would silently
+/ parallel VECTORS, aligned with .qf.demo.pairs: a dict here would silently
 / turn bid/ask into dicts too, which .u.upd rejects with a length error when
 / inserting into the plain quote table (learned the hard way - see this
 / file's ancestor in git history).
-spot:.qsynth.spot
+spot:.qf.demo.spot
 
 / One tick's worth of quotes, from a given level per pair.
 / .
@@ -37,17 +37,17 @@ spot:.qsynth.spot
 / a tickerplant. The venue columns are constants the demo's `quote` schema
 / requires - an empty condition code, an `N` (no) exclusion flag and the
 / venue name.
-/ @param levels one mid per pair, in .qsynth.pairs order
+/ @param levels one mid per pair, in .qf.demo.pairs order
 / @return the tick's rows, in the vendored quote table's column order
-/ @eg count .qpipe.job.fx_feed.tick_rows .qsynth.spot  ->  8
+/ @eg count .qpipe.job.fx_feed.tick_rows .qf.demo.spot  ->  8
 tick_rows:{[levels]
-    n:count .qsynth.pairs;
-    (.qsynth.pairs;levels-.qsynth.pip;levels+.qsynth.pip;
-        n#.qsynth.size_unit;n#.qsynth.size_unit;n#" ";n#"N";n#`UQFFX)}
+    n:count .qf.demo.pairs;
+    (.qf.demo.pairs;levels-.qf.demo.pip;levels+.qf.demo.pip;
+        n#.qf.demo.size_unit;n#.qf.demo.size_unit;n#" ";n#"N";n#`UQFFX)}
 
 / Walk every pair's level, then publish the tick built from it.
 on_timer:{[]
-    `.qpipe.job.fx_feed.spot set .qsynth.drift_one each .qpipe.job.fx_feed.spot;
+    `.qpipe.job.fx_feed.spot set .qf.demo.drift_one each .qpipe.job.fx_feed.spot;
     .qpipe.job.fx_feed.publish[`quote;.qpipe.job.fx_feed.tick_rows[.qpipe.job.fx_feed.spot]];
     }
 

@@ -13,7 +13,7 @@
 / word - the persisted table, the frontend's /coverage endpoint and its
 / Coverage view - and renaming a persisted table to match
 / a namespace is the tail wagging the dog. A namespace and the table it
-/ writes need not share a name; .qpos manages `position` and .qexec writes
+/ writes need not share a name; .qf.port manages `position` and .qf.exec writes
 / `demo_execution_quality` on the same principle.
 / .
 / It was `.qcov` until the maintainer pointed out that `scripts/dev/

@@ -51,23 +51,23 @@ table alone.
 of every row and checks the result is identical.
 
 **Cross routes.** The route of an instrument is a pure function of the
-instrument under a declared convention (`.qcross.attribution_route_with`;
-default `.qcross.attribution_convention`, which is *proposed and unapproved*, so
+instrument under a declared convention (`.qf.mkt.attribution_route_with`;
+default `.qf.mkt.attribution_convention`, which is *proposed and unapproved*, so
 it is a parameter and every row records its `version`). The horizon job's `legs`
 callback is `.qpipe.transform.fx_markout.legs_of`, the same function, so
 readiness waits for exactly the legs scoring reads. One consequence to be aware
 of: a pair that has its own direct book is still priced along its convention
-route when the convention routes it so. `.qcross.cross_ref_price_at` would
+route when the convention routes it so. `.qf.mkt.cross_ref_price_at` would
 instead take the shortest chain of the books present; the two agree when the
 route is the chain available, and a test holds the calculation's allocation to
-`.qexec.cross_markout_attribution` there.
+`.qf.exec.cross_markout_attribution` there.
 
 **Reference price.** Per leg and per source, the latest snapshot at or before
-the instant; level 0 only (`.qbook.top_sides`: sizes decide whether a level is
+the instant; level 0 only (`.qf.mkt.top_sides`: sizes decide whether a level is
 usable, never what the price is, so there is no depth sweep). A source that has
 withdrawn a side contributes nothing on it, and does not fall back to an older
 book. Across sources, the best bid and best ask among those no older than
-`max_age` (`.qmicro.best_across_venues`). `max_age` defaults to none, "as of
+`max_age` (`.qf.mkt.best_across_venues`). `max_age` defaults to none, "as of
 however old", the same as `demo_markout`; a site that wants a bound declares it.
 Each leg is oriented by the route and chained; the reference is the mid of the
 chain. A best bid above the best ask across sources is not corrected: each

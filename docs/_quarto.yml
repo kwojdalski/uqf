@@ -121,6 +121,7 @@ website:
       - section: "Reference"
         contents:
           - reference/quant-modules.md
+          - reference/qf-domains.md
           - reference/environment.md
           - reference/processes.md
           - reference/pipeline-declarations.md

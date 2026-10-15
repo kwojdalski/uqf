@@ -3,44 +3,44 @@
 
 \d .ratestest
 
-test_growth_simple_zero_rate:{[t] .testutil.assertApprox[.qrates.growth_simple[0f;5];1f;1e-9;"no rate -> no growth"]};
-test_growth_simple_zero_time:{[t] .testutil.assertApprox[.qrates.growth_simple[0.05;0f];1f;1e-9;"no time -> no growth"]};
-test_growth_simple_known:{[t] .testutil.assertApprox[.qrates.growth_simple[0.05;1];1.05;1e-9;"5% for 1y simple"]};
-test_growth_cont_zero_rate:{[t] .testutil.assertApprox[.qrates.growth_cont[0f;5];1f;1e-9;"no rate -> no growth"]};
-test_growth_cont_known:{[t] .testutil.assertApprox[.qrates.growth_cont[0.05;1];1.051271;1e-6;"5% for 1y continuous"]};
+test_growth_simple_zero_rate:{[t] .testutil.assertApprox[.qf.px.growth_simple[0f;5];1f;1e-9;"no rate -> no growth"]};
+test_growth_simple_zero_time:{[t] .testutil.assertApprox[.qf.px.growth_simple[0.05;0f];1f;1e-9;"no time -> no growth"]};
+test_growth_simple_known:{[t] .testutil.assertApprox[.qf.px.growth_simple[0.05;1];1.05;1e-9;"5% for 1y simple"]};
+test_growth_cont_zero_rate:{[t] .testutil.assertApprox[.qf.px.growth_cont[0f;5];1f;1e-9;"no rate -> no growth"]};
+test_growth_cont_known:{[t] .testutil.assertApprox[.qf.px.growth_cont[0.05;1];1.051271;1e-6;"5% for 1y continuous"]};
 
-test_df_simple_known:{[t] .testutil.assertApprox[.qrates.df_simple[0.05;1];0.952381;1e-6;"1/1.05"]};
-test_df_cont_known:{[t] .testutil.assertApprox[.qrates.df_cont[0.05;1];0.9512294;1e-6;"exp(-0.05)"]};
-test_df_cont_zero_time:{[t] .testutil.assertApprox[.qrates.df_cont[0.07;0f];1f;1e-9;"no time -> no discounting"]};
-test_df_simple_zero_time:{[t] .testutil.assertApprox[.qrates.df_simple[0.07;0f];1f;1e-9;"no time -> no discounting"]};
+test_df_simple_known:{[t] .testutil.assertApprox[.qf.px.df_simple[0.05;1];0.952381;1e-6;"1/1.05"]};
+test_df_cont_known:{[t] .testutil.assertApprox[.qf.px.df_cont[0.05;1];0.9512294;1e-6;"exp(-0.05)"]};
+test_df_cont_zero_time:{[t] .testutil.assertApprox[.qf.px.df_cont[0.07;0f];1f;1e-9;"no time -> no discounting"]};
+test_df_simple_zero_time:{[t] .testutil.assertApprox[.qf.px.df_simple[0.07;0f];1f;1e-9;"no time -> no discounting"]};
 
 test_df_simple_inverts_growth_simple:{[t]
     rs:0.01 0.03 0.05 0.10;
     ts:0.25 0.5 1 2;
-    .testutil.assertApprox[.qrates.df_simple[rs;ts]*.qrates.growth_simple[rs;ts];1+0*rs;1e-9;"df*growth=1 (simple) across several rate/tenor pairs"]};
+    .testutil.assertApprox[.qf.px.df_simple[rs;ts]*.qf.px.growth_simple[rs;ts];1+0*rs;1e-9;"df*growth=1 (simple) across several rate/tenor pairs"]};
 
 test_df_cont_inverts_growth_cont:{[t]
     rs:0.01 0.03 0.05 0.10;
     ts:0.25 0.5 1 2;
-    .testutil.assertApprox[.qrates.df_cont[rs;ts]*.qrates.growth_cont[rs;ts];1+0*rs;1e-9;"df*growth=1 (continuous) across several rate/tenor pairs"]};
+    .testutil.assertApprox[.qf.px.df_cont[rs;ts]*.qf.px.growth_cont[rs;ts];1+0*rs;1e-9;"df*growth=1 (continuous) across several rate/tenor pairs"]};
 
-test_simple_to_cont_known:{[t] .testutil.assertApprox[.qrates.simple_to_cont[0.05;1];0.04879016;1e-6;"ln(1.05)"]};
+test_simple_to_cont_known:{[t] .testutil.assertApprox[.qf.px.simple_to_cont[0.05;1];0.04879016;1e-6;"ln(1.05)"]};
 
 test_simple_to_cont_round_trip:{[t]
     rs:0.005 0.02 0.05 0.08 0.15;
     ts:0.1 0.5 1 2 5;
-    cont_rates:.qrates.simple_to_cont[rs;ts];
-    .testutil.assertApprox[.qrates.cont_to_simple[cont_rates;ts];rs;1e-6;"cont_to_simple(simple_to_cont(r))=r round trip"]};
+    cont_rates:.qf.px.simple_to_cont[rs;ts];
+    .testutil.assertApprox[.qf.px.cont_to_simple[cont_rates;ts];rs;1e-6;"cont_to_simple(simple_to_cont(r))=r round trip"]};
 
 test_simple_cont_equivalent_growth:{[t]
     r:0.06; tt:1.5;
-    cont_r:.qrates.simple_to_cont[r;tt];
-    .testutil.assertApprox[.qrates.growth_cont[cont_r;tt];.qrates.growth_simple[r;tt];1e-6;"converted cont rate gives the same growth factor as the original simple rate"]};
+    cont_r:.qf.px.simple_to_cont[r;tt];
+    .testutil.assertApprox[.qf.px.growth_cont[cont_r;tt];.qf.px.growth_simple[r;tt];1e-6;"converted cont rate gives the same growth factor as the original simple rate"]};
 
 / t->0 limit of both conversions is r itself (#1256), not the null 0%0.
 test_simple_cont_conversions_at_t_zero_return_r:{[t]
-    .qunit.assertEquals[.qrates.simple_to_cont[0.05;0f];0.05;"simple_to_cont at t=0"];
-    .qunit.assertEquals[.qrates.cont_to_simple[0.05;0f];0.05;"cont_to_simple at t=0"];
-    .testutil.assertApprox[.qrates.simple_to_cont[0.05 0.05;0 1f];0.05 0.04879016;1e-7;"vector t mixing 0 and 1"]};
+    .qunit.assertEquals[.qf.px.simple_to_cont[0.05;0f];0.05;"simple_to_cont at t=0"];
+    .qunit.assertEquals[.qf.px.cont_to_simple[0.05;0f];0.05;"cont_to_simple at t=0"];
+    .testutil.assertApprox[.qf.px.simple_to_cont[0.05 0.05;0 1f];0.05 0.04879016;1e-7;"vector t mixing 0 and 1"]};
 
 \d .

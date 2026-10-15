@@ -32,12 +32,12 @@
 / every namespace is single-level: worker instances nest under .qpipe.job, and a
 / root scan reports `qpipe.job` - a namespace holding no functions - while every
 / worker's surface silently disappears from the export the gates diff
-/ against. .qns.functional drops the containers and keeps the leaves.
+/ against. .qf.util.functional drops the containers and keeps the leaves.
 / .
 / The names come back fully qualified (`.qetl.job.bounded`); the rest of this file works
 / in the undotted form the root scan produced, so the dot is trimmed here.
 own_namespaces:{[]
-    ns:.qns.functional[];
+    ns:.qf.util.functional[];
     ns:ns except `.qunit;
     asc {[n] `$1_string n} each ns}
 

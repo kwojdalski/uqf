@@ -231,7 +231,7 @@ to_date_as_midnight:{[str]
 / not an error - every join returns zero rows and the result is an empty
 / table that reads as "no data for that pair" rather than as a data bug.
 / This library's convention is upper-case six-letter pairs throughout, and
-/ .qccy.normalize_ccy_pair names the same trap for user input.
+/ .qf.px.normalize_ccy_pair names the same trap for user input.
 / .
 / The TRIM is defensive rather than corrective, and it is worth being honest
 / about which: measured on this build, `$"EURUSD " already yields a 6-

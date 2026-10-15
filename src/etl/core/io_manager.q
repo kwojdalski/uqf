@@ -25,7 +25,7 @@
 / workers read the q table directly, in-process - so a `read` here would be a
 / capability reached from no live path. This repository has found four of
 / those in as many days (docs/man.q, .qetl.coverage.require_schema, .qetl.cfg.set_layers,
-/ .qdqc), and each read as protection it was not providing. They go in when
+/ .qf.mkt), and each read as protection it was not providing. They go in when
 / something calls them.
 
 \d .qetl.io

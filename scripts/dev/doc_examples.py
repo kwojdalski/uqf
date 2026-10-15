@@ -23,7 +23,7 @@ HTML comment above the fence, invisible when rendered:
 A file's marked blocks run in ONE q process, in document order, the way a
 reader types them - so a guide's later block may use what an earlier one
 defined. Every file gets its own process, which loads only what its blocks
-use: `src/init.q` when a block names one of the library's `.q<ns>.`
+use: `src/init.q` when a block names one of the library's `.qf.<domain>.`
 namespaces, and the ETL stack (`torq_pipeline.q`, `src/etl/init.q`) too when
 one names `.qetl` or `.qpipe`. A block that uses neither runs on a bare q -
 which is what lets it run on an interpreter the library does not load on.
@@ -49,7 +49,7 @@ _OPEN = re.compile(r"^(?P<indent>\s*)```+\s*q\s*$")
 _CLOSE = re.compile(r"^\s*```+\s*$")
 _PROMPT = re.compile(r"^\s*q\)\s?")
 _ETL = re.compile(r"\.(qetl|qpipe)\.")
-#: A name in one of this library's namespaces: `.qfwd.`, `.qalloc.`, ...
+#: A name in one of this library's namespaces: `.qf.px.`, `.qf.exec.`, ...
 _LIBRARY = re.compile(r"(?<![\w.])\.q[a-z]+\.")
 
 PREAMBLE = ("src/init.q",)

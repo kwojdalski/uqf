@@ -14,7 +14,7 @@ books:`sym`source xkey .qetl.plant.published `market_data
 superbook:.qetl.plant.published `superbook
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
 max_age:0D00:00:05
-/ How far a source's clock may lead this host's is .qmicro.max_clock_lead:
+/ How far a source's clock may lead this host's is .qf.mkt.max_clock_lead:
 / every multi-venue feed has some skew, and with none allowed a venue a few
 / ms ahead vanished from the book while last_value kept it live (#1033). It
 / is read where it is used, never copied here, so a change to it reaches
@@ -23,7 +23,7 @@ max_age:0D00:00:05
 / Remove non-executable levels, keeping prices and base sizes aligned.
 / @param prices a numeric vector
 / @param sizes the matching numeric vector in base currency
-/ @return a table of the levels that are prices by .qbook.level_ok (#1021)
+/ @return a table of the levels that are prices by .qf.mkt.level_ok (#1021)
 / @throws when vectors are malformed or their lengths differ
 / @eg .qpipe.job.superbook.levels[1.1 1.2;100 0f] -> ([] price:enlist 1.1; size:enlist 100f)
 levels:{[prices;sizes]
@@ -33,12 +33,12 @@ levels:{[prices;sizes]
     if[any (0h=type each (prices;sizes)) and 0<count each (prices;sizes);
         '"superbook: prices and sizes must be numeric vectors"];
     ladder:([] price:`float$prices; size:`float$sizes);
-    ladder where .qbook.level_ok[ladder`price;ladder`size]}
+    ladder where .qf.mkt.level_ok[ladder`price;ladder`size]}
 
 / Replace newer source snapshots. Equal timestamps use arrival order.
 / Empty or unusable sides replace the old side too; zero size is withdrawal.
 / Rows dated after as_of are ignored, so they cannot poison a source's
-/ watermark. on_batch passes the processing time plus .qmicro.max_clock_lead (#1033).
+/ watermark. on_batch passes the processing time plus .qf.mkt.max_clock_lead (#1033).
 / @param state latest snapshots keyed by sym and source
 / @param batch market_data rows; a plant time column may also be present
 / @param as_of the latest source_time accepted
@@ -47,7 +47,7 @@ levels:{[prices;sizes]
 / @eg count .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0
 replace_books:{[state;batch;as_of]
     wanted:cols .qpipe.job.market_data.market_data;
-    .qschema.require_cols[`superbook;`batch;batch;wanted];
+    .qf.util.require_cols[`superbook;`batch;batch;wanted];
     rows:wanted#batch;
     problems:.qetl.transform.problems[.qpipe.job.market_data.market_data;rows;1b];
     if[count problems; '"superbook: ","; " sv problems];
@@ -123,7 +123,7 @@ snapshot:{[state;as_of;age;lead]
 / example whose result depends on whatever ran before it is worse than
 / none. tests/q/test_superbook.q drives it against a book it builds itself.
 refresh:{[as_of]
-    rows:snapshot[books;as_of;max_age;.qmicro.max_clock_lead];
+    rows:snapshot[books;as_of;max_age;.qf.mkt.max_clock_lead];
     if[count rows; .qpipe.job.superbook.publish[`superbook;rows]];
     }
 
@@ -150,7 +150,7 @@ on_batch:{[t;x]
     x:fx_only[x];
     if[0=count x; :()];
     now:.z.p;
-    lead:.qmicro.max_clock_lead;
+    lead:.qf.mkt.max_clock_lead;
     latest:now+lead;
     ahead:select from x where source_time>latest;
     if[count ahead;
@@ -171,7 +171,7 @@ on_timer:{[] refresh .z.p;}
 / The expiry window and the clock lead decide which liquidity counts as live,
 / so a change to either changes every snapshot downstream - worth recording
 / (#295, #1033).
-.qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qmicro.max_clock_lead];
+.qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qf.mkt.max_clock_lead];
 
 .qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state`ephemeral!(
     `superbook1;

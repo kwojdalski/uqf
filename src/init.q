@@ -1,41 +1,56 @@
-// init.q - loads every uqf module, each into its own flat namespace (one
-// per file - .qstats, .qccy, .qdcf, .qrates, .qcross, .qfwd, .qopt, .qrisk, .qpos,
-// .qalloc, .qdesk, .qlimit, .qexec, .qbook, .qmicro, .qdqc, .qexdef - kept
-// single-level throughout, not nested under a shared .q parent.
-// .
-// Flat namespaces began as a portability constraint and are now a CONVENTION
-// this tree keeps: one flat .q<abbrev> per file, with the file list as
-// the registry. The original constraint is gone, but the convention is load
-// bearing in its own right - the filename-to-namespace tie is what the naming
-// auditor checks and what docs/man.q's registry is generated against, and 30
-// namespaces now depend on it.
+// init.q - loads every uqf quant module into one of seven domain namespaces
+// under .qf:
+//
+//   .qf.px    theoretical pricing and the conventions it rests on -
+//             ccy.q daycount.q calendar.q rates.q forwards.q options.q
+//   .qf.mkt   analytics over observed market data - book.q cross.q
+//             attribution_routes.q microstructure.q microstructure_venues.q
+//             dqchecks.q asof.q
+//   .qf.exec  execution quality and allocation - execution.q
+//             execution_attribution.q allocation.q
+//   .qf.port  positions, desk exposure, risk and limits - positions.q
+//             desk_positions.q risk.q limits.q
+//   .qf.math  numerical primitives - stats.q
+//   .qf.util  schema checks, metadata tables, rendering and namespace
+//             discovery - schema.q render.q metatables.q namespaces.q
+//   .qf.demo  example defaults and the synthetic market - example_defaults.q
+//             and src/etl/synthetic_market.q (the ETL loads that one)
+//
+// docs/reference/qf-domains.md has the domain boundaries, the helper
+// conventions and the table from every former .q<abbrev> name to its new one.
 // Run from the repository root, e.g. `q src/init.q` or `\l src/init.q`.
 //
 // The directories below are ORGANISATIONAL ONLY. Two things follow from
 // that, and both are deliberate:
 //
-//   1. Namespaces do not track directories. `src/foundation/ccy.q` is still
-//      .qccy, not .qfnd.ccy - the flat single-level scheme is unchanged, so
-//      no call site or test assertion moved when the files did. A reader
-//      learns the file->namespace mapping from the list above or README's
-//      table; it is not derivable from the path.
+//   1. Neither directories nor files are namespaces. Several files share one
+//      domain, and a file declares its domain with `\d .qf.<domain>` and
+//      closes it with `\d .`. A reader learns the file->domain mapping from
+//      the list above; it is not derivable from the path.
 //
-//      The ETL tree (src/etl/, loaded separately) makes two deliberate
-//      exceptions, both for INSTANCES rather than modules: bounded workers
-//      nest under .qpipe.job (.qpipe.job.<worker name>, derived by .qetl.job.bounded.define) and
-//      source declarations under .qpipe.source (.qpipe.source.<source name>, checked
-//      against each file's own source_name). src/namespaces.q (.qns) is the
-//      one enumeration that knows this, and every tool that lists
-//      namespaces goes through it.
+//      Because a domain is shared, a name must be defined by ONE file of it:
+//      two files defining `foo:` leave the winner to load order, and
+//      scripts/gates/check_module_deps.py fails the second. A call from one
+//      file to another is always fully qualified (`.qf.px.pip_factor`, not
+//      `pip_factor`), which is also what lets that gate see the dependency.
 //
-//   2. The library modules form an ACYCLIC graph, and CI holds them to it:
+//      The ETL tree (src/etl/, loaded separately) nests its instances: bounded
+//      workers under .qpipe.job (.qpipe.job.<worker name>, derived by
+//      .qetl.job.bounded.define) and source declarations under .qpipe.source
+//      (.qpipe.source.<source name>, checked against each file's own
+//      source_name). src/namespaces.q (.qf.util) is the one enumeration that
+//      knows the nesting, and every tool that lists namespaces goes through it.
+//
+//   2. The modules (files) form an ACYCLIC graph, and CI holds them to it:
 //      scripts/gates/check_module_deps.py lists every allowed edge between
-//      namespaces and refuses a new one, or a cycle, until the list says so
+//      modules and refuses a new one, or a cycle, until the list says so
 //      (#626). Pricing and execution used to depend on each other; now
-//      execution builds on synthetic cross pricing (.qcross), both use the
-//      shared book maths in .qbook, and everything rests on foundation.
+//      execution builds on synthetic cross pricing (cross.q), both use the
+//      shared book maths in book.q, and everything rests on foundation. The
+//      domains themselves are NOT acyclic (forwards.q reads book.q, cross.q
+//      reads ccy.q), so the graph is held at the module level.
 //      Load order below still is not what makes calls resolve - q binds a
-//      name when it is called - but it now matches the dependency order.
+//      name when it is called - but it matches the dependency order.
 
 \l src/foundation/schema.q
 \l src/foundation/render.q

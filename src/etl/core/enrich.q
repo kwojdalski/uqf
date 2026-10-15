@@ -1,6 +1,6 @@
 / enrich.q - the reference buffer behind a streaming job's as-of enrichment
 / (.qetl.enrich, #1223): the state half of "attach the prevailing quote/mid
-/ to each event". The lookup itself is the pure .qasof.lookup, so a backfill
+/ to each event". The lookup itself is the pure .qf.mkt.lookup, so a backfill
 / twin runs it unchanged over a table it read from the HDB.
 / .
 / A HELPER, NOT A JOB KIND. A job keeps one of these in a namespace global,
@@ -36,7 +36,7 @@ new:{[spec]
     if[count miss; '"qetl.enrich.new: spec is missing ",", " sv string miss];
     if[not -16h=type spec`retention; '"qetl.enrich.new: retention must be a timespan"];
     if[spec[`retention]<0D; '"qetl.enrich.new: retention must not be negative"];
-    .qschema.require_cols[`qetl_enrich_new;`schema;spec`schema;(),spec[`keys],spec`time];
+    .qf.util.require_cols[`qetl_enrich_new;`schema;spec`schema;(),spec[`keys],spec`time];
     `keys`time`retention`rows!((),spec`keys;spec`time;spec`retention;0#spec`schema)}
 
 / The rows a buffer holds, sorted by (keys, time).
@@ -59,7 +59,7 @@ rows:{[state] state`rows}
 / @eg count .qetl.enrich.rows .qetl.enrich.add[.qetl.enrich.new[`keys`time`retention`schema!(enlist `sym;`time;0D00:00:10;([] sym:`symbol$(); time:`timestamp$(); mid:`float$()))];([] sym:3#`a; time:2026.10.01D10:00:00 + 0D00:00:01 * 0 5 30; mid:1 2 3f)]  ->  2
 add:{[state;refs]
     held:cols state`rows;
-    .qschema.require_cols[`qetl_enrich_add;`refs;refs;held];
+    .qf.util.require_cols[`qetl_enrich_add;`refs;refs;held];
     if[0=count refs; :state];
     ks:state`keys;
     combined:((ks,state`time) xasc (state`rows),held#refs);
@@ -68,7 +68,7 @@ add:{[state;refs]
 / Attach the prevailing reference row to each event, from the buffer.
 / .
 / A thin wrapper: the buffer supplies the keys and the reference time column,
-/ and the answer is .qasof.lookup's over the held rows - the same function a
+/ and the answer is .qf.mkt.lookup's over the held rows - the same function a
 / backfill calls on the full history, so the two agree for every event at or
 / after the retention edge of its key (older events may find their
 / prevailing row trimmed).
@@ -76,11 +76,11 @@ add:{[state;refs]
 / @param events the events: the buffer's key columns and event_time
 / @param spec dict: `event_time (events' time column), `attach (a dict new
 /   name!reference column, or a symbol list), `tolerance (timespan, 0Nn for none)
-/ @return events, then attached columns, staleness, status (see .qasof.lookup)
-/ @throws error as .qasof.lookup does
+/ @return events, then attached columns, staleness, status (see .qf.mkt.lookup)
+/ @throws error as .qf.mkt.lookup does
 / @eg .qetl.enrich.lookup[.qetl.enrich.add[.qetl.enrich.new[`keys`time`retention`schema!(enlist `sym;`time;0D00:01:00;([] sym:`symbol$(); time:`timestamp$(); mid:`float$()))];([] sym:enlist `a; time:enlist 2026.10.01D10:00:00; mid:enlist 1f)];([] sym:enlist `a; time:enlist 2026.10.01D10:00:01);`event_time`attach`tolerance!(`time;enlist `mid;0D00:00:05)]  ->  ([] sym:enlist `a; time:enlist 2026.10.01D10:00:01; mid:enlist 1f; staleness:enlist 0D00:00:01; status:enlist `ok)
 lookup:{[state;events;spec]
-    .qasof.lookup[state`rows;events;(`keys`ref_time!(state`keys;state`time)),spec]}
+    .qf.mkt.lookup[state`rows;events;(`keys`ref_time!(state`keys;state`time)),spec]}
 
 / Private: drop what is outside each key's retention window, keeping one
 / anchor row per key. Rows must already be sorted by (keys, time).

@@ -428,7 +428,7 @@ test_a_registered_source_resolves_under_the_feed_root:{[t]
     / is still "what .qetl.source was told about resolves" - while asking it only
     / about the tree's own sources.
     names:.qetl.source.defined[] inter .testutil.etl_declaration_names["src/etl/sources"];
-    missing:names where not {[n] (` sv `.qpipe.source,n) in .qns.owned[]} each names;
+    missing:names where not {[n] (` sv `.qpipe.source,n) in .qf.util.owned[]} each names;
     .qunit.assertEquals[missing;`symbol$();
         "every registered source has its own namespace under .qpipe.source"]};
 

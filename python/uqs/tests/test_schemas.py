@@ -59,7 +59,7 @@ def test_definition_refuses_an_unknown_table():
 
 
 def test_the_wide_orderbook_levels_are_paired_and_contiguous_from_zero():
-    # .qbook.derive_level_groups finds levels by a prefix plus a CONTIGUOUS
+    # .qf.mkt.derive_level_groups finds levels by a prefix plus a CONTIGUOUS
     # digit suffix, so a gap yields a shorter book rather than an error, and
     # a bid level with no ask is a book nothing can price. Read from the q
     # definition, which is the only place the level count is stated.

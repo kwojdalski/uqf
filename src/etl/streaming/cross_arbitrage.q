@@ -91,11 +91,11 @@ quotable:{[state]
 / @return the route's legs in traversal order, empty when none exists
 / @eg .qpipe.job.cross_arbitrage.route_for[`EURUSD`USDJPY`EURJPY;`EURJPY] -> `EURUSD`USDJPY
 route_for:{[avail;sym]
-    legs:.qccy.ccy_pair_legs sym;
-    @[{.qcross.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
+    legs:.qf.px.ccy_pair_legs sym;
+    @[{.qf.mkt.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
 
 / The oldest level time among the levels a sweep consumed, given the
-/ levels_used indices .qbook.sweep_price returned for it (into the ORIGINAL
+/ levels_used indices .qf.mkt.sweep_price returned for it (into the ORIGINAL
 / ladder, after its level_ok filter). Nothing consumed is 0Wp, the identity
 / for `min`. Timing reads the pricing's own answer rather than re-deriving
 / which levels it took (#1181).
@@ -107,17 +107,17 @@ route_for:{[avail;sym]
 used_time:{[times;used] $[count used; min times used; 0Wp]}
 
 / The oldest level time each leg of a chain sweep consumed, from the legs
-/ .qcross.cross_sweep_chain reports: each leg's own levels_used indexes the
+/ .qf.mkt.cross_sweep_chain reports: each leg's own levels_used indexes the
 / time column of the ladder that leg read (an inverted leg reads the other
 / side's ladder).
 / @param books the route's superbook rows, in traversal order
-/ @param inverts per-leg inversion flags from .qcross.ccy_orient_chain
+/ @param inverts per-leg inversion flags from .qf.mkt.ccy_orient_chain
 / @param side `bid or `ask - the side of the synthetic being priced
 / @param size the notional, in leg 0's currency
 / @return one oldest-consumed time per leg
 / @private
 chain_times:{[books;inverts;side;size]
-    r:.qcross.cross_sweep_chain[leg_book each books;side;size;inverts];
+    r:.qf.mkt.cross_sweep_chain[leg_book each books;side;size;inverts];
     leg_ladder_times:{[side;bk;iv] $[iv; $[side=`bid; bk`ask_times; bk`bid_times]; $[side=`ask; bk`ask_times; bk`bid_times]]}[side]'[books;inverts];
     used_time'[leg_ladder_times;r[`legs]`levels_used]}
 
@@ -137,12 +137,12 @@ chain_times:{[books;inverts;side;size]
 / @eg .qpipe.job.cross_arbitrage.leg_times[`sym xkey 0#.qpipe.job.superbook.superbook;`EURJPY;`symbol$();1e6;`bid`ask;`bid`ask] -> `as_of`skew!(0Np;0Nn)
 leg_times:{[state;sym;route;size;route_sides;direct_sides]
     if[0=count route; :`as_of`skew!(0Np;0Nn)];
-    inverts:(.qcross.ccy_orient_chain route)`inverts;
+    inverts:(.qf.mkt.ccy_orient_chain route)`inverts;
     books:state ([] sym:route);
     rt:{[books;inverts;size;side] chain_times[books;inverts;side;size]}[books;inverts;size] each (),route_sides;
     d:state sym;
     dt:{[d;size;side]
-        swept:.qbook.sweep_price[$[side=`bid; d`bid_prices; d`ask_prices];$[side=`bid; d`bid_sizes; d`ask_sizes];size];
+        swept:.qf.mkt.sweep_price[$[side=`bid; d`bid_prices; d`ask_prices];$[side=`bid; d`bid_sizes; d`ask_sizes];size];
         used_time[$[side=`bid; d`bid_times; d`ask_times];swept`levels_used]}[d;size] each (),direct_sides;
     ts:(min each flip rt),min dt;
     `as_of`skew!(min ts;(max ts)-min ts)}
@@ -159,7 +159,7 @@ direct_side:{[row;side;size]
         '"direct_side: side must be `bid or `ask, got ",.Q.s1 side];
     prices:$[side=`bid; row`bid_prices; row`ask_prices];
     sizes:$[side=`bid; row`bid_sizes; row`ask_sizes];
-    swept:.qbook.sweep_price[prices;sizes;size];
+    swept:.qf.mkt.sweep_price[prices;sizes;size];
     `price`fully_filled!(swept`avg_price;swept`fully_filled)}
 
 / One pair's status row: the direct book against its synthetic route.
@@ -191,7 +191,7 @@ opportunity:{[state;avail;sym;size;as_of]
     / symbol is the row you expect. Indexing by a table of keys is the form
     / that takes several, and it preserves the route's order - which matters,
     / because the legs are matched to syms by position.
-    syn:first .qcross.cross_book_chain_at_sizes[route;
+    syn:first .qf.mkt.cross_book_chain_at_sizes[route;
         leg_book each state ([] sym:route);enlist size;`bid`ask];
     / A route whose ends do not spell this pair is a routing bug, not an
     / opportunity - refuse rather than compare two different markets.

@@ -2,8 +2,8 @@
 / .
 / Subscribes to `databento_mbp10` - Databento's forty per-level columns as
 / the feed handler publishes them - folds each row into four level-0-first
-/ vectors, and publishes `eq_orderbook`, the shape .qbook and
-/ .qcross.cross_book_at read.
+/ vectors, and publishes `eq_orderbook`, the shape .qf.mkt and
+/ .qf.mkt.cross_book_at read.
 / .
 / IT DOES NOT DEFINE THE FOLD. `.qetl.transform.define[`eq_orderbook;...]` already
 / exists, declared by src/etl/transforms/eq_orderbook.q with its own

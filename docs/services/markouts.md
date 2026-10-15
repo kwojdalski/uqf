@@ -26,7 +26,7 @@ markout is `side × pip_factor × (ref_price − trade_price)`, in pips: positiv
 means the market moved in your favour after the fill.
 
 Both jobs use the same function and the same horizons:
-`.qexec.markout_at_horizons`, through `.qpipe.transform.demo_markouts.score`
+`.qf.exec.markout_at_horizons`, through `.qpipe.transform.demo_markouts.score`
 (one function both jobs call), with `.qpipe.transform.demo_markouts.horizons`.
 The backfill reads the horizons at run time, so changing them in
 `demo_markout.q` changes both jobs, and a fill scored by both comes out
@@ -148,8 +148,8 @@ What differs from the demo job:
 
 - **The reference is the best mid across venues.** At `trade_time + horizon`,
   each venue's latest top of book counts unless it is more than five seconds old
-  (`.qmicro.reference_max_age`). The highest bid and lowest ask over the venues
-  left give the mid (`.qmicro.best_mid_across_venues`). A venue that went quiet
+  (`.qf.mkt.reference_max_age`). The highest bid and lowest ask over the venues
+  left give the mid (`.qf.mkt.best_mid_across_venues`). A venue that went quiet
   does not set the price. `posbook1` marks crypto positions with the same
   function.
 - **Basis points, not pips.**

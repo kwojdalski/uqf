@@ -46,7 +46,7 @@ than the one its docstring implies.** Three shapes:
    input does not error, it silently returns the wrong rows.
 
 And one shape that is explicitly **not** a finding: a metric whose whole purpose
-is to look forward. `.qexec.markout` measures post-trade price movement;
+is to look forward. `.qf.exec.markout` measures post-trade price movement;
 `markout_at_horizons` joins to quotes at `trade_time+horizon` deliberately. Both
 are correct. Flagging them is the obvious false positive this audit invites, and
 the `execution.q` header documents the intent. Do not report them.
@@ -66,7 +66,7 @@ the `execution.q` header documents the intent. Do not report them.
 
 ## The five checks, in value order
 
-**1. `.qexec.vwap` as an execution benchmark.**
+**1. `.qf.exec.vwap` as an execution benchmark.**
 `vwap:{[prices;sizes] (sum prices*sizes)%sum sizes}` --- a full-window
 size-weighted mean. As documented ("size-weighted average execution price across
 a set of fills") this is a correct aggregation of fills that already happened,

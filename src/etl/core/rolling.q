@@ -23,7 +23,7 @@
 / `window` and `as_of`. It must read only the rows with `inside`; the others
 / are there so a key with nothing in a short window is still a row, and it
 / publishes the statistic's identity (0 for a count or a sum, null for a mean
-/ or a ratio, as .qexec.fill_ratio does) - documented per statistic, in the
+/ or a ratio, as .qf.exec.fill_ratio does) - documented per statistic, in the
 / transform's example.
 / .
 / WINDOWS ARE (as_of-N, as_of] ON THE EVENT TIME: a row exactly N old is OUT, a

@@ -1,7 +1,7 @@
 // attribution_review_example.q - the desk-review report for the markout
 // attribution convention (#1213), built from a small deterministic fixture.
 //
-// WHY THIS EXISTS. .qcross.attribution_convention (proposed_v1) is a PROPOSED
+// WHY THIS EXISTS. .qf.mkt.attribution_convention (proposed_v1) is a PROPOSED
 // default that no desk has approved. This prints what it would do, with
 // numbers, so a desk can read it and say yes or no: the route of every
 // pair, the routes that differ from a naive "via USD" route, and for a set of
@@ -45,19 +45,19 @@ trades:([] time:(2*count pairs)#t_zero,t_zero+one_second; sym:raze pairs,'pairs;
 .qetl.log.info[`attribution_review;"fixture - ",.Q.s1[count quotes]," quotes, ",.Q.s1[count trades]," trades in ",.Q.s1[count pairs]," pairs";()!()];
 
 / ==== the route table, narrowed to the fixture's pairs ====
-conv:.qcross.attribution_convention;
+conv:.qf.mkt.attribution_convention;
 .qetl.log.info[`attribution_review;"convention ",.Q.s1[conv`version]," status ",.Q.s1[conv`status]," - PROPOSED, not approved";()!()];
-route_table:.qcross.attribution_route_table conv;
+route_table:.qf.mkt.attribution_route_table conv;
 .qetl.log.info[`attribution_review;"route table for the fixture's pairs (differs_from_usd = the route is not the via-USD one):";()!()];
 show select from route_table where pair in pairs;
 
 / ==== the pairs the desk has to look at ====
-diffs:.qcross.attribution_route_differences conv;
+diffs:.qf.mkt.attribution_route_differences conv;
 .qetl.log.info[`attribution_review;.Q.s1[count diffs]," of ",.Q.s1[count route_table]," pairs route differently from via-USD; the first rows:";()!()];
 show 8#diffs;
 
 / ==== the review ====
-review:.qexec.attribution_review_with[conv;quotes;trades;enlist one_second;10000;1];
+review:.qf.exec.attribution_review_with[conv;quotes;trades;enlist one_second;10000;1];
 .qetl.log.info[`attribution_review;"review - per pair and route leg: trades, total/mean pips, share of the pair's total, unavailable count:";()!()];
 show review;
 

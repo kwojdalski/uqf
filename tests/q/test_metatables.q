@@ -7,17 +7,17 @@ setUp:{[t]
         time:2026.09.01D01:00:00.000000000 2026.09.01D02:00:00.000000000 2026.09.01D03:00:00.000000000 2026.09.02D01:00:00.000000000;
         size:10 20 30 40f)};
 
-spec:{[groups;metrics] .qmeta.definition[`.metatest.source;`date;groups;metrics]};
+spec:{[groups;metrics] .qf.util.definition[`.metatest.source;`date;groups;metrics]};
 strip:{[result] delete meta_observed_at, meta_definition from result};
 
 test_totals_include_empty_slices_and_deduplicate_requests:{[t]
-    result:.qmeta.collect[spec[`symbol$();()!()];2026.09.01 2026.09.03 2026.09.01];
+    result:.qf.util.collect[spec[`symbol$();()!()];2026.09.01 2026.09.03 2026.09.01];
     .qunit.assertEquals[strip[result];([]date:2026.09.01 2026.09.03;rows:3 0j);"explicit totals, including an empty slice"];
     .qunit.assertTrue[all not null result`meta_observed_at;"UTC observations populated"]};
 
 test_efx_grouping_and_custom_aggregates:{[t]
     metrics:`rows`notional`first_time`last_time!((count;`i);(sum;`size);(min;`time);(max;`time));
-    result:.qmeta.collect[spec[`sym`venue;metrics];enlist 2026.09.01];
+    result:.qf.util.collect[spec[`sym`venue;metrics];enlist 2026.09.01];
     .qunit.assertEquals[result`rows;2 1j;"counts per pair and venue"];
     .qunit.assertEquals[result`notional;30 30f;"custom aggregate"];
     .qunit.assertEquals[result`first_time;source[`time]0 2;"first timestamp per group"];
@@ -25,25 +25,25 @@ test_efx_grouping_and_custom_aggregates:{[t]
 
 test_restatement_removes_disappeared_groups_and_preserves_other_partitions:{[t]
     definition:spec[enlist`sym;()!()];
-    stored:.qmeta.collect[definition;2026.09.01 2026.09.02];
+    stored:.qf.util.collect[definition;2026.09.01 2026.09.02];
     source::delete from source where sym=`GBPUSD;
-    refreshed:.qmeta.refresh[stored;definition;enlist 2026.09.01];
+    refreshed:.qf.util.refresh[stored;definition;enlist 2026.09.01];
     .qunit.assertEquals[strip[refreshed];([]date:2026.09.02 2026.09.01;sym:`EURUSD`EURUSD;rows:1 2j);"replace whole slice, not upsert obsolete groups"];
     .qunit.assertEquals[first refreshed`meta_observed_at;last stored`meta_observed_at;"other slice keeps observation"];
     .qunit.assertEquals[count stored;3j;"caller owns prior immutable value"]};
 
 test_refresh_to_empty_removes_all_groups:{[t]
     definition:spec[enlist`sym;()!()];
-    stored:.qmeta.collect[definition;enlist 2026.09.01];
+    stored:.qf.util.collect[definition;enlist 2026.09.01];
     source::0#source;
-    .qunit.assertEquals[count .qmeta.refresh[stored;definition;enlist 2026.09.01];0j;"empty recomputation clears stale groups"]};
+    .qunit.assertEquals[count .qf.util.refresh[stored;definition;enlist 2026.09.01];0j;"empty recomputation clears stale groups"]};
 
 test_validation_rejects_unbounded_and_wrong_type_requests:{[t]
     definition:spec[`symbol$();()!()];
-    .qunit.assertError[.qmeta.collect[definition;];`date$();"empty request is not all partitions"];
-    .qunit.assertError[.qmeta.collect[definition;];enlist 1j;"wrong partition type"];
-    .qunit.assertError[.qmeta.collect[definition;];enlist 0Nd;"null partition"];
-    .qunit.assertError[.qmeta.collect[spec[enlist`missing;()!()];];enlist 2026.09.01;"unknown grouping column"]};
+    .qunit.assertError[.qf.util.collect[definition;];`date$();"empty request is not all partitions"];
+    .qunit.assertError[.qf.util.collect[definition;];enlist 1j;"wrong partition type"];
+    .qunit.assertError[.qf.util.collect[definition;];enlist 0Nd;"null partition"];
+    .qunit.assertError[.qf.util.collect[spec[enlist`missing;()!()];];enlist 2026.09.01;"unknown grouping column"]};
 
 test_invalid_definitions_fail:{[t]
     .qunit.assertError[spec[;()!()];enlist`date;"partition cannot also be a group"];
@@ -56,22 +56,22 @@ test_invalid_definitions_fail:{[t]
 
 test_collected_rows_carry_the_definition_fingerprint:{[t]
     definition:spec[enlist`sym;()!()];
-    result:.qmeta.collect[definition;2026.09.01 2026.09.02];
-    .qunit.assertEquals[distinct result`meta_definition;enlist .qmeta.fingerprint definition;"every row names its definition"];
-    .qunit.assertEquals[.qmeta.fingerprint definition;.qmeta.fingerprint spec[enlist`sym;()!()];"equal definitions, equal fingerprint"];
-    .qunit.assertTrue[(.qmeta.fingerprint definition)<>.qmeta.fingerprint spec[`sym`venue;()!()];"different grouping, different fingerprint"]};
+    result:.qf.util.collect[definition;2026.09.01 2026.09.02];
+    .qunit.assertEquals[distinct result`meta_definition;enlist .qf.util.fingerprint definition;"every row names its definition"];
+    .qunit.assertEquals[.qf.util.fingerprint definition;.qf.util.fingerprint spec[enlist`sym;()!()];"equal definitions, equal fingerprint"];
+    .qunit.assertTrue[(.qf.util.fingerprint definition)<>.qf.util.fingerprint spec[`sym`venue;()!()];"different grouping, different fingerprint"]};
 
 / The case the schema check cannot see: same column names and types, different meaning.
 test_refresh_refuses_a_redefined_aggregate_with_the_same_name:{[t]
-    stored:.qmeta.collect[spec[`symbol$();enlist[`notional]!enlist(sum;`size)];enlist 2026.09.01];
+    stored:.qf.util.collect[spec[`symbol$();enlist[`notional]!enlist(sum;`size)];enlist 2026.09.01];
     redefined:spec[`symbol$();enlist[`notional]!enlist(max;`size)];
-    .qunit.assertEquals[0#strip[stored];0#strip[.qmeta.collect[redefined;enlist 2026.09.01]];"schemas really are identical"];
-    .qunit.assertThrows[.qmeta.refresh[stored;redefined;];enlist 2026.09.01;"*different definition*";"semantic change needs a rebuild"]};
+    .qunit.assertEquals[0#strip[stored];0#strip[.qf.util.collect[redefined;enlist 2026.09.01]];"schemas really are identical"];
+    .qunit.assertThrows[.qf.util.refresh[stored;redefined;];enlist 2026.09.01;"*different definition*";"semantic change needs a rebuild"]};
 
 test_refresh_refuses_a_table_without_fingerprints:{[t]
     definition:spec[`symbol$();()!()];
-    legacy:delete meta_definition from .qmeta.collect[definition;enlist 2026.09.01];
-    .qunit.assertThrows[.qmeta.refresh[legacy;definition;];enlist 2026.09.01;"*no meta_definition*";"pre-fingerprint table must be rebuilt"]};
+    legacy:delete meta_definition from .qf.util.collect[definition;enlist 2026.09.01];
+    .qunit.assertThrows[.qf.util.refresh[legacy;definition;];enlist 2026.09.01;"*no meta_definition*";"pre-fingerprint table must be rebuilt"]};
 
 / --- reconciliation with the coverage ledger ----------------------
 
@@ -87,8 +87,8 @@ claim:{[from_ts;to_ts;published;superseded]
 tearDown:{[t] ![`.;();0b;enlist`etl_coverage]};
 
 reconciled:{[dates]
-    observed:.qmeta.collect[spec[enlist`sym;()!()];dates];
-    `date xkey .qmeta.reconcile[observed;dates;`trade;`;`v1]};
+    observed:.qf.util.collect[spec[enlist`sym;()!()];dates];
+    `date xkey .qf.util.reconcile[observed;dates;`trade;`;`v1]};
 
 test_reconcile_matches_mismatches_and_unrecorded_dates:{[t]
     current:.qetl.coverage.still_current;
@@ -125,30 +125,30 @@ test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows:{[t]
 
 test_reconcile_rejects_malformed_requests:{[t]
     ledger ();
-    observed:.qmeta.collect[spec[`symbol$();()!()];enlist 2026.09.01];
-    .qunit.assertThrows[.qmeta.reconcile[observed;;`trade;`;`v1];`date$();"*nonempty dates*";"no implicit dates"];
-    .qunit.assertThrows[.qmeta.reconcile[observed;;`trade;`;`v1];enlist 0Nd;"*null dates*";"null date"];
-    .qunit.assertThrows[.qmeta.reconcile[observed;;`trade;`;`v1];enlist 1j;"*date vector*";"wrong type"];
-    .qunit.assertThrows[.qmeta.reconcile[;enlist 2026.09.01;`trade;`;`v1];delete rows from observed;"*rows count*";"rows column required"]};
+    observed:.qf.util.collect[spec[`symbol$();()!()];enlist 2026.09.01];
+    .qunit.assertThrows[.qf.util.reconcile[observed;;`trade;`;`v1];`date$();"*nonempty dates*";"no implicit dates"];
+    .qunit.assertThrows[.qf.util.reconcile[observed;;`trade;`;`v1];enlist 0Nd;"*null dates*";"null date"];
+    .qunit.assertThrows[.qf.util.reconcile[observed;;`trade;`;`v1];enlist 1j;"*date vector*";"wrong type"];
+    .qunit.assertThrows[.qf.util.reconcile[;enlist 2026.09.01;`trade;`;`v1];delete rows from observed;"*rows count*";"rows column required"]};
 
 test_failed_refresh_leaves_prior_table_unchanged:{[t]
     definition:spec[`symbol$();()!()];
-    stored:.qmeta.collect[definition;enlist 2026.09.01];
+    stored:.qf.util.collect[definition;enlist 2026.09.01];
     before:stored;
     broken:spec[`symbol$();enlist[`rows]!enlist(sum;`missing)];
-    .qunit.assertError[.qmeta.refresh[stored;broken;];enlist 2026.09.01;"query errors propagate"];
+    .qunit.assertError[.qf.util.refresh[stored;broken;];enlist 2026.09.01;"query errors propagate"];
     .qunit.assertEquals[stored;before;"no partial mutation"];
     changed:spec[`symbol$();enlist[`other]!enlist(count;`i)];
-    .qunit.assertError[.qmeta.refresh[stored;changed;];enlist 2026.09.01;"schema change needs a rebuild"]};
+    .qunit.assertError[.qf.util.refresh[stored;changed;];enlist 2026.09.01;"schema change needs a rebuild"]};
 
 test_raw_columns_are_not_scalar_aggregates:{[t]
     raw:enlist[`sizes]!enlist`size;
-    .qunit.assertError[.qmeta.collect[spec[`symbol$();raw];];enlist 2026.09.01;"ungrouped raw column refused"];
-    .qunit.assertError[.qmeta.collect[spec[enlist`sym;raw];];enlist 2026.09.01;"nested group refused"]};
+    .qunit.assertError[.qf.util.collect[spec[`symbol$();raw];];enlist 2026.09.01;"ungrouped raw column refused"];
+    .qunit.assertError[.qf.util.collect[spec[enlist`sym;raw];];enlist 2026.09.01;"nested group refused"]};
 
 test_symbol_partitions_are_literal_values:{[t]
-    definition:.qmeta.definition[`.metatest.source;`venue;`symbol$();()!()];
-    result:.qmeta.collect[definition;`EBS`REUTERS];
+    definition:.qf.util.definition[`.metatest.source;`venue;`symbol$();()!()];
+    result:.qf.util.collect[definition;`EBS`REUTERS];
     .qunit.assertEquals[strip[result];([]venue:`EBS`REUTERS;rows:3 1j);"logical partition keys are not evaluated as variables"]};
 
 test_dqe_adapter_preserves_requested_partition_in_payload:{[t]
@@ -157,13 +157,13 @@ test_dqe_adapter_preserves_requested_partition_in_payload:{[t]
     .qunit.assertEquals[(result`meta_fx_counts)`date;2#2026.09.01;"source date independent of DQE observation partition"]};
 
 test_a_metatable_name_must_carry_the_prefix:{[t]
-    .qunit.assertEquals[.qmeta.require_name`meta_fx_counts;`meta_fx_counts;"a prefixed name passes unchanged"];
+    .qunit.assertEquals[.qf.util.require_name`meta_fx_counts;`meta_fx_counts;"a prefixed name passes unchanged"];
     / Two patterns, not "*...*...": KDB-X's like throws 'nyi past two wildcards.
-    e:.qunit.assertThrows[.qmeta.require_name;`fx_counts;"*must start with meta_*";"unprefixed name refused"];
+    e:.qunit.assertThrows[.qf.util.require_name;`fx_counts;"*must start with meta_*";"unprefixed name refused"];
     .qunit.assertTrue[e like "*e.g. `meta_fx_counts";"with the name it should be"];
-    .qunit.assertThrows[.qmeta.require_name;`meta_;"*must start with meta_ and name something*";"the prefix alone names nothing"];
-    .qunit.assertThrows[.qmeta.require_name;`;"*must start with meta_*";"empty name refused"];
-    .qunit.assertThrows[.qmeta.require_name;"meta_x";"*must be a symbol atom*";"a string is not a name"]};
+    .qunit.assertThrows[.qf.util.require_name;`meta_;"*must start with meta_ and name something*";"the prefix alone names nothing"];
+    .qunit.assertThrows[.qf.util.require_name;`;"*must start with meta_*";"empty name refused"];
+    .qunit.assertThrows[.qf.util.require_name;"meta_x";"*must be a symbol atom*";"a string is not a name"]};
 
 test_dqe_adapter_refuses_an_unprefixed_name_before_querying:{[t]
     .qunit.assertThrows[.dqe.uqf_metatable[;`.metatest.source;`date;enlist 2026.09.01;`sym`venue;()!()];`fx_counts;"*must start with meta_*";"adapter holds DQE results to the convention"]};
@@ -171,8 +171,8 @@ test_dqe_adapter_refuses_an_unprefixed_name_before_querying:{[t]
 test_profile_counts_ranges_nulls_and_violations:{[t]
     source[`size]:10 0n -5 40f;
     source::update time:0Np from source where i=1;
-    metrics:.qmeta.profile[enlist`time;`time`size;enlist[`negative_size]!enlist(<;`size;0f)];
-    result:.qmeta.collect[spec[`symbol$();metrics];2026.09.01 2026.09.03];
+    metrics:.qf.util.profile[enlist`time;`time`size;enlist[`negative_size]!enlist(<;`size;0f)];
+    result:.qf.util.collect[spec[`symbol$();metrics];2026.09.01 2026.09.03];
     .qunit.assertEquals[result`rows;3 0j;"profile denominator"];
     .qunit.assertEquals[result`null_size;1 0j;"null counts"];
     .qunit.assertEquals[result`null_time;1 0j;"timestamp null counts"];
@@ -184,19 +184,19 @@ test_profile_counts_ranges_nulls_and_violations:{[t]
 
 test_profile_grouped_all_null_bounds:{[t]
     source[`time]:4#0Np;
-    metrics:.qmeta.profile[enlist`time;enlist`time;()!()];
-    result:.qmeta.collect[spec[enlist`sym;metrics];enlist 2026.09.01];
+    metrics:.qf.util.profile[enlist`time;enlist`time;()!()];
+    result:.qf.util.collect[spec[enlist`sym;metrics];enlist 2026.09.01];
     .qunit.assertEquals[result`null_time;2 1j;"per-pair null counts"];
     .qunit.assertTrue[all null result`min_time;"all-null minimum"];
     .qunit.assertTrue[all null result`max_time;"all-null maximum"]};
 
 test_profile_rejects_wrong_types_and_rules:{[t]
-    .qunit.assertError[.qmeta.profile[;`symbol$();()!()];`time`time;"duplicate temporal columns"];
-    metrics:.qmeta.profile[enlist`size;`symbol$();()!()];
-    .qunit.assertError[.qmeta.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"range must be temporal"];
-    metrics:.qmeta.profile[`symbol$();`symbol$();enlist[`broken]!enlist`size];
-    .qunit.assertError[.qmeta.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"rule must be boolean"];
-    metrics:.qmeta.profile[`symbol$();`symbol$();enlist[`short]!enlist(enlist;1b)];
-    .qunit.assertError[.qmeta.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"one boolean per row required"]};
+    .qunit.assertError[.qf.util.profile[;`symbol$();()!()];`time`time;"duplicate temporal columns"];
+    metrics:.qf.util.profile[enlist`size;`symbol$();()!()];
+    .qunit.assertError[.qf.util.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"range must be temporal"];
+    metrics:.qf.util.profile[`symbol$();`symbol$();enlist[`broken]!enlist`size];
+    .qunit.assertError[.qf.util.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"rule must be boolean"];
+    metrics:.qf.util.profile[`symbol$();`symbol$();enlist[`short]!enlist(enlist;1b)];
+    .qunit.assertError[.qf.util.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"one boolean per row required"]};
 
 \d .

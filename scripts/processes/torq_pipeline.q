@@ -3,7 +3,7 @@
 / own header comments kept documenting: "no shared-constant infra exists
 / across scripts/torq_*.q, each defines its own" (torq_markout_etl.q) - so
 / `fx_pairs` was duplicated in four files (it now lives once, as
-/ .qsynth.pairs in src/etl/synthetic_market.q), the ~25-line subscribe/init/
+/ .qf.demo.pairs in src/etl/synthetic_market.q), the ~25-line subscribe/init/
 / .servers.startup closing block was duplicated in four more, and each of
 / the seven hard-won TorQ invariants below survived only as a prose comment
 / that the next author had to remember to copy.

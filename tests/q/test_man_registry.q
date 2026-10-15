@@ -28,7 +28,7 @@
 
 \d .mantest
 
-/ Private: does a fully-qualified name like ".qopt.d1_d2" resolve?
+/ Private: does a fully-qualified name like ".qf.px.d1_d2" resolve?
 / Splits on the LAST dot rather than assuming one level, so a root-level
 / name and a namespaced one are handled by the same path.
 resolves:{[fullname]
@@ -63,7 +63,7 @@ test_every_documented_argument_belongs_to_a_registered_function:{[t]
 
 test_the_resolver_rejects_a_name_nothing_defines:{[t]
     / A resolver nobody has seen say no might be saying yes to everything.
-    .qunit.assertEquals[resolves[".qopt.no_such_function"];0b;
+    .qunit.assertEquals[resolves[".qf.px.no_such_function"];0b;
         "a name in a real namespace that nothing defines does not resolve"]};
 
 test_the_resolver_rejects_an_unknown_namespace:{[t]
@@ -71,7 +71,7 @@ test_the_resolver_rejects_an_unknown_namespace:{[t]
         "a name in a namespace that does not exist does not resolve"]};
 
 test_the_resolver_accepts_a_name_that_does_exist:{[t]
-    .qunit.assertEquals[resolves[".qopt.d1"];1b;
+    .qunit.assertEquals[resolves[".qf.px.d1"];1b;
         "the resolver is a pass-through on a name that is genuinely defined"]};
 
 / --- coverage ------------------------------------------------------------
@@ -79,7 +79,7 @@ test_the_resolver_accepts_a_name_that_does_exist:{[t]
 test_the_registry_covers_the_etl_tree:{[t]
     / The gap that prompted generating this file. Before the generator,
     / man.q registered 78 of 348 public functions and FIFTEEN NAMESPACES had
-    / zero coverage - .qmicro, .qetl.source, .qetl.dag, .qetl.job.bounded, .qetl.coverage and every other ETL
+    / zero coverage - .qf.mkt, .qetl.source, .qetl.dag, .qetl.job.bounded, .qetl.coverage and every other ETL
     / namespace. `.man.getDocs[]` is the programmatic documentation API, so a
     / caller asking about .qetl.coverage.is_covered got nothing back and could not tell
     / "undocumented" from "does not exist".
@@ -103,7 +103,7 @@ test_the_registry_covers_the_etl_tree:{[t]
 / definitions being invisible to the scan.
 test_documentation_coverage_does_not_regress:{[t]
     documented:exec fullname from .man.funcs;
-    / .qns.functional, not a root-level `like "q*"` scan: worker instances
+    / .qf.util.functional, not a root-level `like "q*"` scan: worker instances
     / live under .qpipe.job (.qpipe.job.demo_deals_backfill and so on), and a root
     / scan sees one namespace holding no functions - so every worker's
     / public surface would leave this count without lowering it, which is
@@ -121,12 +121,12 @@ test_documentation_coverage_does_not_regress:{[t]
     / was, this count depended on which suites had already run rather than on
     / the tree.
     / .
-    / .qns.functional, not a root-level `like "q*"` scan: worker instances
+    / .qf.util.functional, not a root-level `like "q*"` scan: worker instances
     / live under .qpipe.job (.qpipe.job.demo_deals_backfill and so on), and a root scan
     / sees one namespace holding no functions - so every worker's public
     / surface would leave this count without lowering it, which is the
     / opposite of a ratchet.
-    nss:.qns.functional[] inter .testutil.tree_namespaces[];
+    nss:.qf.util.functional[] inter .testutil.tree_namespaces[];
     public:raze {[full]
         ks:key full;
         ks:ks where not ks in `;
@@ -177,13 +177,13 @@ test_the_registry_is_not_a_token_sample:{[t]
 has:{[l;s] any l~\:s}
 
 test_a_private_helper_is_not_registered:{[t]
-    / .qcross.side_cols is plumbing the depth-pricing functions share.
-    .qunit.assertTrue[.mantest.has[.man.private;".qcross.side_cols"];"it is recorded as private"];
-    .qunit.assertFalse[.mantest.has[registered[];".qcross.side_cols"];"and is not in the registry"]};
+    / .qf.mkt.side_cols is plumbing the depth-pricing functions share.
+    .qunit.assertTrue[.mantest.has[.man.private;".qf.mkt.side_cols"];"it is recorded as private"];
+    .qunit.assertFalse[.mantest.has[registered[];".qf.mkt.side_cols"];"and is not in the registry"]};
 
 test_an_untagged_public_function_is_still_registered:{[t]
-    .qunit.assertTrue[.mantest.has[registered[];".qcross.cross_book_at"];"API stays in the registry"];
-    .qunit.assertFalse[.mantest.has[.man.private;".qcross.cross_book_at"];"and is not private"]};
+    .qunit.assertTrue[.mantest.has[registered[];".qf.mkt.cross_book_at"];"API stays in the registry"];
+    .qunit.assertFalse[.mantest.has[.man.private;".qf.mkt.cross_book_at"];"and is not private"]};
 
 test_every_private_name_exists:{[t]
     / A tag left on a block whose function was renamed would name nothing.

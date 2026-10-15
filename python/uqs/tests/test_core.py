@@ -2223,7 +2223,7 @@ def test_gateway1_loads_the_desk_catalog_after_its_own_script():
 
 def test_hdb1_loads_the_metatables_after_its_database():
     """DQE sends `.dqe.uqf_metatable` to hdb1 by value and it runs there, so
-    `.qmeta` has to be loaded on hdb1 - after the database, which the vendored
+    `.qf.util` has to be loaded on hdb1 - after the database, which the vendored
     `load` column names and must stay first."""
     real = stack_paths.default_paths()
     vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
@@ -2461,7 +2461,7 @@ def test_no_module_outside_procs_merges_the_overrides_itself():
 
 def test_no_pip_factor_literal_is_left_in_src():
     """`pip_factor:` followed by a number is a hand-typed factor; every one
-    now comes from .qccy.pip_factor."""
+    now comes from .qf.px.pip_factor."""
     root = Path(__file__).resolve().parents[3] / "src"
     hits = [
         f"{p.relative_to(root)}:{n}"

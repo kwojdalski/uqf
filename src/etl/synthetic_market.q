@@ -1,5 +1,5 @@
 / synthetic_market.q - the invented FX market this demo publishes and
-/ consumes (.qsynth).
+/ consumes (.qf.demo).
 / .
 / Four feed processes - torq_fx_feed.q, torq_quotes_feed.q,
 / torq_wide_book_feed.q, torq_fx_trades_feed.q - each carried their own copy
@@ -18,7 +18,7 @@
 / fixed spread and a fixed ladder shape. It stands in for a market data feed
 / in a demo and nothing here should be read as a market model.
 
-\d .qsynth
+\d .qf.demo
 
 / The pairs every FX feed and ETL in this demo produces. The markout and
 / position jobs filter incoming quotes to these, because the vendored
@@ -42,10 +42,10 @@ pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY
 / unrelated random walks rather than anything resembling a market.
 spot:1.0850 1.2650 149.50 0.6550 162.2075
 
-/ One pip for each pair, in pairs order - from .qccy.pip_size, the one rule,
+/ One pip for each pair, in pairs order - from .qf.px.pip_size, the one rule,
 / rather than a list kept in step with `pairs` by hand. Also the half-spread
 / each feed quotes around the mid.
-pip:.qccy.pip_size pairs
+pip:.qf.px.pip_size pairs
 
 / The size every quote is published at, and the size the cross job prices.
 size_unit:1000000
@@ -57,7 +57,7 @@ size_unit:1000000
 / value: a tick never moves more than 5bp, and never changes sign.
 / @param s the current level, a float atom or vector
 / @return the next level, same shape
-/ @eg .qsynth.drift_one 1.0  ->  a float within 5bp of 1.0
+/ @eg .qf.demo.drift_one 1.0  ->  a float within 5bp of 1.0
 drift_one:{[s] s*1+0.0005*-1+2*rand 1f}
 
 / A level-0-first price ladder for one pair: `levels` prices, `step` apart,
@@ -67,7 +67,7 @@ drift_one:{[s] s*1+0.0005*-1+2*rand 1f}
 / @param dir -1 for the bid side (descending from mid), 1 for the ask side
 / @param levels how many levels deep
 / @return a float vector, levels long, level-0-first
-/ @eg .qsynth.levels_one[1.1;0.0001;-1;3]  ->  1.0999 1.0998 1.0997
+/ @eg .qf.demo.levels_one[1.1;0.0001;-1;3]  ->  1.0999 1.0998 1.0997
 levels_one:{[mid;step;dir;levels] mid+dir*step*1+til levels}
 
 / The size at each level: size_unit, 2*size_unit, ... - thinner at the top
@@ -75,9 +75,9 @@ levels_one:{[mid;step;dir;levels] mid+dir*step*1+til levels}
 / and tick, which is enough depth realism for a proof of concept.
 / @param levels how many levels deep
 / @return a float vector, levels long, level-0-first
-/ @eg .qsynth.levels_size 3  ->  1000000 2000000 3000000f
+/ @eg .qf.demo.levels_size 3  ->  1000000 2000000 3000000f
 / Float, as its plant columns declare (fx_orderbook's bid_sizes, "F"): size_unit
 / is a long, and the longs it made were stored as they came (#1074).
-levels_size:{[levels] "f"$.qsynth.size_unit*1+til levels}
+levels_size:{[levels] "f"$.qf.demo.size_unit*1+til levels}
 
 \d .

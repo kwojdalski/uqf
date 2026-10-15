@@ -153,7 +153,7 @@ sample_result:{[]
         horizon:5#0D00:00:01; kind:`total`execution`leg`leg`residual; step:0 0 1 2 0;
         leg:``,`EURUSD`EURPLN,`; invert:0b,0b,1b,0b,0b;
         price_t0:3.99 3.99 1.25 5 0n; price_t1:5.5 4 1 5.5 0n;
-        pips:-15100 -100 -10000 -5000 0f; status:`ok`ok`ok`ok`reconciled; pip_factor:(5#.qccy.pip_factor `USDPLN); version:5#`proposed_v1)}
+        pips:-15100 -100 -10000 -5000 0f; status:`ok`ok`ok`ok`reconciled; pip_factor:(5#.qf.px.pip_factor `USDPLN); version:5#`proposed_v1)}
 
 / A EURUSD buy at 1.1001, as the executions normalizer publishes it.
 / @private
@@ -180,13 +180,13 @@ sample_long:{[]
         price_t0:16#1.1001 1.1001 1.1 0n;
         price_t1:1.1 1.1 1.1 0n,1.1 1.1 1.1 0n,1.1005 1.1 1.1005 0n,1.10095 1.1 1.10095 0n;
         pips:-1 -1 0 0f,-1 -1 0 0f,4 -1 5 0f,8.5 -1 9.5 0f; status:16#`ok`ok`ok`reconciled;
-        pip_factor:(16#.qccy.pip_factor `EURUSD); version:16#`proposed_v1)}
+        pip_factor:(16#.qf.px.pip_factor `EURUSD); version:16#`proposed_v1)}
 
 / Its wide rows under the job grid.
 / @private
 sample_wide:{[]
     ([] source_time:4#2026.09.17D10:00:00; venue:4#`a; fill_id:4#`x1; sym:4#`EURUSD; side:4#1; size:4#1e6;
-        horizon:(-0D00:00:01;0D00:00:00;0D00:00:01;0D00:00:10); price:4#1.1001; pip_factor:(4#.qccy.pip_factor `EURUSD);
+        horizon:(-0D00:00:01;0D00:00:00;0D00:00:01;0D00:00:10); price:4#1.1001; pip_factor:(4#.qf.px.pip_factor `EURUSD);
         ref_t0:4#1.1; ref_t1:1.1 1.1 1.1005 1.10095; total_pips:-1 -1 4 8.5; execution_pips:4#-1f; residual_pips:4#0f;
         leg1:4#`EURUSD; leg1_invert:4#0b; leg1_pips:0 0 5 9.5;
         leg2:4#`; leg2_invert:4#0b; leg2_pips:4#0n;

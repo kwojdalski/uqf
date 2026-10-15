@@ -2,7 +2,7 @@
 / partition replacement; TorQ DQE owns scheduling, transport and persistence.
 / Definitions are trusted q code, not a query language for untrusted clients.
 / .
-\d .qmeta
+\d .qf.util
 
 / What every metatable's name starts with, so it reads as derived bookkeeping
 / beside the market data it measures - as etl_ marks the pipeline's own tables
@@ -10,21 +10,21 @@
 / to resolve it, and changing it would strand the tables already stored.
 prefix:"meta_";
 
-/ Check a metatable's name: a symbol atom of .qmeta.prefix followed by more.
+/ Check a metatable's name: a symbol atom of .qf.util.prefix followed by more.
 / Refused rather than prefixed for the caller, so a name is never changed
 / underneath whoever chose it.
 / @param name the metatable's name
 / @return name, unchanged
 / @throws a name that is not a symbol atom, or does not start with the prefix
-/ @eg .qmeta.require_name `meta_trade_counts -> `meta_trade_counts
-/ @eg .qmeta.require_name `trade_counts -> throws
+/ @eg .qf.util.require_name `meta_trade_counts -> `meta_trade_counts
+/ @eg .qf.util.require_name `trade_counts -> throws
 require_name:{[name]
     if[not -11h=type name;'"metatables: result name must be a symbol atom"];
     text:string name;
-    prefixed:.qmeta.prefix~count[.qmeta.prefix]#text;
-    if[prefixed and count[.qmeta.prefix]<count text;:name];
-    example:.qmeta.prefix,$[prefixed or 0=count text;"trade_counts";text];
-    '"metatables: result name must start with ",.qmeta.prefix," and name something, e.g. `",example};
+    prefixed:.qf.util.prefix~count[.qf.util.prefix]#text;
+    if[prefixed and count[.qf.util.prefix]<count text;:name];
+    example:.qf.util.prefix,$[prefixed or 0=count text;"trade_counts";text];
+    '"metatables: result name must start with ",.qf.util.prefix," and name something, e.g. `",example};
 
 / Construct a metatable definition; an empty aggregate dictionary means row counts.
 / @param tab source table name
@@ -33,7 +33,7 @@ require_name:{[name]
 / @param aggregates dictionary of output names to functional qSQL aggregate expressions
 / @return definition dictionary
 / @throws invalid names, duplicate columns or reserved output names
-/ @eg .qmeta.definition[`trade;`date;`sym`venue;()!()]
+/ @eg .qf.util.definition[`trade;`date;`sym`venue;()!()]
 definition:{[tab;partition_col;group_cols;aggregates]
     if[not -11h=type tab;'"metatables: table must be a symbol atom"];
     if[null tab;'"metatables: table must be named"];
@@ -82,7 +82,7 @@ require_request:{[spec;partitions]
 / new definition.
 / @param spec definition returned by definition
 / @return guid, equal for equal definitions
-/ @eg .qmeta.fingerprint[.qmeta.definition[`trade;`date;`sym`venue;()!()]]
+/ @eg .qf.util.fingerprint[.qf.util.definition[`trade;`date;`sym`venue;()!()]]
 fingerprint:{[spec]
     "G"$"-" sv 0 8 12 16 20 cut raze string md5 "c"$-8!spec};
 
@@ -110,7 +110,7 @@ collect_partition:{[spec;part;observed_at;definition_id]
 / @return unkeyed table: partition, grouping columns, aggregates, UTC
 /   meta_observed_at, and meta_definition (the definition's fingerprint)
 / @throws malformed request, missing source columns, query or aggregate errors
-/ @eg .qmeta.collect[.qmeta.definition[`trade;`date;`symbol$();()!()];enlist 2026.09.01]
+/ @eg .qf.util.collect[.qf.util.definition[`trade;`date;`symbol$();()!()];enlist 2026.09.01]
 collect:{[spec;partitions]
     partitions:require_request[spec;partitions];
     raze collect_partition[spec;;.z.p;fingerprint[spec]]each partitions};
@@ -123,7 +123,7 @@ collect:{[spec;partitions]
 / @return replacement metatable; other partitions retain their original observations
 / @throws source/query failure, incompatible stored schema, or stored rows
 /   collected under a different definition, leaving current untouched
-/ @eg .qmeta.refresh[stored;spec;enlist 2026.09.01]
+/ @eg .qf.util.refresh[stored;spec;enlist 2026.09.01]
 refresh:{[current;spec;partitions]
     if[not 98h=type current;'"metatables: current must be an unkeyed table"];
     if[not `meta_definition in cols current;
@@ -180,7 +180,7 @@ reconcile_date:{[claims;observed;day]
 / @param version source release the claims were recorded under
 / @return table of date, observed, published, windows, fully_covered, status
 / @throws malformed metatable or dates, or the coverage ledger is not loaded
-/ @eg .qmeta.reconcile[stored;2026.09.01 2026.09.02;`trade;`;`v1]
+/ @eg .qf.util.reconcile[stored;2026.09.01 2026.09.02;`trade;`;`v1]
 reconcile:{[metatable;dates;ds;part;version]
     if[not 98h=type metatable;'"metatables: metatable must be an unkeyed table"];
     if[not all `date`rows in cols metatable;
@@ -209,7 +209,7 @@ time_bound:{[direction;values]
 / @param row_count number of rows in the source group
 / @return long violation count
 / @throws non-boolean, scalar or wrong-length rule result
-/ @eg .qmeta.count_bad[101b;3] -> 2
+/ @eg .qf.util.count_bad[101b;3] -> 2
 count_bad:{[violations;row_count]
     if[not 1h=type violations;'"metatables: quality rules must return boolean vectors"];
     if[row_count<>count violations;
@@ -222,7 +222,7 @@ count_bad:{[violations;row_count]
 / @param rules dictionary of rule names to boolean violation expressions (true means bad)
 / @return aggregate dictionary: rows, temporal bounds, null counts, bad_ rule counts
 / @throws unnamed or duplicate column/rule names, malformed lists or dictionary
-/ @eg .qmeta.profile[enlist`time;`bid`ask;enlist[`crossed]!enlist(>;`bid;`ask)]
+/ @eg .qf.util.profile[enlist`time;`bid`ask;enlist[`crossed]!enlist(>;`bid;`ask)]
 profile:{[time_cols;null_cols;rules]
     if[not all 11h=type each (time_cols;null_cols);
         '"metatables: profile columns must be symbol vectors"];
@@ -238,8 +238,8 @@ profile:{[time_cols;null_cols;rules]
     idx:0;
     while[idx<count time_cols;
         col:time_cols idx;
-        metrics,:(enlist `$"min_",string col)!enlist(.qmeta.time_bound;min;col);
-        metrics,:(enlist `$"max_",string col)!enlist(.qmeta.time_bound;max;col);
+        metrics,:(enlist `$"min_",string col)!enlist(.qf.util.time_bound;min;col);
+        metrics,:(enlist `$"max_",string col)!enlist(.qf.util.time_bound;max;col);
         idx+:1];
     idx:0;
     while[idx<count null_cols;
@@ -249,7 +249,7 @@ profile:{[time_cols;null_cols;rules]
     idx:0;
     while[idx<count rules;
         rule_name:rule_names idx;
-        metrics,:(enlist `$"bad_",string rule_name)!enlist(.qmeta.count_bad;rules rule_name;(count;`i));
+        metrics,:(enlist `$"bad_",string rule_name)!enlist(.qf.util.count_bad;rules rule_name;(count;`i));
         idx+:1];
     metrics};
 

@@ -5,7 +5,7 @@
 / `demo_execution_quality`.
 / .
 / DEMO BY NAME (#729). Only the demo's feeds publish `trades` and `quote`,
-/ and it scores the invented market's pairs (.qsynth.pairs) - so it was
+/ and it scores the invented market's pairs (.qf.demo.pairs) - so it was
 / `markout` until that read as the stack's markouts. Real fills are marked
 / out by crypto_markout.q, from crypto_trades against crypto_book.
 / .
@@ -67,7 +67,7 @@ score_markouts:{[trades;quotes]
                 side:1 -1 1;
                 trade_price:1.1 150 1.27;
                 size:1e6 2e6 5e5;
-                pip_factor:.qccy.pip_factor `EURUSD`USDJPY`GBPUSD;
+                pip_factor:.qf.px.pip_factor `EURUSD`USDJPY`GBPUSD;
                 fill_id:`f1`f2`f3);
             ([] time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00 2026.09.17D10:00:02.5;
                 sym:`EURUSD`EURUSD`EURUSD`USDJPY`USDJPY;
@@ -96,7 +96,7 @@ score_markouts:{[trades;quotes]
     `demo_execution_quality;
     .qpipe.transform.demo_markouts.max_horizon;
     0D00:00:01.000;
-    {[x] x[`sym] in .qsynth.pairs};
+    {[x] x[`sym] in .qf.demo.pairs};
     1b;
     "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two";
     "fills waiting for their horizon at a restart are not scored - a demo's markouts, and hdb_demo_markouts_backfill scores the same fills from the HDB")];

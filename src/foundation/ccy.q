@@ -4,14 +4,14 @@
 / Canonical form used throughout this library is CURCUR - six uppercase
 / letters, no separator, e.g. `EURUSD (not `eurusd, not "EUR/USD").
 
-\d .qccy
+\d .qf.px
 
 / Private: string-coerce x without exploding an already-string input into
 / a list of 1-char strings - `string` on a char vector maps over each
 / char instead of acting as the identity, which is a real q gotcha.
 / @param x a symbol or string
 / @return x as a plain string
-/ @eg .qccy.ccy_to_str `EURUSD  -> "EURUSD"
+/ @eg .qf.px.ccy_to_str `EURUSD  -> "EURUSD"
 / @private
 ccy_to_str:{[x] $[10h=type x; x; string x]};
 
@@ -19,8 +19,8 @@ ccy_to_str:{[x] $[10h=type x; x; string x]};
 / letters, no separator.
 / @param x a symbol or string
 / @return 1b if x is a valid CURCUR pair, else 0b
-/ @eg .qccy.is_ccy_pair `EURUSD  -> 1b
-/ @eg .qccy.is_ccy_pair "eur/usd"  -> 0b
+/ @eg .qf.px.is_ccy_pair `EURUSD  -> 1b
+/ @eg .qf.px.is_ccy_pair "eur/usd"  -> 0b
 is_ccy_pair:{[x]
     s:ccy_to_str[x];
     length_ok:(count s)=6;
@@ -32,7 +32,7 @@ is_ccy_pair:{[x]
 / @param x a symbol or string, e.g. `eurusd, "EUR/USD", "eur-usd"
 / @return the canonical CURCUR symbol, e.g. `EURUSD
 / @throws error if x cannot be normalized to a 6-letter CURCUR pair
-/ @eg .qccy.normalize_ccy_pair "eur/usd"  -> `EURUSD
+/ @eg .qf.px.normalize_ccy_pair "eur/usd"  -> `EURUSD
 normalize_ccy_pair:{[x]
     s:ccy_to_str[x];
     no_slash:ssr[s;"/";""];
@@ -49,7 +49,7 @@ normalize_ccy_pair:{[x]
 / @param quote 3-letter quote currency code, e.g. `USD or "usd"
 / @return the canonical CURCUR symbol, e.g. `EURUSD
 / @throws error if base or quote is not a 3-letter alphabetic code
-/ @eg .qccy.ccy_pair_symbol[`EUR;`USD]  -> `EURUSD
+/ @eg .qf.px.ccy_pair_symbol[`EUR;`USD]  -> `EURUSD
 ccy_pair_symbol:{[base;quote]
     b:upper ccy_to_str base;
     q:upper ccy_to_str quote;
@@ -64,7 +64,7 @@ ccy_pair_symbol:{[base;quote]
 / @param pair a symbol or string, e.g. `EURUSD, "eur/usd"
 / @return dict `base`quote!(baseSym;quoteSym)
 / @throws error if pair cannot be normalized to a 6-letter CURCUR pair
-/ @eg .qccy.ccy_pair_legs `EURUSD  -> `base`quote!(`EUR;`USD)
+/ @eg .qf.px.ccy_pair_legs `EURUSD  -> `base`quote!(`EUR;`USD)
 ccy_pair_legs:{[pair]
     canonical:normalize_ccy_pair[pair];
     s:string canonical;
@@ -82,7 +82,7 @@ pip_size_by_quote:(enlist `JPY)!enlist 0.01
 / The pip size of a pair: 0.01 for a JPY quote, 0.0001 otherwise.
 / @param pair a pair, or a list of pairs, in any format normalize_ccy_pair accepts
 / @return the pip size, as a float - one per pair for a list
-/ @eg .qccy.pip_size `EURUSD`USDJPY  -> 0.0001 0.01
+/ @eg .qf.px.pip_size `EURUSD`USDJPY  -> 0.0001 0.01
 pip_size:{[pair]
     / One pair is a symbol atom OR a string ("usd/jpy"): (),pair would have
     / taken a string's characters for pairs.
@@ -92,10 +92,10 @@ pip_size:{[pair]
     $[one; first sz; sz]}
 
 / How many pips one unit of price is: 10000 for EURUSD, 100 for USDJPY.
-/ What .qexec.markout and every `pip_factor` column multiply by.
+/ What .qf.exec.markout and every `pip_factor` column multiply by.
 / @param pair a pair, or a list of pairs
 / @return the factor, as a long - one per pair for a list
-/ @eg .qccy.pip_factor `EURUSD`USDJPY`EURJPY  -> 10000 100 100
+/ @eg .qf.px.pip_factor `EURUSD`USDJPY`EURJPY  -> 10000 100 100
 pip_factor:{[pair] "j"$1%pip_size[pair]}
 
 \d .

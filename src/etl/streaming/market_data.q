@@ -28,7 +28,7 @@ crypto_book:.qetl.plant.shape `crypto_book
 / @return complete single-level market_data snapshots, sizes in base currency
 / @eg count .qpipe.job.market_data.from_quote[.qpipe.job.market_data.quote] -> 0
 from_quote:{[batch]
-    fx:batch where .qccy.is_ccy_pair each batch`sym;
+    fx:batch where .qf.px.is_ccy_pair each batch`sym;
     select sym, source:src, market:`fx, source_time:time,
         bid_prices:enlist each bid, bid_sizes:enlist each `float$bsize,
         ask_prices:enlist each ask, ask_sizes:enlist each `float$asize from fx}
@@ -40,7 +40,7 @@ from_quote:{[batch]
 / @return complete market_data snapshots with the original receipt time
 / @eg count .qpipe.job.market_data.from_fx_orderbook[.qpipe.job.market_data.fx_orderbook] -> 0
 from_fx_orderbook:{[batch]
-    fx:batch where .qccy.is_ccy_pair each batch`sym;
+    fx:batch where .qf.px.is_ccy_pair each batch`sym;
     select sym, source:`UQFDEPTH, market:`fx, source_time:time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from fx}
 
@@ -59,12 +59,12 @@ from_crypto_book:{[batch]
     select sym, source:venue, market:`crypto, source_time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from batch}
 
-/ The rows market_data is about to publish, held to the .qdqc checks (#944):
+/ The rows market_data is about to publish, held to the .qf.mkt checks (#944):
 / a crossed book (bid at or through the ask) and a quote stale against the
 / newest in its batch. And to what a book must be before ANY consumer reads
 / it (#1021), judged here once rather than by each: a level 0 that is not a
-/ price by .qbook.level_ok (`bad_level), and a source_time further ahead of
-/ this host than .qmicro.max_clock_lead (`bad_time). A book with an empty side is NOT a failure - the
+/ price by .qf.mkt.level_ok (`bad_level), and a source_time further ahead of
+/ this host than .qf.mkt.max_clock_lead (`bad_time). A book with an empty side is NOT a failure - the
 / withdrawal is how a venue pulls its book, and `one_sided is the check's
 / word for it - and a wide spread is a thin market, not bad data, so neither
 / is withheld.
@@ -85,9 +85,9 @@ check:{[rows]
     / whose q suite runs on PeachQ only.
     q:([] time:`timestamp$til count rows; sym:rows`sym; bid_prices:rows`bid_prices;
         bid_sizes:rows`bid_sizes; ask_prices:rows`ask_prices; ask_sizes:rows`ask_sizes);
-    graded:.qdqc.check_market_data_quality[q;0w];
+    graded:.qf.mkt.check_market_data_quality[q;0w];
     bad:select from graded where status=`crossed;
-    crossed:([] check:count[bad]#`crossed_book; status:bad`status; detail:.qrender.full each bad; row:`long$bad`time);
+    crossed:([] check:count[bad]#`crossed_book; status:bad`status; detail:.qf.util.full each bad; row:`long$bad`time);
     / Staleness is per (sym, source), not per sym (#1050): a book replaces
     / its own source's book only, so one fresh venue on a sym must not let
     / another's ten-minute-old book through. The check groups by `sym`, so
@@ -95,19 +95,19 @@ check:{[rows]
     pair:`$string[rows`sym],'"|",'string rows`source;
     real:([] time:rows`source_time; sym:pair; bid_prices:rows`bid_prices;
         bid_sizes:rows`bid_sizes; ask_prices:rows`ask_prices; ask_sizes:rows`ask_sizes);
-    stale:.qdqc.check_stale_quotes[real;max rows`source_time;0D00:05];
+    stale:.qf.mkt.check_stale_quotes[real;max rows`source_time;0D00:05];
     late:where pair in exec sym from stale where status=`stale;
     stale:([] check:count[late]#`stale_quote; status:count[late]#`stale;
         detail:count[late]#enlist "older than the batch's newest quote by over 5 minutes"; row:late);
     / An empty ladder is a withdrawal, not a bad level: only a level that is
     / there and is not a price fails.
-    off:{[px;sz] $[count px; not .qbook.level_ok["f"$first px;"f"$first sz]; 0b]};
+    off:{[px;sz] $[count px; not .qf.mkt.level_ok["f"$first px;"f"$first sz]; 0b]};
     bad:where off'[rows`bid_prices;rows`bid_sizes] or off'[rows`ask_prices;rows`ask_sizes];
     level:([] check:count[bad]#`bad_level; status:count[bad]#`bad_level;
         detail:count[bad]#enlist "a level-0 price or size that is not positive and finite"; row:bad);
-    ahead:where rows[`source_time]>.z.p+.qmicro.max_clock_lead;
+    ahead:where rows[`source_time]>.z.p+.qf.mkt.max_clock_lead;
     timed:([] check:count[ahead]#`bad_time; status:count[ahead]#`future;
-        detail:count[ahead]#enlist "source_time is further ahead of this host than .qmicro.max_clock_lead"; row:ahead);
+        detail:count[ahead]#enlist "source_time is further ahead of this host than .qf.mkt.max_clock_lead"; row:ahead);
     crossed,stale,level,timed}
 
 \d .

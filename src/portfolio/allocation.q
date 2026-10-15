@@ -1,8 +1,8 @@
 / allocation.q - P&L attribution: which opening trade paid for which close,
-/ and what each trade earned (.qalloc). Requires risk.q (pnl) to be loaded
+/ and what each trade earned (.qf.exec). Requires risk.q (pnl) to be loaded
 / first.
 / .
-/ WHY THIS IS NOT positions.q. .qpos tracks a book weighted-average-cost:
+/ WHY THIS IS NOT positions.q. .qf.port tracks a book weighted-average-cost:
 / apply_fill realises P&L at the *running average* price and keeps no lots.
 / That is the right model for a position book - O(1) per fill, and it
 / answers "where am I now" - but it has already thrown away what
@@ -53,7 +53,7 @@
 /   asof    - the trades are truncated at an instant, so residual is the
 /             position AS OF that moment and the ledger is what had been
 /             realised by then. position and position_at roll that up into
-/             a book, which is the same object .qpos carries - and
+/             a book, which is the same object .qf.port carries - and
 /             test_allocation.q holds the two to agreeing.
 / .
 / CONSERVATION. Once a bucket is flat, every method realises the same total
@@ -62,7 +62,7 @@
 / because a matching engine that fails it is not attributing, it is
 / inventing money.
 
-\d .qalloc
+\d .qf.exec
 
 / --------------------------------------------------------------- METHODS
 
@@ -81,7 +81,7 @@ required:`open`pick
 / @param decl the candidate method
 / @return 1b when acceptable
 / @throws error naming the missing key, the unknown key, or the key whose value is not a function
-/ @eg .qalloc.require_method[`open`pick!(.qalloc.append_lot;.qalloc.pick_first)] -> 1b
+/ @eg .qf.exec.require_method[`open`pick!(.qf.exec.append_lot;.qf.exec.pick_first)] -> 1b
 require_method:{[decl]
     if[not 99h=type decl;
         '"require_method: a matching method must be a dictionary carrying ",
@@ -116,17 +116,17 @@ methods:([name:`symbol$()] open:(); pick:(); why:())
 / @param decl a dict with `open (lots;lot -> lots) and `pick (lots -> index), optionally `why
 / @return the name registered
 / @throws error when the method is malformed - see require_method
-/ @eg .qalloc.define[`fifo_again;`open`pick!(.qalloc.append_lot;.qalloc.pick_first)] -> `fifo_again
+/ @eg .qf.exec.define[`fifo_again;`open`pick!(.qf.exec.append_lot;.qf.exec.pick_first)] -> `fifo_again
 define:{[name;decl]
     require_method decl;
-    `.qalloc.methods upsert (name; decl`open; decl`pick; $[`why in key decl; decl`why; ""]);
+    `.qf.exec.methods upsert (name; decl`open; decl`pick; $[`why in key decl; decl`why; ""]);
     name}
 
 / Look a method up by name.
 / @param name a registered method name
 / @return its declaration dict
 / @throws error when nothing is registered under that name, listing what is
-/ @eg .qalloc.def[`fifo]`why -> "oldest open lot first"
+/ @eg .qf.exec.def[`fifo]`why -> "oldest open lot first"
 def:{[name]
     if[not name in defined[];
         '"def: ",string[name]," is not a registered matching method - have ",
@@ -135,7 +135,7 @@ def:{[name]
 
 / Every registered method name, in registration order.
 / @return a symbol vector - the five built in here, plus anything a desk has registered since
-/ @eg `fifo in .qalloc.defined[] -> 1b
+/ @eg `fifo in .qf.exec.defined[] -> 1b
 defined:{[] exec name from key methods}
 
 / ------------------------------------------------------- METHOD PIECES
@@ -149,7 +149,7 @@ append_lot:{[lots;lot] lots,enlist lot}
 / Private: weighted-average lot-opening - fold the fill into the single
 / open lot at the size-weighted average price, so the queue never holds
 / more than one entry and there is nothing left to choose between. This is
-/ .qpos.apply_fill's convention, expressed as an opening rule.
+/ .qf.port.apply_fill's convention, expressed as an opening rule.
 / .
 / The merged lot keeps the FIRST trade's id and time, because there is no
 / better answer: weighted average has destroyed the distinction the id
@@ -184,7 +184,7 @@ define[`fifo;     `open`pick`why!(append_lot; pick_first;   "oldest open lot fir
 define[`lifo;     `open`pick`why!(append_lot; pick_last;    "newest open lot first")];
 define[`hifo;     `open`pick`why!(append_lot; pick_highest; "highest-priced open lot first")];
 define[`lofo;     `open`pick`why!(append_lot; pick_lowest;  "lowest-priced open lot first")];
-define[`weighted; `open`pick`why!(merge_lot;  pick_first;   "one running weighted-average lot - matches .qpos")];
+define[`weighted; `open`pick`why!(merge_lot;  pick_first;   "one running weighted-average lot - matches .qf.port")];
 
 / --------------------------------------------------------------- FILTERS
 
@@ -192,7 +192,7 @@ define[`weighted; `open`pick`why!(merge_lot;  pick_first;   "one running weighte
 / where, so the unfiltered path runs the same code as the filtered one.
 / @param t any table
 / @return t
-/ @eg count .qalloc.all_rows ([] a:1 2 3) -> 3
+/ @eg count .qf.exec.all_rows ([] a:1 2 3) -> 3
 all_rows:{[t] t}
 
 / Build a filter from a dictionary of column -> accepted value(s).
@@ -203,7 +203,7 @@ all_rows:{[t] t}
 / is a function rather than a dict.
 / @param d column name -> an accepted value, or a list of them
 / @return a function taking a table and returning the rows that match every entry
-/ @eg count .qalloc.by_cols[enlist[`a]!enlist 1 2] ([] a:1 2 3) -> 2
+/ @eg count .qf.exec.by_cols[enlist[`a]!enlist 1 2] ([] a:1 2 3) -> 2
 by_cols:{[d]
     {[d;t]
         if[0=count d; :t];
@@ -253,7 +253,7 @@ normalised_opts:{[opts]
 / ---------------------------------------------------------------- ENGINE
 
 / The columns a trades table must carry. side is +1 buy / -1 sell and size
-/ is unsigned, the same convention .qpos.apply_fills consumes - so the one
+/ is unsigned, the same convention .qf.port.apply_fills consumes - so the one
 / table feeds both the book and its attribution.
 required_cols:`time`sym`side`size`trade_price
 
@@ -265,7 +265,7 @@ required_cols:`time`sym`side`size`trade_price
 / @private
 prepared:{[trades;bys]
     if[not 98h=type trades; '"allocate: trades must be a table"];
-    .qschema.require_cols[`allocate;`trades;trades;distinct required_cols,bys];
+    .qf.util.require_cols[`allocate;`trades;trades;distinct required_cols,bys];
     $[`trade_id in cols trades; trades; update trade_id:i from trades]}
 
 / The columns a carried-in lot table must carry, on top of the bucket
@@ -280,10 +280,10 @@ required_lot_cols:`qty`price`side
 prepared_opening:{[opening;bys]
     if[(::)~opening; :()];
     if[not 98h=type opening; '"allocate: opening must be a table of lots"];
-    .qschema.require_cols[`allocate;`opening;opening;distinct required_lot_cols,bys];
+    .qf.util.require_cols[`allocate;`opening;opening;distinct required_lot_cols,bys];
     if[not all (exec side from opening) in -1 1;
         '"allocate: every opening lot's side must be 1 (long) or -1 (short)"];
-    / One side per bucket (#588). step checks only the FIRST lot's side
+    / One side per bucket (#588). lot_match_step checks only the FIRST lot's side
     / before closing and lets the method's pick choose any lot, so a long
     / and a short in one bucket let a sell "close" the short and book a
     / profit that cannot exist. A real book never holds both - residual
@@ -318,13 +318,13 @@ new_matches:{[trades]
 / until either it is used up or the book is flat; whatever is left OPENS a
 / new lot. That ordering is what makes a flip fall out for free rather than
 / needing its own branch: a sell of 3 against a long of 1 closes the 1 and
-/ opens a short of 2 at the sell price, which is .qpos's convention too.
+/ opens a short of 2 at the sell price, which is positions.q's convention too.
 / .
 / Every lot in a bucket shares a side - you cannot be long and short the
 / same thing at once here - so checking the first lot's side decides
 / whether this trade closes or opens.
 / @private
-step:{[m;state;row]
+lot_match_step:{[m;state;row]
     lots:state`lots;
     out:state`matches;
     qty:"f"$row`size;
@@ -339,10 +339,10 @@ step:{[m;state;row]
         qty-:take;
         / Float residue is not a position: a sliver left on either side of
         / the match is flat, so it opens no lot and leaves none behind (#1278).
-        if[.qrisk.is_flat qty; qty:0f];
+        if[.qf.port.is_flat qty; qty:0f];
         / Indexed, not `lots _ ix`: dropping a row from a table by position
         / throws 'type on PeachQ, and the two agree on KDB-X.
-        lots:$[.qrisk.is_flat lot[`qty]-take; lots (til count lots) except ix; @[lots;`qty;@[;ix;-;take]]];
+        lots:$[.qf.port.is_flat lot[`qty]-take; lots (til count lots) except ix; @[lots;`qty;@[;ix;-;take]]];
         ];
     if[0<qty;
         lots:(m`open)[lots;
@@ -405,7 +405,7 @@ seed_lots:{[m;trades;opening;ix]
 / Private: match one bucket, returning its ledger and its leftover lots.
 / @private
 bucket:{[m;bys;kv;seed;sub]
-    st:(step[m])/[`lots`matches!(seed; new_matches[sub]); sub];
+    st:(lot_match_step[m])/[`lots`matches!(seed; new_matches[sub]); sub];
     `matches`residual!(with_by[st`matches;kv;bys]; with_by[st`lots;kv;bys])}
 
 / Attribute realised P&L to trades, and report what is still open.
@@ -417,7 +417,7 @@ bucket:{[m;bys;kv;seed;sub]
 / @param opts an options dict (see default_opts), or a bare method name
 / @return a dict with `matches (the ledger, plus a pnl column) and `residual (unmatched open lots)
 / @throws error on a missing column, an unknown option, or an unregistered method
-/ @eg count .qalloc.run[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo]`matches -> 1
+/ @eg count .qf.exec.run[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo]`matches -> 1
 run:{[trades;opts]
     o:normalised_opts[opts];
     m:def[o`method];
@@ -443,18 +443,18 @@ run:{[trades;opts]
     empty_kv:bys!first each 0#/:trades bys;
     matches:$[count res; raze res[;`matches]; with_by[new_matches[trades];empty_kv;bys]];
     residual:$[count res; raze res[;`residual]; with_by[new_lots[trades];empty_kv;bys]];
-    matches:update pnl:.qrisk.pnl[qty;open_price;close_price;open_side] from matches;
+    matches:update pnl:.qf.port.pnl[qty;open_price;close_price;open_side] from matches;
     `matches`residual!((o`where) `close_time xasc matches; residual)}
 
 / The match ledger: one row per (opening trade, closing trade, matched qty).
 / .
-/ pnl is that slice's realised P&L in quote currency, via .qrisk.pnl at the
+/ pnl is that slice's realised P&L in quote currency, via .qf.port.pnl at the
 / two prices - so this module owns the matching and risk.q still owns the
 / arithmetic.
 / @param trades see run
 / @param opts see run
 / @return a table of bucket columns, open_id/open_time/open_side, close_id/close_time, qty, open_price, close_price, pnl
-/ @eg exec first pnl from .qalloc.allocate[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo] -> 1000000f
+/ @eg exec first pnl from .qf.exec.allocate[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo] -> 1000000f
 allocate:{[trades;opts] run[trades;opts]`matches}
 
 / The lots left open once every trade has been applied - the position the
@@ -463,7 +463,7 @@ allocate:{[trades;opts] run[trades;opts]`matches}
 / @param trades see run
 / @param opts see run
 / @return a table of bucket columns, trade_id, time, qty, price, side
-/ @eg exec first qty from .qalloc.residual[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:3000000 1000000f; trade_price:1.0 2.0);`fifo] -> 2000000f
+/ @eg exec first qty from .qf.exec.residual[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:3000000 1000000f; trade_price:1.0 2.0);`fifo] -> 2000000f
 residual:{[trades;opts] run[trades;opts]`residual}
 
 / ------------------------------------------------------------- POSITIONS
@@ -471,8 +471,8 @@ residual:{[trades;opts] run[trades;opts]`residual}
 / The book the open lots add up to: signed quantity and weighted-average
 / price per bucket.
 / .
-/ The same object .qpos carries, derived rather than tracked - which is why
-/ it is worth having both. .qpos folds fills into a book in one pass and is
+/ The same object .qf.port carries, derived rather than tracked - which is why
+/ it is worth having both. .qf.port folds fills into a book in one pass and is
 / what a live process runs; this recomputes the book from the lots at
 / whatever instant and under whatever filters were asked for, which is what
 / a question about history needs. They agree, and test_allocation.q says so.
@@ -482,7 +482,7 @@ residual:{[trades;opts] run[trades;opts]`residual}
 / @param lots a residual table from residual
 / @param group_cols the columns to group by - normally the same `by the lots were matched under
 / @return a table of group_cols plus qty (signed), avg_price and the number of open lots
-/ @eg exec first qty from .qalloc.position[.qalloc.residual[([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; trade_price:enlist 1.0);`fifo];`sym] -> 1000000f
+/ @eg exec first qty from .qf.exec.position[.qf.exec.residual[([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; trade_price:enlist 1.0);`fifo];`sym] -> 1000000f
 position:{[lots;group_cols]
     ?[lots; (); {x!x} (),group_cols;
         `qty`avg_price`lots!((sum;(*;`side;`qty));
@@ -497,7 +497,7 @@ position:{[lots;group_cols]
 / @param opts see run - its `asof is overwritten by ts
 / @param ts the instant to stop at, inclusive
 / @return a book, as position returns one
-/ @eg exec first qty from .qalloc.position_at[([] time:2026.01.01D09:00:00 2026.01.01D11:00:00; sym:2#`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo;2026.01.01D10:00:00] -> 1000000f
+/ @eg exec first qty from .qf.exec.position_at[([] time:2026.01.01D09:00:00 2026.01.01D11:00:00; sym:2#`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo;2026.01.01D10:00:00] -> 1000000f
 position_at:{[trades;opts;ts]
     o:normalised_opts[opts];
     position[residual[trades;@[o;`asof;:;ts]]; o`by]}
@@ -516,7 +516,7 @@ position_at:{[trades;opts;ts]
 / twice, which is why there is no total column here.
 / @param matches a ledger from allocate
 / @return a table keyed on nothing, one row per trade that opened or closed something
-/ @eg count .qalloc.by_trade .qalloc.allocate[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo] -> 2
+/ @eg count .qf.exec.by_trade .qf.exec.allocate[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo] -> 2
 by_trade:{[matches]
     closing:select closing_pnl:sum pnl, closed_qty:sum qty by trade_id:close_id from matches;
     opening:select opening_pnl:sum pnl, opened_qty:sum qty by trade_id:open_id from matches;
@@ -530,7 +530,7 @@ by_trade:{[matches]
 / @param matches a ledger from allocate
 / @param group_cols the columns to group by
 / @return a table of group_cols plus pnl, qty and the number of matches
-/ @eg exec first pnl from .qalloc.summary[.qalloc.allocate[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo];enlist `sym] -> 1000000f
+/ @eg exec first pnl from .qf.exec.summary[.qf.exec.allocate[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo];enlist `sym] -> 1000000f
 summary:{[matches;group_cols]
     ?[matches; (); {x!x} (),group_cols;
         `pnl`qty`matches!((sum;`pnl);(sum;`qty);(count;`i))]}
@@ -543,9 +543,9 @@ summary:{[matches;group_cols]
 / @param lots a residual table from residual
 / @param marks a dictionary of sym -> current price
 / @return lots plus mark_price and unrealized_pnl
-/ @eg exec first unrealized_pnl from .qalloc.unrealised[.qalloc.residual[([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; trade_price:enlist 1.0);`fifo]; enlist[`EURUSD]!enlist 2.0] -> 1000000f
+/ @eg exec first unrealized_pnl from .qf.exec.unrealised[.qf.exec.residual[([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; trade_price:enlist 1.0);`fifo]; enlist[`EURUSD]!enlist 2.0] -> 1000000f
 unrealised:{[lots;marks]
     r:update mark_price:marks sym from lots;
-    update unrealized_pnl:.qrisk.pnl[qty;price;mark_price;side] from r}
+    update unrealized_pnl:.qf.port.pnl[qty;price;mark_price;side] from r}
 
 \d .

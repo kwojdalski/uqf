@@ -28,7 +28,7 @@
 / elsewhere in this library. A single snapshot still works: wrap its 4
 / level vectors in `enlist` and read index 0 of the result.
 
-\d .qmicro
+\d .qf.mkt
 
 / Private: the level-th element of each row's own vector in levels (a
 / vector of vectors). Nulls out (0n) a row whose vector is shorter than
@@ -63,7 +63,7 @@ sum_levels:{[sizes;n_levels]
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @return a vector, one mid price per row
-/ @eg .qmicro.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> ,1.1001
+/ @eg .qf.mkt.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> ,1.1001
 mid_price:{[bid_prices;ask_prices]
     0.5*(level_at[bid_prices;0])+level_at[ask_prices;0]};
 
@@ -74,7 +74,7 @@ mid_price:{[bid_prices;ask_prices]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param level the level index (0 = top of book)
 / @return a vector, one pressure value per row
-/ @eg .qmicro.book_pressure_at_level[enlist 100 50;enlist 40 60;0]  -> ,0.4285714
+/ @eg .qf.mkt.book_pressure_at_level[enlist 100 50;enlist 40 60;0]  -> ,0.4285714
 book_pressure_at_level:{[bid_sizes;ask_sizes;level]
     bid_lvl:level_at[bid_sizes;level];
     ask_lvl:level_at[ask_sizes;level];
@@ -90,7 +90,7 @@ book_pressure_at_level:{[bid_sizes;ask_sizes;level]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to aggregate over
 / @return a vector, one imbalance value per row, in [-1,1]
-/ @eg .qmicro.order_book_imbalance[enlist 100 50;enlist 40 60;2]  -> ,0.2
+/ @eg .qf.mkt.order_book_imbalance[enlist 100 50;enlist 40 60;2]  -> ,0.2
 order_book_imbalance:{[bid_sizes;ask_sizes;n_levels]
     total_bid:sum_levels[bid_sizes;n_levels];
     total_ask:sum_levels[ask_sizes;n_levels];
@@ -104,7 +104,7 @@ order_book_imbalance:{[bid_sizes;ask_sizes;n_levels]
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, one microprice per row
-/ @eg .qmicro.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,1.10005
+/ @eg .qf.mkt.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,1.10005
 microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
     bid_px0:level_at[bid_prices;0];
     ask_px0:level_at[ask_prices;0];
@@ -122,7 +122,7 @@ microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, microprice - mid_price per row
-/ @eg .qmicro.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,-5e-05
+/ @eg .qf.mkt.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,-5e-05
 microprice_divergence:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
     microprice[bid_prices;bid_sizes;ask_prices;ask_sizes]-mid_price[bid_prices;ask_prices]};
 
@@ -133,7 +133,7 @@ microprice_divergence:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @return a vector, spread in bps per row
-/ @eg .qmicro.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> ,1.818017
+/ @eg .qf.mkt.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> ,1.818017
 spread_bps:{[bid_prices;ask_prices]
     bid_px0:level_at[bid_prices;0];
     ask_px0:level_at[ask_prices;0];
@@ -155,7 +155,7 @@ spread_bps:{[bid_prices;ask_prices]
 / @param bid_sizes a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, depth ratio per row
-/ @eg .qmicro.depth_ratio[enlist 100 20 20 20 20;enlist 100 20 20 20 20]  -> ,1.25
+/ @eg .qf.mkt.depth_ratio[enlist 100 20 20 20 20;enlist 100 20 20 20 20]  -> ,1.25
 depth_ratio:{[bid_sizes;ask_sizes]
     top:(level_at[bid_sizes;0])+level_at[ask_sizes;0];
     deeper_bid:sum level_at[bid_sizes;] each 1 2 3 4;
@@ -166,11 +166,11 @@ depth_ratio:{[bid_sizes;ask_sizes]
 / Private: vwmp_skew for a single row - volume-weighted mid over the first
 / n_levels (via execution.q's vwap, concatenating that row's bid and ask
 / prices/sizes over til n_levels) minus the simple L0 mid, divided by the
-/ L0 spread. Locked/crossed L0 (spread <= 0) is null, not +-0w: a locked spread of 0 divides by zero. This is a division guard, not .qbook.crossed_top's crossed test (a locked book is not crossed, #1176).
+/ L0 spread. Locked/crossed L0 (spread <= 0) is null, not +-0w: a locked spread of 0 divides by zero. This is a division guard, not .qf.mkt.crossed_top's crossed test (a locked book is not crossed, #1176).
 / @private
 vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
     idx:til n_levels;
-    vw_mid:.qexec.vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
+    vw_mid:.qf.exec.vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
     simple_mid:0.5*(bid_prices 0)+ask_prices 0;
     l0_spread:(ask_prices 0)-bid_prices 0;
     $[l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
@@ -184,7 +184,7 @@ vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to volume-weight over
 / @return a vector, skew per row - null for a locked or crossed L0
-/ @eg .qmicro.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> ,0f
+/ @eg .qf.mkt.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> ,0f
 vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
     n:count bid_prices;
     result:n#0n;
@@ -213,8 +213,8 @@ book_slope_one:{[prices;sizes]
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, slope per row - null for a row carrying no size
-/ @eg .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> ,1.333333e-06
-/ @eg .qmicro.book_slope[enlist 1.1000 1.0998;enlist 0 0f]  -> ,0n
+/ @eg .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> ,1.333333e-06
+/ @eg .qf.mkt.book_slope[enlist 1.1000 1.0998;enlist 0 0f]  -> ,0n
 book_slope:{[prices;sizes]
     n:count prices;
     result:n#0n;
@@ -247,7 +247,7 @@ book_convexity_one:{[prices;side]
 / @throws error if side isn't `bid or `ask - checked once here, because
 /   book_convexity_one's `$[side=`ask; ...]` reads anything else as the bid
 /   side and returns a plausible number with the wrong sign (#415)
-/ @eg .qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001
+/ @eg .qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001
 book_convexity:{[prices;side]
     if[not $[-11h=type side; side in `bid`ask; 0b];
         '"book_convexity: side must be `bid or `ask, got ",.Q.s1 side];
@@ -266,8 +266,8 @@ book_convexity:{[prices;side]
 vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     ask_size_target:notional%first ask_prices;
     bid_size_target:notional%first bid_prices;
-    buy_leg:.qbook.sweep_price[ask_prices;ask_sizes;ask_size_target];
-    sell_leg:.qbook.sweep_price[bid_prices;bid_sizes;bid_size_target];
+    buy_leg:.qf.mkt.sweep_price[ask_prices;ask_sizes;ask_size_target];
+    sell_leg:.qf.mkt.sweep_price[bid_prices;bid_sizes;bid_size_target];
     0.5*(buy_leg`avg_price)+sell_leg`avg_price};
 
 / VAMP (volume-adjusted mid price): convert notional into a size via each
@@ -282,7 +282,7 @@ vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
 /   already aligned to rows - same atom-or-vector convention as
 /   execution.q's markout ref_price
 / @return a vector, VAMP per row
-/ @eg .qmicro.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> ,1.1001
+/ @eg .qf.mkt.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> ,1.1001
 vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     n:count bid_prices;
     notional:$[0>type notional; n#notional; notional];
@@ -303,7 +303,7 @@ vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
 / @throws error if quotes is missing a required column (see require_depth_quotes)
 / @private
 quotes_for_sym:{[fn_name;quotes;target_sym]
-    .qschema.require_depth_quotes[fn_name;quotes];
+    .qf.util.require_depth_quotes[fn_name;quotes];
     `time xasc select from quotes where sym=target_sym};
 
 / First difference of the L0 mid price for one sym's quotes, time-ordered.
@@ -315,7 +315,7 @@ quotes_for_sym:{[fn_name;quotes;target_sym]
 / @param target_sym the sym to compute velocity for
 / @return a vector, one velocity value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
-/ @eg .qmicro.mid_price_velocity[quotes;`EURUSD]
+/ @eg .qf.mkt.mid_price_velocity[quotes;`EURUSD]
 mid_price_velocity:{[quotes;target_sym]
     sub:quotes_for_sym[`mid_price_velocity;quotes;target_sym];
     mids:mid_price[sub`bid_prices;sub`ask_prices];
@@ -331,7 +331,7 @@ mid_price_velocity:{[quotes;target_sym]
 / @param target_sym the sym to compute acceleration for
 / @return a vector, one acceleration value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
-/ @eg .qmicro.mid_price_acceleration[quotes;`EURUSD]
+/ @eg .qf.mkt.mid_price_acceleration[quotes;`EURUSD]
 mid_price_acceleration:{[quotes;target_sym]
     "f"$deltas mid_price_velocity[quotes;target_sym]};
 
@@ -375,7 +375,7 @@ side_flow:{[tr]
 / @param side `bid or `ask
 / @return a vector, one depletion rate per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column, or side isn't `bid or `ask
-/ @eg .qmicro.queue_depletion_rate[quotes;`EURUSD;`bid]
+/ @eg .qf.mkt.queue_depletion_rate[quotes;`EURUSD;`bid]
 queue_depletion_rate:{[quotes;target_sym;side]
     sub:quotes_for_sym[`queue_depletion_rate;quotes;target_sym];
     if[not $[-11h=type side; side in `bid`ask; 0b];
@@ -399,7 +399,7 @@ queue_depletion_rate:{[quotes;target_sym;side]
 / @param target_sym the sym to compute OFI for
 / @return a vector, one OFI value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
-/ @eg .qmicro.ofi[quotes;`EURUSD]
+/ @eg .qf.mkt.ofi[quotes;`EURUSD]
 ofi:{[quotes;target_sym]
     sub:quotes_for_sym[`ofi;quotes;target_sym];
     raw:ofi_at_level[sub;0];
@@ -420,7 +420,7 @@ ofi_at_level:{[sub;level]
 / @param n_levels how many levels (0..n_levels-1) to sum OFI over
 / @return a vector, one multi-level OFI value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
-/ @eg .qmicro.ofi_multilevel[quotes;`EURUSD;3]
+/ @eg .qf.mkt.ofi_multilevel[quotes;`EURUSD;3]
 ofi_multilevel:{[quotes;target_sym;n_levels]
     sub:quotes_for_sym[`ofi_multilevel;quotes;target_sym];
     per_level:ofi_at_level[sub;] each til n_levels;
@@ -432,7 +432,7 @@ ofi_multilevel:{[quotes;target_sym;n_levels]
 / @param ofi_series an OFI vector, e.g. from ofi or ofi_multilevel
 / @param window the moving-window size, in number of rows
 / @return a vector, msum[window;ofi_series]
-/ @eg .qmicro.rolling_ofi[1 -1 2 0 -3;2]  -> 1 0 1 2 -3
+/ @eg .qf.mkt.rolling_ofi[1 -1 2 0 -3;2]  -> 1 0 1 2 -3
 rolling_ofi:{[ofi_series;window] msum[window;ofi_series]};
 
 / Ratio of the current quoted spread (spread_bps) to its own rolling mean
@@ -443,7 +443,7 @@ rolling_ofi:{[ofi_series;window] msum[window;ofi_series]};
 / @param window the moving-window size, in number of rows
 / @return a vector, one spread_ratio value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
-/ @eg .qmicro.spread_ratio[quotes;`EURUSD;5]
+/ @eg .qf.mkt.spread_ratio[quotes;`EURUSD;5]
 spread_ratio:{[quotes;target_sym;window]
     sub:quotes_for_sym[`spread_ratio;quotes;target_sym];
     spreads:spread_bps[sub`bid_prices;sub`ask_prices];
@@ -457,7 +457,7 @@ spread_ratio:{[quotes;target_sym;window]
 / @param target_sym the sym to compute inter-event time for
 / @return a vector, one log(1+gap_seconds) value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
-/ @eg .qmicro.inter_event_time[quotes;`EURUSD]
+/ @eg .qf.mkt.inter_event_time[quotes;`EURUSD]
 inter_event_time:{[quotes;target_sym]
     sub:quotes_for_sym[`inter_event_time;quotes;target_sym];
     gaps_ns:"j"$sub[`time]-prev sub`time;
@@ -473,7 +473,7 @@ inter_event_time:{[quotes;target_sym]
 / @param window the moving-window size, in rows (needs >=4: w rows give w-1 lag pairs, and 1 or 2 pairs give a null or a forced +-1 cor)
 / @return a vector, same length as ofi_series, lag-1 autocorrelation per window ending at that index
 / @throws error if window < 4
-/ @eg .qmicro.ofi_autocorrelation[1 -1 2 0 -3 4;4]
+/ @eg .qf.mkt.ofi_autocorrelation[1 -1 2 0 -3 4;4]
 ofi_autocorrelation:{[ofi_series;window]
     if[window<4; '"ofi_autocorrelation: window must be >= 4 - fewer than 3 lag pairs gives a null or a forced +-1 correlation"];
     n:count ofi_series;
@@ -523,10 +523,10 @@ tape_cols:`time`sym`action`side`size
 / @param tape an event tape table
 / @return 1b when the tape is usable
 / @throws error naming what is wrong
-/ @eg .qmicro.require_tape[tape]
+/ @eg .qf.mkt.require_tape[tape]
 require_tape:{[tape]
     if[not .Q.qt tape; '"require_tape: expected a table"];
-    .qschema.require_cols[`require_tape;`tape;tape;tape_cols];
+    .qf.util.require_cols[`require_tape;`tape;tape;tape_cols];
     unknown:distinct (exec action from tape) except tape_actions;
     if[count unknown;
         '"require_tape: unknown action(s) ",(", " sv string unknown),
@@ -549,7 +549,7 @@ require_tape:{[tape]
 / shape contract - a signed size column would make `sum size` meaningless.
 / @param tape an event tape table
 / @return the net signed volume: positive when buyers were the aggressors
-/ @eg .qmicro.signed_trade_flow[tape]  ->  -500000f
+/ @eg .qf.mkt.signed_trade_flow[tape]  ->  -500000f
 signed_trade_flow:{[tape]
     require_tape tape;
     sum exec side*size from tape where action=`trade}
@@ -580,7 +580,7 @@ cumulative_trade_flow:{[tape]
 / which is what a ratio with an empty denominator is.
 / @param tape an event tape table
 / @return cancels divided by trades, or 0n when no trade occurred
-/ @eg .qmicro.cancel_to_trade_ratio[tape]  ->  1.5
+/ @eg .qf.mkt.cancel_to_trade_ratio[tape]  ->  1.5
 cancel_to_trade_ratio:{[tape]
     require_tape tape;
     n_trades:count select from tape where action=`trade;
@@ -600,7 +600,7 @@ cancel_to_trade_ratio:{[tape]
 / @param tape an event tape table
 / @param bucket_size a timespan to floor time into, or 0Nn for no bucketing
 / @param group_cols extra columns to group by, e.g. enlist `sym
-/ @eg .qmicro.cancel_to_trade_ratio_by[tape;0D01:00:00;enlist `sym]
+/ @eg .qf.mkt.cancel_to_trade_ratio_by[tape;0D01:00:00;enlist `sym]
 / Private: a zero denominator becomes a null, so a ratio over a group with
 / nothing in the denominator is undefined rather than infinite.
 / .
@@ -612,7 +612,7 @@ cancel_to_trade_ratio:{[tape]
 / in a form a parse tree can hold.
 / @param n a count, per group
 / @return n, or 0n when n is zero
-/ @eg .qmicro.undefined_if_zero 0  ->  0n
+/ @eg .qf.mkt.undefined_if_zero 0  ->  0n
 / @private
 undefined_if_zero:{[n] ?[0=n;0n;n]}
 
@@ -669,7 +669,7 @@ cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
 / @return a table of bucket, end_time, buy_volume, sell_volume, imbalance
 /   (the absolute difference) - one row per COMPLETE bucket
 / @throws error when bucket_volume is not positive
-/ @eg .qmicro.volume_buckets[tape;1000000f]
+/ @eg .qf.mkt.volume_buckets[tape;1000000f]
 volume_buckets:{[tape;bucket_volume]
     require_tape tape;
     if[not bucket_volume>0;
@@ -733,7 +733,7 @@ empty_buckets:{[] ([] bucket:`long$(); end_time:`timestamp$();
 / @param n_buckets how many trailing buckets each value averages over
 / @return a table of bucket, end_time and vpin
 / @throws error when n_buckets is not positive
-/ @eg .qmicro.vpin[tape;1000000f;50]
+/ @eg .qf.mkt.vpin[tape;1000000f;50]
 vpin:{[tape;bucket_volume;n_buckets]
     if[not n_buckets>0;
         '"vpin: n_buckets must be positive, got ",.Q.s1 n_buckets];
@@ -766,7 +766,7 @@ vpin:{[tape;bucket_volume;n_buckets]
 / opposite of the truth.
 / @param tape an event tape table
 / @return trades per second, or 0n when the span is zero
-/ @eg .qmicro.trade_arrival_rate[tape]  ->  0.2
+/ @eg .qf.mkt.trade_arrival_rate[tape]  ->  0.2
 trade_arrival_rate:{[tape]
     require_tape tape;
     time:exec time from tape where action=`trade;
@@ -783,7 +783,7 @@ trade_arrival_rate:{[tape]
 / @param tape an event tape table
 / @param bucket_size a timespan to floor time into, or 0Nn for no bucketing
 / @param group_cols extra columns to group by, e.g. enlist `sym
-/ @eg .qmicro.trade_arrival_rate_by[tape;0D01:00:00;enlist `sym]
+/ @eg .qf.mkt.trade_arrival_rate_by[tape;0D01:00:00;enlist `sym]
 trade_arrival_rate_by:{[tape;bucket_size;group_cols]
     require_tape tape;
     t:(distinct `time`sym,(),group_cols)#select from tape where action=`trade;
@@ -819,7 +819,7 @@ trade_arrival_rate_by:{[tape;bucket_size;group_cols]
 / @param q the quantile in (0;1], e.g. 0.9 for the top decile
 / @return the size at that quantile, or 0n when the tape holds no trades
 / @throws error when the tape is malformed, or q is outside (0;1]
-/ @eg .qmicro.large_trade_threshold[tape;0.9]
+/ @eg .qf.mkt.large_trade_threshold[tape;0.9]
 large_trade_threshold:{[tape;q]
     require_tape tape;
     if[(not q>0) or q>1;
@@ -845,7 +845,7 @@ large_trade_threshold:{[tape;q]
 / @param tape an event tape table
 / @param q the quantile in (0;1]
 / @return the fraction of trades at or above the threshold, 0n with no trades
-/ @eg .qmicro.large_trade_ratio[tape;0.9]
+/ @eg .qf.mkt.large_trade_ratio[tape;0.9]
 large_trade_ratio:{[tape;q]
     threshold:large_trade_threshold[tape;q];
     if[null threshold; :0n];
@@ -861,7 +861,7 @@ large_trade_ratio:{[tape;q]
 / @param tape an event tape table
 / @param q the quantile in (0;1]
 / @return the fraction of traded volume in large trades, 0n with no trades
-/ @eg .qmicro.large_trade_volume_share[tape;0.9]
+/ @eg .qf.mkt.large_trade_volume_share[tape;0.9]
 large_trade_volume_share:{[tape;q]
     threshold:large_trade_threshold[tape;q];
     if[null threshold; :0n];
@@ -901,7 +901,7 @@ require_odd_lot_threshold:{[fn_name;threshold]
 / @param threshold the size below which a trade is an odd lot, e.g. 1e6
 / @return the fraction of trades that are odd lots, 0n with no trades
 / @throws error when the tape is malformed, or threshold is not a positive number
-/ @eg .qmicro.odd_lot_trade_ratio[tape;1e6]
+/ @eg .qf.mkt.odd_lot_trade_ratio[tape;1e6]
 odd_lot_trade_ratio:{[tape;threshold]
     require_odd_lot_threshold[`odd_lot_trade_ratio;threshold];
     require_tape[tape];
@@ -920,7 +920,7 @@ odd_lot_trade_ratio:{[tape;threshold]
 / @param threshold the size below which a trade is an odd lot, e.g. 1e6
 / @return (buy volume - sell volume) % total volume over odd lots, 0n with none
 / @throws error when the tape is malformed, or threshold is not a positive number
-/ @eg .qmicro.odd_lot_imbalance[tape;1e6]
+/ @eg .qf.mkt.odd_lot_imbalance[tape;1e6]
 odd_lot_imbalance:{[tape;threshold]
     require_odd_lot_threshold[`odd_lot_imbalance;threshold];
     require_tape[tape];
@@ -994,7 +994,7 @@ window_variance:{[w]
 / @param window the number of returns per window (positive)
 / @return a vector, one variance per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
-/ @eg .qmicro.rolling_return_variance[quotes;`EURUSD;3]
+/ @eg .qf.mkt.rolling_return_variance[quotes;`EURUSD;3]
 rolling_return_variance:{[quotes;target_sym;window]
     sub:quotes_for_sym[`rolling_return_variance;quotes;target_sym];
     log_mid:log mid_price[sub`bid_prices;sub`ask_prices];
@@ -1054,7 +1054,7 @@ trade_states0:{[] ([sym:`symbol$()] trades:`long$(); time:`timestamp$(); cum_flo
 / @return the state dict: version, metrics, config, quotes, trades (per-sym
 /   state, keyed tables, empty) and dropped (0)
 / @throws error naming an unknown metric or a malformed config
-/ @eg (.qmicro.stream_init[`ofi`rolling_ofi;(::)])`version  -> 1
+/ @eg (.qf.mkt.stream_init[`ofi`rolling_ofi;(::)])`version  -> 1
 stream_init:{[metrics;config]
     m:(),metrics;
     if[0=count m; '"stream_init: name at least one metric of ",", " sv string stream_metrics];
@@ -1152,9 +1152,9 @@ stream_side:{[what;tbl;states;state0;config;step]
 / absent. Outputs are aligned to the ACCEPTED input rows, each carrying its
 / `row` index in the batch, so a dropped late row is visibly missing.
 / .
-/ ofi and rolling_ofi equal .qmicro.ofi and .qmicro.rolling_ofi over the
+/ ofi and rolling_ofi equal .qf.mkt.ofi and .qf.mkt.rolling_ofi over the
 / whole history; return_variance equals rolling_return_variance; cum_flow
-/ equals .qmicro.cumulative_trade_flow over that sym's trades - at every
+/ equals .qf.mkt.cumulative_trade_flow over that sym's trades - at every
 / prefix, however the history is chunked.
 / @param state from stream_init or a previous stream_update
 / @param batch dict of quotes and/or tape tables
@@ -1164,7 +1164,7 @@ stream_side:{[what;tbl;states;state0;config;step]
 / @throws error for a state of another version, a changed config, a batch
 /   carrying a table no chosen metric reads, unsorted rows, or late rows
 /   under `reject
-/ @eg (.qmicro.stream_update[.qmicro.stream_init[`ofi;(::)];(enlist `quotes)!enlist ([] time:2026.01.02D10:00:00 2026.01.02D10:00:01; sym:`EURUSD`EURUSD; bid_prices:(enlist 1.1;enlist 1.1); bid_sizes:(enlist 5f;enlist 7f); ask_prices:(enlist 1.2;enlist 1.2); ask_sizes:(enlist 4f;enlist 4f));(::)])[`quotes;`ofi]  -> 0n 2
+/ @eg (.qf.mkt.stream_update[.qf.mkt.stream_init[`ofi;(::)];(enlist `quotes)!enlist ([] time:2026.01.02D10:00:00 2026.01.02D10:00:01; sym:`EURUSD`EURUSD; bid_prices:(enlist 1.1;enlist 1.1); bid_sizes:(enlist 5f;enlist 7f); ask_prices:(enlist 1.2;enlist 1.2); ask_sizes:(enlist 4f;enlist 4f));(::)])[`quotes;`ofi]  -> 0n 2
 stream_update:{[state;batch;config]
     if[not 99h=type state; '"stream_update: state must come from stream_init or stream_update"];
     if[not (state`version)~stream_version;
@@ -1180,7 +1180,7 @@ stream_update:{[state;batch;config]
     t_out:();
     if[`quotes in key batch;
         if[0=count quote_cols; '"stream_update: batch carries quotes but no quote metric was chosen at stream_init"];
-        .qschema.require_depth_quotes[`stream_update;batch`quotes];
+        .qf.util.require_depth_quotes[`stream_update;batch`quotes];
         r:stream_side["quote";batch`quotes;state`quotes;quote_state0;cfg;stream_quotes_one[;;cfg`window]];
         state[`quotes]:r 0;
         state[`dropped]+:r 1;
@@ -1200,7 +1200,7 @@ stream_update:{[state;batch;config]
 / @param state a stream state
 / @param syms the syms to reset, or (::) for every sym
 / @return the state with those syms' rows removed from its quote and trade state
-/ @eg (.qmicro.stream_reset[.qmicro.stream_init[`ofi;(::)];(::)])`version  -> 1
+/ @eg (.qf.mkt.stream_reset[.qf.mkt.stream_init[`ofi;(::)];(::)])`version  -> 1
 stream_reset:{[state;syms]
     drop:$[syms~(::); (exec sym from key state`quotes) union exec sym from key state`trades; (),syms];
     state[`quotes]:select from state`quotes where not sym in drop;
@@ -1213,12 +1213,12 @@ stream_reset:{[state;syms]
 / @return table sym, quote_rows, last_quote_time, mid, rolling_ofi,
 /   return_variance, trades, last_trade_time, cum_flow - a sym seen on one
 /   side only has nulls on the other
-/ @eg .qmicro.stream_snapshot .qmicro.stream_init[`ofi;(::)]
+/ @eg .qf.mkt.stream_snapshot .qf.mkt.stream_init[`ofi;(::)]
 stream_snapshot:{[state]
     qs:0!state`quotes;
     ts:0!state`trades;
     syms:asc distinct (qs`sym),ts`sym;
-    quote_part:select sym, quote_rows:rows, last_quote_time:time, mid, rolling_ofi, return_variance from qs;
+    quote_part:([] sym:qs`sym; quote_rows:qs`rows; last_quote_time:qs`time; mid:qs`mid; rolling_ofi:qs`rolling_ofi; return_variance:qs`return_variance); / not a select: rolling_ofi is also a function here (#1411)
     trade_part:select sym, trades, last_trade_time:time, cum_flow from ts;
     base:([] sym:syms);
     base:base lj `sym xkey quote_part;

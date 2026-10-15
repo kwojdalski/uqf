@@ -90,14 +90,14 @@ job is TorQ-free code and the runner decides the transport.
 
 ## What it is made of
 
-  | Piece                                                                            | Namespace                   | What it does                               |
-  | ---                                                                              | ---                         | ---                                        |
-  | [`src/portfolio/desk_positions.q`](../../src/portfolio/desk_positions.q)         | `.qdesk`                    | Net FX exposure along declared dimensions  |
-  | [`src/portfolio/limits.q`](../../src/portfolio/limits.q)                         | `.qlimit`                   | Limits, breach detection, alert throttling |
-  | [`src/etl/core/tick.q`](../../src/etl/core/tick.q)                               | `.qetl.tick`                | A pub/sub tickerplant in stock kdb+        |
-  | [`src/etl/streaming/fx_positions.q`](../../src/etl/streaming/fx_positions.q)     | `.qpipe.job.fx_positions`   | The service                                |
-  | [`src/etl/streaming/fx_orders_feed.q`](../../src/etl/streaming/fx_orders_feed.q) | `.qpipe.job.fx_orders_feed` | Synthetic order flow                       |
-  | [`scripts/processes/run_stream.q`](../../scripts/processes/run_stream.q)         | `.qproc.standalone`         | Runs any registered job with no TorQ       |
+  | Piece                                                                            | Namespace                     | What it does                               |
+  | ---                                                                              | ---                           | ---                                        |
+  | [`src/portfolio/desk_positions.q`](../../src/portfolio/desk_positions.q)         | `.qf.port`                    | Net FX exposure along declared dimensions  |
+  | [`src/portfolio/limits.q`](../../src/portfolio/limits.q)                         | `.qf.port`                    | Limits, breach detection, alert throttling |
+  | [`src/etl/core/tick.q`](../../src/etl/core/tick.q)                               | `.qetl.tick`                  | A pub/sub tickerplant in stock kdb+        |
+  | [`src/etl/streaming/fx_positions.q`](../../src/etl/streaming/fx_positions.q)     | `.qpipe.job.fx_positions`     | The service                                |
+  | [`src/etl/streaming/fx_orders_feed.q`](../../src/etl/streaming/fx_orders_feed.q) | `.qpipe.job.fx_orders_feed`   | Synthetic order flow                       |
+  | [`scripts/processes/run_stream.q`](../../scripts/processes/run_stream.q)         | `.qproc.standalone`           | Runs any registered job with no TorQ       |
 
 ![The FX positions service](../diagrams/fx-positions-service.svg)
 
@@ -105,10 +105,11 @@ job is TorQ-free code and the runner decides the transport.
 
 ### 1. Risk, not P&L
 
-`.qpos` already tracks a book per sym at weighted-average cost, carrying
-realised P&L, and `.qpipe.job.posbook` already publishes it. This service
-answers a different question --- *what are we holding* --- along dimensions
-`.qpos` cannot be keyed on, and it deliberately has **no marks and no P&L**.
+`positions.q` (`.qf.port`) already tracks a book per sym at weighted-average
+cost, carrying realised P&L, and `.qpipe.job.posbook` already publishes it. This
+service answers a different question --- *what are we holding* --- along
+dimensions `positions.q` cannot be keyed on, and it deliberately has **no marks
+and no P&L**.
 
 Marking needs a price source, a convention for a pair never quoted, and a
 decision about which currency the answer is in. `posbook` makes all three. Two
@@ -117,18 +118,18 @@ the fills alone.
 
 So the tree now has three position modules, and each earns its place:
 
-  |           | Keyed on | Cost basis                 | Cost per fill         |
-  | ---       | ---      | ---                        | ---                   |
-  | `.qpos`   | `sym`    | weighted average           | O(1)                  |
-  | `.qalloc` | anything | matched lots (FIFO/LIFO/…) | O(trades), recomputed |
-  | `.qdesk`  | anything | none — netted only         | O(1)                  |
+  | File                                       | Keyed on | Cost basis                 | Cost per fill         |
+  | ---                                        | ---      | ---                        | ---                   |
+  | `positions.q` (`.qf.port`)                 | `sym`    | weighted average           | O(1)                  |
+  | `allocation.q` (`.qf.exec`)                | anything | matched lots (FIFO/LIFO/…) | O(trades), recomputed |
+  | `desk_positions.q` (`.qf.port`)            | anything | none — netted only         | O(1)                  |
 
 ### 2. A position is two currencies
 
 Every row carries `base_qty` **and** `quote_qty`. Reporting one of them is how a
 cross position hides: a desk long EURUSD and short EURGBP is not long two
 things, it is long GBP and roughly flat EUR, and only a per-currency netting
-(`.qdesk.ccy_exposure`) says so. Both are running sums over fills, so
+(`.qf.port.desk_ccy_exposure`) says so. Both are running sums over fills, so
 `quote_qty` is the cash that actually moved rather than `base_qty` revalued ---
 and the difference between them is the trading result, which is what
 `break_even` reports.
@@ -143,7 +144,7 @@ There is deliberately no notion of a desk-level limit versus a pair-level one. A
 limits table scoped on `(sym, book, product)` polices each position; one scoped
 on `(sym, book)` caps each pair across a book's products, and one on `sym` alone
 caps each pair across the desk. The caller rolls its book up to the level its
-limits are written at --- that is a `.qdesk.rollup` call --- so one mechanism
+limits are written at --- that is a `.qf.port.rollup` call --- so one mechanism
 serves every level.
 
 Every scope keeps `sym`, and `load_limits` refuses one that does not (#1260).
@@ -157,12 +158,12 @@ it refuses the limit rather than compare a meaningless number.
 
 A position over its limit is over it on every tick until someone trades out of
 it. Without throttling the desk gets one alert per timer tick and stops reading
-them. `.qlimit.throttle` turns the state back into an event.
+them. `.qf.port.throttle` turns the state back into an event.
 
 The identity it throttles on is **the scope and the metric, never the observed
 value**. Including the value would mean a breached position that merely *moved*
 looked like a new breach and alerted again, which defeats the whole thing ---
-and that bug is a one-line mistake in `.qlimit.measure`, where taking the scope
+and that bug is a one-line mistake in `.qf.port.measure`, where taking the scope
 from anything but the book's own key lets a fill count or an un-melted metric
 into the identity. There is a test named after it.
 

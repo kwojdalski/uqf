@@ -9,12 +9,12 @@ authoritative long forms are: - `docs/architecture/stack.md` (the topology); -
 
 ## Four layers, with different rules
 
-  | Layer                 | Where                                                                                                     | Shape                                                                                              |
-  | ---                   | ---                                                                                                       | ---                                                                                                |
-  | Quant library         | `src/foundation`, `pricing`, `portfolio`, `execution`, `market_data`, `metadata`                          | pure functions, one flat `.q<abbrev>` namespace per file, loaded by `src/init.q`; no state, no I/O |
-  | Pipeline framework    | `src/etl/core/`                                                                                           | shells and contracts (`.qetl.*`); knows no instance and no TorQ                                    |
-  | Declarations          | `src/etl/sources`, `transforms`, `workers`, `streaming`, `reactions`                                      | one file per instance; registers itself as it loads; `src/etl/init.q` loads them last              |
-  | Adapters and surfaces | `scripts/processes/` (`.qtorq`, runners), `python/` (`uqs`, `uqf_frontend`, the Airflow provider), `web/` | the only code that knows TorQ, HTTP, Airflow or a browser exists                                   |
+  | Layer                 | Where                                                                                                     | Shape                                                                                                                 |
+  | ---                   | ---                                                                                                       | ---                                                                                                                   |
+  | Quant library         | `src/foundation`, `pricing`, `portfolio`, `execution`, `market_data`, `metadata`                          | pure functions in seven `.qf.<domain>` namespaces, several files per domain, loaded by `src/init.q`; no state, no I/O |
+  | Pipeline framework    | `src/etl/core/`                                                                                           | shells and contracts (`.qetl.*`); knows no instance and no TorQ                                                       |
+  | Declarations          | `src/etl/sources`, `transforms`, `workers`, `streaming`, `reactions`                                      | one file per instance; registers itself as it loads; `src/etl/init.q` loads them last                                 |
+  | Adapters and surfaces | `scripts/processes/` (`.qtorq`, runners), `python/` (`uqs`, `uqf_frontend`, the Airflow provider), `web/` | the only code that knows TorQ, HTTP, Airflow or a browser exists                                                      |
 
 Load order: `src/init.q`, the library, then `src/etl/init.q`, which loads the
 core and then the declarations. A process that names what it runs sets
@@ -25,27 +25,28 @@ whole tree loads.
 
 ## The quant library: file to namespace
 
-  | File                    | Namespace  |     | File                           | Namespace |
-  | ---                     | ---        | --- | ---                            | ---       |
-  | `foundation/stats.q`    | `.qstats`  |     | `portfolio/positions.q`        | `.qpos`   |
-  | `foundation/ccy.q`      | `.qccy`    |     | `portfolio/allocation.q`       | `.qalloc` |
-  | `foundation/daycount.q` | `.qdcf`    |     | `portfolio/desk_positions.q`   | `.qdesk`  |
-  | `foundation/rates.q`    | `.qrates`  |     | `portfolio/limits.q`           | `.qlimit` |
-  | `foundation/calendar.q` | `.qcal`    |     | `portfolio/risk.q`             | `.qrisk`  |
-  | `foundation/schema.q`   | `.qschema` |     | `execution/execution.q`        | `.qexec`  |
-  | `foundation/render.q`   | `.qrender` |     | `market_data/book.q`           | `.qbook`  |
-  | `pricing/cross.q`       | `.qcross`  |     | `market_data/microstructure.q` | `.qmicro` |
-  | `pricing/forwards.q`    | `.qfwd`    |     | `market_data/dqchecks.q`       | `.qdqc`   |
-  | `pricing/options.q`     | `.qopt`    |     | `metadata/metatables.q`        | `.qmeta`  |
+  | File                    | Namespace   |     | File                           | Namespace    |
+  | ---                     | ---         | --- | ---                            | ---          |
+  | `foundation/stats.q`    | `.qf.math`  |     | `portfolio/positions.q`        | `.qf.port`   |
+  | `foundation/ccy.q`      | `.qf.px`    |     | `portfolio/allocation.q`       | `.qf.exec`   |
+  | `foundation/daycount.q` | `.qf.px`    |     | `portfolio/desk_positions.q`   | `.qf.port`   |
+  | `foundation/rates.q`    | `.qf.px`    |     | `portfolio/limits.q`           | `.qf.port`   |
+  | `foundation/calendar.q` | `.qf.px`    |     | `portfolio/risk.q`             | `.qf.port`   |
+  | `foundation/schema.q`   | `.qf.util`  |     | `execution/execution.q`        | `.qf.exec`   |
+  | `foundation/render.q`   | `.qf.util`  |     | `market_data/book.q`           | `.qf.mkt`    |
+  | `pricing/cross.q`       | `.qf.mkt`   |     | `market_data/microstructure.q` | `.qf.mkt`    |
+  | `pricing/forwards.q`    | `.qf.px`    |     | `market_data/dqchecks.q`       | `.qf.mkt`    |
+  | `pricing/options.q`     | `.qf.px`    |     | `metadata/metatables.q`        | `.qf.util`   |
 
 The directories are organisational: a namespace doesn't follow its path. The
-mapping is the list in `src/init.q`. `src/namespaces.q` (`.qns`) is the one
+mapping is the list in `src/init.q`. `src/namespaces.q` (`.qf.util`) is the one
 enumeration of namespaces that every tool goes through.
 
 The three position models answer different questions, and a fourth would have to
-justify itself the same way: - `.qpos` is a running book with a weighted
-average; - `.qalloc` matches lots across any dimensions; - `.qdesk` is a running
-netted book across any dimensions, with no cost basis.
+justify itself the same way: - `positions.q` (`.qf.port`) is a running book with
+a weighted average; - `allocation.q` (`.qf.exec`) matches lots across any
+dimensions; - `desk_positions.q` (`.qf.port`) is a running netted book across
+any dimensions, with no cost basis.
 
 ## The pipeline framework: file to namespace
 

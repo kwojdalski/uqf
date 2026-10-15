@@ -52,7 +52,7 @@ FAILED_MARKER = "DEPLOY_VERIFY_FAILED"
 
 IDENTITY_EXPR = ".proc.procname"
 #: The same forward deploy_smoke.q checks offline; 0n where no library is loaded.
-LIBRARY_EXPR = "@[{.qfwd.fwd_simple[1.1;0.05;0.02;1f]};::;0n]"
+LIBRARY_EXPR = "@[{.qf.px.fwd_simple[1.1;0.05;0.02;1f]};::;0n]"
 LIBRARY_EXPECTED = 1.1323529411764708
 #: 1b or 0b where the ETL tree is loaded; 0N where it is not.
 ETL_EXPR = "@[{all exec passed from .qetl.transform.verify_all[]};::;0N]"
