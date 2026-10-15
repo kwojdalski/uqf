@@ -3,7 +3,7 @@ server (#956).
 
 Every `uqs deploy push` that gets as far as running - deployed or failed -
 appends one entry to deploy_history.json, beside deploy_targets.toml (or
-wherever $UQS_DEPLOY_HISTORY names). `uqs deploy list` reads it. The server
+wherever $UQS_DEPLOY_HISTORY names). `uqs deploy history` reads it. The server
 keeps its own truth in each release's deploy-report.json; this is the
 operator's record of what THEY pushed and where, so it needs no ssh to read.
 

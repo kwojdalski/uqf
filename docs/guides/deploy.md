@@ -219,8 +219,8 @@ yet registers one, `<server>-<dest's last folder>`, so it can be driven straight
 away.
 
 ```bash
-uqs deploy list                 # newest first; * marks each server's default
-uqs deploy list uat.example     # one server, or one target
+uqs deploy history              # newest first; * marks each server's default
+uqs deploy history uat.example  # one server, or one target
 uqs --target uat.example summary   # a server name: its latest successful deployment
 uqs target shell                # a shell in the most recent deployment
 uqs target shell uat            # ... or in a given target or server

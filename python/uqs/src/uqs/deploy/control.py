@@ -110,7 +110,7 @@ def remote_for(name: str | None, root: Path) -> Remote:
         what = f"no target or deployed server {name!r}" if name else "no deployment recorded"
         raise UqsError(
             f"{what} - targets in {targets.declaration_path(root)}: {known}; "
-            "`uqs deploy list` shows the deployments"
+            "`uqs deploy history` shows the deployments"
         )
     absent = [k for k in ("host", "dest") if not t.get(k)]
     if absent:
