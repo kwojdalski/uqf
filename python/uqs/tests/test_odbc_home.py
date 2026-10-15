@@ -231,22 +231,24 @@ def test_the_cli_runs_the_whole_lifecycle_under_setup_odbc(tmp_path, qhome):
     _approve(home, v1, v2)
 
     def uqs(*args: str):
-        argv = ["setup", "odbc", *args, "--home", str(home)]
-        return runner.invoke(cli.app, argv, env={"COLUMNS": "1000"})
+        return runner.invoke(cli.app, ["setup", "odbc", *args, "--home", str(home)])
 
     empty = uqs("env")
     assert empty.exit_code == 1
     for pkg in (v1, v2):
         installed = uqs("install", str(pkg), "--qhome", str(qhome))
         assert installed.exit_code == 0, installed.output
-        assert f"load it with: . {home}/current/{odbc_home.ENV_FILE}" in installed.output
+        # Unwrapped: rich wraps at the terminal's width, which a test does not set.
+        said = installed.output.replace("\n", "")
+        assert f"load it with: . {home}/current/{odbc_home.ENV_FILE}" in said
     status = json.loads(uqs("status").stdout)
     assert (status["current"], status["previous"]) == ("testodbc-2.0", "testodbc-1.0")
     env = uqs("env")
     assert env.exit_code == 0
     assert env.stdout == (home / "current" / odbc_home.ENV_FILE).read_text()
     rolled = uqs("rollback")
-    assert rolled.exit_code == 0 and "current is testodbc-1.0 again" in rolled.output
+    assert rolled.exit_code == 0
+    assert "current is testodbc-1.0 again" in " ".join(rolled.output.split())
     assert json.loads(uqs("status").stdout)["current"] == "testodbc-1.0"
 
 
