@@ -66,13 +66,13 @@ def test_a_new_edge_fails_naming_its_line(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n",
-            "src/pricing/b.q": "\\d .qf.mkt\n/ .qf.px.f in a comment\ng:{.qf.px.f x}\n\\d .\n",
+            "src/foundation/a.q": ".qf.px.f:{x}\n",
+            "src/pricing/b.q": "/ .qf.px.f in a comment\n.qf.mkt.g:{.qf.px.f x}\n",
         },
     )
     out = cmd.problems(root, frozenset())
     assert out == [
-        "src/pricing/b.q:3: b -> a is a new module dependency - add it to ALLOWED in "
+        "src/pricing/b.q:2: b -> a is a new module dependency - add it to ALLOWED in "
         "scripts/gates/check_module_deps.py in the same change, or call something the "
         "module may already depend on"
     ]
@@ -84,8 +84,8 @@ def test_an_edge_inside_one_domain_is_still_an_edge(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n",
-            "src/pricing/b.q": "\\d .qf.px\ng:{.qf.px.f x}\n\\d .\n",
+            "src/foundation/a.q": ".qf.px.f:{x}\n",
+            "src/pricing/b.q": ".qf.px.g:{.qf.px.f x}\n",
         },
     )
     assert set(cmd.edges(root)) == {("b", "a")}
@@ -95,10 +95,8 @@ def test_strings_and_comments_are_not_edges(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n",
-            "src/pricing/b.q": (
-                '\\d .qf.mkt\ng:{\'"see .qf.px.f"} / .qf.px.f is the other one\n\\d .\n'
-            ),
+            "src/foundation/a.q": ".qf.px.f:{x}\n",
+            "src/pricing/b.q": ('.qf.mkt.g:{\'"see .qf.px.f"} / .qf.px.f is the other one\n'),
         },
     )
     assert cmd.edges(root) == {}
@@ -108,15 +106,15 @@ def test_a_reference_to_a_name_nobody_defines_is_not_an_edge(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n",
-            "src/pricing/b.q": "\\d .qf.mkt\ng:{.qf.px.nothing x}\n\\d .\n",
+            "src/foundation/a.q": ".qf.px.f:{x}\n",
+            "src/pricing/b.q": ".qf.mkt.g:{.qf.px.nothing x}\n",
         },
     )
     assert cmd.edges(root) == {}
 
 
 def test_a_stale_allowed_edge_fails(tmp_path):
-    root = _tree(tmp_path, {"src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n"})
+    root = _tree(tmp_path, {"src/foundation/a.q": ".qf.px.f:{x}\n"})
     assert cmd.problems(root, frozenset({("a", "b")})) == [
         "ALLOWED lists a -> b, which no code makes - remove it"
     ]
@@ -126,8 +124,8 @@ def test_a_cycle_fails(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/pricing/a.q": "\\d .qf.px\nf:{.qf.mkt.g x}\n\\d .\n",
-            "src/execution/b.q": "\\d .qf.mkt\ng:{.qf.px.f x}\n\\d .\n",
+            "src/pricing/a.q": ".qf.px.f:{.qf.mkt.g x}\n",
+            "src/execution/b.q": ".qf.mkt.g:{.qf.px.f x}\n",
         },
     )
     out = cmd.problems(root, frozenset({("a", "b"), ("b", "a")}))
@@ -138,12 +136,12 @@ def test_a_removed_edge_is_refused_even_when_listed(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/execution/execution.q": "\\d .qf.exec\nf:{x}\n\\d .\n",
-            "src/pricing/cross.q": "\\d .qf.mkt\ng:{.qf.exec.f x}\n\\d .\n",
+            "src/execution/execution.q": ".qf.exec.f:{x}\n",
+            "src/pricing/cross.q": ".qf.mkt.g:{.qf.exec.f x}\n",
         },
     )
     out = cmd.problems(root, frozenset({("cross", "execution")}))
-    assert "src/pricing/cross.q:2: cross -> execution is refused" in out[0]
+    assert "src/pricing/cross.q:1: cross -> execution is refused" in out[0]
 
 
 def test_a_module_split_across_files_keeps_every_files_edges(tmp_path):
@@ -153,10 +151,10 @@ def test_a_module_split_across_files_keeps_every_files_edges(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n",
-            "src/foundation/c.q": "\\d .qf.px\nh:{x}\n\\d .\n",
-            "src/pricing/b.q": "\\d .qf.mkt\ng:{.qf.px.f x}\n\\d .\n",
-            "src/pricing/b_more.q": "\\d .qf.mkt\nk:{.qf.px.h x}\nm:{.qf.mkt.g x}\n\\d .\n",
+            "src/foundation/a.q": ".qf.px.f:{x}\n",
+            "src/foundation/c.q": ".qf.px.h:{x}\n",
+            "src/pricing/b.q": ".qf.mkt.g:{.qf.px.f x}\n",
+            "src/pricing/b_more.q": ".qf.mkt.k:{.qf.px.h x}\n.qf.mkt.m:{.qf.mkt.g x}\n",
         },
     )
     groups = {"b_more": "b"}
@@ -169,8 +167,8 @@ def test_a_name_defined_in_two_files_of_one_namespace_fails(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/pricing/a.q": "\\d .qf.px\nclash:{x}\nonly_a:{x}\n\\d .\n",
-            "src/pricing/b.q": "\\d .qf.px\nclash:{x+1}\n\\d .\n",
+            "src/pricing/a.q": ".qf.px.clash:{x}\n.qf.px.only_a:{x}\n",
+            "src/pricing/b.q": ".qf.px.clash:{x+1}\n",
         },
     )
     out = cmd.duplicates(root)
@@ -184,8 +182,8 @@ def test_the_same_name_in_two_different_domains_is_fine(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/pricing/a.q": "\\d .qf.px\nsame:{x}\n\\d .\n",
-            "src/pricing/b.q": "\\d .qf.mkt\nsame:{x}\n\\d .\n",
+            "src/pricing/a.q": ".qf.px.same:{x}\n",
+            "src/pricing/b.q": ".qf.mkt.same:{x}\n",
         },
     )
     assert cmd.duplicates(root) == []
@@ -196,8 +194,19 @@ def test_a_namespace_only_file_is_read_for_duplicates(tmp_path):
     root = _tree(
         tmp_path,
         {
-            "src/foundation/schema.q": "\\d .qf.util\nowned:{x}\n\\d .\n",
-            "src/namespaces.q": "\\d .qf.util\nowned:{x}\n\\d .\n",
+            "src/foundation/schema.q": ".qf.util.owned:{x}\n",
+            "src/namespaces.q": ".qf.util.owned:{x}\n",
         },
     )
     assert len(cmd.duplicates(root)) == 1
+
+
+def test_a_nested_context_in_a_library_file_fails(tmp_path):
+    """PeachQ cannot switch into `\\d .qf.px`; the library defines from the root."""
+    root = _tree(tmp_path, {"src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n"})
+    out = cmd.nested_contexts(root)
+    assert len(out) == 1 and out[0].startswith("src/foundation/a.q:1:")
+
+
+def test_the_real_library_opens_no_nested_context():
+    assert cmd.nested_contexts() == []

@@ -15,7 +15,7 @@
 /   all of them                   ->  foundation (schema, ccy, ...)
 / Nothing here reads execution, so execution analytics can build on it.
 
-\d .qf.mkt
+\d .
 
 / Invert an order book: BASE/QUOTE -> QUOTE/BASE. Inverting flips which
 / side is more favourable, so the new bid comes from the old ask and vice
@@ -23,7 +23,7 @@
 / @param book a dict `bid`ask!(bidPx;askPx) quoted BASE/QUOTE
 / @return the same book quoted QUOTE/BASE
 / @eg .qf.mkt.invert_book[`bid`ask!(1.1000;1.1002)]  -> `bid`ask!0.9089256 0.9090909
-invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
+.qf.mkt.invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
 
 / Combine two order books that are already oriented A/B and B/C (i.e. the
 / quote currency of the first leg matches the base currency of the
@@ -33,7 +33,7 @@ invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
 / @param book_bc dict `bid`ask!(bidPx;askPx) quoted B/C
 / @return dict `bid`ask!(bidPx;askPx) quoted A/C
 / @eg .qf.mkt.combine_oriented_books[`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02)]  -> `bid`ask!165 165.052
-combine_oriented_books:{[book_ab;book_bc]
+.qf.mkt.combine_oriented_books:{[book_ab;book_bc]
     bid:(book_ab`bid)*(book_bc`bid);
     ask:(book_ab`ask)*(book_bc`ask);
     `bid`ask!(bid;ask)};
@@ -45,7 +45,7 @@ combine_oriented_books:{[book_ab;book_bc]
 / @param book a dict `bid`ask!(bidPx;askPx)
 / @return 1b if bid>ask, else 0b
 / @eg .qf.mkt.book_crossed[`bid`ask!(1.1000;1.1002)]  -> 0b
-book_crossed:{[book] first .qf.mkt.crossed_top ([] bid_prices:enlist enlist book`bid; ask_prices:enlist enlist book`ask)};
+.qf.mkt.book_crossed:{[book] first .qf.mkt.crossed_top ([] bid_prices:enlist enlist book`bid; ask_prices:enlist enlist book`ask)};
 
 / Private: work out how two currency pairs relate - which currency they
 / share, what the resulting cross pair's symbol is, and whether either
@@ -60,7 +60,7 @@ book_crossed:{[book] first .qf.mkt.crossed_top ([] bid_prices:enlist enlist book
 / @throws error if sym1 and sym2 share no common currency
 / @eg .qf.mkt.ccy_orient_cross[`EURUSD;`USDJPY]  -> `cross_sym`invert1`invert2!(`EURJPY;0b;0b)
 / @private
-ccy_orient_cross:{[sym1;sym2]
+.qf.mkt.ccy_orient_cross:{[sym1;sym2]
     legs1:.qf.px.ccy_pair_legs sym1; base1:string legs1`base; quote1:string legs1`quote;
     legs2:.qf.px.ccy_pair_legs sym2; base2:string legs2`base; quote2:string legs2`quote;
     / The same pair twice shares BOTH currencies, and crossing it with itself
@@ -88,11 +88,11 @@ ccy_orient_cross:{[sym1;sym2]
 / @return dict `sym`bid`ask!(cross_sym;bidPx;askPx) for the synthetic cross
 / @throws error if sym1 and sym2 share no common currency
 / @eg .qf.mkt.cross_book[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165f;165.052)
-cross_book:{[sym1;book1;sym2;book2]
-    orient:ccy_orient_cross[sym1;sym2];
-    oriented1:$[orient`invert1; invert_book[book1]; book1];
-    oriented2:$[orient`invert2; invert_book[book2]; book2];
-    combined:combine_oriented_books[oriented1;oriented2];
+.qf.mkt.cross_book:{[sym1;book1;sym2;book2]
+    orient:.qf.mkt.ccy_orient_cross[sym1;sym2];
+    oriented1:$[orient`invert1; .qf.mkt.invert_book[book1]; book1];
+    oriented2:$[orient`invert2; .qf.mkt.invert_book[book2]; book2];
+    combined:.qf.mkt.combine_oriented_books[oriented1;oriented2];
     `sym`bid`ask!(orient`cross_sym;combined`bid;combined`ask)};
 
 / Private: the (prices;sizes) to sweep for one leg, for one side of the
@@ -104,7 +104,7 @@ cross_book:{[sym1;book1;sym2;book2]
 / @param invert 1b if this leg's convention needs flipping
 / @return (prices;sizes) to pass to sweep_price
 / @private
-oriented_levels:{[side;book;invert]
+.qf.mkt.oriented_levels:{[side;book;invert]
     $[side=`ask;
         $[invert; .qf.mkt.invert_book_depth[book`bid_prices;book`bid_sizes]; (book`ask_prices;book`ask_sizes)];
         $[invert; .qf.mkt.invert_book_depth[book`ask_prices;book`ask_sizes]; (book`bid_prices;book`bid_sizes)]]};
@@ -120,11 +120,11 @@ oriented_levels:{[side;book;invert]
 / @param invert2 1b if leg 2 needs its convention flipped
 / @return dict `price`filled_size`fully_filled for this side of the cross
 / @private
-cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
-    lvl1:oriented_levels[side;book1;invert1];
+.qf.mkt.cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
+    lvl1:.qf.mkt.oriented_levels[side;book1;invert1];
     sweep1:.qf.mkt.sweep_price[lvl1 0;lvl1 1;size];
     bridge_notional:sweep1[`filled_size]*sweep1[`avg_price];
-    lvl2:oriented_levels[side;book2;invert2];
+    lvl2:.qf.mkt.oriented_levels[side;book2;invert2];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
     sweep2:$[bridge_notional>0; .qf.mkt.sweep_price[lvl2 0;lvl2 1;bridge_notional]; empty_sweep];
     price:sweep1[`avg_price]*sweep2[`avg_price];
@@ -141,17 +141,17 @@ cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
 / @param size the size to sweep, in leg 1's relevant currency
 / @return one row: dict `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid
 / @private
-cross_book_at_one_size:{[sym1;book1;sym2;book2;size]
-    orient:ccy_orient_cross[sym1;sym2];
-    bid_r:cross_sweep_side[book1;book2;`bid;size;orient`invert1;orient`invert2];
-    ask_r:cross_sweep_side[book1;book2;`ask;size;orient`invert1;orient`invert2];
+.qf.mkt.cross_book_at_one_size:{[sym1;book1;sym2;book2;size]
+    orient:.qf.mkt.ccy_orient_cross[sym1;sym2];
+    bid_r:.qf.mkt.cross_sweep_side[book1;book2;`bid;size;orient`invert1;orient`invert2];
+    ask_r:.qf.mkt.cross_sweep_side[book1;book2;`ask;size;orient`invert1;orient`invert2];
     mid_price:0.5*bid_r[`price]+ask_r[`price];
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;orient`cross_sym;bid_r`price;bid_r`filled_size;bid_r`fully_filled;ask_r`price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
 
 / Private: the result columns contributed by one requested side.
 / @private
-side_cols:{[s]
+.qf.mkt.side_cols:{[s]
     $[s=`bid; `bid`bid_filled_size`bid_fully_filled;
       s=`ask; `ask`ask_filled_size`ask_fully_filled;
       s=`mid; enlist `mid;
@@ -175,9 +175,9 @@ side_cols:{[s]
 / @throws error if sym1 and sym2 share no common currency, or sides has
 /   anything other than `bid`ask`mid
 / @eg .qf.mkt.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;1000000 3000000;`bid`ask`mid]
-cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
-    rows:cross_book_at_one_size[sym1;book1;sym2;book2;] each sizes;
-    want_cols:`size`sym , raze side_cols each sides;
+.qf.mkt.cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
+    rows:.qf.mkt.cross_book_at_one_size[sym1;book1;sym2;book2;] each sizes;
+    want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
 
 / Like ccy_orient_cross, but resolves orientation across an
@@ -198,15 +198,15 @@ cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
 / @throws error if syms has fewer than 2 legs, or if two consecutive legs
 /   share no common currency (names the leg index and the two symbols)
 / @eg .qf.mkt.ccy_orient_chain[`EURUSD`USDJPY`JPYCHF]  -> `cross_sym`inverts!(`EURCHF;000b)
-ccy_orient_chain:{[syms]
+.qf.mkt.ccy_orient_chain:{[syms]
     syms:syms,();
     if[(count syms)<2; '"ccy_orient_chain: need at least 2 legs"];
-    orient01:ccy_orient_cross[syms 0;syms 1];
+    orient01:.qf.mkt.ccy_orient_cross[syms 0;syms 1];
     running_sym:orient01`cross_sym;
     inverts:(orient01`invert1;orient01`invert2);
     i:2;
     while[i<count syms;
-        orient_i:.[ccy_orient_cross;(running_sym;syms i);{[i;x] '"ccy_orient_chain: leg ",(string i),": ",x}[i]];
+        orient_i:.[.qf.mkt.ccy_orient_cross;(running_sym;syms i);{[i;x] '"ccy_orient_chain: leg ",(string i),": ",x}[i]];
         if[orient_i`invert1;
             '"ccy_orient_chain: leg ",(string i)," (",(string syms i),") joins ",(string running_sym),
              " at its start, not its end - put it first, or reverse the legs"];
@@ -234,9 +234,9 @@ ccy_orient_chain:{[syms]
 /   was swept at (leg 0: size; later legs: the previous bridge notional, 0 if
 /   none) and the indices into that leg's ORIGINAL oriented ladder it consumed
 / @private
-cross_sweep_chain:{[books;side;size;inverts]
+.qf.mkt.cross_sweep_chain:{[books;side;size;inverts]
     n:count books;
-    lvl0:oriented_levels[side;books 0;inverts 0];
+    lvl0:.qf.mkt.oriented_levels[side;books 0;inverts 0];
     sweep0:.qf.mkt.sweep_price[lvl0 0;lvl0 1;size];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled`levels_used!(0n;0n;0f;0b;`long$());
     acc:sweep0;
@@ -247,7 +247,7 @@ cross_sweep_chain:{[books;side;size;inverts]
     i:1;
     while[i<n;
         bridge_notional:acc[`filled_size]*acc[`avg_price];
-        lvl:oriented_levels[side;books i;inverts i];
+        lvl:.qf.mkt.oriented_levels[side;books i;inverts i];
         sweep_i:$[bridge_notional>0; .qf.mkt.sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
         legs,:enlist `notional`levels_used!(0f|bridge_notional;sweep_i`levels_used);
         price*:sweep_i[`avg_price];
@@ -265,10 +265,10 @@ cross_sweep_chain:{[books;side;size;inverts]
 /   one per leg
 / @param size the size to sweep, in leg 1's relevant currency
 / @return one row: dict `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid
-cross_book_chain_at_one_size:{[syms;books;size]
-    orient:ccy_orient_chain[syms];
-    bid_r:cross_sweep_chain[books;`bid;size;orient`inverts];
-    ask_r:cross_sweep_chain[books;`ask;size;orient`inverts];
+.qf.mkt.cross_book_chain_at_one_size:{[syms;books;size]
+    orient:.qf.mkt.ccy_orient_chain[syms];
+    bid_r:.qf.mkt.cross_sweep_chain[books;`bid;size;orient`inverts];
+    ask_r:.qf.mkt.cross_sweep_chain[books;`ask;size;orient`inverts];
     mid_price:0.5*bid_r[`price]+ask_r[`price];
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;orient`cross_sym;bid_r`price;bid_r`filled_size;bid_r`fully_filled;ask_r`price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
@@ -300,12 +300,12 @@ cross_book_chain_at_one_size:{[syms;books;size]
 /   the same length, if two consecutive legs share no common currency,
 /   or if sides has anything other than `bid`ask`mid
 / @eg .qf.mkt.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);1000000 3000000;`bid`ask`mid]
-cross_book_chain_at_sizes:{[syms;books;sizes;sides]
+.qf.mkt.cross_book_chain_at_sizes:{[syms;books;sizes;sides]
     syms:syms,();
     books:books,();
     if[(count syms)<>count books; '"cross_book_chain_at_sizes: syms and books must be the same length"];
-    rows:cross_book_chain_at_one_size[syms;books;] each sizes;
-    want_cols:`size`sym , raze side_cols each sides;
+    rows:.qf.mkt.cross_book_chain_at_one_size[syms;books;] each sizes;
+    want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
 
 / Private: an undirected currency graph, one edge per direction per
@@ -315,7 +315,7 @@ cross_book_chain_at_sizes:{[syms;books;sizes;sides]
 / @param avail_syms currency pair symbols known to be quotable
 / @return table `src`dst`via, one row per direction per pair
 / @private
-ccy_graph_edges:{[avail_syms]
+.qf.mkt.ccy_graph_edges:{[avail_syms]
     legs:.qf.px.ccy_pair_legs each avail_syms;
     src_ccy:legs[`base],legs[`quote];
     dst_ccy:legs[`quote],legs[`base];
@@ -336,9 +336,9 @@ ccy_graph_edges:{[avail_syms]
 /   if start_ccy and goal_ccy aren't connected by avail_syms at all
 / @eg .qf.mkt.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`AUD;`PLN]  -> `AUDUSD`EURUSD`EURPLN
 / @eg .qf.mkt.ccy_shortest_path[`AUDUSD`EURUSD;`AUD;`JPY]  -> `symbol$() (JPY isn't reachable from the available pairs)
-ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
+.qf.mkt.ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
     if[start_ccy~goal_ccy; :`symbol$()];
-    edges:ccy_graph_edges[avail_syms];
+    edges:.qf.mkt.ccy_graph_edges[avail_syms];
     visited:enlist start_ccy;
     frontier:enlist start_ccy;
     parent:(enlist start_ccy)!(enlist (`;`));
@@ -384,9 +384,9 @@ ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
 /   list if sym's two currencies aren't connected by avail_syms at all
 / @eg .qf.mkt.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDPLN]  -> `AUDUSD`EURUSD`EURPLN
 / @eg .qf.mkt.cross_decomp[`EURUSD`USDRUB;`EURRUB]  -> `EURUSD`USDRUB
-cross_decomp:{[avail_syms;sym]
+.qf.mkt.cross_decomp:{[avail_syms;sym]
     legs:.qf.px.ccy_pair_legs .qf.px.normalize_ccy_pair sym;
-    ccy_shortest_path[avail_syms;legs`base;legs`quote]};
+    .qf.mkt.ccy_shortest_path[avail_syms;legs`base;legs`quote]};
 
 / One symbol's book, as of a given time, pulled out of a quotes
 / table via an as-of join (aj) - the most recent row at or before as_of.
@@ -394,7 +394,7 @@ cross_decomp:{[avail_syms;sym]
 / once up front (aj on unsorted data doesn't error, it silently returns
 / wrong rows), not repeated here on every leg lookup.
 / @throws error if quotes has no row for target_sym at or before as_of
-leg_book_as_of:{[quotes;as_of;target_sym]
+.qf.mkt.leg_book_as_of:{[quotes;as_of;target_sym]
     lookup:([] sym:enlist target_sym; time:enlist as_of);
     joined:aj[`sym`time;lookup;quotes];
     / no match is an empty ladder on KDB-X but a null atom on PeachQ (#1034)
@@ -406,9 +406,9 @@ leg_book_as_of:{[quotes;as_of;target_sym]
 / size - the 1-leg-chain analogue of cross_book_at_one_size, used by
 / cross_book_at when the requested pair (or its inverse) is quoted
 / directly, with no chaining needed.
-single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
-    bid_lvl:oriented_levels[`bid;leg_book;invert];
-    ask_lvl:oriented_levels[`ask;leg_book;invert];
+.qf.mkt.single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
+    bid_lvl:.qf.mkt.oriented_levels[`bid;leg_book;invert];
+    ask_lvl:.qf.mkt.oriented_levels[`ask;leg_book;invert];
     bid_r:.qf.mkt.sweep_price[bid_lvl 0;bid_lvl 1;size];
     ask_r:.qf.mkt.sweep_price[ask_lvl 0;ask_lvl 1;size];
     mid_price:0.5*bid_r[`avg_price]+ask_r[`avg_price];
@@ -424,13 +424,13 @@ single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
 / @return 1b when the leg is the pair's inverse
 / @eg .qf.mkt.leg_inverts[`$"EUR/USD";`EURUSD]  ->  0b
 / @eg .qf.mkt.leg_inverts[`USDEUR;`EURUSD]  ->  1b
-leg_inverts:{[leg;cross_sym] not (.qf.px.normalize_ccy_pair leg)~cross_sym}
+.qf.mkt.leg_inverts:{[leg;cross_sym] not (.qf.px.normalize_ccy_pair leg)~cross_sym}
 
 / Private: like cross_book_chain_at_sizes, but for exactly one leg.
 / @private
-single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
-    rows:single_leg_at_one_size[cross_sym;leg_book;invert;] each sizes;
-    want_cols:`size`sym , raze side_cols each sides;
+.qf.mkt.single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
+    rows:.qf.mkt.single_leg_at_one_size[cross_sym;leg_book;invert;] each sizes;
+    want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
 
 / Depth-aware synthetic book for any pair, found automatically by chaining
@@ -459,18 +459,18 @@ single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
 /   before as_of
 / @eg .qf.mkt.cross_book_at[`sym`time xasc quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
 / @eg .qf.mkt.cross_book_at[`sym`time xasc quotes;`EURUSD;.z.p;enlist 1000000;enlist `mid]  -> EURUSD is quoted directly in this quotes table, so no chaining is needed
-cross_book_at:{[quotes;sym;as_of;sizes;sides]
+.qf.mkt.cross_book_at:{[quotes;sym;as_of;sizes;sides]
     .qf.util.require_depth_quotes[`cross_book_at;quotes];
     if[not quotes~`sym`time xasc quotes;
         '"cross_book_at: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
     cross_sym:.qf.px.normalize_ccy_pair sym;
-    path:cross_decomp[distinct quotes`sym;cross_sym];
+    path:.qf.mkt.cross_decomp[distinct quotes`sym;cross_sym];
     if[0=count path;
         legs:.qf.px.ccy_pair_legs cross_sym;
         '"cross_book_at: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     $[1=count path;
-        single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;as_of;path 0];leg_inverts[path 0;cross_sym];sizes;sides];
-        cross_book_chain_at_sizes[path;leg_book_as_of[quotes;as_of;] each path;sizes;sides]]};
+        .qf.mkt.single_leg_at_sizes[cross_sym;.qf.mkt.leg_book_as_of[quotes;as_of;path 0];.qf.mkt.leg_inverts[path 0;cross_sym];sizes;sides];
+        .qf.mkt.cross_book_chain_at_sizes[path;.qf.mkt.leg_book_as_of[quotes;as_of;] each path;sizes;sides]]};
 
 / Private: true if sweeping `size` on `side` (via cross_book_at) still
 / lands at an average price at least as good as price_limit, and the
@@ -478,9 +478,9 @@ cross_book_at:{[quotes;sym;as_of;sizes;sides]
 / (selling at proceeds no worse than wanted); `ask` side: good means
 / avg_price<=price_limit (buying at cost no worse than wanted).
 / @private
-cross_price_ok_at_size:{[quotes;sym;as_of;side;price_limit;size]
+.qf.mkt.cross_price_ok_at_size:{[quotes;sym;as_of;side;price_limit;size]
     if[size<=0; :1b];
-    r:cross_book_at[quotes;sym;as_of;enlist size;enlist side];
+    r:.qf.mkt.cross_book_at[quotes;sym;as_of;enlist size;enlist side];
     px:first r side;
     fully_col:`$(string side),"_fully_filled";
     fully:first r fully_col;
@@ -495,9 +495,9 @@ cross_price_ok_at_size:{[quotes;sym;as_of;side;price_limit;size]
 / coarser absolute tolerance than 2.5). Override before calling if your
 / instrument universe needs a coarser/finer size resolution, e.g.
 / .qf.mkt.CROSS_SIZE_REL_TOL:1e-4 for faster, coarser sizing.
-CROSS_SIZE_MAX_DOUBLINGS:60;
-CROSS_SIZE_REL_TOL:1e-7;
-CROSS_SIZE_MAX_HALVINGS:200;
+.qf.mkt.CROSS_SIZE_MAX_DOUBLINGS:60;
+.qf.mkt.CROSS_SIZE_REL_TOL:1e-7;
+.qf.mkt.CROSS_SIZE_MAX_HALVINGS:200;
 
 / Largest size (in sym's base currency) tradeable on one side without the
 / average swept price crossing price_limit - the inverse question to
@@ -519,20 +519,20 @@ CROSS_SIZE_MAX_HALVINGS:200;
 / @throws error if side isn't `bid or `ask, or anything cross_book_at itself throws
 / @eg .qf.mkt.cross_size_at_price[quotes;`AUDPLN;.z.p;`bid;2.5650]
 / @eg .qf.mkt.cross_size_at_price[quotes;`AUDPLN;.z.p;`ask;2.5700]  -> the ask-side (buy) boundary at a different price limit
-cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
+.qf.mkt.cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
     if[not $[-11h=type side; side in `bid`ask; 0b];
         '"cross_size_at_price: side must be `bid or `ask, got ",.Q.s1 side];
     lo:0f;
     hi:1f;
     doublings:0;
-    while[(cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;hi]) and doublings<CROSS_SIZE_MAX_DOUBLINGS;
+    while[(.qf.mkt.cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;hi]) and doublings<.qf.mkt.CROSS_SIZE_MAX_DOUBLINGS;
         hi*:2;
         doublings+:1];
-    tol:hi*CROSS_SIZE_REL_TOL;
+    tol:hi*.qf.mkt.CROSS_SIZE_REL_TOL;
     halvings:0;
-    while[((hi-lo)>tol) and halvings<CROSS_SIZE_MAX_HALVINGS;
+    while[((hi-lo)>tol) and halvings<.qf.mkt.CROSS_SIZE_MAX_HALVINGS;
         probe:0.5*lo+hi;
-        $[cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;probe]; lo:probe; hi:probe];
+        $[.qf.mkt.cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;probe]; lo:probe; hi:probe];
         halvings+:1];
     lo};
 
@@ -548,10 +548,10 @@ cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
 / that read as "no quotes at those times" (#1034).
 / @throws error if ref_size is not a positive number, or anything
 /   cross_book_at throws other than leg_book_as_of's no-quote refusal
-cross_ref_price_at:{[quotes;sym;as_of;ref_size]
+.qf.mkt.cross_ref_price_at:{[quotes;sym;as_of;ref_size]
     if[not $[(type ref_size) within -9 -5h; ref_size>0; 0b];
         '"cross_ref_price_at: ref_size must be a positive number, got ",.Q.s1 ref_size];
-    @[{[quotes;sym;ref_size;as_of] first cross_book_at[quotes;sym;as_of;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];
+    @[{[quotes;sym;ref_size;as_of] first .qf.mkt.cross_book_at[quotes;sym;as_of;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];
         as_of;
         {[e] $[e like "leg_book_as_of: no quote for *"; 0n; 'e]}]};
 

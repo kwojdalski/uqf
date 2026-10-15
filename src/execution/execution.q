@@ -9,7 +9,7 @@
 / from a liquidity provider's point of view - flip side to view it from
 / the LP's side of the same trade).
 
-\d .qf.exec
+\d .
 
 / Post-trade price movement: how far the reference/mid price has moved,
 / in pips, from the trade price by the time ref_price was observed.
@@ -21,14 +21,14 @@
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the markout, in pips
 / @eg .qf.exec.markout[1;1.1000;1.1010;10000]  -> 10f
-markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trade_price)};
+.qf.exec.markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trade_price)};
 
 / The columns every markout-at-horizons result has, in order: `time` is the
 / instant the reference price was read (trade_time + horizon), then the pair.
 / One fixed shape (#626), so direct and synthetic markouts join with uj and
 / no library-wide setting can reorder or rename them; a caller that needs
 / another name renames at its own boundary.
-markout_cols:`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
+.qf.exec.markout_cols:`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 
 / Markout at one or more time horizons after each trade, looking up the
 / reference mid itself via an as-of join against a quote table - the
@@ -59,8 +59,8 @@ markout_cols:`time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 /   or if horizons is not a timespan or list of timespans (a bare long would be read
 /   as nanoseconds without complaint)
 / @eg .qf.exec.markout_at_horizons[markout_trades;mid_quotes;0D00:00:01 0D00:00:10]
-markout_at_horizons:{[trades;quotes;horizons]
-    require_horizons[`markout_at_horizons;horizons];
+.qf.exec.markout_at_horizons:{[trades;quotes;horizons]
+    .qf.exec.require_horizons[`markout_at_horizons;horizons];
     .qf.util.require_cols[`markout_at_horizons;`trades;trades;`sym`time`side`trade_price`pip_factor];
     .qf.util.require_cols[`markout_at_horizons;`quotes;quotes;`sym`time`mid];
     horizon_list:$[0>type horizons; enlist horizons; horizons];
@@ -79,9 +79,9 @@ markout_at_horizons:{[trades;quotes;horizons]
     / #1223) with no tolerance, sorting its own copy of quotes.
     joined:.qf.mkt.lookup[quotes;lookup_tbl;`keys`ref_time`event_time`attach`tolerance!(enlist `sym;`time;`time;enlist[`mid]!enlist `mid;0Nn)];
     ref_price:joined`mid;
-    markout_pips:markout[exp_trades`side;exp_trades`trade_price;ref_price;exp_trades`pip_factor];
-    base:flip markout_cols!(target_time;exp_trades`sym;exp_trades`time;exp_horizons;exp_trades`trade_price;ref_price;markout_pips);
-    extra_cols:(cols trades) except `sym`time`side`trade_price`pip_factor,markout_cols;
+    markout_pips:.qf.exec.markout[exp_trades`side;exp_trades`trade_price;ref_price;exp_trades`pip_factor];
+    base:flip .qf.exec.markout_cols!(target_time;exp_trades`sym;exp_trades`time;exp_horizons;exp_trades`trade_price;ref_price;markout_pips);
+    extra_cols:(cols trades) except `sym`time`side`trade_price`pip_factor,.qf.exec.markout_cols;
     $[count extra_cols; base,'extra_cols#exp_trades; base]};
 
 / ------------------------------------------------ CROSS-PAIR MARKOUTS (#626)
@@ -96,7 +96,7 @@ markout_at_horizons:{[trades;quotes;horizons]
 / Shared by markout_at_horizons and the cross markouts below.
 / @throws error naming the caller and the type it was given
 / @private
-require_horizons:{[fn_name;horizons]
+.qf.exec.require_horizons:{[fn_name;horizons]
     if[not (abs type horizons)=16h;
         '(string fn_name),": horizons must be a timespan or list of timespans, e.g. 0D00:00:01, got type ",string type horizons];
     }
@@ -139,8 +139,8 @@ require_horizons:{[fn_name;horizons]
 /   unbridgeable sym is a structural problem, not "no quote yet")
 / @eg .qf.exec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;0D00:00:00.001*-500 -300 0 100 300;1]
 / @eg .qf.exec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;neg 0D00:00:00.5;1]  -> a single backward-looking horizon, 500ms before the trade
-cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons;ref_size]
-    require_horizons[`cross_markout_at_horizons;horizons];
+.qf.exec.cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons;ref_size]
+    .qf.exec.require_horizons[`cross_markout_at_horizons;horizons];
     .qf.util.require_depth_quotes[`cross_markout_at_horizons;quotes];
     if[not quotes~`sym`time xasc quotes;
         '"cross_markout_at_horizons: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
@@ -154,7 +154,7 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
     ref_price:.qf.mkt.cross_ref_price_at[quotes;cross_sym;;ref_size] each target_time;
     markout_pips:.qf.exec.markout[side;trade_price;ref_price;pip_factor];
     n:count horizons;
-    flip markout_cols!(target_time;n#cross_sym;n#trade_time;horizons;n#trade_price;ref_price;markout_pips)};
+    flip .qf.exec.markout_cols!(target_time;n#cross_sym;n#trade_time;horizons;n#trade_price;ref_price;markout_pips)};
 
 / Private: the waterfall behind cross_markout_decomp and
 / cross_markout_attribution - revalue the legs of path one at a time, in
@@ -164,7 +164,7 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
 / @return dict `price_t0`price_t1`contribution, one value per leg; contribution
 /   is all null if any leg's t0 or t1 mid is unavailable
 / @private
-decomp_legs:{[quotes;cross_sym;path;t0;t1;ref_size]
+.qf.exec.decomp_legs:{[quotes;cross_sym;path;t0;t1;ref_size]
     n:count path;
     price_t0:.qf.mkt.cross_ref_price_at[quotes;;t0;ref_size] each path;
     price_t1:.qf.mkt.cross_ref_price_at[quotes;;t1;ref_size] each path;
@@ -216,7 +216,7 @@ decomp_legs:{[quotes;cross_sym;path;t0;t1;ref_size]
 /   see cross_ref_price_at's own comment), or if no chain of pairs
 /   currently in quotes connects sym's two currencies
 / @eg .qf.exec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]
-cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
+.qf.exec.cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
     .qf.util.require_depth_quotes[`cross_markout_decomp;quotes];
     if[not quotes~`sym`time xasc quotes;
         '"cross_markout_decomp: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
@@ -226,7 +226,7 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
         legs:.qf.px.ccy_pair_legs cross_sym;
         '"cross_markout_decomp: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     inverts:$[1=count path; enlist .qf.mkt.leg_inverts[path 0;cross_sym]; (.qf.mkt.ccy_orient_chain path)`inverts];
-    d:decomp_legs[quotes;cross_sym;path;t0;t1;ref_size];
+    d:.qf.exec.decomp_legs[quotes;cross_sym;path;t0;t1;ref_size];
     ([] leg:path; invert:inverts; price_t0:d`price_t0; price_t1:d`price_t1; contribution_pips:pip_factor*d`contribution)};
 
 / Market-impact check: did a trade in traded_sym coincide with a price
@@ -266,13 +266,13 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 /   impact_sym's two currencies
 / @eg .qf.exec.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;0D00:00:00.001*-500 -300 0 100 300;1]
 / @eg .qf.exec.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;-1;10000;0D00:00:00.3;1]  -> a sell reports the impact pair's own drift with the opposite sign
-cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons;ref_size]
+.qf.exec.cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons;ref_size]
     traded_legs:asc value .qf.px.ccy_pair_legs traded_sym;
     impact_legs:asc value .qf.px.ccy_pair_legs impact_sym;
     if[traded_legs~impact_legs;
         '"cross_impact_at_horizons: impact_sym must be different from traded_sym"];
     baseline:.qf.mkt.cross_ref_price_at[quotes;impact_sym;trade_time;ref_size];
-    cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons;ref_size]};
+    .qf.exec.cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons;ref_size]};
 
 / Effective spread paid/received relative to the prevailing mid at the
 / moment of execution, in pips. Positive = cost to the side that traded.
@@ -282,7 +282,7 @@ cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_fact
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the effective spread, in pips
 / @eg .qf.exec.eff_spread[1;1.1002;1.1000;10000]  -> 4f
-eff_spread:{[side;trade_price;mid_at_trade;pip_factor] 2*side*pip_factor*(trade_price-mid_at_trade)};
+.qf.exec.eff_spread:{[side;trade_price;mid_at_trade;pip_factor] 2*side*pip_factor*(trade_price-mid_at_trade)};
 
 / Slippage between a decision/arrival price and the actual execution
 / price, in pips. Positive = cost to the side that traded.
@@ -292,7 +292,7 @@ eff_spread:{[side;trade_price;mid_at_trade;pip_factor] 2*side*pip_factor*(trade_
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the slippage, in pips
 / @eg .qf.exec.slippage[1;1.1000;1.1003;10000]  -> 3f
-slippage:{[side;arrival_price;exec_price;pip_factor] side*pip_factor*(exec_price-arrival_price)};
+.qf.exec.slippage:{[side;arrival_price;exec_price;pip_factor] side*pip_factor*(exec_price-arrival_price)};
 
 / Fraction of quotes/orders that resulted in a fill.
 / .
@@ -312,7 +312,7 @@ slippage:{[side;arrival_price;exec_price;pip_factor] side*pip_factor*(exec_price
 / @return the fill ratio in [0,1], or null when no quotes were sent
 / @eg .qf.exec.fill_ratio[73;100]  -> 0.73
 / @eg .qf.exec.fill_ratio[0;0]  -> 0n
-fill_ratio:{[num_fills;num_quotes] ?[num_quotes=0;0n;num_fills%num_quotes]};
+.qf.exec.fill_ratio:{[num_fills;num_quotes] ?[num_quotes=0;0n;num_fills%num_quotes]};
 
 / Fraction of trade requests rejected (e.g. under last look).
 / .
@@ -323,7 +323,7 @@ fill_ratio:{[num_fills;num_quotes] ?[num_quotes=0;0n;num_fills%num_quotes]};
 / @return the reject ratio in [0,1], or null when no requests were made
 / @eg .qf.exec.reject_ratio[4;100]  -> 0.04
 / @eg .qf.exec.reject_ratio[0;0]  -> 0n
-reject_ratio:{[num_rejects;num_requests] ?[num_requests=0;0n;num_rejects%num_requests]};
+.qf.exec.reject_ratio:{[num_rejects;num_requests] ?[num_requests=0;0n;num_rejects%num_requests]};
 
 / Hit ratio (fraction of requests that resulted in a fill/hit), windowed
 / by time, optionally time-bucketed (hourly, daily, ...), and grouped by
@@ -353,7 +353,7 @@ reject_ratio:{[num_rejects;num_requests] ?[num_requests=0;0n;num_rejects%num_req
 /   or any column named in group_cols), or if mode isn't `count or `amount
 / @eg .qf.exec.hit_ratio_by[requests;range_from;range_to;0D01:00:00;enlist `sym;`amount]
 / @eg .qf.exec.hit_ratio_by[requests;range_from;range_to;0Nn;`symbol$();`count]  -> one overall count-mode ratio, no time-bucketing or grouping
-hit_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
+.qf.exec.hit_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
     group_cols:group_cols,();
     .qf.util.require_cols[`hit_ratio_by;`requests;requests;distinct `time`hit`size,group_cols];
     if[not mode in `count`amount; '"hit_ratio_by: mode must be `count or `amount, got ",string mode];
@@ -396,7 +396,7 @@ hit_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
 /   or any column named in group_cols), or if mode isn't `count or `amount
 / @eg .qf.exec.reject_ratio_by[reject_requests;range_from;range_to;0D01:00:00;enlist `sym;`amount]
 / @eg .qf.exec.reject_ratio_by[reject_requests;range_from;range_to;0Nn;`symbol$();`count]  -> one overall count-mode ratio
-reject_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
+.qf.exec.reject_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
     group_cols:group_cols,();
     .qf.util.require_cols[`reject_ratio_by;`requests;requests;distinct `time`reject`size,group_cols];
     if[not mode in `count`amount; '"reject_ratio_by: mode must be `count or `amount, got ",string mode];
@@ -445,7 +445,7 @@ reject_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
 / The timestamp columns fill_probability_by reads: one row per order.
 / submit_time is required; the rest are null when the event did not happen
 / (observed_until null means "still observed", i.e. up to as_of).
-fill_order_time_cols:`submit_time`observed_until`first_fill_time`full_fill_time`cancel_time
+.qf.exec.fill_order_time_cols:`submit_time`observed_until`first_fill_time`full_fill_time`cancel_time
 
 / What fill_probability_by does when opts does not say.
 / .
@@ -455,10 +455,10 @@ fill_order_time_cols:`submit_time`observed_until`first_fill_time`full_fill_time`
 / `failure scores it as a miss, for when cancelling IS the outcome being
 / measured. min_count is the observed count below which a bucket's status is
 / `sparse - 30 by default, a conventional floor rather than a derived one.
-fill_probability_defaults:`cancel_policy`min_count!(`exclude;30)
+.qf.exec.fill_probability_defaults:`cancel_policy`min_count!(`exclude;30)
 
 / Output column names, which a bucket column may not reuse.
-fill_probability_cols:`horizon`target`order_count`fill_count`failure_count`cancelled_count`censored_count`observed_count`fill_probability`status
+.qf.exec.fill_probability_cols:`horizon`target`order_count`fill_count`failure_count`cancelled_count`censored_count`observed_count`fill_probability`status
 
 / Empirical probability that a resting order fills within a horizon,
 / bucketed by the caller's decision-time features, with separate any-fill
@@ -490,16 +490,16 @@ fill_probability_cols:`horizon`target`order_count`fill_count`failure_count`cance
 / @eg .qf.exec.fill_probability_by[fill_orders;0D00:01:00 0D00:02:00;enlist `sym;2026.01.01D12:00:00.000000000;::]
 / @eg exec fill_probability from .qf.exec.fill_probability_by[fill_orders;0D00:01:00;`symbol$();2026.01.01D12:00:00.000000000;::] where target=`full  -> ,0.4
 / @eg .qf.exec.fill_probability_by[fill_orders;0D00:01:00;`symbol$();2026.01.01D12:00:00.000000000;(enlist `cancel_policy)!enlist `ignore]  -> throws
-fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
+.qf.exec.fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
     bucket_cols:(),bucket_cols;
     hs:(),horizons;
-    fill_probability_require_args[orders;hs;bucket_cols;as_of];
-    o:fill_probability_opts[opts];
+    .qf.exec.fill_probability_require_args[orders;hs;bucket_cols;as_of];
+    o:.qf.exec.fill_probability_opts[opts];
     orders:0!orders;
     / Orders that existed at as_of. A later order is not censored, it is
     / not there yet.
     existing:select from orders where submit_time<=as_of;
-    fill_probability_require_consistent[existing];
+    .qf.exec.fill_probability_require_consistent[existing];
     / One row per (order, horizon), order-major.
     n:count existing;
     m:count hs;
@@ -511,12 +511,12 @@ fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
     / would win the & outright.
     known_by:as_of&as_of^expanded`observed_until;
     horizon_end:(expanded`submit_time)+h;
-    any_outcome:fill_outcome[expanded`first_fill_time;expanded`cancel_time;horizon_end;known_by];
-    full_outcome:fill_outcome[expanded`full_fill_time;expanded`cancel_time;horizon_end;known_by];
+    any_outcome:.qf.exec.fill_outcome[expanded`first_fill_time;expanded`cancel_time;horizon_end;known_by];
+    full_outcome:.qf.exec.fill_outcome[expanded`full_fill_time;expanded`cancel_time;horizon_end;known_by];
     / Column by column, rather than `expanded bucket_cols`: with no bucket
     / columns that would index the table by an empty list.
     grouping:(bucket_cols!{[tbl;c] tbl c}[expanded] each bucket_cols),(enlist `horizon)!enlist h;
-    scored:fill_outcome_rows[grouping;`any;any_outcome],fill_outcome_rows[grouping;`full;full_outcome];
+    scored:.qf.exec.fill_outcome_rows[grouping;`any;any_outcome],.qf.exec.fill_outcome_rows[grouping;`full;full_outcome];
     by_names:bucket_cols,`horizon`target;
     agg:`order_count`fill_count`failure_count`cancelled_count`censored_count!(
         (count;`i);(sum;`fill_count);(sum;`failure_count);(sum;`cancelled_count);(sum;`censored_count));
@@ -530,10 +530,10 @@ fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
 
 / Private: refuse fill_probability_by's arguments, naming what is wrong.
 / @private
-fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
+.qf.exec.fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
     if[not .Q.qt orders; '"fill_probability_by: orders must be a table"];
-    .qf.util.require_cols[`fill_probability_by;`orders;0!orders;distinct fill_order_time_cols,bucket_cols];
-    clash:bucket_cols where bucket_cols in fill_probability_cols;
+    .qf.util.require_cols[`fill_probability_by;`orders;0!orders;distinct .qf.exec.fill_order_time_cols,bucket_cols];
+    clash:bucket_cols where bucket_cols in .qf.exec.fill_probability_cols;
     if[count clash;
         '"fill_probability_by: bucket column(s) ",(", " sv string clash)," would collide with an output column of the same name"];
     if[not 16h=type hs;
@@ -544,7 +544,7 @@ fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
         '"fill_probability_by: as_of must be a timestamp - the instant the estimate is made at"];
     if[null as_of; '"fill_probability_by: as_of is null"];
     col_types:exec c!t from meta 0!orders;
-    not_ts:fill_order_time_cols where not "p"=col_types fill_order_time_cols;
+    not_ts:.qf.exec.fill_order_time_cols where not "p"=col_types .qf.exec.fill_order_time_cols;
     if[count not_ts;
         '"fill_probability_by: ",(", " sv string not_ts)," must be timestamp column(s) - a datetime rounds sub-second times silently"];
     };
@@ -561,7 +561,7 @@ fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
 / @param known_by the last instant this order's state is known at
 / @return a symbol vector, one per row
 / @private
-fill_outcome:{[event_time;cancel_time;horizon_end;known_by]
+.qf.exec.fill_outcome:{[event_time;cancel_time;horizon_end;known_by]
     seen_event:(not null event_time) and event_time<=known_by;
     filled:seen_event and event_time<=horizon_end;
     seen_cancel:(not null cancel_time) and cancel_time<=known_by;
@@ -573,7 +573,7 @@ fill_outcome:{[event_time;cancel_time;horizon_end;known_by]
 / columns, the target, and a 0/1 long per outcome, so a grouped sum of each
 / is its count.
 / @private
-fill_outcome_rows:{[grouping;tgt;outcome]
+.qf.exec.fill_outcome_rows:{[grouping;tgt;outcome]
     flip grouping,`target`fill_count`failure_count`cancelled_count`censored_count!(
         (count outcome)#tgt;
         `long$outcome=`fill;
@@ -584,15 +584,15 @@ fill_outcome_rows:{[grouping;tgt;outcome]
 / Private: fill_probability_by's opts, resolved against the defaults.
 / @throws error naming an unknown key, an unknown cancel_policy or a bad min_count
 / @private
-fill_probability_opts:{[opts]
-    if[(::)~opts; :fill_probability_defaults];
+.qf.exec.fill_probability_opts:{[opts]
+    if[(::)~opts; :.qf.exec.fill_probability_defaults];
     if[not 99h=type opts;
         '"fill_probability_by: opts must be (::) or a dictionary of cancel_policy and/or min_count"];
-    unknown:(key opts) except key fill_probability_defaults;
+    unknown:(key opts) except key .qf.exec.fill_probability_defaults;
     if[count unknown;
         '"fill_probability_by: unknown option(s) ",(", " sv string unknown),
-         " - known: ",", " sv string key fill_probability_defaults];
-    o:fill_probability_defaults,opts;
+         " - known: ",", " sv string key .qf.exec.fill_probability_defaults];
+    o:.qf.exec.fill_probability_defaults,opts;
     if[not (o`cancel_policy) in `exclude`failure;
         '"fill_probability_by: cancel_policy must be `exclude or `failure, got ",-3!o`cancel_policy];
     if[not (type o`min_count) in -5 -6 -7h;
@@ -606,10 +606,10 @@ fill_probability_opts:{[opts]
 / and any estimate built over it would be quietly wrong: a fill before its
 / order existed, or a full fill with no first fill.
 / @private
-fill_probability_require_consistent:{[orders]
+.qf.exec.fill_probability_require_consistent:{[orders]
     s:orders`submit_time;
     if[any null s; '"fill_probability_by: every order needs a submit_time"];
-    event_cols:1_fill_order_time_cols;
+    event_cols:1_.qf.exec.fill_order_time_cols;
     early:{[s;e] (not null e) and e<s}[s] each orders event_cols;
     bad:event_cols where any each early;
     if[count bad;
@@ -648,7 +648,7 @@ fill_probability_require_consistent:{[orders]
 / of component -> weight. normalise: how components are put on one scale
 / before weighting - required with weights, because a composite over raw
 / bps, rates and pips compares nothing.
-venue_quality_defaults:`stale_after`min_count`weights`normalise!(0D00:00:05;30;::;`)
+.qf.exec.venue_quality_defaults:`stale_after`min_count`weights`normalise!(0D00:00:05;30;::;`)
 
 / Venue-quality scorecard: per time bucket, venue and pair, the observable
 / execution-quality components a desk compares liquidity providers on, each
@@ -692,14 +692,14 @@ venue_quality_defaults:`stale_after`min_count`weights`normalise!(0D00:00:05;30;:
 / @return the scorecard table described above
 / @throws error naming what is wrong with an argument; otherwise
 /   "not implemented" until #338 is built
-venue_quality:{[quotes;requests;trades;window;config]
-    venue_quality_require_args[quotes;requests;trades;window];
-    venue_quality_config[config];
+.qf.exec.venue_quality:{[quotes;requests;trades;window;config]
+    .qf.exec.venue_quality_require_args[quotes;requests;trades;window];
+    .qf.exec.venue_quality_config[config];
     '"venue_quality: not implemented yet (#338) - the contract is fixed, the computation is not"};
 
 / Private: refuse venue_quality's tables and window, naming what is wrong.
 / @private
-venue_quality_require_args:{[quotes;requests;trades;window]
+.qf.exec.venue_quality_require_args:{[quotes;requests;trades;window]
     if[not .Q.qt quotes; '"venue_quality: quotes must be a table"];
     if[not .Q.qt requests; '"venue_quality: requests must be a table"];
     if[not .Q.qt trades; '"venue_quality: trades must be a table"];
@@ -713,16 +713,16 @@ venue_quality_require_args:{[quotes;requests;trades;window]
 / Private: venue_quality's config, checked and resolved against the defaults.
 / @throws error naming a missing or unknown key, or a value of the wrong kind
 / @private
-venue_quality_config:{[config]
+.qf.exec.venue_quality_config:{[config]
     if[not 99h=type config;
         '"venue_quality: config must be a dictionary with at least as_of and horizons"];
     missing:`as_of`horizons except key config;
     if[count missing; '"venue_quality: config is missing ",", " sv string missing];
-    unknown:(key config) except `as_of`horizons,key venue_quality_defaults;
+    unknown:(key config) except `as_of`horizons,key .qf.exec.venue_quality_defaults;
     if[count unknown;
         '"venue_quality: unknown config key(s) ",(", " sv string unknown),
-         " - known: as_of, horizons, ",", " sv string key venue_quality_defaults];
-    c:venue_quality_defaults,config;
+         " - known: as_of, horizons, ",", " sv string key .qf.exec.venue_quality_defaults];
+    c:.qf.exec.venue_quality_defaults,config;
     if[not -12h=type c`as_of;
         '"venue_quality: as_of must be a timestamp - nothing after it is used"];
     if[null c`as_of; '"venue_quality: as_of is null"];
@@ -746,7 +746,7 @@ venue_quality_config:{[config]
 / @param sizes list of fill sizes, same length as prices
 / @return the size-weighted average price
 / @eg .qf.exec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625
-vwap:{[prices;sizes]
+.qf.exec.vwap:{[prices;sizes]
     weighted_sum:sum prices*sizes;
     total_size:sum sizes;
     weighted_sum%total_size};
@@ -765,7 +765,7 @@ vwap:{[prices;sizes]
 / @param sizes list of fill sizes, same length as prices, aligned to it
 / @return a vector the same length as prices - the VWAP as of each fill
 / @eg .qf.exec.vwap_expanding[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.1 1.100667 1.100625
-vwap_expanding:{[prices;sizes]
+.qf.exec.vwap_expanding:{[prices;sizes]
     weighted_sums:sums prices*sizes;
     total_sizes:sums sizes;
     weighted_sums%total_sizes};

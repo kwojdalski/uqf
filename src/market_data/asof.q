@@ -15,14 +15,14 @@
 / whatever its arrival order. The comparison is ref_time <= event_time, so a
 / reference row stamped EXACTLY at the event does count (aj's rule).
 
-\d .qf.mkt
+\d .
 
 / The two columns a lookup adds after the attached ones.
-result_cols:`staleness`status
+.qf.mkt.result_cols:`staleness`status
 
 / Private: the names a spec must carry.
 / @private
-spec_keys:`keys`ref_time`event_time`attach`tolerance
+.qf.mkt.spec_keys:`keys`ref_time`event_time`attach`tolerance
 
 / Attach the prevailing reference row to each event.
 / .
@@ -51,7 +51,7 @@ spec_keys:`keys`ref_time`event_time`attach`tolerance
 /   or events, a result column that clashes with an events column, or a
 /   negative tolerance
 / @eg .qf.mkt.lookup[([] sym:`a`a; time:2026.10.01D10:00:00 2026.10.01D10:00:05; mid:1 2f);([] sym:enlist `a; time:enlist 2026.10.01D10:00:07);`keys`ref_time`event_time`attach`tolerance!(enlist `sym;`time;`time;enlist[`mid]!enlist `mid;0D00:00:10)]  ->  ([] sym:enlist `a; time:enlist 2026.10.01D10:00:07; mid:enlist 2f; staleness:enlist 0D00:00:02; status:enlist `ok)
-lookup:{[refs;events;spec]
+.qf.mkt.lookup:{[refs;events;spec]
     miss:.qf.mkt.spec_keys except key spec;
     if[count miss; '"asof.lookup: spec is missing ",", " sv string miss];
     ks:(),spec`keys;

@@ -19,7 +19,7 @@
 / configs). The root is the one exception: it has nothing to point back to,
 / so is_namespace answers 0b for it. No walk here starts at root.
 
-\d .qf.util
+\d .
 
 / Is this value a namespace, as `\d` creates them?
 / .
@@ -32,24 +32,24 @@
 / @return 1b for a namespace dictionary, 0b for anything else
 / @eg .qf.util.is_namespace value `.qetl.job.bounded  ->  1b
 / @eg .qf.util.is_namespace .qetl.job.bounded.worker_cfg  ->  0b
-is_namespace:{[v]
+.qf.util.is_namespace:{[v]
     if[not 99h=type v; :0b];
     if[not 11h=type key v; :0b];
     ` in key v}
 
 / Private: the namespaces DIRECTLY under one, fully qualified.
 / @private
-children:{[ns]
+.qf.util.children:{[ns]
     d:@[value;ns;{[e] (::)}];
-    if[not is_namespace d; :`symbol$()];
+    if[not .qf.util.is_namespace d; :`symbol$()];
     ks:(key d) except `;
-    ks:ks where {[ns;k] is_namespace @[value;` sv ns,k;{[e] (::)}]}[ns] each ks;
+    ks:ks where {[ns;k] .qf.util.is_namespace @[value;` sv ns,k;{[e] (::)}]}[ns] each ks;
     ` sv/: ns,/:ks}
 
 / Private: a namespace and, recursively, everything nested under it.
 / Depth-first, the parent before its children.
 / @private
-descend:{[ns] ns,raze descend each children ns}
+.qf.util.descend:{[ns] ns,raze .qf.util.descend each .qf.util.children ns}
 
 / Every namespace this tree owns, leaves and containers alike, fully
 / qualified and in depth-first order: `.qetl.job.bounded, `.qpipe.job, `.qpipe.job.demo_deals_backfill.
@@ -63,10 +63,10 @@ descend:{[ns] ns,raze descend each children ns}
 / @return symbol list of namespace names, each with its leading dot
 / @eg `.qetl.job.bounded in .qf.util.owned[]  ->  1b
 / @eg `.qpipe.job.demo_deals_backfill in .qf.util.owned[]  ->  1b
-owned:{[]
+.qf.util.owned:{[]
     top:(key `) where (string key `) like "q*";
     top:asc top except `q;
-    raze descend each ` sv/: `,'top}
+    raze .qf.util.descend each ` sv/: `,'top}
 
 / The namespaces that hold FUNCTIONS: owned[] minus the containers, which is
 / what a coverage tool, a contract export or a documentation scan wants.
@@ -75,8 +75,8 @@ owned:{[]
 / @return symbol list, a subset of owned[]
 / @eg `.qpipe.job in .qf.util.functional[]  ->  0b
 / @eg `.qpipe.job.demo_deals_backfill in .qf.util.functional[]  ->  1b
-functional:{[]
-    nss:owned[];
+.qf.util.functional:{[]
+    nss:.qf.util.owned[];
     nss where {[ns]
         d:value ns;
         ks:(key d) except `;

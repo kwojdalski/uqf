@@ -12,7 +12,7 @@
 / worked example - and tests/q/test_render.q holds the two to the same
 / output.
 
-\d .qf.util
+\d .
 
 / A value as q text, IN FULL: a string escaped with no length limit, anything
 / else with the console widened to its 2000-column maximum for the one call
@@ -21,8 +21,8 @@
 / @param v any value
 / @return its q literal, as .Q.s1 spells it
 / @eg count .qf.util.full 300#"a"  ->  302
-full:{[v]
-    if[10h=type v; :quoted[v]];
+.qf.util.full:{[v]
+    if[10h=type v; :.qf.util.quoted[v]];
     c:@[system;"c";{[e] ()}];
     if[2<>count c; :.Q.s1 v];
     @[system;"c ",string[c 0]," 2000";::];
@@ -36,7 +36,7 @@ full:{[v]
 / @param s a string
 / @return the literal
 / @eg .qf.util.quoted "a\nb"  ->  "\"a\\nb\""
-quoted:{[s]
+.qf.util.quoted:{[s]
     esc:{[ch] i:`int$ch;
         $[ch in "\\\""; "\\",ch;
           ch="\n"; "\\n";

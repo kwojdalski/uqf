@@ -7,7 +7,7 @@
 / .
 / Requires stats.q (ncdf/npdf) and rates.q (df_cont) to be loaded first.
 
-\d .qf.px
+\d .
 
 / Private: (d1;d2) computed together so callers never duplicate the
 / underlying arithmetic (see src/foundation/stats.q for why that matters in q).
@@ -27,7 +27,7 @@
 / is the call less it), vega and rho are 0, and gamma, vanna, volga and
 / theta keep the 0%0 / x%0 results they already give at t=0 off the forward.
 / @private
-d1_d2:{[s;k;rd;rf;sigma;t]
+.qf.px.d1_d2:{[s;k;rd;rf;sigma;t]
     if[any (t<0)&not null t; '"options: t must be >= 0"];
     log_moneyness:log[s%k];
     variance_adj:0.5*sigma*sigma;
@@ -48,7 +48,7 @@ d1_d2:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return the Garman-Kohlhagen d1 term
 / @eg .qf.px.d1[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784
-d1:{[s;k;rd;rf;sigma;t] first d1_d2[s;k;rd;rf;sigma;t]};
+.qf.px.d1:{[s;k;rd;rf;sigma;t] first .qf.px.d1_d2[s;k;rd;rf;sigma;t]};
 
 / The Garman-Kohlhagen d2 term.
 / @param s spot rate
@@ -59,7 +59,7 @@ d1:{[s;k;rd;rf;sigma;t] first d1_d2[s;k;rd;rf;sigma;t]};
 / @param t year fraction to expiry
 / @return the Garman-Kohlhagen d2 term
 / @eg .qf.px.d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.0348547
-d2:{[s;k;rd;rf;sigma;t] last d1_d2[s;k;rd;rf;sigma;t]};
+.qf.px.d2:{[s;k;rd;rf;sigma;t] last .qf.px.d1_d2[s;k;rd;rf;sigma;t]};
 
 / European call premium, in domestic/quote currency per unit of base notional.
 / @param s spot rate
@@ -70,8 +70,8 @@ d2:{[s;k;rd;rf;sigma;t] last d1_d2[s;k;rd;rf;sigma;t]};
 / @param t year fraction to expiry
 / @return the call premium
 / @eg .qf.px.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03781082
-gk_call:{[s;k;rd;rf;sigma;t]
-    dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
+.qf.px.gk_call:{[s;k;rd;rf;sigma;t]
+    dd:.qf.px.d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
     call_leg1:s*foreign_df*.qf.math.ncdf[d1v];
     call_leg2:k*domestic_df*.qf.math.ncdf[d2v];
@@ -86,8 +86,8 @@ gk_call:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return the put premium
 / @eg .qf.px.gk_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03701845
-gk_put:{[s;k;rd;rf;sigma;t]
-    dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
+.qf.px.gk_put:{[s;k;rd;rf;sigma;t]
+    dd:.qf.px.d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
     put_leg1:k*domestic_df*.qf.math.ncdf[neg d2v];
     put_leg2:s*foreign_df*.qf.math.ncdf[neg d1v];
@@ -104,7 +104,7 @@ gk_put:{[s;k;rd;rf;sigma;t]
 / @return the call or put premium
 / @eg .qf.px.gk_price[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.03781082
 / ? not $: a vector of is_call flags prices calls and puts element by element.
-gk_price:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_call[s;k;rd;rf;sigma;t];gk_put[s;k;rd;rf;sigma;t]]};
+.qf.px.gk_price:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;.qf.px.gk_call[s;k;rd;rf;sigma;t];.qf.px.gk_put[s;k;rd;rf;sigma;t]]};
 
 / Call delta: sensitivity of the premium to a change in spot.
 / @param s spot rate
@@ -115,8 +115,8 @@ gk_price:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_call[s;k;rd;rf;sigma;t];gk_pu
 / @param t year fraction to expiry
 / @return the call delta, in (0, exp(-rf*t))
 / @eg .qf.px.gk_delta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.512884
-gk_delta_call:{[s;k;rd;rf;sigma;t]
-    d1v:d1[s;k;rd;rf;sigma;t];
+.qf.px.gk_delta_call:{[s;k;rd;rf;sigma;t]
+    d1v:.qf.px.d1[s;k;rd;rf;sigma;t];
     foreign_df:.qf.px.df_cont[rf;t];
     foreign_df*.qf.math.ncdf[d1v]};
 
@@ -129,8 +129,8 @@ gk_delta_call:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return the put delta, in (-exp(-rf*t), 0)
 / @eg .qf.px.gk_delta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4722279
-gk_delta_put:{[s;k;rd;rf;sigma;t]
-    d1v:d1[s;k;rd;rf;sigma;t];
+.qf.px.gk_delta_put:{[s;k;rd;rf;sigma;t]
+    d1v:.qf.px.d1[s;k;rd;rf;sigma;t];
     foreign_df:.qf.px.df_cont[rf;t];
     foreign_df*(.qf.math.ncdf[d1v]-1)};
 
@@ -145,7 +145,7 @@ gk_delta_put:{[s;k;rd;rf;sigma;t]
 / @return the call or put delta
 / @eg .qf.px.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.512884
 / @eg .qf.px.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4722279
-gk_delta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_delta_call[s;k;rd;rf;sigma;t];gk_delta_put[s;k;rd;rf;sigma;t]]};
+.qf.px.gk_delta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;.qf.px.gk_delta_call[s;k;rd;rf;sigma;t];.qf.px.gk_delta_put[s;k;rd;rf;sigma;t]]};
 
 / Gamma: sensitivity of delta to a change in spot. Identical for call and put.
 / @param s spot rate
@@ -156,8 +156,8 @@ gk_delta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_delta_call[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return gamma (always positive)
 / @eg .qf.px.gk_gamma[1.10;1.12;0.045;0.02;0.10;0.75]  -> 4.11994
-gk_gamma:{[s;k;rd;rf;sigma;t]
-    d1v:d1[s;k;rd;rf;sigma;t];
+.qf.px.gk_gamma:{[s;k;rd;rf;sigma;t]
+    d1v:.qf.px.d1[s;k;rd;rf;sigma;t];
     foreign_df:.qf.px.df_cont[rf;t];
     numerator:foreign_df*.qf.math.npdf[d1v];
     denominator:s*sigma*sqrt[t];
@@ -174,8 +174,8 @@ gk_gamma:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return vega (always positive)
 / @eg .qf.px.gk_vega[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3738845
-gk_vega:{[s;k;rd;rf;sigma;t]
-    d1v:d1[s;k;rd;rf;sigma;t];
+.qf.px.gk_vega:{[s;k;rd;rf;sigma;t]
+    d1v:.qf.px.d1[s;k;rd;rf;sigma;t];
     foreign_df:.qf.px.df_cont[rf;t];
     s*foreign_df*.qf.math.npdf[d1v]*sqrt[t]};
 
@@ -196,9 +196,9 @@ gk_vega:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return vanna
 / @eg .qf.px.gk_vanna[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.1367967
-gk_vanna:{[s;k;rd;rf;sigma;t]
-    d1v:d1[s;k;rd;rf;sigma;t];
-    d2v:d2[s;k;rd;rf;sigma;t];
+.qf.px.gk_vanna:{[s;k;rd;rf;sigma;t]
+    d1v:.qf.px.d1[s;k;rd;rf;sigma;t];
+    d2v:.qf.px.d2[s;k;rd;rf;sigma;t];
     foreign_df:.qf.px.df_cont[rf;t];
     density:foreign_df*.qf.math.npdf[d1v];
     neg density*d2v%sigma};
@@ -219,10 +219,10 @@ gk_vanna:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return volga
 / @eg .qf.px.gk_volga[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.006743588
-gk_volga:{[s;k;rd;rf;sigma;t]
-    d1v:d1[s;k;rd;rf;sigma;t];
-    d2v:d2[s;k;rd;rf;sigma;t];
-    vega:gk_vega[s;k;rd;rf;sigma;t];
+.qf.px.gk_volga:{[s;k;rd;rf;sigma;t]
+    d1v:.qf.px.d1[s;k;rd;rf;sigma;t];
+    d2v:.qf.px.d2[s;k;rd;rf;sigma;t];
+    vega:.qf.px.gk_vega[s;k;rd;rf;sigma;t];
     vega*(d1v*d2v)%sigma};
 
 / Call theta: time decay per year (-dV/dT); divide by 365 for a
@@ -235,8 +235,8 @@ gk_volga:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return the call's theta
 / @eg .qf.px.gk_theta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.03732846
-gk_theta_call:{[s;k;rd;rf;sigma;t]
-    dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
+.qf.px.gk_theta_call:{[s;k;rd;rf;sigma;t]
+    dd:.qf.px.d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
     decay_term:(s*foreign_df*.qf.math.npdf[d1v]*sigma)%(2*sqrt[t]);
     drift_term:(rf*s*foreign_df*.qf.math.ncdf[d1v])-(rd*k*domestic_df*.qf.math.ncdf[d2v]);
@@ -252,8 +252,8 @@ gk_theta_call:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return the put's theta
 / @eg .qf.px.gk_theta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.01027354
-gk_theta_put:{[s;k;rd;rf;sigma;t]
-    dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
+.qf.px.gk_theta_put:{[s;k;rd;rf;sigma;t]
+    dd:.qf.px.d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:.qf.px.df_cont[rd;t]; foreign_df:.qf.px.df_cont[rf;t];
     decay_term:(s*foreign_df*.qf.math.npdf[d1v]*sigma)%(2*sqrt[t]);
     drift_term:(rd*k*domestic_df*.qf.math.ncdf[neg d2v])-(rf*s*foreign_df*.qf.math.ncdf[neg d1v]);
@@ -270,7 +270,7 @@ gk_theta_put:{[s;k;rd;rf;sigma;t]
 / @return the call or put theta
 / @eg .qf.px.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> -0.03732846
 / @eg .qf.px.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.01027354
-gk_theta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_theta_call[s;k;rd;rf;sigma;t];gk_theta_put[s;k;rd;rf;sigma;t]]};
+.qf.px.gk_theta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;.qf.px.gk_theta_call[s;k;rd;rf;sigma;t];.qf.px.gk_theta_put[s;k;rd;rf;sigma;t]]};
 
 / Call rho: sensitivity to the domestic rate rd.
 / @param s spot rate
@@ -281,8 +281,8 @@ gk_theta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_theta_call[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return the call's rho
 / @eg .qf.px.gk_rho_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3947712
-gk_rho_call:{[s;k;rd;rf;sigma;t]
-    d2v:d2[s;k;rd;rf;sigma;t];
+.qf.px.gk_rho_call:{[s;k;rd;rf;sigma;t]
+    d2v:.qf.px.d2[s;k;rd;rf;sigma;t];
     domestic_df:.qf.px.df_cont[rd;t];
     k*t*domestic_df*.qf.math.ncdf[d2v]};
 
@@ -295,8 +295,8 @@ gk_rho_call:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @return the put's rho
 / @eg .qf.px.gk_rho_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4173519
-gk_rho_put:{[s;k;rd;rf;sigma;t]
-    d2v:d2[s;k;rd;rf;sigma;t];
+.qf.px.gk_rho_put:{[s;k;rd;rf;sigma;t]
+    d2v:.qf.px.d2[s;k;rd;rf;sigma;t];
     domestic_df:.qf.px.df_cont[rd;t];
     neg (k*t*domestic_df*.qf.math.ncdf[neg d2v])};
 
@@ -311,7 +311,7 @@ gk_rho_put:{[s;k;rd;rf;sigma;t]
 / @return the call or put rho
 / @eg .qf.px.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.3947712
 / @eg .qf.px.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4173519
-gk_rho:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_rho_call[s;k;rd;rf;sigma;t];gk_rho_put[s;k;rd;rf;sigma;t]]};
+.qf.px.gk_rho:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;.qf.px.gk_rho_call[s;k;rd;rf;sigma;t];.qf.px.gk_rho_put[s;k;rd;rf;sigma;t]]};
 
 / Configurable search bracket/iteration cap for bisect_vol's fallback
 / search - lo/hi should stay well outside any real-world vol (0.001% to
@@ -321,9 +321,9 @@ gk_rho:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_rho_call[s;k;rd;rf;sigma;t];gk_
 / cap exists to bound worst-case work, not because convergence is in
 / doubt. Override before calling if a narrower/wider bracket fits your
 / instrument universe better, e.g. .qf.px.BISECT_VOL_HI:2.0.
-BISECT_VOL_LO:0.00001;
-BISECT_VOL_HI:5.0;
-BISECT_VOL_MAX_ITER:200;
+.qf.px.BISECT_VOL_LO:0.00001;
+.qf.px.BISECT_VOL_HI:5.0;
+.qf.px.BISECT_VOL_MAX_ITER:200;
 
 / Private: bisection search used as a robust fallback for implied_vol when
 / Newton-Raphson stalls (vega ~ 0). gk_price is monotone increasing in
@@ -340,15 +340,15 @@ BISECT_VOL_MAX_ITER:200;
 /   (0.1 to the eye. The residual is the bisection's own tolerance, so the
 /   exact digits are a property of BISECT_VOL_TOL rather than of the option)
 / @private
-bisect_vol:{[price;s;k;rd;rf;t;is_call]
-    lo:BISECT_VOL_LO; hi:BISECT_VOL_HI;
+.qf.px.bisect_vol:{[price;s;k;rd;rf;t;is_call]
+    lo:.qf.px.BISECT_VOL_LO; hi:.qf.px.BISECT_VOL_HI;
     / A price no volatility in [lo;hi] produces - below intrinsic, or above
     / the price at hi - has no implied vol: null, not the nearer bound.
-    if[(price<gk_price[s;k;rd;rf;lo;t;is_call]) or price>gk_price[s;k;rd;rf;hi;t;is_call]; :0n];
+    if[(price<.qf.px.gk_price[s;k;rd;rf;lo;t;is_call]) or price>.qf.px.gk_price[s;k;rd;rf;hi;t;is_call]; :0n];
     i:0;
-    while[i<BISECT_VOL_MAX_ITER;
+    while[i<.qf.px.BISECT_VOL_MAX_ITER;
         mid:0.5*(lo+hi);
-        mid_price:gk_price[s;k;rd;rf;mid;t;is_call];
+        mid_price:.qf.px.gk_price[s;k;rd;rf;mid;t;is_call];
         $[mid_price>price;hi:mid;lo:mid];
         i+:1];
     0.5*(lo+hi)};
@@ -362,11 +362,11 @@ bisect_vol:{[price;s;k;rd;rf;t;is_call]
 / from driving sigma negative or to exactly 0 (where vega is itself 0).
 / Override before calling if your instruments need tighter/looser
 / convergence, e.g. .qf.px.IMPLIED_VOL_PRICE_TOL:1e-6 for faster, coarser fits.
-IMPLIED_VOL_INITIAL_SIGMA:0.20;
-IMPLIED_VOL_MAX_ITER:100;
-IMPLIED_VOL_PRICE_TOL:1e-10;
-IMPLIED_VOL_VEGA_FLOOR:1e-12;
-IMPLIED_VOL_SIGMA_FLOOR:0.0001;
+.qf.px.IMPLIED_VOL_INITIAL_SIGMA:0.20;
+.qf.px.IMPLIED_VOL_MAX_ITER:100;
+.qf.px.IMPLIED_VOL_PRICE_TOL:1e-10;
+.qf.px.IMPLIED_VOL_VEGA_FLOOR:1e-12;
+.qf.px.IMPLIED_VOL_SIGMA_FLOOR:0.0001;
 
 / Implied volatility via Newton-Raphson (vega as derivative), falling back
 / to bisection if vega collapses.
@@ -379,19 +379,19 @@ IMPLIED_VOL_SIGMA_FLOOR:0.0001;
 / @param is_call 1b for a call, 0b for a put
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
 / @eg .qf.px.implied_vol[.qf.px.gk_call[1.10;1.12;0.045;0.02;0.12;0.75];1.10;1.12;0.045;0.02;0.75;1b]  -> 0.12
-implied_vol:{[price;s;k;rd;rf;t;is_call]
-    sigma:IMPLIED_VOL_INITIAL_SIGMA;
+.qf.px.implied_vol:{[price;s;k;rd;rf;t;is_call]
+    sigma:.qf.px.IMPLIED_VOL_INITIAL_SIGMA;
     i:0;
     result:0n;
-    while[i<IMPLIED_VOL_MAX_ITER;
-        model_price:gk_price[s;k;rd;rf;sigma;t;is_call];
+    while[i<.qf.px.IMPLIED_VOL_MAX_ITER;
+        model_price:.qf.px.gk_price[s;k;rd;rf;sigma;t;is_call];
         diff:model_price-price;
-        if[(abs diff)<IMPLIED_VOL_PRICE_TOL; result:sigma; i:IMPLIED_VOL_MAX_ITER];
-        if[i<IMPLIED_VOL_MAX_ITER;
-            vega_val:gk_vega[s;k;rd;rf;sigma;t];
-            $[vega_val<IMPLIED_VOL_VEGA_FLOOR;
-                [result:bisect_vol[price;s;k;rd;rf;t;is_call]; i:IMPLIED_VOL_MAX_ITER];
-                [sigma-:diff%vega_val; sigma:IMPLIED_VOL_SIGMA_FLOOR|sigma; i+:1]]]];
-    $[null result; bisect_vol[price;s;k;rd;rf;t;is_call]; result]};
+        if[(abs diff)<.qf.px.IMPLIED_VOL_PRICE_TOL; result:sigma; i:.qf.px.IMPLIED_VOL_MAX_ITER];
+        if[i<.qf.px.IMPLIED_VOL_MAX_ITER;
+            vega_val:.qf.px.gk_vega[s;k;rd;rf;sigma;t];
+            $[vega_val<.qf.px.IMPLIED_VOL_VEGA_FLOOR;
+                [result:.qf.px.bisect_vol[price;s;k;rd;rf;t;is_call]; i:.qf.px.IMPLIED_VOL_MAX_ITER];
+                [sigma-:diff%vega_val; sigma:.qf.px.IMPLIED_VOL_SIGMA_FLOOR|sigma; i+:1]]]];
+    $[null result; .qf.px.bisect_vol[price;s;k;rd;rf;t;is_call]; result]};
 
 \d .

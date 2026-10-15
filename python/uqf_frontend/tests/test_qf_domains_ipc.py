@@ -21,7 +21,6 @@ import pytest
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import QueryRejected
 from uqf_frontend.gateway import KolaGateway
-from uqs.interpreter import PEACHQ, q_impl
 
 #: Every retired namespace; none of them may exist in a process that loaded src/init.q.
 RETIRED = (
@@ -34,8 +33,6 @@ DOMAINS = ["demo", "exec", "math", "mkt", "port", "px", "util"]
 
 @pytest.fixture(scope="module")
 def gateway(start_q, tmp_path_factory) -> Any:
-    if q_impl() == PEACHQ:
-        pytest.skip("PeachQ cannot load nested `\\d .qf.<domain>` namespaces unflattened")
     script = tmp_path_factory.mktemp("qf") / "library.q"
     script.write_text("\\l src/init.q\n")
     with start_q(str(script)) as port:

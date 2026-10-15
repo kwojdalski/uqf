@@ -17,7 +17,7 @@
 / from EURUSD*EURPLN) and that difference is the explicit RESIDUAL row:
 / allocations + residual = total, always.
 
-\d .qf.exec
+\d .
 
 / Attribute a signed cross markout between two times to the legs of the
 / convention route, with an explicit residual.
@@ -41,7 +41,7 @@
 / @throws error if a currency is not in the convention, if quotes is missing
 /   a required column, or is not sorted `sym`time xasc
 / @eg .qf.exec.cross_markout_attribution_with[.qf.mkt.attribution_convention;quotes;`USDPLN;1;t0;t1;10000;1]`kind  -> `leg`leg`residual`total
-cross_markout_attribution_with:{[conv;quotes;sym;side;t0;t1;pip_factor;ref_size]
+.qf.exec.cross_markout_attribution_with:{[conv;quotes;sym;side;t0;t1;pip_factor;ref_size]
     .qf.util.require_depth_quotes[`cross_markout_attribution;quotes];
     if[not quotes~`sym`time xasc quotes;
         '"cross_markout_attribution: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
@@ -54,11 +54,11 @@ cross_markout_attribution_with:{[conv;quotes;sym;side;t0;t1;pip_factor;ref_size]
     leg_books:(has_book[quotes;t0;] each route`leg) and has_book[quotes;t1;] each route`leg;
     leg_price:{[quotes;ref_size;t;leg;ok] $[ok;.qf.mkt.cross_ref_price_at[quotes;leg;t;ref_size];0n]};
     d:$[all leg_books;
-        decomp_legs[quotes;cross_sym;route`leg;t0;t1;ref_size];
+        .qf.exec.decomp_legs[quotes;cross_sym;route`leg;t0;t1;ref_size];
         `price_t0`price_t1`contribution!(leg_price[quotes;ref_size;t0;;]'[route`leg;leg_books];leg_price[quotes;ref_size;t1;;]'[route`leg;leg_books];n#0n)];
     ref_0:.qf.mkt.cross_ref_price_at[quotes;cross_sym;t0;ref_size];
     ref_1:.qf.mkt.cross_ref_price_at[quotes;cross_sym;t1;ref_size];
-    total:markout[side;ref_0;ref_1;pip_factor];
+    total:.qf.exec.markout[side;ref_0;ref_1;pip_factor];
     / no total means no allocation to reconcile: legs go null/unavailable too, so a
     / review sums only trades that have a total (#1249)
     has_total:not null total;
@@ -89,13 +89,13 @@ cross_markout_attribution_with:{[conv;quotes;sym;side;t0;t1;pip_factor;ref_size]
 / @return table, see cross_markout_attribution_with
 / @throws error as cross_markout_attribution_with does
 / @eg .qf.exec.cross_markout_attribution[quotes;`USDPLN;1;t0;t1;10000;1]`leg  -> `EURUSD`EURPLN``
-cross_markout_attribution:{[quotes;sym;side;t0;t1;pip_factor;ref_size]
-    cross_markout_attribution_with[.qf.mkt.attribution_convention;quotes;sym;side;t0;t1;pip_factor;ref_size]};
+.qf.exec.cross_markout_attribution:{[quotes;sym;side;t0;t1;pip_factor;ref_size]
+    .qf.exec.cross_markout_attribution_with[.qf.mkt.attribution_convention;quotes;sym;side;t0;t1;pip_factor;ref_size]};
 
 / Private: the sum of the non-null values, null if there are none (q's own sum
 / of all-null is 0, which would read as a priced zero).
 / @private
-sum_or_null:{$[any not null x;sum x;0n]};
+.qf.exec.sum_or_null:{$[any not null x;sum x;0n]};
 
 / Desk review of an attribution convention against real trades: for each pair,
 / horizon and route leg, how much of the markout the convention attributes
@@ -118,7 +118,7 @@ sum_or_null:{$[any not null x;sum x;0n]};
 / @throws error if trades lacks a column, horizons is empty or not positive,
 /   trades is empty, or cross_markout_attribution_with throws
 / @eg .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;.attributiontest.review_fixture_quotes[];.attributiontest.review_fixture_trades[];enlist 0D00:00:01;10000;1]`share
-attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
+.qf.exec.attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
     miss:`time`sym`side except cols trades;
     if[count miss; '"attribution_review: trades is missing column ",string first miss];
     if[0=count trades; '"attribution_review: no trades"];
@@ -128,7 +128,7 @@ attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
         tr:trades i;
         pair:.qf.px.normalize_ccy_pair tr`sym;
         f:$[99h=type pf;pf pair;pf];
-        r:cross_markout_attribution_with[conv;quotes;pair;tr`side;tr`time;tr[`time]+h;f;rs];
+        r:.qf.exec.cross_markout_attribution_with[conv;quotes;pair;tr`side;tr`time;tr[`time]+h;f;rs];
         update pair:pair,horizon:h from r};
     n:count trades;
     m:count horizons;
@@ -155,5 +155,5 @@ attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
 / @return table, see attribution_review_with
 / @throws error as attribution_review_with does
 / @eg .qf.exec.attribution_review[.attributiontest.review_fixture_quotes[];.attributiontest.review_fixture_trades[];enlist 0D00:00:01;10000;1]`pair
-attribution_review:{[quotes;trades;horizons;pip_factor;ref_size]
-    attribution_review_with[.qf.mkt.attribution_convention;quotes;trades;horizons;pip_factor;ref_size]};
+.qf.exec.attribution_review:{[quotes;trades;horizons;pip_factor;ref_size]
+    .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;quotes;trades;horizons;pip_factor;ref_size]};

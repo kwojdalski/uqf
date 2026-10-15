@@ -7,10 +7,10 @@
 / https://web.archive.org/web/20151030215612/http://home.online.no/~pjacklam/notes/invnorm/
 / .
 
-\d .qf.math
+\d .
 
 / The constant pi, used by npdf.
-PI:acos -1;
+.qf.math.PI:acos -1;
 
 / Evaluate a polynomial at x via Horner's method - the one place q's lack
 / of operator precedence for hand-written Horner chains is worked out and
@@ -22,25 +22,25 @@ PI:acos -1;
 / @param x the point to evaluate the polynomial at
 / @return coeffs[0]*x^n + coeffs[1]*x^(n-1) + ... + coeffs[n]
 / @eg .qf.math.horner_eval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)
-horner_eval:{[coeffs;x]
+.qf.math.horner_eval:{[coeffs;x]
     {[x;acc;c] (acc*x)+c}[x;]/[first coeffs;1 _ coeffs]};
 
 / Standard normal probability density function n(x).
 / @param x point(s) to evaluate at (atom or vector)
 / @return the standard normal density at x
 / @eg .qf.math.npdf 0f  -> 0.3989423
-npdf:{[x] exp[-0.5*x*x] % sqrt 2*PI};
+.qf.math.npdf:{[x] exp[-0.5*x*x] % sqrt 2*.qf.math.PI};
 
 / Standard normal cumulative distribution function N(x).
 / @param x point(s) to evaluate at (atom or vector)
 / @return P(Z is at most x) for a standard normal Z
 / @eg .qf.math.ncdf 1.96  -> 0.9750022
-ncdf:{[x]
+.qf.math.ncdf:{[x]
     coeffs:1.061405429 -1.453152027 1.421413741 -0.284496736 0.254829592 0f; / a5 a4 a3 a2 a1 0, highest degree first
     s:signum x;
     z:(abs x)%sqrt 2f;
     t:1%1+0.3275911*z;
-    poly:horner_eval[coeffs;t];
+    poly:.qf.math.horner_eval[coeffs;t];
     y:1-(poly*exp neg z*z);
     0.5*1+s*y};
 
@@ -49,7 +49,7 @@ ncdf:{[x]
 / @return x such that ncdf[x]~p
 / @throws error if any element of p is not strictly between 0 and 1
 / @eg .qf.math.inv_ncdf 0.95  -> 1.644854 (the one-tailed 95% z-score)
-inv_ncdf:{[p]
+.qf.math.inv_ncdf:{[p]
     if[not all(p>0)&(p<1); '"inv_ncdf: p must be strictly between 0 and 1"];
     a:-39.69683028665376 220.9460984245205 -275.9285104469687 138.3577518672690 -30.66479806614716 2.506628277459239;
     b:-54.47609879822406 161.5858368580409 -155.6989798598866 66.80131188771972 -13.28068155288572,1f;
@@ -59,12 +59,12 @@ inv_ncdf:{[p]
     one:{[a;b;c;d;plow;phigh;p]
         $[p<plow;
             [q:sqrt neg 2*log p;
-             horner_eval[c;q] % horner_eval[d;q]];
+             .qf.math.horner_eval[c;q] % .qf.math.horner_eval[d;q]];
           p>phigh;
             [q:sqrt neg 2*log 1-p;
-             neg horner_eval[c;q] % horner_eval[d;q]];
+             neg .qf.math.horner_eval[c;q] % .qf.math.horner_eval[d;q]];
             [q:p-0.5; r:q*q;
-             (horner_eval[a;r]*q) % horner_eval[b;r]]]};
+             (.qf.math.horner_eval[a;r]*q) % .qf.math.horner_eval[b;r]]]};
     $[0>type p; one[a;b;c;d;plow;phigh;p]; one[a;b;c;d;plow;phigh] each p]};
 
 \d .
