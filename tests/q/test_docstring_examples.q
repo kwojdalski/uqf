@@ -1,5 +1,5 @@
 / test_docstring_examples.q - execute the @eg assertions in the qDoc blocks
-/ (.egtest).
+/ (.qt.man.examples).
 / .
 / The other half of the executable-examples work. There are 116 `@eg`
 / lines under src/ carrying a `->`
@@ -52,7 +52,6 @@
 / ratio"). They are counted as prose rather than quietly passed, so a value
 / that stops parsing cannot hide among them.
 
-\d .egtest
 
 / --- fixtures for the examples that need one -----------------------------
 
@@ -68,15 +67,15 @@
 / namespaces are already in scope.
 / .
 / Bound as ROOT globals because that is where `value` resolves a bare name
-/ from - the @eg text says `tape`, not `.evttest.tape`, and it has to keep
+/ from - the @eg text says `tape`, not `.qt.qpipe.event_tape.tape`, and it has to keep
 / saying that, since an @eg a reader cannot paste is worse documentation
 / than one that goes unchecked.
-bind_fixtures:{[]
+.qt.man.examples.bind_fixtures:{[]
     / Two shapes, two names. The hit family needs a `hit` column and the
     / reject family a `reject` one; each already has a builder, and the docs
     / now name whichever they require rather than calling both `requests`.
-    `requests set .executiontest.mk_hit_ratio_requests[::];
-    `reject_requests set .executiontest.mk_requests[];
+    `requests set .qt.qf.exec.execution.mk_hit_ratio_requests[::];
+    `reject_requests set .qt.qf.exec.execution.mk_requests[];
     / Wide enough to contain both builders' timestamps. A window that
     / excluded one would make its examples report on an empty selection -
     / which is not an error, and so would be tolerated rather than seen.
@@ -87,7 +86,7 @@ bind_fixtures:{[]
     / anything else would make the gate report the fixture's disagreement
     / with the docs as though the docs were wrong.
     `tape set .qpipe.source.demo_events.fixture[];
-    `quotes set .forwardstest.mk_ts_quotes_table[::];
+    `quotes set .qt.qf.px.forwards.mk_ts_quotes_table[::];
     `trade_time set exec first time from `quotes;
     / `b` appeared in five positions.q examples meaning THREE different
     / books, each defined only in a parenthetical gloss. The three that
@@ -99,24 +98,24 @@ bind_fixtures:{[]
     / value, and so was never run by anything until tests/q/run_examples.q.
     / Same rule as above: each comes from a builder the owning suite already
     / uses, or from the source's own declaration. None is invented here.
-    `markout_trades set .executiontest.mk_markout_trades[];
-    `mid_quotes set .executiontest.mk_mid_quotes[];
-    `fill_orders set .executiontest.mk_fill_orders[];
-    `trades set .positionstest.mk_trades[];
-    / `value `trades`, not `trades`: inside \d .egtest a bare name resolves
-    / to .egtest.trades, which does not exist. Every read of a root binding
+    `markout_trades set .qt.qf.exec.execution.mk_markout_trades[];
+    `mid_quotes set .qt.qf.exec.execution.mk_mid_quotes[];
+    `fill_orders set .qt.qf.exec.execution.mk_fill_orders[];
+    `trades set .qt.qf.port.positions.mk_trades[];
+    / `value `trades`, not `trades`: inside the old `\d` block of this suite a bare name resolved
+    / to .qt.man.examples.trades, which does not exist. Every read of a root binding
     / below goes through `value` for the same reason.
     `broker_book set .qf.port.apply_fills[.qf.port.empty_book[];value `trades];
-    books:.forwardstest.mk_books[];
+    books:.qt.qf.px.forwards.mk_books[];
     `eurusd_book set books`eurusd;
     `usdjpy_book set books`usdjpy;
     `jpychf_book set books`jpychf;
     `t0 set min exec time from `quotes;
     `t1 set max exec time from `quotes;
-    `tbl set .booktest.wide_book_table[::];
-    `prefix_targets set .booktest.level_prefix_targets;
-    .metatest.setUp[::];
-    `trade set .metatest.source;
+    `tbl set .qt.qf.mkt.book.wide_book_table[::];
+    `prefix_targets set .qt.qf.mkt.book.level_prefix_targets;
+    .qt.qf.util.metatables.setUp[::];
+    `trade set .qt.qf.util.metatables.source;
     `spec set .qf.util.definition[`trade;`date;enlist `sym;()!()];
     `stored set .qf.util.collect[value `spec;2026.09.01 2026.09.02];
     / The markout job's own buffer, with two rows in it. It used to be read
@@ -137,14 +136,14 @@ bind_fixtures:{[]
 / TorQ process uses, and scanning src/ alone left thirteen of them unseen -
 / including four, added this same month, that named functions which did not
 / exist.
-sources:{[] system"find src scripts -name '*.q' | sort"}
+.qt.man.examples.sources:{[] system"find src scripts -name '*.q' | sort"}
 
 / Private: is this line an @eg TAG, rather than prose that mentions one?
 / .
 / The first version matched "*@eg*" anywhere, and so read a sentence in
 / data.q - "...while their own @eg named `pqModule`." - as an example whose
 / code was "named `pqModule`.", which of course threw.
-is_tag:{[l] (trim l) like "/ @eg *"}
+.qt.man.examples.is_tag:{[l] (trim l) like "/ @eg *"}
 
 / Private: does this line continue the example above it?
 / .
@@ -153,27 +152,27 @@ is_tag:{[l] (trim l) like "/ @eg *"}
 / call with its fields - and reading the tag line alone cut each of them off
 / mid-bracket, so they failed to parse and were reported as broken examples
 / when they were only half-read ones.
-is_continuation:{[l]
+.qt.man.examples.is_continuation:{[l]
     t:trim l;
     $[3>count t; 0b; ("/"=t 0) and ("  "~t 1 2) and 0<count trim 1_t]}
 
 / Private: (file;line;expr;expected) for every @eg. `expected` is "" when the
 / example states no value.
-extract:{[f]
+.qt.man.examples.extract:{[f]
     ls:read0 hsym `$f;
     {[f;ls;i]
         n:count ls; j:i+1; parts:enlist 5_trim ls i;
-        while[(j<n) and is_continuation ls j; parts,:enlist trim 1_trim ls j; j+:1];
+        while[(j<n) and .qt.man.examples.is_continuation ls j; parts,:enlist trim 1_trim ls j; j+:1];
         txt:trim " " sv parts;
         p:first ss[txt;"->"];
         (f;i+1;trim $[null p; txt; p#txt];$[null p; ""; trim (p+2)_txt])
-      }[f;ls] each where is_tag each ls}
+      }[f;ls] each where .qt.man.examples.is_tag each ls}
 
 / Every documented example, whether or not it states a value.
-examples:{[] raze extract each sources[]}
+.qt.man.examples.examples:{[] raze .qt.man.examples.extract each .qt.man.examples.sources[]}
 
 / The examples that state a value, which this suite compares.
-assertions:{[] e:examples[]; e where 0<count each e[;3]}
+.qt.man.examples.assertions:{[] e:.qt.man.examples.examples[]; e where 0<count each e[;3]}
 
 / Examples that cannot run in a test process, and why.
 / .
@@ -183,7 +182,7 @@ assertions:{[] e:examples[]; e where 0<count each e[;3]}
 / here to make a failure go away - only something that needs a live
 / tickerplant, a TorQ process, a licensed driver or downloaded market data,
 / none of which a test process has.
-needs_live:([] expr:(
+.qt.man.examples.needs_live:([] expr:(
         ".qtorq.publish[h;`demo_execution_quality;out]";
         ".qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
         ".qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
@@ -208,7 +207,7 @@ needs_live:([] expr:(
 / Both forms are tried by classify below rather than only the stripped one,
 / because a legitimate value can itself end in a parenthesis and stripping
 / it turned ccy_legs' documented table into a truncated fragment.
-strip_gloss:{[s] i:ss[s;" ("]; $[(0<count i) and ")"=last s; trim (first i)#s; s]}
+.qt.man.examples.strip_gloss:{[s] i:ss[s;" ("]; $[(0<count i) and ")"=last s; trim (first i)#s; s]}
 
 / Private: does this expected text describe what the expression returns?
 / .
@@ -217,50 +216,50 @@ strip_gloss:{[s] i:ss[s;" ("]; $[(0<count i) and ")"=last s; trim (first i)#s; s
 / so comparing parsed doubles with ~ calls 1.016667 wrong against the very
 / value it was copied from. Value comparison second, so `-0.00005` still
 / matches -5e-05 and a general-list spelling of a vector still matches.
-matches:{[actual;txt]
+.qt.man.examples.matches:{[actual;txt]
     shown:-3! actual;
     if[shown~txt; :1b];
     ev:@[{(1b;value x)};txt;{(0b;x)}];
     $[ev 0; actual~ev 1; 0b]}
 
 / Private: `pass, `mismatch, `prose or `error for one assertion.
-classify:{[r]
+.qt.man.examples.classify:{[r]
     / `-> throws` documents a refusal, which passes only by refusing. Without
     / this the text "throws" was scored as prose, so an example documenting
     / a guard went on passing after the guard itself was deleted.
     if[(r 3) like "throws*"; :$[first @[{(1b;value x)};r 2;{(0b;x)}]; `mismatch; `pass]];
     ev:@[{(1b;value x)};r 2;{(0b;x)}];
     if[not ev 0; :`error];
-    forms:distinct (r 3; strip_gloss[r 3]);
-    if[any matches[ev 1] each forms; :`pass];
+    forms:distinct (r 3; .qt.man.examples.strip_gloss[r 3]);
+    if[any .qt.man.examples.matches[ev 1] each forms; :`pass];
     / Not a value at all: neither form parses, so this is prose after the
     / arrow rather than a claim that can be checked.
     parses:{[t] first @[{(1b;value x)};t;{(0b;x)}]} each forms;
     $[any parses; `mismatch; `prose]}
 
-results:{[] bind_fixtures[]; classify each assertions[]}
+.qt.man.examples.results:{[] .qt.man.examples.bind_fixtures[]; .qt.man.examples.classify each .qt.man.examples.assertions[]}
 
 / --- the gate -----------------------------------------------------------
 
-test_no_documented_example_is_wrong:{[t]
-    bind_fixtures[];
-    rows:assertions[];
-    st:classify each rows;
+.qt.man.examples.test_no_documented_example_is_wrong:{[t]
+    .qt.man.examples.bind_fixtures[];
+    rows:.qt.man.examples.assertions[];
+    st:.qt.man.examples.classify each rows;
     bad:rows where st=`mismatch;
     .qunit.assertEquals[count bad;0;
         "every @eg that states a value states the value the code returns"]};
 
-test_the_wrong_ones_are_named_not_merely_counted:{[t]
+.qt.man.examples.test_the_wrong_ones_are_named_not_merely_counted:{[t]
     / If this ever fails, the message has to say WHICH example - a count
     / leaves the reader grepping 113 lines across sixteen files.
-    bind_fixtures[];
-    rows:assertions[];
-    st:classify each rows;
+    .qt.man.examples.bind_fixtures[];
+    rows:.qt.man.examples.assertions[];
+    st:.qt.man.examples.classify each rows;
     bad:rows where st=`mismatch;
     .qunit.assertEquals[{x[0],":",string x[1]} each bad;();
         "a failing example is reported by file and line"]};
 
-test_every_documented_example_can_actually_be_run:{[t]
+.qt.man.examples.test_every_documented_example_can_actually_be_run:{[t]
     / The gap this closes. Sixteen examples were reported as `error and
     / TOLERATED, because each needed a `tape`, `quotes`, `requests` or `b`
     / that only a caller's session had - a sixth of the documented assertions
@@ -269,33 +268,33 @@ test_every_documented_example_can_actually_be_run:{[t]
     / still throws is a defect in the EXAMPLE: it names a fixture nothing
     / provides, a currency pair the fixtures do not carry, or a column its
     / own @throws says it requires. Each was one of those three.
-    bind_fixtures[];
-    rows:assertions[];
-    st:classify each rows;
+    .qt.man.examples.bind_fixtures[];
+    rows:.qt.man.examples.assertions[];
+    st:.qt.man.examples.classify each rows;
     bad:rows where st=`error;
     .qunit.assertEquals[{x[0],":",string x[1]} each bad;();
         "every @eg expression runs - a reader can paste it and get an answer"]};
 
-test_most_examples_are_actually_evaluated:{[t]
+.qt.man.examples.test_most_examples_are_actually_evaluated:{[t]
     / A floor, not an exact count: adding an example must not require editing
     / this test, but a change that made evaluation collapse wholesale - a
     / renamed namespace, a loader dropped from run_tests.q - would otherwise
     / leave this suite passing while checking almost nothing. The floor sits
     / well below the 105 that pass today.
-    st:results[];
+    st:.qt.man.examples.results[];
     .qunit.assertTrue[95<=sum st=`pass;
         "the bulk of the documented examples are executed, not skipped"]};
 
-test_every_assertion_is_classified:{[t]
+.qt.man.examples.test_every_assertion_is_classified:{[t]
     / No silent fifth category.
-    st:results[];
+    st:.qt.man.examples.results[];
     .qunit.assertEquals[count st where not st in `pass`mismatch`prose`error;0;
         "every @eg lands in exactly one of pass/mismatch/prose/error"]};
 
-test_assertions_are_found_at_all:{[t]
+.qt.man.examples.test_assertions_are_found_at_all:{[t]
     / The mirror of the discovered-list trap: if `find` or the @eg convention
     / changed, every test above would pass over an empty list.
-    .qunit.assertTrue[100<=count assertions[];
+    .qunit.assertTrue[100<=count .qt.man.examples.assertions[];
         "the scan finds the documented examples rather than silently nothing"]};
 
 / --- the scanner itself --------------------------------------------------
@@ -303,50 +302,48 @@ test_assertions_are_found_at_all:{[t]
 / The first version matched "*@eg*" anywhere on a line, so this sentence in
 / data.q - "...while their own @eg named `pqModule`." - became an example
 / whose code was "named `pqModule`.".
-test_prose_mentioning_eg_is_not_an_example:{[t]
-    .qunit.assertEquals[is_tag["/ while their own @eg named `pqModule`."];0b;"prose is not a tag"];
-    .qunit.assertEquals[is_tag["/ @eg .qf.px.fwd_cont[1.1;0.02;0.01;0.5]"];1b;"the tag is"]};
+.qt.man.examples.test_prose_mentioning_eg_is_not_an_example:{[t]
+    .qunit.assertEquals[.qt.man.examples.is_tag["/ while their own @eg named `pqModule`."];0b;"prose is not a tag"];
+    .qunit.assertEquals[.qt.man.examples.is_tag["/ @eg .qf.px.fwd_cont[1.1;0.02;0.01;0.5]"];1b;"the tag is"]};
 
 / Reading the tag line alone cut multi-line examples off mid-bracket, so
 / they failed to parse and were reported as broken rather than half-read.
-test_a_multi_line_example_is_read_whole:{[t]
+.qt.man.examples.test_a_multi_line_example_is_read_whole:{[t]
     f:"build/test-status/eg_probe.q";
     system"mkdir -p build/test-status";
     (hsym `$f) 0: ("/ @eg .qetl.log.info[`w;\"msg\";";"/        `a`b!(1;2)]";"/ @return nothing";"f:{[] 1}");
-    r:first extract f;
+    r:first .qt.man.examples.extract f;
     .qunit.assertEquals[r 2;".qetl.log.info[`w;\"msg\"; `a`b!(1;2)]";"both lines, joined, and nothing after"]};
 
-test_a_tag_line_is_not_a_continuation:{[t]
-    .qunit.assertEquals[is_continuation["/ @return the total"];0b;"a following tag ends the example"];
-    .qunit.assertEquals[is_continuation["/ ."];0b;"a paragraph break ends it"];
-    .qunit.assertEquals[is_continuation["/   ready:x where mask;"];1b;"an indented comment continues it"]};
+.qt.man.examples.test_a_tag_line_is_not_a_continuation:{[t]
+    .qunit.assertEquals[.qt.man.examples.is_continuation["/ @return the total"];0b;"a following tag ends the example"];
+    .qunit.assertEquals[.qt.man.examples.is_continuation["/ ."];0b;"a paragraph break ends it"];
+    .qunit.assertEquals[.qt.man.examples.is_continuation["/   ready:x where mask;"];1b;"an indented comment continues it"]};
 
 / `-> throws` documents a refusal. It was scored as prose, so an example
 / documenting a guard went on passing after the guard was deleted.
-test_a_documented_throw_passes_only_by_throwing:{[t]
-    .qunit.assertEquals[classify[("f";1;"'\"boom\"";"throws")];`pass;"it threw, as documented"];
-    .qunit.assertEquals[classify[("f";1;"1+1";"throws")];`mismatch;"it did not, which is now a failure"]};
+.qt.man.examples.test_a_documented_throw_passes_only_by_throwing:{[t]
+    .qunit.assertEquals[.qt.man.examples.classify[("f";1;"'\"boom\"";"throws")];`pass;"it threw, as documented"];
+    .qunit.assertEquals[.qt.man.examples.classify[("f";1;"1+1";"throws")];`mismatch;"it did not, which is now a failure"]};
 
 / Every allowance has to name an example that exists - the full two-sided
 / check (listed but runs) needs a separate process, in run_examples.q.
-test_every_needs_live_entry_names_a_real_example:{[t]
-    ex:examples[][;2];
-    .qunit.assertEquals[(needs_live`expr) where not (needs_live`expr) in ex;();
+.qt.man.examples.test_every_needs_live_entry_names_a_real_example:{[t]
+    ex:.qt.man.examples.examples[][;2];
+    .qunit.assertEquals[(.qt.man.examples.needs_live`expr) where not (.qt.man.examples.needs_live`expr) in ex;();
         "no allowance outlives the example it excused"]};
 
-test_the_checker_rejects_a_wrong_value:{[t]
+.qt.man.examples.test_the_checker_rejects_a_wrong_value:{[t]
     / A checker nobody has seen say no might be saying yes to everything.
-    .qunit.assertEquals[.egtest.matches[42;"43"];0b;
+    .qunit.assertEquals[.qt.man.examples.matches[42;"43"];0b;
         "a documented value that differs from the actual is not a match"]};
 
-test_the_checker_accepts_q_display_rounding:{[t]
+.qt.man.examples.test_the_checker_accepts_q_display_rounding:{[t]
     / The case that makes display comparison necessary: the full double is
     / not equal to its own 7-figure rendering, which is what the doc holds.
-    .qunit.assertEquals[.egtest.matches[1%3;"0.3333333"];1b;
+    .qunit.assertEquals[.qt.man.examples.matches[1%3;"0.3333333"];1b;
         "a float documented as q renders it is a match, not a rounding failure"]};
 
-test_the_checker_accepts_an_equivalent_spelling:{[t]
-    .qunit.assertEquals[.egtest.matches[-5e-05;"-0.00005"];1b;
+.qt.man.examples.test_the_checker_accepts_an_equivalent_spelling:{[t]
+    .qunit.assertEquals[.qt.man.examples.matches[-5e-05;"-0.00005"];1b;
         "the same number written differently is still a match"]};
-
-\d .

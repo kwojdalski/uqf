@@ -5,13 +5,14 @@
 # --check. Embedded from docs/guides/new-pipeline.md.
 #
 # THE THING THIS DRAWS is that there is no registration step. The
-# declaration directories are globbed by src/etl/init.q and one by .testutil.load_suites,
+# declaration directories are globbed by src/etl/init.q and one by .qt.support.load_suites,
 # so a new file is loaded because it exists - and the process registry is
 # READ from the job files' own declarations, so a job needs no entry
 # anywhere else. The APPENDS are the facts that are NOT derivable from the
-# tree - the table definition, nsList, the one hand-kept list of test
-# namespaces, and the q suite's list of tables, a deliberate gate - which is
-# why they are the only places the scaffold has to edit rather than create.
+# tree - the table definition and the q suite's list of tables, a deliberate
+# gate - which is why they are the only places the scaffold has to edit rather
+# than create. (A third, the hand-kept list of test namespaces, is gone: the
+# runner finds a suite by the tests it holds, #1412.)
 # Everything derived, uqs job new regenerates itself before it returns, the port
 # lock included.
 #
@@ -109,7 +110,6 @@ appended: "Appended, not created" {
   class: band
 
   tables: "plant_tables.q\nthe table definition:\nwithout it .u.upd drops\nthe rows in silence" { class: appended }
-  nslist: "run_tests.q nsList\nthe one hand-kept list;\na suite absent from it\nloads and never runs" { class: appended }
   tablelist: "test_stack_tables.q\nexpected - a gate\nevery new table\npasses through" { class: appended }
 }
 
@@ -117,7 +117,7 @@ picked_up: "Picked up: no registration step" {
   class: band
 
   init: "src/etl/init.q\nglobs the declaration\ndirectories" { class: derived }
-  suites: ".testutil.load_suites[]\nglobs tests/q/test_*.q" { class: derived }
+  suites: ".qt.support.load_suites[]\nglobs tests/q/test_*.q;\nsuites found by their tests" { class: derived }
   consumers: "the process registry,\nread from the declarations;\nprocess.csv, processes.md,\npipeline_dag.q, load_plan.q,\nthe port lock -\nre-derived by uqs job new itself" { class: derived }
 }
 
@@ -133,14 +133,12 @@ cmd.plan -> written.source: "backfill" { style.stroke: "#6f4aa5" }
 cmd.plan -> written.worker: "backfill" { style.stroke: "#6f4aa5" }
 cmd.plan -> written.test: "both" { style.stroke: "#6f4aa5" }
 cmd.plan -> appended.tables { style.stroke: "#a8762f" }
-cmd.plan -> appended.nslist { style.stroke: "#a8762f" }
 cmd.plan -> appended.tablelist { style.stroke: "#a8762f" }
 
 written.job -> picked_up.init
 written.source -> picked_up.init
 written.worker -> picked_up.init
 written.test -> picked_up.suites
-appended.nslist -> picked_up.suites: "names it" { style.stroke: "#a8762f" }
 appended.tablelist -> picked_up.suites: "admits it" { style.stroke: "#a8762f" }
 appended.tables -> picked_up.consumers { style.stroke: "#a8762f" }
 written.job -> picked_up.consumers: ".qetl.job.stream.define re-parsed" { style.stroke: "#3d7a5a" }

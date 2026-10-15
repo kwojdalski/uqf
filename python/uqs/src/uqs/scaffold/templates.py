@@ -27,6 +27,11 @@ def test_stub(name: str, namespace: str, what: str, *, driver: bool = False) -> 
     would make "I scaffolded it" and "it works" look identical from the
     outside, which is the state a scaffold should make impossible.
 
+    `namespace` is the suite's, from `jobs.test_namespace`, and every definition
+    is written out in full from the root: no `\\d`, which q 4.0 rejects when
+    it nests, and which the suite loader (tests/lib/discovery.q) refuses to
+    find a suite through (#1412).
+
     `driver` adds the `contract_driver` tests/q/test_job_output_contracts.q
     looks for in this namespace: a job that subscribes and publishes has no
     output check until it has one. It throws until it is written.
@@ -37,7 +42,7 @@ def test_stub(name: str, namespace: str, what: str, *, driver: bool = False) -> 
 / table it publishes is held to its plant table by name, order and type.
 / Push one batch {name} acts on through .qpipe.job.{name}.on_batch - built from
 / the rows this file's own tests use - and call its timer if it publishes on one.
-contract_driver:{{[]
+.{namespace}.contract_driver:{{[]
     '"{name}: write .{namespace}.contract_driver - see tests/q/test_job_output_contracts.q"}}
 """
         if driver
@@ -48,15 +53,14 @@ contract_driver:{{[]
 / SCAFFOLDED, AND FAILING ON PURPOSE. Replace the assertion below with what
 / {name} should actually do with a batch. A scaffold that left a passing test
 / behind would make "generated" and "implemented" indistinguishable.
+/ .
+/ Every definition names its whole path: this file never enters .{namespace}
+/ with \\d, so a helper here is called by its full name too.
 
-\\d .{namespace}
-
-test_{name}_is_implemented:{{[t]
+.{namespace}.test_{name}_is_implemented:{{[t]
     .qunit.assertTrue[0b;
         "{name} has not been implemented yet - write this test, then the job"]}}
-{contract}
-\\d .
-"""
+{contract}"""
 
 
 def _transport_block(src: str, transport: str) -> tuple[str, str, str]:

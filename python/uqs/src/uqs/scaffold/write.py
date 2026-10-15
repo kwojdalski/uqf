@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from uqs import paths
-from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, UqsError
+from uqs.paths import STACK_TABLES_LIST, STACK_TABLES_TEST, UqsError
 from uqs.scaffold import external, profile
 from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -93,20 +93,15 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
 def _appended(existing: str, action: FileAction) -> str:
     """`existing` with the action's body added where that file wants it.
 
-    Two files take their content somewhere other than the end, and both refuse
+    Some files take their content somewhere other than the end, and refuse
     rather than guess when they do not look the way this expects - appending to
-    the end of either would be syntactically valid and register nothing.
+    the end would be syntactically valid and register nothing.
 
-    run_tests.q: the namespace belongs inside the `nsList:` symbol list, before
-    its terminating semicolon.
-
-    test_stack_tables.q: the table belongs at the end of the `expected:` list.
+    test_stack_tables.q: the table belongs at the end of the `expected` list.
 
     The Showcase page: a card belongs at the end of its section - see
     scaffold/docs.py's with_card.
     """
-    if action.path == RUN_TESTS_FILE:
-        return _with_nslist_entry(existing, action.body)
     if action.path == STACK_TABLES_TEST:
         return _with_expected_table(existing, action.body)
     if action.path == profile.PROFILES_FILE:
@@ -118,52 +113,25 @@ def _appended(existing: str, action: FileAction) -> str:
     return existing.rstrip("\n") + "\n" + action.body
 
 
-def _with_nslist_entry(existing: str, entry: str) -> str:
-    """`run_tests.q` with `entry` added to its nsList.
-
-    The list is one long line of backtick symbols ending in `;`, so the entry
-    goes immediately before that semicolon. Refusals rather than guesses:
-    exactly one `nsList:` line must exist and it must end in a semicolon, since
-    appending anywhere else produces a file that loads, runs the same suites as
-    before, and reports nothing missing.
-    """
-    lines = existing.splitlines(keepends=True)
-    found = [i for i, line in enumerate(lines) if line.startswith("nsList:")]
-    if len(found) != 1:
-        raise UqsError(
-            f"{RUN_TESTS_FILE} has {len(found)} lines starting `nsList:`, expected 1 - "
-            "this scaffold cannot tell where a namespace goes, so add it by hand"
-        )
-    index = found[0]
-    line = lines[index].rstrip("\n")
-    if not line.endswith(";"):
-        raise UqsError(
-            f"{RUN_TESTS_FILE}'s nsList line does not end in `;` - add the namespace by hand"
-        )
-    if entry in line:
-        raise UqsError(f"{entry} is already in {RUN_TESTS_FILE}'s nsList - pick another job name")
-    lines[index] = line[:-1] + entry + ";\n"
-    return "".join(lines)
-
-
 def _with_expected_table(existing: str, entry: str) -> str:
     """`test_stack_tables.q` with `entry` added to its `expected:` list.
 
     One line of backtick symbols with no terminator, so the entry goes at its
-    end. The same refusals as the nsList: exactly one `expected:` line, and
+    end. Refusals rather than guesses: exactly one `expected:` line, and
     the table not already on it - a name the q file already defines means the
     scaffold would be redefining someone else's table.
     """
     lines = existing.splitlines(keepends=True)
-    found = [i for i, line in enumerate(lines) if line.startswith("expected:")]
+    found = [i for i, line in enumerate(lines) if line.startswith(f"{STACK_TABLES_LIST}:")]
     if len(found) != 1:
         raise UqsError(
-            f"{STACK_TABLES_TEST} has {len(found)} lines starting `expected:`, expected 1 - "
+            f"{STACK_TABLES_TEST} has {len(found)} lines starting "
+            f"`{STACK_TABLES_LIST}:`, expected 1 - "
             "this scaffold cannot tell where a table goes, so add it by hand"
         )
     index = found[0]
     line = lines[index].rstrip("\n").rstrip()
-    listed = line.removeprefix("expected:").split("`")
+    listed = line.removeprefix(f"{STACK_TABLES_LIST}:").split("`")
     if entry.lstrip("`") in listed:
         raise UqsError(
             f"{entry} is already in {STACK_TABLES_TEST}'s expected list - "

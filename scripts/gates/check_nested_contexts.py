@@ -36,6 +36,7 @@ SCOPE = (
     "src",
     "scripts",
     "sidecars",
+    "tests",
     "docs",
     "README.md",
     "python/uqs/README.md",

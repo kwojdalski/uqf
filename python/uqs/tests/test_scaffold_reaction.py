@@ -20,7 +20,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs.model.declarations import reaction_calls, read_declarations
 from uqs.model.jobs import bounded_producers, job_rows
-from uqs.paths import REACTION_DIR, RUN_TESTS_FILE, UqsError
+from uqs.paths import REACTION_DIR, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.reaction import reaction
 
@@ -65,10 +65,10 @@ def test_it_writes_a_failing_test_in_its_own_namespace():
     assert set(actions) == {
         REACTION_DIR / "rebuild.q",
         Path("tests/q/test_rebuild.q"),
-        RUN_TESTS_FILE,
-    }, "no table, catalog, profile or port: a reaction has no process"
-    assert "\\d .rebuildrxtest" in actions[Path("tests/q/test_rebuild.q")].body
-    assert actions[RUN_TESTS_FILE].body == "`.rebuildrxtest"
+    }, "no table, catalog, profile or port: a reaction has no process, and nothing lists a suite"
+    body = actions[Path("tests/q/test_rebuild.q")].body
+    assert ".qt.qpipe.job.rebuild.test_rebuild_is_implemented:" in body
+    assert "\\d " not in body.replace("with \\d", "")
 
 
 def test_a_dataset_no_bounded_worker_fills_is_refused():
@@ -100,8 +100,6 @@ def test_the_real_tree_knows_which_datasets_can_trigger():
 
 def test_list_jobs_shows_a_reaction_where_it_runs(tmp_path):
     shutil.copytree(UQF_ROOT / "src", tmp_path / "src")
-    (tmp_path / RUN_TESTS_FILE).parent.mkdir(parents=True)
-    shutil.copy2(UQF_ROOT / RUN_TESTS_FILE, tmp_path / RUN_TESTS_FILE)
     producers = bounded_producers(tmp_path)
     write.apply_plan(_plan(writes=["positions"], producers=producers), tmp_path)
     [row] = [r for r in job_rows(tmp_path) if r["job"] == "rebuild"]

@@ -16,7 +16,7 @@ else is refused before a file is written.
 from __future__ import annotations
 
 from uqs.paths import REACTION_DIR, TEST_DIR, UqsError
-from uqs.scaffold.jobs import _check_name, _nslist_action, test_namespace
+from uqs.scaffold.jobs import _check_name, test_namespace
 from uqs.scaffold.plan import FileAction, ScaffoldPlan
 from uqs.scaffold.templates import reaction_body, test_stub
 
@@ -66,14 +66,13 @@ def reaction(
         )
 
     procs = producers[dataset]
-    ns = test_namespace(name, reaction=True)
+    ns = test_namespace(name)
     actions = [
         FileAction(REACTION_DIR / f"{name}.q", reaction_body(name, dataset, writes, procs)),
         FileAction(
             TEST_DIR / f"test_{name}.q",
             test_stub(name, ns, f"the {name} reaction to {dataset}"),
         ),
-        _nslist_action(ns),
     ]
     notes = [
         f"implement .qpipe.job.{name}.handler, then replace the scaffolded test",

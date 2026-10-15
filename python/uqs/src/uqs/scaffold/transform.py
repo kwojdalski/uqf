@@ -229,67 +229,70 @@ def streaming_test(name: str, namespace: str, mode: str, sub: str, pub: str) -> 
 
     For a passthrough every test passes as written. For a derive the two that
     need the transform fail until it - and its example - are written.
+
+    Every definition is written from the root with its whole path (`.{ns}.x`),
+    so there is no `\\d` and a helper is called by its full name (#1412).
     """
     ns = f".{namespace}"
     xf = f"{name}_{mode}"
     if mode == "passthrough":
         output_tests = f"""
-test_fixture_rows_reach_{pub}:{{[t]
-    wired[];
-    .qpipe.job.{name}.on_batch[`{sub};batch[]];
-    .qunit.assertEquals[recorded[;0];enlist `{pub};"one batch, published to {pub}"];
-    .qunit.assertEquals[first recorded[;1];.qpipe.job.{name}.fixture[];
+{ns}.test_fixture_rows_reach_{pub}:{{[t]
+    {ns}.wired[];
+    .qpipe.job.{name}.on_batch[`{sub};{ns}.batch[]];
+    .qunit.assertEquals[{ns}.recorded[;0];enlist `{pub};"one batch, published to {pub}"];
+    .qunit.assertEquals[first {ns}.recorded[;1];.qpipe.job.{name}.fixture[];
         "the rows unchanged, without time"]}};
 """
     else:
         output_tests = f"""
 / SCAFFOLDED until written: fails while derive throws or the example's
 / expected rows are not what it returns.
-test_the_transform_returns_its_example:{{[t]
+{ns}.test_the_transform_returns_its_example:{{[t]
     r:select from .qetl.transform.verify `{xf} where not passed;
     .qunit.assertTrue[0=count r;
         "write .qpipe.job.{name}.derive and its example's expected rows - ",
         $[count r;first r`detail;""]]}};
 
-test_derived_rows_reach_{pub}:{{[t]
-    wired[];
-    .qpipe.job.{name}.on_batch[`{sub};batch[]];
+{ns}.test_derived_rows_reach_{pub}:{{[t]
+    {ns}.wired[];
+    .qpipe.job.{name}.on_batch[`{sub};{ns}.batch[]];
     want:(first .qetl.transform.def[`{xf}]`examples)`expected;
-    .qunit.assertEquals[recorded[;0];enlist `{pub};"one batch, published to {pub}"];
-    .qunit.assertEquals[first recorded[;1];want;"the example's expected rows"]}};
+    .qunit.assertEquals[{ns}.recorded[;0];enlist `{pub};"one batch, published to {pub}"];
+    .qunit.assertEquals[first {ns}.recorded[;1];want;"the example's expected rows"]}};
 """
     return f"""/ test_{name}.q - the {name} streaming job ({ns}).
 / .
 / Generated with --transform {mode}: the handler routes {sub} through the
 / {xf} transform to {pub}. These tests hold the routing, the empty batch
 / and what is published; replace or extend them as the job grows.
-
-\\d {ns}
+/ .
+/ Every definition names its whole path: this file never enters {ns} with
+/ \\d, so a helper here is called by its full name too.
 
 / What the job published, as (table; rows) pairs.
-recorded:()
+{ns}.recorded:()
 
 / Point the job's publish at `recorded`, emptied.
-wired:{{[] `{ns}.recorded set ();
+{ns}.wired:{{[] `{ns}.recorded set ();
     .qetl.job.stream.wire[`{name};{{[t;x] `{ns}.recorded set {ns}.recorded,enlist (t;x)}}];}}
 
 / A {sub} batch as the plant delivers it: the fixture, stamped with `time`.
-batch:{{[] update time:2026.01.01D00:00:00.000000000 from .qpipe.job.{name}.fixture[]}}
+{ns}.batch:{{[] update time:2026.01.01D00:00:00.000000000 from .qpipe.job.{name}.fixture[]}}
 
-test_another_table_is_refused_not_forwarded:{{[t]
-    wired[];
-    .qunit.assertThrows[.qpipe.job.{name}.on_batch[`not_{sub}];batch[];"*subscribes to `{sub}*";
+{ns}.test_another_table_is_refused_not_forwarded:{{[t]
+    {ns}.wired[];
+    .qunit.assertThrows[.qpipe.job.{name}.on_batch[`not_{sub}];{ns}.batch[];
+        "*subscribes to `{sub}*";
         "a table the job does not subscribe to is an error, never forwarded"];
-    .qunit.assertEquals[count recorded;0;"and nothing is published"]}};
+    .qunit.assertEquals[count {ns}.recorded;0;"and nothing is published"]}};
 
-test_an_empty_batch_publishes_nothing:{{[t]
-    wired[];
-    .qpipe.job.{name}.on_batch[`{sub};0#batch[]];
-    .qunit.assertEquals[count recorded;0;"an empty batch is not an empty publish"]}};
+{ns}.test_an_empty_batch_publishes_nothing:{{[t]
+    {ns}.wired[];
+    .qpipe.job.{name}.on_batch[`{sub};0#{ns}.batch[]];
+    .qunit.assertEquals[count {ns}.recorded;0;"an empty batch is not an empty publish"]}};
 {output_tests}
 / What test_job_output_contracts.q drives {name} with: one {sub} batch, so
 / what it publishes is held to {pub}'s plant table by name, order and type.
-contract_driver:{{[] .qpipe.job.{name}.on_batch[`{sub};{ns}.batch[]]}}
-
-\\d .
+{ns}.contract_driver:{{[] .qpipe.job.{name}.on_batch[`{sub};{ns}.batch[]]}}
 """

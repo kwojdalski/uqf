@@ -175,8 +175,8 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
 
     notes = [
         "",
-        "[bold]q tests[/] run only once listed: put each in [cyan]tests/q/[/] and add its "
-        "namespace to [cyan]nsList[/] in [cyan]tests/run_tests.q[/].",
+        "[bold]q tests[/] are found by what they hold: put each in [cyan]tests/q/[/] and "
+        "define its tests under [cyan].qt.<owner>.<suite>[/] from the root, no [cyan]\\d[/].",
     ]
     if sidecar_tests:
         notes.append(

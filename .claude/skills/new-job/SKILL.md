@@ -125,8 +125,8 @@ installed, re-exports the contract surface. Without q it says so, and the
 `contract-surface` hook fails until `contract_surface.py export` is run.
 
 **Always `--dry-run` first** and show the user what it would write. It appends
-to `plant_tables.q` and two test lists, which are files they may have opinions
-about.
+to `plant_tables.q` and the table list in `test_stack_tables.q`, which are files
+they may have opinions about.
 
 `kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
 so do not ask for it. `--publishes` takes a comma list. A table the plant
@@ -197,9 +197,9 @@ Write in this order, and run the suite between each:
 1. **The transform or handler body.** For a streaming job that is
    `on_batch[t;x]` or `on_timer[]`; for a bounded worker it is the source's
    `query` and `fixture`.
-2. **The test**, replacing the scaffolded stub entirely. Delete
-   `test_<name>_is_implemented` --- leaving it beside a real test means a red
-   suite forever.
+2. **The test**, replacing the scaffolded stub entirely, in
+   `.qt.qpipe.job.<name>`. Delete `test_<name>_is_implemented` --- leaving it
+   beside a real test means a red suite forever.
 3. **The docstrings.** Every function gets a qDoc block with `@param`,
    `@return`, `@throws` if it can throw, and `@eg`. `docs/man.q` reads these
    when it loads, so they are in the registry with nothing to regenerate.
@@ -253,9 +253,14 @@ Say this back to the user, because it is the part that surprises people:
   never from another job's namespace - `test_no_job_reads_a_peer_job_at_load`
   refuses a file that does (#731).
 - **No test registration at all.** `tests/run_tests.q` globs `tests/q/test_*.q`
-  for the file, and the scaffold appends the test's NAMESPACE to that file's
-  `nsList` (#350). Both halves matter: the list is kept by hand, and a namespace
-  missing from it means the file loads and none of its tests run.
+  for the file and finds the suite by what it holds - a namespace under `.qt`
+  with `test_*` functions - so there is no namespace list to forget (#350,
+  #1412). The scaffold names the suite after the production owner it tests,
+  `.qt.qpipe.job.<job>`, and defines everything in the file from the root with
+  its whole path, never inside a `\d` block: q 4.0 rejects a nested context and
+  a leading dot is absolute. Write your tests the same way; a helper is called
+  by its full name. A namespace under `.qt` that holds functions but no test is
+  refused at load, a helper belongs under `.qt.support` or `.qt.fixture`.
 - **No hand-kept job or table list.** `test_every_job_is_registered` derives its
   jobs from `src/etl/streaming/` (#352); `expected` in `test_stack_tables.q` is
   still a deliberate gate, and the scaffold appends the new table to it. The

@@ -176,81 +176,71 @@ def test_appending_to_a_missing_file_is_refused(tmp_path: Path):
         write.apply_plan(plan, tmp_path)
 
 
-# ------------------------------------------- registering the test namespace
+# ----------------------------------------------- naming the test suite
 
 
-def test_a_scaffolded_job_registers_its_test_namespace():
-    """The bug this closes (#350): the runner globs test FILES but keeps their
-    namespaces by hand, so writing the file was not enough. The scaffolded test
-    loaded and none of its tests ran - the one red the scaffold exists to leave
-    was invisible, and the reader saw three unrelated ones instead."""
-    plan = jobs.streaming_job("markout2", ["trades"], None, None)
-    paths = [str(a.path) for a in plan.actions]
-    assert str(jobs.RUN_TESTS_FILE) in paths
+def _test_body(plan: jobs.ScaffoldPlan) -> str:
+    """The generated TEST file, not the job file - both end in .q, and the job
+    file declares its own `.qpipe.job.<name>` namespace. Nor the q table list,
+    which the plan appends to and whose name also starts `test_`."""
+    return next(
+        a.body
+        for a in plan.actions
+        if a.path.name.startswith("test_") and a.path != jobs.STACK_TABLES_TEST
+    )
 
 
-def test_the_registered_namespace_is_the_one_the_test_file_declares():
-    """The drift this guards against is why `test_namespace` exists as one
-    function: the namespace is needed by the stub's own `\\d` line and by the
-    nsList entry, and a mismatch means the runner registers a namespace nothing
-    declares while the real one never runs - the original bug, wearing a
-    different hat."""
+def _definitions(body: str) -> list[str]:
+    """The names a test file defines at the start of a line, before the colon."""
+    return [line.split(":", 1)[0] for line in body.splitlines() if line.startswith(".qt.")]
+
+
+def test_a_suite_is_named_after_the_production_owner_it_tests():
+    """#1412: `.qpipe.job.<job>` is tested in `.qt.qpipe.job.<job>`, for every
+    kind of job, because the jobs share one namespace and its unique names. The
+    old `test` / `bftest` / `rxtest` suffixes kept kinds of the same base name
+    apart, which the namespace already does."""
+    assert jobs.test_namespace("fx_rates") == "qt.qpipe.job.fx_rates"
+    assert jobs.test_namespace("fx_rates_backfill") == "qt.qpipe.job.fx_rates_backfill"
+
+
+def test_a_scaffolded_test_defines_its_suite_and_only_its_suite():
+    """The name is computed once and every definition in the file starts with it:
+    a file declaring some other namespace is a suite nothing was told about, the
+    original bug (#350) wearing a different hat."""
+    for plan, owner in (
+        (jobs.streaming_job("markout2", ["trades"], None, None), "markout2"),
+        (backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates_backfill"),
+    ):
+        suite = f".{jobs.test_namespace(owner)}"
+        defined = _definitions(_test_body(plan))
+        assert defined, "the stub defines a test"
+        assert all(d.startswith(f"{suite}.") for d in defined), (suite, defined)
+        assert any(d.rsplit(".", 1)[1].startswith("test_") for d in defined)
+
+
+def test_a_scaffolded_test_never_enters_a_namespace():
+    """q 4.0 rejects a nested context, and a leading dot is absolute, so a suite
+    defines from the root with its whole path; the loader finds it by what it
+    holds. A `\\d` line would still load here and fail there."""
+    for plan in (
+        jobs.streaming_job("markout2", ["trades"], None, None),
+        jobs.streaming_job("markout3", ["trades"], "mk3", "v:float"),
+        backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"),
+    ):
+        body = _test_body(plan)
+        assert not [ln for ln in body.splitlines() if ln.startswith("\\d")], body
+
+
+def test_a_scaffold_registers_nothing_with_the_runner():
+    """The runner finds a suite by the tests it holds (tests/lib/discovery.q),
+    so naming it is the whole of adding it. Nothing touches tests/run_tests.q:
+    the list that file used to carry, and this scaffold used to append to, is gone."""
     for plan in (
         jobs.streaming_job("markout2", ["trades"], None, None),
         backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"),
     ):
-        entry = _body(plan, "run_tests.q").strip()
-        # The TEST file, not the job file - both end in .q, and the job file
-        # declares its own `.qpipe.job.<name>` namespace. Nor the q table list,
-        # which the plan appends to and whose name also starts `test_`.
-        test_body = next(
-            a.body
-            for a in plan.actions
-            if a.path.name.startswith("test_") and a.path != jobs.STACK_TABLES_TEST
-        )
-        declared = [
-            line.split()[1]
-            for line in test_body.splitlines()
-            if line.startswith("\\d .") and line.strip() != "\\d ."
-        ]
-        assert entry == f"`{declared[0]}", (entry, declared)
-
-
-def test_a_bounded_worker_registers_its_own_namespace():
-    """A backfill and a streaming job of the same base name must not claim one
-    namespace, which is what the `bf` suffix is for."""
-    assert jobs.test_namespace("fx_rates") == "fx_ratestest"
-    assert jobs.test_namespace("fx_rates", bounded=True) == "fx_ratesbftest"
-
-
-def test_the_namespace_goes_inside_the_symbol_list():
-    """Before the terminating `;`, not after it - appended at the end of the
-    file it would be a separate statement that registers nothing."""
-    before = "\\l x.q\nnsList:`.atest`.btest;\nres:1\n"
-    after = write._with_nslist_entry(before, "`.ctest")
-    assert "nsList:`.atest`.btest`.ctest;" in after
-    assert after.endswith("res:1\n"), "the rest of the file is untouched"
-
-
-@pytest.mark.parametrize(
-    "content",
-    [
-        "no list here\n",
-        "nsList:`.atest;\nnsList:`.btest;\n",
-        "nsList:`.atest\n",
-    ],
-)
-def test_a_run_tests_file_that_does_not_look_right_is_refused(content):
-    """Refuse rather than guess. Appending to the wrong place produces a file
-    that loads, runs exactly the suites it ran before, and reports nothing
-    missing - which is the failure mode being fixed, reintroduced silently."""
-    with pytest.raises(UqsError):
-        write._with_nslist_entry(content, "`.ctest")
-
-
-def test_a_namespace_already_listed_is_refused():
-    with pytest.raises(UqsError, match="already in"):
-        write._with_nslist_entry("nsList:`.atest`.btest;\n", "`.btest")
+        assert not [a for a in plan.actions if "run_tests" in str(a.path)]
 
 
 # ------------------------------------------ registering the owned table
@@ -273,15 +263,19 @@ def test_a_job_that_owns_no_table_leaves_the_q_table_list_alone():
 
 
 def test_the_table_goes_at_the_end_of_the_expected_list():
-    before = "\\d .tabletest\nexpected:`quotes`trades\nnext:1\n"
+    before = ".qt.qetl.plant.tables.expected:`quotes`trades\nnext:1\n"
     after = write._with_expected_table(before, "`fx_rates")
-    assert "expected:`quotes`trades`fx_rates\n" in after
+    assert ".qt.qetl.plant.tables.expected:`quotes`trades`fx_rates\n" in after
     assert after.endswith("next:1\n"), "the rest of the file is untouched"
 
 
 @pytest.mark.parametrize(
     "content",
-    ["no list here\n", "expected:`a\nexpected:`b\n", "expected:`quotes`fx_rates\n"],
+    [
+        "no list here\n",
+        ".qt.qetl.plant.tables.expected:`a\n.qt.qetl.plant.tables.expected:`b\n",
+        ".qt.qetl.plant.tables.expected:`quotes`fx_rates\n",
+    ],
 )
 def test_a_table_list_that_does_not_look_right_is_refused(content):
     """No list, two lists, or the table already listed - which means the q
@@ -293,8 +287,10 @@ def test_a_table_list_that_does_not_look_right_is_refused(content):
 def test_a_table_whose_name_extends_a_listed_one_is_not_a_duplicate():
     """Matched as a whole symbol, not a substring: `fx_rates_old` being listed
     says nothing about `fx_rates`."""
-    after = write._with_expected_table("expected:`fx_rates_old\n", "`fx_rates")
-    assert after == "expected:`fx_rates_old`fx_rates\n"
+    after = write._with_expected_table(
+        ".qt.qetl.plant.tables.expected:`fx_rates_old\n", "`fx_rates"
+    )
+    assert after == ".qt.qetl.plant.tables.expected:`fx_rates_old`fx_rates\n"
 
 
 # ------------------------------------------- a worker on what already exists
@@ -369,8 +365,8 @@ def test_the_mode_still_renders_as_its_own_word():
 
 
 def test_a_one_line_body_is_described_in_the_singular():
-    """The nsList entry is one symbol, so --dry-run used to print "1 lines"."""
-    assert "(1 line)" in jobs.FileAction(Path("x"), "`.atest").describe()
+    """A table-list entry is one symbol, so --dry-run used to print "1 lines"."""
+    assert "(1 line)" in jobs.FileAction(Path("x"), "`atable").describe()
 
 
 def test_a_job_publishing_a_new_table_is_told_about_the_desk_catalog():
@@ -522,9 +518,10 @@ def test_a_job_that_subscribes_and_publishes_gets_a_throwing_contract_driver():
     """test_job_output_contracts.q finds it by this exact name, in this
     namespace, and it must throw until written rather than pass on nothing."""
     body = _test_file(jobs.streaming_job("zz", ["quote"], "zz_out", "v:float"), "zz")
-    assert "\\d .zztest" in body and "contract_driver:{[]" in body
+    suite = ".qt.qpipe.job.zz"
+    assert f"{suite}.contract_driver:{{[]" in body
     driver = body[body.index("contract_driver:") :]
-    assert "'\"zz: write .zztest.contract_driver" in driver, "it throws"
+    assert f"'\"zz: write {suite}.contract_driver" in driver, "it throws"
     assert "SCAFFOLDED" in body[body.index("test_zz_is_implemented") :], "and is marked"
 
 

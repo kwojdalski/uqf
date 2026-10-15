@@ -32,6 +32,21 @@ Installed separately, because the linter is its own project:
 The tag must match `.qlinter-version`, the one place the pin is set: the q-traps
 hook refuses any other installed version.
 
+## Test suites live under `.qt`, defined from the root
+
+A q test suite is a namespace `.qt.<production-owner>[.<suite>]` that mirrors
+what it tests - `.qt.qetl.coverage`, `.qt.qpipe.job.fx_markout` - and the runner
+finds it by the `test_*` functions it holds: there is no list to add it to.
+Define every name with its whole path (`.qt.qetl.io.batch:{[] ...}`), and call a
+suite's own helpers by their whole path too. Never `\d .qt...` or
+`system "d ..."`: q 4.0 rejects a nested context, and a leading dot is absolute,
+so only the full path means the same on every version. Shared helpers go in
+`.qt.support` (`tests/lib/support.q`) and doubles or fixture workers in
+`.qt.fixture.*`; a namespace under `.qt` that holds functions but no test is
+refused at load. `uqs job new` names a job's suite for you
+(`.qt.qpipe.job.<job>`); `tests/lib/discovery.q` has the rules and
+`tests/q/test_suite_layout.q` the cases.
+
 ## Working on a GitHub issue: always in a new worktree
 
 Several Claude Code sessions work in this repository at once. Whenever you pick

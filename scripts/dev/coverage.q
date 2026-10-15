@@ -384,7 +384,7 @@ swap_value:{[from_;to_;v;d]
       / .
       / What that cost: .qtorq.record_published does `before:0^published t`,
       / and 0^() is () rather than 0, so the next `0=before` threw 'type -
-      / two .sjtest failures that only appeared when .covtest had run first,
+      / two .qt.qetl.job.stream failures that only appeared when .qt.cov had run first,
       / which is why q-unit was red and q-order green (#460).
       0=count v; v;
       99h=type v; (key v)!swap_value[from_;to_;;d+1] each value v;

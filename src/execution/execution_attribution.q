@@ -117,7 +117,7 @@
 /   was neither `ok nor `reconciled: a missing prescribed book, never rerouted.
 / @throws error if trades lacks a column, horizons is empty or not positive,
 /   trades is empty, or cross_markout_attribution_with throws
-/ @eg .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;.attributiontest.review_fixture_quotes[];.attributiontest.review_fixture_trades[];enlist 0D00:00:01;10000;1]`share
+/ @eg .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;.qt.qf.exec.attribution.review_fixture_quotes[];.qt.qf.exec.attribution.review_fixture_trades[];enlist 0D00:00:01;10000;1]`share
 .qf.exec.attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
     miss:`time`sym`side except cols trades;
     if[count miss; '"attribution_review: trades is missing column ",string first miss];
@@ -154,6 +154,6 @@
 / @param ref_size the size swept for every price
 / @return table, see attribution_review_with
 / @throws error as attribution_review_with does
-/ @eg .qf.exec.attribution_review[.attributiontest.review_fixture_quotes[];.attributiontest.review_fixture_trades[];enlist 0D00:00:01;10000;1]`pair
+/ @eg .qf.exec.attribution_review[.qt.qf.exec.attribution.review_fixture_quotes[];.qt.qf.exec.attribution.review_fixture_trades[];enlist 0D00:00:01;10000;1]`pair
 .qf.exec.attribution_review:{[quotes;trades;horizons;pip_factor;ref_size]
     .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;quotes;trades;horizons;pip_factor;ref_size]};

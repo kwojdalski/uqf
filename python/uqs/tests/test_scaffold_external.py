@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.external import feeds
-from uqs.paths import CATALOG_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
+from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.external import DEPENDENCIES_FILE, external_feed, external_files, with_producer
@@ -107,7 +107,6 @@ def tree(tmp_path: Path) -> Path:
     shutil.copytree(UQF_ROOT / "src", tmp_path / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", tmp_path / "scripts" / "processes")
     for rel in (
-        RUN_TESTS_FILE,
         STACK_TABLES_TEST,
         PROFILES_FILE,
         STACK_PAGE,
@@ -124,7 +123,6 @@ def tree(tmp_path: Path) -> Path:
 def test_scaffold_then_remove_leaves_the_tree_as_it_was(tree):
     watched = [
         TABLES_FILE,
-        RUN_TESTS_FILE,
         STACK_TABLES_TEST,
         STACK_PAGE,
         SHOWCASE_PAGE,

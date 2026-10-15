@@ -5,13 +5,14 @@ a table, three lists and a catalog entry - and a typo in the job name used to
 mean reversing each by hand. This works the edits out from the TREE rather
 than from the command that made them, so it needs nothing but the name.
 
-WHAT IT REMOVES. The job's file and its test, the test's nsList entry, and
-the profile lines naming its process. For a backfill, its source too, when no
+WHAT IT REMOVES. The job's file and its test (nothing registers a test: the
+suite loader finds it by what it holds, so deleting the file is the whole of
+it), and the profile lines naming its process. For a backfill, its source too, when no
 other worker reads it. A table the job publishes (or fills) goes with its
 definition, its `expected` entry and its catalog line - but only when nothing
 else in the tree mentions it, so a table another job reads is never taken.
-A reaction is only its file, its test and the test's nsList entry: it has no
-process, so no table, profile or port.
+A reaction is only its file and its test: it has no process, so no table,
+profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
 their test, and the raw table the publisher writes - on the same rule as any
 table: only when nothing else mentions it.
@@ -42,8 +43,8 @@ from uqs.model.kinds import DECLARATION_VERBS
 from uqs.paths import (
     CATALOG_FILE,
     REACTION_DIR,
-    RUN_TESTS_FILE,
     SOURCE_DIR,
+    STACK_TABLES_LIST,
     STACK_TABLES_TEST,
     STREAM_DIR,
     TABLES_FILE,
@@ -59,7 +60,6 @@ from uqs.scaffold.references import Reference, stale_references
 
 MARKER = "SCAFFOLDED"
 _DECLARES = DECLARATION_VERBS
-_NAMESPACE = re.compile(r"^\\d\s+\.(\w+)\s*$", re.MULTILINE)
 #: Files whose mention of a table is bookkeeping, not a use: the scaffold's own
 #: appends, and the generated job graph, which is regenerated after a removal.
 _BOOKKEEPING = (
@@ -180,7 +180,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             removal,
             repo_root,
             STACK_TABLES_TEST,
-            lambda t, tb=table: _drop_token(t, "expected:", f"`{tb}"),
+            lambda t, tb=table: _drop_token(t, f"{STACK_TABLES_LIST}:", f"`{tb}"),
         )
         _edit(removal, repo_root, CATALOG_FILE, lambda t, tb=table: _drop_catalog(t, tb))
 
@@ -213,19 +213,15 @@ def _reaction_removal(repo_root: Path, name: str, job_file: Path) -> Removal:
 
 
 def _remove_test(removal: Removal, repo_root: Path, job: str) -> set[Path]:
-    """Queue `job`'s test file and its nsList entry; return what goes."""
+    """Queue `job`'s test file; return what goes.
+
+    Only the file: the suite is found by what it holds (tests/lib/discovery.q),
+    so no list names it and nothing else needs editing.
+    """
     test_file = TEST_DIR / f"test_{job}.q"
     if not (repo_root / test_file).is_file():
         return set()
-    ns = _NAMESPACE.search((repo_root / test_file).read_text())
     removal.deletes.append(test_file)
-    if ns:
-        _edit(
-            removal,
-            repo_root,
-            RUN_TESTS_FILE,
-            lambda t: _drop_token(t, "nsList:", f"`.{ns.group(1)}"),
-        )
     return {test_file}
 
 
@@ -275,7 +271,7 @@ def _mentioned_elsewhere(repo_root: Path, table: str, gone: set[Path]) -> bool:
     for directory in ("src", "scripts", "tests"):
         for path in (repo_root / directory).rglob("*.q"):
             rel = path.relative_to(repo_root)
-            if rel in gone or rel in _BOOKKEEPING or rel == RUN_TESTS_FILE:
+            if rel in gone or rel in _BOOKKEEPING:
                 continue
             if pattern.search(path.read_text(errors="replace")):
                 return True

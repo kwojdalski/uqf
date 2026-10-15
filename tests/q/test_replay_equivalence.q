@@ -12,91 +12,90 @@
 / a test refuses a job that is neither, so a new replaying job joins the check
 / rather than escaping it.
 
-\d .reqtest
 
-t0:2026.10.09D10:00:00
+.qt.qpipe.replay_equivalence.t0:2026.10.09D10:00:00
 
 / The clock a job's `now` reads, which the script moves.
-clock:t0
+.qt.qpipe.replay_equivalence.clock:.qt.qpipe.replay_equivalence.t0
 
 / What the job published this run, as (table; rows).
-pubs:()
+.qt.qpipe.replay_equivalence.pubs:()
 
 / The plant's log this run: inputs, and the outputs a job restores from.
-wal:()
+.qt.qpipe.replay_equivalence.wal:()
 
 / An executions row received at rcv, for the event at src.
-fill:{[src;rcv;s;px] ([] time:enlist rcv; source_time:enlist src; sym:enlist s; size:enlist 1f; price:enlist px)}
+.qt.qpipe.replay_equivalence.fill:{[src;rcv;s;px] ([] time:enlist rcv; source_time:enlist src; sym:enlist s; size:enlist 1f; price:enlist px)}
 
 / A market_data row: one level each side.
-book:{[st;s;bid;ask]
+.qt.qpipe.replay_equivalence.book:{[st;s;bid;ask]
     ([] time:enlist st; sym:enlist s; market:enlist `fx; source:enlist `lp; source_time:enlist st;
         bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
         ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6)}
 
 / An event: the clock it happens at, the table it arrives on (`tick for a timer
 / firing) and its rows.
-ev:{[at;t;x] (at;t;x)}
+.qt.qpipe.replay_equivalence.ev:{[at;t;x] (at;t;x)}
 
 / exec_bars: in-time fills, the first minute closing, a late row for a minute
 / that has a bar, a late row for a minute that never will, and a second minute.
-bars_script:{[]
-    (ev[t0+0D00:00:10;`executions;fill[t0+0D00:00:10;t0+0D00:00:10;`EURUSD;1.10]];
-     ev[t0+0D00:00:40;`executions;fill[t0+0D00:00:35;t0+0D00:00:40;`EURUSD;1.20]];
-     ev[t0+0D00:01:10;`tick;()];
-     ev[t0+0D00:05:00;`executions;fill[t0+0D00:00:30;t0+0D00:05:00;`EURUSD;1.30]];
-     ev[t0+0D00:05:00;`executions;fill[t0+0D00:03:30;t0+0D00:05:00;`USDJPY;150f]];
-     ev[t0+0D00:05:10;`executions;fill[t0+0D00:05:10;t0+0D00:05:10;`EURUSD;1.15]];
-     ev[t0+0D00:05:50;`executions;fill[t0+0D00:05:20;t0+0D00:05:50;`EURUSD;1.16]];
-     ev[t0+0D00:06:10;`tick;()];
-     ev[t0+0D00:07:00;`tick;()])}
+.qt.qpipe.replay_equivalence.bars_script:{[]
+    (.qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:10;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:00:10;.qt.qpipe.replay_equivalence.t0+0D00:00:10;`EURUSD;1.10]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:40;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:00:35;.qt.qpipe.replay_equivalence.t0+0D00:00:40;`EURUSD;1.20]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:01:10;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:00;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:00:30;.qt.qpipe.replay_equivalence.t0+0D00:05:00;`EURUSD;1.30]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:00;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:03:30;.qt.qpipe.replay_equivalence.t0+0D00:05:00;`USDJPY;150f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:10;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:05:10;.qt.qpipe.replay_equivalence.t0+0D00:05:10;`EURUSD;1.15]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:50;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:05:20;.qt.qpipe.replay_equivalence.t0+0D00:05:50;`EURUSD;1.16]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:06:10;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:07:00;`tick;()])}
 
 / A crypto_book row received at rcv, for the venue's stamp src.
-cbook:{[src;rcv;v;s;bid]
+.qt.qpipe.replay_equivalence.cbook:{[src;rcv;v;s;bid]
     ([] time:enlist rcv; source_time:enlist src; venue:enlist v; sym:enlist s;
         bid_prices:enlist bid-0 1f; bid_sizes:enlist 1 2f; ask_prices:enlist bid+10 11f; ask_sizes:enlist 3 4f)}
 
 / crypto_book_1s: two updates of a second out of order, the second closing, a late
 / update that amends an open second, one for a second already out, and a second venue.
-cbook_script:{[]
-    (ev[t0+0D00:00:00.900;`crypto_book;cbook[t0+0D00:00:00.800;t0+0D00:00:00.900;`a;`BTC;62001f]];
-     ev[t0+0D00:00:01.100;`crypto_book;cbook[t0+0D00:00:00.200;t0+0D00:00:01.100;`a;`BTC;62000f]];
-     ev[t0+0D00:00:01.600;`tick;()];
-     ev[t0+0D00:00:02.100;`crypto_book;cbook[t0+0D00:00:01.900;t0+0D00:00:02.100;`a;`BTC;62010f]];
-     ev[t0+0D00:00:02.200;`crypto_book;cbook[t0+0D00:00:02.300;t0+0D00:00:02.200;`b;`BTC;61000f]];
-     ev[t0+0D00:00:02.300;`crypto_book;cbook[t0+0D00:00:00.950;t0+0D00:00:02.300;`a;`BTC;62099f]];
-     ev[t0+0D00:00:02.700;`crypto_book;cbook[t0+0D00:00:02.600;t0+0D00:00:02.700;`b;`BTC;61005f]];
-     ev[t0+0D00:00:03.600;`tick;()];
-     ev[t0+0D00:00:09.000;`tick;()])}
+.qt.qpipe.replay_equivalence.cbook_script:{[]
+    (.qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:00.900;`crypto_book;.qt.qpipe.replay_equivalence.cbook[.qt.qpipe.replay_equivalence.t0+0D00:00:00.800;.qt.qpipe.replay_equivalence.t0+0D00:00:00.900;`a;`BTC;62001f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:01.100;`crypto_book;.qt.qpipe.replay_equivalence.cbook[.qt.qpipe.replay_equivalence.t0+0D00:00:00.200;.qt.qpipe.replay_equivalence.t0+0D00:00:01.100;`a;`BTC;62000f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:01.600;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:02.100;`crypto_book;.qt.qpipe.replay_equivalence.cbook[.qt.qpipe.replay_equivalence.t0+0D00:00:01.900;.qt.qpipe.replay_equivalence.t0+0D00:00:02.100;`a;`BTC;62010f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:02.200;`crypto_book;.qt.qpipe.replay_equivalence.cbook[.qt.qpipe.replay_equivalence.t0+0D00:00:02.300;.qt.qpipe.replay_equivalence.t0+0D00:00:02.200;`b;`BTC;61000f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:02.300;`crypto_book;.qt.qpipe.replay_equivalence.cbook[.qt.qpipe.replay_equivalence.t0+0D00:00:00.950;.qt.qpipe.replay_equivalence.t0+0D00:00:02.300;`a;`BTC;62099f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:02.700;`crypto_book;.qt.qpipe.replay_equivalence.cbook[.qt.qpipe.replay_equivalence.t0+0D00:00:02.600;.qt.qpipe.replay_equivalence.t0+0D00:00:02.700;`b;`BTC;61005f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:03.600;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:09.000;`tick;()])}
 
 / A market_data row of a provider's two-level FX book, received at rcv, for the book's stamp src.
-lbook:{[src;rcv;p;bid]
+.qt.qpipe.replay_equivalence.lbook:{[src;rcv;p;bid]
     ([] time:enlist rcv; sym:enlist `EURUSD; market:enlist `fx; source:enlist p; source_time:enlist src;
         bid_prices:enlist bid-0 0.0001; bid_sizes:enlist 1e6 2e6; ask_prices:enlist bid+0.0002 0.0003; ask_sizes:enlist 1e6 2e6)}
 
 / book_liquidity_1m: two books of a minute out of order, the minute closing, a late book
 / for a minute that has its row, a book for a minute that is still open and one that
 / amends it, and a second provider.
-liquidity_script:{[]
-    (ev[t0+0D00:00:10;`market_data;lbook[t0+0D00:00:10;t0+0D00:00:10;`LP_A;1.1000]];
-     ev[t0+0D00:00:40;`market_data;lbook[t0+0D00:00:35;t0+0D00:00:40;`LP_A;1.1002]];
-     ev[t0+0D00:01:10;`tick;()];
-     ev[t0+0D00:05:00;`market_data;lbook[t0+0D00:00:30;t0+0D00:05:00;`LP_A;1.1003]];
-     ev[t0+0D00:05:00;`market_data;lbook[t0+0D00:03:30;t0+0D00:05:00;`LP_B;1.2000]];
-     ev[t0+0D00:05:10;`market_data;lbook[t0+0D00:05:10;t0+0D00:05:10;`LP_A;1.1004]];
-     ev[t0+0D00:05:50;`market_data;lbook[t0+0D00:05:20;t0+0D00:05:50;`LP_A;1.1005]];
-     ev[t0+0D00:06:10;`tick;()];
-     ev[t0+0D00:07:00;`tick;()])}
+.qt.qpipe.replay_equivalence.liquidity_script:{[]
+    (.qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:10;`market_data;.qt.qpipe.replay_equivalence.lbook[.qt.qpipe.replay_equivalence.t0+0D00:00:10;.qt.qpipe.replay_equivalence.t0+0D00:00:10;`LP_A;1.1000]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:40;`market_data;.qt.qpipe.replay_equivalence.lbook[.qt.qpipe.replay_equivalence.t0+0D00:00:35;.qt.qpipe.replay_equivalence.t0+0D00:00:40;`LP_A;1.1002]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:01:10;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:00;`market_data;.qt.qpipe.replay_equivalence.lbook[.qt.qpipe.replay_equivalence.t0+0D00:00:30;.qt.qpipe.replay_equivalence.t0+0D00:05:00;`LP_A;1.1003]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:00;`market_data;.qt.qpipe.replay_equivalence.lbook[.qt.qpipe.replay_equivalence.t0+0D00:03:30;.qt.qpipe.replay_equivalence.t0+0D00:05:00;`LP_B;1.2000]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:10;`market_data;.qt.qpipe.replay_equivalence.lbook[.qt.qpipe.replay_equivalence.t0+0D00:05:10;.qt.qpipe.replay_equivalence.t0+0D00:05:10;`LP_A;1.1004]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:50;`market_data;.qt.qpipe.replay_equivalence.lbook[.qt.qpipe.replay_equivalence.t0+0D00:05:20;.qt.qpipe.replay_equivalence.t0+0D00:05:50;`LP_A;1.1005]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:06:10;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:07:00;`tick;()])}
 
-last_value_script:{[]
-    (ev[t0+0D00:00:01;`market_data;book[t0+0D00:00:01;`EURUSD;1.10;1.12]];
-     ev[t0+0D00:00:02;`market_data;book[t0+0D00:00:02;`GBPUSD;1.30;1.32]];
-     ev[t0+0D00:00:03;`market_data;book[t0+0D00:00:03;`EURUSD;1.11;1.13]];
-     ev[t0+0D00:00:04;`market_data;book[t0+0D00:00:00;`EURUSD;1.00;1.02]];
-     ev[t0+0D00:00:05;`market_data;book[t0+0D00:00:05;`GBPUSD;1.31;1.33]])}
+.qt.qpipe.replay_equivalence.last_value_script:{[]
+    (.qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:01;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:01;`EURUSD;1.10;1.12]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:02;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:02;`GBPUSD;1.30;1.32]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:03;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:03;`EURUSD;1.11;1.13]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:04;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:00;`EURUSD;1.00;1.02]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:05;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:05;`GBPUSD;1.31;1.33]])}
 
 / An executions row as posbook reads it: a buy of 1 at px, event time src.
-pb_fill:{[src;s;px]
+.qt.qpipe.replay_equivalence.pb_fill:{[src;s;px]
     ([] time:enlist src; source_time:enlist src; sym:enlist s; venue:enlist `fx; side:enlist 1;
         size:enlist 1f; price:enlist px; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `)}
 
@@ -104,83 +103,83 @@ pb_fill:{[src;s;px]
 / script has a book stamped after a fill delivered ahead of it (+10s before
 / the +5s fill), a late older book that must not rewind a later mark (+0s
 / 1.00, delivered last) and a fill before any book.
-posbook_script:{[]
-    (ev[t0+0D00:00:01;`market_data;book[t0+0D00:00:01;`EURUSD;1.10;1.12]];
-     ev[t0+0D00:00:02;`executions;pb_fill[t0+0D00:00:02;`EURUSD;1.15]];
-     ev[t0+0D00:00:11;`market_data;book[t0+0D00:00:10;`EURUSD;1.20;1.22]];
-     ev[t0+0D00:00:12;`executions;pb_fill[t0+0D00:00:05;`EURUSD;1.15]];
-     ev[t0+0D00:00:13;`market_data;book[t0+0D00:00:00;`EURUSD;1.00;1.02]];
-     ev[t0+0D00:00:14;`executions;pb_fill[t0+0D00:00:14;`EURUSD;1.30]];
-     ev[t0+0D00:00:15;`executions;pb_fill[t0+0D00:00:15;`USDJPY;150f]];
-     ev[t0+0D00:00:16;`executions;pb_fill[t0+0D00:00:00.5;`EURUSD;1.15]])}
+.qt.qpipe.replay_equivalence.posbook_script:{[]
+    (.qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:01;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:01;`EURUSD;1.10;1.12]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:02;`executions;.qt.qpipe.replay_equivalence.pb_fill[.qt.qpipe.replay_equivalence.t0+0D00:00:02;`EURUSD;1.15]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:11;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:10;`EURUSD;1.20;1.22]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:12;`executions;.qt.qpipe.replay_equivalence.pb_fill[.qt.qpipe.replay_equivalence.t0+0D00:00:05;`EURUSD;1.15]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:13;`market_data;.qt.qpipe.replay_equivalence.book[.qt.qpipe.replay_equivalence.t0+0D00:00:00;`EURUSD;1.00;1.02]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:14;`executions;.qt.qpipe.replay_equivalence.pb_fill[.qt.qpipe.replay_equivalence.t0+0D00:00:14;`EURUSD;1.30]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:15;`executions;.qt.qpipe.replay_equivalence.pb_fill[.qt.qpipe.replay_equivalence.t0+0D00:00:15;`USDJPY;150f]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:16;`executions;.qt.qpipe.replay_equivalence.pb_fill[.qt.qpipe.replay_equivalence.t0+0D00:00:00.5;`EURUSD;1.15]])}
 / order_quality's own clock as the tree defined it, put back after a run.
-oq_now:()
+.qt.qpipe.replay_equivalence.oq_now:()
 
 / The scripted jobs: name -> the script and what to do on a tick.
 / order_quality: orders over a few minutes, ticks between, and a book that goes
 / quiet - a restart must publish the same rolling series, the quiet book's
 / identity rows and its disappearance included (#1224).
-order:{[tm;bk;status] ([] time:enlist tm; source_time:enlist tm; source:enlist `orders; request_id:enlist `$string tm;
+.qt.qpipe.replay_equivalence.order:{[tm;bk;status] ([] time:enlist tm; source_time:enlist tm; source:enlist `orders; request_id:enlist `$string tm;
     source_status:enlist status; outcome:enlist status; book:enlist bk; product:enlist `spot; venue:enlist `)}
 
 / A status event of a named request: the lifecycle and redelivery rows of the script.
-update_of:{[tm;rid;bk;status] ([] time:enlist tm; source_time:enlist tm; source:enlist `orders; request_id:enlist rid;
+.qt.qpipe.replay_equivalence.update_of:{[tm;rid;bk;status] ([] time:enlist tm; source_time:enlist tm; source:enlist `orders; request_id:enlist rid;
     source_status:enlist status; outcome:enlist status; book:enlist bk; product:enlist `spot; venue:enlist `)}
 
-order_quality_script:{[]
-    (ev[t0+0D00:00:05;`order_outcomes;order[t0+0D00:00:05;`london;`filled]];
-     ev[t0+0D00:00:20;`order_outcomes;order[t0+0D00:00:20;`newyork;`rejected]];
-     ev[t0+0D00:00:30;`tick;()];
-     ev[t0+0D00:00:40;`order_outcomes;update_of[t0+0D00:00:40;`x1;`london;`unresolved]];
-     ev[t0+0D00:00:55;`order_outcomes;update_of[t0+0D00:00:55;`x1;`london;`filled]];
-     ev[t0+0D00:00:56;`order_outcomes;update_of[t0+0D00:00:55;`x1;`london;`filled]];
-     ev[t0+0D00:01:10;`order_outcomes;order[t0+0D00:01:10;`london;`rejected]];
-     ev[t0+0D00:01:30;`tick;()];
-     ev[t0+0D00:04:50;`order_outcomes;order[t0+0D00:04:50;`london;`filled]];
-     ev[t0+0D00:05:00;`tick;()];
-     ev[t0+0D00:05:30;`order_outcomes;order[t0+0D00:05:30;`london;`cancelled]];
-     ev[t0+0D00:06:10;`tick;()];
-     ev[t0+0D00:07:00;`tick;()])}
+.qt.qpipe.replay_equivalence.order_quality_script:{[]
+    (.qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:05;`order_outcomes;.qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:00:05;`london;`filled]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:20;`order_outcomes;.qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:00:20;`newyork;`rejected]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:30;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:40;`order_outcomes;.qt.qpipe.replay_equivalence.update_of[.qt.qpipe.replay_equivalence.t0+0D00:00:40;`x1;`london;`unresolved]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:55;`order_outcomes;.qt.qpipe.replay_equivalence.update_of[.qt.qpipe.replay_equivalence.t0+0D00:00:55;`x1;`london;`filled]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:56;`order_outcomes;.qt.qpipe.replay_equivalence.update_of[.qt.qpipe.replay_equivalence.t0+0D00:00:55;`x1;`london;`filled]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:01:10;`order_outcomes;.qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:01:10;`london;`rejected]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:01:30;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:04:50;`order_outcomes;.qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:04:50;`london;`filled]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:00;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:30;`order_outcomes;.qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:05:30;`london;`cancelled]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:06:10;`tick;()];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:07:00;`tick;()])}
 
-scripts:`exec_bars`last_value`posbook`crypto_book_1s`order_quality`book_liquidity_1m!(
-    `script`tick!(bars_script;{[j;n] .qpipe.job.exec_bars.close_ready n});
-    `script`tick!(last_value_script;{[j;n] ::});
-    `script`tick!(posbook_script;{[j;n] ::});
-    `script`tick!(cbook_script;{[j;n] .qpipe.job.crypto_book_1s.close_ready n});
-    `script`tick!(order_quality_script;{[j;n] .qpipe.job.order_quality.evaluate n});
-    `script`tick!(liquidity_script;{[j;n] .qpipe.job.book_liquidity_1m.close_ready n}))
+.qt.qpipe.replay_equivalence.scripts:`exec_bars`last_value`posbook`crypto_book_1s`order_quality`book_liquidity_1m!(
+    `script`tick!(.qt.qpipe.replay_equivalence.bars_script;{[j;n] .qpipe.job.exec_bars.close_ready n});
+    `script`tick!(.qt.qpipe.replay_equivalence.last_value_script;{[j;n] ::});
+    `script`tick!(.qt.qpipe.replay_equivalence.posbook_script;{[j;n] ::});
+    `script`tick!(.qt.qpipe.replay_equivalence.cbook_script;{[j;n] .qpipe.job.crypto_book_1s.close_ready n});
+    `script`tick!(.qt.qpipe.replay_equivalence.order_quality_script;{[j;n] .qpipe.job.order_quality.evaluate n});
+    `script`tick!(.qt.qpipe.replay_equivalence.liquidity_script;{[j;n] .qpipe.job.book_liquidity_1m.close_ready n}))
 
 / Replaying jobs deliberately not scripted: job -> why.
-excluded:`fx_positions`kafka_flow!(
+.qt.qpipe.replay_equivalence.excluded:`fx_positions`kafka_flow!(
     "its time-based rule is the breach throttle on the timer's .z.p (fresh_breaches), and a tick is not a logged row; no event script yet";
     "no time-based rule; replayed rows are held for on_replayed (test_kafka_flow); no event script yet")
 
-recorder:{[j;t;x]
+.qt.qpipe.replay_equivalence.recorder:{[j;t;x]
     d:.qetl.job.stream.def j;
-    `.reqtest.pubs set pubs,enlist (t;x);
-    if[t in $[`restore_from in key d; d`restore_from; `symbol$()]; `.reqtest.wal set wal,enlist (t;x)];
+    `.qt.qpipe.replay_equivalence.pubs set .qt.qpipe.replay_equivalence.pubs,enlist (t;x);
+    if[t in $[`restore_from in key d; d`restore_from; `symbol$()]; `.qt.qpipe.replay_equivalence.wal set .qt.qpipe.replay_equivalence.wal,enlist (t;x)];
     count x}
 
 / Private: one event, live.
 / @private
-step:{[j;spec;e]
-    `.reqtest.clock set e 0;
+.qt.qpipe.replay_equivalence.step:{[j;spec;e]
+    `.qt.qpipe.replay_equivalence.clock set e 0;
     if[`tick=e 1; spec[`tick][j;e 0]; :()];
-    `.reqtest.wal set wal,enlist (e 1;e 2);
+    `.qt.qpipe.replay_equivalence.wal set .qt.qpipe.replay_equivalence.wal,enlist (e 1;e 2);
     .qetl.job.stream.handler[j][e 1;e 2];
     }
 
 / Private: the restart - reset, replay the log with publish muted, as start does.
 / @private
-restart:{[j]
+.qt.qpipe.replay_equivalence.restart:{[j]
     pub:` sv ((.qetl.job.stream.def j)`ns),`publish;
     live:get pub;
     .qetl.job.stream.reset j;
-    `.reqtest.clock set t0+1D;
+    `.qt.qpipe.replay_equivalence.clock set .qt.qpipe.replay_equivalence.t0+1D;
     pub set {[t;x] count x};
     `.qetl.job.stream.replaying set 1b;
     h:.qetl.job.stream.handler j;
-    r:.[{[h;lg] {[h;b] h . b}[h] each lg; 1b};(h;wal);{[e] e}];
+    r:.[{[h;lg] {[h;b] h . b}[h] each lg; 1b};(h;.qt.qpipe.replay_equivalence.wal);{[e] e}];
     `.qetl.job.stream.replaying set 0b;
     pub set live;
     if[not 1b~r; 'r];
@@ -191,85 +190,85 @@ restart:{[j]
 / @param j the scripted job
 / @param k how many events run before the restart; 0 for an uninterrupted run
 / @return the publications, as a list of (table; rows)
-run:{[j;k]
-    spec:scripts j;
+.qt.qpipe.replay_equivalence.run:{[j;k]
+    spec:.qt.qpipe.replay_equivalence.scripts j;
     evs:spec[`script][];
     pub:` sv ((.qetl.job.stream.def j)`ns),`publish;
     keep:get pub;
     .qetl.job.stream.reset j;
-    if[j in `exec_bars`crypto_book_1s`book_liquidity_1m; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .reqtest.clock}];
+    if[j in `exec_bars`crypto_book_1s`book_liquidity_1m; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .qt.qpipe.replay_equivalence.clock}];
     if[j=`order_quality;
-        if[()~oq_now; `.reqtest.oq_now set .qpipe.job.order_quality.now];
-        `.qpipe.job.order_quality.now set {[] .reqtest.clock}];
-    `.reqtest.pubs set (); `.reqtest.wal set ();
-    .qetl.job.stream.wire[j;recorder[j]];
-    step[j;spec] each k#evs;
-    if[k>0; restart[j]];
-    step[j;spec] each k _ evs;
-    out:pubs;
+        if[()~.qt.qpipe.replay_equivalence.oq_now; `.qt.qpipe.replay_equivalence.oq_now set .qpipe.job.order_quality.now];
+        `.qpipe.job.order_quality.now set {[] .qt.qpipe.replay_equivalence.clock}];
+    `.qt.qpipe.replay_equivalence.pubs set (); `.qt.qpipe.replay_equivalence.wal set ();
+    .qetl.job.stream.wire[j;.qt.qpipe.replay_equivalence.recorder[j]];
+    .qt.qpipe.replay_equivalence.step[j;spec] each k#evs;
+    if[k>0; .qt.qpipe.replay_equivalence.restart[j]];
+    .qt.qpipe.replay_equivalence.step[j;spec] each k _ evs;
+    out:.qt.qpipe.replay_equivalence.pubs;
     if[j in `exec_bars`crypto_book_1s`book_liquidity_1m; (` sv ((.qetl.job.stream.def j)`ns),`now) set {[] .z.p}];
-    if[j=`order_quality; `.qpipe.job.order_quality.now set oq_now];
+    if[j=`order_quality; `.qpipe.job.order_quality.now set .qt.qpipe.replay_equivalence.oq_now];
     pub set keep;
     .qetl.job.stream.reset j;
     out}
 
 / A restart after any number of events publishes what the uninterrupted run did.
-equivalent:{[j]
-    base:run[j;0];
-    n:count scripts[j][`script][];
-    bad:(1+til n) where not base ~/: run[j;] each 1+til n;
+.qt.qpipe.replay_equivalence.equivalent:{[j]
+    base:.qt.qpipe.replay_equivalence.run[j;0];
+    n:count .qt.qpipe.replay_equivalence.scripts[j][`script][];
+    bad:(1+til n) where not base ~/: .qt.qpipe.replay_equivalence.run[j;] each 1+til n;
     (base;bad)}
 
-test_a_restart_at_any_point_publishes_what_the_running_bars_job_did:{[t]
-    r:equivalent[`exec_bars];
+.qt.qpipe.replay_equivalence.test_a_restart_at_any_point_publishes_what_the_running_bars_job_did:{[t]
+    r:.qt.qpipe.replay_equivalence.equivalent[`exec_bars];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes bars"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
-test_a_restart_at_any_point_publishes_what_the_running_crypto_book_1s_job_did:{[t]
-    r:equivalent[`crypto_book_1s];
+.qt.qpipe.replay_equivalence.test_a_restart_at_any_point_publishes_what_the_running_crypto_book_1s_job_did:{[t]
+    r:.qt.qpipe.replay_equivalence.equivalent[`crypto_book_1s];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes snapshots"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
-test_a_restart_at_any_point_publishes_what_the_running_book_liquidity_1m_job_did:{[t]
-    r:equivalent[`book_liquidity_1m];
+.qt.qpipe.replay_equivalence.test_a_restart_at_any_point_publishes_what_the_running_book_liquidity_1m_job_did:{[t]
+    r:.qt.qpipe.replay_equivalence.equivalent[`book_liquidity_1m];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes minutes"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
-test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]
-    r:equivalent[`last_value];
+.qt.qpipe.replay_equivalence.test_a_restart_at_any_point_publishes_what_the_running_last_value_job_did:{[t]
+    r:.qt.qpipe.replay_equivalence.equivalent[`last_value];
     .qunit.assertEquals[count first r;4;"the script publishes four changes: the older book is dropped"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
-test_a_restart_at_any_point_publishes_what_the_running_posbook_job_did:{[t]
-    r:equivalent[`posbook];
+.qt.qpipe.replay_equivalence.test_a_restart_at_any_point_publishes_what_the_running_posbook_job_did:{[t]
+    r:.qt.qpipe.replay_equivalence.equivalent[`posbook];
     pos:raze last each first r;
     / 1.11 = mid of 1.10/1.12 at +1s; 1.21 = mid of 1.20/1.22 at +10s; the
     / late +0s book (1.01) marks only the +0.5s fill, which precedes the +1s book
-    .testutil.assertApprox[pos[0]`mark_price;1.11;1e-9;"the +2s fill sees the +1s book"];
-    .testutil.assertApprox[pos[1]`mark_price;1.11;1e-9;"the +5s fill is marked as of +5s, not at the +10s book delivered before it (#1229)"];
-    .testutil.assertApprox[pos[2]`mark_price;1.21;1e-9;"the +14s fill sees the +10s book; the late older book did not rewind it (#1088)"];
-    .testutil.assertApprox[pos[3]`mark_price;150f;1e-9;"a sym never quoted: its own price"];
-    .testutil.assertApprox[pos[4]`mark_price;1.01;1e-9;"the +0.5s fill is marked by the late +0s book (1.01), the newest at or before it"];
+    .qt.support.assertApprox[pos[0]`mark_price;1.11;1e-9;"the +2s fill sees the +1s book"];
+    .qt.support.assertApprox[pos[1]`mark_price;1.11;1e-9;"the +5s fill is marked as of +5s, not at the +10s book delivered before it (#1229)"];
+    .qt.support.assertApprox[pos[2]`mark_price;1.21;1e-9;"the +14s fill sees the +10s book; the late older book did not rewind it (#1088)"];
+    .qt.support.assertApprox[pos[3]`mark_price;150f;1e-9;"a sym never quoted: its own price"];
+    .qt.support.assertApprox[pos[4]`mark_price;1.01;1e-9;"the +0.5s fill is marked by the late +0s book (1.01), the newest at or before it"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the positions (restart points that differ)"]};
-test_a_restart_at_any_point_publishes_what_the_running_order_quality_job_did:{[t]
-    r:equivalent[`order_quality];
+.qt.qpipe.replay_equivalence.test_a_restart_at_any_point_publishes_what_the_running_order_quality_job_did:{[t]
+    r:.qt.qpipe.replay_equivalence.equivalent[`order_quality];
     .qunit.assertTrue[0<sum count each last each first r;"the script publishes the rolling series"];
     .qunit.assertEquals[last r;`long$();"no restart point changes the output (restart points that differ)"]};
 
 / The check is a check: a replay that judged lateness on the restart's process
 / clock - what the log clock replaces - is caught by the same script.
-test_the_check_catches_a_replay_that_reads_the_process_clock:{[t]
+.qt.qpipe.replay_equivalence.test_the_check_catches_a_replay_that_reads_the_process_clock:{[t]
     keep:.qetl.job.stream.clock_of;
     `.qetl.job.stream.clock_of set {[now;x] count[x]#now};
-    r:@[equivalent;`exec_bars;{[e] e}];
+    r:@[.qt.qpipe.replay_equivalence.equivalent;`exec_bars;{[e] e}];
     `.qetl.job.stream.clock_of set keep;
     .qunit.assertTrue[not 10h=type r;"the run completed rather than erroring"];
     .qunit.assertTrue[0<count last r;"a restart that republished a late row differs"]};
 
 / The log clock: the process clock live, the receipt stamp on replay.
-test_the_log_clock_is_the_process_clock_live_and_the_receipt_stamp_on_replay:{[t]
-    rows:([] time:t0+0D00:00:01 0D00:00:02; a:1 2);
-    now:t0+1D;
+.qt.qpipe.replay_equivalence.test_the_log_clock_is_the_process_clock_live_and_the_receipt_stamp_on_replay:{[t]
+    rows:([] time:.qt.qpipe.replay_equivalence.t0+0D00:00:01 0D00:00:02; a:1 2);
+    now:.qt.qpipe.replay_equivalence.t0+1D;
     .qunit.assertEquals[.qetl.job.stream.clock_of[now;rows];2#now;"live: now, for every row"];
     `.qetl.job.stream.replaying set 1b;
     r:.qetl.job.stream.clock_of[now;rows];
@@ -280,24 +279,22 @@ test_the_log_clock_is_the_process_clock_live_and_the_receipt_stamp_on_replay:{[t
 
 / The replaying jobs the tree ships, read as this file loads - before any
 / test registers a throwaway job of its own.
-tree_replaying:asc .qetl.job.stream.defined[] where {[j] $[`replay in key d:.qetl.job.stream.def j; d`replay; 0b]} each .qetl.job.stream.defined[]
+.qt.qpipe.replay_equivalence.tree_replaying:asc .qetl.job.stream.defined[] where {[j] $[`replay in key d:.qetl.job.stream.def j; d`replay; 0b]} each .qetl.job.stream.defined[]
 
 / Every replaying job is scripted or excluded with a reason, and no job is both.
-test_every_replaying_job_is_scripted_or_excluded:{[t]
-    reps:tree_replaying;
-    .qunit.assertEquals[asc (key scripts),key excluded;reps;"scripted + excluded is exactly the replaying jobs"];
-    .qunit.assertEquals[(key scripts) inter key excluded;`symbol$();"scripted or excluded, not both"]};
+.qt.qpipe.replay_equivalence.test_every_replaying_job_is_scripted_or_excluded:{[t]
+    reps:.qt.qpipe.replay_equivalence.tree_replaying;
+    .qunit.assertEquals[asc (key .qt.qpipe.replay_equivalence.scripts),key .qt.qpipe.replay_equivalence.excluded;reps;"scripted + excluded is exactly the replaying jobs"];
+    .qunit.assertEquals[(key .qt.qpipe.replay_equivalence.scripts) inter key .qt.qpipe.replay_equivalence.excluded;`symbol$();"scripted or excluded, not both"]};
 
 / The horizon kind is outside the check, and this is why: it declares no replay,
 / so a restart empties its pending events rather than rebuilding them, and its
 / scoring is decided at a timer tick the log does not record. If a horizon job
 / gains replay it must be scripted above, and this test says so.
-test_the_horizon_kind_is_excluded_because_it_does_not_replay:{[t]
+.qt.qpipe.replay_equivalence.test_the_horizon_kind_is_excluded_because_it_does_not_replay:{[t]
     hz:.qetl.job.stream.horizons.defined[];
     .qunit.assertTrue[0<count hz;"horizon jobs are defined"];
     .qunit.assertEquals[0i;`int$sum {[j] $[`replay in key d:.qetl.job.stream.def j; d`replay; 0b]} each hz;
         "none replays - script it in test_replay_equivalence.q the day one does"]};
 
-afterNamespace_reset_the_jobs:{[] .sjtest.reset[];}
-
-\d .
+.qt.qpipe.replay_equivalence.afterNamespace_reset_the_jobs:{[] .qt.qetl.job.stream.reset[];}

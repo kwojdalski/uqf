@@ -4,165 +4,164 @@
 / The job under test uses the real exec_bars transform on a table of its own,
 / so the shell is tested through the aggregation that ships.
 
-\d .barstest
 
 / The jobs this suite defines are process-global; leave the registry as found (#1375).
-beforeNamespace_save_jobs:{[] .testutil.save_stream_jobs[`.barstest]}
-afterNamespace_restore_jobs:{[] .testutil.restore_stream_jobs[`.barstest]}
+.qt.qetl.job.stream.bars.beforeNamespace_save_jobs:{[] .qt.support.save_stream_jobs[`.qt.qetl.job.stream.bars]}
+.qt.qetl.job.stream.bars.afterNamespace_restore_jobs:{[] .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.bars]}
 
-d1:2026.10.09
-t0:2026.10.09D10:00:00
+.qt.qetl.job.stream.bars.d1:2026.10.09
+.qt.qetl.job.stream.bars.t0:2026.10.09D10:00:00
 
 / The clock the job reads, which the tests move.
-clock:t0
+.qt.qetl.job.stream.bars.clock:.qt.qetl.job.stream.bars.t0
 
-sent:()
+.qt.qetl.job.stream.bars.sent:()
 
 / Fills in the executions shape the job projects: source_time sym size price.
-fill:{[tm;s;sz;px] ([] time:enlist tm; source_time:enlist tm; sym:enlist s; size:enlist sz; price:enlist px)}
+.qt.qetl.job.stream.bars.fill:{[tm;s;sz;px] ([] time:enlist tm; source_time:enlist tm; sym:enlist s; size:enlist sz; price:enlist px)}
 
 / A job named nm over the real transform, state emptied and publish recorded.
-job:{[nm]
+.qt.qetl.job.stream.bars.job:{[nm]
     if[not nm in .qetl.job.stream.bars.defined[];
         .qetl.job.stream.at_bars[nm;`procname`events`event_time`transform`publishes`width`lateness`period!(
             `$string[nm],"1";`bt_fills;`source_time;`exec_bars;`bt_bar;0D00:01:00;0D00:00:05;0D00:00:01)]];
     ns:.qetl.job.stream.namespace nm;
     .qetl.job.stream.reset nm;
-    (` sv ns,`now) set {[] .barstest.clock};
-    `.barstest.clock set t0;
-    `.barstest.sent set ();
-    .qetl.job.stream.wire[nm;{[t;x] .barstest.sent,:enlist (t;x); count x}];
+    (` sv ns,`now) set {[] .qt.qetl.job.stream.bars.clock};
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0;
+    `.qt.qetl.job.stream.bars.sent set ();
+    .qetl.job.stream.wire[nm;{[t;x] .qt.qetl.job.stream.bars.sent,:enlist (t;x); count x}];
     nm}
 
-ns:{[nm;k] get ` sv (.qetl.job.stream.namespace nm),k}
-feed:{[nm;x] (ns[nm;`on_batch]) [`bt_fills;x]}
-published:{[] raze last each sent}
+.qt.qetl.job.stream.bars.ns:{[nm;k] get ` sv (.qetl.job.stream.namespace nm),k}
+.qt.qetl.job.stream.bars.feed:{[nm;x] (.qt.qetl.job.stream.bars.ns[nm;`on_batch]) [`bt_fills;x]}
+.qt.qetl.job.stream.bars.published:{[] raze last each .qt.qetl.job.stream.bars.sent}
 
 / What jobout drives it with: a fill, and the day's end, which closes its window.
-contract_driver:{[]
-    `.barstest.clock set t0;
+.qt.qetl.job.stream.bars.contract_driver:{[]
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0;
     .qetl.job.stream.reset `exec_bars;
     / the job's own clock is put back as it was, not redefined, so it stays
     / the function the suite measures
     was:.qpipe.job.exec_bars.now;
-    .qpipe.job.exec_bars.now:{[] .barstest.clock};
-    .qpipe.job.exec_bars.on_batch[`executions;fill[t0+0D00:00:30;`EURUSD;1f;1.1]];
-    .qpipe.job.exec_bars.on_endofday d1;
+    .qpipe.job.exec_bars.now:{[] .qt.qetl.job.stream.bars.clock};
+    .qpipe.job.exec_bars.on_batch[`executions;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;1f;1.1]];
+    .qpipe.job.exec_bars.on_endofday .qt.qetl.job.stream.bars.d1;
     .qpipe.job.exec_bars.now:was;
     }
 
-test_a_bars_job_reads_the_process_clock_by_default:{[t]
+.qt.qetl.job.stream.bars.test_a_bars_job_reads_the_process_clock_by_default:{[t]
     before:.z.p;
     at:.qpipe.job.exec_bars.now[];
     .qunit.assertTrue[at within (before;.z.p);"the kind's default clock is .z.p - .u.upd stamps rows in it"]};
 
 / --- declaring -----------------------------------------------------------
 
-decl:{[] `procname`events`event_time`transform`publishes`width`lateness`period!(
+.qt.qetl.job.stream.bars.decl:{[] `procname`events`event_time`transform`publishes`width`lateness`period!(
     `btd1;`bt_fills;`source_time;`exec_bars;`bt_bar;0D00:01:00;0D00:00:05;0D00:00:01)}
 
-test_a_declaration_missing_a_key_is_refused_by_name:{[t]
-    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];`lateness _ decl[];
+.qt.qetl.job.stream.bars.test_a_declaration_missing_a_key_is_refused_by_name:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];`lateness _ .qt.qetl.job.stream.bars.decl[];
         "*bars job bt_x is missing lateness*";"the key it lacks"]};
 
-test_a_zero_width_is_refused:{[t]
-    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[decl[];`width;:;0D];
+.qt.qetl.job.stream.bars.test_a_zero_width_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`width;:;0D];
         "*bt_x's width must be a positive timespan*";"a window has to have an extent"]};
 
-test_a_transform_that_does_not_name_the_window_is_refused:{[t]
-    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[decl[];`transform;:;`hdb_exec_bars];
+.qt.qetl.job.stream.bars.test_a_transform_that_does_not_name_the_window_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`transform;:;`hdb_exec_bars];
         "*bt_x's transform input carries no bar_start*";"the twin's transform reads raw fills"]};
 
-test_an_unknown_key_is_refused:{[t]
-    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];decl[],enlist[`horizon]!enlist 0D00:00:01;
+.qt.qetl.job.stream.bars.test_an_unknown_key_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];.qt.qetl.job.stream.bars.decl[],enlist[`horizon]!enlist 0D00:00:01;
         "*declares horizon, which a bars job does not take*";"not a horizon job"]};
 
 / --- windows ---------------------------------------------------------------
 
-test_windows_are_half_open_on_the_event_time:{[t]
-    rows:([] st:t0+0 -1 59999999999 60000000000 60000000001);
+.qt.qetl.job.stream.bars.test_windows_are_half_open_on_the_event_time:{[t]
+    rows:([] st:.qt.qetl.job.stream.bars.t0+0 -1 59999999999 60000000000 60000000001);
     .qunit.assertEquals[(.qetl.job.stream.bars.assign[0D00:01;`st;rows])`bar_start;
-        (t0;t0-0D00:01:00;t0;t0+0D00:01:00;t0+0D00:01:00);
+        (.qt.qetl.job.stream.bars.t0;.qt.qetl.job.stream.bars.t0-0D00:01:00;.qt.qetl.job.stream.bars.t0;.qt.qetl.job.stream.bars.t0+0D00:01:00;.qt.qetl.job.stream.bars.t0+0D00:01:00);
         "a row exactly on a boundary opens the window that starts there"]};
 
-test_an_empty_interval_has_no_bar:{[t]
-    nm:job`bt_a;
-    feed[nm;fill[t0+0D00:00:10;`EURUSD;1f;1.1]];
-    feed[nm;fill[t0+0D00:02:10;`EURUSD;1f;1.3]];
-    `.barstest.clock set t0+0D00:05:00;
-    ns[nm;`close_ready][clock];
-    .qunit.assertEquals[(published[])`bar_start;t0,t0+0D00:02:00;
+.qt.qetl.job.stream.bars.test_an_empty_interval_has_no_bar:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_a;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:10;`EURUSD;1f;1.1]];
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:02:10;`EURUSD;1f;1.3]];
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:05:00;
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.clock];
+    .qunit.assertEquals[(.qt.qetl.job.stream.bars.published[])`bar_start;.qt.qetl.job.stream.bars.t0,.qt.qetl.job.stream.bars.t0+0D00:02:00;
         "the 10:01 minute held no fill and has no bar"]};
 
 / --- closing ---------------------------------------------------------------
 
-test_a_window_closes_once_its_lateness_has_passed_and_publishes_once:{[t]
-    nm:job`bt_b;
-    feed[nm;fill[t0+0D00:00:30;`EURUSD;2f;1.1]];
-    .qunit.assertEquals[ns[nm;`close_ready][t0+0D00:01:04.999999999];0;"one nanosecond inside the allowance: still open"];
-    .qunit.assertEquals[ns[nm;`close_ready][t0+0D00:01:05];1;"end plus lateness: closed"];
-    .qunit.assertEquals[ns[nm;`close_ready][t0+0D00:09:00];0;"never again"];
-    .qunit.assertEquals[count sent;1;"one publish"];
-    .qunit.assertEquals[first first sent;`bt_bar;"to the declared table"]};
+.qt.qetl.job.stream.bars.test_a_window_closes_once_its_lateness_has_passed_and_publishes_once:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_b;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;2f;1.1]];
+    .qunit.assertEquals[.qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:01:04.999999999];0;"one nanosecond inside the allowance: still open"];
+    .qunit.assertEquals[.qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:01:05];1;"end plus lateness: closed"];
+    .qunit.assertEquals[.qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:09:00];0;"never again"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.sent;1;"one publish"];
+    .qunit.assertEquals[first first .qt.qetl.job.stream.bars.sent;`bt_bar;"to the declared table"]};
 
-test_a_published_bar_is_the_aggregation:{[t]
-    nm:job`bt_c;
-    {feed[x;y]}[nm] each (fill[t0+0D00:00:50;`EURUSD;3f;1.12];fill[t0+0D00:00:05;`EURUSD;1f;1.10];fill[t0+0D00:00:20;`EURUSD;2f;1.11]);
-    ns[nm;`close_ready][t0+0D00:02:00];
-    b:first published[];
+.qt.qetl.job.stream.bars.test_a_published_bar_is_the_aggregation:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_c;
+    {.qt.qetl.job.stream.bars.feed[x;y]}[nm] each (.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:50;`EURUSD;3f;1.12];.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:05;`EURUSD;1f;1.10];.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:20;`EURUSD;2f;1.11]);
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:02:00];
+    b:first .qt.qetl.job.stream.bars.published[];
     .qunit.assertEquals[b`open`high`low`close`volume`trades;(1.10;1.12;1.10;1.12;6f;3);"open and close by source_time, not arrival"];
     .qunit.assertEquals[b`vwap;6.68%6;"size-weighted"]};
 
-test_a_late_row_within_the_allowance_amends_its_window:{[t]
-    nm:job`bt_d;
-    feed[nm;fill[t0+0D00:00:30;`EURUSD;1f;1.20]];
-    `.barstest.clock set t0+0D00:01:03;
-    feed[nm;fill[t0+0D00:00:10;`EURUSD;1f;1.10]];
-    ns[nm;`close_ready][t0+0D00:01:05];
-    b:first published[];
+.qt.qetl.job.stream.bars.test_a_late_row_within_the_allowance_amends_its_window:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_d;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;1f;1.20]];
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:01:03;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:10;`EURUSD;1f;1.10]];
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:01:05];
+    b:first .qt.qetl.job.stream.bars.published[];
     .qunit.assertEquals[(b`open;b`volume;b`trades);(1.10;2f;2);"the late row opens the bar"];
-    .qunit.assertEquals[count ns[nm;`dropped];0;"nothing dropped"]};
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`dropped];0;"nothing dropped"]};
 
-test_a_late_row_beyond_the_allowance_is_dropped_and_the_bar_is_not_republished:{[t]
-    nm:job`bt_e;
-    feed[nm;fill[t0+0D00:00:30;`EURUSD;1f;1.20]];
-    `.barstest.clock set t0+0D00:01:05;
-    ns[nm;`close_ready][clock];
-    `.barstest.clock set t0+0D00:01:06;
-    feed[nm;fill[t0+0D00:00:10;`EURUSD;1f;1.10]];
-    ns[nm;`close_ready][clock];
-    .qunit.assertEquals[count sent;1;"the bar went out once"];
-    .qunit.assertEquals[(first published[])`open;1.20;"and without the late row"];
-    .qunit.assertEquals[(ns[nm;`dropped])`reason;enlist `late;"the drop is on the ledger"];
-    .qunit.assertEquals[count ns[nm;`pending];0;"and not buffered"]};
+.qt.qetl.job.stream.bars.test_a_late_row_beyond_the_allowance_is_dropped_and_the_bar_is_not_republished:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_e;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;1f;1.20]];
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:01:05;
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.clock];
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:01:06;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:10;`EURUSD;1f;1.10]];
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.clock];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.sent;1;"the bar went out once"];
+    .qunit.assertEquals[(first .qt.qetl.job.stream.bars.published[])`open;1.20;"and without the late row"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.bars.ns[nm;`dropped])`reason;enlist `late;"the drop is on the ledger"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`pending];0;"and not buffered"]};
 
-test_a_publish_that_throws_leaves_the_windows_for_the_next_tick:{[t]
-    nm:job`bt_f;
-    feed[nm;fill[t0+0D00:00:30;`EURUSD;1f;1.20]];
+.qt.qetl.job.stream.bars.test_a_publish_that_throws_leaves_the_windows_for_the_next_tick:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_f;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;1f;1.20]];
     .qetl.job.stream.wire[nm;{[t;x] '"plant down"}];
-    .qunit.assertThrows[ns[nm;`close_ready];t0+0D00:02:00;"*plant down*";"the error reaches the timer"];
-    .qunit.assertEquals[count ns[nm;`pending];1;"still buffered"];
-    .qetl.job.stream.wire[nm;{[t;x] .barstest.sent,:enlist (t;x); count x}];
-    .qunit.assertEquals[ns[nm;`close_ready][t0+0D00:02:00];1;"published on the next tick"]};
+    .qunit.assertThrows[.qt.qetl.job.stream.bars.ns[nm;`close_ready];.qt.qetl.job.stream.bars.t0+0D00:02:00;"*plant down*";"the error reaches the timer"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`pending];1;"still buffered"];
+    .qetl.job.stream.wire[nm;{[t;x] .qt.qetl.job.stream.bars.sent,:enlist (t;x); count x}];
+    .qunit.assertEquals[.qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:02:00];1;"published on the next tick"]};
 
 / --- end of day ------------------------------------------------------------
 
-test_end_of_day_closes_the_days_open_windows_and_no_others:{[t]
-    nm:job`bt_g;
+.qt.qetl.job.stream.bars.test_end_of_day_closes_the_days_open_windows_and_no_others:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_g;
     last_min:2026.10.09D23:59:00;
-    feed[nm;fill[last_min+0D00:00:30;`EURUSD;1f;1.20]];
-    `.barstest.clock set 2026.10.10D00:00:03;
-    feed[nm;fill[2026.10.10D00:00:01;`EURUSD;4f;1.30]];
-    .qunit.assertEquals[ns[nm;`on_endofday][d1];1;"the 23:59 window"];
-    .qunit.assertEquals[(published[])`bar_start;enlist last_min;"published before its lateness had passed"];
-    .qunit.assertEquals[(ns[nm;`pending])`bar_start;enlist 2026.10.10D00:00:00;"the new day's window stays open"];
-    feed[nm;fill[last_min+0D00:00:40;`EURUSD;9f;1.50]];
-    .qunit.assertEquals[count ns[nm;`dropped];1;"a late row for the closed window is refused"];
-    ns[nm;`close_ready][2026.10.10D00:02:00];
-    .qunit.assertEquals[count sent;2;"the last window is not published twice"]};
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[last_min+0D00:00:30;`EURUSD;1f;1.20]];
+    `.qt.qetl.job.stream.bars.clock set 2026.10.10D00:00:03;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[2026.10.10D00:00:01;`EURUSD;4f;1.30]];
+    .qunit.assertEquals[.qt.qetl.job.stream.bars.ns[nm;`on_endofday][.qt.qetl.job.stream.bars.d1];1;"the 23:59 window"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.bars.published[])`bar_start;enlist last_min;"published before its lateness had passed"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.bars.ns[nm;`pending])`bar_start;enlist 2026.10.10D00:00:00;"the new day's window stays open"];
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[last_min+0D00:00:40;`EURUSD;9f;1.50]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`dropped];1;"a late row for the closed window is refused"];
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][2026.10.10D00:02:00];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.sent;2;"the last window is not published twice"]};
 
-test_the_kind_registers_its_end_of_day_hook:{[t]
-    nm:job`bt_h;
+.qt.qetl.job.stream.bars.test_the_kind_registers_its_end_of_day_hook:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_h;
     .qunit.assertTrue[`on_endofday in key .qetl.job.stream.def nm;"the runner calls it"];
     .qunit.assertTrue[(.qetl.job.stream.def nm)`replay;"and replays"];
     .qunit.assertEquals[(.qetl.job.stream.def nm)`restore_from;enlist `bt_bar;"from its own bars"]};
@@ -171,75 +170,75 @@ test_the_kind_registers_its_end_of_day_hook:{[t]
 
 / A restart that replays the log holds the windows that were open and
 / publishes none that were closed - the same bars as a process left running.
-test_a_replay_rebuilds_open_windows_and_does_not_republish_closed_ones:{[t]
-    r1:fill[t0+0D00:00:10;`EURUSD;1f;1.10];
-    r2:fill[t0+0D00:00:40;`EURUSD;1f;1.20];
-    r3:fill[t0+0D00:01:20;`EURUSD;2f;1.30];
+.qt.qetl.job.stream.bars.test_a_replay_rebuilds_open_windows_and_does_not_republish_closed_ones:{[t]
+    r1:.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:10;`EURUSD;1f;1.10];
+    r2:.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:40;`EURUSD;1f;1.20];
+    r3:.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:01:20;`EURUSD;2f;1.30];
     / the process left running: rows, the first window closes, the second later
-    nm:job`bt_i;
-    feed[nm;r1]; feed[nm;r2]; feed[nm;r3];
-    `.barstest.clock set t0+0D00:01:05;
-    ns[nm;`close_ready][clock];
-    first_bar:published[];
-    `.barstest.clock set t0+0D00:02:05;
-    ns[nm;`close_ready][clock];
-    running:published[];
+    nm:.qt.qetl.job.stream.bars.job`bt_i;
+    .qt.qetl.job.stream.bars.feed[nm;r1]; .qt.qetl.job.stream.bars.feed[nm;r2]; .qt.qetl.job.stream.bars.feed[nm;r3];
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:01:05;
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.clock];
+    first_bar:.qt.qetl.job.stream.bars.published[];
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:02:05;
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.clock];
+    running:.qt.qetl.job.stream.bars.published[];
     / the restarted process, long after: replays the log, then ticks
-    nm:job`bt_i;
-    `.barstest.clock set t0+0D00:03:00;
+    nm:.qt.qetl.job.stream.bars.job`bt_i;
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:03:00;
     `.qetl.job.stream.replaying set 1b;
-    r:@[{[nm;a;b;c;bar] feed[nm;a]; feed[nm;b]; feed[nm;c]; (ns[nm;`on_batch])[`bt_bar;bar]; 1b}[nm;r1;r2;r3];first_bar;{x}];
+    r:@[{[nm;a;b;c;bar] .qt.qetl.job.stream.bars.feed[nm;a]; .qt.qetl.job.stream.bars.feed[nm;b]; .qt.qetl.job.stream.bars.feed[nm;c]; (.qt.qetl.job.stream.bars.ns[nm;`on_batch])[`bt_bar;bar]; 1b}[nm;r1;r2;r3];first_bar;{x}];
     `.qetl.job.stream.replaying set 0b;
     .qunit.assertEquals[r;1b;"the replay ran"];
-    .qunit.assertEquals[(ns[nm;`pending])`price;enlist 1.30;"only the open window was rebuilt"];
-    .qunit.assertEquals[count sent;0;"nothing published while replaying"];
-    ns[nm;`close_ready][clock];
-    after:published[];
+    .qunit.assertEquals[(.qt.qetl.job.stream.bars.ns[nm;`pending])`price;enlist 1.30;"only the open window was rebuilt"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.sent;0;"nothing published while replaying"];
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.clock];
+    after:.qt.qetl.job.stream.bars.published[];
     .qunit.assertEquals[(first_bar,after);running;"the closed bar from the log plus the rebuilt one are the running process's"]};
 
 / A row dropped live as late, in a window that never got a bar, stays dropped
 / across a restart: it is not buffered and no bar appears for it (#993).
-test_a_row_dropped_live_as_late_stays_dropped_on_replay:{[t]
+.qt.qetl.job.stream.bars.test_a_row_dropped_live_as_late_stays_dropped_on_replay:{[t]
     / event 10:00:30, received (time) 10:05:00: its window [10:00,10:01) closed at 10:01:05
-    late:update time:.barstest.t0+0D00:05:00 from fill[t0+0D00:00:30;`EURUSD;1f;1.10];
-    nm:job`bt_l;
-    `.barstest.clock set t0+0D00:05:00;
-    feed[nm;late];
-    .qunit.assertEquals[count ns[nm;`dropped];1;"live: dropped as late"];
-    .qunit.assertEquals[count ns[nm;`pending];0;"live: not buffered"];
-    nm:job`bt_l;
-    `.barstest.clock set t0+0D00:06:00;
+    late:update time:.qt.qetl.job.stream.bars.t0+0D00:05:00 from .qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;1f;1.10];
+    nm:.qt.qetl.job.stream.bars.job`bt_l;
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:05:00;
+    .qt.qetl.job.stream.bars.feed[nm;late];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`dropped];1;"live: dropped as late"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`pending];0;"live: not buffered"];
+    nm:.qt.qetl.job.stream.bars.job`bt_l;
+    `.qt.qetl.job.stream.bars.clock set .qt.qetl.job.stream.bars.t0+0D00:06:00;
     `.qetl.job.stream.replaying set 1b;
-    r:@[{[nm;x] feed[nm;x]; 1b}[nm];late;{x}];
+    r:@[{[nm;x] .qt.qetl.job.stream.bars.feed[nm;x]; 1b}[nm];late;{x}];
     `.qetl.job.stream.replaying set 0b;
     .qunit.assertEquals[r;1b;"the replay ran"];
-    .qunit.assertEquals[count ns[nm;`dropped];1;"replay: dropped again"];
-    .qunit.assertEquals[count ns[nm;`pending];0;"replay: not buffered"];
-    ns[nm;`close_ready][clock];
-    .qunit.assertEquals[count published[];0;"no bar for a row the live process refused"]};
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`dropped];1;"replay: dropped again"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`pending];0;"replay: not buffered"];
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.clock];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.published[];0;"no bar for a row the live process refused"]};
 
 / A row received in time is still buffered on replay: receipt time, not the
 / event time, decides, so an old event that arrived promptly is not lost.
-test_a_row_received_in_time_is_buffered_on_replay:{[t]
-    early:update time:.barstest.t0+0D00:01:02 from fill[t0+0D00:00:30;`EURUSD;1f;1.10];
-    nm:job`bt_e;
+.qt.qetl.job.stream.bars.test_a_row_received_in_time_is_buffered_on_replay:{[t]
+    early:update time:.qt.qetl.job.stream.bars.t0+0D00:01:02 from .qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;1f;1.10];
+    nm:.qt.qetl.job.stream.bars.job`bt_e;
     `.qetl.job.stream.replaying set 1b;
-    r:@[{[nm;x] feed[nm;x]; 1b}[nm];early;{x}];
+    r:@[{[nm;x] .qt.qetl.job.stream.bars.feed[nm;x]; 1b}[nm];early;{x}];
     `.qetl.job.stream.replaying set 0b;
     .qunit.assertEquals[r;1b;"the replay ran"];
-    .qunit.assertEquals[count ns[nm;`pending];1;"within lateness at receipt: buffered"];
-    .qunit.assertEquals[count ns[nm;`dropped];0;"and not dropped"]};
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`pending];1;"within lateness at receipt: buffered"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[nm;`dropped];0;"and not dropped"]};
 
 / --- the twin --------------------------------------------------------------
 
-test_the_backfill_twin_builds_the_live_bars_from_the_same_rows:{[t]
-    nm:job`bt_j;
-    rows:([] source_time:t0+0D00:00:01*7 33 59 60 61 119 130 185;
+.qt.qetl.job.stream.bars.test_the_backfill_twin_builds_the_live_bars_from_the_same_rows:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_j;
+    rows:([] source_time:.qt.qetl.job.stream.bars.t0+0D00:00:01*7 33 59 60 61 119 130 185;
         sym:`EURUSD`USDJPY`EURUSD`EURUSD`USDJPY`EURUSD`EURUSD`USDJPY;
         size:1 2 3 4 5 6 7 8f; price:1.1 150 1.2 1.15 151 1.3 1.25 149);
-    feed[nm;update time:source_time from rows];
-    ns[nm;`close_ready][t0+0D00:10:00];
-    live:`sym`bar_start xasc published[];
+    .qt.qetl.job.stream.bars.feed[nm;update time:source_time from rows];
+    .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:10:00];
+    live:`sym`bar_start xasc .qt.qetl.job.stream.bars.published[];
     twin:.qpipe.job.hdb_exec_bars_backfill.bars rows;
     .qunit.assertEquals[(cols live)#`sym`bar_start xasc twin;live;"one aggregation, two lifecycles"];
     .qunit.assertEquals[twin`time;twin[`bar_start]+0D00:01;"the twin stamps the window's end"];
@@ -249,19 +248,17 @@ test_the_backfill_twin_builds_the_live_bars_from_the_same_rows:{[t]
 
 / A quality gate that names the whole batch as offending when flagged, and
 / passes when not (#1232: the kind forwards check/on_fail to define).
-gate:{[flag;x] n:$[flag;1;0]; ([] check:n#`always; status:n#`bad; detail:n#enlist "flagged")}
+.qt.qetl.job.stream.bars.gate:{[flag;x] n:$[flag;1;0]; ([] check:n#`always; status:n#`bad; detail:n#enlist "flagged")}
 
-test_a_bars_job_can_declare_a_check_that_withholds_a_bar:{[t]
-    .qetl.job.stream.at_bars[`bt_chk;@[decl[];`procname;:;`btchk1],`check`on_fail!(gate[1b];`hold)];
-    nm:job`bt_chk;
-    feed[nm;fill[t0+0D00:00:30;`EURUSD;2f;1.1]];
-    .qunit.assertEquals[ns[nm;`close_ready][t0+0D00:02:00];1;"the window closed"];
-    .qunit.assertEquals[count sent;0;"but the failing check withheld the bar"];
+.qt.qetl.job.stream.bars.test_a_bars_job_can_declare_a_check_that_withholds_a_bar:{[t]
+    .qetl.job.stream.at_bars[`bt_chk;@[.qt.qetl.job.stream.bars.decl[];`procname;:;`btchk1],`check`on_fail!(.qt.qetl.job.stream.bars.gate[1b];`hold)];
+    nm:.qt.qetl.job.stream.bars.job`bt_chk;
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;2f;1.1]];
+    .qunit.assertEquals[.qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:02:00];1;"the window closed"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.sent;0;"but the failing check withheld the bar"];
     .qunit.assertEquals[(.qetl.stream_health.of nm)`failed;1;"and counted it"];
-    .qetl.job.stream.at_bars[`bt_chk_ok;@[decl[];`procname;:;`btchkok1],`check`on_fail!(gate[0b];`hold)];
-    ok:job`bt_chk_ok;
-    feed[ok;fill[t0+0D00:00:30;`EURUSD;2f;1.1]];
-    ns[ok;`close_ready][t0+0D00:02:00];
-    .qunit.assertEquals[count sent;1;"a passing check lets the bar through"]};
-
-\d .
+    .qetl.job.stream.at_bars[`bt_chk_ok;@[.qt.qetl.job.stream.bars.decl[];`procname;:;`btchkok1],`check`on_fail!(.qt.qetl.job.stream.bars.gate[0b];`hold)];
+    ok:.qt.qetl.job.stream.bars.job`bt_chk_ok;
+    .qt.qetl.job.stream.bars.feed[ok;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;2f;1.1]];
+    .qt.qetl.job.stream.bars.ns[ok;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:02:00];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.sent;1;"a passing check lets the bar through"]};

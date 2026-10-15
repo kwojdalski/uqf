@@ -1,5 +1,5 @@
 // test_demo_tables.q - the tickerplant table declarations in
-// src/etl/plant_tables.q (.tabletest).
+// src/etl/plant_tables.q (.qt.qetl.plant.tables).
 //
 // These definitions used to be Python string literals. Nothing parsed them
 // as q until stp1 started, so a typo was a failed tickerplant rather than a
@@ -11,12 +11,11 @@
 // feed publishing rows nothing downstream can read, which is the failure the
 // column assertions below exist to catch.
 
-\d .tabletest
 
 / Loaded here rather than in run_tests.q's list: this is the only suite that
 / needs these tables in scope, and defining nine top-level tables for every
 / other suite would put names in the root namespace that nothing else wants.
-beforeNamespace_load:{[]
+.qt.qetl.plant.tables.beforeNamespace_load:{[]
     system"l src/etl/plant_tables.q";
     .qetl.plant.materialise .qetl.plant.own[];
     }
@@ -24,13 +23,13 @@ beforeNamespace_load:{[]
 / Every table the orchestrator's generated database.q is expected to carry.
 / A floor AND a list: a missing name is caught, and so is a new one added to
 / the q file without a thought about who consumes it.
-expected:`fx_orderbook`wide_orderbook`mkt_orderbook`databento_mbp10`eq_orderbook`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`demo_execution_quality`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data`deal_positions`trades_copy`crypto_execution_quality`exec_bar`crypto_book_1s`book_liquidity_1m`last_value`flink_vwap_raw`flink_vwap`order_quality`order_outcomes`fx_markout`fx_markout_wide
+.qt.qetl.plant.tables.expected:`fx_orderbook`wide_orderbook`mkt_orderbook`databento_mbp10`eq_orderbook`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`demo_execution_quality`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data`deal_positions`trades_copy`crypto_execution_quality`exec_bar`crypto_book_1s`book_liquidity_1m`last_value`flink_vwap_raw`flink_vwap`order_quality`order_outcomes`fx_markout`fx_markout_wide
 
 / Tables an installed sidecar bundle added, read from its ledger
 / (src/etl/installed_bundles.json). The bundle defines and describes them
 / itself, so they are not this list's to hold; a checkout with no bundle
 / installed has no ledger, and nothing is exempt.
-bundled:{[] f:`:src/etl/installed_bundles.json;
+.qt.qetl.plant.tables.bundled:{[] f:`:src/etl/installed_bundles.json;
     $[()~key f; `symbol$(); `symbol$(),`$raze {x`tables} each value .j.k raze read0 f]}
 
 / The names THIS FILE declares, read back out of it.
@@ -43,7 +42,7 @@ bundled:{[] f:`:src/etl/installed_bundles.json;
 / The pattern deliberately contains no brackets: q's `like` treats "[...]" as
 / a CHARACTER CLASS, so the obvious "*:([]*" is an empty class and throws
 / rather than matching the literal text it looks like it matches.
-declared:{[]
+.qt.qetl.plant.tables.declared:{[]
     ls:read0 `$":src/etl/plant_tables.q";
     / The file defines each table qualified from the root (.qetl.plant.quote:...).
     ls:{$[x like ".qetl.plant.*"; 12_x; x]} each ls;
@@ -54,81 +53,81 @@ declared:{[]
 
 / A table's value, by name.
 / .
-/ Exists because inside \d .tabletest a BARE `fx_orderbook` resolves to
-/ .tabletest.fx_orderbook, which does not exist - the same namespace trap
+/ Exists because inside the old `\d` block of this suite a BARE `fx_orderbook` resolves to
+/ .qt.qetl.plant.tables.fx_orderbook, which does not exist - the same namespace trap
 / .qetl.coverage.ledger[] exists to avoid, and one this file hit on its first run.
 / .
 / `value nm`, not `value ` sv `,nm`: joining an empty symbol yields `.fx_orderbook`
 / with a LEADING DOT, which is a different name again and resolves to
 / nothing. A plain symbol already looks the table up at the root.
-tbl:{[nm] value nm}
+.qt.qetl.plant.tables.tbl:{[nm] value nm}
 
-test_every_expected_table_is_declared:{[t]
-    .qunit.assertEquals[(asc expected) except .tabletest.declared[];`symbol$();
+.qt.qetl.plant.tables.test_every_expected_table_is_declared:{[t]
+    .qunit.assertEquals[(asc .qt.qetl.plant.tables.expected) except .qt.qetl.plant.tables.declared[];`symbol$();
         "every table the demo publishes into is declared in the q file"]};
 
-test_no_undeclared_table_appears:{[t]
+.qt.qetl.plant.tables.test_no_undeclared_table_appears:{[t]
     / The other direction. A table added to the q file that nothing here
     / knows about is either a new capability nobody wired up, or a stray
     / definition - both worth one line of thought before it ships.
     / The failure is the prompt (#352), so it says what to do: `uqs job new`
     / adds its table to `expected` itself, and a table added by hand needs
     / the same one line once someone has decided it should ship.
-    .qunit.assertEquals[.tabletest.declared[] except expected,bundled[];`symbol$();
+    .qunit.assertEquals[.qt.qetl.plant.tables.declared[] except .qt.qetl.plant.tables.expected,.qt.qetl.plant.tables.bundled[];`symbol$();
         "a table in src/etl/plant_tables.q that this test does not know - if it is meant to ship, add it to `expected` in tests/q/test_stack_tables.q; if not, remove it"]};
 
 / --- shapes their consumers depend on ------------------------------------
 
-test_fx_orderbook_matches_the_shape_pricing_expects:{[t]
+.qt.qetl.plant.tables.test_fx_orderbook_matches_the_shape_pricing_expects:{[t]
     / .qf.util.require_depth_quotes reads these five columns
     / off a quotes table, which leads with `time` because the tickerplant's
     / .u.upd requires the first column to be literally `time`. The library
     / demanded `ts` here until that was made one name tree-wide, so a
     / consumer had to rename at query time; none does now.
-    .qunit.assertEquals[cols .tabletest.tbl `fx_orderbook;
+    .qunit.assertEquals[cols .qt.qetl.plant.tables.tbl `fx_orderbook;
         `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
         "fx_orderbook carries the vector-column shape cross_book_at consumes"]};
 
-test_trades_matches_the_shape_the_markout_family_expects:{[t]
+.qt.qetl.plant.tables.test_trades_matches_the_shape_the_markout_family_expects:{[t]
     / src/execution/execution.q's markout_at_horizons input shape.
-    .qunit.assertEquals[cols .tabletest.tbl `trades;
+    .qunit.assertEquals[cols .qt.qetl.plant.tables.tbl `trades;
         `time`sym`side`trade_price`size`pip_factor`fill_id;
         "trades carries the columns markout_at_horizons reads"]};
 
-test_wide_book_levels_are_contiguous_from_zero:{[t]
+.qt.qetl.plant.tables.test_wide_book_levels_are_contiguous_from_zero:{[t]
     / .qf.mkt.derive_level_groups finds levels by a prefix plus a CONTIGUOUS
     / digit suffix. A gap - bids0..bids4, bids6 - silently yields a shorter
     / book rather than an error, so the numbering is load-bearing.
     bids:`$"bids",/:string til 11;
     asks:`$"asks",/:string til 11;
-    .qunit.assertEquals[cols .tabletest.tbl `wide_orderbook;`time`sym,bids,asks;
+    .qunit.assertEquals[cols .qt.qetl.plant.tables.tbl `wide_orderbook;`time`sym,bids,asks;
         "wide_orderbook numbers both sides 0..10 with no gap, as derive_level_groups requires"]};
 
-test_wide_book_is_the_unfolded_counterpart_of_mkt_orderbook:{[t]
+.qt.qetl.plant.tables.test_wide_book_is_the_unfolded_counterpart_of_mkt_orderbook:{[t]
     / vectorize1 folds one into the other, so the pair only makes sense if
     / the target has the vector columns the fold produces.
-    .qunit.assertEquals[cols .tabletest.tbl `mkt_orderbook;`time`sym`bid_prices`ask_prices;
+    .qunit.assertEquals[cols .qt.qetl.plant.tables.tbl `mkt_orderbook;`time`sym`bid_prices`ask_prices;
         "mkt_orderbook is the folded shape .qf.mkt.book_from_wide_levels writes"]};
 
-test_the_two_fill_tables_do_not_collapse_into_one:{[t]
+.qt.qetl.plant.tables.test_the_two_fill_tables_do_not_collapse_into_one:{[t]
     / crypto_sim_fills is simulated, crypto_trades is real. Conflating them
     / is how a P&L number stops meaning anything, so they must stay distinct
     / tables - not merely distinct names for the same shape.
-    .qunit.assertEquals[`crypto_sim_fills`crypto_trades in .tabletest.declared[];
+    .qunit.assertEquals[`crypto_sim_fills`crypto_trades in .qt.qetl.plant.tables.declared[];
         11b;"simulated and real fills are separate tables"]};
 
-test_every_table_leads_with_time:{[t]
+.qt.qetl.plant.tables.test_every_table_leads_with_time:{[t]
     / The tickerplant's .u.upd stamps and requires a first column literally
     / named `time`. A table that leads with anything else is published
     / wrongly, and the symptom appears in the RDB rather than at publish.
-    leads:{first cols .tabletest.tbl x} each expected;
+    leads:{first cols .qt.qetl.plant.tables.tbl x} each .qt.qetl.plant.tables.expected;
     .qunit.assertEquals[distinct leads;enlist `time;
         "every published table leads with `time, as .u.upd requires"]};
 
-test_every_table_is_empty_as_declared:{[t]
+.qt.qetl.plant.tables.test_every_table_is_empty_as_declared:{[t]
     / These are declarations, not fixtures. A definition that arrived with
     / rows would seed the tickerplant with data nobody published.
-    .qunit.assertEquals[distinct {count .tabletest.tbl x} each expected;enlist 0;
+    .qunit.assertEquals[distinct {count .qt.qetl.plant.tables.tbl x} each .qt.qetl.plant.tables.expected;enlist 0;
         "every declaration is an empty typed table"]};
 
 
@@ -161,19 +160,19 @@ test_every_table_is_empty_as_declared:{[t]
 / .
 / Empty. markout's `quotes` input was here while the plant's depth table was
 / also called `quotes`; renaming that table fx_orderbook ended the collision.
-not_exchanged:()
+.qt.qetl.plant.tables.not_exchanged:()
 
 / Private: one symbol per (job; table) pair, so a pair can be tested for
 / membership. q has no composite `in` over two columns - `([a;b]) in tbl`
 / is a `mismatch` - and rendering is clearer here than a keyed-table join.
-pair:{[job;tbl] `$string[job],"/",string tbl}
+.qt.qetl.plant.tables.pair:{[job;tbl] `$string[job],"/",string tbl}
 
 / The excused pairs, rendered.
-excused:{[] pair .' 2#/:not_exchanged}
+.qt.qetl.plant.tables.excused:{[] .qt.qetl.plant.tables.pair .' 2#/:.qt.qetl.plant.tables.not_exchanged}
 
 / Every table a streaming job declares, with the role its own registration
 / implies.
-job_tables:{[]
+.qt.qetl.plant.tables.job_tables:{[]
     raze {[job]
         ns:.qetl.job.stream.namespace job;
         d:.qetl.job.stream.def job;
@@ -183,40 +182,39 @@ job_tables:{[]
             role:{[d;nm] $[nm in d`subscribe_to;`subscribe_to;nm in d`publishes;`publishes;`internal]}[d] each nms)
       } each .qetl.job.stream.defined[]}
 
-test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
-    rows:select from .tabletest.job_tables[] where tbl in .tabletest.declared[];
-    rows:select from rows where not .tabletest.pair'[job;tbl] in .tabletest.excused[];
-    `.tabletest.bad set ();
+.qt.qetl.plant.tables.test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
+    rows:select from .qt.qetl.plant.tables.job_tables[] where tbl in .qt.qetl.plant.tables.declared[];
+    rows:select from rows where not .qt.qetl.plant.tables.pair'[job;tbl] in .qt.qetl.plant.tables.excused[];
+    `.qt.qetl.plant.tables.bad set ();
     {[row]
-        plant:cols .tabletest.tbl row`tbl;
+        plant:cols .qt.qetl.plant.tables.tbl row`tbl;
         theirs:cols get ` sv (.qetl.job.stream.namespace row`job),row`tbl;
         want:$[row[`role]=`publishes; 1_plant; plant];
         if[not theirs~want;
-            `.tabletest.bad set .tabletest.bad,enlist
+            `.qt.qetl.plant.tables.bad set .qt.qetl.plant.tables.bad,enlist
                 (string[row`job],"/",string[row`tbl]," (",string[row`role],"): job has ",
                  (" " sv string theirs),", plant has ",(" " sv string want))]
       } each rows;
-    .qunit.assertEquals[.tabletest.bad;();
+    .qunit.assertEquals[.qt.qetl.plant.tables.bad;();
         "every job's declared table matches the plant's, with `time` for one it subscribes to and without for one it publishes"]};
 
-test_every_job_table_sharing_a_plant_name_is_exchanged_or_excused:{[t]
+.qt.qetl.plant.tables.test_every_job_table_sharing_a_plant_name_is_exchanged_or_excused:{[t]
     / The loophole in the test above: it derives the comparison from the
     / role, and a table declared with NEITHER role is silently skipped. A
     / name collision is then invisible - which is how markout's `quotes`
     / (a different shape from the plant's depth table, then also `quotes`)
     / went unnoticed.
-    rows:select from .tabletest.job_tables[]
-        where tbl in .tabletest.declared[], role=`internal;
-    unexcused:select from rows where not .tabletest.pair'[job;tbl] in .tabletest.excused[];
+    rows:select from .qt.qetl.plant.tables.job_tables[]
+        where tbl in .qt.qetl.plant.tables.declared[], role=`internal;
+    unexcused:select from rows where not .qt.qetl.plant.tables.pair'[job;tbl] in .qt.qetl.plant.tables.excused[];
     .qunit.assertEquals[count unexcused;0;
         "a job declaring a table named after a plant table, while neither subscribing nor publishing it, is a collision that needs a reason in not_exchanged"]};
 
-test_the_exemptions_still_describe_something_real:{[t]
+.qt.qetl.plant.tables.test_the_exemptions_still_describe_something_real:{[t]
     / So the excuse list cannot rot into cover for the next real collision.
-    live:.tabletest.job_tables[];
-    stale:.tabletest.excused[] except .tabletest.pair'[live`job;live`tbl];
+    live:.qt.qetl.plant.tables.job_tables[];
+    stale:.qt.qetl.plant.tables.excused[] except .qt.qetl.plant.tables.pair'[live`job;live`tbl];
     .qunit.assertEquals[count stale;0;
         "every not_exchanged entry names a job and table that still exist - remove the entry rather than leaving a dead excuse"]};
 
-bad:()
-\d .
+.qt.qetl.plant.tables.bad:()

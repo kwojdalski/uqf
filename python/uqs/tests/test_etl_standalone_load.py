@@ -85,3 +85,43 @@ def test_the_etl_tree_loads_outside_the_test_harness(tmp_path: Path) -> None:
     assert "JOBS:" in out, f"no job count reported:\n{out}"
     count = int(out.split("JOBS:")[1].split("\n")[0])
     assert count > 1, f"expected a graph with several jobs, got {count}"
+
+
+#: What a process that loads the library can see of the test harness: nothing.
+_NO_HARNESS = """\\l src/init.q
+\\l src/etl/init.q
+.qetl.dag.adopt_all[];
+-1 "HARNESS:",", " sv string (`qt`qunit) inter key `;
+-1 "OWNED:",", " sv string .qf.util.owned[] where (string .qf.util.owned[]) like ".qt*";
+"""
+
+
+def test_loading_the_library_creates_no_test_namespace(tmp_path: Path) -> None:
+    """#1412: the test tree lives under `.qt`, and `.qf.util.owned` lists every root
+    namespace that starts with q - so a production process that carried `.qt`,
+    or the vendored `.qunit`, would show test scaffolding in its own namespace
+    enumeration, its contract surface and its coverage. Loading `src/init.q` and
+    `src/etl/init.q`, the way a process does, must create neither.
+
+    A fresh interpreter, because the q suite loads the harness first: only a
+    process that has not can say the library never does. The static half - no
+    production line names `.qt` or `.qunit` - is
+    tests/q/test_suite_layout.q's test_production_sources_never_mention_the_test_tree.
+    """
+    qbin, env = _kdbx()
+    script = tmp_path / "no_harness.q"
+    script.write_text(_NO_HARNESS)
+    result = subprocess.run(
+        [qbin, str(script), "-q"],
+        cwd=UQF_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=TIMEOUT_SECONDS,
+    )
+    out = result.stdout.decode(errors="replace")
+    err = result.stderr.decode(errors="replace")
+    assert result.returncode == 0, f"the ETL tree did not load:\n{out}\n{err}"
+    assert "HARNESS:" in out and "OWNED:" in out, f"the probe did not run:\n{out}"
+    assert out.split("HARNESS:")[1].split("\n")[0] == "", f"a test namespace was loaded:\n{out}"
+    assert out.split("OWNED:")[1].split("\n")[0] == "", f"a .qt namespace is owned:\n{out}"

@@ -1,5 +1,5 @@
 / test_stream_job.q - the streaming-job contract, and the four jobs' own
-/ handlers (.sjtest).
+/ handlers (.qt.qetl.job.stream).
 / .
 / MOST OF THIS COULD NOT BE WRITTEN BEFORE. Each job's `upd` lived at the
 / root of a scripts/torq_*_etl.q that subscribed to a tickerplant as it
@@ -15,33 +15,32 @@
 / process globals, and a test that inherits another's buffer passes or fails
 / for reasons that are not its own.
 
-\d .sjtest
 
 / --- a recorder, standing in for the tickerplant ---------------------------
 
-published:([] job:`symbol$(); tbl:`symbol$(); rows:())
+.qt.qetl.job.stream.published:([] job:`symbol$(); tbl:`symbol$(); rows:())
 
-recorder:{[job;t;x]
-    `.sjtest.published upsert (job;t;enlist x);
+.qt.qetl.job.stream.recorder:{[job;t;x]
+    `.qt.qetl.job.stream.published upsert (job;t;enlist x);
     count x}
 
-reset:{[]
-    `.sjtest.published set 0#.sjtest.published;
+.qt.qetl.job.stream.reset:{[]
+    `.qt.qetl.job.stream.published set 0#.qt.qetl.job.stream.published;
     .qetl.job.stream.reset each .qetl.job.stream.defined[];
-    {.qetl.job.stream.wire[x;.sjtest.recorder[x]]} each .qetl.job.stream.defined[];
+    {.qetl.job.stream.wire[x;.qt.qetl.job.stream.recorder[x]]} each .qetl.job.stream.defined[];
     }
 
 / The rows of the last publication. The `rows` column holds each batch as
 / ONE cell - a table inside a general column - so reading it back takes an
 / unwrap: without it `exec rows from` hands back a one-element list that
 / looks like a one-row table and quietly answers every count with 1.
-last_rows:{[] first last exec rows from .sjtest.published}
+.qt.qetl.job.stream.last_rows:{[] first last exec rows from .qt.qetl.job.stream.published}
 
-d:{[n] 2026.09.17D10:00:00.000000000+n*0D00:00:01}
+.qt.qetl.job.stream.d:{[n] 2026.09.17D10:00:00.000000000+n*0D00:00:01}
 
 / --- the contract ---------------------------------------------------------
 
-test_every_job_is_registered:{[t]
+.qt.qetl.job.stream.test_every_job_is_registered:{[t]
     / Feeds publish on a timer and subscribe to nothing; subscribers are the
     / other half. One contract covers both.
     / .
@@ -51,7 +50,7 @@ test_every_job_is_registered:{[t]
     / equality because other suites register test jobs (.qpipe.job.nt_k and
     / friends), and whether they ran first is not what this asks. The other
     / direction is test_every_registered_job_has_a_file, below.
-    .qunit.assertEquals[.testutil.etl_declaration_names["src/etl/streaming"] except .qetl.job.stream.defined[];
+    .qunit.assertEquals[.qt.support.etl_declaration_names["src/etl/streaming"] except .qetl.job.stream.defined[];
         `symbol$();
         "each job file registers itself as it loads"]};
 
@@ -61,7 +60,7 @@ test_every_job_is_registered:{[t]
 / later. Schemas come from .qetl.plant, which loads first (#731).
 / @param dir a declaration directory
 / @return `file:line text` strings, one per offending line
-peer_reads_at_load:{[dir]
+.qt.qetl.job.stream.peer_reads_at_load:{[dir]
     raze {[dir;nm]
         lines:read0 `$":",dir,"/",string[nm],".q";
         top:where {[l] (0<count l) and not (first l) in " \t/\\"} each lines;
@@ -69,41 +68,41 @@ peer_reads_at_load:{[dir]
         bad:top where {[own;l] (l like "*.qpipe.job.*") and not l like "*",own,"*"}[own] each lines top;
         bad:bad where not {[l] any l like/: ("*.define[[]*";"*.normalize[[]*";"*.audit.watch[[]*")} each lines bad;
         {[nm;i;l] string[nm],".q:",string[1+i],": ",l}[nm]'[bad;lines bad]
-      }[dir] each .testutil.etl_declaration_names dir}
+      }[dir] each .qt.support.etl_declaration_names dir}
 
-test_no_job_reads_a_peer_job_at_load:{[t]
-    .qunit.assertEquals[peer_reads_at_load["src/etl/streaming"];();
+.qt.qetl.job.stream.test_no_job_reads_a_peer_job_at_load:{[t]
+    .qunit.assertEquals[.qt.qetl.job.stream.peer_reads_at_load["src/etl/streaming"];();
         "a job's load-time code reads the plant's schemas, never another job's namespace"]};
 
 / The jobs src/ registered, taken as this file LOADS rather than when a test
-/ runs. Every suite loads before any of them runs (.testutil.load_suites),
+/ runs. Every suite loads before any of them runs (.qt.support.load_suites),
 / and test jobs - .qpipe.job.nt_k, regtest_feed and friends - register only inside
 / test bodies, so this is the tree's own set whatever UQF_TEST_ORDER says.
 / A suite that registered a job at load time would land here and fail the
 / test below, which is the right outcome: register fixtures inside a test.
-src_jobs:.qetl.job.stream.defined[]
+.qt.qetl.job.stream.src_jobs:.qetl.job.stream.defined[]
 
-test_every_registered_job_has_a_file:{[t]
+.qt.qetl.job.stream.test_every_registered_job_has_a_file:{[t]
     / The direction the hand list used to carry and the file-derived check
     / above cannot (#352): a job in the registry with no file. One declared
     / from anywhere but src/etl/streaming/<job>.q is invisible to every check
     / that reads that directory, while still running in the stack.
-    .qunit.assertEquals[src_jobs except .testutil.etl_declaration_names["src/etl/streaming"];
+    .qunit.assertEquals[.qt.qetl.job.stream.src_jobs except .qt.support.etl_declaration_names["src/etl/streaming"];
         `symbol$();
         "every registered job lives in src/etl/streaming/<job>.q, named after its file"]};
 
-test_a_feed_declares_no_subscription:{[t]
+.qt.qetl.job.stream.test_a_feed_declares_no_subscription:{[t]
     .qunit.assertEquals[count .qetl.job.stream.def[`fx_feed]`subscribe_to;0;
         "a feed produces rows on a timer rather than reacting to a table"]};
 
-test_a_subscriber_with_no_handler_is_refused:{[t]
+.qt.qetl.job.stream.test_a_subscriber_with_no_handler_is_refused:{[t]
     / It would receive every batch and drop it, and look healthy doing so.
     .qunit.assertError[{.qetl.job.stream.define[`handlerless;x]};
         `procname`subscribe_to`publishes`period`on_timer!(
             `handlerless1;enlist `trades;`symbol$();0D00:00:01;{[] ()});
         "a job that subscribes must say what to do with a batch"]};
 
-test_a_job_that_does_nothing_is_refused:{[t]
+.qt.qetl.job.stream.test_a_job_that_does_nothing_is_refused:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`idle;x]};
         `procname`subscribe_to`publishes!(`idle1;`symbol$();`symbol$());
         "a job with neither a handler nor a timer runs nothing at all"]};
@@ -111,28 +110,28 @@ test_a_job_that_does_nothing_is_refused:{[t]
 / start_with_all and note are read by uqs's process registry, which is derived
 / from these declarations - so a malformed one is refused here, by name,
 / rather than read later as a registry that quietly disagrees.
-test_an_autostart_that_is_not_a_boolean_is_refused:{[t]
+.qt.qetl.job.stream.test_an_autostart_that_is_not_a_boolean_is_refused:{[t]
     .qunit.assertThrows[{.qetl.job.stream.define[`badstart;x]};
         `procname`subscribe_to`publishes`period`on_timer`start_with_all!(
             `badstart1;`symbol$();`symbol$();0D00:00:01;{[] ()};`yes);
         "*start_with_all must be a boolean*";
         "start_with_all is a flag, not a word that reads like one"]};
 
-test_a_note_that_is_not_a_string_is_refused:{[t]
+.qt.qetl.job.stream.test_a_note_that_is_not_a_string_is_refused:{[t]
     .qunit.assertThrows[{.qetl.job.stream.define[`badnote;x]};
         `procname`subscribe_to`publishes`period`on_timer`note!(
             `badnote1;`symbol$();`symbol$();0D00:00:01;{[] ()};`why);
         "*note must be a string*";
         "a note is prose for the process table, so a symbol is refused"]};
 
-test_state_naming_a_variable_the_job_lacks_is_refused:{[t]
+.qt.qetl.job.stream.test_state_naming_a_variable_the_job_lacks_is_refused:{[t]
     .qunit.assertThrows[{.qetl.job.stream.define[`badstate;x]};
         `procname`subscribe_to`publishes`period`on_timer`state!(
             `badstate1;`symbol$();`symbol$();0D00:00:01;{[] ()};enlist `nosuch);
         "*state names nosuch, which .qpipe.job.badstate does not define*";
         "a declared variable that does not exist would make reset a silent no-op"]};
 
-test_reset_restores_every_declared_variable_to_its_defined_value:{[t]
+.qt.qetl.job.stream.test_reset_restores_every_declared_variable_to_its_defined_value:{[t]
     / the identity: whatever a batch left behind, reset gives back what the file defined
     before:.qpipe.job.cross.unpriced;
     `.qpipe.job.cross.unpriced set `EURGBP`GBPJPY;
@@ -141,37 +140,37 @@ test_reset_restores_every_declared_variable_to_its_defined_value:{[t]
     .qunit.assertEquals[.qpipe.job.cross.unpriced;before;"a symbol list is back to empty"];
     .qunit.assertEquals[count .qpipe.job.cross.crosses;0;"and a table to zero rows"]};
 
-test_a_job_without_declared_state_resets_to_a_no_op:{[t]
+.qt.qetl.job.stream.test_a_job_without_declared_state_resets_to_a_no_op:{[t]
     .qunit.assertEquals[.qetl.job.stream.reset `fx_feed;`fx_feed;"nothing to restore, and no error"]};
 
-test_reset_of_an_unregistered_job_is_refused:{[t]
+.qt.qetl.job.stream.test_reset_of_an_unregistered_job_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.reset;`no_such_job;"*is not a registered streaming job*";"named, not ignored"]};
 
-test_a_jobs_namespace_is_derived_from_its_name:{[t]
+.qt.qetl.job.stream.test_a_jobs_namespace_is_derived_from_its_name:{[t]
     .qunit.assertEquals[.qetl.job.stream.namespace `demo_markout;`.qpipe.job.demo_markout;
         "a job's namespace is .qpipe.job.<job>, not a second name to keep in step"]};
 
-test_the_declaration_names_the_namespace_that_holds_the_job:{[t]
+.qt.qetl.job.stream.test_the_declaration_names_the_namespace_that_holds_the_job:{[t]
     / Not a tautology with the test above: this one checks the derived name
     / is where the implementation actually is.
     .qunit.assertEquals[`on_batch in key .qetl.job.stream.def[`demo_markout]`ns;1b;
         "the derived namespace holds the job's own handler"]};
 
-test_a_process_finds_its_job_by_name:{[t]
+.qt.qetl.job.stream.test_a_process_finds_its_job_by_name:{[t]
     / How the generic runner knows which job it is.
     .qunit.assertEquals[.qetl.job.stream.for_procname `demo_markout1;`demo_markout;
         "the job that claims a process is found by that process's name"]};
 
-test_an_unclaimed_process_is_refused_by_name:{[t]
+.qt.qetl.job.stream.test_an_unclaimed_process_is_refused_by_name:{[t]
     .qunit.assertError[{.qetl.job.stream.for_procname x};`nosuchproc1;
         "a process no job claims is an error naming it, not a job subscribed to nothing"]};
 
-test_a_declaration_missing_a_field_is_refused:{[t]
+.qt.qetl.job.stream.test_a_declaration_missing_a_field_is_refused:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`incomplete;x]};
         `procname`subscribe_to`publishes!(`incomplete1;enlist `t;`symbol$());
         "a job with no on_batch is refused at declaration"]};
 
-test_half_a_timer_is_refused:{[t]
+.qt.qetl.job.stream.test_half_a_timer_is_refused:{[t]
     / A period with no body is a job whose timer never does anything, and
     / every other test still passes.
     .qunit.assertError[{.qetl.job.stream.define[`halftimer;x]};
@@ -179,13 +178,13 @@ test_half_a_timer_is_refused:{[t]
             `halftimer1;enlist `t;`symbol$();{[t;x] ()};0D00:00:01);
         "a period without an on_timer is refused"]};
 
-test_two_jobs_may_not_claim_one_process:{[t]
+.qt.qetl.job.stream.test_two_jobs_may_not_claim_one_process:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`impostor;x]};
         `procname`subscribe_to`publishes`on_batch!(
             `demo_markout1;enlist `t;`symbol$();{[t;x] ()});
         "one process runs one job, so a second claim on demo_markout1 is refused"]};
 
-test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
+.qt.qetl.job.stream.test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
     / with nothing to say.
     .qunit.assertError[{.qetl.job.stream.unwired[`somejob][`t;x]};([] a:enlist 1);
@@ -193,15 +192,15 @@ test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
 
 / --- the feeds ------------------------------------------------------------
 
-test_the_fx_feed_publishes_one_quote_per_pair:{[t]
-    reset[];
+.qt.qetl.job.stream.test_the_fx_feed_publishes_one_quote_per_pair:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_feed.on_timer[];
-    rows:last_rows[];
-    .qunit.assertEquals[(first exec tbl from .sjtest.published;count first rows);
+    rows:.qt.qetl.job.stream.last_rows[];
+    .qunit.assertEquals[(first exec tbl from .qt.qetl.job.stream.published;count first rows);
         (`quote;count .qf.demo.pairs);
         "a tick quotes every pair the demo trades"]};
 
-test_the_fx_feed_quotes_a_pip_either_side:{[t]
+.qt.qetl.job.stream.test_the_fx_feed_quotes_a_pip_either_side:{[t]
     / The spread is the whole content of a top-of-book tick, and it is the
     / one thing a wrong pip vector would silently break.
     / Compared within a tolerance, not with ~: (mid+pip)-(mid-pip) is not
@@ -211,39 +210,39 @@ test_the_fx_feed_quotes_a_pip_either_side:{[t]
     .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-2*.qf.demo.pip;1b;
         "ask minus bid is two pips, pair by pair"]};
 
-test_the_fx_feed_walks_its_level:{[t]
-    reset[];
+.qt.qetl.job.stream.test_the_fx_feed_walks_its_level:{[t]
+    .qt.qetl.job.stream.reset[];
     before:.qpipe.job.fx_feed.spot;
     .qpipe.job.fx_feed.on_timer[];
     .qunit.assertTrue[not before~.qpipe.job.fx_feed.spot;
         "each tick moves the level rather than republishing the same one"]};
 
-test_the_depth_feed_quotes_three_levels_a_side:{[t]
+.qt.qetl.job.stream.test_the_depth_feed_quotes_three_levels_a_side:{[t]
     rows:.qpipe.job.fx_orderbook_feed.tick_rows .qf.demo.spot;
     .qunit.assertEquals[distinct count each raze rows 1 3;enlist .qpipe.job.fx_orderbook_feed.n_levels;
         "every pair's bid and ask ladder is n_levels deep"]};
 
-test_the_depth_feeds_ladders_are_level_zero_first:{[t]
+.qt.qetl.job.stream.test_the_depth_feeds_ladders_are_level_zero_first:{[t]
     / book.q and .qf.mkt.cross_book_at both read level 0 as the touch, so a
     / ladder built outwards-in prices every cross off the wrong level.
     rows:.qpipe.job.fx_orderbook_feed.tick_rows .qf.demo.spot;
     bids:first rows 1;
     .qunit.assertEquals[bids~desc bids;1b;"the bid ladder descends from the touch"]};
 
-test_the_wide_feed_publishes_one_column_per_level:{[t]
+.qt.qetl.job.stream.test_the_wide_feed_publishes_one_column_per_level:{[t]
     / 1 sym + 11 bids + 11 asks. The vectorize job derives its groups from
     / its own schema, so a mismatch here is a column-count error on insert.
     rows:.qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot;
     .qunit.assertEquals[count rows;1+2*.qpipe.job.wide_orderbook_feed.n_levels;
         "the wide book is published as one column per level per side"]};
 
-test_the_wide_feed_column_is_as_long_as_the_pair_list:{[t]
+.qt.qetl.job.stream.test_the_wide_feed_column_is_as_long_as_the_pair_list:{[t]
     / The transpose that makes this a wide table rather than a nested one.
     rows:.qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot;
     .qunit.assertEquals[distinct count each rows;enlist count .qf.demo.pairs;
         "every column carries one value per pair"]};
 
-test_a_fill_prices_around_its_pairs_level:{[t]
+.qt.qetl.job.stream.test_a_fill_prices_around_its_pairs_level:{[t]
     / Three pips either way, which is what makes some fills cross the spread
     / and some improve.
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;3;`fx1];
@@ -251,17 +250,17 @@ test_a_fill_prices_around_its_pairs_level:{[t]
         (first .qf.demo.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
         "the fill prints its slippage in pips from the pair's own level"]};
 
-test_a_fill_is_published_as_one_element_vectors:{[t]
+.qt.qetl.job.stream.test_a_fill_is_published_as_one_element_vectors:{[t]
     / .u.upd counts rows from column lengths, so an atom column here is a
     / length error on insert - the vendored feed.q's own convention.
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
     .qunit.assertEquals[distinct count each rows;enlist 1;
         "every column of a fill is a one-element vector, never an atom"]};
 
-test_the_trades_feed_publishes_one_fill_a_tick:{[t]
-    reset[];
+.qt.qetl.job.stream.test_the_trades_feed_publishes_one_fill_a_tick:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_trades_feed.on_timer[];
-    .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`trades);
+    .qunit.assertEquals[(count .qt.qetl.job.stream.published;first exec tbl from .qt.qetl.job.stream.published);(1;`trades);
         "a tick publishes exactly one fill, onto trades"]};
 
 / --- the publisher invariants, over every feed --------------------------
@@ -285,40 +284,40 @@ test_the_trades_feed_publishes_one_fill_a_tick:{[t]
 / class should not be checked one instance at a time.
 
 / Every registered job that publishes on a timer.
-feeds:{[] .qetl.job.stream.defined[] where
+.qt.qetl.job.stream.feeds:{[] .qetl.job.stream.defined[] where
     {[j] d:.qetl.job.stream.def j; (`period in key d) and count d`publishes} each .qetl.job.stream.defined[]}
 
 / Invariant 3, plus the length agreement it exists to protect: a batch's
 / row count comes from its first column, so a column of a different
 / length silently truncates or overruns.
-columns_are_lists:{[batch]
+.qt.qetl.job.stream.columns_are_lists:{[batch]
     cs:$[98h=type batch; value flip batch; batch];
     $[not all 0<=type each cs; "a column is an ATOM - a one-row batch then reads as a one-COLUMN batch";
       1<count distinct count each cs; "columns are not all the same length, so the row count depends on which one is read first";
       ""]}
 
-test_every_feed_publishes_columns_that_are_lists:{[t]
+.qt.qetl.job.stream.test_every_feed_publishes_columns_that_are_lists:{[t]
     / Invariant 3, the one that actually bites: `enlist` omitted from a row
     / builder is invisible until a plant takes the row count from it.
-    `.sjtest.bad set ();
+    `.qt.qetl.job.stream.bad set ();
     {[job]
-        reset[];
+        .qt.qetl.job.stream.reset[];
         (.qetl.job.stream.def[job]`on_timer)[];
         {[job;cell]
-            problem:.sjtest.columns_are_lists[cell];
-            if[count problem; `.sjtest.bad set .sjtest.bad,enlist string[job],": ",problem]
-          }[job] each first each exec rows from .sjtest.published
-      } each feeds[];
-    .qunit.assertEquals[.sjtest.bad;();"every feed publishes column vectors of equal length"]};
+            problem:.qt.qetl.job.stream.columns_are_lists[cell];
+            if[count problem; `.qt.qetl.job.stream.bad set .qt.qetl.job.stream.bad,enlist string[job],": ",problem]
+          }[job] each first each exec rows from .qt.qetl.job.stream.published
+      } each .qt.qetl.job.stream.feeds[];
+    .qunit.assertEquals[.qt.qetl.job.stream.bad;();"every feed publishes column vectors of equal length"]};
 
-test_no_feed_sends_its_own_time:{[t]
+.qt.qetl.job.stream.test_no_feed_sends_its_own_time:{[t]
     / Invariant 1. Both plants now STRIP a publisher's `time` rather than
     / refusing it (#266), so a feed that sends one is silently corrected
     / and would never be caught at runtime. That makes this the invariant
     / with the least live protection, not the most.
-    `.sjtest.bad set ();
+    `.qt.qetl.job.stream.bad set ();
     {[job]
-        reset[];
+        .qt.qetl.job.stream.reset[];
         (.qetl.job.stream.def[job]`on_timer)[];
         {[job;cell]
             / Nested, not `and`: q's `and` does not short-circuit, so the
@@ -326,127 +325,127 @@ test_no_feed_sends_its_own_time:{[t]
             / batch and throws `type`. The same trap this suite's own
             / subject hit in .qetl.tick.publish.
             if[$[98h<>type cell; 0b; `time in cols cell];
-                `.sjtest.bad set .sjtest.bad,enlist string[job]," sends its own `time`"]
-          }[job] each first each exec rows from .sjtest.published
-      } each feeds[];
-    .qunit.assertEquals[.sjtest.bad;();
+                `.qt.qetl.job.stream.bad set .qt.qetl.job.stream.bad,enlist string[job]," sends its own `time`"]
+          }[job] each first each exec rows from .qt.qetl.job.stream.published
+      } each .qt.qetl.job.stream.feeds[];
+    .qunit.assertEquals[.qt.qetl.job.stream.bad;();
         "no feed sends `time` - the plant stamps it, and a source's own event time belongs in a column named for what it is"]};
 
-test_no_feed_publishes_a_keyed_table:{[t]
+.qt.qetl.job.stream.test_no_feed_publishes_a_keyed_table:{[t]
     / Invariant 2. A plant appends; upserting by key drops the ticks that
     / make a log a log.
-    `.sjtest.bad set ();
+    `.qt.qetl.job.stream.bad set ();
     {[job]
-        reset[];
+        .qt.qetl.job.stream.reset[];
         (.qetl.job.stream.def[job]`on_timer)[];
         {[job;cell]
-            if[99h=type cell; `.sjtest.bad set .sjtest.bad,enlist string[job]," published a keyed table"]
-          }[job] each first each exec rows from .sjtest.published
-      } each feeds[];
-    .qunit.assertEquals[.sjtest.bad;();"no feed publishes a keyed table"]};
+            if[99h=type cell; `.qt.qetl.job.stream.bad set .qt.qetl.job.stream.bad,enlist string[job]," published a keyed table"]
+          }[job] each first each exec rows from .qt.qetl.job.stream.published
+      } each .qt.qetl.job.stream.feeds[];
+    .qunit.assertEquals[.qt.qetl.job.stream.bad;();"no feed publishes a keyed table"]};
 
-test_the_invariant_check_catches_an_atom_column:{[t]
+.qt.qetl.job.stream.test_the_invariant_check_catches_an_atom_column:{[t]
     / The check must fail on the shape it exists for, or it is decoration.
-    .qunit.assertEquals[.sjtest.columns_are_lists[(enlist `EURUSD;enlist 1.085)];"";
+    .qunit.assertEquals[.qt.qetl.job.stream.columns_are_lists[(enlist `EURUSD;enlist 1.085)];"";
         "one-element vectors are fine"];
-    .qunit.assertTrue[0<count .sjtest.columns_are_lists (`EURUSD;1.085);
+    .qunit.assertTrue[0<count .qt.qetl.job.stream.columns_are_lists (`EURUSD;1.085);
         "bare atoms are caught"];
-    .qunit.assertTrue[0<count .sjtest.columns_are_lists (enlist `EURUSD;1.085 1.086);
+    .qunit.assertTrue[0<count .qt.qetl.job.stream.columns_are_lists (enlist `EURUSD;1.085 1.086);
         "and so are columns of unequal length"]};
 
-test_every_feed_is_covered_by_these_checks:{[t]
+.qt.qetl.job.stream.test_every_feed_is_covered_by_these_checks:{[t]
     / feeds[] is derived, so a new feed is covered the day it registers -
     / but only if it publishes on its timer. This pins the count so that a
     / feed which quietly stops publishing is noticed.
-    .qunit.assertTrue[4<count feeds[];
+    .qunit.assertTrue[4<count .qt.qetl.job.stream.feeds[];
         "the FX feeds, the trades feed and the crypto mock all publish on a timer"]};
 
-bad:()
+.qt.qetl.job.stream.bad:()
 
 / --- markout --------------------------------------------------------------
 
-test_markout_buffers_trades_and_quotes_separately:{[t]
-    reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+.qt.qetl.job.stream.test_markout_buffers_trades_and_quotes_separately:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD;
         bid:enlist 1.0999; ask:enlist 1.1001)];
     .qunit.assertEquals[(count .qpipe.job.demo_markout.pending;count .qpipe.job.demo_markout.history);(1;1);
         "each batch lands in the buffer its table names"]};
 
-test_markout_ignores_a_pair_this_demo_does_not_trade:{[t]
+.qt.qetl.job.stream.test_markout_ignores_a_pair_this_demo_does_not_trade:{[t]
     / `quote` also carries the vendored starter pack's equity quotes.
-    reset[];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 0; sym:enlist `AAPL;
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `AAPL;
         bid:enlist 150f; ask:enlist 150.1)];
     .qunit.assertEquals[count .qpipe.job.demo_markout.history;0;
         "a quote outside .qf.demo.pairs is not buffered"]};
 
-test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
+.qt.qetl.job.stream.test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
     / The horizon has not passed, so there is nothing to score yet - and
     / crucially the fill stays buffered rather than being scored against
     / quotes that have not arrived.
-    reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.score_ready[d[1]];
-    .qunit.assertEquals[(count .sjtest.published;count .qpipe.job.demo_markout.pending);(0;1);
+    .qpipe.job.demo_markout.score_ready[.qt.qetl.job.stream.d[1]];
+    .qunit.assertEquals[(count .qt.qetl.job.stream.published;count .qpipe.job.demo_markout.pending);(0;1);
         "a fill younger than the longest horizon is neither scored nor dropped"]};
 
-test_markout_scores_and_evicts_a_ready_fill:{[t]
-    reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+.qt.qetl.job.stream.test_markout_scores_and_evicts_a_ready_fill:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:d[1 10]; sym:`EURUSD`EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:.qt.qetl.job.stream.d[1 10]; sym:`EURUSD`EURUSD;
         bid:1.1004 1.1009; ask:1.1006 1.1011)];
-    .qpipe.job.demo_markout.score_ready[d[20]];
-    out:last_rows[];
-    .qunit.assertEquals[(count .sjtest.published;count out;count .qpipe.job.demo_markout.pending);(1;2;0);
+    .qpipe.job.demo_markout.score_ready[.qt.qetl.job.stream.d[20]];
+    out:.qt.qetl.job.stream.last_rows[];
+    .qunit.assertEquals[(count .qt.qetl.job.stream.published;count out;count .qpipe.job.demo_markout.pending);(1;2;0);
         "a fill past its longest horizon is scored at both horizons, published once, and evicted"]};
 
-test_markout_publishes_the_execution_quality_table:{[t]
-    reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+.qt.qetl.job.stream.test_markout_publishes_the_execution_quality_table:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
-    .qpipe.job.demo_markout.score_ready[d[20]];
-    .qunit.assertEquals[first exec tbl from .sjtest.published;`demo_execution_quality;
+    .qpipe.job.demo_markout.score_ready[.qt.qetl.job.stream.d[20]];
+    .qunit.assertEquals[first exec tbl from .qt.qetl.job.stream.published;`demo_execution_quality;
         "the rows are published onto the table the job declares"]};
 
-test_markout_keeps_the_batch_when_publishing_throws:{[t]
+.qt.qetl.job.stream.test_markout_keeps_the_batch_when_publishing_throws:{[t]
     / At-least-once. The runner's timer swallows a publish failure, so a
     / drain-before-publish ordering would lose the batch silently - which is
     / why score_ready evicts only after the publish returns.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     .qetl.job.stream.wire[`demo_markout;{[t;x] '"tickerplant is down"}];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
+    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
+    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 1; sym:enlist `EURUSD;
         bid:enlist 1.1004; ask:enlist 1.1006)];
-    @[{.qpipe.job.demo_markout.score_ready x};d[20];{x}];
+    @[{.qpipe.job.demo_markout.score_ready x};.qt.qetl.job.stream.d[20];{x}];
     .qunit.assertEquals[count .qpipe.job.demo_markout.pending;1;
         "a failed publish leaves the fill buffered for the next tick"]};
 
 / --- cross ----------------------------------------------------------------
 
-quote_row:{[ts;sym;bid;ask]
+.qt.qetl.job.stream.quote_row:{[ts;sym;bid;ask]
     ([] time:enlist ts; sym:enlist sym;
         bid_prices:enlist enlist bid; bid_sizes:enlist enlist 5e6;
         ask_prices:enlist enlist ask; ask_sizes:enlist enlist 5e6)}
 
-test_cross_mirrors_its_quotes:{[t]
-    reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`GBPUSD;1.3;1.3002]];
+.qt.qetl.job.stream.test_cross_mirrors_its_quotes:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.cross.on_batch[`fx_orderbook;.qt.qetl.job.stream.quote_row[.qt.qetl.job.stream.d[0];`GBPUSD;1.3;1.3002]];
     .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;1;"the batch lands in the mirror"]};
 
-test_cross_reprices_a_pair_it_can_chain:{[t]
+.qt.qetl.job.stream.test_cross_reprices_a_pair_it_can_chain:{[t]
     / GBPUSD and USDJPY quoted -> GBPJPY is buildable; the other two
     / declared crosses are not, and are left out rather than published null.
-    reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`GBPUSD;1.3;1.3002]];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`USDJPY;150f;150.02]];
-    out:.qpipe.job.cross.reprice[d[1]];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.cross.on_batch[`fx_orderbook;.qt.qetl.job.stream.quote_row[.qt.qetl.job.stream.d[0];`GBPUSD;1.3;1.3002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;.qt.qetl.job.stream.quote_row[.qt.qetl.job.stream.d[0];`USDJPY;150f;150.02]];
+    out:.qpipe.job.cross.reprice[.qt.qetl.job.stream.d[1]];
     .qunit.assertEquals[out`sym;enlist `GBPJPY;
         "only the cross whose legs are quoted comes out"]};
 
@@ -454,48 +453,48 @@ test_cross_reprices_a_pair_it_can_chain:{[t]
 / recorder put in place of .qetl.log.line - the one function warn/dbg/info
 / all call - and the real one restored even when `f` throws. Filtered by id
 / because the transform `f` calls logs lines of its own.
-logged:{[id;f]
-    keep:.qetl.log.line; `.sjtest.lines set ();
-    .qetl.log.line:{[level;who;text;fields] .sjtest.lines,:enlist (who;level;text;fields)};
+.qt.qetl.job.stream.logged:{[id;f]
+    keep:.qetl.log.line; `.qt.qetl.job.stream.lines set ();
+    .qetl.log.line:{[level;who;text;fields] .qt.qetl.job.stream.lines,:enlist (who;level;text;fields)};
     r:@[f;::;{x}]; .qetl.log.line:keep;
     if[10h=type r; 'r];
-    1_/:.sjtest.lines where id=first each .sjtest.lines}
+    1_/:.qt.qetl.job.stream.lines where id=first each .qt.qetl.job.stream.lines}
 
-test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
+.qt.qetl.job.stream.test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
     / Only GBPUSD is quoted, so every cross is unpriced. The first reprice
     / warns; the same set again is DEBUG - at INFO or WARNING it repeated on every
     / batch. Quoting USDJPY prices GBPJPY, which is logged as priced again,
     / and the smaller unpriced set warns afresh.
     / The mirror is fed directly: on_batch reprices on its own, which would
     / spend the first warning before it could be observed.
-    reset[];
-    `.qpipe.job.cross.fx_orderbook insert quote_row[d[0];`GBPUSD;1.3;1.3002];
-    first_lines:logged[`cross;{.qpipe.job.cross.reprice d 1}];
-    again:logged[`cross;{.qpipe.job.cross.reprice d 1}];
-    `.qpipe.job.cross.fx_orderbook insert quote_row[d[0];`USDJPY;150f;150.02];
-    fixed:logged[`cross;{.qpipe.job.cross.reprice d 1}];
+    .qt.qetl.job.stream.reset[];
+    `.qpipe.job.cross.fx_orderbook insert .qt.qetl.job.stream.quote_row[.qt.qetl.job.stream.d[0];`GBPUSD;1.3;1.3002];
+    first_lines:.qt.qetl.job.stream.logged[`cross;{.qpipe.job.cross.reprice .qt.qetl.job.stream.d 1}];
+    again:.qt.qetl.job.stream.logged[`cross;{.qpipe.job.cross.reprice .qt.qetl.job.stream.d 1}];
+    `.qpipe.job.cross.fx_orderbook insert .qt.qetl.job.stream.quote_row[.qt.qetl.job.stream.d[0];`USDJPY;150f;150.02];
+    fixed:.qt.qetl.job.stream.logged[`cross;{.qpipe.job.cross.reprice .qt.qetl.job.stream.d 1}];
     .qunit.assertEquals[first_lines[;0];enlist `WARNING;"a newly unpriced set warns"];
     .qunit.assertEquals[again[;0];enlist `DEBUG;"the same set again is only DEBUG"];
     .qunit.assertEquals[fixed[;0 1];((`WARNING;"pairs could not be priced");(`INFO;"pairs priced again"));
         "a smaller set warns, and the recovered pair is named"];
     .qunit.assertEquals[(last fixed)[2]`pairs;enlist `GBPJPY;"GBPJPY is the pair priced again"]};
 
-test_cross_accumulates_rather_than_publishing:{[t]
+.qt.qetl.job.stream.test_cross_accumulates_rather_than_publishing:{[t]
     / cross1 declares no published table: its output is process-local, and
     / a test that saw rows on the recorder would mean the job had started
     / publishing without declaring it.
-    reset[];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`GBPUSD;1.3;1.3002]];
-    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d[0];`USDJPY;150f;150.02]];
-    .qunit.assertEquals[(0<count .qpipe.job.cross.crosses;count .sjtest.published);(1b;0);
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.cross.on_batch[`fx_orderbook;.qt.qetl.job.stream.quote_row[.qt.qetl.job.stream.d[0];`GBPUSD;1.3;1.3002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;.qt.qetl.job.stream.quote_row[.qt.qetl.job.stream.d[0];`USDJPY;150f;150.02]];
+    .qunit.assertEquals[(0<count .qpipe.job.cross.crosses;count .qt.qetl.job.stream.published);(1b;0);
         "the crosses stay in the process and nothing is published"]};
 
-test_cross_ignores_a_table_it_did_not_subscribe_to:{[t]
-    reset[];
-    .qpipe.job.cross.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD)];
+.qt.qetl.job.stream.test_cross_ignores_a_table_it_did_not_subscribe_to:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.cross.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD)];
     .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;0;"a batch from another table is ignored"]};
 
-test_cross_pairs_are_none_of_the_directly_quoted_pairs:{[t]
+.qt.qetl.job.stream.test_cross_pairs_are_none_of_the_directly_quoted_pairs:{[t]
     / #1366. .qf.mkt.cross_book_at prices a directly quoted pair as ONE leg, so a
     / cross_pairs entry that .qf.demo.pairs also quotes just echoes the direct
     / quote instead of chaining through USD. EURJPY was exactly that.
@@ -508,143 +507,143 @@ test_cross_pairs_are_none_of_the_directly_quoted_pairs:{[t]
 
 / posbook reads the two normalizers' outputs, as the plant delivers them:
 / an executions row and a market_data row, `time` stamped in front.
-an_execution:{[ts;s;side;price;size]
+.qt.qetl.job.stream.an_execution:{[ts;s;side;price;size]
     ([] time:enlist ts; source_time:enlist ts; sym:enlist s; venue:enlist `fx; side:enlist side;
         size:enlist size; price:enlist price; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `)}
 
 / A one-level book whose touch IS `mid` on both sides, so its level-0 mid is
 / exactly `mid` rather than a float sum's nearest neighbour.
-a_book:{[s;mid] ([] time:enlist d 0; sym:enlist s; source:enlist `UQFFX; market:enlist `fx; source_time:enlist d 0;
+.qt.qetl.job.stream.a_book:{[s;mid] ([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist s; source:enlist `UQFFX; market:enlist `fx; source_time:enlist .qt.qetl.job.stream.d 0;
     bid_prices:enlist enlist mid; bid_sizes:enlist enlist 1e6;
     ask_prices:enlist enlist mid; ask_sizes:enlist enlist 1e6)}
 
 / The mid posbook would mark a fill at the far future with: the newest book's.
-pb_latest_mid:{[s] first .qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;([] time:enlist 2100.01.01D00:00:00; sym:enlist s)]}
+.qt.qetl.job.stream.pb_latest_mid:{[s] first .qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;([] time:enlist 2100.01.01D00:00:00; sym:enlist s)]}
 
-test_posbook_fx_marks_ignores_a_null_time_mid_row:{[t]
+.qt.qetl.job.stream.test_posbook_fx_marks_ignores_a_null_time_mid_row:{[t]
     / A mid_history row with a null source_time must not become the mark for a fill
     / that precedes every timed row: the fill gets a null mark (fill-price fallback) (#1251).
     hist:.qetl.enrich.add[.qpipe.job.posbook.mid_history;([] sym:3#`EURUSD; source_time:(0Np;2026.09.17D12:00:10;2026.09.17D12:00:20); mid:1.30 1.20 1.25)];
     fl:([] time:2026.09.17D12:00:05 2026.09.17D12:00:15; sym:2#`EURUSD);
     .qunit.assertEquals[.qpipe.job.posbook.fx_marks[hist;fl];0n,1.2;"the early fill is unmarked, not marked to the null-time 1.30"]};
 
-test_posbook_marks_a_fill_against_the_last_mid:{[t]
-    reset[];
-    .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]];
-    out:last_rows[];
+.qt.qetl.job.stream.test_posbook_marks_a_fill_against_the_last_mid:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.104]];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]];
+    out:.qt.qetl.job.stream.last_rows[];
     .qunit.assertEquals[out[`mark_price];enlist 1.104;
         "the fill is marked to the last mid seen for its sym"]};
 
-test_posbook_carries_the_book_between_batches:{[t]
+.qt.qetl.job.stream.test_posbook_carries_the_book_between_batches:{[t]
     / The book is process state rebuilt from each batch's output - the one
     / thing a transform test cannot check, because the transform is pure.
-    reset[];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d[1];`EURUSD;-1;1.105;4e5]];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[1];`EURUSD;-1;1.105;4e5]];
     .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 6e5;
         "the second batch applies to the book the first one left"]};
 
-test_posbook_publishes_one_row_per_fill:{[t]
-    reset[];
-    .qpipe.job.posbook.on_batch[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6],an_execution[d[1];`USDJPY;-1;150f;1e6]];
-    .qunit.assertEquals[count last_rows[];2;
+.qt.qetl.job.stream.test_posbook_publishes_one_row_per_fill:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6],.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[1];`USDJPY;-1;150f;1e6]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.last_rows[];2;
         "every fill in the batch produces a position row"]};
 
-test_posbook_publishes_nothing_for_a_book:{[t]
-    reset[];
-    .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.1001]];
-    .qunit.assertEquals[count .sjtest.published;0;
+.qt.qetl.job.stream.test_posbook_publishes_nothing_for_a_book:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.1001]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;
         "a book only refreshes the mid cache, it is not a publication"]};
 
-test_posbook_keeps_its_mid_when_a_source_withdraws_its_book:{[t]
+.qt.qetl.job.stream.test_posbook_keeps_its_mid_when_a_source_withdraws_its_book:{[t]
     / An empty side is market_data's withdrawal. It has no mid, and marking
     / at 0n would turn every later position's P&L null.
-    reset[];
-    .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
-    .qpipe.job.posbook.on_batch[`market_data;update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from a_book[`EURUSD;1.2]];
-    .qunit.assertEquals[pb_latest_mid`EURUSD;1.104;
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.104]];
+    .qpipe.job.posbook.on_batch[`market_data;update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from .qt.qetl.job.stream.a_book[`EURUSD;1.2]];
+    .qunit.assertEquals[.qt.qetl.job.stream.pb_latest_mid`EURUSD;1.104;
         "the withdrawn book leaves the last real mid in place"]};
 
 / --- posbook marks AS OF the fill's own time (#1229) -----------------------
 
 / A book for sym s stamped at ts with a one-point touch at mid.
-pb_book_at:{[ts;s;mid] update source_time:ts, time:ts from a_book[s;mid]}
+.qt.qetl.job.stream.pb_book_at:{[ts;s;mid] update source_time:ts, time:ts from .qt.qetl.job.stream.a_book[s;mid]}
 
 / A fill stamped (source_time) at ts, priced at px - far from any mid below.
-pb_fill_at:{[ts;s;px] an_execution[ts;s;1;px;1e6]}
+.qt.qetl.job.stream.pb_fill_at:{[ts;s;px] .qt.qetl.job.stream.an_execution[ts;s;1;px;1e6]}
 
-test_posbook_marks_a_fill_to_the_mid_as_of_its_time_not_a_later_book:{[t]
+.qt.qetl.job.stream.test_posbook_marks_a_fill_to_the_mid_as_of_its_time_not_a_later_book:{[t]
     / Books at 12:00:00 (1.10) and 12:00:10 (1.20), a fill at 12:00:05
     / delivered after both: marked 1.10, never 1.20.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     t0:2026.09.17D12:00:00;
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.10]];
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
-    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
-    .qunit.assertEquals[last_rows[]`mark_price;enlist 1.10;"the mid prevailing at 12:00:05"]};
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0;`EURUSD;1.10]];
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;enlist 1.10;"the mid prevailing at 12:00:05"]};
 
-test_posbook_a_fill_exactly_at_a_books_time_takes_that_book:{[t]
-    reset[];
+.qt.qetl.job.stream.test_posbook_a_fill_exactly_at_a_books_time_takes_that_book:{[t]
+    .qt.qetl.job.stream.reset[];
     t0:2026.09.17D12:00:00;
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.10]];
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
-    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:10;`EURUSD;1.15]];
-    .qunit.assertEquals[last_rows[]`mark_price;enlist 1.20;"a book stamped at the fill's instant counts (aj's rule)"]};
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0;`EURUSD;1.10]];
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:10;`EURUSD;1.15]];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;enlist 1.20;"a book stamped at the fill's instant counts (aj's rule)"]};
 
-test_posbook_a_fill_before_any_book_is_marked_at_its_own_price:{[t]
-    reset[];
+.qt.qetl.job.stream.test_posbook_a_fill_before_any_book_is_marked_at_its_own_price:{[t]
+    .qt.qetl.job.stream.reset[];
     t0:2026.09.17D12:00:00;
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
-    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
-    .qunit.assertEquals[last_rows[]`mark_price;enlist 1.15;"no mid at or before the fill: the fill-price fallback, not the later book"];
-    .qunit.assertEquals[last_rows[]`unrealized_pnl;enlist 0f;"so nothing unrealized"]};
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;enlist 1.15;"no mid at or before the fill: the fill-price fallback, not the later book"];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`unrealized_pnl;enlist 0f;"so nothing unrealized"]};
 
-test_posbook_a_late_older_book_does_not_change_later_marks:{[t]
+.qt.qetl.job.stream.test_posbook_a_late_older_book_does_not_change_later_marks:{[t]
     / #1088: the 12:00:00 book arrives after the 12:00:10 one. A fill at
     / 12:00:20 still sees 1.20; a fill at 12:00:05 sees the older book.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     t0:2026.09.17D12:00:00;
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.00]];
-    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:20;`EURUSD;1.15],pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
-    .qunit.assertEquals[last_rows[]`mark_price;1.20 1.00;"the newer book is not rewound; the older one marks only the fills before the newer"]};
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0;`EURUSD;1.00]];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:20;`EURUSD;1.15],.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:05;`EURUSD;1.15]];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;1.20 1.00;"the newer book is not rewound; the older one marks only the fills before the newer"]};
 
-test_posbook_marks_each_fill_of_an_out_of_order_batch_at_its_own_time:{[t]
-    reset[];
+.qt.qetl.job.stream.test_posbook_marks_each_fill_of_an_out_of_order_batch_at_its_own_time:{[t]
+    .qt.qetl.job.stream.reset[];
     t0:2026.09.17D12:00:00;
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0;`EURUSD;1.10]];
-    .qpipe.job.posbook.on_batch[`market_data;pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
-    .qpipe.job.posbook.on_batch[`executions;pb_fill_at[t0+0D00:00:12;`EURUSD;1.15],pb_fill_at[t0+0D00:00:03;`EURUSD;1.15],pb_fill_at[t0+0D00:00:10;`EURUSD;1.15]];
-    .qunit.assertEquals[last_rows[]`mark_price;1.20 1.10 1.20;"marks follow each fill's time, rows follow arrival order"]};
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0;`EURUSD;1.10]];
+    .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.pb_book_at[t0+0D00:00:10;`EURUSD;1.20]];
+    .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:12;`EURUSD;1.15],.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:03;`EURUSD;1.15],.qt.qetl.job.stream.pb_fill_at[t0+0D00:00:10;`EURUSD;1.15]];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;1.20 1.10 1.20;"marks follow each fill's time, rows follow arrival order"]};
 
-test_posbook_marks_a_crypto_fill_to_the_best_venue_mid_as_of_its_time:{[t]
+.qt.qetl.job.stream.test_posbook_marks_a_crypto_fill_to_the_best_venue_mid_as_of_its_time:{[t]
     / a at 10:00:00 (100/102), b at 10:00:02 (101/103), a again at 10:00:08
     / (200/202). A fill at 10:00:03 sees a and b -> 101.5; a fill at 10:00:09
     / sees a (200/202) and b, but b is 7s old: stale, so a alone -> 201; a
     / fill at 10:00:01 sees only a.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     s:`$"BTC-USDT";
     tob:{[s;v;ts;b;a] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
-        update venue:v, source_time:ts from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
+        update venue:v, source_time:ts from .qt.qetl.job.stream.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
     t0:2026.09.17D10:00:00;
-    to_posbook[`market_data;tob[`a;t0;100f;102f],tob[`b;t0+0D00:00:02;101f;103f],tob[`a;t0+0D00:00:08;200f;202f]];
-    f:{[s;ts] update time:ts, source_time:ts from .sjtest.an_execution[ts;s;1;95f;1f]}[s];
+    .qt.qetl.job.stream.to_posbook[`market_data;tob[`a;t0;100f;102f],tob[`b;t0+0D00:00:02;101f;103f],tob[`a;t0+0D00:00:08;200f;202f]];
+    f:{[s;ts] update time:ts, source_time:ts from .qt.qetl.job.stream.an_execution[ts;s;1;95f;1f]}[s];
     .qpipe.job.posbook.on_batch[`executions;f[t0+0D00:00:03],f[t0+0D00:00:09],f[t0+0D00:00:01]];
-    .qunit.assertEquals[last_rows[]`mark_price;101.5 201 101f;"as of each fill: both venues; the stale one dropped; one venue"]};
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;101.5 201 101f;"as of each fill: both venues; the stale one dropped; one venue"]};
 
-test_posbook_marks_identically_live_and_when_the_log_is_replayed:{[t]
+.qt.qetl.job.stream.test_posbook_marks_identically_live_and_when_the_log_is_replayed:{[t]
     / The same log, delivered twice from a reset job (a restart's replay
     / rebuilds state from the log, as the first delivery did), marks every
     / fill the same. The full restart-at-every-point check is
     / test_replay_equivalence.q.
     entries:(
-        (`market_data;pb_book_at[2026.09.17D12:00:00;`EURUSD;1.10]);
-        (`market_data;pb_book_at[2026.09.17D12:00:10;`EURUSD;1.20]);
-        (`executions;pb_fill_at[2026.09.17D12:00:05;`EURUSD;1.15]);
-        (`market_data;pb_book_at[2026.09.17D12:00:02;`EURUSD;1.05]);
-        (`executions;pb_fill_at[2026.09.17D12:00:12;`EURUSD;1.15]));
-    run:{[entries] reset[]; {.qpipe.job.posbook.on_batch . x} each entries; raze first each exec rows from .sjtest.published};
+        (`market_data;.qt.qetl.job.stream.pb_book_at[2026.09.17D12:00:00;`EURUSD;1.10]);
+        (`market_data;.qt.qetl.job.stream.pb_book_at[2026.09.17D12:00:10;`EURUSD;1.20]);
+        (`executions;.qt.qetl.job.stream.pb_fill_at[2026.09.17D12:00:05;`EURUSD;1.15]);
+        (`market_data;.qt.qetl.job.stream.pb_book_at[2026.09.17D12:00:02;`EURUSD;1.05]);
+        (`executions;.qt.qetl.job.stream.pb_fill_at[2026.09.17D12:00:12;`EURUSD;1.15]));
+    run:{[entries] .qt.qetl.job.stream.reset[]; {.qpipe.job.posbook.on_batch . x} each entries; raze first each exec rows from .qt.qetl.job.stream.published};
     live:run entries;
     replayed:run entries;
     .qunit.assertEquals[live`mark_price;1.10 1.20;"as of each fill"];
@@ -652,31 +651,31 @@ test_posbook_marks_identically_live_and_when_the_log_is_replayed:{[t]
 
 / --- vectorize ------------------------------------------------------------
 
-wide_row:{[]
+.qt.qetl.job.stream.wide_row:{[]
     flip (`time`sym,.qpipe.job.vectorize.wide_level_names)!
-        (enlist d 0;enlist `EURUSD),
+        (enlist .qt.qetl.job.stream.d 0;enlist `EURUSD),
         enlist each (1.1-0.0001*til 11),(1.1002+0.0001*til 11)}
 
-test_vectorize_folds_and_republishes_each_batch:{[t]
-    reset[];
-    .qpipe.job.vectorize.on_batch[`wide_orderbook;wide_row[]];
-    out:last_rows[];
-    .qunit.assertEquals[(first exec tbl from .sjtest.published;count out[0;`bid_prices]);
+.qt.qetl.job.stream.test_vectorize_folds_and_republishes_each_batch:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.vectorize.on_batch[`wide_orderbook;.qt.qetl.job.stream.wide_row[]];
+    out:.qt.qetl.job.stream.last_rows[];
+    .qunit.assertEquals[(first exec tbl from .qt.qetl.job.stream.published;count out[0;`bid_prices]);
         (`mkt_orderbook;11);
         "the wide row is folded into eleven-level vectors and published"]};
 
-test_vectorize_keeps_no_state:{[t]
+.qt.qetl.job.stream.test_vectorize_keeps_no_state:{[t]
     / Two identical batches produce two identical publications: nothing
     / accumulates, which is why this job has no buffer to evict.
-    reset[];
-    .qpipe.job.vectorize.on_batch[`wide_orderbook;wide_row[]];
-    .qpipe.job.vectorize.on_batch[`wide_orderbook;wide_row[]];
-    .qunit.assertEquals[count .sjtest.published;2;"each batch stands alone"]};
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.vectorize.on_batch[`wide_orderbook;.qt.qetl.job.stream.wide_row[]];
+    .qpipe.job.vectorize.on_batch[`wide_orderbook;.qt.qetl.job.stream.wide_row[]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;2;"each batch stands alone"]};
 
-test_vectorize_ignores_another_table:{[t]
-    reset[];
-    .qpipe.job.vectorize.on_batch[`fx_orderbook;wide_row[]];
-    .qunit.assertEquals[count .sjtest.published;0;"a batch from another table is ignored"]};
+.qt.qetl.job.stream.test_vectorize_ignores_another_table:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.vectorize.on_batch[`fx_orderbook;.qt.qetl.job.stream.wide_row[]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"a batch from another table is ignored"]};
 
 / --- eq_orderbook: the live fold ----------------------------------------
 
@@ -690,66 +689,66 @@ test_vectorize_ignores_another_table:{[t]
 / Private: a live batch, shaped as it arrives off the tickerplant - the
 / source's own fixture with a `time` prepended, which is what .u.upd does
 / to every message on receipt.
-mbp10_batch:{[] update time:.z.p from .qpipe.source.databento_mbp10.fixture[]}
+.qt.qetl.job.stream.mbp10_batch:{[] update time:.z.p from .qpipe.source.databento_mbp10.fixture[]}
 
-test_databento_folds_a_live_batch_and_republishes_it:{[t]
-    reset[];
-    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
-    out:last_rows[];
+.qt.qetl.job.stream.test_databento_folds_a_live_batch_and_republishes_it:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qetl.job.stream.mbp10_batch[]];
+    out:.qt.qetl.job.stream.last_rows[];
     .qunit.assertEquals[
-        (first exec tbl from .sjtest.published;count out;count out[0;`bid_prices]);
+        (first exec tbl from .qt.qetl.job.stream.published;count out;count out[0;`bid_prices]);
         (`eq_orderbook;4;10);
         "four MBP-10 records fold into four book rows of ten levels a side"]};
 
-test_databento_keeps_the_venue_clock_as_its_own_column:{[t]
+.qt.qetl.job.stream.test_databento_keeps_the_venue_clock_as_its_own_column:{[t]
     / THE POINT OF ts_event. .u.upd stamps `time` on receipt, so a book
     / carrying only `time` would say when it ARRIVED and nothing about when
     / it happened - and a feed stuck an hour behind would look current. A
     / Binance book in the cryptorust recorder was stamped 1973 for weeks
     / because the only clock came from the venue and nothing could
     / cross-check it.
-    reset[];
-    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
-    out:last_rows[];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qetl.job.stream.mbp10_batch[]];
+    out:.qt.qetl.job.stream.last_rows[];
     .qunit.assertEquals[`ts_event in cols out;1b;"the venue clock is carried through"];
     .qunit.assertEquals[out[0;`ts_event];(.qpipe.source.databento_mbp10.fixture[])[0;`ts_event];
         "and it is Databento's value, not the time the row was folded"]};
 
-test_databento_does_not_republish_the_tickerplants_time:{[t]
+.qt.qetl.job.stream.test_databento_does_not_republish_the_tickerplants_time:{[t]
     / One column too wide is a live `length error at the tickerplant, not a
     / warning - .qtorq.publish drops `time`, and this job must not hand it
     / one to drop in the first place.
-    reset[];
-    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
-    .qunit.assertEquals[`time in cols last_rows[];0b;
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qetl.job.stream.mbp10_batch[]];
+    .qunit.assertEquals[`time in cols .qt.qetl.job.stream.last_rows[];0b;
         "the receipt stamp is the tickerplant's to add, not this job's to send"]};
 
-test_databento_ignores_a_table_it_did_not_subscribe_to:{[t]
-    reset[];
-    .qpipe.job.eq_orderbook.on_batch[`fx_orderbook;mbp10_batch[]];
-    .qunit.assertEquals[count .sjtest.published;0;"a batch from another table is ignored"]};
+.qt.qetl.job.stream.test_databento_ignores_a_table_it_did_not_subscribe_to:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.eq_orderbook.on_batch[`fx_orderbook;.qt.qetl.job.stream.mbp10_batch[]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"a batch from another table is ignored"]};
 
-test_databento_publishes_nothing_for_an_empty_batch:{[t]
+.qt.qetl.job.stream.test_databento_publishes_nothing_for_an_empty_batch:{[t]
     / An empty batch is ordinary on a quiet symbol. Publishing a zero-row
     / message would put an empty write on the tickerplant every tick.
-    reset[];
-    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;0#mbp10_batch[]];
-    .qunit.assertEquals[count .sjtest.published;0;"an empty batch publishes nothing"]};
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;0#.qt.qetl.job.stream.mbp10_batch[]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"an empty batch publishes nothing"]};
 
-test_databento_keeps_no_state:{[t]
-    reset[];
-    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
-    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
-    .qunit.assertEquals[count .sjtest.published;2;"each batch stands alone"]};
+.qt.qetl.job.stream.test_databento_keeps_no_state:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qetl.job.stream.mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qetl.job.stream.mbp10_batch[]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;2;"each batch stands alone"]};
 
 / --- the adapter's publish, over what the feeds actually send ------------
 
 / A handle that records the .u.upd message instead of sending it - the
 / integer-handle seam .qtorq.publish applies as h[(`.u.upd;tbl;data)].
-sent:();
-fake_handle:{[m] `.sjtest.sent set .sjtest.sent,enlist m; 1};
+.qt.qetl.job.stream.sent:();
+.qt.qetl.job.stream.fake_handle:{[m] `.qt.qetl.job.stream.sent set .qt.qetl.job.stream.sent,enlist m; 1};
 
-test_the_adapter_recognises_the_list_of_columns_form:{[t]
+.qt.qetl.job.stream.test_the_adapter_recognises_the_list_of_columns_form:{[t]
     / Every feed's row builder returns this shape, and so does cryptorust's
     / recorder. Refusing it was invisible while the running stack predated
     / the runner, because the old per-feed scripts sent to .u.upd directly.
@@ -760,40 +759,40 @@ test_the_adapter_recognises_the_list_of_columns_form:{[t]
     .qunit.assertTrue[.qtorq.is_columns .qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x];
         "and a mock crypto fill"]};
 
-test_the_adapter_still_refuses_a_list_of_atoms:{[t]
+.qt.qetl.job.stream.test_the_adapter_still_refuses_a_list_of_atoms:{[t]
     / Invariant 3's own trap: one row of atoms reads as one column each.
     .qunit.assertFalse[.qtorq.is_columns (`EURUSD;1;1.085);"a general list of atoms is not the columns form"];
     .qunit.assertFalse[.qtorq.is_columns ([] a:1 2);"and a table is a table, handled by as_table"];
     .qunit.assertFalse[.qtorq.is_columns ();"an empty list is nothing to publish"]};
 
-test_the_adapter_sends_columns_straight_through:{[t]
-    `.sjtest.sent set ();
+.qt.qetl.job.stream.test_the_adapter_sends_columns_straight_through:{[t]
+    `.qt.qetl.job.stream.sent set ();
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
-    n:.qtorq.publish[.sjtest.fake_handle;`trades;rows];
+    n:.qtorq.publish[.qt.qetl.job.stream.fake_handle;`trades;rows];
     .qunit.assertEquals[n;1;"one row, counted from the first column"];
-    .qunit.assertEquals[.sjtest.sent 0;(`.u.upd;`trades;rows);
+    .qunit.assertEquals[.qt.qetl.job.stream.sent 0;(`.u.upd;`trades;rows);
         "the message is .u.upd's own shape, untouched"]};
 
-test_the_adapter_reshapes_a_table_and_a_dict_to_u_upds_shape:{[t]
+.qt.qetl.job.stream.test_the_adapter_reshapes_a_table_and_a_dict_to_u_upds_shape:{[t]
     / The invariants as_table exists for: a keyed table is unkeyed (2), a
     / dict of atoms is one row of one-element vectors (3), and a `time`
     / column is stripped because the plant stamps its own (1).
-    `.sjtest.sent set ();
-    .qtorq.publish[.sjtest.fake_handle;`trades;([sym:enlist `EURUSD] time:enlist d 0; side:enlist 1)];
-    .qunit.assertEquals[.sjtest.sent[0;2];(enlist `EURUSD;enlist 1);
+    `.qt.qetl.job.stream.sent set ();
+    .qtorq.publish[.qt.qetl.job.stream.fake_handle;`trades;([sym:enlist `EURUSD] time:enlist .qt.qetl.job.stream.d 0; side:enlist 1)];
+    .qunit.assertEquals[.qt.qetl.job.stream.sent[0;2];(enlist `EURUSD;enlist 1);
         "a keyed table goes out unkeyed and without its time, as column vectors"];
-    `.sjtest.sent set ();
-    .qtorq.publish[.sjtest.fake_handle;`trades;`sym`side!(`EURUSD;1)];
-    .qunit.assertEquals[.sjtest.sent[0;2];(enlist `EURUSD;enlist 1);
+    `.qt.qetl.job.stream.sent set ();
+    .qtorq.publish[.qt.qetl.job.stream.fake_handle;`trades;`sym`side!(`EURUSD;1)];
+    .qunit.assertEquals[.qt.qetl.job.stream.sent[0;2];(enlist `EURUSD;enlist 1);
         "a dict of atoms is one row, every column a one-element vector"];
-    .qunit.assertThrows[.qtorq.publish[.sjtest.fake_handle;`trades;];(`EURUSD;1);
+    .qunit.assertThrows[.qtorq.publish[.qt.qetl.job.stream.fake_handle;`trades;];(`EURUSD;1);
         "*expected a table*";"a bare list of atoms is refused by name"]};
 
-test_the_adapter_publishes_nothing_for_empty_columns:{[t]
-    `.sjtest.sent set ();
-    .qunit.assertEquals[.qtorq.publish[.sjtest.fake_handle;`trades;(`symbol$();`long$())];0;
+.qt.qetl.job.stream.test_the_adapter_publishes_nothing_for_empty_columns:{[t]
+    `.qt.qetl.job.stream.sent set ();
+    .qunit.assertEquals[.qtorq.publish[.qt.qetl.job.stream.fake_handle;`trades;(`symbol$();`long$())];0;
         "empty columns are zero rows"];
-    .qunit.assertEmpty[.sjtest.sent;"and nothing is sent"]};
+    .qunit.assertEmpty[.qt.qetl.job.stream.sent;"and nothing is sent"]};
 
 / --- crypto mock ----------------------------------------------------------
 
@@ -801,39 +800,39 @@ test_the_adapter_publishes_nothing_for_empty_columns:{[t]
 / in build_real_upd_message: symbol, symbol, long, float, float, float,
 / symbol, symbol. The mock's whole reason to exist is to be this, row for
 / row, so this is the assertion that matters most in the section.
-recorder_types:11 11 7 9 9 9 11 11h
+.qt.qetl.job.stream.recorder_types:11 11 7 9 9 9 11 11h
 
-test_the_mock_publishes_a_book_and_then_fills:{[t]
-    reset[];
+.qt.qetl.job.stream.test_the_mock_publishes_a_book_and_then_fills:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.crypto_mock.on_timer[];
-    .qunit.assertEquals[first exec tbl from .sjtest.published;`crypto_book;
+    .qunit.assertEquals[first exec tbl from .qt.qetl.job.stream.published;`crypto_book;
         "the book goes out first, so no fill prints at a price the tape has not shown"]};
 
-test_the_mock_converts_fill_hazards_over_its_declared_period:{[t]
+.qt.qetl.job.stream.test_the_mock_converts_fill_hazards_over_its_declared_period:{[t]
     / tick_seconds is the horizon the per-second hazards are scaled to; if it
     / drifts from the declared period the simulated fill rate changes silently.
     declared:.qetl.job.stream.def[`crypto_mock]`period;
     .qunit.assertEquals[.qpipe.job.crypto_mock.tick_seconds;(`float$declared)%1e9;
         "tick_seconds is the declared period in seconds"]};
 
-test_a_mock_fill_is_the_recorders_wire_shape:{[t]
+.qt.qetl.job.stream.test_a_mock_fill_is_the_recorders_wire_shape:{[t]
     / One message per fill, every column a one-element typed vector, no
     / time. Not a table: the recorder does not send one, and a mock that
     / sent the tidier shape would pass here and fail against the plant.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     r:.qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`$"binance_spot-1"];
-    .qunit.assertEquals[type each r;recorder_types;
+    .qunit.assertEquals[type each r;.qt.qetl.job.stream.recorder_types;
         "sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id - the recorder's types in the recorder's order"];
     .qunit.assertEquals[distinct count each r;enlist 1;"every column is a one-element vector, never an atom"];
     .qunit.assertEquals[count r;count 1_cols .qpipe.job.executions.crypto_trades;
         "and there are exactly as many as crypto_trades has columns after time"]};
 
-test_a_mock_fills_fee_is_the_venues_maker_bps_in_the_quote_currency:{[t]
+.qt.qetl.job.stream.test_a_mock_fills_fee_is_the_venues_maker_bps_in_the_quote_currency:{[t]
     r:.qpipe.job.crypto_mock.fill_rows[`bybit_spot;`$"ETH-USDT";-1;2000f;2f;`$"bybit_spot-7"];
-    .testutil.assertApprox[first r 5;2000*2*8%10000;1e-9;"2 ETH at 2000 on bybit's 8bps is 3.2"];
+    .qt.support.assertApprox[first r 5;2000*2*8%10000;1e-9;"2 ETH at 2000 on bybit's 8bps is 3.2"];
     .qunit.assertEquals[first r 6;`USDT;"charged in the quote currency, which is what comes after the hyphen"]};
 
-test_the_fill_model_skews_with_toxicity_the_way_cryptorust_does:{[t]
+.qt.qetl.job.stream.test_the_fill_model_skews_with_toxicity_the_way_cryptorust_does:{[t]
     / Positive toxicity is buy-heavy flow: it lifts the ASK more. Negative
     / hits the bid. The mock keeps the sign convention of QuoteFillSimulator.
     up:.qpipe.job.crypto_mock.skewed[0.4;1f];
@@ -842,34 +841,34 @@ test_the_fill_model_skews_with_toxicity_the_way_cryptorust_does:{[t]
     .qunit.assertTrue[(down 0)>down 1;"sell-heavy flow, the bid"];
     .qunit.assertEquals[.qpipe.job.crypto_mock.skewed[0.4;0f];0.4 0.4;"and no toxicity leaves them equal"]};
 
-test_a_fill_takes_a_capped_fraction_of_the_quote:{[t]
+.qt.qetl.job.stream.test_a_fill_takes_a_capped_fraction_of_the_quote:{[t]
     row:first .qpipe.job.crypto_mock.market;
     q:.qpipe.job.crypto_mock.quote_size .qpipe.job.crypto_mock.syms?row`sym;
     / draws: at the touch, both uniforms at 0 (certain fill), fractions 1
     decided:.qpipe.job.crypto_mock.decide[row;1;(1b;0f;0f;1f;1f)];
     .qunit.assertEquals[count decided;2;"both sides filled"];
-    .testutil.assertApprox[decided[0;2];q*.qpipe.job.crypto_mock.max_fill_fraction;1e-12;
+    .qt.support.assertApprox[decided[0;2];q*.qpipe.job.crypto_mock.max_fill_fraction;1e-12;
         "a fraction of 1 is capped at max_fill_fraction, as the simulator caps it"];
     .qunit.assertEquals[decided[;0];1 -1;"the bid fill is a buy and the ask fill a sell"]};
 
-test_a_maker_not_at_the_touch_fills_nothing:{[t]
+.qt.qetl.job.stream.test_a_maker_not_at_the_touch_fills_nothing:{[t]
     row:first .qpipe.job.crypto_mock.market;
     .qunit.assertEmpty[.qpipe.job.crypto_mock.decide[row;1;(0b;0f;0f;1f;1f)];
         "outquoted, the maker fills nothing however the dice fall"]};
 
-test_the_beta_draw_is_in_range:{[t]
+.qt.qetl.job.stream.test_the_beta_draw_is_in_range:{[t]
     draws:{[i] .qpipe.job.crypto_mock.beta_draw[.qpipe.job.crypto_mock.fill_alpha;.qpipe.job.crypto_mock.fill_beta]} each til 200;
     .qunit.assertTrue[all draws within 0 1f;"a Beta draw is a fraction"];
     / Beta(2,2) has mean a half; 200 draws sit within a few percent of it.
     .qunit.assertTrue[0.15>abs 0.5-avg draws;"and Beta(2,2) draws average about a half"]};
 
-test_fill_ids_are_unique_per_venue:{[t]
-    reset[];
+.qt.qetl.job.stream.test_fill_ids_are_unique_per_venue:{[t]
+    .qt.qetl.job.stream.reset[];
     ids:.qpipe.job.crypto_mock.next_id each 3#`binance_spot;
     .qunit.assertEquals[ids;`$("binance_spot-1";"binance_spot-2";"binance_spot-3");
         "monotonic within a venue, the way an exchange's own ids are"]};
 
-test_fx_fill_ids_are_unique_and_survive_a_restart:{[t]
+.qt.qetl.job.stream.test_fx_fill_ids_are_unique_and_survive_a_restart:{[t]
     / #1080: two fills of one pair at one instant must differ by id. The run
     / stamp keeps a restarted feed (counter back at 0) off the ids the HDB holds.
     keep:(.qpipe.job.fx_trades_feed.run_id;.qpipe.job.fx_trades_feed.last_id);
@@ -881,12 +880,12 @@ test_fx_fill_ids_are_unique_and_survive_a_restart:{[t]
     .qunit.assertEquals[first_run;`$("fx-111-1";"fx-111-2";"fx-111-3");"counted within a run"];
     .qunit.assertEquals[second_run;`$"fx-222-1";"and a new run cannot reissue the old run's ids"]};
 
-test_the_fx_fill_row_carries_its_id_last_as_trades_declares:{[t]
+.qt.qetl.job.stream.test_the_fx_fill_row_carries_its_id_last_as_trades_declares:{[t]
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx9];
     .qunit.assertEquals[last rows;enlist `fx9;"the id is the final column"];
     .qunit.assertEquals[last cols .qetl.plant.shape `trades;`fill_id;"matching the table's last column"]};
 
-test_the_mock_publishes_no_sim_fills:{[t]
+.qt.qetl.job.stream.test_the_mock_publishes_no_sim_fills:{[t]
     / The paper strategy's table. A mock that published it would tempt a
     / position engine into consuming it.
     .qunit.assertFalse[`crypto_sim_fills in .qetl.job.stream.def[`crypto_mock]`publishes;
@@ -894,78 +893,78 @@ test_the_mock_publishes_no_sim_fills:{[t]
 
 / --- the normalizers and posbook over them -------------------------------
 
-crypto_fill:{[s;side;price;size]
-    ([] time:enlist d 0; sym:enlist s; venue:enlist `binance_spot; side:enlist side;
+.qt.qetl.job.stream.crypto_fill:{[s;side;price;size]
+    ([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist s; venue:enlist `binance_spot; side:enlist side;
         trade_price:enlist price; size:enlist size; fee:enlist 0f;
         fee_currency:enlist `USDT; exchange_fill_id:enlist `$"binance_spot-1")}
 
-fx_fill:{[s;side;price;size]
-    ([] time:enlist d 0; sym:enlist s; side:enlist side; trade_price:enlist price;
+.qt.qetl.job.stream.fx_fill:{[s;side;price;size]
+    ([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist s; side:enlist side; trade_price:enlist price;
         size:enlist size; pip_factor:enlist 10000; fill_id:enlist `fx1)}
 
 / source_time deliberately EARLIER than time: the venue stamped it before
 / this stack received it, which is the whole reason crypto_book carries both.
 / A market_data mapping that went back to reading `time` would produce a
 / book dated d 0 instead of d[0]-0D00:00:02, and say so here.
-crypto_book_row:{[s;bid;ask]
-    ([] time:enlist d 0; source_time:enlist (d[0])-0D00:00:02; venue:enlist `binance_spot; sym:enlist s;
+.qt.qetl.job.stream.crypto_book_row:{[s;bid;ask]
+    ([] time:enlist .qt.qetl.job.stream.d 0; source_time:enlist (.qt.qetl.job.stream.d[0])-0D00:00:02; venue:enlist `binance_spot; sym:enlist s;
         bid_prices:enlist bid; bid_sizes:enlist 3#0.5; ask_prices:enlist ask; ask_sizes:enlist 3#0.5)}
 
 / Deliver a normalizer's published rows to posbook the way the plant would:
 / as a table with `time` stamped in front.
-to_posbook:{[t;x] .qpipe.job.posbook.on_batch[t;`time xcols update time:.sjtest.d[0] from x]; count x}
+.qt.qetl.job.stream.to_posbook:{[t;x] .qpipe.job.posbook.on_batch[t;`time xcols update time:.qt.qetl.job.stream.d[0] from x]; count x}
 
-test_the_executions_normalizer_spells_both_fill_tables_one_way:{[t]
-    reset[];
-    .qpipe.job.executions.on_batch[`trades;fx_fill[`EURUSD;1;1.085;1e6]];
-    .qpipe.job.executions.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";-1;62000f;0.25]];
-    out:raze first each exec rows from .sjtest.published;
-    .qunit.assertEquals[distinct exec tbl from .sjtest.published;enlist `executions;
+.qt.qetl.job.stream.test_the_executions_normalizer_spells_both_fill_tables_one_way:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.executions.on_batch[`trades;.qt.qetl.job.stream.fx_fill[`EURUSD;1;1.085;1e6]];
+    .qpipe.job.executions.on_batch[`crypto_trades;.qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";-1;62000f;0.25]];
+    out:raze first each exec rows from .qt.qetl.job.stream.published;
+    .qunit.assertEquals[distinct exec tbl from .qt.qetl.job.stream.published;enlist `executions;
         "both go out on the one canonical table"];
     .qunit.assertEquals[exec venue from out;`fx`binance_spot;"each attributed to its venue"];
     .qunit.assertEquals[cols out;cols .qpipe.job.executions.executions;"in the canonical columns"]};
 
-test_a_normalizer_drops_a_table_that_is_not_its_source:{[t]
-    reset[];
-    .qpipe.job.executions.on_batch[`quote;([] time:enlist d 0; sym:enlist `EURUSD; bid:enlist 1f; ask:enlist 1.1)];
-    .qunit.assertEmpty[.sjtest.published;"a batch on a table that is not a source is not normalized"]};
+.qt.qetl.job.stream.test_a_normalizer_drops_a_table_that_is_not_its_source:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.executions.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; bid:enlist 1f; ask:enlist 1.1)];
+    .qunit.assertEmpty[.qt.qetl.job.stream.published;"a batch on a table that is not a source is not normalized"]};
 
-test_posbook_folds_an_fx_and_a_crypto_fill_into_one_book:{[t]
+.qt.qetl.job.stream.test_posbook_folds_an_fx_and_a_crypto_fill_into_one_book:{[t]
     / The point of the normalizers: one job, one book, two markets, and
     / posbook itself knows nothing about either.
-    reset[];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`trades;fx_fill[`EURUSD;1;1.085;1e6]]];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;62000f;0.5]]];
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`trades;.qt.qetl.job.stream.fx_fill[`EURUSD;1;1.085;1e6]]];
+    .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;.qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;62000f;0.5]]];
     .qunit.assertEquals[count .qpipe.job.posbook.book;2;"one position per instrument, whichever market"];
-    .testutil.assertApprox[(.qpipe.job.posbook.book`$"BTC-USDT")`qty;0.5;1e-12;"long half a bitcoin"];
-    .testutil.assertApprox[(.qpipe.job.posbook.book`EURUSD)`qty;1e6;1e-9;"and a million euros"]};
+    .qt.support.assertApprox[(.qpipe.job.posbook.book`$"BTC-USDT")`qty;0.5;1e-12;"long half a bitcoin"];
+    .qt.support.assertApprox[(.qpipe.job.posbook.book`EURUSD)`qty;1e6;1e-9;"and a million euros"]};
 
-test_posbook_marks_to_whichever_book_market_data_saw:{[t]
-    reset[];
-    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;crypto_book_row[`$"BTC-USDT";61999 61998 61997f;62001 62002 62003f]]];
-    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`quote;([] time:enlist d 0; sym:enlist `EURUSD; bid:enlist 1.0849; ask:enlist 1.0851;
+.qt.qetl.job.stream.test_posbook_marks_to_whichever_book_market_data_saw:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;.qt.qetl.job.stream.crypto_book_row[`$"BTC-USDT";61999 61998 61997f;62001 62002 62003f]]];
+    .qt.qetl.job.stream.to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`quote;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; bid:enlist 1.0849; ask:enlist 1.0851;
         bsize:enlist 1000000; asize:enlist 1000000; src:enlist `UQFFX)]];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
-    row:last_rows[];
-    .testutil.assertApprox[first row`mark_price;62000f;1e-9;"the crypto mid, off the ladder's first level"];
-    .testutil.assertApprox[first row`unrealized_pnl;1000f;1e-9;"bought at 61000, marked at 62000"];
-    .testutil.assertApprox[pb_latest_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
+    .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;.qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
+    row:.qt.qetl.job.stream.last_rows[];
+    .qt.support.assertApprox[first row`mark_price;62000f;1e-9;"the crypto mid, off the ladder's first level"];
+    .qt.support.assertApprox[first row`unrealized_pnl;1000f;1e-9;"bought at 61000, marked at 62000"];
+    .qt.support.assertApprox[.qt.qetl.job.stream.pb_latest_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
 
-test_posbook_no_longer_reads_the_raw_tables:{[t]
+.qt.qetl.job.stream.test_posbook_no_longer_reads_the_raw_tables:{[t]
     .qunit.assertEquals[.qetl.job.stream.def[`posbook]`subscribe_to;`executions`market_data;
         "posbook subscribes to the two normalizers and nothing else"];
-    reset[];
-    .qpipe.job.posbook.on_batch[`trades;fx_fill[`EURUSD;1;1.085;1e6]];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`trades;.qt.qetl.job.stream.fx_fill[`EURUSD;1;1.085;1e6]];
     .qunit.assertEmpty[.qpipe.job.posbook.book;"a raw trades batch, were one to arrive, moves nothing"]};
 
-test_the_mock_reaches_posbook_through_both_normalizers:{[t]
+.qt.qetl.job.stream.test_the_mock_reaches_posbook_through_both_normalizers:{[t]
     / The mock's rows, delivered the way the plant would deliver them, run
     / through executions and market_data and land in the one book.
-    reset[];
-    as_table:{[cols_after_time;r] update time:.sjtest.d[0] from flip cols_after_time!r};
+    .qt.qetl.job.stream.reset[];
+    as_table:{[cols_after_time;r] update time:.qt.qetl.job.stream.d[0] from flip cols_after_time!r};
     .qetl.job.stream.wire[`crypto_mock;{[as_table;tbl;r]
         norm:$[tbl=`crypto_book;`market_data;`executions];
-        .sjtest.to_posbook[norm;.qetl.job.stream.normalizer.normalize[norm;tbl;`time xcols as_table[
+        .qt.qetl.job.stream.to_posbook[norm;.qetl.job.stream.normalizer.normalize[norm;tbl;`time xcols as_table[
             $[tbl=`crypto_book;`source_time`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
               `sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]]];
         1}[as_table]];
@@ -977,120 +976,120 @@ test_the_mock_reaches_posbook_through_both_normalizers:{[t]
     .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in exec sym from .qpipe.job.posbook.crypto_tob`rows;
         "each marked against the mock's own books, through market_data"]};
 
-test_posbook_marks_a_crypto_fill_to_the_best_mid_across_venues:{[t]
+.qt.qetl.job.stream.test_posbook_marks_a_crypto_fill_to_the_best_mid_across_venues:{[t]
     / The library's one reference price (#886): the highest bid and lowest
     / ask any fresh venue shows, not whichever venue published last.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     book:{[v;bid;ask] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
-        update venue:v from crypto_book_row[`$"BTC-USDT";bid;ask]]};
-    to_posbook[`market_data;book[`binance_spot;62000 61999 61998f;62010 62011 62012f]];
-    to_posbook[`market_data;book[`kraken;62004 62003 62002f;62008 62009 62010f]];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
-    .testutil.assertApprox[first last_rows[]`mark_price;62006f;1e-9;
+        update venue:v from .qt.qetl.job.stream.crypto_book_row[`$"BTC-USDT";bid;ask]]};
+    .qt.qetl.job.stream.to_posbook[`market_data;book[`binance_spot;62000 61999 61998f;62010 62011 62012f]];
+    .qt.qetl.job.stream.to_posbook[`market_data;book[`kraken;62004 62003 62002f;62008 62009 62010f]];
+    .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;.qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
+    .qt.support.assertApprox[first .qt.qetl.job.stream.last_rows[]`mark_price;62006f;1e-9;
         "best bid 62004 from kraken, best ask 62008 from kraken: 62006, not binance's 62005"]};
 
-test_posbook_does_not_mark_a_crypto_fill_to_a_stale_venue:{[t]
+.qt.qetl.job.stream.test_posbook_does_not_mark_a_crypto_fill_to_a_stale_venue:{[t]
     / Age is judged on source_time (#1049): the book and the fill reach the
     / plant together, but the venue quoted twelve seconds before the fill.
-    reset[];
-    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
-        crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]]];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
-        update time:.sjtest.d[10] from crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
-    .testutil.assertApprox[first last_rows[]`mark_price;61000f;1e-9;
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        .qt.qetl.job.stream.crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]]];
+    .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
+        update time:.qt.qetl.job.stream.d[10] from .qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
+    .qt.support.assertApprox[first .qt.qetl.job.stream.last_rows[]`mark_price;61000f;1e-9;
         "no fresh venue: marked at the fill's own price, as an unquoted sym is"]};
 
-test_posbook_ages_a_crypto_book_on_source_time_not_arrival:{[t]
+.qt.qetl.job.stream.test_posbook_ages_a_crypto_book_on_source_time_not_arrival:{[t]
     / #1049: a book the plant received ten seconds late was still quoted two
     / seconds before the fill, so it is fresh at the fill.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     m:.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
-        crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]];
-    .qpipe.job.posbook.on_batch[`market_data;`time xcols update time:.sjtest.d[10] from m];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
-        crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
-    .testutil.assertApprox[first last_rows[]`mark_price;62005f;1e-9;
+        .qt.qetl.job.stream.crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]];
+    .qpipe.job.posbook.on_batch[`market_data;`time xcols update time:.qt.qetl.job.stream.d[10] from m];
+    .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
+        .qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
+    .qt.support.assertApprox[first .qt.qetl.job.stream.last_rows[]`mark_price;62005f;1e-9;
         "the venue's own stamp is two seconds before the fill: marked at its mid"]};
 
-test_posbook_does_not_let_a_late_older_book_rewind_its_venue:{[t]
+.qt.qetl.job.stream.test_posbook_does_not_let_a_late_older_book_rewind_its_venue:{[t]
     / #1049: binance and okx quote 100/101 at source 10:00:01, then a
     / delayed okx 90/91 stamped 10:00:00 arrives. last_value's rule: a book
     / older than the venue's held one is dropped, so okx stays 100/101.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     s:`$"BTC-USDT";
     book:{[s;v;st;b;a] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
-        update venue:v, source_time:st from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
-    to_posbook[`market_data;book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f]];
-    to_posbook[`market_data;book[`okx;d[0];90f;91f]];
-    .qunit.assertEquals[exec time from .qpipe.job.posbook.crypto_tob[`rows] where venue=`okx;d[0 1];
+        update venue:v, source_time:st from .qt.qetl.job.stream.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
+    .qt.qetl.job.stream.to_posbook[`market_data;book[`binance;.qt.qetl.job.stream.d[1];100f;101f],book[`okx;.qt.qetl.job.stream.d[1];100f;101f]];
+    .qt.qetl.job.stream.to_posbook[`market_data;book[`okx;.qt.qetl.job.stream.d[0];90f;91f]];
+    .qunit.assertEquals[exec time from .qpipe.job.posbook.crypto_tob[`rows] where venue=`okx;.qt.qetl.job.stream.d[0 1];
         "okx's older book sits at its own time, behind the newer"];
-    to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
-        update time:.sjtest.d[2] from crypto_fill[s;1;100f;1f]]];
-    .testutil.assertApprox[first last_rows[]`mark_price;100.5;1e-9;
+    .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
+        update time:.qt.qetl.job.stream.d[2] from .qt.qetl.job.stream.crypto_fill[s;1;100f;1f]]];
+    .qt.support.assertApprox[first .qt.qetl.job.stream.last_rows[]`mark_price;100.5;1e-9;
         "marked at 100.5, not 95.5 off a crossed 100/91"];
     lv:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;
-        update time:.sjtest.d[3] from book[`binance;d[1];100f;101f],book[`okx;d[1];100f;101f],book[`okx;d[0];90f;91f]];
+        update time:.qt.qetl.job.stream.d[3] from book[`binance;.qt.qetl.job.stream.d[1];100f;101f],book[`okx;.qt.qetl.job.stream.d[1];100f;101f],book[`okx;.qt.qetl.job.stream.d[0];90f;91f]];
     .qunit.assertEquals[first exec mid from lv`state;100.5;"the price last_value publishes for the same books"]};
 
-test_posbook_marks_a_fill_reported_after_the_venues_requote_as_of_its_time:{[t]
+.qt.qetl.job.stream.test_posbook_marks_a_fill_reported_after_the_venues_requote_as_of_its_time:{[t]
     / #1058 reversed (#1229): a fill executed at 10:00:00.000 is reported
     / after binance requotes 100/102 at .100 and okx 101/103 at .200. No top
     / is at or before the execution, so it takes its own price (95); a fill
     / at .250 sees both venues: best bid 101, best ask 102 -> 101.5.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     s:`$"BTC-USDT";
     book:{[s;v;st;b;a] .qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
-        update venue:v, source_time:st from .sjtest.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
-    books:book[`binance;d[0]+0D00:00:00.100;100f;102f],book[`okx;d[0]+0D00:00:00.200;101f;103f];
-    to_posbook[`market_data;books];
-    f:{[s;ts] update time:ts, source_time:ts from an_execution[ts;s;1;95f;1f]}[s];
-    .qpipe.job.posbook.on_batch[`executions;f[d[0]],f[d[0]+0D00:00:00.250]];
-    .qunit.assertEquals[last_rows[]`mark_price;95 101.5;"before every top: its own price; after both: the best mid then"]};
+        update venue:v, source_time:st from .qt.qetl.job.stream.crypto_book_row[s;b-0 1 2f;a+0 1 2f]]}[s];
+    books:book[`binance;.qt.qetl.job.stream.d[0]+0D00:00:00.100;100f;102f],book[`okx;.qt.qetl.job.stream.d[0]+0D00:00:00.200;101f;103f];
+    .qt.qetl.job.stream.to_posbook[`market_data;books];
+    f:{[s;ts] update time:ts, source_time:ts from .qt.qetl.job.stream.an_execution[ts;s;1;95f;1f]}[s];
+    .qpipe.job.posbook.on_batch[`executions;f[.qt.qetl.job.stream.d[0]],f[.qt.qetl.job.stream.d[0]+0D00:00:00.250]];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;95 101.5;"before every top: its own price; after both: the best mid then"]};
 
-test_posbook_marks_a_crypto_batch_at_each_fills_own_time:{[t]
+.qt.qetl.job.stream.test_posbook_marks_a_crypto_batch_at_each_fills_own_time:{[t]
     / The venue quoted 100/101 at 10:00:01. A fill stamped 10:00:02 sees it
     / (100.5); one stamped 10:00:00, in the same batch, does not (own price).
-    reset[];
+    .qt.qetl.job.stream.reset[];
     s:`$"BTC-USDT";
-    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
-        update source_time:.sjtest.d[1] from crypto_book_row[s;100 99 98f;101 102 103f]]];
-    f:{[s;ts;px] update time:ts, source_time:ts from an_execution[ts;s;1;px;1f]}[s];
-    .qpipe.job.posbook.on_batch[`executions;f[d[2];90f],f[d[0];91f]];
-    .qunit.assertEquals[last_rows[]`mark_price;100.5 91;"each fill at its own time, whatever the order"]};
+    .qt.qetl.job.stream.to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
+        update source_time:.qt.qetl.job.stream.d[1] from .qt.qetl.job.stream.crypto_book_row[s;100 99 98f;101 102 103f]]];
+    f:{[s;ts;px] update time:ts, source_time:ts from .qt.qetl.job.stream.an_execution[ts;s;1;px;1f]}[s];
+    .qpipe.job.posbook.on_batch[`executions;f[.qt.qetl.job.stream.d[2];90f],f[.qt.qetl.job.stream.d[0];91f]];
+    .qunit.assertEquals[.qt.qetl.job.stream.last_rows[]`mark_price;100.5 91;"each fill at its own time, whatever the order"]};
 
 / --- fx orders feed -------------------------------------------------------
 
-test_the_orders_feed_publishes_one_order_a_tick:{[t]
-    reset[];
+.qt.qetl.job.stream.test_the_orders_feed_publishes_one_order_a_tick:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_orders_feed.on_timer[];
-    .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`orders);
+    .qunit.assertEquals[(count .qt.qetl.job.stream.published;first exec tbl from .qt.qetl.job.stream.published);(1;`orders);
         "a tick publishes exactly one order, onto orders"]};
 
-test_an_orders_row_is_one_element_vectors:{[t]
+.qt.qetl.job.stream.test_an_orders_row_is_one_element_vectors:{[t]
     / The plant takes its row count from column length, so an atom column
     / makes a one-row batch read as a one-COLUMN batch.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_orders_feed.on_timer[];
-    .qunit.assertEquals[distinct count each last_rows[];enlist 1;
+    .qunit.assertEquals[distinct count each .qt.qetl.job.stream.last_rows[];enlist 1;
         "every column is a one-element vector, never a bare atom"]};
 
-test_the_orders_feed_emits_statuses_that_are_not_fills:{[t]
+.qt.qetl.job.stream.test_the_orders_feed_emits_statuses_that_are_not_fills:{[t]
     / The positions service exists partly to filter these out, and a feed
     / that only ever emitted fills would let it be written without a
     / filter and still pass.
     .qunit.assertTrue[any not .qpipe.job.fx_orders_feed.statuses=.qpipe.job.executions.filled_status;
         "order flow carries cancels and rejects, not only fills"]};
 
-test_an_order_id_is_unique_within_a_run:{[t]
-    reset[];
+.qt.qetl.job.stream.test_an_order_id_is_unique_within_a_run:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_orders_feed.on_timer[];
     .qpipe.job.fx_orders_feed.on_timer[];
     / The feed publishes a list of column vectors, so each recorded batch
     / is that list and its order ids are the first of them.
-    ids:raze first each first each exec rows from .sjtest.published;
+    ids:raze first each first each exec rows from .qt.qetl.job.stream.published;
     .qunit.assertEquals[count distinct ids;2;"two orders, two ids"]};
 
-test_an_order_id_does_not_restart_at_one:{[t]
+.qt.qetl.job.stream.test_an_order_id_does_not_restart_at_one:{[t]
     / #1265: the counter was 0 in every process, so a feed restarted the same
     / day reissued 1,2,3... and executions' fill_id (`$string order_id)
     / repeated. A process's first id must sit at its start stamp, clear of
@@ -1103,7 +1102,7 @@ test_an_order_id_does_not_restart_at_one:{[t]
     .qunit.assertTrue[first_id<"j"$2 xexp 53;"an id a JSON consumer can hold exactly"];
     / A restart: orders issued by this run, then a fresh seed taken later.
     / The new run must begin above everything the old one published.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_orders_feed.on_timer[];
     .qpipe.job.fx_orders_feed.on_timer[];
     .qpipe.job.fx_orders_feed.on_timer[];
@@ -1115,8 +1114,8 @@ test_an_order_id_does_not_restart_at_one:{[t]
 / Four orders: a buy and a sell that net on one book, a cancel that must
 / not count, and a fill on a second book that must not merge with the
 / first. Round prices so every expected figure is exact.
-orders_batch:{[]
-    ([] time:d each til 4; order_id:1 2 3 4;
+.qt.qetl.job.stream.orders_batch:{[]
+    ([] time:.qt.qetl.job.stream.d each til 4; order_id:1 2 3 4;
         sym:`EURUSD`EURUSD`EURUSD`EURUSD;
         book:`london`london`london`newyork;
         product:`spot`spot`spot`spot;
@@ -1127,281 +1126,281 @@ orders_batch:{[]
 
 / Deliver orders to fx_positions the way the plant would (#885): through the
 / executions normalizer, as a table with `time` stamped in front.
-to_fx_positions:{[x]
+.qt.qetl.job.stream.to_fx_positions:{[x]
     .qpipe.job.fx_positions.on_batch[`executions;
-        `time xcols update time:.sjtest.d[0] from .qetl.job.stream.normalizer.normalize[`executions;`orders;x]]}
+        `time xcols update time:.qt.qetl.job.stream.d[0] from .qetl.job.stream.normalizer.normalize[`executions;`orders;x]]}
 
-test_positions_net_only_filled_orders:{[t]
-    reset[];
-    to_fx_positions[orders_batch[]];
+.qt.qetl.job.stream.test_positions_net_only_filled_orders:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qunit.assertEquals[count .qpipe.job.fx_positions.positions;2;
         "two positions - the cancelled 5mm buy is not one of them"];
-    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;600000f;1e-9;
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;600000f;1e-9;
         "and it did not move london's, which is 1mm bought less 400k sold"]};
 
-test_positions_drop_and_log_a_null_priced_fill:{[t]
-    reset[];
+.qt.qetl.job.stream.test_positions_drop_and_log_a_null_priced_fill:{[t]
+    .qt.qetl.job.stream.reset[];
     saved:.qetl.log.warn;
-    `.qetl.log.warn set {[id;text;fields] `.sjtest.fx_warned set (id;text;fields);};
-    b:update price:0n from orders_batch[] where order_id=2;
-    r:@[{to_fx_positions x; 1b};b;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
+    `.qetl.log.warn set {[id;text;fields] `.qt.qetl.job.stream.fx_warned set (id;text;fields);};
+    b:update price:0n from .qt.qetl.job.stream.orders_batch[] where order_id=2;
+    r:@[{.qt.qetl.job.stream.to_fx_positions x; 1b};b;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
     `.qetl.log.warn set saved;
     .qunit.assertEquals[r;1b;"a null-priced fill does not crash the stream job"];
-    .qunit.assertEquals[(.sjtest.fx_warned 0);`fx_positions;"it is logged"];
-    .qunit.assertEquals[(.sjtest.fx_warned 2)`fills;1j;"naming how many"];
-    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 0);`fx_positions;"it is logged"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 2)`fills;1j;"naming how many"];
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
         "and the unpriced 400k sale is in neither leg of london's book"];
-    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`quote_qty;-1085000f;1e-6;
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`quote_qty;-1085000f;1e-6;
         "the priced buy keeps both"]};
 
-test_positions_keep_the_books_apart:{[t]
-    reset[];
-    to_fx_positions[orders_batch[]];
-    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`newyork`spot]`base_qty;250000f;1e-9;
+.qt.qetl.job.stream.test_positions_keep_the_books_apart:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`newyork`spot]`base_qty;250000f;1e-9;
         "newyork's fill is its own position, not netted into london's"]};
 
-test_positions_ignore_a_table_they_did_not_subscribe_to:{[t]
-    reset[];
-    .qpipe.job.fx_positions.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD;
+.qt.qetl.job.stream.test_positions_ignore_a_table_they_did_not_subscribe_to:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD;
         side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
     .qunit.assertEmpty[.qpipe.job.fx_positions.positions;"a batch on another table moves nothing"]};
 
-test_desk_exposure_and_pnl_net_the_same_fills:{[t]
+.qt.qetl.job.stream.test_desk_exposure_and_pnl_net_the_same_fills:{[t]
     / #885: both views read executions, so a desk fill, an FX trades fill and
     / a crypto fill reach both, and their totals per sym agree.
-    reset[];
-    execs:raze {[tbl;rows] `time xcols update time:.sjtest.d[0] from .qetl.job.stream.normalizer.normalize[`executions;tbl;rows]}'[
+    .qt.qetl.job.stream.reset[];
+    execs:raze {[tbl;rows] `time xcols update time:.qt.qetl.job.stream.d[0] from .qetl.job.stream.normalizer.normalize[`executions;tbl;rows]}'[
         `orders`trades`crypto_trades;
-        (orders_batch[];fx_fill[`EURUSD;1;1.085;3e5];crypto_fill[`$"BTC-USDT";1;62000f;0.5])];
+        (.qt.qetl.job.stream.orders_batch[];.qt.qetl.job.stream.fx_fill[`EURUSD;1;1.085;3e5];.qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;62000f;0.5])];
     .qpipe.job.fx_positions.on_batch[`executions;execs];
     .qpipe.job.posbook.on_batch[`executions;execs];
     exposure:exec sum base_qty by sym from .qpipe.job.fx_positions.positions;
     pnl:exec sym!qty from .qpipe.job.posbook.book;
     .qunit.assertEquals[asc key exposure;asc key pnl;"the same instruments in both"];
-    .testutil.assertApprox[exposure key pnl;value pnl;1e-9;
+    .qt.support.assertApprox[exposure key pnl;value pnl;1e-9;
         "and the same net quantity: 850k EURUSD (600k london, 250k newyork) plus 300k unbooked, half a bitcoin"];
-    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD``]`base_qty;3e5;1e-9;
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD``]`base_qty;3e5;1e-9;
         "the trades fill, which has no book, is held under null dimensions"]};
 
-test_positions_accumulate_across_batches:{[t]
-    reset[];
-    to_fx_positions[orders_batch[]];
-    to_fx_positions[([] time:enlist d 9; order_id:enlist 9;
+.qt.qetl.job.stream.test_positions_accumulate_across_batches:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
+    .qt.qetl.job.stream.to_fx_positions[([] time:enlist .qt.qetl.job.stream.d 9; order_id:enlist 9;
         sym:enlist `EURUSD; book:enlist `london; product:enlist `spot;
         side:enlist 1; size:enlist 400000f; price:enlist 1.0870;
         order_status:enlist `filled)];
-    .testutil.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
         "the second batch is added to the book, not substituted for it"]};
 
-test_the_book_changes_before_anything_is_published:{[t]
+.qt.qetl.job.stream.test_the_book_changes_before_anything_is_published:{[t]
     / Orders will not be redelivered, so a failed publish must not also
     / lose them from the position - the ordering posbook established.
-    reset[];
-    to_fx_positions[orders_batch[]];
-    .qunit.assertEmpty[.sjtest.published;"the batch handler publishes nothing at all"];
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
+    .qunit.assertEmpty[.qt.qetl.job.stream.published;"the batch handler publishes nothing at all"];
     .qunit.assertEquals[count .qpipe.job.fx_positions.positions;2;"while the book has already moved"]};
 
 / --- the snapshot ---------------------------------------------------------
 
-test_the_timer_publishes_the_whole_book:{[t]
+.qt.qetl.job.stream.test_the_timer_publishes_the_whole_book:{[t]
     / Not just what moved: a snapshot carrying only changes would need its
     / reader to keep the rest, which is the reader building a second copy
     / of this service's state and getting it wrong on the first drop.
-    reset[];
-    to_fx_positions[orders_batch[]];
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`fx_position);
+    .qunit.assertEquals[(count .qt.qetl.job.stream.published;first exec tbl from .qt.qetl.job.stream.published);(1;`fx_position);
         "one publication, onto fx_position"];
-    .qunit.assertEquals[count last_rows[];2;"carrying every position, not only the one that last moved"]};
+    .qunit.assertEquals[count .qt.qetl.job.stream.last_rows[];2;"carrying every position, not only the one that last moved"]};
 
-test_the_snapshot_carries_a_break_even_rate:{[t]
-    reset[];
-    to_fx_positions[orders_batch[]];
+.qt.qetl.job.stream.test_the_snapshot_carries_a_break_even_rate:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
-    .testutil.assertApprox[
-        first exec break_even from last_rows[] where book=`london;650600%600000;1e-12;
+    .qt.support.assertApprox[
+        first exec break_even from .qt.qetl.job.stream.last_rows[] where book=`london;650600%600000;1e-12;
         "650,600 USD paid out over 600k EUR held"]};
 
-test_an_empty_book_publishes_no_snapshot:{[t]
-    reset[];
+.qt.qetl.job.stream.test_an_empty_book_publishes_no_snapshot:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEmpty[.sjtest.published;
+    .qunit.assertEmpty[.qt.qetl.job.stream.published;
         "a service that has seen nothing has nothing to say, rather than an empty table every five seconds"]};
 
-test_the_snapshot_matches_the_declared_stack_table:{[t]
-    reset[];
-    to_fx_positions[orders_batch[]];
+.qt.qetl.job.stream.test_the_snapshot_matches_the_declared_stack_table:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEquals[cols last_rows[];cols .qpipe.job.fx_positions.fx_position;
+    .qunit.assertEquals[cols .qt.qetl.job.stream.last_rows[];cols .qpipe.job.fx_positions.fx_position;
         "the published columns are the job's declared output shape"]};
 
 / --- limits ---------------------------------------------------------------
 
-mk_limits:{[]
+.qt.qetl.job.stream.mk_limits:{[]
     ([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot;
         metric:enlist `base_qty; cap:enlist 100000f; severity:enlist `hard)}
 
-test_no_limits_means_no_breaches:{[t]
+.qt.qetl.job.stream.test_no_limits_means_no_breaches:{[t]
     / A service with no limits reports positions and polices nothing,
     / which is a legitimate way to run and better than inventing caps.
-    reset[];
-    to_fx_positions[orders_batch[]];
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEquals[distinct exec tbl from .sjtest.published;enlist `fx_position;
+    .qunit.assertEquals[distinct exec tbl from .qt.qetl.job.stream.published;enlist `fx_position;
         "the snapshot goes out and nothing else"]};
 
-test_a_breached_limit_is_published:{[t]
-    reset[];
-    .qpipe.job.fx_positions.load_limits mk_limits[];
-    to_fx_positions[orders_batch[]];
+.qt.qetl.job.stream.test_a_breached_limit_is_published:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEquals[asc exec tbl from .sjtest.published;`s#`fx_limit_breach`fx_position;
+    .qunit.assertEquals[asc exec tbl from .qt.qetl.job.stream.published;`s#`fx_limit_breach`fx_position;
         "the snapshot and the breach both go out"];
-    breach:first first exec rows from .sjtest.published where tbl=`fx_limit_breach;
-    .testutil.assertApprox[first breach`utilisation;6f;1e-9;"600k against a 100k cap is six times the limit"]};
+    breach:first first exec rows from .qt.qetl.job.stream.published where tbl=`fx_limit_breach;
+    .qt.support.assertApprox[first breach`utilisation;6f;1e-9;"600k against a 100k cap is six times the limit"]};
 
-test_a_standing_breach_does_not_republish_every_tick:{[t]
+.qt.qetl.job.stream.test_a_standing_breach_does_not_republish_every_tick:{[t]
     / A breach is a state, not an event: without throttling the desk gets
     / one alert per timer tick until someone trades out of the position.
-    reset[];
-    .qpipe.job.fx_positions.load_limits mk_limits[];
-    to_fx_positions[orders_batch[]];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
-    `.sjtest.published set 0#.sjtest.published;
+    `.qt.qetl.job.stream.published set 0#.qt.qetl.job.stream.published;
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEquals[exec tbl from .sjtest.published;enlist `fx_position;
+    .qunit.assertEquals[exec tbl from .qt.qetl.job.stream.published;enlist `fx_position;
         "the second tick republishes the book but not the breach"]};
 
-test_a_position_that_moves_further_over_is_still_one_breach:{[t]
-    reset[];
-    .qpipe.job.fx_positions.load_limits mk_limits[];
-    to_fx_positions[orders_batch[]];
+.qt.qetl.job.stream.test_a_position_that_moves_further_over_is_still_one_breach:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     .qpipe.job.fx_positions.on_timer[];
-    `.sjtest.published set 0#.sjtest.published;
-    to_fx_positions[([] time:enlist d 9; order_id:enlist 9;
+    `.qt.qetl.job.stream.published set 0#.qt.qetl.job.stream.published;
+    .qt.qetl.job.stream.to_fx_positions[([] time:enlist .qt.qetl.job.stream.d 9; order_id:enlist 9;
         sym:enlist `EURUSD; book:enlist `london; product:enlist `spot;
         side:enlist 1; size:enlist 2000000f; price:enlist 1.0870;
         order_status:enlist `filled)];
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEquals[exec tbl from .sjtest.published;enlist `fx_position;
+    .qunit.assertEquals[exec tbl from .qt.qetl.job.stream.published;enlist `fx_position;
         "the identity is the scope and the metric, never the observed value, so a worsening breach is the same breach"]};
 
-test_a_malformed_limits_table_is_refused_at_load:{[t]
-    reset[];
+.qt.qetl.job.stream.test_a_malformed_limits_table_is_refused_at_load:{[t]
+    .qt.qetl.job.stream.reset[];
     .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
         ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist -1f);
         "*must be positive*";
         "a limits table that polices nothing is indistinguishable from a quiet day, so it is refused where it is loaded"]};
 
-test_a_limit_scoped_on_a_non_dimension_is_refused_at_load:{[t]
+.qt.qetl.job.stream.test_a_limit_scoped_on_a_non_dimension_is_refused_at_load:{[t]
     / .qf.port cannot catch this - it is never told which columns are meant
     / to be scope, so a stray one silently becomes scope and the limit
     / matches nothing. The job knows its own dimensions, so it can.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
         ([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot;
             base_qty:enlist 1e6; metric:enlist `base_qty; cap:enlist 1f);
         "*is not a dimension of this book*";
         "a limits table carrying an extra column would police nothing, and would look exactly like a quiet day"]};
 
-test_fresh_breaches_is_decidable_without_a_timer:{[t]
-    reset[];
-    .qpipe.job.fx_positions.load_limits mk_limits[];
-    to_fx_positions[orders_batch[]];
-    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 0;1;"the first evaluation alerts"];
-    .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches d 1;"a second, a second later, does not"];
-    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 600;1;
+.qt.qetl.job.stream.test_fresh_breaches_is_decidable_without_a_timer:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
+    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches .qt.qetl.job.stream.d 0;1;"the first evaluation alerts"];
+    .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches .qt.qetl.job.stream.d 1;"a second, a second later, does not"];
+    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches .qt.qetl.job.stream.d 600;1;
         "and once the throttle period has passed it does again"]};
 
 / A breach row as the plant logs it: what fx_positions published, with the
 / plant's `time` in front.
-logged_breach:{[tm;s;m]
+.qt.qetl.job.stream.logged_breach:{[tm;s;m]
     ([] time:enlist tm; sym:enlist s; book:enlist `london; product:enlist `spot; metric:enlist m;
         observed:enlist 6e5; cap:enlist 1e5; severity:enlist `hard; utilisation:enlist 6f)}
 
 / Replay `batches` into fx_positions' on_batch as a restart does.
-replay_fx:{[batches]
+.qt.qetl.job.stream.replay_fx:{[batches]
     `.qetl.job.stream.replaying set 1b;
     r:@[{[b] .qpipe.job.fx_positions.on_batch ./: b; 1b};batches;{x}];
     `.qetl.job.stream.replaying set 0b;
     if[not 1b~r; 'r]}
 
-test_a_restart_does_not_republish_a_breach_inside_its_period:{[t]
+.qt.qetl.job.stream.test_a_restart_does_not_republish_a_breach_inside_its_period:{[t]
     / #1197: the throttle was in memory only, so a restarted fx_positions
     / published every standing breach again on its first tick.
-    reset[];
-    .qpipe.job.fx_positions.load_limits mk_limits[];
-    to_fx_positions[orders_batch[]];
-    pub:d[0];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
+    pub:.qt.qetl.job.stream.d[0];
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches pub;1;"live, the breach publishes"];
     / the restart: state is lost, then the log is replayed - the fill, and the breach as published
     .qetl.job.stream.reset `fx_positions;
-    .qpipe.job.fx_positions.load_limits mk_limits[];
+    .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
     .qunit.assertEmpty[.qpipe.job.fx_positions.alerts;"a restart starts with no throttle state"];
-    replay_fx[((`executions;`time xcols update time:pub from .qetl.job.stream.normalizer.normalize[`executions;`orders;orders_batch[]]);
-               (`fx_limit_breach;logged_breach[pub;`EURUSD;`base_qty]))];
+    .qt.qetl.job.stream.replay_fx[((`executions;`time xcols update time:pub from .qetl.job.stream.normalizer.normalize[`executions;`orders;.qt.qetl.job.stream.orders_batch[]]);
+               (`fx_limit_breach;.qt.qetl.job.stream.logged_breach[pub;`EURUSD;`base_qty]))];
     .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches pub+0D00:01;
         "a minute after it was published, the standing breach is not published again"];
     .qunit.assertEmpty[.qpipe.job.fx_positions.fresh_breaches pub+0D00:04:59;"nor just inside the period"];
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches pub+0D00:05;1;
         "and it reminds once the period has passed, as it would have without the restart"]};
 
-test_a_new_breach_after_a_restart_still_publishes_at_once:{[t]
-    reset[];
-    .qpipe.job.fx_positions.load_limits mk_limits[];
-    to_fx_positions[orders_batch[]];
+.qt.qetl.job.stream.test_a_new_breach_after_a_restart_still_publishes_at_once:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];
     / the log holds a breach of a DIFFERENT metric only: this one is new
-    replay_fx[enlist (`fx_limit_breach;logged_breach[d[0];`EURUSD;`quote_qty])];
-    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 60;1;
+    .qt.qetl.job.stream.replay_fx[enlist (`fx_limit_breach;.qt.qetl.job.stream.logged_breach[.qt.qetl.job.stream.d[0];`EURUSD;`quote_qty])];
+    .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches .qt.qetl.job.stream.d 60;1;
         "a breach the log does not hold publishes immediately"]};
 
-test_the_job_s_own_live_echo_does_not_move_its_throttle:{[t]
-    reset[];
-    .qpipe.job.fx_positions.on_batch[`fx_limit_breach;logged_breach[d[0];`EURUSD;`base_qty]];
+.qt.qetl.job.stream.test_the_job_s_own_live_echo_does_not_move_its_throttle:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.on_batch[`fx_limit_breach;.qt.qetl.job.stream.logged_breach[.qt.qetl.job.stream.d[0];`EURUSD;`base_qty]];
     .qunit.assertEmpty[.qpipe.job.fx_positions.alerts;"live, the throttle already knows what it published"]};
 
-test_restoring_the_throttle_keeps_the_newest_time_per_identity:{[t]
-    reset[];
-    rows:logged_breach[d[0];`EURUSD;`base_qty],logged_breach[d[30];`EURUSD;`base_qty],logged_breach[d[10];`EURUSD;`quote_qty];
-    replay_fx[enlist (`fx_limit_breach;rows)];
+.qt.qetl.job.stream.test_restoring_the_throttle_keeps_the_newest_time_per_identity:{[t]
+    .qt.qetl.job.stream.reset[];
+    rows:.qt.qetl.job.stream.logged_breach[.qt.qetl.job.stream.d[0];`EURUSD;`base_qty],.qt.qetl.job.stream.logged_breach[.qt.qetl.job.stream.d[30];`EURUSD;`base_qty],.qt.qetl.job.stream.logged_breach[.qt.qetl.job.stream.d[10];`EURUSD;`quote_qty];
+    .qt.qetl.job.stream.replay_fx[enlist (`fx_limit_breach;rows)];
     a:.qpipe.job.fx_positions.alerts;
     .qunit.assertEquals[count a;2;"one entry per (scope, metric)"];
-    .qunit.assertEquals[asc value a;asc (d[30];d[10]);"each at its newest time"]};
+    .qunit.assertEquals[asc value a;asc (.qt.qetl.job.stream.d[30];.qt.qetl.job.stream.d[10]);"each at its newest time"]};
 
-test_fx_positions_declares_that_its_throttle_is_rebuilt_by_replay:{[t]
+.qt.qetl.job.stream.test_fx_positions_declares_that_its_throttle_is_rebuilt_by_replay:{[t]
     dc:.qetl.job.stream.def `fx_positions;
     .qunit.assertEquals[dc`restore_from;enlist `fx_limit_breach;"it replays its own breaches"];
     .qunit.assertTrue[`alerts in dc`state;"the throttle is declared state"];
     .qunit.assertTrue[(dc`replay) and not `ephemeral in key dc;"recovered by replay, not ephemeral"]};
 
 / Two books each long 600k EURUSD - 1.2mm across the desk.
-two_books:{[]
-    ([] time:d[1 2]; order_id:1 2; sym:`EURUSD`EURUSD; book:`london`newyork;
+.qt.qetl.job.stream.two_books:{[]
+    ([] time:.qt.qetl.job.stream.d[1 2]; order_id:1 2; sym:`EURUSD`EURUSD; book:`london`newyork;
         product:`spot`spot; side:1 1; size:600000 600000f; price:1.0850 1.0850;
         order_status:`filled`filled)}
 
-test_a_limit_on_a_total_is_compared_with_the_total:{[t]
+.qt.qetl.job.stream.test_a_limit_on_a_total_is_compared_with_the_total:{[t]
     / #733: a cap scoped on sym alone was compared with each (sym, book,
     / product) position, so 600k in each of two books passed a 1mm cap.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
-    to_fx_positions[two_books[]];
-    b:.qpipe.job.fx_positions.fresh_breaches d 0;
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.two_books[]];
+    b:.qpipe.job.fx_positions.fresh_breaches .qt.qetl.job.stream.d 0;
     .qunit.assertEquals[count b;1;"1.2mm across both books is over a 1mm cap on the pair"];
-    .testutil.assertApprox[first b`observed;1200000f;1e-9;"observed is the pair's total"];
+    .qt.support.assertApprox[first b`observed;1200000f;1e-9;"observed is the pair's total"];
     .qunit.assertEquals[first each b`book`product;``;"a breach of a total names no book or product"]};
 
-test_a_breach_of_a_total_is_published:{[t]
-    reset[];
+.qt.qetl.job.stream.test_a_breach_of_a_total_is_published:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_positions.load_limits ([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1000000f);
-    to_fx_positions[two_books[]];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.two_books[]];
     .qpipe.job.fx_positions.on_timer[];
-    .qunit.assertEquals[asc exec tbl from .sjtest.published;`s#`fx_limit_breach`fx_position;
+    .qunit.assertEquals[asc exec tbl from .qt.qetl.job.stream.published;`s#`fx_limit_breach`fx_position;
         "fx_limit_breach takes a total's breach in its usual shape"]};
 
-test_a_null_scope_value_is_refused_at_load:{[t]
+.qt.qetl.job.stream.test_a_null_scope_value_is_refused_at_load:{[t]
     / A null book matches no position: the cap would police nothing.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
         ([] sym:enlist `EURUSD; book:enlist `; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6);
         "*book is null on some limit*";
@@ -1409,20 +1408,20 @@ test_a_null_scope_value_is_refused_at_load:{[t]
 
 / London long 1mm EURUSD at 1.10 and short 1mm USDJPY at 150: EUR +1mm,
 / USD -1mm (bought, then sold), JPY +150mm.
-two_pairs:{[]
-    ([] time:d[1 2]; order_id:1 2; sym:`EURUSD`USDJPY; book:`london`london;
+.qt.qetl.job.stream.two_pairs:{[]
+    ([] time:.qt.qetl.job.stream.d[1 2]; order_id:1 2; sym:`EURUSD`USDJPY; book:`london`london;
         product:`spot`spot; side:1 -1; size:1000000 1000000f; price:1.10 150f;
         order_status:`filled`filled)}
 
-test_a_limit_with_no_sym_is_refused_at_load:{[t]
+.qt.qetl.job.stream.test_a_limit_with_no_sym_is_refused_at_load:{[t]
     / #1260: base_qty is in each pair's base currency and quote_qty in its
     / quote currency, so a scope without sym summed EUR with USD and USD
     / with JPY. A 500k book cap on base_qty saw 1mm EUR - 1mm USD = 0 and
     / passed two genuine breaches; a 5mm cap on quote_qty saw a figure
     / that was mostly JPY. The job holds no rates to revalue with, so the
     / limit is refused rather than compared with a meaningless number.
-    reset[];
-    to_fx_positions[two_pairs[]];
+    .qt.qetl.job.stream.reset[];
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.two_pairs[]];
     .qunit.assertThrows[.qpipe.job.fx_positions.load_limits;
         ([] book:`london`london; metric:`base_qty`quote_qty; cap:500000 5000000f; severity:`hard`hard);
         "load_limits: a limit without sym*";
@@ -1433,14 +1432,14 @@ test_a_limit_with_no_sym_is_refused_at_load:{[t]
         "so would a product cap"];
     .qunit.assertEmpty[.qpipe.job.fx_positions.limits;"nothing is loaded from a refused table"]};
 
-test_a_limit_with_sym_and_book_still_polices_each_pair:{[t]
+.qt.qetl.job.stream.test_a_limit_with_sym_and_book_still_polices_each_pair:{[t]
     / The refusal is about sym, not about book: the same desk caps written
     / per pair are one currency each and police as before.
-    reset[];
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_positions.load_limits ([] sym:`EURUSD`USDJPY; book:`london`london;
         metric:`base_qty`base_qty; cap:500000 500000f);
-    to_fx_positions[two_pairs[]];
-    b:.qpipe.job.fx_positions.fresh_breaches d 0;
+    .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.two_pairs[]];
+    b:.qpipe.job.fx_positions.fresh_breaches .qt.qetl.job.stream.d 0;
     .qunit.assertEquals[asc b`sym;`s#`EURUSD`USDJPY;"EUR +1mm and USD -1mm each breach their own cap"];
     .qunit.assertEquals[distinct b`product;enlist `;"rolled up across products, as scoped"]};
 
@@ -1449,65 +1448,65 @@ test_a_limit_with_sym_and_book_still_polices_each_pair:{[t]
 / A transport that delivers `replayed` - a list of (table; rows) - as the
 / day's log when asked to replay, and records what it was asked. The live
 / handler it was given is kept, so a test can send a batch after start.
-started:()!()
-fake_transport:{[job;replayed]
+.qt.qetl.job.stream.started:()!()
+.qt.qetl.job.stream.fake_transport:{[job;replayed]
     / recovery:0b - a fake that replays one log has no earlier days to give (#1220)
     `connect`publisher`subscribe`timer`recovery!(
         {[] };
         / A projection still owed its one argument: start calls publisher[].
-        {[job;unused] .sjtest.recorder job}[job];
+        {[job;unused] .qt.qetl.job.stream.recorder job}[job];
         {[replayed;tbls;h;replay]
-            `.sjtest.started set `tbls`replay`seen_replaying!(tbls;replay;());
+            `.qt.qetl.job.stream.started set `tbls`replay`seen_replaying!(tbls;replay;());
             if[replay;
-                {[h;m] .sjtest.started[`seen_replaying],:.qetl.job.stream.replaying; h . m}[h] each replayed];
-            `.sjtest.live set h;}[replayed];
+                {[h;m] .qt.qetl.job.stream.started[`seen_replaying],:.qetl.job.stream.replaying; h . m}[h] each replayed];
+            `.qt.qetl.job.stream.live set h;}[replayed];
         {[n;p;f] };
         0b)}
 
 / The bug this fixes: a restarted posbook1 started its book flat, so the next
 / fill published a position as if it were the first of the day.
-test_a_replaying_job_rebuilds_its_state_without_publishing_it_again:{[t]
-    reset[];
+.qt.qetl.job.stream.test_a_replaying_job_rebuilds_its_state_without_publishing_it_again:{[t]
+    .qt.qetl.job.stream.reset[];
     / posbook marks to market_data's level-0 mid since #703 (no marks normalizer)
-    replayed:((`market_data;a_book[`EURUSD;1.104]);
-         (`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]);
-         (`executions;an_execution[d[1];`EURUSD;1;1.11;1e6]));
-    .qetl.job.stream.start[`posbook;fake_transport[`posbook;replayed]];
-    .qunit.assertEquals[count .sjtest.published;0;"what the replay recomputed was published before the restart"];
+    replayed:((`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.104]);
+         (`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]);
+         (`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[1];`EURUSD;1;1.11;1e6]));
+    .qetl.job.stream.start[`posbook;.qt.qetl.job.stream.fake_transport[`posbook;replayed]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"what the replay recomputed was published before the restart"];
     .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 2e6;"the book is back"];
-    .qunit.assertEquals[(.sjtest.started`replay;all .sjtest.started`seen_replaying;.qetl.job.stream.replaying);(1b;1b;0b);
+    .qunit.assertEquals[(.qt.qetl.job.stream.started`replay;all .qt.qetl.job.stream.started`seen_replaying;.qetl.job.stream.replaying);(1b;1b;0b);
         "replay was asked for, `replaying` was set throughout it, and cleared after"];
-    .sjtest.live[`executions;an_execution[d[2];`EURUSD;-1;1.12;5e5]];
-    .qunit.assertEquals[exec qty from last_rows[];enlist 1.5e6;
+    .qt.qetl.job.stream.live[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[2];`EURUSD;-1;1.12;5e5]];
+    .qunit.assertEquals[exec qty from .qt.qetl.job.stream.last_rows[];enlist 1.5e6;
         "the first live fill builds on the rebuilt book - not -500k from flat"]};
 
-test_a_job_that_does_not_replay_is_not_asked_to:{[t]
-    reset[];
-    .qetl.job.stream.start[`demo_markout;fake_transport[`demo_markout;()]];
-    .qunit.assertEquals[.sjtest.started`replay;0b;"replay is opt-in"]};
+.qt.qetl.job.stream.test_a_job_that_does_not_replay_is_not_asked_to:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qetl.job.stream.start[`demo_markout;.qt.qetl.job.stream.fake_transport[`demo_markout;()]];
+    .qunit.assertEquals[.qt.qetl.job.stream.started`replay;0b;"replay is opt-in"]};
 
 / Publish has to be wired before subscribing: a replay delivers batches
 / during the subscribe call, and a job that publishes from one must not hit
 / the unwired stub (run_stream.q's recovery used to, for exactly that reason).
-test_publish_is_wired_before_the_subscription_delivers:{[t]
-    reset[];
+.qt.qetl.job.stream.test_publish_is_wired_before_the_subscription_delivers:{[t]
+    .qt.qetl.job.stream.reset[];
     .qpipe.job.posbook.publish:.qetl.job.stream.unwired `posbook;
-    .qetl.job.stream.start[`posbook;fake_transport[`posbook;()]];
-    .sjtest.live[`executions;an_execution[d[0];`EURUSD;1;1.1;1e6]];
-    .qunit.assertEquals[count .sjtest.published;1;"the live batch published through the transport"]};
+    .qetl.job.stream.start[`posbook;.qt.qetl.job.stream.fake_transport[`posbook;()]];
+    .qt.qetl.job.stream.live[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"the live batch published through the transport"]};
 
-test_a_transport_missing_a_step_is_refused:{[t]
+.qt.qetl.job.stream.test_a_transport_missing_a_step_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.start[`posbook;];`connect`publisher!({[] };{[] });
         "start: the transport is missing subscribe, timer";"named, before anything connects"]};
 
-test_restore_tables_are_subscribed_but_are_not_inputs:{[t]
+.qt.qetl.job.stream.test_restore_tables_are_subscribed_but_are_not_inputs:{[t]
     .qunit.assertEquals[.qetl.job.stream.subscriptions `kafka_flow;`kafka_client_flow`client_flow;
         "kafka_flow reads its own output back, to restore its marks"];
     .qetl.dag.adopt_all[];
     .qunit.assertEquals[(.qetl.dag.def `kafka_flow)`inputs;enlist `kafka_client_flow;
         "but the graph sees only its input, so it draws no cycle"]};
 
-test_restore_declarations_are_refused_without_a_replay:{[t]
+.qt.qetl.job.stream.test_restore_declarations_are_refused_without_a_replay:{[t]
     base:`procname`subscribe_to`publishes`on_batch!(`sjrestoreprobe1;enlist `quote;`symbol$();{[t;x]});
     .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`restore_from]!enlist enlist `quote;
         "*restore_from without replay 1b*";"restore tables are read only by a replay"];
@@ -1520,62 +1519,62 @@ test_restore_declarations_are_refused_without_a_replay:{[t]
 
 / A job whose rows are positive numbers; its check names the row index of
 / every negative one, in the bounded worker's failure shape plus `row`.
-neg_check:{[x]
+.qt.qetl.job.stream.neg_check:{[x]
     bad:where x[`v]<0;
     ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative"; row:bad)}
 
-check_probe:{[name;procname;mode;chk]
+.qt.qetl.job.stream.check_probe:{[name;procname;mode;chk]
     / A feed that keeps its output local, so the output-contract suite has nothing to drive.
     .qetl.job.stream.define[name;`procname`subscribe_to`publishes`period`on_timer`check`on_fail!(
         procname;`symbol$();`symbol$();0D00:00:01;{[] };chk;mode)];
-    reset[];
-    .qetl.job.stream.wire[name;recorder[name]];
+    .qt.qetl.job.stream.reset[];
+    .qetl.job.stream.wire[name;.qt.qetl.job.stream.recorder[name]];
     ` sv (.qetl.job.stream.namespace name),`publish}
 
-test_a_passing_batch_publishes_whole_and_counts_nothing:{[t]
-    pub:check_probe[`sj_check_pass;`sjcheckpass1;`drop;neg_check];
+.qt.qetl.job.stream.test_a_passing_batch_publishes_whole_and_counts_nothing:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_pass;`sjcheckpass1;`drop;.qt.qetl.job.stream.neg_check];
     before:.qetl.stream_health.of[`sj_check_pass]`failed;
     (get pub)[`probe_out;([] v:1 2 3)];
-    .qunit.assertEquals[first first exec rows from .sjtest.published;([] v:1 2 3);"every row published"];
+    .qunit.assertEquals[first first exec rows from .qt.qetl.job.stream.published;([] v:1 2 3);"every row published"];
     .qunit.assertEquals[.qetl.stream_health.of[`sj_check_pass]`failed;before;"no failure counted"]};
 
-test_drop_publishes_the_clean_rows_and_withholds_the_bad:{[t]
-    pub:check_probe[`sj_check_drop;`sjcheckdrop1;`drop;neg_check];
+.qt.qetl.job.stream.test_drop_publishes_the_clean_rows_and_withholds_the_bad:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_drop;`sjcheckdrop1;`drop;.qt.qetl.job.stream.neg_check];
     (get pub)[`probe_out;([] v:1 -2 3 -4)];
-    .qunit.assertEquals[first first exec rows from .sjtest.published;([] v:1 3);"only the clean rows went out"];
+    .qunit.assertEquals[first first exec rows from .qt.qetl.job.stream.published;([] v:1 3);"only the clean rows went out"];
     h:.qetl.stream_health.of`sj_check_drop;
     .qunit.assertEquals[h`failed;1;"the batch is counted as failed, so the job reads failing"];
     .qunit.assertEquals[h`last_error;`$"check failed: 2 failure(s)";"and the reason is kept"]};
 
-test_hold_withholds_the_whole_batch:{[t]
-    pub:check_probe[`sj_check_hold;`sjcheckhold1;`hold;neg_check];
+.qt.qetl.job.stream.test_hold_withholds_the_whole_batch:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_hold;`sjcheckhold1;`hold;.qt.qetl.job.stream.neg_check];
     (get pub)[`probe_out;([] v:1 -2 3)];
-    .qunit.assertEquals[count .sjtest.published;0;"nothing published, clean rows included"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"nothing published, clean rows included"];
     .qunit.assertEquals[(.qetl.stream_health.of`sj_check_hold)`failed;1;"counted as failed"]};
 
 / A check that accepts the dict and column-list batch shapes a publisher takes.
-shape_check:{[x] v:$[99h=type x; x`v; 98h=type x; x`v; x 1]; bad:where (),v<0;
+.qt.qetl.job.stream.shape_check:{[x] v:$[99h=type x; x`v; 98h=type x; x`v; x 1]; bad:where (),v<0;
     ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative")}
 
-shape_batches:{[name;procname;mode]
-    pub:check_probe[name;procname;mode;shape_check];
+.qt.qetl.job.stream.shape_batches:{[name;procname;mode]
+    pub:.qt.qetl.job.stream.check_probe[name;procname;mode;.qt.qetl.job.stream.shape_check];
     (get pub)[`probe_out;`sym`v!(`a;-5)];
     (get pub)[`probe_out;(`a`b;1 -1)];
-    (count .sjtest.published; (.qetl.stream_health.of name)`failed)}
+    (count .qt.qetl.job.stream.published; (.qetl.stream_health.of name)`failed)}
 
-test_a_failing_dict_or_column_list_batch_is_withheld_under_hold:{[t]
-    r:shape_batches[`sj_check_shape_hold;`sjcheckshapehold1;`hold];
+.qt.qetl.job.stream.test_a_failing_dict_or_column_list_batch_is_withheld_under_hold:{[t]
+    r:.qt.qetl.job.stream.shape_batches[`sj_check_shape_hold;`sjcheckshapehold1;`hold];
     .qunit.assertEquals[r 0;0;"nothing of a failing dict row or column list is published under hold"];
     .qunit.assertEquals[r 1;2;"both are counted as failed"]};
 
-test_a_failing_dict_or_column_list_batch_is_withheld_whole_under_drop:{[t]
-    r:shape_batches[`sj_check_shape_drop;`sjcheckshapedrop1;`drop];
+.qt.qetl.job.stream.test_a_failing_dict_or_column_list_batch_is_withheld_whole_under_drop:{[t]
+    r:.qt.qetl.job.stream.shape_batches[`sj_check_shape_drop;`sjcheckshapedrop1;`drop];
     .qunit.assertEquals[r 0;0;"drop has no clean subset to rebuild for a non-table batch, so it is withheld"];
     .qunit.assertEquals[r 1;2;"both are counted as failed"];
     (get ` sv (.qetl.job.stream.namespace `sj_check_shape_drop),`publish)[`probe_out;`sym`v!(`a;5)];
-    .qunit.assertEquals[count .sjtest.published;1;"a passing dict row still goes out"]};
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"a passing dict row still goes out"]};
 
-test_a_column_dict_of_n_rows_is_counted_as_n_and_withheld:{[t]
+.qt.qetl.job.stream.test_a_column_dict_of_n_rows_is_counted_as_n_and_withheld:{[t]
     / #1164: every shape is read as rows once; a dict of 3 rows is 3, not 1
     cols_dict:`sym`v!(`a`b`c;1 -1 2);
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;cols_dict];3;"a column -> vector dict of 3 rows"];
@@ -1583,34 +1582,34 @@ test_a_column_dict_of_n_rows_is_counted_as_n_and_withheld:{[t]
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;(`a`b;1 -1)];2;"a column list of 2 rows"];
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;([] v:1 2 3 4)];4;"a table"];
     .qunit.assertEquals[.qetl.job.stream.row_count[`probe_out;`a`b!(1 2;1 2 3)];1;"a ragged dict is withheld whole as 1"];
-    pub:check_probe[`sj_check_coldict;`sjcheckcoldict1;`drop;shape_check];
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_coldict;`sjcheckcoldict1;`drop;.qt.qetl.job.stream.shape_check];
     (get pub)[`probe_out;cols_dict];
-    .qunit.assertEquals[count .sjtest.published;0;"the failing column dict is withheld"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"the failing column dict is withheld"];
     .qunit.assertEquals[(.qetl.stream_health.of`sj_check_coldict)`failed;1;"and counted as failed"]};
 
-test_a_check_that_throws_publishes_nothing:{[t]
-    pub:check_probe[`sj_check_throw;`sjcheckthrow1;`drop;{[x] 'boom}];
+.qt.qetl.job.stream.test_a_check_that_throws_publishes_nothing:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_throw;`sjcheckthrow1;`drop;{[x] 'boom}];
     (get pub)[`probe_out;([] v:1 2 3)];
-    .qunit.assertEquals[count .sjtest.published;0;"rows nobody could vouch for are not published, even under drop"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"rows nobody could vouch for are not published, even under drop"];
     h:.qetl.stream_health.of`sj_check_throw;
     .qunit.assertEquals[h`failed;1;"counted as failed"];
     .qunit.assertEquals[h`last_error;`$"check threw: boom";"with the check's own error"]};
 
-test_a_check_must_declare_what_failure_does:{[t]
+.qt.qetl.job.stream.test_a_check_must_declare_what_failure_does:{[t]
     base:`procname`subscribe_to`publishes`on_batch!(`sjcheckbad1;enlist `quote;`symbol$();{[t;x]});
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`check]!enlist neg_check;
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`check]!enlist .qt.qetl.job.stream.neg_check;
         "*declares a check but no on_fail*";"the author decides whether bad rows hold their neighbours"];
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,`check`on_fail!(neg_check;`skip);
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,`check`on_fail!(.qt.qetl.job.stream.neg_check;`skip);
         "*on_fail must be `drop or `hold*";"and only the two choices exist"];
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist `drop;
         "*on_fail without a check*";"on_fail alone gates nothing"]};
 
-test_market_data_declares_the_qdqc_checks:{[t]
+.qt.qetl.job.stream.test_market_data_declares_the_qdqc_checks:{[t]
     d:.qetl.job.stream.def`market_data;
     .qunit.assertEquals[d`check;.qpipe.job.market_data.check;"market_data's check is declared"];
     .qunit.assertEquals[d`on_fail;`drop;"one venue's bad book must not hold the others"]};
 
-test_market_data_check_names_crossed_and_stale_rows:{[t]
+.qt.qetl.job.stream.test_market_data_check_names_crossed_and_stale_rows:{[t]
     t0:2026.09.19D10:00:00.000000000;
     book:{[s;ts;b;a] ([] sym:enlist s; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
         bid_prices:enlist enlist b; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e6)};
@@ -1621,7 +1620,7 @@ test_market_data_check_names_crossed_and_stale_rows:{[t]
     .qunit.assertEquals[count .qpipe.job.market_data.check book[`EURUSD;t0;1.1;1.2];0;"a clean book passes"];
     .qunit.assertEquals[count .qpipe.job.market_data.check update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from book[`EURUSD;t0;1.1;1.2];0;"an empty side is a withdrawal, not a failure"]};
 
-test_market_data_check_judges_staleness_per_sym_and_source:{[t]
+.qt.qetl.job.stream.test_market_data_check_judges_staleness_per_sym_and_source:{[t]
     / #1050: binance and kraken quote BTC-USDT at 10:10:00, okx at 10:00:00.
     / Two fresh venues must not let okx's ten-minute-old book through.
     t0:2026.09.19D10:10:00.000000000;
@@ -1635,7 +1634,7 @@ test_market_data_check_judges_staleness_per_sym_and_source:{[t]
 / #1021: what a book must be is judged once, where every book enters, not
 / by each consumer: a level 0 that is not a price, and a stamp from the
 / future, are failures there and withheld under on_fail `drop.
-test_market_data_check_names_bad_levels_and_future_stamps:{[t]
+.qt.qetl.job.stream.test_market_data_check_names_bad_levels_and_future_stamps:{[t]
     now:.z.p;
     book:{[b;bs;ts] ([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
         bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6)};
@@ -1651,7 +1650,7 @@ test_market_data_check_names_bad_levels_and_future_stamps:{[t]
 
 / #1063: superbook reads the shared lead when a batch arrives, not a copy
 / taken at load, so tuning it moves superbook and market_data's check together.
-test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
+.qt.qetl.job.stream.test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
     saved:.qf.mkt.max_clock_lead;
     `.qf.mkt.max_clock_lead set 0D00:00:01;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
@@ -1669,7 +1668,7 @@ test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
 / policed nothing and alert_sink, fed by fx_limit_breach, never fired.
 
 / A limits CSV under build/, with `rows` under the header.
-limits_file:{[rows]
+.qt.qetl.job.stream.limits_file:{[rows]
     system "mkdir -p build";
     f:":build/sjtest_fx_limits.csv";
     (hsym `$f) 0: enlist["sym,book,product,metric,cap,severity"],rows;
@@ -1677,37 +1676,37 @@ limits_file:{[rows]
 
 / fx_positions started on the fake transport, with no limits held, and
 / whether its transport was connected.
-start_fx:{[path]
-    reset[];
+.qt.qetl.job.stream.start_fx:{[path]
+    .qt.qetl.job.stream.reset[];
     `.qpipe.job.fx_positions.limits set 0#.qpipe.job.fx_positions.limits;
     setenv[`UQF_FX_POSITION_LIMITS;path];
-    `.sjtest.connected set 0b;
-    tr:@[fake_transport[`fx_positions;()];`connect;:;{[] `.sjtest.connected set 1b;}];
+    `.qt.qetl.job.stream.connected set 0b;
+    tr:@[.qt.qetl.job.stream.fake_transport[`fx_positions;()];`connect;:;{[] `.qt.qetl.job.stream.connected set 1b;}];
     @[.qetl.job.stream.start[`fx_positions];tr;{x}]}
 
-test_fx_positions_loads_its_limits_file_at_start:{[t]
-    r:start_fx[limits_file[("EURUSD,london,spot,base_qty,1000000,hard";"GBPUSD,london,spot,base_qty,2000000,soft")]];
-    .qunit.assertEquals[(r;.sjtest.connected);(`fx_positions;1b);"started"];
+.qt.qetl.job.stream.test_fx_positions_loads_its_limits_file_at_start:{[t]
+    r:.qt.qetl.job.stream.start_fx[.qt.qetl.job.stream.limits_file[("EURUSD,london,spot,base_qty,1000000,hard";"GBPUSD,london,spot,base_qty,2000000,soft")]];
+    .qunit.assertEquals[(r;.qt.qetl.job.stream.connected);(`fx_positions;1b);"started"];
     .qunit.assertEquals[exec cap from .qpipe.job.fx_positions.limits;1e6 2e6;"both limits are policed from the first tick"]};
 
-test_a_malformed_limits_file_stops_the_start_before_it_connects:{[t]
-    r:start_fx[limits_file[enlist "EURUSD,,spot,base_qty,1000000,hard"]];
+.qt.qetl.job.stream.test_a_malformed_limits_file_stops_the_start_before_it_connects:{[t]
+    r:.qt.qetl.job.stream.start_fx[.qt.qetl.job.stream.limits_file[enlist "EURUSD,,spot,base_qty,1000000,hard"]];
     .qunit.assertTrue[(10h=type r) and r like "load_limits: book is null on some limit*";"refused, as load_limits refuses it"];
-    .qunit.assertEquals[.sjtest.connected;0b;"and nothing was opened: the job does not run blind"]};
+    .qunit.assertEquals[.qt.qetl.job.stream.connected;0b;"and nothing was opened: the job does not run blind"]};
 
-test_a_missing_limits_file_is_named:{[t]
-    r:start_fx["build/no_such_limits.csv"];
+.qt.qetl.job.stream.test_a_missing_limits_file_is_named:{[t]
+    r:.qt.qetl.job.stream.start_fx["build/no_such_limits.csv"];
     .qunit.assertTrue[r like "read_limits: build/no_such_limits.csv does not exist*";"the path is in the refusal"]};
 
-test_no_limits_file_starts_and_polices_nothing:{[t]
-    .qunit.assertEquals[(start_fx[""];count .qpipe.job.fx_positions.limits);(`fx_positions;0);
+.qt.qetl.job.stream.test_no_limits_file_starts_and_polices_nothing:{[t]
+    .qunit.assertEquals[(.qt.qetl.job.stream.start_fx[""];count .qpipe.job.fx_positions.limits);(`fx_positions;0);
         "it still starts - limits can be loaded over IPC - and says so in a warning"]};
 
-test_fx_positions_limits_are_watched:{[t]
+.qt.qetl.job.stream.test_fx_positions_limits_are_watched:{[t]
     .qunit.assertTrue[`.qpipe.job.fx_positions.limits in .qetl.cfg.audit.watching `fx_positions;
         "a change over IPC, or a restart that drops one, reaches config_change"]};
 
-test_on_start_must_be_callable:{[t]
+.qt.qetl.job.stream.test_on_start_must_be_callable:{[t]
     base:`procname`subscribe_to`publishes`period`on_timer!(`sjonstart1;`symbol$();`symbol$();0D00:00:01;{[] });
     .qunit.assertThrows[.qetl.job.stream.define[`sj_on_start_bad;];base,enlist[`on_start]!enlist 1;
         "*on_start must be a niladic function*";"refused at declaration"]};
@@ -1718,66 +1717,66 @@ test_on_start_must_be_callable:{[t]
 / tickerplant would store wrong, positionally, is withheld instead.
 
 / One fx_orderbook row, as fx_orderbook_feed's columns list it.
-ob:{[] (enlist `EURUSD;enlist 1.1 1.0;enlist 1 2f;enlist 1.2 1.3;enlist 1 2f)}
+.qt.qetl.job.stream.ob:{[] (enlist `EURUSD;enlist 1.1 1.0;enlist 1 2f;enlist 1.2 1.3;enlist 1 2f)}
 
 / fx_orderbook_feed's own publish, wired to the recorder.
-ob_publish:{[t;x] .sjtest.reset[]; .qpipe.job.fx_orderbook_feed.publish[t;x]}
+.qt.qetl.job.stream.ob_publish:{[t;x] .qt.qetl.job.stream.reset[]; .qpipe.job.fx_orderbook_feed.publish[t;x]}
 
-test_a_batch_that_fits_its_plant_table_publishes:{[t]
-    ob_publish[`fx_orderbook;ob[]];
-    .qunit.assertEquals[count .sjtest.published;1;"a well-formed column list goes out"]};
+.qt.qetl.job.stream.test_a_batch_that_fits_its_plant_table_publishes:{[t]
+    .qt.qetl.job.stream.ob_publish[`fx_orderbook;.qt.qetl.job.stream.ob[]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"a well-formed column list goes out"]};
 
-test_a_nested_column_of_the_wrong_type_is_withheld:{[t]
+.qt.qetl.job.stream.test_a_nested_column_of_the_wrong_type_is_withheld:{[t]
     before:.qetl.stream_health.of[`fx_orderbook_feed]`failed;
     / sizes as longs: what fx_orderbook_feed published before this check
-    ob_publish[`fx_orderbook;@[ob[];2;:;enlist 1 2]];
+    .qt.qetl.job.stream.ob_publish[`fx_orderbook;@[.qt.qetl.job.stream.ob[];2;:;enlist 1 2]];
     h:.qetl.stream_health.of`fx_orderbook_feed;
-    .qunit.assertEquals[(count .sjtest.published;h[`failed]-before);0 1;"nothing sent, and the job reads failing"];
+    .qunit.assertEquals[(count .qt.qetl.job.stream.published;h[`failed]-before);0 1;"nothing sent, and the job reads failing"];
     .qunit.assertTrue[(string h`last_error) like "plant contract: fx_orderbook.bid_sizes row 0 holds a value of type 7h*";
         "naming the table, column and row"]};
 
-test_columns_out_of_the_plant_order_are_withheld:{[t]
-    book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
-    ob_publish[`fx_orderbook;`sym`ask_prices`ask_sizes`bid_prices`bid_sizes xcols book_rows];
-    .qunit.assertEquals[count .sjtest.published;0;"a tickerplant would have stored the asks as bids"];
+.qt.qetl.job.stream.test_columns_out_of_the_plant_order_are_withheld:{[t]
+    book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!.qt.qetl.job.stream.ob[];
+    .qt.qetl.job.stream.ob_publish[`fx_orderbook;`sym`ask_prices`ask_sizes`bid_prices`bid_sizes xcols book_rows];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"a tickerplant would have stored the asks as bids"];
     .qunit.assertTrue[(string (.qetl.stream_health.of`fx_orderbook_feed)`last_error) like "*fx_orderbook has columns sym ask_prices*";
         "and the columns are named"]};
 
 / Every publisher drops a `time` the job sent - the plant stamps its own - so
 / the contract must not refuse one either (a bundle's feed sends it).
-test_a_batch_carrying_its_own_time_still_publishes:{[t]
-    book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!ob[];
-    ob_publish[`fx_orderbook;`time xcols update time:.z.p from book_rows];
-    .qunit.assertEquals[count .sjtest.published;1;"the time is the publisher's to drop, not a reason to withhold"]};
+.qt.qetl.job.stream.test_a_batch_carrying_its_own_time_still_publishes:{[t]
+    book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!.qt.qetl.job.stream.ob[];
+    .qt.qetl.job.stream.ob_publish[`fx_orderbook;`time xcols update time:.z.p from book_rows];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"the time is the publisher's to drop, not a reason to withhold"]};
 
-test_a_column_list_of_the_wrong_length_is_withheld:{[t]
-    ob_publish[`fx_orderbook;-1_ob[]];
-    .qunit.assertEquals[count .sjtest.published;0;"four vectors cannot be five columns"];
-    ob_publish[`fx_orderbook;@[ob[];0;:;`EURUSD`GBPUSD]];
-    .qunit.assertEquals[count .sjtest.published;0;"nor can columns of different lengths be rows"]};
+.qt.qetl.job.stream.test_a_column_list_of_the_wrong_length_is_withheld:{[t]
+    .qt.qetl.job.stream.ob_publish[`fx_orderbook;-1_.qt.qetl.job.stream.ob[]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"four vectors cannot be five columns"];
+    .qt.qetl.job.stream.ob_publish[`fx_orderbook;@[.qt.qetl.job.stream.ob[];0;:;`EURUSD`GBPUSD]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"nor can columns of different lengths be rows"]};
 
-test_a_table_the_plant_does_not_carry_passes_unchecked:{[t]
-    ob_publish[`sjtest_local;([] anything:1 2)];
-    .qunit.assertEquals[count .sjtest.published;1;"a job's own table is its business"]};
+.qt.qetl.job.stream.test_a_table_the_plant_does_not_carry_passes_unchecked:{[t]
+    .qt.qetl.job.stream.ob_publish[`sjtest_local;([] anything:1 2)];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"a job's own table is its business"]};
 
 / #1073: state says how it survives a restart - rebuilt by replay, or
 / declared ephemeral with the reason - or the job is refused where it is
 / declared.
-recovering:{[extra]
+.qt.qetl.job.stream.recovering:{[extra]
     `.qpipe.job.sj_rec.book set ([] sym:`symbol$(); qty:`float$());
     / the dict in parentheses: right to left, `,extra` would join the values
     (`procname`subscribe_to`publishes`on_batch`state!(`sjrec1;enlist `quote;`symbol$();{[t;x]};enlist `book)),extra}
 
-test_state_without_a_recovery_policy_is_refused:{[t]
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering[()!()];
+.qt.qetl.job.stream.test_state_without_a_recovery_policy_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];.qt.qetl.job.stream.recovering[()!()];
         "*declares state but not how it recovers*";"neither replay nor ephemeral"];
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering[`replay`ephemeral!(1b;"why")];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];.qt.qetl.job.stream.recovering[`replay`ephemeral!(1b;"why")];
         "*declares replay 1b and ephemeral*";"both is a contradiction"];
-    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];recovering[enlist[`ephemeral]!enlist `why];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];.qt.qetl.job.stream.recovering[enlist[`ephemeral]!enlist `why];
         "*ephemeral must be a string*";"a reason, in words"]};
 
-test_state_with_a_recovery_policy_is_accepted:{[t]
-    .qunit.assertEquals[.qetl.job.stream.define[`sj_rec;recovering[enlist[`ephemeral]!enlist "a test fixture"]];`sj_rec;"ephemeral, with its reason"];
+.qt.qetl.job.stream.test_state_with_a_recovery_policy_is_accepted:{[t]
+    .qunit.assertEquals[.qetl.job.stream.define[`sj_rec;.qt.qetl.job.stream.recovering[enlist[`ephemeral]!enlist "a test fixture"]];`sj_rec;"ephemeral, with its reason"];
     `.qetl.job.stream.jobs set (enlist `sj_rec) _ .qetl.job.stream.jobs;
     `.qetl.job.stream.initial set (enlist `sj_rec) _ .qetl.job.stream.initial;
     `.qetl.job.stream.procnames set (enlist `sjrec1) _ .qetl.job.stream.procnames}
@@ -1786,62 +1785,60 @@ test_state_with_a_recovery_policy_is_accepted:{[t]
 
 / A valid value for each passthrough key. check and on_fail only validate
 / together, so each is declared with its partner.
-passthrough_values:`start_with_all`note`on_start`check`on_fail!(1b;"a note";{[] };neg_check;`hold)
+.qt.qetl.job.stream.passthrough_values:`start_with_all`note`on_start`check`on_fail!(1b;"a note";{[] };.qt.qetl.job.stream.neg_check;`hold)
 
 / The declaration extras that exercise key k.
-passthrough_extra:{[k] $[k in `check`on_fail; `check`on_fail#passthrough_values; enlist[k]#passthrough_values]}
+.qt.qetl.job.stream.passthrough_extra:{[k] $[k in `check`on_fail; `check`on_fail#.qt.qetl.job.stream.passthrough_values; enlist[k]#.qt.qetl.job.stream.passthrough_values]}
 
 / Declare one instance of a kind with the extras. Each kind gets the smallest
 / valid declaration its own suite uses, under a name and procname of its own.
-kind_declare:{[kind;nm;extra]
+.qt.qetl.job.stream.kind_declare:{[kind;nm;extra]
     pn:`$string[nm],"1";
     if[kind=`bars;
-        :.qetl.job.stream.at_bars[nm;@[.barstest.decl[];`procname;:;pn],extra]];
+        :.qetl.job.stream.at_bars[nm;@[.qt.qetl.job.stream.bars.decl[];`procname;:;pn],extra]];
     if[kind=`horizon;
-        .horizontest.define_transform[];
-        :.qetl.job.stream.at_horizons[nm;@[.horizontest.decl[];`procname;:;pn],extra]];
+        .qt.qetl.job.stream.horizons.define_transform[];
+        :.qetl.job.stream.at_horizons[nm;@[.qt.qetl.job.stream.horizons.decl[];`procname;:;pn],extra]];
     if[kind=`rolling;
-        .rollingtest.define_transform[];
-        :.qetl.job.stream.at_rolling[nm;@[.rollingtest.decl[];`procname;:;pn],extra]];
+        .qt.qetl.job.stream.rolling.define_transform[];
+        :.qetl.job.stream.at_rolling[nm;@[.qt.qetl.job.stream.rolling.decl[];`procname;:;pn],extra]];
     if[kind=`normalizer;
-        .normtest.mk_xf[`normtest_good;.normtest.canon;.normtest.good];
+        .qt.qetl.job.stream.normalizer.mk_xf[`normtest_good;.qt.qetl.job.stream.normalizer.canon;.qt.qetl.job.stream.normalizer.good];
         (` sv `.qpipe.job,nm,`publish) set .qetl.job.stream.unwired nm;
-        :.qetl.job.stream.normalize[nm;(`procname`output`input!(pn;.normtest.canon;(enlist `src)!enlist `normtest_good)),extra]];
+        :.qetl.job.stream.normalize[nm;(`procname`output`input!(pn;.qt.qetl.job.stream.normalizer.canon;(enlist `src)!enlist `normtest_good)),extra]];
     '"kind_declare: no builder for kind ",string kind}
 
-passthrough_kinds:`bars`horizon`rolling`normalizer
+.qt.qetl.job.stream.passthrough_kinds:`bars`horizon`rolling`normalizer
 
 / Forget a job kind_declare registered, so later suites (the job-output
 / contracts drive every registered publishing job) do not inherit it.
-forget_kind_job:{[kind;nm]
+.qt.qetl.job.stream.forget_kind_job:{[kind;nm]
     reg:` sv `.qetl.job.stream,$[kind=`horizon;`horizons;kind],`registry;
     reg set (enlist nm) _ get reg;
     `.qetl.job.stream.procnames set (key[.qetl.job.stream.procnames] where nm=value .qetl.job.stream.procnames) _ .qetl.job.stream.procnames;
     `.qetl.job.stream.jobs set (enlist nm) _ .qetl.job.stream.jobs;
     `.qetl.job.stream.initial set (enlist nm) _ .qetl.job.stream.initial}
 
-test_every_passthrough_key_has_a_test_value:{[t]
-    .qunit.assertEquals[asc key passthrough_values;asc .qetl.job.stream.passthrough_keys;
+.qt.qetl.job.stream.test_every_passthrough_key_has_a_test_value:{[t]
+    .qunit.assertEquals[asc key .qt.qetl.job.stream.passthrough_values;asc .qetl.job.stream.passthrough_keys;
         "a new passthrough key fails here until a valid value is written for it"]};
 
-test_every_kind_accepts_and_forwards_every_passthrough_key:{[t]
-    cases:passthrough_kinds cross .qetl.job.stream.passthrough_keys;
+.qt.qetl.job.stream.test_every_kind_accepts_and_forwards_every_passthrough_key:{[t]
+    cases:.qt.qetl.job.stream.passthrough_kinds cross .qetl.job.stream.passthrough_keys;
     {[c]
         kind:c 0; k:c 1;
         nm:`$"sj_pt_",string[kind],"_",string k;
-        extra:passthrough_extra[k];
-        kind_declare[kind;nm;extra];
+        extra:.qt.qetl.job.stream.passthrough_extra[k];
+        .qt.qetl.job.stream.kind_declare[kind;nm;extra];
         d:.qetl.job.stream.def nm;
         .qunit.assertTrue[all (key extra) in key d;string[kind]," forwards ",string[k]];
         .qunit.assertEquals[d each key extra;value extra;string[kind]," forwards ",string[k]," unchanged"];
-        forget_kind_job[kind;nm]} each cases};
+        .qt.qetl.job.stream.forget_kind_job[kind;nm]} each cases};
 
-test_a_forwarded_key_is_validated_once_by_define_for_every_kind:{[t]
+.qt.qetl.job.stream.test_a_forwarded_key_is_validated_once_by_define_for_every_kind:{[t]
     {[kind]
         nm:`$"sj_ptbad_",string kind;
-        .qunit.assertThrows[kind_declare[kind;nm;];enlist[`on_fail]!enlist `drop;
+        .qunit.assertThrows[.qt.qetl.job.stream.kind_declare[kind;nm;];enlist[`on_fail]!enlist `drop;
             "*on_fail without a check*";string[kind]," is refused by define, not by its own copy"];
-        .qunit.assertThrows[kind_declare[kind;nm;];enlist[`note]!enlist 5;
-            "*note must be a string*";string[kind]," note"]} each passthrough_kinds};
-
-\d .
+        .qunit.assertThrows[.qt.qetl.job.stream.kind_declare[kind;nm;];enlist[`note]!enlist 5;
+            "*note must be a string*";string[kind]," note"]} each .qt.qetl.job.stream.passthrough_kinds};

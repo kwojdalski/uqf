@@ -95,11 +95,10 @@ cannot run on PeachQ yet is marked `kdbx-only` with the reason (the markers are
 defined in [`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
 
 **The whole suite runs on PeachQ in CI.** PeachQ rejects nested contexts
-(`\d .a.b`), so this tree opens none in `src/`, `scripts/` or `sidecars/`
-(`scripts/gates/check_nested_contexts.py`): every name is defined fully
-qualified from the root and `src/init.q` and `src/etl/init.q` load on PeachQ as
-they are. `tests/` still opens some, so `scripts/test.py q-unit-peachq` first
-writes a copy of it without them
+(`\d .a.b`), so this tree opens none in `src/`, `scripts/`, `sidecars/` or
+`tests/` (`scripts/gates/check_nested_contexts.py`): every name is defined fully
+qualified from the root and every file loads on PeachQ as it is. The lane still
+writes a copy of the tree through the converter, which now has nothing to change
 ([`scripts/portable/flatten_contexts.py`](scripts/portable/flatten_contexts.py)),
 then runs every suite on it. The tests that cannot pass there are listed, each
 with why, in [`tests/q/peachq_known_gaps.txt`](tests/q/peachq_known_gaps.txt). A

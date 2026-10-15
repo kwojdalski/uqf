@@ -14,8 +14,8 @@ bundle then sees the first, exactly as the tree will once both are installed.
 
 WHERE IT LANDS. `into_bundle` keeps the actions a bundle can carry - job
 files, their tests, the table and the catalog entry - and drops the ones that
-register a job with the TREE: run_tests.q's nsList, test_stack_tables.q, the
-process docs, profiles, the example script. Those describe the tree's own
+register a job with the TREE: test_stack_tables.q, the process docs,
+profiles, the example script. Those describe the tree's own
 jobs, and installing a bundle never writes them. The bundle's tests run
 through `scripts/test.py bundles`, which installs each bundle into a
 throwaway copy of the tree.

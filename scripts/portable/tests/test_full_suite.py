@@ -9,6 +9,8 @@ edit could quietly loosen: the file's format, and what counts as a regression.
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,22 +34,40 @@ def test_the_committed_list_reads_and_every_entry_has_a_reason():
 
 def test_every_listed_test_exists_in_the_suite():
     """A test renamed or deleted would otherwise linger as an entry that can
-    never pass - the lane reports it as NOW PASSES, but it is cheaper here."""
+    never pass - the lane reports it as NOW PASSES, but it is cheaper here.
+
+    A suite defines `.qt.<owner>.<suite>.test_x:` at the start of a line."""
     defined = set()
     for path in (REPO / "tests" / "q").glob("test_*.q"):
-        ns = None
         for line in path.read_text(errors="replace").splitlines():
-            if line.startswith("\\d ."):
-                ns = line[3:].strip()
-            elif ns and line.startswith("test_") and ":" in line:
-                defined.add(f"{ns}.{line.split(':', 1)[0]}")
+            if line.startswith(".qt.") and ":" in line:
+                name = line.split(":", 1)[0]
+                if name.rpartition(".")[2].startswith("test_"):
+                    defined.add(name)
     missing = sorted(set(fs.read_gaps()) - defined)
     assert not missing, f"listed in {fs.GAPS.name} but not in tests/q: {missing}"
 
 
+def test_the_test_tree_needs_no_context_conversion(tmp_path):
+    """#1412: a suite defines everything from the root, so the converter that
+    rewrites nested contexts for kdb+ 4.0 has nothing to do under tests/. This
+    is the executable half of "the migrated tests run on q 4.0 without context
+    conversion" that needs no 4.0 binary: it fails the day a test file enters a
+    nested namespace (`\\d .qt.a.b`), which 4.0 rejects."""
+    r = subprocess.run(
+        [sys.executable, str(fs.FLATTENER), "tests", "--root", str(REPO), "--out",
+         str(tmp_path / "flat"), "--dry-run", "--quiet"],
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    report = json.loads(r.stdout[r.stdout.index("{") :])
+    assert report["status"] == "ok", report["refusals"]
+    changed = [f["path"] for f in report["files"] if f["action"] != "unchanged"]
+    assert not changed, f"these need context conversion: {changed}"
+
+
 def test_an_entry_without_a_reason_is_refused(tmp_path):
     p = tmp_path / "gaps.txt"
-    p.write_text(".iotest.test_x\n")
+    p.write_text(".qt.qetl.io.test_x\n")
     with pytest.raises(SystemExit, match="expected `.suite.test_name  # reason`"):
         fs.read_gaps(p)
 
@@ -106,10 +126,9 @@ def test_each_kind_is_accepted(tmp_path):
 
 def _suite(tmp_path):
     (tmp_path / "test_x.q").write_text(
-        "\\d .xtest\n\n"
-        "test_one:{[t]\n"
+        ".qt.x.test_one:{[t]\n"
         '    .qunit.assertEquals[1;1;"positions past the file\'s end are refused"]};\n\n'
-        "test_two:{[t]\n"
+        ".qt.x.test_two:{[t]\n"
         '    / a comment line in the body\n'
         '    .qunit.assertTrue[1b;"short"]};\n'
     )  # fmt: skip
@@ -118,18 +137,18 @@ def _suite(tmp_path):
 
 def test_a_tests_messages_are_read_from_its_own_body(tmp_path):
     tests = _suite(tmp_path)
-    assert fs.messages_of(".xtest.test_one", tests) == ["positions past the file's end are refused"]
-    assert fs.messages_of(".xtest.test_two", tests) == ["short"]
-    assert fs.messages_of(".ytest.test_one", tests) == []
+    assert fs.messages_of(".qt.x.test_one", tests) == ["positions past the file's end are refused"]
+    assert fs.messages_of(".qt.x.test_two", tests) == ["short"]
+    assert fs.messages_of(".qt.y.test_one", tests) == []
 
 
 def test_a_reason_that_repeats_the_assertion_message_is_caught(tmp_path):
     tests = _suite(tmp_path)
     gaps = {
-        ".xtest.test_one": "peachq-lacks: positions past the file's end are refused",
-        ".xtest.test_two": "peachq-lacks: short",  # a word, not a message
+        ".qt.x.test_one": "peachq-lacks: positions past the file's end are refused",
+        ".qt.x.test_two": "peachq-lacks: short",  # a word, not a message
     }
-    assert fs.restated(gaps, tests) == [".xtest.test_one"]
+    assert fs.restated(gaps, tests) == [".qt.x.test_one"]
 
 
 def test_no_committed_reason_repeats_its_tests_message():

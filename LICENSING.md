@@ -12,8 +12,8 @@ Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
   library commercially and want to keep a fully-commercial-license test setup,
   swap `tests/lib/qunit.q` for a permissively-licensed alternative (e.g.
   [q-unit](https://github.com/jasraj/q-unit) or
-  [qtb2](https://github.com/ktsr42/qtb2)) - the `tests/lib/testutil.q` helper
-  and all `test_*.q` files use only qUnit's documented
+  [qtb2](https://github.com/ktsr42/qtb2)) - the `tests/lib/support.q` helper and
+  all `test_*.q` files use only qUnit's documented
   `assertThat`/`assertEquals`/`assertTrue`/`assertFalse`/`assertError` API, so
   swapping frameworks should be a small, mechanical change.
 - `lib/kdb-parquet/`, vendored from

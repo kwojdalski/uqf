@@ -19,7 +19,7 @@
 \S 20260916
 
 \l tests/lib/qunit.q
-\l tests/lib/testutil.q
+\l tests/lib/support.q
 \l src/init.q
 \l src/integrations/data.q
 \l docs/man.q
@@ -33,49 +33,43 @@
 
 \l scripts/dev/coverage.q
 
-/ The suite is defined in tests/lib/testutil.q, not here: run_examples.q and
-/ run_coverage.q need the same file list and the same namespaces, and all
-/ three used to get them by reading THIS file as text - scanning it for
+/ The suite is defined in tests/lib/support.q, not here: run_examples.q and
+/ run_coverage.q need the same file list and the same suites, and all three
+/ used to get them by reading THIS file as text - scanning it for
 / `\l tests/q/test_*` lines and for the line starting `nsList:`. One
 / definition, three callers.
-.testutil.load_suites[];
-/ LISTED, and checked against what actually loaded.
+.qt.support.load_suites[];
+
+/ WHICH SUITES RUN is not listed. It used to be: a hand-kept nsList, held
+/ against the names the files declared by test_namespaces.q, because a suite
+/ that was loaded but not listed ran none of its tests and left the run
+/ green. A list and a check on the list are two things to keep in step; a
+/ suite is now FOUND by what it holds - a namespace under .qt with test_*
+/ functions (tests/lib/discovery.q has the rule) - so there is nothing to
+/ forget. Skipping one is not possible by omission, and a namespace that
+/ would be skipped by mistake - a helper outside .qt.support/.qt.fixture, a
+/ test that is not a one-argument function, a definition that silently
+/ replaced another - stops the run before it starts.
+.qt.support.require_layout[];
+nsList:.qt.support.suites[];
+if[0=count nsList; '"run_tests: no test suites found"];
+
+/ ORDER. Default is depth first by name: a parent before its children,
+/ siblings alphabetical.
+/ UQF_TEST_ORDER=reverse or =shuffle runs the same suites in another one.
 / .
-/ Deriving it - `key `` filtered to `*test` - works, and was tried: it
-/ produces exactly these namespaces. What it also does is REORDER them, and
-/ three suites here measure live global state that other suites mutate.
-/ .qetl.job.bounded fixture workers (`reference`, `partial`, three `fixture_*`) registered
-/ at run time reach .mantest's documentation ratchet and .nstest's worker
-/ enumeration; .qetl.dag.jobs reaches .regtest's registry scan. Each of those
-/ passed only because this list happened to run it first. That fragility is
-/ real and worth fixing on its own terms, not inside the change that found
-/ it.
-/ .
-/ So the list stays - and test_namespaces.q holds it against the derived set,
-/ which is what makes an omission LOUD. The problem being solved was never
-/ the typing: it was that a forgotten entry loaded the file, ran none of its
-/ tests, and left the suite green.
-nsList:`.covtest`.metatest`.seedtest`.schematest`.statstest`.ccytest`.daycounttest`.calendartest`.ratestest`.forwardstest`.attributiontest`.optionstest`.risktest`.positionstest`.alloctest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.nstest`.sjtest`.normtest`.sbtest`.regtest`.synthtest`.dagtest`.rxtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.runtest`.tabletest`.cattest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest`.xftest`.desktest`.limittest`.ticktest`.pipetest`.xarbtest`.cfgatest`.wruntest`.jobouttest`.duckdb_dealsbftest`.kafka_flowtest`.crypto_market_databftest`.rebuild_positionsrxtest`.planttest`.mbftest`.ebbtest`.loctest`.rendertest`.uptimetest`.streampolltest`.hdb_transferbftest`.loadpwtest`.deploytest`.qpoltest`.crypto_markouttest`.trtest`.livetest`.dloadtest`.twintest`.horizontest`.eodtest`.barstest`.alert_sinktest`.last_valuetest`.webhooktest`.reqtest`.retentiontest`.flink_vwaptest`.eq_orderbook_backfilltest`.cttest`.hdb_crypto_bookbftest`.crypto_book_1stest`.book_liquiditytest`.book_liquidity_1mtest`.enrichtest`.rollingtest`.order_qualitytest`.backfillproctest`.order_outcomestest`.hdb_order_qualitybftest`.fxmarkoutcalctest`.fxadaptertest`.fx_markouttest`.fx_markout_widetest`.hdb_fx_markoutsbftest`.hdb_fx_markout_widebftest;
-if[0=count nsList; '"run_tests: no test namespaces listed"];
-/ ORDER. Default is the order listed above; UQF_TEST_ORDER=reverse or
-/ =shuffle runs the same suites in another one.
-/ .
-/ It exists because four tests here USED to pass on this list's order alone.
-/ Each scanned live global state that other suites mutate - .qetl.job.bounded fixture
-/ workers reaching a documentation ratchet, a test-registered source reaching
-/ a namespace check, .qetl.dag.jobs reaching a registry scan - and each was
-/ fixed to ask about the tree rather than about the process. This is what
-/ keeps them fixed: `scripts/test.py q-order` runs the whole suite reversed,
-/ and a test that quietly grows a dependency on running after some other
-/ suite fails there rather than years later.
+/ It exists because four tests here USED to pass on the old list's order
+/ alone. Each scanned live global state that other suites mutate -
+/ .qetl.job.bounded fixture workers reaching a documentation ratchet, a
+/ test-registered source reaching a namespace check, .qetl.dag.jobs reaching
+/ a registry scan - and each was fixed to ask about the tree rather than
+/ about the process. This is what keeps them fixed: `scripts/test.py q-order`
+/ runs the whole suite reversed, and a test that quietly grows a dependency
+/ on running after some other suite fails there rather than years later.
 / .
 / shuffle uses the seed set above, so a shuffled run is reproducible: the
 / same seed gives the same order, and a failure can be repeated.
-test_order:getenv `UQF_TEST_ORDER;
-if[test_order~"reverse"; nsList:reverse nsList];
-if[test_order~"shuffle"; nsList:nsList iasc (count nsList)?1000000];
-if[not test_order in ("";"reverse";"shuffle");
-    '"run_tests: UQF_TEST_ORDER must be reverse, shuffle, or unset - not ",test_order];
+nsList:.qt.support.ordered[nsList;getenv `UQF_TEST_ORDER];
 
 res:.qunit.runTests[nsList];
 
@@ -88,6 +82,13 @@ nErr:sum res[`status]=`error;
 -1 "==================== uqf test summary ====================";
 -1 (string nTotal)," tests: ",(string nPass)," passed, ",(string nFail)," failed, ",(string nErr)," errored";
 -1 "============================================================";
+
+/ Every test that ran, as data, for a lane that holds the run to a list: one
+/ line per test - suite and name, tab-separated - in the file UQF_TEST_RESULTS
+/ names, in run order. What a rename or a move must not change is the SET of
+/ these, which this makes comparable by diff rather than by total.
+if[count getenv `UQF_TEST_RESULTS;
+    (hsym `$getenv `UQF_TEST_RESULTS) 0: {(string x`namespace),"\t",string x`name} each 0!select namespace,name from res];
 
 / The failures as data, for a lane that holds them to a list
 / (scripts/portable/full_suite.py, the PeachQ lane): one line per test that
