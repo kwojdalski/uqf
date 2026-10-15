@@ -167,6 +167,18 @@ bundle, sidecar or notebook:
 - tests and monitoring that assert an error message beginning `qopt:` or
   `qasof.lookup:`, or one of the renamed desk functions' names.
 
+## Data written before the migration
+
+One thing outside the code changes with the names. `.qf.util.fingerprint`
+([`metatables.q`](../../src/metadata/metatables.q)) hashes a metatable
+definition *including any lambda it embeds*, and a lambda carries the name it
+was defined under. A definition built with `.qf.util.profile` embeds
+`.qf.util.time_bound` and `.qf.util.count_bad`, so its fingerprint differs from
+the one `.qmeta.profile` produced; a definition without such an aggregate hashes
+the same as before. Stored profile metatables written before the migration will
+therefore refuse `.qf.util.refresh` ("a different definition"), and are rebuilt
+with `.qf.util.collect`. Nothing else the library persists names a function.
+
 ## Former names to new names
 
 Every public name the twenty-four namespaces held. Former names are written
