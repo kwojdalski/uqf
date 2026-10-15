@@ -17,11 +17,3 @@ python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_is_idempotent  # Peac
 python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_makes_the_query_run  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 
 python/uqs/tests/test_gaps.py::test_the_hole_between_two_sessions_and_the_twin_that_refills_it  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-
-
-
-python/uqs/tests/test_runs.py::test_migrate_upgrades_a_ledger_from_before_the_range_and_counts  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-
-python/uqs/tests/test_scaffold_loads.py::test_a_scaffolded_backfill_example_runs_straight_away[ipc]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_scaffold_loads.py::test_a_scaffolded_backfill_example_runs_straight_away[local]  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
-python/uqs/tests/test_scaffold_loads.py::test_every_scaffolded_kind_loads_and_registers  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
