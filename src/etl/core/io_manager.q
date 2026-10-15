@@ -28,18 +28,18 @@
 / .qf.mkt), and each read as protection it was not providing. They go in when
 / something calls them.
 
-\d .qetl.io
+\d .
 
 / The keys a manager must carry. One, for now, and the list exists so that
 / adding a second is a change to this line rather than to every validator.
-required:enlist `write
+.qetl.io.required:enlist `write
 
 / A manager MAY also carry `finish`, a niladic function the bounded-worker
 / shell calls once, after a run's last window. It exists for a store whose
 / appended windows are not finished data until something runs over all of
 / them - the HDB writer below sorts and applies attributes there. A manager
 / without one needs nothing at the end, which is every in-memory one.
-optional:`write_keyed`finish`flush`recover`on_ready
+.qetl.io.optional:`write_keyed`finish`flush`recover`on_ready
 
 / `write_keyed` takes (target;batch;opts) and honours opts`on_conflict - what to
 / do when an incoming row's row_key is already in the target. See CONFLICTS.
@@ -64,7 +64,7 @@ optional:`write_keyed`finish`flush`recover`on_ready
 / Private: can this value be called? A lambda, or a projection over one -
 / the HDB writer's functions are projections over its root and column.
 / @private
-callable:{[v] (type v) within 100 112h}
+.qetl.io.callable:{[v] (type v) within 100 112h}
 
 / Refuse a manager that is not one, naming what is wrong.
 / .
@@ -74,24 +74,24 @@ callable:{[v] (type v) within 100 112h}
 / @param mgr the candidate manager
 / @return 1b when acceptable
 / @throws error naming the missing key, or the key whose value is not a function
-require_manager:{[mgr]
+.qetl.io.require_manager:{[mgr]
     if[not 99h=type mgr;
         '"require_manager: an io manager must be a dictionary carrying ",
-         ", " sv string required];
-    missing:required where not required in key mgr;
+         ", " sv string .qetl.io.required];
+    missing:.qetl.io.required where not .qetl.io.required in key mgr;
     if[count missing;
         '"require_manager: io manager is missing ",", " sv string missing];
-    if[not callable mgr`write;
+    if[not .qetl.io.callable mgr`write;
         '"require_manager: an io manager's write must be a function taking (target;batch)"];
-    if[(`finish in key mgr) and not callable mgr`finish;
+    if[(`finish in key mgr) and not .qetl.io.callable mgr`finish;
         '"require_manager: an io manager's finish must be a niladic function"];
-    if[(`write_keyed in key mgr) and not callable mgr`write_keyed;
+    if[(`write_keyed in key mgr) and not .qetl.io.callable mgr`write_keyed;
         '"require_manager: an io manager's write_keyed must be a function taking (target;batch;opts)"];
-    if[(`flush in key mgr) and not callable mgr`flush;
+    if[(`flush in key mgr) and not .qetl.io.callable mgr`flush;
         '"require_manager: an io manager's flush must be a function taking a timestamp"];
-    if[(`recover in key mgr) and not callable mgr`recover;
+    if[(`recover in key mgr) and not .qetl.io.callable mgr`recover;
         '"require_manager: an io manager's recover must be a function taking (target;range_from;range_to)"];
-    if[(`on_ready in key mgr) and not callable mgr`on_ready;
+    if[(`on_ready in key mgr) and not .qetl.io.callable mgr`on_ready;
         '"require_manager: an io manager's on_ready must be a function taking a dictionary"];
     1b}
 
@@ -118,30 +118,30 @@ require_manager:{[mgr]
 / ignore), so a batch that repeats itself writes each key once.
 
 / The strategies, and the one a worker gets when it declares none.
-strategies:`upsert`replace`ignore`append`fail
-default_strategy:`upsert
+.qetl.io.strategies:`upsert`replace`ignore`append`fail
+.qetl.io.default_strategy:`upsert
 
 / Refuse what is not a strategy, naming the ones that are.
 / @param strategy the candidate, a symbol
 / @return the strategy
 / @eg .qetl.io.require_strategy `upsert  ->  `upsert
-require_strategy:{[strategy]
-    if[not strategy in strategies;
-        '"on_conflict must be one of ",(", " sv string asc strategies)," - not ",string strategy];
+.qetl.io.require_strategy:{[strategy]
+    if[not strategy in .qetl.io.strategies;
+        '"on_conflict must be one of ",(", " sv string asc .qetl.io.strategies)," - not ",string strategy];
     strategy}
 
 / Private: true at the first occurrence of each row of `k`, a table of keys.
 / @private
-first_seen:{[k] (til count k)=k?k}
+.qetl.io.first_seen:{[k] (til count k)=k?k}
 
 / Private: true at the last occurrence of each row of `k`.
 / @private
-last_seen:{[k] n:count k; (til n)=(n-1)-(reverse k)?k}
+.qetl.io.last_seen:{[k] n:count k; (til n)=(n-1)-(reverse k)?k}
 
 / Private: the attributes off every column, so a table built from pieces of
 / a p#sym partition can be written back - finish sorts it and puts p# back.
 / @private
-plain:{[t] c:cols t; a:c where not null attr each t c; $[count a; @[t;a;`#]; t]}
+.qetl.io.plain:{[t] c:cols t; a:c where not null attr each t c; $[count a; @[t;a;`#]; t]}
 
 / What `existing` becomes when `batch` is written into it under `strategy`.
 / .
@@ -156,8 +156,8 @@ plain:{[t] c:cols t; a:c where not null attr each t c; $[count a; @[t;a;`#]; t]}
 / @return the table the target should hold afterwards
 / @throws error when the columns differ, or under `fail when a key clashes
 / @eg .qetl.io.resolve[`upsert;([] id:1 2; v:10 20);([] id:2 3; v:21 30);`row_key`target!(`id;`t)]  ->  ([] id:1 2 3; v:10 21 30)
-resolve:{[strategy;existing;batch;opts]
-    require_strategy strategy;
+.qetl.io.resolve:{[strategy;existing;batch;opts]
+    .qetl.io.require_strategy strategy;
     kc:(),opts`row_key;
     if[not (asc cols existing)~asc cols batch;
         '"on_conflict: ",string[opts`target]," holds ",(" " sv string cols existing),
@@ -172,9 +172,9 @@ resolve:{[strategy;existing;batch;opts]
             '"on_conflict: ",string[opts`target],"'s batch types differ from what it holds"]];
     if[`append=strategy; :existing,batch];
     if[`ignore=strategy;
-        fresh:batch where first_seen kc#batch;
+        fresh:batch where .qetl.io.first_seen kc#batch;
         :existing,fresh where not (kc#fresh) in kc#existing];
-    fresh:batch where last_seen kc#batch;
+    fresh:batch where .qetl.io.last_seen kc#batch;
     clash:(kc#fresh) in kc#existing;
     if[(`fail=strategy) and any clash;
         '"on_conflict fail: ",string[sum clash]," row(s) of ",string[opts`target],
@@ -194,19 +194,19 @@ resolve:{[strategy;existing;batch;opts]
 / resolves to .qetl.io.<name> rather than the root table - the trap materialisation.q
 / documents at length, and the reason every write here is explicit.
 / @private
-write_memory:{[target;batch]
+.qetl.io.write_memory:{[target;batch]
     if[not target in tables `.; target set 0#batch];
     target insert batch;
     count batch}
 
 / Private: write a batch under opts`on_conflict - the table as resolve says.
 / @private
-write_memory_keyed:{[target;batch;opts]
+.qetl.io.write_memory_keyed:{[target;batch;opts]
     existing:$[target in tables `.; value target; 0#batch];
     / The range is the window's, and opts`time_column is the column the window
     / was cut on, as the batch holds it (#972) - not `time, which a transform
     / may have moved.
-    target set resolve[opts`on_conflict;existing;batch;opts,enlist[`target]!enlist target];
+    target set .qetl.io.resolve[opts`on_conflict;existing;batch;opts,enlist[`target]!enlist target];
     count batch}
 
 / The default: an in-process table, which is exactly what every worker did
@@ -216,11 +216,11 @@ write_memory_keyed:{[target;batch;opts]
 / type error in q, and the two forms look identical at a glance. Same trap
 / the shipped sources hit with row_key, and it fails loudly rather than
 / building a dictionary of the wrong shape.
-memory:`write`write_keyed!(write_memory;write_memory_keyed)
+.qetl.io.memory:`write`write_keyed!(.qetl.io.write_memory;.qetl.io.write_memory_keyed)
 
 / Private: count the rows and write nothing.
 / @private
-write_discard:{[target;batch] count batch} / noqa: QF016 IO manager write signature
+.qetl.io.write_discard:{[target;batch] count batch} / noqa: QF016 IO manager write signature
 
 / Writes nothing, reports what it would have written.
 / .
@@ -234,7 +234,7 @@ write_discard:{[target;batch] count batch} / noqa: QF016 IO manager write signat
 / Named `discard`, not `null` or `noop`: `null` is a q builtin, and a manager
 / called noop reads as "does nothing", which would be a fair description of
 / the dry-run gate and a wrong one for this.
-discard:`write`write_keyed!(write_discard;{[target;batch;opts] count batch}) / noqa: QF016 IO manager write_keyed signature
+.qetl.io.discard:`write`write_keyed!(.qetl.io.write_discard;{[target;batch;opts] count batch}) / noqa: QF016 IO manager write_keyed signature
 
 / ---------------------------------------------------------------- USE
 
@@ -245,7 +245,7 @@ discard:`write`write_keyed!(write_discard;{[target;batch;opts] count batch}) / n
 / backfill's rows belong is a fact about the stack it runs in, not about the
 / worker - the same split as a streaming job's publish, which the runner
 / wires. Tests, and anything that loads the tree in plain q, keep memory.
-default:memory
+.qetl.io.default:.qetl.io.memory
 
 / The manager a worker's declaration asks for, else `default`.
 / .
@@ -256,11 +256,11 @@ default:memory
 / @return the manager dict
 / @throws error, via require_manager, when a declared manager is malformed
 / @eg .qetl.io.for_cfg[`source`dataset`width!(`s;`d;1D)]  ->  .qetl.io.memory
-for_cfg:{[cfg]
-    if[not `io in key cfg; :default];
+.qetl.io.for_cfg:{[cfg]
+    if[not `io in key cfg; :.qetl.io.default];
     m:cfg`io;
-    if[(::)~m; :default];
-    require_manager[m];
+    if[(::)~m; :.qetl.io.default];
+    .qetl.io.require_manager[m];
     m}
 
 / Write one batch through a manager.
@@ -269,7 +269,7 @@ for_cfg:{[cfg]
 / @param batch the rows to store
 / @return the number of rows written, as the manager reports them
 / @eg .qetl.io.write[.qetl.io.memory;`demo_deals;.qpipe.source.demo_deals.fixture[]]
-write:{[mgr;target;batch] (mgr`write)[target;batch]}
+.qetl.io.write:{[mgr;target;batch] (mgr`write)[target;batch]}
 
 / How many rows of a batch share a key with another row of it - the rows a
 / keyed write folds away - logged as a WARNING when there are any (#1089).
@@ -278,7 +278,7 @@ write:{[mgr;target;batch] (mgr`write)[target;batch]}
 / @param row_key the key columns
 / @return how many rows fold away
 / @eg .qetl.io.folded[`t;([] id:1 1 2; v:1 2 3);`id]  ->  1
-folded:{[target;batch;row_key]
+.qetl.io.folded:{[target;batch;row_key]
     if[0=count batch; :0];
     k:(),row_key;
     n:count[batch]-count distinct k#batch;
@@ -299,14 +299,14 @@ folded:{[target;batch;row_key]
 /   and range_to
 / @return the rows written
 / @eg .qetl.io.write_keyed[.qetl.io.discard;`t;([] id:1 2);`on_conflict`row_key!(`upsert;`id)]  ->  2
-write_keyed:{[mgr;target;batch;opts]
-    strategy:require_strategy[opts`on_conflict];
+.qetl.io.write_keyed:{[mgr;target;batch;opts]
+    strategy:.qetl.io.require_strategy[opts`on_conflict];
     / A key a batch repeats is folded to one row - the last, or the first
     / under `ignore (resolve). Deliberate - a later row corrects an earlier
     / one - but not silent (#1089): several sources' keys are unique only in
     / the captures sampled, and a key that stops being unique would otherwise
     / collapse rows with no trace.
-    if[not `append=strategy; folded[target;batch;opts`row_key]];
+    if[not `append=strategy; .qetl.io.folded[target;batch;opts`row_key]];
     $[`write_keyed in key mgr; (mgr`write_keyed)[target;batch;opts];
       `append=strategy; (mgr`write)[target;batch];
       '"write_keyed: this io manager can only append - declare on_conflict `append, or give it a write_keyed"]}
@@ -319,7 +319,7 @@ write_keyed:{[mgr;target;batch;opts]
 / @return how many parts were queued for the next finish; 0 for a manager
 /   without recover
 / @eg .qetl.io.recover[.qetl.io.memory;`t;2026.01.01D00:00;2026.01.03D00:00]  ->  0
-recover:{[mgr;target;range_from;range_to]
+.qetl.io.recover:{[mgr;target;range_from;range_to]
     if[not `recover in key mgr; :0];
     (mgr`recover)[target;range_from;range_to]}
 
@@ -327,10 +327,10 @@ recover:{[mgr;target;range_from;range_to]
 / @param mgr the manager
 / @return the manager's finish result, or (::) when it has none
 / @eg .qetl.io.finish .qetl.io.memory
-finish:{[mgr]
+.qetl.io.finish:{[mgr]
     if[not `finish in key mgr; :(::)];
     n:(mgr`finish)[];
-    ready[mgr;`finished`pending`final!(n;0;1b)];
+    .qetl.io.ready[mgr;`finished`pending`final!(n;0;1b)];
     n}
 
 / Finish what lies wholly before `upto`, for a manager that can.
@@ -340,9 +340,9 @@ finish:{[mgr]
 / @param upto a timestamp - the end of the window just written
 / @return `finished`pending
 / @eg .qetl.io.flush[.qetl.io.memory;2026.01.03D00:00]  ->  `finished`pending!0 0
-flush:{[mgr;upto]
+.qetl.io.flush:{[mgr;upto]
     r:$[`flush in key mgr; (mgr`flush)[upto]; `finished`pending!0 0];
-    ready[mgr;r,enlist[`final]!enlist 0b];
+    .qetl.io.ready[mgr;r,enlist[`final]!enlist 0b];
     r}
 
 / Should a deployment that exposes finished work - a TorQ HDB reload - do
@@ -361,7 +361,7 @@ flush:{[mgr;upto]
 / @param interval the least time between two mid-run actions, a timespan
 / @return `act`state - whether to act, and the state to keep
 / @eg .qetl.io.due[`dirty`last!(0b;0Np);`finished`pending`final!(1;0;0b);2026.01.02D00:00;0D00:00:30]`act  ->  1b
-due:{[state;status;now;interval]
+.qetl.io.due:{[state;status;now;interval]
     dirty:state[`dirty] or 0<status`finished;
     soon:(not status`final) and (not null state`last) and now<state[`last]+interval;
     act:dirty and (0=status`pending) and not soon;
@@ -377,14 +377,14 @@ due:{[state;status;now;interval]
 /   many acknowledged
 / @return the state to keep
 / @eg .qetl.io.acknowledged[`dirty`last!(0b;2026.01.02D12:00);`registered`reloaded!2 1]`dirty  ->  1b
-acknowledged:{[state;result]
+.qetl.io.acknowledged:{[state;result]
     @[state;`dirty;:;result[`reloaded]<result`registered]}
 
 / Private: tell the deployment what is finished. Its failure is logged and
 / swallowed: the rows are already written, and a reload that failed is no
 / reason to fail the run that wrote them.
 / @private
-ready:{[mgr;status]
+.qetl.io.ready:{[mgr;status]
     if[not `on_ready in key mgr; :(::)];
     @[mgr`on_ready;status;{[e] .[{.qetl.log.err[x;y;z]};(`qetl.io;"on_ready failed";enlist[`error]!enlist e);::]}]}
 

@@ -103,8 +103,10 @@ def test_install_places_jobs_and_writes_every_addition(bundle: Path, repo: Path)
     assert (repo / WORKER_DIR / "piggy_backfill.q").read_text() == WORKER
     assert not (repo / STREAM_DIR / "piggy_spread.q").is_symlink()
     tables = (repo / TABLES_FILE).read_text()
-    assert "/ BEGIN bundle piggybank\n/ piggybank's tape\npiggy_tape:([]" in tables
-    assert "nested[`piggy_tape;" in tables and tables.endswith("/ END bundle piggybank\n")
+    assert "/ BEGIN bundle piggybank\n/ piggybank's tape\n.qetl.plant.piggy_tape:([]" in tables
+    assert ".qetl.plant.nested[`piggy_tape;" in tables and tables.endswith(
+        "/ END bundle piggybank\n"
+    )
     assert ".qcat.describe[`piggy_tape]:" in (repo / CATALOG_FILE).read_text()
     assert (repo / OVERRIDES_FILE).read_text() == (
         "procname,field,value\npiggy_spread1,startwithall,0\n"

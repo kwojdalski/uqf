@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from typing import Any
 
@@ -38,7 +39,9 @@ def contract_fields(repo_root: str) -> list[str]:
     """
     text = open(os.path.join(repo_root, CONTRACT_Q), encoding="utf-8").read()
     # columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
-    head = next(line for line in text.splitlines() if line.startswith("columns:")).split(":", 1)[1]
+    head = next(
+        line for line in text.splitlines() if re.match(r"(?:\.[A-Za-z_][\w.]*\.)?columns:", line)
+    ).split(":", 1)[1]
     scalars = [f for f in head.split(",")[0].split("`") if f]
     prefixes = ("bid_px_", "bid_sz_", "ask_px_", "ask_sz_")
     levels = [f"{p}{i:02d}" for i in range(LEVELS) for p in prefixes]

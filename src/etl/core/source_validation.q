@@ -4,7 +4,7 @@
 / several files, loaded in order by src/etl/init.q after source_contract.q, which
 / carries the design record. Public names are unchanged by the split (#970).
 
-\d .qetl.source
+\d .
 
 / ------------------------------------------------------------ VALIDATION
 
@@ -15,9 +15,9 @@
 / matters because a fixture may legitimately be empty, and a source may
 / legitimately return no rows for a window.
 / @private
-type_chars:{[tbl] exec t from 0!meta tbl}
+.qetl.source.type_chars:{[tbl] exec t from 0!meta tbl}
 
-column_names:{[tbl] exec c from 0!meta tbl}
+.qetl.source.column_names:{[tbl] exec c from 0!meta tbl}
 
 / Validate a table against a source's declaration.
 / .
@@ -36,10 +36,10 @@ column_names:{[tbl] exec c from 0!meta tbl}
 / @param tbl a table to check, or a dict of input name -> table
 / @return 1b when the table satisfies the declaration
 / @throws error naming every missing field and every type mismatch at once
-validate:{[source;tbl]
-    decl:def[source];
-    if[count decl`supporting; :validate_inputs[source;decl;tbl]];
-    check_table[source;"";decl`columns;decl`types;tbl];
+.qetl.source.validate:{[source;tbl]
+    decl:.qetl.source.def[source];
+    if[count decl`supporting; :.qetl.source.validate_inputs[source;decl;tbl]];
+    .qetl.source.check_table[source;"";decl`columns;decl`types;tbl];
     .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
     1b}
 
@@ -48,9 +48,9 @@ validate:{[source;tbl]
 / source's only input, or "'s input <name>" for one of several. A type of
 / " " - a general column in a supporting input's contract - accepts any.
 / @private
-check_table:{[source;what;columns;types;tbl]
-    present:column_names[tbl];
-    chars:type_chars[tbl];
+.qetl.source.check_table:{[source;what;columns;types;tbl]
+    present:.qetl.source.column_names[tbl];
+    chars:.qetl.source.type_chars[tbl];
     missing:columns where not columns in present;
     / Report missing columns AND type mismatches together. Reporting only the
     / first class means fixing the columns, re-running, and only then
@@ -72,7 +72,7 @@ check_table:{[source;what;columns;types;tbl]
 / Private: validate what a source with supporting inputs returned - a dict
 / holding exactly its inputs, each satisfying its own contract.
 / @private
-validate_inputs:{[source;decl;given]
+.qetl.source.validate_inputs:{[source;decl;given]
     names:(enlist decl`table_name),key decl`supporting;
     if[not 99h=type given;
         '"validate: ",string[source]," declares supporting input(s), so it must return a dict of ",
@@ -80,9 +80,9 @@ validate_inputs:{[source;decl;given]
     if[not (asc key given)~asc names;
         '"validate: ",string[source]," must return input(s) ",(", " sv string names),
          " - got ",", " sv string key given];
-    check_table[source;"'s input ",string decl`table_name;decl`columns;decl`types;given decl`table_name];
+    .qetl.source.check_table[source;"'s input ",string decl`table_name;decl`columns;decl`types;given decl`table_name];
     {[source;given;nm;contract]
-        check_table[source;"'s input ",string nm;cols contract;type_chars[contract];given nm]
+        .qetl.source.check_table[source;"'s input ",string nm;cols contract;.qetl.source.type_chars[contract];given nm]
       }[source;given]'[key decl`supporting;value decl`supporting];
     .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";
         `rows`inputs!(count given decl`table_name;names));::];
@@ -93,7 +93,7 @@ validate_inputs:{[source;decl;given]
 / Runs in the deterministic suite, with no connection anywhere. A fixture
 / that does not satisfy the contract is a broken test double, and finding
 / that out from a failing worker test is a much longer path.
-validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
+.qetl.source.validate_fixture:{[source] .qetl.source.validate[source;(.qetl.source.def[source]`fixture)[]]}
 
 / Validate LIVE external metadata against what the adapter reads.
 / .
@@ -112,9 +112,9 @@ validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
 / @return 1b
 / @throws error naming the table, and every missing column or each column's
 /   expected and actual type
-validate_live:{[source;h]
-    reader:(transport_def[def[source]`transport])[`metadata][h;];
-    live_check_table[reader] .' live_contracts source;
+.qetl.source.validate_live:{[source;h]
+    reader:(.qetl.source.transport_def[.qetl.source.def[source]`transport])[`metadata][h;];
+    .qetl.source.live_check_table[reader] .' .qetl.source.live_contracts source;
     1b}
 
 / What validate_live reads, one row per physical table: (label for a
@@ -122,17 +122,17 @@ validate_live:{[source;h]
 / @param source a registered source name
 / @return a list of 4-item lists
 / @eg count .qetl.source.live_contracts `demo_deals  ->  1
-live_contracts:{[source]
-    d:def[source];
+.qetl.source.live_contracts:{[source]
+    d:.qetl.source.def[source];
     if[count d`raw;
-        :{[nm;c] ("raw input ",string nm;nm;cols c;type_chars[c])}'[key d`raw;value d`raw]];
+        :{[nm;c] ("raw input ",string nm;nm;cols c;.qetl.source.type_chars[c])}'[key d`raw;value d`raw]];
     (enlist (string d`table_name;d`table_name;d`columns;d`types)),
-        {[nm;c] ("supporting input ",string nm;nm;cols c;type_chars[c])}'[key d`supporting;value d`supporting]}
+        {[nm;c] ("supporting input ",string nm;nm;cols c;.qetl.source.type_chars[c])}'[key d`supporting;value d`supporting]}
 
 / Private: hold one physical table's metadata to (want;want_t). A type of
 / " " accepts any.
 / @private
-live_check_table:{[reader;what;nm;want;want_t]
+.qetl.source.live_check_table:{[reader;what;nm;want;want_t]
     m:@[reader;nm;{[nm;err] '"validate_live: cannot read metadata for ",string[nm]," (",err,")"}[nm;]];
     have:exec c from m;
     absent:want where not want in have;

@@ -21,37 +21,37 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - the plant stamps its own (invariant 1).
 
-\d .qpipe.job.fx_orders_feed
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `fx_orders_feed;
+.qpipe.job.fx_orders_feed.publish:.qetl.job.stream.unwired `fx_orders_feed;
 
 / The trading books this invented desk runs. Two, because one book makes
 / every per-book figure equal to the desk total and a bug that drops the
 / dimension entirely would still look right.
-books:`london`newyork
+.qpipe.job.fx_orders_feed.books:`london`newyork
 
 / The products each book trades. `spot and `fwd differ in nothing here -
 / they exist so the positions service is keyed on three dimensions rather
 / than two, which is the shape a real desk reports and the shape that
 / catches a rollup written against the wrong columns.
-products:`spot`fwd
+.qpipe.job.fx_orders_feed.products:`spot`fwd
 
 / The statuses an order can reach, drawn from with the weights below.
 / Only `filled moves a position, which is the point.
-statuses:`filled`filled`cancelled`rejected
+.qpipe.job.fx_orders_feed.statuses:`filled`filled`cancelled`rejected
 
 / Pips per unit, matching the trades schema's convention.
-pip_factor:.qf.px.pip_factor .qf.demo.pairs
+.qpipe.job.fx_orders_feed.pip_factor:.qf.px.pip_factor .qf.demo.pairs
 
 / The sizes an order is drawn from. Float, matching the schema.
-sizes:500000 1000000 2000000 5000000f
+.qpipe.job.fx_orders_feed.sizes:500000 1000000 2000000 5000000f
 
 / The first order id a process issues: microseconds since 2026.01.01.
 / @return the seed, a long
 / @eg .qpipe.job.fx_orders_feed.seed_id[]>0 -> 1b
-seed_id:{[] "j"$(.z.p-2026.01.01D00:00:00)%1000}
+.qpipe.job.fx_orders_feed.seed_id:{[] "j"$(.z.p-2026.01.01D00:00:00)%1000}
 
 / The order id last issued (#1265). Monotonic within a process, and SEEDED
 / from the process start rather than from 0: a feed restarted the same day
@@ -63,7 +63,7 @@ seed_id:{[] "j"$(.z.p-2026.01.01D00:00:00)%1000}
 / Microseconds stay under 2^53 for about 285 years. A restart cannot collide
 / while the feed issues fewer than a million orders a second: a later start
 / begins 1e6 per second above an earlier one, which only gains 1 per second.
-last_id:.qpipe.job.fx_orders_feed.seed_id[]
+.qpipe.job.fx_orders_feed.last_id:.qpipe.job.fx_orders_feed.seed_id[]
 
 / One order's rows, for a given pair index, book, product, side, size,
 / status and slippage in pips.
@@ -81,14 +81,14 @@ last_id:.qpipe.job.fx_orders_feed.seed_id[]
 / @param slip_pips how far from the pair's level it printed, in pips
 / @return one order's rows: order_id, sym, book, product, side, size, price, order_status
 / @eg count .qpipe.job.fx_orders_feed.order_rows[1;0;`london;`spot;1;1e6;`filled;0] -> 8
-order_rows:{[id;i;bk;pr;side;size;status;slip_pips]
+.qpipe.job.fx_orders_feed.order_rows:{[id;i;bk;pr;side;size;status;slip_pips]
     price:.qf.demo.spot[i]+slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i];
     (enlist id;enlist .qf.demo.pairs i;enlist bk;enlist pr;enlist side;
         enlist size;enlist price;enlist status)}
 
 / Draw one order and publish it. The draws live here so that order_rows
 / stays deterministic and its shape can be asserted.
-on_timer:{[]
+.qpipe.job.fx_orders_feed.on_timer:{[]
     `.qpipe.job.fx_orders_feed.last_id set .qpipe.job.fx_orders_feed.last_id+1;
     i:rand count .qf.demo.pairs;
     / 1 or -1, always an ATOM: indexing `1 -1` with a possibly-empty

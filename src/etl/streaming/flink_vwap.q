@@ -19,21 +19,21 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qpipe.job.flink_vwap
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qetl.job.stream.unwired `flink_vwap;
+.qpipe.job.flink_vwap.publish:.qetl.job.stream.unwired `flink_vwap;
 
 / sym -> the latest window_end already published for it. An unseen sym gives
 / 0Np, which every timestamp compares above, so it keeps every row.
-high_water:(`symbol$())!`timestamp$();
+.qpipe.job.flink_vwap.high_water:(`symbol$())!`timestamp$();
 
 / Publish the windows in this batch that have not been published before.
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.flink_vwap.on_batch:{[t;x]
     if[(0=count x) or not t=`flink_vwap_raw; :()];
     fresh:x where x[`window_end] > .qpipe.job.flink_vwap.high_water x`sym;
     if[0=count fresh; :()];

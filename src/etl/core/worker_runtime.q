@@ -23,14 +23,14 @@
 /      only the row publication leaves coverage claiming the window is
 /      complete - the exact lie the ledger exists to prevent.
 
-\d .qetl.job.bounded.runtime
+\d .
 
 / ------------------------------------------------------------- AUTHORITY
 
 / The authority split, written down as data so a diagnostic can cite it and a test
 / can assert nobody quietly moved a concern across the line.
-q_owned:`startup`source_reads`query_failures`checkpoints`run_counts`window_counts`coverage_events
-airflow_owned:`task_ordering`scheduling`retries`timeouts`concurrency`alert_routing
+.qetl.job.bounded.runtime.q_owned:`startup`source_reads`query_failures`checkpoints`run_counts`window_counts`coverage_events
+.qetl.job.bounded.runtime.airflow_owned:`task_ordering`scheduling`retries`timeouts`concurrency`alert_routing
 
 / The split assigns RETRIES to Airflow, and this file retries transport
 / errors in-process. That reads like a contradiction and is not, so state the
@@ -45,27 +45,27 @@ airflow_owned:`task_ordering`scheduling`retries`timeouts`concurrency`alert_routi
 / .
 / The line is therefore: bounded, in-attempt, transport-only here; everything
 / about whether and when the TASK runs again is Airflow's.
-retry_boundary:"in-attempt transport retry is q's; task-level retry is Airflow's"
+.qetl.job.bounded.runtime.retry_boundary:"in-attempt transport retry is q's; task-level retry is Airflow's"
 
 / Which layer owns a concern, for a diagnostic that would otherwise guess.
 / @throws error if the concern belongs to neither layer
 / @eg .qetl.job.bounded.runtime.owner[`scheduling]  ->  `airflow
-owner:{[concern]
-    $[concern in q_owned; `q;
-      concern in airflow_owned; `airflow;
+.qetl.job.bounded.runtime.owner:{[concern]
+    $[concern in .qetl.job.bounded.runtime.q_owned; `q;
+      concern in .qetl.job.bounded.runtime.airflow_owned; `airflow;
       '"owner: ",string[concern]," is not an assigned concern - the authority split is a fixed list, so an unlisted concern means the split needs amending, not guessing"]}
 
 / ------------------------------------------------------ CLASSIFICATION
 
 / Transport failures: the connection, the host, the socket. Retryable,
 / because the next attempt genuinely may differ.
-transport_patterns:("*connection*";"*timeout*";"*timed out*";"*broken pipe*";
+.qetl.job.bounded.runtime.transport_patterns:("*connection*";"*timeout*";"*timed out*";"*broken pipe*";
                     "*refused*";"*reset*";"*unreachable*";"*temporarily unavailable*";
                     "*no route*";"*handle*";"*closed*")
 
 / Data failures: the payload is wrong. Terminal, because the next attempt is
 / identical.
-data_patterns:("*schema*";"*type*";"*cast*";"*parse*";"*length*";
+.qetl.job.bounded.runtime.data_patterns:("*schema*";"*type*";"*cast*";"*parse*";"*length*";
                "*mismatch*";"*null*";"*domain*";"*not covered*";"*invalid*")
 
 / Classify a caught error string as `transport or `data.
@@ -79,14 +79,14 @@ data_patterns:("*schema*";"*type*";"*cast*";"*parse*";"*length*";
 / @param err the caught error string
 / @return `transport or `data
 / @eg .qetl.job.bounded.runtime.classify["connection refused"]  ->  `transport
-classify:{[err]
+.qetl.job.bounded.runtime.classify:{[err]
     e:lower err;
-    $[any e like/: data_patterns;      `data;
-      any e like/: transport_patterns; `transport;
+    $[any e like/: .qetl.job.bounded.runtime.data_patterns;      `data;
+      any e like/: .qetl.job.bounded.runtime.transport_patterns; `transport;
       `data]}
 
 / Is this error worth another attempt in this process?
-retryable:{[err] `transport~classify[err]}
+.qetl.job.bounded.runtime.retryable:{[err] `transport~.qetl.job.bounded.runtime.classify[err]}
 
 / ------------------------------------------------------------ RETRYING
 
@@ -94,24 +94,24 @@ retryable:{[err] `transport~classify[err]}
 / this is an in-attempt blip, not a scheduling policy - a worker sitting in
 / backoff for minutes is Airflow's job to time out, not this file's job to
 / wait through.
-default_policy:`max_attempts`base_delay_ms`max_delay_ms!(3j;250j;8000j)
+.qetl.job.bounded.runtime.default_policy:`max_attempts`base_delay_ms`max_delay_ms!(3j;250j;8000j)
 
 / Resolve the policy from configuration, falling back to the defaults.
 / .
 / Read through .qetl.cfg so the precedence is the settled one, rather than a
 / second ad-hoc lookup order that drifts from it.
-policy:{[]
+.qetl.job.bounded.runtime.policy:{[]
     read_one:{[k;fallback]
         v:@[{.qetl.cfg.raw x};k;{""}];
         $[0=count v; fallback; null j:"J"$v; fallback; j]};
     `max_attempts`base_delay_ms`max_delay_ms!(
-        read_one[`retry_max_attempts;  default_policy`max_attempts];
-        read_one[`retry_base_delay_ms; default_policy`base_delay_ms];
-        read_one[`retry_max_delay_ms;  default_policy`max_delay_ms])}
+        read_one[`retry_max_attempts;  .qetl.job.bounded.runtime.default_policy`max_attempts];
+        read_one[`retry_base_delay_ms; .qetl.job.bounded.runtime.default_policy`base_delay_ms];
+        read_one[`retry_max_delay_ms;  .qetl.job.bounded.runtime.default_policy`max_delay_ms])}
 
 / Exponential backoff for attempt n (1-based), capped.
 / @eg .qetl.job.bounded.runtime.backoff_ms[.qetl.job.bounded.runtime.default_policy;3]  ->  1000
-backoff_ms:{[pol;attempt]
+.qetl.job.bounded.runtime.backoff_ms:{[pol;attempt]
     raw:"j"$(pol`base_delay_ms)*2 xexp attempt-1;
     (pol`max_delay_ms) & raw}
 
@@ -119,7 +119,7 @@ backoff_ms:{[pol;attempt]
 / is what lets a test set base_delay_ms to 0 and run at full speed rather
 / than sleeping through its own retry assertions.
 / @private
-sleep_ms:{[ms] if[ms>0; system"sleep ",string ms%1000]; ms}
+.qetl.job.bounded.runtime.sleep_ms:{[ms] if[ms>0; system"sleep ",string ms%1000]; ms}
 
 / Run a niladic function under the retry policy.
 / .
@@ -132,7 +132,7 @@ sleep_ms:{[ms] if[ms>0; system"sleep ",string ms%1000]; ms}
 / @return dict of state (`ok or `failed), kind (`none/`transport/`data),
 /   attempts, result (on success) and error (on failure)
 / @eg .qetl.job.bounded.runtime.with_retry[.qetl.job.bounded.runtime.default_policy;{42}]`result  ->  42
-with_retry:{[pol;f]
+.qetl.job.bounded.runtime.with_retry:{[pol;f]
     / `cap`, not `max` - max is a q builtin, and shadowing it inside the
     / lambda breaks the & fallback below in a way that reports as `nyi at
     / call time. Third time this trap has bitten this repository.
@@ -146,17 +146,17 @@ with_retry:{[pol;f]
             {@[{(`ok;x[])};x;{(`err;x)}]};enlist f];
         if[`ok~first outcome;
             :`state`kind`attempts`result`error!(`ok;`none;attempt;last outcome;"")];
-        kind:classify[last outcome];
+        kind:.qetl.job.bounded.runtime.classify[last outcome];
         .[{.qetl.log.dbg[x;y;z]};(`qetl.job.bounded.runtime;"attempt failed";
             `attempt`of`kind`error!(attempt;cap;kind;last outcome));::];
         if[kind=`data;
             :`state`kind`attempts`result`error!(`failed;`data;attempt;::;last outcome)];
         if[attempt=cap;
             :`state`kind`attempts`result`error!(`failed;`transport;attempt;::;last outcome)];
-        wait:backoff_ms[pol;attempt];
+        wait:.qetl.job.bounded.runtime.backoff_ms[pol;attempt];
         .[{.qetl.log.warn[x;y;z]};(`qetl.job.bounded.runtime;"retrying after a transport error";
             `attempt`of`backoff_ms`error!(attempt;cap;wait;last outcome));::];
-        sleep_ms[wait];
+        .qetl.job.bounded.runtime.sleep_ms[wait];
         attempt+:1];
     `state`kind`attempts`result`error!(`failed;`transport;cap;::;last outcome)}
 
@@ -175,7 +175,7 @@ with_retry:{[pol;f]
 / validate and plan never reach the window loop - .qetl.job.bounded.validate
 / and .qetl.job.bounded.plan_only are separate entry points - so the gate
 / below only has to hold the line between dry_run and run.
-modes:`validate`plan`dry_run`run
+.qetl.job.bounded.runtime.modes:`validate`plan`dry_run`run
 
 / EVERY durable effect a run makes, named once. A mode other than `run makes
 / none of them, and an effect not on this list cannot be gated at all - so a
@@ -186,7 +186,7 @@ modes:`validate`plan`dry_run`run
 / Suppressing a SUBSET is the dangerous case: rows withheld while coverage is
 / still published leaves the ledger asserting a window is complete when
 / nothing was written.
-suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions
+.qetl.job.bounded.runtime.suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions
 
 / This run's mode: `mode` (UQF_MODE, or `uqs job backfill --mode`) when set, else
 / `dry_run when the older dry_run flag is set, else `run.
@@ -197,7 +197,7 @@ suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run
 / @return one of .qetl.job.bounded.runtime.modes
 / @throws a mode not in modes, or `run together with the dry_run flag
 / @eg .qetl.job.bounded.runtime.mode[]  ->  `run
-mode:{[]
+.qetl.job.bounded.runtime.mode:{[]
     / Protected like the flag: a loader without .qetl.cfg has no mode set,
     / which is not the same as a mode set wrongly.
     m:@[{.qetl.cfg.raw `mode};::;{[e] ""}];
@@ -222,7 +222,7 @@ mode:{[]
 / @return the flag's value
 / @throws error when the environment holds a different value for k
 / @eg .qetl.job.bounded.runtime.flag_vs_env["demo";`mode;"plan"]  ->  "plan"
-flag_vs_env:{[who;k;v]
+.qetl.job.bounded.runtime.flag_vs_env:{[who;k;v]
     e:getenv `$.qetl.cfg.env_name k;
     if[count[e] and not (lower e)~lower v;
         'who,": -",string[k]," ",v," would be ignored - ",.qetl.cfg.env_name[k],"=",e,
@@ -237,11 +237,11 @@ flag_vs_env:{[who;k;v]
 / @return the strategy in force (what .qetl.cfg.raw answers, not the request),
 / or ` when none was given
 / @throws error for an unknown strategy, or one an environment variable outranks
-use_on_conflict:{[who;opts]
+.qetl.job.bounded.runtime.use_on_conflict:{[who;opts]
     if[not `on_conflict in key opts; :`];
     v:first opts`on_conflict;
     .qetl.io.require_strategy `$v;
-    flag_vs_env[who;`on_conflict;v];
+    .qetl.job.bounded.runtime.flag_vs_env[who;`on_conflict;v];
     .qetl.cfg.set_override[`on_conflict;v];
     `$.qetl.cfg.raw `on_conflict}
 
@@ -252,28 +252,28 @@ use_on_conflict:{[who;opts]
 / @param opts the parsed command line, as .Q.opt returns it
 / @return the mode this run is in
 / @throws error for an unknown mode, or one an environment variable outranks
-use_mode:{[who;opts]
+.qetl.job.bounded.runtime.use_mode:{[who;opts]
     if[`mode in key opts;
-        flag_vs_env[who;`mode;first opts`mode];
+        .qetl.job.bounded.runtime.flag_vs_env[who;`mode;first opts`mode];
         .qetl.cfg.set_override[`mode;first opts`mode]];
-    mode[]}
+    .qetl.job.bounded.runtime.mode[]}
 
 / Is this run diagnostic-only - any mode but `run?
 / .
 / Not protected: a mode that cannot be read throws here, and the effect it
 / was guarding fails with it. Defaulting a broken setting to "write" is how a
 / rehearsal turns into a run.
-is_dry_run:{[] not `run~mode[]}
+.qetl.job.bounded.runtime.is_dry_run:{[] not `run~.qetl.job.bounded.runtime.mode[]}
 
 / May this run make `effect`?
 / @param effect one of suppressed_in_dry_run
 / @return 1b only in mode `run
 / @throws an effect not on the list, so a new one cannot bypass the gate
 / @eg .qetl.job.bounded.runtime.allows `record_run  ->  1b
-allows:{[effect]
+.qetl.job.bounded.runtime.allows:{[effect]
     if[not effect in .qetl.job.bounded.runtime.suppressed_in_dry_run;
         '"allows: ",string[effect]," is not one of the effects a dry run suppresses - add it to suppressed_in_dry_run"];
-    not is_dry_run[]}
+    not .qetl.job.bounded.runtime.is_dry_run[]}
 
 / Perform one named side effect, or record that dry-run withheld it.
 / .
@@ -299,10 +299,10 @@ allows:{[effect]
 /   applied as `enlist(::)` because `f . ()` is a type error, not a call
 / @return (`skipped;effect) or (`done;effect;the action's result)
 / @throws error on an unrecognised effect name
-commit:{[dry;effect;action;args]
-    if[not effect in suppressed_in_dry_run;
+.qetl.job.bounded.runtime.commit:{[dry;effect;action;args]
+    if[not effect in .qetl.job.bounded.runtime.suppressed_in_dry_run;
         '"commit: ",string[effect]," is not one of the effects a dry run suppresses (",
-         (", " sv string suppressed_in_dry_run),") - add it there deliberately rather than bypassing the gate"];
+         (", " sv string .qetl.job.bounded.runtime.suppressed_in_dry_run),") - add it there deliberately rather than bypassing the gate"];
     / `f . ()` is a TYPE error rather than a niladic call; the unary-null
     / argument list is what actually applies a niladic function.
     applied:$[0=count args; enlist(::); args];
@@ -352,7 +352,7 @@ commit:{[dry;effect;action;args]
 / @param width a timespan, e.g. 1D
 / @return a table of range_from/range_to
 / @eg .qetl.job.bounded.runtime.windows[2026.09.01D00:00;2026.09.04D00:00;1D]  -> 3 daily windows
-windows:{[from_ts;to_ts;width]
+.qetl.job.bounded.runtime.windows:{[from_ts;to_ts;width]
     .qetl.coverage.require_interval[from_ts;to_ts];
     if[not width>0D00:00;
         '"windows: width must be positive, got ",string width];
@@ -380,7 +380,7 @@ windows:{[from_ts;to_ts;width]
 / was already done.
 / @param part this worker's partition, or ` when its dataset has none
 / @return 1b when the window still needs fetching
-needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
+.qetl.job.bounded.runtime.needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
     not .qetl.coverage.is_covered[ds;part;version;as_of;from_ts;to_ts]}
 
 / Narrow a requested range to the parts not yet published.
@@ -389,7 +389,7 @@ needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
 / re-fetches only what is missing instead of the whole range. An empty result
 / means there is nothing to do - which is an `idle success, not a
 / failure.
-remaining:{[ds;part;version;as_of;from_ts;to_ts]
+.qetl.job.bounded.runtime.remaining:{[ds;part;version;as_of;from_ts;to_ts]
     m:.qetl.coverage.missing[ds;part;version;as_of;from_ts;to_ts];
     / The answer to "why did the run do nothing": every window already covered
     / at this version, so there is nothing left to fetch.
@@ -416,15 +416,15 @@ remaining:{[ds;part;version;as_of;from_ts;to_ts]
 / @param publish a niladic function publishing the window, returning a row
 /   count
 / @return dict of the three effects' outcomes plus the row count
-finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
-    dry:is_dry_run[];
-    published:commit[dry;`publish_rows;publish;()];
+.qetl.job.bounded.runtime.finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
+    dry:.qetl.job.bounded.runtime.is_dry_run[];
+    published:.qetl.job.bounded.runtime.commit[dry;`publish_rows;publish;()];
     rows:$[`done~first published; last published; 0];
-    covered:commit[dry;`publish_coverage;.qetl.coverage.stage_completion;
+    covered:.qetl.job.bounded.runtime.commit[dry;`publish_coverage;.qetl.coverage.stage_completion;
         (ds;part;spec`source_version;from_ts;to_ts;rows)];
     / written; queryable now, or when the deployment says so (#1094)
     if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version]];
-    checkpointed:commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;
+    checkpointed:.qetl.job.bounded.runtime.commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;
         (worker;spec;to_ts)];
     .[{.qetl.log.dbg[x;y;z]};(worker;"window finished";
         `range_from`range_to`rows`dry_run!(from_ts;to_ts;rows;dry));::];
@@ -439,7 +439,7 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
 
 / What run_version puts between the release and the worker's output revision;
 / uqs strips it again from the ledger, reading it from the generated facts (#1368).
-revision_tag:"@r"
+.qetl.job.bounded.runtime.revision_tag:"@r"
 
 / The release a run records coverage under: the one asked for, with the
 / worker's output revision when it declares one (#1097), and tagged when the
@@ -449,9 +449,9 @@ revision_tag:"@r"
 / @param v the release asked for
 / @return v, as `v@r<revision>` when revised, then `~fixture` when on the fixture
 / @eg .qetl.job.bounded.runtime.run_version[`source`revision!(`demo_deals;2);`v1]  ->  `$"v1@r2~fixture"
-run_version:{[cfg;v]
+.qetl.job.bounded.runtime.run_version:{[cfg;v]
     if[null v; :v];
-    if[not null r:$[`revision in key cfg; cfg`revision; 0N]; v:`$string[v],revision_tag,string r];
+    if[not null r:$[`revision in key cfg; cfg`revision; 0N]; v:`$string[v],.qetl.job.bounded.runtime.revision_tag,string r];
     $[.qetl.source.has_credentials cfg`source; v; .qetl.source.fixture_version v]}
 
 / The grain a worker's output is aggregated to, or 0Nn for none (#1303).
@@ -464,7 +464,7 @@ run_version:{[cfg;v]
 / @return the grain, a positive timespan that divides the width, or 0Nn
 / @throws error when it is not a positive timespan, or the width is not a multiple of it
 / @eg .qetl.job.bounded.runtime.require_align[`w;`width`align!(0D01:00;0D00:01)]  ->  0D00:01:00.000000000
-require_align:{[worker;decl]
+.qetl.job.bounded.runtime.require_align:{[worker;decl]
     if[not `align in key decl; :0Nn];
     a:decl`align;
     if[(-16h=type a) and null a; :0Nn];
@@ -483,7 +483,7 @@ require_align:{[worker;decl]
 / @return the range
 / @throws error naming the worker and the grain when either edge is not a multiple of it
 / @eg .qetl.job.bounded.runtime.require_aligned[`w;enlist[`align]!enlist 0D00:01;2026.10.09D10:00;2026.10.09D11:00]  ->  2026.10.09D10:00 2026.10.09D11:00
-require_aligned:{[worker;cfg;range_from;range_to]
+.qetl.job.bounded.runtime.require_aligned:{[worker;cfg;range_from;range_to]
     a:$[`align in key cfg; cfg`align; 0Nn];
     if[null a; :(range_from;range_to)];
     if[any 0<("j"$(range_from;range_to)) mod "j"$a;
@@ -502,7 +502,7 @@ require_aligned:{[worker;cfg;range_from;range_to]
 / @return the revision, a positive long, or 0N
 / @throws error when it is not a positive long
 / @eg .qetl.job.bounded.runtime.require_revision[`w;enlist[`revision]!enlist 2]  ->  2
-require_revision:{[worker;decl]
+.qetl.job.bounded.runtime.require_revision:{[worker;decl]
     if[not `revision in key decl; :0N];
     r:decl`revision;
     / 0N is "none": a declaration copied from .qetl.job.bounded.def carries it
@@ -519,16 +519,16 @@ require_revision:{[worker;decl]
 / @param who the caller, leading the message
 / @param source the source that has no credential
 / @throws error naming the source, its variable and the way out
-refuse_fixture:{[who;source]
+.qetl.job.bounded.runtime.refuse_fixture:{[who;source]
     .qetl.source.refuse_fixture[who;source];
-    if[not is_dry_run[]; .qetl.source.refuse_fixture_writes[who;source]]}
+    if[not .qetl.job.bounded.runtime.is_dry_run[]; .qetl.source.refuse_fixture_writes[who;source]]}
 
 / Did a run on the fixture claim any of this window? Only a live run asks -
 / a fixture run's own claims are under the tagged release.
 / @param worker the worker's name
 / @param w the window, a dict of range_from and range_to
 / @return 1b when a current fixture claim overlaps the window
-fixture_claimed:{[worker;w]
+.qetl.job.bounded.runtime.fixture_claimed:{[worker;w]
     cfg:.qetl.job.bounded.def worker;
     if[not .qetl.source.has_credentials cfg`source; :0b];
     v:.qetl.source.fixture_version .qetl.job.bounded.read_state[worker;`source_version];
@@ -543,9 +543,9 @@ fixture_claimed:{[worker;w]
 / @param worker the worker's name
 / @param w the window, a dict of range_from and range_to
 / @return the strategy, a symbol
-write_strategy:{[worker;w]
+.qetl.job.bounded.runtime.write_strategy:{[worker;w]
     oc:.qetl.job.bounded.on_conflict worker;
-    if[not fixture_claimed[worker;w]; :oc];
+    if[not .qetl.job.bounded.runtime.fixture_claimed[worker;w]; :oc];
     if[not null (.qetl.job.bounded.def worker)`window_column; :`replace];
     .qetl.log.warn[worker;"a fixture run wrote this window, and with no window_column its rows cannot be cleared - fixture rows the live data does not overwrite stay";
         `range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
@@ -567,7 +567,7 @@ write_strategy:{[worker;w]
 / @return the batch
 / @throws error naming the column and the window when a value lies outside it
 / @private
-require_inside_window:{[worker;batch;w]
+.qetl.job.bounded.runtime.require_inside_window:{[worker;batch;w]
     c:.qetl.job.bounded.def[worker]`window_column;
     if[null c; :batch];
     t:`timestamp$batch c;
@@ -595,9 +595,9 @@ require_inside_window:{[worker;batch;w]
 / @param worker the worker's name
 / @param rows what the publish returned, passed through
 / @return rows
-retire_fixture_claims:{[worker;rows]
+.qetl.job.bounded.runtime.retire_fixture_claims:{[worker;rows]
     w:.qetl.job.bounded.read_state[worker;`last_window];
-    if[not fixture_claimed[worker;w]; :rows];
+    if[not .qetl.job.bounded.runtime.fixture_claimed[worker;w]; :rows];
     cfg:.qetl.job.bounded.def worker;
     v:.qetl.source.fixture_version .qetl.job.bounded.read_state[worker;`source_version];
     iv:.qetl.coverage.intervals[cfg`dataset;cfg`partition;v;.z.p];
@@ -615,12 +615,12 @@ retire_fixture_claims:{[worker;rows]
 / ---------------------------------------------------------- DEPENDENCIES
 
 / worker -> the TorQ process types it needs a connection to.
-declared_dependencies:(`symbol$())!();
+.qetl.job.bounded.runtime.declared_dependencies:(`symbol$())!();
 
 / Declare what a worker needs before it can run.
 / @eg .qetl.job.bounded.runtime.declare_dependencies[`markout_backfill;`tickerplant`hdb]
-declare_dependencies:{[worker;procs]
-    declared_dependencies[worker]:procs;
+.qetl.job.bounded.runtime.declare_dependencies:{[worker;procs]
+    .qetl.job.bounded.runtime.declared_dependencies[worker]:procs;
     procs}
 
 / Private: which process types currently have a live connection.
@@ -633,7 +633,7 @@ declare_dependencies:{[worker;procs]
 / Overridable via connected_override so a test can present a fleet without
 / one.
 / @private
-connected_override:();
+.qetl.job.bounded.runtime.connected_override:();
 
 / The proctypes currently reachable in the fleet.
 / .
@@ -643,8 +643,8 @@ connected_override:();
 / than letting it run blind.
 / @return a symbol vector of proctypes, empty outside a TorQ process
 / @eg .qetl.job.bounded.runtime.connected[]
-connected:{[]
-    if[count connected_override; :connected_override];
+.qetl.job.bounded.runtime.connected:{[]
+    if[count .qetl.job.bounded.runtime.connected_override; :.qetl.job.bounded.runtime.connected_override];
     @[{exec distinct proctype from .servers.SERVERS where not null w};::;{`symbol$()}]}
 
 / Fail at INITIALISATION when a declared dependency is unavailable.
@@ -654,10 +654,10 @@ connected:{[]
 / partial window and burned the operator's time. Reports every missing
 / dependency at once, for the same reason require_contract does.
 / @throws error naming every unavailable dependency
-require_dependencies:{[worker]
-    needed:declared_dependencies[worker];
+.qetl.job.bounded.runtime.require_dependencies:{[worker]
+    needed:.qetl.job.bounded.runtime.declared_dependencies[worker];
     if[0=count needed; :worker];
-    live:connected[];
+    live:.qetl.job.bounded.runtime.connected[];
     missing:needed where not needed in live;
     .[{.qetl.log.dbg[x;y;z]};(worker;"dependencies";`needed`connected`missing!(needed;live;missing));::];
     if[count missing;
@@ -681,7 +681,7 @@ require_dependencies:{[worker]
 / input is missing.
 / @param upstream_part the upstream's partition, or ` when it has none
 / @throws error naming the missing upstream ranges
-require_upstream:{[upstream;upstream_part;version;as_of;from_ts;to_ts]
+.qetl.job.bounded.runtime.require_upstream:{[upstream;upstream_part;version;as_of;from_ts;to_ts]
     .qetl.coverage.require_covered[upstream;upstream_part;version;as_of;from_ts;to_ts]}
 
 \d .

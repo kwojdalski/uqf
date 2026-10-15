@@ -35,18 +35,18 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qpipe.job.last_value
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qetl.job.stream.unwired `last_value;
+.qpipe.job.last_value.publish:.qetl.job.stream.unwired `last_value;
 
-last_value:.qetl.plant.published `last_value
-market_data:.qetl.plant.shape `market_data
+.qpipe.job.last_value.last_value:.qetl.plant.published `last_value
+.qpipe.job.last_value.market_data:.qetl.plant.shape `market_data
 
 / The latest row per sym: what the job compares an arriving book with.
 / Rebuilt by replay after a restart.
-state:1!last_value
+.qpipe.job.last_value.state:1!.qpipe.job.last_value.last_value
 
 / Apply a batch of books to the latest rows.
 / .
@@ -58,7 +58,7 @@ state:1!last_value
 / @return a dict: `state the new keyed state, `tob the new venue tops, `changed the rows that replaced
 /   or added a sym's latest, as published
 / @eg .qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;0#.qpipe.job.last_value.market_data]`changed  ->  0#.qpipe.job.last_value.last_value
-apply:{[state;tob;batch]
+.qpipe.job.last_value.apply:{[state;tob;batch]
     / each market by its rule (.qf.mkt.price_rules, #998), as posbook marks:
     / a book's own mid, or each venue's newest top - a withdrawn side
     / included, so it stops counting - then the best across live venues
@@ -77,7 +77,7 @@ apply:{[state;tob;batch]
 
 / Each crypto venue's newest top of book: what a crypto sym's reference is
 / priced from. Rebuilt by replay after a restart.
-tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$())
+.qpipe.job.last_value.tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); ask:`float$())
 
 / Market data: hold the newest top of book per sym and publish what changed.
 / The state is advanced BEFORE publishing, as posbook's book is: the books
@@ -85,9 +85,9 @@ tob:2!([] sym:`symbol$(); venue:`symbol$(); time:`timestamp$(); bid:`float$(); a
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.last_value.on_batch:{[t;x]
     if[not t=`market_data; :()];
-    r:apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;x];
+    r:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;x];
     `.qpipe.job.last_value.state set r`state;
     `.qpipe.job.last_value.tob set r`tob;
     if[count r`changed; .qpipe.job.last_value.publish[`last_value;r`changed]];

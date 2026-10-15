@@ -56,7 +56,7 @@ test_stream_outputs_match_the_tickerplant_tables:{[t]
     .qunit.assertEquals[count raze bad;0;"each published transform output matches its table, column for column: ",.Q.s1 raze bad]};
 
 stack_tables:{[]
-    ls:read0 `$":src/etl/plant_tables.q";
+    ls:{$[x like ".qetl.plant.*"; 12_x; x]} each read0 `$":src/etl/plant_tables.q";
     nms:`demo_execution_quality`position`mkt_orderbook;
     nms!{[ls;nm] line:first ls where ls like string[nm],":*"; value (1+line?":") _ line}[ls] each nms}
 

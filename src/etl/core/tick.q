@@ -44,14 +44,14 @@
 / integer handle to a message IS the async send in q, so one code path
 / serves both and the tested path is the shipped one.
 
-\d .qetl.tick
+\d .
 
 / ------------------------------------------------------------- THE STATE
 
 / Who wants what. One row per subscription, not per subscriber: a process
 / that wants two tables is two rows, which makes the fan-out for a table a
 / select rather than a scan through nested lists.
-subscribers:([] sink:(); tbl:`symbol$(); registered:`timestamp$())
+.qetl.tick.subscribers:([] sink:(); tbl:`symbol$(); registered:`timestamp$())
 
 / Table name -> its empty schema, learned from the first batch published
 / to it or declared up front by schema.
@@ -59,17 +59,17 @@ subscribers:([] sink:(); tbl:`symbol$(); registered:`timestamp$())
 / A plant that knows its schemas can refuse a batch of the wrong shape at
 / the door, where the publisher's name is still known, rather than letting
 / it land and be found by whoever queries the table next.
-schemas:(`symbol$())!()
+.qetl.tick.schemas:(`symbol$())!()
 
 / The open log file's handle and how many messages have gone into it.
 / Both null until open_log.
-log_handle:0N
-log_path:`
-msg_count:0
+.qetl.tick.log_handle:0N
+.qetl.tick.log_path:`
+.qetl.tick.msg_count:0
 / What open_log was given, so roll can open the next day's log beside it.
-log_dir:""
-log_name:`
-log_date:0Nd
+.qetl.tick.log_dir:""
+.qetl.tick.log_name:`
+.qetl.tick.log_date:0Nd
 
 / ---------------------------------------------------------- SUBSCRIPTION
 
@@ -84,14 +84,14 @@ log_date:0Nd
 / @return the table name
 / @throws error when empty is not a table, or is keyed
 / @eg .qetl.tick.schema[`eg_quote;([] time:`timestamp$(); sym:`symbol$(); bid:`float$())] -> `eg_quote
-schema:{[table_name;empty]
+.qetl.tick.schema:{[table_name;empty]
     if[not 98h=type empty;
         '"schema: ",string[table_name],"'s schema must be an unkeyed table"];
     if[count empty;
         '"schema: ",string[table_name],"'s schema must be EMPTY - it declares a shape, not data"];
     if[not `time=first cols empty;
         '"schema: ",string[table_name],"'s first column must be `time` - the plant stamps it there, and a schema that omits it describes rows nobody will ever receive"];
-    schemas[table_name]:empty;
+    .qetl.tick.schemas[table_name]:empty;
     table_name}
 
 / Subscribe a sink to one or more tables.
@@ -104,16 +104,16 @@ schema:{[table_name;empty]
 / @return a dict of table name -> empty schema, for the tables subscribed to
 / @throws error when the sink is not callable, or a named table is unknown
 / @eg .qetl.tick.reset[]; .qetl.tick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; key .qetl.tick.subscribe[`eg_t;{[m] m}] -> enlist `eg_t
-subscribe:{[want;sink]
-    if[not can_send sink;
+.qetl.tick.subscribe:{[want;sink]
+    if[not .qetl.tick.can_send sink;
         '"subscribe: a sink must be callable as sink[(`upd;table;rows)] - a function, or `neg h` for a real subscriber"];
     t:$[(11h=type want) or -11h=type want; (),want; '"subscribe: tables must be a symbol or symbol list, or ` for all"];
-    t:$[t~enlist `; key schemas; t];
-    unknown:t where not t in key schemas;
+    t:$[t~enlist `; key .qetl.tick.schemas; t];
+    unknown:t where not t in key .qetl.tick.schemas;
     if[count unknown;
         '"subscribe: no schema for ",(", " sv string unknown)," - declare it with .qetl.tick.schema before subscribing, so a subscriber cannot wait forever on a typo"];
     `.qetl.tick.subscribers upsert ([] sink:(count t)#enlist sink; tbl:t; registered:(count t)#.z.p);
-    t!schemas t}
+    t!.qetl.tick.schemas t}
 
 / Drop every subscription held by a sink - what a process calls from .z.pc
 / when a subscriber's connection drops.
@@ -123,9 +123,9 @@ subscribe:{[want;sink]
 / @param sink the sink to remove
 / @return how many subscriptions went
 / @eg .qetl.tick.reset[]; .qetl.tick.unsubscribe[{[m] m}] -> 0
-unsubscribe:{[sink]
-    gone:count where {[s;row] row[`sink]~s}[sink] each subscribers;
-    `.qetl.tick.subscribers set subscribers where not {[s;row] row[`sink]~s}[sink] each subscribers;
+.qetl.tick.unsubscribe:{[sink]
+    gone:count where {[s;row] row[`sink]~s}[sink] each .qetl.tick.subscribers;
+    `.qetl.tick.subscribers set .qetl.tick.subscribers where not {[s;row] row[`sink]~s}[sink] each .qetl.tick.subscribers;
     gone}
 
 / Private: can this value be applied to a message?
@@ -134,14 +134,14 @@ unsubscribe:{[sink]
 / to a message is q's own async send, so a real subscriber and a test
 / recorder are called by identical code.
 / @private
-can_send:{[sink] ((type sink) within 100 112h) or (type sink) in -6 -7h}
+.qetl.tick.can_send:{[sink] ((type sink) within 100 112h) or (type sink) in -6 -7h}
 
 / ------------------------------------------------------------- PUBLISHING
 
 / Private: refuse a batch that a tickerplant cannot carry, naming the rule
 / it breaks. See the header for why each of these is a rule.
 / @private
-require_batch:{[t;x]
+.qetl.tick.require_batch:{[t;x]
     if[99h=type x;
         '"publish: ",string[t]," was given a KEYED table - a tickerplant appends, and upserting by key would silently drop ticks"];
     if[98h=type x; :1b];
@@ -166,8 +166,8 @@ require_batch:{[t;x]
 / @return the number of rows published
 / @throws error naming the invariant a malformed batch breaks
 / @eg .qetl.tick.reset[]; .qetl.tick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; .qetl.tick.publish[`eg_t;enlist enlist 1] -> 1
-publish:{[t;x]
-    require_batch[t;x];
+.qetl.tick.publish:{[t;x]
+    .qetl.tick.require_batch[t;x];
     / `time` FIRST, matching every declared schema in
     / src/etl/plant_tables.q and .u.upd's own convention. A
     / plant that appended it instead would build tables whose columns are
@@ -188,7 +188,7 @@ publish:{[t;x]
     stamped:$[98h=type x;
         ([] time:(count x)#now) ,' x;
         (enlist (count first x)#now),x];
-    if[(not t in key schemas) and 98h=type stamped; schemas[t]:0#stamped];
+    if[(not t in key .qetl.tick.schemas) and 98h=type stamped; .qetl.tick.schemas[t]:0#stamped];
     / ONE canonical form - a table - logged and sent. The list-of-columns
     / spelling is a convenience for feeds and it stops here.
     / .
@@ -196,28 +196,28 @@ publish:{[t;x]
     / publishes columns would have its columns in the log and its TABLE on
     / the wire, so a subscriber's live path and its recovery path receive
     / different shapes. Everything works until the day something restarts.
-    batch:$[98h=type stamped; stamped; learn[t;stamped]];
-    record[(`upd;t;batch)];
-    fan_out[t;batch];
+    batch:$[98h=type stamped; stamped; .qetl.tick.learn[t;stamped]];
+    .qetl.tick.record[(`upd;t;batch)];
+    .qetl.tick.fan_out[t;batch];
     count batch}
 
 / Private: build a table from a declared schema's column names and a list
 / of column vectors, so a plant that was told its schema can hand
 / subscribers a table rather than a bare list.
 / @private
-learn:{[table_name;stamped]
-    if[not table_name in key schemas;
+.qetl.tick.learn:{[table_name;stamped]
+    if[not table_name in key .qetl.tick.schemas;
         '"publish: ",string[table_name]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qetl.tick.schema first"];
-    flip (cols schemas table_name)!stamped}
+    flip (cols .qetl.tick.schemas table_name)!stamped}
 
 / Private: send one batch to every sink subscribed to that table.
 / @private
-fan_out:{[name;batch]
+.qetl.tick.fan_out:{[name;batch]
     / `where tbl=name`, never `where tbl=tbl`: inside a qSQL clause the
     / column shadows a same-named parameter, so the second spelling
     / compares the column with itself, is true for every row, and sends
     / every table to every subscriber. It reads correct and is not.
-    dst:exec sink from subscribers where tbl=name;
+    dst:exec sink from .qetl.tick.subscribers where tbl=name;
     {[name;batch;sink] sink (`upd;name;batch)}[name;batch] each dst;
     count dst}
 
@@ -230,7 +230,7 @@ fan_out:{[name;batch]
 / @param dt the date
 / @return the file, as an hsym
 / @private
-log_file:{[dir;name;dt] hsym `$dir,"/",string[name],ssr[string dt;".";""]}
+.qetl.tick.log_file:{[dir;name;dt] hsym `$dir,"/",string[name],ssr[string dt;".";""]}
 
 / Open (or reopen) the log for a given day, and say how many messages are
 / already in it.
@@ -244,16 +244,16 @@ log_file:{[dir;name;dt] hsym `$dir,"/",string[name],ssr[string dt;".";""]}
 / @return the number of messages already in the log
 / @throws error when the directory cannot be created
 / @eg .qetl.tick.reset[] -> `
-open_log:{[dir;name;dt]
+.qetl.tick.open_log:{[dir;name;dt]
     d:$[10h=abs type dir; dir; string dir];
     system "mkdir -p ",d;
-    path:log_file[d;name;dt];
+    path:.qetl.tick.log_file[d;name;dt];
     / -11!(-2;path) counts the messages without replaying them. Bare
     / -11!path REPLAYS them, calling whatever `upd` is installed, and
     / -11!(-1;path) still resolves `upd` and so throws in a process that
     / has none. Only the -2 form reads a log without needing a handler,
     / which is what opening one should do. repair also cuts off a torn tail.
-    existing:$[() ~ key path; 0; repair[path]];
+    existing:$[() ~ key path; 0; .qetl.tick.repair[path]];
     if[() ~ key path; path set ()];
     `.qetl.tick.log_path set path;
     `.qetl.tick.log_dir set d;
@@ -274,7 +274,7 @@ open_log:{[dir;name;dt]
 / @param path the log file, as an hsym, which must exist
 / @return the number of whole messages in the log
 / @private
-repair:{[path]
+.qetl.tick.repair:{[path]
     r:-11!(-2;path);
     if[-7h=type r; :r];
     size:hcount path;
@@ -294,12 +294,12 @@ repair:{[path]
 / @return the date that ended
 / @throws error when no log is open - a plant with none has no day to end
 / @eg .qetl.tick.roll 2026.10.10  ->  throws
-roll:{[dt]
-    if[null log_handle; '"roll: no log is open - open_log first"];
-    ended:log_date;
-    hclose log_handle;
-    open_log[log_dir;log_name;dt];
-    handles:{x where (type each x) in -6 -7h} exec sink from subscribers;
+.qetl.tick.roll:{[dt]
+    if[null .qetl.tick.log_handle; '"roll: no log is open - open_log first"];
+    ended:.qetl.tick.log_date;
+    hclose .qetl.tick.log_handle;
+    .qetl.tick.open_log[.qetl.tick.log_dir;.qetl.tick.log_name;dt];
+    handles:{x where (type each x) in -6 -7h} exec sink from .qetl.tick.subscribers;
     {[ended;h] @[neg abs h;(`.qetl.job.stream.end_of_day;ended);::]}[ended] each distinct handles;
     ended}
 
@@ -309,11 +309,11 @@ roll:{[dt]
 / and a service that genuinely does not need recovery should be able to
 / say so by not opening one, rather than by writing to /dev/null.
 / @private
-record:{[msg]
-    if[null log_handle; :0];
-    log_handle enlist msg;
-    `.qetl.tick.msg_count set msg_count+1;
-    msg_count}
+.qetl.tick.record:{[msg]
+    if[null .qetl.tick.log_handle; :0];
+    .qetl.tick.log_handle enlist msg;
+    `.qetl.tick.msg_count set .qetl.tick.msg_count+1;
+    .qetl.tick.msg_count}
 
 / Replay a log through a handler, returning how many messages it carried.
 / .
@@ -331,8 +331,8 @@ record:{[msg]
 / @return the number of messages replayed, or 0 when the log does not exist
 / @throws error when the handler is not callable
 / @eg .qetl.tick.replay[hsym `$"/nonexistent/log";{[t;r] r}] -> 0
-replay:{[path;handler]
-    if[not can_send handler; '"replay: the handler must be callable as handler[table;rows]"];
+.qetl.tick.replay:{[path;handler]
+    if[not .qetl.tick.can_send handler; '"replay: the handler must be callable as handler[table;rows]"];
     if[() ~ key path; :0];
     / A torn log - one a crash cut off mid-message - answers -11!(-2) with
     / (whole messages; bytes), and bare -11! on it throws 'badtail. Replay
@@ -376,13 +376,13 @@ replay:{[path;handler]
 / @throws whatever subscribe throws - a sink that cannot be called, an
 /   unknown table
 / @eg .qetl.tick.reset[]; .qetl.tick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; .qetl.tick.replay_then_subscribe[`eg_t;{[m] m}]  ->  ()
-replay_then_subscribe:{[want;sink]
-    w:$[want~`; key schemas; (),want];
+.qetl.tick.replay_then_subscribe:{[want;sink]
+    w:$[want~`; key .qetl.tick.schemas; (),want];
     `.qetl.tick.handoff set ();
-    if[not null log_path;
-        replay[log_path;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]];
-    subscribe[want;sink];
-    m:handoff;
+    if[not null .qetl.tick.log_path;
+        .qetl.tick.replay[.qetl.tick.log_path;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]];
+    .qetl.tick.subscribe[want;sink];
+    m:.qetl.tick.handoff;
     `.qetl.tick.handoff set ();
     m}
 
@@ -390,20 +390,20 @@ replay_then_subscribe:{[want;sink]
 / @param dt the date
 / @return the file, as an hsym (it may not exist), or ` when no log was opened
 / @eg .qetl.tick.reset[]; .qetl.tick.day_log 2026.10.09  ->  `
-day_log:{[dt]
-    $[0=count log_dir; `; log_file[log_dir;log_name;dt]]}
+.qetl.tick.day_log:{[dt]
+    $[0=count .qetl.tick.log_dir; `; .qetl.tick.log_file[.qetl.tick.log_dir;.qetl.tick.log_name;dt]]}
 
 / Whether the plant holds a log for a day.
 / @param dt the date
 / @return 1b when that day's log file exists
 / @eg .qetl.tick.reset[]; .qetl.tick.has_log 2026.10.09  ->  0b
-has_log:{[dt] p:day_log[dt]; $[null p; 0b; not () ~ key p]}
+.qetl.tick.has_log:{[dt] p:.qetl.tick.day_log[dt]; $[null p; 0b; not () ~ key p]}
 
 / The day the plant's open log is for: the log a subscription replays, and so
 / the authority on which days are "earlier" (#1190). 0Nd when no log is open.
 / @return a date, or 0Nd
 / @eg .qetl.tick.reset[]; .qetl.tick.plant_day[]  ->  0Nd
-plant_day:{[] log_date}
+.qetl.tick.plant_day:{[] .qetl.tick.log_date}
 
 / The wanted tables' messages from the logs of earlier days, oldest first
 / (#1072). A job that was down across an end of day restarts into a log
@@ -417,13 +417,13 @@ plant_day:{[] log_date}
 / @param last_day the last date to read, inclusive
 / @return the (table;rows) pairs, in log order
 / @eg .qetl.tick.reset[]; .qetl.tick.earlier_days[`;2026.10.08;2026.10.09]  ->  ()
-earlier_days:{[want;first_day;last_day]
-    w:$[want~`; key schemas; (),want];
+.qetl.tick.earlier_days:{[want;first_day;last_day]
+    w:$[want~`; key .qetl.tick.schemas; (),want];
     `.qetl.tick.handoff set ();
-    {[w;dt] p:day_log[dt];
-        if[has_log[dt];
-            replay[p;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]]}[w] each first_day+til 0|1+last_day-first_day;
-    m:handoff;
+    {[w;dt] p:.qetl.tick.day_log[dt];
+        if[.qetl.tick.has_log[dt];
+            .qetl.tick.replay[p;{[w;t;r] if[t in w; .qetl.tick.handoff,:enlist (t;r)];}[w]]]}[w] each first_day+til 0|1+last_day-first_day;
+    m:.qetl.tick.handoff;
     `.qetl.tick.handoff set ();
     m}
 
@@ -433,10 +433,10 @@ earlier_days:{[want;first_day;last_day]
 / between cases, and what a process calls at start of day.
 / @return the log path that was closed, or ` when none was open
 / @eg .qetl.tick.reset[] -> `
-reset:{[]
-    was:log_path;
-    if[not null log_handle; hclose log_handle];
-    `.qetl.tick.subscribers set 0#subscribers;
+.qetl.tick.reset:{[]
+    was:.qetl.tick.log_path;
+    if[not null .qetl.tick.log_handle; hclose .qetl.tick.log_handle];
+    `.qetl.tick.subscribers set 0#.qetl.tick.subscribers;
     `.qetl.tick.schemas set (`symbol$())!();
     `.qetl.tick.log_handle set 0N;
     `.qetl.tick.log_path set `;

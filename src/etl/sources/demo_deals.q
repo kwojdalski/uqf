@@ -29,23 +29,23 @@
 /      demo of a worker. The lifecycle, coverage and retry behaviour it
 /      exercises are the production ones.
 
-\d .qpipe.source.demo_deals
+\d .
 
-source_name:`demo_deals
+.qpipe.source.demo_deals.source_name:`demo_deals
 
 / The columns this adapter reads, and their q types. Deliberately a small
 / subset of what such a table would have: the source contract asks for the required columns,
 / not every field, and declaring columns the worker does not read would make
 / an upstream change to an unused column break the run.
-columns:`deal_id`deal_time`sym`side`notional`rate
+.qpipe.source.demo_deals.columns:`deal_id`deal_time`sym`side`notional`rate
 / j=long, p=timestamp, s=symbol, s=symbol, f=float, f=float
-types:"jpssff"
+.qpipe.source.demo_deals.types:"jpssff"
 
 / The local table this lands in.
 
 / The column the bounded window is taken on. Declared rather than assumed so
 / .qetl.source can window the fixture exactly as the live query windows the source.
-time_column:`deal_time
+.qpipe.source.demo_deals.time_column:`deal_time
 
 / What identifies a row uniquely. `deal_id` is the natural key for a
 / deal-shaped source and is obviously right for this synthetic one, where
@@ -55,7 +55,7 @@ time_column:`deal_time
 / it is only correct if the source guarantees uniqueness, and a source that
 / reuses ids after a purge would silently merge unrelated rows. That choice
 / is per-source, which is why the key is declared here rather than inferred.
-row_key:`deal_id
+.qpipe.source.demo_deals.row_key:`deal_id
 
 / The zone deal_time is expressed in.
 / .
@@ -70,7 +70,7 @@ row_key:`deal_id
 / real integration should push the conversion upstream rather than declare a
 / zone: see .qetl.source.local_to_utc for the hour of local timestamps that is
 / irrecoverable in any other arrangement.
-tz:`UTC
+.qpipe.source.demo_deals.tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
@@ -87,7 +87,7 @@ tz:`UTC
 / bound and < on the upper. Getting that wrong by one operator
 / double-publishes every boundary row, which then appears as a duplicate
 / nobody can explain.
-query:{[h;range_from;range_to]
+.qpipe.source.demo_deals.query:{[h;range_from;range_to]
     .qetl.source.ipc[h;{[from_ts;to_ts]
         select deal_id, deal_time, sym, side, notional, rate
             from `demo_deals
@@ -102,7 +102,7 @@ query:{[h;range_from;range_to]
 / changes between runs makes a failing assertion impossible to attribute.
 / The one thing it must be is contract-satisfying, and
 / test_source_contract.q asserts exactly that.
-fixture:{[]
+.qpipe.source.demo_deals.fixture:{[]
     ([] deal_id:1 2 3 4 5j;
         deal_time:2026.09.11D09:00:00.000000000+1D*til 5;
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
@@ -112,8 +112,8 @@ fixture:{[]
 
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.demo_deals.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`demo_deals;time_column;row_key;columns;types;query;fixture;tz)];
+    (.qpipe.source.demo_deals.source_name;`demo_deals;.qpipe.source.demo_deals.time_column;.qpipe.source.demo_deals.row_key;.qpipe.source.demo_deals.columns;.qpipe.source.demo_deals.types;.qpipe.source.demo_deals.query;.qpipe.source.demo_deals.fixture;.qpipe.source.demo_deals.tz)];
 
 \d .

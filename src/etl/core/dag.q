@@ -36,7 +36,7 @@
 / `d2[]`/`to_json[]` give a drawing, with no Python in the path. A q
 / process can therefore schedule and render its own graph.
 
-\d .qetl.dag
+\d .
 
 / ------------------------------------------------------------- REGISTRY
 
@@ -45,17 +45,17 @@
 / entry anyway - and on PeachQ, refuses a second row added by key. inputs and
 / outputs are general columns, because each holds a symbol VECTOR of its own
 / length. A row is .qetl.dag.def; the names are .qetl.dag.defined.
-jobs:([name:`symbol$()] kind:`symbol$(); inputs:(); outputs:())
+.qetl.dag.jobs:([name:`symbol$()] kind:`symbol$(); inputs:(); outputs:())
 
 / Every registered job's name.
 / @return a symbol vector, empty when nothing has registered
 / @eg .qetl.dag.defined[]
-defined:{[] (key jobs)`name}
+.qetl.dag.defined:{[] (key .qetl.dag.jobs)`name}
 
 / The keys every spec must carry. `kind` is descriptive rather than
 / behavioural - nothing branches on it - but it is what lets a viz tool
 / colour a streaming process differently from a backfill.
-required_spec:`kind`inputs`outputs
+.qetl.dag.required_spec:`kind`inputs`outputs
 
 / The kinds a job may declare. Closed on purpose: a typo like `streaming`
 / for `stream` would otherwise silently create a new category that every
@@ -69,7 +69,7 @@ required_spec:`kind`inputs`outputs
 / exactly as a `stream` does; it is a kind of its own so that a graph can
 / show where shapes converge, which is the one thing about a normalizer
 / worth seeing.
-kinds:`bounded`continuous`stream`reaction`normalizer
+.qetl.dag.kinds:`bounded`continuous`stream`reaction`normalizer
 
 / Register a job's inputs and outputs.
 / .
@@ -80,13 +80,13 @@ kinds:`bounded`continuous`stream`reaction`normalizer
 / @param decl dict of kind, inputs, outputs
 / @throws error when a required key is missing, or the kind is not known
 / @eg .qetl.dag.register[`cross1;`kind`inputs`outputs!(`stream;`quotes;`symbol$())]
-register:{[job;decl]
-    missing:required_spec where not required_spec in key decl;
+.qetl.dag.register:{[job;decl]
+    missing:.qetl.dag.required_spec where not .qetl.dag.required_spec in key decl;
     if[count missing;
         '"register: ",string[job]," is missing ",", " sv string missing];
-    if[not (decl`kind) in kinds;
+    if[not (decl`kind) in .qetl.dag.kinds;
         '"register: ",string[job],"'s kind ",string[decl`kind]," is not one of ",
-         ", " sv string kinds];
+         ", " sv string .qetl.dag.kinds];
     / Edges stored as symbol VECTORS whatever shape they arrived in, so count
     / means the number of tables - see .regtest's edge normalisation test.
     `.qetl.dag.jobs upsert (job;decl`kind;(`symbol$()),decl`inputs;(`symbol$()),decl`outputs);
@@ -94,70 +94,70 @@ register:{[job;decl]
 
 / A job's spec, or a refusal naming it.
 / @throws error when the job was never registered
-def:{[job]
-    if[not job in defined[];
+.qetl.dag.def:{[job]
+    if[not job in .qetl.dag.defined[];
         '"def: ",string[job]," is not a registered job"];
-    jobs job}
+    .qetl.dag.jobs job}
 
 / Forget every registration. For tests, and for rebuilding the graph after
 / the underlying registries change.
-reset:{[] jobs::0#jobs; ()}
+.qetl.dag.reset:{[] .qetl.dag.jobs::0#.qetl.dag.jobs; ()}
 
 / The registry as a table, for reading rather than for lookup.
-registry:{[]
-    js:asc defined[];
+.qetl.dag.registry:{[]
+    js:asc .qetl.dag.defined[];
     ([] job:js;
-        kind:{(def[x])`kind} each js;
-        inputs:{(def[x])`inputs} each js;
-        outputs:{(def[x])`outputs} each js)}
+        kind:{(.qetl.dag.def[x])`kind} each js;
+        inputs:{(.qetl.dag.def[x])`inputs} each js;
+        outputs:{(.qetl.dag.def[x])`outputs} each js)}
 
 / ---------------------------------------------------------------- GRAPH
 
 / Which jobs write this table? Empty means nothing here produces it, which
 / makes it an external input rather than an error.
-producers:{[table_name] js:defined[]; js where {[t;j] t in (def[j])`outputs}[table_name] each js}
+.qetl.dag.producers:{[table_name] js:.qetl.dag.defined[]; js where {[t;j] t in (.qetl.dag.def[j])`outputs}[table_name] each js}
 
 / Which jobs read this table?
-consumers:{[table_name] js:defined[]; js where {[t;j] t in (def[j])`inputs}[table_name] each js}
+.qetl.dag.consumers:{[table_name] js:.qetl.dag.defined[]; js where {[t;j] t in (.qetl.dag.def[j])`inputs}[table_name] each js}
 
 / Private: the empty edge table, so every return path has one shape.
 / @private
-no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
+.qetl.dag.no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
 
 / Every edge in the graph, one row per (producer; table; consumer).
 / .
 / An input nothing produces still gets a row, with a null upstream - so a
 / drawing shows where data ENTERS the system rather than silently omitting
 / it. Dropping those rows would make an unconnected job look like a root.
-edges:{[]
-    js:defined[];
-    if[0=count js; :no_edges[]];
+.qetl.dag.edges:{[]
+    js:.qetl.dag.defined[];
+    if[0=count js; :.qetl.dag.no_edges[]];
     e:raze {[j]
-        ins:(def[j])`inputs;
-        if[0=count ins; :no_edges[]];
+        ins:(.qetl.dag.def[j])`inputs;
+        if[0=count ins; :.qetl.dag.no_edges[]];
         raze {[j;t]
-            ps:producers[t];
+            ps:.qetl.dag.producers[t];
             $[0=count ps;
               ([] upstream:enlist `; tbl:enlist t; downstream:enlist j);
               ([] upstream:ps; tbl:count[ps]#t; downstream:count[ps]#j)]
           }[j] each ins
       } each js;
-    $[0=count e; no_edges[]; e]}
+    $[0=count e; .qetl.dag.no_edges[]; e]}
 
 / Tables read by some job and written by none - where data enters.
-external_inputs:{[]
-    ins:distinct raze {(def[x])`inputs} each defined[];
-    ins where 0=count each producers each ins}
+.qetl.dag.external_inputs:{[]
+    ins:distinct raze {(.qetl.dag.def[x])`inputs} each .qetl.dag.defined[];
+    ins where 0=count each .qetl.dag.producers each ins}
 
 / Tables written by some job and read by none - where data comes to rest.
-sinks:{[]
-    outs:distinct raze {(def[x])`outputs} each defined[];
-    outs where 0=count each consumers each outs}
+.qetl.dag.sinks:{[]
+    outs:distinct raze {(.qetl.dag.def[x])`outputs} each .qetl.dag.defined[];
+    outs where 0=count each .qetl.dag.consumers each outs}
 
 / Private: job-level dependency pairs, with external entry points dropped -
 / a null upstream is not a job and cannot be waited on.
 / @private
-job_edges:{[] distinct select upstream, downstream from edges[] where not null upstream}
+.qetl.dag.job_edges:{[] distinct select upstream, downstream from .qetl.dag.edges[] where not null upstream}
 
 / ----------------------------------------------------------- ORDERING
 
@@ -170,9 +170,9 @@ job_edges:{[] distinct select upstream, downstream from edges[] where not null u
 / Refuses on a cycle and NAMES the jobs still unplaced, because "there is a
 / cycle" without saying where leaves the reader tracing edges by hand.
 / @throws error naming every job in the cycle
-topological:{[]
-    e:job_edges[];
-    remaining:defined[];
+.qetl.dag.topological:{[]
+    e:.qetl.dag.job_edges[];
+    remaining:.qetl.dag.defined[];
     order:`$();
     while[count remaining;
         blocked:distinct exec downstream from e where upstream in remaining,
@@ -185,9 +185,9 @@ topological:{[]
     order}
 
 / The same order, grouped into parallel-safe layers.
-layers:{[]
-    e:job_edges[];
-    remaining:defined[];
+.qetl.dag.layers:{[]
+    e:.qetl.dag.job_edges[];
+    remaining:.qetl.dag.defined[];
     out:();
     while[count remaining;
         blocked:distinct exec downstream from e where upstream in remaining,
@@ -203,7 +203,7 @@ layers:{[]
 
 / Private: the characters a d2 node id may contain.
 / @private
-id_chars:.Q.a,.Q.A,.Q.n,"_"
+.qetl.dag.id_chars:.Q.a,.Q.A,.Q.n,"_"
 
 / Private: a d2-safe node id - every other character becomes "_".
 / .
@@ -219,7 +219,7 @@ id_chars:.Q.a,.Q.A,.Q.n,"_"
 / fail to render, it would render as a different graph - which is the worse
 / of the two failures, and the reason this allow-list is not relaxed.
 / @private
-safe_id:{[s] c:string s; @[c;where not c in id_chars;:;"_"]}
+.qetl.dag.safe_id:{[s] c:string s; @[c;where not c in .qetl.dag.id_chars;:;"_"]}
 
 / A d2 diagram of the whole graph, as a newline-joined string.
 / .
@@ -244,29 +244,29 @@ safe_id:{[s] c:string s; @[c;where not c in id_chars;:;"_"]}
 / is the upstream of, labelled "(asserted)". Its node is marked as well as
 / its edges because a reaction whose output nothing reads has no outgoing
 / edge to mark, and would otherwise look exactly as checked as a worker (#532).
-d2:{[]
-    e:edges[];
-    asserted:asserted_jobs[];
+.qetl.dag.d2:{[]
+    e:.qetl.dag.edges[];
+    asserted:.qetl.dag.asserted_jobs[];
     lines:enlist "direction: right";
     / An external input is a table nobody in the graph writes, so it is drawn
     / as a cylinder like the tables in the committed diagrams - and it needs
     / its own declaration line, because d2 takes a label from a declaration
     / rather than from inside an edge.
     ext:distinct exec tbl from e where null upstream;
-    lines,:{"ext_",safe_id[x],": \"",string[x],"\" { shape: cylinder }"} each ext;
+    lines,:{"ext_",.qetl.dag.safe_id[x],": \"",string[x],"\" { shape: cylinder }"} each ext;
     lines,:distinct
         {[asserted;r] $[null r`upstream;
-                "ext_",safe_id[r`tbl]," -> ",safe_id[r`downstream];
+                "ext_",.qetl.dag.safe_id[r`tbl]," -> ",.qetl.dag.safe_id[r`downstream];
               r[`upstream] in asserted;
-                safe_id[r`upstream]," -> ",safe_id[r`downstream],": ",string[r`tbl],
+                .qetl.dag.safe_id[r`upstream]," -> ",.qetl.dag.safe_id[r`downstream],": ",string[r`tbl],
                     " (asserted) {style.stroke-dash: 3}";
-                safe_id[r`upstream]," -> ",safe_id[r`downstream],": ",string r`tbl]
+                .qetl.dag.safe_id[r`upstream]," -> ",.qetl.dag.safe_id[r`downstream],": ",string r`tbl]
           }[asserted] each e;
     / A job with no edges at all would otherwise not appear.
-    lonely:defined[] where {[j] 0=count ?[edges[];enlist (or;(=;`upstream;enlist j);
-                                                            (=;`downstream;enlist j));0b;()]} each defined[];
-    lines,:{safe_id[x],": \"",string[x],"\""} each lonely;
-    lines,:{safe_id[x],".style.stroke-dash: 3"} each asserted inter defined[];
+    lonely:.qetl.dag.defined[] where {[j] 0=count ?[.qetl.dag.edges[];enlist (or;(=;`upstream;enlist j);
+                                                            (=;`downstream;enlist j));0b;()]} each .qetl.dag.defined[];
+    lines,:{.qetl.dag.safe_id[x],": \"",string[x],"\""} each lonely;
+    lines,:{.qetl.dag.safe_id[x],".style.stroke-dash: 3"} each asserted inter .qetl.dag.defined[];
     "\n" sv lines}
 
 / The jobs in the graph whose outputs were ASSERTED rather than derived: the
@@ -275,18 +275,18 @@ d2:{[]
 / declaration, and one through plain `on` claims none, so neither is here.
 / @return the job names, as .qetl.dag.reaction_job builds them
 / @eg .qetl.dag.asserted_jobs[]
-asserted_jobs:{[]
-    r:select from reaction_edges[] where not derived, 0<count each outputs;
-    `symbol$reaction_job'[r`dataset;r`reaction]}
+.qetl.dag.asserted_jobs:{[]
+    r:select from .qetl.dag.reaction_edges[] where not derived, 0<count each outputs;
+    `symbol$.qetl.dag.reaction_job'[r`dataset;r`reaction]}
 
 / The graph as JSON, for a viz tool that would rather not parse d2. Each edge
 / carries `asserted`, so a tool can draw a claimed edge differently from a
 / checked one without re-deriving which is which.
-to_json:{[]
-    asserted:asserted_jobs[];
+.qetl.dag.to_json:{[]
+    asserted:.qetl.dag.asserted_jobs[];
     .j.j `jobs`edges`asserted_jobs`external_inputs`sinks`order!
-        (registry[]; update asserted:upstream in asserted from edges[]; asserted;
-         external_inputs[]; sinks[]; topological[])}
+        (.qetl.dag.registry[]; update asserted:upstream in asserted from .qetl.dag.edges[]; asserted;
+         .qetl.dag.external_inputs[]; .qetl.dag.sinks[]; .qetl.dag.topological[])}
 
 / ----------------------------------------------------- ADOPTION (derive)
 
@@ -315,19 +315,19 @@ to_json:{[]
 / Parseable on purpose, so a viz tool can split it back into source and table
 / rather than having to treat the node as opaque.
 / @eg .qetl.dag.external_ref[`demo_deals;`demo_deals]  ->  `demo_deals@demo_deals
-external_ref:{[source;table_name] `$(string table_name),"@",string source}
+.qetl.dag.external_ref:{[source;table_name] `$(string table_name),"@",string source}
 
 / Register every bounded worker into the job graph, from .qetl.job.bounded's own registry.
 / @return the worker names registered, empty when .qetl.job.bounded is not loaded
 / @eg .qetl.dag.adopt_workers[]
-adopt_workers:{[]
+.qetl.dag.adopt_workers:{[]
     if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
     ws:.qetl.job.bounded.defined[];
     {[w]
         cfg:.qetl.job.bounded.def w;
         d:.qetl.source.def cfg`source;
-        register[w;`kind`inputs`outputs!
-            (`bounded; external_ref[cfg`source;d`table_name]; cfg`dataset)]
+        .qetl.dag.register[w;`kind`inputs`outputs!
+            (`bounded; .qetl.dag.external_ref[cfg`source;d`table_name]; cfg`dataset)]
       } each ws;
     ws}
 
@@ -336,10 +336,10 @@ adopt_workers:{[]
 / A feeder's input is external by definition - it tails a live feed, which
 / is why there is no coverage ledger on that path - so it declares
 / no inputs and appears as a root.
-adopt_feeders:{[]
+.qetl.dag.adopt_feeders:{[]
     if[not `feeds in key @[value;`.qetl.job.continuous;{()}]; :`$()];
     fs:key .qetl.job.continuous.feeds;
-    {[f] register[f;`kind`inputs`outputs!(`continuous; `$(); .qetl.job.continuous.feeds f)]} each fs;
+    {[f] .qetl.dag.register[f;`kind`inputs`outputs!(`continuous; `$(); .qetl.job.continuous.feeds f)]} each fs;
     fs}
 
 / Register every streaming job, from .qetl.job.stream's own registry.
@@ -353,13 +353,13 @@ adopt_feeders:{[]
 / on the same-keyed-dicts trap.
 / @return the job names registered, empty when .qetl.job.stream is not loaded
 / @eg .qetl.dag.adopt_streams[]
-adopt_streams:{[]
+.qetl.dag.adopt_streams:{[]
     if[not `jobs in key @[value;`.qetl.job.stream;{()}]; :`$()];
     js:key .qetl.job.stream.jobs;
     norms:@[{key .qetl.job.stream.normalizer.registry};::;{`$()}];
     {[norms;j]
         d:first .qetl.job.stream.jobs j;
-        register[j;`kind`inputs`outputs!
+        .qetl.dag.register[j;`kind`inputs`outputs!
             ($[j in norms;`normalizer;`stream]; d`subscribe_to; d`publishes)]
       }[norms] each js;
     js}
@@ -374,8 +374,8 @@ adopt_streams:{[]
 / never loads the bridge), this returns empty rather than throwing.
 / @return the process names registered, empty when the bridge is not loaded
 / @eg .qetl.dag.adopt_pipelines[]
-adopt_pipelines:{[]
-    $[`register_pipelines in key `.qetl.dag; register_pipelines[]; `$()]}
+.qetl.dag.adopt_pipelines:{[]
+    $[`register_pipelines in key `.qetl.dag; .qetl.dag.register_pipelines[]; `$()]}
 
 / Register every .qetl.reaction reaction as a job.
 / .
@@ -395,13 +395,13 @@ adopt_pipelines:{[]
 / identity or two reactions called `rebuild` would collapse into one node.
 / @return the job names registered, empty when .qetl.reaction is not loaded
 / @eg .qetl.dag.adopt_reactions[]
-adopt_reactions:{[]
+.qetl.dag.adopt_reactions:{[]
     if[not `reactions in key @[value;`.qetl.reaction;{()}]; :`$()];
     raze {[ds]
         rs:.qetl.reaction.for_dataset ds;
         {[ds;name;outs]
-            job:reaction_job[ds;name];
-            register[job;`kind`inputs`outputs!(`reaction;ds;outs)];
+            job:.qetl.dag.reaction_job[ds;name];
+            .qetl.dag.register[job;`kind`inputs`outputs!(`reaction;ds;outs)];
             job}[ds] .' flip (rs`name;rs`outputs)
       } each key .qetl.reaction.reactions}
 
@@ -422,7 +422,7 @@ adopt_reactions:{[]
 / @param name the reaction's name, unique within that dataset
 / @return the job name, as a symbol
 / @eg .qetl.dag.reaction_job[`demo_deals;`rebuild_positions]
-reaction_job:{[dataset;name] `$(string dataset),"~",string name}
+.qetl.dag.reaction_job:{[dataset;name] `$(string dataset),"~",string name}
 
 / Every reaction edge, and whether its output was derived or asserted.
 / .
@@ -432,7 +432,7 @@ reaction_job:{[dataset;name] `$(string dataset),"~",string name}
 / says which, per reaction, so a drawing can mark an asserted edge rather than
 / presenting all of them as equally checked.
 / @return a table of dataset, reaction, outputs, derived
-reaction_edges:{[]
+.qetl.dag.reaction_edges:{[]
     if[not `reactions in key @[value;`.qetl.reaction;{()}]; :([] dataset:`symbol$(); reaction:`symbol$(); outputs:(); derived:`boolean$())];
     raze {[ds]
         rs:.qetl.reaction.for_dataset ds;
@@ -449,10 +449,10 @@ reaction_edges:{[]
 / reaction's output may name a dataset a worker registered above - the order
 / does not matter to `register`, which takes what it is given, but it keeps
 / the graph's own layering readable.
-adopt_all:{[]
-    reset[];
+.qetl.dag.adopt_all:{[]
+    .qetl.dag.reset[];
     `workers`feeders`streams`pipelines`reactions!
-        (adopt_workers[]; adopt_feeders[]; adopt_streams[]; adopt_pipelines[]; adopt_reactions[])}
+        (.qetl.dag.adopt_workers[]; .qetl.dag.adopt_feeders[]; .qetl.dag.adopt_streams[]; .qetl.dag.adopt_pipelines[]; .qetl.dag.adopt_reactions[])}
 
 / Refuse a cyclic graph, leaving the registry as it was found.
 / .
@@ -468,10 +468,10 @@ adopt_all:{[]
 / @return the number of jobs in the acyclic graph
 / @throws error naming the jobs in the cycle ("topological: cycle among ...")
 / @eg .qetl.dag.check_acyclic[]
-check_acyclic:{[]
-    keep:jobs;
-    r:@[{adopt_all[]; count topological[]};::;{(`err;x)}];
-    jobs::keep;
+.qetl.dag.check_acyclic:{[]
+    keep:.qetl.dag.jobs;
+    r:@[{.qetl.dag.adopt_all[]; count .qetl.dag.topological[]};::;{(`err;x)}];
+    .qetl.dag.jobs::keep;
     if[`err~first r; 'last r];
     r}
 

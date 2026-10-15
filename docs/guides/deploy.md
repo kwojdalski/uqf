@@ -219,8 +219,8 @@ yet registers one, `<server>-<dest's last folder>`, so it can be driven straight
 away.
 
 ```bash
-uqs deploy list                 # newest first; * marks each server's default
-uqs deploy list uat.example     # one server, or one target
+uqs deploy history              # newest first; * marks each server's default
+uqs deploy history uat.example  # one server, or one target
 uqs --target uat.example summary   # a server name: its latest successful deployment
 uqs target shell                # a shell in the most recent deployment
 uqs target shell uat            # ... or in a given target or server
@@ -531,9 +531,10 @@ every release links it in.
 
 ## A server on kdb+ 4.0
 
-kdb+ 4.0 has no nested working contexts (`\d .qetl.status`), and this tree uses
-them. Build the release for it, and only the artifact changes - never the
-checkout (#861):
+kdb+ 4.0 has no nested working contexts (`\d .a.b`). This tree opens none (no
+`\d` names more than one level, #1411), so the build mostly has nothing to
+rewrite; it still converts a sidecar bundle's own nested declarations. Build the
+release for it, and only the artifact changes - never the checkout (#861):
 
 ```bash
 uqs deploy build --q-target 4.0

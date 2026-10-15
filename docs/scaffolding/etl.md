@@ -40,11 +40,11 @@ error and no symptom except an output table that stays empty.
 ## What you get
 
 ```q
-\d .qpipe.job.spreadmon
+\d .
 
-publish:.qetl.job.stream.unwired `spreadmon;
+.qpipe.job.spreadmon.publish:.qetl.job.stream.unwired `spreadmon;
 
-on_batch:{[t;x]
+.qpipe.job.spreadmon.on_batch:{[t;x]
     '"spreadmon.on_batch: not implemented";
     }
 

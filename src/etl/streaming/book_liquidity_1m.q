@@ -14,11 +14,11 @@
 / book looks like: market_data is already the normalized shape, and the
 / adapter in that composition decides which of its books are eligible.
 
-\d .qpipe.job.book_liquidity_1m
+\d .
 
 / The books the calculation reads, with the window the kind cuts for them. `time`
 / (the plant's receipt stamp) is left out: the window is the book's source_time.
-book_rows:update bar_start:`timestamp$() from .qetl.plant.columns[`market_data;`source_time`sym`source`market`bid_prices`bid_sizes`ask_prices`ask_sizes]
+.qpipe.job.book_liquidity_1m.book_rows:update bar_start:`timestamp$() from .qetl.plant.columns[`market_data;`source_time`sym`source`market`bid_prices`bid_sizes`ask_prices`ask_sizes]
 
 \d .
 

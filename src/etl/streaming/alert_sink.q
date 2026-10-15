@@ -59,42 +59,42 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qpipe.job.alert_sink
+\d .
 
 / The columns of a breach this job delivers: fx_limit_breach less the plant's
 / `time`, which is not part of a breach's identity (see .qf.port.scope_cols).
-breach_cols:`sym`book`product`metric`observed`cap`severity`utilisation
+.qpipe.job.alert_sink.breach_cols:`sym`book`product`metric`observed`cap`severity`utilisation
 
 / How many times one breach is attempted before it is recorded as dead.
-max_attempts:3
+.qpipe.job.alert_sink.max_attempts:3
 
 / The gap between reminders of one breach, on the plant's clock. It is
 / fx_positions' own alert_period, repeated here and not read from that job: a
 / job may not read a peer at load (test_no_job_reads_a_peer_job_at_load), and
 / test_the_period_matches_the_publishers pins the two together.
-alert_period:0D00:05
+.qpipe.job.alert_sink.alert_period:0D00:05
 
 / How early a reminder may be stamped and still count as a full period after
 / the last report: the plant stamps each row on arrival, so a reminder the
 / publisher sent exactly one period later can be stamped a few ms short.
-slack:0D00:00:01
+.qpipe.job.alert_sink.slack:0D00:00:01
 
 / Dedup state: breach identity -> the plant `time` of the newest report queued.
-alerts:.qf.port.no_alerts[]
+.qpipe.job.alert_sink.alerts:.qf.port.no_alerts[]
 
 / Breaches awaiting delivery. `body` is the JSON text to POST, built once so
 / that every attempt sends the same bytes.
-pending:([] id:`symbol$(); body:(); attempts:`long$(); error:())
+.qpipe.job.alert_sink.pending:([] id:`symbol$(); body:(); attempts:`long$(); error:())
 
 / Breaches given up on after max_attempts, with the last error. The record
 / that makes a failed delivery visible rather than dropped.
-dead:([] id:`symbol$(); body:(); attempts:`long$(); error:(); failed_at:`timestamp$())
+.qpipe.job.alert_sink.dead:([] id:`symbol$(); body:(); attempts:`long$(); error:(); failed_at:`timestamp$())
 
 / The webhook URL, from the environment.
 / @return the URL as a string - a credential, so never log it
 / @throws error naming UQF_SOURCE_CRED_ALERT_SINK when it is unset
 / @private
-url:{[]
+.qpipe.job.alert_sink.url:{[]
     env_var:.qetl.source.credential_var[`alert_sink];
     v:getenv `$env_var;
     if[0=count v;
@@ -108,14 +108,14 @@ url:{[]
 / @param body the JSON text
 / @return the response body
 / @eg .qpipe.job.alert_sink.post[`$":http://localhost:9/hook";"{}"]
-post:{[target;body] .qetl.webhook.post[target;body]}
+.qpipe.job.alert_sink.post:{[target;body] .qetl.webhook.post[target;body]}
 
 / The message a breach becomes: a `text` for chat webhooks and the breach
 / itself as `breach` for anything that parses it.
 / @param row a breach as a dictionary of breach_cols
 / @return JSON text
 / @eg .qpipe.job.alert_sink.payload `sym`book`product`metric`observed`cap`severity`utilisation!(`EURUSD;`london;`spot;`base_qty;2e6;1e6;`hard;2f)
-payload:{[row]
+.qpipe.job.alert_sink.payload:{[row]
     text:"limit breach (",string[row`severity],"): ",string[row`sym]," ",string[row`book]," ",string[row`product]," ",
          string[row`metric]," ",string[row`observed]," against cap ",string[row`cap];
     .j.j `text`breach!(text;row)}
@@ -125,9 +125,9 @@ payload:{[row]
 / @param now stands in for the `time` of a row that has none
 / @return how many were queued
 / @private
-enqueue:{[x;now]
+.qpipe.job.alert_sink.enqueue:{[x;now]
     x:update time:?[null time;now;time] from x;
-    scope:.qf.port.scope_cols breach_cols#x;
+    scope:.qf.port.scope_cols .qpipe.job.alert_sink.breach_cols#x;
     ids:.qf.port.identity ?[x;();0b;(scope,`metric)!scope,`metric];
     cur:.qpipe.job.alert_sink.alerts;
     / A row is a repeat when its time is under one period after the newest queued for its identity.
@@ -141,7 +141,7 @@ enqueue:{[x;now]
     fresh:x pick;
     fids:ids pick;
     `.qpipe.job.alert_sink.alerts set cur,fids!fresh`time;
-    `.qpipe.job.alert_sink.pending upsert flip `id`body`attempts`error!(fids;payload each breach_cols#fresh;(count fresh)#0j;(count fresh)#enlist "");
+    `.qpipe.job.alert_sink.pending upsert flip `id`body`attempts`error!(fids;.qpipe.job.alert_sink.payload each .qpipe.job.alert_sink.breach_cols#fresh;(count fresh)#0j;(count fresh)#enlist "");
     count fresh}
 
 / Attempt every pending delivery once. A success leaves the queue; a failure
@@ -151,10 +151,10 @@ enqueue:{[x;now]
 / @return a dict of delivered, retrying and failed counts
 / @throws error when no URL is configured
 / @eg .qpipe.job.alert_sink.flush .z.p
-flush:{[now]
+.qpipe.job.alert_sink.flush:{[now]
     p:.qpipe.job.alert_sink.pending;
     if[0=count p; :`delivered`retrying`failed!0 0 0];
-    target:url[];
+    target:.qpipe.job.alert_sink.url[];
     errs:{[target;body] .[{[target;body] .qpipe.job.alert_sink.post[target;body]; ""};(target;body);{[e] $[10h=type e; e; "delivery failed"]}]}[target] each p`body;
     ok:0=count each errs;
     tried:update attempts:attempts+1, error:errs from p;
@@ -171,19 +171,19 @@ flush:{[now]
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.alert_sink.on_batch:{[t;x]
     if[not t=`fx_limit_breach; :()];
     if[0=count x; :()];
     / Before the dedup state is touched: a refusal must not mark anything alerted.
-    url[];
-    enqueue[x;.z.p];
-    flush[.z.p];
+    .qpipe.job.alert_sink.url[];
+    .qpipe.job.alert_sink.enqueue[x;.z.p];
+    .qpipe.job.alert_sink.flush[.z.p];
     }
 
 / The retry tick: what is still pending is attempted again. Silent while
 / nothing is pending, so an unconfigured job refuses only when it has a
 / breach to deliver.
-on_timer:{[] flush[.z.p]; }
+.qpipe.job.alert_sink.on_timer:{[] .qpipe.job.alert_sink.flush[.z.p]; }
 
 \d .
 

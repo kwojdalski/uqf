@@ -14,21 +14,21 @@
 / Live: export UQF_SOURCE_CRED_HDB_EXECUTIONS=localhost:<hdb1's port> in the
 / shell `uqs job backfill` runs from. Without it, the fixture below is used.
 
-\d .qpipe.source.hdb_executions
+\d .
 
-source_name:`hdb_executions
+.qpipe.source.hdb_executions.source_name:`hdb_executions
 
-columns:`source_time`sym`size`price
-types:"psff"
+.qpipe.source.hdb_executions.columns:`source_time`sym`size`price
+.qpipe.source.hdb_executions.types:"psff"
 
-time_column:`source_time
+.qpipe.source.hdb_executions.time_column:`source_time
 
 / The table carries a fill id only where the venue gave one, so two fills of a
 / sym at one instant share this key; the worker writes by its own target_key.
-row_key:`sym`source_time
+.qpipe.source.hdb_executions.row_key:`sym`source_time
 
 / .u.upd stamps `time` in UTC, and the source's own stamps are UTC.
-tz:`UTC
+.qpipe.source.hdb_executions.tz:`UTC
 
 / The window's fills, from the HDB. Parameterised, half-open on source_time;
 / the table is date-partitioned, so the partition is constrained first, one
@@ -37,7 +37,7 @@ tz:`UTC
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the fills, by source_time
-query:{[h;range_from;range_to]
+.qpipe.source.hdb_executions.query:{[h;range_from;range_to]
     .qetl.source.ipc[h;{[from_ts;to_ts]
         `source_time xasc select source_time, sym, size, price from `executions
             where date within (-1 1)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
@@ -47,14 +47,14 @@ query:{[h;range_from;range_to]
 / two minutes (one fill exactly on the boundary) and one USDJPY fill.
 / @return fills on 2026.10.09
 / @eg count .qpipe.source.hdb_executions.fixture[]  ->  5
-fixture:{[]
+.qpipe.source.hdb_executions.fixture:{[]
     ([] source_time:2026.10.09D10:00:05 2026.10.09D10:00:50 2026.10.09D10:00:20 2026.10.09D10:01:00 2026.10.09D10:00:30;
         sym:`EURUSD`EURUSD`EURUSD`EURUSD`USDJPY;
         size:1e6 3e6 2e6 1e6 5e5;
         price:1.10 1.12 1.11 1.20 150.0)}
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.hdb_executions.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`executions;time_column;row_key;columns;types;query;fixture;tz)];
+    (.qpipe.source.hdb_executions.source_name;`executions;.qpipe.source.hdb_executions.time_column;.qpipe.source.hdb_executions.row_key;.qpipe.source.hdb_executions.columns;.qpipe.source.hdb_executions.types;.qpipe.source.hdb_executions.query;.qpipe.source.hdb_executions.fixture;.qpipe.source.hdb_executions.tz)];
 
 \d .

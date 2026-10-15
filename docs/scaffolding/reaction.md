@@ -62,12 +62,12 @@ scaffold rebuild_positions:
 ## The file
 
 ```q
-\d .qpipe.job.rebuild_positions
+\d .
 
 / Called with the dataset and the half-open range [range_from;range_to) just
 / published. Recompute exactly what that range changed, keyed by the window,
 / so a re-published window replaces its own rows instead of adding to them.
-handler:{[dataset;range_from;range_to]
+.qpipe.job.rebuild_positions.handler:{[dataset;range_from;range_to]
     '"rebuild_positions: not implemented";
     }
 

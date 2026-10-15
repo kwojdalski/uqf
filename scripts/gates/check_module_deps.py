@@ -18,7 +18,7 @@ a fully qualified reference, `.qf.px.fwd_simple`, and asking which file DEFINES
 is always fully qualified (a bare name only reaches the file's own
 definitions), and because of the fourth rule below.
 
-Five rules, each a failure on its own:
+Four rules, each a failure on its own:
 
 * **Every edge is listed.** A reference from one library module to another
   that ALLOWED does not hold fails, naming the file and line. Adding the edge
@@ -34,9 +34,7 @@ Five rules, each a failure on its own:
   the loser's callers silently get the other function. Refused, naming both
   files; rename the one that means something narrower.
 
-* **No nested context.** A library file defines `.qf.px.f:{...}` from the root
-  and never opens `\\d .qf.px`: PeachQ cannot switch into a nested context, and
-  loading the library natively on it depends on none being there.
+A `\\d` that opens a nested context is refused by check_nested_contexts.py.
 
 STRING AND COMMENT AWARE, like check_etl_layering.py: an error message or a
 comment naming another module's function documents it and is not a call.
@@ -133,7 +131,6 @@ _NS_LINE = re.compile(r"^(?:\\d\s+(\.qdata)\s*$|(\.qf\.[a-z]+)\.[A-Za-z_]\w*\s*:
 _NS_ANY = re.compile(r"^\\d\s+(\S+)\s*$")
 _DEF = re.compile(r"^([A-Za-z_]\w*)\s*:")
 _QDEF = re.compile(r"^(\.qf\.[a-z]+)\.([A-Za-z_]\w*)\s*:")
-_NESTED = re.compile(r"^\\d\s+\.\w+\.\S")
 _STRING = re.compile(r'"(?:\\.|[^"\\])*"')
 _TRAILING_COMMENT = re.compile(r"\s/(\s.*)?$")
 _REF = re.compile(r"(?<![\w`])(\.qf\.[a-z]+|\.qdata)\.([A-Za-z_]\w*)")
@@ -224,25 +221,6 @@ def duplicates(root: Path = REPO) -> list[str]:
     return out
 
 
-def nested_contexts(root: Path = REPO) -> list[str]:
-    """Every `\\d .a.b` in a library file: the quant library defines its names
-    from the root context (`.qf.px.f:{...}`), so that PeachQ, which cannot
-    switch into a nested context, loads it natively (#1411)."""
-    out: list[str] = []
-    paths = [p for d in LIBRARY_DIRS for p in sorted((root / "src" / d).glob("*.q"))]
-    paths += [root / rel for rel in NAMESPACE_ONLY_FILES]
-    for path in paths:
-        if not path.is_file():
-            continue
-        for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
-            if _NESTED.match(line):
-                out.append(
-                    f"{path.relative_to(root)}:{n}: `{line.strip()}` is a nested context - "
-                    "define the names fully qualified from the root (`.qf.px.f:{...}`)"
-                )
-    return out
-
-
 def cycle(graph: frozenset[tuple[str, str]] | set[tuple[str, str]]) -> list[str]:
     """One cycle in `graph`, as a path, or [] when it is acyclic."""
     succ: dict[str, list[str]] = {}
@@ -297,7 +275,6 @@ def problems(
     if loop:
         out.append("the module graph has a cycle: " + " -> ".join(loop))
     out.extend(duplicates(root))
-    out.extend(nested_contexts(root))
     return out
 
 

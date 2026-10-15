@@ -53,7 +53,7 @@ _PARTITION = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 #: `name:([]...)` at the start of a line in the generated database.q - the
 #: same convention model/schemas.py and model/plant_schema.py read by, applied to the
 #: merged file so vendored tables count too.
-_DEFINITION = re.compile(r"^([a-z_0-9]+):\(\[\]", re.MULTILINE)
+_DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_0-9]+):\(\[\]", re.MULTILINE)
 
 #: One `name:` inside a table definition's body. Applied to the text BETWEEN
 #: the `([]` and its closing `)`, so it cannot match a table definition.

@@ -370,7 +370,10 @@ def test_this_checkouts_tree_converts_and_loads_on_peachq(tmp_path, monkeypatch)
     env = {**os.environ, "TORQAPPHOME": str(paths.torqapphome)}
     tree = qtree.prepare(paths, PEACHQ, env)
     assert (tree / "src" / "etl" / "init.q").is_file()
-    assert json.loads((paths.torqdata / qtree.REPORT).read_text())["transformed"]
+    # This tree writes no nested context (#1411), so it arrives converted by
+    # nothing; the copy still has to load on PeachQ, and a site's own nested
+    # declarations are what the conversion remains for.
+    assert json.loads((paths.torqdata / qtree.REPORT).read_text())["transformed"] == []
 
 
 @needs_peachq

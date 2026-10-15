@@ -17,7 +17,7 @@
 / and .qetl.transform runs the transform's own example on every build so the mapping
 / is a tested claim rather than a comment.
 
-\d .qpipe.job.upstream_trades_backfill
+\d .
 
 / Refuse a batch that cannot be a trade: a non-positive price or size.
 / Shaped correctly and still wrong is what a check is for.
@@ -25,7 +25,7 @@
 / @return a table check/status/detail, one row per failing condition; empty
 /   means the batch passed
 / @eg .qpipe.job.upstream_trades_backfill.quality_check[([] time:enlist .z.p; sym:enlist `AAPL; venue:enlist `N; price:enlist 28.73; size:enlist 41; side:enlist 1)]  ->  an empty table
-quality_check:{[batch]
+.qpipe.job.upstream_trades_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     bad:select from batch where (not price>0) or not size>0;
     $[0=count bad;
@@ -43,7 +43,7 @@ quality_check:{[batch]
 / @param batch the transformed rows of one window
 / @return a dict of symbol labels to values, recorded against the window
 / @eg .qpipe.job.upstream_trades_backfill.facts[0#.qpipe.source.upstream_trades.fixture[]]  ->  (enlist `span)!enlist "empty window"
-facts:{[batch]
+.qpipe.job.upstream_trades_backfill.facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
     `span`symbols!((string min batch`time),"/",string max batch`time; count distinct batch`sym)}
 

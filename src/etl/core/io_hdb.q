@@ -8,7 +8,7 @@
 / io_manager.q keeps the contract, the write strategies and the dispatch.
 / Loaded straight after io_manager.q (src/etl/init.q), so load order is as it was.
 
-\d .qetl.io
+\d .
 
 / ---------------------------------------------------------------- HDB
 
@@ -67,12 +67,12 @@
 
 / Is this PeachQ? The one test this tree uses for it, as uqs's own
 / (python/uqs/src/uqs/interpreter.py): PeachQ defines .pq.load_natives.
-on_peachq:not -7h=type @[value;`.pq.load_natives;{0N}]
+.qetl.io.on_peachq:not -7h=type @[value;`.pq.load_natives;{0N}]
 
 / How long an HDB write waits for another writer on the same root (#1083).
 / A keyed write rewrites a whole date partition, so the holder may be busy
 / for well over the ledger's few seconds; a dead holder is broken at once.
-hdb_lock_wait:0D00:10
+.qetl.io.hdb_lock_wait:0D00:10
 
 / The lock every writer to one HDB root holds (#1083), beside the root as
 / its staging area is, so every process writing the root shares it whatever
@@ -94,7 +94,7 @@ hdb_lock_wait:0D00:10
 / @return the lock directory's path, absolute
 / @eg .qetl.io.hdb_lock `:/data/hdb  ->  "/data/hdb.write.lock"
 / @eg .qetl.io.hdb_lock `:/data/hdb/  ->  "/data/hdb.write.lock"
-hdb_lock:{[root]
+.qetl.io.hdb_lock:{[root]
     p:1_string root;
     p:(neg sum mins reverse "/"=p)_p;
     if[not "/"=first p; p:(system"cd"),"/",p];
@@ -102,11 +102,11 @@ hdb_lock:{[root]
 
 / Private: run f . args holding root's write lock.
 / @private
-locked:{[root;f;args]
-    .qetl.job.bounded.state.with_lock_at[hdb_lock[root];hdb_lock_wait;f;args]}
+.qetl.io.locked:{[root;f;args]
+    .qetl.job.bounded.state.with_lock_at[.qetl.io.hdb_lock[root];.qetl.io.hdb_lock_wait;f;args]}
 
 / Partitions written and not yet finished: root, date, table.
-touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())
+.qetl.io.touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())
 
 / An HDB writer for one root and partition column.
 / @param root the HDB directory, as a file symbol, e.g. `:/data/hdb
@@ -115,7 +115,7 @@ touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())
 / @return a manager carrying write and finish
 / @throws error when root is not a file symbol or partition_col not a symbol
 / @eg .qetl.io.hdb[`:/tmp/qio_eg_hdb;`deal_time]
-hdb:{[root;partition_col]
+.qetl.io.hdb:{[root;partition_col]
     if[not (-11h=type root) and ":"=first string root;
         '"hdb: root must be a file symbol, e.g. `:/data/hdb"];
     if[not -11h=type partition_col;
@@ -125,17 +125,17 @@ hdb:{[root;partition_col]
     / is a CALL, and would run the write before the lock is taken.
     / finish takes a second, ignored argument so it stays a function of one.
     `write`write_keyed`flush`finish`recover!(
-        {[r;p;t;b] locked[r;write_hdb;(r;p;t;b)]}[root;partition_col];
-        {[r;p;t;b;o] locked[r;write_hdb_keyed;(r;p;t;b;o)]}[root;partition_col];
-        {[r;u] locked[r;flush_hdb;(r;u)]}[root];
-        {[r;x] locked[r;finish_hdb;(r;x)]}[root];
-        {[r;a;b;c] locked[r;recover_hdb;(r;a;b;c)]}[root])}
+        {[r;p;t;b] .qetl.io.locked[r;.qetl.io.write_hdb;(r;p;t;b)]}[root;partition_col];
+        {[r;p;t;b;o] .qetl.io.locked[r;.qetl.io.write_hdb_keyed;(r;p;t;b;o)]}[root;partition_col];
+        {[r;u] .qetl.io.locked[r;.qetl.io.flush_hdb;(r;u)]}[root];
+        {[r;x] .qetl.io.locked[r;.qetl.io.finish_hdb;(r;x)]}[root];
+        {[r;a;b;c] .qetl.io.locked[r;.qetl.io.recover_hdb;(r;a;b;c)]}[root])}
 
 / Private: append one window into its date partitions.
 / @private
-write_hdb:{[root;partition_col;target;batch]
+.qetl.io.write_hdb:{[root;partition_col;target;batch]
     if[0=count batch; :0];
-    data:.Q.en[root;hdb_rows[partition_col;target;batch]];
+    data:.Q.en[root;.qetl.io.hdb_rows[partition_col;target;batch]];
     days:`date$data`time;
     {[root;target;data;days;d]
         part:hsym `$(string .Q.par[root;d;target]),"/";
@@ -144,11 +144,11 @@ write_hdb:{[root;partition_col;target;batch]
         / A partition a previous run finished carries p#sym; appending out of
         / order to it is not safe, so the attribute comes off here and
         / finish sorts and puts it back.
-        if[(`sym in existing) and not on_peachq; @[part;`sym;`#]];
+        if[(`sym in existing) and not .qetl.io.on_peachq; @[part;`sym;`#]];
         / PeachQ cannot upsert onto a splayed table on disk ('type), so there
         / the partition is read back and written again whole.
         $[()~existing; part set rows;
-          on_peachq; part set .Q.en[root] t,(cols t:read_part[part])#rows;
+          .qetl.io.on_peachq; part set .Q.en[root] t,(cols t:.qetl.io.read_part[part])#rows;
           part upsert rows];
         `.qetl.io.touched upsert (root;d;target);
         }[root;target;data;days] each distinct days;
@@ -157,7 +157,7 @@ write_hdb:{[root;partition_col;target;batch]
 / Private: a partition on disk as a table, symbols decoded - what PeachQ
 / appends to by writing the partition again whole.
 / @private
-read_part:{[part]
+.qetl.io.read_part:{[part]
     base:-1_string part;
     c:get hsym `$base,"/.d";
     flip c!{[base;x] v:get hsym `$base,"/",string x; $[type[v] within 20 76h; value v; v]}[base] each c}
@@ -165,7 +165,7 @@ read_part:{[part]
 / Private: the batch with the plant's `time` column, refused when it cannot
 / be partitioned or would land in the tickerplant's dates.
 / @private
-hdb_rows:{[partition_col;target;batch]
+.qetl.io.hdb_rows:{[partition_col;target;batch]
     if[not any (`time;partition_col) in cols batch;
         '"hdb: ",string[target],"'s batch has neither time nor ",string[partition_col]," to partition by"];
     data:$[`time in cols batch; batch; `time xcols ![batch;();0b;enlist[`time]!enlist partition_col]];
@@ -208,12 +208,12 @@ hdb_rows:{[partition_col;target;batch]
 / Not on PeachQ, which cannot rewrite a partition already on disk: there a
 / replace leaves the spill, as it always did.
 / @private
-write_hdb_keyed:{[root;partition_col;target;batch;opts]
-    strategy:require_strategy opts`on_conflict;
-    if[`append=strategy; :write_hdb[root;partition_col;target;batch]];
+.qetl.io.write_hdb_keyed:{[root;partition_col;target;batch;opts]
+    strategy:.qetl.io.require_strategy opts`on_conflict;
+    if[`append=strategy; :.qetl.io.write_hdb[root;partition_col;target;batch]];
     / Shaped even when empty: a `replace of a day the source has emptied
     / still needs the target's columns to resolve against.
-    data:.Q.en[root;hdb_rows[partition_col;target;batch]];
+    data:.Q.en[root;.qetl.io.hdb_rows[partition_col;target;batch]];
     days:`date$data`time;
     dates:distinct days;
     / NEW KEYS ARE APPENDED, not resolved into a rewrite (#1086). Every
@@ -228,21 +228,21 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
     / append path rewrites a partition whole anyway (it cannot upsert onto a
     / splayed table), so there is nothing to save and the key probe would
     / read a partition the way PeachQ cannot.
-    if[(not on_peachq) and not `replace=strategy;
+    if[(not .qetl.io.on_peachq) and not `replace=strategy;
         kc:(),opts`row_key;
         / The fold IS resolve's: each date's rows resolved against an empty
         / table, one call per date as the slow path makes one per partition
         / (#1160; the hand copy drifted once, #1142).
         fo:(`target,())!(),target;
         folds:{[strategy;kc;data;days;fo;d]
-            resolve[strategy;0#data;data where days=d;fo,enlist[`row_key]!enlist kc]}[strategy;kc;data;days;fo] each dates;
+            .qetl.io.resolve[strategy;0#data;data where days=d;fo,enlist[`row_key]!enlist kc]}[strategy;kc;data;days;fo] each dates;
         fold:raze folds;
         clean:{[root;target;kc;rows;d]
             part:hsym `$(string .Q.par[root;d;target]),"/";
             if[()~key part; :1b];
             if[not (exec t from meta rows)~exec t from meta part; :0b];
             not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
-        if[all clean; write_hdb[root;partition_col;target;fold]; :count batch]];
+        if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count batch]];
     if[`replace=strategy;
         span:{[f;t] f+til 1+t-f}[`date$opts`range_from;`date$opts[`range_to]-1];
         dates:distinct dates,span where (span<.z.d) and
@@ -265,18 +265,18 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
         / 'splay), and turns an enumerated sym into plain symbols (so the
         / splayed `set` below throws 'type). Indexing keeps the enumeration.
         existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
-        (part;d;plain resolve[strategy;existing;rows;o])
+        (part;d;.qetl.io.plain .qetl.io.resolve[strategy;existing;rows;o])
         }[root;target;data;days;strategy;o] each dates;
-    if[(`replace=strategy) and (not on_peachq) and not any (`time,opts`time_column) in (),opts`row_key;
-        plan,:spill[root;target;data;opts;dates]];
+    if[(`replace=strategy) and (not .qetl.io.on_peachq) and not any (`time,opts`time_column) in (),opts`row_key;
+        plan,:.qetl.io.spill[root;target;data;opts;dates]];
     / STAGED, THEN SWAPPED. Writing `set` straight onto the live partition
     / rewrote it column by column while the HDB had it mapped: a kill part way
     / left columns of different lengths, and a reload in between mapped a
     / half-written table. Every date is written whole into the staging area
     / first - an error there leaves the HDB exactly as it was - and only then
     / renamed into place, one directory at a time.
-    {[root;target;step] stage[root;step 1;target;step 2]}[root;target] each plan;
-    {[root;target;step] swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
+    {[root;target;step] .qetl.io.stage[root;step 1;target;step 2]}[root;target] each plan;
+    {[root;target;step] .qetl.io.swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
     count batch}
 
 / Private: the partition after a `replace window, without the window's keys.
@@ -291,14 +291,14 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
 / @param dates the dates already planned
 / @return () or one (part;date;rows) step, as write_hdb_keyed plans them
 / @private
-spill:{[root;target;data;opts;dates]
+.qetl.io.spill:{[root;target;data;opts;dates]
     d:`date$opts`range_to;
     part:hsym `$(string .Q.par[root;d;target]),"/";
     if[(d in dates) or (d>=.z.d) or ()~key part; :()];
     kc:(),opts`row_key;
     existing:flip {x til count x} each flip select from get part;
     keep:existing where not (kc#existing) in kc#data;
-    $[count[keep]<count existing; enlist (part;d;plain keep); ()]}
+    $[count[keep]<count existing; enlist (part;d;.qetl.io.plain keep); ()]}
 
 / ------------------------------------------------------------ STAGING
 / .
@@ -317,22 +317,22 @@ spill:{[root;target;data;opts;dates]
 / Private: the staging area for `root`, as a path string.
 / @param root the HDB root, a file symbol
 / @private
-staging:{[root] (1_string root),".staging"}
+.qetl.io.staging:{[root] (1_string root),".staging"}
 
 / Private: one (date; table) under the staging area's `new or `old.
 / @private
-staged:{[root;kind;d;t] (staging[root]),"/",string[kind],"/",string[d],"/",string t}
+.qetl.io.staged:{[root;kind;d;t] (.qetl.io.staging[root]),"/",string[kind],"/",string[d],"/",string t}
 
 / Private: a partition's table directory, as a path string - through .Q.par,
 / so a segmented HDB's par.txt is honoured.
 / @private
-part_path:{[root;d;t] 1_string .Q.par[root;d;t]}
+.qetl.io.part_path:{[root;d;t] 1_string .Q.par[root;d;t]}
 
 / Private: write one date's resolved table into the staging area.
 / @return the staged path
 / @private
-stage:{[root;d;t;rows]
-    p:staged[root;`new;d;t];
+.qetl.io.stage:{[root;d;t;rows]
+    p:.qetl.io.staged[root;`new;d;t];
     system"rm -rf ",p;
     system"mkdir -p ",p;
     (hsym `$p,"/") set rows;
@@ -340,15 +340,15 @@ stage:{[root;d;t;rows]
 
 / Private: rename a staged table into its partition, retiring the old one.
 / @private
-swap:{[root;d;t]
-    live:part_path[root;d;t];
-    old:staged[root;`old;d;t];
+.qetl.io.swap:{[root;d;t]
+    live:.qetl.io.part_path[root;d;t];
+    old:.qetl.io.staged[root;`old;d;t];
     system"rm -rf ",old;
-    system"mkdir -p ",(staging[root]),"/old/",string d;
+    system"mkdir -p ",(.qetl.io.staging[root]),"/old/",string d;
     / The date directory, whatever its segment: the live path less its table.
     system"mkdir -p ",(neg 1+count string t)_live;
     if[not ()~key hsym `$live; system"mv ",live," ",old];
-    system"mv ",staged[root;`new;d;t]," ",live;
+    system"mv ",.qetl.io.staged[root;`new;d;t]," ",live;
     system"rm -rf ",old;
     }
 
@@ -368,12 +368,12 @@ swap:{[root;d;t]
 / @param t the table
 / @return 1b when a table was removed, 0b when there was none
 / @eg .qetl.io.retire[`:/tmp/qio_eg_hdb;2026.01.02;`iodeals]
-retire:{[root;d;t]
-    live:part_path[root;d;t];
+.qetl.io.retire:{[root;d;t]
+    live:.qetl.io.part_path[root;d;t];
     if[()~key hsym `$live; :0b];
-    old:staged[root;`old;d;t];
+    old:.qetl.io.staged[root;`old;d;t];
     system"rm -rf ",old;
-    system"mkdir -p ",(staging[root]),"/old/",string d;
+    system"mkdir -p ",(.qetl.io.staging[root]),"/old/",string d;
     system"mv ",live," ",old;
     system"rm -rf ",old;
     datedir:(neg 1+count string t)_live;
@@ -397,8 +397,8 @@ retire:{[root;d;t]
 / @param target the table to sweep
 / @return how many tables were restored
 / @private
-sweep_staging:{[root;target]
-    s:staging[root];
+.qetl.io.sweep_staging:{[root;target]
+    s:.qetl.io.staging[root];
     if[()~key hsym `$s; :0];
     under:{[s;kind] $[()~key hsym `$s,"/",kind; `symbol$(); key hsym `$s,"/",kind]}[s];
     {[s;target;d] system"rm -rf ",s,"/new/",string[d],"/",string target}[s;target] each under "new";
@@ -407,8 +407,8 @@ sweep_staging:{[root;target]
         {[s;target;d] not ()~key hsym `$s,"/old/",string[d],"/",string target}[s;target] each dates;
     restored:{[root;pr]
         d:"D"$string pr 0;
-        live:part_path[root;d;pr 1];
-        old:staged[root;`old;d;pr 1];
+        live:.qetl.io.part_path[root;d;pr 1];
+        old:.qetl.io.staged[root;`old;d;pr 1];
         $[()~key hsym `$live;
             [system"mkdir -p ",(neg 1+count string pr 1)_live; system"mv ",old," ",live; 1];
             [system"rm -rf ",old; 0]]}[root] each pairs;
@@ -425,8 +425,8 @@ sweep_staging:{[root;target]
 / finishing.
 / @return 1b when it repaired something
 / @private
-repair_torn:{[root;d;t]
-    base:part_path[root;d;t];
+.qetl.io.repair_torn:{[root;d;t]
+    base:.qetl.io.part_path[root;d;t];
     if[()~key hsym `$base,"/.d"; :0b];
     c:get hsym `$base,"/.d";
     n:{[base;c] count get hsym `$base,"/",string c}[base] each c;
@@ -441,7 +441,7 @@ repair_torn:{[root;d;t]
 / @param todo a table of dt and tbl
 / @return how many partitions were finished
 / @private
-finish_parts:{[root;todo]
+.qetl.io.finish_parts:{[root;todo]
     / Nothing to finish: and PeachQ throws 'nyi on each-both over empty lists.
     if[0=count todo; :0];
     {[root;d;t]
@@ -450,10 +450,10 @@ finish_parts:{[root;todo]
         c:get hsym `$base,"/.d";
         order:(`sym`time inter c);
         if[count order; order xasc part];
-        if[(`sym in c) and not on_peachq; @[part;`sym;`p#]];
+        if[(`sym in c) and not .qetl.io.on_peachq; @[part;`sym;`p#]];
         }[root]'[todo`dt;todo`tbl];
-    if[not on_peachq; .Q.chk root];
-    `.qetl.io.touched set touched except ([] hdb_root:count[todo]#root),'todo;
+    if[not .qetl.io.on_peachq; .Q.chk root];
+    `.qetl.io.touched set .qetl.io.touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
 
 / Private: is this partition finished, as finish_parts leaves it?
@@ -464,11 +464,11 @@ finish_parts:{[root;todo]
 / with neither was written and never finished. One with neither column has
 / nothing to judge by and reads as finished, as does one that does not exist.
 / @private
-is_finished:{[root;d;t]
+.qetl.io.is_finished:{[root;d;t]
     base:string .Q.par[root;d;t];
     if[()~key hsym `$base,"/.d"; :1b];
     c:get hsym `$base,"/.d";
-    if[on_peachq; :in_order[base;c]];
+    if[.qetl.io.on_peachq; :.qetl.io.in_order[base;c]];
     $[`sym in c; `p=attr get hsym `$base,"/sym";
       `time in c; `s=attr get hsym `$base,"/time";
       1b]}
@@ -476,7 +476,7 @@ is_finished:{[root;d;t]
 / Private: is the partition at `base` in finish's order - sym, then time?
 / How PeachQ, which keeps no attribute, tells a finished partition.
 / @private
-in_order:{[base;c]
+.qetl.io.in_order:{[base;c]
     order:`sym`time inter c;
     if[0=count order; :1b];
     t:flip order!{[base;x] get hsym `$base,"/",string x}[base] each order;
@@ -485,33 +485,33 @@ in_order:{[base;c]
 / Private: queue the partitions of `target` in [range_from;range_to) that
 / were written and never finished, for the next finish.
 / @private
-recover_hdb:{[root;target;from_ts;to_ts]
+.qetl.io.recover_hdb:{[root;target;from_ts;to_ts]
     if[not from_ts<to_ts; :0];
     / First what a killed keyed write left in staging, so the partitions read
     / below are the ones the HDB will map.
-    restored:sweep_staging[root;target];
+    restored:.qetl.io.sweep_staging[root;target];
     span:{[f;t] f+til 1+t-f}[`date$from_ts;`date$to_ts-1];
-    torn:span where repair_torn[root;;target] each span;
+    torn:span where .qetl.io.repair_torn[root;;target] each span;
     if[(restored>0) or count torn;
         @[{.qetl.log.warn[`qetl.io;"repaired partitions a killed write left behind";x]};
           `restored`trimmed!(restored;torn);{[e] (::)}]];
     / A trimmed partition is queued whatever its attributes say: trimming
     / rewrote only the long columns, so p#sym can survive on a partition that
     / still needs re-sorting.
-    ds:distinct torn,span where not is_finished[root;;target] each span;
+    ds:distinct torn,span where not .qetl.io.is_finished[root;;target] each span;
     `.qetl.io.touched upsert ([] hdb_root:count[ds]#root; dt:ds; tbl:count[ds]#target);
     count ds}
 
 / Private: every partition this root was written to.
 / @private
-finish_hdb:{[root;ignored]
-    finish_parts[root;distinct select dt, tbl from touched where hdb_root=root]}
+.qetl.io.finish_hdb:{[root;ignored]
+    .qetl.io.finish_parts[root;distinct select dt, tbl from .qetl.io.touched where hdb_root=root]}
 
 / Private: the partitions of this root dated wholly before `upto`, and how
 / many of its partitions are still open after them.
 / @private
-flush_hdb:{[root;upto]
-    n:finish_parts[root;distinct select dt, tbl from touched where hdb_root=root, dt<`date$upto];
-    `finished`pending!(n;count distinct select dt, tbl from touched where hdb_root=root)}
+.qetl.io.flush_hdb:{[root;upto]
+    n:.qetl.io.finish_parts[root;distinct select dt, tbl from .qetl.io.touched where hdb_root=root, dt<`date$upto];
+    `finished`pending!(n;count distinct select dt, tbl from .qetl.io.touched where hdb_root=root)}
 
 \d .

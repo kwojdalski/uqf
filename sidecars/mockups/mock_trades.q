@@ -11,36 +11,36 @@
 /         --from 2026-09-01 --to 2026-09-08
 / Without one, the worker runs on `fixture` - one hour of the same rows.
 
-\d .qpipe.source.mock_trades
+\d .
 
-source_name:`mock_trades
+.qpipe.source.mock_trades.source_name:`mock_trades
 
-columns:`time`sym`side`qty`px
-types:"pssff"
+.qpipe.source.mock_trades.columns:`time`sym`side`qty`px
+.qpipe.source.mock_trades.types:"pssff"
 
 
-time_column:`time
+.qpipe.source.mock_trades.time_column:`time
 
 / At most one trade per pair in a slot, so pair and slot identify a row.
-row_key:`time`sym
+.qpipe.source.mock_trades.row_key:`time`sym
 
 / Generated in UTC.
-tz:`UTC
+.qpipe.source.mock_trades.tz:`UTC
 
 / The pairs traded, and the level each starts its window at.
-syms:`EURUSD`GBPUSD`USDJPY
-base:1.0850 1.2650 149.50
+.qpipe.source.mock_trades.syms:`EURUSD`GBPUSD`USDJPY
+.qpipe.source.mock_trades.base:1.0850 1.2650 149.50
 
 / One slot a minute; a trade in a slot with this probability, per pair.
-step:0D00:01
-rate:0.3
+.qpipe.source.mock_trades.step:0D00:01
+.qpipe.source.mock_trades.rate:0.3
 
 / Run `f` with q's random seed set to `s`, putting the caller's seed back
 / whether or not `f` throws.
 / @param s a positive int seed
 / @param f a function of one argument, called with (::)
 / @return what `f` returns
-with_seed:{[s;f]
+.qpipe.source.mock_trades.with_seed:{[s;f]
     saved:system"S";
     system"S ",string s;
     r:@[f;::;{[saved;e] system"S ",string saved; 'e}[saved]];
@@ -53,7 +53,7 @@ with_seed:{[s;f]
 / @param range_from the window's start
 / @return a positive int
 / @eg .qpipe.source.mock_trades.window_seed[42;2026.09.01D00:00:00.000000000]
-window_seed:{[seed;range_from] 1i+"i"$(seed+("j"$range_from) div 60000000000) mod 2147483646}
+.qpipe.source.mock_trades.window_seed:{[seed;range_from] 1i+"i"$(seed+("j"$range_from) div 60000000000) mod 2147483646}
 
 / One pair's trades in the slots `slot`: a random walk from `level`, kept
 / in roughly `rate` of the slots. Draws from q's current seed.
@@ -61,10 +61,10 @@ window_seed:{[seed;range_from] 1i+"i"$(seed+("j"$range_from) div 60000000000) mo
 / @param sym the pair
 / @param level its price at the first slot
 / @return a table of the declared columns
-pair_trades:{[slot;sym;level]
+.qpipe.source.mock_trades.pair_trades:{[slot;sym;level]
     n:count slot;
     t:([] time:slot; sym:n#sym; side:n?`buy`sell; qty:1e6*1+n?5; px:level*exp sums 0.0002*-0.5+n?1f);
-    t where (n?1f)<rate}
+    t where (n?1f)<.qpipe.source.mock_trades.rate}
 
 / The window's rows: every pair's trades, in time order. Each pair starts
 / at its base, moved by a slow daily cycle, so windows stay near one level.
@@ -73,21 +73,21 @@ pair_trades:{[slot;sym;level]
 / @param range_to the window's end, exclusive
 / @return a table of the declared columns, every row in [range_from;range_to)
 / @eg count .qpipe.source.mock_trades.generate[42;2026.09.01D00:00:00.000000000;2026.09.01D01:00:00.000000000]
-generate:{[seed;range_from;range_to]
+.qpipe.source.mock_trades.generate:{[seed;range_from;range_to]
     / In nanoseconds: PeachQ refuses a timespan `div` a timespan.
-    n:0|("j"$range_to-range_from) div "j"$step;
-    slot:range_from+step*til n;
+    n:0|("j"$range_to-range_from) div "j"$.qpipe.source.mock_trades.step;
+    slot:range_from+.qpipe.source.mock_trades.step*til n;
     cycle:1+0.002*sin 2*acos[-1]*("j"$range_from)%86400000000000*30;
-    rows:with_seed[window_seed[seed;range_from];{[slot;cycle;x] raze pair_trades[slot]'[syms;base*cycle]}[slot;cycle]]; / noqa: QF016 with_seed applies f to ::
+    rows:.qpipe.source.mock_trades.with_seed[.qpipe.source.mock_trades.window_seed[seed;range_from];{[slot;cycle;x] raze .qpipe.source.mock_trades.pair_trades[slot]'[.qpipe.source.mock_trades.syms;.qpipe.source.mock_trades.base*cycle]}[slot;cycle]]; / noqa: QF016 with_seed applies f to ::
     $[count rows; `time`sym xasc rows; 0#([] time:`timestamp$(); sym:`symbol$(); side:`symbol$(); qty:`float$(); px:`float$())]}
 
 / `seed` is what the `mock` transport opened: the source's credential.
 / Nothing is read or sent - the rows are generated.
-query:{[seed;range_from;range_to] generate[seed;range_from;range_to]}
+.qpipe.source.mock_trades.query:{[seed;range_from;range_to] .qpipe.source.mock_trades.generate[seed;range_from;range_to]}
 
 / One hour of seed 42's rows: what a run with no credential reads, and what
 / the tests assert against.
-fixture:{[] generate[42;2026.01.02D00:00:00.000000000;2026.01.02D01:00:00.000000000]}
+.qpipe.source.mock_trades.fixture:{[] .qpipe.source.mock_trades.generate[42;2026.01.02D00:00:00.000000000;2026.01.02D01:00:00.000000000]}
 
 \d .
 

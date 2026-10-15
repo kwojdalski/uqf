@@ -70,7 +70,7 @@
 / run it was set for, so the next backfill in the same shell silently reused
 / the last range - the very default this script refuses to have.
 
-\d .qproc.backfill
+\d .
 
 / The flags this process reads are parsed by .qetl.job.bounded.spec_from_flags
 / in src/etl/core/bounded_worker.q - the one parser scripts/dev/run_backfill.q
@@ -79,12 +79,12 @@
 / Whether this process was asked for DEBUG output.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -verbose was given
-verbose:{[opts] `verbose in key opts}
+.qproc.backfill.verbose:{[opts] `verbose in key opts}
 
 / Whether this process was asked for TRACE output.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -trace was given
-trace:{[opts] `trace in key opts}
+.qproc.backfill.trace:{[opts] `trace in key opts}
 
 / Refuse a per-run flag that an environment variable would silently outrank
 / (#1304). Shared with scripts/dev/run_backfill.q (#1319): the logic is
@@ -93,26 +93,26 @@ trace:{[opts] `trace in key opts}
 / @param v the flag's value, a string
 / @return the flag's value
 / @throws flag_vs_env when the environment holds a different value for k
-flag_vs_env:{[k;v] .qetl.job.bounded.runtime.flag_vs_env["torq_backfill";k;v]}
+.qproc.backfill.flag_vs_env:{[k;v] .qetl.job.bounded.runtime.flag_vs_env["torq_backfill";k;v]}
 
 / Apply -on_conflict, when given, as this run's strategy (see
 / .qetl.job.bounded.runtime.use_on_conflict).
 / @param opts the parsed command line, as .Q.opt returns it
 / @return the strategy in force (what .qetl.cfg.raw answers, not the request),
 / or ` when none was given
-use_on_conflict:{[opts] .qetl.job.bounded.runtime.use_on_conflict["torq_backfill";opts]}
+.qproc.backfill.use_on_conflict:{[opts] .qetl.job.bounded.runtime.use_on_conflict["torq_backfill";opts]}
 
 / Apply -mode, when given, as this run's mode (see
 / .qetl.job.bounded.runtime.use_mode).
 / @param opts the parsed command line, as .Q.opt returns it
 / @return the mode this run is in
-use_mode:{[opts] .qetl.job.bounded.runtime.use_mode["torq_backfill";opts]}
+.qproc.backfill.use_mode:{[opts] .qetl.job.bounded.runtime.use_mode["torq_backfill";opts]}
 
 / Apply -fixture, when given, as the fixture_writes config override, which
 / .qetl.source.fixture_writes_allowed reads.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when this run may write a fixture
-use_fixture:{[opts]
+.qproc.backfill.use_fixture:{[opts]
     if[`fixture in key opts; .qetl.cfg.set_override[`fixture_writes;"1"]];
     .qetl.source.fixture_writes_allowed[]}
 
@@ -121,7 +121,7 @@ use_fixture:{[opts]
 / @param worker the worker's name
 / @param r what .qetl.job.bounded.validate or plan_only returned
 / @return the report
-report:{[worker;r]
+.qproc.backfill.report:{[worker;r]
     .qetl.log.info[worker;string[r`state]," - nothing opened, nothing written";`plan _ r];
     if[not `plan in key r; :r];
     ws:r`plan;
@@ -136,7 +136,7 @@ report:{[worker;r]
 / @param spec the run specification
 / @param width the worker's declared window width
 / @return the window count, or 0N
-window_count:{[spec;width]
+.qproc.backfill.window_count:{[spec;width]
     .[{[spec;width] `long$ceiling (spec[`range_to]-spec`range_from)%width};
       (spec;width);
       {[e] 0N}]}
@@ -148,7 +148,7 @@ window_count:{[spec;width]
 / done, so the next run is idle and the rows never arrive anywhere.
 / @return the HDB root as a file symbol
 / @throws error when KDBHDB is unset
-hdb_root:{[]
+.qproc.backfill.hdb_root:{[]
     d:getenv `KDBHDB;
     if[0=count d; '"torq_backfill: KDBHDB is unset - a backfill writes into the HDB, and cannot tell where it is"];
     hsym `$d}
@@ -168,13 +168,13 @@ hdb_root:{[]
 / default, not an error - a typo here should not fail a backfill that has
 / rows to write.
 / @return the interval, as a timespan
-reload_interval:{[]
+.qproc.backfill.reload_interval:{[]
     v:.qetl.cfg.raw `hdb_reload_seconds;
     n:$[0=count v; 30; null j:"J"$v; 30; j<0; 30; j];
     n*0D00:00:01}
 
 / What has been finished and not yet reloaded, and when the last reload was.
-reload_state:`dirty`last!(0b;0Np)
+.qproc.backfill.reload_state:`dirty`last!(0b;0Np)
 
 / The HDB manager's on_ready: reload when .qetl.io.due says so. What is
 / written stays owed until every registered HDB has reloaded it (#1084):
@@ -183,8 +183,8 @@ reload_state:`dirty`last!(0b;0Np)
 / and covered, but a running HDB is serving the map from before them.
 / @param status `finished`pending`final from .qetl.io.flush or .qetl.io.finish
 / @return 1b when it asked the HDB to reload
-on_hdb_ready:{[status]
-    d:.qetl.io.due[.qproc.backfill.reload_state;status;.z.p;reload_interval[]];
+.qproc.backfill.on_hdb_ready:{[status]
+    d:.qetl.io.due[.qproc.backfill.reload_state;status;.z.p;.qproc.backfill.reload_interval[]];
     s:d`state;
     if[d`act;
         / taken BEFORE the reload is asked: what it maps is what was on disk then
@@ -204,10 +204,10 @@ on_hdb_ready:{[status]
 / split as a streaming job's publish, which torq_stream.q wires.
 / @param decl the worker's declaration
 / @return the manager now in .qetl.io.default
-use_hdb:{[decl]
-    root:hdb_root[];
+.qproc.backfill.use_hdb:{[decl]
+    root:.qproc.backfill.hdb_root[];
     col:(.qetl.source.def decl`source)`time_column;
-    .qetl.io.default:.qetl.io.hdb[root;col],enlist[`on_ready]!enlist on_hdb_ready;
+    .qetl.io.default:.qetl.io.hdb[root;col],enlist[`on_ready]!enlist .qproc.backfill.on_hdb_ready;
     / coverage here means written; queryable once the HDBs reload (#1094)
     .qetl.coverage.defer_ready:1b;
     .qetl.log.info[`backfill;"writing into the HDB";`root`partition_col!(root;col)];
@@ -218,7 +218,7 @@ use_hdb:{[decl]
 / or an idle re-run would leave those windows unqueryable for good (#1094).
 / @param worker the worker being run
 / @return 1b when this run took the debt on
-catch_up:{[worker]
+.qproc.backfill.catch_up:{[worker]
     if[not .qetl.job.bounded.runtime.allows`finish_store; :0b];
     cfg:.qetl.job.bounded.def worker;
     v:(.qetl.job.bounded.spec worker)`source_version;
@@ -235,7 +235,7 @@ catch_up:{[worker]
 / what Airflow reads (Airflow owns retries), so it must distinguish a
 / failed run from a successful one.
 / @return the run's result dictionary
-run:{[]
+.qproc.backfill.run:{[]
     t0:.z.p;
     .qetl.log.dbg[`backfill;"command line";enlist[`args]!enlist .z.x];
     s:.qetl.job.bounded.spec_from_flags .Q.opt .z.x;
@@ -250,16 +250,16 @@ run:{[]
     .qetl.log.info[worker;"range";
         `range_from`range_to`span`width`windows!
             (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
-             decl`width;window_count[spec;decl`width])];
-    oc:use_on_conflict .Q.opt .z.x;
+             decl`width;.qproc.backfill.window_count[spec;decl`width])];
+    oc:.qproc.backfill.use_on_conflict .Q.opt .z.x;
     if[not null oc; .qetl.log.info[worker;"on_conflict for this run";enlist[`on_conflict]!enlist oc]];
-    md:use_mode .Q.opt .z.x;
+    md:.qproc.backfill.use_mode .Q.opt .z.x;
     .qetl.log.info[worker;"mode";enlist[`mode]!enlist md];
-    if[use_fixture .Q.opt .z.x; .qetl.log.info[worker;"fixture writes allowed for this run";enlist[`fixture_writes]!enlist 1b]];
+    if[.qproc.backfill.use_fixture .Q.opt .z.x; .qetl.log.info[worker;"fixture writes allowed for this run";enlist[`fixture_writes]!enlist 1b]];
     / validate and plan stop here: no HDB, no ledger, no lock, no source.
-    if[md~`validate; :report[worker;.qetl.job.bounded.validate[worker;spec]]];
-    if[md~`plan; :report[worker;.qetl.job.bounded.plan_only[worker;spec]]];
-    use_hdb decl;
+    if[md~`validate; :.qproc.backfill.report[worker;.qetl.job.bounded.validate[worker;spec]]];
+    if[md~`plan; :.qproc.backfill.report[worker;.qetl.job.bounded.plan_only[worker;spec]]];
+    .qproc.backfill.use_hdb decl;
     / The run ledger, attached HERE and unprotected: the worker's own
     / begin_run tolerates any failure, so a ledger it cannot write - one from
     / before etl_runs gained its range and counts columns - would leave this
@@ -269,7 +269,7 @@ run:{[]
     if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
     t1:.z.p;
     (` sv ns,`init)[spec];
-    catch_up worker;
+    .qproc.backfill.catch_up worker;
     .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist .qtorq.elapsed_ms t1];
     t2:.z.p;
     r:(` sv ns,`run)[];
@@ -279,7 +279,7 @@ run:{[]
     / apart from whether the rows were written (#1084).
     / An idle run never finishes its store, so what it took on in catch_up
     / is reloaded here; a run that wrote has already released or failed to.
-    if[count .qetl.coverage.unready; on_hdb_ready `finished`pending`final!(0;0;1b)];
+    if[count .qetl.coverage.unready; .qproc.backfill.on_hdb_ready `finished`pending`final!(0;0;1b)];
     r:r,enlist[`hdb_unreloaded]!enlist .qproc.backfill.reload_state`dirty;
     .qetl.log.info[worker;"backfill process finished";
         r,`run_ms`total_ms!(.qtorq.elapsed_ms t2;.qtorq.elapsed_ms t0)];

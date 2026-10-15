@@ -266,6 +266,12 @@ def table_definition(table: str, columns: list[tuple[str, str]]) -> str:
     return f"{table}:([]{body})"
 
 
+def plant_table_definition(table: str, columns: list[tuple[str, str]]) -> str:
+    """The same line as plant_tables.q holds it: fully qualified from the root,
+    since the file opens no `\\d` context (#1411)."""
+    return f".qetl.plant.{table_definition(table, columns)}"
+
+
 def nested_declaration(table: str, columns: list[tuple[str, str]]) -> str:
     """The `.qetl.plant.nested` line a table with list columns needs, or "".
 
@@ -286,6 +292,6 @@ def nested_declaration(table: str, columns: list[tuple[str, str]]) -> str:
         else "`" + "`".join(nested) + f'!"{chars}"'
     )
     return (
-        f"nested[`{table};{pairs}];"
+        f".qetl.plant.nested[`{table};{pairs}];"
         '  / SCAFFOLDED: what each list column holds - "F" floats, "C" strings, "S" symbols\n'
     )

@@ -27,13 +27,13 @@
 / goes through it. A second place that builds SQL is the bug this design
 / exists to prevent.
 
-\d .qetl.io.odbc
+\d .
 
 / ------------------------------------------------------- AVAILABILITY
 
 / Private: has the ODBC library been loaded into this process?
 / @private
-loaded:{[] @[{`open in key x};`.odbc;{0b}]}
+.qetl.io.odbc.loaded:{[] @[{`open in key x};`.odbc;{0b}]}
 
 / Load KX's ODBC client, once, and report whether it is usable.
 / .
@@ -43,9 +43,9 @@ loaded:{[] @[{`open in key x};`.odbc;{0b}]}
 / rather than being handed an error at load time.
 / @return 1b when .odbc is available, 0b otherwise
 / @eg .qetl.io.odbc.available[]
-available:{[]
-    if[loaded[]; :1b];
-    @[{system"l odbc.k"; loaded[]};::;{[e] 0b}]}
+.qetl.io.odbc.available:{[]
+    if[.qetl.io.odbc.loaded[]; :1b];
+    @[{system"l odbc.k"; .qetl.io.odbc.loaded[]};::;{[e] 0b}]}
 
 / Refuse, naming what is missing.
 / .
@@ -80,8 +80,8 @@ available:{[]
 /   You do NOT need any of that to exercise the backfill path - every source
 /   declares a fixture, which is the question bank's whole point.
 / @throws error when the driver is unavailable
-require_available:{[]
-    if[not available[];
+.qetl.io.odbc.require_available:{[]
+    if[not .qetl.io.odbc.available[];
         '"qetl.io.odbc: driver not loaded - source an ODBC home's env.sh; macOS: scripts/dev/odbc_rosetta.sh setup"];
     1b}
 
@@ -98,7 +98,7 @@ require_available:{[]
 / Backslash FIRST, or escaping the quotes would then double the backslashes
 / this very function adds.
 / @private
-escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
+.qetl.io.odbc.escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 
 / Private: a timestamp as SingleStore DATETIME(6) text - to the microsecond,
 / ROUNDED UP (#954).
@@ -113,7 +113,7 @@ escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 / fraction. q renders 2026.09.11D09:00:00.123456789; the date dots become
 / hyphens and the D a space.
 / @private
-datetime6:{[v]
+.qetl.io.odbc.datetime6:{[v]
     if[null v; '"literal: a null timestamp has no SQL literal - a window bound must be an instant"];
     / The sub-microsecond nanoseconds are the last three digits q prints,
     / and adding what is left to the next microsecond is an exact add. NOT
@@ -137,11 +137,11 @@ datetime6:{[v]
 / @return the SQL literal text
 / @throws error naming the type when it is not one this understands
 / @eg .qetl.io.odbc.literal[`EURUSD]  ->  "'EURUSD'"
-literal:{[v]
+.qetl.io.odbc.literal:{[v]
     t:abs type v;
-    $[t=11h; "'",escape_text[string v],"'";
-      t=10h; "'",escape_text[v],"'";
-      t=12h; "'",datetime6[v],"'";
+    $[t=11h; "'",.qetl.io.odbc.escape_text[string v],"'";
+      t=10h; "'",.qetl.io.odbc.escape_text[v],"'";
+      t=12h; "'",.qetl.io.odbc.datetime6[v],"'";
       t=14h; "'",ssr[string v;".";"-"],"'";
       t in 5 6 7h; string v;
       t=9h; string v;
@@ -160,7 +160,7 @@ literal:{[v]
 / @param ts a timestamp
 / @return SQL text for the same instant
 / @eg .qetl.io.odbc.duckdb_timestamp[2026.09.11D09:00:00.000000001]  ->  "make_timestamp_ns(1789117200000000001)"
-duckdb_timestamp:{[ts] "make_timestamp_ns(",literal["j"$ts-1970.01.01D00:00],")"}
+.qetl.io.odbc.duckdb_timestamp:{[ts] "make_timestamp_ns(",.qetl.io.odbc.literal["j"$ts-1970.01.01D00:00],")"}
 
 / ------------------------------------------------------- CONNECTING
 
@@ -175,7 +175,7 @@ duckdb_timestamp:{[ts] "make_timestamp_ns(",literal["j"$ts-1970.01.01D00:00],")"
 / @param user the username
 / @param password the password, from the environment
 / @return the ODBC connection string
-build_connection_string:{[host;port;database;user;password]
+.qetl.io.odbc.build_connection_string:{[host;port;database;user;password]
     ";" sv ("DRIVER=SingleStore ODBC Driver";
             "SERVER=",host;
             "PORT=",string port;
@@ -187,8 +187,8 @@ build_connection_string:{[host;port;database;user;password]
 / @param conn the connection string
 / @return an ODBC handle
 / @throws error when the driver is absent, or the connection fails
-open:{[conn]
-    require_available[];
+.qetl.io.odbc.open:{[conn]
+    .qetl.io.odbc.require_available[];
     @[{.odbc.open x};conn;
       {[e] '"qetl.io.odbc.open: could not connect - ",e}]}
 
@@ -196,7 +196,7 @@ open:{[conn]
 / .
 / Safe to call twice and safe in a failure path, which is what lets
 / with_connection close unconditionally.
-close:{[h] @[{.odbc.close x};h;{[e] (::)}]; (::)}
+.qetl.io.odbc.close:{[h] @[{.odbc.close x};h;{[e] (::)}]; (::)}
 
 / Run f against a fresh connection and ALWAYS close it.
 / .
@@ -208,10 +208,10 @@ close:{[h] @[{.odbc.close x};h;{[e] (::)}]; (::)}
 / @param f a function taking the handle
 / @return whatever f returns
 / @throws whatever f throws, after the handle is closed
-with_connection:{[conn;f]
-    h:open conn;
+.qetl.io.odbc.with_connection:{[conn;f]
+    h:.qetl.io.odbc.open conn;
     r:@[f;h;{[e] (`error;e)}];
-    close h;
+    .qetl.io.odbc.close h;
     if[(0h=type r) and 2=count r; if[`error~first r; '"qetl.io.odbc: ",last r]];
     r}
 
@@ -239,8 +239,8 @@ with_connection:{[conn;f]
 / query that hangs is in the log - and again with the rows and milliseconds
 / when it returns. Every ODBC source sends through here, so this is the one
 / place a backfill's SQL is visible.
-run_sql:{[h;sql]
-    require_available[];
+.qetl.io.odbc.run_sql:{[h;sql]
+    .qetl.io.odbc.require_available[];
     if[not .qetl.log.enabled`TRACE;
         :.[{[hd;st] .odbc.eval[hd;st]};(h;sql);
           {[sql;e] '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql]]];
@@ -267,7 +267,7 @@ run_sql:{[h;sql]
 / discovering one.
 / @param h an ODBC handle
 / @return a symbol vector of table names
-table_names:{[h] require_available[]; .odbc.tables h}
+.qetl.io.odbc.table_names:{[h] .qetl.io.odbc.require_available[]; .odbc.tables h}
 
 / A windowed SELECT over one table, with the bounds escaped.
 / .
@@ -288,11 +288,11 @@ table_names:{[h] require_available[]; .odbc.tables h}
 / @param range_to exclusive upper bound
 / @return the rows in the window
 / @eg .qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]
-window_query:{[h;table_name;time_column;columns;range_from;range_to]
+.qetl.io.odbc.window_query:{[h;table_name;time_column;columns;range_from;range_to]
     sql:"SELECT ",(", " sv string columns),
         " FROM ",string[table_name],
-        " WHERE ",string[time_column],">=",literal[range_from],
-        " AND ",string[time_column],"<",literal[range_to];
-    run_sql[h;sql]}
+        " WHERE ",string[time_column],">=",.qetl.io.odbc.literal[range_from],
+        " AND ",string[time_column],"<",.qetl.io.odbc.literal[range_to];
+    .qetl.io.odbc.run_sql[h;sql]}
 
 \d .

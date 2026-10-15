@@ -5,15 +5,15 @@
 / Source timestamps are also watermarks: expiry does not erase them and let
 / a delayed older snapshot resurrect withdrawn liquidity.
 
-\d .qpipe.job.superbook
+\d .
 
-publish:.qetl.job.stream.unwired `superbook;
+.qpipe.job.superbook.publish:.qetl.job.stream.unwired `superbook;
 / From the plant, not from .qpipe.job.market_data: the plant loads before
 / every declaration, a peer job does not (#731).
-books:`sym`source xkey .qetl.plant.published `market_data
-superbook:.qetl.plant.published `superbook
+.qpipe.job.superbook.books:`sym`source xkey .qetl.plant.published `market_data
+.qpipe.job.superbook.superbook:.qetl.plant.published `superbook
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
-max_age:0D00:00:05
+.qpipe.job.superbook.max_age:0D00:00:05
 / How far a source's clock may lead this host's is .qf.mkt.max_clock_lead:
 / every multi-venue feed has some skew, and with none allowed a venue a few
 / ms ahead vanished from the book while last_value kept it live (#1033). It
@@ -26,7 +26,7 @@ max_age:0D00:00:05
 / @return a table of the levels that are prices by .qf.mkt.level_ok (#1021)
 / @throws when vectors are malformed or their lengths differ
 / @eg .qpipe.job.superbook.levels[1.1 1.2;100 0f] -> ([] price:enlist 1.1; size:enlist 100f)
-levels:{[prices;sizes]
+.qpipe.job.superbook.levels:{[prices;sizes]
     if[not all (type each (prices;sizes)) in 0 6 7 8 9h;
         '"superbook: prices and sizes must be numeric vectors"];
     if[(count prices)<>count sizes; '"superbook: prices and sizes differ in length"];
@@ -45,7 +45,7 @@ levels:{[prices;sizes]
 / @return updated keyed snapshots, without mutating state
 / @throws when columns, identities, timestamps or level vectors are malformed
 / @eg count .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0
-replace_books:{[state;batch;as_of]
+.qpipe.job.superbook.replace_books:{[state;batch;as_of]
     wanted:cols .qpipe.job.market_data.market_data;
     .qf.util.require_cols[`superbook;`batch;batch;wanted];
     rows:wanted#batch;
@@ -57,8 +57,8 @@ replace_books:{[state;batch;as_of]
     i:0;
     while[i<count rows;
         row:rows i;
-        bid_levels:levels[row`bid_prices;row`bid_sizes];
-        ask_levels:levels[row`ask_prices;row`ask_sizes];
+        bid_levels:.qpipe.job.superbook.levels[row`bid_prices;row`bid_sizes];
+        ask_levels:.qpipe.job.superbook.levels[row`ask_prices;row`ask_sizes];
         row[`bid_prices`bid_sizes]:(bid_levels`price;bid_levels`size);
         row[`ask_prices`ask_sizes]:(ask_levels`price;ask_levels`size);
         previous:state `sym`source#row;
@@ -78,7 +78,7 @@ replace_books:{[state;batch;as_of]
 / @return price, size, source and source_time sorted best-first
 / @throws error if side isn't `bid or `ask
 / @eg count .qpipe.job.superbook.side_levels[.qpipe.job.market_data.market_data;`bid] -> 0
-side_levels:{[rows;side]
+.qpipe.job.superbook.side_levels:{[rows;side]
     if[not $[-11h=type side; side in `bid`ask; 0b];
         '"side_levels: side must be `bid or `ask, got ",.Q.s1 side];
     price_col:$[side=`bid;`bid_prices;`ask_prices];
@@ -97,7 +97,7 @@ side_levels:{[rows;side]
 / @param lead how far a source_time may be after as_of and still count
 / @return unkeyed superbook snapshots, one row per known pair
 / @eg count .qpipe.job.superbook.snapshot[`sym`source xkey 0#.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05;0D00:00:00.250] -> 0
-snapshot:{[state;as_of;age;lead]
+.qpipe.job.superbook.snapshot:{[state;as_of;age;lead]
     all_books:0!state;
     cutoff:as_of-age;
     latest:as_of+lead;
@@ -108,8 +108,8 @@ snapshot:{[state;as_of;age;lead]
     while[i<count pairs;
         pair:pairs i;
         current:select from fresh where sym=pair;
-        bids:side_levels[current;`bid];
-        asks:side_levels[current;`ask];
+        bids:.qpipe.job.superbook.side_levels[current;`bid];
+        asks:.qpipe.job.superbook.side_levels[current;`ask];
         result:result upsert (pair;as_of;bids`price;bids`size;bids`source;bids`source_time;
             asks`price;asks`size;asks`source;asks`source_time);
         i+:1];
@@ -122,8 +122,8 @@ snapshot:{[state;as_of;age;lead]
 / on process state a one-line example cannot set up honestly - and an
 / example whose result depends on whatever ran before it is worse than
 / none. tests/q/test_superbook.q drives it against a book it builds itself.
-refresh:{[as_of]
-    rows:snapshot[books;as_of;max_age;.qf.mkt.max_clock_lead];
+.qpipe.job.superbook.refresh:{[as_of]
+    rows:.qpipe.job.superbook.snapshot[.qpipe.job.superbook.books;as_of;.qpipe.job.superbook.max_age;.qf.mkt.max_clock_lead];
     if[count rows; .qpipe.job.superbook.publish[`superbook;rows]];
     }
 
@@ -138,16 +138,16 @@ refresh:{[as_of]
 / @param x market_data rows
 / @return the rows whose market is `fx
 / @eg count .qpipe.job.superbook.fx_only ([] sym:`EURUSD`XBTEUR; market:`fx`crypto)  ->  1
-fx_only:{[x] x where `fx=x`market}
+.qpipe.job.superbook.fx_only:{[x] x where `fx=x`market}
 
 / Consume a canonical market_data batch and publish the recomputed books.
 / @param t incoming table name
 / @param x full source snapshots
 / @return nothing
 / @eg .qpipe.job.superbook.on_batch[`unrelated;()]
-on_batch:{[t;x]
+.qpipe.job.superbook.on_batch:{[t;x]
     if[not t=`market_data; :()];
-    x:fx_only[x];
+    x:.qpipe.job.superbook.fx_only[x];
     if[0=count x; :()];
     now:.z.p;
     lead:.qf.mkt.max_clock_lead;
@@ -156,15 +156,15 @@ on_batch:{[t;x]
     if[count ahead;
         .qetl.log.warn[`superbook;"rows dated past the allowed clock lead refused";
             `sources`rows`max_clock_lead!(distinct ahead`source;count ahead;lead)]];
-    `.qpipe.job.superbook.books set replace_books[books;x;latest];
-    refresh[now];
+    `.qpipe.job.superbook.books set .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;x;latest];
+    .qpipe.job.superbook.refresh[now];
     }
 
 / Recompute on the clock so silence withdraws stale liquidity.
 / @return nothing
 / No @eg, for refresh's reason: it is `refresh .z.p` and shows nothing a
 / reader can act on without the state behind it.
-on_timer:{[] refresh .z.p;}
+.qpipe.job.superbook.on_timer:{[] .qpipe.job.superbook.refresh .z.p;}
 
 \d .
 

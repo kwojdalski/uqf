@@ -4,13 +4,13 @@
 / .qetl.job.bounded's. The rows come from the mock_trades source, which
 / generates them per window from a seed.
 
-\d .qpipe.job.mock_trades_backfill
+\d .
 
 / What this run SAW, beyond its row count: how many pairs traded.
 / @param batch one window's rows
 / @return a dictionary of facts
 / @eg .qpipe.job.mock_trades_backfill.facts .qpipe.source.mock_trades.fixture[]
-facts:{[batch]
+.qpipe.job.mock_trades_backfill.facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     `rows`pairs!(count batch;count distinct batch`sym)}
 

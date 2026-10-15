@@ -45,7 +45,7 @@ if[not `worker in key .Q.opt .z.x;
 \l src/init.q
 \l src/etl/init.q
 
-\d .qdev.runbackfill
+\d .
 
 / The flags are torq_backfill.q's, parsed by the same function:
 / .qetl.job.bounded.spec_from_flags. -version may be left out for a worker
@@ -59,7 +59,7 @@ if[not `worker in key .Q.opt .z.x;
 / @param opts the parsed command line
 / @param worker the worker about to run
 / @return the io manager now installed as the default
-use_io:{[opts;worker]
+.qdev.runbackfill.use_io:{[opts;worker]
     if[not `hdb in key opts;
         .qetl.log.info[`run_backfill;"writing into this process only - pass -hdb <root> to keep the rows";()!()];
         :.qetl.io.default:.qetl.io.memory];

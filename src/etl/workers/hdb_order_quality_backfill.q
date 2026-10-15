@@ -33,47 +33,47 @@
 /    which a live job restarted at midnight withholds.
 / .  `time` is as_of, where the live job's is the plant's stamp a moment later.
 
-\d .qpipe.job.hdb_order_quality_backfill
+\d .
 
 / The orders as order outcomes: the live normalizer's adapter, unchanged.
 / @param rows orders, with the columns hdb_orders hands over
 / @return canonical order_outcomes rows
-outcomes_of:{[rows]
+.qpipe.job.hdb_order_quality_backfill.outcomes_of:{[rows]
     .qetl.job.stream.normalizer.normalize[`order_outcomes;`orders;rows]}
 
 / The start of the window the rows belong to: the hour the first order falls in.
 / @param rows the window's orders
 / @return a timestamp
 / @eg .qpipe.job.hdb_order_quality_backfill.window_start[([] time:enlist 2026.10.09D10:20:00)]  ->  2026.10.09D10:00:00.000000000
-window_start:{[rows] `timestamp$.qpipe.job.hdb_order_quality_backfill.width xbar min rows`time}
+.qpipe.job.hdb_order_quality_backfill.window_start:{[rows] `timestamp$.qpipe.job.hdb_order_quality_backfill.width xbar min rows`time}
 
 / The grid points a window of the live job publishes at: every period from its start.
 / @param ws the window's start
 / @return timestamps
 / @eg count .qpipe.job.hdb_order_quality_backfill.grid[2026.10.09D10:00:00]  ->  720
-grid:{[ws] ws+.qpipe.job.hdb_order_quality_backfill.period*til `long$.qpipe.job.hdb_order_quality_backfill.width%.qpipe.job.hdb_order_quality_backfill.period}
+.qpipe.job.hdb_order_quality_backfill.grid:{[ws] ws+.qpipe.job.hdb_order_quality_backfill.period*til `long$.qpipe.job.hdb_order_quality_backfill.width%.qpipe.job.hdb_order_quality_backfill.period}
 
 / How long a window is: one aligned hour. The period is the live job's.
-width:0D01
-period:.qpipe.transform.order_quality.period
+.qpipe.job.hdb_order_quality_backfill.width:0D01
+.qpipe.job.hdb_order_quality_backfill.period:.qpipe.transform.order_quality.period
 
 / The series for one window: the live job's statistic at every grid point of it,
 / from the window's orders and the orders before it.
 / @param orders the window's orders
 / @param before the orders before the window (context; any at or after its start are ignored)
 / @return rows in order_quality's columns, `time` the grid point
-series:{[orders;before]
-    ws:window_start[orders];
+.qpipe.job.hdb_order_quality_backfill.series:{[orders;before]
+    ws:.qpipe.job.hdb_order_quality_backfill.window_start[orders];
     rows:(select from before where time<ws),orders;
-    o:outcomes_of[rows];
-    out:.qetl.job.stream.rolling.series[`order_quality;o;grid[ws]];
+    o:.qpipe.job.hdb_order_quality_backfill.outcomes_of[rows];
+    out:.qetl.job.stream.rolling.series[`order_quality;o;.qpipe.job.hdb_order_quality_backfill.grid[ws]];
     (cols .qetl.plant.shape `order_quality) xcols update time:as_of from out}
 
 / The ratios are shares, the counts are consistent, and a book has a row only
 / if the live statistic could have made it.
 / @param batch the transformed rows
 / @return no failures, or the offending rows
-quality_check:{[batch]
+.qpipe.job.hdb_order_quality_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     ok_counts:(batch[`n_filled]+batch`n_rejected)<=batch`n_orders;
     ok_fill:null[batch`fill_ratio] | batch[`fill_ratio] within 0 1f;
@@ -87,14 +87,14 @@ quality_check:{[batch]
 / What a run records about its window.
 / @param batch the transformed rows
 / @return the grid points published, books, and the share of rows with no order in the window
-facts:{[batch]
+.qpipe.job.hdb_order_quality_backfill.facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
     `as_ofs`books`quiet_rows!(count distinct batch`as_of;count distinct batch`book;sum batch[`n_orders]=0)}
 
 / The hand-worked example's orders. A window of the 10:00 hour with one order -
 / london, filled at 10:00:00 - and, before it, newyork rejected at 09:58:00.
-example_orders:([] time:enlist 2026.10.09D10:00:00; order_id:enlist 2; book:enlist `london; product:enlist `spot; order_status:enlist `filled)
-example_before:([] time:enlist 2026.10.09D09:58:00; order_id:enlist 1; book:enlist `newyork; product:enlist `spot; order_status:enlist `rejected)
+.qpipe.job.hdb_order_quality_backfill.example_orders:([] time:enlist 2026.10.09D10:00:00; order_id:enlist 2; book:enlist `london; product:enlist `spot; order_status:enlist `filled)
+.qpipe.job.hdb_order_quality_backfill.example_before:([] time:enlist 2026.10.09D09:58:00; order_id:enlist 1; book:enlist `newyork; product:enlist `spot; order_status:enlist `rejected)
 
 / The series at one grid point, worked from the definition and not from the function:
 / an order is in the window ending at a when its time is after a-window (and not
@@ -106,7 +106,7 @@ example_before:([] time:enlist 2026.10.09D09:58:00; order_id:enlist 1; book:enli
 / @param ws the window's start, the instant the orders are placed relative to
 / @param a the grid point
 / @return the rows of that point
-example_at:{[ws;a]
+.qpipe.job.hdb_order_quality_backfill.example_at:{[ws;a]
     wins:0D00:01 0D00:05 0D01;
     ln:`long$ws>a-wins;
     yn:`long$(ws-0D00:02)>a-wins;
@@ -117,7 +117,7 @@ example_at:{[ws;a]
 
 / The whole hour of it: one grid point every period.
 / @return the expected series of the example
-expected_rows:{[]
+.qpipe.job.hdb_order_quality_backfill.expected_rows:{[]
     ws:2026.10.09D10:00:00;
     raze .qpipe.job.hdb_order_quality_backfill.example_at[ws;] each ws+0D00:00:05*til 720}
 

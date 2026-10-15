@@ -18,7 +18,7 @@ from uqs.paths import SOURCE_DIR, repo_root
 ROOT = repo_root()
 
 #: (source_name;`table_name;... - the define call's second value.
-_DECLARED = re.compile(r"\(source_name;`([a-z_][a-z0-9_]*);")
+_DECLARED = re.compile(r"\((?:\.[\w.]+\.)?source_name;`([a-z_][a-z0-9_]*);")
 #: read[`trades;...] or read[(`trades;`time`sym);...] inside a local query.
 _READS = re.compile(r"\bread\[\(?`([a-z_][a-z0-9_]*)")
 
@@ -27,7 +27,7 @@ def _local_sources() -> list[Path]:
     return [
         path
         for path in sorted((ROOT / SOURCE_DIR).glob("*.q"))
-        if re.search(r"^transport:`local\b", path.read_text(), re.MULTILINE)
+        if re.search(r"^(?:\.[A-Za-z_][\w.]*\.)?transport:`local\b", path.read_text(), re.MULTILINE)
     ]
 
 

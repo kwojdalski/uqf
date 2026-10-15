@@ -198,7 +198,7 @@ def test_the_cli_shows_the_selected_file(monkeypatch, tmp_path):
 
 
 def _q_value(path: Path, name: str) -> str:
-    found = re.search(rf"^{name}:(.*)$", path.read_text(), re.MULTILINE)
+    found = re.search(rf"^(?:\.[A-Za-z_][\w.]*\.)?{name}:(.*)$", path.read_text(), re.MULTILINE)
     assert found, f"{name} is no longer defined in {path.name}"
     return found.group(1).strip()
 

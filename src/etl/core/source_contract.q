@@ -114,7 +114,7 @@
 /     that is handled here rather than by warping window widths - see
 /     source_bounds and local_to_utc for the two traps that produces.
 
-\d .qetl.source
+\d .
 
 / ---------------------------------------------------------------- SCHEMA
 
@@ -125,6 +125,6 @@
 / bug: it reads as a decision downstream while nobody ever made one. Stating
 / `UTC` costs one symbol and makes "this source hands over UTC" a claim
 / somebody wrote, which validate_live can then be run against.
-required_declarations:`source`table_name`time_column`row_key`columns`types`query`fixture`tz
+.qetl.source.required_declarations:`source`table_name`time_column`row_key`columns`types`query`fixture`tz
 
 \d .

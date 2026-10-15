@@ -237,33 +237,33 @@ The rest of this guide is the bounded case.
 A source declares its **shape**, not its plumbing. Create
 `src/etl/sources/fx_rates.q`:
 
-<!-- q-example: run kdbx-only: the ETL stack does not load on PeachQ v0.88 - it rejects the nested namespace `\d .qetl.status` (src/etl/core/status.q:34) -->
+<!-- q-example: run -->
 ```q
 / fx_rates.q - an external reference-rate source (.qpipe.source.fx_rates).
 
-\d .qpipe.source.fx_rates
+\d .
 
-source_name:`fx_rates
-columns:`rate_time`sym`mid    / the columns this adapter reads
-types:"psf"                    / one q type character per field
-time_column:`rate_time         / the column the window is taken on
-row_key:`rate_time`sym         / what identifies a row uniquely
-tz:`UTC                        / what time_column is expressed in
+.qpipe.source.fx_rates.source_name:`fx_rates
+.qpipe.source.fx_rates.columns:`rate_time`sym`mid    / the columns this adapter reads
+.qpipe.source.fx_rates.types:"psf"                    / one q type character per field
+.qpipe.source.fx_rates.time_column:`rate_time         / the column the window is taken on
+.qpipe.source.fx_rates.row_key:`rate_time`sym         / what identifies a row uniquely
+.qpipe.source.fx_rates.tz:`UTC                        / what time_column is expressed in
 
-query:{[h;range_from;range_to]
+.qpipe.source.fx_rates.query:{[h;range_from;range_to]
     .qetl.source.ipc[h;{[from_ts;to_ts]
         select rate_time, sym, mid from `fx_rates
             where rate_time>=from_ts, rate_time<to_ts
       };range_from;range_to]}
 
-fixture:{[]
+.qpipe.source.fx_rates.fixture:{[]
     ([] rate_time:2026.09.11D09:00:00.000000000+1D*til 5;
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
         mid:1.0842 1.2631 1.0847 149.82 1.0851)}
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.fx_rates.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`fx_rates;time_column;row_key;columns;types;query;fixture;tz)];
+    (.qpipe.source.fx_rates.source_name;`fx_rates;.qpipe.source.fx_rates.time_column;.qpipe.source.fx_rates.row_key;.qpipe.source.fx_rates.columns;.qpipe.source.fx_rates.types;.qpipe.source.fx_rates.query;.qpipe.source.fx_rates.fixture;.qpipe.source.fx_rates.tz)];
 
 \d .
 ```
@@ -273,9 +273,10 @@ formality.
 
 **The namespace is `.qpipe.source.<source name>`, and it is the same word
 twice.** Sources live under one `.qpipe.source` root and are named exactly as
-they register, so `\d .qpipe.source.fx_rates` goes with
-`source_name:`fx_rates` and nothing else; `test_source_contract.q\` fails if the
-two disagree.
+they register, so `.qpipe.source.fx_rates.` goes with
+`source_name:`fx_rates` and nothing else; `test_source_contract.q` fails if the two disagree. A file opens no `\d\`
+context for it: every name is written in full from the root, as in the block
+above.
 
 **`columns` is what you READ, not everything the source has.** Declaring a
 column the worker never touches means an upstream change to an unused column
@@ -362,14 +363,14 @@ query:{[h;range_from;range_to]
 
 Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
 
-<!-- q-example: run kdbx-only: the ETL stack does not load on PeachQ v0.88 - it rejects the nested namespace `\d .qetl.status` (src/etl/core/status.q:34) -->
+<!-- q-example: run -->
 ```q
 / fx_rates_backfill.q - the fx_rates bounded worker (.qpipe.job.fx_rates_backfill).
 
-\d .qpipe.job.fx_rates_backfill
+\d .
 
 / Refuse a batch that is shaped correctly but cannot be true.
-quality_check:{[batch]
+.qpipe.job.fx_rates_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     bad:select from batch where not mid>0;
     $[0=count bad;
@@ -463,7 +464,7 @@ A test file is loaded by glob too; only its namespace is listed, in
 
 The job graph adopts the worker from its own declaration:
 
-<!-- q-example: transcript kdbx-only: the ETL stack does not load on PeachQ v0.88 - it rejects the nested namespace `\d .qetl.status` (src/etl/core/status.q:34) -->
+<!-- q-example: transcript -->
 ```q
 q).qetl.dag.adopt_workers[];
 q).qetl.dag.def `fx_rates_backfill
@@ -638,16 +639,16 @@ plain q process holding the upstream table, set
 `UQF_SOURCE_CRED_<SOURCE>=host:port`, and run the worker
 (`scripts/test.py q-two-instances` does exactly this for `upstream_trades`). One
 trap that only shows up there: write `` from `trade ``, never `from trade`. The
-lambda carries your `\d .qpipe.source.fx_rates` across the wire, so a bare name
-resolves in that namespace on the remote and throws; `test_source_contract.q`
-refuses it.
+lambda carries the `.qpipe.source.fx_rates` context it was defined under across
+the wire, so a bare name resolves in that namespace on the remote and throws;
+`test_source_contract.q` refuses it.
 
 ## Recomputing on an upstream publish
 
 A published window announces itself. Register a reaction and it runs, with the
 range that was just published, as soon as the window is recorded:
 
-<!-- q-example: run kdbx-only: the ETL stack does not load on PeachQ v0.88 - it rejects the nested namespace `\d .qetl.status` (src/etl/core/status.q:34) -->
+<!-- q-example: run -->
 ```q
 `positions set ([sym:`symbol$(); window:`timestamp$()] notional:`float$());
 

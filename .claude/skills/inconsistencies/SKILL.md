@@ -70,11 +70,10 @@ Commands: ok — fix it | s/skip — skip | done — stop
 
 ### 4. Module and Namespace Structure
 
-- A new module (`src/*.q`) that doesn't follow the established `\d .qmodule` ...
-  `\d .` wrapping pattern, or that nests namespaces more than one level deep ---
-  except the ETL tree's instances, which are deliberately
-  `\d .qpipe.job.<worker name>` (derived by `.qetl.job.bounded.define`) and
-  `\d .qpipe.source.<source name>`
+- A new module (`src/*.q`) that opens a `\d` more than one level deep, or
+  defines names anywhere but a `.qf.<domain>` (library) or the ETL's own
+  namespaces (`.qpipe.job.<worker name>`, `.qpipe.source.<source name>`, derived
+  by `.qetl.job.bounded.define`) --- all written fully qualified from the root
 - A module not added to `src/init.q`'s load order, or added in a position that
   doesn't respect its actual dependencies (e.g. a module using `ccy.q` functions
   loaded before `ccy.q`)

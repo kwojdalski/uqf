@@ -47,11 +47,6 @@ platform: Linux-x86_64
 .iotest.test_recover_trims_a_torn_append  # peachq-lacks: writing or appending a partitioned HDB on disk ('nyi)
 .iotest.test_recover_looks_only_inside_the_range  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written
 
-.jobouttest.test_a_column_list_is_held_to_count_and_types  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.jobouttest.test_a_wrong_type_is_caught  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.jobouttest.test_every_publication_has_the_plant_shape  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.jobouttest.test_the_right_shape_passes  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.jobouttest.test_two_swapped_columns_of_one_type_are_caught  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
 .loctest.test_a_column_enumerated_against_another_domain_uses_that_domain  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
 .loctest.test_a_domain_file_too_short_for_the_column_is_refused  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
@@ -67,7 +62,6 @@ platform: Linux-x86_64
 .metatest.test_reconcile_matches_mismatches_and_unrecorded_dates  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .metatest.test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
-.nstest.test_the_subscriber_processes_are_inside_the_prefix  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
 
 .regtest.test_the_trap_is_real_and_has_two_halves  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
@@ -76,15 +70,10 @@ platform: Linux-x86_64
 
 .seedtest.test_reseeding_reproduces_a_known_draw  # peachq-lacks: KDB-X's random generator - a seed is reproducible on PeachQ, but `\S 20260916` then 5?1000 draws 717 47 276 94 179
 
-.srctest.test_every_source_file_declares_the_namespace_its_name_implies  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
-.tabletest.test_every_expected_table_is_declared  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.tabletest.test_no_undeclared_table_appears  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
-.tabletest.test_the_two_fill_tables_do_not_collapse_into_one  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
 .tztest.test_a_datetime_column_filters_without_complaint  # peachq-lacks: comparing a datetime with a timestamp converts neither, so the raw values (days as a float against nanoseconds) are compared, and the window matches nothing
 .tztest.test_almost_no_timestamp_survives_a_round_trip_through_a_datetime  # peachq-lacks: KDB-X's datetime<->timestamp rounding - 994 of the 1000 instants change on PeachQ, not 999
 .tztest.test_equals_and_match_disagree_across_the_two_types  # peachq-lacks: comparing a datetime with a timestamp converts neither, so the raw values (days as a float against nanoseconds) are compared, so `=` is false for the same instant
 
 .xftest.test_every_registered_transform_passes_its_examples  # peachq-lacks: `,'` of two empty tables gives () rather than an empty table (mkt_orderbook's fold), and ?[b;x;y] on an empty condition gives () rather than an empty long (upstream_trades_to_local's side)
-.xftest.test_stream_outputs_match_the_tickerplant_tables  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too

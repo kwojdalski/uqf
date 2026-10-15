@@ -16,7 +16,7 @@
 / how much history a cross chain may need, which is a real question this
 / demo does not answer.
 
-\d .qpipe.job.cross
+\d .
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -27,17 +27,17 @@
 / cross_arbitrage.q checks) and is therefore not here (#1366). The except keeps
 / the set clear of .qf.demo.pairs if that list grows; .qf.demo is a plain module
 / loaded before the streaming declarations, not a peer job (#731).
-cross_pairs:(`GBPJPY`EURGBP`AUDJPY) except .qf.demo.pairs
+.qpipe.job.cross.cross_pairs:(`GBPJPY`EURGBP`AUDJPY) except .qf.demo.pairs
 
 / The fx_orderbook table as the plant delivers it - what this process receives
 / via its subscription, and exactly what the transform reads. Read from the
 / plant, not written out: a hand copy here was refused by the transform's own
 / input check the moment the plant table gained a column, which under TorQ's
 / error trap meant a healthy-looking cross1 publishing nothing (#817).
-fx_orderbook_in:.qetl.plant.shape `fx_orderbook
+.qpipe.job.cross.fx_orderbook_in:.qetl.plant.shape `fx_orderbook
 
 / This job's output: one row per (pair, reprice).
-cross_quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(); mid:`float$())
+.qpipe.job.cross.cross_quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(); mid:`float$())
 
 / ---------------------------------------------------------- THE TRANSFORM
 
@@ -55,7 +55,7 @@ cross_quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(
 / @param quotes the quote mirror, as this job keeps it
 / @param as_of price every pair from quotes at or before this instant
 / @return one row per pair that could be priced, in cross_pairs order
-reprice_crosses:{[quotes;as_of]
+.qpipe.job.cross.reprice_crosses:{[quotes;as_of]
     if[0=count quotes; :.qpipe.job.cross.cross_quotes];
     q:`sym`time xasc select time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from quotes where time<=as_of;
     if[0=count q; :.qpipe.job.cross.cross_quotes];
@@ -71,17 +71,17 @@ reprice_crosses:{[quotes;as_of]
 / Where rows go. This job publishes nothing, so nothing wires this - it
 / stays a stub, and a future edit that starts publishing without declaring
 / it gets an error naming the job rather than silent rows.
-publish:.qetl.job.stream.unwired `cross;
+.qpipe.job.cross.publish:.qetl.job.stream.unwired `cross;
 
 / The quote mirror, grouped on sym for the as-of lookups the chain does.
-fx_orderbook:update `g#sym from fx_orderbook_in;
+.qpipe.job.cross.fx_orderbook:update `g#sym from .qpipe.job.cross.fx_orderbook_in;
 
 / The repriced crosses, appended to on every batch.
-crosses:cross_quotes;
+.qpipe.job.cross.crosses:.qpipe.job.cross.cross_quotes;
 
 / The pairs the last reprice could not price, so a WARNING is logged when that
 / set changes rather than on every batch.
-unpriced:`symbol$();
+.qpipe.job.cross.unpriced:`symbol$();
 
 / Take the batch into the mirror, then reprice every cross pair as of one
 / instant read here.
@@ -93,7 +93,7 @@ unpriced:`symbol$();
 / @param t the table the batch arrived on
 / @param x the rows, as a table, already carrying `time`
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.cross.on_batch:{[t;x]
     if[not t=`fx_orderbook; :()];
     `.qpipe.job.cross.fx_orderbook insert x;
     .qpipe.job.cross.reprice[.qpipe.job.cross.now[]];
@@ -104,7 +104,7 @@ on_batch:{[t;x]
 / argument, so a test can drive it without a clock.
 / @param now the instant to price as of
 / @return the rows appended
-reprice:{[now]
+.qpipe.job.cross.reprice:{[now]
     if[0=count .qpipe.job.cross.fx_orderbook; :.qpipe.job.cross.cross_quotes];
     out:.qetl.transform.apply_as_of[`cross_quotes;enlist[`fx_orderbook]!enlist .qpipe.job.cross.fx_orderbook;now];
     missing:.qpipe.job.cross.cross_pairs except out`sym;
@@ -133,7 +133,7 @@ reprice:{[now]
 / .
 / Reading .z.p here is what superbook.q and cross_arbitrage.q already do, and
 / it holds whatever flag the process was started with.
-now:{[] .z.p}
+.qpipe.job.cross.now:{[] .z.p}
 
 \d .
 

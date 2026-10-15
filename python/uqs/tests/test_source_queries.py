@@ -32,7 +32,7 @@ TRACED = (
 
 def query_body(text: str) -> str:
     """The `query:{...}` definition: from its line to the next blank line."""
-    match = re.search(r"(?ms)^query:\{.*?(?=^\s*$)", text)
+    match = re.search(r"(?ms)^(?:\.[A-Za-z_][\w.]*\.)?query:\{.*?(?=^\s*$)", text)
     assert match, "no `query:{` definition found"
     return match.group(0)
 

@@ -22,17 +22,17 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qetl.stream_health
+\d .
 
 / Per job, in this process. last_error is a symbol: one value per row, and
 / the message is shown, never parsed.
-batches:([job:`symbol$()] ok:`long$(); failed:`long$(); last_error:`symbol$(); last_failure_at:`timestamp$())
+.qetl.stream_health.batches:([job:`symbol$()] ok:`long$(); failed:`long$(); last_error:`symbol$(); last_failure_at:`timestamp$())
 
 / What `job`'s batches have done in this process.
 / @param job the streaming job's name
 / @return dict ok, failed, last_error, last_failure_at - zeros for a job that has handled none
 / @eg .qetl.stream_health.of[`nothing_streams_this]`failed  ->  0
-of:{[job]
+.qetl.stream_health.of:{[job]
     $[job in exec job from .qetl.stream_health.batches;
       .qetl.stream_health.batches job;
       `ok`failed`last_error`last_failure_at!(0;0;`;0Np)]}
@@ -42,8 +42,8 @@ of:{[job]
 / @param ok 1b when on_batch returned, 0b when it threw
 / @param err the error, a string; ignored when ok
 / @return the job's counts after this batch
-record:{[job;ok;err]
-    h:of[job];
+.qetl.stream_health.record:{[job;ok;err]
+    h:.qetl.stream_health.of[job];
     h:$[ok; @[h;`ok;+;1]; h,`failed`last_error`last_failure_at!(1+h`failed;`$err;.z.p)];
     `.qetl.stream_health.batches upsert (enlist[`job]!enlist job),h;
     h}
@@ -53,8 +53,8 @@ record:{[job;ok;err]
 / @param job the streaming job's name
 / @param failing 1b when a batch of the job's failed since the previous beat
 / @return the file's path
-write:{[job;failing]
-    h:of[job];
+.qetl.stream_health.write:{[job;failing]
+    h:.qetl.stream_health.of[job];
     dir:.qetl.status.status_dir[];
     system"mkdir -p ",dir;
     payload:`job`process`pid`host`at`ok`failed`failing`last_error`last_failure_at!(

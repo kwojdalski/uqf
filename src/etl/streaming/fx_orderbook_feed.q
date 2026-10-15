@@ -14,20 +14,20 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qpipe.job.fx_orderbook_feed
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `fx_orderbook_feed;
+.qpipe.job.fx_orderbook_feed.publish:.qetl.job.stream.unwired `fx_orderbook_feed;
 
 / This process's own moving mid per pair. Parallel plain VECTORS, aligned
 / with .qf.demo.pairs, for the reason fx_feed.q gives: a dict here turns the
 / level columns into dicts too, and .u.upd rejects those.
-spot:.qf.demo.spot
+.qpipe.job.fx_orderbook_feed.spot:.qf.demo.spot
 
 / How deep this feed quotes. The wide-book feed quotes eleven from the same
 / .qf.demo helpers; the depth is the only difference between them.
-n_levels:3
+.qpipe.job.fx_orderbook_feed.n_levels:3
 
 / One tick's worth of depth quotes, from a given mid per pair.
 / .
@@ -36,7 +36,7 @@ n_levels:3
 / @param mids one mid per pair, in .qf.demo.pairs order
 / @return the tick's rows: pairs, bid prices, bid sizes, ask prices, ask sizes
 / @eg count first .qpipe.job.fx_orderbook_feed.tick_rows[.qf.demo.spot] 1  ->  3
-tick_rows:{[mids]
+.qpipe.job.fx_orderbook_feed.tick_rows:{[mids]
     n:count .qf.demo.pairs;
     sizes:.qf.demo.levels_size .qpipe.job.fx_orderbook_feed.n_levels;
     (.qf.demo.pairs;
@@ -46,7 +46,7 @@ tick_rows:{[mids]
         n#enlist sizes)}
 
 / Walk every pair's mid, then publish the tick built from it.
-on_timer:{[]
+.qpipe.job.fx_orderbook_feed.on_timer:{[]
     `.qpipe.job.fx_orderbook_feed.spot set .qf.demo.drift_one each .qpipe.job.fx_orderbook_feed.spot;
     .qpipe.job.fx_orderbook_feed.publish[`fx_orderbook;.qpipe.job.fx_orderbook_feed.tick_rows[.qpipe.job.fx_orderbook_feed.spot]];
     }

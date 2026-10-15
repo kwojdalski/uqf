@@ -1,4 +1,4 @@
-"""`uqs target ...` and `uqs deploy list`: the servers `uqs --target NAME`
+"""`uqs target ...` and `uqs deploy history`: the servers `uqs --target NAME`
 drives, and what was deployed where (#956).
 
 Targets are the entries `uqs deploy push --target` reads, in
@@ -167,16 +167,19 @@ def remove(name: Annotated[str, typer.Argument(help="The target")]) -> None:
     console.print(f"[green]✓[/] target {name} removed from {path}")
 
 
-@deploy_app.command("list")
-def deploy_list(
+@deploy_app.command("history")
+def deploy_history(
     server: Annotated[
         str | None, typer.Argument(help="Only this target or server (host, with or without user@)")
     ] = None,
     limit: Annotated[int, typer.Option("--limit", help="Most recent N")] = 20,
 ) -> None:
-    """Every `uqs deploy push` made from this machine, newest first. `*` marks
-    each server's default: its latest successful deployment, which
-    `uqs --target <server>` and `uqs target shell` use."""
+    """Show deployment history recorded on this machine, newest first.
+
+    Every `uqs deploy push` made from THIS machine - not what a server has
+    installed (`uqs deploy status`) nor the declared servers (`uqs target
+    list`). `*` marks each server's default: its latest successful
+    deployment, which `uqs --target <server>` and `uqs target shell` use."""
     root = repo_root()
     try:
         entries = history.read(root)

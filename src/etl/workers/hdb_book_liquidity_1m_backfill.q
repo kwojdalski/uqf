@@ -20,7 +20,7 @@
 / previous window's last minute, whose end is this window's first instant (#1143;
 / the same class as hdb_exec_bars_backfill).
 
-\d .qpipe.job.hdb_book_liquidity_1m_backfill
+\d .
 
 / The minutes for a window of books, with the live job's calculation. Kept: `time`,
 / the minute's end, which the live job leaves for the plant to stamp; a backfill has
@@ -28,7 +28,7 @@
 / @param book_rows rows of the HDB's market_data: source_time sym source market and the four ladders
 / @return one row per provider, size and minute, in book_liquidity_1m's columns
 / @eg count .qpipe.job.hdb_book_liquidity_1m_backfill.minutes .qpipe.source.hdb_market_data.fixture[]  ->  9
-minutes:{[book_rows]
+.qpipe.job.hdb_book_liquidity_1m_backfill.minutes:{[book_rows]
     m:.qpipe.transform.book_liquidity_1m.bars[book_rows];
     (cols .qetl.plant.shape `book_liquidity_1m) xcols update time:bar_start+.qpipe.transform.book_liquidity_1m.width from m}
 
@@ -37,7 +37,7 @@ minutes:{[book_rows]
 / was mis-keyed.
 / @param batch the transformed rows
 / @return no failures, or the offending rows
-quality_check:{[batch]
+.qpipe.job.hdb_book_liquidity_1m_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     obs:(batch[`bid_obs]>batch`snapshots) or batch[`ask_obs]>batch`snapshots;
     / a mean of floats can land an ulp over its bound, so the upper bounds carry a hair of slack
