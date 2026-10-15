@@ -1,4 +1,4 @@
-"""`uqs backfill --wait` reads the worker status file by q's rules (#1362).
+"""`uqs job backfill --wait` reads the worker status file by q's rules (#1362).
 
 The wait is one of four readers of the file `.qetl.status.write_status`
 writes, and the one that went unchecked: it built the file name inline and

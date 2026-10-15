@@ -286,7 +286,7 @@ def start_backfill(
     HTTP surface: a backfill that guessed a range would publish the wrong
     window and record it as covered. The four values reach the process as the
     command-line flags `scripts/processes/torq_backfill.q` reads, built by the
-    same `uqs.stack.backfill.backfill_flags` `uqs backfill` uses - not a second
+    same `uqs.stack.backfill.backfill_flags` `uqs job backfill` uses - not a second
     way of spelling them.
     """
     require_writes(settings)
@@ -308,7 +308,7 @@ def start_backfill(
     from uqs.stack.backfill import procname_for
     from uqs.stack.backfill import start as start_backfill
 
-    # Through torq.sh, exactly as `uqs backfill` starts it. Running the q
+    # Through torq.sh, exactly as `uqs job backfill` starts it. Running the q
     # script directly - as this did - skipped TorQ's launcher, so the process
     # died at once on `.proc.procname` with its output sent to /dev/null,
     # while this endpoint answered 200 with the pid of a process already gone.
@@ -347,7 +347,7 @@ def _require_utc(name: str, raw: str) -> dt.datetime:
     Identical reasoning to the coverage endpoint's: a naive timestamp is read
     as the server's local time, and a backfill an hour wide of where the
     caller meant records coverage for the wrong window. And the rule
-    `uqs backfill` applies to its own bounds (uqs.stack.backfill): a datetime
+    `uqs job backfill` applies to its own bounds (uqs.stack.backfill): a datetime
     stops at the microsecond, and `fromisoformat` would keep the first six
     digits of a finer fraction without a word - a range 789 ns short of the
     one the caller sent, recorded as covered.

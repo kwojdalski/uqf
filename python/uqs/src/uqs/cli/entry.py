@@ -29,11 +29,12 @@ from __future__ import annotations
 # this CLI.
 #
 # The import ORDER is the order `--help` lists commands in, so isort is turned
-# off for it: the fleet first, the bounded jobs that run over data it has
-# already written, then the summary of it, then what reads it, then what writes
-# code, then the external recorders, then deploying a release. Alphabetical would open the help with
-# `backfill`. The groups (`data`, `config`, `job`, `feed`) list after every flat
-# command, in the order their modules register them.
+# off for it: the fleet first, then the summary of it, then what reads it, then
+# what writes code, then the external connectors and the machine's setup, then
+# deploying a release. The groups (`data`, `config`, `job`, `connector`,
+# `setup`) list after every flat command, in the order their modules register
+# them; `job`'s operations (backfill, runs, gaps, preview) register on it from
+# their own modules, under a help panel of their own (#1417).
 #
 # isort: off
 from uqs.cli import lifecycle  # noqa: F401

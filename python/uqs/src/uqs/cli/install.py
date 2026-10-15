@@ -23,7 +23,7 @@ from uqs.checks.traced_queries import untraced_lines
 from uqs.cli import completion, install_bundle
 from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
-from uqs.cli.shared import _die, _paths, console, job_app
+from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app
 from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import UqsError
@@ -166,7 +166,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
     for worker in workers:
         step(
             "Run a worker (the fleet must be up)",
-            f"uqs backfill {worker} --version v1 --from 2026-09-01 --to 2026-09-02",
+            f"uqs job backfill {worker} --version v1 --from 2026-09-01 --to 2026-09-02",
         )
     step("Each one answers", "uqs summary --columns status   (Responds: yes)")
     step("How long each took to load", "uqs summary --debug")
@@ -193,7 +193,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
     )
 
 
-@job_app.command("install")
+@job_app.command("install", rich_help_panel=JOB_AUTHORING_PANEL)
 def install_jobs(
     sidecar: Annotated[
         Path,

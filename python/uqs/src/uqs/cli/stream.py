@@ -1,8 +1,8 @@
-"""`uqs stream ...`: streaming jobs, short of running them (#663).
+"""`uqs job preview`: a streaming job, short of running it (#663).
 
-`preview` fetches and normalizes one page of a polling feed and says what it
+It fetches and normalizes one page of a polling feed and says what it
 would publish and where its cursor would move, publishing nothing and saving
-nothing. It is not `uqs backfill --mode dry-run`: that rehearses a bounded
+nothing. It is not `uqs job backfill --mode dry-run`: that rehearses a bounded
 range; this looks at the one page a running feed would take next.
 """
 
@@ -13,17 +13,10 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 from uqs.stack import stream_preview
 from uqs.stack.trace_render import render_query_trace
-
-stream_app = typer.Typer(
-    no_args_is_help=True,
-    add_completion=False,
-    help="Streaming jobs: preview a polling feed's next page without publishing it.",
-)
-app.add_typer(stream_app, name="stream")
 
 _LIVE = {
     "live": "[green]live[/] - its source's credential is set",
@@ -46,7 +39,7 @@ def _print_trace(lines: list) -> None:
         console.print(render_query_trace(message), markup=False, highlight=False)
 
 
-@stream_app.command("preview")
+@job_app.command("preview", rich_help_panel=JOB_OPERATIONS_PANEL)
 def preview(
     job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],
     sample: Annotated[
@@ -64,7 +57,7 @@ def preview(
         typer.Option(
             "--trace",
             help="Show every query the fetch sends - before it goes, and with its rows, "
-            "time or error - as `uqs backfill --trace` does. Off by default.",
+            "time or error - as `uqs job backfill --trace` does. Off by default.",
         ),
     ] = False,
     last: Annotated[

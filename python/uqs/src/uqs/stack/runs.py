@@ -1,4 +1,4 @@
-"""Reading the run ledger back: what `uqs run` shows (#530).
+"""Reading the run ledger back: what `uqs job runs` shows (#530).
 
 Every window a bounded worker publishes is attributed to a run
 (`src/etl/core/run.q`): which execution produced it, and the facts it recorded
@@ -62,7 +62,7 @@ def to_q_timestamp(moment: datetime) -> str:
     """A datetime as the q timestamp literal for the same instant, in UTC:
     2026.09.13D00:00:00.000000000, not 2026-09-13T00:00:00Z.
 
-    The one formatter: `uqs backfill` writes its -from/-to with it, and the
+    The one formatter: `uqs job backfill` writes its -from/-to with it, and the
     ledger reads here splice their bounds with it. There were two, and this
     one formatted the wall time it was given - a +02:00 bound reached q two
     hours off - while backfill.py's converted to UTC first. A naive datetime
@@ -149,7 +149,7 @@ def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
     """One run's row, and every fact it recorded."""
     if not _GUID.match(run_id):
         raise UqsError(
-            f"{run_id!r} is not a run id - they look like 0a1b2c3d-...; see `uqs run list`"
+            f"{run_id!r} is not a run id - they look like 0a1b2c3d-...; see `uqs job runs list`"
         )
     literal = f'"G"$"{run_id}"'
     return (
@@ -159,7 +159,7 @@ def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
 
 
 def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
-    """A ledger timestamp as `uqs backfill --from/--to` takes it.
+    """A ledger timestamp as `uqs job backfill --from/--to` takes it.
 
     The ledger's JSON spells nanoseconds - 2026-09-13T00:00:00.000000000 -
     which `datetime.fromisoformat` refuses, so the command would not run as
@@ -207,7 +207,7 @@ def rerun_command(run: dict) -> str | None:
     fixture = recorded.endswith(FIXTURE_TAG)
     version = untagged(recorded)
     return (
-        f"uqs backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
+        f"uqs job backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
         f"--to {_as_bound(str(run['range_to']), upper=True)} --version {version}"
         + (" --fixture" if fixture else "")
     )

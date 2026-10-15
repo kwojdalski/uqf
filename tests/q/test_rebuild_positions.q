@@ -8,7 +8,7 @@
 / deal and fires the reaction once.
 / .
 / Under both IO managers (#541): .qetl.io.memory, which is what a plain q
-/ process uses, and .qetl.io.hdb, which is what `uqs backfill` uses - the one
+/ process uses, and .qetl.io.hdb, which is what `uqs job backfill` uses - the one
 / the tests missed before, and the one where the reaction did nothing.
 
 \d .rebuild_positionsrxtest
@@ -102,7 +102,7 @@ test_an_empty_window_writes_nothing:{[t]
     .qunit.assertEquals[(count positions[];exec distinct outcome from .qetl.reaction.history);(0;enlist `ok);
         "a window with no deals is a successful reaction that writes no rows"]};
 
-/ #541, both halves. What `uqs backfill` does: torq_backfill.q points the
+/ #541, both halves. What `uqs job backfill` does: torq_backfill.q points the
 / worker at .qetl.io.hdb, which writes partitions and makes no root table.
 / The reaction must READ what was published - there is no demo_deals to name
 / - and WRITE where the worker wrote: into the HDB, not a table in a process
@@ -123,7 +123,7 @@ test_under_the_hdb_io_manager_positions_land_in_the_hdb:{[t]
         (5;enlist `ok;0b;1000000 -2500000 750000 -3000000 1250000f;5#1j);
         "every reaction succeeded, and deal_positions is in the HDB partitions, not in memory"]};
 
-/ The same fix where it matters: `uqs backfill` writes the HDB, and a second
+/ The same fix where it matters: `uqs job backfill` writes the HDB, and a second
 / release of the range must leave one row per day there too.
 test_under_the_hdb_io_manager_a_second_release_replaces:{[t]
     system "rm -rf build/test_hdb_rebuild_positions_twice";

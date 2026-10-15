@@ -15,7 +15,7 @@
 / eligible (FX only) is the calculation's decision, not the query's.
 / .
 / Live: export UQF_SOURCE_CRED_HDB_MARKET_DATA=localhost:<hdb1's port> in the
-/ shell `uqs backfill` runs from. Without it, the fixture below is used.
+/ shell `uqs job backfill` runs from. Without it, the fixture below is used.
 
 \d .qpipe.source.hdb_market_data
 

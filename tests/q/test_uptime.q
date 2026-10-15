@@ -44,7 +44,7 @@ test_a_session_records_who_and_when_and_is_on_disk:{[t]
     delete etl_stream_uptime from `.;
     .qetl.uptime.attach[];
     .qunit.assertEquals[count select from .qetl.uptime.sessions[] where session=id;1;
-        "a fresh reader finds it - uqs gaps reads after the process is gone"]};
+        "a fresh reader finds it - uqs job gaps reads after the process is gone"]};
 
 test_a_beat_moves_only_this_processes_sessions:{[t]
     .uptimetest.session[`posbook;0;1];

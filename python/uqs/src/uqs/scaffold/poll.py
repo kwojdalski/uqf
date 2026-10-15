@@ -2,7 +2,7 @@
 
 A feed scaffolded the ordinary way gets an `on_timer` that does everything -
 fetch, normalize, publish, save the cursor - so nothing can run its steps
-apart, and `uqs stream preview` refuses it. With `--poll` the feed gets the
+apart, and `uqs job preview` refuses it. With `--poll` the feed gets the
 steps instead, declared as `poll`: the framework builds the timer from them
 (.qetl.job.stream.tick) and the preview runs the same fetch and normalize
 with nothing published or saved. So no timer is written here at all.
@@ -11,7 +11,7 @@ with nothing published or saved. So no timer is written here at all.
 timestamp, for a source that pages through rows sharing one: the load, save
 and advances trio is written whole, from the framework's stock helpers, and
 next_cursor takes those fields of the page's last row. It also gets a
-start_cursor step, which `uqs stream preview --last` needs (#681): only the
+start_cursor step, which `uqs job preview --last` needs (#681): only the
 feed knows its tie-breakers' types, so that one is written to throw until
 filled in.
 
@@ -73,7 +73,7 @@ def steps(name: str, publishes: str, fields: list[str]) -> str:
 / tie-breaker loses the rows that share the rest.
 next_cursor:{{[page] {symbol_list(fields)}#last page}}
 
-/ [instant] -> the cursor just before `instant`, for `uqs stream preview
+/ [instant] -> the cursor just before `instant`, for `uqs job preview
 / {name} --last 30s`: fetching after it must return the rows at or after
 / instant. Usually {fields[0]} set to the instant and each tie-breaker to
 / its type's null, which sorts before every value - e.g.
@@ -90,13 +90,13 @@ next_cursor:{{[page]
     }}"""
     return f"""/ SCAFFOLDED. A polling feed: these steps, not one on_timer. The framework's
 / timer fetches the page after the cursor, normalizes it, publishes it and
-/ then saves the cursor; `uqs stream preview {name}` runs the same fetch and
+/ then saves the cursor; `uqs job preview {name}` runs the same fetch and
 / normalize, publishing nothing and saving nothing. Each step throws until
 / written - a fetch that returned a fixture would preview as live data.
 
 / [cursor] -> the page after `cursor`, a table: {cursor}.
 / Send the query through .qetl.source.ipc_call[h;{{[c] select ... }};enlist cursor],
-/ not h(...) directly, so `uqs stream preview {name} --trace` shows it.
+/ not h(...) directly, so `uqs job preview {name} --trace` shows it.
 fetch:{{[cursor]
     '"{name}.fetch: not implemented";
     }}

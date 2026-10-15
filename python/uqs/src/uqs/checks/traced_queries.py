@@ -1,6 +1,6 @@
 """Queries `--trace` cannot see: a polling feed's or a backfill source's.
 
-`uqs stream preview --trace`, `uqs backfill --trace` and the running jobs log
+`uqs job preview --trace`, `uqs job backfill --trace` and the running jobs log
 every query sent through the traced paths - `.qetl.source.ipc_call` (a
 cursor's query), `.qetl.source.ipc` (a window's), `.qetl.source.local` and
 `.qetl.io.odbc.run_sql`/`window_query` - before it goes and again when it

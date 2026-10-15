@@ -81,7 +81,7 @@ def test_a_runtime_without_pipelines_refuses_their_commands_by_its_own_name(
         raise SystemExit(1)
 
     monkeypatch.setattr(shared, "_die", die)
-    result = CliRunner().invoke(cli.app, ["--runtime", "probe", command])
+    result = CliRunner().invoke(cli.app, ["--runtime", "probe", *command.split()])
     assert result.exit_code == 1
     assert "the probe runtime has none of this tree's pipelines" in said[0]
 

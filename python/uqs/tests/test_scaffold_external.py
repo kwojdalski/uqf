@@ -161,14 +161,14 @@ def test_a_scaffolded_feed_names_its_raw_table_where_the_stack_looks(tree):
     before = _producers((tree / DEPENDENCIES_FILE).read_text())
     write.apply_plan(_plan(), tree)
     after = _producers((tree / DEPENDENCIES_FILE).read_text())
-    assert after == {**before, "ws_raw": "the external ws feed (`uqs feed start ws`)"}
+    assert after == {**before, "ws_raw": "the external ws feed (`uqs connector start ws`)"}
     catalog = (tree / CATALOG_FILE).read_text()
     assert ".qcat.hidden[`ws_raw]:" in catalog and ".qcat.describe[`ws_quotes]" in catalog
 
 
 def test_a_producer_goes_inside_the_dict_or_not_at_all():
     text = (UQF_ROOT / DEPENDENCIES_FILE).read_text()
-    entry = '    "x_raw": "the external x feed (`uqs feed start x`)",\n'
+    entry = '    "x_raw": "the external x feed (`uqs connector start x`)",\n'
     assert _producers(with_producer(text, entry))["x_raw"].startswith("the external x feed")
     with pytest.raises(UqsError, match="EXTERNAL_PRODUCERS"):
         with_producer("x = 1\n", entry)

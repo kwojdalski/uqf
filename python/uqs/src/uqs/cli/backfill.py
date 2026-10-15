@@ -1,4 +1,4 @@
-"""`uqs backfill`: run a bounded worker over a range.
+"""`uqs job backfill`: run a bounded worker over a range.
 
 Its own command rather than `uqs start <process>`, because a backfill takes
 arguments no other process does - which worker, which source release, which
@@ -14,7 +14,15 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
-from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app, console
+from uqs.cli.shared import (
+    JOB_OPERATIONS_PANEL,
+    PortOpt,
+    _debug_requested,
+    _die,
+    _paths,
+    console,
+    job_app,
+)
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
@@ -25,7 +33,7 @@ _BOUND_HELP = (
 )
 
 
-@app.command()
+@job_app.command("backfill", rich_help_panel=JOB_OPERATIONS_PANEL)
 def backfill(
     ctx: typer.Context,
     worker: Annotated[
@@ -115,13 +123,13 @@ def backfill(
     discovery, so the fleet has to be up, and it exits when the range is
     done - follow it with `uqs logs <process> -f`.
 
-    e.g. `uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15`
+    e.g. `uqs job backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15`
 
     `--mode plan` lists the windows a run would fetch without opening the
     source or writing anything; `--mode dry-run` fetches them and writes
     nothing. Their output is in the process's log, like a run's.
 
-    `--debug` (or `uqs --debug backfill ...`) starts the process with
+    `--debug` (or `uqs --debug job backfill ...`) starts the process with
     `-verbose`, so its log - `uqs logs <process>` - carries DEBUG lines.
     `--trace` starts it with `-trace`: every query sent to the source, at TRACE,
     and the DEBUG lines `--debug` would show, so each query sits beside its

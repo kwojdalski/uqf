@@ -52,29 +52,33 @@ READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
     {
         ("summary", None),
         ("graph", None),
-        ("gaps", None),
+        ("job", "gaps"),
+        ("job", "preview"),
         ("query", None),
         ("schema", None),
         ("list", None),
         ("logs", None),
-        ("run", "status"),
-        ("run", "list"),
-        ("run", "show"),
-        ("run", "audit"),
-        ("stream", "preview"),
         ("data", "hdb-check"),
         ("config", "get"),
         ("runtime", "diff"),
-        ("feed", "status"),
-        ("odbc", "status"),
-        ("odbc", "env"),
+        ("connector", "status"),
         ("deploy", "status"),
         ("deploy", "verify"),
     }
 )
 #: Read-only three deep: `config sources check` reads, `config sources stub`
-#: writes a file.
-READ_ONLY_DEEP = frozenset({("config", "sources", "check")})
+#: writes a file; `job runs migrate` and `setup odbc install` write.
+READ_ONLY_DEEP = frozenset(
+    {
+        ("config", "sources", "check"),
+        ("job", "runs", "status"),
+        ("job", "runs", "list"),
+        ("job", "runs", "show"),
+        ("job", "runs", "audit"),
+        ("setup", "odbc", "status"),
+        ("setup", "odbc", "env"),
+    }
+)
 
 
 @dataclass(frozen=True)

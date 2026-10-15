@@ -14,12 +14,12 @@ from typing import Annotated
 import typer
 
 from uqs.cli.regenerate import _DERIVED, _export_contract_surface, _regenerate_derived
-from uqs.cli.shared import _die, _paths, console, job_app
+from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app
 from uqs.paths import CONTRACT_SURFACE_SCRIPT, UqsError
 from uqs.scaffold.remove import plan_removal
 
 
-@job_app.command("remove")
+@job_app.command("remove", rich_help_panel=JOB_AUTHORING_PANEL)
 def remove_job(
     name: Annotated[str, typer.Argument(help="The job, as uqs job new named it")],
     dry_run: Annotated[

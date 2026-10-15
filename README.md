@@ -207,7 +207,7 @@ a process that starts with the stack. It registers with discovery, so the fleet
 above has to be up:
 
 ```
-uv run uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
+uv run uqs job backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
 `--from` and `--to` are required, and a date without an offset is UTC: a

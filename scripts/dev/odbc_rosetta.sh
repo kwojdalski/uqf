@@ -25,7 +25,7 @@
 #   scripts/dev/odbc_rosetta.sh q <q args...>  run q under Rosetta with ODBC wired up
 #   scripts/dev/odbc_rosetta.sh backfill <worker> [-version V -from T -to T [-hdb root]]
 #       run one bounded worker under Rosetta, which is the ONLY way an
-#       ODBC-backed worker reaches a driver on macOS: `uqs backfill` launches
+#       ODBC-backed worker reaches a driver on macOS: `uqs job backfill` launches
 #       through torq.sh, which starts the system arm64 q, and KX ships
 #       odbc.so for x86_64 only. Export the source's credential first.
 #   scripts/dev/odbc_rosetta.sh databento <q args...>

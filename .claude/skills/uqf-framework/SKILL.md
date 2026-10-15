@@ -396,11 +396,11 @@ Work from the outside in. Most problems stop at step 1 or 2. The full runbook is
    `src/etl/init.q`, `.qetl.job.stream.wire` the job to a recorder, and call
    `.qpipe.job.<job>.on_batch` with a batch you build.
 6. **A backfill has exited by the time you look.**
-   - `uqs run status` lists runs that never finished.
-   - `uqs run show <run_id>` gives the facts, the log paths and the command that
-     resumes.
+   - `uqs job runs status` lists runs that never finished.
+   - `uqs job runs show <run_id>` gives the facts, the log paths and the command
+     that resumes.
    - Re-running the same command **is** the resume: covered windows are skipped.
-7. **Gaps in a streaming job's output:** `uqs gaps <job> --from .. --to ..`.
+7. **Gaps in a streaming job's output:** `uqs job gaps <job> --from .. --to ..`.
    With a backfill twin, it prints the refill commands.
 8. **A source won't connect, or is the wrong shape:**
    `uqs config sources check <source>`. Its stages are credential → tls →

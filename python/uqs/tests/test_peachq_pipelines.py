@@ -514,6 +514,7 @@ def test_a_bundles_jobs_run_on_peachq(stack_copy):
 
     day = datetime.now(UTC).date() - timedelta(days=1)
     run = uqs(
+        "job",
         "backfill",
         "synth_hist_backfill",
         "--from",

@@ -58,7 +58,7 @@ none of them unless asked: --jobs piggy_spread,mw_quotes starts those
 streaming jobs, and every uqf process each one needs (the closure recorded at
 build time), beside the profile - the profile is never assumed to include
 them. A bounded worker is installed and never run: naming one in --jobs is
-refused, and a backfill is its own deliberate `uqs backfill` afterwards. The
+refused, and a backfill is its own deliberate `uqs job backfill` afterwards. The
 plan (--dry-run) prints the resolved process list; verification checks those
 processes and that the tickerplant carries every bundle table.
 

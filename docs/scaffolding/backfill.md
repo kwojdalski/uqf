@@ -1,7 +1,7 @@
 # Backfill
 
 A backfill fills a **past window** from a source outside the stack. It takes its
-range as flags (`uqs backfill`), fetches, transforms, publishes, records
+range as flags (`uqs job backfill`), fetches, transforms, publishes, records
 coverage, and **exits**. It is not a long-running process and it never
 subscribes to the tickerplant.
 
@@ -46,8 +46,8 @@ physical table to, while the query's rows are held to `--columns` (see
 the query you write: it is never guessed.
 
 `--twin-of JOB` scaffolds a streaming job's backfill **twin**: a worker that
-refills the table the job publishes, which is what `uqs gaps JOB` looks for. The
-dataset and columns are taken from the job's declaration and the plant's
+refills the table the job publishes, which is what `uqs job gaps JOB` looks for.
+The dataset and columns are taken from the job's declaration and the plant's
 definition rather than given, so the twin writes the right table by
 construction. `--columns` is refused, and so is a `--dataset` the job does not
 publish. A job that publishes several tables needs `--dataset` to pick one.
@@ -189,7 +189,7 @@ A backfill takes its window as flags and registers with discovery, so the fleet
 has to be up:
 
 ```bash
-uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
+uqs job backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
 `--fixture` because a scaffolded source has no credential yet: a run that would
@@ -211,7 +211,7 @@ worker's declaration, each stage's timing and every window as it starts and
 publishes:
 
 ```bash
-uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture --debug
+uqs job backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture --debug
 ```
 
 ## Then

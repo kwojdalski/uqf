@@ -34,7 +34,7 @@ classes: {
 }
 
 broker: "Kafka topic\nuqf.client.flow" { class: ext }
-consumer: "kafka_feed.py - uqs feed start kafka\nauto-commit off" { class: py }
+consumer: "kafka_feed.py - uqs connector start kafka\nauto-commit off" { class: py }
 stp1: "stp1 - tickerplant" { class: plant }
 flow: "kafka_flow1 - kafka_flow.q\nkeeps rows above the mark" { class: job }
 mark: "high-water mark per partition\nprocess state - rebuilt from the\nclient_flow log on a restart" { class: table }

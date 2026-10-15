@@ -8,10 +8,10 @@ the uqf stack](../guides/uqs.md).
 ![The consumer polls the topic, publishes to stp1 and only then commits the offset; kafka_flow1 subscribes, compares each record with a per-partition high-water mark held in process state, and publishes only new records as client_flow](../diagrams/kafka.svg)
 
 ```
-uqs feed start kafka                                      # localhost:9092, uqf.client.flow
-uqs feed start kafka --brokers broker:9092 --topic fx.deals --group uqf-kafka-flow
-uqs feed status kafka
-uqs feed stop kafka
+uqs connector start kafka                                      # localhost:9092, uqf.client.flow
+uqs connector start kafka --brokers broker:9092 --topic fx.deals --group uqf-kafka-flow
+uqs connector status kafka
+uqs connector stop kafka
 ```
 
 Needs a reachable broker and `confluent-kafka`, and **neither ships with this

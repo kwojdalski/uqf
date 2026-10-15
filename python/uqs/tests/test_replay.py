@@ -270,7 +270,7 @@ def test_a_plant_with_no_schemafile_is_refused_rather_than_replayed_blind(fleet)
 def test_start_passes_the_flags_through_torq_sh_extras(monkeypatch):
     """`-extras` is torq.sh's own way to add to one process's start line, so
     tpreplay1 starts the way every other process does - the same channel
-    `uqs backfill` uses."""
+    `uqs job backfill` uses."""
     seen = {}
     monkeypatch.setattr(
         runtime,

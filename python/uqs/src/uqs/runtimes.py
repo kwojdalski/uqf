@@ -195,12 +195,14 @@ DEFAULT_RUNTIME = next(iter(RUNTIMES))
 #: Commands that work only on this tree's own pipelines, and what each needs
 #: that a runtime without them (`pipelines=False`, such as torq) does not
 #: have. Refused there with the reason, rather than left to fail against
-#: processes and tables that do not exist.
+#: processes and tables that do not exist. Keyed by the command's path, one
+#: word for a top-level command or group, two for a command inside a group:
+#: `job new` writes into the tree and is not refused, `job backfill` is.
 UQF_ONLY_COMMANDS: dict[str, str] = {
-    "backfill": "runs this tree's bounded workers",
-    "gaps": "reads this tree's streaming jobs' coverage",
+    "job backfill": "runs this tree's bounded workers",
+    "job gaps": "reads this tree's streaming jobs' coverage",
     "graph": "draws this tree's pipeline declarations",
-    "run": "reads this tree's run ledger",
-    "stream": "previews this tree's streaming jobs",
-    "feed": "publishes this tree's tables into the plant",
+    "job runs": "reads this tree's run ledger",
+    "job preview": "previews this tree's streaming jobs",
+    "connector": "publishes this tree's tables into the plant",
 }

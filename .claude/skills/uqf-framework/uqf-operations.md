@@ -19,29 +19,29 @@ in `.github/workflows/ci.yml`).
 
 ## Command map
 
-  | Need                                                   | Command                                                                        |
-  | ---                                                    | ---                                                                            |
-  | start a set of processes, with what they depend on     | `uqs start --profile NAME [extra procs]`                                       |
-  | start one process, or several                          | `uqs start NAME...`                                                            |
-  | start and follow its log in the foreground             | `uqs up NAME` / `uqs up --profile NAME`                                        |
-  | stop                                                   | `uqs stop [NAME...]` (`--force` for a process that won't stop)                 |
-  | status, wiring, heartbeats, batch health               | `uqs summary`                                                                  |
-  | who feeds whom                                         | `uqs graph`                                                                    |
-  | a q expression on a process                            | `uqs query "expr" --port P` / `uqs query --proc NAME` (interactive)            |
-  | a table's columns in a running process                 | `uqs schema`                                                                   |
-  | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                             |
-  | list processes, profiles, runtimes, overrides, env     | `uqs list KIND` (no argument lists the kinds)                                  |
-  | a bounded worker over a range                          | `uqs backfill WORKER --from T --to T --version V [--wait] [--debug|--trace]`   |
-  | runs: unfinished, one run, one window                  | `uqs run status`, `uqs run show RUN_ID`, `uqs run list`                        |
-  | holes in a streaming job's output, and refill commands | `uqs gaps JOB --from T --to T`                                                 |
-  | scaffold, remove or install a job                      | `uqs job new`, `uqs job remove`, `uqs job install`                             |
-  | a source checked live                                  | `uqs config sources check SOURCE... [--odbc-home DIR]`                         |
-  | a source's `sources.csv` row                           | `uqs config sources`, `uqs config sources stub SOURCE`                         |
-  | the HDB's shape against the schema                     | `uqs data hdb-check [--fix]`                                                   |
-  | replay a tickerplant log into the HDB                  | `uqs data replay`                                                              |
-  | compare runtimes; install a runtime's bundles          | `uqs runtime diff A B`, `uqs runtime prepare`                                  |
-  | external publishers                                    | `uqs feed start|stop|status databento|kafka|crypto|crypto-fills`               |
-  | deploy                                                 | `uqs deploy build`, `uqs deploy push`, `uqs deploy verify`, rollback and prune |
+  | Need                                                   | Command                                                                                       |
+  | ---                                                    | ---                                                                                           |
+  | start a set of processes, with what they depend on     | `uqs start --profile NAME [extra procs]`                                                      |
+  | start one process, or several                          | `uqs start NAME...`                                                                           |
+  | start and follow its log in the foreground             | `uqs up NAME` / `uqs up --profile NAME`                                                       |
+  | stop                                                   | `uqs stop [NAME...]` (`--force` for a process that won't stop)                                |
+  | status, wiring, heartbeats, batch health               | `uqs summary`                                                                                 |
+  | who feeds whom                                         | `uqs graph`                                                                                   |
+  | a q expression on a process                            | `uqs query "expr" --port P` / `uqs query --proc NAME` (interactive)                           |
+  | a table's columns in a running process                 | `uqs schema`                                                                                  |
+  | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                                            |
+  | list processes, profiles, runtimes, overrides, env     | `uqs list KIND` (no argument lists the kinds)                                                 |
+  | a bounded worker over a range                          | `uqs job backfill WORKER --from T --to T --version V [--wait] [--debug|--trace]`              |
+  | runs: unfinished, one run, one window                  | `uqs job runs status`, `uqs job runs show RUN_ID`, `uqs job runs list`                        |
+  | holes in a streaming job's output, and refill commands | `uqs job gaps JOB --from T --to T`                                                            |
+  | scaffold, remove or install a job                      | `uqs job new`, `uqs job remove`, `uqs job install`                                            |
+  | a source checked live                                  | `uqs config sources check SOURCE... [--odbc-home DIR]`                                        |
+  | a source's `sources.csv` row                           | `uqs config sources`, `uqs config sources stub SOURCE`                                        |
+  | the HDB's shape against the schema                     | `uqs data hdb-check [--fix]`                                                                  |
+  | replay a tickerplant log into the HDB                  | `uqs data replay`                                                                             |
+  | compare runtimes; install a runtime's bundles          | `uqs runtime diff A B`, `uqs runtime prepare`                                                 |
+  | external publishers                                    | `uqs connector start|stop|status databento|kafka|crypto|crypto-fills`                         |
+  | deploy                                                 | `uqs deploy build`, `uqs deploy push`, `uqs deploy verify`, rollback and prune                |
 
 Anything else is passed through to TorQ's launcher with
 `uqs raw -- <torq.sh verb>`.
@@ -89,13 +89,13 @@ because re-running a backfill resumes it.
 `docs/guides/when-it-breaks.md` has the full runbook.
 
 - **A backfill failed:**
-  - find it with `uqs run status` and `uqs run show RUN_ID`;
+  - find it with `uqs job runs status` and `uqs job runs show RUN_ID`;
   - fix the cause;
   - re-run the same command, which resumes, because covered windows are skipped.
 - **A streaming job died:**
   - find it with `uqs summary` and `uqs logs NAME --level ERROR`;
   - start it again with `uqs start NAME`;
-  - then `uqs gaps NAME --from --to`. Rows it missed while down are not
+  - then `uqs job gaps NAME --from --to`. Rows it missed while down are not
     republished; a job with a backfill twin can refill them.
 - **A job is `up` but its table stays empty:** its producer isn't running. Start
   it through a profile.
@@ -128,10 +128,10 @@ the report.
 ## ODBC sources
 
 A source read over ODBC needs KX's q client, a driver manager (unixODBC) and the
-database's driver (`docs/guides/odbc.md`). - **On a server:** `uqs odbc install`
-installs an approved package. - **On a Mac:** run `./install.sh --odbc` (or
-`scripts/dev/odbc_rosetta.sh setup`). Run q with it through
-`scripts/dev/odbc_rosetta.sh q`: KX's macOS client is x86_64 only.
+database's driver (`docs/guides/odbc.md`). - **On a server:**
+`uqs setup odbc install` installs an approved package. - **On a Mac:** run
+`./install.sh --odbc` (or `scripts/dev/odbc_rosetta.sh setup`). Run q with it
+through `scripts/dev/odbc_rosetta.sh q`: KX's macOS client is x86_64 only.
 
 Check a source with `uqs config sources check SOURCE`.
 

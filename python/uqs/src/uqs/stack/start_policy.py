@@ -9,7 +9,7 @@ They live here now, below every front end:
   - a name that is not a process, a q too old for the tree, and ports another
     stack holds are refused by refuse_start, which `runtime.run_torq_sh`
     applies to every `start` and `restart` - so neither a front end nor
-    another launcher of q processes (`uqs backfill`, `uqs replay`, `uqs raw`)
+    another launcher of q processes (`uqs job backfill`, `uqs replay`, `uqs raw`)
     can skip them (#964); `stop` refuses an unknown name itself;
   - a profile is resolved here, with its refusals: an undeclared profile, a
     set past the licence's connection budget, a member the runtime lacks.
@@ -40,7 +40,7 @@ def refuse_start(paths: UqsPaths, args: Sequence[str], base_port: int | None) ->
     another stack holds. Anything but a starting verb passes untouched.
 
     The processes are the words between the verb and torq.sh's first flag
-    (`-extras`, `-csv`): `uqs backfill` starts `<procname> -extras ...`.
+    (`-extras`, `-csv`): `uqs job backfill` starts `<procname> -extras ...`.
     """
     if not args or args[0] not in STARTING_VERBS:
         return

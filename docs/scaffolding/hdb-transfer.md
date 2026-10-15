@@ -75,7 +75,7 @@ That wrote the skeleton: a source, a worker, the `trades_copy` table in
 
   ```bash
   export UQF_SOURCE_CRED_HDB_TRANSFER=/data/source_hdb
-  uqs backfill hdb_transfer_backfill --from 2026-01-05 --to 2026-01-08 --version v1 --wait
+  uqs job backfill hdb_transfer_backfill --from 2026-01-05 --to 2026-01-08 --version v1 --wait
   ```
 
 - **Without the stack.** `scripts/dev/run_backfill.q` runs the same worker in

@@ -383,7 +383,7 @@ def plan(
 def start(paths: UqsPaths, replay: ReplayPlan) -> subprocess.CompletedProcess[str]:
     """Start tpreplay1 on `replay`, through torq.sh's own `-extras`.
 
-    The same channel `uqs backfill` uses: the flags are appended to the one
+    The same channel `uqs job backfill` uses: the flags are appended to the one
     start line torq.sh builds from process.csv, so the process starts the way
     every other one does - registered with discovery, logged where `uqs logs`
     looks - and exits when the replay is done (`exitwhencomplete`).

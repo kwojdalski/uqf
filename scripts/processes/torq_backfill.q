@@ -26,7 +26,7 @@
 /                    of completed ones.
 / .
 / WHICH WORKER, AND OVER WHAT RANGE, come from this process's command line,
-/ so one script serves every worker. `uqs backfill` appends them to TorQ's
+/ so one script serves every worker. `uqs job backfill` appends them to TorQ's
 / start line through torq.sh's own `-extras`:
 / .
 /   -worker   the worker name, e.g. demo_deals_backfill
@@ -38,25 +38,25 @@
 /   -verbose  optional: switch the DEBUG level on for this process - the parsed
 /             flags, the worker's declaration, the windows it will cut, every
 /             window as it starts and publishes, and each stage's timing.
-/             `uqs backfill --debug` passes it. Not TorQ's own -debug, which
+/             `uqs job backfill --debug` passes it. Not TorQ's own -debug, which
 /             also stops the log going to its file.
 /   -trace    optional: switch the TRACE level on - every query the source is
 /             sent, the SQL statement or the q lambda and its bounds, before
 /             it goes and again with the rows and milliseconds it took - and
 /             DEBUG with it, as -verbose does: a query is read beside the window
-/             it was sent for. `uqs backfill --trace` passes it.
+/             it was sent for. `uqs job backfill --trace` passes it.
 /   -on_conflict  optional: upsert, replace, ignore, append or fail - what a
 /             write does with a row whose row_key is already there, for this
 /             run only, over the worker's declared strategy.
-/             `uqs backfill --on-conflict` passes it.
+/             `uqs job backfill --on-conflict` passes it.
 /   -mode     optional: validate, plan, dry_run or run (the default) - see
 /             .qetl.job.bounded.runtime.modes. validate and plan stop before
 /             any source is opened or anything written; dry_run fetches and
-/             writes nothing. `uqs backfill --mode` passes it.
+/             writes nothing. `uqs job backfill --mode` passes it.
 /   -fixture  optional: let a run with no credential write its source's
 /             fixture (#1082) - refused otherwise, outside a dry run.
 /             Its coverage is recorded under the release tagged ~fixture.
-/             `uqs backfill --fixture` passes it.
+/             `uqs job backfill --fixture` passes it.
 / .
 / -worker, -from and -to are required and refused when absent, and -version
 / unless the worker declares a default. A backfill that defaulted a
@@ -264,7 +264,7 @@ run:{[]
     / begin_run tolerates any failure, so a ledger it cannot write - one from
     / before etl_runs gained its range and counts columns - would leave this
     / run untracked without a word. Failing the backfill names the fix
-    / (`uqs run migrate`) instead.
+    / (`uqs job runs migrate`) instead.
     / Not on a dry run, which records no run - attaching can create the ledger.
     if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
     t1:.z.p;

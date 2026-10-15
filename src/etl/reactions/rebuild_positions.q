@@ -4,7 +4,7 @@
 / The first reaction the tree runs rather than only tests (#529): each time
 / demo_deals_backfill publishes a window, the rows of THAT window are summed
 / into `deal_positions`, one row per (sym; window), written where the deals
-/ were - the HDB under `uqs backfill`. Nothing polls, and nothing recomputes
+/ were - the HDB under `uqs job backfill`. Nothing polls, and nothing recomputes
 / a window that did not change.
 / .
 / Runs inside whichever process publishes demo_deals - today deals_backfill1 -
@@ -24,7 +24,7 @@
 / .
 / READ AS PUBLISHED and WRITTEN WHERE THE WORKER WROTE (#541). The deals come
 / from .qetl.reaction.published, not the dataset by name, because under
-/ `uqs backfill` the worker writes HDB partitions and there is no table to
+/ `uqs job backfill` the worker writes HDB partitions and there is no table to
 / name. The positions go out through .qetl.reaction.write - the worker's
 / own IO manager - because this runs inside the backfill process, which
 / exits when its range is done: a table kept here would go with it.

@@ -188,7 +188,7 @@ modes:`validate`plan`dry_run`run
 / nothing was written.
 suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions
 
-/ This run's mode: `mode` (UQF_MODE, or `uqs backfill --mode`) when set, else
+/ This run's mode: `mode` (UQF_MODE, or `uqs job backfill --mode`) when set, else
 / `dry_run when the older dry_run flag is set, else `run.
 / .
 / An explicit `run with the dry_run flag also set is refused rather than

@@ -496,7 +496,7 @@ def test_a_job_dropping_batches_is_failing_though_up_and_heartbeat_ok(monkeypatc
     assert "1 streaming job(s) failed a batch since their last beat" in flat
     assert (
         "cross (cross1), last at 2026.10.08D10:00:00: stale shape - "
-        "`uqs gaps cross` shows the span it dropped" in flat
+        "`uqs job gaps cross` shows the span it dropped" in flat
     )
 
 
@@ -1251,7 +1251,7 @@ def test_crypto_start_splits_the_comma_separated_lists(monkeypatch):
     split happens here - the one piece of real logic in this file."""
     rec = _patch(monkeypatch, crypto, "start_crypto_recorder", result=4242)
     result = runner.invoke(
-        cli.app, ["feed", "start", "crypto", "--venues", "a, b ,c", "--symbols", "X,Y"]
+        cli.app, ["connector", "start", "crypto", "--venues", "a, b ,c", "--symbols", "X,Y"]
     )
     assert result.exit_code == 0
     assert rec.kwargs["venues"] == ("a", "b", "c"), "whitespace around a name is trimmed"
@@ -1263,22 +1263,22 @@ def test_crypto_start_drops_empty_entries_rather_than_passing_blanks(monkeypatch
     """A trailing comma is an ordinary typo, and a blank venue name reaches
     the recorder as a connection attempt to nothing."""
     rec = _patch(monkeypatch, crypto, "start_crypto_recorder", result=1)
-    runner.invoke(cli.app, ["feed", "start", "crypto", "--venues", "a,,b,"])
+    runner.invoke(cli.app, ["connector", "start", "crypto", "--venues", "a,,b,"])
     assert rec.kwargs["venues"] == ("a", "b")
 
 
 def test_crypto_stop_and_status_render(monkeypatch):
     _patch(monkeypatch, crypto, "stop_crypto_recorder")
-    assert runner.invoke(cli.app, ["feed", "stop", "crypto"]).exit_code == 0
+    assert runner.invoke(cli.app, ["connector", "stop", "crypto"]).exit_code == 0
     _patch(monkeypatch, crypto, "crypto_recorder_status", result={"running": "yes", "pid": "42"})
-    result = runner.invoke(cli.app, ["feed", "status", "crypto"])
+    result = runner.invoke(cli.app, ["connector", "status", "crypto"])
     assert result.exit_code == 0
     assert "42" in result.stdout
 
 
 def test_a_crypto_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, crypto, "start_crypto_recorder", raises=UqsError("no checkout"))
-    assert runner.invoke(cli.app, ["feed", "start", "crypto"]).exit_code == 1
+    assert runner.invoke(cli.app, ["connector", "start", "crypto"]).exit_code == 1
 
 
 def test_crypto_fills_start_passes_the_oms_socket_and_poll_interval(monkeypatch):
@@ -1286,7 +1286,7 @@ def test_crypto_fills_start_passes_the_oms_socket_and_poll_interval(monkeypatch)
     result = runner.invoke(
         cli.app,
         [
-            "feed",
+            "connector",
             "start",
             "crypto-fills",
             "--oms-socket-path",
@@ -1306,7 +1306,7 @@ def test_crypto_fills_start_names_which_table_is_simulated(monkeypatch):
     trading-decision error, not a cosmetic one. The message says which is
     which, so it is asserted."""
     _patch(monkeypatch, crypto, "start_crypto_fills_recorder", result=1)
-    result = runner.invoke(cli.app, ["feed", "start", "crypto-fills"])
+    result = runner.invoke(cli.app, ["connector", "start", "crypto-fills"])
     assert CRYPTO_FILLS_RECORDER_TABLE in result.stdout
     assert CRYPTO_REAL_FILLS_RECORDER_TABLE in result.stdout
     assert "SIMULATED" in result.stdout
@@ -1314,30 +1314,30 @@ def test_crypto_fills_start_names_which_table_is_simulated(monkeypatch):
 
 def test_crypto_fills_stop_and_status_render(monkeypatch):
     _patch(monkeypatch, crypto, "stop_crypto_fills_recorder")
-    assert runner.invoke(cli.app, ["feed", "stop", "crypto-fills"]).exit_code == 0
+    assert runner.invoke(cli.app, ["connector", "stop", "crypto-fills"]).exit_code == 0
     _patch(monkeypatch, crypto, "crypto_fills_recorder_status", result={"running": "no"})
-    result = runner.invoke(cli.app, ["feed", "status", "crypto-fills"])
+    result = runner.invoke(cli.app, ["connector", "status", "crypto-fills"])
     assert result.exit_code == 0
     assert "running" in result.stdout
 
 
 def test_a_crypto_fills_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, crypto, "start_crypto_fills_recorder", raises=UqsError("no socket"))
-    assert runner.invoke(cli.app, ["feed", "start", "crypto-fills"]).exit_code == 1
+    assert runner.invoke(cli.app, ["connector", "start", "crypto-fills"]).exit_code == 1
     _patch(monkeypatch, crypto, "stop_crypto_fills_recorder", raises=UqsError("not running"))
-    assert runner.invoke(cli.app, ["feed", "stop", "crypto-fills"]).exit_code == 1
+    assert runner.invoke(cli.app, ["connector", "stop", "crypto-fills"]).exit_code == 1
 
 
 def test_a_crypto_stop_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, crypto, "stop_crypto_recorder", raises=UqsError("not running"))
-    assert runner.invoke(cli.app, ["feed", "stop", "crypto"]).exit_code == 1
+    assert runner.invoke(cli.app, ["connector", "stop", "crypto"]).exit_code == 1
 
 
 def test_kafka_and_databento_start_with_their_own_defaults(monkeypatch):
     """Every feed's options are optional at the CLI, so each feed's defaults
     are filled in by the feed, not left as None for it to trip over."""
     kafka = _patch(monkeypatch, kafka_feed, "start_kafka_feed", result=7)
-    assert runner.invoke(cli.app, ["feed", "start", "kafka", "--topic", "t"]).exit_code == 0
+    assert runner.invoke(cli.app, ["connector", "start", "kafka", "--topic", "t"]).exit_code == 0
     assert kafka.kwargs == {
         "brokers": kafka_feed.DEFAULT_BROKERS,
         "topic": "t",
@@ -1345,7 +1345,8 @@ def test_kafka_and_databento_start_with_their_own_defaults(monkeypatch):
     }
     databento = _patch(monkeypatch, databento_feed, "start_databento_feed", result=8)
     assert (
-        runner.invoke(cli.app, ["feed", "start", "databento", "--symbols", "A, B"]).exit_code == 0
+        runner.invoke(cli.app, ["connector", "start", "databento", "--symbols", "A, B"]).exit_code
+        == 0
     )
     assert databento.kwargs["symbols"] == ("A", "B")
     assert databento.kwargs["dataset"] == databento_feed.DEFAULT_DATASET
@@ -1355,7 +1356,17 @@ def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
     """Defaults fill in what was NOT given. `--interval-ms 0` was given, and
     used to become 1000 without a word (#505)."""
     rec = _patch(monkeypatch, crypto, "start_crypto_recorder", result=1)
-    argv = ["feed", "start", "crypto", "--interval-ms", "0", "--symbols", "", "--top-n-levels", "0"]
+    argv = [
+        "connector",
+        "start",
+        "crypto",
+        "--interval-ms",
+        "0",
+        "--symbols",
+        "",
+        "--top-n-levels",
+        "0",
+    ]
     assert runner.invoke(cli.app, argv).exit_code == 0
     assert rec.kwargs["interval_ms"] == 0
     assert rec.kwargs["top_n_levels"] == 0
@@ -1375,7 +1386,7 @@ def test_a_feed_refuses_an_option_or_name_it_does_not_have(monkeypatch, argv, me
     errors = _error_log(monkeypatch)
     monkeypatch.setattr(kafka_feed, "start_kafka_feed", lambda *a, **k: pytest.fail("started"))
     monkeypatch.setattr(crypto, "start_crypto_recorder", lambda *a, **k: pytest.fail("started"))
-    assert runner.invoke(cli.app, ["feed", "start", *argv]).exit_code == 1
+    assert runner.invoke(cli.app, ["connector", "start", *argv]).exit_code == 1
     assert any(message in m for m in errors.messages), errors.messages
 
 
@@ -1387,7 +1398,7 @@ def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
         (crypto, "crypto_fills_recorder_status"),
     ):
         _patch(monkeypatch, module, fn, result={"running": fn})
-    result = runner.invoke(cli.app, ["feed", "status"])
+    result = runner.invoke(cli.app, ["connector", "status"])
     assert result.exit_code == 0
     for title in ("databento feed", "kafka feed", "crypto recorder", "crypto fills recorder"):
         assert title in result.stdout
@@ -1483,7 +1494,8 @@ def test_every_command_is_reachable_and_documented():
         "config",
         "data",
         "job",
-        "feed",
+        "connector",
+        "setup",
     ):
         assert command in result.stdout
 
@@ -2174,11 +2186,13 @@ def _refusals(monkeypatch, module: ModuleType) -> list[str]:
     return said
 
 
-@pytest.mark.parametrize("command", ["graph", "backfill", "gaps", "run", "stream", "feed"])
+@pytest.mark.parametrize(
+    "command", ["graph", "job backfill", "job gaps", "job runs", "job preview", "connector"]
+)
 def test_the_torq_runtime_refuses_the_commands_only_uqf_has(monkeypatch, command):
     monkeypatch.setenv("UQS_RUNTIME", "uqf")  # restored afterwards: --runtime sets it
     said = _refusals(monkeypatch, shared)
-    result = runner.invoke(cli.app, ["--runtime", "torq", command])
+    result = runner.invoke(cli.app, ["--runtime", "torq", *command.split()])
     assert result.exit_code == 1
     assert said[0].startswith(f"`uqs {command}` ") and said[0].endswith("Use --runtime uqf")
 

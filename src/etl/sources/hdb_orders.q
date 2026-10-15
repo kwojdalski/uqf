@@ -21,7 +21,7 @@
 / an order read from the HDB has no receipt time distinct from its stamp.
 / .
 / Live: export UQF_SOURCE_CRED_HDB_ORDERS=localhost:<hdb1's port> in the shell
-/ `uqs backfill` runs from. Without it, the fixture below is used.
+/ `uqs job backfill` runs from. Without it, the fixture below is used.
 
 \d .qpipe.source.hdb_orders
 

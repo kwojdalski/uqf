@@ -1,6 +1,6 @@
 """Every source sends its query through a path `--trace` can see.
 
-`uqs backfill --trace` logs each query a source is sent, at TRACE, from two
+`uqs job backfill --trace` logs each query a source is sent, at TRACE, from two
 places: `.qetl.source.ipc` for a q lambda over IPC, and `.qetl.io.odbc.run_sql`
 for SQL (`window_query` sends through it too). A source whose `query` calls
 the handle itself - `h({...};from;to)` - still works, and its queries are

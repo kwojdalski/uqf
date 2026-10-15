@@ -26,7 +26,7 @@
 / date either side.
 / .
 / Live: export UQF_SOURCE_CRED_HDB_FX_MARKOUTS=localhost:<hdb1's port> in the shell
-/ `uqs backfill` runs from. Without it, the fixture below is used.
+/ `uqs job backfill` runs from. Without it, the fixture below is used.
 
 \d .qpipe.source.hdb_fx_markouts
 

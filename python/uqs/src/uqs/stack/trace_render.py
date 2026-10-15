@@ -1,6 +1,6 @@
 """Query traces in `uqs logs`: the query as a code block, not an escaped string.
 
-`uqs backfill --trace` logs every query a source is sent (src/etl/core/log.q,
+`uqs job backfill --trace` logs every query a source is sent (src/etl/core/log.q,
 .qetl.source.ipc, .qetl.io.odbc.run_sql), as one line like
 
     query sent call="{[from_ts;to_ts]\\n    select ..." range_from=... range_to=...

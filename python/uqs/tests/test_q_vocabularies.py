@@ -112,7 +112,7 @@ def test_on_conflict_and_modes_are_read_from_q_not_copied():
 
 
 def test_status_dir_is_qs_rule(tmp_path):
-    """`uqs run` and the lock and checkpoint paths read the directory q writes
+    """`uqs job runs` and the lock and checkpoint paths read the directory q writes
     status files to: $UQF_STATUS_DIR, else $TORQDATA/status. Both halves of
     q's rule are read from status.q, then checked against Python's."""
     body = q_definition("status.q", "status_dir")
@@ -135,7 +135,7 @@ def test_checkpoint_path_is_qs_rule(tmp_path, monkeypatch):
 
 
 def test_every_column_uqs_run_shows_is_one_q_records():
-    """`uqs run` prints a choice of each ledger's columns; one renamed in q
+    """`uqs job runs` prints a choice of each ledger's columns; one renamed in q
     alone would print empty rather than fail. _FACT_COLUMNS had no check at
     all beside _RUN_COLUMNS' (#818)."""
     for shown, ledger, name in (

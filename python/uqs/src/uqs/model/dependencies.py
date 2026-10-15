@@ -52,17 +52,17 @@ log = get_logger(__name__)
 #: tree are.
 EXTERNAL_PRODUCERS: dict[str, str] = {
     "databento_mbp10": (
-        "the external Databento feed handler (`uqs feed start databento`) "
+        "the external Databento feed handler (`uqs connector start databento`) "
         "or a `databento_backfill1` run"
     ),
     "kafka_client_flow": (
-        "the external Kafka consumer (`uqs feed start kafka`). There is no backfill "
+        "the external Kafka consumer (`uqs connector start kafka`). There is no backfill "
         "alternative: replaying a topic from offset 0 is Kafka's own answer to "
         "that, and it needs the same broker"
     ),
     "crypto_book": "cryptorust's kdb recorder, which cryptomock1 stands in for",
     "crypto_trades": "cryptorust's kdb recorder, which cryptomock1 stands in for",
-    "flink_vwap_raw": "the external flink_vwap feed (`uqs feed start flink_vwap`)",
+    "flink_vwap_raw": "the external flink_vwap feed (`uqs connector start flink_vwap`)",
 }
 
 

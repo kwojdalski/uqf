@@ -7,7 +7,7 @@ names without case: q's `.z.h` is lower-case where `socket.gethostname()` may
 not be, and comparing them with case made every local writer look like
 another host's, alive forever (#726).
 
-Used by `uqs backfill --wait` (stack/backfill_wait.py), checkpoint clearing
+Used by `uqs job backfill --wait` (stack/backfill_wait.py), checkpoint clearing
 (stack/backfill.py) and uqf_frontend's status view. A leaf: it imports nothing
 from `uqs`, because uqf_frontend's read path imports it (the same rule as
 timefmt, #1326). uqf_airflow_provider does not depend on uqs, so its sensor

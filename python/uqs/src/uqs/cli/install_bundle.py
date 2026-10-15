@@ -98,5 +98,5 @@ def install(
     if streaming:
         console.print(f"Start: [green]uqs start {' '.join(streaming)}[/]")
     for worker in workers:
-        run = f"uqs backfill {worker} --version <v> --from <date> --to <date>"
+        run = f"uqs job backfill {worker} --version <v> --from <date> --to <date>"
         console.print(f"Installed, not run: [green]{run}[/]")

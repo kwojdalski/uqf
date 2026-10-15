@@ -637,7 +637,7 @@ notify_from_here:{[dataset;range_from;range_to] notify_rows[dataset;range_from;r
 / .qetl.job.bounded.do_window calls this with the batch it has just written,
 / so a reaction reads WHAT WAS PUBLISHED through `published` rather than
 / through wherever it was written. That is the point (#541): under
-/ `uqs backfill` a worker writes HDB partitions (.qetl.io.hdb), not the root
+/ `uqs job backfill` a worker writes HDB partitions (.qetl.io.hdb), not the root
 / table the in-memory manager makes, so a handler that read the dataset back
 / by name found nothing and failed on every window - silently, since a
 / reaction never fails the publication. The rows are in hand here whatever
@@ -649,7 +649,7 @@ notify_rows:{[dataset;range_from;range_to;rows] notify_published[dataset;range_f
 / Announce a publication with its rows AND the IO manager it was written
 / through - what .qetl.job.bounded.do_window calls. The manager is what
 / `write` sends a reaction's output through, so a reaction under
-/ `uqs backfill` writes the HDB exactly as its worker did (#541).
+/ `uqs job backfill` writes the HDB exactly as its worker did (#541).
 / @param io the IO manager the rows were written with, or (::)
 / @eg .qetl.reaction.notify_published[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
 notify_published:{[dataset;range_from;range_to;rows;io]
@@ -685,10 +685,10 @@ published:{[]
 / written with - call it from a handler.
 / .
 / The output half of #541. A reaction runs inside the publishing process,
-/ and under `uqs backfill` that is a process that exits when its range is
+/ and under `uqs job backfill` that is a process that exits when its range is
 / done: output kept in a table there is gone with it. Written through the
 / worker's own manager, it lands where the worker's rows did - HDB
-/ partitions under `uqs backfill`, a root table under .qetl.io.memory - and
+/ partitions under `uqs job backfill`, a root table under .qetl.io.memory - and
 / the worker's end-of-run `finish` sorts and attributes those partitions
 / with its own. When the notification named no manager (a bare notify),
 / .qetl.io.default is used: where this process writes.

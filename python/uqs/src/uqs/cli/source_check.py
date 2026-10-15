@@ -37,7 +37,7 @@ def sources_check(
         typer.Option(
             "--odbc-home",
             envvar=odbc_home.ODBC_HOME_ENV,
-            help="A private ODBC setup (uqs odbc install) whose current version to load",
+            help="A private ODBC setup (uqs setup odbc install) whose current version to load",
         ),
     ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="One JSON object per source")] = False,
@@ -50,7 +50,9 @@ def sources_check(
         if odbc is not None:
             version = odbc_home.current(odbc)
             if version is None:
-                raise UqsError(f"{odbc} has no current ODBC version - `uqs odbc install` first")
+                raise UqsError(
+                    f"{odbc} has no current ODBC version - `uqs setup odbc install` first"
+                )
             env = odbc_home.env_vars(version)
         results = live_check.check(
             _paths(), sources, timeout=timeout, window_minutes=window, odbc_env=env

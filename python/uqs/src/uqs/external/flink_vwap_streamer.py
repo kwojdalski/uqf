@@ -1,5 +1,5 @@
 """flink_vwap_streamer.py - run an Apache Flink job and push the windows it
-closes at the tickerplant. Started by `uqs feed start flink_vwap`
+closes at the tickerplant. Started by `uqs connector start flink_vwap`
 (flink_vwap_feed.py).
 
 Flink does the stream processing; q only receives its result. The job is SQL:

@@ -311,7 +311,7 @@ old_ledger:{[] ([] run_id:enlist 0Ng; worker:enlist `old_worker; process:enlist 
 
 test_an_old_ledger_is_refused_naming_the_migration:{[t]
     `etl_runs set .runtest.old_ledger[];
-    .qunit.assertThrows[{[x] .qetl.run.require_run_schema[]};::;"*uqs run migrate*";
+    .qunit.assertThrows[{[x] .qetl.run.require_run_schema[]};::;"*uqs job runs migrate*";
         "an old ledger is not a foreign one - say how to upgrade it"]};
 
 test_migrate_upgrades_an_old_ledger_on_disk:{[t]

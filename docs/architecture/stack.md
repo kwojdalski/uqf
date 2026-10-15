@@ -107,7 +107,7 @@ holds a live Databento subscription and publishes raw MBP-10 onto
 `databento_mbp10`, and `databento1` folds it into `eq_orderbook` with the same
 `.qetl.transform` transform the ODBC backfill applies. The handler is not a
 process here, for the reason cryptorust is not: a q process cannot hold that
-subscription, so it is started by `uqs feed start databento` rather than by
+subscription, so it is started by `uqs connector start databento` rather than by
 `torq.sh`.
 
 `kafka_flow1` is the second subscriber fed from outside q, and it exists to
@@ -279,9 +279,9 @@ profile.
 `demo_markout1`'s buffers live in its process, so a fill it never saw goes
 unscored: it was down, restarting, or the fill came before it. A bounded
 backfill covers those. `hdb_demo_markouts_backfill1`
-(`uqs backfill hdb_demo_markouts_backfill ...`) reads a window of fills from the
-HDB's `trades`, and their quotes from `quote` up to the window's end plus the
-longest horizon. It scores them with the same function and horizons as
+(`uqs job backfill hdb_demo_markouts_backfill ...`) reads a window of fills from
+the HDB's `trades`, and their quotes from `quote` up to the window's end plus
+the longest horizon. It scores them with the same function and horizons as
 `demo_markout1` (`.qpipe.source.hdb_demo_markouts`) and writes the rows into the
 same `demo_execution_quality` table. Rows are keyed on
 `sym, trade_time, horizon`, so a fill both jobs scored is replaced, not counted

@@ -12,7 +12,7 @@ This writes both halves:
                                                  and publishing are done
   python/uqs/src/uqs/external/NAME_feed.py       its lifecycle (the shared
                                                  DetachedProcess) and a FEED that
-                                                 `uqs feed start|stop|status`
+                                                 `uqs connector start|stop|status`
                                                  finds without a CLI edit
   python/uqs/tests/test_NAME_streamer.py         a failing test, as every scaffold
   the raw table, and the q job NAME              via scaffold/jobs.streaming_job:
@@ -125,7 +125,7 @@ def external_feed(
     notes = [
         f"write {EXTERNAL_DIR}/{name}_streamer.py's batches(): yield lists of records from "
         "the outside source - and acknowledge the source only AFTER .u.upd returns",
-        f"to run it: start the q job {name} with the stack, then `uqs feed start {name}`",
+        f"to run it: start the q job {name} with the stack, then `uqs connector start {name}`",
         *job.notes,
     ]
     return ScaffoldPlan(name=name, actions=raw + python + job.actions, notes=notes)
@@ -133,7 +133,7 @@ def external_feed(
 
 def producer_entry(name: str, raw_table: str) -> str:
     """The EXTERNAL_PRODUCERS line naming `raw_table`'s outside publisher."""
-    return f'    "{raw_table}": "the external {name} feed (`uqs feed start {name}`)",\n'
+    return f'    "{raw_table}": "the external {name} feed (`uqs connector start {name}`)",\n'
 
 
 def with_producer(existing: str, entry: str) -> str:
@@ -160,7 +160,7 @@ def without_producer(existing: str, raw_table: str) -> str:
 
 def _streamer(name: str, raw_table: str, fields: list[str]) -> str:
     return f'''"""{name}_streamer.py - hold the {name} source's subscription and push its
-records at the tickerplant. Started by `uqs feed start {name}` ({name}_feed.py).
+records at the tickerplant. Started by `uqs connector start {name}` ({name}_feed.py).
 
 SCAFFOLDED: write `batches()`. Connecting, converting and publishing are done.
 
@@ -227,7 +227,7 @@ if __name__ == "__main__":  # pragma: no cover - process entry point
 def _feed(name: str, raw_table: str, publishes: str) -> str:
     return f'''"""{name}_feed.py - start, stop and report the {name} publisher.
 
-A process outside TorQ: not a process.csv row, so `uqs feed start|stop|status
+A process outside TorQ: not a process.csv row, so `uqs connector start|stop|status
 {name}` drives it, through FEED below - the CLI finds it without an edit.
 """
 

@@ -92,8 +92,8 @@ etl, as markout and fx_positions have. For a backfill, `--partition SYM` scopes
 the worker to one slice of its dataset - the only way two workers can fill one
 dataset - and `--check` scaffolds a quality check that throws until written.
 `--twin-of JOB` makes a backfill a streaming job's twin: its dataset and columns
-are read from JOB's published table, so `uqs gaps JOB` names it with no wiring.
-NAME is the base, as for every backfill:
+are read from JOB's published table, so `uqs job gaps JOB` names it with no
+wiring. NAME is the base, as for every backfill:
 `uqs job new JOB_hist --kind backfill --twin-of JOB` writes worker
 `JOB_hist_backfill` over source `JOB_hist`, and a NAME already ending in
 `_backfill` is refused rather than doubled. If JOB declares its `transform`, the

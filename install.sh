@@ -21,7 +21,7 @@
 # unixODBC, the client and the DuckDB driver into output/odbc-x86_64, in user
 # space, and this runs it. On Linux unixODBC is a system package, so it is
 # checked and its install command printed. A server takes an approved package
-# instead (`uqs odbc install`, docs/guides/odbc.md). Database drivers are
+# instead (`uqs setup odbc install`, docs/guides/odbc.md). Database drivers are
 # per-database and often not redistributable: never installed here.
 #
 # TLS VERIFICATION STAYS ON. Behind a proxy that re-signs TLS, give the tools
@@ -135,7 +135,7 @@ if ((ODBC)); then
         fi
         [[ -d "$HOME/.kx" ]] || MISSING+=("KDB-X at ~/.kx - the ODBC overlay QHOME links to it")
     else
-        need odbcinst "$(pkg unixodbc unixodbc) - root installs the driver manager; a server takes an approved package instead (uqs odbc install)"
+        need odbcinst "$(pkg unixodbc unixodbc) - root installs the driver manager; a server takes an approved package instead (uqs setup odbc install)"
         if have ldconfig && [[ "$(ldconfig -p 2>/dev/null)" != *libodbc.so.2* ]]; then
             MISSING+=("libodbc.so.2 - $(pkg unixodbc unixodbc)")
         fi

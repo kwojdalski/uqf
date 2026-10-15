@@ -271,7 +271,7 @@ def push(
         str | None,
         typer.Option(
             "--odbc-home",
-            help="A private ODBC setup on the server (uqs odbc install), loaded by every "
+            help="A private ODBC setup on the server (uqs setup odbc install), loaded by every "
             "process the release starts",
         ),
     ] = None,
