@@ -531,9 +531,10 @@ every release links it in.
 
 ## A server on kdb+ 4.0
 
-kdb+ 4.0 has no nested working contexts (`\d .qetl.status`), and this tree uses
-them. Build the release for it, and only the artifact changes - never the
-checkout (#861):
+kdb+ 4.0 has no nested working contexts (`\d .a.b`). This tree opens none (no
+`\d` names more than one level, #1411), so the build mostly has nothing to
+rewrite; it still converts a sidecar bundle's own nested declarations. Build the
+release for it, and only the artifact changes - never the checkout (#861):
 
 ```bash
 uqs deploy build --q-target 4.0

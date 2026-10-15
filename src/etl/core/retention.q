@@ -53,14 +53,14 @@
 / .
 / A declaration is a call, loaded by whoever deploys it. The tree ships none.
 
-\d .qetl.retention
+\d .
 
 / The kinds a declaration may name.
-kinds:`hdb_partitions`ledger_rows`uptime_sessions
+.qetl.retention.kinds:`hdb_partitions`ledger_rows`uptime_sessions
 
 / The ledgers a ledger_rows declaration may name, and the timestamp column each
 / is aged by. etl_retention is deliberately absent: the record is never pruned.
-ledger_age:`etl_coverage`etl_runs!`superseded_at`ended_at
+.qetl.retention.ledger_age:`etl_coverage`etl_runs!`superseded_at`ended_at
 
 / The record's columns, in order. One constant in one place, like
 / .qetl.coverage.schema.
@@ -68,21 +68,21 @@ ledger_age:`etl_coverage`etl_runs!`superseded_at`ended_at
 / WHY NO COLUMN FOR A SEGMENT OR A ROOT: one deployment prunes one root. What
 / would overturn that is two HDB roots declared at once; the `target` would
 / then have to carry the root as well.
-record_schema:`retention_id`name`kind`target`item`range_from`range_to`rows,
+.qetl.retention.record_schema:`retention_id`name`kind`target`item`range_from`range_to`rows,
     `claims_superseded`removed_at`run_id
 
 / The declarations, by name, each ENLISTED (#1028): a dictionary of
 / dictionaries collapses into a keyed table on the first insert, after which a
 / declaration with other keys - another kind, or the same keys in another
 / order - is refused with a bare 'mismatch. Read one back with decl_of.
-decls:(`symbol$())!()
+.qetl.retention.decls:(`symbol$())!()
 
 / The columns of a plan, and of what run returns.
-plan_cols:`name`kind`target`item`range_from`range_to`rows`claims
+.qetl.retention.plan_cols:`name`kind`target`item`range_from`range_to`rows`claims
 
 / Private: an empty plan.
 / @private
-no_plan:{[] ([] name:`symbol$(); kind:`symbol$(); target:`symbol$(); item:`symbol$();
+.qetl.retention.no_plan:{[] ([] name:`symbol$(); kind:`symbol$(); target:`symbol$(); item:`symbol$();
     range_from:`timestamp$(); range_to:`timestamp$(); rows:`long$(); claims:`long$())}
 
 / ------------------------------------------------------------ DECLARATION
@@ -97,14 +97,14 @@ no_plan:{[] ([] name:`symbol$(); kind:`symbol$(); target:`symbol$(); item:`symbo
 / @return the name
 / @throws error naming what is missing, unknown or duplicated
 / @eg .qetl.retention.define[`old_sessions;`kind`horizon!(`uptime_sessions;30D)]
-define:{[name;decl]
+.qetl.retention.define:{[name;decl]
     if[not -11h=type name; '"retention: a retention's name must be a symbol"];
-    if[name in key decls; '"retention: ",string[name]," is already declared"];
+    if[name in key .qetl.retention.decls; '"retention: ",string[name]," is already declared"];
     if[not 99h=type decl; '"retention: ",string[name]," needs a declaration dict"];
     if[not (`kind in key decl) and `horizon in key decl;
         '"retention: ",string[name]," must name its `kind and its `horizon - there is no default horizon"];
-    if[not decl[`kind] in kinds;
-        '"retention: ",string[name],": kind must be one of ",", " sv string kinds];
+    if[not decl[`kind] in .qetl.retention.kinds;
+        '"retention: ",string[name],": kind must be one of ",", " sv string .qetl.retention.kinds];
     h:decl`horizon;
     if[not $[-16h=type h; h>0D; 0b];
         '"retention: ",string[name],": horizon must be a timespan greater than zero"];
@@ -115,38 +115,38 @@ define:{[name;decl]
     / take reads as the null of the declaration's FIRST value - 0Nn when that
     / is the horizon - so `in` a symbol list threw 'type by key order (#1028).
     if[decl[`kind]=`ledger_rows;
-        if[not decl[`table] in key ledger_age;
-            '"retention: ",string[name],": table must be one of ",(", " sv string key ledger_age),
+        if[not decl[`table] in key .qetl.retention.ledger_age;
+            '"retention: ",string[name],": table must be one of ",(", " sv string key .qetl.retention.ledger_age),
              " - the retention record itself is never pruned"]];
     if[decl[`kind]=`hdb_partitions;
         if[not (-11h=type decl`root) and ":"=first string decl`root;
             '"retention: ",string[name],": root must be a file symbol, e.g. `:/data/hdb"]];
-    `.qetl.retention.decls set decls,enlist[name]!enlist enlist decl;
+    `.qetl.retention.decls set .qetl.retention.decls,enlist[name]!enlist enlist decl;
     name}
 
 / The declared retentions' names.
 / @return a symbol list
 / @eg .qetl.retention.declared[]
-declared:{[] key decls}
+.qetl.retention.declared:{[] key .qetl.retention.decls}
 
 / Private: a declaration, or a refusal naming the ones there are.
 / @private
-decl_of:{[name]
-    if[not name in key decls;
+.qetl.retention.decl_of:{[name]
+    if[not name in key .qetl.retention.decls;
         '"retention: no retention named ",string[name]," is declared"];
-    first decls name}
+    first .qetl.retention.decls name}
 
 / ------------------------------------------------------------------ PLAN
 
 / Private: one plan row.
 / @private
-candidate:{[name;kind;target;item;from_ts;to_ts;rows;claims]
+.qetl.retention.candidate:{[name;kind;target;item;from_ts;to_ts;rows;claims]
     enlist `name`kind`target`item`range_from`range_to`rows`claims!
         (name;kind;target;item;from_ts;to_ts;"j"$rows;"j"$claims)}
 
 / Private: the current coverage claims over [from_ts;to_ts) for a dataset.
 / @private
-claims_over:{[ds;from_ts;to_ts]
+.qetl.retention.claims_over:{[ds;from_ts;to_ts]
     .qetl.coverage.init_ledger[];
     cur:.qetl.coverage.still_current;
     select partition, source_version from .qetl.coverage.ledger[]
@@ -154,36 +154,36 @@ claims_over:{[ds;from_ts;to_ts]
 
 / Private: the rows in one partition's table, without mapping the table.
 / @private
-part_rows:{[root;d;t]
+.qetl.retention.part_rows:{[root;d;t]
     base:.qetl.io.part_path[root;d;t];
     c:get hsym `$base,"/.d";
     $[count c; count get hsym `$base,"/",string first c; 0]}
 
 / Private: the HDB partitions older than the cutoff.
 / @private
-plan_hdb:{[name;decl;cutoff]
+.qetl.retention.plan_hdb:{[name;decl;cutoff]
     .qetl.coverage.attach[];
     root:decl`root;
     tbl:decl`table;
     if[not ()~key hsym `$(1_string root),"/par.txt";
         '"retention: ",string[name],": a segmented HDB (par.txt) is not supported"];
     dirs:key root;
-    if[not 11h=type dirs; :no_plan[]];
+    if[not 11h=type dirs; :.qetl.retention.no_plan[]];
     dts:"D"$string each dirs;
     dts:asc dts where not null dts;
     dts:dts where (`timestamp$dts+1)<=cutoff;
     dts:dts where dts<.z.d;
     dts:dts where {[root;tbl;d] not ()~key hsym `$.qetl.io.part_path[root;d;tbl]}[root;tbl] each dts;
-    if[0=count dts; :no_plan[]];
+    if[0=count dts; :.qetl.retention.no_plan[]];
     raze {[name;decl;root;tbl;d]
         f:`timestamp$d;
         t:`timestamp$d+1;
-        candidate[name;`hdb_partitions;tbl;`$string d;f;t;part_rows[root;d;tbl];
-            count claims_over[decl`dataset;f;t]]}[name;decl;root;tbl] each dts}
+        .qetl.retention.candidate[name;`hdb_partitions;tbl;`$string d;f;t;.qetl.retention.part_rows[root;d;tbl];
+            count .qetl.retention.claims_over[decl`dataset;f;t]]}[name;decl;root;tbl] each dts}
 
 / Private: the ledger rows older than the cutoff, as one plan row.
 / @private
-plan_ledger:{[name;decl;cutoff]
+.qetl.retention.plan_ledger:{[name;decl;cutoff]
     tbl:decl`table;
     $[tbl=`etl_coverage;
         [.qetl.coverage.attach[];
@@ -191,16 +191,16 @@ plan_ledger:{[name;decl;cutoff]
          old:select recorded_at from .qetl.coverage.ledger[] where superseded_at<cutoff, superseded_at<cur];
         [.qetl.run.attach[];
          old:select recorded_at:started_at from .qetl.run.runs[] where ended_at<cutoff]];
-    $[0=count old; no_plan[]; candidate[name;`ledger_rows;tbl;`;min old`recorded_at;cutoff;count old;0]]}
+    $[0=count old; .qetl.retention.no_plan[]; .qetl.retention.candidate[name;`ledger_rows;tbl;`;min old`recorded_at;cutoff;count old;0]]}
 
 / Private: the uptime sessions older than the cutoff, as one plan row.
 / @private
-plan_uptime:{[name;cutoff]
+.qetl.retention.plan_uptime:{[name;cutoff]
     .qetl.uptime.attach[];
     keep:.qetl.uptime.mine;
     old:select started_at from .qetl.uptime.sessions[] where last_seen<cutoff, not session in keep;
-    $[0=count old; no_plan[];
-        candidate[name;`uptime_sessions;`etl_stream_uptime;`;min old`started_at;cutoff;count old;0]]}
+    $[0=count old; .qetl.retention.no_plan[];
+        .qetl.retention.candidate[name;`uptime_sessions;`etl_stream_uptime;`;min old`started_at;cutoff;count old;0]]}
 
 / What a retention would remove as of an instant, and removes nothing.
 / @param name a declared retention
@@ -209,19 +209,19 @@ plan_uptime:{[name;cutoff]
 /   claims - how many current coverage claims still overlap the item
 / @throws error when name is not declared, or its HDB cannot be enumerated
 / @eg .qetl.retention.plan[`old_sessions;.z.p]
-plan:{[name;as_of]
-    decl:decl_of[name];
+.qetl.retention.plan:{[name;as_of]
+    decl:.qetl.retention.decl_of[name];
     cutoff:as_of-decl`horizon;
     k:decl`kind;
-    $[k=`hdb_partitions; plan_hdb[name;decl;cutoff];
-      k=`ledger_rows; plan_ledger[name;decl;cutoff];
-      plan_uptime[name;cutoff]]}
+    $[k=`hdb_partitions; .qetl.retention.plan_hdb[name;decl;cutoff];
+      k=`ledger_rows; .qetl.retention.plan_ledger[name;decl;cutoff];
+      .qetl.retention.plan_uptime[name;cutoff]]}
 
 / ------------------------------------------------------------------- RUN
 
 / Private: an option, false when absent.
 / @private
-flag:{[opts;k] $[k in key opts; opts k; 0b]}
+.qetl.retention.flag:{[opts;k] $[k in key opts; opts k; 0b]}
 
 / Run a retention. A dry run unless opts`apply is true.
 / @param name a declared retention
@@ -233,37 +233,37 @@ flag:{[opts;k] $[k in key opts; opts k; 0b]}
 / @throws error, before removing anything, when an applied run would remove
 /   data coverage still claims and opts`supersede is not set
 / @eg .qetl.retention.run[`old_sessions;.z.p;()!()]
-run:{[name;as_of;opts]
-    p:plan[name;as_of];
-    if[not flag[opts;`apply]; :p];
-    decl:decl_of[name];
-    if[(not flag[opts;`supersede]) and any p[`claims]>0;
+.qetl.retention.run:{[name;as_of;opts]
+    p:.qetl.retention.plan[name;as_of];
+    if[not .qetl.retention.flag[opts;`apply]; :p];
+    decl:.qetl.retention.decl_of[name];
+    if[(not .qetl.retention.flag[opts;`supersede]) and any p[`claims]>0;
         '"retention: ",string[name]," would remove ",string[sum 0<p`claims],
          " item(s) of ",string[decl`table]," that etl_coverage still claims for ",
          string[decl`dataset],", and the ledger must not claim data that is gone -",
          " pass `supersede to withdraw the claims in the same run"];
     id:.qetl.run.mint[];
     cutoff:as_of-decl`horizon;
-    $[decl[`kind]=`hdb_partitions; apply_hdb[id;decl;p];
-      decl[`kind]=`ledger_rows; apply_ledger[id;decl;cutoff;p];
-      apply_uptime[id;cutoff;p]];
+    $[decl[`kind]=`hdb_partitions; .qetl.retention.apply_hdb[id;decl;p];
+      decl[`kind]=`ledger_rows; .qetl.retention.apply_ledger[id;decl;cutoff;p];
+      .qetl.retention.apply_uptime[id;cutoff;p]];
     p}
 
 / Private: remove the HDB partitions, one at a time: supersede, remove, record.
 / @private
-apply_hdb:{[id;decl;p]
+.qetl.retention.apply_hdb:{[id;decl;p]
     {[id;decl;r]
         n:0;
         if[r[`claims]>0;
-            cl:claims_over[decl`dataset;r`range_from;r`range_to];
+            cl:.qetl.retention.claims_over[decl`dataset;r`range_from;r`range_to];
             n:sum {[ds;r;c] .qetl.coverage.supersede[ds;c`partition;c`source_version;r`range_from;r`range_to]}[decl`dataset;r] each cl];
         .qetl.io.retire[decl`root;"D"$string r`item;r`target];
-        record[id;enlist r;n]}[id;decl] each p;
+        .qetl.retention.record[id;enlist r;n]}[id;decl] each p;
     }
 
 / Private: remove the old ledger rows under that ledger's own lock.
 / @private
-apply_ledger:{[id;decl;cutoff;p]
+.qetl.retention.apply_ledger:{[id;decl;cutoff;p]
     if[0=count p; :()];
     n:$[decl[`table]=`etl_coverage;
         .qetl.coverage.with_lock[{[cutoff]
@@ -279,27 +279,27 @@ apply_ledger:{[id;decl;cutoff;p]
             `etl_runs set delete from .qetl.run.runs[] where ended_at<cutoff;
             .qetl.run.persist[];
             before-count .qetl.run.runs[]};enlist cutoff]];
-    record[id;update rows:n from p;0]}
+    .qetl.retention.record[id;update rows:n from p;0]}
 
 / Private: remove the old uptime sessions under their lock.
 / @private
-apply_uptime:{[id;cutoff;p]
+.qetl.retention.apply_uptime:{[id;cutoff;p]
     if[0=count p; :()];
     n:.qetl.uptime.update_shared[{[cutoff;keep]
         before:count .qetl.uptime.sessions[];
         `etl_stream_uptime set delete from .qetl.uptime.sessions[] where last_seen<cutoff, not session in keep;
         before-count .qetl.uptime.sessions[]};(cutoff;.qetl.uptime.mine)];
-    record[id;update rows:n from p;0]}
+    .qetl.retention.record[id;update rows:n from p;0]}
 
 / ---------------------------------------------------------------- RECORD
 
 / Private: where the record lives, beside the other ledgers.
 / @private
-record_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_retention"}
+.qetl.retention.record_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_retention"}
 
 / Private: create the record if absent.
 / @private
-init_record:{[]
+.qetl.retention.init_record:{[]
     if[not `etl_retention in tables `.;
         `etl_retention set ([] retention_id:0#0Ng; name:`symbol$(); kind:`symbol$();
             target:`symbol$(); item:`symbol$(); range_from:`timestamp$();
@@ -309,25 +309,25 @@ init_record:{[]
 
 / Private: append plan rows to the record, durably, under the record's lock.
 / @private
-record:{[id;p;superseded]
-    init_record[];
+.qetl.retention.record:{[id;p;superseded]
+    .qetl.retention.init_record[];
     now:.z.p;
     run:.qetl.coverage.current_run[];
     rows:update retention_id:id, claims_superseded:"j"$superseded, removed_at:now, run_id:run from p;
     .qetl.job.bounded.state.with_file_lock[`etl_retention;
         {[rows]
-            if[not ()~key hsym `$record_path[]; `etl_retention set .qetl.job.bounded.state.durable_get record_path[]];
-            `etl_retention insert record_schema#rows;
-            .qetl.job.bounded.state.durable_set[record_path[];value `etl_retention]};enlist rows];
+            if[not ()~key hsym `$.qetl.retention.record_path[]; `etl_retention set .qetl.job.bounded.state.durable_get .qetl.retention.record_path[]];
+            `etl_retention insert .qetl.retention.record_schema#rows;
+            .qetl.job.bounded.state.durable_set[.qetl.retention.record_path[];value `etl_retention]};enlist rows];
     count rows}
 
 / Everything retention has removed, from every process that has written to
 / this status directory. Never pruned by any declaration.
 / @return the record, in the order it was written
 / @eg .qetl.retention.history[]
-history:{[]
-    init_record[];
-    if[not ()~key hsym `$record_path[]; `etl_retention set .qetl.job.bounded.state.durable_get record_path[]];
+.qetl.retention.history:{[]
+    .qetl.retention.init_record[];
+    if[not ()~key hsym `$.qetl.retention.record_path[]; `etl_retention set .qetl.job.bounded.state.durable_get .qetl.retention.record_path[]];
     value `etl_retention}
 
 \d .

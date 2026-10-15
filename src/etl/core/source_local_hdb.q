@@ -4,7 +4,7 @@
 / several files, loaded in order by src/etl/init.q after source_contract.q, which
 / carries the design record. Public names are unchanged by the split (#970).
 
-\d .qetl.source
+\d .
 
 / ---------------------------------------------------------------- LOCAL
 / .
@@ -53,7 +53,7 @@
 / @return the directory, as a file symbol - the source's "handle"
 / @throws error naming the path and what is wrong with it
 / @eg @[.qetl.source.local_root;"/no/such/hdb";{x}] like "*does not exist*"  ->  1b
-local_root:{[path]
+.qetl.source.local_root:{[path]
     if[0=count path; '"local: the credential is empty - set it to the HDB directory's path"];
     root:hsym `$path;
     k:key root;
@@ -61,7 +61,7 @@ local_root:{[path]
     if[-11h=type k; '"local: ",path," is a file, not an HDB directory"];
     / Every segment and the layout are checked here, at connect, rather than
     / on the first window that happens to need them.
-    ds:local_dates[root;-0Wd;0Wd];
+    ds:.qetl.source.local_dates[root;-0Wd;0Wd];
     if[not (`sym in k) or (`par.txt in k) or 0<count ds;
         '"local: ",path," holds no sym file, no par.txt and no date partition - is it an HDB root?"];
     root}
@@ -73,7 +73,7 @@ local_root:{[path]
 / @param root the HDB directory, as a file symbol
 / @return the segment directories, as file symbols
 / @throws error naming a segment that is missing, unreadable or a file
-local_segments:{[root]
+.qetl.source.local_segments:{[root]
     p:` sv root,`par.txt;
     if[()~key p; :enlist root];
     lines:{x where 0<count each x} trim each read0 p;
@@ -90,7 +90,7 @@ local_segments:{[root]
 / directories are not dates, so before this they were skipped in silence and
 / every window read as empty.
 / @private
-local_check_layout:{[seg]
+.qetl.source.local_check_layout:{[seg]
     ns:string key seg;
     cand:ns where {all x in "0123456789."} each ns;
     bad:cand where null "D"$cand;
@@ -106,9 +106,9 @@ local_check_layout:{[seg]
 / @param d0 first date, inclusive
 / @param d1 last date, inclusive
 / @return a table of date and dir, the partition directory as a file symbol
-local_parts:{[root;d0;d1]
-    segs:local_segments[root];
-    local_check_layout each segs;
+.qetl.source.local_parts:{[root;d0;d1]
+    segs:.qetl.source.local_segments[root];
+    .qetl.source.local_check_layout each segs;
     t:raze {[seg]
         k:key seg;
         ds:"D"$string k;
@@ -122,7 +122,7 @@ local_parts:{[root;d0;d1]
 / @param d0 first date, inclusive
 / @param d1 last date, inclusive
 / @return the dates, ascending
-local_dates:{[root;d0;d1] distinct exec date from local_parts[root;d0;d1]}
+.qetl.source.local_dates:{[root;d0;d1] distinct exec date from .qetl.source.local_parts[root;d0;d1]}
 
 / Private: an enumerated column, decoded against its own domain's file under
 / `root`. Refuses a domain file that is missing, or too short for the
@@ -132,7 +132,7 @@ local_dates:{[root;d0;d1] distinct exec date from local_parts[root;d0;d1]}
 / @param v the column as read: an enumeration
 / @return the column as plain symbols
 / @private
-local_decode:{[root;c;v]
+.qetl.source.local_decode:{[root;c;v]
     dom:key v;
     f:` sv root,dom;
     if[()~key f; '"local: column ",string[c]," is enumerated against `",string[dom],", but ",(1_string f)," does not exist"];
@@ -147,11 +147,11 @@ local_decode:{[root;c;v]
 / (0N for all), every enumeration decoded against its own domain's file - a
 / nested column of enumerations row by row.
 / @private
-local_columns:{[root;base;cs;n]
+.qetl.source.local_columns:{[root;base;cs;n]
     {[root;base;n;c]
         v:get hsym `$base,"/",string c;
         if[not null n; v:n sublist v];
-        dec:{[root;c;x] $[(type x) within 20 76h; local_decode[root;c;x]; x]}[root;c];
+        dec:{[root;c;x] $[(type x) within 20 76h; .qetl.source.local_decode[root;c;x]; x]}[root;c];
         $[(type v) within 20 76h; dec v; (type v) in 0 77h; dec each v; v]
       }[root;base;n] each cs}
 
@@ -160,7 +160,7 @@ local_columns:{[root;base;cs;n]
 / names the columns to read - every one when empty - and `n` how many rows
 / (0N for all). Empty list when that partition has no such table.
 / @private
-local_partition:{[root;table;want;n;part]
+.qetl.source.local_partition:{[root;table;want;n;part]
     base:string ` sv part[`dir],table;
     if[()~key hsym `$base,"/.d"; :()];
     cs:get hsym `$base,"/.d";
@@ -169,7 +169,7 @@ local_partition:{[root;table;want;n;part]
         if[count absent;
             '"local: ",string[table]," in ",(1_base)," has no column(s) ",", " sv string absent];
         cs:want except `date];
-    `date xcols update date:part`date from flip cs!local_columns[root;base;cs;n]}
+    `date xcols update date:part`date from flip cs!.qetl.source.local_columns[root;base;cs;n]}
 
 / The rows of `table` from every date partition that [from_ts;to_ts) touches
 / - whole partitions, to be filtered by the caller - read as
@@ -183,16 +183,16 @@ local_partition:{[root;table;want;n;part]
 /   when no partition in range holds it
 / @throws error when no partition anywhere in the HDB holds the table, or a
 /   requested column is not in it
-local_read:{[root;table;from_ts;to_ts]
+.qetl.source.local_read:{[root;table;from_ts;to_ts]
     want:$[-11h=type table; `symbol$(); (),table 1];
     table:first table;
     if[not -11h=type table; '"local: read takes a table name, or (name;columns)"];
     / to_ts is EXCLUSIVE: a window ending at midnight touches no part of the
     / next day, so its partition is not read.
-    ps:local_parts[root;`date$from_ts;`date$to_ts-1];
-    parts:local_partition[root;table;want;0N] each ps;
+    ps:.qetl.source.local_parts[root;`date$from_ts;`date$to_ts-1];
+    parts:.qetl.source.local_partition[root;table;want;0N] each ps;
     keep:where 0<count each parts;
-    if[0=count keep; :0#local_partition[root;table;want;1;local_latest_part[root;table]]];
+    if[0=count keep; :0#.qetl.source.local_partition[root;table;want;1;.qetl.source.local_latest_part[root;table]]];
     / Partitions with different columns cannot be one table - a mapped HDB
     / refuses them too - and razing them would hand the query a list of
     / dicts that fails somewhere far from here.
@@ -204,8 +204,8 @@ local_read:{[root;table;from_ts;to_ts]
 
 / Private: the newest partition holding `table`, as a row of local_parts.
 / @private
-local_latest_part:{[root;table]
-    ps:reverse local_parts[root;-0Wd;0Wd];
+.qetl.source.local_latest_part:{[root;table]
+    ps:reverse .qetl.source.local_parts[root;-0Wd;0Wd];
     hit:ps where {[table;p] not ()~key hsym `$(string ` sv p[`dir],table),"/.d"}[table] each ps;
     if[0=count hit; '"local: no partition of ",string[table]," under ",1_string root];
     first hit}
@@ -215,7 +215,7 @@ local_latest_part:{[root;table]
 / @param table the table's name
 / @return that partition's rows
 / @throws error when no partition holds the table
-local_latest:{[root;table] local_partition[root;table;`symbol$();0N;local_latest_part[root;table]]}
+.qetl.source.local_latest:{[root;table] .qetl.source.local_partition[root;table;`symbol$();0N;.qetl.source.local_latest_part[root;table]]}
 
 / The columns and types of `table`, as `meta` gives them, without reading a
 / partition: the newest partition's .d file and the first row of each column
@@ -226,8 +226,8 @@ local_latest:{[root;table] local_partition[root;table;`symbol$();0N;local_latest
 / @return a table of c and t
 / @throws error when no partition holds the table
 
-local_meta:{[root;table]
-    select c, t from 0!meta local_partition[root;table;`symbol$();1;local_latest_part[root;table]]}
+.qetl.source.local_meta:{[root;table]
+    select c, t from 0!meta .qetl.source.local_partition[root;table;`symbol$();1;.qetl.source.local_latest_part[root;table]]}
 
 / Run a local source's query: call `f` with a table reader over the HDB and
 / the window's bounds, traced as .qetl.source.ipc traces an IPC query - the
@@ -245,13 +245,13 @@ local_meta:{[root;table]
 / @param range_to exclusive upper bound
 / @return what `f` returns
 / @eg count .qetl.source.local[`:/no/such/hdb;{[read;a;b] ([] x:a,b)};1;2]  ->  2
-local:{[root;f;range_from;range_to]
-    read:local_read[root];
+.qetl.source.local:{[root;f;range_from;range_to]
+    read:.qetl.source.local_read[root];
     if[not .qetl.log.enabled`TRACE; :f[read;range_from;range_to]];
     t0:.z.p;
     req:`transport`request!(`local;.qetl.log.next_request[]);
     .[{.qetl.log.trc[x;y;z]};(`local;"query sent";
-        (enlist[`call]!enlist call_text f),req,`range_from`range_to!(range_from;range_to));::];
+        (enlist[`call]!enlist .qetl.source.call_text f),req,`range_from`range_to!(range_from;range_to));::];
     r:.[f;(read;range_from;range_to);{[req;t0;e]
         .[{.qetl.log.trc[x;y;z]};(`local;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];

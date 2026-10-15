@@ -45,7 +45,7 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qpipe.job.eq_orderbook
+\d .
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -54,11 +54,11 @@
 / rather than by agreement. Derived from the declaration, not restated -
 / a level added to .qpipe.source.databento_mbp10 reaches this table with no edit
 / here.
-raw:flip .qpipe.source.databento_mbp10.columns!{[c] $[c within "AZ"; (); c$()]} each .qpipe.source.databento_mbp10.types
+.qpipe.job.eq_orderbook.raw:flip .qpipe.source.databento_mbp10.columns!{[c] $[c within "AZ"; (); c$()]} each .qpipe.source.databento_mbp10.types
 
 / What this job publishes. The backfill's target shape plus `ts_event`:
 / see the header on why the venue clock is a column of its own.
-book:([] sym:`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$();
+.qpipe.job.eq_orderbook.book:([] sym:`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$();
     price:`float$(); size:`long$(); sequence:`long$();
     bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
@@ -66,7 +66,7 @@ book:([] sym:`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `eq_orderbook;
+.qpipe.job.eq_orderbook.publish:.qetl.job.stream.unwired `eq_orderbook;
 
 / Fold one batch and republish it.
 / .
@@ -80,7 +80,7 @@ publish:.qetl.job.stream.unwired `eq_orderbook;
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.eq_orderbook.on_batch:{[t;x]
     if[not t=`databento_mbp10; :()];
     if[0=count x; :()];
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];

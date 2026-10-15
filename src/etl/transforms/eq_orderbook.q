@@ -2,21 +2,21 @@
 / The source contract and worked example belong to the transform, independently
 / of either job lifecycle.
 
-\d .qpipe.transform.eq_orderbook
+\d .
 
 / --- the transform ---------------------------------------------------------
 
 / The source contract, as the empty table the transform reads.
-contract:flip .qpipe.source.databento_mbp10.columns!{[c] c$()} each .qpipe.source.databento_mbp10.types
+.qpipe.transform.eq_orderbook.contract:flip .qpipe.source.databento_mbp10.columns!{[c] c$()} each .qpipe.source.databento_mbp10.types
 
 / The plant's own shape, `time` kept: a backfill has no receipt time, so the
 / event time is what it writes (see to_book). Derived, not copied (#1360).
-book:.qetl.plant.shape `eq_orderbook
+.qpipe.transform.eq_orderbook.book:.qetl.plant.shape `eq_orderbook
 
 / Private: one side and quantity's ten level columns, as a vector per row.
 / `flip` over the columns rather than `each` over rows: one pass per column.
 / @private
-fold:{[batch;prefix] flip batch `$prefix,/:.qpipe.source.databento_mbp10.levels}
+.qpipe.transform.eq_orderbook.fold:{[batch;prefix] flip batch `$prefix,/:.qpipe.source.databento_mbp10.levels}
 
 / Fold Databento's per-level columns into level-0-first vectors.
 / .
@@ -31,16 +31,16 @@ fold:{[batch;prefix] flip batch `$prefix,/:.qpipe.source.databento_mbp10.levels}
 / otherwise give a list with no rows to type.
 / @param batch MBP-10 records in the source contract's shape
 / @return one book row per record
-to_book:{[batch]
+.qpipe.transform.eq_orderbook.to_book:{[batch]
     if[0=count batch; :.qpipe.transform.eq_orderbook.book];
     ([] time:batch`ts_event; sym:batch`symbol; ts_event:batch`ts_event; action:batch`action; side:batch`side;
         price:batch`price; size:batch`size; sequence:batch`sequence;
-        bid_prices:fold[batch;"bid_px_"]; bid_sizes:fold[batch;"bid_sz_"];
-        ask_prices:fold[batch;"ask_px_"]; ask_sizes:fold[batch;"ask_sz_"])}
+        bid_prices:.qpipe.transform.eq_orderbook.fold[batch;"bid_px_"]; bid_sizes:.qpipe.transform.eq_orderbook.fold[batch;"bid_sz_"];
+        ask_prices:.qpipe.transform.eq_orderbook.fold[batch;"ask_px_"]; ask_sizes:.qpipe.transform.eq_orderbook.fold[batch;"ask_sz_"])}
 
 / The example is the source's own fixture, and the expected book is written
 / out: the fixture's levels step one cent from the touch and 100 in size.
-example_book:{[]
+.qpipe.transform.eq_orderbook.example_book:{[]
     f:.qpipe.source.databento_mbp10.fixture[];
     px:{[touch;dir] touch+dir*0.01*til 10};
     sz:{[s] s+100*til 10};
@@ -52,9 +52,9 @@ example_book:{[]
         ask_sizes:(sz 500;sz 479;sz 100;sz 100))}
 
 .qetl.transform.define[`eq_orderbook;`inputs`output`fn`examples!(
-    enlist[`batch]!enlist contract;
-    book;
-    to_book;
-    enlist `inputs`expected!(enlist[`batch]!enlist .qpipe.source.databento_mbp10.fixture[];example_book[]))];
+    enlist[`batch]!enlist .qpipe.transform.eq_orderbook.contract;
+    .qpipe.transform.eq_orderbook.book;
+    .qpipe.transform.eq_orderbook.to_book;
+    enlist `inputs`expected!(enlist[`batch]!enlist .qpipe.source.databento_mbp10.fixture[];.qpipe.transform.eq_orderbook.example_book[]))];
 
 \d .

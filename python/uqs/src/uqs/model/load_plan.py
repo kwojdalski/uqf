@@ -55,7 +55,15 @@ DIRS = ("sources", "transforms", "workers", "streaming", "reactions")
 ETL = Path("src") / "etl"
 PLAN_FILE = ETL / "generated" / "load_plan.q"
 
-_NAMESPACE = re.compile(r"^\\d\s+\.qpipe\.(job|source|transform)\.(\w+)\s*$", re.MULTILINE)
+#: A declaration file defines its namespace by writing names in it from the root
+#: (`.qpipe.job.demo_deals_backfill.quality_check:{...}`), never by opening it
+#: with `\\d` (#1411): the first segment after the kind is the namespace.
+_NAMESPACE = re.compile(
+    r"^\.qpipe\.(job|source|transform)\.(\w+)\.[A-Za-z_][\w.]*\s*::?", re.MULTILINE
+)
+#: The old spelling, still read so a site's own declaration written as
+#: `\\d .qpipe.job.<name>` loads on KDB-X: this tree writes none.
+_NAMESPACE_BLOCK = re.compile(r"^\\d\s+\.qpipe\.(job|source|transform)\.(\w+)\s*$", re.MULTILINE)
 _QPIPE_REF = re.compile(r"\.qpipe\.(job|source|transform)\.([a-zA-Z_]\w*)")
 _TRANSFORM_DEF = re.compile(r"\.qetl\.transform\.define\[\s*`(\w+)")
 _TRANSFORM_USE = re.compile(r"\.qetl\.transform\.\w+\[\s*`(\w+)")
@@ -89,6 +97,7 @@ def facts(rel: str, text: str) -> FileFacts:
     """What `text` (the file at `rel`) defines and refers to."""
     code = strip_q_comments(text)
     defines = {f"{k}:{n}" for k, n in _NAMESPACE.findall(code)}
+    defines |= {f"{k}:{n}" for k, n in _NAMESPACE_BLOCK.findall(code)}
     defines |= {f"transform:{n}" for n in _TRANSFORM_DEF.findall(code)}
     defines |= {f"source:{n}" for n in _SOURCE_DEF.findall(code)}
     refers = {f"{k}:{n}" for k, n in _QPIPE_REF.findall(code)}

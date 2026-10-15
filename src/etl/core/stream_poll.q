@@ -62,10 +62,10 @@
 / so there is no page to fetch. Previewing one would need a supplied batch or
 / a replay with isolated state, which is a different feature.
 
-\d .qetl.job.stream
+\d .
 
 / What a poll declaration must carry.
-poll_keys:`fetch`normalize`next_cursor
+.qetl.job.stream.poll_keys:`fetch`normalize`next_cursor
 
 / Private: check a declaration's `poll` and give it the timer built from it.
 / Called by `define` before it checks the timer pair.
@@ -74,22 +74,22 @@ poll_keys:`fetch`normalize`next_cursor
 / @return the declaration with its generated on_timer
 / @throws error naming what is wrong with the poll declaration
 / @private
-poll_declared:{[job;decl]
+.qetl.job.stream.poll_declared:{[job;decl]
     p:decl`poll;
     if[not 99h=type p;
         '"define: ",string[job],"'s poll must be a dictionary of fetch, normalize and next_cursor"];
-    if[count missing:poll_keys where not poll_keys in key p;
+    if[count missing:.qetl.job.stream.poll_keys where not .qetl.job.stream.poll_keys in key p;
         '"define: ",string[job],"'s poll is missing ",", " sv string missing];
     / `(enlist `close) inter`, never `` `close inter ``: inter indexes its left
     / argument, and an atom cannot be indexed - 'type at every define.
-    fns:poll_keys,`close`start_cursor inter key p;
-    if[count bad:fns where not is_callable each p fns;
+    fns:.qetl.job.stream.poll_keys,`close`start_cursor inter key p;
+    if[count bad:fns where not .qetl.job.stream.is_callable each p fns;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     custom:`load`save`advances inter key p;
     if[(count custom) and 3<>count custom;
         '"define: ",string[job],"'s poll declares ",(", " sv string custom),
          " - a custom cursor needs load, save and advances together, or none of them for a timestamp"];
-    if[count bad:custom where not is_callable each p custom;
+    if[count bad:custom where not .qetl.job.stream.is_callable each p custom;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     if[count bad:(`source`cursor inter key p) where not -11h=type each p `source`cursor inter key p;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be symbols"];
@@ -103,13 +103,13 @@ poll_declared:{[job;decl]
         '"define: ",string[job]," declares both poll and on_timer - a polling job's timer is built from poll"];
     if[not `period in key decl;
         '"define: ",string[job]," declares poll without period - how often to poll"];
-    decl[`on_timer]:{[job;unused] tick job}[job];
+    decl[`on_timer]:{[job;unused] .qetl.job.stream.tick job}[job];
     decl}
 
 / The cursor file a polling job advances.
 / @param job the job's name
 / @return the cursor's name, as .qetl.job.continuous names cursors
-cursor_name:{[job] p:(def job)`poll; $[`cursor in key p; p`cursor; job]}
+.qetl.job.stream.cursor_name:{[job] p:(.qetl.job.stream.def job)`poll; $[`cursor in key p; p`cursor; job]}
 
 / Private: normalize's result as table -> rows, refusing a table the job
 / does not declare it publishes.
@@ -118,8 +118,8 @@ cursor_name:{[job] p:(def job)`poll; $[`cursor in key p; p`cursor; job]}
 / @return dict of published table -> rows
 / @throws error when the result is neither a table nor such a dictionary
 / @private
-outputs:{[job;out]
-    pubs:(def job)`publishes;
+.qetl.job.stream.outputs:{[job;out]
+    pubs:(.qetl.job.stream.def job)`publishes;
     if[.Q.qt out;
         if[1<>count pubs;
             '"normalize: ",string[job]," returned one table but publishes ",(", " sv string pubs)," - return a dictionary of table -> rows"];
@@ -132,18 +132,18 @@ outputs:{[job;out]
 
 / Private: the timestamp cursor's advance rule, .qetl.job.continuous.advance's.
 / @private
-default_advances:{[current;proposed] (not null proposed) and (null current) or proposed>current}
+.qetl.job.stream.default_advances:{[current;proposed] (not null proposed) and (null current) or proposed>current}
 
 / How a polling job keeps its cursor: its own load, save and advances, or the
 / timestamp defaults. The one place both the timer and the preview get them,
 / so the two cannot disagree about what counts as progress.
 / @param job the job's name
 / @return dict of load [name], save [name;cursor] and advances [current;proposed]
-cursor_ops:{[job]
-    p:(def job)`poll;
+.qetl.job.stream.cursor_ops:{[job]
+    p:(.qetl.job.stream.def job)`poll;
     $[`load in key p;
       `load`save`advances#p;
-      `load`save`advances!(.qetl.job.continuous.load_cursor;.qetl.job.continuous.save_cursor;default_advances)]}
+      `load`save`advances!(.qetl.job.continuous.load_cursor;.qetl.job.continuous.save_cursor;.qetl.job.stream.default_advances)]}
 
 / One poll: fetch the page after the cursor, normalize it, check the cursor
 / it would move to, publish every table, then save that cursor. What a
@@ -157,24 +157,24 @@ cursor_ops:{[job]
 / @return dict of state (`idle or `published), rows and cursor
 / @throws error when the page does not fit its plant tables (.qetl.plant.problems),
 /   the proposed cursor does not advance, or a step throws
-tick:{[job]
-    d:def job;
+.qetl.job.stream.tick:{[job]
+    d:.qetl.job.stream.def job;
     p:d`poll;
     / A deployment's --live (#800): a feed whose source has no credential
     / publishes nothing, rather than its fixture.
-    if[`fixture~liveness[job]; .qetl.source.refuse_fixture["tick: ",string job;p`source]];
-    ops:cursor_ops[job];
-    name:cursor_name[job];
+    if[`fixture~.qetl.job.stream.liveness[job]; .qetl.source.refuse_fixture["tick: ",string job;p`source]];
+    ops:.qetl.job.stream.cursor_ops[job];
+    name:.qetl.job.stream.cursor_name[job];
     current:ops[`load] name;
     / Every line the fetch logs - a traced query above all - carries the job
     / and the cursor it fetched after.
     page:.qetl.log.with_context[`job`cursor!(job;current);p`fetch;enlist current];
     if[0=count page; :`state`rows`cursor!(`idle;0;current)];
-    out:outputs[job;p[`normalize] page];
+    out:.qetl.job.stream.outputs[job;p[`normalize] page];
     / Checked before anything is published or saved: a page the plant would
     / mis-store is refused whole, so no table of it lands and the cursor stays
     / where it was - the page is fetched again once the job is fixed.
-    if[count failures:raze contract_failures'[key out;value out];
+    if[count failures:raze .qetl.job.stream.contract_failures'[key out;value out];
         '"tick: ",string[job]," would publish what the plant does not take - ","; " sv failures];
     proposed:p[`next_cursor] page;
     if[not ops[`advances][current;proposed];
@@ -191,13 +191,13 @@ tick:{[job]
 / table the plant does not carry has nothing to compare against.
 / @return a list of messages, empty when it matches
 / @private
-contract_failures:{[t;rows] $[t in .qetl.plant.names[]; .qetl.plant.problems[t;rows]; ()]}
+.qetl.job.stream.contract_failures:{[t;rows] $[t in .qetl.plant.names[]; .qetl.plant.problems[t;rows]; ()]}
 
 / Private: whether a polling job's page is live data, the fixture, or
 / unknown - known only when its poll names the source it reads.
 / @private
-liveness:{[job]
-    p:(def job)`poll;
+.qetl.job.stream.liveness:{[job]
+    p:(.qetl.job.stream.def job)`poll;
     $[not `source in key p; `unknown; .qetl.source.has_credentials p`source; `live; `fixture]}
 
 / Preview one page of a polling job: what it would fetch, publish and advance
@@ -215,7 +215,7 @@ liveness:{[job]
 /   (each table -> ...), and failures (messages; empty unless `invalid)
 / @throws error when the job is not a polling feed, or its fetch, normalize
 /   or next_cursor throws
-preview:{[job;n] run_preview[job;n;::]}
+.qetl.job.stream.preview:{[job;n] .qetl.job.stream.run_preview[job;n;::]}
 
 / Preview the RECENT data of a polling job: the rows in [now - span, now),
 / fetched from a temporary cursor, with nothing published and nothing saved.
@@ -235,22 +235,22 @@ preview:{[job;n] run_preview[job;n;::]}
 /   may hold rows the sample did not reach)
 / @throws error for a span that is not a positive timespan, a feed with its
 /   own cursor and no start_cursor, or anything preview throws
-preview_recent:{[job;n;span]
+.qetl.job.stream.preview_recent:{[job;n;span]
     if[not -16h=type span;
         '"preview_recent: span must be a timespan, e.g. 0D00:00:30 - got ",.Q.s1 span];
     if[not span>0D; '"preview_recent: span must be positive - got ",string span];
-    run_preview[job;n;span]}
+    .qetl.job.stream.run_preview[job;n;span]}
 
 / Private: preview's guard, the page, and `close` either way.
 / @private
-run_preview:{[job;n;span]
-    d:def job;
+.qetl.job.stream.run_preview:{[job;n;span]
+    d:.qetl.job.stream.def job;
     if[count d`subscribe_to;
         '"preview: ",string[job]," subscribes to ",(", " sv string d`subscribe_to),
          " - its input arrives from the plant, so there is no page to fetch. Preview supports polling feeds"];
     if[not `poll in key d;
         '"preview: ",string[job]," declares no poll - its on_timer is one function, and running it would publish and advance. Declare poll (fetch, normalize, next_cursor) to preview it"];
-    r:.[preview_page;(job;n;span);{[e] (`preview_failed;e)}];
+    r:.[.qetl.job.stream.preview_page;(job;n;span);{[e] (`preview_failed;e)}];
     if[`close in key d`poll; @[(d`poll)`close;::;{[e] ::}]];
     if[(0h=type r) and `preview_failed~first r; 'last r];
     r}
@@ -259,8 +259,8 @@ run_preview:{[job;n;span]
 / from: the feed's start_cursor, or instant minus 1ns for a timestamp cursor.
 / @throws error for a feed with its own cursor and no start_cursor
 / @private
-start_cursor_of:{[job]
-    p:(def job)`poll;
+.qetl.job.stream.start_cursor_of:{[job]
+    p:(.qetl.job.stream.def job)`poll;
     if[`start_cursor in key p; :p`start_cursor];
     if[`load in key p;
         '"preview: ",string[job]," keeps its own cursor (load, save, advances) and declares no start_cursor - ",
@@ -269,20 +269,20 @@ start_cursor_of:{[job]
 
 / Private: the window a recent-data preview covers, from one captured instant.
 / @private
-recent_window:{[job;span]
+.qetl.job.stream.recent_window:{[job;span]
     / `from` is a qSQL keyword, so neither bound is named after its key
     window_end:.z.p;
     window_start:window_end-span;
-    start:start_cursor_of[job];
+    start:.qetl.job.stream.start_cursor_of[job];
     `from`to`start_cursor`end_cursor!(window_start;window_end;start window_start;start window_end)}
 
 / Private: which rows of `page` lie in the window: after its start cursor and
 / not after its end cursor, each row's cursor being next_cursor of that row
 / alone, compared with the feed's own advances.
 / @private
-in_window:{[job;window;page]
-    p:(def job)`poll;
-    ops:cursor_ops[job];
+.qetl.job.stream.in_window:{[job;window;page]
+    p:(.qetl.job.stream.def job)`poll;
+    ops:.qetl.job.stream.cursor_ops[job];
     row_cursor:{[next_cursor;page;i] next_cursor enlist page i}[p`next_cursor;page;] each til count page;
     after_start:ops[`advances][window`start_cursor;] each row_cursor;
     after_end:ops[`advances][window`end_cursor;] each row_cursor;
@@ -291,12 +291,12 @@ in_window:{[job;window;page]
 / Private: preview's body, between the guard and `close`. `span` is (::)
 / for the next page after the saved cursor, else the recent window's length.
 / @private
-preview_page:{[job;n;span]
-    p:(def job)`poll;
-    ops:cursor_ops[job];
+.qetl.job.stream.preview_page:{[job;n;span]
+    p:(.qetl.job.stream.def job)`poll;
+    ops:.qetl.job.stream.cursor_ops[job];
     recent:not span~(::);
-    window:$[recent; recent_window[job;span]; (::)];
-    current:$[recent; window`start_cursor; ops[`load] cursor_name job];
+    window:$[recent; .qetl.job.stream.recent_window[job;span]; (::)];
+    current:$[recent; window`start_cursor; ops[`load] .qetl.job.stream.cursor_name job];
     / Every line the fetch logs - a traced query above all - carries the job
     / and the cursor it fetched after; a recent preview's, its window and
     / page limit too.
@@ -304,14 +304,14 @@ preview_page:{[job;n;span]
     context:`job`cursor!(job;current);
     if[recent; context,:`window`page_limit!(window`from`to;limit)];
     fetched:.qetl.log.with_context[context;p`fetch;enlist current];
-    page:$[recent; fetched where in_window[job;window;fetched]; fetched];
-    base:`job`mode`live`cursor`fetched!(job;$[recent; `recent; `next_page];liveness[job];current;count fetched);
+    page:$[recent; fetched where .qetl.job.stream.in_window[job;window;fetched]; fetched];
+    base:`job`mode`live`cursor`fetched!(job;$[recent; `recent; `next_page];.qetl.job.stream.liveness[job];current;count fetched);
     if[recent;
         base,:`window`kept`page_limit`limited!(window;count page;limit;(not null limit) and limit<=count fetched)];
     if[0=count page;
         :base,`state`next_cursor`advances`rows`sample`failures!(`idle;(::);0b;()!();()!();())];
-    out:outputs[job;p[`normalize] page];
-    failures:raze contract_failures'[key out;value out];
+    out:.qetl.job.stream.outputs[job;p[`normalize] page];
+    failures:raze .qetl.job.stream.contract_failures'[key out;value out];
     next_cursor:p[`next_cursor] page;
     advances:ops[`advances][current;next_cursor];
     if[not advances;

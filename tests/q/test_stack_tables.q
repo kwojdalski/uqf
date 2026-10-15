@@ -45,6 +45,8 @@ bundled:{[] f:`:src/etl/installed_bundles.json;
 / rather than matching the literal text it looks like it matches.
 declared:{[]
     ls:read0 `$":src/etl/plant_tables.q";
+    / The file defines each table qualified from the root (.qetl.plant.quote:...).
+    ls:{$[x like ".qetl.plant.*"; 12_x; x]} each ls;
     / `name:([]` exactly, as uqs and .qetl.plant.adopt_vendored read it: a
     / looser "*:(*" also caught the keyed `elements:([table:...]...)` lookup.
     ls:ls where (not ls like "/*") and {[l] (0<count l) and "([]"~3#(1+l?":")_l} each ls;

@@ -34,15 +34,15 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qetl.livecheck
+\d .
 
 / Setting names whose values are secrets, lower case. Matched against the
 / `key=value` parts of a credential.
-secret_keys:`pwd`password`passwd`secret`token`apikey`api_key`accesskey`access_key
+.qetl.livecheck.secret_keys:`pwd`password`passwd`secret`token`apikey`api_key`accesskey`access_key
 
 / Settings that turn certificate verification off, lower case: key -> the
 / values that do it. A credential carrying one is refused.
-tls_off:(!) . flip (
+.qetl.livecheck.tls_off:(!) . flip (
     (`sslverify;`0`false`no`off);
     (`ssl_verify;`0`false`no`off);
     (`sslverifyservercert;`0`false`no);
@@ -55,7 +55,7 @@ tls_off:(!) . flip (
 / that opens with { runs to its closing }: inside it ";" is data and "}}" an
 / escaped "}" (#1270 - cut at every ";", a quoted password leaked its tail).
 / @private
-split_parts:{[cred]
+.qetl.livecheck.split_parts:{[cred]
     r:(); cur:""; quoted:0b; i:0;
     while[i<count cred;
         c:cred i;
@@ -69,7 +69,7 @@ split_parts:{[cred]
 / Private: a value as the driver reads it - an ODBC {}-quoted one without its
 / braces and with "}}" read as "}"; any other value as it is.
 / @private
-unquote:{[v]
+.qetl.livecheck.unquote:{[v]
     if[not "{"~first v; :v];
     v:1_v;
     if["}"~last v; v:-1_v];
@@ -79,20 +79,20 @@ unquote:{[v]
 / Symbols, not strings: a dictionary looked up with a string indexes it by
 / each character.
 / @private
-settings:{[cred]
-    parts:{x where 0<count each x} split_parts[cred];
+.qetl.livecheck.settings:{[cred]
+    parts:{x where 0<count each x} .qetl.livecheck.split_parts[cred];
     parts:parts where "=" in/: parts;
-    (`$lower {trim (x?"=")#x} each parts)!{unquote[trim (1+x?"=")_x]} each parts}
+    (`$lower {trim (x?"=")#x} each parts)!{.qetl.livecheck.unquote[trim (1+x?"=")_x]} each parts}
 
 / Private: `s` as an ssr search string that matches only itself. ssr reads
 / [ ? * as pattern syntax, so a password Xk[9]q!7 searched as it is matches
 / Xk9q!7 and never its own text (#1270); each is bracketed to stand for itself.
 / @private
-literal:{[s] raze {$[x in "[?*"; "[",x,"]"; enlist x]} each s}
+.qetl.livecheck.literal:{[s] raze {$[x in "[?*"; "[",x,"]"; enlist x]} each s}
 
 / Private: is `x` a trapped failure, (`error;message)?
 / @private
-failed:{[x] (0h=type x) and (2=count x) and `error~first x}
+.qetl.livecheck.failed:{[x] (0h=type x) and (2=count x) and `error~first x}
 
 / Mask every secret value in the credential wherever `text` repeats it. The
 / rest stays: a host, a path or a user name is what makes the message
@@ -101,10 +101,10 @@ failed:{[x] (0h=type x) and (2=count x) and `error~first x}
 / @param cred the credential, "" when none was read
 / @return the text, safe to print or log
 / @eg .qetl.livecheck.redact["login failed for DRIVER=x;PWD=hunter2";"DRIVER=x;PWD=hunter2"]  ->  "login failed for DRIVER=x;PWD=<redacted>"
-redact:{[text;cred]
+.qetl.livecheck.redact:{[text;cred]
     if[0=count cred; :text];
-    s:settings[cred];
-    secrets:value[s] where key[s] in secret_keys;
+    s:.qetl.livecheck.settings[cred];
+    secrets:value[s] where key[s] in .qetl.livecheck.secret_keys;
     / a quoted secret also as it was written, }} and all
     secrets,:{ssr[x;"}";"}}"]} each secrets;
     / an ipc credential host:port:user:password keeps its password last
@@ -112,43 +112,43 @@ redact:{[text;cred]
     hide:distinct secrets where 0<count each secrets;
     / longest first, so one secret inside another is masked whole
     hide:hide idesc count each hide;
-    {ssr[x;literal[y];"<redacted>"]}/[text;hide]}
+    {ssr[x;.qetl.livecheck.literal[y];"<redacted>"]}/[text;hide]}
 
 / Private: the first setting in `cred` that turns TLS verification off, or "".
 / @private
-tls_disabled:{[cred]
-    s:settings[cred];
+.qetl.livecheck.tls_disabled:{[cred]
+    s:.qetl.livecheck.settings[cred];
     / $[], not `and`: q's `and` evaluates both sides, and `s k` of a key the
     / credential lacks is not a string
-    bad:{[s;k] $[k in key s; (`$lower s k) in tls_off k; 0b]}[s] each key tls_off;
-    $[any bad; (string k),"=",s k:first key[tls_off] where bad; ""]}
+    bad:{[s;k] $[k in key s; (`$lower s k) in .qetl.livecheck.tls_off k; 0b]}[s] each key .qetl.livecheck.tls_off;
+    $[any bad; (string k),"=",s k:first key[.qetl.livecheck.tls_off] where bad; ""]}
 
 / Check one source, live.
 / @param source a registered source
 / @param window how far back the bounded read reaches, a timespan
 / @return dict source, transport, status (`ok`empty`failed), stage, rows, elapsed_ms, diagnostic
-check:{[source;window]
+.qetl.livecheck.check:{[source;window]
     t0:.z.p;
     r:`source`transport`status`stage`rows`elapsed_ms`diagnostic!(source;`;`failed;`credential;0N;0N;"");
     finish:{[t0;r] r[`elapsed_ms]:`long$(.z.p-t0)%1000000; r}[t0];
     decl:@[.qetl.source.def;source;{(`error;x)}];
-    if[failed[decl]; :finish r,`stage`diagnostic!(`declaration;last decl)];
+    if[.qetl.livecheck.failed[decl]; :finish r,`stage`diagnostic!(`declaration;last decl)];
     r[`transport]:decl`transport;
     if[not .qetl.source.has_credentials source;
         :finish r,enlist[`diagnostic]!enlist
             string[source]," has no credential - set ",.qetl.source.credential_var[source],
             ", or give it a row in sources.csv. The live check never reads a fixture"];
     cred:@[.qetl.source.require_credentials;source;{(`error;x)}];
-    if[failed[cred]; :finish r,enlist[`diagnostic]!enlist last cred];
+    if[.qetl.livecheck.failed[cred]; :finish r,enlist[`diagnostic]!enlist last cred];
     cred:$[10h=type cred; cred; string cred];
-    off:tls_disabled[cred];
+    off:.qetl.livecheck.tls_disabled[cred];
     if[count off;
         :finish r,`stage`diagnostic!(`tls;"the credential turns certificate verification off (",
-            redact[off;cred],") - the live check refuses it; verify the server's certificate instead")];
+            .qetl.livecheck.redact[off;cred],") - the live check refuses it; verify the server's certificate instead")];
     tr:.qetl.source.transport_def decl`transport;
     h:@[tr`open;cred;{(`error;x)}];
-    if[failed[h];
-        :finish r,`stage`diagnostic!(`connect;redact[last h;cred])];
+    if[.qetl.livecheck.failed[h];
+        :finish r,`stage`diagnostic!(`connect;.qetl.livecheck.redact[last h;cred])];
     / From here the handle is open: every path below closes it.
     outcome:@[{[source;window;h]
         .qetl.source.validate_live[source;h];
@@ -159,13 +159,13 @@ check:{[source;window]
         .qetl.source.validate[source;got 1];
         (`ok;count .qetl.source.primary[source;got 1])}[source;window];h;{(`error;x)}];
     @[tr`close;h;{[e] (::)}];
-    if[failed[outcome];
+    if[.qetl.livecheck.failed[outcome];
         e:last outcome;
         stage:$[e like "validate_live*"; `schema; e like "validate:*"; `output; `read];
         why:$[stage=`schema; e;
             stage=`output; "the read of the last ",string[window]," ran, but its rows break the adapter's declared output: ",e;
             "the bounded read of the last ",string[window]," failed: ",e];
-        :finish r,`stage`diagnostic!(stage;redact[why;cred])];
+        :finish r,`stage`diagnostic!(stage;.qetl.livecheck.redact[why;cred])];
     finish r,`status`stage`rows!($[0=last outcome; `empty; `ok];`done;last outcome)}
 
 \d .

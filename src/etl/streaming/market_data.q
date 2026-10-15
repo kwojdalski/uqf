@@ -14,20 +14,20 @@
 / `marks` normalizer used to compute that mid from quote and crypto_book on
 / its own, a second reading of the same books for one consumer.
 
-\d .qpipe.job.market_data
+\d .
 
-publish:.qetl.job.stream.unwired `market_data;
-market_data:.qetl.plant.published `market_data
-quote:.qetl.plant.columns[`quote;`time`sym`bid`ask`bsize`asize`src]
-fx_orderbook:.qetl.plant.shape `fx_orderbook
-crypto_book:.qetl.plant.shape `crypto_book
+.qpipe.job.market_data.publish:.qetl.job.stream.unwired `market_data;
+.qpipe.job.market_data.market_data:.qetl.plant.published `market_data
+.qpipe.job.market_data.quote:.qetl.plant.columns[`quote;`time`sym`bid`ask`bsize`asize`src]
+.qpipe.job.market_data.fx_orderbook:.qetl.plant.shape `fx_orderbook
+.qpipe.job.market_data.crypto_book:.qetl.plant.shape `crypto_book
 
 / Direct top-of-book quotes, with the feed's own source identifier.
 / The shared quote table also carries equities; only canonical FX pairs pass.
 / @param batch quote rows
 / @return complete single-level market_data snapshots, sizes in base currency
 / @eg count .qpipe.job.market_data.from_quote[.qpipe.job.market_data.quote] -> 0
-from_quote:{[batch]
+.qpipe.job.market_data.from_quote:{[batch]
     fx:batch where .qf.px.is_ccy_pair each batch`sym;
     select sym, source:src, market:`fx, source_time:time,
         bid_prices:enlist each bid, bid_sizes:enlist each `float$bsize,
@@ -39,7 +39,7 @@ from_quote:{[batch]
 / @param batch fx_orderbook rows
 / @return complete market_data snapshots with the original receipt time
 / @eg count .qpipe.job.market_data.from_fx_orderbook[.qpipe.job.market_data.fx_orderbook] -> 0
-from_fx_orderbook:{[batch]
+.qpipe.job.market_data.from_fx_orderbook:{[batch]
     fx:batch where .qf.px.is_ccy_pair each batch`sym;
     select sym, source:`UQFDEPTH, market:`fx, source_time:time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from fx}
@@ -55,7 +55,7 @@ from_fx_orderbook:{[batch]
 / @param batch crypto_book rows
 / @return complete market_data snapshots, one per venue and sym
 / @eg count .qpipe.job.market_data.from_crypto_book[.qpipe.job.market_data.crypto_book] -> 0
-from_crypto_book:{[batch]
+.qpipe.job.market_data.from_crypto_book:{[batch]
     select sym, source:venue, market:`crypto, source_time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from batch}
 
@@ -75,7 +75,7 @@ from_crypto_book:{[batch]
 / @param rows market_data rows (sym, source, source_time, the four ladders)
 / @return failures: check, status, detail, and `row`, the index in rows
 / @eg count .qpipe.job.market_data.check[0#.qpipe.job.market_data.market_data] -> 0
-check:{[rows]
+.qpipe.job.market_data.check:{[rows]
     if[0=count rows; :.qetl.job.bounded.no_failures[]];
     / The quality check sorts its answer, so it is handed the row index as its
     / `time` (a timestamp is a long underneath) and the index comes back with it.

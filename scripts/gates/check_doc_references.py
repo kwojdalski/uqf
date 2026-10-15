@@ -150,10 +150,6 @@ ALLOWED_MISSING = {
         ".qf.px.sub",
     ): "the same nested-namespace illustration, in the rule that forbids it",
     (
-        ".claude/skills/antipattern/SKILL.md",
-        ".qf.px.sub",
-    ): "the same nested-namespace illustration",
-    (
         ".claude/agents/extension-brainstormer.md",
         ".qf.px.sub",
     ): "the same nested-namespace illustration",

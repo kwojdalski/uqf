@@ -5,28 +5,28 @@
 / The same namespace as stream_job.q, which runs these from `start` (and
 / writes the marker from `end_of_day`); loaded straight after it.
 
-\d .qetl.job.stream
+\d .
 
 / Where a carrying job records the last day it saw end (#1072): beside the
 / ledgers, in the status directory, so it outlives the process.
 / @param job the job's name
 / @return the file path
 / @eg .qetl.job.stream.carry_marker_path `fx_positions
-carry_marker_path:{[job] (.qetl.job.bounded.state.lock_dir[]),"/carry_",string job}
+.qetl.job.stream.carry_marker_path:{[job] (.qetl.job.bounded.state.lock_dir[]),"/carry_",string job}
 
 / The last end of day a carrying job recorded, 0Nd when none (a first start).
 / @param job the job's name
 / @return a date, or 0Nd
 / @eg .qetl.job.stream.last_end_seen `fx_positions
-last_end_seen:{[job]
-    p:carry_marker_path[job];
+.qetl.job.stream.last_end_seen:{[job]
+    p:.qetl.job.stream.carry_marker_path[job];
     if[()~key hsym `$p; :0Nd];
     @[{first (.qetl.job.bounded.state.durable_get x)`last_end_of_day};p;{[e] 0Nd}]}
 
 / How many batches the publish seam has withheld (a check or the plant's
 / contract): `withhold` returns :: like a publisher that sent nothing, so
 / `snapshot` reads this to tell a withheld snapshot from a published one.
-withheld_n:0
+.qetl.job.stream.withheld_n:0
 
 / At the end of a day, record that a carrying job carried across it (#1072) -
 / but only once its snapshot was published (#1307). A failed or withheld
@@ -36,15 +36,15 @@ withheld_n:0
 / @param j the job's name
 / @return 1b when the marker was recorded
 / @eg .qetl.job.stream.carry_end_of_day[2026.10.09;`no_such_job]  / 0b: the snapshot failed, so no marker
-carry_end_of_day:{[dt;j]
-    ok:@[{snapshot x; 1b};j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]; 0b}[dt;j]];
+.qetl.job.stream.carry_end_of_day:{[dt;j]
+    ok:@[{.qetl.job.stream.snapshot x; 1b};j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]; 0b}[dt;j]];
     if[not ok; :0b];
     / A one-row table, not a bare date: PeachQ cannot read a `set atom back.
-    @[{[dt;j] .qetl.job.bounded.state.durable_set[carry_marker_path[j];([] last_end_of_day:enlist dt)]; 1b}[dt];j;
+    @[{[dt;j] .qetl.job.bounded.state.durable_set[.qetl.job.stream.carry_marker_path[j];([] last_end_of_day:enlist dt)]; 1b}[dt];j;
         {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]; 0b}[j]]}
 
 / The keys of a transport that can recover a carrying job across an end of day.
-recovery_keys:`earlier_days`plant_day`has_log
+.qetl.job.stream.recovery_keys:`earlier_days`plant_day`has_log
 
 / Judge a transport's recovery keys against a job (#1220). Only a job with
 / carry and replay needs them.
@@ -53,14 +53,14 @@ recovery_keys:`earlier_days`plant_day`has_log
 / @return the job name
 / @throws error naming the recovery keys the transport lacks, when it has some but not all
 / @eg .qetl.job.stream.require_recovery[`fx_positions;.qetl.job.stream.recovery_keys!3#enlist {[x]}]  / `fx_positions
-require_recovery:{[job;tr]
-    d:def[job];
+.qetl.job.stream.require_recovery:{[job;tr]
+    d:.qetl.job.stream.def[job];
     if[not (`carry in key d) and $[`replay in key d; d`replay; 0b]; :job];
-    present:recovery_keys inter key tr;
-    if[count[present]=count recovery_keys; :job];
+    present:.qetl.job.stream.recovery_keys inter key tr;
+    if[count[present]=count .qetl.job.stream.recovery_keys; :job];
     if[count present;
         '"start: the transport for ",string[job]," has some recovery keys but not all - missing ",
-            ", " sv string recovery_keys except present];
+            ", " sv string .qetl.job.stream.recovery_keys except present];
     / $[], not `and`: q evaluates both sides, and tr`recovery of a transport without it is a null
     if[$[`recovery in key tr; not tr`recovery; 0b]; :job];
     .qetl.log.err[job;"this transport has none of earlier_days, plant_day and has_log, so a restart across an end of day will lose the state this job carries - give the transport all three, or state recovery:0b if it cannot recover";
@@ -75,7 +75,7 @@ require_recovery:{[job;tr]
 / @param tr the transport
 / @return a date
 / @eg .qetl.job.stream.plant_today ()!()  / no plant_day: the job's own clock
-plant_today:{[tr] $[`plant_day in key tr; tr[`plant_day][]; .z.D]}
+.qetl.job.stream.plant_today:{[tr] $[`plant_day in key tr; tr[`plant_day][]; .z.D]}
 
 / Before a carrying job replays today's log, rebuild what an end of day it
 / was down for left out (#1072). The snapshot is written by a job RUNNING at
@@ -98,13 +98,13 @@ plant_today:{[tr] $[`plant_day in key tr; tr[`plant_day][]; .z.D]}
 / @param h the handler to replay through
 / @return how many messages were replayed
 / @eg .qetl.job.stream.catch_up[`fx_positions;()!();`executions`fx_position_open;{[t;x]}]  / a transport with no earlier_days: nothing to replay
-catch_up:{[job;tr;tbls;h]
-    last_eod:last_end_seen[job];
-    today:plant_today[tr];
+.qetl.job.stream.catch_up:{[job;tr;tbls;h]
+    last_eod:.qetl.job.stream.last_end_seen[job];
+    today:.qetl.job.stream.plant_today[tr];
     if[(null last_eod) or last_eod>=today-1; :0];
     if[not `earlier_days in key tr; :0];
     msgs:tr[`earlier_days][tbls;last_eod+1;today-1];
-    if[`has_log in key tr; caught_up[job]:tr[`has_log][last_eod+1]];
+    if[`has_log in key tr; .qetl.job.stream.caught_up[job]:tr[`has_log][last_eod+1]];
     {[h;m] h . m}[h] each msgs;
     .qetl.log.info[job;"replayed the logs of the days it was down across, to rebuild the state it carried";
         `last_end_of_day`through`messages!(last_eod;today-1;count msgs)];
@@ -125,13 +125,13 @@ catch_up:{[job;tr;tbls;h]
 / @param today the date the replayed log is for (the plant's, see plant_today)
 / @return 1b when an end of day was missed, after logging it as an ERROR
 / @eg .qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]
-missed_end_of_day:{[job;today]
-    if[(first $[job in key carry_log; carry_log job; enlist `none]) in `restored`restored_full; :0b];
-    if[job in key caught_up; if[caught_up job; :0b]];
-    last_eod:last_end_seen[job];
+.qetl.job.stream.missed_end_of_day:{[job;today]
+    if[(first $[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; enlist `none]) in `restored`restored_full; :0b];
+    if[job in key .qetl.job.stream.caught_up; if[.qetl.job.stream.caught_up job; :0b]];
+    last_eod:.qetl.job.stream.last_end_seen[job];
     if[(null last_eod) or last_eod>=today-1; :0b];
     .qetl.log.err[job;"replayed with no carried snapshot, and the last end of day this job saw was before yesterday - it was down at an end of day, so the state carried from before today is missing, and no earlier log held it";
-        `last_end_of_day`today`table!(last_eod;today;def[job][`carry]`table)];
+        `last_end_of_day`today`table!(last_eod;today;.qetl.job.stream.def[job][`carry]`table)];
     1b}
 
 \d .

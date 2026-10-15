@@ -34,16 +34,16 @@
 / Live: export UQF_SOURCE_CRED_HDB_DEMO_MARKOUTS=localhost:<hdb1's port> in
 / the shell `uqs backfill` runs from. Without it, the fixture below is used.
 
-\d .qpipe.source.hdb_demo_markouts
+\d .
 
-source_name:`hdb_demo_markouts
+.qpipe.source.hdb_demo_markouts.source_name:`hdb_demo_markouts
 
 / The primary input: the HDB's fills, in markout's shape already (signed
 / side, trade_price, pip_factor).
-columns:`time`sym`side`trade_price`pip_factor`fill_id
-types:"psjfjs"
+.qpipe.source.hdb_demo_markouts.columns:`time`sym`side`trade_price`pip_factor`fill_id
+.qpipe.source.hdb_demo_markouts.types:"psjfjs"
 
-time_column:`time
+.qpipe.source.hdb_demo_markouts.time_column:`time
 
 / A fill is its fill_id (#1080); sym and time stay in the key because a
 / partition written before the column holds null ids, and for those the pair
@@ -51,20 +51,20 @@ time_column:`time
 / instant still collapse, as before the column - the limitation is now only
 / for legacy rows). The worker writes by its own target_key, the markout
 / rows' key.
-row_key:`sym`time`fill_id
+.qpipe.source.hdb_demo_markouts.row_key:`sym`time`fill_id
 
 / The supporting input: top of book, read by the transform as `quote`.
-supporting:enlist[`quote]!enlist ([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$())
+.qpipe.source.hdb_demo_markouts.supporting:enlist[`quote]!enlist ([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$())
 
 / .u.upd stamps `time` in UTC, and trades and quote are both stamped that way.
-tz:`UTC
+.qpipe.source.hdb_demo_markouts.tz:`UTC
 
 / How far back the last quote before a window is looked for. Without it, a
 / fill early in a window whose latest quote predates the window has nothing
 / to be priced against and scores null - and the target key replaces the
 / live job's correct row with that null. A pair unquoted for longer than this
 / scores null, as the live job would after a restart.
-lookback:7D
+.qpipe.source.hdb_demo_markouts.lookback:7D
 
 / The window's fills, and the quotes they are marked against, both from the
 / HDB. Both tables are date-partitioned, so the partition is constrained
@@ -74,14 +74,14 @@ lookback:7D
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return `trades`quote!(the window's fills; the quotes they need)
-query:{[h;range_from;range_to]
+.qpipe.source.hdb_demo_markouts.query:{[h;range_from;range_to]
     deals:.qetl.source.ipc[h;{[from_ts;to_ts]
         `time xasc select time, sym, side, trade_price, pip_factor, fill_id from `trades
             where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts
       };range_from;range_to];
     / No fills, no quote query: a window whose primary input is empty
     / publishes nothing, whatever quotes there are.
-    if[0=count deals; :`trades`quote!(deals;0#supporting`quote)];
+    if[0=count deals; :`trades`quote!(deals;0#.qpipe.source.hdb_demo_markouts.supporting`quote)];
     / One request: the window's quotes, plus each traded pair's last quote
     / before it. The pairs and the lookback travel in the projection.
     quotes:.qetl.source.ipc[h;{[syms;lb;from_ts;to_ts]
@@ -91,14 +91,14 @@ query:{[h;range_from;range_to]
         inwin:select time, sym, bid, ask from `quote
             where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts, sym in syms;
         `time xasc before,inwin
-      }[distinct deals`sym;lookback];range_from;range_to+.qpipe.transform.demo_markouts.max_horizon];
+      }[distinct deals`sym;.qpipe.source.hdb_demo_markouts.lookback];range_from;range_to+.qpipe.transform.demo_markouts.max_horizon];
     `trades`quote!(deals;quotes)}
 
 / Four fills on 2026.09.17: EURUSD both ways, a USDJPY buy, and a GBPUSD
 / fill with no quote after it, so a null markout is part of the fixture.
 / @return the fills, as the HDB's trades holds them
 / @eg count .qpipe.source.hdb_demo_markouts.raw_fills[] -> 4
-raw_fills:{[]
+.qpipe.source.hdb_demo_markouts.raw_fills:{[]
     ([] time:2026.09.17D10:00:00.000000000 2026.09.17D10:00:05.000000000
              2026.09.17D10:00:07.000000000 2026.09.17D23:59:59.000000000;
         sym:`EURUSD`EURUSD`USDJPY`GBPUSD;
@@ -110,7 +110,7 @@ raw_fills:{[]
 / Quotes around raw_fills, as the HDB's quote holds them.
 / @return quotes on 2026.09.17, sorted by time
 / @eg count .qpipe.source.hdb_demo_markouts.raw_quotes[] -> 6
-raw_quotes:{[]
+.qpipe.source.hdb_demo_markouts.raw_quotes:{[]
     ([] time:2026.09.17D09:59:59.000000000 2026.09.17D10:00:01.000000000
              2026.09.17D10:00:06.500000000 2026.09.17D10:00:07.500000000
              2026.09.17D10:00:12.000000000 2026.09.17D10:00:20.000000000;
@@ -122,10 +122,10 @@ raw_quotes:{[]
 / the HDB holds them. The worker cuts `trades` to each window; `quote` is
 / context and is not cut.
 / @return `trades`quote!(raw_fills[];raw_quotes[])
-fixture:{[] `trades`quote!(raw_fills[];raw_quotes[])}
+.qpipe.source.hdb_demo_markouts.fixture:{[] `trades`quote!(.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[])}
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.hdb_demo_markouts.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting!
-    (source_name;`trades;time_column;row_key;columns;types;query;fixture;tz;supporting)];
+    (.qpipe.source.hdb_demo_markouts.source_name;`trades;.qpipe.source.hdb_demo_markouts.time_column;.qpipe.source.hdb_demo_markouts.row_key;.qpipe.source.hdb_demo_markouts.columns;.qpipe.source.hdb_demo_markouts.types;.qpipe.source.hdb_demo_markouts.query;.qpipe.source.hdb_demo_markouts.fixture;.qpipe.source.hdb_demo_markouts.tz;.qpipe.source.hdb_demo_markouts.supporting)];
 
 \d .

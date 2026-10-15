@@ -11,7 +11,7 @@
 /   uqs job new hdb_transfer --kind backfill --transport local --dataset trades_copy \
 /       --columns 'trade_id:long,sym:symbol,price:float,size:long,side:symbol,notional:float'
 
-\d .qpipe.job.hdb_transfer_backfill
+\d .
 
 / What this run SAW, beyond its row count: how many pairs, and the notional
 / moved - a partial extract changes both. Survives an empty batch.
@@ -19,7 +19,7 @@
 / Notional is price * size, in each pair's QUOTE currency, so it is one fact
 / per quote currency (notional_USD, notional_JPY, ...): a single sum added
 / USDJPY's yen to the dollars of every other pair (#1339).
-facts:{[batch]
+.qpipe.job.hdb_transfer_backfill.facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     quote:{x!{(.qf.px.ccy_pair_legs x)`quote} each x} distinct batch`sym;
     / group, not exec ... by: PeachQ's exec-by returns a keyed table, not a dictionary
@@ -28,7 +28,7 @@ facts:{[batch]
 
 / The transform: the source's trades, plus notional = price * size, in
 / trades_copy's column order.
-with_notional:{[batch] cols[.qetl.plant.shape `trades_copy] xcols update notional:price*size from batch}
+.qpipe.job.hdb_transfer_backfill.with_notional:{[batch] cols[.qetl.plant.shape `trades_copy] xcols update notional:price*size from batch}
 
 \d .
 

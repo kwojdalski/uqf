@@ -19,7 +19,7 @@
 / different fetch or publish would define its own above that call. This
 / file declares only what is this worker's: its check and its transform.
 
-\d .qpipe.job.demo_deals_backfill
+\d .
 
 / --- the data-quality gate ------------------------------------------------
 
@@ -42,7 +42,7 @@
 / @param batch the fetched rows, before publication
 / @return a table check/status/detail, one row per offending row
 / @eg .qpipe.job.demo_deals_backfill.quality_check[.qpipe.source.demo_deals.fixture[]]  ->  an empty table
-quality_check:{[batch]
+.qpipe.job.demo_deals_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     bad_rate:select from batch where not rate>0;
     bad_notional:select from batch where not notional>0;

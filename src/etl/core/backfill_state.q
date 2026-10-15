@@ -11,7 +11,7 @@
 / "A bounded worker must not silently become an unbounded tailer" is the
 / sentence the whole contract exists to make true.
 
-\d .qetl.job.bounded.state
+\d .
 
 / ---------------------------------------------------------------- CONTRACT
 
@@ -19,24 +19,24 @@
 / Chosen to match the lifecycle the framework actually drives: acquire a
 / request, turn a cursor into windows, fetch one window, publish it, then
 / record the cursor that acknowledges it.
-bounded_worker_methods:`init`plan`fetch`publish`checkpoint
+.qetl.job.bounded.state.bounded_worker_methods:`init`plan`fetch`publish`checkpoint
 
 / ...and these globals. range_from/range_to make the bound explicit and
 / inspectable rather than buried in a call; source_version is mandatory
 / because coverage recorded under one source release says nothing about
 / another, so a run that cannot name its release cannot record
 / coverage either.
-bounded_worker_globals:`source_version`range_from`range_to
+.qetl.job.bounded.state.bounded_worker_globals:`source_version`range_from`range_to
 
 / worker name -> the namespace symbol holding its implementation.
-bounded_workers:(`symbol$())!`symbol$()
+.qetl.job.bounded.state.bounded_workers:(`symbol$())!`symbol$()
 
 / Private: the names defined in a namespace, or an empty list if the
 / namespace does not exist. Wrapped because `key` on an absent namespace
 / throws rather than returning empty, and a missing namespace is a contract
 / violation we want reported by name rather than as a bare error.
 / @private
-ns_names:{[ns] @[{key x};ns;`symbol$()]}
+.qetl.job.bounded.state.ns_names:{[ns] @[{key x};ns;`symbol$()]}
 
 / Register a bounded worker. Does NOT validate - require_contract does that,
 / at init, when the namespace is actually populated. Registering early and
@@ -48,12 +48,12 @@ ns_names:{[ns] @[{key x};ns;`symbol$()]}
 /   built without the shell passes one by hand
 / @return the worker name
 / @eg .qetl.job.bounded.state.register[`demo_deals_backfill;`.qpipe.job.demo_deals_backfill]
-register:{[worker;ns]
-    bounded_workers[worker]:ns;
+.qetl.job.bounded.state.register:{[worker;ns]
+    .qetl.job.bounded.state.bounded_workers[worker]:ns;
     worker}
 
 / Every registered bounded worker, for introspection and for tests.
-registered:{[] key bounded_workers}
+.qetl.job.bounded.state.registered:{[] key .qetl.job.bounded.state.bounded_workers}
 
 / Check that a registered worker implements the whole contract, and throw
 / naming everything missing if it does not.
@@ -71,15 +71,15 @@ registered:{[] key bounded_workers}
 / @throws error if the worker is unregistered, its namespace is absent, or
 /   any contract method or global is missing
 / @eg .qetl.job.bounded.state.require_contract[`demo_deals_backfill]
-require_contract:{[worker]
-    if[not worker in key bounded_workers;
+.qetl.job.bounded.state.require_contract:{[worker]
+    if[not worker in key .qetl.job.bounded.state.bounded_workers;
         '"require_contract: ",string[worker]," is not registered - call .qetl.job.bounded.state.register first"];
-    ns:bounded_workers worker;
-    names:ns_names[ns];
+    ns:.qetl.job.bounded.state.bounded_workers worker;
+    names:.qetl.job.bounded.state.ns_names[ns];
     if[0=count names;
         '"require_contract: ",string[worker],"'s namespace ",string[ns]," is empty or absent"];
-    missing_methods:bounded_worker_methods where not bounded_worker_methods in names;
-    missing_globals:bounded_worker_globals where not bounded_worker_globals in names;
+    missing_methods:.qetl.job.bounded.state.bounded_worker_methods where not .qetl.job.bounded.state.bounded_worker_methods in names;
+    missing_globals:.qetl.job.bounded.state.bounded_worker_globals where not .qetl.job.bounded.state.bounded_worker_globals in names;
     if[count missing_methods,missing_globals;
         '"require_contract: ",string[worker]," is incomplete",
          $[count missing_methods; " - missing method(s): ",", " sv string missing_methods; ""],
@@ -94,9 +94,9 @@ require_contract:{[worker]
 / tree's own init.q, so there is nothing to guard against - the try-with-
 / fallback this used to carry existed because status_dir lived in scripts/
 / and might not have been loaded (#229).
-lock_dir:{[] .qetl.status.status_dir[]}
+.qetl.job.bounded.state.lock_dir:{[] .qetl.status.status_dir[]}
 
-lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
+.qetl.job.bounded.state.lock_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".lock"}
 
 / A path as ONE shell word, whatever it holds. Unquoted, a lock beside an HDB
 / root under "runtime with space" - the directory uqs's own migration tests
@@ -105,17 +105,17 @@ lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 / @param path a filesystem path
 / @return it single-quoted for sh, any single quote in it escaped
 / @eg .qetl.job.bounded.state.shell_word "/a b/c.lock"  ->  "'/a b/c.lock'"
-shell_word:{[path] "'",ssr[path;"'";"'\\''"],"'"}
+.qetl.job.bounded.state.shell_word:{[path] "'",ssr[path;"'";"'\\''"],"'"}
 
 / Private: create one lock directory, atomically - 0 when this call made it,
 / 1 when it exists already (or cannot be made). mkdir on an existing
 / directory returns non-zero: that IS the test.
 / @private
-try_mkdir:{[path] @[{system"mkdir ",shell_word[x]," 2>/dev/null"; 0};path;{[e] 1}]}
+.qetl.job.bounded.state.try_mkdir:{[path] @[{system"mkdir ",.qetl.job.bounded.state.shell_word[x]," 2>/dev/null"; 0};path;{[e] 1}]}
 
 / Private: remove a lock directory and everything in it.
 / @private
-rm_lock:{[path] system"rm -rf ",shell_word[path]}
+.qetl.job.bounded.state.rm_lock:{[path] system"rm -rf ",.qetl.job.bounded.state.shell_word[path]}
 
 / ------------------------------------------------- LOCK OWNERSHIP
 / .
@@ -132,7 +132,7 @@ rm_lock:{[path] system"rm -rf ",shell_word[path]}
 / @param path the lock directory
 / @return the path of the owner file inside it
 / @eg .qetl.job.bounded.state.owner_file["/tmp/x.lock"]  ->  "/tmp/x.lock/owner"
-owner_file:{[path] path,"/owner"}
+.qetl.job.bounded.state.owner_file:{[path] path,"/owner"}
 
 / Record who holds a lock.
 / .
@@ -143,7 +143,7 @@ owner_file:{[path] path,"/owner"}
 / @param path the lock directory
 / @return the owner file's path
 / @eg .qetl.job.bounded.state.write_owner["/tmp/x.lock"]
-write_owner:{[path] write_owner_as[path;.z.i]}
+.qetl.job.bounded.state.write_owner:{[path] .qetl.job.bounded.state.write_owner_as[path;.z.i]}
 
 / write_owner, naming another process on this host as the holder: for a lock
 / taken on behalf of a process that is not q - uqs data migrate holds an HDB
@@ -154,9 +154,9 @@ write_owner:{[path] write_owner_as[path;.z.i]}
 / @param pid the holder's process id on this host
 / @return the owner file's path
 / @eg .qetl.job.bounded.state.write_owner_as["/tmp/x.lock";.z.i]
-write_owner_as:{[path;pid]
-    (hsym `$owner_file[path]) 0: enlist .j.j `pid`started`host!("j"$pid;.z.p;string .z.h);
-    owner_file[path]}
+.qetl.job.bounded.state.write_owner_as:{[path;pid]
+    (hsym `$.qetl.job.bounded.state.owner_file[path]) 0: enlist .j.j `pid`started`host!("j"$pid;.z.p;string .z.h);
+    .qetl.job.bounded.state.owner_file[path]}
 
 / The holder recorded inside a lock, or () when there is none to read.
 / .
@@ -167,7 +167,7 @@ write_owner_as:{[path;pid]
 / @param path the lock directory
 / @return the parsed owner dictionary, or ()
 / @eg .qetl.job.bounded.state.read_owner["/tmp/nonexistent.lock"]  ->  ()
-read_owner:{[path] @[{.j.k first read0 hsym `$x};owner_file[path];{[e] ()}]}
+.qetl.job.bounded.state.read_owner:{[path] @[{.j.k first read0 hsym `$x};.qetl.job.bounded.state.owner_file[path];{[e] ()}]}
 
 / Is a process with this id running on this host?
 / .
@@ -182,7 +182,7 @@ read_owner:{[path] @[{.j.k first read0 hsym `$x};owner_file[path];{[e] ()}]}
 / @param pid the process id
 / @return 1b when a process with that id exists here
 / @eg .qetl.job.bounded.state.pid_alive .z.i  ->  1b
-pid_alive:{[pid]
+.qetl.job.bounded.state.pid_alive:{[pid]
     out:@[system;"ps -p ",string["j"$pid]," > /dev/null 2>&1; echo $?";{[e] ""}];
     $[0=count out; 1b; "0"=first first out]}
 
@@ -202,12 +202,12 @@ pid_alive:{[pid]
 / @param path the lock directory
 / @return 1b when the recorded holder is gone from this host
 / @eg .qetl.job.bounded.state.lock_is_stale["/tmp/nonexistent.lock"]  ->  0b
-lock_is_stale:{[path]
-    o:read_owner[path];
+.qetl.job.bounded.state.lock_is_stale:{[path]
+    o:.qetl.job.bounded.state.read_owner[path];
     $[()~o;                          0b;
       not all `pid`host in key o;    0b;
       not lower[o`host]~lower string .z.h; 0b;
-      not pid_alive o`pid]}
+      not .qetl.job.bounded.state.pid_alive o`pid]}
 
 / Break a stale lock, if it is still stale - without ever removing a live one.
 / .
@@ -224,15 +224,15 @@ lock_is_stale:{[path]
 / @param path the lock directory
 / @return 1b when this call removed the lock
 / @eg .qetl.job.bounded.state.break_stale "/tmp/nonexistent.lock"  ->  0b
-break_stale:{[path]
+.qetl.job.bounded.state.break_stale:{[path]
     b:path,".break";
-    if[0<>try_mkdir[b];
-        if[lock_is_stale[b]; rm_lock[b]];
+    if[0<>.qetl.job.bounded.state.try_mkdir[b];
+        if[.qetl.job.bounded.state.lock_is_stale[b]; .qetl.job.bounded.state.rm_lock[b]];
         :0b];
-    write_owner[b];
-    broke:lock_is_stale[path];
-    if[broke; rm_lock[path]];
-    rm_lock[b];
+    .qetl.job.bounded.state.write_owner[b];
+    broke:.qetl.job.bounded.state.lock_is_stale[path];
+    if[broke; .qetl.job.bounded.state.rm_lock[path]];
+    .qetl.job.bounded.state.rm_lock[b];
     broke}
 
 / How a refusal or a timeout describes the holder it found.
@@ -245,8 +245,8 @@ break_stale:{[path]
 / @param path the lock directory
 / @return a phrase naming the holder, for an error message
 / @eg .qetl.job.bounded.state.owner_desc["/tmp/nonexistent.lock"]  ->  "an unrecorded holder (no owner file - it is mid-acquire)"
-owner_desc:{[path]
-    o:read_owner[path];
+.qetl.job.bounded.state.owner_desc:{[path]
+    o:.qetl.job.bounded.state.read_owner[path];
     if[()~o; :"an unrecorded holder (no owner file - it is mid-acquire)"];
     "pid ",string["j"$o`pid],
         $[`host in key o; " on ",o`host; ""],
@@ -269,49 +269,49 @@ owner_desc:{[path]
 / @return the lock path
 / @throws error if another instance already holds the lock
 / @eg .qetl.job.bounded.state.acquire_lock[`markout_backfill]
-acquire_lock:{[worker]
-    dir:lock_dir[];
-    system"mkdir -p ",shell_word[dir];
-    path:lock_path[worker];
-    rc:try_mkdir[path];
+.qetl.job.bounded.state.acquire_lock:{[worker]
+    dir:.qetl.job.bounded.state.lock_dir[];
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word[dir];
+    path:.qetl.job.bounded.state.lock_path[worker];
+    rc:.qetl.job.bounded.state.try_mkdir[path];
     / A lock whose recorded holder is gone from this host is BROKEN AND
     / RETAKEN rather than reported (#490). Nothing releases a lock when a
     / process ends - this tree has no .z.exit handler - so without this a
     / clean exit, a kill and a throw each left one behind, and the next run
     / of that worker refused against a pid that had not existed for hours.
     if[rc<>0;
-        if[lock_is_stale[path];
+        if[.qetl.job.bounded.state.lock_is_stale[path];
             .[{.qetl.log.info[x;y;z]};
                 (worker;"breaking a stale lock - its holder is gone";
-                 `path`holder!(path;owner_desc[path]));::];
-            break_stale[path];
+                 `path`holder!(path;.qetl.job.bounded.state.owner_desc[path]));::];
+            .qetl.job.bounded.state.break_stale[path];
             / Retake it through the same atomic mkdir. Losing THIS race means
             / another process got in first, and the refusal below - now
             / describing that live holder - is the right answer.
-            rc:try_mkdir[path]]];
+            rc:.qetl.job.bounded.state.try_mkdir[path]]];
     if[rc<>0;
         '"acquire_lock: ",string[worker]," is already running (lock held at ",path,
-         " by ",(owner_desc[path]),
+         " by ",(.qetl.job.bounded.state.owner_desc[path]),
          ") - refusing to start a second instance, because two instances would ",
          "both advance the same private checkpoint"];
     / Record who holds it, so the next process can tell a live lock from one
     / this process left behind. READ BACK by lock_is_stale above; it was
     / write-only until #490.
-    write_owner[path];
+    .qetl.job.bounded.state.write_owner[path];
     .[{.qetl.log.dbg[x;y;z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
     path}
 
 / Release the lock. Safe to call when not held, so it can sit in a cleanup
 / path that also runs on the failure branch.
-release_lock:{[worker]
-    path:lock_path[worker];
-    rm_lock[path];
+.qetl.job.bounded.state.release_lock:{[worker]
+    path:.qetl.job.bounded.state.lock_path[worker];
+    .qetl.job.bounded.state.rm_lock[path];
     .[{.qetl.log.dbg[x;y;z]};(worker;"lock released";enlist[`path]!enlist path);::];
     path}
 
 / Is the lock currently held? For diagnostics and tests, not for gating -
 / gating on this would reintroduce the race acquire_lock avoids.
-lock_held:{[worker] not () ~ @[{key hsym `$x};lock_path[worker];{()}]}
+.qetl.job.bounded.state.lock_held:{[worker] not () ~ @[{key hsym `$x};.qetl.job.bounded.state.lock_path[worker];{()}]}
 
 / ------------------------------------------------------------ LEDGER LOCK
 
@@ -320,13 +320,13 @@ lock_held:{[worker] not () ~ @[{key hsym `$x};lock_path[worker];{()}]}
 / Bounded rather than indefinite: a lock left behind by a process that died
 / mid-write would otherwise wedge every worker on the host forever, and a
 / loud failure after five seconds beats a silent hang.
-file_lock_wait:0D00:00:05
+.qetl.job.bounded.state.file_lock_wait:0D00:00:05
 
 / Where a named ledger's mutex lives.
 / @param name the ledger's name, e.g. `etl_coverage
 / @return the lock directory path
 / @eg .qetl.job.bounded.state.file_lock_path `etl_coverage
-file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
+.qetl.job.bounded.state.file_lock_path:{[name] (.qetl.job.bounded.state.lock_dir[]),"/",string[name],".lock"}
 
 / Run `f . args` holding a named ledger's mutex, releasing it however f ends.
 / .
@@ -357,9 +357,9 @@ file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
 / @return whatever f returns
 / @throws error when the lock cannot be taken within file_lock_wait
 / @eg .qetl.job.bounded.state.with_file_lock[`etl_coverage;{[n] n};enlist 1]
-with_file_lock:{[name;f;args]
-    system"mkdir -p ",shell_word[lock_dir[]];
-    with_lock_at[file_lock_path[name];file_lock_wait;f;args]}
+.qetl.job.bounded.state.with_file_lock:{[name;f;args]
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
+    .qetl.job.bounded.state.with_lock_at[.qetl.job.bounded.state.file_lock_path[name];.qetl.job.bounded.state.file_lock_wait;f;args]}
 
 / Take the lock at path for a holder, waiting up to wait while a live one
 / has it and breaking a dead one at once: with_lock_at's acquisition on its
@@ -375,25 +375,25 @@ with_file_lock:{[name;f;args]
 / @return path
 / @throws error when the lock cannot be taken within wait
 / @eg .qetl.job.bounded.state.release_lock_at[;.z.i] .qetl.job.bounded.state.take_lock_at["/tmp/uqf_eg_take.lock";0D00:00:01;.z.i]  ->  1b
-take_lock_at:{[path;wait;pid]
+.qetl.job.bounded.state.take_lock_at:{[path;wait;pid]
     deadline:.z.p+wait;
-    while[0<>try_mkdir[path];
+    while[0<>.qetl.job.bounded.state.try_mkdir[path];
         / Same staleness rule acquire_lock uses, and it matters MORE here.
         / This mutex is SHARED, so one process dying mid-write used to wedge
         / the ledger for every worker on the host - five seconds at a time,
         / forever - with an error that named the case it could not handle.
         / Breaking it here turns that into a pause and a log line.
-        stale:lock_is_stale[path];
-        if[stale; break_stale[path]];
+        stale:.qetl.job.bounded.state.lock_is_stale[path];
+        if[stale; .qetl.job.bounded.state.break_stale[path]];
         if[not stale;
             if[.z.p>deadline;
                 '"with_file_lock: could not take the lock at ",path," within ",
-                 string[wait]," - held by ",(owner_desc[path]),
+                 string[wait]," - held by ",(.qetl.job.bounded.state.owner_desc[path]),
                  ", which is still running"];
             system"sleep 0.01"]];
     / Record the holder, so a lock left by a dead process can be broken by
     / the next process to want it rather than waited on.
-    write_owner_as[path;pid];
+    .qetl.job.bounded.state.write_owner_as[path;pid];
     path}
 
 / Give up a lock take_lock_at took for pid - and only that one. A lock
@@ -404,15 +404,15 @@ take_lock_at:{[path;wait;pid]
 / @return 1b when this call removed it, 0b when it was already gone
 / @throws error when the lock is held by another process or host
 / @eg .qetl.job.bounded.state.release_lock_at["/tmp/uqf_eg_nonexistent.lock";.z.i]  ->  0b
-release_lock_at:{[path;pid]
+.qetl.job.bounded.state.release_lock_at:{[path;pid]
     if[()~key hsym `$path; :0b];
-    o:read_owner[path];
+    o:.qetl.job.bounded.state.read_owner[path];
     mine:$[()~o; 0b; not all `pid`host in key o; 0b;
         (("j"$o`pid)=pid) and lower[o`host]~lower string .z.h];
     if[not mine;
-        '"release_lock_at: the lock at ",path," is held by ",(owner_desc[path]),
+        '"release_lock_at: the lock at ",path," is held by ",(.qetl.job.bounded.state.owner_desc[path]),
          ", not pid ",string["j"$pid]," on ",string[.z.h]," - left in place"];
-    rm_lock[path];
+    .qetl.job.bounded.state.rm_lock[path];
     1b}
 
 / with_file_lock's critical section, at any lock path and with any wait: for
@@ -427,10 +427,10 @@ release_lock_at:{[path;pid]
 / @return whatever f returns
 / @throws error when the lock cannot be taken within wait
 / @eg .qetl.job.bounded.state.with_lock_at["/tmp/uqf_eg.lock";0D00:00:01;{[n] n};enlist 1]  ->  1
-with_lock_at:{[path;wait;f;args]
-    take_lock_at[path;wait;.z.i];
+.qetl.job.bounded.state.with_lock_at:{[path;wait;f;args]
+    .qetl.job.bounded.state.take_lock_at[path;wait;.z.i];
     r:@[{[fa] (1b; (fa 0) . fa 1)};(f;args);{[e] (0b;e)}];
-    rm_lock[path];
+    .qetl.job.bounded.state.rm_lock[path];
     if[not first r; 'last r];
     last r}
 
@@ -443,7 +443,7 @@ with_lock_at:{[path;wait;f;args]
 / @return 1b
 / @throws error naming each column whose type differs, with both types
 / @eg .qetl.job.bounded.state.require_types[`t;([] a:enlist 1);([] a:`long$())]  ->  1b
-require_types:{[name;got;want]
+.qetl.job.bounded.state.require_types:{[name;got;want]
     w:exec c!t from 0!meta want;
     g:exec c!t from 0!meta got;
     c:(key w) where (key w) in key g;
@@ -470,7 +470,7 @@ require_types:{[name;got;want]
 / @param v the value to write
 / @return path
 / @eg .qetl.job.bounded.state.durable_set["/tmp/durable_eg";([] a:1 2)]
-durable_set:{[path;v] durable_replace[path;{[v;tmp] (hsym `$tmp) set v}[v]]}
+.qetl.job.bounded.state.durable_set:{[path;v] .qetl.job.bounded.state.durable_replace[path;{[v;tmp] (hsym `$tmp) set v}[v]]}
 
 / durable_set for a text file: `lines` written with 0:, through the same
 / rename. For state kept as JSON - cursors, checkpoints - so a crash mid-write
@@ -479,13 +479,13 @@ durable_set:{[path;v] durable_replace[path;{[v;tmp] (hsym `$tmp) set v}[v]]}
 / @param lines the file's lines, a list of strings
 / @return path
 / @eg .qetl.job.bounded.state.durable_lines["/tmp/durable_lines_eg";enlist "{}"]
-durable_lines:{[path;lines] durable_replace[path;{[lines;tmp] (hsym `$tmp) 0: lines}[lines]]}
+.qetl.job.bounded.state.durable_lines:{[path;lines] .qetl.job.bounded.state.durable_replace[path;{[lines;tmp] (hsym `$tmp) 0: lines}[lines]]}
 
 / Private: write through `write[tmp]` beside `path`, keep the current file as
 / `<path>.bak`, then rename the new one into place - durable_set's protocol,
 / whatever the file format.
 / @private
-durable_replace:{[path;write]
+.qetl.job.bounded.state.durable_replace:{[path;write]
     tmp:path,".tmp";
     write tmp;
     if[not ()~key hsym `$path; system"ln -f ",path," ",path,".bak"];
@@ -500,7 +500,7 @@ durable_replace:{[path;write]
 / @param path the file, as a string
 / @return path
 / @eg .qetl.job.bounded.state.durable_remove "/tmp/durable_remove_eg"
-durable_remove:{[path] system"rm -f ",path," ",path,".bak ",path,".tmp"; path}
+.qetl.job.bounded.state.durable_remove:{[path] system"rm -f ",path," ",path,".bak ",path,".tmp"; path}
 
 / Read a file durable_set wrote, falling back to the previous generation.
 / .
@@ -513,7 +513,7 @@ durable_remove:{[path] system"rm -f ",path," ",path,".bak ",path,".tmp"; path}
 / @return the value
 / @throws error when neither the file nor its .bak can be read
 / @eg .qetl.job.bounded.state.durable_get "/tmp/durable_eg"
-durable_get:{[path] durable_read["durable_get";path;{get hsym `$x}]}
+.qetl.job.bounded.state.durable_get:{[path] .qetl.job.bounded.state.durable_read["durable_get";path;{get hsym `$x}]}
 
 / durable_get for any format: `reader[path]` reads one generation, and throws
 / when it cannot - a reader that returns a default instead hides exactly the
@@ -527,7 +527,7 @@ durable_get:{[path] durable_read["durable_get";path;{get hsym `$x}]}
 / @return the value, from `path` or else from `<path>.bak`
 / @throws error naming both when neither the file nor its .bak can be read
 / @eg .qetl.job.bounded.state.durable_read["eg";"/tmp/durable_eg";{get hsym `$x}]
-durable_read:{[who;path;reader]
+.qetl.job.bounded.state.durable_read:{[who;path;reader]
     r:@[{(1b;x y)}[reader];path;{(0b;x)}];
     if[first r; :last r];
     bak:path,".bak";
@@ -543,7 +543,7 @@ durable_read:{[who;path;reader]
 / durable_read reader: the old readers returned ()!() here, which every
 / caller then read as "nothing saved".
 / @private
-read_json_dict:{[path]
+.qetl.job.bounded.state.read_json_dict:{[path]
     raw:raze read0 hsym `$path;
     if[0=count raw; '"empty file"];
     d:.j.k raw;
@@ -558,7 +558,7 @@ read_json_dict:{[path]
 / exactly one channel, the append-only etl_coverage ledger, and
 / conflating the two is how a dataset gets declared complete because some
 / unrelated worker happened to get far enough.
-checkpoint_path:{[worker] (lock_dir[]),"/",string[worker],".checkpoint"}
+.qetl.job.bounded.state.checkpoint_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".checkpoint"}
 
 / Save a cursor together with the FULL run specification that produced it
 /.
@@ -572,13 +572,13 @@ checkpoint_path:{[worker] (lock_dir[]),"/",string[worker],".checkpoint"}
 / @param spec the run specification - source_version, range_from, range_to
 / @param cursor how far the run has got
 / @return the path written
-save_checkpoint:{[worker;spec;cursor]
-    dir:lock_dir[];
+.qetl.job.bounded.state.save_checkpoint:{[worker;spec;cursor]
+    dir:.qetl.job.bounded.state.lock_dir[];
     system"mkdir -p ",dir;
-    path:checkpoint_path[worker];
+    path:.qetl.job.bounded.state.checkpoint_path[worker];
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);
-    durable_lines[path;enlist .j.j payload];
+    .qetl.job.bounded.state.durable_lines[path;enlist .j.j payload];
     .[{.qetl.log.dbg[x;y;z]};(worker;"checkpoint saved";enlist[`cursor]!enlist cursor);::];
     path}
 
@@ -593,8 +593,8 @@ save_checkpoint:{[worker;spec;cursor]
 / @param worker the worker's name
 / @param spec the CURRENT run specification
 / @return the cursor to resume from, or 0Np to start from range_from
-load_checkpoint:{[worker;spec]
-    path:checkpoint_path[worker];
+.qetl.job.bounded.state.load_checkpoint:{[worker;spec]
+    path:.qetl.job.bounded.state.checkpoint_path[worker];
     if[()~key hsym `$path;
         .[{.qetl.log.dbg[x;y;z]};(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
         :0Np];
@@ -602,7 +602,7 @@ load_checkpoint:{[worker;spec]
     / previous generation - an earlier cursor of the same run, so a window is
     / redone rather than skipped - and is refused when that fails too, naming
     / how to start over, rather than quietly restarting from the beginning.
-    saved:@[durable_read["load_checkpoint";path;];read_json_dict;
+    saved:@[.qetl.job.bounded.state.durable_read["load_checkpoint";path;];.qetl.job.bounded.state.read_json_dict;
         {[w;e] 'e," - `uqs remove checkpoint ",string[w],"` starts the run over"}[worker]];
     / Compare PARSED values, not strings. .j.j writes a timestamp as ISO
     / ("2026-09-13T00:00:00.000000000") while `string` on a q timestamp
@@ -626,7 +626,7 @@ load_checkpoint:{[worker;spec]
     cursor}
 
 / Remove a worker's checkpoint, for a deliberate restart from the beginning.
-clear_checkpoint:{[worker] durable_remove checkpoint_path worker}
+.qetl.job.bounded.state.clear_checkpoint:{[worker] .qetl.job.bounded.state.durable_remove .qetl.job.bounded.state.checkpoint_path worker}
 
 / ------------------------------------------------------------------- SHELL
 
@@ -649,7 +649,7 @@ clear_checkpoint:{[worker] durable_remove checkpoint_path worker}
 /   in the pass did
 / @param err the caught error string
 / @return the status file path written
-fail:{[worker;spec;progress;err]
+.qetl.job.bounded.state.fail:{[worker;spec;progress;err]
     .qetl.status.write_status[worker;worker;`failed;spec;progress;err]}
 
 / Run a worker's pass under the shell contract: trap, convert, release.
@@ -664,11 +664,11 @@ fail:{[worker;spec;progress;err]
 /   progress dict
 / @return the progress dict on success; on failure, writes a failed status
 /   and rethrows so the caller's own exit path still runs
-run_pass:{[worker;spec;pass]
+.qetl.job.bounded.state.run_pass:{[worker;spec;pass]
     outcome:@[{(`ok;x[])};pass;{(`err;x)}];
     if[`err~first outcome;
-        fail[worker;spec;`cursor`rows_published`windows_completed!(0Np;0;0);last outcome];
-        release_lock[worker];
+        .qetl.job.bounded.state.fail[worker;spec;`cursor`rows_published`windows_completed!(0Np;0;0);last outcome];
+        .qetl.job.bounded.state.release_lock[worker];
         '"run_pass: ",string[worker]," failed: ",last outcome];
     last outcome}
 

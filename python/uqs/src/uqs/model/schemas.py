@@ -33,7 +33,7 @@ TABLES_Q = repo_root() / TABLES_FILE
 #: `name:([]...)` at the start of a line, to the end of that line. Comments in
 #: the q file start with `/` and never begin a definition, so a line-anchored
 #: match cannot pick one up.
-_DEFINITION = re.compile(r"^([a-z_][a-z0-9_]*):\(\[\].*$", re.MULTILINE)
+_DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\].*$", re.MULTILINE)
 
 #: The same, also as `uqs deploy build --q-target 4.0` leaves it (#861): the
 #: converter qualifies every name under the file's `\d .qetl.plant`, so a

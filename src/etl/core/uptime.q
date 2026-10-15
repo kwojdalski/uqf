@@ -29,63 +29,63 @@
 / same durable write under its own lock, so `uqs gaps` reads it after the
 / process is gone - which is exactly when it is needed.
 
-\d .qetl.uptime
+\d .
 
 / Seconds between beats. Also the most a session can under-claim at its end.
-period:0D00:01:00
+.qetl.uptime.period:0D00:01:00
 
 / The sessions THIS process opened, which are the only ones it beats.
-mine:0#0Ng
+.qetl.uptime.mine:0#0Ng
 
 / Create the root table if it is absent, and return its name.
 / Backtick form: inside \d .qetl.uptime a bare name resolves to this namespace.
-init_table:{[]
+.qetl.uptime.init_table:{[]
     if[not `etl_stream_uptime in tables `.;
         `etl_stream_uptime set ([] session:0#0Ng; job:`symbol$(); process:`symbol$();
             host:`symbol$(); pid:`int$(); started_at:`timestamp$(); last_seen:`timestamp$())];
     `etl_stream_uptime}
 
 / The root table.
-sessions:{[] init_table[]; value `etl_stream_uptime}
+.qetl.uptime.sessions:{[] .qetl.uptime.init_table[]; value `etl_stream_uptime}
 
 / Private: where the table is kept.
 / @private
-path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_stream_uptime"}
+.qetl.uptime.path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_stream_uptime"}
 
 / Private: replace the in-memory table with what is on disk, if anything is.
 / @private
-reload:{[]
-    init_table[];
-    p:path[];
+.qetl.uptime.reload:{[]
+    .qetl.uptime.init_table[];
+    p:.qetl.uptime.path[];
     if[not ()~key hsym `$p; `etl_stream_uptime set .qetl.job.bounded.state.durable_get p];
     `etl_stream_uptime}
 
 / Private: read, change and write back under this table's own lock, so two
 / processes beating at once cannot each write over the other's row.
 / @private
-update_shared:{[f;args]
+.qetl.uptime.update_shared:{[f;args]
     .qetl.job.bounded.state.with_file_lock[`etl_stream_uptime;
-        {[f;args] reload[]; r:f . args; .qetl.job.bounded.state.durable_set[path[];sessions[]]; r};
+        {[f;args] .qetl.uptime.reload[]; r:f . args; .qetl.job.bounded.state.durable_set[.qetl.uptime.path[];.qetl.uptime.sessions[]]; r};
         (f;args)]}
 
 / Open a session for `job`: it is now up and subscribed.
 / @param job the streaming job's name
 / @return the session id
-begin:{[job]
+.qetl.uptime.begin:{[job]
     system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
     / mint, not `first 1?0Ng`: that is the same guid in every fresh process (run.q)
     id:.qetl.run.mint[];
     now:.z.p;
-    update_shared[{[id;job;now]
+    .qetl.uptime.update_shared[{[id;job;now]
         `etl_stream_uptime insert (id;job;.qetl.run.proc_name[];.z.h;.z.i;now;now)};
         (id;job;now)];
-    `.qetl.uptime.mine set mine,id;
+    `.qetl.uptime.mine set .qetl.uptime.mine,id;
     / failures before the session opened (a replay's) are not this session's
-    `.qetl.uptime.failed_seen set failed_seen,enlist[job]!enlist .qetl.stream_health.of[job]`failed;
+    `.qetl.uptime.failed_seen set .qetl.uptime.failed_seen,enlist[job]!enlist .qetl.stream_health.of[job]`failed;
     id}
 
 / Each job's failed-batch count at the last beat, to tell what failed since.
-failed_seen:(`symbol$())!`long$()
+.qetl.uptime.failed_seen:(`symbol$())!`long$()
 
 / Move last_seen to now for every session this process opened - except one
 / whose job had a batch fail since the last beat (.qetl.stream_health, #832).
@@ -95,26 +95,26 @@ failed_seen:(`symbol$())!`long$()
 / than left behind, so a job that keeps failing keeps one empty row, not one
 / per beat. Each job's stream_health file is written on the way.
 / @return the number of sessions beaten
-beat:{[]
-    if[0=count mine; :0];
+.qetl.uptime.beat:{[]
+    if[0=count .qetl.uptime.mine; :0];
     now:.z.p;
-    jobs:(exec session!job from sessions[]) mine;
+    jobs:(exec session!job from .qetl.uptime.sessions[]) .qetl.uptime.mine;
     failed:{.qetl.stream_health.of[x]`failed} each jobs;
-    broken:failed>0^failed_seen jobs;
-    `.qetl.uptime.failed_seen set failed_seen,jobs!failed;
-    renew:mine where broken;
+    broken:failed>0^.qetl.uptime.failed_seen jobs;
+    `.qetl.uptime.failed_seen set .qetl.uptime.failed_seen,jobs!failed;
+    renew:.qetl.uptime.mine where broken;
     fresh:.qetl.run.mint each til count renew;
-    update_shared[{[keep;renew;fresh;now]
+    .qetl.uptime.update_shared[{[keep;renew;fresh;now]
         update last_seen:now from `etl_stream_uptime where session in keep;
-        ended:select from sessions[] where session in renew;
+        ended:select from .qetl.uptime.sessions[] where session in renew;
         delete from `etl_stream_uptime where session in renew, last_seen=started_at;
         `etl_stream_uptime insert update session:(renew!fresh) session, started_at:now, last_seen:now from ended};
-        (mine except renew;renew;fresh;now)];
-    `.qetl.uptime.mine set (mine except renew),fresh;
+        (.qetl.uptime.mine except renew;renew;fresh;now)];
+    `.qetl.uptime.mine set (.qetl.uptime.mine except renew),fresh;
     {[job;failing] .[.qetl.stream_health.write;(job;failing);{[job;e]
         .qetl.log.warn[job;"could not write its stream_health file";enlist[`error]!enlist e];}[job]]}'[
         distinct jobs;(distinct jobs) in jobs where broken];
-    count mine}
+    count .qetl.uptime.mine}
 
 / Where, in [range_from; range_to), was `job` not up and subscribed?
 / .
@@ -127,9 +127,9 @@ beat:{[]
 / @param range_to end of the range, exclusive
 / @return a table of range_from/range_to; empty when the job was up throughout
 / @eg .qetl.uptime.gaps[`nothing_streams_this;2026.09.13D00:00;2026.09.14D00:00]  ->  ([] range_from:enlist 2026.09.13D00:00; range_to:enlist 2026.09.14D00:00)
-gaps:{[job;range_from;range_to]
+.qetl.uptime.gaps:{[job;range_from;range_to]
     j:job;
-    up:select range_from:started_at, range_to:last_seen from sessions[]
+    up:select range_from:started_at, range_to:last_seen from .qetl.uptime.sessions[]
         where job=j, last_seen>started_at;
     .qetl.coverage.gaps[range_from;range_to;up]}
 
@@ -140,7 +140,7 @@ gaps:{[job;range_from;range_to]
 / @param job the streaming job's name
 / @return the worker names, a symbol list
 / @eg .qetl.uptime.twins `demo_markout  ->  ,`hdb_demo_markouts_backfill
-twins:{[job]
+.qetl.uptime.twins:{[job]
     out:(),(.qetl.job.stream.def job)`publishes;
     workers:.qetl.job.bounded.defined[];
     workers where {[out;w] ((.qetl.job.bounded.def w)`dataset) in out}[out] each workers}
@@ -148,6 +148,6 @@ twins:{[job]
 / Load what earlier processes recorded. Called by a reader that starts cold
 / (uqs gaps), and harmless to call twice.
 / @return the table name
-attach:{[] reload[]}
+.qetl.uptime.attach:{[] .qetl.uptime.reload[]}
 
 \d .

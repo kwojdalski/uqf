@@ -53,11 +53,11 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qpipe.job.kafka_flow
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qetl.job.stream.unwired `kafka_flow;
+.qpipe.job.kafka_flow.publish:.qetl.job.stream.unwired `kafka_flow;
 
 / ------------------------------------------------------------- THE STATE
 
@@ -66,11 +66,11 @@ publish:.qetl.job.stream.unwired `kafka_flow;
 / Unlike a per-symbol cache this cannot grow without bound: a topic has a
 / fixed partition count, so this dict is as big as the topic is wide and
 / never bigger. There is nothing to evict.
-high_water:(`long$())!`long$();
+.qpipe.job.kafka_flow.high_water:(`long$())!`long$();
 
 / Raw rows held during a replay, judged by on_replayed once the marks are
 / complete.
-held:.qetl.plant.published `kafka_client_flow
+.qpipe.job.kafka_flow.held:.qetl.plant.published `kafka_client_flow
 
 / ------------------------------------------------------------- THE DEDUPE
 
@@ -85,7 +85,7 @@ held:.qetl.plant.published `kafka_client_flow
 / @param rows a batch, carrying `partition` and `offset`
 / @return the rows whose offset is above their partition's mark
 / @private
-above_high_water:{[rows]
+.qpipe.job.kafka_flow.above_high_water:{[rows]
     rows where rows[`offset] > .qpipe.job.kafka_flow.high_water rows`partition}
 
 / Private: one row per (partition;offset) in the batch, the first kept.
@@ -99,7 +99,7 @@ above_high_water:{[rows]
 / @param rows a batch, carrying `partition` and `offset`
 / @return the rows, with any repeated (partition;offset) reduced to its first
 / @private
-first_per_coordinate:{[rows]
+.qpipe.job.kafka_flow.first_per_coordinate:{[rows]
     rows asc value {first each group flip (x`partition;x`offset)}[rows]}
 
 / Private: raise each partition's mark to the highest offset in the batch.
@@ -111,7 +111,7 @@ first_per_coordinate:{[rows]
 / @param rows the batch about to be published
 / @return nothing - it updates `high_water` in place
 / @private
-advance:{[rows]
+.qpipe.job.kafka_flow.advance:{[rows]
     m:exec max offset by partition from rows;
     hw:.qpipe.job.kafka_flow.high_water;
     `.qpipe.job.kafka_flow.high_water set hw,(key m)!(hw key m)|value m;
@@ -133,7 +133,7 @@ advance:{[rows]
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.kafka_flow.on_batch:{[t;x]
     if[0=count x; :()];
     if[t=`client_flow; :.qpipe.job.kafka_flow.advance[x]];
     if[not t=`kafka_client_flow; :()];
@@ -150,7 +150,7 @@ on_batch:{[t;x]
 / threw left them raised over rows that never went out, so a redelivery
 / was dropped as already seen.
 / @private
-publish_fresh:{[rows]
+.qpipe.job.kafka_flow.publish_fresh:{[rows]
     fresh:.qpipe.job.kafka_flow.first_per_coordinate[.qpipe.job.kafka_flow.above_high_water[rows]];
     if[0=count fresh; :0];
     out:select broker_time, sym, side, qty, price, client, trade_id, partition, offset from fresh;
@@ -163,7 +163,7 @@ publish_fresh:{[rows]
 / The marks now hold everything published before the restart, so the held
 / rows above them are exactly the missed ones.
 / @return the number of rows published
-on_replayed:{[]
+.qpipe.job.kafka_flow.on_replayed:{[]
     n:.qpipe.job.kafka_flow.publish_fresh[.qpipe.job.kafka_flow.held];
     `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
     if[n>0; .[{.qetl.log.info[x;y;z]};(`kafka_flow;"published rows that arrived while this job was down";enlist[`rows]!enlist n);::]];

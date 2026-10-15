@@ -4,7 +4,7 @@
 / several files, loaded in order by src/etl/init.q after source_contract.q, which
 / carries the design record. Public names are unchanged by the split (#970).
 
-\d .qetl.source
+\d .
 
 / ------------------------------------------------------------- TRANSPORTS
 / .
@@ -37,11 +37,11 @@
 /   example                a credential of that shape. A source's own
 /                          credential_example declaration wins over it.
 /   query_note             how a source's query reaches it, for the scaffold.
-transport:([name:`symbol$()] open:(); close:(); metadata:(); expects:(); example:(); query_note:())
+.qetl.source.transport:([name:`symbol$()] open:(); close:(); metadata:(); expects:(); example:(); query_note:())
 
 / The fields a transport registers, and their kinds.
-transport_fields:`open`close`metadata`expects`example`query_note
-transport_functions:`open`close`metadata
+.qetl.source.transport_fields:`open`close`metadata`expects`example`query_note
+.qetl.source.transport_functions:`open`close`metadata
 
 / Register a transport, or refuse naming what is wrong.
 / @param name the transport, as a symbol
@@ -49,43 +49,43 @@ transport_functions:`open`close`metadata
 / @return name
 / @throws error naming a missing or unknown field, a non-function operation,
 /   or a non-string description
-register_transport:{[name;decl]
+.qetl.source.register_transport:{[name;decl]
     who:"register_transport: ",string name;
     if[not -11h=type name; '"register_transport: a transport's name is a symbol"];
-    if[not 99h=type decl; 'who,": the declaration must be a dictionary of ",", " sv string transport_fields];
-    missing:transport_fields except key decl;
+    if[not 99h=type decl; 'who,": the declaration must be a dictionary of ",", " sv string .qetl.source.transport_fields];
+    missing:.qetl.source.transport_fields except key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
-    unknown:(key decl) except transport_fields;
+    unknown:(key decl) except .qetl.source.transport_fields;
     if[count unknown; 'who," declares ",(", " sv string unknown),", which a transport does not take"];
-    notfn:transport_functions where not {(type x) within 100 112h} each decl transport_functions;
+    notfn:.qetl.source.transport_functions where not {(type x) within 100 112h} each decl .qetl.source.transport_functions;
     if[count notfn; 'who,": ",(", " sv string notfn)," must be function(s)"];
-    words:transport_fields except transport_functions;
+    words:.qetl.source.transport_fields except .qetl.source.transport_functions;
     notstr:words where not 10h=type each decl words;
     if[count notstr; 'who,": ",(", " sv string notstr)," must be string(s)"];
-    `.qetl.source.transport upsert (name,decl transport_fields);
+    `.qetl.source.transport upsert (name,decl .qetl.source.transport_fields);
     name}
 
 / Every registered transport's name.
 / @return a symbol vector
 / @eg .qetl.source.transports[]  ->  `ipc`odbc`local`mock
-transports:{[] (key transport)`name}
+.qetl.source.transports:{[] (key .qetl.source.transport)`name}
 
 / A transport's row, or a refusal naming it and the ones there are - before
 / anything is opened or dispatched.
 / @param name the transport
 / @return dict of transport_fields
 / @throws error naming an unknown transport
-transport_def:{[name]
-    if[not name in transports[];
-        '"transport ",string[name]," is not registered - the transports are ",", " sv string transports[]];
-    transport name}
+.qetl.source.transport_def:{[name]
+    if[not name in .qetl.source.transports[];
+        '"transport ",string[name]," is not registered - the transports are ",", " sv string .qetl.source.transports[]];
+    .qetl.source.transport name}
 
 / A source's transport row.
 / @param source a registered source
 / @return dict of transport_fields
-for_source:{[source] transport_def (def[source])`transport}
+.qetl.source.for_source:{[source] .qetl.source.transport_def (.qetl.source.def[source])`transport}
 
-register_transport[`ipc;transport_fields!(
+.qetl.source.register_transport[`ipc;.qetl.source.transport_fields!(
     {[cred] hopen (hsym `$":",cred;5000j)};
     {[h] @[hclose;h;::]; (::)};
     {[h;table_name] select c, t from 0!h({0!meta x};table_name)};
@@ -93,7 +93,7 @@ register_transport[`ipc;transport_fields!(
     "localhost:5010";
     "/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).\n/ The bounds are arguments to a functional select evaluated on the remote\n/ side, so no caller value is ever spliced into query text. Send it with\n/ .qetl.source.ipc[h;{[from_ts;to_ts] select ...};range_from;range_to], not\n/ h(...) directly, so `uqs backfill --trace` shows the query.")];
 
-register_transport[`odbc;transport_fields!(
+.qetl.source.register_transport[`odbc;.qetl.source.transport_fields!(
     {[cred] .qetl.io.odbc.open cred};
     {[h] .qetl.io.odbc.close h};
     / The table name is a declaration symbol, as in .qetl.io.odbc.window_query;
@@ -103,7 +103,7 @@ register_transport[`odbc;transport_fields!(
     "DRIVER=<driver>;<driver-specific settings>";
     "/ `h` is an ODBC handle from .qetl.io.odbc.open. Build the SELECT with every\n/ bound through .qetl.io.odbc.literal - never string concatenation of a raw\n/ value - run it with .qetl.io.odbc.run_sql, and return the declared columns\n/ and types (src/etl/sources/duckdb_deals.q's sql_for and adapt).")];
 
-register_transport[`local;transport_fields!(
+.qetl.source.register_transport[`local;.qetl.source.transport_fields!(
     {[cred] .qetl.source.local_root cred};
     {[h] (::)};
     {[h;table_name] .qetl.source.local_meta[h;table_name]};
@@ -115,7 +115,7 @@ register_transport[`local;transport_fields!(
 / query GENERATES the window's rows from it. For exercising a worker - a
 / backfill over any range, its coverage and reactions - with no data stored
 / anywhere. sidecars/mockups/mock_trades.q is one.
-register_transport[`mock;transport_fields!(
+.qetl.source.register_transport[`mock;.qetl.source.transport_fields!(
     {[cred] .qetl.source.mock_seed cred};
     {[h] (::)};
     {[h;table_name] .qetl.source.mock_meta table_name}; / noqa: QF016 transport close signature
@@ -123,7 +123,7 @@ register_transport[`mock;transport_fields!(
     "42";
     "/ `h` is the seed: the credential, opened as a long - there is nothing to\n/ connect to. Generate the window's rows from it and the bounds,\n/ deterministically: the same seed and window must give the same rows\n/ (sidecars/mockups/mock_trades.q).")];
 
-default_transport:`ipc
+.qetl.source.default_transport:`ipc
 
 / The optional declarations, and what a source that omits one stores.
 / credential_example's empty string is what .qetl.source.credential_example
@@ -132,6 +132,6 @@ default_transport:`ipc
 / supporting's empty dict is a source with one input, as every source was
 / before #617 - see SUPPORTING INPUTS below.
 / complete_through's default is a source over CLOSED data: complete forever.
-optional_declarations:`transport`credential_example`supporting`raw`complete_through!(default_transport;"";()!();()!();{[h] 0Wp})
+.qetl.source.optional_declarations:`transport`credential_example`supporting`raw`complete_through!(.qetl.source.default_transport;"";()!();()!();{[h] 0Wp})
 
 \d .

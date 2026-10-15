@@ -43,27 +43,27 @@
 / bad settings should be told about three, not discover them over three
 / restarts.
 
-\d .qetl.cfg
+\d .
 
 / ------------------------------------------------------------- PRECEDENCE
 
 / The sources, most significant first. Named rather than positional so a
 / diagnostic can say WHERE a value came from, which is the question an
 / operator actually asks.
-sources:`env`overrides`yaml`default
+.qetl.cfg.sources:`env`overrides`yaml`default
 / The two layers a caller must tell apart by name: the environment outranks an
 / override, so setting one under the other is no change. Read, not retyped, by
 / the control surface (#1368); `sources` above is where they sit.
-env_layer:sources 0
-override_layer:sources 1
+.qetl.cfg.env_layer:.qetl.cfg.sources 0
+.qetl.cfg.override_layer:.qetl.cfg.sources 1
 
 / Private: per-source lookup tables, populated by `set_layers`. Kept separate
 / rather than merged eagerly so `explain` below can report provenance.
 / @private
-env_values:(`symbol$())!();
-override_values:(`symbol$())!();
-yaml_values:(`symbol$())!();
-default_values:(`symbol$())!();
+.qetl.cfg.env_values:(`symbol$())!();
+.qetl.cfg.override_values:(`symbol$())!();
+.qetl.cfg.yaml_values:(`symbol$())!();
+.qetl.cfg.default_values:(`symbol$())!();
 
 / Register the non-environment layers. Called by a worker's init, typically
 / from whatever parsed the YAML and the overrides CSV - this file does not
@@ -79,31 +79,31 @@ default_values:(`symbol$())!();
 / enclosing script carries on. Fourth reserved-name collision in this
 / repository, after desc, tables and sv; scripts/../python's
 / test_q_programs.py checks new files against the full list.
-set_layers:{[overrides;yaml;defaults]
-    override_values::overrides;
-    yaml_values::yaml;
-    default_values::defaults;
-    sources}
+.qetl.cfg.set_layers:{[overrides;yaml;defaults]
+    .qetl.cfg.override_values::overrides;
+    .qetl.cfg.yaml_values::yaml;
+    .qetl.cfg.default_values::defaults;
+    .qetl.cfg.sources}
 
 / What every config key'"'"'s environment variable starts with. A value, not just
 / inside `env_name`, because the browser tells an operator which variable to
 / unset and reads this prefix from the generated python facts (#1368).
-env_prefix:"UQF_"
+.qetl.cfg.env_prefix:"UQF_"
 
 / Private: the environment variable name for a config key. UQF_BACKFILL_FROM
 / for `backfill_from, so the mapping is mechanical and an operator can guess
 / it without reading this file.
 / @private
-env_name:{[k] env_prefix,upper string k}
+.qetl.cfg.env_name:{[k] .qetl.cfg.env_prefix,upper string k}
 
 / Private: raw string value for a key from one named source, or "" when the
 / source does not carry it.
 / @private
-raw_from:{[source;k]
-    $[source=env_layer;      getenv `$env_name[k];
-      source=override_layer; $[k in key override_values; override_values k; ""];
-      source=`yaml;      $[k in key yaml_values; yaml_values k; ""];
-      source=`default;   $[k in key default_values; default_values k; ""];
+.qetl.cfg.raw_from:{[source;k]
+    $[source=.qetl.cfg.env_layer;      getenv `$.qetl.cfg.env_name[k];
+      source=.qetl.cfg.override_layer; $[k in key .qetl.cfg.override_values; .qetl.cfg.override_values k; ""];
+      source=`yaml;      $[k in key .qetl.cfg.yaml_values; .qetl.cfg.yaml_values k; ""];
+      source=`default;   $[k in key .qetl.cfg.default_values; .qetl.cfg.default_values k; ""];
       ""]}
 
 / Which source supplies a key, and its raw value. Returns (`none;"") when no
@@ -123,9 +123,9 @@ raw_from:{[source;k]
 / example whose documented value depends on the caller's ambient environment
 / cannot be verified by anything. `dry_run` is the one key production really
 / reads, via .qetl.job.bounded.runtime.is_dry_run.
-explain:{[k]
-    hits:sources where 0<count each raw_from[;k] each sources;
-    $[0=count hits; (`none;""); (first hits; raw_from[first hits;k])]}
+.qetl.cfg.explain:{[k]
+    hits:.qetl.cfg.sources where 0<count each .qetl.cfg.raw_from[;k] each .qetl.cfg.sources;
+    $[0=count hits; (`none;""); (first hits; .qetl.cfg.raw_from[first hits;k])]}
 
 / Set one override in a running process, and say which layer now answers.
 / .
@@ -149,15 +149,15 @@ explain:{[k]
 / @throws qetl.cfg.set_override a key that is not a symbol or string, or a
 / value that is not a string, symbol or char
 / @eg .qetl.cfg.set_override[`example_only;"x"]
-set_override:{[k;v]
+.qetl.cfg.set_override:{[k;v]
     if[10h=type k; k:`$k];
     if[not -11h=type k; '"qetl.cfg.set_override: the key must be a symbol, e.g. `dry_run"];
     v:$[-11h=type v; string v;
         10h=type v; v;
         -10h=type v; enlist v;
         '"qetl.cfg.set_override: the value must be a string or symbol"];
-    override_values::override_values,(enlist k)!enlist v;
-    explain[k]}
+    .qetl.cfg.override_values::.qetl.cfg.override_values,(enlist k)!enlist v;
+    .qetl.cfg.explain[k]}
 
 / Raw string value for a key, honouring the precedence order.
 / .
@@ -166,17 +166,17 @@ set_override:{[k;v]
 / rather than a string, and every comparison against a list of string
 / literals then fails silently - get_flag returned FALSE for a flag
 / configured as "1". Normalising once here means no consumer has to remember.
-raw:{[k] (),last explain k}
+.qetl.cfg.raw:{[k] (),last .qetl.cfg.explain k}
 
 / ----------------------------------------------------------------- TYPED
 
 / Errors accumulated by the typed getters below, so one startup reports
 / every bad setting rather than the first.
-errors:();
+.qetl.cfg.errors:();
 
 / Private: record a problem and return a null of the right type.
 / @private
-note:{[msg;null_value] errors,:enlist msg; null_value}
+.qetl.cfg.note:{[msg;null_value] .qetl.cfg.errors,:enlist msg; null_value}
 
 / A required timestamp, e.g. a backfill window bound.
 / .
@@ -184,25 +184,25 @@ note:{[msg;null_value] errors,:enlist msg; null_value}
 / and the value is UTC - "P"$ alone ignored "+02:00", two hours off. A
 / date-only value is midnight here, unlike in to_timestamp: a window bound
 / legitimately is a day, where a row's event time never is.
-get_timestamp:{[k]
-    v:raw[k];
-    $[0=count v; note["missing required setting ",string[k]," (",env_name[k]," or config)";0Np];
+.qetl.cfg.get_timestamp:{[k]
+    v:.qetl.cfg.raw[k];
+    $[0=count v; .qetl.cfg.note["missing required setting ",string[k]," (",.qetl.cfg.env_name[k]," or config)";0Np];
       null p:$[.qetl.coerce.is_date_only v; .qetl.coerce.to_date_as_midnight v; .qetl.coerce.to_timestamp v];
-        note["setting ",string[k]," is not a timestamp: ",v;0Np];
+        .qetl.cfg.note["setting ",string[k]," is not a timestamp: ",v;0Np];
       p]}
 
 / A required positive long, e.g. a row cap.
-get_positive:{[k]
-    v:raw[k];
-    $[0=count v; note["missing required setting ",string[k];0Nj];
-      null j:"J"$v; note["setting ",string[k]," is not an integer: ",v;0Nj];
-      j<=0; note["setting ",string[k]," must be positive, got ",v;0Nj];
+.qetl.cfg.get_positive:{[k]
+    v:.qetl.cfg.raw[k];
+    $[0=count v; .qetl.cfg.note["missing required setting ",string[k];0Nj];
+      null j:"J"$v; .qetl.cfg.note["setting ",string[k]," is not an integer: ",v;0Nj];
+      j<=0; .qetl.cfg.note["setting ",string[k]," must be positive, got ",v;0Nj];
       j]}
 
 / A required symbol, e.g. a source_version.
-get_symbol:{[k]
-    v:raw[k];
-    $[0=count v; note["missing required setting ",string[k];`];
+.qetl.cfg.get_symbol:{[k]
+    v:.qetl.cfg.raw[k];
+    $[0=count v; .qetl.cfg.note["missing required setting ",string[k];`];
       `$v]}
 
 / The accepted spellings. Note `enlist "1"`, not `"1"`: a single character is
@@ -211,23 +211,23 @@ get_symbol:{[k]
 / false. Match with ~/: rather than `in` for the same reason: comparing a
 / string with `in` against a list of strings is a trap, and `in` on two
 / strings is per-character, which is the related trap one line further on.
-truthy:(enlist "1";"true";"yes";"on")
-falsy:(enlist "0";"false";"no";"off")
+.qetl.cfg.truthy:(enlist "1";"true";"yes";"on")
+.qetl.cfg.falsy:(enlist "0";"false";"no";"off")
 
 / A boolean flag. Absent means false, so a flag is opt-in - which matters
 / for dry_run, where defaulting to true would make a worker silently do
 / nothing.
-get_flag:{[k]
-    v:lower raw k;
+.qetl.cfg.get_flag:{[k]
+    v:lower .qetl.cfg.raw k;
     $[0=count v; 0b;
-      any v ~/: truthy; 1b;
-      any v ~/: falsy;  0b;
-      note["setting ",string[k]," is not a boolean: ",v;0b]]}
+      any v ~/: .qetl.cfg.truthy; 1b;
+      any v ~/: .qetl.cfg.falsy;  0b;
+      .qetl.cfg.note["setting ",string[k]," is not a boolean: ",v;0b]]}
 
 / ------------------------------------------------------------- VALIDATION
 
 / Reset the accumulated errors, before a fresh resolution.
-reset:{[] errors::(); ()}
+.qetl.cfg.reset:{[] .qetl.cfg.errors::(); ()}
 
 / Throw if anything went wrong, naming every problem at once.
 / .
@@ -235,10 +235,10 @@ reset:{[] errors::(); ()}
 / worker that begins with a wrong window backfills the wrong data and
 / reports success, which is worse than not starting.
 / @throws error listing every accumulated problem
-require_valid:{[]
-    if[count errors;
-        '"worker config invalid (",string[count errors]," problem(s)): ",
-         "; " sv errors];
+.qetl.cfg.require_valid:{[]
+    if[count .qetl.cfg.errors;
+        '"worker config invalid (",string[count .qetl.cfg.errors]," problem(s)): ",
+         "; " sv .qetl.cfg.errors];
     1b}
 
 \d .

@@ -58,7 +58,9 @@ def test_states_match_the_q_writer():
     worker may ever report; this reader must recognise exactly that set.
     """
     src = STATUS_Q.read_text()
-    line = next(ln for ln in src.splitlines() if ln.startswith("status_states:"))
+    line = next(
+        ln for ln in src.splitlines() if re.match(r"(?:\.[A-Za-z_][\w.]*\.)?status_states:", ln)
+    )
     assert set(re.findall(r"`(\w+)", line)) == set(STATES)
 
 
@@ -96,8 +98,8 @@ def test_status_file_name_matches_the_q_writer():
     written, reporting "no status yet" for a worker that is running.
     """
     src = STATUS_Q.read_text()
-    prefix = re.search(r'^file_prefix:"([^"]+)"', src, re.M)
-    suffix = re.search(r'^file_suffix:"([^"]+)"', src, re.M)
+    prefix = re.search(r'^(?:\.[A-Za-z_][\w.]*\.)?file_prefix:"([^"]+)"', src, re.M)
+    suffix = re.search(r'^(?:\.[A-Za-z_][\w.]*\.)?file_suffix:"([^"]+)"', src, re.M)
     assert prefix and suffix, "status.q no longer names the file the way this test reads it"
     assert (FILENAME_PREFIX, FILENAME_SUFFIX) == (prefix.group(1), suffix.group(1))
 
@@ -158,7 +160,9 @@ def test_non_json_body_is_reported_not_raised_as_a_bare_jsondecodeerror(tmp_path
 def q_exit_successes() -> set[str]:
     """The states `.qetl.job.bounded.exit_code` exits 0 for."""
     line = next(
-        ln for ln in BOUNDED_WORKER_Q.read_text().splitlines() if ln.startswith("exit_code:")
+        ln
+        for ln in BOUNDED_WORKER_Q.read_text().splitlines()
+        if re.match(r"(?:\.[A-Za-z_][\w.]*\.)?exit_code:", ln)
     )
     m = re.search(r"state in ((?:`\w+)+);\s*0i", line)
     assert m, "bounded_worker.q's exit_code is no longer spelled the way this test reads it"

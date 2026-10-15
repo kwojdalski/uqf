@@ -155,7 +155,7 @@ def test_a_table_without_list_columns_needs_no_nested_declaration():
 
 def test_list_columns_are_declared_float_vectors_and_marked_for_review():
     line = nested_declaration("book", parse_columns("sym:symbol, bids:list, asks:list"))
-    assert line.startswith('nested[`book;`bids`asks!"FF"];')
+    assert line.startswith('.qetl.plant.nested[`book;`bids`asks!"FF"];')
     assert "SCAFFOLDED" in line
     assert line.endswith("\n")
 
@@ -163,7 +163,7 @@ def test_list_columns_are_declared_float_vectors_and_marked_for_review():
 def test_one_list_column_is_declared_with_enlist():
     # `bids!"F"` would be an atom dictionary, which .qetl.plant.nested refuses.
     line = nested_declaration("book", parse_columns("bids:list"))
-    assert line.startswith('nested[`book;(enlist `bids)!enlist "F"];')
+    assert line.startswith('.qetl.plant.nested[`book;(enlist `bids)!enlist "F"];')
 
 
 def test_every_plant_table_with_list_columns_is_declared_beside_it():
@@ -171,7 +171,7 @@ def test_every_plant_table_with_list_columns_is_declared_beside_it():
     with a () column has a nested[...] line, so the gate does not need q to
     say which one is missing."""
     text = (UQF_ROOT / TABLES_FILE).read_text()
-    declared = set(re.findall(r"^nested\[`([a-z_0-9]+);", text, re.MULTILINE))
+    declared = set(re.findall(r"^\.qetl\.plant\.nested\[`([a-z_0-9]+);", text, re.MULTILINE))
     with_lists = {
         name
         for name, line in _tables(UQF_ROOT / TABLES_FILE).items()

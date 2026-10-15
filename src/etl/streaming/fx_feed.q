@@ -17,18 +17,18 @@
 / among them: .u.upd stamps its own on receipt (scripts/processes/torq_pipeline.q,
 / invariant 1).
 
-\d .qpipe.job.fx_feed
+\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `fx_feed;
+.qpipe.job.fx_feed.publish:.qetl.job.stream.unwired `fx_feed;
 
 / This process's own moving level per pair, walked on every tick. Plain
 / parallel VECTORS, aligned with .qf.demo.pairs: a dict here would silently
 / turn bid/ask into dicts too, which .u.upd rejects with a length error when
 / inserting into the plain quote table (learned the hard way - see this
 / file's ancestor in git history).
-spot:.qf.demo.spot
+.qpipe.job.fx_feed.spot:.qf.demo.spot
 
 / One tick's worth of quotes, from a given level per pair.
 / .
@@ -40,13 +40,13 @@ spot:.qf.demo.spot
 / @param levels one mid per pair, in .qf.demo.pairs order
 / @return the tick's rows, in the vendored quote table's column order
 / @eg count .qpipe.job.fx_feed.tick_rows .qf.demo.spot  ->  8
-tick_rows:{[levels]
+.qpipe.job.fx_feed.tick_rows:{[levels]
     n:count .qf.demo.pairs;
     (.qf.demo.pairs;levels-.qf.demo.pip;levels+.qf.demo.pip;
         n#.qf.demo.size_unit;n#.qf.demo.size_unit;n#" ";n#"N";n#`UQFFX)}
 
 / Walk every pair's level, then publish the tick built from it.
-on_timer:{[]
+.qpipe.job.fx_feed.on_timer:{[]
     `.qpipe.job.fx_feed.spot set .qf.demo.drift_one each .qpipe.job.fx_feed.spot;
     .qpipe.job.fx_feed.publish[`quote;.qpipe.job.fx_feed.tick_rows[.qpipe.job.fx_feed.spot]];
     }

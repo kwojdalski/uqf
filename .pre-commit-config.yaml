@@ -148,6 +148,16 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # No `\d` may name more than one level (#1411): PeachQ cannot load one.
+      # always_run because the rule scans src/, scripts/, sidecars/ and docs/,
+      # not only what is staged - one list, in the gate itself.
+      - id: nested-contexts
+        name: Refuse a \d context more than one level deep
+        entry: python3 scripts/gates/check_nested_contexts.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: bundle-blocks
         name: Refuse an installed bundle's blocks in tracked q files
         entry: python3 scripts/gates/check_bundle_blocks.py

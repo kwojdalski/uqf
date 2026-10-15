@@ -98,17 +98,21 @@ see errors that the inner one already handled.
 myfunc:{x+1}   / becomes .qmodule.myfunc
 \d .
 otherfunc:{x+1}  / becomes .otherfunc (root)
+.qmodule.third:{x+1}  / the same name as myfunc's neighbour, set from the root
 ```
 
-This is exactly the pattern every file in `src/` uses - each declaring one of
-the seven domain namespaces (`.qf.math`, `.qf.px`, `.qf.exec`, etc. - see this
-skill's Layout section for the full list), which several files share. Two traps
-worth knowing:
+`\d` may open ONE level (`\d .qmodule`); a nested one (`\d .a.b`) is refused by
+`check_nested_contexts.py` because PeachQ cannot load it. Every file in `src/`
+therefore writes its names the third way, fully qualified from the root, into
+one of the seven domain namespaces (`.qf.math`, `.qf.px`, `.qf.exec`, etc. - see
+this skill's Layout section for the full list), which several files share, or
+into the ETL's own (`.qetl.*`, `.qpipe.job.<name>`). A lambda defined from the
+root resolves an unqualified global at the root, so it names its siblings in
+full as well. Two traps worth knowing:
 
 - **`\d` persists for the rest of the file** until the next `\d` - forgetting
-  the closing `\d .` at the bottom of a `src/*.q` file would leak later
-  definitions into that file's namespace (or wherever you loaded next)
-  unintentionally.
+  the closing `\d .` after a one-level `\d .name` would leak later definitions
+  into that file's namespace (or wherever you loaded next) unintentionally.
 - **Local variables shadow globals, and don't leak out**: `f:{a:20;a}` sets a
   *local* `a` even if a global `a` already exists; the global is untouched
   unless you explicitly use `::` (e.g. `g:{a::20}`). This is exactly why qUnit's

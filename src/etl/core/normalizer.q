@@ -37,15 +37,15 @@
 / publishes is the output, on_batch is the dispatcher - so an instance
 / cannot declare its edges differently from its mappings.
 
-\d .qetl.job.stream.normalizer
+\d .
 
 / name -> its declaration, ENLISTED, for the reason .qetl.job.stream.jobs enlists:
 / same-keyed dicts collapse into a table and a later, differently-keyed
 / declaration is then refused with a bare 'mismatch.
-registry:(`symbol$())!();
+.qetl.job.stream.normalizer.registry:(`symbol$())!();
 
 / What every normalizer must declare.
-required_keys:`procname`output`input
+.qetl.job.stream.normalizer.required_keys:`procname`output`input
 
 / Declare a normalizer: its canonical output and one transform per source.
 / .
@@ -59,10 +59,10 @@ required_keys:`procname`output`input
 / @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally the passthrough options of .qetl.job.stream.define (.qetl.job.stream.passthrough_keys: start_with_all, note, on_start, check with on_fail)
 / @return the name
 / @throws error naming every problem it finds first
-define:{[name;decl]
+.qetl.job.stream.normalizer.define:{[name;decl]
     who:"define: normalizer ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
-    missing:required_keys where not required_keys in key decl;
+    missing:.qetl.job.stream.normalizer.required_keys where not .qetl.job.stream.normalizer.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     out:decl`output;
     if[not 98h=type out; 'who,"'s output must be an unkeyed table - it is published, and a keyed table cannot be"];
@@ -73,23 +73,23 @@ define:{[name;decl]
     if[not (99h=type srcs) and (11h=type key srcs) and 11h=type value srcs;
         'who,"'s input must be a dictionary of source table -> transform name, symbols both"];
     if[0=count srcs; 'who," has no input - a normalizer of nothing normalizes nothing"];
-    check_source[who;out]'[key srcs;value srcs];
+    .qetl.job.stream.normalizer.check_source[who;out]'[key srcs;value srcs];
     / The dispatcher is ALSO set as .qpipe.job.<name>.on_batch, so a normalizer
     / instance has the same surface as every other job - a reader, a test
     / or the runner reaching for a job's handler finds it in the one place.
-    handler:dispatch[name;;];
+    handler:.qetl.job.stream.normalizer.dispatch[name;;];
     (` sv (.qetl.job.stream.namespace name),`on_batch) set handler;
     / The passthrough options (start_with_all, note, on_start, check, on_fail)
     / go straight to define, which validates them once (#1232).
     .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch!(
         decl`procname; key srcs; enlist name; handler)),.qetl.job.stream.passthrough decl];
     / registered only once the streaming job is, as horizon does
-    registry[name]:enlist decl;
+    .qetl.job.stream.normalizer.registry[name]:enlist decl;
     name}
 
 / Private: one source's transform, held to the canonical output.
 / @private
-check_source:{[who;out;src;xf]
+.qetl.job.stream.normalizer.check_source:{[who;out;src;xf]
     if[not xf in .qetl.transform.defined[];
         'who,": source ",string[src]," maps through transform ",string[xf],", which is not registered - a mapping is a declared transform, so its examples are verified"];
     d:.qetl.transform.def xf;
@@ -105,15 +105,15 @@ check_source:{[who;out;src;xf]
 / @return the declaration dict
 / @throws error when nothing was defined under that name
 / @eg .qetl.job.stream.normalizer.def[`executions]`input
-def:{[name]
-    if[not name in key registry;
-        '"def: ",string[name]," is not a defined normalizer - defined: ",", " sv string key registry];
-    first registry name}
+.qetl.job.stream.normalizer.def:{[name]
+    if[not name in key .qetl.job.stream.normalizer.registry;
+        '"def: ",string[name]," is not a defined normalizer - defined: ",", " sv string key .qetl.job.stream.normalizer.registry];
+    first .qetl.job.stream.normalizer.registry name}
 
 / Every defined normalizer.
 / @return a symbol vector
 / @eg `executions in .qetl.job.stream.normalizer.defined[] -> 1b
-defined:{[] key registry}
+.qetl.job.stream.normalizer.defined:{[] key .qetl.job.stream.normalizer.registry}
 
 / The canonical rows for one source batch: the pure half, with no publish.
 / .
@@ -128,8 +128,8 @@ defined:{[] key registry}
 / @return the canonical rows
 / @throws error when src is not one of the normalizer's sources, or the batch lacks a declared column
 / @eg cols .qetl.job.stream.normalizer.normalize[`executions;`trades;([] time:enlist 2026.09.17D10:00:00; sym:enlist `EURUSD; side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)]
-normalize:{[name;src;batch]
-    d:def[name];
+.qetl.job.stream.normalizer.normalize:{[name;src;batch]
+    d:.qetl.job.stream.normalizer.def[name];
     srcs:d`input;
     if[not src in key srcs;
         '"normalize: ",string[src]," is not a source of ",string[name]," - its sources are ",", " sv string key srcs];
@@ -146,21 +146,21 @@ normalize:{[name;src;batch]
 / the plant delivers only what was subscribed to, so this can only happen
 / from a test or a hand call, and neither should take the job down.
 / @private
-dispatch:{[name;t;x]
-    if[not t in key def[name]`input; :()];
+.qetl.job.stream.normalizer.dispatch:{[name;t;x]
+    if[not t in key .qetl.job.stream.normalizer.def[name]`input; :()];
     if[0=count x; :()];
-    rows:normalize[name;t;x];
+    rows:.qetl.job.stream.normalizer.normalize[name;t;x];
     if[0=count rows; :()];
     (get ` sv (.qetl.job.stream.namespace name),`publish)[name;rows];
     }
 
-\d .qetl.job.stream
+\d .
 
 / Declare a streaming normalizer with one canonical output and a mapping per source.
 / @param name the job name and output table
 / @param decl output schema, input mappings and process declaration
 / @return the registered streaming job name
 / @throws error when a mapping does not produce the canonical schema
-normalize:{[name;decl] .qetl.job.stream.normalizer.define[name;decl]}
+.qetl.job.stream.normalize:{[name;decl] .qetl.job.stream.normalizer.define[name;decl]}
 
 \d .

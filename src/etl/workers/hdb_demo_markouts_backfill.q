@@ -18,7 +18,7 @@
 / `time` is trade_time+horizon, so window_column says trade_time: `replace then
 / clears the rows the window produced, not a neighbour's late markouts (#972).
 
-\d .qpipe.job.hdb_demo_markouts_backfill
+\d .
 
 / Score fills against quotes with the shared transform the live job uses,
 / so a fill scored both ways scores identically - tests/q/test_twins.q
@@ -28,13 +28,13 @@
 / @param quotes rows of the HDB's quote: time sym bid ask
 / @return one row per fill per horizon, in demo_execution_quality's columns
 / @eg count .qpipe.job.hdb_demo_markouts_backfill.score[.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[]] -> 8
-score:{[fill_rows;quotes] .qpipe.transform.demo_markouts.score[fill_rows;quotes]}
+.qpipe.job.hdb_demo_markouts_backfill.score:{[fill_rows;quotes] .qpipe.transform.demo_markouts.score[fill_rows;quotes]}
 
 / A markout is missing only where no quote preceded the horizon - kept, as
 / the live job keeps it, so the gap shows. Anything non-finite is broken.
 / @param batch the transformed rows
 / @return no failures, or the rows whose markout is infinite
-quality_check:{[batch]
+.qpipe.job.hdb_demo_markouts_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     bad:select from batch where markout_pips in -0w 0w;
     $[0=count bad;
@@ -46,7 +46,7 @@ quality_check:{[batch]
 / What a run records about its window.
 / @param batch the transformed rows
 / @return fills scored, horizons, and rows with no reference quote
-facts:{[batch]
+.qpipe.job.hdb_demo_markouts_backfill.facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
     `scored_fills`horizons`unpriced!(count distinct `sym`trade_time`fill_id#batch;
         count distinct batch`horizon; sum "j"$null batch`markout_pips)}

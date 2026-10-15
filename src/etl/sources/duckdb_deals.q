@@ -34,33 +34,33 @@
 / overwritten the day these rows are published. plant_tables.q defines the
 / plant table as time plus deal_time, as eq_orderbook keeps ts_event.
 
-\d .qpipe.source.duckdb_deals
+\d .
 
-source_name:`duckdb_deals
+.qpipe.source.duckdb_deals.source_name:`duckdb_deals
 
 / The columns this adapter READS, in the order the target table holds them.
-columns:`deal_time`deal_id`sym`side`notional`rate
+.qpipe.source.duckdb_deals.columns:`deal_time`deal_id`sym`side`notional`rate
 / p=timestamp, j=long, s=symbol, s=symbol, f=float, f=float
-types:"pjssff"
+.qpipe.source.duckdb_deals.types:"pjssff"
 
 / The table in the DuckDB file, and the table its rows land in here.
-table_name:`deals
+.qpipe.source.duckdb_deals.table_name:`deals
 
-time_column:`deal_time
+.qpipe.source.duckdb_deals.time_column:`deal_time
 
 / deal_id is the DuckDB table's PRIMARY KEY, so here the source does
 / guarantee uniqueness - the thing a natural key needs and demo_deals can
 / only assume.
-row_key:`deal_id
+.qpipe.source.duckdb_deals.row_key:`deal_id
 
-tz:`UTC
-transport:`odbc
+.qpipe.source.duckdb_deals.tz:`UTC
+.qpipe.source.duckdb_deals.transport:`odbc
 
 / What UQF_SOURCE_CRED_DUCKDB_DEALS looks like. Declared rather than
 / left to the per-transport default, which is a networked-database string:
 / DuckDB is embedded, so this is a file path and a mode, with no host, user
 / or password to supply.
-credential_example:"DRIVER=DuckDB;Database=/path/fx_deals.duckdb;access_mode=READ_ONLY"
+.qpipe.source.duckdb_deals.credential_example:"DRIVER=DuckDB;Database=/path/fx_deals.duckdb;access_mode=READ_ONLY"
 
 / The SQL for one window: half-open [range_from;range_to) on deal_time,
 / ordered so a window is the same table on every fetch.
@@ -68,7 +68,7 @@ credential_example:"DRIVER=DuckDB;Database=/path/fx_deals.duckdb;access_mode=REA
 / @param range_to exclusive upper bound
 / @return the SELECT statement text
 / @eg .qpipe.source.duckdb_deals.sql_for[2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]
-sql_for:{[range_from;range_to]
+.qpipe.source.duckdb_deals.sql_for:{[range_from;range_to]
     "SELECT epoch_ns(deal_time) AS deal_time, deal_id, sym, side, notional, rate",
     " FROM deals",
     " WHERE deal_time >= ",.qetl.io.odbc.duckdb_timestamp[range_from],
@@ -79,21 +79,21 @@ sql_for:{[range_from;range_to]
 / @param raw the table .qetl.io.odbc.run_sql returns for sql_for's statement
 / @return the same rows as the contract declares them
 / @eg .qpipe.source.duckdb_deals.adapt[([] deal_time:enlist 1789117200000000000; deal_id:enlist 1; sym:enlist "EURUSD"; side:enlist "buy"; notional:enlist 1e6; rate:enlist 1.0842)]
-adapt:{[raw]
+.qpipe.source.duckdb_deals.adapt:{[raw]
     t:update deal_time:1970.01.01D00:00+deal_time from raw;
     t:@[t;`sym`side;{`$x}];
-    columns xcols t}
+    .qpipe.source.duckdb_deals.columns xcols t}
 
 / One window of deals from DuckDB.
 / @param h an ODBC handle from .qetl.io.odbc.open
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the deals in the window, in the contract's shape
-query:{[h;range_from;range_to] adapt .qetl.io.odbc.run_sql[h;sql_for[range_from;range_to]]}
+.qpipe.source.duckdb_deals.query:{[h;range_from;range_to] .qpipe.source.duckdb_deals.adapt .qetl.io.odbc.run_sql[h;.qpipe.source.duckdb_deals.sql_for[range_from;range_to]]}
 
 / demo_deals' five deals, one a day from 2026.09.11 - the same rows that open
 / the DuckDB file - in this source's column names.
-fixture:{[]
+.qpipe.source.duckdb_deals.fixture:{[]
     ([] deal_time:2026.09.11D09:00:00.000000000+1D*til 5;
         deal_id:1 2 3 4 5j;
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
@@ -108,10 +108,10 @@ fixture:{[]
 / so deal_time is general too: its type is the output contract's to check,
 / after `adapt`. Without this the live check failed a correctly configured
 / source at `schema`.
-raw:enlist[table_name]!enlist ([] deal_id:`long$(); deal_time:(); sym:(); side:(); notional:`float$(); rate:`float$())
+.qpipe.source.duckdb_deals.raw:enlist[.qpipe.source.duckdb_deals.table_name]!enlist ([] deal_id:`long$(); deal_time:(); sym:(); side:(); notional:`float$(); rate:`float$())
 
-.qetl.source.define[source_name;
+.qetl.source.define[.qpipe.source.duckdb_deals.source_name;
     `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`raw!
-    (source_name;table_name;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example;raw)];
+    (.qpipe.source.duckdb_deals.source_name;.qpipe.source.duckdb_deals.table_name;.qpipe.source.duckdb_deals.time_column;.qpipe.source.duckdb_deals.row_key;.qpipe.source.duckdb_deals.columns;.qpipe.source.duckdb_deals.types;.qpipe.source.duckdb_deals.query;.qpipe.source.duckdb_deals.fixture;.qpipe.source.duckdb_deals.tz;.qpipe.source.duckdb_deals.transport;.qpipe.source.duckdb_deals.credential_example;.qpipe.source.duckdb_deals.raw)];
 
 \d .

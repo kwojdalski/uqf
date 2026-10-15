@@ -224,7 +224,9 @@ def test_a_worker_is_pointed_at_a_quality_check():
 def test_the_transports_are_the_ones_q_registers():
     """The surface's list is generated from these calls; this catches a
     registration added without re-exporting the surface."""
-    registered = re.findall(r"^register_transport\[`(\w+);", TRANSPORTS_Q.read_text(), re.M)
+    registered = re.findall(
+        r"^\.qetl\.source\.register_transport\[`(\w+);", TRANSPORTS_Q.read_text(), re.M
+    )
     assert transports.names() == tuple(registered)
     assert transports.default() == "ipc"
 

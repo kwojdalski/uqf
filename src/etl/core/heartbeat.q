@@ -34,11 +34,11 @@
 / already deleted one such flag (shape_is_assumed) that was set by a single
 / call site and read by nothing.
 
-\d .qetl.hb
+\d .
 
 / The table's declared shape. Named so require_schema can check it rather
 / than assume it - the mistake .qetl.coverage.require_schema exists to prevent.
-columns:`worker`state`last_seen`windows
+.qetl.hb.columns:`worker`state`last_seen`windows
 
 / Create the root table if it is absent, and return its name.
 / .
@@ -50,23 +50,23 @@ columns:`worker`state`last_seen`windows
 / Backtick form (`worker_heartbeat set), not a bare name: inside \d .qetl.hb a
 / bare `worker_heartbeat` resolves to .qetl.hb.worker_heartbeat, NOT the root
 / table. Same trap materialisation.q documents at length.
-init_table:{[]
+.qetl.hb.init_table:{[]
     if[not `worker_heartbeat in tables `.;
         `worker_heartbeat set 1!([] worker:`symbol$(); state:`symbol$();
                                     last_seen:`timestamp$(); windows:`long$())];
     `worker_heartbeat}
 
 / The root table. Exists so no read below names it bare.
-ledger:{[] value `worker_heartbeat}
+.qetl.hb.ledger:{[] value `worker_heartbeat}
 
 / Refuse if the table is not the declared shape.
 / @throws error naming the missing or unexpected column(s)
-require_schema:{[]
-    actual:cols ledger[];
-    missing:columns where not columns in actual;
+.qetl.hb.require_schema:{[]
+    actual:cols .qetl.hb.ledger[];
+    missing:.qetl.hb.columns where not .qetl.hb.columns in actual;
     if[count missing;
         '"require_schema: worker_heartbeat is missing ",", " sv string missing];
-    extra:actual where not actual in columns;
+    extra:actual where not actual in .qetl.hb.columns;
     if[count extra;
         '"require_schema: worker_heartbeat has unexpected column(s) ",
          ", " sv string extra];
@@ -77,10 +77,10 @@ require_schema:{[]
 / Called from a worker's init. Present because .qetl.coverage.require_schema spent a
 / while defined, tested, and reached from no live path - a check that cannot
 / fire protects nothing, and its existence reads as protection.
-attach:{[]
+.qetl.hb.attach:{[]
     existed:`worker_heartbeat in tables `.;
-    init_table[];
-    if[existed; require_schema[]];
+    .qetl.hb.init_table[];
+    if[existed; .qetl.hb.require_schema[]];
     `worker_heartbeat}
 
 / ------------------------------------------------------------------ BEAT
@@ -99,9 +99,9 @@ attach:{[]
 / a lambda local throws at LOAD time and aborts the rest of the file - the
 / eighth reserved-name collision in this repository, after desc, tables, sv,
 / load, var, save, get and the `_` parameter. check_q_traps did not have it.
-beat:{[worker;state]
-    init_table[];
-    seen:$[worker in key ledger[]; first (),(ledger[])[(enlist worker)]`windows; 0j];
+.qetl.hb.beat:{[worker;state]
+    .qetl.hb.init_table[];
+    seen:$[worker in key .qetl.hb.ledger[]; first (),(.qetl.hb.ledger[])[(enlist worker)]`windows; 0j];
     `worker_heartbeat upsert (worker;state;.z.p;seen);
     worker}
 
@@ -111,17 +111,17 @@ beat:{[worker;state]
 / recorded". Conflating them would make the number grow while a worker sat
 / wedged, which is exactly the signal being destroyed.
 / @eg .qetl.hb.beat_window[`demo_deals_backfill]
-beat_window:{[worker]
-    init_table[];
-    seen:$[worker in key ledger[]; first (),(ledger[])[(enlist worker)]`windows; 0j];
+.qetl.hb.beat_window:{[worker]
+    .qetl.hb.init_table[];
+    seen:$[worker in key .qetl.hb.ledger[]; first (),(.qetl.hb.ledger[])[(enlist worker)]`windows; 0j];
     `worker_heartbeat upsert (worker;`running;.z.p;seen+1);
     worker}
 
 / --------------------------------------------------------------- READING
 
 / Every worker's beat, with its age derived AT READ TIME.
-report:{[]
-    t:0!ledger[];
+.qetl.hb.report:{[]
+    t:0!.qetl.hb.ledger[];
     if[0=count t; :([] worker:`symbol$(); state:`symbol$();
                        last_seen:`timestamp$(); windows:`long$(); age:`timespan$())];
     update age:.z.p-last_seen from t}
@@ -133,10 +133,10 @@ report:{[]
 / decides whether to page someone.
 / @param max_age a timespan, e.g. 0D00:05
 / @eg .qetl.hb.stale[0D00:05]
-stale:{[max_age]
+.qetl.hb.stale:{[max_age]
     if[not 16h=abs type max_age;
         '"stale: max_age must be a timespan, e.g. 0D00:05"];
-    select from report[] where age>max_age}
+    select from .qetl.hb.report[] where age>max_age}
 
 / Has this worker ever beaten at all?
 / .
@@ -145,16 +145,16 @@ stale:{[max_age]
 / "not beating", and they need different people woken up, so `stale` above
 / deliberately cannot report the first - it has no age to compare.
 / @eg .qetl.hb.has_beaten[`demo_deals_backfill]
-has_beaten:{[worker] worker in exec worker from report[]}
+.qetl.hb.has_beaten:{[worker] worker in exec worker from .qetl.hb.report[]}
 
 / Registered workers that have never beaten, from .qetl.job.bounded's registry.
 / .
 / Derived from the worker registry rather than from a second list, so a
 / worker cannot be missing from monitoring by being forgotten here - the
 / same reason .qetl.dag adopts rather than asking anyone to re-declare.
-never_started:{[]
+.qetl.hb.never_started:{[]
     if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
     ws:.qetl.job.bounded.defined[];
-    ws where not has_beaten each ws}
+    ws where not .qetl.hb.has_beaten each ws}
 
 \d .

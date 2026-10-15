@@ -64,7 +64,7 @@ def publish_problems(source: str, declarations: list[Declaration]) -> list[str]:
         line = code.count("\n", 0, m.start()) + 1
         name, after = m.group("name"), m.group("after").strip()
         # `publish:.qetl.job.stream.unwired `job` - the stub the runner replaces.
-        if after == ":" and name == "publish":
+        if after == ":" and re.fullmatch(r"(?:\.qpipe\.job\.\w+\.)?publish", name):
             continue
         call = _CHECKABLE.match(code, m.start())
         if call is None:

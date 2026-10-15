@@ -69,21 +69,21 @@
 / .
 / The transform is verified by its examples (worked by hand) in the suite.
 
-\d .qpipe.transform.fx_markout
+\d .
 
 / The executions columns the calculation reads, as the plant carries them.
-executions_in:.qetl.plant.columns[`executions;`source_time`venue`sym`side`size`price`fill_id]
+.qpipe.transform.fx_markout.executions_in:.qetl.plant.columns[`executions;`source_time`venue`sym`side`size`price`fill_id]
 
 / The market_data columns it reads: the sources' books, one row per snapshot.
-market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes]
+.qpipe.transform.fx_markout.market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes]
 
 / The calculation result: one row per (execution, horizon, component), see the header.
-result:([] source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$();
+.qpipe.transform.fx_markout.result:([] source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$();
     horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$();
     price_t0:`float$(); price_t1:`float$(); pips:`float$(); status:`symbol$(); pip_factor:`long$(); version:`symbol$())
 
 / The components of one (execution, horizon), in the order the result lists them.
-kinds:`total`execution`leg`residual
+.qpipe.transform.fx_markout.kinds:`total`execution`leg`residual
 
 / ------------------------------------------------------------------- SPEC
 
@@ -92,14 +92,14 @@ kinds:`total`execution`leg`residual
 / unapproved, which is why it is a parameter and every row records its version);
 / max_age is the oldest a source's book may be and still count (0Wn: however
 / old); tolerance is the residual, in pips, that still counts as reconciled.
-default_spec:`horizons`convention`max_age`tolerance!(0D00:00:01 0D00:00:10;.qf.mkt.attribution_convention;0Wn;1e-6)
+.qpipe.transform.fx_markout.default_spec:`horizons`convention`max_age`tolerance!(0D00:00:01 0D00:00:10;.qf.mkt.attribution_convention;0Wn;1e-6)
 
 / Refuse a spec the calculation cannot honour, naming the first problem.
 / @param spec dict horizons, convention, max_age, tolerance
 / @return the spec
 / @throws error naming what is wrong
 / @eg .qpipe.transform.fx_markout.require_spec[.qpipe.transform.fx_markout.default_spec]`tolerance  ->  1e-06
-require_spec:{[spec]
+.qpipe.transform.fx_markout.require_spec:{[spec]
     if[not 99h=type spec; '"fx_markout: spec must be a dictionary"];
     miss:`horizons`convention`max_age`tolerance except key spec;
     if[count miss; '"fx_markout: spec is missing ",", " sv string miss];
@@ -121,13 +121,13 @@ require_spec:{[spec]
 / @param settle the least wait, a positive timespan
 / @return the horizon the horizon kind declares
 / @eg .qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout.default_spec;0D00:00:01]  ->  0D00:00:10
-wait:{[spec;settle] settle|max spec`horizons}
+.qpipe.transform.fx_markout.wait:{[spec;settle] settle|max spec`horizons}
 
 / How far BEFORE an execution the reference is read: the most negative horizon, or none.
 / @param spec the spec
 / @return the lookback the horizon kind declares, a timespan of zero or more
 / @eg .qpipe.transform.fx_markout.lookback[`horizons`convention`max_age`tolerance!(-0D00:00:30 0D00:00:01;::;0Wn;0f)]  ->  0D00:00:30
-lookback:{[spec] 0D|neg min spec`horizons}
+.qpipe.transform.fx_markout.lookback:{[spec] 0D|neg min spec`horizons}
 
 / ------------------------------------------------------------------ ROUTES
 
@@ -137,7 +137,7 @@ lookback:{[spec] 0D|neg min spec`horizons}
 / @param syms instruments
 / @return a boolean per instrument
 / @eg .qpipe.transform.fx_markout.routable[.qf.mkt.attribution_convention;`EURUSD`BTCUSDT`EURXXX]  ->  100b
-routable:{[conv;syms]
+.qpipe.transform.fx_markout.routable:{[conv;syms]
     ccys:conv[`currencies]`ccy;
     one:{[ccys;s]
         if[not .qf.px.is_ccy_pair s; :0b];
@@ -153,7 +153,7 @@ routable:{[conv;syms]
 / @return table leg, invert, one row per leg
 / @throws error when the convention cannot route the instrument
 / @eg .qpipe.transform.fx_markout.route[.qf.mkt.attribution_convention;`USDPLN]`leg  ->  `EURUSD`EURPLN
-route:{[conv;sym] select leg, invert from .qf.mkt.attribution_route_with[conv;sym]}
+.qpipe.transform.fx_markout.route:{[conv;sym] select leg, invert from .qf.mkt.attribution_route_with[conv;sym]}
 
 / The horizon kind's `legs` callback: for each pending execution, the legs its
 / reference must cover. An execution with no route has none (and is never queued:
@@ -162,7 +162,7 @@ route:{[conv;sym] select leg, invert from .qf.mkt.attribution_route_with[conv;sy
 / @param pending executions, at least sym
 / @return a list of symbol lists, one per execution
 / @eg .qpipe.transform.fx_markout.legs_of[.qpipe.transform.fx_markout.default_spec;([] sym:`USDPLN`EURUSD)]  ->  (`EURUSD`EURPLN;enlist `EURUSD)
-legs_of:{[spec;pending]
+.qpipe.transform.fx_markout.legs_of:{[spec;pending]
     u:distinct pending`sym;
     ok:.qpipe.transform.fx_markout.routable[spec`convention;u];
     per:{[conv;s;ok] $[ok; (.qpipe.transform.fx_markout.route[conv;s])`leg; `symbol$()]}[spec`convention]'[u;ok];
@@ -176,7 +176,7 @@ legs_of:{[spec;pending]
 / @param exe executions
 / @return a boolean per execution
 / @eg .qpipe.transform.fx_markout.scoreable[.qpipe.transform.fx_markout.default_spec;([] source_time:2#2026.09.17D10:00:00; venue:`a`a; sym:`EURUSD`BTCUSDT; side:1 1; price:1.1 2f; fill_id:`x`y)]  ->  10b
-scoreable:{[spec;exe]
+.qpipe.transform.fx_markout.scoreable:{[spec;exe]
     has_id:(not null exe`fill_id) & (not null exe`venue) & not null exe`source_time;
     sane:(exe[`side] in 1 -1) & (exe[`price]>0f) & exe[`price]<0w;
     has_id & sane & .qpipe.transform.fx_markout.routable[spec`convention;exe`sym]}
@@ -187,7 +187,7 @@ scoreable:{[spec;exe]
 / @param exe executions
 / @return table fill_id, venue, reason
 / @eg count .qpipe.transform.fx_markout.unscoreable[.qpipe.transform.fx_markout.default_spec;([] source_time:enlist 2026.09.17D10:00:00; venue:`a; sym:`BTCUSDT; side:1; price:1f; fill_id:`x)]  ->  1
-unscoreable:{[spec;exe]
+.qpipe.transform.fx_markout.unscoreable:{[spec;exe]
     bad:where not .qpipe.transform.fx_markout.scoreable[spec;exe];
     e:exe bad;
     why:?[not .qpipe.transform.fx_markout.routable[spec`convention;e`sym];`no_route;
@@ -200,7 +200,7 @@ unscoreable:{[spec;exe]
 / @param exe executions
 / @return executions, one per (venue; fill_id)
 / @eg count .qpipe.transform.fx_markout.last_delivery[([] venue:`a`a`b; fill_id:`x`x`x)]  ->  2
-last_delivery:{[exe]
+.qpipe.transform.fx_markout.last_delivery:{[exe]
     ids:`$string[exe`venue],'"|",'string exe`fill_id;
     exe asc last each value group ids}
 
@@ -210,7 +210,7 @@ last_delivery:{[exe]
 / @param md market_data rows
 / @return table time, sym, venue (the source), bid, ask
 / @eg count .qpipe.transform.fx_markout.tops[0#.qpipe.transform.fx_markout.market_data_in]  ->  0
-tops:{[md]
+.qpipe.transform.fx_markout.tops:{[md]
     md:md where not null md`source_time;
     s:.qf.mkt.top_sides md;
     ([] time:md`source_time; sym:md`sym; venue:md`source; bid:s`bid; ask:s`ask)}
@@ -224,7 +224,7 @@ tops:{[md]
 / @param times the instant per row
 / @return table bid, ask (oriented), mid (the leg's own, un-oriented)
 / @eg .qpipe.transform.fx_markout.leg_at[0#.qpipe.transform.fx_markout.tops[0#.qpipe.transform.fx_markout.market_data_in];0Wn;enlist `EURUSD;enlist 0b;enlist 2026.09.17D10:00:00]`mid  ->  enlist 0n
-leg_at:{[tob;max_age;syms;inverted;times]
+.qpipe.transform.fx_markout.leg_at:{[tob;max_age;syms;inverted;times]
     n:count syms;
     live:where not null syms;
     b:.qf.mkt.best_across_venues[tob;([] sym:syms live; time:times live);max_age];
@@ -245,7 +245,7 @@ leg_at:{[tob;max_age;syms;inverted;times]
 / @param s how many legs are at the horizon
 / @return the chain's mid, a float per row
 / @eg .qpipe.transform.fx_markout.chain_mid[enlist 1.1 1.2;enlist 1.2 1.2;enlist 1.3 1.3;enlist 1.3 1.4;1]  ->  1.3 1.35
-chain_mid:{[b0;a0;b1;a1;s]
+.qpipe.transform.fx_markout.chain_mid:{[b0;a0;b1;a1;s]
     j:til count b0;
     bid:prd {[b0;b1;s;j] $[j<s; b1 j; b0 j]}[b0;b1;s] each j;
     ask:prd {[a0;a1;s;j] $[j<s; a1 j; a0 j]}[a0;a1;s] each j;
@@ -254,7 +254,7 @@ chain_mid:{[b0;a0;b1;a1;s]
 / Private: one row per (execution, horizon), trade-major: the execution's
 / identity, its price, the horizon and the pip factor of its pair.
 / @private
-frame:{[spec;exe]
+.qpipe.transform.fx_markout.frame:{[spec;exe]
     hs:spec`horizons;
     n:count exe;
     m:count hs;
@@ -268,7 +268,7 @@ frame:{[spec;exe]
 / Private: the k-th leg of each row's route and whether it is inverted, for every
 / k up to the longest route; null and unflipped past a shorter route's end.
 / @private
-route_legs:{[spec;fr]
+.qpipe.transform.fx_markout.route_legs:{[spec;fr]
     pairs:distinct fr`sym;
     routes:.qpipe.transform.fx_markout.route[spec`convention;] each pairs;
     si:pairs?fr`sym;
@@ -278,7 +278,7 @@ route_legs:{[spec;fr]
 
 / Private: every leg's oriented book at the execution and at the horizon.
 / @private
-references:{[spec;fr;lg;md]
+.qpipe.transform.fx_markout.references:{[spec;fr;lg;md]
     tob:.qpipe.transform.fx_markout.tops[md];
     t0:fr`source_time;
     t1:t0+fr`horizon;
@@ -287,7 +287,7 @@ references:{[spec;fr;lg;md]
 / Private: the markout, the execution residual and each leg's allocation, in pips,
 / with the reference they are priced against.
 / @private
-allocate:{[fr;refs]
+.qpipe.transform.fx_markout.allocate:{[fr;refs]
     at0:refs`at0;
     at1:refs`at1;
     depth:count at0;
@@ -304,18 +304,18 @@ allocate:{[fr;refs]
 / Private: a component's rows for those of fr in idx: its identity columns, its
 / kind and place in the listing order, and its own columns.
 / @private
-piece:{[fr;idx;ord;kind;v]
+.qpipe.transform.fx_markout.piece:{[fr;idx;ord;kind;v]
     ((`ri`source_time`venue`fill_id`sym`side`size`horizon`pip_factor`version)#fr idx),'
     (([] ord:(count idx)#ord; kind:(count idx)#kind),'v)}
 
 / Private: a component's own columns, from vectors.
 / @private
-own:{[step;leg;flipped;p0;p1;pips;status]
+.qpipe.transform.fx_markout.own:{[step;leg;flipped;p0;p1;pips;status]
     ([] step:step; leg:leg; invert:flipped; price_t0:p0; price_t1:p1; pips:pips; status:status)}
 
 / Private: the result's rows for every component, from the allocation.
 / @private
-rows_of:{[spec;fr;lg;refs;a]
+.qpipe.transform.fx_markout.rows_of:{[spec;fr;lg;refs;a]
     nn:count fr;
     every:til nn;
     st:{[v] ?[null v;`unavailable;`ok]};
@@ -345,7 +345,7 @@ rows_of:{[spec;fr;lg;refs;a]
 /   kind total, execution, leg (by step), residual
 / @throws error when the spec is malformed or an input lacks a column
 / @eg count .qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;0#.qpipe.transform.fx_markout.executions_in;0#.qpipe.transform.fx_markout.market_data_in]  ->  0
-calc:{[spec;exe;md]
+.qpipe.transform.fx_markout.calc:{[spec;exe;md]
     spec:.qpipe.transform.fx_markout.require_spec[spec];
     .qf.util.require_cols[`fx_markout;`executions;exe;cols .qpipe.transform.fx_markout.executions_in];
     .qf.util.require_cols[`fx_markout;`market_data;md;cols .qpipe.transform.fx_markout.market_data_in];
@@ -356,7 +356,7 @@ calc:{[spec;exe;md]
     refs:.qpipe.transform.fx_markout.references[spec;fr;lg;md];
     a:.qpipe.transform.fx_markout.allocate[fr;refs];
     out:`ri`ord`step xasc raze .qpipe.transform.fx_markout.rows_of[spec;fr;lg;refs;a];
-    (cols result)#out}
+    (cols .qpipe.transform.fx_markout.result)#out}
 
 \d .
 

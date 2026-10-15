@@ -199,14 +199,3 @@ def test_a_namespace_only_file_is_read_for_duplicates(tmp_path):
         },
     )
     assert len(cmd.duplicates(root)) == 1
-
-
-def test_a_nested_context_in_a_library_file_fails(tmp_path):
-    """PeachQ cannot switch into `\\d .qf.px`; the library defines from the root."""
-    root = _tree(tmp_path, {"src/foundation/a.q": "\\d .qf.px\nf:{x}\n\\d .\n"})
-    out = cmd.nested_contexts(root)
-    assert len(out) == 1 and out[0].startswith("src/foundation/a.q:1:")
-
-
-def test_the_real_library_opens_no_nested_context():
-    assert cmd.nested_contexts() == []

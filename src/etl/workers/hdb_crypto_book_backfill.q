@@ -18,7 +18,7 @@
 / previous window's last snapshot, whose end is this window's first instant
 / (#1143; the same class as hdb_exec_bars_backfill).
 
-\d .qpipe.job.hdb_crypto_book_backfill
+\d .
 
 / Snapshots for a window of book updates with the shared pick. Kept: `time`, the
 / snapshot's end, which the live job leaves for the plant to stamp; a backfill
@@ -26,7 +26,7 @@
 / @param book_rows rows of the HDB's crypto_book: source_time venue sym and the four ladders
 / @return one row per (venue, sym) per second, in crypto_book_1s's columns
 / @eg count .qpipe.job.hdb_crypto_book_backfill.snapshots .qpipe.source.hdb_crypto_book.fixture[]  ->  6
-snapshots:{[book_rows]
+.qpipe.job.hdb_crypto_book_backfill.snapshots:{[book_rows]
     windowed:.qetl.job.stream.bars.assign[.qpipe.transform.crypto_book_1s.width;`source_time;book_rows];
     b:.qpipe.transform.crypto_book_1s.snapshots windowed;
     (cols .qetl.plant.shape `crypto_book_1s) xcols update time:bar_start+.qpipe.transform.crypto_book_1s.width from b}
@@ -36,7 +36,7 @@ snapshots:{[book_rows]
 / row was mis-keyed or the ladders were written ragged.
 / @param batch the transformed snapshots
 / @return no failures, or the offending snapshots
-quality_check:{[batch]
+.qpipe.job.hdb_crypto_book_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     ragged:(count each batch`bid_prices)<>count each batch`bid_sizes;
     ragged:ragged | (count each batch`ask_prices)<>count each batch`ask_sizes;

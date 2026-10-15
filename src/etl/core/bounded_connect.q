@@ -3,7 +3,7 @@
 / straight before it. Same namespace, unchanged: init calls `connect` and
 / plan_only calls it too (#1201), both resolved at call time.
 
-\d .qetl.job.bounded
+\d .
 
 / Private: open the live connection. Separate from init so the failure is
 / attributable, and so a test can exercise init without one.
@@ -13,8 +13,8 @@
 / HDB directory's path, validated there so a wrong path fails the run rather
 / than quietly reading the fixture.
 / @private
-connect:{[worker]
-    source:(def worker)`source;
+.qetl.job.bounded.connect:{[worker]
+    source:(.qetl.job.bounded.def worker)`source;
     cred:.qetl.source.require_credentials source;
     transport:(.qetl.source.def source)`transport;
     .qetl.log.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
@@ -40,7 +40,7 @@ connect:{[worker]
 / @param e the opener's error text
 / @return the message to throw, never longer than q will carry
 / @eg 256>count .qetl.job.bounded.connect_error[`crypto_market_data;"driver not loaded"]  ->  1b
-connect_error:{[source;e]
+.qetl.job.bounded.connect_error:{[source;e]
     msg:"connect: ",string[source]," unreachable - ",e,
         ". Not falling back to the fixture: that would record synthetic data as covered";
     $[254<count msg; 254#msg; msg]}

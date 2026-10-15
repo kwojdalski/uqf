@@ -13,28 +13,28 @@
 / The output carries no `time`; .u.upd stamps its own on receipt
 / (scripts/processes/torq_pipeline.q, invariant 1).
 
-\d .qpipe.job.vectorize
+\d .
 
 / ------------------------------------------------------------- THE SHAPES
 
 / The table this job folds, as the plant declares it: eleven levels a side,
 / level 0 first, named as the feed publishes them. Read, not copied, so a
 / level the plant gains or renames reaches the fold and its examples.
-wide_orderbook:.qetl.plant.shape `wide_orderbook
-wide_level_names:(cols wide_orderbook) except `time`sym
+.qpipe.job.vectorize.wide_orderbook:.qetl.plant.shape `wide_orderbook
+.qpipe.job.vectorize.wide_level_names:(cols .qpipe.job.vectorize.wide_orderbook) except `time`sym
 
 / The column groups the fold reads, derived from the schema rather than
 / written out: bids0..bids10 -> bid_prices, asks0..asks10 -> ask_prices.
-wide_level_groups:.qf.mkt.derive_level_groups[cols wide_orderbook;(("bids";`bid_prices);("asks";`ask_prices))]
+.qpipe.job.vectorize.wide_level_groups:.qf.mkt.derive_level_groups[cols .qpipe.job.vectorize.wide_orderbook;(("bids";`bid_prices);("asks";`ask_prices))]
 
-mkt_orderbook:.qetl.plant.published `mkt_orderbook
+.qpipe.job.vectorize.mkt_orderbook:.qetl.plant.published `mkt_orderbook
 
 / ---------------------------------------------------------- THE TRANSFORM
 
 / Fold a wide book's per-level columns into one price vector per side.
 / @param book wide_orderbook rows
 / @return one row per input row: sym, bid_prices, ask_prices
-fold_wide_orderbook:{[book]
+.qpipe.job.vectorize.fold_wide_orderbook:{[book]
     folded:.qf.mkt.book_from_wide_levels[book;.qpipe.job.vectorize.wide_level_groups;`sym];
     select sym, bid_prices, ask_prices from folded}
 
@@ -42,14 +42,14 @@ fold_wide_orderbook:{[book]
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `vectorize;
+.qpipe.job.vectorize.publish:.qetl.job.stream.unwired `vectorize;
 
 / Fold the batch and republish it. No state: a wide book row is complete in
 / itself, so there is nothing to accumulate and nothing to evict.
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-on_batch:{[t;x]
+.qpipe.job.vectorize.on_batch:{[t;x]
     if[not t=`wide_orderbook; :()];
     .qpipe.job.vectorize.publish[`mkt_orderbook;.qetl.transform.apply[`mkt_orderbook;enlist[`wide_orderbook]!enlist x]];
     }

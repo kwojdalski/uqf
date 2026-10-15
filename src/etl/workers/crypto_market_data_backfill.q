@@ -40,7 +40,7 @@
 / trade print that crypto_book has no columns for; see the source's header for
 / why pouring a capture into crypto_book would throw them away.
 
-\d .qpipe.job.crypto_market_data_backfill
+\d .
 
 / Refuse a batch that is shaped correctly but cannot be true. Three
 / conditions, each one a thing no correct recorded row can meet:
@@ -66,7 +66,7 @@
 / @param batch the transformed rows of one window
 / @return a table check/status/detail, one row per offending row; empty when the batch passes
 / @eg .qpipe.job.crypto_market_data_backfill.quality_check[.qpipe.transform.crypto_market_data.example_book[]]  ->  an empty table
-quality_check:{[batch]
+.qpipe.job.crypto_market_data_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     crossed:batch where .qf.mkt.crossed_top batch;
     bad_trade:select from batch where (not null trade_price) & not (trade_price>0) & (trade_size>0);
@@ -89,7 +89,7 @@ quality_check:{[batch]
 / @param batch the transformed rows of one window
 / @return a dictionary of labels for the window's materialisation
 / @eg .qpipe.job.crypto_market_data_backfill.facts[.qpipe.transform.crypto_market_data.example_book[]]
-facts:{[batch]
+.qpipe.job.crypto_market_data_backfill.facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     `rows`venues`pairs`first_update`last_update`max_lag!
         (count batch;count distinct batch`venue;count distinct batch`sym;

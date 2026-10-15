@@ -4,7 +4,7 @@
 / several files, loaded in order by src/etl/init.q after source_contract.q, which
 / carries the design record. Public names are unchanged by the split (#970).
 
-\d .qetl.source
+\d .
 
 / ------------------------------------------------------- COMPLETE THROUGH
 
@@ -21,10 +21,10 @@
 / @return the exclusive instant every row before which is present; 0Wp when unbounded
 / @throws error naming the source when live without a handle, or when complete_through does not return a timestamp
 / @eg .qetl.source.complete_through_of[`demo_deals;0Ni;0b]  ->  0Wp
-complete_through_of:{[source;h;live]
+.qetl.source.complete_through_of:{[source;h;live]
     if[not live; :0Wp];
     if[null h; '"complete_through: ",string[source]," is live but has no open handle to ask"];
-    ct:((def source)`complete_through) h;
+    ct:((.qetl.source.def source)`complete_through) h;
     if[not -12h=type ct;
         '"complete_through: ",string[source]," returned type ",string[type ct],", not a timestamp atom"];
     $[null ct; -0Wp; ct]}
@@ -42,8 +42,8 @@ complete_through_of:{[source;h;live]
 / @return the end to plan to: range_to, or the source's bound when earlier
 / @throws as complete_through_of
 / @eg .qetl.source.clip_to_complete[`w;`demo_deals;0Ni;0b;2026.09.11D00:00]  ->  2026.09.11D00:00:00.000000000
-clip_to_complete:{[worker;source;h;live;range_to]
-    bound:complete_through_of[source;h;live];
+.qetl.source.clip_to_complete:{[worker;source;h;live;range_to]
+    bound:.qetl.source.complete_through_of[source;h;live];
     if[bound>=range_to; :range_to];
     .qetl.log.warn[worker;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
         `source`complete_through`requested_to!(source;bound;range_to)];
@@ -73,8 +73,8 @@ clip_to_complete:{[worker;source;h;live;range_to]
 / window and attempt come from the scoped log context the bounded worker
 / sets, so a sidecar sending through here is correlated without saying so.
 / With TRACE off nothing is numbered, timed or formatted: the query is sent.
-ipc:{[h;f;range_from;range_to]
-    traced_ipc[h;f;(range_from;range_to);`range_from`range_to!(range_from;range_to)]}
+.qetl.source.ipc:{[h;f;range_from;range_to]
+    .qetl.source.traced_ipc[h;f;(range_from;range_to);`range_from`range_to!(range_from;range_to)]}
 
 / .qetl.source.ipc for any arguments: `h(f;a;b...)`, traced the same way.
 / .
@@ -89,18 +89,18 @@ ipc:{[h;f;range_from;range_to]
 / @param args its arguments, as a list - enlist cursor for one
 / @return what `f` returns on the far side
 / @eg .qetl.source.ipc_call[{value x};{[c] c+1};enlist 41] -> 42
-ipc_call:{[h;f;args] traced_ipc[h;f;args;enlist[`args]!enlist args]}
+.qetl.source.ipc_call:{[h;f;args] .qetl.source.traced_ipc[h;f;args;enlist[`args]!enlist args]}
 
 / Private: send `f` with `args` over `h`, logging it at TRACE with `shown`
 / beside the call - before it is sent, and with the rows and milliseconds,
 / or the error, when it comes back. With TRACE off it is just sent.
 / @private
-traced_ipc:{[h;f;args;shown]
+.qetl.source.traced_ipc:{[h;f;args;shown]
     msg:enlist[f],args;
     if[not .qetl.log.enabled`TRACE; :h msg];
     t0:.z.p;
     req:`transport`request!(`ipc;.qetl.log.next_request[]);
-    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist call_text f),req,shown);::];
+    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),req,shown);::];
     r:@[h;msg;{[req;t0;e]
         .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
@@ -118,14 +118,14 @@ traced_ipc:{[h;f;args;shown]
 / @return its text
 / @eg count .qetl.source.call_text {[a;b] a+b} -> 11
 / @private
-call_text:{[f] $[100h=type f; string f; .qetl.log.value1 f]}
+.qetl.source.call_text:{[f] $[100h=type f; string f; .qetl.log.value1 f]}
 
 / A mock source's seed, from its credential.
 / @param cred the credential, a string
 / @return a long
 / @throws error when the credential is not an integer
 / @eg .qetl.source.mock_seed "42"  ->  42
-mock_seed:{[cred]
+.qetl.source.mock_seed:{[cred]
     s:"J"$cred;
     if[null s; '"mock: the credential is an integer seed, such as 42"];
     s}
@@ -135,7 +135,7 @@ mock_seed:{[cred]
 / @param tbl the table a mock source reads
 / @return ([] c:symbols; t:chars), one row per declared column
 / @throws error when no mock source reads `tbl`
-mock_meta:{[tbl]
+.qetl.source.mock_meta:{[tbl]
     / Indexed rather than selected: in qSQL `transport` is this table's
     / column or .qetl.source.transport, and the PeachQ converter will not guess.
     src:0!.qetl.source.sources;
@@ -144,7 +144,7 @@ mock_meta:{[tbl]
     byraw:where mock & {[tbl;r] tbl in key r}[tbl] each src`raw;
     if[count byraw;
         c:(src[`raw] first byraw) tbl;
-        :([] c:cols c; t:type_chars[c])];
+        :([] c:cols c; t:.qetl.source.type_chars[c])];
     s:first src[`name] where (src[`table_name]=tbl) & mock;
     if[null s; '"mock_meta: no mock source reads ",string tbl];
     d:.qetl.source.sources s;
@@ -180,32 +180,32 @@ mock_meta:{[tbl]
 / For a non-UTC source the window is translated in BOTH directions here -
 / bounds out, timestamps back - so neither the query nor the fixture author
 / has to know about zones. See source_bounds and narrow_to_utc.
-fetch_window:{[source;h;range_from;range_to]
+.qetl.source.fetch_window:{[source;h;range_from;range_to]
     t0:.z.p;
-    decl:def[source];
-    bounds:source_bounds[decl;range_from;range_to];
+    decl:.qetl.source.def[source];
+    bounds:.qetl.source.source_bounds[decl;range_from;range_to];
     .[{.qetl.log.dbg[x;y;z]};(source;"fetching";
         `path`range_from`range_to`source_from`source_to`tz!
             ($[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
     page:$[null h;
-        (`fixture;window_fixture[decl;bounds 0;bounds 1]);
+        (`fixture;.qetl.source.window_fixture[decl;bounds 0;bounds 1]);
         (`live;(decl`query)[h;bounds 0;bounds 1])];
-    out:narrow_to_utc[decl;page 1;range_from;range_to];
-    if[(page 0)=`live; require_live_window[source;decl;out;range_from;range_to]];
+    out:.qetl.source.narrow_to_utc[decl;page 1;range_from;range_to];
+    if[(page 0)=`live; .qetl.source.require_live_window[source;decl;out;range_from;range_to]];
     / fetched vs kept differ only for a zoned source, whose bounds are padded:
     / the difference is the neighbouring windows' rows, dropped on purpose.
     .[{.qetl.log.dbg[x;y;z]};(source;"fetched";
-        `path`fetched`kept`ms!(page 0;count primary[source;page 1];count primary[source;out];
+        `path`fetched`kept`ms!(page 0;count .qetl.source.primary[source;page 1];count .qetl.source.primary[source;out];
             `long$(.z.p-t0)%1000000));::];
     (page 0;out)}
 
 / Private: refuse excess live primary rows before coverage can claim a window.
 / Supporting inputs are context and may lie outside it.
 / @private
-require_live_window:{[source;decl;out;range_from;range_to]
-    tbl:primary[source;out];
+.qetl.source.require_live_window:{[source;decl;out;range_from;range_to]
+    tbl:.qetl.source.primary[source;out];
     f:decl`time_column;
-    if[not f in column_names tbl;
+    if[not f in .qetl.source.column_names tbl;
         '"fetch_window: ",string[source],"'s primary input has no ",string[f]," time column"];
     ts:tbl f;
     outside:where (null ts)|(ts<range_from)|(ts>=range_to);
@@ -220,7 +220,7 @@ require_live_window:{[source;decl;out;range_from;range_to]
 / is the date-line jump, 24h). It buys correctness at the cost of
 / over-fetching, and the exact narrowing in narrow_to_utc throws the excess
 / away - so the only cost is bandwidth on sources that are not UTC.
-bound_padding:1D
+.qetl.source.bound_padding:1D
 
 / Private: the window bounds to hand the source, in the SOURCE's clock.
 / .
@@ -239,12 +239,12 @@ bound_padding:1D
 / So: pad the bounds, fetch a superset, and narrow exactly in UTC afterwards
 / where the arithmetic is unambiguous.
 / @private
-source_bounds:{[decl;range_from;range_to]
+.qetl.source.source_bounds:{[decl;range_from;range_to]
     tz:decl`tz;
     if[`UTC~tz; :(range_from;range_to)];
-    require_zone_table[tz];
-    (utc_to_local[tz;range_from-bound_padding];
-     utc_to_local[tz;range_to+bound_padding])}
+    .qetl.source.require_zone_table[tz];
+    (.qetl.source.utc_to_local[tz;range_from-.qetl.source.bound_padding];
+     .qetl.source.utc_to_local[tz;range_to+.qetl.source.bound_padding])}
 
 / Private: convert a fetched page's time_column to UTC and narrow it to the
 / requested half-open range.
@@ -273,20 +273,20 @@ source_bounds:{[decl;range_from;range_to]
 /     wall-clock time its own calendar never had means the declared zone is
 /     wrong - which is a contract breach, not a windowing question.
 / @private
-narrow_to_utc:{[decl;tbl;range_from;range_to]
+.qetl.source.narrow_to_utc:{[decl;tbl;range_from;range_to]
     tz:decl`tz;
     if[`UTC~tz; :tbl];
     f:decl`time_column;
     local_ts:tbl f;
     if[0=count local_ts; :tbl];
-    cs:local_candidates[tz;local_ts];
+    cs:.qetl.source.local_candidates[tz;local_ts];
     nvalid:count each cs;
     if[any 0=nvalid;
-        '"narrow_to_utc: ",nonexistent_message[tz;first local_ts where 0=nvalid]];
+        '"narrow_to_utc: ",.qetl.source.nonexistent_message[tz;first local_ts where 0=nvalid]];
     in_range:{[lo;hi;c] any (c>=lo) and c<hi}[range_from;range_to] each cs;
     if[any in_range and 1<nvalid;
         pos:first where in_range and 1<nvalid;
-        '"narrow_to_utc: ",ambiguous_message[tz;local_ts pos;cs pos]];
+        '"narrow_to_utc: ",.qetl.source.ambiguous_message[tz;local_ts pos;cs pos]];
     / Every surviving row now has exactly one reading, so the conversion is
     / unambiguous and the half-open bound is applied in UTC - the direction
     / where the arithmetic cannot double-count or skip.
@@ -299,21 +299,21 @@ narrow_to_utc:{[decl;tbl;range_from;range_to]
 / name is a variable: `select from t where time_column>=from_ts` would compare
 / the literal symbol, not the column it names.
 / @private
-window_fixture:{[decl;range_from;range_to]
+.qetl.source.window_fixture:{[decl;range_from;range_to]
     t:(decl`fixture)[];
-    if[0=count decl`supporting; :window_rows[decl;t;range_from;range_to]];
+    if[0=count decl`supporting; :.qetl.source.window_rows[decl;t;range_from;range_to]];
     / Only the primary owns the window; supporting rows are context and may
     / lie outside it.
     if[not 99h=type t;
         '"window_fixture: ",string[decl`source],"'s fixture must return a dict of its inputs - it declares supporting input(s) ",
          ", " sv string key decl`supporting];
-    @[t;decl`table_name;window_rows[decl;;range_from;range_to]]}
+    @[t;decl`table_name;.qetl.source.window_rows[decl;;range_from;range_to]]}
 
 / Private: one table's rows inside [range_from;range_to) on time_column.
 / @private
-window_rows:{[decl;t;range_from;range_to]
+.qetl.source.window_rows:{[decl;t;range_from;range_to]
     f:decl`time_column;
-    if[not f in column_names t;
+    if[not f in .qetl.source.column_names t;
         '"window_fixture: ",string[decl`source],"'s fixture has no ",string[f],
          " column, so the window cannot be applied - it would return every row for every window and triplicate the data"];
     ?[t;((>=;f;range_from);(<;f;range_to));0b;()]}
