@@ -30,7 +30,7 @@ marks a shortfall when a middle leg cannot carry it. What is left is one idea:
 
 > the shortest path **excluding the direct leg** is the synthetic route
 
-<!-- q-example: transcript kdbx-only: the quant library does not load on PeachQ v0.88 unflattened - it rejects the nested namespace `\d .qf.util` (src/foundation/schema.q:21); q-unit-peachq runs it flattened -->
+<!-- q-example: transcript -->
 ```q
 q) .qf.mkt.ccy_shortest_path[`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY except `EURJPY;`EUR;`JPY]
 `EURUSD`USDJPY

@@ -199,7 +199,7 @@ convention the new `version` separates old rows from new ones and a query can
 group by it. `kind`, `step` (null on `residual` and `total`) and `status` are
 persisted too.
 
-<!-- q-example: run kdbx-only: the quant library does not load on PeachQ v0.88 unflattened - it rejects the nested namespace `\d .qf.util` (src/foundation/schema.q:21); q-unit-peachq runs it flattened -->
+<!-- q-example: run -->
 ```q
 t0:2026.01.01D00:00:00.000000000;
 t1:t0+0D00:00:01;

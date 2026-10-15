@@ -2,13 +2,13 @@
 / partition replacement; TorQ DQE owns scheduling, transport and persistence.
 / Definitions are trusted q code, not a query language for untrusted clients.
 / .
-\d .qf.util
+\d .
 
 / What every metatable's name starts with, so it reads as derived bookkeeping
 / beside the market data it measures - as etl_ marks the pipeline's own tables
 / (etl_runs, etl_coverage). Fixed, not configurable: every reader would have
 / to resolve it, and changing it would strand the tables already stored.
-prefix:"meta_";
+.qf.util.prefix:"meta_";
 
 / Check a metatable's name: a symbol atom of .qf.util.prefix followed by more.
 / Refused rather than prefixed for the caller, so a name is never changed
@@ -18,7 +18,7 @@ prefix:"meta_";
 / @throws a name that is not a symbol atom, or does not start with the prefix
 / @eg .qf.util.require_name `meta_trade_counts -> `meta_trade_counts
 / @eg .qf.util.require_name `trade_counts -> throws
-require_name:{[name]
+.qf.util.require_name:{[name]
     if[not -11h=type name;'"metatables: result name must be a symbol atom"];
     text:string name;
     prefixed:.qf.util.prefix~count[.qf.util.prefix]#text;
@@ -34,7 +34,7 @@ require_name:{[name]
 / @return definition dictionary
 / @throws invalid names, duplicate columns or reserved output names
 / @eg .qf.util.definition[`trade;`date;`sym`venue;()!()]
-definition:{[tab;partition_col;group_cols;aggregates]
+.qf.util.definition:{[tab;partition_col;group_cols;aggregates]
     if[not -11h=type tab;'"metatables: table must be a symbol atom"];
     if[null tab;'"metatables: table must be named"];
     if[not -11h=type partition_col;'"metatables: partition column must be a symbol atom"];
@@ -57,11 +57,11 @@ definition:{[tab;partition_col;group_cols;aggregates]
 
 / Private: validate a definition against current source metadata and normalize partitions.
 / @private
-require_request:{[spec;partitions]
+.qf.util.require_request:{[spec;partitions]
     if[not 99h=type spec;'"metatables: definition must be a dictionary"];
     fields:`table`partition_col`group_cols`aggregates;
     if[not fields~key spec;'"metatables: use definition to construct the specification"];
-    definition . spec fields;
+    .qf.util.definition . spec fields;
     if[not (type partitions) in 6 7 11 13 14h;
         '"metatables: partitions must be an int, long, symbol, month or date vector"];
     if[0=count partitions;'"metatables: explicit nonempty partitions required"];
@@ -83,12 +83,12 @@ require_request:{[spec;partitions]
 / @param spec definition returned by definition
 / @return guid, equal for equal definitions
 / @eg .qf.util.fingerprint[.qf.util.definition[`trade;`date;`sym`venue;()!()]]
-fingerprint:{[spec]
+.qf.util.fingerprint:{[spec]
     "G"$"-" sv 0 8 12 16 20 cut raze string md5 "c"$-8!spec};
 
 / Private: query a single partition; preserve typed empty grouped results.
 / @private
-collect_partition:{[spec;part;observed_at;definition_id]
+.qf.util.collect_partition:{[spec;part;observed_at;definition_id]
     grouping:spec`group_cols;
     by_expr:$[count grouping;grouping!grouping;0b];
     predicate:enlist(=;spec`partition_col;$[-11h=type part;enlist part;part]);
@@ -111,9 +111,9 @@ collect_partition:{[spec;part;observed_at;definition_id]
 /   meta_observed_at, and meta_definition (the definition's fingerprint)
 / @throws malformed request, missing source columns, query or aggregate errors
 / @eg .qf.util.collect[.qf.util.definition[`trade;`date;`symbol$();()!()];enlist 2026.09.01]
-collect:{[spec;partitions]
-    partitions:require_request[spec;partitions];
-    raze collect_partition[spec;;.z.p;fingerprint[spec]]each partitions};
+.qf.util.collect:{[spec;partitions]
+    partitions:.qf.util.require_request[spec;partitions];
+    raze .qf.util.collect_partition[spec;;.z.p;.qf.util.fingerprint[spec]]each partitions};
 
 / Replace complete requested slices of a metatable, including groups which disappeared.
 / Returns a new table only after every query succeeds. Assign or persist it at the caller.
@@ -124,13 +124,13 @@ collect:{[spec;partitions]
 / @throws source/query failure, incompatible stored schema, or stored rows
 /   collected under a different definition, leaving current untouched
 / @eg .qf.util.refresh[stored;spec;enlist 2026.09.01]
-refresh:{[current;spec;partitions]
+.qf.util.refresh:{[current;spec;partitions]
     if[not 98h=type current;'"metatables: current must be an unkeyed table"];
     if[not `meta_definition in cols current;
         '"metatables: stored table has no meta_definition; rebuild it with collect"];
-    if[not all (fingerprint[spec])=current`meta_definition;
+    if[not all (.qf.util.fingerprint[spec])=current`meta_definition;
         '"metatables: stored rows were collected under a different definition; rebuild"];
-    replacement:collect[spec;partitions];
+    replacement:.qf.util.collect[spec;partitions];
     if[not (0#current)~0#replacement;
         '"metatables: stored schema differs; rebuild after definition changes"];
     retained:?[current;enlist(not;(in;spec`partition_col;enlist partitions));0b;()];
@@ -140,7 +140,7 @@ refresh:{[current;spec;partitions]
 / A window counts towards a date only when it lies wholly inside that day; one
 / that crosses midnight cannot be split, so its rows cannot be attributed.
 / @private
-reconcile_date:{[claims;observed;day]
+.qf.util.reconcile_date:{[claims;observed;day]
     start:`timestamp$day;
     end:`timestamp$day+1;
     inside:`range_from xasc select from claims where range_from>=start, range_to<=end;
@@ -181,7 +181,7 @@ reconcile_date:{[claims;observed;day]
 / @return table of date, observed, published, windows, fully_covered, status
 / @throws malformed metatable or dates, or the coverage ledger is not loaded
 / @eg .qf.util.reconcile[stored;2026.09.01 2026.09.02;`trade;`;`v1]
-reconcile:{[metatable;dates;ds;part;version]
+.qf.util.reconcile:{[metatable;dates;ds;part;version]
     if[not 98h=type metatable;'"metatables: metatable must be an unkeyed table"];
     if[not all `date`rows in cols metatable;
         '"metatables: reconcile needs a date-partitioned metatable with a rows count"];
@@ -194,11 +194,11 @@ reconcile:{[metatable;dates;ds;part;version]
     claims:select range_from,range_to,rows_published from .qetl.coverage.history[ds;part;version]
         where superseded_at=.qetl.coverage.still_current;
     observed:exec sum rows by date from metatable;
-    reconcile_date[claims;observed;]each distinct dates};
+    .qf.util.reconcile_date[claims;observed;]each distinct dates};
 
 / Private: temporal bounds preserve typed nulls for empty/all-null slices.
 / @private
-time_bound:{[direction;values]
+.qf.util.time_bound:{[direction;values]
     if[not (type values) in 12 13 14 15 16 17 18 19h;
         '"metatables: time range columns must be temporal vectors"];
     present:values where not null values;
@@ -210,7 +210,7 @@ time_bound:{[direction;values]
 / @return long violation count
 / @throws non-boolean, scalar or wrong-length rule result
 / @eg .qf.util.count_bad[101b;3] -> 2
-count_bad:{[violations;row_count]
+.qf.util.count_bad:{[violations;row_count]
     if[not 1h=type violations;'"metatables: quality rules must return boolean vectors"];
     if[row_count<>count violations;
         '"metatables: quality rules must return one boolean per source row"];
@@ -223,7 +223,7 @@ count_bad:{[violations;row_count]
 / @return aggregate dictionary: rows, temporal bounds, null counts, bad_ rule counts
 / @throws unnamed or duplicate column/rule names, malformed lists or dictionary
 / @eg .qf.util.profile[enlist`time;`bid`ask;enlist[`crossed]!enlist(>;`bid;`ask)]
-profile:{[time_cols;null_cols;rules]
+.qf.util.profile:{[time_cols;null_cols;rules]
     if[not all 11h=type each (time_cols;null_cols);
         '"metatables: profile columns must be symbol vectors"];
     if[(any null time_cols,null_cols) or not (time_cols;null_cols)~distinct each (time_cols;null_cols);

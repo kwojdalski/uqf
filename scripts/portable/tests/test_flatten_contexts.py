@@ -342,7 +342,10 @@ def test_every_binding_survives_the_round_trip_through_5_0():
     again = convert({p: r.output for p, r in renested.items()}, allow=True)
     assert [p for p in flat if again[p].output != flat[p]] == []
     direct = convert(originals, target="5.0")
-    assert [p for p, r in direct.items() if r.output != originals[p]] == []
+    # A file written flat on purpose (the quant library defines every name from
+    # the root, #1411) is exactly what --target 5.0 puts back inside a context,
+    # so only files it leaves alone are held to staying unchanged.
+    assert [p for p, r in direct.items() if r.output != originals[p] and not r.nested] == []
 
 
 # ------------------------------------------------------------- refusals

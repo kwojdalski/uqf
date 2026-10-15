@@ -8,7 +8,7 @@
 / these defaults.
 / .
 
-\d .qf.demo
+\d .
 
 / One pip, in rate terms - the increment example scripts use between
 / adjacent synthetic order book levels (e.g. spot, spot-pip_size,
@@ -17,15 +17,15 @@
 / supplied scaling parameter for markout/eff_spread/slippage/etc - this
 / is 1%10000 in the same units pip_factor scales, purely for building
 / demo data.
-pip_size:0.0001;
+.qf.demo.pip_size:0.0001;
 
 / One synthetic order-book level's baseline notional, in example scripts'
 / synthetic books - a round, readable size (1 million) that scripts scale
 / up per level to build a depth ladder.
-level_size_unit:1e6;
+.qf.demo.level_size_unit:1e6;
 
 / Jitter amount (same units as level_size_unit) example scripts add per row so
 / consecutive synthetic ticks' sizes aren't identical.
-size_row_drift:1e4;
+.qf.demo.size_row_drift:1e4;
 
 \d .

@@ -2,14 +2,14 @@
 / Requires stats.q (inv_ncdf) to be loaded first for var_parametric.
 / .
 
-\d .qf.port
+\d .
 
 / The quantity below which a position or lot counts as flat. Under the
 / smallest unit anything here trades in - a satoshi is 1e-8 - so a quantity
 / this small is float residue from netting fractional fills, never a real
 / holding (#811, #1278). The one constant behind is_flat, shared by
 / positions.q, desk_positions.q and allocation.q (.qf.exec).
-flat_tolerance:1e-9;
+.qf.port.flat_tolerance:1e-9;
 
 / Whether a quantity is flat: within flat_tolerance of zero. Netting
 / fractional sizes rarely lands on an exact 0f (0.1+0.2-0.3 is 5.6e-17),
@@ -17,7 +17,7 @@ flat_tolerance:1e-9;
 / @param qty a signed quantity (atom or list)
 / @return a boolean, true where abs qty is under flat_tolerance
 / @eg .qf.port.is_flat[0.1+0.2-0.3] -> 1b
-is_flat:{[qty] flat_tolerance>abs qty};
+.qf.port.is_flat:{[qty] .qf.port.flat_tolerance>abs qty};
 
 / Money value of a 1-pip move on a given base-currency notional, in quote
 / currency.
@@ -25,7 +25,7 @@ is_flat:{[qty] flat_tolerance>abs qty};
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the value of a 1-pip move, in quote currency
 / @eg .qf.port.pip_value[1000000;10000]  -> 100f
-pip_value:{[notional;pip_factor] notional%pip_factor};
+.qf.port.pip_value:{[notional;pip_factor] notional%pip_factor};
 
 / Mark-to-market P&L of a spot position, in quote currency.
 / @param notional position size in base currency units
@@ -34,7 +34,7 @@ pip_value:{[notional;pip_factor] notional%pip_factor};
 / @param side 1 for long base currency, -1 for short
 / @return the P&L, in quote currency
 / @eg .qf.port.pnl[1000000;1.1000;1.1050;1]  -> 5000f
-pnl:{[notional;entry_rate;exit_rate;side] side*notional*(exit_rate-entry_rate)};
+.qf.port.pnl:{[notional;entry_rate;exit_rate;side] side*notional*(exit_rate-entry_rate)};
 
 / Forward premium/discount implied by spot vs. an outright, as a decimal
 / return: (F-S)/S. Positive means the base currency trades forward at a
@@ -43,7 +43,7 @@ pnl:{[notional;entry_rate;exit_rate;side] side*notional*(exit_rate-entry_rate)};
 / @param fwd outright forward rate
 / @return the decimal forward premium/discount
 / @eg .qf.port.carry_return[1.10;1.1050]  -> 0.004545455
-carry_return:{[spot;fwd] (fwd-spot)%spot};
+.qf.port.carry_return:{[spot;fwd] (fwd-spot)%spot};
 
 / Money value of that same forward premium/discount on a given notional.
 / @param notional position size in base currency units
@@ -51,7 +51,7 @@ carry_return:{[spot;fwd] (fwd-spot)%spot};
 / @param fwd outright forward rate
 / @return the carry P&L, in quote currency
 / @eg .qf.port.carry_pnl[1000000;1.10;1.1050]  -> 5000f
-carry_pnl:{[notional;spot;fwd] notional*(fwd-spot)};
+.qf.port.carry_pnl:{[notional;spot;fwd] notional*(fwd-spot)};
 
 / One-sided parametric (variance-covariance) VaR for a position with
 / annualised volatility vol over a horizon of t years, at a one-tailed
@@ -62,7 +62,7 @@ carry_pnl:{[notional;spot;fwd] notional*(fwd-spot)};
 / @param confidence one-tailed confidence level, e.g. 0.95 or 0.99
 / @return a positive loss estimate, in the notional's currency
 / @eg .qf.port.var_parametric[1000000;0.10;1%252;0.95]  -> 10361.6 (1-day 95% VaR)
-var_parametric:{[notional;vol;t;confidence]
+.qf.port.var_parametric:{[notional;vol;t;confidence]
     z_score:.qf.math.inv_ncdf[confidence];
     (abs notional)*vol*sqrt[t]*z_score};
 
@@ -98,7 +98,7 @@ var_parametric:{[notional;vol;t;confidence]
 /   negative when the percentile outcome is a gain
 / @throws error when pnl_series holds no non-null outcome
 / @eg .qf.port.var_historical[-100+til 200;0.95]  -> 90 (5th percentile of a 200-outcome series)
-var_historical:{[pnl_series;confidence]
+.qf.port.var_historical:{[pnl_series;confidence]
     outcomes:pnl_series where not null pnl_series;
     if[0=count outcomes; '"var_historical: no non-null P&L outcome to take a percentile of"];
     n:count outcomes;

@@ -108,8 +108,8 @@ Never propose any of these, and say why if asked:
   `scripts/gates/check_q_traps.py` carries the list it knows about.
 - **A word that names a type.** `to_timestamp`, `to_float`, `to_symbol`.
 - **A namespace or filename.** The convention ties `src/<area>/<module>.q` to
-  its test file and a `\d .qf.<domain>` domain, so renaming a domain means every
-  file's `\d` line, every qualified call, the `src/init.q` entry and every
+  its test file and a `.qf.<domain>` domain, so renaming a domain means every
+  definition's prefix, every qualified call, the `src/init.q` entry and every
   citation. That is a migration, not a spelling tidy.
 - **A name whose shortening collides with a local.** Verify by reading the
   function, not by assuming. Renaming the `.qetl.job.bounded` config registry to

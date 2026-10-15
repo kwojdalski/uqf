@@ -42,7 +42,7 @@
 / view. Two modules marking the same book two ways would drift. Exposure
 / is a fact about the fills alone, and that is what this file computes.
 
-\d .qf.port
+\d .
 
 / The columns a fill table must carry, on top of the dimensions.
 / .
@@ -52,7 +52,7 @@
 / that spells it `BUY/`SELL converts once, at the edge that reads it.
 / fxpositions1 feeds this module `executions`, the one fill tape posbook
 / reads too (#885).
-required_cols:`sym`side`size`price
+.qf.port.required_cols:`sym`side`size`price
 
 / An empty book keyed on the given dimensions.
 / .
@@ -65,7 +65,7 @@ required_cols:`sym`side`size`price
 / @return an empty keyed table: dims -> base_qty, quote_qty, fill_count
 / @throws error when dims is empty - a book with no dimensions is one row and says nothing
 / @eg cols .qf.port.empty_desk_book[`sym`book] -> `sym`book`base_qty`quote_qty`fill_count
-empty_desk_book:{[dims]
+.qf.port.empty_desk_book:{[dims]
     d:(),dims;
     if[0=count d; '"empty_desk_book: a book needs at least one dimension to be keyed on"];
     if[not 11h=abs type d; '"empty_desk_book: dimensions must be column names, as symbols"];
@@ -76,7 +76,7 @@ empty_desk_book:{[dims]
 / @param book a book from empty_desk_book
 / @return the dimension columns, in key order
 / @eg .qf.port.dimensions .qf.port.empty_desk_book[`sym`book] -> `sym`book
-dimensions:{[book] keys book}
+.qf.port.dimensions:{[book] keys book}
 
 / Net a batch of fills into a book.
 / .
@@ -97,10 +97,10 @@ dimensions:{[book] keys book}
 / @return the updated book
 / @throws error naming any missing column, or counting fills with a null side, size or price
 / @eg exec base_qty from .qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym];([] sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; price:1.085 1.086)] -> enlist 600000f
-apply_desk_fills:{[book;batch]
-    dims:dimensions[book];
+.qf.port.apply_desk_fills:{[book;batch]
+    dims:.qf.port.dimensions[book];
     if[not 98h=type batch; '"apply_desk_fills: fills must be a table"];
-    .qf.util.require_cols[`apply_desk_fills;`fills;batch;distinct required_cols,dims];
+    .qf.util.require_cols[`apply_desk_fills;`fills;batch;distinct .qf.port.required_cols,dims];
     if[0=count batch; :book];
     / sum skips a null, so a null price would net into base_qty and not
     / quote_qty (a null size into neither, yet still count) - a book missing
@@ -140,7 +140,7 @@ apply_desk_fills:{[book;batch]
 / @param book a book from apply_desk_fills
 / @return the book with a break_even column added
 / @eg exec break_even from .qf.port.break_even .qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym];([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; price:enlist 1.085)] -> enlist 1.085
-break_even:{[book]
+.qf.port.break_even:{[book]
     / A local, not the global by name: inside qSQL KDB-X resolves a bare
     / global at the ROOT, where no flat_tolerance exists. The constant is
     / risk.q's - this file used to keep an alias of it, which became the same
@@ -169,7 +169,7 @@ break_even:{[book]
 / @param group_cols the dimensions to report within, e.g. `book, or () for the whole desk
 / @return a table of group_cols plus ccy and amount
 / @eg exec amount from .qf.port.desk_ccy_exposure[.qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym];([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; price:enlist 1.085)];()] -> 1000000 -1085000f
-desk_ccy_exposure:{[book;group_cols]
+.qf.port.desk_ccy_exposure:{[book;group_cols]
     g:(),group_cols;
     rows:0!book;
     / Empty, but the SAME shape as a non-empty result: keyed on the group
@@ -197,12 +197,12 @@ desk_ccy_exposure:{[book;group_cols]
 / @return a book keyed on group_cols
 / @throws error when a requested column is not one of the book's dimensions
 / @eg .qf.port.dimensions .qf.port.rollup[.qf.port.empty_desk_book[`sym`book];enlist `book] -> enlist `book
-rollup:{[book;group_cols]
+.qf.port.rollup:{[book;group_cols]
     g:(),group_cols;
-    unknown:g where not g in dimensions book;
+    unknown:g where not g in .qf.port.dimensions book;
     if[count unknown;
         '"rollup: ",(", " sv string unknown)," is not a dimension of this book - it is keyed on ",
-         ", " sv string dimensions book];
+         ", " sv string .qf.port.dimensions book];
     g xkey ?[0!book; (); {x!x} g;
         `base_qty`quote_qty`fill_count!((sum;`base_qty);(sum;`quote_qty);(sum;`fill_count))]}
 

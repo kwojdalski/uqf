@@ -16,7 +16,6 @@ python/uqs/tests/test_qnames.py::test_q_appends_the_tags_in_the_order_runs_strip
 
 python/uqs/tests/test_declarations_match_q.py::test_the_parser_reads_every_job_the_way_q_loads_it  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
-python/uqs/tests/test_dqe_config.py::test_the_generated_rows_run_as_dqe_runs_them  # loads src/metadata/metatables.q, which now declares the nested \d .qf.util that PeachQ cannot load (peachq-org/peachq#80)
 
 python/uqs/tests/test_etl_standalone_load.py::test_the_etl_tree_loads_outside_the_test_harness  # loads the source tree, whose nested \d contexts PeachQ cannot load (peachq-org/peachq#80)
 
