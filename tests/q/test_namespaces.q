@@ -97,7 +97,7 @@ test_every_registered_worker_has_its_namespace_listed:{[t]
     / files alone stopped exercising .qetl.job.bounded.state.registered at all, which the
     / coverage lane noticed. Both halves matter: the registry is the thing
     / under test, the files are what separates a real worker from a fixture.
-    registered:.qetl.job.bounded.state.registered[] inter .testutil.etl_declaration_names["src/etl/workers"];
+    registered:.qetl.job.bounded.state.registered[] inter .qt.support.etl_declaration_names["src/etl/workers"];
     missing:registered where not {[w] (.qetl.job.bounded.namespace w) in .qns.owned[]} each registered;
     .qunit.assertEquals[missing;`symbol$();
         "every registered bounded worker's namespace is enumerated"]};
@@ -266,43 +266,21 @@ missing_declarations:{[names;registered] names except registered}
 leaf_names:{[root;names] `$(1+count string root)_/:string names}
 
 test_every_streaming_file_is_a_registered_job:{[t]
-    missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/streaming"];
+    missed:.nstest.missing_declarations[.qt.support.etl_declaration_names["src/etl/streaming"];
         key .qetl.job.stream.jobs];
     .qunit.assertEquals[missed; `symbol$();
         "every src/etl/streaming/*.q registers a job - one the glob missed would load nothing"]};
 
 test_every_source_file_is_a_registered_source:{[t]
-    missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/sources"];
+    missed:.nstest.missing_declarations[.qt.support.etl_declaration_names["src/etl/sources"];
         .nstest.leaf_names[`.qpipe.source; .qns.children `.qpipe.source]];
     .qunit.assertEquals[missed; `symbol$();
         "every src/etl/sources/*.q registers under .qpipe.source"]};
 
 test_every_worker_file_is_a_registered_worker:{[t]
-    missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/workers"];
+    missed:.nstest.missing_declarations[.qt.support.etl_declaration_names["src/etl/workers"];
         .nstest.leaf_names[`.qpipe.job; .qns.children `.qpipe.job]];
     .qunit.assertEquals[missed; `symbol$();
         "every src/etl/workers/*.q registers under .qpipe.job"]};
-
-/ ---------------------------------------------------------------------------
-/ The runner's own namespace list
-/ ---------------------------------------------------------------------------
-/ tests/run_tests.q LISTS the namespaces it runs (its comment says why it is
-/ not derived). A namespace missing from that list is a suite that LOADS and
-/ never RUNS - green, silently, for as long as nobody looks. This is what
-/ makes that loud.
-/ .
-/ It reads the runner as text rather than the live `nsList`, because the live
-/ one is whatever the runner set and comparing a value to itself proves
-/ nothing.
-test_the_runner_runs_every_suite_it_loads:{[t]
-    src:read0 `:tests/run_tests.q;
-    / The RHS only. `value` on the whole line would RUN the assignment - it
-    / returns the name rather than the value, and reassigns the runner's own
-    / nsList from inside a test while it is using it.
-    / The RHS, without its trailing `;` - with it, `value` sees an empty
-    / statement after the list and hands back `::` rather than the symbols.
-    listed:value -1_ (count "nsList:")_ first src where src like "nsList:*";
-    .qunit.assertEquals[asc .testutil.suite_namespaces[]; asc listed;
-        "every loaded test namespace is listed in run_tests.q - one that is not loads and never runs"]};
 
 \d .

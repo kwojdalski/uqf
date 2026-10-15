@@ -1,6 +1,6 @@
 // test_allocation.q - tests for src/portfolio/allocation.q. Load
 // src/portfolio/risk.q, src/portfolio/positions.q, src/portfolio/allocation.q,
-// tests/lib/qunit.q and tests/lib/testutil.q before this file.
+// tests/lib/qunit.q and tests/lib/support.q before this file.
 
 \d .alloctest
 
@@ -26,16 +26,16 @@ test_weighted_reproduces_the_position_book:{[t]
     trades:mk_flat[];
     book:.qpos.apply_fills[.qpos.empty_book[];trades];
     ledger:.qalloc.allocate[trades;`weighted];
-    .testutil.assertApprox[sum exec pnl from ledger; (book`EURUSD)`realized_pnl; 1e-9;
+    .qt.support.assertApprox[sum exec pnl from ledger; (book`EURUSD)`realized_pnl; 1e-9;
         "weighted total realised P&L equals .qpos.apply_fills' realized_pnl"]};
 
 test_weighted_residual_matches_the_position_book:{[t]
     trades:mk_two_lots[];
     book:.qpos.apply_fills[.qpos.empty_book[];trades];
     left:.qalloc.residual[trades;`weighted];
-    .testutil.assertApprox[first exec side*qty from left; (book`EURUSD)`qty; 1e-9;
+    .qt.support.assertApprox[first exec side*qty from left; (book`EURUSD)`qty; 1e-9;
         "weighted leaves the same signed quantity open as .qpos carries"];
-    .testutil.assertApprox[first exec price from left; (book`EURUSD)`avg_price; 1e-9;
+    .qt.support.assertApprox[first exec price from left; (book`EURUSD)`avg_price; 1e-9;
         "and at the same weighted-average price"]};
 
 / ---------------------------------------------------------- THE METHODS
@@ -73,7 +73,7 @@ test_every_method_realises_the_same_total_once_flat:{[t]
     totals:{[trades;m] sum exec pnl from .qalloc.allocate[trades;m]}[trades;] each `fifo`lifo`hifo`lofo`weighted;
     .qunit.assertEquals[count distinct totals; 1;
         "fifo, lifo, hifo, lofo and weighted all realise the same total on a flat book"];
-    .testutil.assertApprox[first totals; 9000000f; 1e-9;
+    .qt.support.assertApprox[first totals; 9000000f; 1e-9;
         "2mm bought for 3mm and sold for 12mm realises 9mm, however it is sliced"]};
 
 test_no_method_leaves_anything_open_once_flat:{[t]
@@ -337,9 +337,9 @@ test_position_agrees_with_the_position_book:{[t]
     trades:mk_flat[],mk_two_lots[];
     derived:.qalloc.position[.qalloc.residual[trades;`weighted];`sym];
     tracked:.qpos.apply_fills[.qpos.empty_book[];trades];
-    .testutil.assertApprox[first exec qty from derived; (tracked`EURUSD)`qty; 1e-9;
+    .qt.support.assertApprox[first exec qty from derived; (tracked`EURUSD)`qty; 1e-9;
         "the open lots add up to the position book's qty"];
-    .testutil.assertApprox[first exec avg_price from derived; (tracked`EURUSD)`avg_price; 1e-9;
+    .qt.support.assertApprox[first exec avg_price from derived; (tracked`EURUSD)`avg_price; 1e-9;
         "at the position book's average price"]};
 
 test_position_reports_a_short_as_a_negative_quantity:{[t]
@@ -355,9 +355,9 @@ test_by_trade_attributes_the_same_money_twice:{[t]
     ledger:.qalloc.allocate[trades;`fifo];
     r:.qalloc.by_trade ledger;
     total:sum exec pnl from ledger;
-    .testutil.assertApprox[sum exec closing_pnl from r; total; 1e-9;
+    .qt.support.assertApprox[sum exec closing_pnl from r; total; 1e-9;
         "closing_pnl sums to the book's realised P&L"];
-    .testutil.assertApprox[sum exec opening_pnl from r; total; 1e-9;
+    .qt.support.assertApprox[sum exec opening_pnl from r; total; 1e-9;
         "and so does opening_pnl - they are two views of the same money"];
     .qunit.assertEquals[count r; 4; "every trade appears, as an opener or a closer or both"]};
 

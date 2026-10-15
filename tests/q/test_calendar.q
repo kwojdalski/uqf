@@ -1,6 +1,6 @@
 // test_calendar.q - tests for src/foundation/calendar.q (.qcal): weekdays,
 // business-day rolls, spot dates and tenor value dates. Load src/init.q,
-// tests/lib/qunit.q and tests/lib/testutil.q before this file.
+// tests/lib/qunit.q and tests/lib/support.q before this file.
 
 \d .calendartest
 

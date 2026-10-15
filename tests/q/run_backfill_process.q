@@ -18,7 +18,7 @@
 \c 400 1000
 
 \l tests/lib/qunit.q
-\l tests/lib/testutil.q
+\l tests/lib/support.q
 \l src/init.q
 \l src/etl/core/status.q
 \l src/etl/core/backfill_state.q
@@ -34,9 +34,9 @@ if[""~getenv `UQF_STATUS_DIR;
 
 statusdir:getenv `UQF_STATUS_DIR;
 system"mkdir -p ",statusdir;
-.testutil.reset_coverage_ledger[];
+.qt.support.reset_coverage_ledger[];
 
-Q:.testutil.q_interpreter[];
+Q:.qt.support.q_interpreter[];
 
 failures:0;
 / `label`, not `desc`: desc is a q BUILTIN (descending sort), so using it as

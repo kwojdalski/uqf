@@ -148,7 +148,7 @@ Each refusal names a specific failure it prevents. A guard whose comment cannot
 name one is usually guarding nothing.
 
 The inverse --- silent healing --- is treated as a bug even in test scaffolding.
-`.testutil.reset_coverage_ledger` carries a comment about a version that
+`.qt.support.reset_coverage_ledger` carries a comment about a version that
 returned an empty *symbol vector* instead of an empty table, which every suite
 then healed on first use, hiding the fault until something called `meta`
 directly.

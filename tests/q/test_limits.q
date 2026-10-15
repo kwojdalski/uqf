@@ -1,5 +1,5 @@
 // test_limits.q - tests for src/portfolio/limits.q. Load
-// src/portfolio/limits.q, tests/lib/qunit.q and tests/lib/testutil.q before
+// src/portfolio/limits.q, tests/lib/qunit.q and tests/lib/support.q before
 // this file - and, for the section policing other modules' tables,
 // src/portfolio/positions.q and src/execution/execution.q.
 
@@ -63,7 +63,7 @@ test_measure_melts_a_book_into_metric_and_observed:{[t]
     m:.qlimit.measure[mk_book[];`base_qty`quote_qty];
     .qunit.assertEquals[count m;6;"three positions times two metrics"];
     .qunit.assertEquals[asc distinct exec metric from m;`s#`base_qty`quote_qty;"one row per metric"];
-    .testutil.assertApprox[first exec observed from m where sym=`EURUSD, metric=`base_qty;2000000f;1e-9;
+    .qt.support.assertApprox[first exec observed from m where sym=`EURUSD, metric=`base_qty;2000000f;1e-9;
         "carrying the book's own number"]};
 
 test_the_scope_is_the_books_key_not_its_other_columns:{[t]
@@ -96,7 +96,7 @@ test_a_position_over_its_cap_breaches:{[t]
     b:.qlimit.evaluate[.qlimit.measure[mk_book[];enlist `base_qty];mk_limits[]];
     .qunit.assertEquals[count b;2;"EURUSD at 2mm over 1mm, and USDJPY at 9mm over 5mm"];
     .qunit.assertEquals[first exec sym from b;`EURUSD;"worst first, by utilisation"];
-    .testutil.assertApprox[first exec utilisation from b;2f;1e-9;"2mm against a 1mm cap is twice the limit"]};
+    .qt.support.assertApprox[first exec utilisation from b;2f;1e-9;"2mm against a 1mm cap is twice the limit"]};
 
 test_a_null_observed_on_a_limited_scope_is_refused_not_dropped:{[t]
     m:.qlimit.measure[mk_book[];enlist `base_qty];
@@ -111,9 +111,9 @@ test_a_short_position_breaches_the_same_cap:{[t]
     / A cap is on |value|: a desk 9mm short is as far over a 5mm limit as
     / one 9mm long, and a signed comparison would police one direction.
     b:.qlimit.evaluate[.qlimit.measure[mk_book[];enlist `base_qty];mk_limits[]];
-    .testutil.assertApprox[first exec observed from b where sym=`USDJPY;-9000000f;1e-9;
+    .qt.support.assertApprox[first exec observed from b where sym=`USDJPY;-9000000f;1e-9;
         "the breach reports the signed position"];
-    .testutil.assertApprox[first exec utilisation from b where sym=`USDJPY;1.8;1e-9;
+    .qt.support.assertApprox[first exec utilisation from b where sym=`USDJPY;1.8;1e-9;
         "while the utilisation is measured on its size"]};
 
 test_a_position_inside_its_cap_does_not_breach:{[t]
@@ -184,7 +184,7 @@ test_a_qpos_book_is_policed_as_it_stands:{[t]
     b:.qlimit.evaluate[.qlimit.measure[pos;enlist `qty];
         ([] sym:enlist `EURUSD; metric:enlist `qty; cap:enlist 1000000f)];
     .qunit.assertEquals[count b;1;"1.5mm short is over a 1mm cap on its size"];
-    .testutil.assertApprox[first b`observed;-1500000f;1e-9;"the breach reports the signed position"]};
+    .qt.support.assertApprox[first b`observed;-1500000f;1e-9;"the breach reports the signed position"]};
 
 test_a_currency_exposure_breaches_on_its_magnitude:{[t]
     / ccy_exposure_in's shape, keyed on the currency it reports.

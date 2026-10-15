@@ -29,7 +29,7 @@ import pytest
 
 from uqs.cli.create_backfill import twin_target
 from uqs.interpreter import q_interpreter
-from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST
+from uqs.paths import STACK_TABLES_TEST
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.columns import (
@@ -155,12 +155,12 @@ def _status_dir(env: dict[str, str], root: Path) -> dict[str, str]:
 def _copy_of_the_tree(root: Path) -> None:
     """What loading and scaffolding touch: src/, the plant's q files, the
     vendored database.q the plant registry reads quote and trade from, the
-    two test lists and the two doc pages a scaffold appends to. Not the whole
+    test list and the two doc pages a scaffold appends to. Not the whole
     repository."""
     shutil.copytree(UQF_ROOT / "src", root / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", root / "scripts" / "processes")
     vendored = Path("lib/torq-finance-starter-pack/database.q")
-    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, vendored, STACK_PAGE, SHOWCASE_PAGE):
+    for rel in (STACK_TABLES_TEST, vendored, STACK_PAGE, SHOWCASE_PAGE):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, root / rel)
 
@@ -282,6 +282,105 @@ def test_every_scaffolded_kind_loads_and_registers(tmp_path):
     failed = [label for label in LABELS if reported.get(label) == "FAILED"]
     assert not missing, f"checks that never ran: {missing}\n{tail}"
     assert not failed, f"checks that failed: {failed}\n{tail}"
+
+
+#: Every job `_scaffold_every_kind` writes, by the name `.qpipe.job.<job>` it registers under.
+_SCAFFOLDED_JOBS = [
+    "smokefeed", "smokepoll", "smokepollc", "smokeetl", "smokenorm", "smokehz",
+    "smokebf_backfill", "smokebfd_backfill", "smokepass", "smokederive",
+    "smokedb_backfill", "smokelocal_backfill", "smoketwin_backfill", "smokerx",
+]  # fmt: skip
+
+_SUITES = """
+\\l tests/lib/qunit.q
+\\l tests/lib/support.q
+\\l src/init.q
+\\l src/etl/init.q
+.qt.support.load_suites[];
+want:{[jobs] .qt.support.job_suite each jobs};
+found:.qt.support.suites[];
+-1 "SUITES:",", " sv string found;
+res:.qunit.runTests[found];
+-1 "ERRORED:",", " sv string exec name from res where status=`error;
+-1 "RAN:",", " sv string distinct exec namespace from res;
+exit 0
+"""
+
+
+def test_every_scaffolded_test_is_found_by_the_runner_and_runs(tmp_path):
+    """The bug #350 closed, held the new way (#1412): a generated test must be
+    FOUND - by what it holds, not by a list - and RUN, whatever kind of job it
+    belongs to. Every kind is scaffolded into a copy, its test file loaded with
+    the harness, and the suites the loader discovers must be exactly the jobs'
+    own: `.qt.qpipe.job.<job>`, the name `jobs.test_namespace` computes. None
+    may error - a stub fails by assertion, which is the point of a stub."""
+    qbin, env = _kdbx()
+    _copy_of_the_tree(tmp_path)
+    for rel in ("tests/lib/qunit.q", "tests/lib/support.q", "tests/lib/discovery.q"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(UQF_ROOT / rel, tmp_path / rel)
+    surface = Path("docs/reference/surfaces/current/variables.csv")
+    (tmp_path / surface).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(UQF_ROOT / surface, tmp_path / surface)
+    (tmp_path / "tests/q").mkdir(parents=True, exist_ok=True)
+    _scaffold_every_kind(tmp_path)
+    # the plant's table list was only there to be appended to; it is a suite of its own
+    (tmp_path / STACK_TABLES_TEST).unlink()
+    (tmp_path / "suites.q").write_text(_SUITES)
+    result = subprocess.run(
+        [qbin, "suites.q", "-q"],
+        cwd=tmp_path,
+        env=_status_dir(env, tmp_path),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=TIMEOUT_SECONDS,
+        text=True,
+    )
+    tail = "\n".join((result.stdout + result.stderr).splitlines()[-25:])
+    lines = {
+        ln.split(":", 1)[0]: ln.split(":", 1)[1] for ln in result.stdout.splitlines() if ":" in ln
+    }
+    assert result.returncode == 0 and "SUITES" in lines, f"the harness did not load:\n{tail}"
+    suites = {s.strip() for s in lines["SUITES"].split(",")}
+    expected = {f".{jobs.test_namespace(job)}" for job in _SCAFFOLDED_JOBS}
+    assert suites == expected, (sorted(suites ^ expected), tail)
+    ran = {s.strip() for s in lines["RAN"].split(",")}
+    assert ran == expected, f"found but not run: {sorted(expected - ran)}"
+    # A stub fails by assertion. Only a derive job's test errors, by design: its
+    # derive throws "not implemented" until written, and the test calls it.
+    errored = [n.strip() for n in lines["ERRORED"].split(",") if n.strip()]
+    stray = [n for n in errored if not n.startswith(".qt.qpipe.job.smokederive.")]
+    assert not stray, f"a scaffolded test errored instead of failing: {stray}\n{tail}"
+
+
+def test_python_and_q_name_a_jobs_suite_the_same_way(tmp_path):
+    """`jobs.test_namespace` and `.qt.support.job_suite` are one rule written
+    twice, because the scaffold writes the name and the contract-driver lookup
+    reads it; this holds them to the same answer."""
+    qbin, env = _kdbx()
+    script = tmp_path / "names.q"
+    script.write_text(
+        "\\l tests/lib/qunit.q\n\\l tests/lib/support.q\n"
+        "-1 each string .qt.support.job_suite each "
+        "`fx_markout`hdb_fx_markouts_backfill`rebuild_positions;\n"
+        "exit 0\n"
+    )
+    result = subprocess.run(
+        [qbin, str(script), "-q"],
+        cwd=UQF_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=TIMEOUT_SECONDS,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    got = [ln for ln in result.stdout.splitlines() if ln.startswith(".qt.")]
+    want = [
+        f".{jobs.test_namespace(j)}"
+        for j in ("fx_markout", "hdb_fx_markouts_backfill", "rebuild_positions")
+    ]
+    assert got == want
 
 
 @pytest.mark.parametrize("transport", ["ipc", "local"])

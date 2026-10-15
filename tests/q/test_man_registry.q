@@ -1,5 +1,5 @@
 / test_man_registry.q - every function docs/man.q registers must exist
-/ (.mantest).
+/ (.qt.man.registry).
 / .
 / The exact, checkable half of the question bank ("is there a freshness gate
 / catching a document that references a symbol which no longer exists?").
@@ -26,57 +26,56 @@
 / all 78 resolve - which is also why the count is asserted below rather than
 / left implicit.
 
-\d .mantest
 
 / Private: does a fully-qualified name like ".qopt.d1_d2" resolve?
 / Splits on the LAST dot rather than assuming one level, so a root-level
 / name and a namespaced one are handled by the same path.
-resolves:{[fullname]
+.qt.man.registry.resolves:{[fullname]
     parts:"." vs fullname;
     if[2>count parts; :0b];
     (`$last parts) in key `$"." sv -1_parts}
 
-registered:{[] exec fullname from .man.funcs}
+.qt.man.registry.registered:{[] exec fullname from .man.funcs}
 
-test_man_q_actually_loaded:{[t]
+.qt.man.registry.test_man_q_actually_loaded:{[t]
     / Not a tautology: this file cannot be reached unless man.q loaded, but
     / asserting a NON-ZERO count is what fails if a future edit makes the
     / file abort part-way through and register only its first few entries -
     / which is exactly the failure that went unnoticed before.
-    .qunit.assertTrue[0<count registered[];
+    .qunit.assertTrue[0<count .qt.man.registry.registered[];
         "docs/man.q registered at least one function - a zero count means it aborted while loading"]};
 
-test_every_registered_function_exists:{[t]
-    names:registered[];
-    missing:names where not resolves each names;
+.qt.man.registry.test_every_registered_function_exists:{[t]
+    names:.qt.man.registry.registered[];
+    missing:names where not .qt.man.registry.resolves each names;
     .qunit.assertEquals[missing;();
         "every function docs/man.q documents resolves in a loaded namespace"]};
 
-test_every_documented_argument_belongs_to_a_registered_function:{[t]
+.qt.man.registry.test_every_documented_argument_belongs_to_a_registered_function:{[t]
     / .man.args is keyed by the same fullname. An argument row for a function
     / that was removed from .man.funcs is the same staleness one level down,
     / and it is where a half-finished deletion would show first.
     documented:distinct exec fullname from .man.args;
-    orphans:documented where not documented in registered[];
+    orphans:documented where not documented in .qt.man.registry.registered[];
     .qunit.assertEquals[orphans;();
         "every documented argument belongs to a function docs/man.q still registers"]};
 
-test_the_resolver_rejects_a_name_nothing_defines:{[t]
+.qt.man.registry.test_the_resolver_rejects_a_name_nothing_defines:{[t]
     / A resolver nobody has seen say no might be saying yes to everything.
-    .qunit.assertEquals[resolves[".qopt.no_such_function"];0b;
+    .qunit.assertEquals[.qt.man.registry.resolves[".qopt.no_such_function"];0b;
         "a name in a real namespace that nothing defines does not resolve"]};
 
-test_the_resolver_rejects_an_unknown_namespace:{[t]
-    .qunit.assertEquals[resolves[".qnosuchns.anything"];0b;
+.qt.man.registry.test_the_resolver_rejects_an_unknown_namespace:{[t]
+    .qunit.assertEquals[.qt.man.registry.resolves[".qnosuchns.anything"];0b;
         "a name in a namespace that does not exist does not resolve"]};
 
-test_the_resolver_accepts_a_name_that_does_exist:{[t]
-    .qunit.assertEquals[resolves[".qopt.d1"];1b;
+.qt.man.registry.test_the_resolver_accepts_a_name_that_does_exist:{[t]
+    .qunit.assertEquals[.qt.man.registry.resolves[".qopt.d1"];1b;
         "the resolver is a pass-through on a name that is genuinely defined"]};
 
 / --- coverage ------------------------------------------------------------
 
-test_the_registry_covers_the_etl_tree:{[t]
+.qt.man.registry.test_the_registry_covers_the_etl_tree:{[t]
     / The gap that prompted generating this file. Before the generator,
     / man.q registered 78 of 348 public functions and FIFTEEN NAMESPACES had
     / zero coverage - .qmicro, .qetl.source, .qetl.dag, .qetl.job.bounded, .qetl.coverage and every other ETL
@@ -101,7 +100,7 @@ test_the_registry_covers_the_etl_tree:{[t]
 / regressions were caught this way while building the generator: a shared
 / block attaching to only the first of four levels, and fully-qualified
 / definitions being invisible to the scan.
-test_documentation_coverage_does_not_regress:{[t]
+.qt.man.registry.test_documentation_coverage_does_not_regress:{[t]
     documented:exec fullname from .man.funcs;
     / .qns.functional, not a root-level `like "q*"` scan: worker instances
     / live under .qpipe.job (.qpipe.job.demo_deals_backfill and so on), and a root
@@ -113,9 +112,9 @@ test_documentation_coverage_does_not_regress:{[t]
     / counts functions that actually exist; declared, because the process
     / running this suite holds a great deal that is not the tree.
     / .
-    / This replaced a hand-kept deny-list - `.q`.qunit`.qetldbl`.qrefw`.qtorq -
+    / This replaced a hand-kept deny-list - `.q`.qunit`.qt.fixture.etl`.qt.fixture.reference_worker`.qtorq -
     / which could not hold, because suites create whole namespaces at RUN
-    / time: `.qcompletetest` and `.qmethodsonly` are fixture workers built
+    / time: `.qt.fixture.complete_worker` and `.qt.fixture.methods_only_worker` are fixture workers built
     / inside assertions, `.qpipe.job.nt_k`/`.qpipe.job.nt_l` are streaming jobs a test
     / registers. Every new one would have to be remembered here, and until it
     / was, this count depended on which suites had already run rather than on
@@ -126,7 +125,7 @@ test_documentation_coverage_does_not_regress:{[t]
     / sees one namespace holding no functions - so every worker's public
     / surface would leave this count without lowering it, which is the
     / opposite of a ratchet.
-    nss:.qns.functional[] inter .testutil.tree_namespaces[];
+    nss:.qns.functional[] inter .qt.support.tree_namespaces[];
     public:raze {[full]
         ks:key full;
         ks:ks where not ks in `;
@@ -161,7 +160,7 @@ test_documentation_coverage_does_not_regress:{[t]
     .qunit.assertTrue[12>=count undocumented;
         "public functions without a qDoc block have not increased - see the count in the failure"]};
 
-test_the_registry_is_not_a_token_sample:{[t]
+.qt.man.registry.test_the_registry_is_not_a_token_sample:{[t]
     / A floor, not an exact count: adding a function must not require editing
     / this test, but a generator that silently started emitting a handful of
     / entries would otherwise leave every test above passing over almost
@@ -174,24 +173,24 @@ test_the_registry_is_not_a_token_sample:{[t]
 / --- @private (#627) --------------------------------------------------------
 
 / Private: is the string `s` one of the strings in `l`?
-has:{[l;s] any l~\:s}
+.qt.man.registry.has:{[l;s] any l~\:s}
 
-test_a_private_helper_is_not_registered:{[t]
+.qt.man.registry.test_a_private_helper_is_not_registered:{[t]
     / .qcross.side_cols is plumbing the depth-pricing functions share.
-    .qunit.assertTrue[.mantest.has[.man.private;".qcross.side_cols"];"it is recorded as private"];
-    .qunit.assertFalse[.mantest.has[registered[];".qcross.side_cols"];"and is not in the registry"]};
+    .qunit.assertTrue[.qt.man.registry.has[.man.private;".qcross.side_cols"];"it is recorded as private"];
+    .qunit.assertFalse[.qt.man.registry.has[.qt.man.registry.registered[];".qcross.side_cols"];"and is not in the registry"]};
 
-test_an_untagged_public_function_is_still_registered:{[t]
-    .qunit.assertTrue[.mantest.has[registered[];".qcross.cross_book_at"];"API stays in the registry"];
-    .qunit.assertFalse[.mantest.has[.man.private;".qcross.cross_book_at"];"and is not private"]};
+.qt.man.registry.test_an_untagged_public_function_is_still_registered:{[t]
+    .qunit.assertTrue[.qt.man.registry.has[.qt.man.registry.registered[];".qcross.cross_book_at"];"API stays in the registry"];
+    .qunit.assertFalse[.qt.man.registry.has[.man.private;".qcross.cross_book_at"];"and is not private"]};
 
-test_every_private_name_exists:{[t]
+.qt.man.registry.test_every_private_name_exists:{[t]
     / A tag left on a block whose function was renamed would name nothing.
-    missing:.man.private where not resolves each .man.private;
+    missing:.man.private where not .qt.man.registry.resolves each .man.private;
     .qunit.assertEquals[missing;();"every @private name resolves in a loaded namespace"]};
 
 / A file with one public and one private function, read by the same parser.
-private_probe:{[]
+.qt.man.registry.private_probe:{[]
     f:"build/mantest_private_probe.q";
     system"mkdir -p build";
     (hsym `$f) 0: ("\\d .mantestprobe";"/ Public: the API.";"/ @return 1";"api:{[] 1}";"";
@@ -200,11 +199,9 @@ private_probe:{[]
     hdel hsym `$f;
     r 2}
 
-test_the_parser_reads_the_private_tag:{[t]
-    docs:.mantest.private_probe[];
+.qt.man.registry.test_the_parser_reads_the_private_tag:{[t]
+    docs:.qt.man.registry.private_probe[];
     .qunit.assertEquals[docs@\:`fullname;(".mantestprobe.api";".mantestprobe.helper");"both blocks are read"];
     .qunit.assertEquals[docs@\:`private;01b;"only the tagged one is private"];
     .qunit.assertEquals[(last docs)`examples;enlist ".mantestprobe.helper[]";
         "@private is a tag, not a continuation of the @eg above it"]};
-
-\d .

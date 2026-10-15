@@ -9,19 +9,18 @@
 //
 // Load src/etl/core/status.q, src/etl/core/backfill_state.q,
 // src/etl/core/materialisation.q, src/etl/core/continuous_state.q,
-// tests/lib/qunit.q and tests/lib/testutil.q before this file.
+// tests/lib/qunit.q and tests/lib/support.q before this file.
 
-\d .conttest
 
-d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.job.continuous.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
-beforeNamespace_isolate:{[]
+.qt.qetl.job.continuous.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 
-setUp_fresh:{[]
-    .testutil.reset_coverage_ledger[];
+.qt.qetl.job.continuous.setUp_fresh:{[]
+    .qt.support.reset_coverage_ledger[];
     .qetl.job.continuous.clear_cursor `tailer;
     }
 
@@ -30,40 +29,40 @@ setUp_fresh:{[]
 / What 0: onto the cursor file used to leave after a kill mid-write: half a
 / line, which load_cursor read as 0Np - "never ran" - so a polling feed
 / restarted from its own beginning and republished everything.
-truncate:{[path] system"printf '{\"cursor\":\"2026-09' > ",path}
+.qt.qetl.job.continuous.truncate:{[path] system"printf '{\"cursor\":\"2026-09' > ",path}
 
-test_a_truncated_cursor_falls_back_to_the_previous_one:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;d[1]];
-    .qetl.job.continuous.save_cursor[`tailer;d[2]];
-    truncate[.qetl.job.continuous.cursor_path `tailer];
-    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;d[1];
+.qt.qetl.job.continuous.test_a_truncated_cursor_falls_back_to_the_previous_one:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    .qt.qetl.job.continuous.truncate[.qetl.job.continuous.cursor_path `tailer];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[1];
         "the generation before it: one page fetched again, never everything"]};
 
-test_an_unreadable_cursor_with_nothing_before_it_is_refused:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;d[1]];
-    truncate[.qetl.job.continuous.cursor_path `tailer];
+.qt.qetl.job.continuous.test_an_unreadable_cursor_with_nothing_before_it_is_refused:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qt.qetl.job.continuous.truncate[.qetl.job.continuous.cursor_path `tailer];
     .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"*and so is its .bak*";
         "refused, never a null a feed would read as its first run"]};
 
 / Clearing only the cursor file would leave its .bak behind, and a later
 / unreadable write would then fall back to the cursor from BEFORE the clear.
-test_a_cleared_cursor_does_not_come_back_through_its_previous_generation:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;d[1]];
-    .qetl.job.continuous.save_cursor[`tailer;d[2]];
+.qt.qetl.job.continuous.test_a_cleared_cursor_does_not_come_back_through_its_previous_generation:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
     .qetl.job.continuous.clear_cursor `tailer;
-    .qetl.job.continuous.save_cursor[`tailer;d[5]];
-    truncate[.qetl.job.continuous.cursor_path `tailer];
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[5]];
+    .qt.qetl.job.continuous.truncate[.qetl.job.continuous.cursor_path `tailer];
     .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"load_cursor: *";
         "the cleared generation is gone, so there is nothing stale to resume from"]};
 
-test_a_truncated_compound_cursor_falls_back_to_the_previous_one:{[t]
+.qt.qetl.job.continuous.test_a_truncated_compound_cursor_falls_back_to_the_previous_one:{[t]
     .qetl.job.continuous.save_cursor_value[`tailer;`t`id!(1;`a)];
     .qetl.job.continuous.save_cursor_value[`tailer;`t`id!(2;`b)];
     system"printf 'garbage' > ",.qetl.job.continuous.cursor_value_path `tailer;
     .qunit.assertEquals[.qetl.job.continuous.load_cursor_value `tailer;`t`id!(1;`a);
         "a compound cursor gets the same protection as a timestamp one"]};
 
-test_an_unreadable_compound_cursor_with_nothing_before_it_is_refused:{[t]
+.qt.qetl.job.continuous.test_an_unreadable_compound_cursor_with_nothing_before_it_is_refused:{[t]
     .qetl.job.continuous.save_cursor_value[`tailer;`t`id!(1;`a)];
     system"printf 'garbage' > ",.qetl.job.continuous.cursor_value_path `tailer;
     .qunit.assertThrows[.qetl.job.continuous.load_cursor_value;`tailer;"load_cursor_value: *";
@@ -73,49 +72,49 @@ test_an_unreadable_compound_cursor_with_nothing_before_it_is_refused:{[t]
 
 / A first run has no cursor. Treating that as an error would make every
 / fresh deployment need manual seeding.
-test_an_absent_cursor_is_null_not_an_error:{[t]
+.qt.qetl.job.continuous.test_an_absent_cursor_is_null_not_an_error:{[t]
     .qunit.assertEquals[null .qetl.job.continuous.load_cursor `tailer;1b;"a worker that has never run has no cursor, which is not a failure"]};
 
-test_a_saved_cursor_round_trips:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;.conttest.d[2]];
-    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.conttest.d[2];"the cursor survives a save and load"]};
+.qt.qetl.job.continuous.test_a_saved_cursor_round_trips:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[2];"the cursor survives a save and load"]};
 
-test_clearing_a_cursor_restarts_from_nothing:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;.conttest.d[2]];
+.qt.qetl.job.continuous.test_clearing_a_cursor_restarts_from_nothing:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
     .qetl.job.continuous.clear_cursor `tailer;
     .qunit.assertEquals[null .qetl.job.continuous.load_cursor `tailer;1b;"a cleared cursor is as if the worker had never run"]};
 
 / The filenames must differ, or a bounded resume could read a tailer's
 / cursor and skip history it never published.
-test_a_continuous_cursor_is_not_a_bounded_checkpoint:{[t]
+.qt.qetl.job.continuous.test_a_continuous_cursor_is_not_a_bounded_checkpoint:{[t]
     .qunit.assertEquals[.qetl.job.continuous.cursor_path[`tailer]~.qetl.job.bounded.state.checkpoint_path[`tailer];0b;"the two kinds of state live in different files and can never be read for each other"]};
 
 / --- advancing (the re-publication guard) -------------------------------
 
-test_a_forward_cursor_advances:{[t]
-    .qunit.assertEquals[.qetl.job.continuous.advance[`tailer;.conttest.d[1];.conttest.d[2]];.conttest.d[2];"a cursor that moves forward is accepted"]};
+.qt.qetl.job.continuous.test_a_forward_cursor_advances:{[t]
+    .qunit.assertEquals[.qetl.job.continuous.advance[`tailer;.qt.qetl.job.continuous.d[1];.qt.qetl.job.continuous.d[2]];.qt.qetl.job.continuous.d[2];"a cursor that moves forward is accepted"]};
 
-test_a_first_advance_from_null_is_accepted:{[t]
-    .qunit.assertEquals[.qetl.job.continuous.advance[`tailer;0Np;.conttest.d[1]];.conttest.d[1];"the first page has no previous cursor to be ahead of"]};
+.qt.qetl.job.continuous.test_a_first_advance_from_null_is_accepted:{[t]
+    .qunit.assertEquals[.qetl.job.continuous.advance[`tailer;0Np;.qt.qetl.job.continuous.d[1]];.qt.qetl.job.continuous.d[1];"the first page has no previous cursor to be ahead of"]};
 
 / A backwards cursor is the one way a tailer silently re-publishes: it
 / re-reads a page it has handled, and continuous output has no coverage
 / ledger to notice.
-test_a_backwards_cursor_is_refused:{[t]
-    .qunit.assertError[{.qetl.job.continuous.advance[`tailer;x 0;x 1]};(.conttest.d[2];.conttest.d[1]);"moving a continuous cursor backwards re-publishes pages, with nothing to notice"]};
+.qt.qetl.job.continuous.test_a_backwards_cursor_is_refused:{[t]
+    .qunit.assertError[{.qetl.job.continuous.advance[`tailer;x 0;x 1]};(.qt.qetl.job.continuous.d[2];.qt.qetl.job.continuous.d[1]);"moving a continuous cursor backwards re-publishes pages, with nothing to notice"]};
 
 / Equal is refused too: an idle poll that called advance would rewrite the
 / file on every tick, making saved_at useless as a signal of real progress.
-test_an_unchanged_cursor_is_refused:{[t]
-    .qunit.assertError[{.qetl.job.continuous.advance[`tailer;x;x]};.conttest.d[2];"a cursor that does not move is not progress"]};
+.qt.qetl.job.continuous.test_an_unchanged_cursor_is_refused:{[t]
+    .qunit.assertError[{.qetl.job.continuous.advance[`tailer;x;x]};.qt.qetl.job.continuous.d[2];"a cursor that does not move is not progress"]};
 
-test_a_null_cursor_is_refused:{[t]
-    .qunit.assertError[{.qetl.job.continuous.advance[`tailer;.conttest.d[1];x]};0Np;"a cursor that cannot be compared cannot be trusted to move forward"]};
+.qt.qetl.job.continuous.test_a_null_cursor_is_refused:{[t]
+    .qunit.assertError[{.qetl.job.continuous.advance[`tailer;.qt.qetl.job.continuous.d[1];x]};0Np;"a cursor that cannot be compared cannot be trusted to move forward"]};
 
-test_a_refused_advance_leaves_the_stored_cursor_alone:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;.conttest.d[3]];
-    @[{.qetl.job.continuous.advance[`tailer;.conttest.d[3];x]};.conttest.d[1];{x}];
-    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.conttest.d[3];"a rejected advance does not corrupt the cursor it rejected"]};
+.qt.qetl.job.continuous.test_a_refused_advance_leaves_the_stored_cursor_alone:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[3]];
+    @[{.qetl.job.continuous.advance[`tailer;.qt.qetl.job.continuous.d[3];x]};.qt.qetl.job.continuous.d[1];{x}];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[3];"a rejected advance does not corrupt the cursor it rejected"]};
 
 / --- the claim this file must NOT make ---------------------------
 
@@ -123,39 +122,39 @@ test_a_refused_advance_leaves_the_stored_cursor_alone:{[t]
 / timestamp is not evidence that everything before it is published, and
 / conflating the two is how a dataset gets declared complete because some
 / unrelated tailer got far enough.
-test_advancing_a_cursor_records_no_coverage:{[t]
-    .qetl.job.continuous.advance[`tailer;0Np;.conttest.d[2]];
+.qt.qetl.job.continuous.test_advancing_a_cursor_records_no_coverage:{[t]
+    .qetl.job.continuous.advance[`tailer;0Np;.qt.qetl.job.continuous.d[2]];
     .qunit.assertEquals[count value `etl_coverage;0;"a continuous cursor advancing is not a completion claim"]};
 
-test_a_full_poll_records_no_coverage:{[t]
-    `.conttest.page set ([] ts:enlist .conttest.d 1; v:enlist 1.5);
-    .qetl.job.continuous.poll_once[`tailer;{[c] .conttest.page};{[p] count p};{[p] .conttest.d 2}];
+.qt.qetl.job.continuous.test_a_full_poll_records_no_coverage:{[t]
+    `.qt.qetl.job.continuous.page set ([] ts:enlist .qt.qetl.job.continuous.d 1; v:enlist 1.5);
+    .qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};{[p] count p};{[p] .qt.qetl.job.continuous.d 2}];
     .qunit.assertEquals[count value `etl_coverage;0;"publishing a continuous page is not a completion claim either"]};
 
-test_freshness_states_that_it_is_not_completeness:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;.conttest.d[2]];
+.qt.qetl.job.continuous.test_freshness_states_that_it_is_not_completeness:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
     .qunit.assertEquals[.qetl.job.continuous.freshness[`tailer]`is_completeness_claim;0b;"the return value says outright that this is not a completeness claim"]};
 
 / --- freshness (#62's gap, reported rather than papered over) -------------
 
-test_freshness_reports_the_cursor_and_a_lag:{[t]
+.qt.qetl.job.continuous.test_freshness_reports_the_cursor_and_a_lag:{[t]
     .qetl.job.continuous.save_cursor[`tailer;.z.p-0D00:05];
     f:.qetl.job.continuous.freshness `tailer;
     .qunit.assertEquals[(f[`lag]>0D00:04;f[`lag]<0D00:06);11b;"the lag is now minus the cursor"]};
 
-test_an_unrun_worker_has_a_null_lag:{[t]
+.qt.qetl.job.continuous.test_an_unrun_worker_has_a_null_lag:{[t]
     .qunit.assertEquals[null .qetl.job.continuous.freshness[`tailer]`lag;1b;"no cursor means no lag, rather than a lag of zero"]};
 
 / A never-started tailer must not report as up to date. Defaulting the
 / answer to true is how a dead process looks healthy.
-test_an_unrun_worker_is_not_fresh:{[t]
+.qt.qetl.job.continuous.test_an_unrun_worker_is_not_fresh:{[t]
     .qunit.assertEquals[.qetl.job.continuous.is_fresh[`tailer;1D];0b;"a worker that has never run is not fresh, however generous the tolerance"]};
 
-test_a_recent_cursor_is_fresh:{[t]
+.qt.qetl.job.continuous.test_a_recent_cursor_is_fresh:{[t]
     .qetl.job.continuous.save_cursor[`tailer;.z.p-0D00:01];
     .qunit.assertEquals[.qetl.job.continuous.is_fresh[`tailer;0D00:05];1b;"a cursor a minute old is within a five-minute tolerance"]};
 
-test_a_stale_cursor_is_not_fresh:{[t]
+.qt.qetl.job.continuous.test_a_stale_cursor_is_not_fresh:{[t]
     .qetl.job.continuous.save_cursor[`tailer;.z.p-2D];
     .qunit.assertEquals[.qetl.job.continuous.is_fresh[`tailer;0D00:05];0b;"a two-day-old cursor is not within five minutes"]};
 
@@ -165,50 +164,50 @@ test_a_stale_cursor_is_not_fresh:{[t]
 / min over cursors and the laggard is named. These tests use three tailers
 / feeding one dataset with deliberately different lags.
 
-setUp_feeders:{[]
+.qt.qetl.job.continuous.setUp_feeders:{[]
     .qetl.job.continuous.feeds:(`symbol$())!`symbol$();
     .qetl.job.continuous.clear_cursor each `f1`f2`f3;
     }
 
-test_an_unfed_dataset_is_an_error_not_a_freshness:{[t]
+.qt.qetl.job.continuous.test_an_unfed_dataset_is_an_error_not_a_freshness:{[t]
     .qunit.assertError[{.qetl.job.continuous.dataset_freshness x};`nobody_feeds_this;"a freshness for a dataset with no declared feeder would be invented"]};
 
-test_dataset_cursor_is_the_minimum_over_feeders:{[t]
+.qt.qetl.job.continuous.test_dataset_cursor_is_the_minimum_over_feeders:{[t]
     .qetl.job.continuous.register_feeder[`f1;`quotes]; .qetl.job.continuous.register_feeder[`f2;`quotes];
-    .qetl.job.continuous.save_cursor[`f1;.conttest.d[5]];
-    .qetl.job.continuous.save_cursor[`f2;.conttest.d[2]];
-    .qunit.assertEquals[.qetl.job.continuous.dataset_freshness[`quotes]`cursor;.conttest.d[2];"the dataset is current only to the slowest feed"]};
+    .qetl.job.continuous.save_cursor[`f1;.qt.qetl.job.continuous.d[5]];
+    .qetl.job.continuous.save_cursor[`f2;.qt.qetl.job.continuous.d[2]];
+    .qunit.assertEquals[.qetl.job.continuous.dataset_freshness[`quotes]`cursor;.qt.qetl.job.continuous.d[2];"the dataset is current only to the slowest feed"]};
 
 / "The dataset is 29 minutes behind" is a symptom; "fx_feed_2 is 29 minutes
 / behind" is a diagnosis.
-test_the_laggard_is_named:{[t]
+.qt.qetl.job.continuous.test_the_laggard_is_named:{[t]
     .qetl.job.continuous.register_feeder[`f1;`quotes]; .qetl.job.continuous.register_feeder[`f2;`quotes]; .qetl.job.continuous.register_feeder[`f3;`quotes];
-    .qetl.job.continuous.save_cursor[`f1;.conttest.d[5]];
-    .qetl.job.continuous.save_cursor[`f2;.conttest.d[1]];
-    .qetl.job.continuous.save_cursor[`f3;.conttest.d[4]];
+    .qetl.job.continuous.save_cursor[`f1;.qt.qetl.job.continuous.d[5]];
+    .qetl.job.continuous.save_cursor[`f2;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.save_cursor[`f3;.qt.qetl.job.continuous.d[4]];
     .qunit.assertEquals[.qetl.job.continuous.dataset_freshness[`quotes]`laggard;`f2;"the slowest feeder is identified, not just its lag"]};
 
 / A missing feed is the worst possible lag, not a feed to ignore. `min`
 / would silently skip the null and report the dataset as fresh.
-test_a_feeder_with_no_cursor_makes_the_dataset_not_fresh:{[t]
+.qt.qetl.job.continuous.test_a_feeder_with_no_cursor_makes_the_dataset_not_fresh:{[t]
     .qetl.job.continuous.register_feeder[`f1;`quotes]; .qetl.job.continuous.register_feeder[`f2;`quotes];
     .qetl.job.continuous.save_cursor[`f1;.z.p-0D00:01];
     f:.qetl.job.continuous.dataset_freshness `quotes;
     .qunit.assertEquals[(null f`cursor;f`laggard;.qetl.job.continuous.dataset_is_fresh[`quotes;1D]);(1b;`f2;0b);"a never-run feeder is the laggard and the dataset is not fresh, however generous the tolerance"]};
 
-test_other_datasets_feeders_are_not_counted:{[t]
+.qt.qetl.job.continuous.test_other_datasets_feeders_are_not_counted:{[t]
     .qetl.job.continuous.register_feeder[`f1;`quotes]; .qetl.job.continuous.register_feeder[`f2;`trades];
-    .qetl.job.continuous.save_cursor[`f1;.conttest.d[5]];
-    .qetl.job.continuous.save_cursor[`f2;.conttest.d[1]];
-    .qunit.assertEquals[.qetl.job.continuous.dataset_freshness[`quotes]`cursor;.conttest.d[5];"a slow feeder of a DIFFERENT dataset does not drag this one down"]};
+    .qetl.job.continuous.save_cursor[`f1;.qt.qetl.job.continuous.d[5]];
+    .qetl.job.continuous.save_cursor[`f2;.qt.qetl.job.continuous.d[1]];
+    .qunit.assertEquals[.qetl.job.continuous.dataset_freshness[`quotes]`cursor;.qt.qetl.job.continuous.d[5];"a slow feeder of a DIFFERENT dataset does not drag this one down"]};
 
 / Aggregation must not turn "seen up to here" into "complete up to here".
-test_dataset_freshness_is_still_not_a_completeness_claim:{[t]
+.qt.qetl.job.continuous.test_dataset_freshness_is_still_not_a_completeness_claim:{[t]
     .qetl.job.continuous.register_feeder[`f1;`quotes];
-    .qetl.job.continuous.save_cursor[`f1;.conttest.d[5]];
+    .qetl.job.continuous.save_cursor[`f1;.qt.qetl.job.continuous.d[5]];
     .qunit.assertEquals[.qetl.job.continuous.dataset_freshness[`quotes]`is_completeness_claim;0b;"the continuous-worker distinction survives aggregation"]};
 
-test_dataset_is_fresh_within_tolerance:{[t]
+.qt.qetl.job.continuous.test_dataset_is_fresh_within_tolerance:{[t]
     .qetl.job.continuous.register_feeder[`f1;`quotes]; .qetl.job.continuous.register_feeder[`f2;`quotes];
     .qetl.job.continuous.save_cursor[`f1;.z.p-0D00:01];
     .qetl.job.continuous.save_cursor[`f2;.z.p-0D00:03];
@@ -216,40 +215,38 @@ test_dataset_is_fresh_within_tolerance:{[t]
 
 / --- polling -----------------------------------------------
 
-test_a_poll_publishes_a_page_and_advances:{[t]
-    `.conttest.page set ([] ts:enlist .conttest.d 1; v:enlist 1.5);
-    r:.qetl.job.continuous.poll_once[`tailer;{[c] .conttest.page};{[p] count p};{[p] .conttest.d 2}];
-    .qunit.assertEquals[(r`state;r`rows;r`cursor);(`published;1;.conttest.d[2]);"a page is published and the cursor acknowledges it"]};
+.qt.qetl.job.continuous.test_a_poll_publishes_a_page_and_advances:{[t]
+    `.qt.qetl.job.continuous.page set ([] ts:enlist .qt.qetl.job.continuous.d 1; v:enlist 1.5);
+    r:.qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};{[p] count p};{[p] .qt.qetl.job.continuous.d 2}];
+    .qunit.assertEquals[(r`state;r`rows;r`cursor);(`published;1;.qt.qetl.job.continuous.d[2]);"a page is published and the cursor acknowledges it"]};
 
-test_a_poll_persists_the_new_cursor:{[t]
-    `.conttest.page set ([] ts:enlist .conttest.d 1; v:enlist 1.5);
-    .qetl.job.continuous.poll_once[`tailer;{[c] .conttest.page};{[p] count p};{[p] .conttest.d 2}];
-    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.conttest.d[2];"the advance is durable, so a restart resumes from it"]};
+.qt.qetl.job.continuous.test_a_poll_persists_the_new_cursor:{[t]
+    `.qt.qetl.job.continuous.page set ([] ts:enlist .qt.qetl.job.continuous.d 1; v:enlist 1.5);
+    .qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};{[p] count p};{[p] .qt.qetl.job.continuous.d 2}];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[2];"the advance is durable, so a restart resumes from it"]};
 
 / A tailer on a quiet source is working correctly. An orchestrator that
 / cannot tell "nothing new" from "broken" alerts all night on a healthy
 / process.
-test_an_empty_page_is_idle_not_a_failure:{[t]
-    r:.qetl.job.continuous.poll_once[`tailer;{[c] ([] ts:`timestamp$(); v:`float$())};{[p] count p};{[p] .conttest.d 2}];
+.qt.qetl.job.continuous.test_an_empty_page_is_idle_not_a_failure:{[t]
+    r:.qetl.job.continuous.poll_once[`tailer;{[c] ([] ts:`timestamp$(); v:`float$())};{[p] count p};{[p] .qt.qetl.job.continuous.d 2}];
     .qunit.assertEquals[r`state;`idle;"an empty poll is a success, because a quiet source is not a broken one"]};
 
-test_an_empty_page_does_not_move_the_cursor:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;.conttest.d[1]];
-    .qetl.job.continuous.poll_once[`tailer;{[c] ([] ts:`timestamp$(); v:`float$())};{[p] count p};{[p] .conttest.d 9}];
-    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.conttest.d[1];"nothing published means nothing acknowledged"]};
+.qt.qetl.job.continuous.test_an_empty_page_does_not_move_the_cursor:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.poll_once[`tailer;{[c] ([] ts:`timestamp$(); v:`float$())};{[p] count p};{[p] .qt.qetl.job.continuous.d 9}];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[1];"nothing published means nothing acknowledged"]};
 
 / The page's own publish function receives the page, and the cursor function
 / receives it too - so a worker derives its next cursor from what it actually
 / published rather than from the clock.
-test_the_cursor_is_derived_from_the_published_page:{[t]
-    `.conttest.page set ([] ts:.conttest.d each 1 2 3; v:1 2 3f);
-    r:.qetl.job.continuous.poll_once[`tailer;{[c] .conttest.page};{[p] count p};{[p] last p`ts}];
-    .qunit.assertEquals[r`cursor;.conttest.d[3];"the cursor comes from the page's own last row, not from now"]};
+.qt.qetl.job.continuous.test_the_cursor_is_derived_from_the_published_page:{[t]
+    `.qt.qetl.job.continuous.page set ([] ts:.qt.qetl.job.continuous.d each 1 2 3; v:1 2 3f);
+    r:.qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};{[p] count p};{[p] last p`ts}];
+    .qunit.assertEquals[r`cursor;.qt.qetl.job.continuous.d[3];"the cursor comes from the page's own last row, not from now"]};
 
-test_a_poll_resumes_from_the_stored_cursor:{[t]
-    .qetl.job.continuous.save_cursor[`tailer;.conttest.d[5]];
-    `.conttest.seen set 0Np;
-    .qetl.job.continuous.poll_once[`tailer;{[c] `.conttest.seen set c; ([] ts:`timestamp$(); v:`float$())};{[p] 0};{[p] 0Np}];
-    .qunit.assertEquals[.conttest.seen;.conttest.d[5];"the fetch function is asked for the page after the stored cursor"]};
-
-\d .
+.qt.qetl.job.continuous.test_a_poll_resumes_from_the_stored_cursor:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[5]];
+    `.qt.qetl.job.continuous.seen set 0Np;
+    .qetl.job.continuous.poll_once[`tailer;{[c] `.qt.qetl.job.continuous.seen set c; ([] ts:`timestamp$(); v:`float$())};{[p] 0};{[p] 0Np}];
+    .qunit.assertEquals[.qt.qetl.job.continuous.seen;.qt.qetl.job.continuous.d[5];"the fetch function is asked for the page after the stored cursor"]};

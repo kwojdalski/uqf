@@ -1,5 +1,5 @@
 // test_ccy.q - tests for src/foundation/ccy.q (currency pair symbol conventions).
-// Load src/foundation/ccy.q, tests/lib/qunit.q and tests/lib/testutil.q before this
+// Load src/foundation/ccy.q, tests/lib/qunit.q and tests/lib/support.q before this
 // file.
 
 \d .ccytest

@@ -1,18 +1,18 @@
 // test_options.q - tests for src/pricing/options.q (Garman-Kohlhagen). Load
 // src/foundation/stats.q, src/foundation/rates.q, src/pricing/options.q, tests/lib/qunit.q and
-// tests/lib/testutil.q before this file.
+// tests/lib/support.q before this file.
 
 \d .optionstest
 
 / Hull, "Options, Futures and Other Derivatives": S=42,K=40,r=10%,vol=20%,
 / T=0.5, no dividend -> with rf=0 GK collapses to plain Black-Scholes.
-test_gk_call_hull_benchmark:{[t] .testutil.assertApprox[.qopt.gk_call[42;40;0.10;0f;0.20;0.5];4.759423;1e-4;"Hull BS call benchmark (rf=0)"]};
-test_gk_put_hull_benchmark:{[t] .testutil.assertApprox[.qopt.gk_put[42;40;0.10;0f;0.20;0.5];0.8086;1e-3;"Hull BS put benchmark (rf=0)"]};
+test_gk_call_hull_benchmark:{[t] .qt.support.assertApprox[.qopt.gk_call[42;40;0.10;0f;0.20;0.5];4.759423;1e-4;"Hull BS call benchmark (rf=0)"]};
+test_gk_put_hull_benchmark:{[t] .qt.support.assertApprox[.qopt.gk_put[42;40;0.10;0f;0.20;0.5];0.8086;1e-3;"Hull BS put benchmark (rf=0)"]};
 
 test_d1_minus_d2_equals_vol_sqrt_t:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
     lhs:.qopt.d1[s;k;rd;rf;sigma;tt]-.qopt.d2[s;k;rd;rf;sigma;tt];
-    .testutil.assertApprox[lhs;sigma*sqrt tt;1e-9;"d1-d2=sigma*sqrt(T) by construction"]};
+    .qt.support.assertApprox[lhs;sigma*sqrt tt;1e-9;"d1-d2=sigma*sqrt(T) by construction"]};
 
 test_put_call_parity:{[t]
     spots:1.10 0.90 150.0 1.2500;
@@ -25,12 +25,12 @@ test_put_call_parity:{[t]
     p:.qopt.gk_put[spots;ks;rds;rfs;sigmas;tts];
     lhs:c-p;
     rhs:(spots*.qrates.df_cont[rfs;tts])-(ks*.qrates.df_cont[rds;tts]);
-    .testutil.assertApprox[lhs;rhs;1e-6;"C-P = S*df(rf) - K*df(rd) across several FX scenarios"]};
+    .qt.support.assertApprox[lhs;rhs;1e-6;"C-P = S*df(rf) - K*df(rd) across several FX scenarios"]};
 
 test_delta_call_minus_delta_put_equals_foreign_df:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
     lhs:.qopt.gk_delta_call[s;k;rd;rf;sigma;tt]-.qopt.gk_delta_put[s;k;rd;rf;sigma;tt];
-    .testutil.assertApprox[lhs;.qrates.df_cont[rf;tt];1e-9;"deltaCall-deltaPut=exp(-rf*T)"]};
+    .qt.support.assertApprox[lhs;.qrates.df_cont[rf;tt];1e-9;"deltaCall-deltaPut=exp(-rf*T)"]};
 
 test_delta_call_bounds:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
@@ -55,36 +55,36 @@ test_gamma_call_put_equal:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
     g1:.qopt.gk_gamma[s;k;rd;rf;sigma;tt];
     g2:.qopt.gk_gamma[s;k;rd;rf;sigma;tt];
-    .testutil.assertApprox[g1;g2;1e-12;"gamma is a single deterministic function, no call/put branch"]};
+    .qt.support.assertApprox[g1;g2;1e-12;"gamma is a single deterministic function, no call/put branch"]};
 
 test_rho_call_minus_rho_put_equals_ktdf:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
     lhs:.qopt.gk_rho_call[s;k;rd;rf;sigma;tt]-.qopt.gk_rho_put[s;k;rd;rf;sigma;tt];
     rhs:k*tt*.qrates.df_cont[rd;tt];
-    .testutil.assertApprox[lhs;rhs;1e-9;"rhoCall-rhoPut = K*T*df(rd)"]};
+    .qt.support.assertApprox[lhs;rhs;1e-9;"rhoCall-rhoPut = K*T*df(rd)"]};
 
 test_call_approaches_discounted_intrinsic_as_vol_shrinks:{[t]
     s:1.20;k:1.10;rd:0.03;rf:0.01;tt:1;
     tiny_vol_call:.qopt.gk_call[s;k;rd;rf;0.0001;tt];
     fwd:s*.qrates.growth_cont[rd-rf;tt];
     intrinsic:.qrates.df_cont[rd;tt]*(fwd-k);
-    .testutil.assertApprox[tiny_vol_call;intrinsic;1e-3;"ITM call with ~0 vol prices to discounted forward intrinsic value"]};
+    .qt.support.assertApprox[tiny_vol_call;intrinsic;1e-3;"ITM call with ~0 vol prices to discounted forward intrinsic value"]};
 
 test_call_is_worthless_deep_otm_tiny_vol:{[t]
     otm_call:.qopt.gk_call[1.10;2.00;0.045;0.02;0.0001;0.1];
-    .testutil.assertApprox[otm_call;0f;1e-6;"deep OTM call with ~0 vol is worthless"]};
+    .qt.support.assertApprox[otm_call;0f;1e-6;"deep OTM call with ~0 vol is worthless"]};
 
 test_implied_vol_round_trip_call:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.12;tt:0.75;
     price:.qopt.gk_call[s;k;rd;rf;sigma;tt];
     iv:.qopt.implied_vol[price;s;k;rd;rf;tt;1b];
-    .testutil.assertApprox[iv;sigma;1e-4;"implied vol recovers the sigma used to build the call price"]};
+    .qt.support.assertApprox[iv;sigma;1e-4;"implied vol recovers the sigma used to build the call price"]};
 
 test_implied_vol_round_trip_put:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.12;tt:0.75;
     price:.qopt.gk_put[s;k;rd;rf;sigma;tt];
     iv:.qopt.implied_vol[price;s;k;rd;rf;tt;0b];
-    .testutil.assertApprox[iv;sigma;1e-4;"implied vol recovers the sigma used to build the put price"]};
+    .qt.support.assertApprox[iv;sigma;1e-4;"implied vol recovers the sigma used to build the put price"]};
 
 test_implied_vol_round_trip_across_many_scenarios:{[t]
     spots:1.10 0.90 150.0 1.2500;
@@ -95,7 +95,7 @@ test_implied_vol_round_trip_across_many_scenarios:{[t]
     tts:0.5 1 0.25 2;
     prices:.qopt.gk_call[spots;ks;rds;rfs;sigmas;tts];
     ivs:{[price;s;k;rd;rf;tt] .qopt.implied_vol[price;s;k;rd;rf;tt;1b]}'[prices;spots;ks;rds;rfs;tts];
-    .testutil.assertApprox[ivs;sigmas;1e-4;"implied vol recovers sigma across several ITM/OTM scenarios"]};
+    .qt.support.assertApprox[ivs;sigmas;1e-4;"implied vol recovers sigma across several ITM/OTM scenarios"]};
 
 test_implied_vol_robust_for_tiny_vega:{[t]
     deep_otm_price:.qopt.gk_call[1.10;2.00;0.045;0.02;0.05;0.05];
@@ -109,24 +109,24 @@ test_implied_vol_robust_for_tiny_vega:{[t]
 test_vanna_equals_dvega_dspot:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;h:1e-4;
     fd:(.qopt.gk_vega[s+h;k;rd;rf;sigma;tt]-.qopt.gk_vega[s-h;k;rd;rf;sigma;tt])%2*h;
-    .testutil.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];fd;1e-4;"vanna = d(vega)/d(spot)"]};
+    .qt.support.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];fd;1e-4;"vanna = d(vega)/d(spot)"]};
 
 test_vanna_equals_ddelta_dvol:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;h:1e-4;
     fd:(.qopt.gk_delta_call[s;k;rd;rf;sigma+h;tt]-.qopt.gk_delta_call[s;k;rd;rf;sigma-h;tt])%2*h;
-    .testutil.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];fd;1e-4;"vanna = d(delta)/d(vol) - the same number from the other side"]};
+    .qt.support.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];fd;1e-4;"vanna = d(delta)/d(vol) - the same number from the other side"]};
 
 test_volga_equals_dvega_dvol:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;h:1e-4;
     fd:(.qopt.gk_vega[s;k;rd;rf;sigma+h;tt]-.qopt.gk_vega[s;k;rd;rf;sigma-h;tt])%2*h;
-    .testutil.assertApprox[.qopt.gk_volga[s;k;rd;rf;sigma;tt];fd;1e-4;"volga = d(vega)/d(vol)"]};
+    .qt.support.assertApprox[.qopt.gk_volga[s;k;rd;rf;sigma;tt];fd;1e-4;"volga = d(vega)/d(vol)"]};
 
 / Both are type-independent, like gamma and vega: a call and a put with the
 / same parameters share them exactly.
 test_vanna_and_volga_are_type_independent:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
     vanna_from_put:(.qopt.gk_delta_put[s;k;rd;rf;sigma+1e-4;tt]-.qopt.gk_delta_put[s;k;rd;rf;sigma-1e-4;tt])%2e-4;
-    .testutil.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];vanna_from_put;1e-4;"vanna from the put's delta matches - no option-type term"]};
+    .qt.support.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];vanna_from_put;1e-4;"vanna from the put's delta matches - no option-type term"]};
 
 / Volga's sign follows d1*d2: negative only in the narrow band where the two
 / straddle zero, positive on both wings. A butterfly is long the wings.
@@ -162,7 +162,7 @@ test_dispatchers_vectorise_every_argument_including_is_call:{[t]
     sigma:0.10 0.10 0.15;tt:0.75 0.75 0.25;flags:101b;
     d:.qopt.gk_delta[s;k;rd;rf;sigma;tt;1b];
     .qunit.assertEquals[count d;3;"one delta per row, with a scalar is_call"];
-    .testutil.assertApprox[d 2;.qopt.gk_delta_call[0.90;0.95;0.02;0.05;0.15;0.25];1e-12;"and each row is its own pair's answer"];
+    .qt.support.assertApprox[d 2;.qopt.gk_delta_call[0.90;0.95;0.02;0.05;0.15;0.25];1e-12;"and each row is its own pair's answer"];
     expect:{[c;p;flags;args] ?[flags;c . args;p . args]};
     args:(s;k;rd;rf;sigma;tt);
     .qunit.assertEquals[.qopt.gk_price[s;k;rd;rf;sigma;tt;flags];expect[.qopt.gk_call;.qopt.gk_put;flags;args];"gk_price: a flag per row"];
@@ -175,7 +175,7 @@ test_dispatchers_vectorise_every_argument_including_is_call:{[t]
 test_delta_dispatcher_respects_put_call_parity:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
     lhs:.qopt.gk_delta[s;k;rd;rf;sigma;tt;1b]-.qopt.gk_delta[s;k;rd;rf;sigma;tt;0b];
-    .testutil.assertApprox[lhs;.qrates.df_cont[rf;tt];1e-9;"deltaCall-deltaPut=exp(-rf*T) through the dispatcher"]};
+    .qt.support.assertApprox[lhs;.qrates.df_cont[rf;tt];1e-9;"deltaCall-deltaPut=exp(-rf*T) through the dispatcher"]};
 
 
 test_implied_vol_of_an_impossible_price_is_null:{[t]
@@ -198,22 +198,22 @@ test_gk_zero_vol_at_forward_prices_zero:{[t]
 test_gk_zero_variance_off_forward_stays_intrinsic:{[t]
     itm:.qopt.gk_call[1.10;1.10-1e-9;0.045;0.02;0.10;0f];
     otm:.qopt.gk_call[1.10;1.10+1e-9;0.045;0.02;0.10;0f];
-    .testutil.assertApprox[itm;1e-9;1e-12;"ITM at t=0 is intrinsic"];
+    .qt.support.assertApprox[itm;1e-9;1e-12;"ITM at t=0 is intrinsic"];
     .qunit.assertEquals[otm;0f;"OTM at t=0 is 0"]};
 
 test_gk_zero_variance_parity_and_vector:{[t]
     ks:1.05 1.10 1.15;
     c:.qopt.gk_call[1.10;ks;0.045;0.02;0.10;0f];
     p:.qopt.gk_put[1.10;ks;0.045;0.02;0.10;0f];
-    .testutil.assertApprox[c-p;1.10-ks;1e-12;"parity C-P = S-K at expiry, incl. the ATM element"];
-    .testutil.assertApprox[c;0.05 0 0f;1e-12;"vector of ITM/ATM/OTM calls at expiry"]};
+    .qt.support.assertApprox[c-p;1.10-ks;1e-12;"parity C-P = S-K at expiry, incl. the ATM element"];
+    .qt.support.assertApprox[c;0.05 0 0f;1e-12;"vector of ITM/ATM/OTM calls at expiry"]};
 
 test_gk_greeks_finite_at_expiry_atm:{[t]
     a:(1.10;1.10;0.045;0.02;0.10;0f);
-    .testutil.assertApprox[.qopt.gk_delta_call . a;0.5;1e-12;"call delta at the money at expiry is half the foreign df (t=0: 0.5)"];
-    .testutil.assertApprox[.qopt.gk_delta_put . a;-0.5;1e-12;"put delta mirrors it"];
-    .testutil.assertApprox[.qopt.gk_vega . a;0f;1e-12;"vega 0"];
-    .testutil.assertApprox[.qopt.gk_rho_call . a;0f;1e-12;"rho 0 (t=0)"]};
+    .qt.support.assertApprox[.qopt.gk_delta_call . a;0.5;1e-12;"call delta at the money at expiry is half the foreign df (t=0: 0.5)"];
+    .qt.support.assertApprox[.qopt.gk_delta_put . a;-0.5;1e-12;"put delta mirrors it"];
+    .qt.support.assertApprox[.qopt.gk_vega . a;0f;1e-12;"vega 0"];
+    .qt.support.assertApprox[.qopt.gk_rho_call . a;0f;1e-12;"rho 0 (t=0)"]};
 
 test_gk_negative_t_refused:{[t]
     .qunit.assertThrows[.qopt.gk_call[1.10;1.10;0.045;0.02;0.10;];-0.5;"qopt: t must be >= 0";"negative t refused by name"]};

@@ -1,6 +1,6 @@
 // test_forwards.q - tests for src/pricing/forwards.q and src/pricing/cross.q
 // (.qcross, split out of it in #626). Load src/foundation/rates.q,
-// src/pricing/forwards.q, tests/lib/qunit.q and tests/lib/testutil.q before this
+// src/pricing/forwards.q, tests/lib/qunit.q and tests/lib/support.q before this
 // file.
 
 \d .forwardstest
@@ -21,32 +21,32 @@ mk_books:{[]
 
 test_fwd_simple_no_differential_is_spot:{[t]
     rs:0.01 0.03 0.07;
-    .testutil.assertApprox[.qfwd.fwd_simple[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (simple)"]};
+    .qt.support.assertApprox[.qfwd.fwd_simple[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (simple)"]};
 
 test_fwd_cont_no_differential_is_spot:{[t]
     rs:0.01 0.03 0.07;
-    .testutil.assertApprox[.qfwd.fwd_cont[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (continuous)"]};
+    .qt.support.assertApprox[.qfwd.fwd_cont[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (continuous)"]};
 
-test_fwd_simple_known_example:{[t] .testutil.assertApprox[.qfwd.fwd_simple[1.10;0.05;0.02;1];1.132353;1e-5;"EURUSD-style CIRP example, 1y"]};
-test_fwd_cont_known_example:{[t] .testutil.assertApprox[.qfwd.fwd_cont[1.10;0.05;0.02;1];1.10*exp 0.03;1e-9;"continuous CIRP matches exp((rd-rf)*t) directly"]};
+test_fwd_simple_known_example:{[t] .qt.support.assertApprox[.qfwd.fwd_simple[1.10;0.05;0.02;1];1.132353;1e-5;"EURUSD-style CIRP example, 1y"]};
+test_fwd_cont_known_example:{[t] .qt.support.assertApprox[.qfwd.fwd_cont[1.10;0.05;0.02;1];1.10*exp 0.03;1e-9;"continuous CIRP matches exp((rd-rf)*t) directly"]};
 
-test_fwd_points_known:{[t] .testutil.assertApprox[.qfwd.fwd_points[1.132353;1.10;10000];323.53;1e-1;"forward points in pips for the CIRP example"]};
-test_fwd_points_zero_when_no_move:{[t] .testutil.assertApprox[.qfwd.fwd_points[1.10;1.10;10000];0f;1e-9;"forward equals spot -> zero points"]};
+test_fwd_points_known:{[t] .qt.support.assertApprox[.qfwd.fwd_points[1.132353;1.10;10000];323.53;1e-1;"forward points in pips for the CIRP example"]};
+test_fwd_points_zero_when_no_move:{[t] .qt.support.assertApprox[.qfwd.fwd_points[1.10;1.10;10000];0f;1e-9;"forward equals spot -> zero points"]};
 
 test_points_to_outright_round_trip:{[t]
     fwd:.qfwd.fwd_simple[1.10;0.05;0.02;1];
     points:.qfwd.fwd_points[fwd;1.10;10000];
-    .testutil.assertApprox[.qfwd.points_to_outright[1.10;points;10000];fwd;1e-8;"points -> outright round trip"]};
+    .qt.support.assertApprox[.qfwd.points_to_outright[1.10;points;10000];fwd;1e-8;"points -> outright round trip"]};
 
 test_implied_foreign_rate_round_trip:{[t]
     spot:1.2500; rd:0.045; rf:0.015; tt:0.5;
     fwd:.qfwd.fwd_simple[spot;rd;rf;tt];
-    .testutil.assertApprox[.qfwd.implied_foreign_rate[spot;fwd;rd;tt];rf;1e-8;"recovers rf from a forward built with fwd_simple"]};
+    .qt.support.assertApprox[.qfwd.implied_foreign_rate[spot;fwd;rd;tt];rf;1e-8;"recovers rf from a forward built with fwd_simple"]};
 
 test_implied_domestic_rate_round_trip:{[t]
     spot:1.2500; rd:0.045; rf:0.015; tt:0.5;
     fwd:.qfwd.fwd_simple[spot;rd;rf;tt];
-    .testutil.assertApprox[.qfwd.implied_domestic_rate[spot;fwd;rf;tt];rd;1e-8;"recovers rd from a forward built with fwd_simple"]};
+    .qt.support.assertApprox[.qfwd.implied_domestic_rate[spot;fwd;rf;tt];rd;1e-8;"recovers rd from a forward built with fwd_simple"]};
 
 test_implied_rate_round_trip_across_many_scenarios:{[t]
     spots:1.10 0.90 1.25 150.0;
@@ -54,78 +54,78 @@ test_implied_rate_round_trip_across_many_scenarios:{[t]
     rfs:0.02 0.05 0.015 0.05;
     tts:1 0.25 0.5 2;
     fwds:.qfwd.fwd_simple[spots;rds;rfs;tts];
-    .testutil.assertApprox[.qfwd.implied_foreign_rate[spots;fwds;rds;tts];rfs;1e-6;"implied rf recovered across several currency-pair scenarios"]};
+    .qt.support.assertApprox[.qfwd.implied_foreign_rate[spots;fwds;rds;tts];rfs;1e-6;"implied rf recovered across several currency-pair scenarios"]};
 
-test_cross_rate_triangulation_known:{[t] .testutil.assertApprox[.qfwd.cross_rate[1.10;150];165f;1e-9;"EURUSD * USDJPY = EURJPY"]};
+test_cross_rate_triangulation_known:{[t] .qt.support.assertApprox[.qfwd.cross_rate[1.10;150];165f;1e-9;"EURUSD * USDJPY = EURJPY"]};
 
 test_cross_rate_round_trip:{[t]
     ab:1.3427; bc:0.7231;
     ac:.qfwd.cross_rate[ab;bc];
-    .testutil.assertApprox[.qfwd.cross_rate[ac;.qfwd.invert_rate bc];ab;1e-9;"(A/B*B/C)*C/B = A/B round trip via invert_rate"]};
+    .qt.support.assertApprox[.qfwd.cross_rate[ac;.qfwd.invert_rate bc];ab;1e-9;"(A/B*B/C)*C/B = A/B round trip via invert_rate"]};
 
 test_invert_rate_round_trip:{[t]
     rates:0.5 1.10 150.25 0.7231;
-    .testutil.assertApprox[.qfwd.invert_rate .qfwd.invert_rate rates;rates;1e-9;"invert twice returns the original rate"]};
+    .qt.support.assertApprox[.qfwd.invert_rate .qfwd.invert_rate rates;rates;1e-9;"invert twice returns the original rate"]};
 
-test_invert_rate_known:{[t] .testutil.assertApprox[.qfwd.invert_rate 2f;0.5;1e-9;"1/2=0.5"]};
+test_invert_rate_known:{[t] .qt.support.assertApprox[.qfwd.invert_rate 2f;0.5;1e-9;"1/2=0.5"]};
 
 test_cross_rate_shared_base_known:{[t]
     / EURPLN=4.30, EURUSD=1.075 -> USDPLN=4.30/1.075=4.0 exactly
-    .testutil.assertApprox[.qfwd.cross_rate_shared_base[4.30;1.075];4f;1e-9;"EURPLN, EURUSD -> USDPLN"]};
+    .qt.support.assertApprox[.qfwd.cross_rate_shared_base[4.30;1.075];4f;1e-9;"EURPLN, EURUSD -> USDPLN"]};
 
 test_cross_rate_shared_base_matches_manual_composition:{[t]
     rate_ax:1.3427; rate_ay:0.7231;
     lhs:.qfwd.cross_rate_shared_base[rate_ax;rate_ay];
     rhs:.qfwd.cross_rate[rate_ax;.qfwd.invert_rate rate_ay];
-    .testutil.assertApprox[lhs;rhs;1e-9;"cross_rate_shared_base = cross_rate composed with invert_rate on the second leg"]};
+    .qt.support.assertApprox[lhs;rhs;1e-9;"cross_rate_shared_base = cross_rate composed with invert_rate on the second leg"]};
 
 test_cross_rate_shared_base_identity_when_pairs_equal:{[t]
     / A/X and A/Y with X=Y (same rate on both legs) -> Y/X = 1
-    .testutil.assertApprox[.qfwd.cross_rate_shared_base[1.2500;1.2500];1f;1e-9;"identical shared-base rates cross to exactly 1"]};
+    .qt.support.assertApprox[.qfwd.cross_rate_shared_base[1.2500;1.2500];1f;1e-9;"identical shared-base rates cross to exactly 1"]};
 
 test_cross_rate_shared_base_anti_symmetric:{[t]
     / swapping which pair is "X" and which is "Y" inverts the result
     rate_ax:1.10; rate_ay:150.0;
     fwd:.qfwd.cross_rate_shared_base[rate_ax;rate_ay];
     back:.qfwd.cross_rate_shared_base[rate_ay;rate_ax];
-    .testutil.assertApprox[fwd*back;1f;1e-9;"swapping the two legs gives the inverse cross rate"]};
+    .qt.support.assertApprox[fwd*back;1f;1e-9;"swapping the two legs gives the inverse cross rate"]};
 
 test_invert_book_swaps_sides:{[t]
     book:`bid`ask!(1.1000;1.1002);
     inverted:.qcross.invert_book book;
     expected:`bid`ask!(1%1.1002;1%1.1000);
-    .testutil.assertApprox[inverted`bid;expected`bid;1e-9;"inverted bid = 1/original ask"];
-    .testutil.assertApprox[inverted`ask;expected`ask;1e-9;"inverted ask = 1/original bid"]};
+    .qt.support.assertApprox[inverted`bid;expected`bid;1e-9;"inverted bid = 1/original ask"];
+    .qt.support.assertApprox[inverted`ask;expected`ask;1e-9;"inverted ask = 1/original bid"]};
 
 test_invert_book_round_trip:{[t]
     book:`bid`ask!(1.2500;1.2503);
     back:.qcross.invert_book .qcross.invert_book book;
-    .testutil.assertApprox[back`bid;book`bid;1e-9;"invert twice restores bid"];
-    .testutil.assertApprox[back`ask;book`ask;1e-9;"invert twice restores ask"]};
+    .qt.support.assertApprox[back`bid;book`bid;1e-9;"invert twice restores bid"];
+    .qt.support.assertApprox[back`ask;book`ask;1e-9;"invert twice restores ask"]};
 
 test_cross_book_direct_form:{[t]
     eurusd:`bid`ask!(1.1000;1.1002);
     usdjpy:`bid`ask!(150.00;150.02);
     r:.qcross.cross_book[`EURUSD;eurusd;`USDJPY;usdjpy];
     .qunit.assertEquals[r`sym;`EURJPY;"A/B * B/C -> A/C symbol"];
-    .testutil.assertApprox[r`bid;1.10*150.00;1e-8;"synthetic bid = leg1.bid*leg2.bid"];
-    .testutil.assertApprox[r`ask;1.1002*150.02;1e-8;"synthetic ask = leg1.ask*leg2.ask"]};
+    .qt.support.assertApprox[r`bid;1.10*150.00;1e-8;"synthetic bid = leg1.bid*leg2.bid"];
+    .qt.support.assertApprox[r`ask;1.1002*150.02;1e-8;"synthetic ask = leg1.ask*leg2.ask"]};
 
 test_cross_book_invert_second_leg:{[t]
     eurusd:`bid`ask!(1.1000;1.1002);
     gbpusd:`bid`ask!(1.2500;1.2503);
     r:.qcross.cross_book[`EURUSD;eurusd;`GBPUSD;gbpusd];
     .qunit.assertEquals[r`sym;`EURGBP;"A/B and C/B -> A/C symbol"];
-    .testutil.assertApprox[r`bid;1.1000%1.2503;1e-8;"EUR/GBP bid = EURUSD.bid / GBPUSD.ask"];
-    .testutil.assertApprox[r`ask;1.1002%1.2500;1e-8;"EUR/GBP ask = EURUSD.ask / GBPUSD.bid"]};
+    .qt.support.assertApprox[r`bid;1.1000%1.2503;1e-8;"EUR/GBP bid = EURUSD.bid / GBPUSD.ask"];
+    .qt.support.assertApprox[r`ask;1.1002%1.2500;1e-8;"EUR/GBP ask = EURUSD.ask / GBPUSD.bid"]};
 
 test_cross_book_invert_first_leg:{[t]
     usdjpy:`bid`ask!(150.00;150.02);
     usdchf:`bid`ask!(0.9000;0.9003);
     r:.qcross.cross_book[`USDJPY;usdjpy;`USDCHF;usdchf];
     .qunit.assertEquals[r`sym;`JPYCHF;"B/A and B/C -> A/C symbol"];
-    .testutil.assertApprox[r`bid;0.9000%150.02;1e-8;"JPY/CHF bid = USDCHF.bid / USDJPY.ask"];
-    .testutil.assertApprox[r`ask;0.9003%150.00;1e-8;"JPY/CHF ask = USDCHF.ask / USDJPY.bid"]};
+    .qt.support.assertApprox[r`bid;0.9000%150.02;1e-8;"JPY/CHF bid = USDCHF.bid / USDJPY.ask"];
+    .qt.support.assertApprox[r`ask;0.9003%150.00;1e-8;"JPY/CHF ask = USDCHF.ask / USDJPY.bid"]};
 
 test_cross_book_never_crossed_from_valid_inputs:{[t]
     books:(`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02);`bid`ask!(1.2500;1.2503);`bid`ask!(0.9000;0.9003));
@@ -165,16 +165,16 @@ test_ccy_orient_cross_rejects_no_shared_currency:{[t]
 
 test_invert_book_depth_known:{[t]
     r:.qbook.invert_book_depth[1.1000 1.1002;1000000 1000000];
-    .testutil.assertApprox[first r;0.9090909 0.9089256;1e-6;"prices invert elementwise, staying best-first"];
-    .testutil.assertApprox[last r;1100000 1100200;1e-6;"sizes rescale into the new base currency"]};
+    .qt.support.assertApprox[first r;0.9090909 0.9089256;1e-6;"prices invert elementwise, staying best-first"];
+    .qt.support.assertApprox[last r;1100000 1100200;1e-6;"sizes rescale into the new base currency"]};
 
 test_invert_book_depth_round_trip:{[t]
     prices:1.2500 1.2503 1.2505;
     sizes:2000000 1500000 3000000;
     once:.qbook.invert_book_depth[prices;sizes];
     twice:.qbook.invert_book_depth[once 0;once 1];
-    .testutil.assertApprox[twice 0;prices;1e-6;"inverting twice restores prices"];
-    .testutil.assertApprox[twice 1;sizes;1e-3;"inverting twice restores sizes"]};
+    .qt.support.assertApprox[twice 0;prices;1e-6;"inverting twice restores prices"];
+    .qt.support.assertApprox[twice 1;sizes;1e-3;"inverting twice restores sizes"]};
 
 test_cross_book_at_sizes_matches_cross_book_at_negligible_size:{[t]
     / a size far smaller than any level's depth should reduce to exactly
@@ -185,8 +185,8 @@ test_cross_book_at_sizes_matches_cross_book_at_negligible_size:{[t]
     r:.qcross.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 100;`bid`ask];
     tob:.qcross.cross_book[`EURUSD;`bid`ask!(1.0998;1.1000);`USDJPY;`bid`ask!(149.98;150.00)];
     .qunit.assertEquals[first r`sym;tob`sym;"cross symbol matches cross_book"];
-    .testutil.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches cross_book's top-of-book bid"];
-    .testutil.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches cross_book's top-of-book ask"]};
+    .qt.support.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches cross_book's top-of-book bid"];
+    .qt.support.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches cross_book's top-of-book ask"]};
 
 test_cross_book_at_sizes_shared_corner_matches_cross_book_at_negligible_size:{[t]
     / same consistency check, but for the shared-quote (invert) branch
@@ -195,16 +195,16 @@ test_cross_book_at_sizes_shared_corner_matches_cross_book_at_negligible_size:{[t
     r:.qcross.cross_book_at_sizes[`AUDUSD;audusd_book;`EURUSD;eurusd_book;enlist 100;`bid`ask];
     tob:.qcross.cross_book[`AUDUSD;`bid`ask!(0.6498;0.6500);`EURUSD;`bid`ask!(1.0998;1.1000)];
     .qunit.assertEquals[first r`sym;tob`sym;"cross symbol matches cross_book (AUDEUR)"];
-    .testutil.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches cross_book's top-of-book bid"];
-    .testutil.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches cross_book's top-of-book ask"]};
+    .qt.support.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches cross_book's top-of-book bid"];
+    .qt.support.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches cross_book's top-of-book ask"]};
 
 test_cross_book_at_sizes_walks_multiple_levels:{[t]
     eurusd_book:mk_books[][`eurusd];
     usdjpy_book:mk_books[][`usdjpy];
     r:.qcross.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1500000;`bid`ask`mid];
-    .testutil.assertApprox[first r`bid;164.9293;1e-3;"blended bid after walking depth on both legs"];
-    .testutil.assertApprox[first r`ask;165.0187;1e-3;"blended ask after walking depth on both legs"];
-    .testutil.assertApprox[first r`mid;164.974;1e-3;"mid is the average of the swept bid and ask"];
+    .qt.support.assertApprox[first r`bid;164.9293;1e-3;"blended bid after walking depth on both legs"];
+    .qt.support.assertApprox[first r`ask;165.0187;1e-3;"blended ask after walking depth on both legs"];
+    .qt.support.assertApprox[first r`mid;164.974;1e-3;"mid is the average of the swept bid and ask"];
     .qunit.assertTrue[first r`bid_fully_filled;"enough depth to fully fill 1.5mm"];
     .qunit.assertTrue[first r`ask_fully_filled;"enough depth to fully fill 1.5mm"]};
 
@@ -213,8 +213,8 @@ test_cross_book_at_sizes_insufficient_depth:{[t]
     eurusd_book:mk_books[][`eurusd];
     usdjpy_book:mk_books[][`usdjpy];
     r:.qcross.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 3000000;`bid`ask];
-    .testutil.assertApprox[first r`bid_filled_size;2000000f;1e-6;"bid caps at leg1's total depth"];
-    .testutil.assertApprox[first r`ask_filled_size;2000000f;1e-6;"ask caps at leg1's total depth"];
+    .qt.support.assertApprox[first r`bid_filled_size;2000000f;1e-6;"bid caps at leg1's total depth"];
+    .qt.support.assertApprox[first r`ask_filled_size;2000000f;1e-6;"ask caps at leg1's total depth"];
     .qunit.assertFalse[first r`bid_fully_filled;"not fully filled"];
     .qunit.assertFalse[first r`ask_fully_filled;"not fully filled"]};
 
@@ -286,9 +286,9 @@ test_cross_book_chain_at_sizes_matches_cross_book_at_sizes_for_two_legs:{[t]
     r_chain:.qcross.cross_book_chain_at_sizes[`EURUSD`USDJPY;(eurusd_book;usdjpy_book);enlist 1500000;`bid`ask`mid];
     r_pair:.qcross.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1500000;`bid`ask`mid];
     .qunit.assertEquals[first r_chain`sym;first r_pair`sym;"2-leg chain symbol matches cross_book_at_sizes"];
-    .testutil.assertApprox[first r_chain`bid;first r_pair`bid;1e-9;"2-leg chain bid matches cross_book_at_sizes"];
-    .testutil.assertApprox[first r_chain`ask;first r_pair`ask;1e-9;"2-leg chain ask matches cross_book_at_sizes"];
-    .testutil.assertApprox[first r_chain`mid;first r_pair`mid;1e-9;"2-leg chain mid matches cross_book_at_sizes"]};
+    .qt.support.assertApprox[first r_chain`bid;first r_pair`bid;1e-9;"2-leg chain bid matches cross_book_at_sizes"];
+    .qt.support.assertApprox[first r_chain`ask;first r_pair`ask;1e-9;"2-leg chain ask matches cross_book_at_sizes"];
+    .qt.support.assertApprox[first r_chain`mid;first r_pair`mid;1e-9;"2-leg chain mid matches cross_book_at_sizes"]};
 
 test_cross_book_chain_at_sizes_matches_cross_book_at_negligible_size_three_legs:{[t]
     / at a size far smaller than any level's depth, a 3-leg chain should
@@ -302,8 +302,8 @@ test_cross_book_chain_at_sizes_matches_cross_book_at_negligible_size_three_legs:
     eurjpy_tob:.qcross.cross_book[`EURUSD;`bid`ask!(1.0998;1.1000);`USDJPY;`bid`ask!(149.98;150.00)];
     eurchf_tob:.qcross.cross_book[`EURJPY;eurjpy_tob;`JPYCHF;`bid`ask!(0.0065;0.0066)];
     .qunit.assertEquals[first r`sym;eurchf_tob`sym;"3-leg chain symbol matches hand-triangulated top-of-book"];
-    .testutil.assertApprox[first r`bid;eurchf_tob`bid;1e-6;"negligible-size 3-leg bid matches hand-triangulated top-of-book"];
-    .testutil.assertApprox[first r`ask;eurchf_tob`ask;1e-6;"negligible-size 3-leg ask matches hand-triangulated top-of-book"]};
+    .qt.support.assertApprox[first r`bid;eurchf_tob`bid;1e-6;"negligible-size 3-leg bid matches hand-triangulated top-of-book"];
+    .qt.support.assertApprox[first r`ask;eurchf_tob`ask;1e-6;"negligible-size 3-leg ask matches hand-triangulated top-of-book"]};
 
 test_cross_book_chain_at_sizes_shortfall_on_middle_leg_marks_not_fully_filled:{[t]
     / leg 1 and leg 3 have plenty of depth; leg 2 (the bridge currency)
@@ -313,7 +313,7 @@ test_cross_book_chain_at_sizes_shortfall_on_middle_leg_marks_not_fully_filled:{[
     thin_usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 149.98;enlist 300000;enlist 150.00;enlist 300000);
     big_jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 0.0065;enlist 50000000;enlist 0.0066;enlist 50000000);
     r:.qcross.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(big_eurusd_book;thin_usdjpy_book;big_jpychf_book);enlist 1000000;`bid`ask];
-    .testutil.assertApprox[first r`bid_filled_size;1000000f;1e-6;"reported filled_size stays leg 1's fill"];
+    .qt.support.assertApprox[first r`bid_filled_size;1000000f;1e-6;"reported filled_size stays leg 1's fill"];
     .qunit.assertFalse[first r`bid_fully_filled;"middle-leg shortfall marks the cross as not fully filled"];
     .qunit.assertFalse[first r`ask_fully_filled;"middle-leg shortfall marks the cross as not fully filled"]};
 
@@ -333,7 +333,7 @@ test_cross_book_chain_at_sizes_recovers_via_deeper_levels_on_thin_bridge_leg:{[t
     / underestimate by an order of magnitude and get a false shortfall.
     big_jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(0.0065 0.0064;500000000 500000000;0.0066 0.0067;500000000 500000000);
     r:.qcross.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(big_eurusd_book;two_level_usdjpy_book;big_jpychf_book);enlist 1000000;`bid`ask];
-    .testutil.assertApprox[first r`bid_filled_size;1000000f;1e-6;"leg 1's full 1mm EUR request is met"];
+    .qt.support.assertApprox[first r`bid_filled_size;1000000f;1e-6;"leg 1's full 1mm EUR request is met"];
     .qunit.assertTrue[first r`bid_fully_filled;"bridge leg's thin top-of-book didn't block the fill - the deeper level covered the shortfall"];
     .qunit.assertTrue[first r`ask_fully_filled;"same recovery on the ask side"]};
 
@@ -404,14 +404,14 @@ test_cross_book_at_chains_through_available_pairs:{[t]
     direct:.qcross.cross_book_chain_at_sizes[`AUDUSD`EURUSD`EURPLN;.qcross.leg_book_as_of[quotes;2026.01.02D00:00:00.000000000;] each `AUDUSD`EURUSD`EURPLN;enlist 500000;`bid`ask`mid];
     auto:.qcross.cross_book_at[quotes;`AUDPLN;2026.01.02D00:00:00.000000000;enlist 500000;`bid`ask`mid];
     .qunit.assertEquals[first auto`sym;`AUDPLN;"cross_book_at resolves the chain and labels the result AUDPLN"];
-    .testutil.assertApprox[first auto`bid;first direct`bid;1e-9;"matches manually chaining the same legs through cross_book_chain_at_sizes"];
-    .testutil.assertApprox[first auto`ask;first direct`ask;1e-9;"ask side also matches the manually-chained equivalent"]};
+    .qt.support.assertApprox[first auto`bid;first direct`bid;1e-9;"matches manually chaining the same legs through cross_book_chain_at_sizes"];
+    .qt.support.assertApprox[first auto`ask;first direct`ask;1e-9;"ask side also matches the manually-chained equivalent"]};
 
 test_cross_book_at_direct_quote_needs_no_chaining:{[t]
     quotes:mk_quotes_table[::];
     r:.qcross.cross_book_at[quotes;`AUDUSD;2026.01.02D00:00:00.000000000;enlist 500000;`bid`ask`mid];
     .qunit.assertEquals[first r`sym;`AUDUSD;"AUDUSD is quoted directly, no chain needed"];
-    .testutil.assertApprox[first r`bid;0.655;1e-6;"top-of-book bid matches the quoted spot at negligible size"]};
+    .qt.support.assertApprox[first r`bid;0.655;1e-6;"top-of-book bid matches the quoted spot at negligible size"]};
 
 test_cross_book_at_inverse_of_a_direct_quote:{[t]
     quotes:mk_quotes_table[::];
@@ -420,7 +420,7 @@ test_cross_book_at_inverse_of_a_direct_quote:{[t]
     / each), so the AUDUSD mid at this size is just the level-0 mid: (bid
     / 0.6550 + ask 0.6551)/2.
     audusd_mid:0.5*.6550+.6551;
-    .testutil.assertApprox[first r`mid;1%audusd_mid;1e-6;"USDAUD, not directly quoted, is priced as the inverse of AUDUSD"]};
+    .qt.support.assertApprox[first r`mid;1%audusd_mid;1e-6;"USDAUD, not directly quoted, is priced as the inverse of AUDUSD"]};
 
 test_cross_book_at_rejects_unreachable_pair:{[t]
     quotes:mk_quotes_table[::];
@@ -484,7 +484,7 @@ test_cross_size_at_price_near_zero_when_even_negligible_size_breaches:{[t]
     quotes:mk_quotes_table[::];
     as_of:2026.01.02D00:00:00.000000000;
     max_sz:.qcross.cross_size_at_price[quotes;`AUDPLN;as_of;`bid;10f];
-    .testutil.assertApprox[max_sz;0f;1e-6;"an unreachable price limit returns ~zero tradeable size"]};
+    .qt.support.assertApprox[max_sz;0f;1e-6;"an unreachable price limit returns ~zero tradeable size"]};
 
 / Shared 3-pair, 2-timestamp (1s apart) quotes table for the markout
 / tests below: AUDUSD and EURPLN each drift up by 10 pips, EURUSD stays
@@ -510,7 +510,7 @@ test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
     r:.qexec.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;0D00:00:00.001*-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
     .qunit.assertEquals[r[0]`time;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
-    .testutil.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
+    .qt.support.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
     .qunit.assertTrue[(r[2]`ref_price)>(r[0]`ref_price);"the +500ms horizon (at t1) sees the higher price after AUDUSD/EURPLN drifted up"]};
 
 test_cross_markout_at_horizons_col_precedence_orders_ts_then_sym:{[t]
@@ -553,7 +553,7 @@ test_cross_markout_decomp_sums_exactly_to_the_total_move:{[t]
     mid_t0:.qcross.cross_ref_price_at[quotes;`AUDPLN;t0;1];
     mid_t1:.qcross.cross_ref_price_at[quotes;`AUDPLN;t1;1];
     actual_total:10000*mid_t1-mid_t0;
-    .testutil.assertApprox[total_from_decomp;actual_total;1e-6;"per-leg contributions sum exactly to the actual total price move"]};
+    .qt.support.assertApprox[total_from_decomp;actual_total;1e-6;"per-leg contributions sum exactly to the actual total price move"]};
 
 test_cross_markout_decomp_flat_leg_contributes_zero:{[t]
     quotes:mk_ts_quotes_table[::];
@@ -561,7 +561,7 @@ test_cross_markout_decomp_flat_leg_contributes_zero:{[t]
     t1:t0+0D00:00:01;
     decomp:.qexec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
     eurusd_row:first select from decomp where leg=`EURUSD;
-    .testutil.assertApprox[eurusd_row`contribution_pips;0f;1e-6;"EURUSD didn't move between t0 and t1, so it contributes exactly zero"]};
+    .qt.support.assertApprox[eurusd_row`contribution_pips;0f;1e-6;"EURUSD didn't move between t0 and t1, so it contributes exactly zero"]};
 
 test_cross_markout_decomp_reprices_bridge_depth:{[t]
     t0:2026.01.01D00:00:00.000000000;
@@ -574,10 +574,10 @@ test_cross_markout_decomp_reprices_bridge_depth:{[t]
     r:.qexec.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
     / EURUSD's move increases the USDJPY sweep from 1.1 to 1.2 USD.
     / Cross bid/ask: 165/165.1 -> 180/180.2, so mid moves 15.05.
-    .testutil.assertApprox[r`contribution_pips;1505 0f;1e-9;"EURUSD's contribution includes its effect on the bridge sweep; the unchanged USDJPY book contributes zero"];
+    .qt.support.assertApprox[r`contribution_pips;1505 0f;1e-9;"EURUSD's contribution includes its effect on the bridge sweep; the unchanged USDJPY book contributes zero"];
     before:.qcross.cross_ref_price_at[quotes;`EURJPY;t0;1];
     after:.qcross.cross_ref_price_at[quotes;`EURJPY;t1;1];
-    .testutil.assertApprox[sum r`contribution_pips;100*(after-before);1e-9;"attribution reconciles with the actual depth-aware cross move"]};
+    .qt.support.assertApprox[sum r`contribution_pips;100*(after-before);1e-9;"attribution reconciles with the actual depth-aware cross move"]};
 
 test_cross_markout_decomp_attributes_spread_moves_with_flat_leg_mids:{[t]
     t0:2026.01.01D00:00:00.000000000;
@@ -590,7 +590,7 @@ test_cross_markout_decomp_attributes_spread_moves_with_flat_leg_mids:{[t]
     r:.qexec.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
     .qunit.assertEquals[r`price_t0;r`price_t1;"both descriptive leg mids remain unchanged"];
     / Full-book midpoint: 165.1 -> 165.2 after EURUSD -> 165.4 after USDJPY.
-    .testutil.assertApprox[r`contribution_pips;10 20f;1e-9;"spread changes affect the cross mid despite unchanged standalone leg mids"];
+    .qt.support.assertApprox[r`contribution_pips;10 20f;1e-9;"spread changes affect the cross mid despite unchanged standalone leg mids"];
     .qunit.assertEquals[r`leg;`EURUSD`USDJPY;"the waterfall follows the currency path"]};
 
 test_cross_markout_decomp_prices_inverted_single_leg_book:{[t]
@@ -603,10 +603,10 @@ test_cross_markout_decomp_prices_inverted_single_leg_book:{[t]
         ask_sizes:2#enlist enlist 1000000f);
     r:.qexec.cross_markout_decomp[quotes;"usd/eur";t0;t1;10000;1];
     expected:10000*((110%117)-(11%12));
-    .testutil.assertApprox[first r`contribution_pips;expected;1e-9;"USDEUR uses the midpoint of inverted bid and ask, not the reciprocal EURUSD midpoint"];
+    .qt.support.assertApprox[first r`contribution_pips;expected;1e-9;"USDEUR uses the midpoint of inverted bid and ask, not the reciprocal EURUSD midpoint"];
     .qunit.assertEquals[r`invert;enlist 1b;"the direct quote is inverted for USDEUR"];
     direct:.qexec.cross_markout_decomp[quotes;`EURUSD;t0;t1;10000;1];
-    .testutil.assertApprox[first direct`contribution_pips;0f;1e-9;"the directly quoted EURUSD midpoint is unchanged"]};
+    .qt.support.assertApprox[first direct`contribution_pips;0f;1e-9;"the directly quoted EURUSD midpoint is unchanged"]};
 
 test_cross_markout_decomp_missing_endpoint_quotes_null_attribution:{[t]
     t0:2026.01.01D00:00:00.000000000;
@@ -637,8 +637,8 @@ test_cross_impact_at_horizons_reports_a_different_pairs_own_drift:{[t]
     trade_time:t0+0D00:00:00.500;
     r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;0D00:00:00.001*-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
-    .testutil.assertApprox[r[0]`markout_pips;0f;1e-6;"no drift yet at/before the trade's own baseline time"];
-    .testutil.assertApprox[r[2]`markout_pips;10f;1e-6;"AUDUSD's genuine 10-pip drift by t1 shows up as +10 for a buy"]};
+    .qt.support.assertApprox[r[0]`markout_pips;0f;1e-6;"no drift yet at/before the trade's own baseline time"];
+    .qt.support.assertApprox[r[2]`markout_pips;10f;1e-6;"AUDUSD's genuine 10-pip drift by t1 shows up as +10 for a buy"]};
 
 test_cross_impact_at_horizons_side_flips_the_sign:{[t]
     quotes:mk_ts_quotes_table[::];
@@ -646,7 +646,7 @@ test_cross_impact_at_horizons_side_flips_the_sign:{[t]
     trade_time:t0+0D00:00:00.500;
     buy_r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0D00:00:00.5;1];
     sell_r:.qexec.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;-1;10000;enlist 0D00:00:00.5;1];
-    .testutil.assertApprox[first buy_r`markout_pips;neg first sell_r`markout_pips;1e-6;"selling reports the same drift with the opposite sign"]};
+    .qt.support.assertApprox[first buy_r`markout_pips;neg first sell_r`markout_pips;1e-6;"selling reports the same drift with the opposite sign"]};
 
 test_cross_impact_at_horizons_rejects_same_pair:{[t]
     quotes:mk_ts_quotes_table[::];
@@ -764,7 +764,7 @@ test_the_same_legs_reordered_price_the_cross_correctly:{[t]
     bk:{[px] `bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist px;enlist 1e12;enlist px;enlist 1e12)};
     r:.qcross.cross_book_chain_at_sizes[`EURGBP`EURUSD`USDJPY;(bk 0.85;bk 1.1;bk 150f);enlist 1f;enlist `mid];
     .qunit.assertEquals[first r`sym;`GBPJPY;"EURGBP first: GBP->EUR->USD->JPY"];
-    .testutil.assertApprox[first r`mid;1.1*150%0.85;1e-9;"1.1*150/0.85 - the inverse of the JPYGBP the old code got wrong"]};
+    .qt.support.assertApprox[first r`mid;1.1*150%0.85;1e-9;"1.1*150/0.85 - the inverse of the JPYGBP the old code got wrong"]};
 
 test_a_pair_crossed_with_itself_is_refused:{[t]
     .qunit.assertThrows[{.qcross.ccy_orient_cross[`EURUSD;`EURUSD]};::;"ccy_orient_cross: EURUSD crossed with itself";
@@ -776,8 +776,8 @@ broken_curve:{[] ([] value_date:2026.10.01 2026.10.11; forward_points:10 30f)}
 
 test_broken_date_midway_interpolates_points_and_outright:{[t]
     r:.qfwd.forward_at_date[1.10;broken_curve[];2026.10.06;10000;::];
-    .testutil.assertApprox[r`points;20f;1e-12;"halfway between 10 and 30"];
-    .testutil.assertApprox[r`outright;1.102;1e-12;"1.10 + 20 pips"];
+    .qt.support.assertApprox[r`points;20f;1e-12;"halfway between 10 and 30"];
+    .qt.support.assertApprox[r`outright;1.102;1e-12;"1.10 + 20 pips"];
     .qunit.assertEquals[r`lower_weight`upper_weight;0.5 0.5;"equal weights"];
     .qunit.assertEquals[r`lower`upper;2026.10.01 2026.10.11;"the bracketing nodes"]};
 
@@ -789,7 +789,7 @@ test_broken_date_on_a_node_reproduces_it:{[t]
 
 test_broken_date_points_and_outright_round_trip:{[t]
     r:.qfwd.forward_at_date[1.10;.qfwd.mock_fwd_curve;2026.11.02;10000;::];
-    .testutil.assertApprox[.qfwd.fwd_points[r`outright;1.10;10000];r`points;1e-9;"outright back to points"]};
+    .qt.support.assertApprox[.qfwd.fwd_points[r`outright;1.10;10000];r`points;1e-9;"outright back to points"]};
 
 test_broken_date_outside_the_curve_is_refused_by_default:{[t]
     .qunit.assertThrows[.qfwd.forward_at_date[1.10;broken_curve[];;10000;::];2026.10.20;
@@ -797,8 +797,8 @@ test_broken_date_outside_the_curve_is_refused_by_default:{[t]
 
 test_broken_date_extrapolates_only_when_asked:{[t]
     f:{[policy] .qfwd.forward_at_date[1.10;.forwardstest.broken_curve[];2026.10.21;10000;(enlist `extrapolation)!enlist policy]};
-    .testutil.assertApprox[(f `flat)`points;30f;1e-12;"flat holds the end node"];
-    .testutil.assertApprox[(f `linear)`points;50f;1e-12;"linear extends the end slope"];
+    .qt.support.assertApprox[(f `flat)`points;30f;1e-12;"flat holds the end node"];
+    .qt.support.assertApprox[(f `linear)`points;50f;1e-12;"linear extends the end slope"];
     .qunit.assertEquals[(f `flat)`extrapolated;1b;"and says it extrapolated"]};
 
 test_broken_date_duplicate_curve_dates_are_refused:{[t]
@@ -818,13 +818,13 @@ test_swap_struck_at_market_is_worth_nothing:{[t]
     m:.qfwd.mock_swap_market;
     at_market:@[@[s;`near_rate;:;m`near_fwd];`far_rate;:;m`far_fwd];
     r:.qfwd.swap_value[at_market;m;2026.09.18;(enlist `pip_factor)!enlist 10000];
-    .testutil.assertApprox[r`pv;0f;1e-9;"contracted at the marks"]};
+    .qt.support.assertApprox[r`pv;0f;1e-9;"contracted at the marks"]};
 
 test_swap_pv_is_the_sum_of_its_legs:{[t]
     r:.qfwd.swap_value[.qfwd.mock_swap;.qfwd.mock_swap_market;2026.09.18;(enlist `pip_factor)!enlist 10000];
-    .testutil.assertApprox[r`pv;(r`near_pv)+r`far_pv;1e-9;"net = near + far"];
-    .testutil.assertApprox[r`pv;-1976.08;1e-6;"(1.1004-1.10)*1m*0.9998 - (1.1124-1.11)*1m*0.99"];
-    .testutil.assertApprox[r`market_points`contract_points;120 100f;1e-6;"swap points in pips"]};
+    .qt.support.assertApprox[r`pv;(r`near_pv)+r`far_pv;1e-9;"net = near + far"];
+    .qt.support.assertApprox[r`pv;-1976.08;1e-6;"(1.1004-1.10)*1m*0.9998 - (1.1124-1.11)*1m*0.99"];
+    .qt.support.assertApprox[r`market_points`contract_points;120 100f;1e-6;"swap points in pips"]};
 
 test_swap_reversed_negates_and_doubled_doubles:{[t]
     s:.qfwd.mock_swap;
@@ -833,14 +833,14 @@ test_swap_reversed_negates_and_doubled_doubles:{[t]
     base:.qfwd.swap_value[s;m;2026.09.18;o];
     rev:.qfwd.swap_value[@[s;`near_side;neg];m;2026.09.18;o];
     dbl:.qfwd.swap_value[@[s;`notional;2*];m;2026.09.18;o];
-    .testutil.assertApprox[rev`near_pv`far_pv`pv`near_pv01`far_pv01;neg base`near_pv`far_pv`pv`near_pv01`far_pv01;1e-9;"reversed"];
-    .testutil.assertApprox[dbl`near_pv`far_pv`pv;2*base`near_pv`far_pv`pv;1e-9;"doubled"];
+    .qt.support.assertApprox[rev`near_pv`far_pv`pv`near_pv01`far_pv01;neg base`near_pv`far_pv`pv`near_pv01`far_pv01;1e-9;"reversed"];
+    .qt.support.assertApprox[dbl`near_pv`far_pv`pv;2*base`near_pv`far_pv`pv;1e-9;"doubled"];
     .qunit.assertEquals[(.qfwd.swap_cashflows @[s;`near_side;neg])`amount;neg (.qfwd.swap_cashflows s)`amount;"flows negate too"]};
 
 test_swap_settled_near_leg_is_worth_nothing:{[t]
     r:.qfwd.swap_value[.qfwd.mock_swap;.qfwd.mock_swap_market;2026.10.01;(enlist `pip_factor)!enlist 10000];
     .qunit.assertEquals[r`settled;enlist `near;"the near leg settled on 22 Sep"];
-    .testutil.assertApprox[r`pv;r`far_pv;1e-12;"only the far leg remains"]};
+    .qt.support.assertApprox[r`pv;r`far_pv;1e-12;"only the far leg remains"]};
 
 test_swap_without_a_pip_factor_is_refused:{[t]
     .qunit.assertThrows[.qfwd.swap_value[.qfwd.mock_swap;.qfwd.mock_swap_market;2026.09.18;];::;
@@ -850,13 +850,13 @@ test_swap_without_a_pip_factor_is_refused:{[t]
 
 test_convert_quotes_inverts_bid_and_ask:{[t]
     r:.qfwd.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::];
-    .testutil.assertApprox[first each r`bid`ask;0.4 0.5;1e-12;"1/2.5 and 1/2"];
+    .qt.support.assertApprox[first each r`bid`ask;0.4 0.5;1e-12;"1/2.5 and 1/2"];
     .qunit.assertEquals[first each r`sym`source_sym;`USDEUR`EURUSD;"target and source named"]};
 
 test_convert_quotes_rescales_sizes:{[t]
     q:([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5; bid_size:enlist 10f; ask_size:enlist 10f);
     r:.qfwd.convert_quotes[q;(enlist `EURUSD)!enlist `USDEUR;::];
-    .testutil.assertApprox[first r`ask_size;20f;1e-12;"10 base at 2 is 20 of the new base, now an offer at 0.5"]};
+    .qt.support.assertApprox[first r`ask_size;20f;1e-12;"10 base at 2 is 20 of the new base, now an offer at 0.5"]};
 
 test_convert_quotes_round_trips:{[t]
     q:([] sym:`EURUSD`USDJPY; bid:1.0998 148.21; ask:1.1002 148.24; bid_size:1000000 2000000f; ask_size:1500000 1000000f);
@@ -865,13 +865,13 @@ test_convert_quotes_round_trips:{[t]
     r:.qfwd.convert_quotes[delete source_sym,inverted from .qfwd.convert_quotes[q;there;::];back;::];
     .qunit.assertEquals[r`sym;q`sym;"symbols back"];
     gap:max abs raze (r`bid`ask`bid_size`ask_size)-q`bid`ask`bid_size`ask_size;
-    .testutil.assertApprox[gap;0f;1e-6;"prices and sizes back"]};
+    .qt.support.assertApprox[gap;0f;1e-6;"prices and sizes back"]};
 
 test_convert_quotes_points_go_through_the_outright:{[t]
     q:([] sym:enlist `EURUSD; spot:enlist 2f; fwd_points:enlist 2000f);
     pf:(enlist `pip_factors)!enlist `EURUSD`USDEUR!10000 10000f;
     r:.qfwd.convert_quotes[q;(enlist `EURUSD)!enlist `USDEUR;pf];
-    .testutil.assertApprox[first r`fwd_points;10000*(1%2.2)-1%2;1e-9;"target_pf*(1/F - 1/S), not -2000"]};
+    .qt.support.assertApprox[first r`fwd_points;10000*(1%2.2)-1%2;1e-9;"target_pf*(1/F - 1/S), not -2000"]};
 
 test_convert_quotes_same_pair_passes_unchanged:{[t]
     q:([] sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.2);

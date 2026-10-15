@@ -1,5 +1,5 @@
 // etl_test_doubles.q - adapter doubles for testing stateful control flow
-// (.qetldbl).
+// (.qt.fixture.etl).
 //
 // The doubles rule permits doubling exactly four things - fetch, publish, checkpoint and
 // logging - and then says the part that matters twice:
@@ -18,37 +18,36 @@
 // So: the EDGES are doubled here; the MIDDLE (.qetl.coverage's arithmetic, and any
 // transform) is tested against the real implementation in test_materialisation.q.
 
-\d .qetldbl
 
 / The closed set the doubles rule permits. Everything about this list is deliberate,
 / including its shortness.
-doubleable:`fetch`publish`checkpoint`log
+.qt.fixture.etl.doubleable:`fetch`publish`checkpoint`log
 
 / Named explicitly so the refusal message can say WHY, rather than only that
 / the name is unknown. These are the things whose real behaviour the suite
 / exists to check.
-protected:`transform`coverage`stage_completion`compose`gaps`is_covered
+.qt.fixture.etl.protected:`transform`coverage`stage_completion`compose`gaps`is_covered
 
 / adapter -> the function standing in for it.
-installed:(`symbol$())!();
+.qt.fixture.etl.installed:(`symbol$())!();
 
 / Every doubled call, in order, as (adapter;args). A list rather than a
 / counter because ORDER is what the lifecycle tests assert: publish must
 / precede checkpoint, and a counter cannot tell you it did.
-calls:();
+.qt.fixture.etl.calls:();
 
 / Install a double.
 / @throws error when the adapter is protected, or simply not doubleable
-/ @eg .qetldbl.install[`fetch;{[a;b] ([] px:1 2 3.)}]
-install:{[adapter;impl]
-    if[adapter in protected;
+/ @eg .qt.fixture.etl.install[`fetch;{[a;b] ([] px:1 2 3.)}]
+.qt.fixture.etl.install:{[adapter;impl]
+    if[adapter in .qt.fixture.etl.protected;
         / Short by necessity: a thrown string is truncated at 255 bytes, and
         / The rule's full sentence plus the adapter name exceeded it. The quote
         / is in this file's header; what belongs here is the instruction.
         '"install: ",string[adapter]," must not be doubled (doubling the edges is not testing the middle) - test it against the real implementation"];
-    if[not adapter in doubleable;
-        '"install: ",string[adapter]," is not a doubleable adapter - the doubles rule permits ",", " sv string doubleable];
-    installed[adapter]:impl;
+    if[not adapter in .qt.fixture.etl.doubleable;
+        '"install: ",string[adapter]," is not a doubleable adapter - the doubles rule permits ",", " sv string .qt.fixture.etl.doubleable];
+    .qt.fixture.etl.installed[adapter]:impl;
     adapter}
 
 / Call a doubled adapter, recording the call.
@@ -58,18 +57,18 @@ install:{[adapter;impl]
 / deferred one, so building the argument would perform the effect. And
 / `enlist(::)` rather than `()`, because `f . ()` is a type error.
 / @throws error when nothing is installed for the adapter
-call:{[adapter;args]
-    if[not adapter in key installed;
+.qt.fixture.etl.call:{[adapter;args]
+    if[not adapter in key .qt.fixture.etl.installed;
         '"call: no double installed for ",string[adapter]," - a test that reaches an undoubled adapter would hit the real one"];
-    calls,:enlist (adapter;args);
-    (installed adapter) . $[0=count args; enlist(::); args]}
+    .qt.fixture.etl.calls,:enlist (adapter;args);
+    (.qt.fixture.etl.installed adapter) . $[0=count args; enlist(::); args]}
 
 / Clear every double and every recorded call. Call from setUp, so no test
 / depends on another's doubles - the failure mode otherwise is a suite that
 / passes in order and fails in isolation.
-reset:{[]
-    installed::(`symbol$())!();
-    calls::();
+.qt.fixture.etl.reset:{[]
+    .qt.fixture.etl.installed::(`symbol$())!();
+    .qt.fixture.etl.calls::();
     ()}
 
 / How many times an adapter was called.
@@ -80,22 +79,20 @@ reset:{[]
 / match a long 3 under ~ - which is what assertEquals uses. The test would
 / fail with "expected 3 3 3, actual (3;3i;3i)", which reads like an arity
 / problem rather than a type one.
-call_count:{[adapter]
-    if[0=count calls; :0j];
-    "j"$sum adapter~/: first each calls}
+.qt.fixture.etl.call_count:{[adapter]
+    if[0=count .qt.fixture.etl.calls; :0j];
+    "j"$sum adapter~/: first each .qt.fixture.etl.calls}
 
 / The adapters that were called, in order. This is the assertion the doubles rule's
 / "stateful control flow" actually needs: that publish happened before
 / checkpoint, not merely that both did.
-call_order:{[]
-    if[0=count calls; :`symbol$()];
-    (,/) first each calls}
+.qt.fixture.etl.call_order:{[]
+    if[0=count .qt.fixture.etl.calls; :`symbol$()];
+    (,/) first each .qt.fixture.etl.calls}
 
 / The arguments of the nth call to an adapter (0-based).
-call_args:{[adapter;n]
-    matching:calls where adapter~/: first each calls;
+.qt.fixture.etl.call_args:{[adapter;n]
+    matching:.qt.fixture.etl.calls where adapter~/: first each .qt.fixture.etl.calls;
     if[n>=count matching;
         '"call_args: ",string[adapter]," was called ",string[count matching]," time(s), no call ",string n];
     last matching n}
-
-\d .

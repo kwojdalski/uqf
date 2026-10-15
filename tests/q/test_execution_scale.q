@@ -3,7 +3,7 @@
 // day, bid/ask levels and liquidity, then computes markout for every row
 // as a single vectorized call - the way this function is meant to be used
 // against a real trade blotter. Load src/init.q, tests/lib/qunit.q and
-// tests/lib/testutil.q before this file.
+// tests/lib/support.q before this file.
 
 \d .executionscaletest
 
@@ -94,7 +94,7 @@ test_markout_has_no_nulls_and_matches_direct_call:{[t]
     // result row is worth avoiding here.
     direct_call:.qexec.markout[trades`side;trades`trade_price;trades`ref_price;trades`pip_factor];
     max_diff:max abs (trades`markout_pips)-direct_call;
-    .testutil.assertApprox[max_diff;0f;1e-9;"in-table markout matches a direct vectorized call on the same columns (max abs diff)"]};
+    .qt.support.assertApprox[max_diff;0f;1e-9;"in-table markout matches a direct vectorized call on the same columns (max abs diff)"]};
 
 test_per_symbol_aggregation_and_performance_budget:{[t]
     // Per-symbol aggregation (a typical downstream use of a markout

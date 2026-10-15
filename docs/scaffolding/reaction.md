@@ -101,4 +101,4 @@ has a worked handler and the dispatcher's guarantees.
 
 `uqs list jobs` shows it with kind `reaction`, the dataset it reads, the process
 it runs in, and `triggered`. `uqs job remove rebuild_positions` takes out the
-file, the test and its `nsList` entry, and nothing else.
+file and the test, and nothing else.

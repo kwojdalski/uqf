@@ -23,7 +23,7 @@ log = get_logger(__name__)
 #: One home, because `src/etl/streaming` was spelled in four: `pipeline_edges`
 #: as `Path("src") / "etl" / "streaming"`, `scaffold` as
 #: `Path("src/etl/streaming")`, and twice more in q (`src/etl/init.q`,
-#: `tests/lib/testutil.q`). Four spellings of one fact is four places to edit
+#: `tests/lib/support.q`). Four spellings of one fact is four places to edit
 #: and three chances to miss one.
 #:
 #: RELATIVE, because every consumer joins them to a root it already has - the
@@ -38,10 +38,13 @@ WORKER_DIR = ETL_DIR / "workers"
 REACTION_DIR = ETL_DIR / "reactions"
 
 TEST_DIR = Path("tests/q")
-RUN_TESTS_FILE = Path("tests/run_tests.q")
 #: The q suite's list of every tickerplant table - the deliberate gate a new
 #: table passes through, and the list the scaffold appends a new table to.
 STACK_TABLES_TEST = TEST_DIR / "test_stack_tables.q"
+#: That list's q name: the suite mirrors `.qetl.plant`, whose tables these are,
+#: and the file defines it from the root with the whole path (#1412). A line
+#: starts with it, then `:`.
+STACK_TABLES_LIST = ".qt.qetl.plant.tables.expected"
 
 PROCESS_SCRIPTS_DIR = Path("scripts/processes")
 TABLES_FILE = ETL_DIR / "plant_tables.q"

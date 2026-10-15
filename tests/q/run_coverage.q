@@ -18,7 +18,7 @@
 /   q tests/q/run_coverage.q
 
 \l tests/lib/qunit.q
-\l tests/lib/testutil.q
+\l tests/lib/support.q
 \l src/init.q
 \l src/integrations/data.q
 \l docs/man.q
@@ -29,12 +29,13 @@
 \l tests/q/reference_worker.q
 \l scripts/dev/coverage.q
 
-/ The suite's file and namespace lists come from testutil, not from a copy
-/ kept here and not from parsing run_tests.q as text: a second copy is a
-/ second thing to forget, and forgetting the namespace list is how a test
-/ silently never runs.
-.testutil.load_suites[];
-nsList:.testutil.suite_namespaces[];
+/ The suite's files and its suites come from tests/lib/support.q, not from a
+/ copy kept here and not from parsing run_tests.q as text: a second copy is a
+/ second thing to forget, and forgetting a suite is how a test silently never
+/ runs. The suites are FOUND (discovery.q), so there is no list to forget.
+.qt.support.load_suites[];
+.qt.support.require_layout[];
+nsList:.qt.support.all_suites[];
 
 / Every namespace this tree declares, from the one enumeration in
 / src/namespaces.q - fully qualified already, and INCLUDING the nested
@@ -43,7 +44,7 @@ nsList:.testutil.suite_namespaces[];
 / vanished from this report the day they nested, silently, which is exactly
 / the failure this tool exists to reveal. `qunit` is the vendored test
 / framework, not this library's code.
-namespaces:.qns.functional[] except `.qunit;
+namespaces:.qt.support.library_only .qns.functional[];
 
 -1 "== coverage: instrumenting ",string[count namespaces]," namespace(s) ==";
 

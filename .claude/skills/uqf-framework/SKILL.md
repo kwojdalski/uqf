@@ -272,8 +272,8 @@ invariants, is `uqf-q-traps.md`.
   Linux PeachQ, and only CI's lane is authoritative: off that platform the q
   lane reports "not comparable" (#968), so a local pass is no promise.
 - **V6** Every `@eg` line in a qDoc block is executed, by
-  `tests/q/run_examples.q` and `.egtest`. One that can't run without a live
-  process is listed in `.egtest.needs_live`, with the reason.
+  `tests/q/run_examples.q` and `.qt.man.examples`. One that can't run without a
+  live process is listed in `.qt.man.examples.needs_live`, with the reason.
 - **V7** Run the commit hooks every time. Never use `--no-verify`. To skip a
   hook that's broken on `master`, use `SKIP=<id>`, and give the reason in the
   commit message.

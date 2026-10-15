@@ -1,5 +1,5 @@
 // test_positions.q - tests for src/portfolio/positions.q. Load src/portfolio/risk.q,
-// src/portfolio/positions.q, tests/lib/qunit.q and tests/lib/testutil.q before this
+// src/portfolio/positions.q, tests/lib/qunit.q and tests/lib/support.q before this
 // file.
 
 \d .positionstest
@@ -18,82 +18,82 @@ test_empty_book_is_empty:{[t] .qunit.assertEmpty[.qpos.empty_book[];"empty_book 
 test_apply_fill_opens_from_flat:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     row:b`EURUSD;
-    .testutil.assertApprox[row`qty;1000000f;1e-9;"opening buy sets qty"];
-    .testutil.assertApprox[row`avg_price;1.1000;1e-9;"opening buy sets avg_price to the fill price"];
-    .testutil.assertApprox[row`realized_pnl;0f;1e-9;"opening a position realizes nothing"]};
+    .qt.support.assertApprox[row`qty;1000000f;1e-9;"opening buy sets qty"];
+    .qt.support.assertApprox[row`avg_price;1.1000;1e-9;"opening buy sets avg_price to the fill price"];
+    .qt.support.assertApprox[row`realized_pnl;0f;1e-9;"opening a position realizes nothing"]};
 
 test_apply_fill_opens_short:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;-1];
     row:b`EURUSD;
-    .testutil.assertApprox[row`qty;-1000000f;1e-9;"opening sell sets negative qty"];
-    .testutil.assertApprox[row`avg_price;1.1000;1e-9;"avg_price is still the fill price"]};
+    .qt.support.assertApprox[row`qty;-1000000f;1e-9;"opening sell sets negative qty"];
+    .qt.support.assertApprox[row`avg_price;1.1000;1e-9;"avg_price is still the fill price"]};
 
 test_apply_fill_adds_same_direction_weighted_average:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`EURUSD;1000000;1.2000;1];
     row:b`EURUSD;
-    .testutil.assertApprox[row`qty;2000000f;1e-9;"two same-direction buys add up"];
-    .testutil.assertApprox[row`avg_price;1.1500;1e-9;"equal-size fills average to the midpoint"];
-    .testutil.assertApprox[row`realized_pnl;0f;1e-9;"adding to a position realizes nothing"]};
+    .qt.support.assertApprox[row`qty;2000000f;1e-9;"two same-direction buys add up"];
+    .qt.support.assertApprox[row`avg_price;1.1500;1e-9;"equal-size fills average to the midpoint"];
+    .qt.support.assertApprox[row`realized_pnl;0f;1e-9;"adding to a position realizes nothing"]};
 
 test_apply_fill_partial_reduce_realizes_pnl_avg_price_unchanged:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`EURUSD;400000;1.1050;-1];
     row:b`EURUSD;
-    .testutil.assertApprox[row`qty;600000f;1e-9;"partial sell reduces qty, same direction"];
-    .testutil.assertApprox[row`avg_price;1.1000;1e-9;"avg_price of the remaining position is unchanged"];
-    .testutil.assertApprox[row`realized_pnl;2000f;1e-6;"400000 closed at a 50-pip gain -> 2000"]};
+    .qt.support.assertApprox[row`qty;600000f;1e-9;"partial sell reduces qty, same direction"];
+    .qt.support.assertApprox[row`avg_price;1.1000;1e-9;"avg_price of the remaining position is unchanged"];
+    .qt.support.assertApprox[row`realized_pnl;2000f;1e-6;"400000 closed at a 50-pip gain -> 2000"]};
 
 test_apply_fill_exact_close_realizes_full_pnl_and_flattens:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`EURUSD;1000000;1.0950;-1];
     row:b`EURUSD;
-    .testutil.assertApprox[row`qty;0f;1e-9;"fully closed -> flat"];
-    .testutil.assertApprox[row`avg_price;0f;1e-9;"avg_price resets to 0 once flat"];
-    .testutil.assertApprox[row`realized_pnl;-5000f;1e-6;"1,000,000 closed at a 50-pip loss -> -5000"]};
+    .qt.support.assertApprox[row`qty;0f;1e-9;"fully closed -> flat"];
+    .qt.support.assertApprox[row`avg_price;0f;1e-9;"avg_price resets to 0 once flat"];
+    .qt.support.assertApprox[row`realized_pnl;-5000f;1e-6;"1,000,000 closed at a 50-pip loss -> -5000"]};
 
 test_apply_fill_flip_realizes_old_and_reopens_at_fill_price:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`EURUSD;1500000;1.1050;-1];
     row:b`EURUSD;
-    .testutil.assertApprox[row`qty;-500000f;1e-9;"oversized sell flips long to short"];
-    .testutil.assertApprox[row`avg_price;1.1050;1e-9;"the new (short) side opens at the flipping fill's price"];
-    .testutil.assertApprox[row`realized_pnl;5000f;1e-6;"the whole old 1,000,000 long realizes at the flip price: 50 pips * 1mm"]};
+    .qt.support.assertApprox[row`qty;-500000f;1e-9;"oversized sell flips long to short"];
+    .qt.support.assertApprox[row`avg_price;1.1050;1e-9;"the new (short) side opens at the flipping fill's price"];
+    .qt.support.assertApprox[row`realized_pnl;5000f;1e-6;"the whole old 1,000,000 long realizes at the flip price: 50 pips * 1mm"]};
 
 test_apply_fill_zero_qty_fill_is_noop:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`EURUSD;0;1.5000;1];
     row:b`EURUSD;
-    .testutil.assertApprox[row`qty;1000000f;1e-9;"zero-size fill leaves qty unchanged"];
-    .testutil.assertApprox[row`avg_price;1.1000;1e-9;"zero-size fill leaves avg_price unchanged"]};
+    .qt.support.assertApprox[row`qty;1000000f;1e-9;"zero-size fill leaves qty unchanged"];
+    .qt.support.assertApprox[row`avg_price;1.1000;1e-9;"zero-size fill leaves avg_price unchanged"]};
 
 test_apply_fill_tracks_multiple_syms_independently:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`GBPUSD;500000;1.2500;-1];
-    .testutil.assertApprox[(b`EURUSD)`qty;1000000f;1e-9;"EURUSD row unaffected by the GBPUSD fill"];
-    .testutil.assertApprox[(b`GBPUSD)`qty;-500000f;1e-9;"GBPUSD row set independently"]};
+    .qt.support.assertApprox[(b`EURUSD)`qty;1000000f;1e-9;"EURUSD row unaffected by the GBPUSD fill"];
+    .qt.support.assertApprox[(b`GBPUSD)`qty;-500000f;1e-9;"GBPUSD row set independently"]};
 
 test_unrealized_pnl_long_position:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
-    .testutil.assertApprox[.qpos.unrealized_pnl[b;`EURUSD;1.1100];10000f;1e-6;"long 1mm, price up 100 pips -> +10000"]};
+    .qt.support.assertApprox[.qpos.unrealized_pnl[b;`EURUSD;1.1100];10000f;1e-6;"long 1mm, price up 100 pips -> +10000"]};
 
 test_unrealized_pnl_short_position:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;-1];
-    .testutil.assertApprox[.qpos.unrealized_pnl[b;`EURUSD;1.1050];-5000f;1e-6;"short 1mm, price up 50 pips -> -5000"]};
+    .qt.support.assertApprox[.qpos.unrealized_pnl[b;`EURUSD;1.1050];-5000f;1e-6;"short 1mm, price up 50 pips -> -5000"]};
 
 test_unrealized_pnl_zero_for_flat_sym:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`EURUSD;1000000;1.1050;-1];
-    .testutil.assertApprox[.qpos.unrealized_pnl[b;`EURUSD;1.5000];0f;1e-9;"flat position has no unrealized P&L regardless of market price"]};
+    .qt.support.assertApprox[.qpos.unrealized_pnl[b;`EURUSD;1.5000];0f;1e-9;"flat position has no unrealized P&L regardless of market price"]};
 
 test_unrealized_pnl_zero_for_unknown_sym:{[t]
-    .testutil.assertApprox[.qpos.unrealized_pnl[.qpos.empty_book[];`USDJPY;150.00];0f;1e-9;"a sym never traded has no unrealized P&L"]};
+    .qt.support.assertApprox[.qpos.unrealized_pnl[.qpos.empty_book[];`USDJPY;150.00];0f;1e-9;"a sym never traded has no unrealized P&L"]};
 
 test_total_pnl_combines_realized_and_unrealized:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qpos.apply_fill[b;`EURUSD;400000;1.1050;-1];  / realizes 2000, 600000 left open @ 1.1000
     expected:2000f+.qrisk.pnl[600000;1.1000;1.1100;1];
-    .testutil.assertApprox[.qpos.total_pnl[b;`EURUSD;1.1100];expected;1e-6;"total = realized + mark-to-market on what's left open"]};
+    .qt.support.assertApprox[.qpos.total_pnl[b;`EURUSD;1.1100];expected;1e-6;"total = realized + mark-to-market on what's left open"]};
 
 test_apply_fills_folds_a_trades_table_in_time_order:{[t]
     / A SUPERSET of the four columns apply_fills needs, carrying trade_id
@@ -115,9 +115,9 @@ test_apply_fills_folds_a_trades_table_in_time_order:{[t]
     / own weighted-average/partial-reduce tests, just via the folded path.
     expected:.qpos.apply_fill[.qpos.apply_fill[.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];`EURUSD;200000;1.1020;1];`EURUSD;400000;1.1050;-1];
     exp_row:expected`EURUSD;
-    .testutil.assertApprox[row`qty;exp_row`qty;1e-9;"apply_fills' final qty matches folding apply_fill by hand, in time order"];
-    .testutil.assertApprox[row`avg_price;exp_row`avg_price;1e-9;"apply_fills' final avg_price matches the hand-folded sequence"];
-    .testutil.assertApprox[row`realized_pnl;exp_row`realized_pnl;1e-6;"apply_fills' final realized_pnl matches the hand-folded sequence"]};
+    .qt.support.assertApprox[row`qty;exp_row`qty;1e-9;"apply_fills' final qty matches folding apply_fill by hand, in time order"];
+    .qt.support.assertApprox[row`avg_price;exp_row`avg_price;1e-9;"apply_fills' final avg_price matches the hand-folded sequence"];
+    .qt.support.assertApprox[row`realized_pnl;exp_row`realized_pnl;1e-6;"apply_fills' final realized_pnl matches the hand-folded sequence"]};
 
 test_apply_fills_on_an_empty_trades_table_is_a_noop:{[t]
     trades:0#([] sym:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); time:`timestamp$());
@@ -137,7 +137,7 @@ test_reconcile_trades_flags_a_qty_break:{[t]
     r:.qpos.reconcile_trades[reference;trades;0f;1e-9];
     row:first r;
     .qunit.assertTrue[row`qty_break;"900000 (reference) vs 1000000 (computed from trades) exceeds qty_tol -> break"];
-    .testutil.assertApprox[row`qty_diff;100000f;1e-6;"qty_diff is computed - reference"];
+    .qt.support.assertApprox[row`qty_diff;100000f;1e-6;"qty_diff is computed - reference"];
     .qunit.assertEquals[row`status;`break;"a qty break marks the row `break"]};
 
 test_reconcile_trades_qty_tol_absorbs_small_diffs:{[t]
@@ -184,16 +184,16 @@ test_reconcile_trades_includes_a_sym_missing_from_either_side:{[t]
     .qunit.assertTrue[`GBPUSD in syms;"a sym only in trades still appears in the reconciliation"];
     .qunit.assertTrue[`AUDUSD in syms;"a sym only in the reference book still appears in the reconciliation"];
     gbpusd_row:first select from r where sym=`GBPUSD;
-    .testutil.assertApprox[gbpusd_row`reference_qty;0f;1e-9;"GBPUSD has no reference qty -> defaults to 0"];
+    .qt.support.assertApprox[gbpusd_row`reference_qty;0f;1e-9;"GBPUSD has no reference qty -> defaults to 0"];
     audusd_row:first select from r where sym=`AUDUSD;
-    .testutil.assertApprox[audusd_row`computed_qty;0f;1e-9;"AUDUSD has no trades -> computed qty defaults to 0"]};
+    .qt.support.assertApprox[audusd_row`computed_qty;0f;1e-9;"AUDUSD has no trades -> computed qty defaults to 0"]};
 
 test_ccy_legs_splits_pair_into_base_and_quote:{[t]
     legs:.qpos.ccy_legs[`EURAUD;1000000;1.6000];
     .qunit.assertEquals[exec ccy from legs;`EUR`AUD;"legs are base then quote"];
     amounts:exec amount from legs;
-    .testutil.assertApprox[amounts[0];1000000f;1e-9;"base currency leg is +qty"];
-    .testutil.assertApprox[amounts[1];-1600000f;1e-9;"quote currency leg is -(qty*avg_price)"]};
+    .qt.support.assertApprox[amounts[0];1000000f;1e-9;"base currency leg is +qty"];
+    .qt.support.assertApprox[amounts[1];-1600000f;1e-9;"quote currency leg is -(qty*avg_price)"]};
 
 test_ccy_exposure_nets_across_pairs_sharing_a_currency:{[t]
     / EURAUD short-AUD leg and AUDUSD long-AUD leg both touch AUD - a real
@@ -202,9 +202,9 @@ test_ccy_exposure_nets_across_pairs_sharing_a_currency:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURAUD;1000000;1.6000;1];  / +EUR 1mm, -AUD 1.6mm
     b:.qpos.apply_fill[b;`AUDUSD;500000;0.6500;1];  / +AUD 500k, -USD 325k
     exposure:.qpos.ccy_exposure[b];
-    .testutil.assertApprox[first exec amount from exposure where ccy=`AUD;-1100000f;1e-6;"AUD nets the EURAUD short leg and the AUDUSD long leg: -1,600,000+500,000"];
-    .testutil.assertApprox[first exec amount from exposure where ccy=`EUR;1000000f;1e-9;"EUR leg from the EURAUD position"];
-    .testutil.assertApprox[first exec amount from exposure where ccy=`USD;-325000f;1e-6;"USD leg from the AUDUSD position"]};
+    .qt.support.assertApprox[first exec amount from exposure where ccy=`AUD;-1100000f;1e-6;"AUD nets the EURAUD short leg and the AUDUSD long leg: -1,600,000+500,000"];
+    .qt.support.assertApprox[first exec amount from exposure where ccy=`EUR;1000000f;1e-9;"EUR leg from the EURAUD position"];
+    .qt.support.assertApprox[first exec amount from exposure where ccy=`USD;-325000f;1e-6;"USD leg from the AUDUSD position"]};
 
 test_ccy_exposure_counts_realised_pnl_in_the_quote_currency:{[t]
     / Bought 1mm EURUSD at 1.10, sold half at 1.11: the open half is +EUR 500k
@@ -213,8 +213,8 @@ test_ccy_exposure_counts_realised_pnl_in_the_quote_currency:{[t]
     b:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.10;1];
     b:.qpos.apply_fill[b;`EURUSD;500000;1.11;-1];
     exposure:.qpos.ccy_exposure[b];
-    .testutil.assertApprox[first exec amount from exposure where ccy=`EUR;500000f;1e-6;"EUR is the open half"];
-    .testutil.assertApprox[first exec amount from exposure where ccy=`USD;-545000f;1e-6;"USD includes the 5,000 realised: -1,100,000 + 555,000"]};
+    .qt.support.assertApprox[first exec amount from exposure where ccy=`EUR;500000f;1e-6;"EUR is the open half"];
+    .qt.support.assertApprox[first exec amount from exposure where ccy=`USD;-545000f;1e-6;"USD includes the 5,000 realised: -1,100,000 + 555,000"]};
 
 test_ccy_exposure_of_a_book_closed_at_a_profit_is_its_realised_cash:{[t]
     / Flat again after selling the rest at 1.12: no open position, but the
@@ -223,8 +223,8 @@ test_ccy_exposure_of_a_book_closed_at_a_profit_is_its_realised_cash:{[t]
     b:.qpos.apply_fill[b;`EURUSD;500000;1.11;-1];
     b:.qpos.apply_fill[b;`EURUSD;500000;1.12;-1];
     exposure:.qpos.ccy_exposure[b];
-    .testutil.assertApprox[first exec amount from exposure where ccy=`EUR;0f;1e-6;"no EUR left once flat"];
-    .testutil.assertApprox[first exec amount from exposure where ccy=`USD;15000f;1e-6;"the realised 15,000 USD stays an exposure"]};
+    .qt.support.assertApprox[first exec amount from exposure where ccy=`EUR;0f;1e-6;"no EUR left once flat"];
+    .qt.support.assertApprox[first exec amount from exposure where ccy=`USD;15000f;1e-6;"the realised 15,000 USD stays an exposure"]};
 
 test_ccy_exposure_agrees_with_the_desk_book_on_the_same_fills:{[t]
     / Two books, one question: the average-cost book here and .qdesk's netted
@@ -240,7 +240,7 @@ test_ccy_exposure_agrees_with_the_desk_book_on_the_same_fills:{[t]
         pe:exec ccy!amount from p;
         de:exec ccy!amount from d;
         .qunit.assertEquals[asc key pe;asc key de;"the same currencies after ",string[n]," fill(s)"];
-        .testutil.assertApprox[pe asc key pe;de asc key pe;1e-6;"the same amount per currency after ",string[n]," fill(s)"]};
+        .qt.support.assertApprox[pe asc key pe;de asc key pe;1e-6;"the same amount per currency after ",string[n]," fill(s)"]};
     agree[pos_trades;deals;] each 1+til count deals};
 
 / Shared 3-pair quotes table (AUDUSD, EURUSD, EURPLN), mirroring
@@ -274,7 +274,7 @@ test_ccy_exposure_in_direct_pair_converts_at_the_chains_own_mid:{[t]
     aud_amount:first exec amount from r where ccy=`AUD;
     aud_reporting:first exec reporting_amount from r where ccy=`AUD;
     expected_mid:first exec mid from .qcross.cross_book_at[quotes;`AUDUSD;at;enlist aud_amount;enlist `mid];
-    .testutil.assertApprox[aud_reporting;aud_amount*expected_mid;1e-6;"AUD leg converts to USD at AUDUSD's own chain mid"]};
+    .qt.support.assertApprox[aud_reporting;aud_amount*expected_mid;1e-6;"AUD leg converts to USD at AUDUSD's own chain mid"]};
 
 test_ccy_exposure_in_reporting_currency_converts_at_one:{[t]
     quotes:mk_quotes_table[::];
@@ -283,7 +283,7 @@ test_ccy_exposure_in_reporting_currency_converts_at_one:{[t]
     r:.qpos.ccy_exposure_in[b;quotes;`USD;at];
     usd_amount:first exec amount from r where ccy=`USD;
     usd_reporting:first exec reporting_amount from r where ccy=`USD;
-    .testutil.assertApprox[usd_reporting;usd_amount;1e-9;"reporting_ccy's own row converts at 1 (unchanged)"]};
+    .qt.support.assertApprox[usd_reporting;usd_amount;1e-9;"reporting_ccy's own row converts at 1 (unchanged)"]};
 
 test_ccy_exposure_in_chains_through_a_bridge_currency:{[t]
     / PLN has no direct USD quote in this fixture (only EURPLN and EURUSD
@@ -297,8 +297,8 @@ test_ccy_exposure_in_chains_through_a_bridge_currency:{[t]
     pln_amount:first exec amount from r where ccy=`PLN;
     pln_reporting:first exec reporting_amount from r where ccy=`PLN;
     expected_mid:first exec mid from .qcross.cross_book_at[quotes;`PLNUSD;at;enlist abs pln_amount;enlist `mid];
-    .testutil.assertApprox[pln_amount;-2125000f;1e-6;"PLN leg from the EURPLN position, at cost"];
-    .testutil.assertApprox[pln_reporting;pln_amount*expected_mid;1e-6;"PLN leg converts to USD by chaining through the EUR bridge"]};
+    .qt.support.assertApprox[pln_amount;-2125000f;1e-6;"PLN leg from the EURPLN position, at cost"];
+    .qt.support.assertApprox[pln_reporting;pln_amount*expected_mid;1e-6;"PLN leg converts to USD by chaining through the EUR bridge"]};
 
 / Fractional fills that net to zero only up to float residue (#1278).
 mk_residue_trades:{[sizes;sides]
@@ -310,7 +310,7 @@ test_fractional_close_leaves_a_flat_book_when_selling_in_pieces:{[t]
     b:.qpos.apply_fills[.qpos.empty_book[];mk_residue_trades[0.3 0.1 0.2;1 -1 -1]];
     .qunit.assertEquals[(b`BTCUSD)`qty; 0f; "buy 0.3, sell 0.1 and 0.2 is flat, not a 2.8e-17 short"];
     .qunit.assertEquals[(b`BTCUSD)`avg_price; 0f; "a flat position carries no average price"];
-    .testutil.assertApprox[(b`BTCUSD)`realized_pnl; 500f; 1e-6; "0.1*(61000-60000)+0.2*(62000-60000) = 100+400"]};
+    .qt.support.assertApprox[(b`BTCUSD)`realized_pnl; 500f; 1e-6; "0.1*(61000-60000)+0.2*(62000-60000) = 100+400"]};
 
 test_fractional_close_leaves_a_flat_book_when_buying_in_pieces:{[t]
     b:.qpos.apply_fills[.qpos.empty_book[];mk_residue_trades[0.1 0.2 0.3;1 1 -1]];

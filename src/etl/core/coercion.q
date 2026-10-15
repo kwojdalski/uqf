@@ -284,7 +284,7 @@ require_present:{[field;v]
 / `"j"$` because `sum` of a boolean vector is an INT, and 2i does not match
 / 2j under ~ - which is what assertEquals uses. The failure then reads like a
 / miscount rather than a type mismatch. Second time this exact trap has bitten
-/ in this session, after .qetldbl.call_count; it needs types to detect
+/ in this session, after .qt.fixture.etl.call_count; it needs types to detect
 / statically, so it stays a reviewer-attention item rather than a checker rule.
 coerce_column:{[f;col]
     vals:f each col;

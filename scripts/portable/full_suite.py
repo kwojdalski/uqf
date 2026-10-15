@@ -5,9 +5,14 @@ PeachQ rejects nested working contexts (`\\d .a.b`), so it cannot load this tree
 as written. flatten_contexts.py rewrites a copy that needs none; this runs the
 full suite - tests/run_tests.q, every suite - on that copy:
 
-  1. flatten src/, scripts/ and tests/ into a scratch directory. A refusal
-     fails the lane: the tree must stay convertible, and a new construct the
-     flattener cannot rewrite is caught here rather than on a 4.0 server.
+  1. flatten src/ and scripts/ into a scratch directory. A refusal fails the
+     lane: the tree must stay convertible, and a new construct the flattener
+     cannot rewrite is caught here rather than on a 4.0 server. tests/ is NOT
+     flattened (#1412): a suite defines everything from the root by its whole
+     path, so it needs no conversion and runs here exactly as written - which
+     is the nearest executable evidence, without a 4.0 binary, that it runs on
+     4.0. (test_the_test_tree_needs_no_context_conversion holds the converter
+     to a no-op there.)
   2. lay the flattened files over a copy of every tracked file - lib/ included
      as it is, never converted or edited - so the suite runs as in a checkout.
   3. run the suite there with UQF_TEST_FAILURES set, so it writes the tests
@@ -24,7 +29,7 @@ full suite - tests/run_tests.q, every suite - on that copy:
 The known-gaps file is one test per line, its full name, then `#` and the
 reason it cannot pass on PeachQ, which starts with its kind (#986):
 
-    .iotest.test_hdb_appends_a_second_window  # peachq-lacks: appending a partitioned HDB
+    .qt.qetl.io.test_hdb_appends_a_second_window  # peachq-lacks: appending a partitioned HDB
 
 A reason that repeats one of the test's own messages says what the test
 expects, not why PeachQ cannot do it, and is refused. The file also records
@@ -51,7 +56,8 @@ GAPS = REPO / "tests" / "q" / "peachq_known_gaps.txt"
 FLATTENER = REPO / "scripts" / "portable" / "flatten_contexts.py"
 BUNDLE_SUITE = REPO / "scripts" / "dev" / "bundle_suite.py"
 #: What is flattened. lib/ is not: the flattener leaves vendored code alone.
-CONVERTED = ("src", "scripts", "tests")
+#: tests/ is not either (#1412): no test file enters a nested namespace.
+CONVERTED = ("src", "scripts")
 #: How a reason starts (#986): PeachQ lacks something, this tree relies on
 #: something it should not, or the flattened copy fails on KDB-X too.
 KINDS = ("peachq-lacks: ", "tree-bug: #", "flattening: ")
@@ -96,7 +102,13 @@ def this_platform() -> str:
 
 def messages_of(name: str, tests: Path = REPO / "tests" / "q") -> list[str]:
     """The string literals in the body of test `name` (`.suite.test_x`), read
-    from its suite file: its assertions' messages among them."""
+    from its suite file: its assertions' messages among them.
+
+    A suite defines `.qt.<owner>.<suite>.test_x:` from the root, so the test is
+    found by its whole name at the start of a line. The suites not yet moved
+    under .qt (#1412) still sit in a `\\d .<suite>` block and are found by the
+    block; that branch goes with the last of them.
+    """
     suite, _, test = name.rpartition(".")
     for path in sorted(tests.glob("test_*.q")):
         ns, body = None, None
@@ -107,7 +119,7 @@ def messages_of(name: str, tests: Path = REPO / "tests" / "q") -> list[str]:
                 body.append(line)
             elif line.startswith("\\d "):
                 ns = line[3:].strip()
-            elif ns == suite and line.startswith(f"{test}:"):
+            elif line.startswith(f"{name}:") or (ns == suite and line.startswith(f"{test}:")):
                 body = [line]
         if body is not None:
             found = re.findall(r'"((?:[^"\\]|\\.)*)"', "\n".join(body))
@@ -141,7 +153,7 @@ def compare(failed: dict[str, str], gaps: dict[str, str]) -> tuple[list[str], li
 
 
 def build_tree(into: Path, bundles: bool = False) -> None:
-    """A runnable copy of the checkout with src/, scripts/ and tests/ flattened.
+    """A runnable copy of the checkout with src/ and scripts/ flattened.
     With `bundles`, every bundle under sidecars/ is installed into the copy,
     its tests included, BEFORE flattening, so its jobs are converted and run
     like the tree's own (#925). Raises SystemExit when the flattener refuses."""

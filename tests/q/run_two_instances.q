@@ -22,7 +22,7 @@
 / port, which the hermetic suite must not.
 
 \l tests/lib/qunit.q
-\l tests/lib/testutil.q
+\l tests/lib/support.q
 \l src/init.q
 \l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
@@ -30,7 +30,7 @@
 statusdir:getenv `UQF_STATUS_DIR;
 if[0=count statusdir; '"run_two_instances: set UQF_STATUS_DIR to a fresh directory"];
 system"mkdir -p ",statusdir;
-Q:.testutil.q_interpreter[];
+Q:.qt.support.q_interpreter[];
 
 failures:0;
 check:{[label;ok]

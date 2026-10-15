@@ -96,7 +96,8 @@ defined in [`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
 
 **The whole suite runs on PeachQ in CI, flattened.** PeachQ rejects nested
 contexts (`\d .a.b`), so `scripts/test.py q-unit-peachq` first writes a copy of
-`src/`, `scripts/` and `tests/` without them
+`src/` and `scripts/` without them (`tests/` needs none: a suite defines
+everything from the root by its whole path)
 ([`scripts/portable/flatten_contexts.py`](scripts/portable/flatten_contexts.py)),
 then runs every suite on it. The tests that cannot pass there are listed, each
 with why, in [`tests/q/peachq_known_gaps.txt`](tests/q/peachq_known_gaps.txt). A

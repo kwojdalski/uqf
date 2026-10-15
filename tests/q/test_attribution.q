@@ -149,9 +149,9 @@ test_attribution_reconciles_to_total:{[t]
     total:first exec pips from r where kind=`total;
     q:mk_quotes[specs_route[]];
     expected:.qexec.markout[1;.qcross.cross_ref_price_at[q;`USDPLN;tm_zero;1];.qcross.cross_ref_price_at[q;`USDPLN;tm_one;1];10000];
-    .testutil.assertApprox[total;expected;1e-9;"total is the signed markout of the pair's own reference price"];
-    .testutil.assertApprox[(sum legs`pips)+res;total;1e-9;"legs plus residual reconcile to the total"];
-    .testutil.assertApprox[res;0f;1e-6;"with no direct book the reference IS the route, so the residual is zero"];
+    .qt.support.assertApprox[total;expected;1e-9;"total is the signed markout of the pair's own reference price"];
+    .qt.support.assertApprox[(sum legs`pips)+res;total;1e-9;"legs plus residual reconcile to the total"];
+    .qt.support.assertApprox[res;0f;1e-6;"with no direct book the reference IS the route, so the residual is zero"];
     .qunit.assertEquals[legs`status;`ok`ok;"both legs available"];
     .qunit.assertEquals[first exec status from r where kind=`residual;`reconciled;"reconciled status"]};
 
@@ -166,7 +166,7 @@ test_attribution_ignores_a_direct_book_but_reports_the_difference_as_residual:{[
     .qunit.assertEquals[select leg,pips from unrelated where kind=`leg;legs_b;"an unrelated book changes nothing"];
     res_w:first exec pips from with where kind=`residual;
     total_w:first exec pips from with where kind=`total;
-    .testutil.assertApprox[(sum exec pips from with where kind=`leg)+res_w;total_w;1e-9;"still reconciles"];
+    .qt.support.assertApprox[(sum exec pips from with where kind=`leg)+res_w;total_w;1e-9;"still reconciles"];
     .qunit.assertTrue[1<abs res_w;"the direct book's disagreement with EURUSD*EURPLN lands in the residual"]};
 
 test_missing_prescribed_leg_is_unavailable_not_rerouted:{[t]
@@ -177,7 +177,7 @@ test_missing_prescribed_leg_is_unavailable_not_rerouted:{[t]
     .qunit.assertTrue[all null (select from r where kind=`leg)`pips;"every allocation is null"];
     .qunit.assertEquals[first exec status from r where kind=`residual;`unallocated;"nothing was allocated"];
     total:first exec pips from r where kind=`total;
-    .testutil.assertApprox[first exec pips from r where kind=`residual;total;1e-9;"the whole total is residual"];
+    .qt.support.assertApprox[first exec pips from r where kind=`residual;total;1e-9;"the whole total is residual"];
     .qunit.assertTrue[not null total;"the total still comes from the reference price"]};
 
 test_attribution_records_the_convention_version:{[t]
@@ -193,7 +193,7 @@ test_attribution_records_the_convention_version:{[t]
 test_attribution_sell_side_flips_sign:{[t]
     buy:attribute[specs_route[]];
     sell:.qexec.cross_markout_attribution[mk_quotes[specs_route[]];`USDPLN;-1;tm_zero;tm_one;10000;1];
-    .testutil.assertApprox[sell`pips;neg buy`pips;1e-9;"a sell is the buy with every sign flipped"]};
+    .qt.support.assertApprox[sell`pips;neg buy`pips;1e-9;"a sell is the buy with every sign flipped"]};
 
 test_attribution_refuses_unsupported_currency_and_unsorted_quotes:{[t]
     q:mk_quotes[specs_route[]];
@@ -208,13 +208,13 @@ test_review_matches_hand_computed_totals:{[t]
     r:review[];
     / EURUSD: buy 1.10->1.12 = +200 pips, sell 1.12->1.13 = -100 pips
     e:first select from r where pair=`EURUSD,kind=`total;
-    .testutil.assertApprox[e`total_pips;100f;1e-6;"EURUSD total"];
-    .testutil.assertApprox[e`mean_pips;50f;1e-6;"EURUSD mean"];
+    .qt.support.assertApprox[e`total_pips;100f;1e-6;"EURUSD total"];
+    .qt.support.assertApprox[e`mean_pips;50f;1e-6;"EURUSD mean"];
     .qunit.assertEquals[e`n_trades;2;"two trades"];
     .qunit.assertEquals[count select from r where pair=`EURUSD,kind=`leg;1;"a direct pair has one leg row"];
     / EURMXN = EURUSD*USDMXN: buy 18.7->19.152 = +4520, sell 19.152->19.436 = -2840
     m:first select from r where pair=`EURMXN,kind=`total;
-    .testutil.assertApprox[m`total_pips;1680f;1e-6;"EURMXN total"];
+    .qt.support.assertApprox[m`total_pips;1680f;1e-6;"EURMXN total"];
     legs:select from r where pair=`EURMXN,kind=`leg;
     .qunit.assertEquals[legs`leg;`EURUSD`USDMXN;"EM via USD legs"];
     .qunit.assertEquals[distinct r`horizon;enlist 0D00:00:01;"one horizon"];
@@ -223,14 +223,14 @@ test_review_matches_hand_computed_totals:{[t]
 test_review_shares_sum_to_one_with_residual:{[t]
     r:review[];
     parts:select s:sum share by pair from r where kind in `leg`residual;
-    .testutil.assertApprox[exec s from parts;(count parts)#1f;1e-9;"leg shares plus residual share are 1 for every pair"];
+    .qt.support.assertApprox[exec s from parts;(count parts)#1f;1e-9;"leg shares plus residual share are 1 for every pair"];
     tot:select from r where kind=`total;
-    .testutil.assertApprox[tot`share;(count tot)#1f;1e-12;"total share is 1"];
+    .qt.support.assertApprox[tot`share;(count tot)#1f;1e-12;"total share is 1"];
     / the legs and residual add up to the total in pips too
     pair_sums:exec s:sum total_pips by pair from r where kind in `leg`residual;
     totals:exec total_pips by pair from tot;
-    .testutil.assertApprox[pair_sums`GBPPLN;totals`GBPPLN;1e-9;"GBPPLN: all of it is residual"];
-    .testutil.assertApprox[pair_sums`USDPLN;totals`USDPLN;1e-6;"USDPLN reconciles"]};
+    .qt.support.assertApprox[pair_sums`GBPPLN;totals`GBPPLN;1e-9;"GBPPLN: all of it is residual"];
+    .qt.support.assertApprox[pair_sums`USDPLN;totals`USDPLN;1e-6;"USDPLN reconciles"]};
 
 test_review_counts_unavailable_legs_and_never_reroutes:{[t]
     r:review[];
@@ -240,7 +240,7 @@ test_review_counts_unavailable_legs_and_never_reroutes:{[t]
     .qunit.assertEquals[first exec n_unavailable from g where kind=`residual;2;"the residual is unallocated for both trades"];
     .qunit.assertTrue[all null (select from g where kind=`leg)`total_pips;"a leg never priced has a null total, not a 0"];
     .qunit.assertEquals[first exec n_unavailable from g where kind=`total;0;"the total itself is available"];
-    .testutil.assertApprox[first exec total_pips from g where kind=`residual;200f;1e-6;"buy 5.40->5.45 +500, sell 5.45->5.48 -300, all residual"];
+    .qt.support.assertApprox[first exec total_pips from g where kind=`residual;200f;1e-6;"buy 5.40->5.45 +500, sell 5.45->5.48 -300, all residual"];
     .qunit.assertEquals[first exec route from g;`$"EURGBP(inv)+EURPLN";"route text shows the inversion"];
     .qunit.assertEquals[sum exec n_unavailable from r where pair<>`GBPPLN,kind in `leg`total;0;"no other pair has an unavailable leg"]};
 
@@ -258,7 +258,7 @@ test_review_skips_trades_without_a_total:{[t]
     .qunit.assertEquals[first exec status from one where kind=`residual;`unavailable;"no total: residual unavailable"];
     tr:([] time:tm_zero,t5; sym:`USDPLN`USDPLN; side:1 1);
     r:.qexec.attribution_review[q;tr;enlist 0D00:00:00.500000000;10000;1];
-    .testutil.assertApprox[sum exec share from r where kind<>`total;1f;1e-9;"shares over the trades with a total sum to 1"];
+    .qt.support.assertApprox[sum exec share from r where kind<>`total;1f;1e-9;"shares over the trades with a total sum to 1"];
     .qunit.assertEquals[exec n_unavailable from r where kind=`leg;1 1;"the trade without a total counts as unavailable on each leg"];
     .qunit.assertEquals[first exec n_unavailable from r where kind=`total;1;"and on the total"]};
 
@@ -269,7 +269,7 @@ test_review_horizons_and_pip_factor_dict:{[t]
     r:.qexec.attribution_review[q;tr;0D00:00:01 0D00:00:02;(enlist `EURUSD)!enlist 100f;1];
     t_row:select from r where kind=`total;
     .qunit.assertEquals[t_row`horizon;0D00:00:01 0D00:00:02;"one total row per horizon"];
-    .testutil.assertApprox[t_row`total_pips;2 3f;1e-9;"pip_factor 100: 0.02 and 0.03 of price"]};
+    .qt.support.assertApprox[t_row`total_pips;2 3f;1e-9;"pip_factor 100: 0.02 and 0.03 of price"]};
 
 test_review_refuses_bad_input:{[t]
     q:review_fixture_quotes[];

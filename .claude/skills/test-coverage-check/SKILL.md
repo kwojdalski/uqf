@@ -141,7 +141,7 @@ When the user says `write <component>`:
    unary functions) that:
    - Assert specific numeric values where the formula is deterministic --- a
      known reference value or a tight tolerance check via
-     `tests/lib/testutil.q`'s helper, not `assert result is not null`
+     `tests/lib/support.q`'s helper, not `assert result is not null`
    - Test the happy path AND at least one edge case per function (null/empty
      input, a zero-division guard, an unsorted-input rejection, a missing-column
      rejection)

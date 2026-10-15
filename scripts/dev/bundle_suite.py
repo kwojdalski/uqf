@@ -1,16 +1,16 @@
 """Run each sidecar bundle's own q tests, installed into a throwaway tree.
 
 A bundle (docs/guides/sidecar-bundles.md) carries its tests beside its jobs,
-and installing it never copies them: a q test runs only once its namespace is
-in tests/run_tests.q's nsList, and that list is the tree's. So nothing ran a
+and installing it never copies them: a q test runs only from tests/q/, where
+the tree's runner finds a suite by the tests it holds. So nothing ran a
 bundle's tests. This does, without touching the checkout:
 
   1. copies the checkout's files (tracked, plus untracked ones git does not
      ignore) into a temporary directory;
   2. installs the bundle there with the real installer, as
      `uqs job install` would;
-  3. copies the bundle's test_*.q into tests/q/ and adds each one's namespace
-     (its `\\d .name` line) to nsList;
+  3. copies the bundle's test_*.q into tests/q/ - there is no list to add them
+     to, and a test that enters a namespace with `\\d` is refused (below);
   4. runs the WHOLE q suite there - which also proves the installed bundle
      leaves every other test passing.
 
@@ -28,21 +28,19 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from uqs.paths import RUN_TESTS_FILE, TEST_DIR
+from uqs.paths import TEST_DIR
 from uqs.scaffold import write
-from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
+from uqs.scaffold.plan import FileAction, ScaffoldPlan
 from uqs.stack import bundles
 
 REPO = Path(__file__).resolve().parents[2]
 SIDECARS = REPO / "sidecars"
-_NAMESPACE = re.compile(r"^\\d (\.[A-Za-z0-9_.]+)\s*$", re.M)
 
 
 def find_bundles(paths: list[str]) -> list[Path]:
@@ -72,26 +70,33 @@ def copy_checkout(into: Path) -> None:
             shutil.copy2(src, into / rel)
 
 
-def namespace(test: Path) -> str:
-    """The namespace a bundle test file runs its tests in."""
-    m = _NAMESPACE.search(test.read_text())
-    if m is None:
-        raise SystemExit(f"{test}: no `\\d .namespace` line, so run_tests.q cannot run it")
-    return m.group(1)
+def check_test(test: Path) -> None:
+    """Refuse a bundle test that enters a namespace.
+
+    Suites define everything from the root as `.qt.<owner>.<suite>.<name>`
+    (tests/lib/discovery.q, #1412): q 4.0 rejects a nested `\\d`, and a suite
+    declared that way would be found only by the transitional root-level rule.
+    """
+    for number, line in enumerate(test.read_text().splitlines(), start=1):
+        if line.startswith("\\d .") and line.strip() != "\\d .":
+            raise SystemExit(
+                f"{test}:{number}: `{line.strip()}` enters a namespace - define "
+                ".qt.<owner>.<suite>.<name> from the root instead"
+            )
 
 
 def install(folder: Path, tree: Path) -> list[str]:
     """Install the bundle at `folder` into `tree`, tests included; return the
-    test namespaces added to nsList."""
+    test files added to tests/q/."""
     bundle = bundles.read_bundle(folder)
     plan = bundles.plan(bundle, tree)
     bundles.install(plan, tree)
     actions = []
     for test in sorted(plan.tests):
+        check_test(test)
         actions.append(FileAction(TEST_DIR / test.name, test.read_text()))
-        actions.append(FileAction(RUN_TESTS_FILE, f"`{namespace(test)}", WriteMode.APPEND))
     write.apply_plan(ScaffoldPlan(bundle.name, actions), tree)
-    return [a.body for a in actions if a.mode is WriteMode.APPEND]
+    return [a.path.name for a in actions]
 
 
 def run(folder: Path, q: str, timeout: float) -> int:

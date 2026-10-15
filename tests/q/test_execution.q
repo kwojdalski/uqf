@@ -1,5 +1,5 @@
 // test_execution.q - tests for src/execution/execution.q. Load src/execution/execution.q,
-// tests/lib/qunit.q and tests/lib/testutil.q before this file.
+// tests/lib/qunit.q and tests/lib/support.q before this file.
 
 \d .executiontest
 
@@ -28,30 +28,30 @@ mk_requests:{[]
         reject:1001b;
         size:4#1000000f)};
 
-test_markout_known_single_buy:{[t] .testutil.assertApprox[.qexec.markout[1;1.1000;1.1010;10000];10f;1e-6;"buy, price rallies 10 pips after -> +10 pip markout"]};
-test_markout_known_single_sell:{[t] .testutil.assertApprox[.qexec.markout[-1;1.1000;1.0990;10000];10f;1e-6;"sell, price falls 10 pips after -> +10 pip markout (favourable)"]};
-test_markout_adverse_move:{[t] .testutil.assertApprox[.qexec.markout[1;1.1000;1.0990;10000];-10f;1e-6;"buy, price falls after -> negative (adverse) markout"]};
-test_markout_zero_when_flat:{[t] .testutil.assertApprox[.qexec.markout[1;1.1000;1.1000;10000];0f;1e-9;"no move -> zero markout"]};
+test_markout_known_single_buy:{[t] .qt.support.assertApprox[.qexec.markout[1;1.1000;1.1010;10000];10f;1e-6;"buy, price rallies 10 pips after -> +10 pip markout"]};
+test_markout_known_single_sell:{[t] .qt.support.assertApprox[.qexec.markout[-1;1.1000;1.0990;10000];10f;1e-6;"sell, price falls 10 pips after -> +10 pip markout (favourable)"]};
+test_markout_adverse_move:{[t] .qt.support.assertApprox[.qexec.markout[1;1.1000;1.0990;10000];-10f;1e-6;"buy, price falls after -> negative (adverse) markout"]};
+test_markout_zero_when_flat:{[t] .qt.support.assertApprox[.qexec.markout[1;1.1000;1.1000;10000];0f;1e-9;"no move -> zero markout"]};
 
 test_markout_vectorized_across_horizons:{[t]
     horizons:1.1010 1.1005 1.0995 1.1000;
     expected:10 5 -5 0;
-    .testutil.assertApprox[.qexec.markout[1;1.1000;horizons;10000];expected;1e-6;"markout profile across several post-trade horizons"]};
+    .qt.support.assertApprox[.qexec.markout[1;1.1000;horizons;10000];expected;1e-6;"markout profile across several post-trade horizons"]};
 
 test_markout_side_flip_is_negation:{[t]
     buy_side:.qexec.markout[1;1.1000;1.1010;10000];
     sell_side:.qexec.markout[-1;1.1000;1.1010;10000];
-    .testutil.assertApprox[sell_side;neg buy_side;1e-9;"flipping side negates markout for the same prices"]};
+    .qt.support.assertApprox[sell_side;neg buy_side;1e-9;"flipping side negates markout for the same prices"]};
 
 test_markout_at_horizons_known_values:{[t]
     trades:mk_markout_trades[];
     quotes:mk_mid_quotes[];
     r:.qexec.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10];
     .qunit.assertEquals[count r;2;"one row per (trade,horizon) pair"];
-    .testutil.assertApprox[r[`ref_price] 0;1.1010;1e-9;"1s horizon finds the quote at exactly +1s"];
-    .testutil.assertApprox[r[`markout_pips] 0;10f;1e-6;"markout at the 1s horizon"];
-    .testutil.assertApprox[r[`ref_price] 1;1.1005;1e-9;"10s horizon finds the quote at exactly +10s"];
-    .testutil.assertApprox[r[`markout_pips] 1;5f;1e-6;"markout at the 10s horizon"]};
+    .qt.support.assertApprox[r[`ref_price] 0;1.1010;1e-9;"1s horizon finds the quote at exactly +1s"];
+    .qt.support.assertApprox[r[`markout_pips] 0;10f;1e-6;"markout at the 1s horizon"];
+    .qt.support.assertApprox[r[`ref_price] 1;1.1005;1e-9;"10s horizon finds the quote at exactly +10s"];
+    .qt.support.assertApprox[r[`markout_pips] 1;5f;1e-6;"markout at the 10s horizon"]};
 
 test_markout_at_horizons_carries_extra_columns_per_trade_with_shuffled_input:{[t]
     / trades deliberately out of time and sym order: rows must stay trade-major in
@@ -73,8 +73,8 @@ test_markout_at_horizons_finds_most_recent_quote_before_target:{[t]
     quotes:([] sym:`USDJPY`USDJPY`USDJPY; time:2024.01.01D09:00:00.000000000 2024.01.01D09:00:05.000000000 2024.01.01D09:01:02.000000000; mid:150.00 150.05 149.90);
     r:.qexec.markout_at_horizons[trades;quotes;0D00:00:10];
     / target = 09:00:12, latest quote before that is the 09:00:05 one (150.05)
-    .testutil.assertApprox[first r`ref_price;150.05;1e-9;"picks the last quote at or before the target time, not the nearest overall"];
-    .testutil.assertApprox[first r`markout_pips;-5f;1e-6;"sell side: price rose against the seller -> negative markout"]};
+    .qt.support.assertApprox[first r`ref_price;150.05;1e-9;"picks the last quote at or before the target time, not the nearest overall"];
+    .qt.support.assertApprox[first r`markout_pips;-5f;1e-6;"sell side: price rose against the seller -> negative markout"]};
 
 test_markout_at_horizons_matches_direct_markout_call:{[t]
     / self-consistency: whatever ref_price the join finds, markout_at_horizons's
@@ -83,7 +83,7 @@ test_markout_at_horizons_matches_direct_markout_call:{[t]
     quotes:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:01.000000000; mid:enlist 1.1023);
     r:.qexec.markout_at_horizons[trades;quotes;0D00:00:05];
     direct_result:.qexec.markout[1;1.1000;first r`ref_price;10000];
-    .testutil.assertApprox[first r`markout_pips;direct_result;1e-9;"table form and direct markout call agree on the same ref_price"]};
+    .qt.support.assertApprox[first r`markout_pips;direct_result;1e-9;"table form and direct markout call agree on the same ref_price"]};
 
 test_markout_at_horizons_null_when_no_quote_before_target:{[t]
     trades:([] sym:enlist `EURUSD; time:enlist 2023.12.31D23:59:00.000000000; side:enlist 1; trade_price:enlist 1.10; pip_factor:enlist 10000);
@@ -105,7 +105,7 @@ test_markout_at_horizons_works_with_unsorted_quotes:{[t]
     trades:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; side:enlist 1; trade_price:enlist 1.1000; pip_factor:enlist 10000);
     shuffled_quotes:([] sym:`EURUSD`EURUSD`EURUSD; time:2024.01.01D09:00:10.000000000 2024.01.01D09:00:00.000000000 2024.01.01D09:00:01.000000000; mid:1.1005 1.1000 1.1010);
     r:.qexec.markout_at_horizons[trades;shuffled_quotes;0D00:00:01];
-    .testutil.assertApprox[first r`ref_price;1.1010;1e-9;"correct as-of match even though the input quotes weren't sorted"]};
+    .qt.support.assertApprox[first r`ref_price;1.1010;1e-9;"correct as-of match even though the input quotes weren't sorted"]};
 
 test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
     / #625: the two horizon markouts spell their inputs differently - a trades
@@ -127,7 +127,7 @@ test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
         horizons:0D00:00:00 0D00:00:01 0D00:00:10;
         by_table:.qexec.markout_at_horizons[trade;mids;horizons];
         by_scalars:.qexec.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;horizons;1];
-        .testutil.assertApprox[by_scalars`markout_pips;by_table`markout_pips;1e-9;
+        .qt.support.assertApprox[by_scalars`markout_pips;by_table`markout_pips;1e-9;
             "the same horizons over mids and over depth give the same pips"];
         .qunit.assertEquals[exec c!t from meta by_scalars;exec c!t from meta by_table;
             "the same columns, in the same order, of the same types"];
@@ -155,21 +155,21 @@ test_markout_at_horizons_rejects_quotes_missing_a_required_column:{[t]
     wrapper:{[tr;q] .qexec.markout_at_horizons[tr;q;0D00:00:01]};
     .qunit.assertError[wrapper[trades;];quotes;"quotes with a typo'd mid column (midprice) is rejected immediately, not left to throw a bare `domain error inside aj"]};
 
-test_eff_spread_known_buy_above_mid:{[t] .testutil.assertApprox[.qexec.eff_spread[1;1.1002;1.1000;10000];4f;1e-6;"buy 0.2 pips above mid -> 2*0.2=0.4... scaled: 4 pip effective spread"]};
-test_eff_spread_known_sell_below_mid:{[t] .testutil.assertApprox[.qexec.eff_spread[-1;1.0998;1.1000;10000];4f;1e-6;"sell 0.2 pips below mid -> same 4 pip effective spread (symmetric)"]};
-test_eff_spread_zero_at_mid:{[t] .testutil.assertApprox[.qexec.eff_spread[1;1.1000;1.1000;10000];0f;1e-9;"trade exactly at mid -> zero effective spread"]};
-test_eff_spread_negative_is_price_improvement:{[t] .testutil.assertApprox[.qexec.eff_spread[1;1.0999;1.1000;10000];-2f;1e-6;"buy below mid -> negative effective spread (price improvement)"]};
+test_eff_spread_known_buy_above_mid:{[t] .qt.support.assertApprox[.qexec.eff_spread[1;1.1002;1.1000;10000];4f;1e-6;"buy 0.2 pips above mid -> 2*0.2=0.4... scaled: 4 pip effective spread"]};
+test_eff_spread_known_sell_below_mid:{[t] .qt.support.assertApprox[.qexec.eff_spread[-1;1.0998;1.1000;10000];4f;1e-6;"sell 0.2 pips below mid -> same 4 pip effective spread (symmetric)"]};
+test_eff_spread_zero_at_mid:{[t] .qt.support.assertApprox[.qexec.eff_spread[1;1.1000;1.1000;10000];0f;1e-9;"trade exactly at mid -> zero effective spread"]};
+test_eff_spread_negative_is_price_improvement:{[t] .qt.support.assertApprox[.qexec.eff_spread[1;1.0999;1.1000;10000];-2f;1e-6;"buy below mid -> negative effective spread (price improvement)"]};
 
-test_slippage_known_cost:{[t] .testutil.assertApprox[.qexec.slippage[1;1.1000;1.1003;10000];3f;1e-6;"buy fills 3 pips worse than arrival -> +3 pip slippage cost"]};
-test_slippage_zero_when_no_move:{[t] .testutil.assertApprox[.qexec.slippage[1;1.1000;1.1000;10000];0f;1e-9;"execution at arrival price -> zero slippage"]};
-test_slippage_negative_is_improvement:{[t] .testutil.assertApprox[.qexec.slippage[1;1.1000;1.0998;10000];-2f;1e-6;"buy fills better than arrival -> negative slippage"]};
-test_slippage_sell_side_sign:{[t] .testutil.assertApprox[.qexec.slippage[-1;1.1000;1.0997;10000];3f;1e-6;"sell fills 3 pips worse (lower) than arrival -> +3 pip cost"]};
+test_slippage_known_cost:{[t] .qt.support.assertApprox[.qexec.slippage[1;1.1000;1.1003;10000];3f;1e-6;"buy fills 3 pips worse than arrival -> +3 pip slippage cost"]};
+test_slippage_zero_when_no_move:{[t] .qt.support.assertApprox[.qexec.slippage[1;1.1000;1.1000;10000];0f;1e-9;"execution at arrival price -> zero slippage"]};
+test_slippage_negative_is_improvement:{[t] .qt.support.assertApprox[.qexec.slippage[1;1.1000;1.0998;10000];-2f;1e-6;"buy fills better than arrival -> negative slippage"]};
+test_slippage_sell_side_sign:{[t] .qt.support.assertApprox[.qexec.slippage[-1;1.1000;1.0997;10000];3f;1e-6;"sell fills 3 pips worse (lower) than arrival -> +3 pip cost"]};
 
-test_fill_ratio_known:{[t] .testutil.assertApprox[.qexec.fill_ratio[73;100];0.73;1e-9;"73 fills out of 100 quotes"]};
-test_fill_ratio_zero:{[t] .testutil.assertApprox[.qexec.fill_ratio[0;100];0f;1e-9;"no fills"]};
-test_fill_ratio_full:{[t] .testutil.assertApprox[.qexec.fill_ratio[100;100];1f;1e-9;"every quote filled"]};
+test_fill_ratio_known:{[t] .qt.support.assertApprox[.qexec.fill_ratio[73;100];0.73;1e-9;"73 fills out of 100 quotes"]};
+test_fill_ratio_zero:{[t] .qt.support.assertApprox[.qexec.fill_ratio[0;100];0f;1e-9;"no fills"]};
+test_fill_ratio_full:{[t] .qt.support.assertApprox[.qexec.fill_ratio[100;100];1f;1e-9;"every quote filled"]};
 
-test_reject_ratio_known:{[t] .testutil.assertApprox[.qexec.reject_ratio[4;100];0.04;1e-9;"4 rejects out of 100 requests"]};
+test_reject_ratio_known:{[t] .qt.support.assertApprox[.qexec.reject_ratio[4;100];0.04;1e-9;"4 rejects out of 100 requests"]};
 
 / Shared 6-row requests table for the hit_ratio_by tests: EURUSD/USDJPY,
 / 4 rows within the first hour of t0, 2 more a day later - so a time
@@ -187,8 +187,8 @@ test_hit_ratio_by_count_mode_grouped_by_sym:{[t]
     r:.qexec.hit_ratio_by[requests;t0;t0+2D;0Nn;enlist `sym;`count];
     eurusd_row:first select from r where sym=`EURUSD;
     usdjpy_row:first select from r where sym=`USDJPY;
-    .testutil.assertApprox[eurusd_row`hit_ratio;0.5;1e-9;"EURUSD: 2 hits out of 4 requests"];
-    .testutil.assertApprox[usdjpy_row`hit_ratio;0.5;1e-9;"USDJPY: 1 hit out of 2 requests"]};
+    .qt.support.assertApprox[eurusd_row`hit_ratio;0.5;1e-9;"EURUSD: 2 hits out of 4 requests"];
+    .qt.support.assertApprox[usdjpy_row`hit_ratio;0.5;1e-9;"USDJPY: 1 hit out of 2 requests"]};
 
 test_hit_ratio_by_amount_mode_weighted_by_size:{[t]
     requests:mk_hit_ratio_requests[::];
@@ -196,7 +196,7 @@ test_hit_ratio_by_amount_mode_weighted_by_size:{[t]
     r:.qexec.hit_ratio_by[requests;t0;t0+2D;0Nn;enlist `sym;`amount];
     eurusd_row:first select from r where sym=`EURUSD;
     / (100*1+200*1+300*0+400*0)/(100+200+300+400) = 300/1000
-    .testutil.assertApprox[eurusd_row`hit_ratio;0.3;1e-9;"amount mode weights by size, not just count"]};
+    .qt.support.assertApprox[eurusd_row`hit_ratio;0.3;1e-9;"amount mode weights by size, not just count"]};
 
 test_hit_ratio_by_no_grouping_gives_one_overall_row:{[t]
     requests:mk_hit_ratio_requests[::];
@@ -204,7 +204,7 @@ test_hit_ratio_by_no_grouping_gives_one_overall_row:{[t]
     r:.qexec.hit_ratio_by[requests;t0;t0+2D;0Nn;`symbol$();`count];
     .qunit.assertEquals[count r;1;"empty group_cols and no bucketing gives a single overall row"];
     / 3 hits out of 6 requests total
-    .testutil.assertApprox[first r`hit_ratio;0.5;1e-9;"overall hit ratio across every request"]};
+    .qt.support.assertApprox[first r`hit_ratio;0.5;1e-9;"overall hit ratio across every request"]};
 
 test_hit_ratio_by_respects_the_time_window:{[t]
     / a window that only covers the first hour excludes the 2 EURUSD
@@ -212,7 +212,7 @@ test_hit_ratio_by_respects_the_time_window:{[t]
     requests:mk_hit_ratio_requests[::];
     t0:2026.01.01D08:00:00.000000000;
     r:.qexec.hit_ratio_by[requests;t0;t0+0D00:30:00;0Nn;`symbol$();`count];
-    .testutil.assertApprox[first r`hit_ratio;1f;1e-9;"only the first two (both-hit) EURUSD rows fall inside the window"]};
+    .qt.support.assertApprox[first r`hit_ratio;1f;1e-9;"only the first two (both-hit) EURUSD rows fall inside the window"]};
 
 test_hit_ratio_by_hourly_bucket_grouped_by_sym:{[t]
     requests:mk_hit_ratio_requests[::];
@@ -221,8 +221,8 @@ test_hit_ratio_by_hourly_bucket_grouped_by_sym:{[t]
     .qunit.assertEquals[cols r;`time`sym`hit_ratio;"time (the bucket) leads, then sym, then hit_ratio"];
     hour1:first select from r where time=t0,sym=`EURUSD;
     hour2:first select from r where time=t0+0D01:00:00,sym=`EURUSD;
-    .testutil.assertApprox[hour1`hit_ratio;1f;1e-9;"08:00 EURUSD bucket: both requests hit"];
-    .testutil.assertApprox[hour2`hit_ratio;0f;1e-9;"09:00 EURUSD bucket: neither request hit"]};
+    .qt.support.assertApprox[hour1`hit_ratio;1f;1e-9;"08:00 EURUSD bucket: both requests hit"];
+    .qt.support.assertApprox[hour2`hit_ratio;0f;1e-9;"09:00 EURUSD bucket: neither request hit"]};
 
 test_hit_ratio_by_daily_bucket_no_other_grouping:{[t]
     requests:mk_hit_ratio_requests[::];
@@ -230,8 +230,8 @@ test_hit_ratio_by_daily_bucket_no_other_grouping:{[t]
     r:.qexec.hit_ratio_by[requests;t0;t0+2D;1D;`symbol$();`amount];
     day1:first select from r where time=2026.01.01D00:00:00.000000000;
     day2:first select from r where time=2026.01.02D00:00:00.000000000;
-    .testutil.assertApprox[day1`hit_ratio;0.3;1e-9;"day 1: (100+200 hit)/(100+200+300+400) = 300/1000"];
-    .testutil.assertApprox[day2`hit_ratio;500%1100;1e-9;"day 2: 500 hit / (500+600) total"]};
+    .qt.support.assertApprox[day1`hit_ratio;0.3;1e-9;"day 1: (100+200 hit)/(100+200+300+400) = 300/1000"];
+    .qt.support.assertApprox[day2`hit_ratio;500%1100;1e-9;"day 2: 500 hit / (500+600) total"]};
 
 test_hit_ratio_by_rejects_bad_mode:{[t]
     requests:mk_hit_ratio_requests[::];
@@ -246,12 +246,12 @@ test_hit_ratio_by_rejects_requests_missing_a_column:{[t]
     wrapper:{[q;t0] .qexec.hit_ratio_by[q;t0;t0+2D;0Nn;enlist `sym;`amount]}[;t0];
     .qunit.assertError[wrapper;bad;"a requests table missing a required column is rejected immediately"]};
 
-test_vwap_known_example:{[t] .testutil.assertApprox[.qexec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000];1.100625;1e-9;"size-weighted average across three fills"]};
-test_vwap_single_fill_equals_that_price:{[t] .testutil.assertApprox[.qexec.vwap[enlist 1.1234;enlist 1000000];1.1234;1e-9;"a single fill's vwap is just its own price"]};
+test_vwap_known_example:{[t] .qt.support.assertApprox[.qexec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000];1.100625;1e-9;"size-weighted average across three fills"]};
+test_vwap_single_fill_equals_that_price:{[t] .qt.support.assertApprox[.qexec.vwap[enlist 1.1234;enlist 1000000];1.1234;1e-9;"a single fill's vwap is just its own price"]};
 test_vwap_equal_sizes_equals_simple_average:{[t]
     prices:1.1000 1.1010 1.1020 1.1030;
     sizes:1000000 1000000 1000000 1000000;
-    .testutil.assertApprox[.qexec.vwap[prices;sizes];avg prices;1e-9;"equal sizes -> vwap reduces to the plain average"]};
+    .qt.support.assertApprox[.qexec.vwap[prices;sizes];avg prices;1e-9;"equal sizes -> vwap reduces to the plain average"]};
 
 test_sweep_price_walks_multiple_levels:{[t]
     / 1M@1.1000, 1M@1.1002, 2M@1.1005 -- sweep 3M walks all of level 1,
@@ -259,33 +259,33 @@ test_sweep_price_walks_multiple_levels:{[t]
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
     r:.qbook.sweep_price[prices;sizes;3000000];
-    .testutil.assertApprox[r`avg_price;1.100233333;1e-6;"blended sweep price across three levels"];
-    .testutil.assertApprox[r`worst_price;1.1005;1e-9;"worst (marginal) price is the last level touched"];
-    .testutil.assertApprox[r`filled_size;3000000f;1e-9;"filled size matches the requested size"];
+    .qt.support.assertApprox[r`avg_price;1.100233333;1e-6;"blended sweep price across three levels"];
+    .qt.support.assertApprox[r`worst_price;1.1005;1e-9;"worst (marginal) price is the last level touched"];
+    .qt.support.assertApprox[r`filled_size;3000000f;1e-9;"filled size matches the requested size"];
     .qunit.assertTrue[r`fully_filled;"fully filled when the book has enough depth"]};
 
 test_sweep_price_fits_inside_first_level:{[t]
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
     r:.qbook.sweep_price[prices;sizes;500000];
-    .testutil.assertApprox[r`avg_price;1.1000;1e-9;"size smaller than top level fills entirely at the top price"];
-    .testutil.assertApprox[r`worst_price;1.1000;1e-9;"worst price equals the top price when only one level is touched"];
+    .qt.support.assertApprox[r`avg_price;1.1000;1e-9;"size smaller than top level fills entirely at the top price"];
+    .qt.support.assertApprox[r`worst_price;1.1000;1e-9;"worst price equals the top price when only one level is touched"];
     .qunit.assertTrue[r`fully_filled;"fully filled"]};
 
 test_sweep_price_exact_level_boundary:{[t]
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
     r:.qbook.sweep_price[prices;sizes;1000000];
-    .testutil.assertApprox[r`avg_price;1.1000;1e-9;"sweeping exactly one level's size stays entirely within that level"];
-    .testutil.assertApprox[r`worst_price;1.1000;1e-9;"worst price is still the top level"]};
+    .qt.support.assertApprox[r`avg_price;1.1000;1e-9;"sweeping exactly one level's size stays entirely within that level"];
+    .qt.support.assertApprox[r`worst_price;1.1000;1e-9;"worst price is still the top level"]};
 
 test_sweep_price_insufficient_liquidity:{[t]
     / total depth is 4M; asking for 5M can only get 4M filled
     prices:1.1000 1.1002 1.1005;
     sizes:1000000 1000000 2000000;
     r:.qbook.sweep_price[prices;sizes;5000000];
-    .testutil.assertApprox[r`filled_size;4000000f;1e-9;"filled size caps at total available depth"];
-    .testutil.assertApprox[r`worst_price;1.1005;1e-9;"worst price is the last (deepest) level available"];
+    .qt.support.assertApprox[r`filled_size;4000000f;1e-9;"filled size caps at total available depth"];
+    .qt.support.assertApprox[r`worst_price;1.1005;1e-9;"worst price is the last (deepest) level available"];
     .qunit.assertFalse[r`fully_filled;"not fully filled when requested size exceeds total depth"]};
 
 test_sweep_price_of_full_depth_equals_vwap:{[t]
@@ -294,21 +294,21 @@ test_sweep_price_of_full_depth_equals_vwap:{[t]
     sizes:1000000 1000000 2000000 1500000;
     total_size:sum sizes;
     r:.qbook.sweep_price[prices;sizes;total_size];
-    .testutil.assertApprox[r`avg_price;.qexec.vwap[prices;sizes];1e-9;"sweeping full depth = vwap of the whole book"]};
+    .qt.support.assertApprox[r`avg_price;.qexec.vwap[prices;sizes];1e-9;"sweeping full depth = vwap of the whole book"]};
 
 test_sweep_price_empty_book_fills_nothing:{[t]
     r:.qbook.sweep_price[`float$();`float$();1000000];
-    .testutil.assertApprox[r`filled_size;0f;1e-9;"empty book fills nothing"];
+    .qt.support.assertApprox[r`filled_size;0f;1e-9;"empty book fills nothing"];
     .qunit.assertFalse[r`fully_filled;"empty book cannot be fully filled"];
     .qunit.assertTrue[null r`avg_price;"avg_price is null when nothing filled"];
     .qunit.assertTrue[null r`worst_price;"worst_price is null when nothing filled"]};
 
 test_sweep_price_skips_unusable_levels:{[t]
     r:.qbook.sweep_price[1.10 0n 1.11;1e6 1e6 1e6;2.5e6];
-    .testutil.assertApprox[r`avg_price;1.105;1e-9;"null-price level contributes no fill and no average"];
-    .testutil.assertApprox[r`filled_size;2e6;1e-9;"only usable levels fill"];
+    .qt.support.assertApprox[r`avg_price;1.105;1e-9;"null-price level contributes no fill and no average"];
+    .qt.support.assertApprox[r`filled_size;2e6;1e-9;"only usable levels fill"];
     .qunit.assertFalse[r`fully_filled;"book short of target once the null level is skipped"];
-    .testutil.assertApprox[r`worst_price;1.11;1e-9;"worst price from usable levels"]};
+    .qt.support.assertApprox[r`worst_price;1.11;1e-9;"worst price from usable levels"]};
 
 test_sweep_price_levels_used_are_original_indices:{[t]
     r:.qbook.sweep_price[1.10 0n 1.11 1.12;1e6 1e6 1e6 1e6;1.5e6];
@@ -333,12 +333,12 @@ test_sweep_price_rejects_mismatched_lengths:{[t]
 test_vwap_expanding_ends_at_the_flat_vwap:{[t]
     prices:1.1000 1.1010 1.1005 1.1020;
     sizes:1000000 2000000 1000000 3000000f;
-    .testutil.assertApprox[last .qexec.vwap_expanding[prices;sizes];.qexec.vwap[prices;sizes];1e-12;"last expanding VWAP equals the flat VWAP"]};
+    .qt.support.assertApprox[last .qexec.vwap_expanding[prices;sizes];.qexec.vwap[prices;sizes];1e-12;"last expanding VWAP equals the flat VWAP"]};
 
 test_vwap_expanding_starts_at_the_first_price:{[t]
     prices:1.1000 1.1010 1.1005;
     sizes:1000000 2000000 1000000f;
-    .testutil.assertApprox[first .qexec.vwap_expanding[prices;sizes];first prices;1e-12;"one fill's VWAP is its own price, whatever its size"]};
+    .qt.support.assertApprox[first .qexec.vwap_expanding[prices;sizes];first prices;1e-12;"one fill's VWAP is its own price, whatever its size"]};
 
 test_vwap_expanding_is_row_aligned:{[t]
     prices:1.1000 1.1010 1.1005 1.1020;
@@ -351,7 +351,7 @@ test_vwap_expanding_never_looks_ahead:{[t]
     sizes:3#1000000f;
     short_run:.qexec.vwap_expanding[prices;sizes];
     long_run:.qexec.vwap_expanding[prices,1.5000;sizes,9000000f];
-    .testutil.assertApprox[3#long_run;short_run;1e-12;"a later fill cannot change an earlier element"]};
+    .qt.support.assertApprox[3#long_run;short_run;1e-12;"a later fill cannot change an earlier element"]};
 
 / reject_ratio_by collapses to the flat reject_ratio when nothing is grouped
 / or bucketed - the same relationship hit_ratio_by has to fill_ratio.
@@ -360,14 +360,14 @@ test_reject_ratio_by_no_grouping_matches_flat_reject_ratio:{[t]
     window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
     grouped:.qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;`symbol$();`count];
     flat:.qexec.reject_ratio[sum reqs`reject;count reqs];
-    .testutil.assertApprox[first exec reject_ratio from grouped;flat;1e-12;"ungrouped reject_ratio_by equals reject_ratio"]};
+    .qt.support.assertApprox[first exec reject_ratio from grouped;flat;1e-12;"ungrouped reject_ratio_by equals reject_ratio"]};
 
 test_reject_ratio_by_count_mode_grouped_by_sym:{[t]
     reqs:.executiontest.mk_requests[];
     window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
     r:`sym xasc .qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;enlist `sym;`count];
     .qunit.assertEquals[count r;2;"one row per sym"];
-    .testutil.assertApprox[r`reject_ratio;0.5 0.5;1e-12;"each sym rejected one of two requests"]};
+    .qt.support.assertApprox[r`reject_ratio;0.5 0.5;1e-12;"each sym rejected one of two requests"]};
 
 / Amount mode weights by size, so one large reject outweighs several small
 / fills - a distinction a count-mode ratio hides entirely.
@@ -377,14 +377,14 @@ test_reject_ratio_by_amount_mode_weights_by_size:{[t]
     window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
     by_count:first exec reject_ratio from .qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;`symbol$();`count];
     by_amount:first exec reject_ratio from .qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;`symbol$();`amount];
-    .testutil.assertApprox[by_count;0.25;1e-12;"one of four requests rejected"];
-    .testutil.assertApprox[by_amount;0.75;1e-12;"but three quarters of the size"]};
+    .qt.support.assertApprox[by_count;0.25;1e-12;"one of four requests rejected"];
+    .qt.support.assertApprox[by_amount;0.75;1e-12;"but three quarters of the size"]};
 
 test_reject_ratio_by_respects_the_time_window:{[t]
     reqs:.executiontest.mk_requests[];
     early:(2026.09.15D00:00:00.000000000;2026.09.15D10:15:00.000000000);
     r:.qexec.reject_ratio_by[reqs;early 0;early 1;0Nn;`symbol$();`count];
-    .testutil.assertApprox[first exec reject_ratio from r;1.0;1e-12;"only the first request, which was rejected"]};
+    .qt.support.assertApprox[first exec reject_ratio from r;1.0;1e-12;"only the first request, which was rejected"]};
 
 test_reject_ratio_by_rejects_bad_mode:{[t]
     reqs:.executiontest.mk_requests[];
@@ -418,18 +418,18 @@ test_a_zero_denominator_does_not_poison_an_aggregate:{[t]
     / `ratios` is a q reserved word (.Q.res) - assigning to it is an `assign
     / error at LOAD time, which is the trap CLAUDE.md names first.
     per_window:.qexec.fill_ratio[50 5 50;100 0 100];
-    .testutil.assertApprox[avg 0^per_window;0.3333333;1e-6;
+    .qt.support.assertApprox[avg 0^per_window;0.3333333;1e-6;
         "a quiet window nulls out of the average rather than making it 0w"];
     .qunit.assertTrue[not any 0w=per_window;"no element is infinity"]};
 
 test_a_ratio_still_vectorises_over_rows:{[t]
-    .testutil.assertApprox[.qexec.fill_ratio[73 50;100 200];0.73 0.25;1e-9;
+    .qt.support.assertApprox[.qexec.fill_ratio[73 50;100 200];0.73 0.25;1e-9;
         "the guard must not break the atom-or-vector convention"]};
 
 test_a_zero_numerator_over_a_real_denominator_is_still_zero:{[t]
     / Distinct from the guarded case: no fills out of a hundred quotes is a
     / real 0%, not missing data.
-    .testutil.assertApprox[.qexec.fill_ratio[0;100];0f;1e-12;
+    .qt.support.assertApprox[.qexec.fill_ratio[0;100];0f;1e-12;
         "zero fills over real quotes is zero, not null"]};
 
 

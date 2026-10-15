@@ -1,11 +1,11 @@
 // test_microstructure.q - tests for src/market_data/microstructure.q. Load
-// src/init.q, tests/lib/qunit.q and tests/lib/testutil.q before this file.
+// src/init.q, tests/lib/qunit.q and tests/lib/support.q before this file.
 
 \d .microstructuretest
 
 test_level_at_extracts_the_right_level:{[t]
     rows:enlist 100 200 300;
-    .testutil.assertApprox[first .qmicro.level_at[rows;1];200f;1e-9;"level 1 of the one row"]};
+    .qt.support.assertApprox[first .qmicro.level_at[rows;1];200f;1e-9;"level 1 of the one row"]};
 
 test_level_at_nulls_a_too_short_row:{[t]
     rows:enlist 100 200 300;
@@ -15,11 +15,11 @@ test_level_at_nulls_a_too_short_row:{[t]
 
 test_book_pressure_at_level_known_imbalance:{[t]
     r:.qmicro.book_pressure_at_level[enlist 100 50;enlist 40 60;0];
-    .testutil.assertApprox[first r;60f%140f;1e-9;"(100-40)/(100+40) at level 0"]};
+    .qt.support.assertApprox[first r;60f%140f;1e-9;"(100-40)/(100+40) at level 0"]};
 
 test_book_pressure_at_level_both_sizes_zero_is_exactly_zero:{[t]
     r:.qmicro.book_pressure_at_level[enlist 0 50;enlist 0 60;0];
-    .testutil.assertApprox[first r;0f;1e-9;"both sizes 0 at an existing level -> exactly 0, not null"]};
+    .qt.support.assertApprox[first r;0f;1e-9;"both sizes 0 at an existing level -> exactly 0, not null"]};
 
 test_book_pressure_at_level_row_too_shallow_is_null:{[t]
     r:.qmicro.book_pressure_at_level[enlist 100 50;enlist 40 60;5];
@@ -29,7 +29,7 @@ test_book_pressure_at_level_row_too_shallow_is_null:{[t]
 
 test_order_book_imbalance_known_value:{[t]
     r:.qmicro.order_book_imbalance[enlist 100 50;enlist 40 60;2];
-    .testutil.assertApprox[first r;0.2;1e-9;"(150-100)/(150+100) aggregated across 2 levels"]};
+    .qt.support.assertApprox[first r;0.2;1e-9;"(150-100)/(150+100) aggregated across 2 levels"]};
 
 test_order_book_imbalance_is_not_sum_of_per_level_pressures:{[t]
     / same book as above: level-0 pressure is 60/140, level-1 pressure is
@@ -45,22 +45,22 @@ test_order_book_imbalance_is_not_sum_of_per_level_pressures:{[t]
 
 test_microprice_known_value:{[t]
     r:.qmicro.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300];
-    .testutil.assertApprox[first r;1.10005;1e-9;"size-weighted toward the heavier (ask) side"]};
+    .qt.support.assertApprox[first r;1.10005;1e-9;"size-weighted toward the heavier (ask) side"]};
 
 test_microprice_falls_back_to_mid_when_both_l0_sizes_zero:{[t]
     r:.qmicro.microprice[enlist enlist 1.1000;enlist enlist 0;enlist enlist 1.1002;enlist enlist 0];
     expected_mid:first .qmicro.mid_price[enlist enlist 1.1000;enlist enlist 1.1002];
-    .testutil.assertApprox[first r;expected_mid;1e-9;"both L0 sizes 0 -> exactly mid_price"]};
+    .qt.support.assertApprox[first r;expected_mid;1e-9;"both L0 sizes 0 -> exactly mid_price"]};
 
 test_microprice_divergence_known_value:{[t]
     r:.qmicro.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300];
-    .testutil.assertApprox[first r;-0.00005;1e-9;"microprice - mid_price"]};
+    .qt.support.assertApprox[first r;-0.00005;1e-9;"microprice - mid_price"]};
 
 / ---- spread_bps ----
 
 test_spread_bps_known_value:{[t]
     r:.qmicro.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002];
-    .testutil.assertApprox[first r;10000*0.0002%1.1001;1e-6;"10000*(ask-bid)/mid"]};
+    .qt.support.assertApprox[first r;10000*0.0002%1.1001;1e-6;"10000*(ask-bid)/mid"]};
 
 / ---- depth_ratio ----
 
@@ -69,7 +69,7 @@ test_depth_ratio_known_value_and_shallow_row_is_null:{[t]
     ask_sizes:(100 20 20 20 20;100 20 20 20 20);
     r:.qmicro.depth_ratio[bid_sizes;ask_sizes];
     .qunit.assertTrue[null r 0;"row 0's bid side only has 2 levels - not enough for a 5-level depth_ratio -> null"];
-    .testutil.assertApprox[r 1;1.25;1e-9;"row 1: (100+100)/((20+20+20+20)+(20+20+20+20))"]};
+    .qt.support.assertApprox[r 1;1.25;1e-9;"row 1: (100+100)/((20+20+20+20)+(20+20+20+20))"]};
 
 / ---- vwmp_skew ----
 
@@ -83,7 +83,7 @@ test_vwmp_skew_matches_direct_vwap_call:{[t]
     l0_spread:1.1002-1.1000;
     expected:(vw_mid-simple_mid)%l0_spread;
     r:.qmicro.vwmp_skew[bid_prices;bid_sizes;ask_prices;ask_sizes;2];
-    .testutil.assertApprox[first r;expected;1e-9;"vwmp_skew matches a direct vwap call over the same concatenated levels"]};
+    .qt.support.assertApprox[first r;expected;1e-9;"vwmp_skew matches a direct vwap call over the same concatenated levels"]};
 
 test_vwmp_skew_locked_or_crossed_l0_is_null_not_infinite:{[t]
     bid_prices:(1.1000 1.0996;1.1000 1.0996;1.1000 1.0996);
@@ -101,16 +101,16 @@ test_vwmp_skew_locked_or_crossed_l0_is_null_not_infinite:{[t]
 test_book_slope_opposite_signs_for_bid_vs_ask:{[t]
     bid_slope:first .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100];
     ask_slope:first .qmicro.book_slope[enlist 1.1002 1.1004 1.1006;enlist 100 100 100];
-    .testutil.assertApprox[bid_slope;0.0004%300;1e-9;"bid ladder: (P0-Plast)/sum(sizes), P0 highest"];
-    .testutil.assertApprox[ask_slope;-0.0004%300;1e-9;"ask ladder: (P0-Plast)/sum(sizes), P0 lowest -> negative"]};
+    .qt.support.assertApprox[bid_slope;0.0004%300;1e-9;"bid ladder: (P0-Plast)/sum(sizes), P0 highest"];
+    .qt.support.assertApprox[ask_slope;-0.0004%300;1e-9;"ask ladder: (P0-Plast)/sum(sizes), P0 lowest -> negative"]};
 
 / ---- book_convexity ----
 
 test_book_convexity_bid_and_ask_signs_mirror:{[t]
     bid_convexity:first .qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;`bid];
     ask_convexity:first .qmicro.book_convexity[enlist 1.1002 1.1004 1.1007;`ask];
-    .testutil.assertApprox[bid_convexity;-0.0001;1e-9;"bid: (P0-P1)-(P1-P2)"];
-    .testutil.assertApprox[ask_convexity;-0.0001;1e-9;"ask: negated so a similarly-shaped ladder reads the same sign as the bid side"]};
+    .qt.support.assertApprox[bid_convexity;-0.0001;1e-9;"bid: (P0-P1)-(P1-P2)"];
+    .qt.support.assertApprox[ask_convexity;-0.0001;1e-9;"ask: negated so a similarly-shaped ladder reads the same sign as the bid side"]};
 
 test_book_convexity_too_few_levels_is_null:{[t]
     r:.qmicro.book_convexity[enlist 1.1000 1.0998;`bid];
@@ -137,7 +137,7 @@ test_vamp_matches_two_explicit_sweep_price_calls:{[t]
     sell_leg:.qbook.sweep_price[1.1000 1.0998;1000000 1000000;bid_size_target];
     expected:0.5*(buy_leg`avg_price)+sell_leg`avg_price;
     r:.qmicro.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
-    .testutil.assertApprox[first r;expected;1e-9;"vamp matches averaging two direct sweep_price legs"]};
+    .qt.support.assertApprox[first r;expected;1e-9;"vamp matches averaging two direct sweep_price legs"]};
 
 test_vamp_with_per_row_notional_vector:{[t]
     bid_prices:(1.1000 1.0998;1.2000 1.1998);
@@ -146,8 +146,8 @@ test_vamp_with_per_row_notional_vector:{[t]
     ask_sizes:(1000000 1000000;1000000 1000000);
     notional:500000 700000;
     r:.qmicro.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
-    .testutil.assertApprox[r 0;1.1001;1e-9;"row 0 uses notional 500000"];
-    .testutil.assertApprox[r 1;1.2001;1e-9;"row 1 uses its own notional 700000"]};
+    .qt.support.assertApprox[r 0;1.1001;1e-9;"row 0 uses notional 500000"];
+    .qt.support.assertApprox[r 1;1.2001;1e-9;"row 1 uses its own notional 700000"]};
 
 / ---- Tier 2 shared fixture ----
 
@@ -167,14 +167,14 @@ test_mid_price_velocity_and_acceleration_known_values:{[t]
     quotes:mk_mid_quotes[::];
     velocity:.qmicro.mid_price_velocity[quotes;`EURUSD];
     .qunit.assertTrue[null velocity 0;"no prior snapshot for the first row -> null"];
-    .testutil.assertApprox[velocity 1;0.0010;1e-9;"1.1010-1.1000"];
-    .testutil.assertApprox[velocity 2;-0.0005;1e-9;"1.1005-1.1010"];
-    .testutil.assertApprox[velocity 3;0.0015;1e-9;"1.1020-1.1005"];
+    .qt.support.assertApprox[velocity 1;0.0010;1e-9;"1.1010-1.1000"];
+    .qt.support.assertApprox[velocity 2;-0.0005;1e-9;"1.1005-1.1010"];
+    .qt.support.assertApprox[velocity 3;0.0015;1e-9;"1.1020-1.1005"];
     accel:.qmicro.mid_price_acceleration[quotes;`EURUSD];
     .qunit.assertTrue[null accel 0;"first row has no velocity to diff -> null"];
     .qunit.assertTrue[null accel 1;"second row's velocity diffs against a null first velocity -> null"];
-    .testutil.assertApprox[accel 2;-0.0015;1e-9;"-0.0005-0.0010"];
-    .testutil.assertApprox[accel 3;0.0020;1e-9;"0.0015-(-0.0005)"]};
+    .qt.support.assertApprox[accel 2;-0.0015;1e-9;"-0.0005-0.0010"];
+    .qt.support.assertApprox[accel 3;0.0020;1e-9;"0.0015-(-0.0005)"]};
 
 / ---- queue_depletion_rate ----
 
@@ -188,8 +188,8 @@ test_queue_depletion_rate_depletion_and_replenishment:{[t]
         ask_sizes:enlist each 3#100);
     r:.qmicro.queue_depletion_rate[quotes;`EURUSD;`bid];
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
-    .testutil.assertApprox[r 1;0.4;1e-9;"size fell from 100 to 60: (100-60)/100"];
-    .testutil.assertApprox[r 2;0f;1e-9;"size rose from 60 to 80 - clamped at 0, not negative"]};
+    .qt.support.assertApprox[r 1;0.4;1e-9;"size fell from 100 to 60: (100-60)/100"];
+    .qt.support.assertApprox[r 2;0f;1e-9;"size rose from 60 to 80 - clamped at 0, not negative"]};
 
 / #1031: the prior top QUEUE, not the L0 size whatever its price did. Row 1's
 / bid improves to 1.1001 and the 1.1000 queue, untouched, is now L1: it used
@@ -205,8 +205,8 @@ test_queue_depletion_rate_compares_the_prior_queue_across_a_price_move:{[t]
         ask_sizes:3#enlist 1e6 1e6);
     r:.qmicro.queue_depletion_rate[quotes;`EURUSD;`bid];
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
-    .testutil.assertApprox[r 1;0f;1e-9;"a better bid leaves the prior queue untouched"];
-    .testutil.assertApprox[r 2;1f;1e-9;"a worse bid means the prior queue is gone"]};
+    .qt.support.assertApprox[r 1;0f;1e-9;"a better bid leaves the prior queue untouched"];
+    .qt.support.assertApprox[r 2;1f;1e-9;"a worse bid means the prior queue is gone"]};
 
 test_queue_depletion_rate_reads_the_ask_side_the_other_way_round:{[t]
     t0:2026.01.01D09:00:00.000000000;
@@ -264,11 +264,11 @@ test_ofi_covers_improve_unchanged_worsen_on_both_sides:{[t]
     r:.qmicro.ofi[quotes;`EURUSD];
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
     / row 1: bid improves (150), ask unchanged (80-100=-20) -> 150-(-20)
-    .testutil.assertApprox[r 1;170f;1e-9;"bid price-improve branch, ask unchanged branch"];
+    .qt.support.assertApprox[r 1;170f;1e-9;"bid price-improve branch, ask unchanged branch"];
     / row 2: bid worsens (-150), ask improves (200) -> -150-200
-    .testutil.assertApprox[r 2;-350f;1e-9;"bid price-worsen branch, ask price-improve branch"];
+    .qt.support.assertApprox[r 2;-350f;1e-9;"bid price-worsen branch, ask price-improve branch"];
     / row 3: bid unchanged (120-90=30), ask worsens (-200) -> 30-(-200)
-    .testutil.assertApprox[r 3;230f;1e-9;"bid unchanged branch, ask price-worsen branch"]};
+    .qt.support.assertApprox[r 3;230f;1e-9;"bid unchanged branch, ask price-worsen branch"]};
 
 / #1032: L0 OFI and one-level multilevel OFI are one quantity. With the ask
 / withdrawn for a row and back the next, ofi used to be null on both rows.
@@ -298,7 +298,7 @@ test_ofi_multilevel_level_disappearing_is_negative_flow:{[t]
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
     / level 0 unchanged on both sides -> 0 contribution; level 1's bid
     / disappears (50 -> gone) while ask level 1 is unchanged -> -50
-    .testutil.assertApprox[r 1;-50f;1e-9;"bid level 1 disappearing shows up as -50, not a dropped/null contribution"]};
+    .qt.support.assertApprox[r 1;-50f;1e-9;"bid level 1 disappearing shows up as -50, not a dropped/null contribution"]};
 
 test_ofi_multilevel_ask_level_disappearing_and_reappearing:{[t]
     t0:2026.01.01D09:00:00.000000000;
@@ -326,7 +326,7 @@ test_ofi_multilevel_absent_deeper_levels_preserve_l0_flow:{[t]
 
 test_rolling_ofi_matches_msum_directly:{[t]
     series:1 -1 2 0 -3;
-    .testutil.assertApprox[.qmicro.rolling_ofi[series;2];msum[2;series];1e-9;"rolling_ofi is exactly msum"]};
+    .qt.support.assertApprox[.qmicro.rolling_ofi[series;2];msum[2;series];1e-9;"rolling_ofi is exactly msum"]};
 
 test_spread_ratio_matches_direct_spread_bps_and_mavg:{[t]
     t0:2026.01.01D09:00:00.000000000;
@@ -339,7 +339,7 @@ test_spread_ratio_matches_direct_spread_bps_and_mavg:{[t]
     spreads:.qmicro.spread_bps[quotes`bid_prices;quotes`ask_prices];
     expected:spreads%mavg[2;spreads];
     r:.qmicro.spread_ratio[quotes;`EURUSD;2];
-    .testutil.assertApprox[r;expected;1e-9;"spread_ratio matches spread_bps % mavg computed directly"]};
+    .qt.support.assertApprox[r;expected;1e-9;"spread_ratio matches spread_bps % mavg computed directly"]};
 
 / ---- inter_event_time ----
 
@@ -353,8 +353,8 @@ test_inter_event_time_known_irregular_gaps:{[t]
         ask_sizes:enlist each 3#100);
     r:.qmicro.inter_event_time[quotes;`EURUSD];
     .qunit.assertTrue[null r 0;"no prior quote -> null gap"];
-    .testutil.assertApprox[r 1;log 2;1e-6;"1s gap -> log(1+1)"];
-    .testutil.assertApprox[r 2;log 3;1e-6;"2s gap -> log(1+2)"]};
+    .qt.support.assertApprox[r 1;log 2;1e-6;"1s gap -> log(1+1)"];
+    .qt.support.assertApprox[r 2;log 3;1e-6;"2s gap -> log(1+2)"]};
 
 / ---- ofi_autocorrelation ----
 
@@ -364,8 +364,8 @@ test_ofi_autocorrelation_known_window:{[t]
     .qunit.assertTrue[all null 3#r;"fewer than window rows of history -> null"];
     / window ending at index 3: segment 1 -1 2 0 -> lagged 1 -1 2, current -1 2 0
     expected:cor[1 -1 2f;-1 2 0f];
-    .testutil.assertApprox[r 3;expected;1e-9;"lag-1 correlation over the first full window"];
-    .testutil.assertApprox[r 5;cor[2 0 -3f;0 -3 4f];1e-9;"lag-1 correlation over the last window"]};
+    .qt.support.assertApprox[r 3;expected;1e-9;"lag-1 correlation over the first full window"];
+    .qt.support.assertApprox[r 5;cor[2 0 -3f;0 -3 4f];1e-9;"lag-1 correlation over the last window"]};
 
 test_ofi_autocorrelation_rejects_degenerate_windows:{[t]
     / windows 2 and 3 give 1 or 2 lag pairs: a null or a forced +-1 correlation
@@ -433,12 +433,12 @@ test_the_count_ratio_includes_the_threshold_trade:{[t]
 test_the_volume_share_is_not_the_count_share:{[t]
     / The whole reason both exist. Sizes 9 and 10 are 2 of 10 trades but
     / carry 19 of 55 units.
-    .testutil.assertApprox[.qmicro.large_trade_volume_share[lt_tape[];0.9];19%55;1e-12;
+    .qt.support.assertApprox[.qmicro.large_trade_volume_share[lt_tape[];0.9];19%55;1e-12;
         "the volume share reports the volume those trades carried, not their count"]};
 
 test_a_median_split_covers_most_volume:{[t]
     / Sizes 5..10 sum to 45 of 55 - the heavy tail this metric exists to show.
-    .testutil.assertApprox[.qmicro.large_trade_volume_share[lt_tape[];0.5];45%55;1e-12;
+    .qt.support.assertApprox[.qmicro.large_trade_volume_share[lt_tape[];0.5];45%55;1e-12;
         "the larger half of trades by count carries far more than half the volume"]};
 
 test_an_empty_tape_is_null_not_zero:{[t]
@@ -490,7 +490,7 @@ test_odd_lot_trade_ratio_moves_with_the_threshold:{[t]
 test_odd_lot_imbalance_is_net_volume_over_odd_lot_volume:{[t]
     / Buys 1e5+2e5+3e5=6e5, sell 4e5: (6e5-4e5)%1e6. The 1e6 sell and 5e6
     / buy are round lots and must not move it.
-    .testutil.assertApprox[.qmicro.odd_lot_imbalance[ol_tape[];1e6];0.2;1e-12;
+    .qt.support.assertApprox[.qmicro.odd_lot_imbalance[ol_tape[];1e6];0.2;1e-12;
         "signed odd-lot volume over total odd-lot volume"]};
 
 test_odd_lot_imbalance_with_no_odd_lots_is_null:{[t]
@@ -540,9 +540,9 @@ test_a_withdrawn_row_does_not_poison_the_series:{[t]
         "the withdrawn row nulls out and the other two survive"]};
 
 test_book_slope_and_depth_ratio_are_unchanged_on_normal_books:{[t]
-    .testutil.assertApprox[first .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100f];
+    .qt.support.assertApprox[first .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100f];
         1.333333e-06;1e-12;"the guard must not move a normal answer"];
-    .testutil.assertApprox[first .qmicro.depth_ratio[enlist 100 20 20 20 20f;enlist 100 20 20 20 20f];
+    .qt.support.assertApprox[first .qmicro.depth_ratio[enlist 100 20 20 20 20f;enlist 100 20 20 20 20f];
         1.25;1e-12;"nor this one"]};
 
 / ---- streaming analytics (#332) ----
@@ -732,8 +732,8 @@ test_ten_tenths_fill_one_whole_bucket:{[t]
     / 10*0.1 sums to 0.9999999999999999; a bare floor made that 0 buckets.
     b:.qmicro.volume_buckets[fr_tape[10#0.1];1f];
     .qunit.assertEquals[count b;1;"ten 0.1 trades fill one 1.0 bucket"];
-    .testutil.assertApprox[first b`buy_volume;0.7;1e-9;"seven buys"];
-    .testutil.assertApprox[first .qmicro.vpin[fr_tape[10#0.1];1f;1]`vpin;0.4;1e-9;"|0.7-0.3|/1"]};
+    .qt.support.assertApprox[first b`buy_volume;0.7;1e-9;"seven buys"];
+    .qt.support.assertApprox[first .qmicro.vpin[fr_tape[10#0.1];1f;1]`vpin;0.4;1e-9;"|0.7-0.3|/1"]};
 
 test_tenth_sized_buckets_count_every_trade:{[t]
     .qunit.assertEquals[count .qmicro.volume_buckets[fr_tape[10#0.1];0.1];10;"ten 0.1 buckets, not 9"];
@@ -751,7 +751,7 @@ test_the_threshold_rank_survives_float_noise:{[t]
     tape:fr_tape[1f+til 100];
     .qunit.assertEquals[.qmicro.large_trade_threshold[tape;0.07];7f;"q=0.07 of 1..100 is 7"];
     .qunit.assertEquals[.qmicro.large_trade_threshold[tape;0.55];55f;"q=0.55 of 1..100 is 55"];
-    .testutil.assertApprox[.qmicro.large_trade_ratio[tape;0.07];0.94;1e-12;"94 of 100 trades are >= 7"]};
+    .qt.support.assertApprox[.qmicro.large_trade_ratio[tape;0.07];0.94;1e-12;"94 of 100 trades are >= 7"]};
 
 / ---- a sym with no quotes (#1047) ----
 

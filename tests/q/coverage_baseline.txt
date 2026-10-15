@@ -64,7 +64,7 @@
 # These two earn their place: wait_for_tickerplant BLOCKS until a plant
 # answers (startupdepcycles with check_cycles 0W waits forever), so a test
 # that entered it would hang the suite rather than fail it; reload_hdb opens
-# discovered handles and is already listed in .egtest.needs_live for the
+# discovered handles and is already listed in .qt.man.examples.needs_live for the
 # same reason.
 .qtorq.connect_etl
 .qtorq.feed_handle
@@ -98,8 +98,3 @@
 .qetl.run.history
 .qdata.getBySymbolDate
 .qdata.pqModule
-
-# --- Test scaffolding ---------------------------------------------------
-# A reference worker exists to be inspected by the contract checks rather
-# than run end to end.
-.qrefw.checkpoint

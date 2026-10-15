@@ -1,6 +1,6 @@
 // test_dqchecks.q - tests for src/market_data/dqchecks.q. Load src/foundation/schema.q,
 // src/market_data/microstructure.q, src/market_data/dqchecks.q, tests/lib/qunit.q and
-// tests/lib/testutil.q before this file.
+// tests/lib/support.q before this file.
 
 \d .dqcheckstest
 
@@ -78,7 +78,7 @@ test_check_stale_quotes_flags_a_gap_past_max_age:{[t]
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
     row:first r;
     .qunit.assertEquals[row`status;`stale;"10s since the last quote exceeds a 5s max_age -> stale"];
-    .testutil.assertApprox[(`long$row`age)%1e9;10;1e-6;"age is the gap between as_of and the last quote, in nanoseconds"]};
+    .qt.support.assertApprox[(`long$row`age)%1e9;10;1e-6;"age is the gap between as_of and the last quote, in nanoseconds"]};
 
 test_check_stale_quotes_within_max_age_is_ok:{[t]
     t0:2026.01.01D00:00:00.000000000;

@@ -1,5 +1,5 @@
 // test_schema.q - tests for src/foundation/schema.q (.qschema). Load
-// src/foundation/schema.q, tests/lib/qunit.q and tests/lib/testutil.q before
+// src/foundation/schema.q, tests/lib/qunit.q and tests/lib/support.q before
 // this file.
 
 \d .schematest

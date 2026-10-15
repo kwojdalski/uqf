@@ -27,7 +27,6 @@ import re
 from collections.abc import Iterable
 
 from uqs.paths import (
-    RUN_TESTS_FILE,
     STACK_TABLES_TEST,
     STREAM_DIR,
     TABLES_FILE,
@@ -61,30 +60,23 @@ from uqs.scaffold.transform import (
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-def test_namespace(base: str, *, bounded: bool = False, reaction: bool = False) -> str:
-    """The q namespace the generated test file declares, without its leading dot.
+def test_namespace(job: str) -> str:
+    """The q namespace a job's generated test defines, without its leading dot.
 
-    Computed here and nowhere else, because it is needed TWICE - by the test
-    file's own `\\d` line and by the entry that registers it in
-    `run_tests.q`'s `nsList` - and the two disagreeing is exactly the bug this
-    registration exists to prevent: a namespace the runner does not know about
-    means the file loads, its tests never run, and the suite stays green.
+    A suite mirrors the production owner it tests (#1412): the job
+    `.qpipe.job.<job>` is tested in `.qt.qpipe.job.<job>`, whatever kind it is.
+    One rule serves a streaming job, a normalizer, a horizon job, a bounded
+    worker and a reaction because they share the `.qpipe.job` namespace and
+    its unique names (`.qetl.job.*.define` refuses a repeat), so the old
+    `test` / `bftest` / `rxtest` suffixes, which kept jobs of different kinds
+    from claiming one suite, are not needed.
 
-    A bounded worker gets `bf` and a reaction `rx`, so that jobs of different
-    kinds with the same base name do not claim one namespace.
+    Computed here and nowhere else - tests/lib/discovery.q's `job_suite` is
+    its q twin, and python/uqs/tests/test_scaffold.py holds the two to the same
+    answer. Nothing registers the name: the suite loader finds a suite by the
+    tests it holds, so naming it is the whole of "adding it to the runner".
     """
-    if reaction:
-        return f"{base}rxtest"
-    return f"{base}bftest" if bounded else f"{base}test"
-
-
-def _nslist_action(namespace: str) -> FileAction:
-    """Register `namespace` in run_tests.q's nsList.
-
-    The runner globs its test FILES but keeps the namespace list by hand, so
-    writing the file is not enough to make its tests run.
-    """
-    return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode=WriteMode.APPEND)
+    return f"qt.qpipe.job.{job}"
 
 
 #: The documentation no generator writes, because both pages are authored
@@ -371,7 +363,6 @@ publish:.qetl.job.stream.unwired `{name};
         else streaming_test(name, ns, transform, subscribe_to[0], pubs[0])
     )
     actions.append(FileAction(TEST_DIR / f"test_{name}.q", test_body))
-    actions.append(_nslist_action(ns))
     if transform is None:
         notes.append(
             f"implement {', '.join(f'.qpipe.job.{name}.{h}' for h, _ in handlers)}, "

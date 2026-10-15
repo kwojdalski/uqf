@@ -6,88 +6,87 @@
 // the states were validated and the transitions were not, so every illegal
 // one wrote cleanly.
 //
-// Load src/etl/core/status.q, tests/lib/qunit.q and tests/lib/testutil.q
+// Load src/etl/core/status.q, tests/lib/qunit.q and tests/lib/support.q
 // before this file.
 
-\d .statustest
 
-d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.status.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
-spec:{[] `source_version`range_from`range_to!(`v1;.statustest.d[1];.statustest.d[2])}
-progress:{[] `cursor`rows_published`windows_completed!(.statustest.d[2];10;1)}
+.qt.qetl.status.spec:{[] `source_version`range_from`range_to!(`v1;.qt.qetl.status.d[1];.qt.qetl.status.d[2])}
+.qt.qetl.status.progress:{[] `cursor`rows_published`windows_completed!(.qt.qetl.status.d[2];10;1)}
 
-beforeNamespace_isolate:{[]
+.qt.qetl.status.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 
 / Each test starts with no status file for its instance, so no test inherits
 / another's state - which for a state MACHINE is the whole ballgame.
-setUp_fresh:{[]
+.qt.qetl.status.setUp_fresh:{[]
     system"rm -f build/test-status/airflow_status_st1.txt";
     }
 
-write:{[state;err] .qetl.status.write_status[`w;`st1;state;.statustest.spec[];.statustest.progress[];err]}
+.qt.qetl.status.write:{[state;err] .qetl.status.write_status[`w;`st1;state;.qt.qetl.status.spec[];.qt.qetl.status.progress[];err]}
 
 / --- the writer's existing guarantees --------------------------------------
 
-test_a_valid_status_writes:{[t]
-    .qunit.assertEquals[0<count .statustest.write[`starting;""];1b;"a first status writes and returns its path"]};
+.qt.qetl.status.test_a_valid_status_writes:{[t]
+    .qunit.assertEquals[0<count .qt.qetl.status.write[`starting;""];1b;"a first status writes and returns its path"]};
 
-test_an_unknown_state_is_refused:{[t]
-    .qunit.assertError[{.statustest.write[x;""]};`bogus;"the state set is closed"]};
+.qt.qetl.status.test_an_unknown_state_is_refused:{[t]
+    .qunit.assertError[{.qt.qetl.status.write[x;""]};`bogus;"the state set is closed"]};
 
-test_a_failed_state_must_carry_an_error:{[t]
-    .qunit.assertError[{.statustest.write[`failed;x]};"";"a failure with no message is not a diagnosis"]};
+.qt.qetl.status.test_a_failed_state_must_carry_an_error:{[t]
+    .qunit.assertError[{.qt.qetl.status.write[`failed;x]};"";"a failure with no message is not a diagnosis"]};
 
-test_a_reversed_range_is_refused:{[t]
-    bad:`source_version`range_from`range_to!(`v1;.statustest.d[2];.statustest.d[1]);
-    .qunit.assertError[{.qetl.status.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"a bad range can never reach the file"]};
+.qt.qetl.status.test_a_reversed_range_is_refused:{[t]
+    bad:`source_version`range_from`range_to!(`v1;.qt.qetl.status.d[2];.qt.qetl.status.d[1]);
+    .qunit.assertError[{.qetl.status.write_status[`w;`st1;`running;x;.qt.qetl.status.progress[];""]};bad;"a bad range can never reach the file"]};
 
-test_a_null_source_version_is_refused:{[t]
-    bad:`source_version`range_from`range_to!(`;.statustest.d[1];.statustest.d[2]);
-    .qunit.assertError[{.qetl.status.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"source_version is mandatory"]};
+.qt.qetl.status.test_a_null_source_version_is_refused:{[t]
+    bad:`source_version`range_from`range_to!(`;.qt.qetl.status.d[1];.qt.qetl.status.d[2]);
+    .qunit.assertError[{.qetl.status.write_status[`w;`st1;`running;x;.qt.qetl.status.progress[];""]};bad;"source_version is mandatory"]};
 
 / --- reading the previous state --------------------------------------------
 
-test_no_file_means_no_previous_state:{[t]
+.qt.qetl.status.test_no_file_means_no_previous_state:{[t]
     .qunit.assertEquals[null .qetl.status.previous_state `st1;1b;"a first write has nothing to transition from"]};
 
-test_the_previous_state_is_read_back:{[t]
-    .statustest.write[`starting;""];
+.qt.qetl.status.test_the_previous_state_is_read_back:{[t]
+    .qt.qetl.status.write[`starting;""];
     .qunit.assertEquals[.qetl.status.previous_state `st1;`starting;"the writer can see what it last wrote, across a restart"]};
 
 / --- the transition rules -------------------------------------------
 
-test_a_first_state_is_always_permitted:{[t]
+.qt.qetl.status.test_a_first_state_is_always_permitted:{[t]
     .qunit.assertEquals[.qetl.status.require_transition[`;`failed];1b;"a worker whose init failed before writing `starting must still be able to record it"]};
 
-test_starting_may_begin_running:{[t]
+.qt.qetl.status.test_starting_may_begin_running:{[t]
     .qunit.assertEquals[.qetl.status.require_transition[`starting;`running];1b;"the ordinary path"]};
 
 / running -> running is the next window, not a stutter.
-test_running_may_continue_running:{[t]
+.qt.qetl.status.test_running_may_continue_running:{[t]
     .qunit.assertEquals[.qetl.status.require_transition[`running;`running];1b;"each window reports progress under the same state"]};
 
-test_running_may_complete:{[t]
+.qt.qetl.status.test_running_may_complete:{[t]
     .qunit.assertEquals[.qetl.status.require_transition[`running;`completed];1b;"a finished run is terminal"]};
 
 / The case this rule exists for. Either direction resurrects a terminal run,
 / and because the file is overwritten the previous state is GONE - so a
 / correctly recorded failure silently reads as healthy.
-test_a_completed_run_may_not_go_back_to_running:{[t]
+.qt.qetl.status.test_a_completed_run_may_not_go_back_to_running:{[t]
     .qunit.assertError[{.qetl.status.require_transition[`completed;x]};`running;"resurrecting a completed run hides whatever happens next"]};
 
-test_a_failed_run_may_not_report_completed:{[t]
+.qt.qetl.status.test_a_failed_run_may_not_report_completed:{[t]
     .qunit.assertError[{.qetl.status.require_transition[`failed;x]};`completed;"a failure overwritten by success is the worst possible silent outcome"]};
 
-test_an_idle_run_may_not_go_back_to_running:{[t]
+.qt.qetl.status.test_an_idle_run_may_not_go_back_to_running:{[t]
     .qunit.assertError[{.qetl.status.require_transition[`idle;x]};`running;"idle is terminal for that run"]};
 
 / ...but beginning again IS legal. The rule is not "terminal is forever", it
 / is "you may begin a new run, but you may not slip from finished back to
 / in-progress without declaring it".
-test_every_terminal_state_may_start_a_new_run:{[t]
+.qt.qetl.status.test_every_terminal_state_may_start_a_new_run:{[t]
     .qunit.assertEquals[
         .qetl.status.require_transition[;`starting] each `idle`completed`failed;
         111b;
@@ -98,7 +97,7 @@ test_every_terminal_state_may_start_a_new_run:{[t]
 / failure throw INSIDE .qetl.job.bounded.state.fail - the shell's own error path - masking
 / the original error with a complaint about state transitions. A rule that
 / exists to stop a failure being hidden must not itself hide one.
-test_a_failure_is_recordable_from_any_state:{[t]
+.qt.qetl.status.test_a_failure_is_recordable_from_any_state:{[t]
     .qunit.assertEquals[
         .qetl.status.require_transition[;`failed] each `starting`running`idle`completed`failed;
         11111b;
@@ -106,57 +105,55 @@ test_a_failure_is_recordable_from_any_state:{[t]
 
 / ...and through the real error path, not just the rule in isolation. This is
 / the check that found the bug above.
-test_two_consecutive_failures_both_record:{[t]
+.qt.qetl.status.test_two_consecutive_failures_both_record:{[t]
     system"rm -f build/test-status/airflow_status_st1.txt";
-    .statustest.write[`failed;"first"];
-    .qunit.assertEquals[0<count .statustest.write[`failed;"second"];1b;"the shell can report a second failure without throwing in its own handler"]};
+    .qt.qetl.status.write[`failed;"first"];
+    .qunit.assertEquals[0<count .qt.qetl.status.write[`failed;"second"];1b;"the shell can report a second failure without throwing in its own handler"]};
 
-test_an_unknown_previous_state_is_refused:{[t]
+.qt.qetl.status.test_an_unknown_previous_state_is_refused:{[t]
     .qunit.assertError[{.qetl.status.require_transition[x;`running]};`nonsense;"a state nobody defined cannot be reasoned about"]};
 
 / The error must say what the transition would have HIDDEN, not merely that
 / it was refused - the reader of this error is someone debugging a run that
 / looked fine.
-test_the_refusal_explains_what_it_prevents:{[t]
+.qt.qetl.status.test_the_refusal_explains_what_it_prevents:{[t]
     err:@[{.qetl.status.require_transition[`failed;x]; ""};`completed;{x}];
     .qunit.assertEquals[err like "*silently read as healthy*";1b;"the message names the consequence, not just the rule"]};
 
 / --- the writer enforces them ----------------------------------------------
 
-test_the_writer_refuses_a_forbidden_transition:{[t]
-    .statustest.write[`completed;""];
-    .qunit.assertError[{.statustest.write[x;""]};`running;"the writer validates, so a caller cannot forget to"]};
+.qt.qetl.status.test_the_writer_refuses_a_forbidden_transition:{[t]
+    .qt.qetl.status.write[`completed;""];
+    .qunit.assertError[{.qt.qetl.status.write[x;""]};`running;"the writer validates, so a caller cannot forget to"]};
 
-test_the_writer_allows_a_new_run_after_completion:{[t]
-    .statustest.write[`completed;""];
-    .qunit.assertEquals[0<count .statustest.write[`starting;""];1b;"a new run after a completed one is the normal restart"]};
+.qt.qetl.status.test_the_writer_allows_a_new_run_after_completion:{[t]
+    .qt.qetl.status.write[`completed;""];
+    .qunit.assertEquals[0<count .qt.qetl.status.write[`starting;""];1b;"a new run after a completed one is the normal restart"]};
 
 / A refused write must leave the PREVIOUS status intact. Truncating it would
 / destroy the very record the rule exists to protect.
-test_a_refused_write_leaves_the_recorded_status_alone:{[t]
-    .statustest.write[`failed;"the real error"];
-    @[{.statustest.write[x;""]};`completed;{x}];
+.qt.qetl.status.test_a_refused_write_leaves_the_recorded_status_alone:{[t]
+    .qt.qetl.status.write[`failed;"the real error"];
+    @[{.qt.qetl.status.write[x;""]};`completed;{x}];
     .qunit.assertEquals[.qetl.status.previous_state `st1;`failed;"the failure survives an attempt to overwrite it with success"]};
 
-test_the_file_says_which_process_wrote_it:{[t]
+.qt.qetl.status.test_the_file_says_which_process_wrote_it:{[t]
     / A reader on this host whose pid is gone knows a `running file is
     / abandoned - the only way anything outside q can tell dead from slow.
-    j:.j.k raze read0 hsym `$.statustest.write[`starting;""];
+    j:.j.k raze read0 hsym `$.qt.qetl.status.write[`starting;""];
     .qunit.assertEquals[(`long$j`pid;j`host;j`run_id);(`long$.z.i;string .z.h;"");
         "this process's pid and host; no run id before a run opens"]};
 
-test_the_file_carries_the_open_runs_id:{[t]
+.qt.qetl.status.test_the_file_carries_the_open_runs_id:{[t]
     keep:.qetl.run.current_run;
     .qetl.run.current_run:id:first 1?0Ng;
-    j:.j.k raze read0 hsym `$.statustest.write[`starting;""];
+    j:.j.k raze read0 hsym `$.qt.qetl.status.write[`starting;""];
     .qetl.run.current_run:keep;
     .qunit.assertEquals[j`run_id;string id;"a reader can name the execution it is looking at"]};
 
-test_the_ordinary_lifecycle_writes_end_to_end:{[t]
-    .statustest.write[`starting;""];
-    .statustest.write[`running;""];
-    .statustest.write[`running;""];
-    .statustest.write[`completed;""];
+.qt.qetl.status.test_the_ordinary_lifecycle_writes_end_to_end:{[t]
+    .qt.qetl.status.write[`starting;""];
+    .qt.qetl.status.write[`running;""];
+    .qt.qetl.status.write[`running;""];
+    .qt.qetl.status.write[`completed;""];
     .qunit.assertEquals[.qetl.status.previous_state `st1;`completed;"start, two windows, finish"]};
-
-\d .

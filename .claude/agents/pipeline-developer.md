@@ -110,8 +110,12 @@ Two registry facts that changed under you, and that a job no longer states:
   `.qetl.job.bounded.read_state`/`write_state`). A new function that
   reimplements one instead of calling it is the most common mistake here.
 - **The matching `tests/q/test_*.q`** for that module's established test style ---
-  the `.{module}test` namespace, its local `d` date helper, its builders. Match
-  it; don't invent a second style.
+  the `.qt.<owner>[.<suite>]` namespace it defines (`.qt.qetl.coverage`,
+  `.qt.qpipe.job.fx_markout`), its local `d` date helper, its builders. Match
+  it; don't invent a second style. A suite defines every name from the root with
+  its whole path - never `\d .qt...` or `system "d ..."` - and calls its own
+  helpers by full path too; `.qt.support` and `.qt.fixture.*` are the reserved
+  homes of helpers and doubles (tests/lib/discovery.q has the rules).
 
 ## The requirements that bite
 

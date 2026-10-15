@@ -1,9 +1,8 @@
 // test_registries.q - the one q trap every declaration registry in this tree
-// has to defend against, and whether each one's defence works (.regtest).
-// Load src/init.q, src/etl/init.q, tests/lib/qunit.q and tests/lib/testutil.q
+// has to defend against, and whether each one's defence works (.qt.qetl.registries).
+// Load src/init.q, src/etl/init.q, tests/lib/qunit.q and tests/lib/support.q
 // before this file.
 
-\d .regtest
 
 / THE TRAP. A dictionary whose values are same-keyed dictionaries is a
 / TABLE, and q makes it one silently - on the FIRST entry, not the second.
@@ -33,9 +32,9 @@
 / Every test here registers into a LIVE registry, so every test has to
 / take it back out. Without this the suite passes only while this file's
 / namespace happens to run after the contract tests that enumerate what is
-/ registered - .srctest's "every source has a .qpipe.source namespace" and
-/ .sjtest's "every job is registered" both fail if it runs first.
-forget:{[reg;names]
+/ registered - .qt.qetl.source's "every source has a .qpipe.source namespace" and
+/ .qt.qetl.job.stream's "every job is registered" both fail if it runs first.
+.qt.qetl.registries.forget:{[reg;names]
     r:get reg;
     / A registry is a dict, or a keyed table (.qalloc.methods), whose `key`
     / is a table - `names inter` it would match nothing and forget nothing.
@@ -44,14 +43,14 @@ forget:{[reg;names]
         (names inter key r) _ r];
     }
 
-forget_job:{[job]
-    forget[`.qetl.job.stream.jobs;enlist job];
+.qt.qetl.registries.forget_job:{[job]
+    .qt.qetl.registries.forget[`.qetl.job.stream.jobs;enlist job];
     pn:key[.qetl.job.stream.procnames] where job=value .qetl.job.stream.procnames;
-    forget[`.qetl.job.stream.procnames;pn];
+    .qt.qetl.registries.forget[`.qetl.job.stream.procnames;pn];
     }
 
 / Executable documentation: the trap itself, on a registry with no guard.
-test_the_trap_is_real_and_has_two_halves:{[t]
+.qt.qetl.registries.test_the_trap_is_real_and_has_two_halves:{[t]
     reg:(`symbol$())!();
     reg[`x]:`p`q!(1;2);
     .qunit.assertEquals[type value reg;98h;
@@ -75,15 +74,15 @@ test_the_trap_is_real_and_has_two_halves:{[t]
 / They have a registry's shape - so dict_registries[] finds them - but nothing
 / registers into them, so there is no second declaration whose shape could
 / collapse or be refused. An exemption is a claim; this keeps it argued.
-not_registries:(enlist `.qcal.mock_conventions)!enlist
+.qt.qetl.registries.not_registries:(enlist `.qcal.mock_conventions)!enlist
     "sample FX conventions, passed as an argument to .qcal.spot_date and friends; nothing registers into it"
 
-covered:`.qetl.job.stream.jobs`.qetl.transform.registry`.qalloc.methods`.qetl.job.stream.normalizer.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
+.qt.qetl.registries.covered:`.qetl.job.stream.jobs`.qetl.transform.registry`.qalloc.methods`.qetl.job.stream.normalizer.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
 
-empty_in:([] time:`timestamp$(); x:`long$())
-rows_in:([] time:enlist 2026.01.01D00:00:00; x:enlist 1)
+.qt.qetl.registries.empty_in:([] time:`timestamp$(); x:`long$())
+.qt.qetl.registries.rows_in:([] time:enlist 2026.01.01D00:00:00; x:enlist 1)
 
-test_a_streaming_job_without_a_timer_does_not_gain_one:{[t]
+.qt.qetl.registries.test_a_streaming_job_without_a_timer_does_not_gain_one:{[t]
     / The historical bug, as a regression. The four feeds registered first
     / with identical fields, so `jobs` became a keyed table, and markout's
     / declaration - which carries an on_batch the feeds do not - was
@@ -98,23 +97,23 @@ test_a_streaming_job_without_a_timer_does_not_gain_one:{[t]
         "a feed has no on_batch, and must not acquire one as a null"];
     .qunit.assertFalse[`period in key sub;
         "and a subscriber has no timer"];
-    forget_job each `regtest_feed`regtest_sub};
+    .qt.qetl.registries.forget_job each `regtest_feed`regtest_sub};
 
-test_a_transform_without_as_of_does_not_gain_one:{[t]
+.qt.qetl.registries.test_a_transform_without_as_of_does_not_gain_one:{[t]
     / .qetl.transform declares its table (#512): as_of is a typed column, and an
     / undeclared one is stored false - the default define chooses, not a null.
     .qetl.transform.define[`regtest_plain;`inputs`output`fn`examples!(
-        (enlist `i)!enlist empty_in;empty_in;{[i] i};
-        enlist `inputs`expected!((enlist `i)!enlist rows_in;rows_in))];
+        (enlist `i)!enlist .qt.qetl.registries.empty_in;.qt.qetl.registries.empty_in;{[i] i};
+        enlist `inputs`expected!((enlist `i)!enlist .qt.qetl.registries.rows_in;.qt.qetl.registries.rows_in))];
     .qetl.transform.define[`regtest_clocked;`inputs`output`fn`examples`as_of!(
-        (enlist `i)!enlist empty_in;empty_in;{[i;a] i};
-        enlist `inputs`expected`as_of!((enlist `i)!enlist rows_in;rows_in;2026.01.01D00:00:00);1b)];
+        (enlist `i)!enlist .qt.qetl.registries.empty_in;.qt.qetl.registries.empty_in;{[i;a] i};
+        enlist `inputs`expected`as_of!((enlist `i)!enlist .qt.qetl.registries.rows_in;.qt.qetl.registries.rows_in;2026.01.01D00:00:00);1b)];
     .qunit.assertEquals[.qetl.transform.def[`regtest_plain]`as_of;0b;
         "an undeclared as_of is FALSE, not a null - normalising means choosing the default explicitly"];
     .qunit.assertEquals[.qetl.transform.def[`regtest_clocked]`as_of;1b;"and a declared one survives"];
-    forget[`.qetl.transform.registry;`regtest_plain`regtest_clocked]};
+    .qt.qetl.registries.forget[`.qetl.transform.registry;`regtest_plain`regtest_clocked]};
 
-test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]
+.qt.qetl.registries.test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]
     / The case that would have reintroduced the bug: an optional key on a
     / registry that normalises rather than enlists.
     .qalloc.define[`regtest_described;`open`pick`why!(.qalloc.append_lot;.qalloc.pick_first;"a reason")];
@@ -122,9 +121,9 @@ test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]
     .qunit.assertEquals[.qalloc.def[`regtest_bare]`why;"";
         "an omitted description is an empty string, not a null - and `why` is still present, so every stored method is one shape"];
     .qunit.assertEquals[.qalloc.def[`regtest_described]`why;"a reason";"and a given one survives"];
-    forget[`.qalloc.methods;`regtest_described`regtest_bare]};
+    .qt.qetl.registries.forget[`.qalloc.methods;`regtest_described`regtest_bare]};
 
-test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
+.qt.qetl.registries.test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
     / .qetl.source stores row_key as a VECTOR whatever the spelling, so no
     / consumer has to ask whether a one-column key needs enlisting - and a
     / general column holding an atom on one row and a vector on the next is a
@@ -141,9 +140,9 @@ test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
     .qunit.assertEquals[.qetl.source.def[`regtest_scalar]`row_key;enlist `sym;
         "a scalar row_key is stored enlisted, so every stored declaration has one shape"];
     .qunit.assertEquals[.qetl.source.def[`regtest_vector]`row_key;`time`sym;"and a vector is unchanged"];
-    forget[`.qetl.source.sources;`regtest_scalar`regtest_vector]};
+    .qt.qetl.registries.forget[`.qetl.source.sources;`regtest_scalar`regtest_vector]};
 
-test_a_worker_config_without_an_optional_key_gets_the_documented_default:{[t]
+.qt.qetl.registries.test_a_worker_config_without_an_optional_key_gets_the_documented_default:{[t]
     / .qetl.job.bounded normalises the four optional keys to (::) rather than leaving
     / them absent, which is what keeps every stored cfg one shape. The
     / point of the test is that the DEFAULT is chosen, not inherited from
@@ -178,16 +177,16 @@ test_a_worker_config_without_an_optional_key_gets_the_documented_default:{[t]
 
 / The four registries that were dictionaries of dictionaries, depending on q's
 / collapse into a table. Each is now a keyed table on `name`.
-keyed:`.qetl.transform.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
+.qt.qetl.registries.keyed:`.qetl.transform.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
 
-test_the_four_registries_are_declared_keyed_tables:{[t]
-    .qunit.assertEquals[{98h=type key get x} each keyed;1111b;
+.qt.qetl.registries.test_the_four_registries_are_declared_keyed_tables:{[t]
+    .qunit.assertEquals[{98h=type key get x} each .qt.qetl.registries.keyed;1111b;
         "each registry's key is a table: declared, not a dictionary that collapsed"];
-    .qunit.assertEquals[{first cols key get x} each keyed;4#`name;
+    .qunit.assertEquals[{first cols key get x} each .qt.qetl.registries.keyed;4#`name;
         "keyed on `name, as .qalloc.methods is"]};
 
-test_no_keyed_registry_is_classified_as_a_collapsed_dictionary:{[t]
-    .qunit.assertEquals[keyed inter .regtest.dict_registries[];`symbol$();
+.qt.qetl.registries.test_no_keyed_registry_is_classified_as_a_collapsed_dictionary:{[t]
+    .qunit.assertEquals[.qt.qetl.registries.keyed inter .qt.qetl.registries.dict_registries[];`symbol$();
         "none of the four relies on a collapse any more, so the scan does not report it"]};
 
 / A source declaring credential_example and one that does not, side by side:
@@ -195,7 +194,7 @@ test_no_keyed_registry_is_classified_as_a_collapsed_dictionary:{[t]
 / which .qetl.source.credential_example reads as "not declared". Registered
 / narrow-first and wide-first, because a collapsed dictionary differed by
 / order: the narrower one gained a NULL when it came second.
-test_sources_with_different_optional_fields_coexist:{[t]
+.qt.qetl.registries.test_sources_with_different_optional_fields_coexist:{[t]
     base:`table_name`time_column`row_key`columns`types`query`fixture`tz!(`regtest_t;`time;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`UTC);
     .qetl.source.define[`regtest_narrow;(enlist[`source]!enlist `regtest_narrow),base];
@@ -205,9 +204,9 @@ test_sources_with_different_optional_fields_coexist:{[t]
     .qunit.assertEquals[.qetl.source.def[`regtest_narrow]`transport;`ipc;"and an omitted transport is ipc"];
     .qunit.assertEquals[.qetl.source.def[`regtest_wide]`credential_example;"DSN=x";"a declared one survives"];
     .qunit.assertEquals[.qetl.source.def[`regtest_wide]`transport;`odbc;"as does a declared transport"];
-    forget[`.qetl.source.sources;`regtest_narrow`regtest_wide]};
+    .qt.qetl.registries.forget[`.qetl.source.sources;`regtest_narrow`regtest_wide]};
 
-test_a_source_key_no_column_holds_is_refused_by_name:{[t]
+.qt.qetl.registries.test_a_source_key_no_column_holds_is_refused_by_name:{[t]
     decl:`source`table_name`time_column`row_key`columns`types`query`fixture`tz`colour!(`regtest_bad;`regtest_t;`time;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`UTC;`red);
     .qunit.assertThrows[.qetl.source.define[`regtest_bad];decl;"*declares colour*";
@@ -217,7 +216,7 @@ test_a_source_key_no_column_holds_is_refused_by_name:{[t]
 / Two workers on the shipped demo source, one with a check and one with a
 / partition and a note: each keeps what it declared and gets the default for
 / what it did not - (::) for an omitted check, ` for an omitted partition.
-test_workers_with_different_optional_fields_coexist:{[t]
+.qt.qetl.registries.test_workers_with_different_optional_fields_coexist:{[t]
     base:`source`dataset`width`transform!(`demo_deals;`regtest_ds;1D;`demo_deals_passthrough);
     .qetl.job.bounded.define[`regtest_checked;base,enlist[`check]!enlist {[b] .qetl.job.bounded.no_failures[]}];
     .qetl.job.bounded.define[`regtest_sliced;@[base;`dataset;:;`regtest_ds2],`partition`note!(`EURUSD;"a slice")];
@@ -227,30 +226,30 @@ test_workers_with_different_optional_fields_coexist:{[t]
         "each omitted optional field holds its documented default, not a neighbour's typed null"];
     .qunit.assertEquals[(s`partition;s`note);(`EURUSD;"a slice");"and the declared ones survive"];
     .qunit.assertEquals[100h;type c`check;"a declared check is the function it was given"];
-    forget[`.qetl.job.bounded.worker_cfg;`regtest_checked`regtest_sliced]};
+    .qt.qetl.registries.forget[`.qetl.job.bounded.worker_cfg;`regtest_checked`regtest_sliced]};
 
-test_a_worker_key_no_column_holds_is_refused_by_name:{[t]
+.qt.qetl.registries.test_a_worker_key_no_column_holds_is_refused_by_name:{[t]
     decl:`source`dataset`width`transform`colour!(`demo_deals;`regtest_ds;1D;`demo_deals_passthrough;`red);
     .qunit.assertThrows[.qetl.job.bounded.define[`regtest_bad];decl;"*declares colour*";
         "an unknown key is refused naming it"];
     .qunit.assertFalse[`regtest_bad in .qetl.job.bounded.defined[];"and nothing is registered"]};
 
-test_re_registration_replaces_the_row:{[t]
+.qt.qetl.registries.test_re_registration_replaces_the_row:{[t]
     .qetl.dag.register[`regtest_job;`kind`inputs`outputs!(`stream;`regtest_a;`regtest_x)];
     .qetl.dag.register[`regtest_job;`kind`inputs`outputs!(`bounded;`regtest_b`regtest_c;`symbol$())];
     .qunit.assertEquals[count where `regtest_job=.qetl.dag.defined[];1;"one row per name, not two"];
     .qunit.assertEquals[.qetl.dag.def[`regtest_job]`kind`inputs;(`bounded;`regtest_b`regtest_c);
         "and it is the second declaration"];
-    forget[`.qetl.dag.jobs;enlist `regtest_job]};
+    .qt.qetl.registries.forget[`.qetl.dag.jobs;enlist `regtest_job]};
 
-test_lookup_enumeration_removal_and_reset_on_empty_and_populated:{[t]
+.qt.qetl.registries.test_lookup_enumeration_removal_and_reset_on_empty_and_populated:{[t]
     keep:.qetl.dag.jobs;
     .qetl.dag.reset[];
     .qunit.assertEquals[.qetl.dag.defined[];`symbol$();"an empty registry enumerates no names, as a symbol vector"];
     .qunit.assertThrows[.qetl.dag.def;`regtest_none;"*not a registered job*";"and a lookup is refused by name"];
     .qetl.dag.register[`regtest_one;`kind`inputs`outputs!(`stream;`regtest_a;`symbol$())];
     .qunit.assertEquals[.qetl.dag.defined[];enlist `regtest_one;"a populated one enumerates its names"];
-    forget[`.qetl.dag.jobs;enlist `regtest_one];
+    .qt.qetl.registries.forget[`.qetl.dag.jobs;enlist `regtest_one];
     .qunit.assertEquals[.qetl.dag.defined[];`symbol$();"and removal by name empties it again"];
     .qetl.dag.register[`regtest_two;`kind`inputs`outputs!(`stream;`regtest_a;`symbol$())];
     .qetl.dag.reset[];
@@ -258,21 +257,21 @@ test_lookup_enumeration_removal_and_reset_on_empty_and_populated:{[t]
         "reset empties it and leaves it a declared keyed table"];
     `.qetl.dag.jobs set keep};
 
-test_every_dict_valued_registry_is_covered_here:{[t]
+.qt.qetl.registries.test_every_dict_valued_registry_is_covered_here:{[t]
     / The completeness half. A registry added to src/ without a check here
     / is a registry whose guard nobody has tested - and the guards are not
     / interchangeable, so "it looks like the others" is not evidence.
-    .qunit.assertTrue[0<count covered;"the coverage list is not empty"];
+    .qunit.assertTrue[0<count .qt.qetl.registries.covered;"the coverage list is not empty"];
     / dict_registries[] finds registries whose values have COLLAPSED into a
     / table - which is exactly the set that relies on normalising to a
     / fixed key set. One that enlists (.qetl.job.stream, .qetl.job.stream.normalizer) keeps a general
     / list and is safe whatever shape arrives, so it does not appear here
     / and does not need to.
-    missing:.regtest.dict_registries[] except covered,key not_registries;
+    missing:.qt.qetl.registries.dict_registries[] except .qt.qetl.registries.covered,key .qt.qetl.registries.not_registries;
     .qunit.assertEquals[missing;`$();
         "every registry relying on normalisation is listed in `covered` and has a test above registering two declarations of different shape - copying another registry's guard is not evidence, because the guards are not interchangeable"]};
 
-test_a_job_graph_declaration_normalises_its_edges:{[t]
+.qt.qetl.registries.test_a_job_graph_declaration_normalises_its_edges:{[t]
     / .qetl.dag normalises instead of enlisting: every registration writes the
     / same three keys, so `jobs` collapses into a table. That is safe only
     / because `inputs` and `outputs` are forced to VECTORS with `(),` on the
@@ -282,7 +281,7 @@ test_a_job_graph_declaration_normalises_its_edges:{[t]
     / .
     / This registry reached `covered` late, and how says something. The
     / completeness check below had been reporting it for as long as it had
-    / existed; it only reported it when .dagtest happened to run FIRST and
+    / existed; it only reported it when .qt.qetl.dag happened to run FIRST and
     / leave `jobs` populated, because an empty dict has not collapsed and
     / does not look like a registry that normalises. With the suite order
     / derived rather than hand-written, that stopped being luck.
@@ -297,12 +296,12 @@ test_a_job_graph_declaration_normalises_its_edges:{[t]
     .qunit.assertEquals[count many`inputs;2;"a vector keeps its length"];
     .qunit.assertEquals[count many`outputs;0;
         "an empty output stays empty rather than becoming a one-element null"];
-    forget[`.qetl.dag.jobs;`regtest_one`regtest_many]};
+    .qt.qetl.registries.forget[`.qetl.dag.jobs;`regtest_one`regtest_many]};
 
 / Every symbol-keyed registry in src/ whose values are dictionaries, read
 / from the live namespaces rather than from a list kept by hand.
-dict_registries:{[]
-    nss:.qns.functional[] except `.q`.qunit;
+.qt.qetl.registries.dict_registries:{[]
+    nss:.qt.support.library_only .qns.functional[];
     raze {[ns]
         nms:key[ns] except `;
         hits:nms where {[ns;nm]
@@ -316,6 +315,3 @@ dict_registries:{[]
               $[98h=type value v; 1b; all 99h=type each value v]]}[ns] each nms;
         {[ns;nm] ` sv ns,nm}[ns] each hits
       } each nss}
-
-
-\d .
