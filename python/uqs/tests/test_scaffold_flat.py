@@ -22,6 +22,6 @@ def test_text_that_opens_no_context_is_left_as_written():
     assert flat_source(text, REPO) == text
 
 
-def test_a_tree_without_the_converter_gets_the_text_as_it_was(tmp_path):
-    text = "\\d .a.b\nf:{x}\n\\d .\n"
-    assert flat_source(text, tmp_path) == text
+def test_a_tree_without_the_converter_uses_the_one_uqs_was_installed_from(tmp_path):
+    out = flat_source("\\d .a.b\nf:{x}\n\\d .\n", tmp_path)
+    assert "\\d .a.b" not in out and ".a.b.f:{x}" in out

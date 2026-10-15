@@ -12,6 +12,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from uqs import paths
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, UqsError
 from uqs.scaffold import external, profile
 from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
@@ -28,10 +29,13 @@ def flat_source(text: str, repo_root: Path) -> str:
     file is written the way every other declaration in src/ is: each name fully
     qualified from the root. The repository's own converter does it - the same
     lexer that wrote the rest of the tree - so a template cannot disagree with
-    it. A tree without the converter gets the text as it was.
+    it. The tree being written to may be a partial copy without the converter, so
+    the one uqs itself was installed from is the fallback.
     """
-    path = repo_root / CONVERTER
-    if "\\d ." not in text or not path.is_file():
+    path = next(
+        (p for p in (repo_root / CONVERTER, paths.repo_root() / CONVERTER) if p.is_file()), None
+    )
+    if "\\d ." not in text or path is None:
         return text
     spec = importlib.util.spec_from_file_location("flatten_contexts_scaffold", path)
     if spec is None or spec.loader is None:  # pragma: no cover - a broken checkout
