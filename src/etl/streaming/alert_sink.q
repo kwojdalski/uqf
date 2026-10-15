@@ -62,7 +62,7 @@
 \d .qpipe.job.alert_sink
 
 / The columns of a breach this job delivers: fx_limit_breach less the plant's
-/ `time`, which is not part of a breach's identity (see .qlimit.scope_cols).
+/ `time`, which is not part of a breach's identity (see .qf.port.scope_cols).
 breach_cols:`sym`book`product`metric`observed`cap`severity`utilisation
 
 / How many times one breach is attempted before it is recorded as dead.
@@ -80,7 +80,7 @@ alert_period:0D00:05
 slack:0D00:00:01
 
 / Dedup state: breach identity -> the plant `time` of the newest report queued.
-alerts:.qlimit.no_alerts[]
+alerts:.qf.port.no_alerts[]
 
 / Breaches awaiting delivery. `body` is the JSON text to POST, built once so
 / that every attempt sends the same bytes.
@@ -127,8 +127,8 @@ payload:{[row]
 / @private
 enqueue:{[x;now]
     x:update time:?[null time;now;time] from x;
-    scope:.qlimit.scope_cols breach_cols#x;
-    ids:.qlimit.identity ?[x;();0b;(scope,`metric)!scope,`metric];
+    scope:.qf.port.scope_cols breach_cols#x;
+    ids:.qf.port.identity ?[x;();0b;(scope,`metric)!scope,`metric];
     cur:.qpipe.job.alert_sink.alerts;
     / A row is a repeat when its time is under one period after the newest queued for its identity.
     gap:.qpipe.job.alert_sink.alert_period-.qpipe.job.alert_sink.slack;

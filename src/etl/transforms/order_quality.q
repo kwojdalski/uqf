@@ -67,7 +67,7 @@ requests:{[x;dims]
 / window length: how many requests were counted and how many ended filled and
 / rejected, and their shares. Reads only the rows `inside` the window; the others
 / only keep a group that is quiet in a short window a row, whose identity is 0 for
-/ each count and null for each ratio - .qexec.fill_ratio and .qexec.reject_ratio say
+/ each count and null for each ratio - .qf.exec.fill_ratio and .qf.exec.reject_ratio say
 / no requests is null, not zero.
 / @param dims the grouping dimensions, a non-empty subset of .qpipe.transform.order_outcome.dimensions
 / @param x outcomes carrying source, request_id, source_time, outcome, the dimensions, window, as_of and inside
@@ -89,7 +89,7 @@ stats_by:{[dims;x]
     n:?[r;();g!g;`n_orders`n_filled`n_rejected!((sum;`counted);(sum;`filled);(sum;`rejected))];
     b:groups lj g xkey n;
     b:update n_orders:0^n_orders, n_filled:0^n_filled, n_rejected:0^n_rejected from b;
-    b:update fill_ratio:.qexec.fill_ratio[n_filled;n_orders], reject_ratio:.qexec.reject_ratio[n_rejected;n_orders] from b;
+    b:update fill_ratio:.qf.exec.fill_ratio[n_filled;n_orders], reject_ratio:.qf.exec.reject_ratio[n_rejected;n_orders] from b;
     (cols shape) xcols g xasc b}
 
 / The published statistic: per book, over the order outcomes of every source.

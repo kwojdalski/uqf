@@ -8,7 +8,7 @@
 / these defaults.
 / .
 
-\d .qexdef
+\d .qf.demo
 
 / One pip, in rate terms - the increment example scripts use between
 / adjacent synthetic order book levels (e.g. spot, spot-pip_size,
@@ -22,9 +22,9 @@ pip_size:0.0001;
 / One synthetic order-book level's baseline notional, in example scripts'
 / synthetic books - a round, readable size (1 million) that scripts scale
 / up per level to build a depth ladder.
-size_unit:1e6;
+level_size_unit:1e6;
 
-/ Jitter amount (same units as size_unit) example scripts add per row so
+/ Jitter amount (same units as level_size_unit) example scripts add per row so
 / consecutive synthetic ticks' sizes aren't identical.
 size_row_drift:1e4;
 

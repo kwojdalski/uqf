@@ -51,11 +51,11 @@
 / test that is not a one-argument function, a definition that silently
 / replaced another - stops the run before it starts.
 .qt.support.require_layout[];
-nsList:.qt.support.all_suites[];
+nsList:.qt.support.suites[];
 if[0=count nsList; '"run_tests: no test suites found"];
 
 / ORDER. Default is depth first by name: a parent before its children,
-/ siblings alphabetical, and any suite not yet moved under .qt after them.
+/ siblings alphabetical.
 / UQF_TEST_ORDER=reverse or =shuffle runs the same suites in another one.
 / .
 / It exists because four tests here USED to pass on the old list's order

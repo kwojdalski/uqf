@@ -83,7 +83,7 @@ describe[`fx_orderbook]:
 describe[`superbook]:
     "Latest fresh direct FX liquidity merged across sources, bids descending and asks ascending, with aligned source and original timestamp vectors. Empty snapshots clear expired books";
 describe[`trades]:
-    "Client fills, shaped to match .qpos.apply_fill and .qexec.markout_at_horizons exactly";
+    "Client fills, shaped to match .qf.port.apply_fill and .qf.exec.markout_at_horizons exactly";
 describe[`imported_trades]:
     "One trade moved over IPC from another kdb+ process's HDB by upstream_trades_backfill, with the upstream's int size widened to long, its buy/sell side as 1/-1 and its zero-size rows dropped. Written by a bounded worker rather than a feed, so it is only as complete as the windows etl_coverage says were run";
 describe[`wide_orderbook]:
@@ -98,9 +98,9 @@ describe[`wide_orderbook]:
 describe[`predictions]:
     "Model output per (time, sym, horizon_ms, model). DECLARED, NOT YET PRODUCED - nothing in this tree runs a model, so the shape is agreed and the table is empty";
 describe[`ccy_exposure]:
-    "Net exposure per currency at an instant, revalued into one reporting currency. DECLARED, NOT YET PRODUCED - .qpos.ccy_exposure_in computes this, but no job publishes it yet";
+    "Net exposure per currency at an instant, revalued into one reporting currency. DECLARED, NOT YET PRODUCED - .qf.port.ccy_exposure_in computes this, but no job publishes it yet";
 describe[`reference_data]:
-    "Static instrument reference per pair, base and quote legs as .qccy.ccy_pair_legs names them. DECLARED, NOT YET PRODUCED - no loader, and no decision yet on where the static data lives";
+    "Static instrument reference per pair, base and quote legs as .qf.px.ccy_pair_legs names them. DECLARED, NOT YET PRODUCED - no loader, and no decision yet on where the static data lives";
 describe[`order_routing]:
     "Routing decisions, one row per (order, venue) - not 1:1 with orders, since an order can split. DECLARED, NOT YET PRODUCED - nothing in this tree routes";
 describe[`connections]:

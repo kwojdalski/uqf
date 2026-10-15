@@ -2,7 +2,7 @@
 / .
 / Subscribes to `wide_orderbook` - twenty-two per-level columns, as a venue
 / publishes them - folds each row into one price vector per side, and
-/ publishes `mkt_orderbook`, the book shape .qbook and .qcross.cross_book_at
+/ publishes `mkt_orderbook`, the book shape book.q and .qf.mkt.cross_book_at
 / read. It keeps no state: every batch is republished as it arrives.
 / .
 / WHAT IS IN THIS FILE: the wide and folded schemas, the fold transform with
@@ -25,7 +25,7 @@ wide_level_names:(cols wide_orderbook) except `time`sym
 
 / The column groups the fold reads, derived from the schema rather than
 / written out: bids0..bids10 -> bid_prices, asks0..asks10 -> ask_prices.
-wide_level_groups:.qbook.derive_level_groups[cols wide_orderbook;(("bids";`bid_prices);("asks";`ask_prices))]
+wide_level_groups:.qf.mkt.derive_level_groups[cols wide_orderbook;(("bids";`bid_prices);("asks";`ask_prices))]
 
 mkt_orderbook:.qetl.plant.published `mkt_orderbook
 
@@ -35,7 +35,7 @@ mkt_orderbook:.qetl.plant.published `mkt_orderbook
 / @param book wide_orderbook rows
 / @return one row per input row: sym, bid_prices, ask_prices
 fold_wide_orderbook:{[book]
-    folded:.qbook.book_from_wide_levels[book;.qpipe.job.vectorize.wide_level_groups;`sym];
+    folded:.qf.mkt.book_from_wide_levels[book;.qpipe.job.vectorize.wide_level_groups;`sym];
     select sym, bid_prices, ask_prices from folded}
 
 / --------------------------------------------------------------- THE JOB

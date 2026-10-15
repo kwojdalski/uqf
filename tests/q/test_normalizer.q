@@ -157,7 +157,7 @@
         "the venue's stamp, not the plant's 14:32:09"];
     .qunit.assertEquals[first m`source;`binance_spot;"the venue is the source"];
     / As the plant delivers it, `time` stamped in front.
-    b:first .qmicro.venue_tops update time:2026.09.17D14:32:09.000000000 from m;
+    b:first .qf.mkt.venue_tops update time:2026.09.17D14:32:09.000000000 from m;
     .qunit.assertEquals[b`venue`bid`ask;(`binance_spot;61999f;62001f);
         "and posbook reads the venue's touch, to mark across venues"]};
 

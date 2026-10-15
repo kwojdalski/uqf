@@ -16,12 +16,6 @@
     if[`layout_probe in key `.qt.fixture; ![`.qt.fixture;();0b;enlist `layout_probe]];
     }
 
-/ The suites the quant libraries still declare the old way, a root-level
-/ namespace named <thing>test (#1412). It is a ratchet: only ever shorter, and
-/ empty when the last has moved under .qt - at which point the two tests
-/ below say that no suite is declared the old way at all.
-.qt.harness.layout.moving:`.alloctest`.attributiontest`.booktest`.calendartest`.ccytest`.daycounttest`.desktest`.dqcheckstest`.executiontest`.executionscaletest`.forwardstest`.limittest`.metatest`.microstructuretest`.nstest`.optionstest`.positionstest`.ratestest`.rendertest`.risktest`.schematest`.statstest`.synthtest
-
 / --- what is a suite -------------------------------------------------------
 
 .qt.harness.layout.test_a_suite_is_a_namespace_that_holds_tests_wherever_it_sits:{[t]
@@ -105,22 +99,23 @@
 
 / --- what is not -----------------------------------------------------------
 
-.qt.harness.layout.test_no_suite_is_declared_the_old_way_except_the_ones_still_to_move:{[t]
-    .qunit.assertEquals[.qt.support.legacy_suites[] except .qt.harness.layout.moving;`symbol$();
-        "a new suite is a namespace under .qt - a root-level <thing>test is only tolerated while its owner is on the moving list"]};
+.qt.harness.layout.test_no_suite_is_declared_outside_qt:{[t]
+    .qunit.assertEquals[.qt.support.outside_suites[];`symbol$();
+        "a suite is a namespace under .qt - a root-level <thing>test holding test_ functions is the old way, and is refused"]};
 
-.qt.harness.layout.test_a_suite_that_has_moved_comes_off_the_moving_list:{[t]
-    .qunit.assertEquals[.qt.harness.layout.moving except .qt.support.legacy_suites[];`symbol$();
-        "the list only ever shrinks: a name here that is no longer a root-level suite is stale"]};
+.qt.harness.layout.test_a_suite_outside_qt_is_reported_by_the_layout_check:{[t]
+    `.zzoutsidetest.test_one set {[t] 1};
+    got:.qt.support.outside_suites[];
+    / a root namespace cannot be deleted by name; emptying it is enough, as only a test makes it a suite
+    ![`.zzoutsidetest;();0b;enlist `test_one];
+    .qunit.assertEquals[got;enlist `.zzoutsidetest;"found, so layout_problems names it"]};
 
 .qt.harness.layout.test_a_test_file_declares_no_context_switch:{[t]
     / q 4.0 rejects a nested working context, and a leading dot is absolute,
-    / so a suite defines everything from the root by full path. The suites
-    / still on the moving list are exempt until they move.
+    / so a suite defines everything from the root by full path.
     bad:raze {[f]
         ls:read0 hsym `$f;
         sw:ls where ls like "\\d .?*";
-        sw:sw where not (`$3_/:sw) in .qt.harness.layout.moving;
         sw,:ls where ls like "system \"d *";
         (f,": "),/:sw} each .qt.support.layout_files[];
     .qunit.assertEquals[bad;();
@@ -160,11 +155,11 @@
     .qunit.assertEquals[.qt.support.defined_path ".qt.a.b.f[1]";`;"a call, not a definition"];
     .qunit.assertEquals[.qt.support.defined_path ".qt.a.b-c:1";`;"not a name"]};
 
-.qt.harness.layout.test_a_file_declares_its_tests_in_either_style:{[t]
+.qt.harness.layout.test_a_file_declares_its_tests_by_whole_path:{[t]
     lines:(".qt.a.b.helper:1";".qt.a.b.test_x:{[t] 1}";"/ .qt.a.b.test_y:{[t] 1}";
-        "\\d .oldtest";"test_z:{[t] 1}";"helper:{[t] 1}";"\\d .";"test_after:{[t] 1}");
-    .qunit.assertEquals[.qt.support.declared_tests lines;`.qt.a.b.test_x`.oldtest.test_z;
-        "the .qt definition and the one inside \\d .oldtest; not the helper, the comment, or a test outside any block"];
+        "    .qt.a.b.test_z:{[t] 1}";"test_after:{[t] 1}");
+    .qunit.assertEquals[.qt.support.declared_tests lines;enlist `.qt.a.b.test_x;
+        "a definition at the start of a line; not the helper, the comment, the continuation or a bare name"];
     .qunit.assertEquals[.qt.support.declared_tests (".qt.support.test_names:1";".qt.fixture.x.test_a:1");`symbol$();
         "the harness and the fixtures are never suites, whatever they are called"]};
 
@@ -227,7 +222,7 @@
 .qt.harness.layout.test_a_library_scan_drops_the_harness_and_nothing_else:{[t]
     nss:`.q`.qunit`.qt`.qt.support`.qt.qetl.io`.qetl.io`.qpipe.job.x`.qtorq;
     .qunit.assertEquals[.qt.support.library_only nss;`.qetl.io`.qpipe.job.x`.qtorq;
-        ".qns.owned lists every root namespace starting with q, which includes .qt"]};
+        ".qf.util.owned lists every root namespace starting with q, which includes .qt"]};
 
 .qt.harness.layout.test_production_sources_never_mention_the_test_tree:{[t]
     / init.q and everything it loads must stand without .qt and .qunit: the

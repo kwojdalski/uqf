@@ -1,12 +1,12 @@
 / schema.q - the one refusal for a table that lacks the columns a function
-/ reads (.qschema).
+/ reads (.qf.util).
 / .
 / Why a foundation module for one function: the check was hand-written at
 / fourteen sites and worded five ways - "is missing required column(s)",
 / "is missing column(s)", "no such column(s)", "the book has no column(s)",
 / "missing columns" - so no grep found them all and no caller could match on
 / one shape. Only two helpers existed and both were tied to one table:
-/ .qschema.require_depth_quotes and .qmicro.require_tape. #418.
+/ .qf.util.require_depth_quotes and .qf.mkt.require_tape. #418.
 / .
 / It lives in foundation because every layer above loads foundation first
 / (src/init.q), the ETL tree included - src/etl/init.q assumes src/init.q has
@@ -18,7 +18,7 @@
 / in front of them when the error lands. q gives a lambda no way to ask its
 / own name, so the caller passes it.
 
-\d .qschema
+\d .qf.util
 
 / Refuse a table that lacks any of the columns a function reads.
 / .
@@ -31,8 +31,8 @@
 / @param req symbol vector (or one symbol) of the columns the caller reads
 / @return generic null when every required column is present
 / @throws error naming the caller, the table and every missing column
-/ @eg .qschema.require_cols[`markout;`trades;([] sym:enlist `EURUSD);enlist `sym]  -> ::
-/ @eg .qschema.require_cols[`markout;`trades;([] sym:enlist `EURUSD);`sym`time]  -> throws
+/ @eg .qf.util.require_cols[`markout;`trades;([] sym:enlist `EURUSD);enlist `sym]  -> ::
+/ @eg .qf.util.require_cols[`markout;`trades;([] sym:enlist `EURUSD);`sym`time]  -> throws
 require_cols:{[fn_name;table_name;tbl;req]
     r:(),req;
     missing:r where not r in cols tbl;
@@ -41,14 +41,14 @@ require_cols:{[fn_name;table_name;tbl;req]
     }
 / Refuse a depth-quotes table that lacks a column a depth function reads:
 / time, sym and the four level vectors. The one shape every function that
-/ prices from a depth book takes - synthetic cross pricing (.qcross), cross
-/ markouts (.qexec), microstructure and the data-quality checks - so it lives
+/ prices from a depth book takes - synthetic cross pricing (.qf.mkt), cross
+/ markouts (.qf.exec), microstructure and the data-quality checks - so it lives
 / here rather than in any of them (#626).
 / @param fn_name symbol naming the CALLING function, for the message
 / @param quotes the depth-quotes table
 / @return generic null when every column is present
 / @throws error naming the caller and every missing column
-/ @eg .qschema.require_depth_quotes[`f;([] time:`timestamp$(); sym:`symbol$())]  -> throws
+/ @eg .qf.util.require_depth_quotes[`f;([] time:`timestamp$(); sym:`symbol$())]  -> throws
 depth_quote_cols:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 require_depth_quotes:{[fn_name;quotes] require_cols[fn_name;`quotes;quotes;depth_quote_cols]}
 

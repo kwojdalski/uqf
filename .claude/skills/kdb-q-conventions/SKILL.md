@@ -44,7 +44,7 @@ implicit grouping. Instead:
    right-to-left rule would happen to give the right answer anyway - don't make
    the next reader re-derive the evaluation order.
 
-3. Any polynomial evaluation goes through `.qstats.horner_eval[coeffs;x]`
+3. Any polynomial evaluation goes through `.qf.math.horner_eval[coeffs;x]`
    (defined in `src/foundation/stats.q`) rather than a hand-written Horner chain -
    that arithmetic is tricky exactly once, in one tested place.
 
@@ -172,26 +172,36 @@ no processes/IPC/tables).
 
 ## Layout
 
-- `src/*.q` - one module per topic, each wrapped in its own `\d .q<abbrev>` ...
-  `\d .` block, so each file lands in its own flat namespace rather than sharing
-  one (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`,
-  `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef` -
-  `src/integrations/data.q` is `.qdata`, out of scope for this library, see
-  below). Every one of these is single-level (not nested under a shared `.q`
-  parent) by convention - the filename-to-namespace tie is what the naming
-  auditor checks and what `docs/man.q` is generated against. The ETL framework
-  nests under `.qetl` (for example `.qetl.job.bounded`, `.qetl.cfg.audit`);
-  concrete implementations live under `.qpipe.source`, `.qpipe.transform` and
-  `.qpipe.job`. Both bounded and streaming jobs share the job root and must have
-  distinct names. Shared transforms load from `src/etl/transforms/` before jobs.
-  The TorQ adapter is `.qtorq`, and runner-local state stays under `.qproc`. A
-  namespace outside the `.q` prefix entirely is a bug unless it is one of the
-  three listed in `tests/q/test_namespaces.q`'s `outside_the_prefix` - `.dqe`
-  (TorQ's own), `.cov` (KX's API shape) and `.surface` (the exporter) - and that
-  test fails on a new one. Code that enumerates namespaces must therefore go
-  through `.qns.owned` / `.qns.functional` (`src/namespaces.q`): a root-level
+- `src/*.q` - one module (file) per topic, each wrapped in a `\d .qf.<domain>`
+  ... `\d .` block. The quant library is exactly seven namespaces under `.qf` -
+  `.qf.px` (pricing and conventions), `.qf.mkt` (market-book analytics),
+  `.qf.exec` (execution quality and allocation), `.qf.port` (positions, desk
+  exposure, risk, limits), `.qf.math` (numerical primitives), `.qf.util`
+  (schema, metadata, rendering, namespace discovery) and `.qf.demo` (example
+  defaults and synthetic data) - and several files load into each.
+  `docs/reference/qf-domains.md` has the file-to-domain mapping, the `px`/`mkt`
+  boundary and the table from every former `.q<abbrev>` name. There is no
+  intermediate public namespace (no `.qf.px.options`). `src/integrations/data.q`
+  is `.qdata`, out of scope for this library, see below. A domain is shared, so:
+  a name is defined by ONE of its files (`check_module_deps.py` fails a second
+  `name:`, because load order would silently pick the winner); another file's
+  function is always called fully qualified (`.qf.px.ccy_pair_legs`, never a
+  bare name), which is also how that gate sees the dependency; and a private
+  helper (`/ @private`) lives in the domain beside the public names and needs a
+  descriptive, domain-unique name (`empty_desk_book`, not `empty_book`). The ETL
+  framework nests under `.qetl` (for example `.qetl.job.bounded`,
+  `.qetl.cfg.audit`); concrete implementations live under `.qpipe.source`,
+  `.qpipe.transform` and `.qpipe.job`. Both bounded and streaming jobs share the
+  job root and must have distinct names. Shared transforms load from
+  `src/etl/transforms/` before jobs. The TorQ adapter is `.qtorq`, and
+  runner-local state stays under `.qproc`. A namespace outside the `.q` prefix
+  entirely is a bug unless it is one of the three listed in
+  `tests/q/test_namespaces.q`'s `outside_the_prefix` - `.dqe` (TorQ's own),
+  `.cov` (KX's API shape) and `.surface` (the exporter) - and that test fails on
+  a new one. Code that enumerates namespaces must therefore go through
+  `.qf.util.owned` / `.qf.util.functional` (`src/namespaces.q`): a root-level
   `(key `) where like
-  "q\*"` scan sees `.qpipe.job`, `.qpipe.source` and `.qpipe.job` as namespaces holding no functions and drops every worker, source and subscriber process without saying so. A function calling another module's function must qualify it explicitly (e.g. `forwards.q`'s `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a bare, unqualified name) - there is no shared namespace for cross-file calls to resolve into implicitly, and (see the real-KDB-X gotcha further down) even a *same*-namespace call from inside a select/update clause's per-row expression needs to be qualified too. Load order doesn't matter for function *definitions* (q resolves names at call time, and every namespace is fully loaded before any cross-module call actually runs), but `src/init.q\`
+  "q\*"` scan sees `.qf`, `.qetl` and `.qpipe` as containers and drops every domain, worker, source and subscriber process under them without saying so. Even a *same*-namespace call from inside a select/update clause's per-row expression needs to be qualified (see the real-KDB-X gotcha further down). Load order doesn't matter for function *definitions* (q resolves names at call time, and every namespace is fully loaded before any cross-module call actually runs), but `src/init.q\`
   loads them in a sensible dependency order (stats -> ccy -> daycount -> rates
   -> forwards -> options -> risk -> positions -> execution -> book ->
   microstructure -> dqchecks -> example_defaults) anyway, for readability.
@@ -281,7 +291,7 @@ One word per concept, so a signature reads the same in every module:
 A registry's three verbs are `define` (declare one), `defined[]` (list them) and
 `def[x]` (read one back) - `.qetl.source`, `.qetl.job.stream`,
 `.qetl.job.bounded`, `.qetl.job.stream.normalizer`, `.qetl.transform`,
-`.qetl.dag` and `.qalloc` alike. The lookup is `def` and not `decl` on purpose:
+`.qetl.dag` and `.qf.exec` alike. The lookup is `def` and not `decl` on purpose:
 callers write `decl:def x`, and a function named `decl` would be shadowed by
 that local for the whole body - the right-hand side would read the unset local
 instead of calling the lookup (the `d1v` trap above).
@@ -361,8 +371,8 @@ order backwards - see below) by actually downloading `qstudio.jar` and running
   only what no other module or job file is told to call: a helper a guide tells
   job authors to use is API, whatever its comment says.
 - A file-level doc block (single-`/` lines, ending in a lone `/ .` line) goes
-  **before** the file's `\d .q<abbrev>` line at the top of the file and becomes
-  that file's description in the generated docs.
+  **before** the file's `\d .qf.<domain>` line at the top of the file and
+  becomes that file's description in the generated docs.
 - The CLI is
   `java -cp qstudio.jar com.timestored.qdoc.QDocMain <target> <source>`.
   TimeStored's own help page states the reverse order (`<source> <target>`) -
@@ -370,8 +380,8 @@ order backwards - see below) by actually downloading `qstudio.jar` and running
   into your source folder and finds nothing to document.
   `scripts/dev/gen-docs.sh` has the verified order baked in.
 - qDoc documents each namespace separately per source file in its nav
-  (`.qopt (options.q)`, `.qrisk (risk.q)`, ...) - one page per file, since each
-  file now has its own distinct namespace.
+  (`.qf.px (options.q)`, `.qf.port (risk.q)`, ...) - one page per file, since
+  each file now has its own distinct namespace.
 - **Never write a literal `<` in doc text** (descriptions, `@return`, `@throws`,
   etc.) - qDoc drops it and everything after it into the HTML unescaped, so a
   naive HTML parser treats `<=0` or `<rd` as the start of a tag and the rest of
@@ -383,7 +393,7 @@ order backwards - see below) by actually downloading `qstudio.jar` and running
 - qstudio.jar also runs a bundled linter as a side effect (`docs/lint.csv`),
   which throws a lot of `UNDECLARED_VAR` false positives for this repo
   specifically, because it lints each file in isolation and can't see that e.g.
-  `.qrates.df_cont` (from `rates.q`) is available once both files are loaded via
+  `.qf.px.df_cont` (from `rates.q`) is available once both files are loaded via
   `src/init.q` and `options.q` calls it qualified. Safe to ignore those; do look
   at anything else it flags.
 

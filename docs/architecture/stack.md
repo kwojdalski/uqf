@@ -232,13 +232,13 @@ table), the other keeps it private to the process.
 `posbook1` and `demo_markout1` are the two processes in this stack that run
 uqf's actual eFX business logic (position/PnL and execution quality, not just
 market-data reshaping) against live data. `posbook1`'s `.qpipe.job.posbook.book`
-(a private, in-process `.qpos`-shaped keyed table, same "wrap a pure function
+(a private, in-process `.qf.port`-shaped keyed table, same "wrap a pure function
 with local mutable state" pattern `cross1`'s `.qpipe.job.cross.fx_orderbook`
-mirror uses) accumulates fills via `.qpos.apply_fill`, marked to the mid as of
-each fill's own `source_time` (`.qasof.lookup` over an event-time history, so a
-book stamped after a fill never marks it); `position` is a snapshot republished
-per fill. `demo_markout1` can't score a fill the instant it arrives -
-`.qexec.markout_at_horizons` needs a reference quote at trade_time+horizon,
+mirror uses) accumulates fills via `.qf.port.apply_fill`, marked to the mid as
+of each fill's own `source_time` (`.qf.mkt.lookup` over an event-time history,
+so a book stamped after a fill never marks it); `position` is a snapshot
+republished per fill. `demo_markout1` can't score a fill the instant it arrives -
+`.qf.exec.markout_at_horizons` needs a reference quote at trade_time+horizon,
 which by definition hasn't happened yet - so it buffers trades/quotes in
 `.qpipe.job.demo_markout.pending`/`.qpipe.job.demo_markout.history` and
 scores+drains them on a 1s repeating timer once each trade is old enough that

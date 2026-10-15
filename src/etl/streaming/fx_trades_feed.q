@@ -20,15 +20,15 @@
 / (the runner) or at a recorder (a test).
 publish:.qetl.job.stream.unwired `fx_trades_feed;
 
-/ This process's own level per pair, aligned with .qsynth.pairs. Not walked:
+/ This process's own level per pair, aligned with .qf.demo.pairs. Not walked:
 / this feed prices around the quote feeds' own starting levels rather than
 / drifting independently, so a fill and a quote for the same pair stay in
 / the same neighbourhood.
-spot:.qsynth.spot
+spot:.qf.demo.spot
 
-/ Pips per unit, which is the form .qexec and the trades schema take - the
-/ reciprocal of .qsynth.pip, which is the size of one pip.
-pip_factor:.qccy.pip_factor .qsynth.pairs
+/ Pips per unit, which is the form .qf.exec and the trades schema take - the
+/ reciprocal of .qf.demo.pip, which is the size of one pip.
+pip_factor:.qf.px.pip_factor .qf.demo.pairs
 
 / The sizes a fill is drawn from. Float, matching the trades table's
 / size:`float$() - a long here inserts as the wrong type rather than failing.
@@ -52,7 +52,7 @@ next_id:{[]
 / vendored feed.q's own convention, and .u.upd's row-count-from-column-length
 / machinery expects it. The randomness lives in on_timer, so this function is
 / deterministic and its shape can be asserted.
-/ @param i which pair, as an index into .qsynth.pairs
+/ @param i which pair, as an index into .qf.demo.pairs
 / @param side 1 for a buy, -1 for a sell
 / @param size the fill size
 / @param slip_pips how far from the pair's level the fill printed, in pips
@@ -61,13 +61,13 @@ next_id:{[]
 / @eg count .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1]  ->  6
 fill_rows:{[i;side;size;slip_pips;fill_id]
     price:.qpipe.job.fx_trades_feed.spot[i]+slip_pips%.qpipe.job.fx_trades_feed.pip_factor[i];
-    (enlist .qsynth.pairs i;enlist side;enlist price;enlist size;
+    (enlist .qf.demo.pairs i;enlist side;enlist price;enlist size;
         enlist .qpipe.job.fx_trades_feed.pip_factor i;enlist fill_id)}
 
 / Draw one fill and publish it. The draws are here rather than in fill_rows
 / so that the row builder stays deterministic.
 on_timer:{[]
-    i:rand count .qsynth.pairs;
+    i:rand count .qf.demo.pairs;
     / 1 or -1, always an atom - indexing `1 -1` with a possibly-empty vector
     / is how this produced a list instead, and .u.upd took it as two rows.
     side:1-2*rand 2;

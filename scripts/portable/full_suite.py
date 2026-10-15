@@ -105,21 +105,16 @@ def messages_of(name: str, tests: Path = REPO / "tests" / "q") -> list[str]:
     from its suite file: its assertions' messages among them.
 
     A suite defines `.qt.<owner>.<suite>.test_x:` from the root, so the test is
-    found by its whole name at the start of a line. The suites not yet moved
-    under .qt (#1412) still sit in a `\\d .<suite>` block and are found by the
-    block; that branch goes with the last of them.
+    found by its whole name at the start of a line.
     """
-    suite, _, test = name.rpartition(".")
     for path in sorted(tests.glob("test_*.q")):
-        ns, body = None, None
+        body = None
         for line in path.read_text(errors="replace").splitlines():
             if body is not None:
                 if line[:1] not in ("", " ", "\t", "/"):
                     break
                 body.append(line)
-            elif line.startswith("\\d "):
-                ns = line[3:].strip()
-            elif line.startswith(f"{name}:") or (ns == suite and line.startswith(f"{test}:")):
+            elif line.startswith(f"{name}:"):
                 body = [line]
         if body is not None:
             found = re.findall(r'"((?:[^"\\]|\\.)*)"', "\n".join(body))

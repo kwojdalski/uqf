@@ -51,7 +51,7 @@
 
 / A table's value, by name.
 / .
-/ Exists because inside \d .qt.qetl.plant.tables a BARE `fx_orderbook` resolves to
+/ Exists because inside the old `\d` block of this suite a BARE `fx_orderbook` resolves to
 / .qt.qetl.plant.tables.fx_orderbook, which does not exist - the same namespace trap
 / .qetl.coverage.ledger[] exists to avoid, and one this file hit on its first run.
 / .
@@ -77,7 +77,7 @@
 / --- shapes their consumers depend on ------------------------------------
 
 .qt.qetl.plant.tables.test_fx_orderbook_matches_the_shape_pricing_expects:{[t]
-    / .qschema.require_depth_quotes reads these five columns
+    / .qf.util.require_depth_quotes reads these five columns
     / off a quotes table, which leads with `time` because the tickerplant's
     / .u.upd requires the first column to be literally `time`. The library
     / demanded `ts` here until that was made one name tree-wide, so a
@@ -93,7 +93,7 @@
         "trades carries the columns markout_at_horizons reads"]};
 
 .qt.qetl.plant.tables.test_wide_book_levels_are_contiguous_from_zero:{[t]
-    / .qbook.derive_level_groups finds levels by a prefix plus a CONTIGUOUS
+    / .qf.mkt.derive_level_groups finds levels by a prefix plus a CONTIGUOUS
     / digit suffix. A gap - bids0..bids4, bids6 - silently yields a shorter
     / book rather than an error, so the numbering is load-bearing.
     bids:`$"bids",/:string til 11;
@@ -105,7 +105,7 @@
     / vectorize1 folds one into the other, so the pair only makes sense if
     / the target has the vector columns the fold produces.
     .qunit.assertEquals[cols .qt.qetl.plant.tables.tbl `mkt_orderbook;`time`sym`bid_prices`ask_prices;
-        "mkt_orderbook is the folded shape .qbook.book_from_wide_levels writes"]};
+        "mkt_orderbook is the folded shape .qf.mkt.book_from_wide_levels writes"]};
 
 .qt.qetl.plant.tables.test_the_two_fill_tables_do_not_collapse_into_one:{[t]
     / crypto_sim_fills is simulated, crypto_trades is real. Conflating them

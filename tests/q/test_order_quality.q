@@ -4,7 +4,7 @@
 / .
 / The kind's rules (the window boundary, lateness, eviction, restart) are
 / test_rolling.q's; these are the statistic's: the ratios on a worked example,
-/ their agreement with .qexec.hit_ratio_by and .qexec.reject_ratio_by, the identity
+/ their agreement with .qf.exec.hit_ratio_by and .qf.exec.reject_ratio_by, the identity
 / of a book that is quiet in a short window, and the counting policy of
 / order_quality.q - one request, once, at its latest terminal outcome.
 / The orders feed's own rows go through the REAL adapter (order_outcomes1), so the
@@ -126,8 +126,8 @@
     / the same window through the library: [as_of-1m+1ns, as_of], as the half-open window is
     reqs:([] time:as_of-0D00:00:50 0D00:00:40 0D00:00:30 0D00:00:20; book:4#`london; size:1 2 3 1f;
         hit:1000b; reject:0110b);
-    hit:first exec hit_ratio from .qexec.hit_ratio_by[reqs;as_of-0D00:00:59;as_of;0Nn;enlist `book;`count];
-    rej:first exec reject_ratio from .qexec.reject_ratio_by[reqs;as_of-0D00:00:59;as_of;0Nn;enlist `book;`count];
+    hit:first exec hit_ratio from .qf.exec.hit_ratio_by[reqs;as_of-0D00:00:59;as_of;0Nn;enlist `book;`count];
+    rej:first exec reject_ratio from .qf.exec.reject_ratio_by[reqs;as_of-0D00:00:59;as_of;0Nn;enlist `book;`count];
     .qt.support.assertApprox[m`fill_ratio;hit;1e-12;"fill ratio is hit_ratio_by in count mode"];
     .qt.support.assertApprox[m`reject_ratio;rej;1e-12;"reject ratio is reject_ratio_by in count mode"];
     .qt.qpipe.job.order_quality.release[]};
@@ -249,7 +249,7 @@
     x:.qt.qpipe.job.order_quality.stat[.qt.qpipe.job.order_quality.out[`a;`r1;200;`filled;`london];.qt.qpipe.job.order_quality.as_of];
     r:first select from x where window=0D00:01;
     .qunit.assertTrue[(r`n_orders)=0;"nothing in the minute"];
-    .qunit.assertTrue[null r`fill_ratio;"null, as .qexec.fill_ratio says no requests is"]};
+    .qunit.assertTrue[null r`fill_ratio;"null, as .qf.exec.fill_ratio says no requests is"]};
 
 / ------------------------------------------------------ GROUPING
 

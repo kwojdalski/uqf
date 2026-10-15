@@ -76,11 +76,11 @@ A capability that is defined, tested, and reached from no live path is worse
 than a missing one, because it reads as protection while asserting nothing.
 
 This tree has produced the failure repeatedly and the examples are kept rather
-than tidied away: `.qdqc` carried nine data-quality check functions that nothing
-called, which meant the coverage ledger could record a window as complete that
-had failed its own checks. `docs/man.q` was generated for months and never
-loaded by anything. `.qetl.cfg.set_layers` implemented three documented
-configuration layers with no production caller.
+than tidied away: `dqchecks.q` (`.qf.mkt`) carried nine data-quality check
+functions that nothing called, which meant the coverage ledger could record a
+window as complete that had failed its own checks. `docs/man.q` was generated
+for months and never loaded by anything. `.qetl.cfg.set_layers` implemented
+three documented configuration layers with no production caller.
 
 So: **a check that is not on the publish path is decoration**, and a capability
 that works only under the test runner is not a capability. When something is
@@ -114,7 +114,7 @@ generate what is mechanical, check what is not. `check_doc_references.py` reads
 every living document and confirms that each `.q*` function it names exists, and
 that any call it shows passes no more arguments than the function takes. The
 gate's first run found two references left behind by renames: a design note
-citing `.qmicro.require_sorted_tape` (the function is `require_tape`) and an
+citing `.qf.mkt.require_sorted_tape` (the function is `require_tape`) and an
 agent citing `.qetl.coerce.coerce` (it is `coerce_column`). Neither was caught
 by anything else, because a name that appears in no generated artifact has
 nothing to disagree with.

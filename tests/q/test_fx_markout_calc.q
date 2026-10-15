@@ -4,7 +4,7 @@
 / Every expected number is worked by hand from the books written in the test,
 / not read back from the function: a sell that is marked down, a leg that moves
 / before the one after it, a source that withdrew. The calculation is also held
-/ to the library's own attribution (.qexec.cross_markout_attribution), which it
+/ to the library's own attribution (.qf.exec.cross_markout_attribution), which it
 / must agree with wherever the two policies coincide - one source, one level.
 
 
@@ -162,7 +162,7 @@
     `sym`time xasc select time:source_time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from m}
 
 .qt.qpipe.transform.fx_markout.test_the_allocation_equals_the_librarys_attribution_where_the_policies_coincide:{[tc]
-    / one source, level 0, the convention's route = the books present: .qexec's waterfall must agree
+    / one source, level 0, the convention's route = the books present: .qf.exec's waterfall must agree
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(.qt.qpipe.transform.fx_markout.one_s,.qt.qpipe.transform.fx_markout.ten_s;1e-6)];
     m:raze (.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`a;1.2499;1.2501];.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURPLN;`a;4.9998;5.0002];
             .qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t+0D00:00:00.5;`EURUSD;`a;1.0999;1.1001];.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t+0D00:00:00.5;`EURPLN;`a;5.4999;5.5001];
@@ -170,7 +170,7 @@
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`USDPLN;-1;3.99;`y1];m];
     q:.qt.qpipe.transform.fx_markout.depth_quotes[m];
     chk:{[q;r;h]
-        lib:.qexec.cross_markout_attribution[q;`USDPLN;-1;.qt.qpipe.transform.fx_markout.t;.qt.qpipe.transform.fx_markout.t+h;10000;1];
+        lib:.qf.exec.cross_markout_attribution[q;`USDPLN;-1;.qt.qpipe.transform.fx_markout.t;.qt.qpipe.transform.fx_markout.t+h;10000;1];
         ours:select from r where horizon=h;
         (.qt.qpipe.transform.fx_markout.near[exec pips from lib where kind=`leg;exec pips from ours where kind=`leg];
          .qt.qpipe.transform.fx_markout.near[(exec first pips from ours where kind=`total)-exec first pips from ours where kind=`execution;exec first pips from lib where kind=`total])

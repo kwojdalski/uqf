@@ -119,7 +119,7 @@
 
 / WHAT THE CANONICAL CODE MEANT BY A TRADING DAY IS NOT KNOWABLE HERE, and
 / nothing in this tree has a business-date notion: .qetl.job.bounded.runtime.windows cuts
-/ elapsed time, .qetl.coverage composes half-open intervals, and .qdcf counts actual
+/ elapsed time, .qetl.coverage composes half-open intervals, and .qf.px counts actual
 / calendar days. These two tests pin the assumption that is therefore in
 / force, so that whoever adds a venue calendar later has to change a failing
 / test rather than a comment.

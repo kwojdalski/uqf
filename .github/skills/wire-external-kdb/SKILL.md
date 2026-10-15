@@ -116,7 +116,7 @@ are never edited in place, matching this repo's existing convention for
 - Confirm the resulting table passes uqf's own checks: right columns,
   `` ~`sym`ts xasc `` sortedness, non-empty `bid_prices`/`ask_prices` vectors.
 - Feed one real row through an actual uqf function live via `query_q` (e.g.
-  `.qcross.cross_book_at` or `.qmicro.mid_price`) and sanity-check the result
+  `.qf.mkt.cross_book_at` or `.qf.mkt.mid_price`) and sanity-check the result
   against what the raw live quote implies - a real number from the real
   database, not a canned example.
 - Report what was actually found (live schema, any reshape applied, any mismatch

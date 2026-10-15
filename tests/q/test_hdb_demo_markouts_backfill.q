@@ -253,7 +253,7 @@
 .qt.qpipe.job.hdb_demo_markouts_backfill.twin_fills:{[ids]
     inputs:.qpipe.source.hdb_demo_markouts.fixture[];
     inputs[`trades]:([] time:2#2026.09.17D10:00:00; sym:2#`EURUSD; side:2#1; trade_price:2#1.1001;
-        pip_factor:2#.qccy.pip_factor `EURUSD; fill_id:ids);
+        pip_factor:2#.qf.px.pip_factor `EURUSD; fill_id:ids);
     inputs}
 
 .qt.qpipe.job.hdb_demo_markouts_backfill.test_scoring_carries_each_fills_id_onto_its_horizons:{[t]
@@ -283,7 +283,7 @@
         side:1 1 1; trade_price:1.1 1.3 1.2; pip_factor:10000 10000 10000; fill_id:`f9`f0`f4);
     quotes:([] time:enlist 2026.09.17D10:00:00; sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.1);
     r:.qpipe.transform.demo_markouts.score[shuffled;quotes];
-    pairs_in:.qsynth.pairs;
+    pairs_in:.qf.demo.pairs;
     keep:shuffled where shuffled[`sym] in pairs_in;
     .qunit.assertEquals[r`fill_id;raze (count .qpipe.transform.demo_markouts.horizons)#'keep`fill_id;"each row carries its own fill's id"];
     .qunit.assertEquals[r`trade_price;raze (count .qpipe.transform.demo_markouts.horizons)#'keep`trade_price;"and its own price"]};

@@ -164,7 +164,7 @@
 / .
 / .qetl.transform.registry, .qetl.source.sources, .qetl.job.bounded.worker_cfg
 / and .qetl.dag.jobs are keyed tables keyed on `name` (#512), as
-/ .qalloc.methods is. A test that swaps a row in or out cannot use the
+/ .qf.exec.methods is. A test that swaps a row in or out cannot use the
 / dictionary idioms it once did - `k _ reg`, `reg[k]:row`, `reg[k;col]:v` all
 / throw on a keyed table - so it goes through these, which keep the registry
 / declared rather than rebuilding it.

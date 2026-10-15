@@ -105,7 +105,7 @@ def test_a_document_is_one_session_in_order_with_the_etl_stack_when_named(tmp_pa
     ("body", "loads"),
     [
         ("t:([] a:`long$())", []),
-        (".qfwd.cross[1;2]", ["src/init.q"]),
+        (".qf.px.cross[1;2]", ["src/init.q"]),
         (".qetl.cfg.audit.watch[`o;`.a.b]", ["src/init.q", "src/etl/init.q"]),
     ],
 )

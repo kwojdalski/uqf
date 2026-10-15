@@ -69,8 +69,8 @@
     sizes:1e6 3e6 4.5e6 10e6;
     got:.qt.qpipe.transform.book_liquidity.snap[.qt.qpipe.transform.book_liquidity.ref_book[];sizes];
     check:{[got;s]
-        b:.qbook.sweep_price[.qt.qpipe.transform.book_liquidity.bidp;.qt.qpipe.transform.book_liquidity.bids;s];
-        a:.qbook.sweep_price[.qt.qpipe.transform.book_liquidity.askp;.qt.qpipe.transform.book_liquidity.asks;s];
+        b:.qf.mkt.sweep_price[.qt.qpipe.transform.book_liquidity.bidp;.qt.qpipe.transform.book_liquidity.bids;s];
+        a:.qf.mkt.sweep_price[.qt.qpipe.transform.book_liquidity.askp;.qt.qpipe.transform.book_liquidity.asks;s];
         r:.qt.qpipe.transform.book_liquidity.at[got;s];
         (r`bid_price;r`bid_qty;r`bid_full;r`ask_price;r`ask_qty;r`ask_full)~(b`avg_price;b`filled_size;b`fully_filled;a`avg_price;a`filled_size;a`fully_filled)}[got;];
     .qunit.assertEquals[check each sizes;4#1b;"the same price, quantity and fill flag at every size, exactly"]};

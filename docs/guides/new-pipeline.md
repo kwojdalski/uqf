@@ -403,7 +403,7 @@ quality_check:{[batch]
 worker instance lives under the one `.qpipe.job` root, named exactly as it is
 registered, and `.qetl.job.bounded.define` derives the namespace from the worker
 name --- a supplied `ns` key is refused. So
-`key `.qpipe.job` lists every loaded worker, and a worker has one name rather than a name and an abbreviation to keep in step. The library's own modules stay flat (`.qetl.job.bounded`, `.qetl.coverage`, `.qetl.source\`);
+`key `.qpipe.job` lists every loaded worker, and a worker has one name rather than a name and an abbreviation to keep in step. The quant library is two levels (`.qf.px`, `.qf.exec`, ...) and the framework nests by module (`.qetl.job.bounded`, `.qetl.coverage`, `.qetl.source\`);
 the nesting marks the line between the framework and what runs on it.
 
 **The contract's names are stamped by `define`, not written by you.** The

@@ -302,8 +302,8 @@
 
 
 / log.q keeps its own copy of the renderer (processes load it without the
-/ library); it must not drift from .qrender's.
+/ library); it must not drift from .qf.util's.
 .qt.qetl.log.test_the_log_renderer_matches_the_librarys:{[t]
     / `samples`, not `vs`: vs is a q builtin.
     samples:(300#"a";til 500;`a`b!1 2;"tab\there";([] x:til 50));
-    .qunit.assertEquals[.qetl.log.value1 each samples;.qrender.full each samples;"value1 and .qrender.full agree"]};
+    .qunit.assertEquals[.qetl.log.value1 each samples;.qf.util.full each samples;"value1 and .qf.util.full agree"]};

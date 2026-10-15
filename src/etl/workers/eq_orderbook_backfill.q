@@ -4,7 +4,7 @@
 / A declaration over the generic shell (#124), over the first ODBC source.
 / Its transform is the first in this tree that changes the shape of what it
 / fetched: Databento's forty per-level columns fold into four level-0-first
-/ vectors, the book shape .qcross.cross_book_at and .qbook already read.
+/ vectors, the book shape .qf.mkt.cross_book_at and book.q already read.
 / .
 / Windows are ten minutes. The opening ten minutes of 2026-02-25 alone is
 / 778,176 rows across six symbols, fetched in about ten seconds over ODBC
@@ -16,7 +16,7 @@
 / --- the data-quality gate ------------------------------------------------
 
 / Refuse a window whose book is crossed (bid strictly above ask, by the shared
-/ .qbook.crossed_top, #1176; a locked book passes) or whose price is not positive.
+/ .qf.mkt.crossed_top, #1176; a locked book passes) or whose price is not positive.
 / .
 / Both are conditions this data does not contain, not merely rare ones:
 / across all 46,038,453 rows loaded, no record had bid_px_00 >= ask_px_00, a
@@ -34,11 +34,11 @@
 / @return a table check/status/detail, one row per offending record
 quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    crossed:batch where .qbook.crossed_top batch;
+    crossed:batch where .qf.mkt.crossed_top batch;
     bad_price:select from batch where (not null price) & not price>0;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each select time, sym, sequence from t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qf.util.full each select time, sym, sequence from t)
       }'[`crossed_top_of_book`nonpositive_price;(crossed;bad_price)]}
 
 \d .

@@ -15,7 +15,7 @@
 / whatever its arrival order. The comparison is ref_time <= event_time, so a
 / reference row stamped EXACTLY at the event does count (aj's rule).
 
-\d .qasof
+\d .qf.mkt
 
 / The two columns a lookup adds after the attached ones.
 result_cols:`staleness`status
@@ -50,26 +50,26 @@ spec_keys:`keys`ref_time`event_time`attach`tolerance
 / @throws error naming every missing spec key, or every missing column of refs
 /   or events, a result column that clashes with an events column, or a
 /   negative tolerance
-/ @eg .qasof.lookup[([] sym:`a`a; time:2026.10.01D10:00:00 2026.10.01D10:00:05; mid:1 2f);([] sym:enlist `a; time:enlist 2026.10.01D10:00:07);`keys`ref_time`event_time`attach`tolerance!(enlist `sym;`time;`time;enlist[`mid]!enlist `mid;0D00:00:10)]  ->  ([] sym:enlist `a; time:enlist 2026.10.01D10:00:07; mid:enlist 2f; staleness:enlist 0D00:00:02; status:enlist `ok)
+/ @eg .qf.mkt.lookup[([] sym:`a`a; time:2026.10.01D10:00:00 2026.10.01D10:00:05; mid:1 2f);([] sym:enlist `a; time:enlist 2026.10.01D10:00:07);`keys`ref_time`event_time`attach`tolerance!(enlist `sym;`time;`time;enlist[`mid]!enlist `mid;0D00:00:10)]  ->  ([] sym:enlist `a; time:enlist 2026.10.01D10:00:07; mid:enlist 2f; staleness:enlist 0D00:00:02; status:enlist `ok)
 lookup:{[refs;events;spec]
-    miss:.qasof.spec_keys except key spec;
-    if[count miss; '"qasof.lookup: spec is missing ",", " sv string miss];
+    miss:.qf.mkt.spec_keys except key spec;
+    if[count miss; '"asof.lookup: spec is missing ",", " sv string miss];
     ks:(),spec`keys;
     attach:spec`attach;
     if[not 99h=type attach; attach:(attach,())!attach,()];
     tol:spec`tolerance;
-    if[not (abs type tol) in 16 -16h; '"qasof.lookup: tolerance must be a timespan (0Nn for none)"];
-    if[(not null tol)&tol<0D; '"qasof.lookup: tolerance must not be negative"];
-    .qschema.require_cols[`qasof_lookup;`refs;refs;distinct ks,spec[`ref_time],value attach];
-    .qschema.require_cols[`qasof_lookup;`events;events;distinct ks,spec`event_time];
-    clash:((key attach),.qasof.result_cols) inter cols events;
-    if[count clash; '"qasof.lookup: result columns already in events: ",", " sv string clash];
+    if[not (abs type tol) in 16 -16h; '"asof.lookup: tolerance must be a timespan (0Nn for none)"];
+    if[(not null tol)&tol<0D; '"asof.lookup: tolerance must not be negative"];
+    .qf.util.require_cols[`qasof_lookup;`refs;refs;distinct ks,spec[`ref_time],value attach];
+    .qf.util.require_cols[`qasof_lookup;`events;events;distinct ks,spec`event_time];
+    clash:((key attach),.qf.mkt.result_cols) inter cols events;
+    if[count clash; '"asof.lookup: result columns already in events: ",", " sv string clash];
     n:count attach;
     / Temporary names (qasof_*) are not ones a caller names a column.
     tmp:`$"qasof_a",/:string til n;
     tt:`qasof_t;
     rt:`qasof_rt;
-    names:(key attach),.qasof.result_cols;
+    names:(key attach),.qf.mkt.result_cols;
     / No events: the typed empty shape, built without aj or `,'` - PeachQ gives
     / () for an aj on an empty left and for `,'` of two empty tables.
     if[0=count events;

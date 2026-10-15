@@ -62,12 +62,12 @@ platform: Linux-x86_64
 
 .qt.man.registry.test_every_private_name_exists  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
-.metatest.test_reconcile_flags_lost_rows_on_a_date_with_no_observations  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
-.metatest.test_reconcile_ignores_superseded_claims  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
-.metatest.test_reconcile_matches_mismatches_and_unrecorded_dates  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
-.metatest.test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.qt.qf.util.metatables.test_reconcile_flags_lost_rows_on_a_date_with_no_observations  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.qt.qf.util.metatables.test_reconcile_ignores_superseded_claims  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.qt.qf.util.metatables.test_reconcile_matches_mismatches_and_unrecorded_dates  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
+.qt.qf.util.metatables.test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
-.nstest.test_the_subscriber_processes_are_inside_the_prefix  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
+.qt.qf.util.namespaces.test_the_subscriber_processes_are_inside_the_prefix  # flattening: reads the q source as text, which the flattened copy writes out qualified - fails flattened on KDB-X too
 
 
 .qt.qetl.registries.test_the_trap_is_real_and_has_two_halves  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts

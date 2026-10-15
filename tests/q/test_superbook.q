@@ -96,7 +96,7 @@
 / from superbook entirely while last_value kept it live (#1033).
 .qt.qpipe.job.superbook.test_a_source_whose_clock_leads_by_less_than_the_allowed_lead_is_kept:{[t]
     ahead:update source_time:.qt.qpipe.job.superbook.d[0]+0D00:00:00.005 from 1#.qt.qpipe.job.superbook.fixtures[];
-    lead:.qmicro.max_clock_lead;
+    lead:.qf.mkt.max_clock_lead;
     .qunit.assertTrue[lead>=0D00:00:00.005;"the default lead tolerates ordinary NTP skew"];
     s:.qpipe.job.superbook.replace_books[.qt.qpipe.job.superbook.empty[];ahead;.qt.qpipe.job.superbook.d[0]+lead];
     .qunit.assertEquals[count s;1;"a row 5ms ahead is stored"];
@@ -255,13 +255,13 @@
 
 .qt.qpipe.job.superbook.test_a_crypto_pair_spelled_like_a_currency_pair_stays_out:{[t]
     / The trap #886 names: a venue spelling a crypto pair as six capitals
-    / (XBTEUR) passes .qccy.is_ccy_pair, and used to be classified FX by its
+    / (XBTEUR) passes .qf.px.is_ccy_pair, and used to be classified FX by its
     / spelling. The normalizer stamps `market` from the mapping, which knows.
     `.qpipe.job.superbook.books set .qt.qpipe.job.superbook.empty[];
     `.qt.qpipe.job.superbook.published set 0#.qt.qpipe.job.superbook.published;
     .qetl.job.stream.wire[`superbook;.qt.qpipe.job.superbook.record];
     kraken:update sym:`XBTEUR, source:`kraken, market:`crypto, source_time:.z.p from .qt.qpipe.job.superbook.fixtures[];
-    .qunit.assertTrue[all .qccy.is_ccy_pair each kraken`sym;"XBTEUR does look like a currency pair"];
+    .qunit.assertTrue[all .qf.px.is_ccy_pair each kraken`sym;"XBTEUR does look like a currency pair"];
     .qpipe.job.superbook.on_batch[`market_data;kraken,update source_time:.z.p from .qt.qpipe.job.superbook.fixtures[]];
     .qunit.assertEquals[exec distinct sym from 0!.qpipe.job.superbook.books;enlist `EURUSD;
         "the crypto book stays out of the FX superbook, however it is spelled"]};

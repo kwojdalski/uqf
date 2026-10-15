@@ -74,8 +74,8 @@
     / Two shapes, two names. The hit family needs a `hit` column and the
     / reject family a `reject` one; each already has a builder, and the docs
     / now name whichever they require rather than calling both `requests`.
-    `requests set .executiontest.mk_hit_ratio_requests[::];
-    `reject_requests set .executiontest.mk_requests[];
+    `requests set .qt.qf.exec.execution.mk_hit_ratio_requests[::];
+    `reject_requests set .qt.qf.exec.execution.mk_requests[];
     / Wide enough to contain both builders' timestamps. A window that
     / excluded one would make its examples report on an empty selection -
     / which is not an error, and so would be tolerated rather than seen.
@@ -86,38 +86,38 @@
     / anything else would make the gate report the fixture's disagreement
     / with the docs as though the docs were wrong.
     `tape set .qpipe.source.demo_events.fixture[];
-    `quotes set .forwardstest.mk_ts_quotes_table[::];
+    `quotes set .qt.qf.px.forwards.mk_ts_quotes_table[::];
     `trade_time set exec first time from `quotes;
     / `b` appeared in five positions.q examples meaning THREE different
     / books, each defined only in a parenthetical gloss. The three that
     / assert a value now build their own book inline, so this binding serves
     / only the two that assert nothing - a book with one open position.
-    `b set .qpos.apply_fill[.qpos.empty_book[];`EURUSD;600000;1.1000;1];
+    `b set .qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;600000;1.1000;1];
 
     / Every binding below serves an @eg with no `->` - one that claims no
     / value, and so was never run by anything until tests/q/run_examples.q.
     / Same rule as above: each comes from a builder the owning suite already
     / uses, or from the source's own declaration. None is invented here.
-    `markout_trades set .executiontest.mk_markout_trades[];
-    `mid_quotes set .executiontest.mk_mid_quotes[];
-    `fill_orders set .executiontest.mk_fill_orders[];
-    `trades set .positionstest.mk_trades[];
-    / `value `trades`, not `trades`: inside \d .qt.man.examples a bare name resolves
+    `markout_trades set .qt.qf.exec.execution.mk_markout_trades[];
+    `mid_quotes set .qt.qf.exec.execution.mk_mid_quotes[];
+    `fill_orders set .qt.qf.exec.execution.mk_fill_orders[];
+    `trades set .qt.qf.port.positions.mk_trades[];
+    / `value `trades`, not `trades`: inside the old `\d` block of this suite a bare name resolved
     / to .qt.man.examples.trades, which does not exist. Every read of a root binding
     / below goes through `value` for the same reason.
-    `broker_book set .qpos.apply_fills[.qpos.empty_book[];value `trades];
-    books:.forwardstest.mk_books[];
+    `broker_book set .qf.port.apply_fills[.qf.port.empty_book[];value `trades];
+    books:.qt.qf.px.forwards.mk_books[];
     `eurusd_book set books`eurusd;
     `usdjpy_book set books`usdjpy;
     `jpychf_book set books`jpychf;
     `t0 set min exec time from `quotes;
     `t1 set max exec time from `quotes;
-    `tbl set .booktest.wide_book_table[::];
-    `prefix_targets set .booktest.level_prefix_targets;
-    .metatest.setUp[::];
-    `trade set .metatest.source;
-    `spec set .qmeta.definition[`trade;`date;enlist `sym;()!()];
-    `stored set .qmeta.collect[value `spec;2026.09.01 2026.09.02];
+    `tbl set .qt.qf.mkt.book.wide_book_table[::];
+    `prefix_targets set .qt.qf.mkt.book.level_prefix_targets;
+    .qt.qf.util.metatables.setUp[::];
+    `trade set .qt.qf.util.metatables.source;
+    `spec set .qf.util.definition[`trade;`date;enlist `sym;()!()];
+    `stored set .qf.util.collect[value `spec;2026.09.01 2026.09.02];
     / The markout job's own buffer, with two rows in it. It used to be read
     / out of scripts/torq_markout_etl.q as TEXT and re-evaluated, because
     / that file could not be loaded outside TorQ; the job is a src/ file now,
@@ -304,7 +304,7 @@
 / whose code was "named `pqModule`.".
 .qt.man.examples.test_prose_mentioning_eg_is_not_an_example:{[t]
     .qunit.assertEquals[.qt.man.examples.is_tag["/ while their own @eg named `pqModule`."];0b;"prose is not a tag"];
-    .qunit.assertEquals[.qt.man.examples.is_tag["/ @eg .qfwd.fwd_cont[1.1;0.02;0.01;0.5]"];1b;"the tag is"]};
+    .qunit.assertEquals[.qt.man.examples.is_tag["/ @eg .qf.px.fwd_cont[1.1;0.02;0.01;0.5]"];1b;"the tag is"]};
 
 / Reading the tag line alone cut multi-line examples off mid-bracket, so
 / they failed to parse and were reported as broken rather than half-read.

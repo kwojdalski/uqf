@@ -31,7 +31,7 @@ rows_per_pair:$[0<count .z.x; "J"$first .z.x; default_rows_per_pair];
 
 / Illustrative, approximately realistic spot rates (not live market data).
 / tick_scale is the price columns' unit relative to the quoted rate (1 =
-/ hold the rate directly, as a float); .qexdef.pip_size (one pip, 0.0001 -
+/ hold the rate directly, as a float); .qf.demo.pip_size (one pip, 0.0001 -
 / src/examples/example_defaults.q) scaled by tick_scale gives a level step of one
 / pip in that same unit, matching typical eFX top-of-book spacing.
 / row_drift is a small, sub-pip synthetic drift between the demo's rows,
@@ -40,17 +40,17 @@ rows_per_pair:$[0<count .z.x; "J"$first .z.x; default_rows_per_pair];
 pairs:`AUDUSD`EURUSD`EURPLN;
 approx_spot_rates:0.6550 1.0850 4.2500;
 tick_scale:1;
-pip_size:.qexdef.pip_size*tick_scale;
+pip_size:.qf.demo.pip_size*tick_scale;
 row_drift:pip_size%10;
 base_prices:tick_scale*approx_spot_rates;
 
-/ Size levels in clean round millions (.qexdef.size_unit, src/examples/example_defaults.q)
+/ Size levels in clean round millions (.qf.demo.level_size_unit, src/examples/example_defaults.q)
 / - typical order-of-magnitude for eFX top-of-book depth on a major pair.
 / ask starts a tenth of a level below bid so bid/ask sizes stay visually
-/ distinct. .qexdef.size_row_drift is a small per-row jitter (1% of a level)
+/ distinct. .qf.demo.size_row_drift is a small per-row jitter (1% of a level)
 / so rows aren't identical, without blurring the clean million-level pattern.
-size_unit:.qexdef.size_unit;
-size_row_drift:.qexdef.size_row_drift;
+size_unit:.qf.demo.level_size_unit;
+size_row_drift:.qf.demo.size_row_drift;
 
 / Build one prefix's worth of zero-padded, per-level columns as a single
 / dict col_name!column_vector, e.g. bid_px_00!... bid_px_09!... . row_step
@@ -72,7 +72,7 @@ mk_level_cols:{[prefix;n_levels;base;step;row_step]
 / pair's rows back-to-back (so the final table's time column is strictly
 / increasing top to bottom, same as row order): each row lands ~1ms after
 / the previous one, with gap jitter drawn from Normal(1ms, 1ms) via this
-/ repo's own .qstats.inv_ncdf (inverse normal CDF) - approximates the
+/ repo's own .qf.math.inv_ncdf (inverse normal CDF) - approximates the
 / irregular arrival cadence of a real order book feed. Floored at a small
 / positive gap so timestamps stay strictly increasing (an unclamped
 / Normal(1ms,1ms) draw goes negative ~16% of the time, which a real feed
@@ -82,8 +82,8 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
-    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qstats.inv_ncdf p";()!()];
-    shock:.qstats.inv_ncdf p;
+    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.math.inv_ncdf p";()!()];
+    shock:.qf.math.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*shock;
     start_ts+sums gaps};
 all_ts:mk_timestamps[rows_per_pair*count pairs;.z.p];
@@ -130,8 +130,8 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.derive_level_groups[cols t;level_prefix_targets]";()!()];
-level_groups:.qbook.derive_level_groups[cols t;level_prefix_targets];
+.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.derive_level_groups[cols t;level_prefix_targets]";()!()];
+level_groups:.qf.mkt.derive_level_groups[cols t;level_prefix_targets];
 .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"level_groups - target_col -> ordered source_cols:";()!()];
 show level_groups;
 
@@ -140,8 +140,8 @@ show level_groups;
 / values ("A"/"B"/...) kdb+ collapses that column into a plain char vector
 / rather than a list of strings, so it isn't a "string column" by
 / candidate_symbol_columns's own type check.
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";()!()];
-candidates:.qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
+.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";()!()];
+candidates:.qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
 .qetl.log.info[`reshape_wide_order_book_multi_pair;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];()!()];
 
 / Explicit final column order - edit this list to reorder (or drop) columns.
@@ -149,8 +149,8 @@ candidates:.qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`time`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.book_from_wide_levels[t;level_groups;candidates]";()!()];
-out:col_order#.qbook.book_from_wide_levels[t;level_groups;candidates];
+.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.book_from_wide_levels[t;level_groups;candidates]";()!()];
+out:col_order#.qf.mkt.book_from_wide_levels[t;level_groups;candidates];
 .qetl.log.info[`reshape_wide_order_book_multi_pair;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];
 show out;
 .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"meta out - column types after reshaping:";()!()];
@@ -169,8 +169,8 @@ show first_row_per_pair;
 
 sweep_by_pair:{[t;pair]
     row:t pair;
-    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.sweep_price[row`ask_prices;row`ask_sizes;250] for pair ",.Q.s1[pair];()!()];
-    result:.qbook.sweep_price[row`ask_prices;row`ask_sizes;250];
+    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.sweep_price[row`ask_prices;row`ask_sizes;250] for pair ",.Q.s1[pair];()!()];
+    result:.qf.mkt.sweep_price[row`ask_prices;row`ask_sizes;250];
     result,enlist[`sym]!enlist pair}[first_row_per_pair;] each exec sym from first_row_per_pair;
 .qetl.log.info[`reshape_wide_order_book_multi_pair;"sweep_by_pair - swept 250 units against each pair's ask side (",.Q.s1[count sweep_by_pair]," pairs)";()!()];
 show sweep_by_pair;

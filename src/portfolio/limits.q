@@ -1,10 +1,10 @@
-/ limits.q - risk limits, breach detection and alert throttling (.qlimit).
+/ limits.q - risk limits, breach detection and alert throttling (.qf.port).
 / Depends on nothing else here: a limit is a number compared with another
 / number, and keeping it that way is what lets the same file police an
 / exposure, a P&L drawdown or a fill count.
 / .
 / WHAT A LIMIT IS HERE. A row in a table, not a registered function. The
-/ registry pattern the rest of this tree uses (.qetl.source, .qetl.io, .qetl.transform, .qalloc)
+/ registry pattern the rest of this tree uses (.qetl.source, .qetl.io, .qetl.transform, .qf.exec)
 / is right when the thing being declared is BEHAVIOUR - a way of fetching,
 / writing, transforming, matching. A limit is data: a scope, a metric and
 / a cap. Desks change them daily, and they arrive from a spreadsheet or a
@@ -26,7 +26,7 @@
 / SCOPE IS WHATEVER BOTH TABLES AGREE ON. A limits table keyed on
 / (sym, book) polices each pair on each book; one keyed on (book) alone
 / polices the desk. Nothing here decides which - the caller rolls its book
-/ up to the level its limits are written at, and that is a .qdesk.rollup
+/ up to the level its limits are written at, and that is a .qf.port.rollup
 / call. So one limit mechanism serves every level without a notion of
 / hierarchy, and a desk-wide limit is not a special case - provided the
 / metric is in one unit across what is rolled up. A base_qty summed over
@@ -38,7 +38,7 @@
 / police only one direction. A one-sided limit is expressed as two rows
 / with different metrics, not by making the common case a trap.
 
-\d .qlimit
+\d .qf.port
 
 / The columns a limits table must carry, on top of its scope columns.
 required_limit_cols:`metric`cap
@@ -70,10 +70,10 @@ non_scope_cols:`metric`cap`severity`observed`utilisation
 / @param limits the candidate table
 / @return 1b when acceptable
 / @throws error naming the missing column, the non-positive cap, or the duplicated scope
-/ @eg .qlimit.require_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1b
+/ @eg .qf.port.require_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1b
 require_limits:{[limits]
     if[not 98h=type limits; '"require_limits: limits must be a table"];
-    .qschema.require_cols[`require_limits;`limits;limits;required_limit_cols];
+    .qf.util.require_cols[`require_limits;`limits;limits;required_limit_cols];
     if[not 11h=abs type limits`metric;
         '"require_limits: metric must be a symbol column naming what is capped"];
     if[any null limits`cap; '"require_limits: a null cap polices nothing - remove the row instead"];
@@ -89,7 +89,7 @@ require_limits:{[limits]
 / metric, a cap or a severity.
 / @param limits a limits table
 / @return the scope columns, in the table's own order
-/ @eg .qlimit.scope_cols[([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> enlist `sym
+/ @eg .qf.port.scope_cols[([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> enlist `sym
 scope_cols:{[limits] c:cols limits; c where not c in non_scope_cols}
 
 / Melt a book into the long (metric; observed) form evaluate consumes.
@@ -107,21 +107,21 @@ scope_cols:{[limits] c:cols limits; c where not c in non_scope_cols}
 / new breach and alert again on every tick. Taking the key instead means
 / the scope is what the book is ABOUT, which is the thing a limit is
 / written against, and it cannot drift as columns are added.
-/ @param book a KEYED table - .qdesk's books are keyed on their dimensions
+/ @param book a KEYED table - .qf.port's books are keyed on their dimensions
 / @param metrics the columns to melt, e.g. `base_qty`quote_qty
 / @return a table of the book's key columns plus metric and observed
 / @see the column is `observed` rather than `value` because `value` is a q
 /   builtin: in a `where` clause the bare name resolves as the function and
 /   the column is unreachable, which qlinter's QF013 exists to catch
 / @throws error when the book is not keyed, or names a metric it does not carry
-/ @eg exec metric from .qlimit.measure[([sym:enlist `EURUSD] base_qty:enlist 1e6);enlist `base_qty] -> enlist `base_qty
+/ @eg exec metric from .qf.port.measure[([sym:enlist `EURUSD] base_qty:enlist 1e6);enlist `base_qty] -> enlist `base_qty
 measure:{[book;metrics]
     if[not 99h=type book;
         '"measure: the book must be keyed on its scope columns - an unkeyed table does not say which of its columns a limit would be written against"];
     scope:keys book;
     t:0!book;
     m:(),metrics;
-    .qschema.require_cols[`measure;`book;t;m];
+    .qf.util.require_cols[`measure;`book;t;m];
     overlap:m where m in scope;
     if[count overlap;
         '"measure: ",(", " sv string overlap)," is part of the book's key, so it identifies a position rather than measuring one"];
@@ -147,10 +147,10 @@ measure:{[book;metrics]
 / @param limits the limits table
 / @return a table of scope, metric, observed, cap, severity, utilisation - one row per breach, worst first
 / @throws error when either table is malformed, or a limited scope's observed is null
-/ @eg count .qlimit.evaluate[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6);([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
+/ @eg count .qf.port.evaluate[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6);([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
 evaluate:{[measured;limits]
     if[not 98h=type measured; '"evaluate: measured must be a table"];
-    .qschema.require_cols[`evaluate;`measured;measured;required_measured_cols];
+    .qf.util.require_cols[`evaluate;`measured;measured;required_measured_cols];
     require_limits[limits];
     scope:scope_cols[limits];
     unknown:scope where not scope in cols measured;
@@ -174,7 +174,7 @@ evaluate:{[measured;limits]
 / @param measured the long-form measurements
 / @param limits the limits table
 / @return the limit rows with no matching measurement
-/ @eg count .qlimit.unmatched_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 1f);([] sym:enlist `GBPUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
+/ @eg count .qf.port.unmatched_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 1f);([] sym:enlist `GBPUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
 unmatched_limits:{[measured;limits]
     scope:scope_cols[limits];
     ident:?[measured;();0b;(scope,`metric)!scope,`metric];
@@ -196,7 +196,7 @@ unmatched_limits:{[measured;limits]
 / (scopes x metrics) in the LIMITS table, which a desk writes by hand, so
 / the set is small, fixed at load, and does not grow with traffic.
 / @return an empty throttle state, to be threaded through throttle
-/ @eg count .qlimit.no_alerts[] -> 0
+/ @eg count .qf.port.no_alerts[] -> 0
 no_alerts:{[] (`symbol$())!`timestamp$()}
 
 / Split a breach set into the ones worth alerting on and the ones already
@@ -218,7 +218,7 @@ no_alerts:{[] (`symbol$())!`timestamp$()}
 / @param now the time to record against anything alerted
 / @param period how long a given breach stays quiet after alerting
 / @return a dict of `state (carry it to the next call) and `alerts (the breaches to send)
-/ @eg count .qlimit.throttle[.qlimit.no_alerts[];([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6; cap:enlist 1e6);2026.01.01D09:00:00;0D00:05]`alerts -> 1
+/ @eg count .qf.port.throttle[.qf.port.no_alerts[];([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6; cap:enlist 1e6);2026.01.01D09:00:00;0D00:05]`alerts -> 1
 throttle:{[state;breaches;now;period]
     if[0=count breaches; :`state`alerts!(state;breaches)];
     scope:scope_cols[breaches];

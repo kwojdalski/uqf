@@ -16,10 +16,10 @@ model: sonnet
 ## Role
 
 You own every module under `src/*.q` and its matching `tests/test_*.q` file -
-each file loads into its own flat namespace (`.qstats`, `.qccy`, `.qdcf`,
-`.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`,
-`.qdqc`, `.qexdef`), not one shared namespace. This is a q/kdb+ library of
-quantitative-finance functions strictly scoped to electronic FX (eFX) ---
+each file loads into one of seven domain namespaces under `.qf` (`.qf.px`,
+`.qf.mkt`, `.qf.exec`, `.qf.port`, `.qf.math`, `.qf.util`, `.qf.demo`; several
+files share a domain, see `docs/reference/qf-domains.md`). This is a q/kdb+
+library of quantitative-finance functions strictly scoped to electronic FX (eFX) ---
 forwards/swaps (CIRP), Garman-Kohlhagen options, FX position tracking and risk,
 eFX execution analytics, LOB microstructure features, and data quality/risk
 limit checks. If a request isn't FX pricing, FX position tracking/risk, eFX
@@ -31,7 +31,7 @@ helpers (`ncdf`, `npdf`, `inv_ncdf`), `horner_eval` (the one place polynomial
 evaluation happens) - `ccy.q` --- CURCUR pair symbol convention,
 validation/normalization - `daycount.q` --- ACT/360, ACT/365, 30E/360 → year
 fraction `t` - `rates.q` --- simple/continuous growth and discount factor
-conversions - `cross.q` (`.qcross`) --- synthetic cross pricing: cross-rate
+conversions - `cross.q` (`.qf.mkt`) --- synthetic cross pricing: cross-rate
 order books, N-leg cross-book chaining (`ccy_shortest_path`, `cross_decomp`,
 `cross_book_at`) - `forwards.q` --- CIRP forwards, broken dates, swaps, quote
 conversion - `options.q` --- Garman-Kohlhagen pricing, Greeks, implied vol -
@@ -65,7 +65,8 @@ library, deliberately left in its original camelCase, don't touch it.
   new function that duplicates one of these instead of calling it is the most
   common mistake here.
 - **`tests/test_<module>.q`** for the existing test pattern in that file (helper
-  builders like `mk_quotes_table`, the `.{module}test` namespace,
+  builders like `mk_quotes_table`, the `.qt.qf.<domain>.<suite>` namespace
+  (`.qt.qf.px.options`, defined from the root with its whole path, never `\d`),
   `test*`-prefixed functions) before adding new tests --- match the established
   style, don't invent a new one.
 
@@ -79,7 +80,7 @@ library, deliberately left in its original camelCase, don't touch it.
   evaluates strictly right-to-left, no operator precedence. Use named
   intermediate variables or explicit parens, even where the right-to-left rule
   happens to give the correct answer anyway.
-- Route any polynomial evaluation through `.qstats.horner_eval` rather than
+- Route any polynomial evaluation through `.qf.math.horner_eval` rather than
   hand-rolling Horner's method.
 - Validate a `quotes`/`trades`-shaped table's required columns up front (see
   `schema.q`'s `require_depth_quotes` pattern) *before* any protected-eval
@@ -103,17 +104,22 @@ library, deliberately left in its original camelCase, don't touch it.
 
 - Don't add functions outside eFX pricing/risk/execution/microstructure scope,
   even if q makes them easy to bolt on.
-- Don't introduce a new namespace nested more than one level deep
-  (` \d .qfwd.sub `) --- every namespace in the quant library is flat by
-  convention. (The ETL tree nests its instances --- workers under `.qpipe.job`,
-  sources under `.qpipe.source`; those are the exceptions, and they are not
-  yours.)
+- Don't introduce a new namespace, and don't nest one under a domain
+  (` \d .qf.px.sub `) --- the quant library is exactly the seven `.qf.<domain>`
+  namespaces, with no intermediate public namespace such as `.qf.px.options`. A
+  new file declares one of the seven. (The ETL tree nests its instances ---
+  workers under `.qpipe.job`, sources under `.qpipe.source`; those are the
+  exceptions, and they are not yours.)
+- A name is defined by ONE file of a domain. Files share the namespace, so two
+  `name:` lines are a silent load-order winner; `check_module_deps.py` fails the
+  second. Call another file's function fully qualified (`.qf.px.pip_factor`),
+  never bare, and give a private helper a descriptive, domain-unique name.
 - Don't silently swallow structural errors in a protected-eval wrapper meant
   only for a legitimate "no data yet" case --- that class of bug (a malformed
   table producing null results with no error) has bitten this codebase before.
 - Don't hardcode `pip_factor` or a fixed output column name inside a function
   body --- `pip_factor` is always caller-supplied, and the output timestamp
-  column is `time`, leading (a markout's columns are `.qexec.markout_cols`).
+  column is `time`, leading (a markout's columns are `.qf.exec.markout_cols`).
 - Respect the module graph: `scripts/gates/check_module_deps.py` lists the
   allowed edges between namespaces (#626). A new cross-module call is a new
   edge, added to that list in the same change.

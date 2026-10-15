@@ -31,7 +31,7 @@ Scan for the following, in order of severity:
   explicit parens is a latent bug (`a*r+b` evaluates as `a*(r+b)`, not
   `(a*r)+b`)
 - Hand-rolled polynomial evaluation instead of routing through
-  `.qstats.horner_eval` (`stats.q`) --- this arithmetic is tricky exactly once,
+  `.qf.math.horner_eval` (`stats.q`) --- this arithmetic is tricky exactly once,
   in one tested place
 - A formula that was never verified against a known reference value (textbook
   example, provable identity, round-trip through an inverse function)
@@ -60,9 +60,10 @@ Scan for the following, in order of severity:
   definition time
 - Single-key dict construction via `` `key!value `` on an atom key --- collides
   with q's enum overload (type 20h); must be `(enlist key)!(enlist value)`
-- A new namespace nested more than one level deep (` \d .qfwd.sub `) --- library
-  namespaces are flat by convention, and the filename-to-namespace tie depends
-  on it. The exceptions are the ETL tree's instances: a bounded worker
+- A new namespace, or one nested under a domain (` \d .qf.px.sub `) --- the
+  quant library is the seven `.qf.<domain>` namespaces and nothing else; a new
+  file declares one of them and defines names no other file of the domain
+  defines. The exceptions are the ETL tree's instances: a bounded worker
   (` \d .qpipe.job.<worker name> `), whose namespace `.qetl.job.bounded.define`
   derives from the registered name, and a source
   (` \d .qpipe.source.<source name> `), checked against the file's own

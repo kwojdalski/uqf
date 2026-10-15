@@ -5,7 +5,7 @@
 
 / Collect one named metatable in DQE's advanced-result dictionary format.
 / @param name resultkeys identifier, unique per definition; starts with
-/   .qmeta.prefix (meta_)
+/   .qf.util.prefix (meta_)
 / @param tab source table name (also used by DQE's parameter introspection)
 / @param partition_col explicit partition column
 / @param partitions explicit typed vector of slices
@@ -13,9 +13,9 @@
 / @param aggregates functional qSQL aggregates; empty dictionary defaults to count
 / @return name mapped to an unkeyed metatable, for DQE advancedres
 uqf_metatable:{[name;tab;partition_col;partitions;group_cols;aggregates]
-    .qmeta.require_name name;
-    spec:.qmeta.definition[tab;partition_col;group_cols;aggregates];
-    enlist[name]!enlist .qmeta.collect[spec;partitions]};
+    .qf.util.require_name name;
+    spec:.qf.util.definition[tab;partition_col;group_cols;aggregates];
+    enlist[name]!enlist .qf.util.collect[spec;partitions]};
 
 \d .
 

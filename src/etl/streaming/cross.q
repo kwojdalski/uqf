@@ -21,13 +21,13 @@
 / ------------------------------------------------------------- THE SHAPES
 
 / The synthetic pairs this job reprices - deliberately none of the directly
-/ quoted pairs, so every one has to chain through USD. .qcross.cross_book_at
-/ prices a quoted pair as a single leg, so a pair in .qsynth.pairs would just
+/ quoted pairs, so every one has to chain through USD. .qf.mkt.cross_book_at
+/ prices a quoted pair as a single leg, so a pair in .qf.demo.pairs would just
 / echo its own quote. EURJPY is quoted directly (to close the triangle
 / cross_arbitrage.q checks) and is therefore not here (#1366). The except keeps
-/ the set clear of .qsynth.pairs if that list grows; .qsynth is a plain module
+/ the set clear of .qf.demo.pairs if that list grows; .qf.demo is a plain module
 / loaded before the streaming declarations, not a peer job (#731).
-cross_pairs:(`GBPJPY`EURGBP`AUDJPY) except .qsynth.pairs
+cross_pairs:(`GBPJPY`EURGBP`AUDJPY) except .qf.demo.pairs
 
 / The fx_orderbook table as the plant delivers it - what this process receives
 / via its subscription, and exactly what the transform reads. Read from the
@@ -60,7 +60,7 @@ reprice_crosses:{[quotes;as_of]
     q:`sym`time xasc select time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from quotes where time<=as_of;
     if[0=count q; :.qpipe.job.cross.cross_quotes];
     rows:{[q;as_of;pair]
-        r:.[.qcross.cross_book_at;(q;pair;as_of;enlist .qsynth.size_unit;`bid`ask`mid);{[e] ()}];
+        r:.[.qf.mkt.cross_book_at;(q;pair;as_of;enlist .qf.demo.size_unit;`bid`ask`mid);{[e] ()}];
         $[0=count r; .qpipe.job.cross.cross_quotes;
             ([] time:enlist as_of; sym:enlist pair; bid:r`bid; ask:r`ask; mid:r`mid)]
       }[q;as_of] each .qpipe.job.cross.cross_pairs;

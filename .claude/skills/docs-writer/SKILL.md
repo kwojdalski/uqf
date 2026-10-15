@@ -117,8 +117,8 @@ The known reference value(s) this formula is tested against (textbook example, p
 
 ## Functions
 
-- **`.q<abbrev>.<fn>`** in `src/<module>.q` — <one-line role>
-- **`.q<abbrev>.<related_fn>`** — <how it composes with the above, if applicable>
+- **`.qf.<domain>.<fn>`** in `src/<module>.q` — <one-line role>
+- **`.qf.<domain>.<related_fn>`** — <how it composes with the above, if applicable>
 
 ## See Also
 
@@ -143,8 +143,8 @@ One paragraph: what this workflow does, when to use it, and what it produces.
 docs/diagrams/<topic>-workflow.d2, embedded as an SVG (see above):
 
 ```
-direction: down a: "Entry point: .q<abbrev>.<fn>" b: "..." c: "..." a -> b b ->
-c
+direction: down a: "Entry point: .qf.<domain>.<fn>" b: "..." c: "..." a -> b b
+-> c
 
 ````
 
@@ -154,7 +154,7 @@ c
 
 ### 1. <First Stage>
 
-- **Entry point**: `.q<abbrev>.<function>`
+- **Entry point**: `.qf.<domain>.<function>`
 - **Location**: `src/<path>.q`
 - **Steps**:
   1. <what happens>
@@ -162,7 +162,7 @@ c
 
 ### 2. <Second Stage>
 
-- **Entry point**: `.q<abbrev>.<function>`
+- **Entry point**: `.qf.<domain>.<function>`
 - **Location**: `src/<path>.q`
 - **Steps**:
   1. ...
@@ -182,7 +182,7 @@ c
 
 ```q
 q)\l src/init.q
-q).q<abbrev>.<function>[<args>]
+q).qf.<domain>.<function>[<args>]
 ````
 
 See `scripts/<relevant_example>.q` for a full worked example with synthetic
@@ -191,8 +191,8 @@ data.
 ## Output Structure
 
 Describe the returned table/dict shape, including column precedence
-(`` `time`sym `` leading - a markout's columns are `.qexec.markout_cols`) where
-applicable.
+(`` `time`sym `` leading - a markout's columns are `.qf.exec.markout_cols`)
+where applicable.
 
 ## Troubleshooting
 
@@ -237,7 +237,7 @@ style.stroke-dash: 4 }
 ### <Function group 1, e.g. "Chain discovery">
 
 - **Purpose**: <what it does>
-- **Key functions**: `.q<abbrev>.<fn>` in `src/<path>.q`
+- **Key functions**: `.qf.<domain>.<fn>` in `src/<path>.q`
 - **Notes**: any non-obvious constraints or invariants
 
 ### <Function group 2>

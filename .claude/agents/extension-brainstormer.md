@@ -81,7 +81,7 @@ deliberately left in camelCase. Never propose work on it.
 ## Where good ideas actually come from, in yield order
 
 1. **Adjacency.** A function that is nearly free given what exists.
-   `.qmicro.vamp` is the model: it is `avg` of two `sweep_price` calls, so it
+   `.qf.mkt.vamp` is the model: it is `avg` of two `sweep_price` calls, so it
    was cheap and it got built. Look for the same shape --- a recognised eFX
    metric that is one composition away from an existing primitive. Name the
    composition explicitly; that is what makes the idea credible and the estimate
@@ -106,9 +106,9 @@ Drop the idea if it cannot answer all five. Do not file a partial one with the
 gaps marked TBD.
 
 1. **Signature** --- the actual q signature, in this library's conventions:
-   `lower_snake_case`, the right namespace (`.qexec`, `.qmicro`, `.qfwd`, ...),
-   caller-supplied `pip_factor`, vector-column inputs where the module works
-   that way.
+   `lower_snake_case`, the right namespace (`.qf.exec`, `.qf.mkt`, `.qf.px`,
+   ...), caller-supplied `pip_factor`, vector-column inputs where the module
+   works that way.
 2. **Built on** --- which existing primitives it calls. "New module" is a red
    flag; justify it if you mean it.
 3. **Why a desk wants it** --- one sentence, concrete. "Improves analytics" is
@@ -151,7 +151,7 @@ gh issue create --label brainstorm --label enhancement \
   --title "<module>: <imperative, specific, under ~70 chars>" \
   --body "$(cat <<'EOF'
 ## Proposed signature
-`.qmicro.example_fn[quotes;target_sym;window]`
+`.qf.mkt.example_fn[quotes;target_sym;window]`
 
 ## Why
 <one or two sentences, desk-level>
@@ -186,7 +186,7 @@ EXTENSION SLATE   (nothing filed yet — awaiting approval)
 ==============
  # | Source    | Module      | Idea                                     | Signature                              | Effort | Rationale
 ---|-----------|-------------|------------------------------------------|----------------------------------------|--------|----------
- 1 | adjacency | execution.q | expanding/causal VWAP benchmark variant  | .qexec.vwap_expanding[prices;sizes]    | S      | makes "beat VWAP" honest; one sums call
+ 1 | adjacency | execution.q | expanding/causal VWAP benchmark variant  | .qf.exec.vwap_expanding[prices;sizes]    | S      | makes "beat VWAP" honest; one sums call
  2 | blocker   | quotes      | per-level resting-order counts in quotes | (schema change, no single signature)   | L      | unblocks order_count_imbalance (ROADMAP #18)
 ```
 
@@ -209,10 +209,10 @@ first if only one got done. Then ask for approval.
   or nothing.
 - Never widen the eFX scope to admit a good idea. Report it as out of scope
   instead.
-- Don't propose a new namespace nested more than one level (` \d .qfwd.sub `) ---
-  every namespace in this library is deliberately flat. (Nesting resolves fine
-  in q; the ETL tree uses it for its instances --- workers under `.qpipe.job`,
-  sources under `.qpipe.source`. It is the quant library that stays flat.)
+- Don't propose a new namespace, or one nested under a domain
+  (` \d .qf.px.sub `) --- the quant library is exactly the seven `.qf.<domain>`
+  namespaces (`docs/reference/qf-domains.md`). (The ETL tree nests its instances ---
+  workers under `.qpipe.job`, sources under `.qpipe.source`.)
 - Don't propose work on `src/integrations/data.q` or inside
   `lib/torq`/`lib/torq-finance-starter-pack` (vendored; extend via the
   orchestrator overlay instead).

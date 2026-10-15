@@ -136,7 +136,7 @@ normalize:{[name;src;batch]
     xf:srcs src;
     ins:.qetl.transform.def[xf]`inputs;
     want:cols first value ins;
-    .qschema.require_cols[`normalize;`$(string src)," batch for ",string name;batch;want];
+    .qf.util.require_cols[`normalize;`$(string src)," batch for ",string name;batch;want];
     .qetl.transform.apply[xf;(enlist first key ins)!enlist want#batch]}
 
 / Private: the dispatcher every normalizer registers as its on_batch -

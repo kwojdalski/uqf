@@ -35,7 +35,7 @@
 / runs. The suites are FOUND (discovery.q), so there is no list to forget.
 .qt.support.load_suites[];
 .qt.support.require_layout[];
-nsList:.qt.support.all_suites[];
+nsList:.qt.support.suites[];
 
 / Every namespace this tree declares, from the one enumeration in
 / src/namespaces.q - fully qualified already, and INCLUDING the nested
@@ -44,7 +44,7 @@ nsList:.qt.support.all_suites[];
 / vanished from this report the day they nested, silently, which is exactly
 / the failure this tool exists to reveal. `qunit` is the vendored test
 / framework, not this library's code.
-namespaces:.qt.support.library_only .qns.functional[];
+namespaces:.qt.support.library_only .qf.util.functional[];
 
 -1 "== coverage: instrumenting ",string[count namespaces]," namespace(s) ==";
 

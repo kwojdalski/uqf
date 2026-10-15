@@ -45,31 +45,31 @@
 / --- require_tape: three silent failures, refused ------------------------
 
 .qt.qpipe.event_tape.test_a_well_formed_tape_is_accepted:{[t]
-    .qunit.assertEquals[.qmicro.require_tape .qt.qpipe.event_tape.tape[`add`trade;1 1;1000 1000f];1b;"the ordinary case"]};
+    .qunit.assertEquals[.qf.mkt.require_tape .qt.qpipe.event_tape.tape[`add`trade;1 1;1000 1000f];1b;"the ordinary case"]};
 
 / A missing column reads as a null in most q code, so a windowed count over
 / it returns 0 rather than erroring.
 .qt.qpipe.event_tape.test_a_tape_missing_a_column_is_refused:{[t]
-    .qunit.assertError[{.qmicro.require_tape x};delete side from .qt.qpipe.event_tape.tape[`add`trade;1 1;1000 1000f];"a missing column would make every side-based feature silently report zero"]};
+    .qunit.assertError[{.qf.mkt.require_tape x};delete side from .qt.qpipe.event_tape.tape[`add`trade;1 1;1000 1000f];"a missing column would make every side-based feature silently report zero"]};
 
 / A typo'd action is never matched by action=`trade, so every trade-based
 / ratio reports on an empty set with no error at all.
 .qt.qpipe.event_tape.test_an_unknown_action_is_refused:{[t]
-    .qunit.assertError[{.qmicro.require_tape x};update action:`trades from .qt.qpipe.event_tape.tape[`add`trade;1 1;1000 1000f] where i=1;"an unmatched action makes a ratio report on an empty set"]};
+    .qunit.assertError[{.qf.mkt.require_tape x};update action:`trades from .qt.qpipe.event_tape.tape[`add`trade;1 1;1000 1000f] where i=1;"an unmatched action makes a ratio report on an empty set"]};
 
 .qt.qpipe.event_tape.test_the_unknown_action_error_names_the_offender:{[t]
     bad:update action:`trades from .qt.qpipe.event_tape.tape[`add`trade;1 1;1000 1000f] where i=1;
-    err:@[{.qmicro.require_tape x; ""};bad;{x}];
+    err:@[{.qf.mkt.require_tape x; ""};bad;{x}];
     .qunit.assertEquals[err like "*trades*";1b;"the message names the action it did not recognise"]};
 
 / Rejecting beats sorting: the tape is sorted by construction, so sorting on
 / every call pays O(n log n) to hide a caller's bug - and an unsorted tape
 / makes every rolling window return a plausible wrong number.
 .qt.qpipe.event_tape.test_an_unsorted_tape_is_refused:{[t]
-    .qunit.assertError[{.qmicro.require_tape x};`time xdesc .qt.qpipe.event_tape.tape[`add`trade`cancel;1 1 1;1000 1000 1000f];"a rolling window over an unsorted tape returns a plausible wrong number"]};
+    .qunit.assertError[{.qf.mkt.require_tape x};`time xdesc .qt.qpipe.event_tape.tape[`add`trade`cancel;1 1 1;1000 1000 1000f];"a rolling window over an unsorted tape returns a plausible wrong number"]};
 
 .qt.qpipe.event_tape.test_a_non_table_is_refused:{[t]
-    .qunit.assertError[{.qmicro.require_tape x};`not`a`table;"the precondition covers shape as well as content"]};
+    .qunit.assertError[{.qf.mkt.require_tape x};`not`a`table;"the precondition covers shape as well as content"]};
 
 / --- signed_trade_flow (ROADMAP #19) ------------------------------------
 
@@ -77,24 +77,24 @@
 / net into the flow, which is the whole reason the function filters.
 .qt.qpipe.event_tape.test_only_trades_contribute_to_flow:{[t]
     tp:.qt.qpipe.event_tape.tape[`add`cancel`trade;1 1 1;5000 5000 100f];
-    .qunit.assertEquals[.qmicro.signed_trade_flow tp;100f;"a 5000 add and a 5000 cancel contribute nothing; only the 100 trade counts"]};
+    .qunit.assertEquals[.qf.mkt.signed_trade_flow tp;100f;"a 5000 add and a 5000 cancel contribute nothing; only the 100 trade counts"]};
 
 .qt.qpipe.event_tape.test_a_buy_aggressor_gives_positive_flow:{[t]
-    .qunit.assertEquals[.qmicro.signed_trade_flow .qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 1000f];1000f;"buyers crossing the spread is positive pressure"]};
+    .qunit.assertEquals[.qf.mkt.signed_trade_flow .qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 1000f];1000f;"buyers crossing the spread is positive pressure"]};
 
 .qt.qpipe.event_tape.test_a_sell_aggressor_gives_negative_flow:{[t]
-    .qunit.assertEquals[.qmicro.signed_trade_flow .qt.qpipe.event_tape.tape[enlist `trade;enlist -1;enlist 1000f];-1000f;"sellers crossing is negative"]};
+    .qunit.assertEquals[.qf.mkt.signed_trade_flow .qt.qpipe.event_tape.tape[enlist `trade;enlist -1;enlist 1000f];-1000f;"sellers crossing is negative"]};
 
 .qt.qpipe.event_tape.test_flow_nets_the_two_sides:{[t]
-    .qunit.assertEquals[.qmicro.signed_trade_flow .qt.qpipe.event_tape.tape[`trade`trade;1 -1;1000 1500f];-500f;"1000 bought against 1500 sold is 500 net sold"]};
+    .qunit.assertEquals[.qf.mkt.signed_trade_flow .qt.qpipe.event_tape.tape[`trade`trade;1 -1;1000 1500f];-500f;"1000 bought against 1500 sold is 500 net sold"]};
 
 .qt.qpipe.event_tape.test_a_tape_with_no_trades_has_zero_flow:{[t]
-    .qunit.assertEquals[.qmicro.signed_trade_flow .qt.qpipe.event_tape.tape[`add`cancel;1 1;1000 1000f];0f;"no volume moved, so no flow - distinct from an undefined ratio"]};
+    .qunit.assertEquals[.qf.mkt.signed_trade_flow .qt.qpipe.event_tape.tape[`add`cancel;1 1;1000 1000f];0f;"no volume moved, so no flow - distinct from an undefined ratio"]};
 
 / Size is unsigned in the tape and signed by multiplying, per the shape
 / contract. A signed size column would make `sum size` meaningless.
 .qt.qpipe.event_tape.test_the_fixture_flow_matches_its_trades:{[t]
-    .qunit.assertEquals[.qmicro.signed_trade_flow .qpipe.source.demo_events.fixture[];-500000f;"the fixture buys 1M and sells 1.5M aggressively"]};
+    .qunit.assertEquals[.qf.mkt.signed_trade_flow .qpipe.source.demo_events.fixture[];-500000f;"the fixture buys 1M and sells 1.5M aggressively"]};
 
 / --- cumulative_trade_flow ----------------------------------------------
 
@@ -103,53 +103,53 @@
 / as observations.
 .qt.qpipe.event_tape.test_cumulative_flow_has_one_row_per_trade:{[t]
     tp:.qt.qpipe.event_tape.tape[`add`trade`cancel`trade;1 1 1 -1;5000 100 5000 400f];
-    .qunit.assertEquals[count .qmicro.cumulative_trade_flow tp;2;"two trades, two rows - not four"]};
+    .qunit.assertEquals[count .qf.mkt.cumulative_trade_flow tp;2;"two trades, two rows - not four"]};
 
 .qt.qpipe.event_tape.test_cumulative_flow_is_a_running_total:{[t]
     tp:.qt.qpipe.event_tape.tape[`trade`trade`trade;1 1 -1;100 200 50f];
-    .qunit.assertEquals[exec cum_flow from .qmicro.cumulative_trade_flow tp;100 300 250f;"each row is the net flow up to and including that trade"]};
+    .qunit.assertEquals[exec cum_flow from .qf.mkt.cumulative_trade_flow tp;100 300 250f;"each row is the net flow up to and including that trade"]};
 
 .qt.qpipe.event_tape.test_cumulative_flow_ends_at_the_scalar_flow:{[t]
     tp:.qpipe.source.demo_events.fixture[];
-    .qunit.assertEquals[last exec cum_flow from .qmicro.cumulative_trade_flow tp;.qmicro.signed_trade_flow tp;"the last cumulative value is the total, or one of the two is wrong"]};
+    .qunit.assertEquals[last exec cum_flow from .qf.mkt.cumulative_trade_flow tp;.qf.mkt.signed_trade_flow tp;"the last cumulative value is the total, or one of the two is wrong"]};
 
 / --- cancel_to_trade_ratio (ROADMAP #23) --------------------------------
 
 .qt.qpipe.event_tape.test_the_ratio_is_cancels_over_trades:{[t]
     tp:.qt.qpipe.event_tape.tape[`cancel`cancel`cancel`trade`trade;1 1 1 1 1;5#1000f];
-    .qunit.assertEquals[.qmicro.cancel_to_trade_ratio tp;1.5;"three cancels to two trades"]};
+    .qunit.assertEquals[.qf.mkt.cancel_to_trade_ratio tp;1.5;"three cancels to two trades"]};
 
 .qt.qpipe.event_tape.test_adds_do_not_affect_the_ratio:{[t]
     with_adds:.qt.qpipe.event_tape.tape[`add`cancel`add`trade;1 1 1 1;4#1000f];
     without:.qt.qpipe.event_tape.tape[`cancel`trade;1 1;2#1000f];
-    .qunit.assertEquals[.qmicro.cancel_to_trade_ratio[with_adds];.qmicro.cancel_to_trade_ratio without;"the ratio is about cancels and trades; adds are neither"]};
+    .qunit.assertEquals[.qf.mkt.cancel_to_trade_ratio[with_adds];.qf.mkt.cancel_to_trade_ratio without;"the ratio is about cancels and trades; adds are neither"]};
 
 / 0n, not 0 and not 0w. Zero would read as "no cancelling happening", the
 / opposite of the truth when cancels occur with nothing trading; 0w
 / propagates into any average a caller takes.
 .qt.qpipe.event_tape.test_no_trades_gives_null_not_zero_or_infinity:{[t]
-    r:.qmicro.cancel_to_trade_ratio .qt.qpipe.event_tape.tape[`add`cancel`cancel;1 1 1;3#1000f];
+    r:.qf.mkt.cancel_to_trade_ratio .qt.qpipe.event_tape.tape[`add`cancel`cancel;1 1 1;3#1000f];
     .qunit.assertEquals[(null r;r=0f;r=0w);(1b;0b;0b);"an empty denominator is undefined, not zero and not infinite"]};
 
 .qt.qpipe.event_tape.test_the_fixture_ratio_matches_its_counts:{[t]
-    .qunit.assertEquals[.qmicro.cancel_to_trade_ratio .qpipe.source.demo_events.fixture[];1.5;"three cancels, two trades"]};
+    .qunit.assertEquals[.qf.mkt.cancel_to_trade_ratio .qpipe.source.demo_events.fixture[];1.5;"three cancels, two trades"]};
 
 / --- cancel_to_trade_ratio_by: the hit_ratio_by shape -------------------
 
 .qt.qpipe.event_tape.test_grouping_by_sym_gives_one_row_per_sym:{[t]
     tp:.qt.qpipe.event_tape.tape[`cancel`trade`cancel`trade;1 1 1 1;4#1000f];
     tp:update sym:`EURUSD`EURUSD`GBPUSD`GBPUSD from tp;
-    r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
+    r:.qf.mkt.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
     .qunit.assertEquals[count r;2;"two syms, two ratios"]};
 
 .qt.qpipe.event_tape.test_a_null_bucket_size_disables_time_bucketing:{[t]
     tp:.qt.qpipe.event_tape.tape[`cancel`trade;1 1;2#1000f];
-    r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
+    r:.qf.mkt.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
     .qunit.assertEquals[`time in cols r;0b;"no time column when bucketing is disabled, matching hit_ratio_by"]};
 
 .qt.qpipe.event_tape.test_bucketing_puts_the_time_back:{[t]
     tp:.qt.qpipe.event_tape.tape[`cancel`trade;1 1;2#1000f];
-    r:.qmicro.cancel_to_trade_ratio_by[tp;0D01:00:00;enlist `sym];
+    r:.qf.mkt.cancel_to_trade_ratio_by[tp;0D01:00:00;enlist `sym];
     .qunit.assertEquals[`time in cols 0!r;1b;"an hourly bucket groups by the floored time as well as the group columns"]};
 
 / A group with cancels and no trade. The scalar form has returned 0n for
@@ -163,7 +163,7 @@
     update sym:`EURUSD`GBPUSD`GBPUSD`GBPUSD from tp}
 
 .qt.qpipe.event_tape.test_a_group_with_no_trades_is_null_not_infinity:{[t]
-    r:.qmicro.cancel_to_trade_ratio_by[.qt.qpipe.event_tape.mixed_tape[];0Nn;enlist `sym];
+    r:.qf.mkt.cancel_to_trade_ratio_by[.qt.qpipe.event_tape.mixed_tape[];0Nn;enlist `sym];
     quiet:first exec ratio from r where sym=`EURUSD;
     .qunit.assertEquals[(null quiet;quiet=0w);(1b;0b);
         "cancels with nothing trading is undefined, not infinite"];
@@ -171,7 +171,7 @@
         "and the group that did trade keeps its ratio - the guard nulls a zero denominator, not every group"]};
 
 .qt.qpipe.event_tape.test_a_bucket_with_no_trades_is_null_not_infinity:{[t]
-    r:0!.qmicro.cancel_to_trade_ratio_by[.qt.qpipe.event_tape.mixed_tape[];0D01:00:00;enlist `sym];
+    r:0!.qf.mkt.cancel_to_trade_ratio_by[.qt.qpipe.event_tape.mixed_tape[];0D01:00:00;enlist `sym];
     .qunit.assertTrue[null first exec ratio from r where sym=`EURUSD;
         "the bucketed form guards too - a quiet bucket is the common case, which is why 0w here would poison an average over buckets"];
     .qunit.assertEquals[first exec ratio from r where sym=`GBPUSD;2f;"the busy bucket is unaffected"]};
@@ -180,22 +180,22 @@
     / The invariant the bug broke: one tape, one group, two code paths,
     / one answer.
     tp:select from .qt.qpipe.event_tape.mixed_tape[] where sym=`EURUSD;
-    grouped:first exec ratio from .qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
-    .qunit.assertEquals[(null grouped;null .qmicro.cancel_to_trade_ratio tp);(1b;1b);
+    grouped:first exec ratio from .qf.mkt.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
+    .qunit.assertEquals[(null grouped;null .qf.mkt.cancel_to_trade_ratio tp);(1b;1b);
         "grouped and ungrouped give the same answer for the same events"]};
 
 .qt.qpipe.event_tape.test_undefined_if_zero_is_the_guard_and_only_the_guard:{[t]
-    .qunit.assertTrue[null .qmicro.undefined_if_zero 0;"zero becomes undefined"];
-    .qunit.assertEquals[.qmicro.undefined_if_zero 3;3;"and anything else is untouched"];
-    .qunit.assertEquals[.qmicro.undefined_if_zero 0 2 0 5;0n 2 0n 5f;"vectorised, because a functional select hands it one value per group"]};
+    .qunit.assertTrue[null .qf.mkt.undefined_if_zero 0;"zero becomes undefined"];
+    .qunit.assertEquals[.qf.mkt.undefined_if_zero 3;3;"and anything else is untouched"];
+    .qunit.assertEquals[.qf.mkt.undefined_if_zero 0 2 0 5;0n 2 0n 5f;"vectorised, because a functional select hands it one value per group"]};
 
 .qt.qpipe.event_tape.test_grouped_ratios_match_the_ungrouped_one_for_a_single_group:{[t]
     tp:.qpipe.source.demo_events.fixture[];
-    r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
-    .qunit.assertEquals[first exec ratio from r;.qmicro.cancel_to_trade_ratio tp;"one sym grouped must equal the whole-tape ratio"]};
+    r:.qf.mkt.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
+    .qunit.assertEquals[first exec ratio from r;.qf.mkt.cancel_to_trade_ratio tp;"one sym grouped must equal the whole-tape ratio"]};
 
 .qt.qpipe.event_tape.test_the_grouped_form_also_validates_its_tape:{[t]
-    .qunit.assertError[{.qmicro.cancel_to_trade_ratio_by[x;0Nn;enlist `sym]};`time xdesc .qt.qpipe.event_tape.tape[`cancel`trade`add;1 1 1;3#1000f];"every entry point checks the precondition, not just the scalar one"]};
+    .qunit.assertError[{.qf.mkt.cancel_to_trade_ratio_by[x;0Nn;enlist `sym]};`time xdesc .qt.qpipe.event_tape.tape[`cancel`trade`add;1 1 1;3#1000f];"every entry point checks the precondition, not just the scalar one"]};
 
 / --- the worker over this source (#124's second worker) -----------------
 
@@ -283,39 +283,39 @@
 /   bucket 1 [200,400): trade1's remaining 150 sell + trade2's first 50 buy
 /   bucket 2 [400,450): trade2's last 50 - INCOMPLETE, discarded
 .qt.qpipe.event_tape.test_a_straddling_trade_is_split_across_buckets:{[t]
-    b:.qmicro.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
+    b:.qf.mkt.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
     .qunit.assertEquals[
         (exec buy_volume from b;exec sell_volume from b);
         (100 50f;100 150f);
         "trade1's 250 splits 100/150 across the boundary, so each bucket holds exactly 200"]};
 
 .qt.qpipe.event_tape.test_the_incomplete_final_bucket_is_discarded:{[t]
-    b:.qmicro.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
+    b:.qf.mkt.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
     .qunit.assertEquals[count b;2;"450 of volume at V=200 is two complete buckets; the trailing 50 is not comparable"]};
 
 / Every complete bucket must hold exactly bucket_volume, or VPIN's
 / denominator (n * bucket_volume) is wrong.
 .qt.qpipe.event_tape.test_every_bucket_holds_exactly_the_bucket_volume:{[t]
-    b:.qmicro.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade`trade;1 -1 1 -1;70 130 90 110f];100f];
+    b:.qf.mkt.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade`trade;1 -1 1 -1;70 130 90 110f];100f];
     .qunit.assertEquals[exec buy_volume+sell_volume from b;(count b)#100f;"unequal buckets would make VPIN systematically wrong by however lumpy the tape is"]};
 
 .qt.qpipe.event_tape.test_only_trades_are_bucketed:{[t]
     with_noise:.qt.qpipe.event_tape.tape[`add`trade`cancel`trade;1 1 1 -1;5000 100 5000 100f];
-    b:.qmicro.volume_buckets[with_noise;100f];
+    b:.qf.mkt.volume_buckets[with_noise;100f];
     .qunit.assertEquals[(count b;exec buy_volume from b);(2;100 0f);"a 5000 add does not become 50 buckets of volume"]};
 
 .qt.qpipe.event_tape.test_a_tape_with_less_volume_than_one_bucket_gives_no_buckets:{[t]
-    .qunit.assertEquals[count .qmicro.volume_buckets[.qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 50f];200f];0;"an incomplete bucket is not an observation"]};
+    .qunit.assertEquals[count .qf.mkt.volume_buckets[.qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 50f];200f];0;"an incomplete bucket is not an observation"]};
 
 .qt.qpipe.event_tape.test_a_tape_with_no_trades_gives_no_buckets:{[t]
-    .qunit.assertEquals[count .qmicro.volume_buckets[.qt.qpipe.event_tape.tape[`add`cancel;1 1;100 100f];10f];0;"adds and cancels move no volume"]};
+    .qunit.assertEquals[count .qf.mkt.volume_buckets[.qt.qpipe.event_tape.tape[`add`cancel;1 1;100 100f];10f];0;"adds and cancels move no volume"]};
 
 .qt.qpipe.event_tape.test_the_end_time_is_when_the_bucket_filled:{[t]
-    b:.qmicro.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
+    b:.qf.mkt.volume_buckets[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
     .qunit.assertEquals[exec end_time from b;.qt.qpipe.event_tape.d each 1 2;"a bucket's observation completes at the trade that filled it"]};
 
 .qt.qpipe.event_tape.test_a_non_positive_bucket_volume_is_refused:{[t]
-    .qunit.assertError[{.qmicro.volume_buckets[.qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 100f];x]};0f;"a zero bucket volume would divide by zero and produce infinitely many buckets"]};
+    .qunit.assertError[{.qf.mkt.volume_buckets[.qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 100f];x]};0f;"a zero bucket volume would divide by zero and produce infinitely many buckets"]};
 
 / --- vpin (ROADMAP #25) -------------------------------------------------
 
@@ -323,68 +323,68 @@
 / bucket volume, which makes the arithmetic checkable by hand: 0/200 and
 / 100/200.
 .qt.qpipe.event_tape.test_vpin_is_the_imbalance_as_a_fraction_of_bucket_volume:{[t]
-    v:.qmicro.vpin[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f;1];
+    v:.qf.mkt.vpin[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f;1];
     .qunit.assertEquals[exec vpin from v;0 0.5;"a balanced bucket is 0, one 50% one-sided is 0.5"]};
 
 / The trailing window: (0 + 100) / (2 * 200) = 0.25, and the first bucket
 / has no answer because the window has not filled.
 .qt.qpipe.event_tape.test_vpin_averages_over_the_trailing_window:{[t]
-    v:.qmicro.vpin[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f;2];
+    v:.qf.mkt.vpin[.qt.qpipe.event_tape.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f;2];
     .qunit.assertEquals[exec vpin from v;(0n;0.25);"the mean absolute imbalance over two buckets, normalised"]};
 
 / A partly-filled msum window gives a smaller numerator over the same
 / denominator, which would read as an unusually BALANCED market rather than
 / as "not enough data". Nulled instead.
 .qt.qpipe.event_tape.test_vpin_is_null_until_the_window_fills:{[t]
-    v:.qmicro.vpin[.qt.qpipe.event_tape.tape[`trade`trade`trade`trade;1 -1 1 -1;100 100 100 100f];100f;3];
+    v:.qf.mkt.vpin[.qt.qpipe.event_tape.tape[`trade`trade`trade`trade;1 -1 1 -1;100 100 100 100f];100f;3];
     .qunit.assertEquals[null exec vpin from v;1100b;"the first two of four buckets have no answer, and 0 would be a wrong one"]};
 
 / A perfectly one-sided tape is the definitional maximum.
 .qt.qpipe.event_tape.test_an_entirely_one_sided_tape_gives_vpin_one:{[t]
-    v:.qmicro.vpin[.qt.qpipe.event_tape.tape[`trade`trade;1 1;100 100f];100f;1];
+    v:.qf.mkt.vpin[.qt.qpipe.event_tape.tape[`trade`trade;1 1;100 100f];100f;1];
     .qunit.assertEquals[exec vpin from v;1 1f;"every bucket entirely one-sided is the maximum toxicity the measure can report"]};
 
 .qt.qpipe.event_tape.test_a_perfectly_balanced_tape_gives_vpin_zero:{[t]
-    v:.qmicro.vpin[.qt.qpipe.event_tape.tape[`trade`trade;1 -1;100 100f];200f;1];
+    v:.qf.mkt.vpin[.qt.qpipe.event_tape.tape[`trade`trade;1 -1;100 100f];200f;1];
     .qunit.assertEquals[exec vpin from v;enlist 0f;"buys exactly offsetting sells is zero imbalance"]};
 
 .qt.qpipe.event_tape.test_vpin_is_bounded_by_zero_and_one:{[t]
-    v:exec vpin from .qmicro.vpin[.qpipe.source.demo_events.fixture[];1000000f;1];
+    v:exec vpin from .qf.mkt.vpin[.qpipe.source.demo_events.fixture[];1000000f;1];
     defined:v where not null v;
     .qunit.assertEquals[all (defined>=0f) and defined<=1f;1b;"a fraction of bucket volume cannot leave 0..1"]};
 
 .qt.qpipe.event_tape.test_a_non_positive_n_buckets_is_refused:{[t]
-    .qunit.assertError[{.qmicro.vpin[.qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 100f];100f;x]};0;"averaging over zero buckets is not a question"]};
+    .qunit.assertError[{.qf.mkt.vpin[.qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 100f];100f;x]};0;"averaging over zero buckets is not a question"]};
 
 .qt.qpipe.event_tape.test_vpin_on_a_tape_with_no_buckets_is_empty:{[t]
-    .qunit.assertEquals[count .qmicro.vpin[.qt.qpipe.event_tape.tape[`add`cancel;1 1;100 100f];10f;1];0;"no trades, no buckets, no values - rather than a zero"]};
+    .qunit.assertEquals[count .qf.mkt.vpin[.qt.qpipe.event_tape.tape[`add`cancel;1 1;100 100f];10f;1];0;"no trades, no buckets, no values - rather than a zero"]};
 
 / --- trade_arrival_rate (ROADMAP #26) -----------------------------------
 
 / Three trades one second apart is two intervals over two seconds = 1/s.
 / Intervals, not events: three events do not make three arrivals-per-second.
 .qt.qpipe.event_tape.test_the_arrival_rate_counts_intervals_not_events:{[t]
-    .qunit.assertEquals[.qmicro.trade_arrival_rate .qt.qpipe.event_tape.tape[`trade`trade`trade;1 1 1;3#100f];1f;"three trades one second apart is one arrival per second"]};
+    .qunit.assertEquals[.qf.mkt.trade_arrival_rate .qt.qpipe.event_tape.tape[`trade`trade`trade;1 1 1;3#100f];1f;"three trades one second apart is one arrival per second"]};
 
 .qt.qpipe.event_tape.test_adds_and_cancels_are_not_arrivals:{[t]
     mixed:.qt.qpipe.event_tape.tape[`trade`add`cancel`trade;1 1 1 1;4#100f];
-    .qunit.assertEquals[.qmicro.trade_arrival_rate mixed;(1%3)*1;"two trades three seconds apart, whatever happened between them"]};
+    .qunit.assertEquals[.qf.mkt.trade_arrival_rate mixed;(1%3)*1;"two trades three seconds apart, whatever happened between them"]};
 
 / One trade gives no information about a rate, and neither do several at the
 / same instant. 0n, not 0w - which would propagate into any average - and
 / not 0, which would read as "no trading".
 .qt.qpipe.event_tape.test_a_single_trade_has_no_rate:{[t]
-    .qunit.assertEquals[null .qmicro.trade_arrival_rate .qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 100f];1b;"one event is not a rate"]};
+    .qunit.assertEquals[null .qf.mkt.trade_arrival_rate .qt.qpipe.event_tape.tape[enlist `trade;enlist 1;enlist 100f];1b;"one event is not a rate"]};
 
 .qt.qpipe.event_tape.test_a_tape_with_no_trades_has_no_rate:{[t]
-    .qunit.assertEquals[null .qmicro.trade_arrival_rate .qt.qpipe.event_tape.tape[`add`cancel;1 1;100 100f];1b;"undefined, not zero"]};
+    .qunit.assertEquals[null .qf.mkt.trade_arrival_rate .qt.qpipe.event_tape.tape[`add`cancel;1 1;100 100f];1b;"undefined, not zero"]};
 
 .qt.qpipe.event_tape.test_the_grouped_form_counts_trades_per_bucket:{[t]
-    r:.qmicro.trade_arrival_rate_by[.qpipe.source.demo_events.fixture[];0D01:00:00;enlist `sym];
+    r:.qf.mkt.trade_arrival_rate_by[.qpipe.source.demo_events.fixture[];0D01:00:00;enlist `sym];
     .qunit.assertEquals[first exec trades from r;2;"the fixture's two trades fall in one hourly bucket"]};
 
 .qt.qpipe.event_tape.test_the_grouped_form_validates_its_tape:{[t]
-    .qunit.assertError[{.qmicro.trade_arrival_rate_by[x;0Nn;enlist `sym]};`time xdesc .qt.qpipe.event_tape.tape[`trade`trade`add;1 1 1;3#100f];"every entry point checks the precondition"]};
+    .qunit.assertError[{.qf.mkt.trade_arrival_rate_by[x;0Nn;enlist `sym]};`time xdesc .qt.qpipe.event_tape.tape[`trade`trade`add;1 1 1;3#100f];"every entry point checks the precondition"]};
 
 
 / --- the events worker's contract methods (#185 coverage) ----------------
@@ -449,7 +449,7 @@
 / time/sym(/action) only, so `venue threw 'venue.
 .qt.qpipe.event_tape.test_ratios_and_rates_group_by_any_column:{[t]
     tp:update venue:`LN`LN`NY`NY from .qt.qpipe.event_tape.tape[`cancel`trade`cancel`trade;1 1 -1 -1;100 100 100 100];
-    r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `venue];
+    r:.qf.mkt.cancel_to_trade_ratio_by[tp;0Nn;enlist `venue];
     .qunit.assertEquals[exec ratio from 0!r;1 1f;"one cancel per trade at each venue"];
-    a:.qmicro.trade_arrival_rate_by[tp;0Nn;enlist `venue];
+    a:.qf.mkt.trade_arrival_rate_by[tp;0Nn;enlist `venue];
     .qunit.assertEquals[exec trades from 0!a;1 1;"one trade at each venue"]};

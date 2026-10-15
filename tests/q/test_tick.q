@@ -249,7 +249,7 @@
     / `key `.`, not `key ` ` - the latter lists NAMESPACES, so it answers
     / 0b for a root variable that is sitting right there.
     .qunit.assertTrue[`upd in key `.;"the root upd is still there"];
-    / `(get `upd)`, not a bare `upd`: this file runs inside \d .qt.qetl.tick,
+    / `(get `upd)`, not a bare `upd`: this file used to run inside a `\d` block,
     / where an unqualified name resolves against .qt.qetl.tick first.
     (get `upd)[`x;()];
     .qunit.assertEquals[.qt.qetl.tick.marker;`live;"and it is the one that was there before, not the replay handler"];

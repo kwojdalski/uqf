@@ -7,10 +7,10 @@
 / .
 / DATA QUALITY ONLY. A limit a desk sets on its own activity - a position,
 / a currency exposure, a reject rate - is business logic, and belongs to
-/ limits.q (.qlimit). These checks ask whether the data is fit to use, not
+/ limits.q (.qf.port). These checks ask whether the data is fit to use, not
 / whether the desk is inside its limits. The position, exposure and
 / reject-ratio limit checks that used to live here, on a limit engine of
-/ their own, are now ordinary .qlimit metrics (#412): two engines had
+/ their own, are now ordinary .qf.port metrics (#412): two engines had
 / given different answers to the same question - one reported a missing
 / limit as a gap, the other left it unpoliced.
 / .
@@ -24,25 +24,25 @@
 / Requires microstructure.q (spread_bps, for check_market_data_quality) and
 / forwards.q (require_depth_quotes) to be loaded first.
 
-\d .qdqc
+\d .qf.mkt
 
 / Per-row market data sanity, built on microstructure.q's own spread_bps
 / (no re-derivation of top-of-book/mid here) - a negative spread means the
 / book is crossed (bid strictly above the ask - a locked book, bid = ask,
 / is not - a genuine data error, not just a quality concern; the rule is
-/ .qbook.crossed_top's, shared with the backfill gates, #1176), a spread wider than max_spread_bps is flagged
+/ .qf.mkt.crossed_top's, shared with the backfill gates, #1176), a spread wider than max_spread_bps is flagged
 / separately (thin/stale liquidity or a bad print, not necessarily wrong,
 / but worth a human's attention) so the two very different severities
 / don't collapse into one generic "bad" bucket.
 / .
-/ A side whose best level is not usable (.qbook.level_ok: a zero, negative,
+/ A side whose best level is not usable (.qf.mkt.level_ok: a zero, negative,
 / null or infinite price) is ABSENT too, so a zero or negative ask is
 / `one_sided - flagged, not ok (#1200); all statuses and spread_bps come from
-/ the same .qbook.top_sides tops, with null spread_bps for such a row.
+/ the same .qf.mkt.top_sides tops, with null spread_bps for such a row.
 / A side nobody quoted is ABSENT, not wrong: its spread is null, and a null
 / is neither crossed nor wide - it is `one_sided. Written the obvious way,
 / `spreads<0` called it crossed, because q orders a null below every number,
-/ so a quote with an ask and no bid read as a data error (#546). .qbook.crossed_top
+/ so a quote with an ask and no bid read as a data error (#546). .qf.mkt.crossed_top
 / owns that guard now, for every path that decides a crossed book.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 /   (see forwards.q's require_depth_quotes) - any row order, needn't be sorted
@@ -54,16 +54,16 @@
 /   not a severity ranking; `crossed` rows are the most urgent, so they land
 /   first, which is what matters)
 / @throws error if quotes is missing a required column
-/ @eg .qdqc.check_market_data_quality[quotes;5]
+/ @eg .qf.mkt.check_market_data_quality[quotes;5]
 check_market_data_quality:{[quotes;max_spread_bps]
-    .qschema.require_depth_quotes[`check_market_data_quality;quotes];
+    .qf.util.require_depth_quotes[`check_market_data_quality;quotes];
     / ONE extraction of the top for every status (#1200): a side whose level 0
     / is not level_ok (zero, negative, null, infinite) is absent, so it is
     / one_sided - never ok, and never judged wide or crossed from a number
     / the rest of the library refuses to call a price.
     depth:quotes`bid_prices`bid_sizes`ask_prices`ask_sizes;
     book:`bid_prices`bid_sizes`ask_prices`ask_sizes!depth;
-    t:.qbook.top_sides flip book;
+    t:.qf.mkt.top_sides flip book;
     bid0:t`bid;
     ask0:t`ask;
     one_sided:(null bid0) | null ask0;
@@ -75,7 +75,7 @@ check_market_data_quality:{[quotes;max_spread_bps]
     / index-a-status-vector idiom check_stale_quotes/reconcile_trades
     / already use for the 2-way case, generalized to 3 statuses via a
     / 0/1/2 index built from ordinary boolean arithmetic instead of $.
-    is_crossed:(not one_sided) & .qbook.crossed_top flip book;
+    is_crossed:(not one_sided) & .qf.mkt.crossed_top flip book;
     is_wide:spreads>max_spread_bps;
     / 0 crossed, 1 ok, 2 wide - and 3 one_sided, which overrides: a null
     / spread is never crossed (guarded above) or wide (null>x is false).
@@ -99,9 +99,9 @@ check_market_data_quality:{[quotes;max_spread_bps]
 /   timed quote at or before as_of (all times null) is `stale`, with null
 /   last_ts and age (#1277)
 / @throws error if quotes is missing a required column
-/ @eg .qdqc.check_stale_quotes[quotes;.z.p;0D00:00:05]
+/ @eg .qf.mkt.check_stale_quotes[quotes;.z.p;0D00:00:05]
 check_stale_quotes:{[quotes;as_of;max_age]
-    .qschema.require_depth_quotes[`check_stale_quotes;quotes];
+    .qf.util.require_depth_quotes[`check_stale_quotes;quotes];
     / by before from, where after from - the canonical qSQL clause order,
     / kept because a reordered clause reads as a typo to anyone scanning it.
     / Compared through a local, never `where time<=as_of`: this tree's
@@ -140,13 +140,13 @@ check_stale_quotes:{[quotes;as_of;max_age]
 /   folded into detail as-is
 / @return a table check/status/detail, one row per non-`ok row across
 /   every check supplied, in the order given
-/ @eg .qdqc.summarize_checks[((`stale;.qdqc.check_stale_quotes[quotes;.z.p;0D00:00:05]);(`spread;.qdqc.check_market_data_quality[quotes;5]))]
+/ @eg .qf.mkt.summarize_checks[((`stale;.qf.mkt.check_stale_quotes[quotes;.z.p;0D00:00:05]);(`spread;.qf.mkt.check_market_data_quality[quotes;5]))]
 summarize_checks:{[named_checks]
     rows:raze {[pair]
         check_name:pair 0; t:pair 1;
         bad:select from t where status<>`ok;
         if[0=count bad; :0#([] check:`symbol$(); status:`symbol$(); detail:`char$())];
-        ([] check:count[bad]#check_name; status:bad`status; detail:.qrender.full each bad)
+        ([] check:count[bad]#check_name; status:bad`status; detail:.qf.util.full each bad)
     } each named_checks;
     rows};
 

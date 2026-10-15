@@ -1,6 +1,6 @@
 / calendar.q - FX settlement calendars: which dates a currency pair can
 / settle on, the spot date a trade date settles to, and the value date a
-/ tenor lands on (.qcal).
+/ tenor lands on (.qf.px).
 / .
 / SEPARATE FROM daycount.q ON PURPOSE. daycount.q turns two dates into a year
 / fraction; it cannot say whether a date is tradable. This module decides the
@@ -27,7 +27,7 @@
 / NOTE ON q ARITHMETIC: no operator precedence (right to left), so mixed
 / arithmetic below goes through named intermediates.
 
-\d .qcal
+\d .qf.px
 
 / The weekday symbols, indexed by `date mod 7` (0 is Saturday).
 weekdays:`sat`sun`mon`tue`wed`thu`fri
@@ -49,7 +49,7 @@ convention_defaults:enlist[`settle_via]!enlist `USD
 / The weekday of a date, as a symbol.
 / @param d a date, or a list of dates
 / @return `sat`sun`mon`tue`wed`thu`fri - one per date for a list
-/ @eg .qcal.weekday 2026.09.18  -> `fri
+/ @eg .qf.px.weekday 2026.09.18  -> `fri
 weekday:{[d] weekdays (`long$d) mod 7}
 
 / Private: the holidays of `ccys`, refusing a currency the calendars lack.
@@ -70,7 +70,7 @@ holidays_of:{[ccys;calendars]
 / @param calendars dict currency -> holiday dates
 / @param weekend the weekend days, e.g. `sat`sun
 / @return 1b for a business day - one per date for a list
-/ @eg .qcal.is_business_day[2026.09.21;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 1b
+/ @eg .qf.px.is_business_day[2026.09.21;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 1b
 is_business_day:{[d;ccys;calendars;weekend]
     off:holidays_of[ccys;calendars];
     (not (weekday[d]) in weekend) and not d in off}
@@ -87,7 +87,7 @@ is_business_day:{[d;ccys;calendars;weekend]
 / @param weekend the weekend days, e.g. `sat`sun
 / @return the adjusted date
 / @throws error naming an unknown roll
-/ @eg .qcal.adjust[2026.05.31;`modified_following;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.05.29
+/ @eg .qf.px.adjust[2026.05.31;`modified_following;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.05.29
 adjust:{[d;roll;ccys;calendars;weekend]
     if[not roll in rolls; '"adjust: roll must be one of ",(", " sv string rolls),", got ",string roll];
     if[roll=`none; :d];
@@ -106,7 +106,7 @@ adjust:{[d;roll;ccys;calendars;weekend]
 / @param calendars dict currency -> holiday dates
 / @param weekend the weekend days
 / @return the date `n` business days after `d`
-/ @eg .qcal.add_business_days[2026.09.18;2;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.09.22
+/ @eg .qf.px.add_business_days[2026.09.18;2;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.09.22
 add_business_days:{[d;n;ccys;calendars;weekend]
     if[n<0; '"add_business_days: n must not be negative"];
     good:is_business_day[;ccys;calendars;weekend];
@@ -122,7 +122,7 @@ add_business_days:{[d;n;ccys;calendars;weekend]
 / @param d a date
 / @param n months to add (negative subtracts)
 / @return the date `n` months on
-/ @eg .qcal.add_months[2028.01.31;1]  -> 2028.02.29
+/ @eg .qf.px.add_months[2028.01.31;1]  -> 2028.02.29
 add_months:{[d;n]
     target:(`month$d)+n;
     month_start:`date$target;
@@ -136,7 +136,7 @@ add_months:{[d;n]
 / @param calendars dict currency -> holiday dates
 / @param weekend the weekend days
 / @return that month's last business day
-/ @eg .qcal.month_end_business_day[2026.05.10;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.05.29
+/ @eg .qf.px.month_end_business_day[2026.05.10;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.05.29
 month_end_business_day:{[d;ccys;calendars;weekend]
     last_day:(`date$1+`month$d)-1;
     adjust[last_day;`preceding;ccys;calendars;weekend]}
@@ -151,7 +151,7 @@ month_end_business_day:{[d;ccys;calendars;weekend]
 / @private
 pair_terms:{[pair;conventions]
     if[not 99h=type conventions; '"calendar: conventions must be a dictionary of pair -> conventions"];
-    p:.qccy.normalize_ccy_pair pair;
+    p:.qf.px.normalize_ccy_pair pair;
     if[not p in key conventions;
         '"calendar: no conventions for ",string[p]," - supply spot_lag, roll, eom and weekend rather than assume T+2"];
     c:conventions p;
@@ -165,7 +165,7 @@ pair_terms:{[pair;conventions]
     c:convention_defaults,c;
     via:c`settle_via;
     if[not -11h=type via; '"calendar: ",string[p],"'s settle_via must be a currency symbol, or ` for none"];
-    legs:.qccy.ccy_pair_legs p;
+    legs:.qf.px.ccy_pair_legs p;
     ccys:legs`base`quote;
     / a pair whose legs are both the vehicle cannot exist; one that has it
     / counts on its other leg, a cross on both
@@ -190,7 +190,7 @@ pair_terms:{[pair;conventions]
 / @return dict date, trade_date, pair, spot_lag, calendars, skipped - the
 /   non-business days passed over between the trade date and spot
 / @throws error naming a missing calendar, pair or convention
-/ @eg (.qcal.spot_date[2026.09.18;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions])`date  -> 2026.09.22
+/ @eg (.qf.px.spot_date[2026.09.18;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions])`date  -> 2026.09.22
 spot_date:{[trade_date;pair;calendars;conventions]
     c:pair_terms[pair;conventions];
     settle_ccys:c`settle_ccys;
@@ -230,7 +230,7 @@ tenor_parts:{[tenor]
 / @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...), optionally `settle_via
 / @return dict date, spot_date, tenor, unadjusted, roll, eom_applied, calendars
 / @throws error naming a missing calendar, pair or convention, or a bad tenor
-/ @eg (.qcal.forward_date[2026.09.22;`1M;`EURUSD;.qcal.mock_calendars;.qcal.mock_conventions])`date  -> 2026.10.22
+/ @eg (.qf.px.forward_date[2026.09.22;`1M;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions])`date  -> 2026.10.22
 forward_date:{[spot_date;tenor;pair;calendars;conventions]
     c:pair_terms[pair;conventions];
     explicit:-14h=type tenor;

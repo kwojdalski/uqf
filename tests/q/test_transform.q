@@ -194,11 +194,11 @@
 
 / posbook1 rebuilds its book from the transform's output rather than having
 / the transform mutate a global, so the rebuild has to agree with folding
-/ the same fills through .qpos directly.
+/ the same fills through .qf.port directly.
 .qt.qetl.transform.test_next_book_matches_folding_the_fills_through_qpos:{[t]
     ex:first (.qetl.transform.def `position)`examples;
     i:ex`inputs;
     out:.qetl.transform.apply[`position;i];
     book:.qpipe.job.posbook.next_book[i`book;out];
-    direct:0!.qpos.apply_fills[1!i`book;i`batch];
-    .qunit.assertEquals[`sym xasc book;`sym xasc direct;"the book rebuilt from positions is the book .qpos folds to"]};
+    direct:0!.qf.port.apply_fills[1!i`book;i`batch];
+    .qunit.assertEquals[`sym xasc book;`sym xasc direct;"the book rebuilt from positions is the book .qf.port folds to"]};

@@ -372,7 +372,7 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 
 
 def _fn_index(surface: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """`.qns.name` -> its entry, flattened for comparison."""
+    """`.qf.util.name` -> its entry, flattened for comparison."""
     out: dict[str, dict[str, Any]] = {}
     for ns, entries in surface.get("functions", {}).items():
         for entry in entries:

@@ -92,12 +92,12 @@ _NO_HARNESS = """\\l src/init.q
 \\l src/etl/init.q
 .qetl.dag.adopt_all[];
 -1 "HARNESS:",", " sv string (`qt`qunit) inter key `;
--1 "OWNED:",", " sv string .qns.owned[] where (string .qns.owned[]) like ".qt*";
+-1 "OWNED:",", " sv string .qf.util.owned[] where (string .qf.util.owned[]) like ".qt*";
 """
 
 
 def test_loading_the_library_creates_no_test_namespace(tmp_path: Path) -> None:
-    """#1412: the test tree lives under `.qt`, and `.qns.owned` lists every root
+    """#1412: the test tree lives under `.qt`, and `.qf.util.owned` lists every root
     namespace that starts with q - so a production process that carried `.qt`,
     or the vendored `.qunit`, would show test scaffolding in its own namespace
     enumeration, its contract surface and its coverage. Loading `src/init.q` and

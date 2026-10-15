@@ -37,7 +37,7 @@
 /   product      likewise: spot, forward, ... for a desk fill
 / .
 / Nothing is DROPPED that a downstream job reads: pip_factor is not here
-/ because nothing downstream of a fill reads it - .qexec's markout family
+/ because nothing downstream of a fill reads it - .qf.exec's markout family
 / takes it off `trades` directly, and stays subscribed there.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
@@ -101,7 +101,7 @@ from_orders:{[batch]
     enlist `inputs`expected!(
         (enlist `trades)!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:01;
             sym:`EURUSD`USDJPY; side:1 -1; trade_price:1.085 149.5; size:1e6 5e5;
-            pip_factor:.qccy.pip_factor `EURUSD`USDJPY; fill_id:`fx1`fx2);
+            pip_factor:.qf.px.pip_factor `EURUSD`USDJPY; fill_id:`fx1`fx2);
         ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:01; sym:`EURUSD`USDJPY;
             venue:`fx`fx; side:1 -1; size:1e6 5e5; price:1.085 149.5; fee:0 0f;
             fee_ccy:``; fill_id:`fx1`fx2; book:``; product:``)))];

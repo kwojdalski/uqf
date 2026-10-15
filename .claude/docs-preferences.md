@@ -38,8 +38,8 @@ and let the quant modules be one section among several.
 showing three pricing calls tells someone who came for the pipeline framework
 that it does not exist.
 
-> *2026-09-17.* Quick start was three `.qopt`/`.qfwd`/`.qexec` calls. Now four
-> entry points: price something, run the fleet, run a backfill, run the tests.
+> *2026-09-17.* Quick start was three `.qf.px`/`.qf.exec` calls. Now four entry
+> points: price something, run the fleet, run a backfill, run the tests.
 
 **Say what is verified, not that it is the only possibility.** A requirement
 stated as "you need X" and "this tree targets X alone" claims two things and

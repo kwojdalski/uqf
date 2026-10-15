@@ -1,6 +1,6 @@
 # Database metatables
 
-`src/metadata/metatables.q` provides `.qmeta`: reusable definitions for
+`src/metadata/metatables.q` provides `.qf.util`: reusable definitions for
 measuring explicit database partitions and returning ordinary q tables. It works
 in a plain q process and in a TorQ HDB. Counts are the default; eFX dimensions
 and additional measurements are supplied by the caller.
@@ -27,13 +27,13 @@ the coverage ledger, though, and `reconcile` reports where they do (see
 
 ## Names
 
-A metatable's name starts with `meta_` (`.qmeta.prefix`), the way the pipeline's
-own bookkeeping starts with `etl_` (`etl_runs`, `etl_coverage`). In `tables[]`,
-an HDB directory or `uqs schema`, either prefix marks a table as derived from
-the data beside it rather than being market data, and a tool can find them by
-pattern instead of by a list.
+A metatable's name starts with `meta_` (`.qf.util.prefix`), the way the
+pipeline's own bookkeeping starts with `etl_` (`etl_runs`, `etl_coverage`). In
+`tables[]`, an HDB directory or `uqs schema`, either prefix marks a table as
+derived from the data beside it rather than being market data, and a tool can
+find them by pattern instead of by a list.
 
-`.qmeta.require_name` checks a name and the DQE adapter applies it: a name
+`.qf.util.require_name` checks a name and the DQE adapter applies it: a name
 without the prefix is refused, with the prefixed name it should have been, never
 renamed for you. The prefix is fixed rather than configurable - every reader
 would have to resolve it, and changing it would strand the tables already
@@ -47,14 +47,14 @@ Run from the repository root in a process with `trade` loaded:
 \l src/metadata/metatables.q
 
 / Total rows per requested date, with no secondary grouping.
-totals:.qmeta.definition[`trade;`date;`symbol$();()!()];
-meta_trade_counts:.qmeta.collect[totals;2026.09.01 2026.09.02];
+totals:.qf.util.definition[`trade;`date;`symbol$();()!()];
+meta_trade_counts:.qf.util.collect[totals;2026.09.01 2026.09.02];
 
 / Counts and traded base quantity per pair and venue.
 metrics:`rows`base_quantity`first_time`last_time!
     ((count;`i);(sum;`size);(min;`time);(max;`time));
-by_market:.qmeta.definition[`trade;`date;`sym`venue;metrics];
-meta_trade_markets:.qmeta.collect[by_market;2026.09.01 2026.09.02];
+by_market:.qf.util.definition[`trade;`date;`sym`venue;metrics];
+meta_trade_markets:.qf.util.collect[by_market;2026.09.01 2026.09.02];
 ```
 
 Adapt `trade`, `sym`, `venue`, `size` and `time` to your schema. Summing `size`
@@ -86,14 +86,14 @@ standalone `definition`/`collect`/`refresh` API and the DQE adapter:
 / Exclude nulls explicitly when a separate null count owns that policy.
 rules:`crossed`nonpositive_bid!
     ((>;`bid;`ask);(&;(not;(null;`bid));(<=;`bid;0f)));
-measurements:.qmeta.profile[enlist`time;`time`bid`ask;rules];
-spec:.qmeta.definition[`quote;`date;`sym`venue;measurements];
+measurements:.qf.util.profile[enlist`time;`time`bid`ask;rules];
+spec:.qf.util.definition[`quote;`date;`sym`venue;measurements];
 
 / On demand: returns the current profile without storing it.
-current_profile:.qmeta.collect[spec;enlist 2026.09.01];
+current_profile:.qf.util.collect[spec;enlist 2026.09.01];
 
 / Explicit refresh: replaces these slices in a previously collected table.
-stored_profile:.qmeta.refresh[stored_profile;spec;enlist 2026.09.01];
+stored_profile:.qf.util.refresh[stored_profile;spec;enlist 2026.09.01];
 ```
 
 For each partition/group this produces:
@@ -124,7 +124,7 @@ count of distinct bad rows.
 Counts are long integers. Compute rates using `rows` as the denominator; zero
 rows mean no observations, not a 100% quality score. No automatic pass/fail
 thresholds, alerts, temporal-gap detector or duplicate-key policy are assumed.
-Use TorQ DQC or the existing `.qdqc` functions for applicable checks on these
+Use TorQ DQC or the existing `.qf.mkt` functions for applicable checks on these
 measurements. This keeps profiling separate from quality enforcement.
 
 ## Partition semantics and refresh
@@ -143,7 +143,7 @@ measurements. This keeps profiling separate from quality enforcement.
 
 ```q
 / Recompute a corrected date, removing groups that disappeared.
-meta_trade_markets:.qmeta.refresh[meta_trade_markets;by_market;enlist 2026.09.01];
+meta_trade_markets:.qf.util.refresh[meta_trade_markets;by_market;enlist 2026.09.01];
 ```
 
 Refresh returns a replacement value only after all requested queries succeed. It
@@ -153,13 +153,13 @@ counts. The caller owns assignment and storage.
 
 Keep one unchanged definition per metatable. `refresh` enforces this two ways:
 the stored schema must match, and every stored row's `meta_definition` must
-equal `.qmeta.fingerprint` of the definition passed in. The second check catches
-what the first cannot: changing `notional` from `(sum;`size)` to `(max;`size)`
-keeps the column names and types, but would otherwise mix two meanings in one
-table. The fingerprint is an MD5 of the serialized definition, so it also
-changes when a lambda the definition embeds is redefined (as `.qmeta.time_bound`
-in `profile`). A table collected before this column existed has no fingerprints
-and must be rebuilt with `collect`.
+equal `.qf.util.fingerprint` of the definition passed in. The second check
+catches what the first cannot: changing `notional` from
+`(sum;`size)` to `(max;`size)` keeps the column names and types, but would
+otherwise mix two meanings in one table. The fingerprint is an MD5 of the
+serialized definition, so it also changes when a lambda the definition embeds is
+redefined (as `.qf.util.time_bound` in `profile`). A table collected before this
+column existed has no fingerprints and must be rebuilt with `collect`.
 
 For a partitioned HDB, use its loaded partition column and values (normally
 `.Q.pf` and a selected subset of `.Q.PV`). Read on an HDB after its reload has
@@ -177,7 +177,7 @@ those claims with what a metatable observed:
 ```q
 / Restrict the metatable to the slice that the coverage partition describes.
 eurusd:select from trade_markets where sym=`EURUSD;
-.qmeta.reconcile[eurusd;2026.09.01 2026.09.02;`trades;`EURUSD;`v1]
+.qf.util.reconcile[eurusd;2026.09.01 2026.09.02;`trades;`EURUSD;`v1]
 ```
 
 It returns one row per requested date: `observed` (rows summed over the
@@ -263,8 +263,8 @@ Or submitted through DQE's own transport from `dqe1`:
 DQE reflects the adapter's `tab` parameter into `advancedres.table` and records
 its name in `resultkeys`. The nested `resultdata` retains **source partition
 values**; DQEDB's own storage date is not the source partition date. DQE
-persistence retains its own append/history semantics; `.qmeta.refresh` does not
-mutate DQEDB or change DQE's retention policy. No TorQ files are patched.
+persistence retains its own append/history semantics; `.qf.util.refresh` does
+not mutate DQEDB or change DQE's retention policy. No TorQ files are patched.
 
 ## Verification
 

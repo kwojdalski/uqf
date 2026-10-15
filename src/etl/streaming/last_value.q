@@ -19,8 +19,8 @@
 / the source: the row says which `source` it was.
 / .
 / A CRYPTO SYM IS PRICED ACROSS VENUES (#990). Its row is the shared
-/ reference .qmicro.best_across_venues gives - the best bid and best ask over
-/ every venue quoting within .qmicro.reference_max_age, and their mid - with
+/ reference .qf.mkt.best_across_venues gives - the best bid and best ask over
+/ every venue quoting within .qf.mkt.reference_max_age, and their mid - with
 / `source` `venues. That is the price crypto_markout and posbook already use
 / (#886); the last venue's own book would be a third answer to "the current
 / price", and this table exists to be the one. So the job also holds the
@@ -59,20 +59,20 @@ state:1!last_value
 /   or added a sym's latest, as published
 / @eg .qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;0#.qpipe.job.last_value.market_data]`changed  ->  0#.qpipe.job.last_value.last_value
 apply:{[state;tob;batch]
-    / each market by its rule (.qmicro.price_rules, #998), as posbook marks:
+    / each market by its rule (.qf.mkt.price_rules, #998), as posbook marks:
     / a book's own mid, or each venue's newest top - a withdrawn side
     / included, so it stops counting - then the best across live venues
-    t:.qmicro.own_book_mids batch;
-    c:.qmicro.newer_venue_tops[tob;.qmicro.venue_tops batch];
+    t:.qf.mkt.own_book_mids batch;
+    c:.qf.mkt.newer_venue_tops[tob;.qf.mkt.venue_tops batch];
     tob:tob upsert c;
     syms:distinct c`sym;
     at:0!select time:max time by sym from tob where sym in syms;
-    best:.qmicro.best_across_venues[0!tob;at;.qmicro.reference_max_age];
+    best:.qf.mkt.best_across_venues[0!tob;at;.qf.mkt.reference_max_age];
     mk:exec last market by sym from batch;
     venues:select from ([] sym:at`sym; market:mk at`sym; source:`venues; source_time:at`time;
         bid:best`bid; ask:best`ask; mid:best`mid) where not null mid;
     t:t,venues;
-    t:.qmicro.newer_by_sym[exec sym!source_time from 0!state;t];
+    t:.qf.mkt.newer_by_sym[exec sym!source_time from 0!state;t];
     `state`tob`changed!(state upsert t;tob;cols[.qpipe.job.last_value.last_value]#t)}
 
 / Each crypto venue's newest top of book: what a crypto sym's reference is

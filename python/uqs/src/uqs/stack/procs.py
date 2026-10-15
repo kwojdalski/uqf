@@ -89,8 +89,8 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: gaps it here rather than keeping a second implementation in Python.
 #:
 #: hdb1 and dqe1 - the metatables (docs/guides/metatables.md). DQE sends
-#: `.dqe.uqf_metatable` to hdb1 by value and it runs there, so `.qmeta` must be
-#: loaded on hdb1, after its database; dqe1 loads the adapter and `.qmeta`
+#: `.dqe.uqf_metatable` to hdb1 by value and it runs there, so `.qf.util` must be
+#: loaded on hdb1, after its database; dqe1 loads the adapter and `.qf.util`
 #: after its own script, and uqs_dqe_config.q BEFORE it, because dqe.q reads
 #: `.dqe.configcsv` once as it loads (stack/dqe.py). hdb2 is not a DQE target.
 #:

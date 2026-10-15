@@ -21,7 +21,7 @@
 / USDJPY's yen to the dollars of every other pair (#1339).
 facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
-    quote:{x!{(.qccy.ccy_pair_legs x)`quote} each x} distinct batch`sym;
+    quote:{x!{(.qf.px.ccy_pair_legs x)`quote} each x} distinct batch`sym;
     / group, not exec ... by: PeachQ's exec-by returns a keyed table, not a dictionary
     n:sum each batch[`notional] group quote batch`sym;
     (`rows`syms,`$"notional_",/:string key n)!(count batch;count distinct batch`sym),value n}

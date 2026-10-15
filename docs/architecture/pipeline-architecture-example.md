@@ -77,14 +77,14 @@ Subscribe, hold state, republish. Each is one file under
 [`src/etl/streaming/`](../../src/etl/streaming), TorQ-free, run by a generic
 runner.
 
-  | Engine                                                                                                                | Reads                            | Holds                                                                                              | Publishes                                                                             |
-  | ---                                                                                                                   | ---                              | ---                                                                                                | ---                                                                                   |
-  | [`posbook`](../../src/etl/streaming/posbook.q)                                                                        | `executions`, `market_data`      | a [`.qpos`](../../src/portfolio/positions.q) book: position and P&L per sym, weighted-average cost | `position` — FX and crypto in one book                                                |
-  | [`fx_positions`](../../src/etl/streaming/fx_positions.q)                                                              | `executions`                     | a `.qdesk` book: net exposure by (sym, book, product); `.qlimit` caps                              | `fx_position` snapshots, `fx_limit_breach` throttled alerts                           |
-  | [`demo_markout`](../../src/etl/streaming/demo_markout.q)                                                              | `trades`, `quote`                | buffered fills awaiting their horizons                                                             | `demo_execution_quality`                                                              |
-  | [`cross`](../../src/etl/streaming/cross.q), [`vectorize`](../../src/etl/streaming/vectorize.q)                        | `fx_orderbook`, `wide_orderbook` | mirrors                                                                                            | synthetic crosses; a reshaped book                                                    |
-  | [`superbook`](../../src/etl/streaming/superbook.q)                                                                    | `market_data`                    | the freshest ladder per source, expiring                                                           | `superbook` — quoted liquidity merged across sources                                  |
-  | [`arbitrage`](../../src/etl/streaming/arbitrage.q), [`crossarb`](../../src/etl/streaming/cross_arbitrage.q)           | `superbook`                      | —                                                                                                  | crossed levels within the merged book; the direct book against a synthetic route      |
+  | Engine                                                                                                                | Reads                            | Holds                                                                                                               | Publishes                                                                             |
+  | ---                                                                                                                   | ---                              | ---                                                                                                                 | ---                                                                                   |
+  | [`posbook`](../../src/etl/streaming/posbook.q)                                                                        | `executions`, `market_data`      | a [`.qf.port`](../../src/portfolio/positions.q) book: position and P&L per sym, weighted-average cost               | `position` — FX and crypto in one book                                                |
+  | [`fx_positions`](../../src/etl/streaming/fx_positions.q)                                                              | `executions`                     | a `.qf.port` desk book: net exposure by (sym, book, product); `.qf.port` limits cap it                              | `fx_position` snapshots, `fx_limit_breach` throttled alerts                           |
+  | [`demo_markout`](../../src/etl/streaming/demo_markout.q)                                                              | `trades`, `quote`                | buffered fills awaiting their horizons                                                                              | `demo_execution_quality`                                                              |
+  | [`cross`](../../src/etl/streaming/cross.q), [`vectorize`](../../src/etl/streaming/vectorize.q)                        | `fx_orderbook`, `wide_orderbook` | mirrors                                                                                                             | synthetic crosses; a reshaped book                                                    |
+  | [`superbook`](../../src/etl/streaming/superbook.q)                                                                    | `market_data`                    | the freshest ladder per source, expiring                                                                            | `superbook` — quoted liquidity merged across sources                                  |
+  | [`arbitrage`](../../src/etl/streaming/arbitrage.q), [`crossarb`](../../src/etl/streaming/cross_arbitrage.q)           | `superbook`                      | —                                                                                                                   | crossed levels within the merged book; the direct book against a synthetic route      |
 
 `posbook` and `fx_positions` answer different questions and are deliberately two
 engines: *what did we make*, per sym, marked; and *what are we holding*, along
@@ -116,15 +116,15 @@ into storage directly --- and the claim goes in the ledger beside them.
 Pure functions over whatever the store holds --- no state, no clock, no sockets ---
 called from a query, a notebook or a surface.
 
-- [`.qalloc`](../../src/portfolio/allocation.q) --- P&L attribution: which
+- [`.qf.exec`](../../src/portfolio/allocation.q) --- P&L attribution: which
   opening trade paid for which close, under FIFO, LIFO, HIFO or weighted
   average; carried-in positions; the book as of any instant.
-- [`.qrisk`](../../src/portfolio/risk.q),
-  [`.qpos.ccy_exposure_in`](../../src/portfolio/positions.q) --- VaR, carry, and
-  per-currency exposure revalued into one reporting currency through
-  [`.qcross`](../../src/pricing/cross.q)'s cross-rate chaining.
-- [`.qmicro`](../../src/market_data/microstructure.q),
-  [`.qexec`](../../src/execution/execution.q) --- book pressure, microprice,
+- [`.qf.port`](../../src/portfolio/risk.q),
+  [`.qf.port.ccy_exposure_in`](../../src/portfolio/positions.q) --- VaR, carry,
+  and per-currency exposure revalued into one reporting currency through
+  [`.qf.mkt`](../../src/pricing/cross.q)'s cross-rate chaining.
+- [`.qf.mkt`](../../src/market_data/microstructure.q),
+  [`.qf.exec`](../../src/execution/execution.q) --- book pressure, microprice,
   VPIN, markout: over a `fx_orderbook` snapshot series or the [event
   tape](event-tape.md), whichever the metric needs.
 

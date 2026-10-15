@@ -139,9 +139,9 @@ or a procedure.
 
 **8. Derived data and materialised views.** Reactions (`src/etl/core/react.q`,
 `src/etl/reactions/`), streaming jobs that publish derived tables
-(`src/etl/streaming/`) and `.qmeta` metatables. Compare ClickHouse materialised
-views, Flink SQL continuous queries and dbt incremental models. Ask about
-consistency between a base table and what is derived from it, and about
+(`src/etl/streaming/`) and `.qf.util` metatables. Compare ClickHouse
+materialised views, Flink SQL continuous queries and dbt incremental models. Ask
+about consistency between a base table and what is derived from it, and about
 recomputation after a restatement.
 
 **9. Orchestration and lineage.** The job graph (`src/etl/core/dag.q`,

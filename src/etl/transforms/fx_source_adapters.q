@@ -75,7 +75,7 @@ pairs_of:{[codes]
     if[0=count codes; :`symbol$()];
     u:distinct codes;
     cleaned:{[c] upper (string c) except "/-_ "} each u;
-    ok:.qccy.is_ccy_pair each cleaned;
+    ok:.qf.px.is_ccy_pair each cleaned;
     (u!?[ok;`$cleaned;`]) codes}
 
 / Is each value a positive, finite number?

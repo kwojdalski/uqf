@@ -132,7 +132,7 @@
     b:raze (.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(0n;0f)];.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1005;1e6)]);
     r:first .qt.qpipe.transform.fx_source_adapters.from_levels[b];
     .qunit.assertEquals[(count r`bid_prices;r`ask_prices);(0;enlist 1.1005);"the marker row empties the bid side and is not a level"];
-    .qunit.assertTrue[null first (.qbook.top_sides enlist r)`bid;"and top-of-book reads no bid"]};
+    .qunit.assertTrue[null first (.qf.mkt.top_sides enlist r)`bid;"and top-of-book reads no bid"]};
 
 .qt.qpipe.transform.fx_source_adapters.test_a_side_the_snapshot_does_not_list_is_empty_too:{[tc]
     r:first .qt.qpipe.transform.fx_source_adapters.from_levels[.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1005;1e6)]];

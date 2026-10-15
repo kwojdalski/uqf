@@ -40,11 +40,13 @@
 // The price is that a suite refers to its own helpers by full path too: a
 // function defined from the root resolves bare names in the root.
 //
-// The transitional rule for suites not yet moved under .qt is in
-// legacy_suites; it goes with the last of them (#1412).
+// OUTSIDE .qt. A root-level namespace that holds test* functions is a suite
+// declared the old way (<thing>test, usually inside a nested `\d`) and is
+// refused by layout_problems rather than run: it would otherwise run, or not,
+// depending on how it was spelled (#1412).
 
 // Is this value a namespace, as `\d` creates them - a dictionary whose keys
-// include the empty symbol? The same rule .qns.is_namespace states, written
+// include the empty symbol? The same rule .qf.util.is_namespace states, written
 // out here so the harness does not stand on the library whose suites it runs.
 // The key type is checked first: a dictionary keyed by chars would throw 'type
 // from the lookup of ` in it.
@@ -53,7 +55,7 @@
 .qt.support.is_namespace:{[v] $[not 99h=type v; 0b; not 11h=type key v; 0b; ` in key v]}
 
 // The library's namespaces among some, without the test harness: .q, the
-// vendored .qunit, and .qt with everything beneath it. `.qns.owned` lists every
+// vendored .qunit, and .qt with everything beneath it. `.qf.util.owned` lists every
 // root namespace that starts with q, and .qt does, so a tool that walks the
 // library - coverage, the documentation ratchet - must drop it by name.
 // @param nss namespace symbols
@@ -131,20 +133,15 @@
 // @throws as suites_under does
 .qt.support.suites:{[] .qt.support.suites_under `.qt}
 
-// Suites declared the old way, as a root-level namespace holding test*
-// functions. Transitional: the quant suites are the last (#1412), and this
-// function, its use in `all_suites` and the layout check on it go with them.
+// Suites declared outside .qt: a root-level namespace holding test* functions.
+// There are none to run - a suite lives under .qt - so this exists to refuse one.
 // @return root namespace symbols, alphabetical
-.qt.support.legacy_suites:{[]
+.qt.support.outside_suites:{[]
     top:asc (key `) except `qt`q`Q`h`j`o`z`qunit;
     ns:` sv/: `,'top;
     ns where {[ns]
         d:@[value;ns;{[e] (::)}];
         .qt.support.is_namespace[d] and 0<count .qt.support.tests_in ns} each ns}
-
-// Every suite, in run order: the .qt suites, then any not yet moved.
-// @return namespace symbols
-.qt.support.all_suites:{[] .qt.support.suites[],.qt.support.legacy_suites[]}
 
 // Reorder suites for the runner: UQF_TEST_ORDER=reverse or shuffle runs the
 // same suites in another order, so a test that quietly depends on running
@@ -207,22 +204,15 @@
     lib:lib where (lib like "*.q") and not lib like "qunit.q";
     (("tests/lib/",/:string lib),("tests/q/",/:string .qt.support.suite_files[]),enlist "tests/q/reference_worker.q")}
 
-// The tests a file declares, as full names. A .qt definition whose last label
-// starts test, or - for the not yet moved suites - a test* definition at the
-// start of a line inside a `\d .<name>` block.
+// The tests a file declares, as full names: a .qt definition at the start of a
+// line whose last label starts test. The harness and the fixtures are never
+// suites, whatever their functions are called.
 // @param lines a file's source lines
 // @return symbols
 .qt.support.declared_tests:{[lines]
     named:.qt.support.defined_paths lines;
     named:named where not {[p] any (string p) like/: (".qt.support.*";".qt.fixture.*")} each named;
-    new:named where (string last each ` vs/: named) like "test*";
-    / the namespace in force at each line: the last \d line at or before it
-    mark:{[l] $[l like "\\d *"; `$3_l; `]} each lines;
-    inforce:fills mark;
-    w:where (lines like "test*") and (inforce<>`) and not inforce=`.;
-    names:`$({(x?":")#x} each lines w);
-    old:` sv/: inforce[w],'names;
-    new,old}
+    named where (string last each ` vs/: named) like "test*"}
 
 // The suites that define a qunitConfig. qUnit reads it through the first label
 // of a test's name - `.[`.<first label>; `qunitConfig, test]` - which is the
@@ -247,8 +237,9 @@
     lines:{read0 hsym `$x} each files;
     problems:.qt.support.collisions raze .qt.support.defined_paths each lines;
     declared:distinct raze .qt.support.declared_tests each lines;
-    suites:.qt.support.all_suites[];
+    suites:.qt.support.suites[];
     live:raze {[ns] ` sv/: ns,/:.qt.support.tests_in ns} each suites;
+    problems,:("a suite outside .qt: ",/:string each .qt.support.outside_suites[]);
     problems,:("declared but not discovered as a test: ",/:string each asc declared except live);
     problems,:("discovered but not declared in a suite file: ",/:string each asc live except declared);
     problems,:("qunitConfig is ignored for a suite not at the root: ",/:string each .qt.support.config_ignored suites);
