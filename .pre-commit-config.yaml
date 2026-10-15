@@ -4,21 +4,32 @@
 # file outside lib/.
 repos:
   # Basic file hygiene
+  #
+  # The hooks that rewrite a file, or parse it as strict YAML/TOML/JSON,
+  # exclude lib/ for the reason panache does below: vendored trees are
+  # copied byte-for-byte from upstream and never edited here, and upstream's
+  # own conventions (trailing spaces, CRLF, JSON with comments) are not ours
+  # to fix. The size, case and merge-conflict checks still cover lib/.
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: '\.md$'  # Allow trailing spaces in markdown for line breaks
+        exclude: '(\.md$|^lib/)'  # Allow trailing spaces in markdown for line breaks
       - id: end-of-file-fixer
+        exclude: '^lib/'
       - id: check-yaml
+        exclude: '^lib/'
       - id: check-toml
+        exclude: '^lib/'
       - id: check-json
+        exclude: '^lib/'
       - id: check-added-large-files
         args: ['--maxkb=10240']  # 10MB limit for data files
       - id: check-case-conflict
       - id: check-merge-conflict
       - id: mixed-line-ending
         args: ['--fix=lf']
+        exclude: '^lib/'
 
   # Markdown and Quarto formatting/linting
   #
