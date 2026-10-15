@@ -24,8 +24,10 @@
 // that, and both are deliberate:
 //
 //   1. Neither directories nor files are namespaces. Several files share one
-//      domain, and a file declares its domain with `\d .qf.<domain>` and
-//      closes it with `\d .`. A reader learns the file->domain mapping from
+//      domain, and a file puts a name in its domain by writing
+//      the name in full from the root context (`.qf.px.fwd_simple:{...}`) -
+//      never `\d .qf.px`, which PeachQ cannot load - so a lambda's own
+//      siblings are named in full too (`.qf.px.growth_simple[r;t]`). A reader learns the file->domain mapping from
 //      the list above; it is not derivable from the path.
 //
 //      Because a domain is shared, a name must be defined by ONE file of it:

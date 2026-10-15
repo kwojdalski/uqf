@@ -81,11 +81,11 @@ Several files now define names into one namespace, which changes three rules.
   give the loser's callers the other function. The gate above fails the second,
   naming both files. The migration found and resolved every such collision
   before the namespaces were merged (below).
-- **Qualify every call to another file.** Within a file a bare name is the
-  file's own. A call into another file of the domain, or another domain, is
-  written in full (`.qf.px.ccy_pair_legs`, not `ccy_pair_legs`). That is already
-  the repository's rule for select/update clauses on KDB-X, and it is how the
-  gate sees the dependency at all.
+- **Qualify every reference to a library name.** The library is defined from the
+  root context, so a bare name inside a function is a parameter, a local or a q
+  built-in -- never a sibling. A call to any library function, in the same file
+  or another, is written in full (`.qf.px.ccy_pair_legs`), which is also how the
+  gate sees a dependency between files.
 - **A helper is a name like any other.** A private helper is tagged `/ @private`
   in its qDoc block, lives in the domain beside the public names, is left out of
   the contract surface, and needs a descriptive name that is unique in the whole
@@ -94,9 +94,8 @@ Several files now define names into one namespace, which changes three rules.
 
 State follows the same rule. A constant is assigned in one file; no file
 reassigns another's (`flat_tolerance` is `risk.q`'s, and `desk_positions.q`
-calls it as `.qf.port.flat_tolerance` rather than keeping a copy). A `\d` block
-opens and closes with `\d .`, and nothing initialises a name another file owns:
-the quant library keeps no mutable state.
+calls it as `.qf.port.flat_tolerance` rather than keeping a copy). Nothing
+initialises a name another file owns: the quant library keeps no mutable state.
 
 ### Collisions the merge resolved
 
@@ -121,29 +120,33 @@ message changed.
 
 ## PeachQ
 
-`\d .qf.px` is a nested context, and PeachQ v0.88 cannot load one (the same
-limit the whole `.qetl` and `.qpipe` tree already has). The quant library used
-to be single-level and loaded on PeachQ as it stands; it no longer does. What
-changed in the lanes that run on PeachQ:
+PeachQ v0.88 cannot switch into a nested context, so no library file contains
+`\d .qf.px`. Every name is defined from the root, fully qualified
+(`.qf.px.growth_simple:{[r;t] ...}`), and a lambda names its own siblings and
+constants in full too, because a lambda defined from the root resolves an
+unqualified global at the root. The result loads natively on PeachQ:
+`\l src/init.q` works, the two `docs/` blocks that load it run on PeachQ, and
+the library needs no flattening there (the ETL's `.qetl.*` and `.qpipe.*` still
+do). [`check_module_deps.py`](../../scripts/gates/check_module_deps.py) fails a
+`\d .a.b` in a library file so this cannot regress.
 
-- `scripts/test.py q-unit-peachq` flattens `src/`, `scripts/` and `tests/` first
-  ([`flatten_contexts.py`](../../scripts/portable/flatten_contexts.py)), and the
-  library now goes through it with the rest. The flattener refuses a qSQL phrase
-  that names a column which is also a name in the namespace, so a helper called
-  `step` or a function called `rolling_ofi` beside a column of the same name is
-  a collision there too; that is another reason to give helpers narrow names.
-- The two `docs/` blocks that load `src/init.q` are marked `kdbx-only`, as the
-  ETL blocks are, and one Python test that loads `metatables.q` natively is
-  listed in `python/peachq_known_gaps.txt`.
+Two consequences of writing names in full:
+
+- Inside a function, a bare name is a parameter, a local or a q built-in, never
+  a sibling. Read `.qf.px.growth_simple[r;t]`, not `growth_simple[r;t]`.
+- A qSQL phrase that names a column which is also a function in the namespace is
+  ambiguous to the flattener the ETL lane still runs, so a helper called `step`
+  or a function called `rolling_ofi` beside a column of that name is worth
+  avoiding; that is another reason to give helpers narrow names.
 
 ## Adding to a domain
 
 1. Choose the domain by the `px`/`mkt` rule above and the table at the top. Do
    not add a namespace.
-2. In an existing file, define the function under that file's `\d .qf.<domain>`.
-   In a new file, open `\d .qf.<domain>`, close with `\d .`, add the `\l` line
-   to `src/init.q` in dependency order and a matching `tests/q/test_<module>.q`
-   to `tests/run_tests.q`.
+2. Define the function fully qualified (`.qf.<domain>.name:{...}`), in an
+   existing file or a new one, never inside `\d .qf.<domain>`. For a new file,
+   add the `\l` line to `src/init.q` in dependency order and a matching
+   `tests/q/test_<module>.q` to `tests/run_tests.q`.
 3. Check the name is free in the whole domain
    (`uv run python scripts/gates/check_module_deps.py`).
 4. A cross-file call is a new edge: add it to `ALLOWED` in the same change.

@@ -172,30 +172,33 @@ no processes/IPC/tables).
 
 ## Layout
 
-- `src/*.q` - one module (file) per topic, each wrapped in a `\d .qf.<domain>`
-  ... `\d .` block. The quant library is exactly seven namespaces under `.qf` -
-  `.qf.px` (pricing and conventions), `.qf.mkt` (market-book analytics),
-  `.qf.exec` (execution quality and allocation), `.qf.port` (positions, desk
-  exposure, risk, limits), `.qf.math` (numerical primitives), `.qf.util`
-  (schema, metadata, rendering, namespace discovery) and `.qf.demo` (example
-  defaults and synthetic data) - and several files load into each.
-  `docs/reference/qf-domains.md` has the file-to-domain mapping, the `px`/`mkt`
-  boundary and the table from every former `.q<abbrev>` name. There is no
-  intermediate public namespace (no `.qf.px.options`). `src/integrations/data.q`
-  is `.qdata`, out of scope for this library, see below. A domain is shared, so:
-  a name is defined by ONE of its files (`check_module_deps.py` fails a second
-  `name:`, because load order would silently pick the winner); another file's
-  function is always called fully qualified (`.qf.px.ccy_pair_legs`, never a
-  bare name), which is also how that gate sees the dependency; and a private
-  helper (`/ @private`) lives in the domain beside the public names and needs a
-  descriptive, domain-unique name (`empty_desk_book`, not `empty_book`). The ETL
-  framework nests under `.qetl` (for example `.qetl.job.bounded`,
-  `.qetl.cfg.audit`); concrete implementations live under `.qpipe.source`,
-  `.qpipe.transform` and `.qpipe.job`. Both bounded and streaming jobs share the
-  job root and must have distinct names. Shared transforms load from
-  `src/etl/transforms/` before jobs. The TorQ adapter is `.qtorq`, and
-  runner-local state stays under `.qproc`. A namespace outside the `.q` prefix
-  entirely is a bug unless it is one of the three listed in
+- `src/*.q` - one module (file) per topic, each defining its names fully
+  qualified from the root (`.qf.px.fwd_simple:{...}`), never inside a
+  `\d .qf.<domain>` block: PeachQ cannot load a nested context, and
+  `check_module_deps.py` refuses one. A lambda therefore names its own siblings
+  in full too, since unqualified globals resolve at the root. The quant library
+  is exactly seven namespaces under `.qf` - `.qf.px` (pricing and conventions),
+  `.qf.mkt` (market-book analytics), `.qf.exec` (execution quality and
+  allocation), `.qf.port` (positions, desk exposure, risk, limits), `.qf.math`
+  (numerical primitives), `.qf.util` (schema, metadata, rendering, namespace
+  discovery) and `.qf.demo` (example defaults and synthetic data) - and several
+  files load into each. `docs/reference/qf-domains.md` has the file-to-domain
+  mapping, the `px`/`mkt` boundary and the table from every former `.q<abbrev>`
+  name. There is no intermediate public namespace (no `.qf.px.options`).
+  `src/integrations/data.q` is `.qdata`, out of scope for this library, see
+  below. A domain is shared, so: a name is defined by ONE of its files
+  (`check_module_deps.py` fails a second `name:`, because load order would
+  silently pick the winner); another file's function is always called fully
+  qualified (`.qf.px.ccy_pair_legs`, never a bare name), which is also how that
+  gate sees the dependency; and a private helper (`/ @private`) lives in the
+  domain beside the public names and needs a descriptive, domain-unique name
+  (`empty_desk_book`, not `empty_book`). The ETL framework nests under `.qetl`
+  (for example `.qetl.job.bounded`, `.qetl.cfg.audit`); concrete implementations
+  live under `.qpipe.source`, `.qpipe.transform` and `.qpipe.job`. Both bounded
+  and streaming jobs share the job root and must have distinct names. Shared
+  transforms load from `src/etl/transforms/` before jobs. The TorQ adapter is
+  `.qtorq`, and runner-local state stays under `.qproc`. A namespace outside the
+  `.q` prefix entirely is a bug unless it is one of the three listed in
   `tests/q/test_namespaces.q`'s `outside_the_prefix` - `.dqe` (TorQ's own),
   `.cov` (KX's API shape) and `.surface` (the exporter) - and that test fails on
   a new one. Code that enumerates namespaces must therefore go through
@@ -371,8 +374,8 @@ order backwards - see below) by actually downloading `qstudio.jar` and running
   only what no other module or job file is told to call: a helper a guide tells
   job authors to use is API, whatever its comment says.
 - A file-level doc block (single-`/` lines, ending in a lone `/ .` line) goes
-  **before** the file's `\d .qf.<domain>` line at the top of the file and
-  becomes that file's description in the generated docs.
+  **before** the file's first definition at the top of the file and becomes that
+  file's description in the generated docs.
 - The CLI is
   `java -cp qstudio.jar com.timestored.qdoc.QDocMain <target> <source>`.
   TimeStored's own help page states the reverse order (`<source> <target>`) -

@@ -11,7 +11,7 @@
 / torq_cross_etl.q/torq_vectorize_etl.q wrap other uqf pure functions with
 / their own local state and glue.
 
-\d .qf.port
+\d .
 
 / An empty position book: one row per sym once opened, running signed
 / qty, volume-weighted average entry price of the *currently open*
@@ -20,7 +20,7 @@
 / current market price.
 / @return an empty keyed table, ready for apply_fill
 / @eg .qf.port.empty_book[]
-empty_book:{[] ([sym:`symbol$()] qty:`float$(); avg_price:`float$(); realized_pnl:`float$())};
+.qf.port.empty_book:{[] ([sym:`symbol$()] qty:`float$(); avg_price:`float$(); realized_pnl:`float$())};
 
 / Apply one fill to a position book, weighted-average-cost style:
 / - opening from flat, or adding to a position in the same direction:
@@ -43,7 +43,7 @@ empty_book:{[] ([sym:`symbol$()] qty:`float$(); avg_price:`float$(); realized_pn
 / @return pos with sym's row updated (or added, if new)
 / @eg .qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1] -> qty 1000000, avg_price 1.1, realized_pnl 0
 / @eg .qf.port.apply_fill[.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1];`EURUSD;400000;1.1050;-1] -> qty 600000, avg_price 1.1 (unchanged), realized_pnl 2000 (400000 closed at a 50-pip gain)
-apply_fill:{[pos;sym;qty;price;side]
+.qf.port.apply_fill:{[pos;sym;qty;price;side]
     / exec sym from pos, not key pos: `key` on a single-key-column keyed
     / table does not always give a plain symbol vector, and `in` against
     / anything else fails. exec says exactly what is wanted, so it is kept
@@ -97,8 +97,8 @@ apply_fill:{[pos;sym;qty;price;side]
 /   need not already be sorted)
 / @return pos with every trade in trades applied, oldest first
 / @eg .qf.port.apply_fills[.qf.port.empty_book[];trades]
-apply_fills:{[pos;trades]
-    {[pos;row] apply_fill[pos;row`sym;row`size;row`trade_price;row`side]}/[pos;`time xasc trades]};
+.qf.port.apply_fills:{[pos;trades]
+    {[pos;row] .qf.port.apply_fill[pos;row`sym;row`size;row`trade_price;row`side]}/[pos;`time xasc trades]};
 
 / Recompute a position book from a trades table (via apply_fills) and diff
 / it, per sym, against an independent reference book - e.g. a broker/prime
@@ -124,8 +124,8 @@ apply_fills:{[pos;trades]
 /   avg_price_break/status (`break`match), one row per sym seen in
 /   either side, sorted breaks-first
 / @eg .qf.port.reconcile_trades[broker_book;trades;0f;1e-6]
-reconcile_trades:{[reference_book;trades;qty_tol;price_tol]
-    computed_book:apply_fills[empty_book[];trades];
+.qf.port.reconcile_trades:{[reference_book;trades;qty_tol;price_tol]
+    computed_book:.qf.port.apply_fills[.qf.port.empty_book[];trades];
     ref_syms:exec sym from reference_book;
     comp_syms:exec sym from computed_book;
     all_syms:asc distinct ref_syms,comp_syms;
@@ -151,7 +151,7 @@ reconcile_trades:{[reference_book;trades;qty_tol;price_tol]
 / @param mkt_price the current market price to mark against
 / @return unrealized P&L, in quote currency (0 if sym isn't in pos or is flat)
 / @eg .qf.port.unrealized_pnl[.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;600000;1.1000;1];`EURUSD;1.1100] -> 6000f
-unrealized_pnl:{[pos;sym;mkt_price]
+.qf.port.unrealized_pnl:{[pos;sym;mkt_price]
     if[not sym in exec sym from pos; :0f];
     row:pos sym;
     .qf.port.pnl[abs row`qty;row`avg_price;mkt_price;signum row`qty]};
@@ -162,9 +162,9 @@ unrealized_pnl:{[pos;sym;mkt_price]
 / @param mkt_price the current market price to mark against
 / @return total P&L, in quote currency
 / @eg .qf.port.total_pnl[b;`EURUSD;1.1100]
-total_pnl:{[pos;sym;mkt_price]
+.qf.port.total_pnl:{[pos;sym;mkt_price]
     realized:$[sym in exec sym from pos; pos[sym]`realized_pnl; 0f];
-    realized+unrealized_pnl[pos;sym;mkt_price]};
+    realized+.qf.port.unrealized_pnl[pos;sym;mkt_price]};
 
 / Decompose one pair position into its two currency legs, in *fixed*,
 / dealt-rate notional terms - not marked to current market. Spot FX legs
@@ -178,7 +178,7 @@ total_pnl:{[pos;sym;mkt_price]
 / @return a 2-row table `ccy`amount - the base currency's leg is +qty,
 /   the quote currency's leg is -(qty*avg_price)
 / @eg .qf.port.ccy_legs[`EURAUD;1000000;1.6000] -> +`ccy`amount!(`EUR`AUD;(1000000;-1600000f))
-ccy_legs:{[sym;qty;avg_price]
+.qf.port.ccy_legs:{[sym;qty;avg_price]
     legs:.qf.px.ccy_pair_legs sym;
     ([] ccy:(legs`base;legs`quote); amount:(qty;neg qty*avg_price))};
 
@@ -201,9 +201,9 @@ ccy_legs:{[sym;qty;avg_price]
 / across both pairs: -1,600,000 from the EURAUD leg plus +500,000 from the
 / AUDUSD leg is -1,100,000.
 / @eg .qf.port.ccy_exposure[.qf.port.apply_fill[.qf.port.apply_fill[.qf.port.empty_book[];`EURAUD;1000000;1.6000;1];`AUDUSD;500000;0.6500;1]] -> +`ccy`amount!(`s#`AUD`EUR`USD;-1100000 1000000 -325000f)
-ccy_exposure:{[pos]
+.qf.port.ccy_exposure:{[pos]
     legs:raze {[row]
-        open:ccy_legs[row`sym;row`qty;row`avg_price];
+        open:.qf.port.ccy_legs[row`sym;row`qty;row`avg_price];
         / ccy_legs gives the base leg, then the quote leg. Parenthesised:
         / a bare comma in a qSQL update starts another column.
         update amount:amount+(0,row`realized_pnl) from open} each 0!pos;
@@ -235,8 +235,8 @@ ccy_exposure:{[pos]
 / @throws error (from cross_book_at) if some currency has no chain of
 /   available pairs connecting it to reporting_ccy in quotes
 / @eg .qf.port.ccy_exposure_in[b;quotes;`USD;.z.p]
-ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
-    exposure:ccy_exposure[pos];
+.qf.port.ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
+    exposure:.qf.port.ccy_exposure[pos];
     convert_one:{[quotes;reporting_ccy;as_of;ccy;amount]
         if[ccy=reporting_ccy; :amount];
         / Nothing to convert, and nothing to sweep: a book that closed a

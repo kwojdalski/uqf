@@ -38,13 +38,13 @@
 / police only one direction. A one-sided limit is expressed as two rows
 / with different metrics, not by making the common case a trap.
 
-\d .qf.port
+\d .
 
 / The columns a limits table must carry, on top of its scope columns.
-required_limit_cols:`metric`cap
+.qf.port.required_limit_cols:`metric`cap
 
 / The columns a measured table must carry, on top of its scope columns.
-required_measured_cols:`metric`observed
+.qf.port.required_measured_cols:`metric`observed
 
 / Columns that are NEVER scope - so the scope is whatever is left, and a
 / desk adding a column to its limits file widens the scope without telling
@@ -60,7 +60,7 @@ required_measured_cols:`metric`observed
 / `severity is optional and carried through to the breach untouched, so a
 / desk can route warnings and hard breaches differently without this file
 / knowing what its severities mean.
-non_scope_cols:`metric`cap`severity`observed`utilisation
+.qf.port.non_scope_cols:`metric`cap`severity`observed`utilisation
 
 / Refuse a limits table that is not one, naming what is wrong.
 / .
@@ -71,15 +71,15 @@ non_scope_cols:`metric`cap`severity`observed`utilisation
 / @return 1b when acceptable
 / @throws error naming the missing column, the non-positive cap, or the duplicated scope
 / @eg .qf.port.require_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1b
-require_limits:{[limits]
+.qf.port.require_limits:{[limits]
     if[not 98h=type limits; '"require_limits: limits must be a table"];
-    .qf.util.require_cols[`require_limits;`limits;limits;required_limit_cols];
+    .qf.util.require_cols[`require_limits;`limits;limits;.qf.port.required_limit_cols];
     if[not 11h=abs type limits`metric;
         '"require_limits: metric must be a symbol column naming what is capped"];
     if[any null limits`cap; '"require_limits: a null cap polices nothing - remove the row instead"];
     if[any 0f>=limits`cap;
         '"require_limits: every cap must be positive - a cap is on the absolute value, so a negative one can never be met"];
-    scope:scope_cols[limits];
+    scope:.qf.port.scope_cols[limits];
     ident:?[limits;();0b;(scope,`metric)!scope,`metric];
     if[(count distinct ident)<count ident;
         '"require_limits: two limits cover the same scope and metric - which one binds would depend on row order"];
@@ -90,7 +90,7 @@ require_limits:{[limits]
 / @param limits a limits table
 / @return the scope columns, in the table's own order
 / @eg .qf.port.scope_cols[([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> enlist `sym
-scope_cols:{[limits] c:cols limits; c where not c in non_scope_cols}
+.qf.port.scope_cols:{[limits] c:cols limits; c where not c in .qf.port.non_scope_cols}
 
 / Melt a book into the long (metric; observed) form evaluate consumes.
 / .
@@ -115,7 +115,7 @@ scope_cols:{[limits] c:cols limits; c where not c in non_scope_cols}
 /   the column is unreachable, which qlinter's QF013 exists to catch
 / @throws error when the book is not keyed, or names a metric it does not carry
 / @eg exec metric from .qf.port.measure[([sym:enlist `EURUSD] base_qty:enlist 1e6);enlist `base_qty] -> enlist `base_qty
-measure:{[book;metrics]
+.qf.port.measure:{[book;metrics]
     if[not 99h=type book;
         '"measure: the book must be keyed on its scope columns - an unkeyed table does not say which of its columns a limit would be written against"];
     scope:keys book;
@@ -148,11 +148,11 @@ measure:{[book;metrics]
 / @return a table of scope, metric, observed, cap, severity, utilisation - one row per breach, worst first
 / @throws error when either table is malformed, or a limited scope's observed is null
 / @eg count .qf.port.evaluate[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6);([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
-evaluate:{[measured;limits]
+.qf.port.evaluate:{[measured;limits]
     if[not 98h=type measured; '"evaluate: measured must be a table"];
-    .qf.util.require_cols[`evaluate;`measured;measured;required_measured_cols];
-    require_limits[limits];
-    scope:scope_cols[limits];
+    .qf.util.require_cols[`evaluate;`measured;measured;.qf.port.required_measured_cols];
+    .qf.port.require_limits[limits];
+    scope:.qf.port.scope_cols[limits];
     unknown:scope where not scope in cols measured;
     if[count unknown;
         '"evaluate: limits are scoped on ",(", " sv string unknown),", which the measurements do not carry - roll the book up to the level the limits are written at"];
@@ -175,8 +175,8 @@ evaluate:{[measured;limits]
 / @param limits the limits table
 / @return the limit rows with no matching measurement
 / @eg count .qf.port.unmatched_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 1f);([] sym:enlist `GBPUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
-unmatched_limits:{[measured;limits]
-    scope:scope_cols[limits];
+.qf.port.unmatched_limits:{[measured;limits]
+    scope:.qf.port.scope_cols[limits];
     ident:?[measured;();0b;(scope,`metric)!scope,`metric];
     limits where not (?[limits;();0b;(scope,`metric)!scope,`metric]) in ident}
 
@@ -197,7 +197,7 @@ unmatched_limits:{[measured;limits]
 / the set is small, fixed at load, and does not grow with traffic.
 / @return an empty throttle state, to be threaded through throttle
 / @eg count .qf.port.no_alerts[] -> 0
-no_alerts:{[] (`symbol$())!`timestamp$()}
+.qf.port.no_alerts:{[] (`symbol$())!`timestamp$()}
 
 / Split a breach set into the ones worth alerting on and the ones already
 / alerted recently, and carry the state forward.
@@ -219,10 +219,10 @@ no_alerts:{[] (`symbol$())!`timestamp$()}
 / @param period how long a given breach stays quiet after alerting
 / @return a dict of `state (carry it to the next call) and `alerts (the breaches to send)
 / @eg count .qf.port.throttle[.qf.port.no_alerts[];([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6; cap:enlist 1e6);2026.01.01D09:00:00;0D00:05]`alerts -> 1
-throttle:{[state;breaches;now;period]
+.qf.port.throttle:{[state;breaches;now;period]
     if[0=count breaches; :`state`alerts!(state;breaches)];
-    scope:scope_cols[breaches];
-    ids:identity ?[breaches;();0b;(scope,`metric)!scope,`metric];
+    scope:.qf.port.scope_cols[breaches];
+    ids:.qf.port.identity ?[breaches;();0b;(scope,`metric)!scope,`metric];
     quiet:{[state;now;period;id] $[id in key state; now<period+state id; 0b]}[state;now;period] each ids;
     fresh:breaches where not quiet;
     `state`alerts!(state,(ids where not quiet)!(count fresh)#now; fresh)}
@@ -234,6 +234,6 @@ throttle:{[state;breaches;now;period]
 / something rather than as an empty string indistinguishable from another
 / column's.
 / @private
-identity:{[scopes] `$ {"|" sv .Q.s1 each value x} each scopes}
+.qf.port.identity:{[scopes] `$ {"|" sv .Q.s1 each value x} each scopes}
 
 \d .

@@ -4,7 +4,7 @@
 / it loads into the same namespace, .qf.mkt, and no public name changed. This is the one
 / crypto reference crypto_markout, posbook and last_value price from.
 
-\d .qf.mkt
+\d .
 
 / ------------------------------------------------- HOW A MARKET IS PRICED
 
@@ -13,17 +13,17 @@
 / market, read by every consumer that prices from market_data (posbook,
 / last_value), so a market added without one is refused by name rather than
 / falling into whichever branch each consumer wrote.
-price_rules:`fx`crypto!`own_book`across_venues
+.qf.mkt.price_rules:`fx`crypto!`own_book`across_venues
 
 / The pricing rule for each market.
 / @param markets symbol list
 / @return the rule for each, aligned
 / @throws when a market has no rule, naming it
 / @eg .qf.mkt.price_rule `fx`crypto`fx  ->  `own_book`across_venues`own_book
-price_rule:{[markets]
-    u:distinct markets except key price_rules;
+.qf.mkt.price_rule:{[markets]
+    u:distinct markets except key .qf.mkt.price_rules;
     if[count u; '"price_rule: no pricing rule for market ",(", " sv string u)," - add it to .qf.mkt.price_rules"];
-    price_rules markets}
+    .qf.mkt.price_rules markets}
 
 / Each venue's top of book, for the markets priced across venues: the venue
 / is the book's source and its time the venue's source_time. A side with no
@@ -33,8 +33,8 @@ price_rule:{[markets]
 / @param x market_data rows
 / @return table sym, venue, time, bid, ask, in batch order
 / @eg exec bid from .qf.mkt.venue_tops ([] sym:2#`$"BTC-USDT"; market:2#`crypto; source:`a`b; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 62000f;`float$()); ask_prices:(enlist 62010f;enlist 62008f))  ->  62000 0n
-venue_tops:{[x]
-    x:x where `across_venues=price_rule[x`market];
+.qf.mkt.venue_tops:{[x]
+    x:x where `across_venues=.qf.mkt.price_rule[x`market];
     s:.qf.mkt.top_sides x;
     ([] sym:x`sym; venue:x`source; time:x`source_time; bid:s`bid; ask:s`ask)}
 
@@ -45,8 +45,8 @@ venue_tops:{[x]
 / @param x market_data rows
 / @return table sym, market, source, source_time, bid, ask, mid, in batch order
 / @eg exec mid from .qf.mkt.own_book_mids ([] sym:`EURUSD`GBPUSD; market:`fx`fx; source:`a`a; source_time:2#2026.09.17D10:00:00; bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ,1.085
-own_book_mids:{[x]
-    x:x where `own_book=price_rule[x`market];
+.qf.mkt.own_book_mids:{[x]
+    x:x where `own_book=.qf.mkt.price_rule[x`market];
     s:.qf.mkt.top_sides x;
     t:([] sym:x`sym; market:x`market; source:x`source; source_time:x`source_time; bid:s`bid; ask:s`ask);
     t:t where (not null t`bid) & not null t`ask;
@@ -58,13 +58,13 @@ own_book_mids:{[x]
 / reference price: one policy for every job that prices against the market
 / rather than one venue - crypto_markout's markouts and posbook's crypto
 / marks (#886). Five seconds, superbook's expiry window for FX.
-reference_max_age:0D00:00:05
+.qf.mkt.reference_max_age:0D00:00:05
 
 / How far a source's clock may lead this host's and its book still count as
 / current: market_data's publish check refuses a book dated further ahead
 / (#1021), and superbook takes it as its default (#1033). Every multi-venue
 / feed has some skew; past this, the stamp is wrong rather than early.
-max_clock_lead:0D00:00:00.250
+.qf.mkt.max_clock_lead:0D00:00:00.250
 
 / The best mid across venues at each target (sym; time).
 / .
@@ -78,7 +78,7 @@ max_clock_lead:0D00:00:00.250
 / @param max_age the oldest a venue's book may be and still count
 / @return a float vector aligned with targets
 / @eg .qf.mkt.best_mid_across_venues[([] time:2026.09.17D10:00:00 2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 62004f; ask:62010 62008f);([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:01);0D00:00:05]  ->  ,62006f
-best_mid_across_venues:{[tob;targets;max_age] (best_across_venues[tob;targets;max_age])`mid}
+.qf.mkt.best_mid_across_venues:{[tob;targets;max_age] (.qf.mkt.best_across_venues[tob;targets;max_age])`mid}
 
 / The best bid, best ask and their mid across venues at each target - the
 / quote best_mid_across_venues prices from, for a consumer that publishes
@@ -90,7 +90,7 @@ best_mid_across_venues:{[tob;targets;max_age] (best_across_venues[tob;targets;ma
 / @param max_age the oldest a venue's book may be and still count
 / @return a table bid, ask, mid aligned with targets
 / @eg .qf.mkt.best_across_venues[([] time:2026.09.17D10:00:00 2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 62004f; ask:62010 62008f);([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:01);0D00:00:05]  ->  ([] bid:enlist 62004f; ask:enlist 62008f; mid:enlist 62006f)
-best_across_venues:{[tob;targets;max_age]
+.qf.mkt.best_across_venues:{[tob;targets;max_age]
     / nothing to price, or nothing to price from: no aj (PeachQ refuses one
     / with no targets against a non-empty book - #990)
     if[(0=count tob) or 0=count targets; :([] bid:(count targets)#0n; ask:(count targets)#0n; mid:(count targets)#0n)];
@@ -117,7 +117,7 @@ best_across_venues:{[tob;targets;max_age]
 / @param tops table sym, venue, time, bid, ask - a batch's tops, any order
 / @return the rows of tops to upsert into tob, one per (sym; venue) at most
 / @eg exec bid from .qf.mkt.newer_venue_tops[2!([] sym:enlist `$"BTC-USDT"; venue:enlist `a; time:enlist 2026.09.17D10:00:01; bid:enlist 100f; ask:enlist 101f);([] sym:2#`$"BTC-USDT"; venue:`a`b; time:2#2026.09.17D10:00:00; bid:90 95f; ask:91 96f)]  ->  ,95f
-newer_venue_tops:{[tob;tops]
+.qf.mkt.newer_venue_tops:{[tob;tops]
     t:0!select by sym, venue from `time xasc tops;
     held:(exec (sym,'venue)!time from 0!tob) t[`sym],'t`venue;
     t where (null held) or t[`time]>=held}
@@ -132,7 +132,7 @@ newer_venue_tops:{[tob;tops]
 / @param rows a table with sym and source_time, any order
 / @return the rows to apply, one per sym at most
 / @eg exec mid from .qf.mkt.newer_by_sym[enlist[`EURUSD]!enlist 2026.09.17D10:00:01;([] sym:`EURUSD`GBPUSD; source_time:2#2026.09.17D10:00:00; mid:1.1 1.27)]  ->  ,1.27
-newer_by_sym:{[held;rows]
+.qf.mkt.newer_by_sym:{[held;rows]
     t:0!select by sym from `source_time xasc rows;
     h:held t`sym;
     t where (null h) or t[`source_time]>=h}

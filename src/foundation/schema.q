@@ -18,7 +18,7 @@
 / in front of them when the error lands. q gives a lambda no way to ask its
 / own name, so the caller passes it.
 
-\d .qf.util
+\d .
 
 / Refuse a table that lacks any of the columns a function reads.
 / .
@@ -33,7 +33,7 @@
 / @throws error naming the caller, the table and every missing column
 / @eg .qf.util.require_cols[`markout;`trades;([] sym:enlist `EURUSD);enlist `sym]  -> ::
 / @eg .qf.util.require_cols[`markout;`trades;([] sym:enlist `EURUSD);`sym`time]  -> throws
-require_cols:{[fn_name;table_name;tbl;req]
+.qf.util.require_cols:{[fn_name;table_name;tbl;req]
     r:(),req;
     missing:r where not r in cols tbl;
     if[count missing;
@@ -49,7 +49,7 @@ require_cols:{[fn_name;table_name;tbl;req]
 / @return generic null when every column is present
 / @throws error naming the caller and every missing column
 / @eg .qf.util.require_depth_quotes[`f;([] time:`timestamp$(); sym:`symbol$())]  -> throws
-depth_quote_cols:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
-require_depth_quotes:{[fn_name;quotes] require_cols[fn_name;`quotes;quotes;depth_quote_cols]}
+.qf.util.depth_quote_cols:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+.qf.util.require_depth_quotes:{[fn_name;quotes] .qf.util.require_cols[fn_name;`quotes;quotes;.qf.util.depth_quote_cols]}
 
 \d .

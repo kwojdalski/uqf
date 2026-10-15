@@ -24,7 +24,7 @@
 / Requires microstructure.q (spread_bps, for check_market_data_quality) and
 / forwards.q (require_depth_quotes) to be loaded first.
 
-\d .qf.mkt
+\d .
 
 / Per-row market data sanity, built on microstructure.q's own spread_bps
 / (no re-derivation of top-of-book/mid here) - a negative spread means the
@@ -55,7 +55,7 @@
 /   first, which is what matters)
 / @throws error if quotes is missing a required column
 / @eg .qf.mkt.check_market_data_quality[quotes;5]
-check_market_data_quality:{[quotes;max_spread_bps]
+.qf.mkt.check_market_data_quality:{[quotes;max_spread_bps]
     .qf.util.require_depth_quotes[`check_market_data_quality;quotes];
     / ONE extraction of the top for every status (#1200): a side whose level 0
     / is not level_ok (zero, negative, null, infinite) is absent, so it is
@@ -100,7 +100,7 @@ check_market_data_quality:{[quotes;max_spread_bps]
 /   last_ts and age (#1277)
 / @throws error if quotes is missing a required column
 / @eg .qf.mkt.check_stale_quotes[quotes;.z.p;0D00:00:05]
-check_stale_quotes:{[quotes;as_of;max_age]
+.qf.mkt.check_stale_quotes:{[quotes;as_of;max_age]
     .qf.util.require_depth_quotes[`check_stale_quotes;quotes];
     / by before from, where after from - the canonical qSQL clause order,
     / kept because a reordered clause reads as a typo to anyone scanning it.
@@ -141,7 +141,7 @@ check_stale_quotes:{[quotes;as_of;max_age]
 / @return a table check/status/detail, one row per non-`ok row across
 /   every check supplied, in the order given
 / @eg .qf.mkt.summarize_checks[((`stale;.qf.mkt.check_stale_quotes[quotes;.z.p;0D00:00:05]);(`spread;.qf.mkt.check_market_data_quality[quotes;5]))]
-summarize_checks:{[named_checks]
+.qf.mkt.summarize_checks:{[named_checks]
     rows:raze {[pair]
         check_name:pair 0; t:pair 1;
         bad:select from t where status<>`ok;

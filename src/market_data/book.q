@@ -6,7 +6,7 @@
 / first) list per row.
 / .
 
-\d .qf.mkt
+\d .
 
 / Fold N per-level source columns into one vector-valued column, for each
 / group in level_groups. Each row of the resulting column holds the N
@@ -19,7 +19,7 @@
 /   group to fold, source columns listed in the desired fold order
 / @return tbl with each group's source columns replaced by one target_col
 / @eg .qf.mkt.fold_level_columns[tbl;(enlist `bid_prices)!(enlist `bid0`bid1)]
-fold_level_columns:{[tbl;level_groups]
+.qf.mkt.fold_level_columns:{[tbl;level_groups]
     target_cols:(key level_groups),();
     i:0;
     while[i<count target_cols;
@@ -38,24 +38,24 @@ fold_level_columns:{[tbl;level_groups]
 / `like`, since `like`'s "_" wildcard would misfire on prefixes such as
 / "bid_px_".
 / @private
-starts_with:{[prefix;s]
+.qf.mkt.starts_with:{[prefix;s]
     prefix_len:count prefix;
     (prefix_len<=count s) and prefix~prefix_len#s};
 
 / Private: true if s is non-empty and every character is a decimal digit.
 / @private
-all_digit_string:{[s] (0<count s) and all s in "0123456789"};
+.qf.mkt.all_digit_string:{[s] (0<count s) and all s in "0123456789"};
 
 / Private: the ordered source columns for one (prefix;target_col) naming
 / rule - see derive_level_groups.
 / @throws error if the matched levels aren't a contiguous 0..N-1 run
 / @private
-sorted_source_cols_for_prefix:{[col_names;col_strs;prefix_target]
+.qf.mkt.sorted_source_cols_for_prefix:{[col_names;col_strs;prefix_target]
     prefix:prefix_target 0;
     prefix_len:count prefix;
-    matches:starts_with[prefix;] each col_strs;
+    matches:.qf.mkt.starts_with[prefix;] each col_strs;
     suffixes:prefix_len _' col_strs;
-    is_level_col:matches and all_digit_string each suffixes;
+    is_level_col:matches and .qf.mkt.all_digit_string each suffixes;
     matched_names:col_names where is_level_col;
     matched_suffixes:suffixes where is_level_col;
     levels:("I"$) each matched_suffixes;
@@ -85,7 +85,7 @@ sorted_source_cols_for_prefix:{[col_names;col_strs;prefix_target]
 /   0..N-1 run, naming the prefix and the levels actually found
 / @eg .qf.mkt.derive_level_groups[`bid0`bid1`bidSize0`bidSize1;enlist ("bid";`bid_prices)]
 / @eg .qf.mkt.derive_level_groups[`bid_px_00`bid_px_01`ask_px_00`ask_px_01;(("bid_px_";`bid_prices);("ask_px_";`ask_prices))]  -> Databento-style zero-padded prefixes, two rules at once
-derive_level_groups:{[col_names;prefix_targets]
+.qf.mkt.derive_level_groups:{[col_names;prefix_targets]
     col_names:col_names,();
     prefix_targets:prefix_targets,();
     col_strs:string col_names;
@@ -94,7 +94,7 @@ derive_level_groups:{[col_names;prefix_targets]
     i:0;
     while[i<count prefix_targets;
         prefix_target:prefix_targets i;
-        sorted_names:sorted_source_cols_for_prefix[col_names;col_strs;prefix_target];
+        sorted_names:.qf.mkt.sorted_source_cols_for_prefix[col_names;col_strs;prefix_target];
         targets:targets,prefix_target 1;
         source_lists:source_lists,enlist sorted_names;
         i+:1];
@@ -111,7 +111,7 @@ derive_level_groups:{[col_names;prefix_targets]
 / @return tbl with sym_cols cast to symbol
 / @throws error naming any column in sym_cols that tbl does not have
 / @eg .qf.mkt.symbolize_columns[tbl;enlist `sym]
-symbolize_columns:{[tbl;sym_cols]
+.qf.mkt.symbolize_columns:{[tbl;sym_cols]
     sym_cols:sym_cols,();
     / Refuse an absent column BY NAME. q does not agree with itself about
     / what indexing a missing column gives: on a plain table built from a
@@ -138,7 +138,7 @@ symbolize_columns:{[tbl;sym_cols]
 / whole is type 0h (a general list of char vectors), not 10h itself -
 / same gotcha as ccy_to_str.
 / @private
-is_string_column:{[tbl;col] (count tbl col) and all 10h=type each tbl col};
+.qf.mkt.is_string_column:{[tbl;col] (count tbl col) and all 10h=type each tbl col};
 
 / Candidate identifier-like string columns that are LIKELY mis-typed and
 / should be symbols - advisory only, never applied automatically; run
@@ -153,12 +153,12 @@ is_string_column:{[tbl;col] (count tbl col) and all 10h=type each tbl col};
 / @param cardinality_ratio flag a string column when (distinct count / row count) is below this ratio
 / @return list of column names likely to be mis-typed symbol columns
 / @eg .qf.mkt.candidate_symbol_columns[tbl;`sym`side;0.1]
-candidate_symbol_columns:{[tbl;allowlist;cardinality_ratio]
+.qf.mkt.candidate_symbol_columns:{[tbl;allowlist;cardinality_ratio]
     allowlist:allowlist,();
     all_cols:cols tbl;
     row_count:count tbl;
     is_candidate:{[tbl;allowlist;cardinality_ratio;row_count;col]
-        if[not is_string_column[tbl;col]; :0b];
+        if[not .qf.mkt.is_string_column[tbl;col]; :0b];
         if[col in allowlist; :1b];
         if[row_count=0; :0b];
         distinct_ratio:(count distinct tbl col)%row_count;
@@ -176,9 +176,9 @@ candidate_symbol_columns:{[tbl;allowlist;cardinality_ratio]
 / @param sym_cols explicit list of column names to cast string->symbol
 / @return the corrected table
 / @eg .qf.mkt.book_from_wide_levels[tbl;.qf.mkt.derive_level_groups[cols tbl;prefix_targets];enlist `sym]
-book_from_wide_levels:{[tbl;level_groups;sym_cols]
-    folded:fold_level_columns[tbl;level_groups];
-    symbolize_columns[folded;sym_cols]};
+.qf.mkt.book_from_wide_levels:{[tbl;level_groups;sym_cols]
+    folded:.qf.mkt.fold_level_columns[tbl;level_groups];
+    .qf.mkt.symbolize_columns[folded;sym_cols]};
 
 / ------------------------------------------------------- SHARED BOOK MATHS
 / .
@@ -197,7 +197,7 @@ book_from_wide_levels:{[tbl;level_groups;sym_cols]
 / @param sizes level sizes in the ladder's own base currency, aligned to prices
 / @return (invertedPrices;rescaledSizes), still best-first
 / @eg .qf.mkt.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200f)
-invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
+.qf.mkt.invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 
 / Walk a stack of order book levels to price a sweep of target_size: the
 / blended price you'd get consuming best-to-worst levels until target_size
@@ -221,10 +221,10 @@ invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 /   times) for exactly the levels that priced the fill (#1181)
 / @throws error if target_size is not positive, or prices/sizes differ in length
 / @eg .qf.mkt.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled`levels_used!(1.100233;1.1005;3000000;1b;0 1 2)
-sweep_price:{[prices;sizes;target_size]
+.qf.mkt.sweep_price:{[prices;sizes;target_size]
     if[target_size<=0; '"sweep_price: size must be positive"];
     if[(count prices)<>count sizes; '"sweep_price: prices and sizes must be the same length"];
-    usable:level_ok["f"$prices;"f"$sizes];
+    usable:.qf.mkt.level_ok["f"$prices;"f"$sizes];
     usable_idx:where usable;
     prices:prices usable_idx;
     sizes:sizes usable_idx;
@@ -251,7 +251,7 @@ sweep_price:{[prices;sizes;target_size]
 / @param size the matching size(s)
 / @return boolean, aligned
 / @eg .qf.mkt.level_ok[1.1 0 0w 1.1 1.1;1e6 1e6 1e6 0 0w]  ->  10000b
-level_ok:{[price;size] (0<price) & (0w>price) & (0<size) & 0w>size}
+.qf.mkt.level_ok:{[price;size] (0<price) & (0w>price) & (0<size) & 0w>size}
 
 / Each book's level-0 bid and ask: the ONE top-of-book extraction every
 / consumer of market_data prices from (#998). A side with an empty ladder is
@@ -265,11 +265,11 @@ level_ok:{[price;size] (0<price) & (0w>price) & (0<size) & 0w>size}
 /   first, and optionally bid_sizes and ask_sizes
 / @return table bid, ask (float), aligned with x
 / @eg .qf.mkt.top_sides ([] bid_prices:(enlist 1.0849;`float$()); ask_prices:(enlist 1.0851;enlist 1.27))  ->  ([] bid:1.0849 0n; ask:1.0851 1.27)
-top_sides:{[x]
+.qf.mkt.top_sides:{[x]
     n:count x;
     bsz:$[`bid_sizes in cols x; x`bid_sizes; n#enlist enlist 1f];
     asz:$[`ask_sizes in cols x; x`ask_sizes; n#enlist enlist 1f];
-    side:{[px;sz] $[count px; $[level_ok[f:"f"$first px;"f"$first sz]; f; 0n]; 0n]};
+    side:{[px;sz] $[count px; $[.qf.mkt.level_ok[f:"f"$first px;"f"$first sz]; f; 0n]; 0n]};
     ([] bid:"f"$side'[x`bid_prices;bsz]; ask:"f"$side'[x`ask_prices;asz])};
 
 / Whether each book's top is CROSSED: its best bid strictly above its best ask.
@@ -295,8 +295,8 @@ top_sides:{[x]
 /   ask_sizes - pass them
 / @return boolean per row, 1b iff both tops are usable and bid > ask
 / @eg .qf.mkt.crossed_top ([] bid_prices:(1.1005 1.1;1.1 1.1;1.1;`float$()); bid_sizes:(1e6 1e6;1e6 1e6;1e6;`float$()); ask_prices:(1.1000 1.2;1.1 1.2;`float$();1.2); ask_sizes:(1e6 1e6;1e6 1e6;`float$();1e6))  ->  1000b
-crossed_top:{[x]
-    t:top_sides[x];
+.qf.mkt.crossed_top:{[x]
+    t:.qf.mkt.top_sides[x];
     b:t`bid;
     a:t`ask;
     (not null b) & (not null a) & b>a};
