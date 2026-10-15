@@ -16,8 +16,9 @@ alike, since a comment naming a function that is gone is the same drift - is
 checked against the names the q source defines. The definitions are read from
 the `.q` files rather than from `docs/reference/surfaces/current`, for two
 reasons: the surface lists only what `src/init.q` loads, so it has nothing for
-`scripts/` (`.qtorq`, `.qcat`), and reading text needs no q, so this runs
-wherever pytest does - CI included, which has no q.
+`scripts/` (`.qtorq`, `.qcat`) or for the test tree, whose names the scaffold
+and `uqs job remove` write (`.qt.*`, #1412), and reading text needs no q, so
+this runs wherever pytest does - CI included, which has no q.
 
 Only namespaces this tree defines are checked. A name under a namespace the q
 source never opens (`.gw`, `.u`, TorQ's own) is someone else's, and is not
@@ -33,7 +34,9 @@ import pytest
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 PYTHON_SOURCES = sorted(UQF_ROOT.glob("python/*/src/**/*.py"))
-Q_SOURCES = sorted(p for d in ("src", "scripts", "tests/lib") for p in (UQF_ROOT / d).rglob("*.q"))
+Q_SOURCES = sorted(
+    p for d in ("src", "scripts", "tests/lib", "tests/q") for p in (UQF_ROOT / d).rglob("*.q")
+)
 
 #: A q name as Python text spells it: `.qetl.cfg.explain`. The lookbehind
 #: keeps `x.qetl` (an attribute) and `..qetl` out; the name must start with

@@ -65,7 +65,8 @@ library, deliberately left in its original camelCase, don't touch it.
   new function that duplicates one of these instead of calling it is the most
   common mistake here.
 - **`tests/test_<module>.q`** for the existing test pattern in that file (helper
-  builders like `mk_quotes_table`, the `.{module}test` namespace,
+  builders like `mk_quotes_table`, the `.qt.qf.<domain>.<suite>` namespace
+  (`.qt.qf.px.options`, defined from the root with its whole path, never `\d`),
   `test*`-prefixed functions) before adding new tests --- match the established
   style, don't invent a new one.
 

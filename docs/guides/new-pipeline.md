@@ -33,12 +33,16 @@ There is no registry entry - the process is read from the job's own declaration.
 <!-- Source: docs/diagrams/scaffolding.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
 
-![What uqs job new writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
+![What uqs job new writes, in five bands: the plan, the files it creates, the two files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
-Everything but three files is picked up by a glob. Those three it appends to:
-the table definition, the test namespace list `nsList`, and `expected` in
+Everything but two files is picked up by a glob. Those two it appends to: the
+table definition, and `expected` in
 [`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q). It then
 regenerates `processes.md`, `pipeline_dag.q` and the port lock.
+
+The test is not registered anywhere. Its suite is `.qt.qpipe.job.<name>` - the
+production owner it tests, under `.qt` - and the runner finds a suite by the
+tests it holds, so naming it is the whole of adding it.
 
 ```
 uqs job new markout2 --subscribe-to trades,quote \
@@ -96,11 +100,12 @@ uqs job new dxprobe --subscribe-to trades --publishes dx_t --columns "sym:symbol
 q tests/run_tests.q
 ```
 
-reports `.dxprobetest.test_dxprobe_is_implemented`, and the `.jobouttest` tests
-that drive every publishing job fail on the throwing driver.
+reports `.qt.qpipe.job.dxprobe.test_dxprobe_is_implemented`, and the
+`.qt.qpipe.job_output_contracts` tests that drive every publishing job fail on
+the throwing driver.
 
 Nothing else in the q suite needs an edit: the scaffold adds the new table to
-`expected` and your test's namespace to `nsList` itself.
+`expected` itself, and the runner finds your test's suite on its own.
 
 `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists, by
 `path:line`, every placeholder still marked `SCAFFOLDED` - the handler, the
@@ -459,8 +464,10 @@ time. Within a directory files load alphabetically, so none may read another
 job's table at load time - take a schema from `.qetl.plant` instead, which loads
 first. `test_no_job_reads_a_peer_job_at_load` refuses a job that does.
 
-A test file is loaded by glob too; only its namespace is listed, in
-`tests/run_tests.q`'s `nsList`, and a test fails if one that loaded is missing.
+A test file is loaded by glob too, and its suite is found by what it holds: a
+namespace under `.qt` with `test_*` functions (`tests/lib/discovery.q`). Nothing
+lists it, and a test fails if a declared test did not load or a loaded one was
+never declared.
 
 The job graph adopts the worker from its own declaration:
 
@@ -616,8 +623,9 @@ apart retries a successful no-op forever.
 
 ## 6. Test it
 
-Add `tests/q/test_fx_rates_backfill.q`, and its namespace `.<name>test` to
-`nsList` in `tests/run_tests.q` (the scaffold does both). Then:
+Add `tests/q/test_fx_rates_backfill.q`, defining its tests under
+`.qt.qpipe.job.fx_rates_backfill` - the job it tests - from the root, with the
+whole path and no `\d` (the scaffold writes it that way). Then:
 
 ```
 scripts/test.py q-unit

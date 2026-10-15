@@ -35,7 +35,6 @@ from uqs.scaffold.jobs import (
     _DOCS_NOTE,
     _check_name,
     _expected_table_action,
-    _nslist_action,
     start_with_all_field,
     test_namespace,
 )
@@ -185,7 +184,6 @@ score:{{[events;reference]
             TEST_DIR / f"test_{name}.q",
             test_stub(name, ns, f"the {name} horizon job", driver=True),
         ),
-        _nslist_action(ns),
     ]
     actions += doc_stub_actions(proc, ANALYTICS)
     notes.append(_DOCS_NOTE.format(proc=proc))

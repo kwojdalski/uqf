@@ -20,7 +20,6 @@ from uqs.scaffold.jobs import (
     _DOCS_NOTE,
     _check_name,
     _expected_table_action,
-    _nslist_action,
     test_namespace,
 )
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -168,9 +167,8 @@ def bounded_worker(
     actions += [
         FileAction(
             TEST_DIR / f"test_{worker}.q",
-            test_stub(worker, test_namespace(name, bounded=True), f"the {worker} bounded worker"),
+            test_stub(worker, test_namespace(worker), f"the {worker} bounded worker"),
         ),
-        _nslist_action(test_namespace(name, bounded=True)),
     ]
     if reuse_source:
         notes = [f"reuses .qpipe.source.{src}: its query and fixture are already written"]

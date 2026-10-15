@@ -1,7 +1,7 @@
 """scripts/dev/bundle_suite.py: installing a bundle's tests into a throwaway tree.
 
 The q run itself is the `bundles` lane's; these hold the part that decides
-WHAT runs - a test the lane copied but never listed would load and run nothing.
+WHAT runs - a test the lane copied must be one the runner can find.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.paths import CATALOG_FILE, RUN_TESTS_FILE, SOURCE_DIR, TABLES_FILE, TEST_DIR
+from uqs.paths import CATALOG_FILE, SOURCE_DIR, TABLES_FILE, TEST_DIR
 
 _SPEC = importlib.util.spec_from_file_location(
     "bundle_suite", Path(__file__).resolve().parents[1] / "bundle_suite.py"
@@ -33,7 +33,6 @@ def tree(tmp_path: Path) -> Path:
     (root / CATALOG_FILE).write_text("\\d .qcat\n")
     (root / "python/uqs").mkdir(parents=True)
     (root / TEST_DIR).mkdir(parents=True)
-    (root / RUN_TESTS_FILE).write_text("nsList:`.covtest;\n")
     return root
 
 
@@ -43,21 +42,27 @@ def bundle(tmp_path: Path) -> Path:
     folder.mkdir()
     (folder / "bundle.json").write_text(json.dumps({"name": "mockups", "version": "0.1.0"}))
     (folder / "mock.q").write_text("source_name:`mock\n.qetl.source.define[source_name;()!()];\n")
-    (folder / "test_mock.q").write_text("/ the mock source\n\\d .mocktest\ntest_x:{[t] }\n")
+    (folder / "test_mock.q").write_text("/ the mock source\n.qt.qpipe.job.mock.test_x:{[t] }\n")
     return folder
 
 
-def test_a_bundle_test_is_copied_and_listed(tree: Path, bundle: Path) -> None:
-    assert suite.install(bundle, tree) == ["`.mocktest"]
+def test_a_bundle_test_is_copied_and_nothing_is_listed(tree: Path, bundle: Path) -> None:
+    assert suite.install(bundle, tree) == ["test_mock.q"]
     assert (tree / TEST_DIR / "test_mock.q").is_file()
-    assert (tree / RUN_TESTS_FILE).read_text() == "nsList:`.covtest`.mocktest;\n"
+    assert not (tree / "tests/run_tests.q").exists(), "no runner file is edited: suites are found"
 
 
-def test_a_test_with_no_namespace_is_refused(tmp_path: Path) -> None:
+def test_a_test_that_enters_a_namespace_is_refused(tmp_path: Path) -> None:
     test = tmp_path / "test_x.q"
-    test.write_text("/ no \\d line\n")
-    with pytest.raises(SystemExit, match="no `\\\\d .namespace` line"):
-        suite.namespace(test)
+    test.write_text("/ old style\n\\d .xtest\ntest_a:{[t] }\n\\d .\n")
+    with pytest.raises(SystemExit, match="enters a namespace"):
+        suite.check_test(test)
+
+
+def test_a_test_that_defines_from_the_root_is_accepted(tmp_path: Path) -> None:
+    test = tmp_path / "test_x.q"
+    test.write_text(".qt.qpipe.job.x.test_a:{[t] }\n")
+    suite.check_test(test)
 
 
 def test_a_folder_without_a_manifest_is_not_a_bundle(tmp_path: Path) -> None:

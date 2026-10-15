@@ -49,8 +49,8 @@ class FileAction:
     def describe(self) -> str:
         verb = "create" if self.mode is WriteMode.CREATE else "append to"
         n = len(self.body.splitlines())
-        # The nsList entry is a single symbol, so the count is genuinely 1 here
-        # and "1 lines" is what --dry-run would print.
+        # A one-line body is genuinely 1, and "1 lines" is what --dry-run
+        # would print.
         return f"{verb} {self.path} ({n} line{'' if n == 1 else 's'})"
 
 

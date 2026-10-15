@@ -2,7 +2,7 @@
 
 The property that matters is the round trip: scaffold into a copy of the real
 tree, remove, and every file is BYTE-identical to before. A removal that left
-a blank line in plant_tables.q or a stray backtick in nsList would pass a test
+a blank line in plant_tables.q or a stray backtick in a list would pass a test
 that only checked the job file was gone.
 
 The other half is what it must not take: a table another job still reads, a
@@ -16,10 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from uqs.paths import CATALOG_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
+from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
+from uqs.scaffold.columns import definition_columns, parse_columns, table_definition
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
+from uqs.scaffold.horizon import horizon_job
+from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.reaction import reaction
 from uqs.scaffold.remove import plan_removal
@@ -30,7 +33,6 @@ _TRACKED = (
     TABLES_FILE,
     CATALOG_FILE,
     STACK_TABLES_TEST,
-    RUN_TESTS_FILE,
     PROFILES_FILE,
     STACK_PAGE,
     SHOWCASE_PAGE,
@@ -40,10 +42,10 @@ _TRACKED = (
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
     """A copy of what scaffolding and removal touch: src/, the plant's q files,
-    the two test lists, profiles.py and the two doc pages a process is named on."""
+    the test list, profiles.py and the two doc pages a process is named on."""
     shutil.copytree(UQF_ROOT / "src", tmp_path / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", tmp_path / "scripts" / "processes")
-    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, PROFILES_FILE, STACK_PAGE, SHOWCASE_PAGE):
+    for rel in (STACK_TABLES_TEST, PROFILES_FILE, STACK_PAGE, SHOWCASE_PAGE):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, tmp_path / rel)
     return tmp_path
@@ -114,8 +116,8 @@ def test_a_backfill_round_trips_with_its_source(tree):
 
 
 def test_a_reaction_round_trips_exactly(tree):
-    """Its file, its test and the nsList entry - and nothing else is touched,
-    since a reaction has no table, profile or port."""
+    """Its file and its test - and nothing else is touched, since a reaction
+    has no table, profile or port, and no list names its suite."""
     before = _snapshot(tree)
     plan = reaction(
         "rebuild_exposure",
@@ -127,9 +129,87 @@ def test_a_reaction_round_trips_exactly(tree):
     write.apply_plan(plan, tree)
     assert _snapshot(tree) != before
     removal = plan_removal(tree, "rebuild_exposure")
-    assert set(removal.rewrites) == {RUN_TESTS_FILE}
+    assert not removal.rewrites
     removal.apply(tree)
     assert _snapshot(tree) == before
+
+
+_FEED = "sym:symbol, px:float"
+_FEED_TABLE = table_definition("rt_ticks", parse_columns(_FEED))
+_REF_TABLE = table_definition("rt_ref", parse_columns(_FEED))
+_DEFS = {"rt_ticks": definition_columns(_FEED_TABLE), "rt_ref": definition_columns(_REF_TABLE)}
+_KNOWN = {"rt_ticks", "rt_ref"}
+
+#: One plan per job kind the scaffold supports, built when the test runs - each
+#: reads the two feeds the tree holds by then.
+_KINDS = {
+    "poll feed": lambda: jobs.streaming_job("rtpoll", [], "rt_poll", _FEED, poll=True),
+    "etl handler": lambda: jobs.streaming_job(
+        "rtetl", ["rt_ticks"], "rt_stats", "sym:symbol, n:long", known_tables=_KNOWN
+    ),
+    "passthrough": lambda: jobs.streaming_job(
+        "rtpass",
+        ["rt_ticks"],
+        "rt_echo",
+        _FEED,
+        known_tables=_KNOWN,
+        transform="passthrough",
+        definitions={"rt_ticks": _FEED_TABLE},
+    ),
+    "derive": lambda: jobs.streaming_job(
+        "rtderive",
+        ["rt_ticks"],
+        "rt_derived",
+        "sym:symbol, n:long",
+        known_tables=_KNOWN,
+        transform="derive",
+        definitions={"rt_ticks": _FEED_TABLE},
+    ),
+    "normalizer": lambda: normalizer(
+        "rtnorm",
+        ["rt_ticks"],
+        parse_columns("sym:symbol, mid:float"),
+        {"rt_ticks": _DEFS["rt_ticks"]},
+        known_tables=_KNOWN,
+    ),
+    "horizon": lambda: horizon_job(
+        "rthz",
+        ["rt_ticks", "rt_ref"],
+        parse_columns("sym:symbol, px:float"),
+        _DEFS,
+        "0D00:00:10",
+        known_tables=_KNOWN,
+    ),
+    "backfill (ipc)": lambda: backfill.bounded_worker("rtbf", "rt_hist", _FEED),
+    "backfill (derive)": lambda: backfill.bounded_worker(
+        "rtbfd", "rt_bfd", _FEED, transform="derive"
+    ),
+    "backfill (local)": lambda: backfill.bounded_worker(
+        "rtloc", "rt_loc", _FEED, transport="local"
+    ),
+}
+
+
+@pytest.mark.parametrize("label", list(_KINDS))
+def test_every_job_kind_scaffolds_and_removes_exactly(tree, label):
+    """Scaffold then remove, for each supported kind: the tree is byte-identical
+    to before, and the scaffold named the suite after the job it tests without
+    asking any list to know it (#1412)."""
+    write.apply_plan(jobs.streaming_job("rt_feed", [], "rt_ticks", _FEED), tree)
+    write.apply_plan(jobs.streaming_job("rt_reffeed", [], "rt_ref", _FEED), tree)
+    before = _snapshot(tree)
+    plan = _KINDS[label]()
+    write.apply_plan(plan, tree)
+    assert _snapshot(tree) != before
+    tests = [
+        a for a in plan.actions if a.path.parent == Path("tests/q") and a.mode.value == "create"
+    ]
+    assert tests, "a kind with no test would be a job nothing checks"
+    suite = jobs.test_namespace(plan.name)
+    assert suite == f"qt.qpipe.job.{plan.name}"
+    assert all(f".{suite}." in a.body for a in tests), (label, suite)
+    _remove(tree, plan.name)
+    assert _snapshot(tree) == before, label
 
 
 def test_a_table_something_else_reads_is_kept(tree):

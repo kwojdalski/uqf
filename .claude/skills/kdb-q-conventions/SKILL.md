@@ -212,11 +212,32 @@ no processes/IPC/tables).
 - `tests/lib/qunit.q` - vendored TimeStored qUnit framework (CC BY-NC-SA,
   non-commercial - keep the attribution header intact; see README's Licensing
   section before using this repo commercially).
-- `tests/test_*.q` - one test file per `src/*.q` module. Each file opens its own
-  namespace ending in `test` (qUnit auto-discovers namespaces by that suffix)
-  and defines `test*`-prefixed unary functions.
-- `tests/run_tests.q` - loads qunit + src + tests, runs everything, prints a
-  pass/fail summary, and exits non-zero on any failure (for CI).
+- `tests/q/test_*.q` - the suite files, loaded by glob. A suite is a namespace
+  under `.qt` that mirrors the production owner it tests, with a descriptive
+  suite name where an owner needs several: `.qt.qetl.coverage`,
+  `.qt.qpipe.job.fx_markout`, `.qt.qtorq.pipeline`. It defines `test*`-prefixed
+  unary functions, and **every definition is written from the root with its
+  whole path** (`.qt.qetl.io.batch:{[] ...}`, called as `.qt.qetl.io.batch[]`):
+  no `\d .qt...` block, no `system "d ..."`. q 4.0 rejects a nested working
+  context, and a leading dot is absolute - inside `\d .qt` the definition
+  `.qf.x:1` would still be `.qf.x` - so the full path is the one spelling that
+  means the same everywhere. A function defined from the root resolves its bare
+  names in the root, so a suite refers to its own helpers by full path too. In
+  q-SQL a column name wins over a global, and a qualified name can never be a
+  column: leave a column bare.
+- `.qt.support` (tests/lib/support.q, discovery.q) holds shared helpers and
+  `.qt.fixture.*` the doubles and fixture workers (`.qt.fixture.etl`,
+  `.qt.fixture.reference_worker`). Both are reserved: never suites. A namespace
+  under `.qt` that holds functions but no test is refused when the suite loads,
+  so a helper cannot sit outside them unnoticed. A job's suite is
+  `.qt.qpipe.job.<job>`, `.qt.support.job_suite[job]` in q and `test_namespace`
+  in `uqs job new`.
+- `tests/run_tests.q` - loads qunit + src + tests, FINDS the suites (a namespace
+  holding `test*` functions - nothing lists them), runs everything, prints a
+  pass/fail summary, and exits non-zero on any failure (for CI). Two defined
+  paths colliding - one defined twice, or one that is both a value and a
+  namespace container - stop the run before it starts: q would otherwise replace
+  the earlier definition, or the whole container, without a word.
 
 ## Conventions used across the library
 

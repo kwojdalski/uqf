@@ -88,7 +88,7 @@
         '"register: ",string[job],"'s kind ",string[decl`kind]," is not one of ",
          ", " sv string .qetl.dag.kinds];
     / Edges stored as symbol VECTORS whatever shape they arrived in, so count
-    / means the number of tables - see .regtest's edge normalisation test.
+    / means the number of tables - see .qt.qetl.registries's edge normalisation test.
     `.qetl.dag.jobs upsert (job;decl`kind;(`symbol$()),decl`inputs;(`symbol$()),decl`outputs);
     job}
 

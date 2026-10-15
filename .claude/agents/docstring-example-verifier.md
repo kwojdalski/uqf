@@ -4,30 +4,31 @@ description: >-
   Read-only auditor for the `@eg` examples in this library's qDoc comment blocks
   — 217 `@eg` lines across `src/**/*.q`, of which 116 assert an expected value
   with `->`. The `->` ones are NO LONGER unchecked:
-  `tests/q/test_docstring_examples.q` (`.egtest`) runs in the q-unit lane and
-  classifies all 116 every commit, executing 105 and failing on any mismatch AND
-  on any example that cannot be run at all. Two gates now cover what this agent
-  used to: `.egtest` compares every example that states a value (including `->
-  throws`, which passes only by throwing), and `tests/q/run_examples.q` runs
-  EVERY `@eg` under `src/` and `scripts/` in its own process - 239 of them, 234
-  running and 5 that need a live tickerplant, TorQ process, ODBC driver or
-  downloaded market data, each listed in `.egtest.needs_live` with its reason.
-  What no gate can judge is whether an example that runs is a GOOD example:
-  whether it shows the call a reader actually needs, whether its prose
-  expectation is true, and whether an example that states no value should state
-  one. That is this agent's job now. It evaluates each documented call against
-  the live code under KDB-X and classifies it STALE (the documented value is now
-  wrong), TEST-CANDIDATE (correct but unverified, so it can silently drift),
-  NON-EVALUABLE (pseudo-code or prose that no harness can run), or NO-ASSERTION
-  (an `@eg` with no `->` expected value at all), then proposes a paste-ready
-  qUnit test in the module's own established style for the ones worth locking
-  down. Distinct from `bugfinder` (hunts wrong formulas in the code) and
-  `test-coverage-check` (maps which functions lack tests): this agent treats the
-  documentation itself as an untested assertion suite and asks only whether each
-  documented example still produces what it claims. Use PROACTIVELY after
-  changing any `src/*.q` function signature, return shape, or formula, before a
-  release or snapshot, or whenever the user asks whether the docs still tell the
-  truth. Reports its findings inline and edits no file.
+  `tests/q/test_docstring_examples.q` (`.qt.man.examples`) runs in the q-unit
+  lane and classifies all 116 every commit, executing 105 and failing on any
+  mismatch AND on any example that cannot be run at all. Two gates now cover
+  what this agent used to: `.qt.man.examples` compares every example that states
+  a value (including `-> throws`, which passes only by throwing), and
+  `tests/q/run_examples.q` runs EVERY `@eg` under `src/` and `scripts/` in its
+  own process - 239 of them, 234 running and 5 that need a live tickerplant,
+  TorQ process, ODBC driver or downloaded market data, each listed in
+  `.qt.man.examples.needs_live` with its reason. What no gate can judge is
+  whether an example that runs is a GOOD example: whether it shows the call a
+  reader actually needs, whether its prose expectation is true, and whether an
+  example that states no value should state one. That is this agent's job now.
+  It evaluates each documented call against the live code under KDB-X and
+  classifies it STALE (the documented value is now wrong), TEST-CANDIDATE
+  (correct but unverified, so it can silently drift), NON-EVALUABLE (pseudo-code
+  or prose that no harness can run), or NO-ASSERTION (an `@eg` with no `->`
+  expected value at all), then proposes a paste-ready qUnit test in the module's
+  own established style for the ones worth locking down. Distinct from
+  `bugfinder` (hunts wrong formulas in the code) and `test-coverage-check` (maps
+  which functions lack tests): this agent treats the documentation itself as an
+  untested assertion suite and asks only whether each documented example still
+  produces what it claims. Use PROACTIVELY after changing any `src/*.q` function
+  signature, return shape, or formula, before a release or snapshot, or whenever
+  the user asks whether the docs still tell the truth. Reports its findings
+  inline and edits no file.
 tools: [Read, Bash, Grep, Glob]
 model: sonnet
 ---

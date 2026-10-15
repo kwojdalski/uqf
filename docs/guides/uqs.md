@@ -1050,8 +1050,9 @@ with the reason:
   three folders load in a fixed order);
 - a job or worker name the tree already declares - q refuses the second
   declaration, so the tree would stop loading;
-- `test_*.q` - a q test runs only once its namespace is in `nsList` in
-  `tests/run_tests.q`, which is a decision rather than a copy.
+- `test_*.q` - a q test in `tests/q/` joins the tree's suite on its own (the
+  runner finds a suite by the tests it holds), so putting one there is a
+  decision rather than a copy.
 
 The wizard asks **copy** or **symlink**. A copy is a snapshot the tree owns:
 edit the sidecar and install again. A symlink keeps the sidecar the source of

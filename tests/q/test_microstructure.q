@@ -1,37 +1,36 @@
 // test_microstructure.q - tests for src/market_data/microstructure.q. Load
-// src/init.q, tests/lib/qunit.q and tests/lib/testutil.q before this file.
+// src/init.q, tests/lib/qunit.q and tests/lib/support.q before this file.
 
-\d .microstructuretest
 
-test_level_at_extracts_the_right_level:{[t]
+.qt.qf.mkt.microstructure.test_level_at_extracts_the_right_level:{[t]
     rows:enlist 100 200 300;
-    .testutil.assertApprox[first .qf.mkt.level_at[rows;1];200f;1e-9;"level 1 of the one row"]};
+    .qt.support.assertApprox[first .qf.mkt.level_at[rows;1];200f;1e-9;"level 1 of the one row"]};
 
-test_level_at_nulls_a_too_short_row:{[t]
+.qt.qf.mkt.microstructure.test_level_at_nulls_a_too_short_row:{[t]
     rows:enlist 100 200 300;
     .qunit.assertTrue[null first .qf.mkt.level_at[rows;5];"level 5 doesn't exist on a 3-level row -> null, not an error"]};
 
 / ---- book_pressure_at_level ----
 
-test_book_pressure_at_level_known_imbalance:{[t]
+.qt.qf.mkt.microstructure.test_book_pressure_at_level_known_imbalance:{[t]
     r:.qf.mkt.book_pressure_at_level[enlist 100 50;enlist 40 60;0];
-    .testutil.assertApprox[first r;60f%140f;1e-9;"(100-40)/(100+40) at level 0"]};
+    .qt.support.assertApprox[first r;60f%140f;1e-9;"(100-40)/(100+40) at level 0"]};
 
-test_book_pressure_at_level_both_sizes_zero_is_exactly_zero:{[t]
+.qt.qf.mkt.microstructure.test_book_pressure_at_level_both_sizes_zero_is_exactly_zero:{[t]
     r:.qf.mkt.book_pressure_at_level[enlist 0 50;enlist 0 60;0];
-    .testutil.assertApprox[first r;0f;1e-9;"both sizes 0 at an existing level -> exactly 0, not null"]};
+    .qt.support.assertApprox[first r;0f;1e-9;"both sizes 0 at an existing level -> exactly 0, not null"]};
 
-test_book_pressure_at_level_row_too_shallow_is_null:{[t]
+.qt.qf.mkt.microstructure.test_book_pressure_at_level_row_too_shallow_is_null:{[t]
     r:.qf.mkt.book_pressure_at_level[enlist 100 50;enlist 40 60;5];
     .qunit.assertTrue[null first r;"level 5 doesn't exist on a 2-level row -> null"]};
 
 / ---- order_book_imbalance ----
 
-test_order_book_imbalance_known_value:{[t]
+.qt.qf.mkt.microstructure.test_order_book_imbalance_known_value:{[t]
     r:.qf.mkt.order_book_imbalance[enlist 100 50;enlist 40 60;2];
-    .testutil.assertApprox[first r;0.2;1e-9;"(150-100)/(150+100) aggregated across 2 levels"]};
+    .qt.support.assertApprox[first r;0.2;1e-9;"(150-100)/(150+100) aggregated across 2 levels"]};
 
-test_order_book_imbalance_is_not_sum_of_per_level_pressures:{[t]
+.qt.qf.mkt.microstructure.test_order_book_imbalance_is_not_sum_of_per_level_pressures:{[t]
     / same book as above: level-0 pressure is 60/140, level-1 pressure is
     / -10/110 - summing those directly gives a different (and unbounded-
     / in-general) number from the aggregate-then-ratio OBI definition.
@@ -43,37 +42,37 @@ test_order_book_imbalance_is_not_sum_of_per_level_pressures:{[t]
 
 / ---- microprice / microprice_divergence ----
 
-test_microprice_known_value:{[t]
+.qt.qf.mkt.microstructure.test_microprice_known_value:{[t]
     r:.qf.mkt.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300];
-    .testutil.assertApprox[first r;1.10005;1e-9;"size-weighted toward the heavier (ask) side"]};
+    .qt.support.assertApprox[first r;1.10005;1e-9;"size-weighted toward the heavier (ask) side"]};
 
-test_microprice_falls_back_to_mid_when_both_l0_sizes_zero:{[t]
+.qt.qf.mkt.microstructure.test_microprice_falls_back_to_mid_when_both_l0_sizes_zero:{[t]
     r:.qf.mkt.microprice[enlist enlist 1.1000;enlist enlist 0;enlist enlist 1.1002;enlist enlist 0];
     expected_mid:first .qf.mkt.mid_price[enlist enlist 1.1000;enlist enlist 1.1002];
-    .testutil.assertApprox[first r;expected_mid;1e-9;"both L0 sizes 0 -> exactly mid_price"]};
+    .qt.support.assertApprox[first r;expected_mid;1e-9;"both L0 sizes 0 -> exactly mid_price"]};
 
-test_microprice_divergence_known_value:{[t]
+.qt.qf.mkt.microstructure.test_microprice_divergence_known_value:{[t]
     r:.qf.mkt.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300];
-    .testutil.assertApprox[first r;-0.00005;1e-9;"microprice - mid_price"]};
+    .qt.support.assertApprox[first r;-0.00005;1e-9;"microprice - mid_price"]};
 
 / ---- spread_bps ----
 
-test_spread_bps_known_value:{[t]
+.qt.qf.mkt.microstructure.test_spread_bps_known_value:{[t]
     r:.qf.mkt.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002];
-    .testutil.assertApprox[first r;10000*0.0002%1.1001;1e-6;"10000*(ask-bid)/mid"]};
+    .qt.support.assertApprox[first r;10000*0.0002%1.1001;1e-6;"10000*(ask-bid)/mid"]};
 
 / ---- depth_ratio ----
 
-test_depth_ratio_known_value_and_shallow_row_is_null:{[t]
+.qt.qf.mkt.microstructure.test_depth_ratio_known_value_and_shallow_row_is_null:{[t]
     bid_sizes:(100 20;100 20 20 20 20);
     ask_sizes:(100 20 20 20 20;100 20 20 20 20);
     r:.qf.mkt.depth_ratio[bid_sizes;ask_sizes];
     .qunit.assertTrue[null r 0;"row 0's bid side only has 2 levels - not enough for a 5-level depth_ratio -> null"];
-    .testutil.assertApprox[r 1;1.25;1e-9;"row 1: (100+100)/((20+20+20+20)+(20+20+20+20))"]};
+    .qt.support.assertApprox[r 1;1.25;1e-9;"row 1: (100+100)/((20+20+20+20)+(20+20+20+20))"]};
 
 / ---- vwmp_skew ----
 
-test_vwmp_skew_matches_direct_vwap_call:{[t]
+.qt.qf.mkt.microstructure.test_vwmp_skew_matches_direct_vwap_call:{[t]
     bid_prices:enlist 1.1000 1.0996;
     bid_sizes:enlist 300 100;
     ask_prices:enlist 1.1002 1.1010;
@@ -83,9 +82,9 @@ test_vwmp_skew_matches_direct_vwap_call:{[t]
     l0_spread:1.1002-1.1000;
     expected:(vw_mid-simple_mid)%l0_spread;
     r:.qf.mkt.vwmp_skew[bid_prices;bid_sizes;ask_prices;ask_sizes;2];
-    .testutil.assertApprox[first r;expected;1e-9;"vwmp_skew matches a direct vwap call over the same concatenated levels"]};
+    .qt.support.assertApprox[first r;expected;1e-9;"vwmp_skew matches a direct vwap call over the same concatenated levels"]};
 
-test_vwmp_skew_locked_or_crossed_l0_is_null_not_infinite:{[t]
+.qt.qf.mkt.microstructure.test_vwmp_skew_locked_or_crossed_l0_is_null_not_infinite:{[t]
     bid_prices:(1.1000 1.0996;1.1000 1.0996;1.1000 1.0996);
     bid_sizes:(300 100;300 100;300 100);
     ask_prices:(1.1000 1.1010;1.0999 1.1010;1.1002 1.1010);
@@ -98,25 +97,25 @@ test_vwmp_skew_locked_or_crossed_l0_is_null_not_infinite:{[t]
 
 / ---- book_slope ----
 
-test_book_slope_opposite_signs_for_bid_vs_ask:{[t]
+.qt.qf.mkt.microstructure.test_book_slope_opposite_signs_for_bid_vs_ask:{[t]
     bid_slope:first .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100];
     ask_slope:first .qf.mkt.book_slope[enlist 1.1002 1.1004 1.1006;enlist 100 100 100];
-    .testutil.assertApprox[bid_slope;0.0004%300;1e-9;"bid ladder: (P0-Plast)/sum(sizes), P0 highest"];
-    .testutil.assertApprox[ask_slope;-0.0004%300;1e-9;"ask ladder: (P0-Plast)/sum(sizes), P0 lowest -> negative"]};
+    .qt.support.assertApprox[bid_slope;0.0004%300;1e-9;"bid ladder: (P0-Plast)/sum(sizes), P0 highest"];
+    .qt.support.assertApprox[ask_slope;-0.0004%300;1e-9;"ask ladder: (P0-Plast)/sum(sizes), P0 lowest -> negative"]};
 
 / ---- book_convexity ----
 
-test_book_convexity_bid_and_ask_signs_mirror:{[t]
+.qt.qf.mkt.microstructure.test_book_convexity_bid_and_ask_signs_mirror:{[t]
     bid_convexity:first .qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;`bid];
     ask_convexity:first .qf.mkt.book_convexity[enlist 1.1002 1.1004 1.1007;`ask];
-    .testutil.assertApprox[bid_convexity;-0.0001;1e-9;"bid: (P0-P1)-(P1-P2)"];
-    .testutil.assertApprox[ask_convexity;-0.0001;1e-9;"ask: negated so a similarly-shaped ladder reads the same sign as the bid side"]};
+    .qt.support.assertApprox[bid_convexity;-0.0001;1e-9;"bid: (P0-P1)-(P1-P2)"];
+    .qt.support.assertApprox[ask_convexity;-0.0001;1e-9;"ask: negated so a similarly-shaped ladder reads the same sign as the bid side"]};
 
-test_book_convexity_too_few_levels_is_null:{[t]
+.qt.qf.mkt.microstructure.test_book_convexity_too_few_levels_is_null:{[t]
     r:.qf.mkt.book_convexity[enlist 1.1000 1.0998;`bid];
     .qunit.assertTrue[null first r;"only 2 levels present -> null, not an index error"]};
 
-test_book_convexity_rejects_anything_but_bid_or_ask:{[t]
+.qt.qf.mkt.microstructure.test_book_convexity_rejects_anything_but_bid_or_ask:{[t]
     / Each of these used to be read as the bid side and return a number (#415):
     / a typo, a trade-direction word, and the trade-direction encoding.
     {[s] .qunit.assertThrows[.qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;];s;
@@ -125,7 +124,7 @@ test_book_convexity_rejects_anything_but_bid_or_ask:{[t]
 
 / ---- vamp ----
 
-test_vamp_matches_two_explicit_sweep_price_calls:{[t]
+.qt.qf.mkt.microstructure.test_vamp_matches_two_explicit_sweep_price_calls:{[t]
     bid_prices:enlist 1.1000 1.0998;
     bid_sizes:enlist 1000000 1000000;
     ask_prices:enlist 1.1002 1.1004;
@@ -137,23 +136,23 @@ test_vamp_matches_two_explicit_sweep_price_calls:{[t]
     sell_leg:.qf.mkt.sweep_price[1.1000 1.0998;1000000 1000000;bid_size_target];
     expected:0.5*(buy_leg`avg_price)+sell_leg`avg_price;
     r:.qf.mkt.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
-    .testutil.assertApprox[first r;expected;1e-9;"vamp matches averaging two direct sweep_price legs"]};
+    .qt.support.assertApprox[first r;expected;1e-9;"vamp matches averaging two direct sweep_price legs"]};
 
-test_vamp_with_per_row_notional_vector:{[t]
+.qt.qf.mkt.microstructure.test_vamp_with_per_row_notional_vector:{[t]
     bid_prices:(1.1000 1.0998;1.2000 1.1998);
     bid_sizes:(1000000 1000000;1000000 1000000);
     ask_prices:(1.1002 1.1004;1.2002 1.2004);
     ask_sizes:(1000000 1000000;1000000 1000000);
     notional:500000 700000;
     r:.qf.mkt.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
-    .testutil.assertApprox[r 0;1.1001;1e-9;"row 0 uses notional 500000"];
-    .testutil.assertApprox[r 1;1.2001;1e-9;"row 1 uses its own notional 700000"]};
+    .qt.support.assertApprox[r 0;1.1001;1e-9;"row 0 uses notional 500000"];
+    .qt.support.assertApprox[r 1;1.2001;1e-9;"row 1 uses its own notional 700000"]};
 
 / ---- Tier 2 shared fixture ----
 
 / 4-row EURUSD quotes fixture: time 1s apart, both sides equal to the same
 / per-row mid value (so mid_price is exactly that value by construction).
-mk_mid_quotes:{[dummy]
+.qt.qf.mkt.microstructure.mk_mid_quotes:{[dummy]
     t0:2026.01.01D09:00:00.000000000;
     mids:1.1000 1.1010 1.1005 1.1020;
     ([] time:t0+(1000000000*til 4);
@@ -163,22 +162,22 @@ mk_mid_quotes:{[dummy]
         ask_prices:enlist each mids;
         ask_sizes:enlist each 4#100)};
 
-test_mid_price_velocity_and_acceleration_known_values:{[t]
-    quotes:mk_mid_quotes[::];
+.qt.qf.mkt.microstructure.test_mid_price_velocity_and_acceleration_known_values:{[t]
+    quotes:.qt.qf.mkt.microstructure.mk_mid_quotes[::];
     velocity:.qf.mkt.mid_price_velocity[quotes;`EURUSD];
     .qunit.assertTrue[null velocity 0;"no prior snapshot for the first row -> null"];
-    .testutil.assertApprox[velocity 1;0.0010;1e-9;"1.1010-1.1000"];
-    .testutil.assertApprox[velocity 2;-0.0005;1e-9;"1.1005-1.1010"];
-    .testutil.assertApprox[velocity 3;0.0015;1e-9;"1.1020-1.1005"];
+    .qt.support.assertApprox[velocity 1;0.0010;1e-9;"1.1010-1.1000"];
+    .qt.support.assertApprox[velocity 2;-0.0005;1e-9;"1.1005-1.1010"];
+    .qt.support.assertApprox[velocity 3;0.0015;1e-9;"1.1020-1.1005"];
     accel:.qf.mkt.mid_price_acceleration[quotes;`EURUSD];
     .qunit.assertTrue[null accel 0;"first row has no velocity to diff -> null"];
     .qunit.assertTrue[null accel 1;"second row's velocity diffs against a null first velocity -> null"];
-    .testutil.assertApprox[accel 2;-0.0015;1e-9;"-0.0005-0.0010"];
-    .testutil.assertApprox[accel 3;0.0020;1e-9;"0.0015-(-0.0005)"]};
+    .qt.support.assertApprox[accel 2;-0.0015;1e-9;"-0.0005-0.0010"];
+    .qt.support.assertApprox[accel 3;0.0020;1e-9;"0.0015-(-0.0005)"]};
 
 / ---- queue_depletion_rate ----
 
-test_queue_depletion_rate_depletion_and_replenishment:{[t]
+.qt.qf.mkt.microstructure.test_queue_depletion_rate_depletion_and_replenishment:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+(1000000000*til 3);
         sym:3#`EURUSD;
@@ -188,14 +187,14 @@ test_queue_depletion_rate_depletion_and_replenishment:{[t]
         ask_sizes:enlist each 3#100);
     r:.qf.mkt.queue_depletion_rate[quotes;`EURUSD;`bid];
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
-    .testutil.assertApprox[r 1;0.4;1e-9;"size fell from 100 to 60: (100-60)/100"];
-    .testutil.assertApprox[r 2;0f;1e-9;"size rose from 60 to 80 - clamped at 0, not negative"]};
+    .qt.support.assertApprox[r 1;0.4;1e-9;"size fell from 100 to 60: (100-60)/100"];
+    .qt.support.assertApprox[r 2;0f;1e-9;"size rose from 60 to 80 - clamped at 0, not negative"]};
 
 / #1031: the prior top QUEUE, not the L0 size whatever its price did. Row 1's
 / bid improves to 1.1001 and the 1.1000 queue, untouched, is now L1: it used
 / to read (5-1)/5 = 0.8. Row 2's bid falls below 1.1001, so that queue is
 / gone: it used to read 0, the 8M at 1.0999 being larger.
-test_queue_depletion_rate_compares_the_prior_queue_across_a_price_move:{[t]
+.qt.qf.mkt.microstructure.test_queue_depletion_rate_compares_the_prior_queue_across_a_price_move:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+(1000000000*til 3);
         sym:3#`EURUSD;
@@ -205,10 +204,10 @@ test_queue_depletion_rate_compares_the_prior_queue_across_a_price_move:{[t]
         ask_sizes:3#enlist 1e6 1e6);
     r:.qf.mkt.queue_depletion_rate[quotes;`EURUSD;`bid];
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
-    .testutil.assertApprox[r 1;0f;1e-9;"a better bid leaves the prior queue untouched"];
-    .testutil.assertApprox[r 2;1f;1e-9;"a worse bid means the prior queue is gone"]};
+    .qt.support.assertApprox[r 1;0f;1e-9;"a better bid leaves the prior queue untouched"];
+    .qt.support.assertApprox[r 2;1f;1e-9;"a worse bid means the prior queue is gone"]};
 
-test_queue_depletion_rate_reads_the_ask_side_the_other_way_round:{[t]
+.qt.qf.mkt.microstructure.test_queue_depletion_rate_reads_the_ask_side_the_other_way_round:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+(1000000000*til 4);
         sym:4#`EURUSD;
@@ -219,7 +218,7 @@ test_queue_depletion_rate_reads_the_ask_side_the_other_way_round:{[t]
     r:.qf.mkt.queue_depletion_rate[quotes;`EURUSD;`ask];
     .qunit.assertEquals[r;0n 0 0.5 1f;"down is better for an ask: 0, then (300-150)/300, then up is worse: 1"]};
 
-test_queue_depletion_rate_a_withdrawn_side_drains_and_its_return_does_not:{[t]
+.qt.qf.mkt.microstructure.test_queue_depletion_rate_a_withdrawn_side_drains_and_its_return_does_not:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+(1000000000*til 4);
         sym:4#`EURUSD;
@@ -231,7 +230,7 @@ test_queue_depletion_rate_a_withdrawn_side_drains_and_its_return_does_not:{[t]
     .qunit.assertEquals[r;0n 1 0n 0f;
         "withdrawal consumes the queue; absent to absent has no queue to drain; a return is new"]};
 
-test_queue_depletion_rate_rejects_bad_side:{[t]
+.qt.qf.mkt.microstructure.test_queue_depletion_rate_rejects_bad_side:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:enlist t0; sym:enlist `EURUSD;
         bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 100;
@@ -250,7 +249,7 @@ test_queue_depletion_rate_rejects_bad_side:{[t]
 
 / 4-row EURUSD quotes covering, across both sides, all three OFI branches
 / (price improves / unchanged / worsens) over three transitions.
-mk_ofi_quotes:{[dummy]
+.qt.qf.mkt.microstructure.mk_ofi_quotes:{[dummy]
     t0:2026.01.01D09:00:00.000000000;
     ([] time:t0+(1000000000*til 4);
         sym:4#`EURUSD;
@@ -259,20 +258,20 @@ mk_ofi_quotes:{[dummy]
         ask_prices:enlist each 1.1002 1.1002 1.1001 1.1003;
         ask_sizes:enlist each 100 80 200 50)};
 
-test_ofi_covers_improve_unchanged_worsen_on_both_sides:{[t]
-    quotes:mk_ofi_quotes[::];
+.qt.qf.mkt.microstructure.test_ofi_covers_improve_unchanged_worsen_on_both_sides:{[t]
+    quotes:.qt.qf.mkt.microstructure.mk_ofi_quotes[::];
     r:.qf.mkt.ofi[quotes;`EURUSD];
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
     / row 1: bid improves (150), ask unchanged (80-100=-20) -> 150-(-20)
-    .testutil.assertApprox[r 1;170f;1e-9;"bid price-improve branch, ask unchanged branch"];
+    .qt.support.assertApprox[r 1;170f;1e-9;"bid price-improve branch, ask unchanged branch"];
     / row 2: bid worsens (-150), ask improves (200) -> -150-200
-    .testutil.assertApprox[r 2;-350f;1e-9;"bid price-worsen branch, ask price-improve branch"];
+    .qt.support.assertApprox[r 2;-350f;1e-9;"bid price-worsen branch, ask price-improve branch"];
     / row 3: bid unchanged (120-90=30), ask worsens (-200) -> 30-(-200)
-    .testutil.assertApprox[r 3;230f;1e-9;"bid unchanged branch, ask price-worsen branch"]};
+    .qt.support.assertApprox[r 3;230f;1e-9;"bid unchanged branch, ask price-worsen branch"]};
 
 / #1032: L0 OFI and one-level multilevel OFI are one quantity. With the ask
 / withdrawn for a row and back the next, ofi used to be null on both rows.
-test_ofi_agrees_with_one_level_multilevel_on_a_withdrawn_side:{[t]
+.qt.qf.mkt.microstructure.test_ofi_agrees_with_one_level_multilevel_on_a_withdrawn_side:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+(1000000000*til 3);
         sym:3#`EURUSD;
@@ -286,7 +285,7 @@ test_ofi_agrees_with_one_level_multilevel_on_a_withdrawn_side:{[t]
 
 / ---- ofi_multilevel ----
 
-test_ofi_multilevel_level_disappearing_is_negative_flow:{[t]
+.qt.qf.mkt.microstructure.test_ofi_multilevel_level_disappearing_is_negative_flow:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+0 1000000000;
         sym:2#`EURUSD;
@@ -298,9 +297,9 @@ test_ofi_multilevel_level_disappearing_is_negative_flow:{[t]
     .qunit.assertTrue[null r 0;"no prior snapshot -> null"];
     / level 0 unchanged on both sides -> 0 contribution; level 1's bid
     / disappears (50 -> gone) while ask level 1 is unchanged -> -50
-    .testutil.assertApprox[r 1;-50f;1e-9;"bid level 1 disappearing shows up as -50, not a dropped/null contribution"]};
+    .qt.support.assertApprox[r 1;-50f;1e-9;"bid level 1 disappearing shows up as -50, not a dropped/null contribution"]};
 
-test_ofi_multilevel_ask_level_disappearing_and_reappearing:{[t]
+.qt.qf.mkt.microstructure.test_ofi_multilevel_ask_level_disappearing_and_reappearing:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+(1000000000*til 5);
         sym:5#`EURUSD;
@@ -311,7 +310,7 @@ test_ofi_multilevel_ask_level_disappearing_and_reappearing:{[t]
     r:.qf.mkt.ofi_multilevel[quotes;`EURUSD;2];
     .qunit.assertEquals[r;0n 50 0 -70 0f;"ask removal adds 50, continued absence adds zero, reappearance subtracts the new 70, unchanged depth adds zero"]};
 
-test_ofi_multilevel_absent_deeper_levels_preserve_l0_flow:{[t]
+.qt.qf.mkt.microstructure.test_ofi_multilevel_absent_deeper_levels_preserve_l0_flow:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+0 1000000000;
         sym:2#`EURUSD;
@@ -324,11 +323,11 @@ test_ofi_multilevel_absent_deeper_levels_preserve_l0_flow:{[t]
 
 / ---- rolling_ofi / spread_ratio (thin builtin wrappers) ----
 
-test_rolling_ofi_matches_msum_directly:{[t]
+.qt.qf.mkt.microstructure.test_rolling_ofi_matches_msum_directly:{[t]
     series:1 -1 2 0 -3;
-    .testutil.assertApprox[.qf.mkt.rolling_ofi[series;2];msum[2;series];1e-9;"rolling_ofi is exactly msum"]};
+    .qt.support.assertApprox[.qf.mkt.rolling_ofi[series;2];msum[2;series];1e-9;"rolling_ofi is exactly msum"]};
 
-test_spread_ratio_matches_direct_spread_bps_and_mavg:{[t]
+.qt.qf.mkt.microstructure.test_spread_ratio_matches_direct_spread_bps_and_mavg:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+(1000000000*til 3);
         sym:3#`EURUSD;
@@ -339,11 +338,11 @@ test_spread_ratio_matches_direct_spread_bps_and_mavg:{[t]
     spreads:.qf.mkt.spread_bps[quotes`bid_prices;quotes`ask_prices];
     expected:spreads%mavg[2;spreads];
     r:.qf.mkt.spread_ratio[quotes;`EURUSD;2];
-    .testutil.assertApprox[r;expected;1e-9;"spread_ratio matches spread_bps % mavg computed directly"]};
+    .qt.support.assertApprox[r;expected;1e-9;"spread_ratio matches spread_bps % mavg computed directly"]};
 
 / ---- inter_event_time ----
 
-test_inter_event_time_known_irregular_gaps:{[t]
+.qt.qf.mkt.microstructure.test_inter_event_time_known_irregular_gaps:{[t]
     t0:2026.01.01D09:00:00.000000000;
     quotes:([] time:t0+0 1000000000 3000000000;
         sym:3#`EURUSD;
@@ -353,21 +352,21 @@ test_inter_event_time_known_irregular_gaps:{[t]
         ask_sizes:enlist each 3#100);
     r:.qf.mkt.inter_event_time[quotes;`EURUSD];
     .qunit.assertTrue[null r 0;"no prior quote -> null gap"];
-    .testutil.assertApprox[r 1;log 2;1e-6;"1s gap -> log(1+1)"];
-    .testutil.assertApprox[r 2;log 3;1e-6;"2s gap -> log(1+2)"]};
+    .qt.support.assertApprox[r 1;log 2;1e-6;"1s gap -> log(1+1)"];
+    .qt.support.assertApprox[r 2;log 3;1e-6;"2s gap -> log(1+2)"]};
 
 / ---- ofi_autocorrelation ----
 
-test_ofi_autocorrelation_known_window:{[t]
+.qt.qf.mkt.microstructure.test_ofi_autocorrelation_known_window:{[t]
     series:1 -1 2 0 -3 4;
     r:.qf.mkt.ofi_autocorrelation[series;4];
     .qunit.assertTrue[all null 3#r;"fewer than window rows of history -> null"];
     / window ending at index 3: segment 1 -1 2 0 -> lagged 1 -1 2, current -1 2 0
     expected:cor[1 -1 2f;-1 2 0f];
-    .testutil.assertApprox[r 3;expected;1e-9;"lag-1 correlation over the first full window"];
-    .testutil.assertApprox[r 5;cor[2 0 -3f;0 -3 4f];1e-9;"lag-1 correlation over the last window"]};
+    .qt.support.assertApprox[r 3;expected;1e-9;"lag-1 correlation over the first full window"];
+    .qt.support.assertApprox[r 5;cor[2 0 -3f;0 -3 4f];1e-9;"lag-1 correlation over the last window"]};
 
-test_ofi_autocorrelation_rejects_degenerate_windows:{[t]
+.qt.qf.mkt.microstructure.test_ofi_autocorrelation_rejects_degenerate_windows:{[t]
     / windows 2 and 3 give 1 or 2 lag pairs: a null or a forced +-1 correlation
     pat:"ofi_autocorrelation: window must be >= 4*";
     f:{[w] .qf.mkt.ofi_autocorrelation[1 2 3 5 8 13f;w]};
@@ -376,8 +375,8 @@ test_ofi_autocorrelation_rejects_degenerate_windows:{[t]
 
 / ---- require_depth_quotes reuse ----
 
-test_ofi_rejects_quotes_missing_a_required_column:{[t]
-    quotes:mk_ofi_quotes[::];
+.qt.qf.mkt.microstructure.test_ofi_rejects_quotes_missing_a_required_column:{[t]
+    quotes:.qt.qf.mkt.microstructure.mk_ofi_quotes[::];
     bad:delete ask_sizes from quotes;
     wrapper:{[q] .qf.mkt.ofi[q;`EURUSD]};
     .qunit.assertError[wrapper;bad;"a quotes table missing a required column is rejected immediately"]};
@@ -393,7 +392,7 @@ test_ofi_rejects_quotes_missing_a_required_column:{[t]
 / to action=`trade, and a threshold computed over all events rather than
 / trades would be silently wrong - it would not error, it would return a
 / plausible number.
-lt_tape:{[]
+.qt.qf.mkt.microstructure.lt_tape:{[]
     ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 12;
         sym:12#`EURUSD;
         action:(10#`trade),`add`cancel;
@@ -406,60 +405,60 @@ lt_tape:{[]
         size:"f"$(1+til 10),100 200;
         price:12#1.10)};
 
-test_the_threshold_is_the_largest_trade_at_q_one:{[t]
-    .qunit.assertEquals[.qf.mkt.large_trade_threshold[lt_tape[];1.0];10f;
+.qt.qf.mkt.microstructure.test_the_threshold_is_the_largest_trade_at_q_one:{[t]
+    .qunit.assertEquals[.qf.mkt.large_trade_threshold[.qt.qf.mkt.microstructure.lt_tape[];1.0];10f;
         "q=1.0 is the largest size that actually traded"]};
 
-test_the_threshold_is_a_size_that_traded:{[t]
+.qt.qf.mkt.microstructure.test_the_threshold_is_a_size_that_traded:{[t]
     / Nearest-rank, no interpolation: the threshold is always a real observed
     / size, never a number between two of them.
-    .qunit.assertEquals[.qf.mkt.large_trade_threshold[lt_tape[];0.5];5f;
+    .qunit.assertEquals[.qf.mkt.large_trade_threshold[.qt.qf.mkt.microstructure.lt_tape[];0.5];5f;
         "the median of sizes 1..10 by nearest rank is the fifth smallest"]};
 
-test_non_trade_events_do_not_move_the_threshold:{[t]
+.qt.qf.mkt.microstructure.test_non_trade_events_do_not_move_the_threshold:{[t]
     / The add and cancel rows carry sizes of 100 and 200 - far larger than any
     / trade. If they leaked into the distribution the threshold would jump,
     / and nothing would report an error.
-    .qunit.assertEquals[.qf.mkt.large_trade_threshold[lt_tape[];1.0];10f;
+    .qunit.assertEquals[.qf.mkt.large_trade_threshold[.qt.qf.mkt.microstructure.lt_tape[];1.0];10f;
         "adds and cancels are excluded from the size distribution"]};
 
-test_the_count_ratio_includes_the_threshold_trade:{[t]
+.qt.qf.mkt.microstructure.test_the_count_ratio_includes_the_threshold_trade:{[t]
     / >= not >, so a trade of exactly the ninetieth-percentile size counts as
     / large. On ten trades that makes the ratio 0.2 rather than 0.1, which is
     / the detail most likely to look like an off-by-one and is not.
-    .qunit.assertEquals[.qf.mkt.large_trade_ratio[lt_tape[];0.9];0.2;
+    .qunit.assertEquals[.qf.mkt.large_trade_ratio[.qt.qf.mkt.microstructure.lt_tape[];0.9];0.2;
         "trades at or above the threshold are large, including the threshold itself"]};
 
-test_the_volume_share_is_not_the_count_share:{[t]
+.qt.qf.mkt.microstructure.test_the_volume_share_is_not_the_count_share:{[t]
     / The whole reason both exist. Sizes 9 and 10 are 2 of 10 trades but
     / carry 19 of 55 units.
-    .testutil.assertApprox[.qf.mkt.large_trade_volume_share[lt_tape[];0.9];19%55;1e-12;
+    .qt.support.assertApprox[.qf.mkt.large_trade_volume_share[.qt.qf.mkt.microstructure.lt_tape[];0.9];19%55;1e-12;
         "the volume share reports the volume those trades carried, not their count"]};
 
-test_a_median_split_covers_most_volume:{[t]
+.qt.qf.mkt.microstructure.test_a_median_split_covers_most_volume:{[t]
     / Sizes 5..10 sum to 45 of 55 - the heavy tail this metric exists to show.
-    .testutil.assertApprox[.qf.mkt.large_trade_volume_share[lt_tape[];0.5];45%55;1e-12;
+    .qt.support.assertApprox[.qf.mkt.large_trade_volume_share[.qt.qf.mkt.microstructure.lt_tape[];0.5];45%55;1e-12;
         "the larger half of trades by count carries far more than half the volume"]};
 
-test_an_empty_tape_is_null_not_zero:{[t]
+.qt.qf.mkt.microstructure.test_an_empty_tape_is_null_not_zero:{[t]
     / 0n, not 0: no trades means the question has no answer, and a 0 would
     / read as "no large trades" and average into a series as though it were a
     / measurement.
-    .qunit.assertEquals[.qf.mkt.large_trade_ratio[0#lt_tape[];0.9];0n;
+    .qunit.assertEquals[.qf.mkt.large_trade_ratio[0#.qt.qf.mkt.microstructure.lt_tape[];0.9];0n;
         "a tape with no trades reports null rather than zero"]};
 
-test_a_quantile_above_one_is_refused:{[t]
-    .qunit.assertError[{.qf.mkt.large_trade_threshold[lt_tape[];x]};1.5;
+.qt.qf.mkt.microstructure.test_a_quantile_above_one_is_refused:{[t]
+    .qunit.assertError[{.qf.mkt.large_trade_threshold[.qt.qf.mkt.microstructure.lt_tape[];x]};1.5;
         "a quantile outside (0;1] is refused rather than clamped"]};
 
-test_a_zero_quantile_is_refused:{[t]
+.qt.qf.mkt.microstructure.test_a_zero_quantile_is_refused:{[t]
     / Zero would index before the smallest element. Refused rather than
     / treated as "the smallest", because a caller writing 0 meant something
     / and it was not that.
-    .qunit.assertError[{.qf.mkt.large_trade_threshold[lt_tape[];x]};0.0;
+    .qunit.assertError[{.qf.mkt.large_trade_threshold[.qt.qf.mkt.microstructure.lt_tape[];x]};0.0;
         "a zero quantile is refused"]};
 
-test_a_malformed_tape_is_refused:{[t]
+.qt.qf.mkt.microstructure.test_a_malformed_tape_is_refused:{[t]
     .qunit.assertError[{.qf.mkt.large_trade_ratio[x;0.9]};([] wrong:1 2 3);
         "the tape contract is checked before any size is read"]};
 
@@ -470,7 +469,7 @@ test_a_malformed_tape_is_refused:{[t]
 / and two at or above it. The sell of exactly 1e6 is the boundary case: a
 / round lot, not an odd one. The add and cancel rows are small on purpose -
 / if they leaked in they would count as odd lots.
-ol_tape:{[]
+.qt.qf.mkt.microstructure.ol_tape:{[]
     ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 8;
         sym:8#`EURUSD;
         action:(6#`trade),`add`cancel;
@@ -478,46 +477,46 @@ ol_tape:{[]
         size:1e5 2e5 3e5 4e5 1e6 5e6 1e3 1e3;
         price:8#1.10)};
 
-test_odd_lot_trade_ratio_counts_trades_strictly_below_the_threshold:{[t]
-    .qunit.assertEquals[.qf.mkt.odd_lot_trade_ratio[ol_tape[];1e6];4%6;
+.qt.qf.mkt.microstructure.test_odd_lot_trade_ratio_counts_trades_strictly_below_the_threshold:{[t]
+    .qunit.assertEquals[.qf.mkt.odd_lot_trade_ratio[.qt.qf.mkt.microstructure.ol_tape[];1e6];4%6;
         "four of six trades are below 1e6; the trade of exactly 1e6 is a round lot"]};
 
-test_odd_lot_trade_ratio_moves_with_the_threshold:{[t]
+.qt.qf.mkt.microstructure.test_odd_lot_trade_ratio_moves_with_the_threshold:{[t]
     / The point of taking it as an argument: the caller decides what small means.
-    .qunit.assertEquals[.qf.mkt.odd_lot_trade_ratio[ol_tape[];2.5e5];2%6;
+    .qunit.assertEquals[.qf.mkt.odd_lot_trade_ratio[.qt.qf.mkt.microstructure.ol_tape[];2.5e5];2%6;
         "a lower threshold admits fewer trades"]};
 
-test_odd_lot_imbalance_is_net_volume_over_odd_lot_volume:{[t]
+.qt.qf.mkt.microstructure.test_odd_lot_imbalance_is_net_volume_over_odd_lot_volume:{[t]
     / Buys 1e5+2e5+3e5=6e5, sell 4e5: (6e5-4e5)%1e6. The 1e6 sell and 5e6
     / buy are round lots and must not move it.
-    .testutil.assertApprox[.qf.mkt.odd_lot_imbalance[ol_tape[];1e6];0.2;1e-12;
+    .qt.support.assertApprox[.qf.mkt.odd_lot_imbalance[.qt.qf.mkt.microstructure.ol_tape[];1e6];0.2;1e-12;
         "signed odd-lot volume over total odd-lot volume"]};
 
-test_odd_lot_imbalance_with_no_odd_lots_is_null:{[t]
-    .qunit.assertEquals[.qf.mkt.odd_lot_imbalance[ol_tape[];1e4];0n;
+.qt.qf.mkt.microstructure.test_odd_lot_imbalance_with_no_odd_lots_is_null:{[t]
+    .qunit.assertEquals[.qf.mkt.odd_lot_imbalance[.qt.qf.mkt.microstructure.ol_tape[];1e4];0n;
         "no trade below the threshold means no answer, not a balanced zero"]};
 
-test_odd_lot_trade_ratio_of_an_empty_tape_is_null:{[t]
-    .qunit.assertEquals[.qf.mkt.odd_lot_trade_ratio[0#ol_tape[];1e6];0n;
+.qt.qf.mkt.microstructure.test_odd_lot_trade_ratio_of_an_empty_tape_is_null:{[t]
+    .qunit.assertEquals[.qf.mkt.odd_lot_trade_ratio[0#.qt.qf.mkt.microstructure.ol_tape[];1e6];0n;
         "a tape with no trades reports null rather than zero"]};
 
-test_odd_lot_threshold_must_be_a_positive_number:{[t]
+.qt.qf.mkt.microstructure.test_odd_lot_threshold_must_be_a_positive_number:{[t]
     / Each would make size<threshold false everywhere and report "no odd
     / lots" instead of erroring.
-    {[x] .qunit.assertThrows[.qf.mkt.odd_lot_trade_ratio[ol_tape[];];x;
+    {[x] .qunit.assertThrows[.qf.mkt.odd_lot_trade_ratio[.qt.qf.mkt.microstructure.ol_tape[];];x;
         "odd_lot_trade_ratio: threshold must be positive, got *";
         "a zero or negative threshold is refused"]} each (0f;-1e6);
-    .qunit.assertThrows[.qf.mkt.odd_lot_imbalance[ol_tape[];];0n;
+    .qunit.assertThrows[.qf.mkt.odd_lot_imbalance[.qt.qf.mkt.microstructure.ol_tape[];];0n;
         "odd_lot_imbalance: threshold must be positive, got *";
         "a null threshold is refused"];
-    .qunit.assertThrows[.qf.mkt.odd_lot_imbalance[ol_tape[];];`big;
+    .qunit.assertThrows[.qf.mkt.odd_lot_imbalance[.qt.qf.mkt.microstructure.ol_tape[];];`big;
         "odd_lot_imbalance: threshold must be a numeric atom, got type *";
         "a non-numeric threshold is refused"]};
 
 
 / ---- zero denominators: null, never infinity -----------------------------
 
-test_depth_ratio_with_zero_deeper_levels_is_null_not_infinity:{[t]
+.qt.qf.mkt.microstructure.test_depth_ratio_with_zero_deeper_levels_is_null_not_infinity:{[t]
     / Zero size is WITHDRAWAL, not absence - superbook.q says so where it
     / builds these books - so a book with nothing behind the touch is an
     / ordinary state. It used to give 0w.
@@ -525,11 +524,11 @@ test_depth_ratio_with_zero_deeper_levels_is_null_not_infinity:{[t]
     .qunit.assertTrue[null first r;
         "deeper levels present but empty: undefined, not +inf"]};
 
-test_book_slope_with_no_size_is_null_not_infinity:{[t]
+.qt.qf.mkt.microstructure.test_book_slope_with_no_size_is_null_not_infinity:{[t]
     r:.qf.mkt.book_slope[enlist 1.1000 1.0998;enlist 0 0f];
     .qunit.assertTrue[null first r;"a withdrawn book has no slope"]};
 
-test_a_withdrawn_row_does_not_poison_the_series:{[t]
+.qt.qf.mkt.microstructure.test_a_withdrawn_row_does_not_poison_the_series:{[t]
     / The consequence, which is what makes this a bug rather than a nicety:
     / one withdrawn snapshot among three used to make avg and max infinite.
     prices:(1.1000 1.0998 1.0996;1.1000 1.0998 1.0996;1.1000 1.0998 1.0996);
@@ -539,17 +538,17 @@ test_a_withdrawn_row_does_not_poison_the_series:{[t]
     .qunit.assertEquals[count r where not null r;2;
         "the withdrawn row nulls out and the other two survive"]};
 
-test_book_slope_and_depth_ratio_are_unchanged_on_normal_books:{[t]
-    .testutil.assertApprox[first .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100f];
+.qt.qf.mkt.microstructure.test_book_slope_and_depth_ratio_are_unchanged_on_normal_books:{[t]
+    .qt.support.assertApprox[first .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100f];
         1.333333e-06;1e-12;"the guard must not move a normal answer"];
-    .testutil.assertApprox[first .qf.mkt.depth_ratio[enlist 100 20 20 20 20f;enlist 100 20 20 20 20f];
+    .qt.support.assertApprox[first .qf.mkt.depth_ratio[enlist 100 20 20 20 20f;enlist 100 20 20 20 20f];
         1.25;1e-12;"nor this one"]};
 
 / ---- streaming analytics (#332) ----
 
 / n quote rows for one sym, 1s apart from t0, with a random walk in the L0
 / bid and random sizes - seeded, so the fixture is fixed.
-st_quotes_for:{[s;n;t0;seed]
+.qt.qf.mkt.microstructure.st_quotes_for:{[s;n;t0;seed]
     system "S ",string seed;
     bid:1.1+0.0001*sums -1+n?3;
     ask:bid+0.0001*1+n?2;
@@ -558,23 +557,23 @@ st_quotes_for:{[s;n;t0;seed]
         ask_prices:enlist each ask; ask_sizes:enlist each `float$100*1+n?5)}
 
 / Two syms interleaved, half a second apart.
-st_quotes:{[] `time xasc (st_quotes_for[`EURUSD;30;2026.01.02D10:00:00;7]),st_quotes_for[`GBPUSD;30;2026.01.02D10:00:00.5;11]}
+.qt.qf.mkt.microstructure.st_quotes:{[] `time xasc (.qt.qf.mkt.microstructure.st_quotes_for[`EURUSD;30;2026.01.02D10:00:00;7]),.qt.qf.mkt.microstructure.st_quotes_for[`GBPUSD;30;2026.01.02D10:00:00.5;11]}
 
 / A tape of trades (and some adds) for two syms.
-st_tape:{[]
+.qt.qf.mkt.microstructure.st_tape:{[]
     system "S 5";
     n:40;
     ([] time:2026.01.02D10:00:00+500000000*til n; sym:n?`EURUSD`GBPUSD; action:n?`trade`trade`add;
         side:n?-1 1; size:`float$1000*1+n?9)}
 
-st_cfg:{[] (enlist `window)!enlist 4}
+.qt.qf.mkt.microstructure.st_cfg:{[] (enlist `window)!enlist 4}
 
-st_quote_metrics:`ofi`rolling_ofi`return_variance
+.qt.qf.mkt.microstructure.st_quote_metrics:`ofi`rolling_ofi`return_variance
 
 / Feed `chunks` (a list of batch dicts) through a fresh stream; return the
 / final state and the concatenated outputs, batch-local `row` removed.
-st_run:{[metrics;chunks]
-    cfg:.microstructuretest.st_cfg[];
+.qt.qf.mkt.microstructure.st_run:{[metrics;chunks]
+    cfg:.qt.qf.mkt.microstructure.st_cfg[];
     step:{[cfg;acc;b]
         r:.qf.mkt.stream_update[acc 0;b;cfg];
         q:$[98h=type r`quotes; delete row from r`quotes; ()];
@@ -582,99 +581,99 @@ st_run:{[metrics;chunks]
         (r`state;(acc 1),q;(acc 2),t)}[cfg];
     step/[(.qf.mkt.stream_init[metrics;cfg];();());chunks]}
 
-test_stream_equals_batch_for_each_sym:{[t]
-    q:st_quotes[];
-    o:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
+.qt.qf.mkt.microstructure.test_stream_equals_batch_for_each_sym:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
+    o:(.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
     check:{[q;o;s]
         e:select from o where sym=s;
         flows:.qf.mkt.ofi[q;s];
         (e[`ofi]~flows) and (e[`rolling_ofi]~.qf.mkt.rolling_ofi[flows;4]) and e[`return_variance]~.qf.mkt.rolling_return_variance[q;s;4]};
     .qunit.assertEquals[check[q;o;] each `EURUSD`GBPUSD;11b;"ofi, rolling_ofi, return_variance equal the batch functions, warm-up nulls included"]};
 
-test_stream_equals_batch_at_every_prefix:{[t]
-    q:st_quotes[];
-    o:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
+.qt.qf.mkt.microstructure.test_stream_equals_batch_at_every_prefix:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
+    o:(.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
     at_prefix:{[q;o;k]
         p:k#q;
         e:select from (k#o) where sym=`EURUSD;
         (e[`ofi]~.qf.mkt.ofi[p;`EURUSD]) and e[`return_variance]~.qf.mkt.rolling_return_variance[p;`EURUSD;4]};
     .qunit.assertEquals[all at_prefix[q;o;] each 1+til count q;1b;"each prefix of the stream is the batch answer on that prefix"]};
 
-test_stream_chunking_does_not_change_anything:{[t]
-    q:st_quotes[];
-    whole:st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q];
-    rows:st_run[st_quote_metrics;{(enlist `quotes)!enlist x} each 1 cut q];
-    ragged:st_run[st_quote_metrics;{(enlist `quotes)!enlist x} each (0 3 4 19 40) cut q];
+.qt.qf.mkt.microstructure.test_stream_chunking_does_not_change_anything:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
+    whole:.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist q];
+    rows:.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;{(enlist `quotes)!enlist x} each 1 cut q];
+    ragged:.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;{(enlist `quotes)!enlist x} each (0 3 4 19 40) cut q];
     .qunit.assertEquals[(rows 1;ragged 1);(whole 1;whole 1);"single rows and ragged chunks give the same outputs"];
     .qunit.assertEquals[(rows 0;ragged 0);(whole 0;whole 0);"and the same final state"]};
 
-test_stream_resumes_from_a_checkpoint:{[t]
-    q:st_quotes[];
-    cfg:st_cfg[];
-    whole:st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q];
-    first_half:st_run[st_quote_metrics;enlist (enlist `quotes)!enlist 25#q];
+.qt.qf.mkt.microstructure.test_stream_resumes_from_a_checkpoint:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
+    cfg:.qt.qf.mkt.microstructure.st_cfg[];
+    whole:.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist q];
+    first_half:.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist 25#q];
     saved:-8!first_half 0;
     r:.qf.mkt.stream_update[-9!saved;(enlist `quotes)!enlist 25_q;cfg];
     .qunit.assertEquals[r`state;whole 0;"serialised, restored and continued: the same state"];
     .qunit.assertEquals[delete row from r`quotes;25_whole 1;"and the same outputs"]};
 
-test_stream_trade_flow_equals_batch_per_sym:{[t]
-    tape:st_tape[];
-    r:st_run[enlist `signed_trade_flow;{(enlist `tape)!enlist x} each (0 7 8 33) cut tape];
+.qt.qf.mkt.microstructure.test_stream_trade_flow_equals_batch_per_sym:{[t]
+    tape:.qt.qf.mkt.microstructure.st_tape[];
+    r:.qt.qf.mkt.microstructure.st_run[enlist `signed_trade_flow;{(enlist `tape)!enlist x} each (0 7 8 33) cut tape];
     check:{[tape;o;s]
         e:select from o where sym=s;
         ref:.qf.mkt.cumulative_trade_flow select from tape where sym=s;
         e[`cum_flow]~ref`cum_flow};
     .qunit.assertEquals[check[tape;r 2;] each `EURUSD`GBPUSD;11b;"cumulative flow per sym, chunked, equals the batch"]};
 
-test_stream_constant_returns_have_zero_variance:{[t]
+.qt.qf.mkt.microstructure.test_stream_constant_returns_have_zero_variance:{[t]
     n:12;
     flat:([] time:2026.01.02D10:00:00+1000000000*til n; sym:n#`EURUSD;
         bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1f; ask_prices:n#enlist enlist 1.1002; ask_sizes:n#enlist enlist 1f);
-    o:(st_run[enlist `return_variance;enlist (enlist `quotes)!enlist flat]) 1;
+    o:(.qt.qf.mkt.microstructure.st_run[enlist `return_variance;enlist (enlist `quotes)!enlist flat]) 1;
     .qunit.assertEquals[o`return_variance;(4#0n),(n-4)#0f;"null through warm-up, then exactly 0"]};
 
-test_stream_syms_do_not_contaminate_each_other:{[t]
-    q:st_quotes[];
-    mixed:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
-    alone:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist select from q where sym=`EURUSD]) 1;
+.qt.qf.mkt.microstructure.test_stream_syms_do_not_contaminate_each_other:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
+    mixed:(.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
+    alone:(.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist select from q where sym=`EURUSD]) 1;
     .qunit.assertEquals[select from mixed where sym=`EURUSD;alone;"EURUSD's stream is the same with GBPUSD interleaved"]};
 
-test_stream_late_rows_are_refused_by_default:{[t]
-    q:st_quotes[];
-    cfg:st_cfg[];
+.qt.qf.mkt.microstructure.test_stream_late_rows_are_refused_by_default:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
+    cfg:.qt.qf.mkt.microstructure.st_cfg[];
     st:(.qf.mkt.stream_update[.qf.mkt.stream_init[`ofi;cfg];(enlist `quotes)!enlist 10#q;cfg])`state;
     .qunit.assertThrows[.qf.mkt.stream_update[st;;cfg];(enlist `quotes)!enlist 2#q;
         "stream_update: 1 late quote row(s) for EURUSD*";"an earlier row than already processed"]};
 
-test_stream_late_rows_can_be_dropped_and_counted:{[t]
-    q:st_quotes[];
+.qt.qf.mkt.microstructure.test_stream_late_rows_can_be_dropped_and_counted:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
     cfg:(`window`late)!(4;`drop);
     st:(.qf.mkt.stream_update[.qf.mkt.stream_init[`ofi;cfg];(enlist `quotes)!enlist 10#q;cfg])`state;
     r:.qf.mkt.stream_update[st;(enlist `quotes)!enlist (2#q),10_q;cfg];
     .qunit.assertEquals[r[`state;`dropped];2;"both late rows counted"];
     .qunit.assertEquals[r[`quotes;`row];2+til 50;"and missing from the output"]};
 
-test_stream_reset_starts_a_sym_over:{[t]
-    q:select from st_quotes[] where sym=`EURUSD;
-    cfg:st_cfg[];
+.qt.qf.mkt.microstructure.test_stream_reset_starts_a_sym_over:{[t]
+    q:select from .qt.qf.mkt.microstructure.st_quotes[] where sym=`EURUSD;
+    cfg:.qt.qf.mkt.microstructure.st_cfg[];
     st:(.qf.mkt.stream_update[.qf.mkt.stream_init[`ofi;cfg];(enlist `quotes)!enlist 10#q;cfg])`state;
     r:.qf.mkt.stream_update[.qf.mkt.stream_reset[st;`EURUSD];(enlist `quotes)!enlist 10_q;cfg];
     .qunit.assertEquals[first r[`quotes;`ofi];0n;"the first row after a reset has no prior snapshot"];
     .qunit.assertEquals[r[`quotes;`ofi];.qf.mkt.ofi[10_q;`EURUSD];"the stream restarts as the batch would on the new session"]};
 
-test_stream_refuses_a_changed_config_and_a_foreign_version:{[t]
-    cfg:st_cfg[];
+.qt.qf.mkt.microstructure.test_stream_refuses_a_changed_config_and_a_foreign_version:{[t]
+    cfg:.qt.qf.mkt.microstructure.st_cfg[];
     st:.qf.mkt.stream_init[`ofi;cfg];
-    q:(enlist `quotes)!enlist 3#st_quotes[];
+    q:(enlist `quotes)!enlist 3#.qt.qf.mkt.microstructure.st_quotes[];
     .qunit.assertThrows[.qf.mkt.stream_update[st;q;];(enlist `window)!enlist 9;"stream_update: config differs*";"a changed window"];
     .qunit.assertThrows[.qf.mkt.stream_update[;q;cfg];@[st;`version;:;2];"stream_update: state is version 2*";"another version"]};
 
-test_stream_refuses_unknown_metrics_and_time_windows:{[t]
+.qt.qf.mkt.microstructure.test_stream_refuses_unknown_metrics_and_time_windows:{[t]
     .qunit.assertThrows[.qf.mkt.stream_init[;::];`vpin;"stream_init: unknown metric(s) vpin*";"vpin is not streamed"];
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];(enlist `window_mode)!enlist `time;"stream: window_mode must be `count*";"no time window yet"]};
 
-test_stream_refuses_a_config_that_is_not_a_dictionary:{[t]
+.qt.qf.mkt.microstructure.test_stream_refuses_a_config_that_is_not_a_dictionary:{[t]
     / Each of these used to run on the default 20-row window (#804).
     msg:"stream: config must be (::) for the defaults, or a dictionary*";
     / `window!enlist 5 is ENUMERATION (type 20), the case #804 found. KDB-X
@@ -689,9 +688,9 @@ test_stream_refuses_a_config_that_is_not_a_dictionary:{[t]
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];`windw;msg;"a symbol"];
     .qunit.assertEquals[(.qf.mkt.stream_init[`ofi;::])[`config;`window];20;"(::) still gives the defaults"]};
 
-test_stream_snapshot_reports_each_sym:{[t]
-    q:st_quotes[];
-    st:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 0;
+.qt.qf.mkt.microstructure.test_stream_snapshot_reports_each_sym:{[t]
+    q:.qt.qf.mkt.microstructure.st_quotes[];
+    st:(.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist q]) 0;
     snap:.qf.mkt.stream_snapshot st;
     .qunit.assertEquals[snap`sym;`EURUSD`GBPUSD;"one row per sym"];
     .qunit.assertEquals[snap`quote_rows;30 30;"rows seen"];
@@ -700,63 +699,63 @@ test_stream_snapshot_reports_each_sym:{[t]
 
 / --- best_mid_across_venues (#886) ----------------------------------------
 
-test_the_best_mid_takes_the_best_side_from_any_venue:{[t]
+.qt.qf.mkt.microstructure.test_the_best_mid_takes_the_best_side_from_any_venue:{[t]
     tob:([] time:2#2026.09.17D10:00:00; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 62004f; ask:62010 62008f);
     tg:([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:01);
     .qunit.assertEquals[.qf.mkt.best_mid_across_venues[tob;tg;0D00:00:05];enlist 62006f;
         "bid 62004 and ask 62008, both from b"]};
 
-test_a_venue_older_than_max_age_does_not_count:{[t]
+.qt.qf.mkt.microstructure.test_a_venue_older_than_max_age_does_not_count:{[t]
     tob:([] time:2026.09.17D10:00:00 2026.09.17D10:00:08; sym:2#`$"BTC-USDT"; venue:`a`b; bid:62000 61990f; ask:62010 62020f);
     tg:([] sym:enlist `$"BTC-USDT"; time:enlist 2026.09.17D10:00:09);
     .qunit.assertEquals[.qf.mkt.best_mid_across_venues[tob;tg;0D00:00:05];enlist 62005f;
         "a is nine seconds old: b's mid alone"]};
 
-test_no_live_venue_is_a_null_not_a_guess:{[t]
+.qt.qf.mkt.microstructure.test_no_live_venue_is_a_null_not_a_guess:{[t]
     tob:([] time:enlist 2026.09.17D10:00:00; sym:enlist `$"BTC-USDT"; venue:enlist `a; bid:enlist 62000f; ask:enlist 0n);
     tg:([] sym:(`$"BTC-USDT";`$"ETH-USDT"); time:2#2026.09.17D10:00:01);
     .qunit.assertEquals[.qf.mkt.best_mid_across_venues[tob;tg;0D00:00:05];0n 0n;
         "a missing side, and a sym no venue quotes, both price as null"]};
 
-test_one_staleness_policy_serves_both_jobs:{[t]
+.qt.qf.mkt.microstructure.test_one_staleness_policy_serves_both_jobs:{[t]
     .qunit.assertEquals[.qpipe.job.crypto_markout.max_age;.qf.mkt.reference_max_age;
         "crypto_markout reads the library's limit rather than keeping its own"]};
 
 / ---- float-rounding edges (#1045, #1046) ----
 
 / A tape of trades of the given sizes, sides buy buy sell repeating.
-fr_tape:{[s] n:count s;
+.qt.qf.mkt.microstructure.fr_tape:{[s] n:count s;
     ([] time:2026.01.01D09:00:00+0D00:00:01*til n; sym:n#`BTCUSD; action:n#`trade; side:n#1 1 -1; size:s)};
 
-test_ten_tenths_fill_one_whole_bucket:{[t]
+.qt.qf.mkt.microstructure.test_ten_tenths_fill_one_whole_bucket:{[t]
     / 10*0.1 sums to 0.9999999999999999; a bare floor made that 0 buckets.
-    b:.qf.mkt.volume_buckets[fr_tape[10#0.1];1f];
+    b:.qf.mkt.volume_buckets[.qt.qf.mkt.microstructure.fr_tape[10#0.1];1f];
     .qunit.assertEquals[count b;1;"ten 0.1 trades fill one 1.0 bucket"];
-    .testutil.assertApprox[first b`buy_volume;0.7;1e-9;"seven buys"];
-    .testutil.assertApprox[first .qf.mkt.vpin[fr_tape[10#0.1];1f;1]`vpin;0.4;1e-9;"|0.7-0.3|/1"]};
+    .qt.support.assertApprox[first b`buy_volume;0.7;1e-9;"seven buys"];
+    .qt.support.assertApprox[first .qf.mkt.vpin[.qt.qf.mkt.microstructure.fr_tape[10#0.1];1f;1]`vpin;0.4;1e-9;"|0.7-0.3|/1"]};
 
-test_tenth_sized_buckets_count_every_trade:{[t]
-    .qunit.assertEquals[count .qf.mkt.volume_buckets[fr_tape[10#0.1];0.1];10;"ten 0.1 buckets, not 9"];
-    .qunit.assertEquals[count .qf.mkt.volume_buckets[fr_tape[7#0.1];0.1];7;"seven 0.1 buckets, not 6"]};
+.qt.qf.mkt.microstructure.test_tenth_sized_buckets_count_every_trade:{[t]
+    .qunit.assertEquals[count .qf.mkt.volume_buckets[.qt.qf.mkt.microstructure.fr_tape[10#0.1];0.1];10;"ten 0.1 buckets, not 9"];
+    .qunit.assertEquals[count .qf.mkt.volume_buckets[.qt.qf.mkt.microstructure.fr_tape[7#0.1];0.1];7;"seven 0.1 buckets, not 6"]};
 
-test_long_fractional_tape_keeps_its_last_bucket:{[t]
+.qt.qf.mkt.microstructure.test_long_fractional_tape_keeps_its_last_bucket:{[t]
     / 100000 trades of 0.07 sum to ~6999.9999999921: an absolute 1e-9 is too small at this scale (#1262).
-    tape:fr_tape[100000#0.07];
+    tape:.qt.qf.mkt.microstructure.fr_tape[100000#0.07];
     b:.qf.mkt.volume_buckets[tape;0.7];
     .qunit.assertEquals[count b;10000;"10000 buckets, not 9999"];
     .qunit.assertEquals[last b`end_time;last tape`time;"the last bucket ends at the last trade"]};
 
-test_the_threshold_rank_survives_float_noise:{[t]
+.qt.qf.mkt.microstructure.test_the_threshold_rank_survives_float_noise:{[t]
     / 0.07*100 is 7.000000000000001, which a bare ceiling took to rank 8.
-    tape:fr_tape[1f+til 100];
+    tape:.qt.qf.mkt.microstructure.fr_tape[1f+til 100];
     .qunit.assertEquals[.qf.mkt.large_trade_threshold[tape;0.07];7f;"q=0.07 of 1..100 is 7"];
     .qunit.assertEquals[.qf.mkt.large_trade_threshold[tape;0.55];55f;"q=0.55 of 1..100 is 55"];
-    .testutil.assertApprox[.qf.mkt.large_trade_ratio[tape;0.07];0.94;1e-12;"94 of 100 trades are >= 7"]};
+    .qt.support.assertApprox[.qf.mkt.large_trade_ratio[tape;0.07];0.94;1e-12;"94 of 100 trades are >= 7"]};
 
 / ---- a sym with no quotes (#1047) ----
 
-test_tier2_functions_return_empty_for_a_sym_with_no_quotes:{[t]
-    q:1#mk_mid_quotes[::];
+.qt.qf.mkt.microstructure.test_tier2_functions_return_empty_for_a_sym_with_no_quotes:{[t]
+    q:1#.qt.qf.mkt.microstructure.mk_mid_quotes[::];
     .qunit.assertEquals[.qf.mkt.mid_price_velocity[q;`GBPUSD];`float$();"velocity"];
     .qunit.assertEquals[.qf.mkt.mid_price_acceleration[q;`GBPUSD];`float$();"acceleration"];
     .qunit.assertEquals[.qf.mkt.queue_depletion_rate[q;`GBPUSD;`bid];`float$();"depletion"];
@@ -764,8 +763,8 @@ test_tier2_functions_return_empty_for_a_sym_with_no_quotes:{[t]
     .qunit.assertEquals[.qf.mkt.ofi_multilevel[q;`GBPUSD;3];`float$();"ofi_multilevel"];
     .qunit.assertEquals[.qf.mkt.rolling_return_variance[q;`GBPUSD;3];`float$();"variance"]};
 
-test_an_empty_sym_still_validates_the_side:{[t]
-    .qunit.assertThrows[.qf.mkt.queue_depletion_rate[1#mk_mid_quotes[::];`GBPUSD;];`mid;
+.qt.qf.mkt.microstructure.test_an_empty_sym_still_validates_the_side:{[t]
+    .qunit.assertThrows[.qf.mkt.queue_depletion_rate[1#.qt.qf.mkt.microstructure.mk_mid_quotes[::];`GBPUSD;];`mid;
         "queue_depletion_rate: side must be `bid or `ask*";"a bad side is refused even with no rows"]};
 / --- the stream reads a withdrawn side as ofi does (#1111) ------------------
 / #1032 moved the batch functions onto side_transition, which reads an
@@ -773,25 +772,23 @@ test_an_empty_sym_still_validates_the_side:{[t]
 / ask's flow was null and msum read it as 0.
 
 / EURUSD with its ask withdrawn on row 1 and back on row 2.
-withdrawn:{[] ([] time:2026.01.01D10:00:00+0D00:00:01*til 4; sym:`EURUSD;
+.qt.qf.mkt.microstructure.withdrawn:{[] ([] time:2026.01.01D10:00:00+0D00:00:01*til 4; sym:`EURUSD;
     bid_prices:4#enlist enlist 1.1; bid_sizes:4#enlist enlist 1e6;
     ask_prices:(enlist 1.1002;`float$();enlist 1.1002;enlist 1.1002);
     ask_sizes:(enlist 2e6;`float$();enlist 2e6;enlist 2e6))}
 
-test_the_stream_reads_a_withdrawn_ask_as_ofi_does:{[t]
-    q:withdrawn[];
+.qt.qf.mkt.microstructure.test_the_stream_reads_a_withdrawn_ask_as_ofi_does:{[t]
+    q:.qt.qf.mkt.microstructure.withdrawn[];
     cfg:enlist[`window]!enlist 2;
     r:.qf.mkt.stream_update[.qf.mkt.stream_init[`ofi`rolling_ofi;cfg];enlist[`quotes]!enlist q;cfg];
     want:.qf.mkt.ofi[q;`EURUSD];
     .qunit.assertEquals[r[`quotes]`ofi;want;"the queue leaving is +2e6, its return -2e6 - as the batch says"];
     .qunit.assertEquals[r[`quotes]`rolling_ofi;.qf.mkt.rolling_ofi[want;2];"so the rolling sum is not silently 0"]};
 
-test_a_batch_boundary_at_the_withdrawal_changes_nothing:{[t]
-    q:withdrawn[];
+.qt.qf.mkt.microstructure.test_a_batch_boundary_at_the_withdrawal_changes_nothing:{[t]
+    q:.qt.qf.mkt.microstructure.withdrawn[];
     cfg:enlist[`window]!enlist 2;
     a:.qf.mkt.stream_update[.qf.mkt.stream_init[`ofi;cfg];enlist[`quotes]!enlist 2#q;cfg];
     b:.qf.mkt.stream_update[a`state;enlist[`quotes]!enlist 2_q;cfg];
     .qunit.assertEquals[(a[`quotes]`ofi),b[`quotes]`ofi;.qf.mkt.ofi[q;`EURUSD];
         "the state holds the withdrawn ask as the rule reads it"]};
-
-\d .

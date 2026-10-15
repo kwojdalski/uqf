@@ -1,16 +1,18 @@
-// testutil.q - small shared helper for tolerance-based float assertions
-// on top of the vendored qUnit framework (tests/lib/qunit.q).
-// Load qunit.q before this file.
+// support.q - the shared helpers of the test suites (.qt.support), on top of
+// the vendored qUnit framework (tests/lib/qunit.q).
+// Load qunit.q before this file. Every definition is a fully qualified .qt.support
+// name from the root context, never inside a `\d` block - see discovery.q for why,
+// and for how a suite is told from a helper, a container and a fixture.
+// This file loads discovery.q last, so a runner loads one file for both.
 
-\d .testutil
 
 // True if actual and expected are within tol of each other. Reduced with
 // `all` so it also works when actual/expected are equal-length vectors
 // (assertThat needs a single boolean, not a vector of them).
-approx:{[tol;a;b] all tol>=abs a-b};
+.qt.support.approx:{[tol;a;b] all tol>=abs a-b};
 
 // assertThat wrapper for approximate numeric equality.
-assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];expected;msg]};
+.qt.support.assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;.qt.support.approx[tol];expected;msg]};
 
 // A genuinely empty etl_coverage ledger, whatever shape it currently has.
 //
@@ -37,13 +39,13 @@ assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];exp
 // like a bug in require_schema. superseded_at did it; run_id did it
 // again. test_coverage's test_the_foreign_fixture_tracks_the_declared_schema
 // now fails FIRST, and by name, so the next one is a one-line fix here.
-foreign_coverage_ledger:{[]
+.qt.support.foreign_coverage_ledger:{[]
     ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
         range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$();
         superseded_at:`timestamp$(); run_id:0#0Ng)};
 
-reset_coverage_ledger:{[]
+.qt.support.reset_coverage_ledger:{[]
     ![`.;();0b;enlist `etl_coverage];
     // The ledger is persisted now, so deleting the in-memory table is no
     // longer a reset: the next attach or stage_completion reloads whatever
@@ -59,17 +61,12 @@ reset_coverage_ledger:{[]
     value `etl_coverage};
 
 // ---------------------------------------------------------------------------
-// What the suite IS: its files, and the namespaces they declare.
+// What the suite IS: its files. Its namespaces are discovered (discovery.q).
 // ---------------------------------------------------------------------------
-// Three scripts need this and all three used to get it by reading
-// tests/run_tests.q as TEXT - run_examples.q and run_coverage.q each scanned
-// it for `\l tests/q/test_*` lines to re-execute, and run_coverage.q
-// additionally `value`d the line starting `nsList:`. That worked only while
-// the runner listed its suites literally, and coupled three files to the
-// exact spelling of a fourth.
-//
-// So the definition lives here, as functions, and the runner is one caller
-// among three rather than the source everyone parses.
+// Three scripts need the file list and all three used to get it by reading
+// tests/run_tests.q as TEXT. The definition lives here, as a function, and the
+// runner is one caller among three rather than the source everyone parses.
+// The namespaces are not listed anywhere: a suite is found by what it holds.
 
 // Every test suite file under tests/q/, alphabetically.
 //
@@ -79,36 +76,15 @@ reset_coverage_ledger:{[]
 //
 // Two clauses rather than like "test_*.q": an interior wildcard is unreliable
 // in q's like (QB002), which the repository's trap gate refuses.
-suite_files:{[]
+.qt.support.suite_files:{[]
     f:key `:tests/q;
     f:f where f like "*.q";
     f:asc f where f like "test_*";
-    if[0=count f; '"testutil.suite_files: no tests/q/test_*.q found - wrong directory?"];
+    if[0=count f; '"support.suite_files: no tests/q/test_*.q found - wrong directory?"];
     f}
 
 // Load every suite file. Globbed, so a new suite runs the day it is written.
-load_suites:{[] {system "l tests/q/",string x} each .testutil.suite_files[];}
-
-// The namespaces the suite files DECLARE, read from the files.
-//
-// From the files, not from `key `` after loading, and that distinction is
-// the whole point. A test body may create a namespace at RUN time -
-// test_backfill_state.q builds `.qcompletetest` as a fixture worker inside
-// an assertion - and those match `*test` just as a suite does. Deriving from
-// the live root therefore returns a different set depending on WHICH SUITES
-// HAVE ALREADY RUN, which is not a property of the tree and cannot be
-// compared against anything stable.
-//
-// A file may declare helper namespaces beside its suite (test_coverage_tool.q
-// has `.covfix`), so only the ones named `*test` are suites.
-suite_namespaces:{[]
-    ns:raze {[f]
-        src:read0 hsym `$"tests/q/",string f;
-        decls:3_/:src where src like "\\d .*";
-        decls where decls like "*test"} each .testutil.suite_files[];
-    ns:asc distinct `$ns;
-    if[0=count ns; '"testutil.suite_namespaces: no \\d .<name>test found in tests/q/"];
-    ns}
+.qt.support.load_suites:{[] {system "l tests/q/",string x} each .qt.support.suite_files[];}
 
 // ---------------------------------------------------------------------------
 // What the TREE declares, as opposed to what a test registered
@@ -125,7 +101,7 @@ suite_namespaces:{[]
 // registry with these to ask about the tree rather than about the process.
 
 // The declaration stems in one of the ETL directories: `foo.q -> `foo.
-etl_declaration_names:{[dir]
+.qt.support.etl_declaration_names:{[dir]
     n:key hsym `$dir;
     n:n where n like "*.q";
     asc `$-2_/:string n}
@@ -134,18 +110,18 @@ etl_declaration_names:{[dir]
 // otherwise `q`, resolved by the shell on PATH. TorQ's rule (torq.sh), and
 // uqs.interpreter.q_command's (#414); scripts/test.py passes QCMD on to every lane
 // it runs, so the children run the binary the runner itself was started with.
-q_interpreter:{[] $[""~getenv `QCMD; "q"; getenv `QCMD]}
+.qt.support.q_interpreter:{[] $[""~getenv `QCMD; "q"; getenv `QCMD]}
 
 // Every .q file under a directory, recursively.
 //
 // `key` on a directory returns a symbol LIST (11h) and on a file an atom
 // (-11h), which is how a subdirectory is told from a file without shelling
 // out.
-q_files:{[dir]
+.qt.support.q_files:{[dir]
     paths:(dir,"/"),/:string key hsym `$dir;
     isdir:{11h=type key hsym `$x} each paths;
     (paths where (not isdir) and paths like "*.q"),
-        raze .testutil.q_files each paths where isdir}
+        raze .qt.support.q_files each paths where isdir}
 
 // The namespaces this tree's own source DECLARES, from the files.
 //
@@ -158,12 +134,12 @@ q_files:{[dir]
 //
 // Worker instances are appended because no file declares them: `.qetl.job.bounded.define`
 // stamps `.qpipe.job.<name>` from the registered name (#227).
-tree_namespaces:{[]
+.qt.support.tree_namespaces:{[]
     decls:raze {[f]
         src:read0 hsym `$f;
-        3_/:src where src like "\\d .*"} each .testutil.q_files["src"];
+        3_/:src where src like "\\d .*"} each .qt.support.q_files["src"];
     ns:`$decls where 1<count each decls;
-    ns:ns,`$".qpipe.job.",/:string .testutil.etl_declaration_names["src/etl/workers"];
+    ns:ns,`$".qpipe.job.",/:string .qt.support.etl_declaration_names["src/etl/workers"];
     asc distinct ns}
 
 
@@ -175,14 +151,14 @@ tree_namespaces:{[]
 / @param trace 1b to switch TRACE on for the call
 / @param f a niladic function
 / @return the lines, in order
-captured_log:{[trace;f]
+.qt.support.captured_log:{[trace;f]
     keep:.qetl.log.line; was:.qetl.log.trace_enabled;
     if[trace; .qetl.log.trace 1b];
-    `.testutil.lines set ();
-    .qetl.log.line:{[level;id;text;fields] .testutil.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
+    `.qt.support.lines set ();
+    .qetl.log.line:{[level;id;text;fields] .qt.support.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
     @[f;::;::];
     .qetl.log.line:keep; .qetl.log.trace was;
-    .testutil.lines}
+    .qt.support.lines}
 
 / ------------------------------------------------- KEYED-TABLE REGISTRIES
 / .
@@ -196,20 +172,20 @@ captured_log:{[trace;f]
 / Drop rows from a registry by name; a name it does not hold is ignored.
 / @param reg the registry's global name, e.g. `.qetl.source.sources
 / @param names the names to drop
-drop_rows:{[reg;names] ![reg;enlist (in;`name;enlist (),names);0b;`symbol$()];}
+.qt.support.drop_rows:{[reg;names] ![reg;enlist (in;`name;enlist (),names);0b;`symbol$()];}
 
 / Store `row` under `name`, replacing any row already there.
 / @param reg the registry's global name
 / @param name the key
 / @param row the row, as the registry's def returns it
-put_row:{[reg;name;row] reg upsert (enlist[`name]!enlist name),row;}
+.qt.support.put_row:{[reg;name;row] reg upsert (enlist[`name]!enlist name),row;}
 
 / Set one field of one row, leaving the rest of the row as it was.
 / @param reg the registry's global name
 / @param name the key of a row the registry holds
 / @param col the column
 / @param v the value
-set_field:{[reg;name;col;v] put_row[reg;name;@[(get reg) name;col;:;v]]}
+.qt.support.set_field:{[reg;name;col;v] .qt.support.put_row[reg;name;@[(get reg) name;col;:;v]]}
 
 / ------------------------------------------------------ TorQ PROCESS NAME
 / .
@@ -220,7 +196,7 @@ set_field:{[reg;name;col;v] put_row[reg;name;@[(get reg) name;col;:;v]]}
 / @param p the process name, or ` for no TorQ
 / @param f a niladic function
 / @return f's result, or (`threw;error)
-with_procname:{[p;f]
+.qt.support.with_procname:{[p;f]
     had:@[{`procname in key x};`.proc;0b];
     old:$[had; .proc.procname; `];
     $[null p; if[had; ![`.proc;();0b;enlist `procname]]; `.proc.procname set p];
@@ -232,22 +208,22 @@ with_procname:{[p;f]
 //
 // A suite that defines streaming jobs (.qetl.job.stream.define and the
 // horizon, rolling, bars and normalizer kinds built on it) writes the
-// process-global registries, and .jobouttest and .dagtest scan those live, so
+// process-global registries, and .qt.qpipe.job_output_contracts and .qt.qetl.dag scan those live, so
 // whichever suite ran first decided what they saw (#1375). The per-test
 // isolation below deliberately leaves them alone - several suites define a job
 // once and reuse it across cases - so a suite brackets its WHOLE namespace:
-//   beforeNamespace_save_jobs:{[] .testutil.save_stream_jobs[`.mytest]}
-//   afterNamespace_restore_jobs:{[] .testutil.restore_stream_jobs[`.mytest]}
+//   beforeNamespace_save_jobs:{[] .qt.support.save_stream_jobs[`.mytest]}
+//   afterNamespace_restore_jobs:{[] .qt.support.restore_stream_jobs[`.mytest]}
 
 // Every registry a stream job's definition writes.
 // @private
-stream_registries:`.qetl.job.stream.jobs`.qetl.job.stream.procnames`.qetl.job.stream.initial`.qetl.job.stream.normalizer.registry`.qetl.job.stream.horizons.registry`.qetl.job.stream.rolling.registry`.qetl.job.stream.bars.registry
+.qt.support.stream_registries:`.qetl.job.stream.jobs`.qetl.job.stream.procnames`.qetl.job.stream.initial`.qetl.job.stream.normalizer.registry`.qetl.job.stream.horizons.registry`.qetl.job.stream.rolling.registry`.qetl.job.stream.bars.registry
 
 // Remember the stream registries, for the suite in namespace ns.
-// @param ns the suite's namespace, e.g. `.horizontest
+// @param ns the suite's namespace, e.g. `.qt.qetl.job.stream.horizons
 // @return the registries saved
-save_stream_jobs:{[ns]
-    r:.testutil.stream_registries where {@[{get x; 1b};x;{[e] 0b}]} each .testutil.stream_registries;
+.qt.support.save_stream_jobs:{[ns]
+    r:.qt.support.stream_registries where {@[{get x; 1b};x;{[e] 0b}]} each .qt.support.stream_registries;
     / each value enlisted: dicts that share keys would otherwise collapse into a table
     (` sv ns,`saved_stream_registries) set r!{enlist get x} each r;
     r}
@@ -256,7 +232,7 @@ save_stream_jobs:{[ns]
 // defined is gone, and one it removed is back.
 // @param ns the suite's namespace, as given to save_stream_jobs
 // @return the registries restored
-restore_stream_jobs:{[ns]
+.qt.support.restore_stream_jobs:{[ns]
     s:get ` sv ns,`saved_stream_registries;
     {x set first y}'[key s;value s];
     key s}
@@ -290,7 +266,7 @@ restore_stream_jobs:{[ns]
 
 // Private: the names in `files`' `setenv[`NAME;...]` calls.
 // @private
-setenv_names:{[files]
+.qt.support.setenv_names:{[files]
     lines:raze {read0 hsym `$x} each files;
     / `[[]`: a bare `[` opens a character class in ss's pattern, as in like's
     at:ss[;"setenv[[]`"] each lines;
@@ -298,18 +274,18 @@ setenv_names:{[files]
     names where {all x in .Q.an} each string names}
 
 // The environment variables a test may change, read once at load.
-env_names:{[]
+.qt.support.env_names:{[]
     / untrapped: a harness that could not read it would isolate less, silently
     surface:exec name from (enlist "S";enlist ",") 0: `:docs/reference/surfaces/current/variables.csv;
-    asc distinct surface,.testutil.setenv_names .testutil.q_files["tests/q"],.testutil.q_files["src"]}[]
+    asc distinct surface,.qt.support.setenv_names .qt.support.q_files["tests/q"],.qt.support.q_files["src"]}[]
 
 // What the harness restores after each test: the environment, the timer, and
 // which root tables exist.
-snapshot:{[] `env`timer`tables!(.testutil.env_names!getenv each .testutil.env_names;system"t";tables `.)}
+.qt.support.snapshot:{[] `env`timer`tables!(.qt.support.env_names!getenv each .qt.support.env_names;system"t";tables `.)}
 
 // Put back what `snapshot` took: only what changed is written.
 // @param s a snapshot
-restore:{[s]
+.qt.support.restore:{[s]
     now:getenv each key s`env;
     changed:where not (s`env)~'now;
     if[count changed; setenv'[changed;(s`env) changed]];
@@ -320,27 +296,29 @@ restore:{[s]
 
 // The runner's own runTest, kept once: loading this file twice must not wrap
 // the wrapper, which would then call itself.
-if[not `run_test_unisolated in key `.testutil; run_test_unisolated:.qunit.runTest];
+if[not `run_test_unisolated in key `.qt.support; .qt.support.run_test_unisolated:.qunit.runTest];
 
 // Private: one test, isolated - see ISOLATION above.
 // @private
-isolated_run_test:{[fn]
-    s:.testutil.snapshot[];
-    r:@[.testutil.run_test_unisolated;fn;{[s;e] .testutil.restore s; 'e}[s]];
-    .testutil.restore s;
+.qt.support.isolated_run_test:{[fn]
+    s:.qt.support.snapshot[];
+    r:@[.qt.support.run_test_unisolated;fn;{[s;e] .qt.support.restore s; 'e}[s]];
+    .qt.support.restore s;
     r}
 
-.qunit.runTest:isolated_run_test;
+.qunit.runTest:.qt.support.isolated_run_test;
 
 // The run spec a worker with no credential stores once `init` has it: the
 // same, under the release tagged as the fixture's (#1082).
 // @param s a run spec - source_version, range_from, range_to
 // @return s, its source_version tagged
-fixture_spec:{[s] @[s;`source_version;.qetl.source.fixture_version]}
+.qt.support.fixture_spec:{[s] @[s;`source_version;.qetl.source.fixture_version]}
 
 // The suites run bounded workers on their sources' fixtures, which a run must
 // now ask for (#1082). Set once, before any test, so it is the baseline every
 // test is restored to; a test of the refusal clears it for itself.
 setenv[`UQF_FIXTURE_WRITES;enlist "1"];
 
-\d .
+// Which namespaces are suites, and the layout rules that keep a renamed suite
+// from silently ceasing to run.
+system "l tests/lib/discovery.q";

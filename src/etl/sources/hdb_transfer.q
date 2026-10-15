@@ -49,7 +49,7 @@
     .qetl.source.local[h;{[read;from_ts;to_ts]
         / Whole partitions come back; keep [from_ts;to_ts) and the declared
         / columns. Indexed rather than select-from: a bare name after `from`
-        / is what .srctest guards against in a query sent to a remote.
+        / is what .qt.qetl.source guards against in a query sent to a remote.
         t:read[`trades;from_ts;to_ts];
         (`time`trade_id`sym`price`size`side)#t where (t[`time]>=from_ts) & t[`time]<to_ts};
         range_from;range_to]}

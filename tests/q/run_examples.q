@@ -22,7 +22,7 @@
 / or through `scripts/test.py q-examples`.
 
 \l tests/lib/qunit.q
-\l tests/lib/testutil.q
+\l tests/lib/support.q
 \l src/init.q
 \l src/integrations/data.q
 \l docs/man.q
@@ -37,7 +37,7 @@
 / The test files, for the builders the fixtures reuse - read from
 / run_tests.q rather than listed again, so a new suite cannot be forgotten
 / here. Loading a test file defines its tests; nothing runs them.
-.testutil.load_suites[];
+.qt.support.load_suites[];
 
 / A status directory of our own. Examples take locks and write status
 / files, and a directory another run left behind would make a lock example
@@ -48,14 +48,14 @@ if[0=count getenv `UQF_STATUS_DIR; setenv[`UQF_STATUS_DIR;first system"mktemp -d
 / unset. Found the first time this ran in a fresh worktree: four data.q
 / examples had passed in the main checkout only because a gitignored .env
 / there names a real data directory, so the result depended on whose machine
-/ ran it. An OS variable takes precedence over .env (.datatest pins that), so
+/ ran it. An OS variable takes precedence over .env (.qt.qdata pins that), so
 / setting one here makes every checkout see the same thing.
 setenv[`DATABENTO_DATA_DIR;first system"mktemp -d"];
 
-.egtest.bind_fixtures[];
+.qt.man.examples.bind_fixtures[];
 
-rows:.egtest.examples[];
-live:.egtest.needs_live;
+rows:.qt.man.examples.examples[];
+live:.qt.man.examples.needs_live;
 
 / One example's outcome: `ok, or the reason it is a failure.
 / `-> throws` documents a refusal, which passes only by refusing.
@@ -74,7 +74,7 @@ listed:(rows[;2]) in live`expr;
 problems:();
 {[r;o;isl]
     if[isl and o~`ok;
-        problems,::enlist (r 0),":",string[r 1],"  listed as needing a live process, but it runs - remove it from .egtest.needs_live";
+        problems,::enlist (r 0),":",string[r 1],"  listed as needing a live process, but it runs - remove it from .qt.man.examples.needs_live";
         :(::)];
     if[(not isl) and not o~`ok;
         problems,::enlist (r 0),":",string[r 1],"  ",(200 sublist o),"\n      ",r 2];

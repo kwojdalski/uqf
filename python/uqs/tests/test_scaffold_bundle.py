@@ -15,7 +15,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import create, create_reaction
-from uqs.paths import CATALOG_FILE, RUN_TESTS_FILE, TABLES_FILE, UqsError
+from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import bundle as bundle_mod
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.stack import bundles
@@ -30,7 +30,7 @@ TRADES = [
 @pytest.fixture
 def tree_files():
     """The tree files a tree scaffold appends to; each test asserts they are unchanged."""
-    paths = [UQF_ROOT / p for p in (TABLES_FILE, CATALOG_FILE, RUN_TESTS_FILE)]
+    paths = [UQF_ROOT / p for p in (TABLES_FILE, CATALOG_FILE, STACK_TABLES_TEST)]
     before = {p: p.read_text() for p in paths}
     yield
     assert {p: p.read_text() for p in paths} == before, "--bundle wrote into the tree"
@@ -91,7 +91,7 @@ def test_a_dry_run_writes_nothing(tmp_path, monkeypatch, tree_files):
     folder = tmp_path / "mockups"
     out, refused = _job_new([*TRADES, "--bundle", str(folder), "--dry-run"], monkeypatch)
     assert refused == [] and not folder.exists()
-    assert "tests/run_tests.q" in out  # named among what a bundle does not write
+    assert "tests/q/test_stack_tables.q" in out  # named among what a bundle does not write
 
 
 @pytest.mark.parametrize("option", [["--profile", "essential"], ["--unprofiled", "why"]])
@@ -112,7 +112,7 @@ def test_tree_registrations_are_dropped_and_named():
         [
             FileAction(Path("src/etl/streaming/x.q"), "job\n"),
             FileAction(TABLES_FILE, "\n/ x\nx:([]a:())\n", WriteMode.APPEND),
-            FileAction(RUN_TESTS_FILE, "`.xtest", WriteMode.APPEND),
+            FileAction(STACK_TABLES_TEST, "`x", WriteMode.APPEND),
         ],
         [f"describe x: replace its SCAFFOLDED line in {CATALOG_FILE} - or, if not, hide it"],
     )
@@ -121,4 +121,4 @@ def test_tree_registrations_are_dropped_and_named():
         Path("b/bundle.json"), Path("b/x.q"), Path("b/tables.q"),
     ]  # fmt: skip
     assert out.actions[2].mode is WriteMode.CREATE and out.actions[2].body == "/ x\nx:([]a:())\n"
-    assert any(str(RUN_TESTS_FILE) in n and "not written" in n for n in out.notes)
+    assert any(str(STACK_TABLES_TEST) in n and "not written" in n for n in out.notes)
