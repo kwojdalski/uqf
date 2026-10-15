@@ -1,7 +1,7 @@
 # Licensing
 
 Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
-**except** the five vendored dependencies below:
+**except** the six vendored dependencies below:
 
 - `tests/lib/qunit.q`, vendored from [TimeStored's
   qUnit](https://github.com/timestored/kdb/blob/master/qunit/qunit.q) (see also
@@ -53,6 +53,16 @@ Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
   row rather than generating the whole synthetic dataset upfront in one
   vectorized batch (uqf's own `scripts/*.q` examples do the latter). Not loaded
   by `src/init.q` or anything else in this repo; vendored for reference only.
+- `lib/ml/`, vendored from [KxSystems/ml](https://github.com/KxSystems/ml) at
+  release `4.1.0` (commit `5509fa6`), distributed under the Apache License 2.0
+  (full text at `lib/ml/LICENSE-ml`) - permissive and fine to combine with this
+  repository's MIT code; Apache 2.0 asks that its licence and any NOTICE travel
+  with redistributed copies, which they do. KX's machine-learning toolkit
+  (`.ml`), with its `nlp` (`.nlp`) and `automl` (`.automl`) modules. Four
+  pickle-based example models were not copied - see `lib/ml/NOTICE.md`. Not
+  loaded by `src/init.q` or anything else in this repo, and not verified working
+  here: it needs a Python bridge (PyKX or embedPy) that PeachQ does not support.
+  Vendored for reference only, at the repo owner's explicit choice.
 - `lib/torq-finance-starter-pack/`, vendored from
   [DataIntellectTech/TorQ-Finance-Starter-Pack](https://github.com/DataIntellectTech/TorQ-Finance-Starter-Pack)
   at commit `50fcd5a`, distributed under the MIT License (full text at
