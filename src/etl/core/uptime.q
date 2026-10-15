@@ -26,7 +26,7 @@
 / silently missing rows.
 / .
 / Stored in the status directory beside the run and coverage ledgers, by the
-/ same durable write under its own lock, so `uqs gaps` reads it after the
+/ same durable write under its own lock, so `uqs job gaps` reads it after the
 / process is gone - which is exactly when it is needed.
 
 \d .
@@ -136,7 +136,7 @@
 / The bounded workers that can refill `job`'s gaps: those whose dataset is a
 / table the job publishes. markout publishes demo_execution_quality, and
 / hdb_demo_markouts_backfill re-derives demo_execution_quality from the HDB - so it is
-/ markout's twin. A job with none cannot be refilled; `uqs gaps` says so.
+/ markout's twin. A job with none cannot be refilled; `uqs job gaps` says so.
 / @param job the streaming job's name
 / @return the worker names, a symbol list
 / @eg .qetl.uptime.twins `demo_markout  ->  ,`hdb_demo_markouts_backfill
@@ -146,7 +146,7 @@
     workers where {[out;w] ((.qetl.job.bounded.def w)`dataset) in out}[out] each workers}
 
 / Load what earlier processes recorded. Called by a reader that starts cold
-/ (uqs gaps), and harmless to call twice.
+/ (uqs job gaps), and harmless to call twice.
 / @return the table name
 .qetl.uptime.attach:{[] .qetl.uptime.reload[]}
 

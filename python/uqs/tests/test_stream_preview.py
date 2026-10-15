@@ -1,4 +1,4 @@
-"""`uqs stream preview`: the q it runs, and what it prints of the answer.
+"""`uqs job preview`: the q it runs, and what it prints of the answer.
 
 The preview itself - nothing published, no cursor written - is held in q by
 tests/q/test_stream_poll.q. These hold the Python half against a fake q: the
@@ -88,7 +88,7 @@ def invoke(monkeypatch, answer: dict):
     monkeypatch.setattr(
         stream_preview, "preview", lambda paths, job, sample, trace=False, last_ns=None: answer
     )
-    return runner.invoke(cli.app, ["stream", "preview", "vectorize2"], env={"COLUMNS": "200"})
+    return runner.invoke(cli.app, ["job", "preview", "vectorize2"], env={"COLUMNS": "200"})
 
 
 def test_the_command_prints_the_page(monkeypatch):
@@ -177,7 +177,7 @@ def test_the_command_prints_a_traced_query_as_a_block(monkeypatch):
         stream_preview, "preview", lambda paths, job, sample, trace=False, last_ns=None: traced
     )
     result = runner.invoke(
-        cli.app, ["stream", "preview", "vectorize2", "--trace"], env={"COLUMNS": "200"}
+        cli.app, ["job", "preview", "vectorize2", "--trace"], env={"COLUMNS": "200"}
     )
     assert result.exit_code == 0, result.output
     assert "    {[c] select from t where time>c}" in result.output, "the query as a block"
@@ -191,7 +191,7 @@ def test_the_command_prints_the_trace_of_a_failed_preview(monkeypatch):
         )
 
     monkeypatch.setattr(stream_preview, "preview", fail)
-    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--trace"])
+    result = runner.invoke(cli.app, ["job", "preview", "vectorize2", "--trace"])
     assert result.exit_code == 1
     assert "query failed" in result.output and "source down" in result.output
 
@@ -257,7 +257,7 @@ def test_the_command_says_a_recent_sample_is_not_the_next_page(monkeypatch):
 
     monkeypatch.setattr(stream_preview, "preview", fake)
     result = runner.invoke(
-        cli.app, ["stream", "preview", "vectorize2", "--last", "30s", "--sample", "1"]
+        cli.app, ["job", "preview", "vectorize2", "--last", "30s", "--sample", "1"]
     )
     assert result.exit_code == 0, result.output
     assert seen["last_ns"] == 30 * 10**9
@@ -275,14 +275,14 @@ def test_a_full_page_is_flagged(monkeypatch):
         "preview",
         lambda paths, job, sample, trace=False, last_ns=None: {**RECENT, "limited": True},
     )
-    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--last", "30s"])
+    result = runner.invoke(cli.app, ["job", "preview", "vectorize2", "--last", "30s"])
     assert "the page was full" in result.output
 
 
 def test_a_bad_last_is_refused_before_q(monkeypatch):
     started: list = []
     monkeypatch.setattr(stream_preview, "preview", lambda *a, **kw: started.append(1) or RECENT)
-    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--last", "0s"])
+    result = runner.invoke(cli.app, ["job", "preview", "vectorize2", "--last", "0s"])
     assert result.exit_code == 1
     assert started == []
 
@@ -297,6 +297,6 @@ def test_an_empty_window_says_so(monkeypatch):
             "kept": 0,
         },
     )
-    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--last", "30s"])
+    result = runner.invoke(cli.app, ["job", "preview", "vectorize2", "--last", "30s"])
     assert result.exit_code == 0
     assert "nothing in the window" in result.output

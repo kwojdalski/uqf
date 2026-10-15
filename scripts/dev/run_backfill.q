@@ -1,6 +1,6 @@
 // run_backfill.q - run one bounded worker in THIS process, with no TorQ.
 //
-// WHY THIS EXISTS. `uqs backfill` launches the worker through torq.sh, which
+// WHY THIS EXISTS. `uqs job backfill` launches the worker through torq.sh, which
 // starts the SYSTEM q. On macOS that q is arm64, and KX ships odbc.so for
 // x86_64 only - so an ODBC-backed worker launched that way can never reach a
 // driver, whatever the credential says. Every ODBC source in this tree is a
@@ -22,7 +22,7 @@
 // -fixture is what lets a run with no credential write the fixture (#1082);
 // without it that run is refused.
 //
-// WHAT IT IS NOT. Not a replacement for `uqs backfill`, and deliberately
+// WHAT IT IS NOT. Not a replacement for `uqs job backfill`, and deliberately
 // smaller: it does not register with discovery, does not tell a running HDB
 // to reload, and does not read KDBHDB. A DEVELOPMENT aid for the one case the
 // fleet path cannot serve - reach a real ODBC driver - and for running a

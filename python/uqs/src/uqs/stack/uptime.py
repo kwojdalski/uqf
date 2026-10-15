@@ -1,4 +1,4 @@
-"""When a streaming job was down: `uqs gaps` (#630).
+"""When a streaming job was down: `uqs job gaps` (#630).
 
 A streaming job's output has no coverage ledger, so a job that died left a
 hole in its table that nothing recorded. `src/etl/core/uptime.q` now records

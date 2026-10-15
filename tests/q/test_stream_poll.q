@@ -136,7 +136,7 @@
     .qunit.assertEquals[(r`state;count .qt.qetl.job.stream.poll.sent);(`published;1);"a valid page goes out"]};
 
 / A fetch that sends through .qetl.source.ipc_call is traced, and every line
-/ it logs names the job and the cursor it fetched after - what `uqs stream
+/ it logs names the job and the cursor it fetched after - what `uqs job
 / preview --trace` shows.
 .qt.qetl.job.stream.poll.test_a_traced_fetch_names_its_job_and_cursor:{[t]
     .qt.qetl.job.stream.poll.declare[`spt_quote;`spt_out;{[page] select ts, v from page};

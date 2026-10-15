@@ -71,7 +71,7 @@ Kafka topic by `external/kafka_feed.py`, deduplicated on the record's
 windows computed by a PyFlink job in `external/flink_vwap_streamer.py`, each
 published once: a window Flink emits again is dropped on `(sym; window_end)`.
 Reads `flink_vwap_raw`, publishes `flink_vwap`. Start it with
-`uqs start flink_vwap1`, then `uqs feed start flink_vwap`, which needs
+`uqs start flink_vwap1`, then `uqs connector start flink_vwap`, which needs
 `apache-flink` and Java.
 
 ## Normalisers
@@ -176,8 +176,8 @@ in a profile. [Details](fx-markout.md)
 ## Backfills
 
 A backfill takes a date range, fills it, records which windows are covered, and
-exits. Run one with `uqs backfill <worker> --from … --to … [--wait]`; running it
-again skips everything already covered. None starts with the stack.
+exits. Run one with `uqs job backfill <worker> --from … --to … [--wait]`;
+running it again skips everything already covered. None starts with the stack.
 
 **`deals_backfill1` · demo deals** --- FX deals from a q source, the reference
 example of a bounded worker.
@@ -200,8 +200,8 @@ crypto books and trades replayed from DuckDB, an hour at a time.
 
 **`hdb_demo_markouts_backfill1` · markouts from history** --- the HDB's fills
 marked out against its quotes, into `demo_execution_quality`. It refills what
-`demo_markout1` missed while it was down; `uqs gaps markout` names those holes.
-[Details](markouts.md)
+`demo_markout1` missed while it was down; `uqs job gaps markout` names those
+holes. [Details](markouts.md)
 
 **`hdb_transfer_backfill1` · one kdb+ database into another** --- trades read
 from another HDB's files, with notional added, into `trades_copy`. The worked
@@ -232,10 +232,10 @@ For each aligned hour it reads the HDB's `orders` and the longest window's worth
 before it (`hdb_orders` source), runs them through the live pair's own adapter
 (`order_outcomes_from_orders`) and statistic (`order_quality`), and writes
 `order_quality` at every five-second grid point, replacing the live rows under
-`book, window, as_of`. `uqs gaps order_quality` names it. An hour with no orders
-publishes nothing (a bounded worker runs no transform on an empty window); the
-live job would still publish identity rows after a quiet start. Worked example:
-`q scripts/examples/hdb_order_quality_example.q`.
+`book, window, as_of`. `uqs job gaps order_quality` names it. An hour with no
+orders publishes nothing (a bounded worker runs no transform on an empty
+window); the live job would still publish identity rows after a quiet start.
+Worked example: `q scripts/examples/hdb_order_quality_example.q`.
 
 **`book_liquidity_1m1` and `hdb_book_liquidity_1m_backfill1` · one-minute FX
 book liquidity** --- per FX liquidity provider and requested size (1m, 5m, 10m),

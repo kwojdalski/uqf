@@ -88,9 +88,9 @@ tell you where rows stop:
 
 **3. Turn on DEBUG for that one process.** Without a restart:
 `uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes `--debug`
-(`uqs backfill <worker> --debug ...`), which starts it with `-verbose`. DEBUG is
-per process on purpose: switched on fleet-wide, it buries the one worker you are
-looking at.
+(`uqs job backfill <worker> --debug ...`), which starts it with `-verbose`.
+DEBUG is per process on purpose: switched on fleet-wide, it buries the one
+worker you are looking at.
 
 **4. Look inside the running process.** `uqs query --proc <process>` opens a
 qcon session on it by name. From there,
@@ -105,11 +105,11 @@ page](scaffolding/etl.md#testing-it-without-a-stack). To run it as a real
 process on stock kdb+, use `scripts/processes/run_stream.q`.
 
 **A backfill** has exited by the time you look, so read what it left on disk:
-`uqs run status` for runs that never finished, `uqs run list` for every run and
-its outcome, and `uqs run show <run_id>` for one run's facts, its log files and
-the command that resumes it. [When it breaks](guides/when-it-breaks.md) walks
-the whole recovery. All of this lives in the status directory,
-`$UQF_STATUS_DIR`.
+`uqs job runs status` for runs that never finished, `uqs job runs list` for
+every run and its outcome, and `uqs job runs show <run_id>` for one run's facts,
+its log files and the command that resumes it. [When it
+breaks](guides/when-it-breaks.md) walks the whole recovery. All of this lives in
+the status directory, `$UQF_STATUS_DIR`.
 
 **Query errors from the HDB** such as
 `./2026.01.07/arbitrage. OS reports: No such file or directory` mean a partition
@@ -123,20 +123,21 @@ a parameter name, or a line holding only `/`.
 ## Where do a backfill's rows end up?
 
 In the HDB, in the partition of each row's own date - not through the
-tickerplant. A backfill started by `uqs backfill` writes through `.qetl.io.hdb`:
-it refuses rows dated today or later (the tickerplant's and end-of-day's) and
-gives each row a `time` from its own time column. How a row meets one already
-there is the worker's `on_conflict` - `upsert` by default, which replaces a row
-with the same key. Every strategy but `append` rewrites that date's table whole,
-staged in `<hdb>.staging/` and renamed into place, so the HDB never maps a
-half-written table; `append` adds to `<hdb>/<date>/<table>/` directly. As the
-run moves past each day, that day's partitions are sorted with `p#sym` and the
-running HDB is asked to reload - at most every `UQF_HDB_RELOAD_SECONDS` (default
-30), never while a partition is still being written, and always once more at the
-end. The tickerplant would stamp old rows with today's time, file them under
-today's date, and hand them to every subscriber as if they had just happened. In
-plain q - a test, or a prompt - the same worker writes to an in-memory table
-instead. See [`io_hdb.q`](../src/etl/core/io_hdb.q) and
+tickerplant. A backfill started by `uqs job backfill` writes through
+`.qetl.io.hdb`: it refuses rows dated today or later (the tickerplant's and
+end-of-day's) and gives each row a `time` from its own time column. How a row
+meets one already there is the worker's `on_conflict` - `upsert` by default,
+which replaces a row with the same key. Every strategy but `append` rewrites
+that date's table whole, staged in `<hdb>.staging/` and renamed into place, so
+the HDB never maps a half-written table; `append` adds to
+`<hdb>/<date>/<table>/` directly. As the run moves past each day, that day's
+partitions are sorted with `p#sym` and the running HDB is asked to reload - at
+most every `UQF_HDB_RELOAD_SECONDS` (default 30), never while a partition is
+still being written, and always once more at the end. The tickerplant would
+stamp old rows with today's time, file them under today's date, and hand them to
+every subscriber as if they had just happened. In plain q - a test, or a prompt -
+the same worker writes to an in-memory table instead. See
+[`io_hdb.q`](../src/etl/core/io_hdb.q) and
 [on_conflict](reference/pipeline-declarations.md).
 
 ## How is a backfill job different from TorQ's dataloader?
@@ -153,18 +154,18 @@ A bounded worker (`.qetl.job.bounded`) writes into the same kind of partitions
 but answers a different question: not "load these files" but "make this dataset
 correct for this range, and know that it is".
 
-  |                              | TorQ dataloader                                                                                           | uqf backfill (`.qetl.job.bounded`)                                                                                                                   |
-  | ---                          | ---                                                                                                       | ---                                                                                                                                                  |
-  | Reads from                   | files in a directory: CSV or other delimited, with headers and types given as parameters                  | any source a declaration describes: a q process over IPC, a database over ODBC (DuckDB, SingleStore), or a fixture with no connection                |
-  | Unit of work                 | every file in the directory, in chunks of bytes                                                           | a time range, cut into windows of the worker's `width`                                                                                               |
-  | Knows what it already loaded | no. Its file and partition lists reset on every call, so loading a directory twice appends its rows twice | yes. A coverage ledger (`.qetl.coverage`) records each window per `source_version`, so a re-run is idle and a partial run redoes only the gaps       |
-  | Contract with the source     | the headers and types you pass it                                                                         | a declared source contract (`.qetl.source`): columns, types, time column, row key and zone, checked on every batch and against the live source       |
-  | Transform                    | an optional function, untested by the loader                                                              | a declared `.qetl.transform` transform with worked examples, verified on every test run                                                              |
-  | Bad data                     | a failed write is logged and the load goes on                                                             | an optional quality check fails the window: nothing published, no coverage recorded, so the next run plans the window again                          |
-  | Failure and restart          | start again from the directory                                                                            | retries per window, a checkpoint to resume from, a single-instance lock, and a run ledger (`.qetl.run`) of every run and its outcome                 |
-  | Today's partition            | not guarded                                                                                               | refused: today belongs to the tickerplant and end-of-day                                                                                             |
-  | After the write              | sort and attributes via `sort.csv`; optional compression                                                  | sort by sym and time with `p#sym`, missing tables filled (`.Q.chk`), and the running HDB asked to reload                                             |
-  | Where it runs                | any TorQ process that loads it                                                                            | a registered process started by `uqs backfill`, visible to discovery while it runs; or plain q, writing to memory, for tests                         |
+  |                              | TorQ dataloader                                                                                           | uqf backfill (`.qetl.job.bounded`)                                                                                                                       |
+  | ---                          | ---                                                                                                       | ---                                                                                                                                                      |
+  | Reads from                   | files in a directory: CSV or other delimited, with headers and types given as parameters                  | any source a declaration describes: a q process over IPC, a database over ODBC (DuckDB, SingleStore), or a fixture with no connection                    |
+  | Unit of work                 | every file in the directory, in chunks of bytes                                                           | a time range, cut into windows of the worker's `width`                                                                                                   |
+  | Knows what it already loaded | no. Its file and partition lists reset on every call, so loading a directory twice appends its rows twice | yes. A coverage ledger (`.qetl.coverage`) records each window per `source_version`, so a re-run is idle and a partial run redoes only the gaps           |
+  | Contract with the source     | the headers and types you pass it                                                                         | a declared source contract (`.qetl.source`): columns, types, time column, row key and zone, checked on every batch and against the live source           |
+  | Transform                    | an optional function, untested by the loader                                                              | a declared `.qetl.transform` transform with worked examples, verified on every test run                                                                  |
+  | Bad data                     | a failed write is logged and the load goes on                                                             | an optional quality check fails the window: nothing published, no coverage recorded, so the next run plans the window again                              |
+  | Failure and restart          | start again from the directory                                                                            | retries per window, a checkpoint to resume from, a single-instance lock, and a run ledger (`.qetl.run`) of every run and its outcome                     |
+  | Today's partition            | not guarded                                                                                               | refused: today belongs to the tickerplant and end-of-day                                                                                                 |
+  | After the write              | sort and attributes via `sort.csv`; optional compression                                                  | sort by sym and time with `p#sym`, missing tables filled (`.Q.chk`), and the running HDB asked to reload                                                 |
+  | Where it runs                | any TorQ process that loads it                                                                            | a registered process started by `uqs job backfill`, visible to discovery while it runs; or plain q, writing to memory, for tests                         |
 
 For a directory of CSVs you need in the HDB once, the dataloader is enough. For
 a source you will read again - where it matters which ranges are done, under
@@ -198,10 +199,10 @@ composed](architecture/pipeline-architecture-example.md).
 Not per row, and not by `.qtorq`: by which kind of process the job runs in. The
 runner that starts the process wires its output once, at startup.
 
-  | Process                                                                     | Its rows go                                                                                                                                                     | Wired by                                                                                                    |
-  | ---                                                                         | ---                                                                                                                                                             | ---                                                                                                         |
-  | a streaming job (`.qetl.job.stream`, `.qetl.job.stream.normalizer`)         | to the tickerplant, which stamps `time` and fans them out: `rdb1` holds today in memory, `wdb1` writes the day down and it is sorted into the HDB at end of day | `torq_stream.q`: the job's `publish` becomes `.qtorq.publish`, which calls `.u.upd`                         |
-  | a backfill (`.qetl.job.bounded`, started by `uqs backfill`)                 | straight into the HDB partition of each row's own date - never the tickerplant, never the RDB                                                                   | `torq_backfill.q`: sets `.qetl.io.default` to `.qetl.io.hdb`, then `.qtorq.reload_hdb` once the run is done |
+  | Process                                                                         | Its rows go                                                                                                                                                     | Wired by                                                                                                    |
+  | ---                                                                             | ---                                                                                                                                                             | ---                                                                                                         |
+  | a streaming job (`.qetl.job.stream`, `.qetl.job.stream.normalizer`)             | to the tickerplant, which stamps `time` and fans them out: `rdb1` holds today in memory, `wdb1` writes the day down and it is sorted into the HDB at end of day | `torq_stream.q`: the job's `publish` becomes `.qtorq.publish`, which calls `.u.upd`                         |
+  | a backfill (`.qetl.job.bounded`, started by `uqs job backfill`)                 | straight into the HDB partition of each row's own date - never the tickerplant, never the RDB                                                                   | `torq_backfill.q`: sets `.qetl.io.default` to `.qetl.io.hdb`, then `.qtorq.reload_hdb` once the run is done |
 
 So the rule is about the data's age, enforced by process type. Live rows go
 through the tickerplant because subscribers must see them and today's partition
@@ -216,13 +217,13 @@ reload request, because that is the step that needs TorQ.
 Nowhere silently. Every one of these cases either stops loudly or keeps the rows
 somewhere you can see:
 
-  | Situation                                                    | What happens                                                                                                                                                                                                                                                                                          |
-  | ---                                                          | ---                                                                                                                                                                                                                                                                                                   |
-  | TorQ stack, but the tickerplant is not running               | A streaming job never starts. `.qtorq.subscribe_etl` blocks until the plant is up, and the job's last log line is `waiting for the tickerplant - if this is the last line, it is not running`. Nothing is published, so nothing is lost.                                                              |
-  | Plain q, no TorQ, job not wired                              | `.qtorq` is not loaded at all - nothing under `src/` uses it - and the job's `publish` is still the stub it starts as, which throws `publish: <job> is not wired`. A job that produces rows fails rather than dropping them.                                                                          |
-  | Plain q, job wired to a recorder (`.qetl.job.stream.wire`)   | The rows are wherever the recorder puts them, usually a table in that q session. This is how the tests run.                                                                                                                                                                                           |
-  | Stock kdb+, `scripts/processes/run_stream.q`                 | `.qetl.tick` stands in for the tickerplant. It stamps `time`, sends each batch to its subscribers, and writes a tick log under `-logdir` (default `tplog/`), which a restarted job replays. There is no RDB, HDB or end-of-day writedown, so rows live in the subscribers' memory and in that log.    |
-  | Plain q, a bounded worker                                    | The default output is `.qetl.io.memory`, so rows land in a table named after the worker's `dataset` in that q session. Only a backfill started by `uqs backfill` writes to the HDB.                                                                                                                   |
+  | Situation                                                    | What happens                                                                                                                                                                                                                                                                                              |
+  | ---                                                          | ---                                                                                                                                                                                                                                                                                                       |
+  | TorQ stack, but the tickerplant is not running               | A streaming job never starts. `.qtorq.subscribe_etl` blocks until the plant is up, and the job's last log line is `waiting for the tickerplant - if this is the last line, it is not running`. Nothing is published, so nothing is lost.                                                                  |
+  | Plain q, no TorQ, job not wired                              | `.qtorq` is not loaded at all - nothing under `src/` uses it - and the job's `publish` is still the stub it starts as, which throws `publish: <job> is not wired`. A job that produces rows fails rather than dropping them.                                                                              |
+  | Plain q, job wired to a recorder (`.qetl.job.stream.wire`)   | The rows are wherever the recorder puts them, usually a table in that q session. This is how the tests run.                                                                                                                                                                                               |
+  | Stock kdb+, `scripts/processes/run_stream.q`                 | `.qetl.tick` stands in for the tickerplant. It stamps `time`, sends each batch to its subscribers, and writes a tick log under `-logdir` (default `tplog/`), which a restarted job replays. There is no RDB, HDB or end-of-day writedown, so rows live in the subscribers' memory and in that log.        |
+  | Plain q, a bounded worker                                    | The default output is `.qetl.io.memory`, so rows land in a table named after the worker's `dataset` in that q session. Only a backfill started by `uqs job backfill` writes to the HDB.                                                                                                                   |
 
 The rule underneath: `publish` only reaches a tickerplant when a runner wires it
 to one, and a job that is not wired throws instead of running silently.

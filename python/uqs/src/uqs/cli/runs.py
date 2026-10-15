@@ -1,6 +1,7 @@
-"""`uqs run ...`: reading the run ledger - which execution produced what.
+"""`uqs job runs ...`: reading the run ledger - which execution produced what.
 
-A group, as `job` and `data` are. Read-only: every command here asks the ledger
+A group inside `job` (#1417), plural because it inspects runs rather than
+launching one. Read-only: every command here asks the ledger
 in the status directory a question and prints the answer; see stack/runs.py
 for why that means a short-lived q and not a running process.
 """
@@ -12,17 +13,25 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli.shared import InteractiveOpt, _die, _paths, _show, app, console
+from uqs.cli.shared import (
+    JOB_OPERATIONS_PANEL,
+    InteractiveOpt,
+    _die,
+    _paths,
+    _show,
+    console,
+    job_app,
+)
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs as stack_runs
 
-run_app = typer.Typer(
+runs_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Read the run ledger: unfinished runs, one run's facts, one window across runs.",
 )
-app.add_typer(run_app, name="run")
+job_app.add_typer(runs_app, name="runs", rich_help_panel=JOB_OPERATIONS_PANEL)
 
 _RUN_COLUMNS = (
     "run_id",
@@ -60,7 +69,7 @@ def _print(
         return
     table = Table(title=title)
     for col in columns:
-        # A run id is what `uqs run show` takes, so it is never cut short.
+        # A run id is what `uqs job runs show` takes, so it is never cut short.
         if col == "run_id":
             table.add_column(col, min_width=36, no_wrap=True)
         else:
@@ -70,7 +79,7 @@ def _print(
     _show(table, interactive)
 
 
-@run_app.command("status")
+@runs_app.command("status")
 def status(interactive: InteractiveOpt = False) -> None:
     """Runs that began and never finished.
 
@@ -85,7 +94,7 @@ def status(interactive: InteractiveOpt = False) -> None:
     _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
 
 
-@run_app.command("list")
+@runs_app.command("list")
 def list_runs(interactive: InteractiveOpt = False) -> None:
     """Every run in the ledger, newest first."""
     try:
@@ -96,7 +105,7 @@ def list_runs(interactive: InteractiveOpt = False) -> None:
     _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
 
 
-@run_app.command("migrate")
+@runs_app.command("migrate")
 def migrate() -> None:
     """Upgrade a run ledger written before it recorded each run's range and counts.
 
@@ -115,8 +124,8 @@ def migrate() -> None:
         console.print("the run ledger is already current - nothing to do", markup=False)
 
 
-@run_app.command("show")
-def show(run_id: Annotated[str, typer.Argument(help="A run id, from `uqs run list`")]) -> None:
+@runs_app.command("show")
+def show(run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")]) -> None:
     """One run, and every fact it recorded about what it published."""
     try:
         run, facts = stack_runs.show(_paths(), run_id)
@@ -154,7 +163,7 @@ def _print_next_steps(run: dict) -> None:
         )
 
 
-@run_app.command("audit")
+@runs_app.command("audit")
 def audit(
     dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
     range_from: Annotated[str, typer.Option("--from", help="The window's start")],

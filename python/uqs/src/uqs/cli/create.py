@@ -23,6 +23,7 @@ from uqs.cli.create_plant import plant_definitions, plant_tables
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import (
+    JOB_AUTHORING_PANEL,
     _die,
     _paths,
     app,
@@ -39,7 +40,7 @@ from uqs.scaffold import horizon as horizon_scaffold
 app.add_typer(job_app, name="job")
 
 
-@job_app.command("new")
+@job_app.command("new", rich_help_panel=JOB_AUTHORING_PANEL)
 def new_job(
     name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
     kind: Annotated[
@@ -169,7 +170,7 @@ def new_job(
         typer.Option(
             "--twin-of",
             help="A streaming job whose published table this backfill refills - the dataset "
-            "and columns are taken from it, and `uqs gaps JOB` then names this worker "
+            "and columns are taken from it, and `uqs job gaps JOB` then names this worker "
             "NAME_backfill: pass NAME without the suffix, e.g. `uqs job new JOB_hist "
             "--kind backfill --twin-of JOB` (backfill)",
         ),
@@ -232,7 +233,7 @@ def new_job(
         uqs job new trades_copy --subscribe-to trades --publishes trades_copy_out \\
             --columns-from trades --transform passthrough
 
-    Polling feed, as steps `uqs stream preview` can run without publishing:
+    Polling feed, as steps `uqs job preview` can run without publishing:
 
         uqs job new rates_feed --publishes rates --columns "sym:symbol, mid:float" --poll
 

@@ -149,7 +149,7 @@ elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 
 / Switch DEBUG logging on when this process was started with -verbose, and
 / say who this process is. Every uqf process script takes the same flag, so
-/ `-extras -verbose` on a start line, or `uqs backfill --debug`, is one
+/ `-extras -verbose` on a start line, or `uqs job backfill --debug`, is one
 / spelling for all of them. A process already running can be switched too,
 / without a restart: `uqs query ".qetl.log.debug 1b" --port <port>`.
 / @return 1b when debug logging is now on

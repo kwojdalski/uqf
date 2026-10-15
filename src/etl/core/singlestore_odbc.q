@@ -61,7 +61,7 @@
 / byte string survives a throw intact and a 255 byte one comes back 254.
 / The long form lives here instead:
 / .
-/   On a server, `uqs odbc install` puts an approved package - KX's client,
+/   On a server, `uqs setup odbc install` puts an approved package - KX's client,
 /   unixODBC and the driver - in a private ODBC home, and sourcing that
 /   home's current/env.sh loads it: an overlay QHOME, ODBCSYSINI and
 /   LD_LIBRARY_PATH, with nothing installed system-wide (#840). See
@@ -69,7 +69,7 @@
 / .
 /   On macOS none of that is enough on its own: KX ships odbc.so for x86_64
 /   only, so q has to run under Rosetta with an overlay QHOME.
-/   scripts/dev/odbc_rosetta.sh setup builds it, and `uqs backfill` - which
+/   scripts/dev/odbc_rosetta.sh setup builds it, and `uqs job backfill` - which
 /   launches plain arm64 q from ~/.kx - cannot reach a driver at all until
 /   it does. That is why the message names the script rather than this file.
 / .

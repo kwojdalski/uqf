@@ -1,9 +1,9 @@
-"""`uqs run`: the run ledger read back (#530).
+"""`uqs job runs`: the run ledger read back (#530).
 
 Built with the real q writer into a temporary status directory - two finished
 runs that published the same window with different facts, and one begun and
 never finished, as a crashed worker leaves it - then read through
-stack/runs.py, which is what every `uqs run` command calls. Needs q, so it
+stack/runs.py, which is what every `uqs job runs` command calls. Needs q, so it
 skips without one.
 """
 
@@ -162,7 +162,7 @@ def test_migrate_upgrades_a_ledger_from_before_the_range_and_counts(tmp_path, pa
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    with pytest.raises(UqsError, match="uqs run migrate"):
+    with pytest.raises(UqsError, match="uqs job runs migrate"):
         runs.history(paths, directory=tmp_path)
     assert runs.migrate(paths, directory=tmp_path) == 1
     (row,) = runs.history(paths, directory=tmp_path)

@@ -249,7 +249,7 @@
          .qetl.source.credential_var[source],", or give it a row in sources.csv"]}
 
 / May a bounded worker WRITE its source's fixture (#1082)? The fixture_writes
-/ flag - UQF_FIXTURE_WRITES, or `uqs backfill --fixture` - and off by
+/ flag - UQF_FIXTURE_WRITES, or `uqs job backfill --fixture` - and off by
 / default. A run with no credential used to publish synthetic rows into the
 / dataset and record their windows as covered whenever a credential was
 / simply missing, so the first live run after one was provisioned found the
@@ -267,7 +267,7 @@
 .qetl.source.refuse_fixture_writes:{[who;source]
     if[not .qetl.source.fixture_writes_allowed[];
         'who,": ",string[source]," has no credential - refusing to write its fixture. Set ",
-         .qetl.source.credential_var[source],", or UQF_FIXTURE_WRITES=1 (uqs backfill --fixture) for a demo"]}
+         .qetl.source.credential_var[source],", or UQF_FIXTURE_WRITES=1 (uqs job backfill --fixture) for a demo"]}
 
 / The source_version a run on the fixture records coverage under: the
 / release asked for, tagged. A fixture's coverage is a claim about the

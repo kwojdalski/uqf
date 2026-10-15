@@ -1,4 +1,4 @@
-"""Tests for `uqs backfill` and the flags it hands torq_backfill.q.
+"""Tests for `uqs job backfill` and the flags it hands torq_backfill.q.
 
 The flags reach q on a start line torq.sh builds as a string and `eval`s, so
 what is refused here is as much the point as what is built.
@@ -168,7 +168,7 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--port", "7000"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -207,7 +207,7 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     # The global flag reconfigures logging for the whole process, which would
     # leak DEBUG output into every later test's captured stdout.
     monkeypatch.setattr(shared, "configure_logging", lambda **kw: None)
-    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", *argv_debug]
     prefix = [] if argv_debug else ["--debug"]
     result = runner.invoke(cli.app, [*prefix, *argv])
@@ -257,7 +257,7 @@ def test_the_cli_passes_fixture_through(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
     argv += ["--to", "2026-09-15", "--fixture"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -284,7 +284,7 @@ def test_the_cli_passes_on_conflict_through(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
     argv += ["--to", "2026-09-15", "--on-conflict", "replace"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -325,7 +325,7 @@ def test_trace_on_the_command_line_reaches_the_process(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--trace"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -338,14 +338,24 @@ def test_every_part_of_the_range_is_required(monkeypatch, missing):
     monkeypatch.setattr(backfill, "start", lambda *a, **k: pytest.fail("must not start"))
     args = {"--version": "v1", "--from": "2026-09-13", "--to": "2026-09-15"}
     del args[missing]
-    argv = ["backfill", "demo_deals_backfill", *[x for kv in args.items() for x in kv]]
+    argv = ["job", "backfill", "demo_deals_backfill", *[x for kv in args.items() for x in kv]]
     assert runner.invoke(cli.app, argv).exit_code != 0
 
 
 def test_a_refusal_exits_one_rather_than_raising():
     result = runner.invoke(
         cli.app,
-        ["backfill", "nope", "--version", "v1", "--from", "2026-09-13", "--to", "2026-09-15"],
+        [
+            "job",
+            "backfill",
+            "nope",
+            "--version",
+            "v1",
+            "--from",
+            "2026-09-13",
+            "--to",
+            "2026-09-15",
+        ],
     )
     assert result.exit_code == 1
     assert not isinstance(result.exception, UqsError)
@@ -481,7 +491,7 @@ def test_the_cli_passes_the_mode_through(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
     argv += ["--to", "2026-09-15", "--mode", "plan"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -523,7 +533,7 @@ def test_the_cli_runs_without_version_for_a_worker_with_a_default(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["backfill", "demo_events_backfill", "--from", "2026-09-13", "--to", "2026-09-15"]
+    argv = ["job", "backfill", "demo_events_backfill", "--from", "2026-09-13", "--to", "2026-09-15"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen == {"version": "v1"}
@@ -675,7 +685,7 @@ def test_the_command_exits_with_the_runs_outcome_under_wait(monkeypatch):
     )
     owed = "1 reaction(s) owed over 1 window(s) (rebuild_positions)"
     monkeypatch.setattr(backfill_wait, "wait_for_outcome", lambda *a, **k: ("failed", 1, owed))
-    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 1, result.output
@@ -710,7 +720,7 @@ def test_wait_with_a_mode_that_writes_no_status_is_refused(monkeypatch):
 
     monkeypatch.setattr(backfill, "start", lambda *a, **k: started.append(a))
     monkeypatch.setattr(cli_backfill, "_die", die)
-    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait", "--mode", "plan"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 1

@@ -267,7 +267,7 @@ class DetachedProcess:
         return pid
 
     def status(self, **extra: str) -> dict[str, str]:
-        """What `uqs feed status` renders: running and pid, the feed's own
+        """What `uqs connector status` renders: running and pid, the feed's own
         fields, then the log. Strings, because it is a display table."""
         pid = self.pid()
         return {

@@ -43,7 +43,7 @@
     delete etl_stream_uptime from `.;
     .qetl.uptime.attach[];
     .qunit.assertEquals[count select from .qetl.uptime.sessions[] where session=id;1;
-        "a fresh reader finds it - uqs gaps reads after the process is gone"]};
+        "a fresh reader finds it - uqs job gaps reads after the process is gone"]};
 
 .qt.qetl.uptime.test_a_beat_moves_only_this_processes_sessions:{[t]
     .qt.qetl.uptime.session[`posbook;0;1];

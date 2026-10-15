@@ -99,7 +99,7 @@ def test_profile_resolution_refuses_with_a_reason(names, extra, says):
 FROM, TO = datetime(2026, 9, 13, tzinfo=UTC), datetime(2026, 9, 15, tzinfo=UTC)
 
 #: Every way into torq.sh that starts q processes: `uqs start`, `uqs restart`,
-#: `uqs backfill`, and `uqs raw -- start ...` (run_torq_sh as given).
+#: `uqs job backfill`, and `uqs raw -- start ...` (run_torq_sh as given).
 STARTERS = {
     "start": lambda p: runtime.start(p, "rdb1"),
     "restart": lambda p: runtime.restart(p, "rdb1"),
@@ -126,7 +126,7 @@ def old_q(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("how", sorted(STARTERS))
 def test_every_starter_refuses_a_q_too_old_for_the_tree(no_torq, old_q, how):
-    """`uqs backfill` used to call torq.sh past the version check, and its
+    """`uqs job backfill` used to call torq.sh past the version check, and its
     worker died at the first nested `\\d` with the failure only in its log."""
     with pytest.raises(UqsError, match=r"kdb\+ 4\.1, which has no nested contexts"):
         STARTERS[how](old_q)

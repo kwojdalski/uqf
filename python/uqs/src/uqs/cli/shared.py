@@ -33,23 +33,28 @@ app = typer.Typer(
 console = Console()
 log = get_logger(__name__)
 
-#: `uqs job ...`: the commands that WRITE jobs into the tree - new, remove,
-#: install - rather than act on a running fleet. A group, as `crypto` and
-#: `replay` are, because the flat app exists to keep `uqs start` spelled that
-#: way, and none of these is a lifecycle command. Registered on `app` in
-#: create.py, the first of the three modules entry.py imports, so it lists
-#: where they did.
+#: `uqs job ...`: everything about one ETL job short of the fleet's
+#: lifecycle (#1417). Authoring - new, remove, install - WRITES jobs into the
+#: tree; operations - backfill, preview, gaps, runs - run a bounded worker,
+#: look at a polling feed's next page, find a streaming job's holes and read
+#: the run ledger. Two help panels keep the halves apart. Registered on `app`
+#: in create.py; the operations register on it from their own modules.
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Write ETL jobs into the tree: scaffold one, remove a scaffold, install finished ones.",
+    help="ETL jobs: write them into the tree (new, remove, install) and operate on "
+    "them - backfill a bounded worker, preview a polling feed, find a streaming "
+    "job's gaps, read the run ledger.",
 )
+#: The two help panels `uqs job --help` lists its commands under.
+JOB_AUTHORING_PANEL = "Authoring"
+JOB_OPERATIONS_PANEL = "Operations"
 
 #: `uqs data ...`: moving data the stack has already written into where it
 #: belongs, and checking the result - replaying a tickerplant log into the HDB
 #: and checking the HDB's shape. Here rather than in either module because
-#: both register on it: replay.py and inspect.py. `backfill` stays top level,
-#: being the one of these people reach for most.
+#: both register on it: replay.py and inspect.py. A backfill is a job's
+#: operation, so it is `uqs job backfill`, not one of these.
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
@@ -136,15 +141,7 @@ def _configure(
     except UqsError as exc:
         _die(exc)
         return
-    needs = runtimes.UQF_ONLY_COMMANDS.get(ctx.invoked_subcommand or "")
-    if not declared.pipelines and needs:
-        _die(
-            UqsError(
-                f"`uqs {ctx.invoked_subcommand}` {needs}; "
-                f"the {declared.name} runtime has none of this tree's pipelines. "
-                f"Use --runtime {runtimes.DEFAULT_RUNTIME}"
-            )
-        )
+    _refuse_without_pipelines(declared, ctx.invoked_subcommand or "")
     # main() has already configured logging from the environment so that
     # anything logged during Typer's own startup lands somewhere. Re-running
     # it here is what makes --debug take effect, and the flag wins over the
@@ -155,6 +152,30 @@ def _configure(
     # adds a section - so `uqs --debug summary` and `uqs summary --debug` are
     # the same request.
     ctx.obj = {"debug": debug}
+
+
+def _refuse_without_pipelines(declared: runtimes.Runtime, command: str) -> None:
+    """Refuse `command` - its path, `graph` or `job backfill` - on a runtime
+    without this tree's pipelines, when UQF_ONLY_COMMANDS lists it."""
+    needs = runtimes.UQF_ONLY_COMMANDS.get(command)
+    if not declared.pipelines and needs:
+        _die(
+            UqsError(
+                f"`uqs {command}` {needs}; "
+                f"the {declared.name} runtime has none of this tree's pipelines. "
+                f"Use --runtime {runtimes.DEFAULT_RUNTIME}"
+            )
+        )
+
+
+@job_app.callback()
+def _job(ctx: typer.Context) -> None:
+    # The root callback has already chosen the runtime (and refused a bad
+    # one); it sees only `job`, and `job new` works on any runtime, so the
+    # operations that need this tree's pipelines are refused here, by path.
+    _refuse_without_pipelines(
+        runtimes.RUNTIMES[stack_paths.runtime_from_env()], f"job {ctx.invoked_subcommand}"
+    )
 
 
 def _debug_requested(ctx: typer.Context, flag: bool) -> bool:

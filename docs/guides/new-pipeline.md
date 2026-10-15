@@ -295,7 +295,7 @@ injection, and how a type coercion becomes a silently wrong window rather than
 an error. Where a driver cannot parameterise --- ODBC --- there is exactly one
 escape function, `.qetl.io.odbc.literal`, and everything goes through it. It is
 sent with `.qetl.source.ipc`, not `h(...)`: that is what logs the lambda and its
-bounds at TRACE, so `uqs backfill --trace` shows every query a run sends, as
+bounds at TRACE, so `uqs job backfill --trace` shows every query a run sends, as
 `.qetl.io.odbc.run_sql` does for SQL. This is required, not advised. The test
 suite fails a source in the tree whose `query` does otherwise, and
 `uqs job install` refuses a sidecar source with a direct `h(...)` line, unless
@@ -449,10 +449,10 @@ manager](../../src/etl/core/io_manager.q) to write somewhere other than an
 in-memory table, and a function from the transformed batch to a dictionary of
 labels recorded as materialisation metadata.
 
-Leave `io` out and the process decides: under `uqs backfill`, rows go into the
-HDB partition of their own date, never through the tickerplant; in plain q, into
-an in-memory table. [The FAQ](../faq.md#where-do-a-backfills-rows-end-up) has
-the detail.
+Leave `io` out and the process decides: under `uqs job backfill`, rows go into
+the HDB partition of their own date, never through the tickerplant; in plain q,
+into an in-memory table. [The FAQ](../faq.md#where-do-a-backfills-rows-end-up)
+has the detail.
 
 ## 3. Register it
 
@@ -555,7 +555,7 @@ wrong window and record it as covered. The source version is required too,
 unless the worker declares a default `source_version`:
 
 ```
-uqs backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16 --fixture
+uqs job backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16 --fixture
 ```
 
 Both ask for the fixture (`UQF_FIXTURE_WRITES`, `--fixture`): a run with no
@@ -564,14 +564,14 @@ recorded under `v1~fixture`, never `v1`, so a live run once the credential is
 set still fetches the range.
 
 Every run it makes is recorded in the run ledger, beside the coverage ledger in
-the status directory, with the facts each window reported. `uqs run` reads it
-back. No stack needs to be up, because the worker has exited by then:
+the status directory, with the facts each window reported. `uqs job runs` reads
+it back. No stack needs to be up, because the worker has exited by then:
 
 ```bash
-uqs run status                     # runs that began and never finished - interrupted ones
-uqs run list                       # every run, newest first: its range, window width and counts
-uqs run show RUN_ID                # one run, and what it recorded about each window
-uqs run audit fx_rates --from 2026-09-11 --to 2026-09-12
+uqs job runs status                     # runs that began and never finished - interrupted ones
+uqs job runs list                       # every run, newest first: its range, window width and counts
+uqs job runs show RUN_ID                # one run, and what it recorded about each window
+uqs job runs audit fx_rates --from 2026-09-11 --to 2026-09-12
                                    # one window's facts from every run that published it
 ```
 
@@ -583,8 +583,8 @@ ends: `windows_planned`, `windows_completed`, `windows_failed` and
 run whose row could not be closed fails: its status file reads `failed`, names
 the open row's `run_id`, and says the run ledger could not record the outcome. A
 ledger written before these columns existed stops the next backfill with
-`etl_runs predates the run's range and counts`; run `uqs run migrate` once, and
-earlier runs keep blanks where nothing was recorded.
+`etl_runs predates the run's range and counts`; run `uqs job runs migrate` once,
+and earlier runs keep blanks where nothing was recorded.
 
 `audit` is the question run identity exists to answer: whether two
 materialisations of the same window agree. It reads `$UQF_STATUS_DIR`, or
@@ -713,8 +713,9 @@ quietly rather than loudly:
   coverage stands. The run, though, ends `partial` while any reaction over its
   range is owed, because a dataset derived from it is stale. The status file
   reads `failed` with `reactions_owed` and an error naming the reactions;
-  `/ops/backfill` shows both, `uqs backfill --wait` prints the error, and the
-  exit code is 1. Failures also land in `.qetl.reaction.history` and the log.
+  `/ops/backfill` shows both, `uqs job backfill --wait` prints the error, and
+  the exit code is 1. Failures also land in `.qetl.reaction.history` and the
+  log.
 - **Handlers must be idempotent.** A handler runs *at least* once per window,
   not exactly once. A process killed after a handler wrote its rows but before
   its success was recorded fires it again over the same window, and so does

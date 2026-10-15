@@ -154,7 +154,7 @@ or `durable_set` to get the same.
 Declaring the steps is what makes the feed previewable:
 
 ```
-uqs stream preview vectorize2 --sample 10
+uqs job preview vectorize2 --sample 10
 ```
 
 fetches one real page and shows what it would publish and where the cursor would
@@ -175,7 +175,7 @@ sidecar with such a line, naming it, and the tree's own feeds are tested for it.
 A line that must stay direct says so with `/ untraced: <why>`.
 
 ```
-uqs stream preview vectorize2 --trace
+uqs job preview vectorize2 --trace
 ```
 
 ### Previewing recent data
@@ -185,7 +185,7 @@ want while troubleshooting. `--last` previews a recent window instead of the
 next page:
 
 ```
-uqs stream preview vectorize2 --last 30s --sample 1 --trace
+uqs job preview vectorize2 --last 30s --sample 1 --trace
 ```
 
 The window is `[now - 30s, now)`, with `now` one UTC instant captured once.

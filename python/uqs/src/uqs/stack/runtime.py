@@ -203,7 +203,7 @@ def run_torq_sh(
     bootstrap writes anything.
 
     A `start` or `restart` is refused first by start_policy.refuse_start -
-    here, so no caller (`uqs start`, `uqs backfill`, `uqs replay`, `uqs raw`)
+    here, so no caller (`uqs start`, `uqs job backfill`, `uqs replay`, `uqs raw`)
     can skip it (#964).
 
     `timeout` is seconds to wait before giving up, or None to wait forever -

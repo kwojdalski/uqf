@@ -442,7 +442,7 @@
 / ------------------------------------------------- A RUN FROM A COMMAND LINE
 / .
 / ONE PARSER FOR EVERY LAUNCHER. scripts/processes/torq_backfill.q (the fleet
-/ path, `uqs backfill`) and scripts/dev/run_backfill.q (the TorQ-free dev
+/ path, `uqs job backfill`) and scripts/dev/run_backfill.q (the TorQ-free dev
 / path) each kept their own, and they drifted: the dev one refused a run with
 / no -version while the fleet one fell back to the worker's declared default,
 / so a command line did not move between them unchanged, as run_backfill.q
@@ -824,7 +824,7 @@
 / A source configured live is opened for the length of the call, only so its
 / complete_through can clip the plan exactly as a run would (#1201): a plan
 / that listed windows the run then clips away would be wrong on precisely the
-/ growing-source case, and uqs backfill --plan and anything polling it
+/ growing-source case, and uqs job backfill --plan and anything polling it
 / (Airflow, a gaps report) would believe it. An unreachable live source
 / therefore fails the plan, as it fails the run. The fixture is never clipped.
 / @param worker the worker's name
@@ -883,7 +883,7 @@
     / A WARNING that says how to fix it, not just that it happened: the variable
     / to set, what its value looks like for this source's transport (an ODBC
     / connection string, or host:port for kdb+ IPC), an example, and where it
-    / has to be exported - the shell `uqs backfill` runs in, whose environment
+    / has to be exported - the shell `uqs job backfill` runs in, whose environment
     / the process inherits. Not an error: no credential is the declared way
     / to run on the fixture, and a demo stack runs like that on purpose.
     / .
@@ -903,7 +903,7 @@
     live:.qetl.source.has_credentials cfg`source;
     if[not live;
         tr:.qetl.source.for_source cfg`source;
-        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: give the source a row in sources.csv (`uqs config sources` shows which file is read), or export the variable below in the shell you run `uqs backfill` from, then run it again. A secret is only ever read from the environment - a row names its variable - so a password stays out of this repository and off the command line";
+        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: give the source a row in sources.csv (`uqs config sources` shows which file is read), or export the variable below in the shell you run `uqs job backfill` from, then run it again. A secret is only ever read from the environment - a row names its variable - so a password stays out of this repository and off the command line";
             `variable`settings_row`expects`example!(
                 .qetl.source.credential_var cfg`source;
                 "," sv (string cfg`source;string (.qetl.source.def cfg`source)`transport;.qetl.source.credential_example cfg`source;"");
@@ -1025,7 +1025,7 @@
     .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}
 
 / The conflict strategy this run writes under: the operator's override when
-/ one is set - on_conflict in config, UQF_ON_CONFLICT, or `uqs backfill
+/ one is set - on_conflict in config, UQF_ON_CONFLICT, or `uqs job backfill
 / --on-conflict` - else what the worker declared.
 / .
 / An override exists for the one-off: a worker that upserts by default, run

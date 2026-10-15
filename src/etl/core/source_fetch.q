@@ -81,7 +81,7 @@
 / What a POLLING feed's fetch sends through: its query takes a cursor, not a
 / window, so `h({[c] select ... where time>c};cursor)` becomes
 / .qetl.source.ipc_call[h;{[c] select ... where time>c};enlist cursor] - and
-/ `uqs stream preview --trace` shows it, as `uqs backfill --trace` shows a
+/ `uqs job preview --trace` shows it, as `uqs job backfill --trace` shows a
 / window's. The arguments are logged at TRACE, so never pass a credential as
 / one: credentials belong to the handle, which is not logged.
 / @param h the handle to the source process

@@ -91,7 +91,7 @@
     {[h;table_name] select c, t from 0!h({0!meta x};table_name)};
     "host:port, or host:port:user:password";
     "localhost:5010";
-    "/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).\n/ The bounds are arguments to a functional select evaluated on the remote\n/ side, so no caller value is ever spliced into query text. Send it with\n/ .qetl.source.ipc[h;{[from_ts;to_ts] select ...};range_from;range_to], not\n/ h(...) directly, so `uqs backfill --trace` shows the query.")];
+    "/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).\n/ The bounds are arguments to a functional select evaluated on the remote\n/ side, so no caller value is ever spliced into query text. Send it with\n/ .qetl.source.ipc[h;{[from_ts;to_ts] select ...};range_from;range_to], not\n/ h(...) directly, so `uqs job backfill --trace` shows the query.")];
 
 .qetl.source.register_transport[`odbc;.qetl.source.transport_fields!(
     {[cred] .qetl.io.odbc.open cred};

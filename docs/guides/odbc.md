@@ -51,7 +51,7 @@ singlestore,1.1.7,linux-x86_64,4f0c...e2
 Then, as the service account:
 
 ```bash
-uqs odbc install singlestore-1.1.7.tar.gz --home /srv/uqf/odbc --qhome /opt/kx
+uqs setup odbc install singlestore-1.1.7.tar.gz --home /srv/uqf/odbc --qhome /opt/kx
 . /srv/uqf/odbc/current/env.sh
 ```
 
@@ -127,9 +127,9 @@ the usual rollback follows.
 ## Upgrading and rolling back
 
 ```bash
-uqs odbc install singlestore-1.1.8.tar.gz --home /srv/uqf/odbc   # approved first
-uqs odbc status --home /srv/uqf/odbc
-uqs odbc rollback --home /srv/uqf/odbc
+uqs setup odbc install singlestore-1.1.8.tar.gz --home /srv/uqf/odbc   # approved first
+uqs setup odbc status --home /srv/uqf/odbc
+uqs setup odbc rollback --home /srv/uqf/odbc
 ```
 
 An upgrade installs the new version beside the old and moves `current`. The old

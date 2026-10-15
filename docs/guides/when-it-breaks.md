@@ -11,24 +11,24 @@ this page is the order to read things in.
 ### 1. See that it did not finish
 
 ```
-uqs run status
+uqs job runs status
 ```
 
 lists every run that began and never finished. That includes runs whose process
-died, which nothing else records. `uqs run list` shows every run with its
+died, which nothing else records. `uqs job runs list` shows every run with its
 outcome: `completed`, `idle` (nothing to do), `partial` (some windows failed) or
 `failed`.
 
 The process also told whoever started it:
 
 - the backfill process exits non-zero (`partial` and `failed` both count as
-  failures). `uqs backfill` itself returns as soon as torq.sh has started the
-  process, so its exit code says only whether the process started. With `--wait`
-  it follows the run to its outcome and exits with that: 0 for `completed` or
-  `idle`, 1 for `failed` or a process that died. That includes a process that
-  died before it recorded anything, for example while loading the tree: once it
-  has had 30 seconds to start and is no longer running, the wait ends and points
-  at `uqs logs`. Use `--wait` in a script or a scheduler;
+  failures). `uqs job backfill` itself returns as soon as torq.sh has started
+  the process, so its exit code says only whether the process started. With
+  `--wait` it follows the run to its outcome and exits with that: 0 for
+  `completed` or `idle`, 1 for `failed` or a process that died. That includes a
+  process that died before it recorded anything, for example while loading the
+  tree: once it has had 30 seconds to start and is no longer running, the wait
+  ends and points at `uqs logs`. Use `--wait` in a script or a scheduler;
 - the Airflow sensor fails the task with q's error;
 - the browser's **Backfills** view shows **Failure**.
 
@@ -39,7 +39,7 @@ that only on the host that ran it.
 ### 2. Find the cause
 
 ```
-uqs run show <run_id>
+uqs job runs show <run_id>
 ```
 
 prints the run: its range, how many windows were planned, completed and failed,
@@ -49,7 +49,7 @@ and the facts it recorded. It then prints the two things to do next:
 logs   uqs logs deals_backfill1 --level ERROR
          .../torqdata/logs/out_deals_backfill1.log
          .../torqdata/logs/err_deals_backfill1.log
-re-run uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00 --to 2026-09-15T00:00:00 --version v1 --fixture
+re-run uqs job backfill demo_deals_backfill --from 2026-09-13T00:00:00 --to 2026-09-15T00:00:00 --version v1 --fixture
          covered windows are skipped, so this resumes rather than repeats
 ```
 
@@ -88,8 +88,8 @@ beginning on purpose. It refuses while a run of that worker may still be live.
 
 ### 4. Confirm
 
-`uqs run show <new_run_id>` should show `completed` with no failed windows, or
-`idle` if every window was already covered. Rows in the RDB or HDB are where
+`uqs job runs show <new_run_id>` should show `completed` with no failed windows,
+or `idle` if every window was already covered. Rows in the RDB or HDB are where
 [the FAQ](../faq.md#where-do-a-backfills-rows-end-up) says. `uqs data hdb-check`
 reports a partition missing a table or column.
 
@@ -137,7 +137,7 @@ Every streaming job records the sessions it was up and subscribed, so the gap
 can be asked for directly:
 
 ```
-uqs gaps <job> --from <start> --to <end>
+uqs job gaps <job> --from <start> --to <end>
 ```
 
 It lists each stretch of the range when the job was not up, or was up but had a
@@ -146,8 +146,9 @@ while it drops rows. For a job with a bounded "twin" (a backfill worker filling
 the table the job publishes), it then prints the backfill command that refills
 each gap. For markouts the twin is `hdb_demo_markouts_backfill` (see
 [markouts](../services/markouts.md)). A job with no twin cannot be refilled from
-here, and `uqs gaps` says so; `uqs job new NAME --kind backfill --twin-of JOB`
-scaffolds one (see [backfills](../scaffolding/backfill.md)).
+here, and `uqs job gaps` says so;
+`uqs job new NAME --kind backfill --twin-of JOB` scaffolds one (see
+[backfills](../scaffolding/backfill.md)).
 
 Two things to know about the answer:
 
@@ -162,10 +163,10 @@ Two things to know about the answer:
 - **Today can't be refilled until end of day.** A backfill can't write rows
   dated today: those belong to the tickerplant until end of day, and the HDB
   writer refuses them. So the commands stop at today's UTC midnight. A gap that
-  lies entirely in today gets no command, and `uqs gaps` says to run it again
-  after end of day.
+  lies entirely in today gets no command, and `uqs job gaps` says to run it
+  again after end of day.
 
-Runs from before uptime was recorded have no sessions, and `uqs gaps` reports
-the whole range as down. For those, the log still tells you: the gap runs from
-the job's last line before it died to `streaming job wired - running` after the
-restart.
+Runs from before uptime was recorded have no sessions, and `uqs job gaps`
+reports the whole range as down. For those, the log still tells you: the gap
+runs from the job's last line before it died to `streaming job wired - running`
+after the restart.

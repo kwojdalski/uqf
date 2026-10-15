@@ -1,4 +1,4 @@
-"""`uqs backfill --wait`: following a launched backfill to its outcome.
+"""`uqs job backfill --wait`: following a launched backfill to its outcome.
 
 Apart from stack/backfill.py, which launches it, because waiting is the
 half that reads status files and the process listing rather than starting
@@ -53,7 +53,7 @@ def wait_for_outcome(
 ) -> tuple[str, int, str]:
     """Follow the process's status file to its outcome: (state, exit code, error).
 
-    `uqs backfill` returns once torq.sh has STARTED the process, so its own
+    `uqs job backfill` returns once torq.sh has STARTED the process, so its own
     exit code says only that. This waits for what the worker reports - the
     same file the Airflow sensor reads, with the sensor's rules: a file for
     another run (version, range, or written before this launch) is not this

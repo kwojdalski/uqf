@@ -32,7 +32,7 @@
 / [10:00;11:00) window keeps its 10s markout, which lands after 11:00.
 / .
 / Live: export UQF_SOURCE_CRED_HDB_DEMO_MARKOUTS=localhost:<hdb1's port> in
-/ the shell `uqs backfill` runs from. Without it, the fixture below is used.
+/ the shell `uqs job backfill` runs from. Without it, the fixture below is used.
 
 \d .
 

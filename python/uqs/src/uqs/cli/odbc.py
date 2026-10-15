@@ -1,4 +1,7 @@
-"""`uqs odbc ...`: a deployment-owned, versioned ODBC setup (#840).
+"""`uqs setup odbc ...`: a deployment-owned, versioned ODBC setup (#840).
+
+Under `setup` (#1417) because it prepares the machine the stack runs on -
+infrastructure, not a job and not a process.
 
 Thin over uqs.stack.odbc_home, whose docstring describes the package, the
 home's layout and what env.sh sets.
@@ -17,12 +20,20 @@ from uqs.cli.shared import _die, app, console
 from uqs.paths import UqsError
 from uqs.stack import odbc_home
 
+setup_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Infrastructure setup: prepare what the stack needs on this machine - "
+    "a private ODBC setup. Changes no running process.",
+)
+app.add_typer(setup_app, name="setup")
+
 odbc_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="A private ODBC setup: install an approved package, load it, roll it back.",
 )
-app.add_typer(odbc_app, name="odbc")
+setup_app.add_typer(odbc_app, name="odbc")
 
 Home = Annotated[
     Path,
@@ -76,6 +87,6 @@ def env(home: Home) -> None:
     """The current version's variables, as shell exports."""
     version = odbc_home.current(home)
     if version is None:
-        _die(UqsError(f"{home} has no current version - `uqs odbc install` first"))
+        _die(UqsError(f"{home} has no current version - `uqs setup odbc install` first"))
         return
     print((version / odbc_home.ENV_FILE).read_text(), end="")

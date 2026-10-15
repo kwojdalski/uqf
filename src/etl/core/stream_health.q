@@ -10,7 +10,7 @@
 /               last failure - counted by guarded on every batch
 /   uptime      .qetl.uptime.beat ends a session at the last beat before a
 /               failed batch, so the span a job dropped becomes a gap that
-/               `uqs gaps` reports, with the twin that refills it
+/               `uqs job gaps` reports, with the twin that refills it
 /   on disk     stream_health_<job>.txt in the status directory, one JSON
 /               object written on each beat - what `uqs summary`'s Batches
 /               column reads, with no q

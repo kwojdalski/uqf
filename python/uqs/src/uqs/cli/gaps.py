@@ -1,4 +1,4 @@
-"""`uqs gaps`: where a streaming job was down, and how to refill it (#630)."""
+"""`uqs job gaps`: where a streaming job was down, and how to refill it (#630)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,15 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli.shared import InteractiveOpt, _die, _paths, _show, app, console
+from uqs.cli.shared import (
+    JOB_OPERATIONS_PANEL,
+    InteractiveOpt,
+    _die,
+    _paths,
+    _show,
+    console,
+    job_app,
+)
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs as stack_runs
@@ -67,7 +75,7 @@ def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = Fal
     return f"{datetime.fromtimestamp(seconds, UTC):%Y-%m-%dT%H:%M:%S}.{sub:09d}"
 
 
-@app.command()
+@job_app.command("gaps", rich_help_panel=JOB_OPERATIONS_PANEL)
 def gaps(
     job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
     range_from: Annotated[str, typer.Option("--from", help="Start of the range to check")],
@@ -127,7 +135,7 @@ def gaps(
             start = widen_to_grain(str(hole["range_from"]), align)
             end = widen_to_grain(str(hole["range_to"]), align, upper=True)
             command = (
-                f"uqs backfill {worker} --from {stack_runs._as_bound(start)} "
+                f"uqs job backfill {worker} --from {stack_runs._as_bound(start)} "
                 f"--to {stack_runs._as_bound(end, upper=True)}{version}"
             )
             console.print(f"  {command}", soft_wrap=True)
@@ -135,5 +143,5 @@ def gaps(
         console.print(
             "[yellow]today's part of these gaps is not refillable yet[/]: a backfill cannot "
             "write rows dated today, which belong to the tickerplant until end of day. "
-            "Run this same `uqs gaps` command after end of day for its refill."
+            "Run this same `uqs job gaps` command after end of day for its refill."
         )

@@ -103,7 +103,7 @@
     d:.qetl.job.bounded.def `hdb_order_quality_backfill;
     .qunit.assertEquals[(d`dataset;d`width;d`align;d`window_column);(`order_quality;0D01;0D01;`as_of);"the live table, one aligned hour, cleared on as_of"];
     .qunit.assertEquals[d`target_key;`book`window`as_of;"the live key"];
-    .qunit.assertEquals[first .qetl.uptime.twins `order_quality;`hdb_order_quality_backfill;"uqs gaps names it"];
+    .qunit.assertEquals[first .qetl.uptime.twins `order_quality;`hdb_order_quality_backfill;"uqs job gaps names it"];
     .qunit.assertEquals[.qpipe.job.hdb_order_quality_backfill.period;.qpipe.transform.order_quality.period;"the live job's grid"]};
 
 .qt.qpipe.job.hdb_order_quality_backfill.test_an_unaligned_range_is_refused_because_the_window_is_derived_from_the_hour:{[t]

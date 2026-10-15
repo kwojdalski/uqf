@@ -80,13 +80,13 @@ any dimensions, with no cost basis.
 
 ## Two frameworks, one adapter
 
-  |            | bounded (batch)                                          | streaming                                                                          |
-  | ---        | ---                                                      | ---                                                                                |
-  | framework  | `.qetl.job.bounded`                                      | `.qetl.job.stream`                                                                 |
-  | instance   | `.qpipe.job.<worker>`, under `workers/`                  | `.qpipe.job.<job>`, under `streaming/`                                             |
-  | runner     | `scripts/processes/torq_backfill.q`                      | `scripts/processes/torq_stream.q`; `run_stream.q` on stock kdb+                    |
-  | lifecycle  | init → plan → fetch → transform → publish → cover → done | wire `publish` → subscribe → `on_batch` per batch, `on_timer` per period → forever |
-  | guarantees | coverage, and retry-safe publication                     | freshness, and uptime sessions (`uqs gaps`)                                        |
+  |            | bounded (batch)                                          | streaming                                                                              |
+  | ---        | ---                                                      | ---                                                                                    |
+  | framework  | `.qetl.job.bounded`                                      | `.qetl.job.stream`                                                                     |
+  | instance   | `.qpipe.job.<worker>`, under `workers/`                  | `.qpipe.job.<job>`, under `streaming/`                                                 |
+  | runner     | `scripts/processes/torq_backfill.q`                      | `scripts/processes/torq_stream.q`; `run_stream.q` on stock kdb+                        |
+  | lifecycle  | init → plan → fetch → transform → publish → cover → done | wire `publish` → subscribe → `on_batch` per batch, `on_timer` per period → forever     |
+  | guarantees | coverage, and retry-safe publication                     | freshness, and uptime sessions (`uqs job gaps`)                                        |
 
 A bounded worker's `define` stamps the inherited lifecycle methods into its
 namespace. A streaming declaration carries its callbacks, and the runner wires

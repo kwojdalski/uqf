@@ -12,7 +12,7 @@
 / fetch, normalize and advance check with neither the publish nor the save.
 / They are not a muted copy of the timer: preview never calls publish, never
 / saves a cursor,
-/ and runs in a process (`uqs stream preview`) whose publish is the unwired
+/ and runs in a process (`uqs job preview`) whose publish is the unwired
 / stub, so a publish reached any other way throws rather than lands.
 / .
 /   poll    dict of
@@ -40,7 +40,7 @@
 /                  save_cursor_value and lexically_after[fields]
 /     start_cursor optional [instant] -> the cursor positioned just before
 /                  `instant`: fetching after it returns the rows at or after
-/                  it. What `uqs stream preview --last` starts from (#681).
+/                  it. What `uqs job preview --last` starts from (#681).
 /                  A timestamp cursor needs none - it is instant minus 1ns -
 /                  but a feed with its own load/save/advances must declare
 /                  one, because only the feed knows its tie-breakers

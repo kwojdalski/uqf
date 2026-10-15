@@ -92,7 +92,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`last_value1`** — the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile
 - **`exec_bars1`** — time bars over the unified fills tape; the window is the fill's source_time
 - **`hdb_exec_bars_backfill1`** — bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live
-- **`flink_vwap1`** — publishes each per-symbol VWAP window an Apache Flink job closes, once, dropping windows Flink emits again after a restart or replay. The raw rows come from an EXTERNAL Python process (external/flink_vwap_feed.py) - Flink runs outside q - so flink_vwap_raw has no producer in this list and this does not start with the stack. Start it with `uqs feed start flink_vwap`
+- **`flink_vwap1`** — publishes each per-symbol VWAP window an Apache Flink job closes, once, dropping windows Flink emits again after a restart or replay. The raw rows come from an EXTERNAL Python process (external/flink_vwap_feed.py) - Flink runs outside q - so flink_vwap_raw has no producer in this list and this does not start with the stack. Start it with `uqs connector start flink_vwap`
 - **`crypto_book_1s1`** — last book state per venue and sym per second; the window is the update's source_time, not the plant's time
 - **`hdb_crypto_book_backfill1`** — bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live
 - **`order_quality1`** — rolling fill and reject ratios per book over the last 1m, 5m and 1h

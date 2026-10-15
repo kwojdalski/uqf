@@ -1,6 +1,6 @@
 """One rule: is the q process a file names provably dead? (#726, #1362)
 
-`uqs backfill --wait`, `uqs remove checkpoint` (`_live_holder`, for a backfill
+`uqs job backfill --wait`, `uqs remove checkpoint` (`_live_holder`, for a backfill
 lock) and the frontend's status reader all call uqs.liveness. The Airflow
 sensor cannot - uqf_airflow_provider does not depend on uqs - so it carries a
 copy, uqf_airflow_provider.liveness. These tests hold that copy to the

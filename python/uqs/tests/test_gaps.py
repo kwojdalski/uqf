@@ -1,4 +1,4 @@
-"""`uqs gaps`: the holes in a streaming job's uptime, read back by a fresh q (#630)."""
+"""`uqs job gaps`: the holes in a streaming job's uptime, read back by a fresh q (#630)."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def _gaps_cli(monkeypatch, holes, twins, sessions=1):
     monkeypatch.setattr(uptime, "gaps", lambda *a: (holes, grains, sessions))
     return runner.invoke(
         cli.app,
-        ["gaps", "demo_markout", "--from", "2026-09-13", "--to", "2026-09-14"],
+        ["job", "gaps", "demo_markout", "--from", "2026-09-13", "--to", "2026-09-14"],
         env={"COLUMNS": "200"},
     )
 
@@ -102,7 +102,7 @@ def test_the_cli_prints_each_gap_and_the_backfill_that_refills_it(monkeypatch):
     assert result.exit_code == 0, result.output
     assert "2026-09-13T10:20:00.000000000" in result.output
     assert (
-        "uqs backfill hdb_demo_markouts_backfill --from 2026-09-13T10:00:00 "
+        "uqs job backfill hdb_demo_markouts_backfill --from 2026-09-13T10:00:00 "
         "--to 2026-09-13T10:20:00 --version <V>"
     ) in result.output
 
@@ -129,7 +129,7 @@ def test_a_gap_today_prints_no_command_and_says_when_it_can_be_refilled(monkeypa
     result = _gaps_cli(monkeypatch, [_HOLE], ["hdb_demo_markouts_backfill"])
     assert result.exit_code == 0, result.output
     assert "2026-09-13T10:20:00.000000000" in result.output, "the gap itself is still shown"
-    assert "uqs backfill" not in result.output
+    assert "uqs job backfill" not in result.output
     assert "after end of day" in result.output
 
 
@@ -141,7 +141,7 @@ def test_a_gap_across_midnight_into_today_is_refilled_up_to_midnight(monkeypatch
     }
     result = _gaps_cli(monkeypatch, [hole], ["hdb_demo_markouts_backfill"])
     assert (
-        "uqs backfill hdb_demo_markouts_backfill --from 2026-09-13T23:00:00 "
+        "uqs job backfill hdb_demo_markouts_backfill --from 2026-09-13T23:00:00 "
         "--to 2026-09-14T00:00:00 --version <V>"
     ) in result.output
     assert "after end of day" in result.output
@@ -163,7 +163,7 @@ _NS_HOLE = {
 
 
 def _printed_command(output: str) -> str:
-    return next(line.strip() for line in output.splitlines() if "uqs backfill" in line)
+    return next(line.strip() for line in output.splitlines() if "uqs job backfill" in line)
 
 
 def test_a_nanosecond_gap_is_widened_to_the_microsecond_backfill_carries(monkeypatch):
@@ -186,7 +186,7 @@ def test_a_nanosecond_gap_is_widened_to_the_microsecond_backfill_carries(monkeyp
 
 
 def test_the_printed_refill_runs_through_the_backfill_cli(monkeypatch):
-    """Pasted back into `uqs backfill`, the command reaches the start of a
+    """Pasted back into `uqs job backfill`, the command reaches the start of a
     run with the widened range, rather than a refusal of its bounds."""
     import shlex
 

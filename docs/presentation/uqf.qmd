@@ -284,14 +284,14 @@ cannot disagree about the maths.
 
 ## Recovery {.smaller .scrollable}
 
-  |                      | TorQ                                                     | uqf                                                                                                                             |
-  | ---                  | ---                                                      | ---                                                                                                                             |
-  | log replay into HDB  | `tpreplay1` (`tickerlogreplay.q`), `-.replay.*` switches | still that; `uqs data replay` aims it at the running plant's `-tplogdir`, `-schemafile` and `-stackid`                          |
-  | a restarted job      | resubscribes, state is the job's problem                 | `replay:1b` rebuilds state from the log with publish muted; a job may also restore from its own published rows (`restore_from`) |
-  | state across days    | none                                                     | `carry`: the state is snapshotted onto a table at end of day, so the new day's log opens with it                                |
-  | down across an EOD   | not handled                                              | `.qtorq.earlier_days` reads the missed days' logs, named by the schema `stpmeta` recorded with each                             |
-  | what replay may do   | n/a                                                      | a restart must publish what the running process would have: `test_replay_equivalence.q`, per job                                |
-  | holes in output      | n/a                                                      | `etl_stream_uptime` records when a job was up and subscribed; `uqs gaps` names what lies between, with the twin that refills it |
+  |                      | TorQ                                                     | uqf                                                                                                                                 |
+  | ---                  | ---                                                      | ---                                                                                                                                 |
+  | log replay into HDB  | `tpreplay1` (`tickerlogreplay.q`), `-.replay.*` switches | still that; `uqs data replay` aims it at the running plant's `-tplogdir`, `-schemafile` and `-stackid`                              |
+  | a restarted job      | resubscribes, state is the job's problem                 | `replay:1b` rebuilds state from the log with publish muted; a job may also restore from its own published rows (`restore_from`)     |
+  | state across days    | none                                                     | `carry`: the state is snapshotted onto a table at end of day, so the new day's log opens with it                                    |
+  | down across an EOD   | not handled                                              | `.qtorq.earlier_days` reads the missed days' logs, named by the schema `stpmeta` recorded with each                                 |
+  | what replay may do   | n/a                                                      | a restart must publish what the running process would have: `test_replay_equivalence.q`, per job                                    |
+  | holes in output      | n/a                                                      | `etl_stream_uptime` records when a job was up and subscribed; `uqs job gaps` names what lies between, with the twin that refills it |
 
 ## Monitoring {.smaller .scrollable}
 

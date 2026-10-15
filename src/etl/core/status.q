@@ -14,7 +14,7 @@
 /                                 it - what Airflow polls to decide whether a
 /                                 backfill task succeeded, idled or failed
 /   python/uqf_frontend           status.py - the Control view's worker list
-/   python/uqs                    stack/backfill_wait.py - `uqs backfill --wait`
+/   python/uqs                    stack/backfill_wait.py - `uqs job backfill --wait`
 / .
 / None of them can start q, so the state sets (status_states, terminal_states
 / and the ones .qetl.job.bounded.exit_code exits 0 for) and the file name

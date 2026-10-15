@@ -331,7 +331,7 @@ case "$out" in
 esac
 if [ -n "$odbc_home" ]; then
   test -f "$odbc_home/current/env.sh" ||
-    fail "no ODBC setup at $odbc_home - run \`uqs odbc install\` there first"
+    fail "no ODBC setup at $odbc_home - run \`uqs setup odbc install\` there first"
 fi
 if [ -n "$torq_launcher" ]; then
   test -f "$torq_launcher" || fail "no TorQ launcher $torq_launcher"

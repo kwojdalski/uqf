@@ -7,7 +7,7 @@
 / over any date range, with no data stored anywhere.
 / .
 / To backfill it, give it a seed as its credential:
-/     UQF_SOURCE_CRED_MOCK_TRADES=42 uqs backfill mock_trades_backfill --version v1 \
+/     UQF_SOURCE_CRED_MOCK_TRADES=42 uqs job backfill mock_trades_backfill --version v1 \
 /         --from 2026-09-01 --to 2026-09-08
 / Without one, the worker runs on `fixture` - one hour of the same rows.
 

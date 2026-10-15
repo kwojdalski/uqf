@@ -1,6 +1,6 @@
-"""`uqs stream preview`: one page of a polling feed, with nothing published (#663).
+"""`uqs job preview`: one page of a polling feed, with nothing published (#663).
 
-The preview runs in a short-lived q of its own, as `uqs run` reads the run
+The preview runs in a short-lived q of its own, as `uqs job runs` reads the run
 ledger: the whole ETL tree loaded, nothing wired, and the job's
 `.qetl.job.stream.preview` called once. In that process the job's publish is
 the unwired stub, so a publish reached by any path throws rather than lands -

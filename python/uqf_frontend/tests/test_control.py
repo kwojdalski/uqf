@@ -456,7 +456,7 @@ def test_a_backfill_is_started_through_torq_sh_as_uqs_backfill_starts_it(writeab
     """Through TorQ's launcher, not `q torq_backfill.q` run bare: that died at
     once on `.proc.procname`, with its output sent to /dev/null, while this
     endpoint answered 200 with the pid of a process already gone. Patched at
-    the torq.sh boundary - the one `uqs backfill`'s own tests patch - so the
+    the torq.sh boundary - the one `uqs job backfill`'s own tests patch - so the
     command asserted here is the command that runs."""
     seen = _patch_torq_sh(monkeypatch)
     r = writeable.post("/control/backfill", json=_backfill_body())
@@ -499,7 +499,7 @@ def test_a_launcher_failure_is_a_502_naming_the_process(writeable, monkeypatch):
 
 def test_a_backfill_value_a_shell_would_interpret_is_refused(writeable, monkeypatch):
     """The flags reach q on a start line, so a value like `v1;rm` is refused
-    before any process starts - the same rule `uqs backfill` applies."""
+    before any process starts - the same rule `uqs job backfill` applies."""
     _patch_torq_sh(monkeypatch)
     resp = writeable.post("/control/backfill", json=_backfill_body(source_version="v1;rm"))
     assert resp.status_code == 422
@@ -534,7 +534,7 @@ def test_a_range_bound_finer_than_a_microsecond_is_refused_not_truncated(writeab
     """`fromisoformat` keeps the first six digits of a nine-digit fraction
     without a word, so `range_to ...123456789Z` started a worker 789 ns short
     of the range the caller sent, and recorded that as covered (#1317). The
-    rule `uqs backfill` applies to its own bounds, applied at this surface."""
+    rule `uqs job backfill` applies to its own bounds, applied at this surface."""
     seen = _patch_torq_sh(monkeypatch)
     resp = writeable.post(
         "/control/backfill", json=_backfill_body(range_to="2026-09-12T00:00:00.123456789Z")

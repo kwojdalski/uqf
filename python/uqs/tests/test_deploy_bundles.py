@@ -171,7 +171,7 @@ def test_selected_jobs_start_with_their_dependency_closure(tmp_path):
 
 
 def test_a_worker_is_never_run_by_a_deployment(tmp_path):
-    with pytest.raises(DeployError, match="bounded worker.*uqs backfill piggy_backfill"):
+    with pytest.raises(DeployError, match="bounded worker.*uqs job backfill piggy_backfill"):
         _deploy(tmp_path, "--jobs", "piggy_backfill")
 
 

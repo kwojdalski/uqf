@@ -5,7 +5,7 @@
 # --check. Embedded from docs/services/crypto-recorder.md.
 #
 # WHAT THIS DIAGRAM IS FOR. The publishers here are not q and not process.csv
-# rows: two Rust binaries from a sibling checkout, started by `uqs feed`,
+# rows: two Rust binaries from a sibling checkout, started by `uqs connector`,
 # each calling .u.upd on stp1 over raw IPC. The book recorder talks to the
 # venues; the fills recorder talks to an already-running cryptorust OMS. The
 # mock publishes onto the same two tables, which is why it runs INSTEAD of
@@ -39,10 +39,10 @@ outside: "outside the repository" {
   oms: "a running cryptorust service\nits OMS on /tmp/beacon.sock" { class: ext }
 }
 
-rust: "cryptorust - sibling checkout, Rust, started by uqs feed" {
+rust: "cryptorust - sibling checkout, Rust, started by uqs connector" {
   class: band
-  books: "kdb-market-data-recorder\nuqs feed start crypto\nreconnects on drop" { class: py }
-  fills: "kdb-fills-recorder\nuqs feed start crypto-fills\npolls every tick" { class: py }
+  books: "kdb-market-data-recorder\nuqs connector start crypto\nreconnects on drop" { class: py }
+  fills: "kdb-fills-recorder\nuqs connector start crypto-fills\npolls every tick" { class: py }
 }
 
 mock: "cryptomock1 - crypto_mock.q\ninvented ladders and fills\nINSTEAD of the recorders" { class: job }

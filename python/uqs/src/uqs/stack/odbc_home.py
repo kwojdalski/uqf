@@ -1,4 +1,4 @@
-"""`uqs odbc`: a deployment-owned, versioned ODBC setup (#840).
+"""`uqs setup odbc`: a deployment-owned, versioned ODBC setup (#840).
 
 q reaches an ODBC database through KX's client (odbc.k and a native odbc.so),
 a driver manager (unixODBC) and the database's own driver. On a server none of
@@ -33,7 +33,7 @@ THE HOME:
   versions/<name>-<version>/   one installed package, checked file by file
                           against its manifest, with etc/, qhome/ and env.sh
   current -> versions/...      what env.sh users load; moved in one rename
-  previous -> versions/...     what `uqs odbc rollback` returns to
+  previous -> versions/...     what `uqs setup odbc rollback` returns to
 
 An upgrade installs the new version beside the old and moves `current`; a
 rollback swaps `current` and `previous`. Nothing is deleted.
@@ -164,7 +164,7 @@ def _write_config(into: Path, version: Path, manifest: dict) -> None:
         f'export LD_LIBRARY_PATH="{version / "lib"}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"'
     )
     (into / ENV_FILE).write_text(
-        "# written by `uqs odbc install` - source it\n" + "\n".join(body) + "\n"
+        "# written by `uqs setup odbc install` - source it\n" + "\n".join(body) + "\n"
     )
 
 
@@ -234,7 +234,7 @@ def install(home: Path, archive: Path, managed_qhome: Path) -> Path:
         _overlay(staged / "qhome", managed_qhome, staged / "q")
         target = versions / f"{row['name']}-{row['version']}"
         if target.exists():
-            raise UqsError(f"{target.name} is already installed - `uqs odbc status` shows it")
+            raise UqsError(f"{target.name} is already installed - `uqs setup odbc status` shows it")
         _write_config(staged, target, manifest)
         os.replace(staged, target)
     except BaseException:

@@ -325,7 +325,7 @@
 / not in any RDB or HDB: nothing replicates it there, and the frontend's
 / /coverage, which used to select etl_coverage on both tiers, could not see
 / a backfill every worker skipped as covered. gateway1 loads this file to
-/ answer it, as `uqs gaps` reads the same file. Read without the ledger's
+/ answer it, as `uqs job gaps` reads the same file. Read without the ledger's
 / lock: durable_set renames a whole file into place, so a read sees the old
 / ledger or the new one, never half of either.
 / .

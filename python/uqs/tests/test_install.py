@@ -169,7 +169,7 @@ def test_cli_wizard_asks_the_mode(sidecar: Path, cli_repo: Path) -> None:
     assert (cli_repo / WORKER_DIR / "acme_backfill.q").is_symlink()
     assert "Next steps" in out
     assert "uqs start acme_spread1" in out
-    assert "uqs backfill acme_backfill" in out
+    assert "uqs job backfill acme_backfill" in out
     # Neither table is defined in the fake plant, and both are reported.
     assert "acme_spread publishes acme_spread" in out
     assert "acme_backfill fills acme_tape" in out

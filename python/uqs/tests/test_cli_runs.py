@@ -1,4 +1,4 @@
-"""`uqs run` at the CLI: what each command prints for what stack/runs.py returns.
+"""`uqs job runs` at the CLI: what each command prints for what stack/runs.py returns.
 
 stack/runs.py itself is tested against a real ledger in test_runs.py, which
 needs q; these need none.
@@ -23,7 +23,7 @@ runner = CliRunner()
 )
 def test_migrate_says_what_it_did(monkeypatch, upgraded, said):
     monkeypatch.setattr(stack_runs, "migrate", lambda paths: upgraded)
-    result = runner.invoke(cli.app, ["run", "migrate"])
+    result = runner.invoke(cli.app, ["job", "runs", "migrate"])
     assert result.exit_code == 0, result.output
     assert said in result.output
 
@@ -33,7 +33,7 @@ def test_a_migrate_refusal_exits_one(monkeypatch):
         raise UqsError("not ours to rewrite")
 
     monkeypatch.setattr(stack_runs, "migrate", refuse)
-    assert runner.invoke(cli.app, ["run", "migrate"]).exit_code == 1
+    assert runner.invoke(cli.app, ["job", "runs", "migrate"]).exit_code == 1
 
 
 @pytest.mark.parametrize(
@@ -61,13 +61,13 @@ def test_list_shows_each_runs_range_and_counts(monkeypatch):
         "rows_published": 42.0,
     }
     monkeypatch.setattr(stack_runs, "history", lambda paths: [row])
-    result = runner.invoke(cli.app, ["run", "list"], env={"COLUMNS": "400"})
+    result = runner.invoke(cli.app, ["job", "runs", "list"], env={"COLUMNS": "400"})
     assert result.exit_code == 0, result.output
     assert "demo_deals_backfill" in result.output
     assert "42" in result.output and "42.0" not in result.output
 
 
-# --- what to do next, from `uqs run show` (#636) -----------------------------
+# --- what to do next, from `uqs job runs show` (#636) -----------------------------
 
 _FAILED_RUN = {
     "run_id": "0a1b2c3d-0000-0000-0000-000000000000",
@@ -88,7 +88,7 @@ def test_the_rerun_command_is_one_the_cli_accepts():
 
     command = stack_runs.rerun_command(_FAILED_RUN)
     assert command == (
-        "uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00 "
+        "uqs job backfill demo_deals_backfill --from 2026-09-13T00:00:00 "
         "--to 2026-09-15T00:00:00 --version v1"
     )
     for bound in (command.split("--from ")[1].split()[0], command.split("--to ")[1].split()[0]):
@@ -145,18 +145,20 @@ def test_no_rerun_command_without_a_recorded_range():
 
 def test_show_prints_the_logs_and_the_command_that_resumes(monkeypatch):
     monkeypatch.setattr(stack_runs, "show", lambda paths, run_id: ([_FAILED_RUN], []))
-    result = runner.invoke(cli.app, ["run", "show", _FAILED_RUN["run_id"]], env={"COLUMNS": "400"})
+    result = runner.invoke(
+        cli.app, ["job", "runs", "show", _FAILED_RUN["run_id"]], env={"COLUMNS": "400"}
+    )
     assert result.exit_code == 0, result.output
     assert "uqs logs deals_backfill1 --level ERROR" in result.output
     assert "err_deals_backfill1.log" in result.output
-    assert "uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00" in result.output
+    assert "uqs job backfill demo_deals_backfill --from 2026-09-13T00:00:00" in result.output
     assert "resumes rather than repeats" in result.output
 
 
 def test_show_says_so_when_the_run_had_no_torq_process(monkeypatch):
     run = {**_FAILED_RUN, "process": ""}
     monkeypatch.setattr(stack_runs, "show", lambda paths, run_id: ([run], []))
-    result = runner.invoke(cli.app, ["run", "show", run["run_id"]], env={"COLUMNS": "400"})
+    result = runner.invoke(cli.app, ["job", "runs", "show", run["run_id"]], env={"COLUMNS": "400"})
     assert result.exit_code == 0, result.output
     assert "recorded no TorQ process" in result.output
 

@@ -551,7 +551,7 @@
 / Private: the job's on_batch, counting every batch in .qetl.stream_health
 / and logging a failure with its table before re-raising it. Re-raised, the
 / error still reaches the caller; counted, a job that drops every batch is
-/ a gap in `uqs gaps` and `failing` in `uqs summary` rather than a process
+/ a gap in `uqs job gaps` and `failing` in `uqs summary` rather than a process
 / that looks healthy (#832).
 / @private
 .qetl.job.stream.guarded:{[job;f;t;x]
@@ -575,7 +575,7 @@
 /      what was published before the restart.
 /   4. on_replayed, with publish live again, for what the replay left owed.
 /   5. Uptime: a session in .qetl.uptime, beaten on a timer - the record of
-/      when the job was up and subscribed, which `uqs gaps` reads (#630).
+/      when the job was up and subscribed, which `uqs job gaps` reads (#630).
 /   6. Timers: the job's, and the configuration audit's.
 / .
 / Both runners used to do this themselves, differently (#data-platform

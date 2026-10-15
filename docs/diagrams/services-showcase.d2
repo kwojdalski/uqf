@@ -93,7 +93,7 @@ feeds: "FEEDS - invent rows on a timer\n\nfxfeed1 -> quote (TorQ)\nfxorderbookfe
 
 external: "EXTERNAL PUBLISHERS - Python, outside q\n(q cannot hold these subscriptions)\n\ndatabento_feed.py -> databento_mbp10\nkafka_feed.py -> kafka_client_flow\nflink_vwap_feed.py -> flink_vwap_raw" { class: external }
 
-backfills: "BACKFILLS - a past range, then exit\nrun on demand: uqs backfill ... [--wait]\n\na q process (IPC): deals, events, upstream,\nhdb_markouts, hdb_exec_bars,\n hdb_crypto_book (the stack's HDB)\nODBC / DuckDB: duckdb_deals, databento,\n crypto_market_data\nHDB files: hdb_transfer" { class: bounded }
+backfills: "BACKFILLS - a past range, then exit\nrun on demand: uqs job backfill ... [--wait]\n\na q process (IPC): deals, events, upstream,\nhdb_markouts, hdb_exec_bars,\n hdb_crypto_book (the stack's HDB)\nODBC / DuckDB: duckdb_deals, databento,\n crypto_market_data\nHDB files: hdb_transfer" { class: bounded }
 
 q_publish: "Does it publish\nanything?" { class: question }
 

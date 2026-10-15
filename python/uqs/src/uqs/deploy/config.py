@@ -104,7 +104,7 @@ class Config:
     init_data: bool = False
     jobs: tuple[str, ...] = ()
     live: bool = False
-    #: a private ODBC setup on the server (uqs odbc install), loaded by deploy.env
+    #: a private ODBC setup on the server (uqs setup odbc install), loaded by deploy.env
     odbc_home: str | None = None
     #: sources checked live after verify, before activation (#840)
     live_check: tuple[str, ...] = ()

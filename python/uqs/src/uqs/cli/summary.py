@@ -248,7 +248,7 @@ def summary(
             console.print(
                 f"  {record['job']} ({record['process']}), last at "
                 f"{record.get('last_failure_at', '')}: {record.get('last_error', '')} - "
-                f"`uqs gaps {record['job']}` shows the span it dropped, "
+                f"`uqs job gaps {record['job']}` shows the span it dropped, "
                 f"`uqs logs {record['process']}` the error",
                 markup=False,
             )

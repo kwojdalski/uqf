@@ -60,7 +60,7 @@ def select_jobs(manifest: dict, wanted: Sequence[str]) -> Selection:
             raise DeployError(
                 "arguments",
                 f"--jobs {name} is a bounded worker: a deployment installs it and never runs "
-                f"it - run `uqs backfill {name}` from the release when you mean to",
+                f"it - run `uqs job backfill {name}` from the release when you mean to",
             )
         sel.jobs.append(name)
         sel.processes += [job["procname"], *job.get("needs", [])]

@@ -1,10 +1,12 @@
-"""The external publishers: `uqs feed start|stop|status NAME`.
+"""The external connectors: `uqs connector start|stop|status NAME`.
 
 Databento, Kafka, and cryptorust's two recorders each drive a process this
 repository does not own, publishing onto the running stack's tickerplant. They
 do not go through torq.sh or process.csv - the q half of each (databento1,
 kafka_flow1, ...) is an ordinary pipeline row that `uqs start` brings up - so
-they are one group of their own rather than lifecycle commands.
+they are one group of their own rather than lifecycle commands. Called
+`connector` rather than `feed` (#1417) because a feed is also a TorQ-managed q
+process here; these supervise the publisher OUTSIDE the plant.
 
 One `start` for every feed, rather than a sub-app per feed, because all four
 have the same three verbs. Each feed's options are its own: one given to a
@@ -36,12 +38,14 @@ from uqs.external.crypto import (
 from uqs.external.feeds import ExternalFeed, discover
 from uqs.paths import UqsError
 
-feed_app = typer.Typer(
+connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="External publishers into the tickerplant: databento, kafka, crypto, crypto-fills.",
+    help="External connectors: start, stop and check the publishers outside the plant "
+    "(databento, kafka, crypto, crypto-fills) that write into its tickerplant. These "
+    "supervise external processes, not the TorQ-managed q processes `uqs start` runs.",
 )
-app.add_typer(feed_app, name="feed")
+app.add_typer(connector_app, name="connector")
 
 
 def _split(text: str) -> tuple[str, ...]:
@@ -198,7 +202,7 @@ def _opt(help_: str, feeds: str):
     return typer.Option(help=f"{help_} ({feeds})", show_default=False)
 
 
-@feed_app.command("start")
+@connector_app.command("start")
 def start(
     name: FeedArg,
     dataset: Annotated[str | None, _opt("Databento dataset, e.g. XNAS.ITCH", "databento")] = None,
@@ -270,9 +274,9 @@ def start(
     console.print(message)
 
 
-@feed_app.command("stop")
+@connector_app.command("stop")
 def stop(name: FeedArg) -> None:
-    """Stop a feed started by `uqs feed start`."""
+    """Stop a feed started by `uqs connector start`."""
     try:
         _feed(name).stop(_paths())
     except UqsError as exc:
@@ -281,7 +285,7 @@ def stop(name: FeedArg) -> None:
     console.print(f"{name} feed stopped")
 
 
-@feed_app.command("status")
+@connector_app.command("status")
 def status(
     name: Annotated[
         str | None,

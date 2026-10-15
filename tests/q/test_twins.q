@@ -1,7 +1,7 @@
 / test_twins.q - a stream job and its backfill twin compute one dataset one way (#884).
 / .
 / .qetl.uptime.twins names a bounded worker as the twin of the stream job
-/ whose table it writes; `uqs gaps` offers the twin to refill an outage, and
+/ whose table it writes; `uqs job gaps` offers the twin to refill an outage, and
 / a refill REPLACES the live rows under the shared key. So a twin must
 / re-derive what the stream job publishes, and that was nowhere checked: the
 / demo markout pair computed its rows two ways for as long as it existed.

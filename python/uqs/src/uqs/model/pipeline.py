@@ -25,7 +25,7 @@ PIPELINE_LIB_SCRIPT = "processes/torq_pipeline.q"
 STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
 
 #: The one process script every bounded worker runs under; its -worker flag,
-#: which `uqs backfill` passes, names which worker at runtime.
+#: which `uqs job backfill` passes, names which worker at runtime.
 BACKFILL_RUNNER_SCRIPT = "processes/torq_backfill.q"
 
 # The access list a real .sub.subscribe subscriber needs: an ETL process
@@ -144,7 +144,7 @@ class Pipeline:
     # sit apart from subscribe_to/publishes and never reach database.q.
     source: str | None = None
     dataset: str | None = None
-    # The source_version a run uses when `uqs backfill` is given no --version;
+    # The source_version a run uses when `uqs job backfill` is given no --version;
     # None when the worker declares none, and then a run must name one.
     default_version: str | None = None
 

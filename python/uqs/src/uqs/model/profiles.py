@@ -145,11 +145,11 @@ NEEDS_LARGER_LICENCE: dict[str, str] = {
 UNPROFILED: dict[str, str] = {
     "databento1": (
         "a live external feed - its rows come from the Databento handler "
-        "(`uqs feed start databento`), so it is started with that or not at all"
+        "(`uqs connector start databento`), so it is started with that or not at all"
     ),
     "kafka_flow1": (
         "a live external feed - its rows come from the Kafka consumer "
-        "(`uqs feed start kafka`), so it is started with that or not at all"
+        "(`uqs connector start kafka`), so it is started with that or not at all"
     ),
     "exec_bars1": (
         "on demand: it bars the executions tape, which the fx and crypto chains "
@@ -184,7 +184,7 @@ UNPROFILED: dict[str, str] = {
         "and refuses to run without one, so it starts only when asked"
     ),
     "flink_vwap1": (
-        "a live external feed - its rows come from the Flink job (`uqs feed "
+        "a live external feed - its rows come from the Flink job (`uqs connector "
         "start flink_vwap`), so it is started with that or not at all"
     ),
     "fxmarkout1": (

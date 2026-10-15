@@ -63,9 +63,9 @@ what it merely usually does.
 
 The same rule decides where a weaker fact goes. A streaming job records when it
 was up and subscribed ([`.qetl.uptime`](../../src/etl/core/uptime.q)), so
-`uqs gaps` can name the holes in its output. That is weaker than coverage: a job
-can be subscribed and publish nothing. So it has a table of its own and never
-enters the coverage ledger, whose rows a backfill trusts enough to skip a
+`uqs job gaps` can name the holes in its output. That is weaker than coverage: a
+job can be subscribed and publish nothing. So it has a table of its own and
+never enters the coverage ledger, whose rows a backfill trusts enough to skip a
 window. A weak claim filed beside a strong one would borrow its strength. Each
 uptime session also ends at its last beat rather than at the moment the job
 stopped: it under-claims by up to one beat, never over-claims.
@@ -215,8 +215,8 @@ The rule that makes it safe to add is the coverage ledger's own:
   (`.qetl.io.retire`), so a kill mid-removal is put right by the same recovery
   that puts right a killed write.
 
-Pruning uptime sessions makes `uqs gaps` report the pruned span as a gap, as it
-would for a job that was never up; ask it only within the horizon. Removing
+Pruning uptime sessions makes `uqs job gaps` report the pruned span as a gap, as
+it would for a job that was never up; ask it only within the horizon. Removing
 other things (a source's files, a table) remains an operator's act, and nothing
 in the framework assumes old rows are gone.
 

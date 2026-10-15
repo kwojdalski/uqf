@@ -527,7 +527,7 @@
 
 / rebuild_positions' output (a reaction on demo_deals): the net notional per
 / pair for each published window, written through demo_deals_backfill's own
-/ IO manager - so into the HDB under `uqs backfill`. `time` is the window's
+/ IO manager - so into the HDB under `uqs job backfill`. `time` is the window's
 / start, which is what the HDB writer partitions by.
 .qetl.plant.deal_positions:([]time:`timestamp$(); sym:`g#`symbol$(); window:`timestamp$(); net_notional:`float$(); deals:`long$())
 

@@ -61,7 +61,7 @@ def twin_target(
     """The dataset and columns a twin of streaming job `twin_of` writes (#716).
 
     A twin is a worker whose dataset is a table the job publishes - what
-    `.qetl.uptime.twins` looks for, and so what `uqs gaps` refills from. The
+    `.qetl.uptime.twins` looks for, and so what `uqs job gaps` refills from. The
     dataset and its columns are taken from the job's declaration and the
     plant's definition, so the twin writes the right table by construction
     rather than by matching it up by hand.

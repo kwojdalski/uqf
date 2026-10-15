@@ -125,7 +125,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
 
   ```bash
   ssh uqf-server 'cd /opt/uqf/current && source ./deploy.env && \
-    .venv/bin/uqs backfill pb_backfill --version v1 --from 2026-09-01 --to 2026-09-02'
+    .venv/bin/uqs job backfill pb_backfill --version v1 --from 2026-09-01 --to 2026-09-02'
   ```
 
 - **Verification** checks that the added processes answer as themselves and that

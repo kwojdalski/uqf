@@ -198,10 +198,10 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   `uqs --target`. `uqs target list` and `uqs target remove` read and edit that
   file. `remove` leaves every other line, comments included, as it was.
 - **Confirmation.** A command that can change the server, such as `start`,
-  `stop`, `restart`, `raw`, `backfill`, `config set` or `data seed`, asks first
-  and names the target. Without a terminal it needs `--yes`. Read-only commands
-  run directly: `summary`, `logs`, `query`, `schema`, `list`, `graph`, `gaps`
-  and `run show`.
+  `stop`, `restart`, `raw`, `job backfill`, `config set` or `data seed`, asks
+  first and names the target. Without a terminal it needs `--yes`. Read-only
+  commands run directly: `summary`, `logs`, `query`, `schema`, `list`, `graph`,
+  `job gaps` and `job runs show`.
 - **ssh.** It runs with `BatchMode`, so a missing key or an unknown host key
   fails rather than prompts. Host-key checking is whatever your `ssh_config`
   says, and credentials stay on the server.

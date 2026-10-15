@@ -213,3 +213,58 @@ def test_a_rollback_with_nothing_before_is_refused(tmp_path, qhome):
     odbc_home.install(home, pkg, qhome)
     with pytest.raises(UqsError, match="no previous version"):
         odbc_home.rollback(home)
+
+
+# ------------------------------------------------- `uqs setup odbc` (#1417)
+
+
+def test_the_cli_runs_the_whole_lifecycle_under_setup_odbc(tmp_path, qhome):
+    """Install, status, env and rollback, as the CLI moved under `setup`
+    prints them: the same calls, the same words, the same refusals."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+
+    runner = CliRunner()
+    home = tmp_path / "odbc"
+    v1, v2 = _package(tmp_path, "1.0"), _package(tmp_path, "2.0")
+    _approve(home, v1, v2)
+
+    def uqs(*args: str):
+        return runner.invoke(cli.app, ["setup", "odbc", *args, "--home", str(home)])
+
+    empty = uqs("env")
+    assert empty.exit_code == 1
+    for pkg in (v1, v2):
+        installed = uqs("install", str(pkg), "--qhome", str(qhome))
+        assert installed.exit_code == 0, installed.output
+        # Unwrapped: rich wraps at the terminal's width, which a test does not set.
+        said = installed.output.replace("\n", "")
+        assert f"load it with: . {home}/current/{odbc_home.ENV_FILE}" in said
+    status = json.loads(uqs("status").stdout)
+    assert (status["current"], status["previous"]) == ("testodbc-2.0", "testodbc-1.0")
+    env = uqs("env")
+    assert env.exit_code == 0
+    assert env.stdout == (home / "current" / odbc_home.ENV_FILE).read_text()
+    rolled = uqs("rollback")
+    assert rolled.exit_code == 0
+    assert "current is testodbc-1.0 again" in " ".join(rolled.output.split())
+    assert json.loads(uqs("status").stdout)["current"] == "testodbc-1.0"
+
+
+def test_setup_odbc_env_without_a_version_names_the_new_install_command(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from uqs import cli
+
+    said: list[str] = []
+
+    def die(exc):
+        said.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr("uqs.cli.odbc._die", die)
+    (tmp_path / "odbc").mkdir()
+    result = CliRunner().invoke(cli.app, ["setup", "odbc", "env", "--home", str(tmp_path / "odbc")])
+    assert result.exit_code == 1
+    assert said == [f"{tmp_path / 'odbc'} has no current version - `uqs setup odbc install` first"]

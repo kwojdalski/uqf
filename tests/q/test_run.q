@@ -319,7 +319,7 @@
 
 .qt.qetl.run.test_an_old_ledger_is_refused_naming_the_migration:{[t]
     `etl_runs set .qt.qetl.run.old_ledger[];
-    .qunit.assertThrows[{[x] .qetl.run.require_run_schema[]};::;"*uqs run migrate*";
+    .qunit.assertThrows[{[x] .qetl.run.require_run_schema[]};::;"*uqs job runs migrate*";
         "an old ledger is not a foreign one - say how to upgrade it"]};
 
 .qt.qetl.run.test_migrate_upgrades_an_old_ledger_on_disk:{[t]
