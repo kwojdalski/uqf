@@ -65,6 +65,7 @@
 
 / name -> its declaration, ENLISTED, for the reason .qetl.job.stream.jobs enlists.
 .qetl.job.stream.horizons.registry:(`symbol$())!();
+.qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.horizons.registry;
 
 / What every horizon job declares.
 .qetl.job.stream.horizons.required_keys:`procname`events`reference`transform`publishes`horizon`period

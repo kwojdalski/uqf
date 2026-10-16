@@ -43,6 +43,7 @@
 / same-keyed dicts collapse into a table and a later, differently-keyed
 / declaration is then refused with a bare 'mismatch.
 .qetl.job.stream.normalizer.registry:(`symbol$())!();
+.qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.normalizer.registry;
 
 / What every normalizer must declare.
 .qetl.job.stream.normalizer.required_keys:`procname`output`input
