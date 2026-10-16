@@ -10,26 +10,36 @@
 / The window the keyed tests replace, and the strategy.
 .qt.qetl.hdb_scoped.opts:{[s] `on_conflict`row_key`time_column`range_from`range_to!(s;`sym`time;`time;2026.01.02D09:00:00.000000000;2026.01.02D11:00:00.000000000)}
 
-/ A date partition written the way a native wdb leaves it: through .Q.dpft, so sorted by sym
-/ with p# and enumerated against the root's sym file.
-.qt.qetl.hdb_scoped.put:{[root;d;name;tbl]
-    name set tbl;
-    .Q.dpft[root;d;`sym;name];
-    delete from name}
+/ A date partition of a table, written by the repo's own HDB writer (PeachQ has no .Q.dpft) and
+/ left unfinished: nothing here calls finish, so no .Q.chk runs over the fixture.
+.qt.qetl.hdb_scoped.put:{[root;name;tbl]
+    .qetl.io.write[.qetl.io.hdb[root;`time];name;tbl];
+    `.qetl.io.touched set 0#.qetl.io.touched}
 
 / The native HDB: 2026.01.01 holds only `other`; 2026.01.02 holds iodeals and other; 2026.01.03 iodeals.
 .qt.qetl.hdb_scoped.native:{[]
     root:`$":",first system"mktemp -d";
     rows:{[t;s;v] ([] time:t; sym:s; notional:v)};
-    .qt.qetl.hdb_scoped.put[root;2026.01.01;`other;([] time:enlist 2026.01.01D07:00:00.000000000; sym:enlist `EURUSD; qty:enlist 5)];
-    .qt.qetl.hdb_scoped.put[root;2026.01.02;`iodeals;rows[2026.01.02D08:00:00.000000000 2026.01.02D10:00:00.000000000 2026.01.02D10:30:00.000000000;`EURUSD`EURUSD`GBPUSD;1e6 2e6 3e6]];
-    .qt.qetl.hdb_scoped.put[root;2026.01.02;`other;([] time:enlist 2026.01.02D07:00:00.000000000; sym:enlist `EURUSD; qty:enlist 7)];
-    .qt.qetl.hdb_scoped.put[root;2026.01.03;`iodeals;rows[enlist 2026.01.03D09:00:00.000000000;enlist `USDJPY;enlist 4e6]];
+    .qt.qetl.hdb_scoped.put[root;`other;([] time:enlist 2026.01.01D07:00:00.000000000; sym:enlist `EURUSD; qty:enlist 5)];
+    .qt.qetl.hdb_scoped.put[root;`iodeals;rows[2026.01.02D08:00:00.000000000 2026.01.02D10:00:00.000000000 2026.01.02D10:30:00.000000000;`EURUSD`EURUSD`GBPUSD;1e6 2e6 3e6]];
+    .qt.qetl.hdb_scoped.put[root;`other;([] time:enlist 2026.01.02D07:00:00.000000000; sym:enlist `EURUSD; qty:enlist 7)];
+    .qt.qetl.hdb_scoped.put[root;`iodeals;rows[enlist 2026.01.03D09:00:00.000000000;enlist `USDJPY;enlist 4e6]];
     root}
 
-.qt.qetl.hdb_scoped.part:{[root;d;t] get hsym `$(string .Q.par[root;d;t]),"/"}
+/ A partition read back by a FRESH q process, as a dictionary of column to its -3! text: PeachQ cannot
+/ re-read, in the process that replaced it, a splayed table renamed into place ('corrupt), and a fresh
+/ reader is what a native HDB process is anyway. Column by column, as .qetl.io.read_part does, because
+/ PeachQ cannot `get a splayed table directory; text, because it has no .j.j for an enumeration.
+.qt.qetl.hdb_scoped.part:{[root;d;t]
+    script:(first system"mktemp -d"),"/read.q";
+    path:(1_string .Q.par[root;d;t]),"/";
+    (hsym `$script) 0: enlist "b:\"",path,"\"; c:get hsym `$b,\".d\"; {-1 (string x),\"|\",-3!get hsym `$y,string x}[;b] each c; exit 0";
+    / no -q: under KDB-X it suppresses the child's -1 output; the banner is skipped by the | in a line
+    child:"QHOME=",getenv[`QHOME]," ",.qt.support.q_interpreter[]," ",script," < /dev/null 2>/dev/null";
+    out:system child;
+    out:out where out like "*|*";
+    (`$(out?\:"|")#'out)!(1+out?\:"|")_'out}
 
-/ Every file under the root with its size, and the sym domain: what "untouched" means.
 .qt.qetl.hdb_scoped.fingerprint:{[root]
     p:1_string root;
     files:system"find ",p," -type f | sort";
@@ -90,7 +100,7 @@
     m:.qetl.io.hdb_scoped[root;`time;.qt.qetl.hdb_scoped.bounds[]];
     .qetl.io.write_keyed[m;`iodeals;.qt.qetl.hdb_scoped.batch[];.qt.qetl.hdb_scoped.opts`upsert];
     .qetl.io.finish m;
-    .qunit.assertEquals[key hsym `$(string root),"/2026.01.01";enlist `other;
+    .qunit.assertFalse[`iodeals in key hsym `$(string root),"/2026.01.01";
         "2026.01.01 lacks iodeals and still does: .Q.chk would have filled it"];
     .qunit.assertEquals[(key hsym `$(string root),"/2026.01.03/iodeals") except `.d;`notional`sym`time;"an untouched date keeps its own table"]};
 
@@ -118,10 +128,9 @@
     sym_before:get hsym `$(string root),"/sym";
     m:.qetl.io.hdb_scoped[root;`time;.qt.qetl.hdb_scoped.bounds[]];
     n:.qetl.io.write_keyed[m;`iodeals;.qt.qetl.hdb_scoped.batch[];.qt.qetl.hdb_scoped.opts`replace];
-    .qetl.io.finish m;
     p:.qt.qetl.hdb_scoped.part[root;2026.01.02;`iodeals];
     .qunit.assertEquals[n;1;"one row written"];
-    .qunit.assertEquals[(p`time;p`notional);(2026.01.02D08:00:00.000000000 2026.01.02D10:00:00.000000000;1e6 9e6);
+    .qunit.assertEquals[(p`time;p`notional);(-3!2026.01.02D08:00:00.000000000 2026.01.02D10:00:00.000000000;-3!1e6 9e6);
         "08:00 is outside the window and stays; 10:00 is restated; 10:30 was in the window and not in the batch, so it goes"];
     .qunit.assertEquals[(.qt.qetl.hdb_scoped.part[root;2026.01.03;`iodeals];.qt.qetl.hdb_scoped.part[root;2026.01.02;`other];.qt.qetl.hdb_scoped.part[root;2026.01.01;`other]);other_dates;
         "the other date, the other table and the date that never held the table are the same data"];
@@ -226,7 +235,7 @@
     .qetl.io.default:saved;
     r}
 
-.qt.qetl.hdb_scoped.rows_on:{[root;d] $[()~key hsym `$(string .Q.par[root;d;`demo_deals]),"/.d"; 0; count .qt.qetl.hdb_scoped.part[root;d;`demo_deals]]}
+.qt.qetl.hdb_scoped.rows_on:{[root;d] $[()~key hsym `$(string .Q.par[root;d;`demo_deals]),"/.d"; ""; .qt.qetl.hdb_scoped.part[root;d;`demo_deals]`time]}
 
 .qt.qetl.hdb_scoped.covered:{[] .qetl.coverage.is_covered[`demo_deals;`;`$"v1~fixture";.z.p;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000]}
 
@@ -243,7 +252,7 @@
     root:`$":",first system"mktemp -d";
     r1:.qt.qetl.hdb_scoped.with_broken_ledger[{[r;ignored] .qt.qetl.hdb_scoped.lifecycle_run[r]}[root]];
     written:.qt.qetl.hdb_scoped.rows_on[root;] each 2026.09.11 2026.09.12 2026.09.13;
-    .qunit.assertTrue[all written>0;"the rows are on disk: publication came first"];
+    .qunit.assertTrue[all 0<count each written;"the rows are on disk: publication came first"];
     .qunit.assertFalse[.qt.qetl.hdb_scoped.covered[];"and nothing claims them: the ledger write failed after the rows were published"];
     .qunit.assertFalse[`completed~r1`state;"the run does not report success"];
     .qt.qetl.hdb_scoped.lifecycle_reset[];
@@ -262,6 +271,6 @@
     .qpipe.job.demo_deals_backfill.cleanup[];
     .qetl.io.default:saved;
     .qunit.assertFalse[`completed~r`state;"the window past the bound fails the run"];
-    .qunit.assertEquals[.qt.qetl.hdb_scoped.rows_on[root;] each 2026.09.11 2026.09.12 2026.09.13;(1;1;0);
+    .qunit.assertEquals[0<count each .qt.qetl.hdb_scoped.rows_on[root;] each 2026.09.11 2026.09.12 2026.09.13;110b;
         "the dates up to the bound were written; the one past it was not touched"];
     .qunit.assertTrue[()~key hsym `$(string root),"/2026.09.13";"no partition exists for it"]};

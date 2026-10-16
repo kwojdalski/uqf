@@ -77,9 +77,12 @@
     if[()~key root; '"hdb_scoped: ",string[root]," does not exist - nothing creates a destination"];
     .qetl.io.scoped_roots,:enlist `$string root;
     m:.qetl.io.hdb[root;partition_col];
-    guarded:{[bounds;pc;f;target;batch;wto;rest] .qetl.io.scoped_check[bounds;pc;target;batch;wto]; f . (target;batch),rest};
-    m,(`write`write_keyed!(
-        {[g;f;t;b] g[f;t;b;0Np;()]}[guarded[bounds;partition_col];m`write];
-        {[g;f;t;b;o] g[f;t;b;$[`replace=o`on_conflict; o`range_to; 0Np];enlist o]}[guarded[bounds;partition_col];m`write_keyed]))}
+    / Two named lambdas rather than one with a joined argument list: the check first, then the
+    / underlying write, with every argument named.
+    m,`write`write_keyed!(
+        {[b;pc;f;t;rows] .qetl.io.scoped_check[b;pc;t;rows;0Np]; f[t;rows]}[bounds;partition_col;m`write];
+        {[b;pc;f;t;rows;o]
+            .qetl.io.scoped_check[b;pc;t;rows;$[`replace=o`on_conflict; o`range_to; 0Np]];
+            f[t;rows;o]}[bounds;partition_col;m`write_keyed])}
 
 \d .
