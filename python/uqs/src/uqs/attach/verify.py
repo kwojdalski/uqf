@@ -24,7 +24,7 @@ from pathlib import Path
 from uqs.attach import config, persist, plan
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
-from uqs.attach.manifest import CREATED, DONE, Manifest
+from uqs.attach.manifest import CREATED, DONE, SHARED, Manifest
 from uqs.attach.preflight import identity
 from uqs.attach.remote import Ipc
 from uqs.attach.schema import TableSpec, differences
@@ -81,6 +81,10 @@ def _tickerplant(
     if op is not None and op.ownership == CREATED:
         mine = p.get("owned", {}).get(t, {}).get("token") == m.token
         out.append(Check(f"{who}: {t} carries this attachment's ownership record", mine))
+    if op is not None and op.ownership == SHARED:
+        # without it the creator's detach would remove a table this attachment publishes to
+        users = p.get("owned", {}).get(t, {}).get("users", [])
+        out.append(Check(f"{who}: {t} lists {att.name} among its users", att.name in users))
     return out
 
 
@@ -115,18 +119,23 @@ def _consumer(m: Manifest, c: Proc, spec: TableSpec) -> list[Check]:
 
 
 def _schema_file(m: Manifest, att: Attachment, specs: tuple[TableSpec, ...]) -> list[Check]:
-    block = next((o for o in m.operations if o.op == "schema_block" and o.status == DONE), None)
-    if att.persist != "schema-file" or block is None:
+    if att.persist != "schema-file":
         return []
-    created = tuple(s for s in specs if s.name in block.table.split(","))
-    found = persist.problems(persist.BlockRecord(**block.post), att, m.token, created)
-    return [
-        Check(
-            "the schema file still holds this attachment's block, unchanged",
-            not found,
-            "; ".join(found),
+    out = []
+    for block in m.operations:
+        if block.op not in ("schema_block", "schema_uses") or block.status != DONE:
+            continue
+        mine = tuple(s for s in specs if s.name in block.table.split(","))
+        found = persist.problems(persist.BlockRecord(**block.post), att, m.token, mine)
+        what = "block" if block.op == "schema_block" else "+uses block"
+        out.append(
+            Check(
+                f"the schema file still holds this attachment's {what}, unchanged",
+                not found,
+                "; ".join(found),
+            )
         )
-    ]
+    return out
 
 
 def run(att: Attachment, obs: Observation, m: Manifest) -> list[Check]:
