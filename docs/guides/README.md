@@ -14,7 +14,7 @@ understood and a [reference](../reference/) page to be consulted.
   | [`config-audit.md`](config-audit.md)                   | recording runtime configuration changes, and joining them to who made them                                                    |
   | [`deploy.md`](deploy.md)                               | building a release artifact, deploying it to a server with an existing TorQ, verifying it, and rolling back                   |
   | [`sidecar-bundles.md`](sidecar-bundles.md)             | packaging jobs kept outside the tree as a versioned bundle, installing it, and deploying selected jobs                        |
-  | [`attach-existing-torq.md`](attach-existing-torq.md)   | attaching a job's table to a TorQ stack that is already running: plan, validate, apply, verify, start, and (to follow) detach |
+  | [`attach-existing-torq.md`](attach-existing-torq.md)   | attaching a job's table to a TorQ stack that is already running: plan, validate, apply, verify, start, detach                 |
   | [`odbc.md`](odbc.md)                                   | a private ODBC setup on a server, checking sources live, and gating a deployment on it                                        |
   | [`real-time-subscribers.md`](real-time-subscribers.md) | following a table live from outside: subscribing on sctp1, snapshotting through the gateway                                   |
 
