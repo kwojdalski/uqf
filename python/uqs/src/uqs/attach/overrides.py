@@ -83,6 +83,11 @@ POLICY: dict[str, Policy] = {
     "SCHEMA_INCOMPATIBLE": Policy(
         False, "a proven schema mismatch: publishers send columns by position"
     ),
+    "NAME_RESERVED": Policy(
+        False,
+        "the name is already bound to something else on the process (a TorQ global, a view, a "
+        "keyword); registering the table would overwrite it for every table",
+    ),
     "NOT_PUBLISHED": Policy(False, "the table is not a pub/sub table; ownership of it is unclear"),
     "STACK_MISMATCH": Policy(
         False, "the process belongs to another stack; identity is not negotiable"

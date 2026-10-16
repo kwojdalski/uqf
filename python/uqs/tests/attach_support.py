@@ -30,6 +30,12 @@ JOB_Q = (
     "`procname`subscribe_to`publishes`note!(`pb_ledger1;`symbol$();enlist `{table};"
     '"publishes the general ledger")];\n'
 )
+#: Root globals of a starter-pack process (`system"f"` / `system"v"`), as the probe reports them.
+TP_GLOBALS = ["upd", "tablelist", "init", "setup", "loghandles"]
+CONSUMER_GLOBALS = {
+    "rdb": ["upd", "endofday", "endofperiod", "reload", "countbysym", "hloc"],
+    "wdb": ["upd", "endofday", "endofperiod", "sym"],
+}
 SORT_DEFAULT = [
     {"tabname": "default", "att": "p", "col": "sym", "sort": True},
     {"tabname": "default", "att": "", "col": "time", "sort": True},
@@ -62,6 +68,7 @@ def probe(procname: str, proctype: str, port: int, stack: str, **extra: Any) -> 
         "tplogdir": "",
         "procfile": "",
         "owned": {},
+        "names": [],
     }
     return {**base, **extra}
 
@@ -104,6 +111,7 @@ class FakeStack:
                 custom=[],
                 tables=["currlog", "logmsg", "quote", "trade"],
                 published=["quote", "trade"],
+                names=[*TP_GLOBALS, "currlog", "logmsg", "quote", "trade"],
                 schemas={},
                 subscribers={},
                 filtered={},
@@ -120,6 +128,7 @@ class FakeStack:
         for name, offset in (("rdb1", 2), ("wdb1", 5)):
             kind = name[:3]
             ext: dict[str, Any] = {
+                "names": [*CONSUMER_GLOBALS[kind], "quote", "trade"],
                 "ignorelist": ["heartbeat", "logmsg"],
                 "tables": ["quote", "trade"],
                 "schemas": {},
@@ -215,6 +224,7 @@ class FakeStack:
             return {"status": "refused", "detail": "unsupported tickerplant mode"}
         log = f"{p['dldir'].lstrip(':')}/stp1_{t}20261016090000"
         p["schemas"][t] = cols
+        p["names"].append(t)
         p["tables"].append(t)
         p["published"].append(t)
         p["subscribers"][t] = 0
@@ -243,6 +253,8 @@ class FakeStack:
                 "owner": ledger["attachment"] if ledger else "",
             }
         p["schemas"][t] = cols
+        p["names"].append(t)
+        p["tables"].append(t)
         p["subscribed"].append(t)
         key = "subtables" if p["proctype"] == "rdb" else "tablelist"
         p[key] = [*p.get(key, []), t]
@@ -288,7 +300,7 @@ class FakeStack:
             return {"status": "dry_run", "problems": []}
         p["schemas"].pop(t, None)
         p["owned"].pop(t, None)
-        for key in ("subscribed", "subtables", "tablelist"):
+        for key in ("subscribed", "subtables", "tablelist", "names", "tables"):
             if t in p.get(key, []):
                 p[key].remove(t)
         return {"status": "removed", "problems": []}
@@ -315,7 +327,7 @@ class FakeStack:
             return {"status": "dry_run", "problems": []}
         for key in ("schemas", "owned", "subscribers", "logged", "updtab", "logfiles", "replay"):
             p[key].pop(t, None)
-        for key in ("tables", "published"):
+        for key in ("tables", "published", "names"):
             if t in p[key]:
                 p[key].remove(t)
         return {"status": "removed", "problems": []}

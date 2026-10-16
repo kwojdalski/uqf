@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.attach.config import Attachment, AttachmentError, atomic_write
-from uqs.attach.schema import TableSpec
+from uqs.attach.schema import SchemaError, TableSpec, check_publishable
 
 
 def _sha(text: str) -> str:
@@ -63,6 +63,12 @@ def render(name: str, token: str, specs: tuple[TableSpec, ...]) -> str:
         ".uqfattach.owned:@[value;`.uqfattach.owned;()!()];",
     ]
     for spec in specs:
+        # The block is q the tickerplant runs at every start: a name that is a global
+        # there would overwrite it, persistently (#1450).
+        try:
+            check_publishable(spec)
+        except SchemaError as e:
+            raise AttachmentError(f"refusing to write the schema block: {e}") from e
         lines.append(spec.definition())
         record = json.dumps(
             {"token": token, "attachment": name, "created": "persisted"}, separators=(",", ":")
