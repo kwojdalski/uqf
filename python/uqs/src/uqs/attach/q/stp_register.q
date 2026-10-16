@@ -28,13 +28,17 @@
  att:r`attachment;
  cs:`$r[`columns][;0];
  ty:first each r[`columns][;1];
+ / an untyped column decides its stored type from each batch; a later batch of another shape
+ / makes the wdb's write fail and aborts its end of day for every table (#1451)
+ if[any ty=" ";:.j.j `status`detail!("refused";"untyped column(s) ",(", " sv string cs where ty=" ")," - declare a concrete type for each")];
  g:{@[value;x;y]};
  own:g[`.uqfattach.owned;()!()];
  own:$[count own;(key own)!.j.k each value own;()!()];
  if[t in tables[];
   inl:t in key own;
   mine:$[inl;tok~own[t]`token;0b];
-  same:((cols t)~cs) and all (ty=" ")|(exec t from meta t)=ty;
+  mt:exec t from meta t;
+  same:$[(cols t)~cs;all (ty=mt)|(ty in .Q.A)&mt=" ";0b];
   if[same and inl and (not mine) and `join in key r;
    rec:own t;
    rec[`users]:distinct (),$[`users in key rec;rec`users;()],enlist att;
@@ -47,7 +51,7 @@
  if[g[`.sctp.chainedtp;0b];:.j.j `status`detail!("refused";"a chained tickerplant takes its tables from its parent")];
  if[not g[`.stplg.multilog;`] in `tabperiod`tabular;
   :.j.j `status`detail!("refused";"logging mode ",string[g[`.stplg.multilog;`]]," shares logs between tables")];
- empty:flip cs!{$[x=" ";();x$()]}each ty;
+ empty:flip cs!{$[x in " ",.Q.A;();x$()]}each ty;
  steps:(
   {[t;e] t set e};
   {[t;e] .stpps.t:distinct .stpps.t,t; .stpps.schemas[t]:e; .stpps.tabcols[t]:cols e; .stpps.schemasnoattributes[t]:e};

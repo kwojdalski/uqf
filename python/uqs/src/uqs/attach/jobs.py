@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.attach.config import AttachmentError
-from uqs.attach.schema import SchemaError, TableSpec, parse_definition
+from uqs.attach.schema import SchemaError, TableSpec, parse_definition, parse_nested
 from uqs.model.declarations import Declaration, read_file
 from uqs.paths import UqsError
 from uqs.stack import bundles
@@ -46,9 +46,22 @@ def _definitions(text: str) -> dict[str, str]:
     return {m.group(1): line for line in text.splitlines() if (m := _TABLE_LINE.match(line))}
 
 
-def _spec(table: str, line: str, where: str) -> TableSpec:
+def _nested(text: str, where: str) -> dict[str, dict[str, str]]:
+    """The `nested[...]` element types the file declares: {table: {column: char}}."""
+    out: dict[str, dict[str, str]] = {}
+    for line in text.splitlines():
+        try:
+            found = parse_nested(line)
+        except SchemaError as exc:
+            raise AttachmentError(f"{where}: {exc}") from None
+        if found:
+            out.setdefault(found[0], {}).update(found[1])
+    return out
+
+
+def _spec(table: str, line: str, where: str, nested: dict[str, str]) -> TableSpec:
     try:
-        return parse_definition(line)
+        return parse_definition(line, nested)
     except SchemaError as exc:
         raise AttachmentError(f"{where}: table {table}: {exc}") from None
 
@@ -79,8 +92,9 @@ def from_bundle(job: str, folder: Path) -> JobSpec:
     if not decl.publishes:
         raise AttachmentError(f"{job} publishes nothing, so there is nothing to attach")
     tables_q = folder / bundles.TABLES
-    defined = _definitions(tables_q.read_text()) if tables_q.is_file() else {}
-    return _build(decl, defined, f"bundle {bundle.name}/{bundles.TABLES}", bundle)
+    where = f"bundle {bundle.name}/{bundles.TABLES}"
+    text = tables_q.read_text() if tables_q.is_file() else ""
+    return _build(decl, _definitions(text), where, bundle, _nested(text, where))
 
 
 def from_tree(job: str, root: Path) -> JobSpec:
@@ -91,12 +105,20 @@ def from_tree(job: str, root: Path) -> JobSpec:
     decl = _pick(read_declarations(root), job, "this tree")
     if not decl.publishes:
         raise AttachmentError(f"{job} publishes nothing, so there is nothing to attach")
-    defined = _definitions((root / TABLES_FILE).read_text())
-    return _build(decl, defined, str(TABLES_FILE), None)
+    text = (root / TABLES_FILE).read_text()
+    return _build(decl, _definitions(text), str(TABLES_FILE), None, _nested(text, str(TABLES_FILE)))
 
 
-def _build(decl: Declaration, defined: dict[str, str], where: str, bundle) -> JobSpec:
-    tables = tuple(_spec(t, defined[t], where) for t in decl.publishes if t in defined)
+def _build(
+    decl: Declaration,
+    defined: dict[str, str],
+    where: str,
+    bundle,
+    nested: dict[str, dict[str, str]],
+) -> JobSpec:
+    tables = tuple(
+        _spec(t, defined[t], where, nested.get(t, {})) for t in decl.publishes if t in defined
+    )
     external = tuple(t for t in decl.publishes if t not in defined)
     origin = (
         {"bundle": bundle.name, "version": bundle.version, "folder": str(bundle.root)}

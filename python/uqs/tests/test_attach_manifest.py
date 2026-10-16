@@ -143,7 +143,7 @@ def test_a_manifest_this_uqs_cannot_read_is_refused_not_guessed(att, state):
 
 
 SPECS = (
-    TableSpec(TABLE, (("time", "p"), ("sym", "s"), ("amount", "f"), ("note", " "))),
+    TableSpec(TABLE, (("time", "p"), ("sym", "s"), ("amount", "f"), ("note", "s"))),
 )  # fmt: skip
 
 
@@ -161,7 +161,10 @@ def test_the_block_holds_the_definition_and_the_ownership_record(att):
     text = persist.render("pb-uat", "tok123", SPECS)
     lines = text.splitlines()
     assert lines[0] == "/ BEGIN uqs-attach pb-uat tok123" and lines[-1] == "/ END uqs-attach pb-uat"
-    assert f"{TABLE}:([] time:`timestamp$(); sym:`symbol$(); amount:`float$(); note:())" in lines
+    assert (
+        f"{TABLE}:([] time:`timestamp$(); sym:`symbol$(); amount:`float$(); note:`symbol$())"
+        in lines
+    )
     assert any(
         line.startswith(f".uqfattach.owned[`{TABLE}]:") and '\\"token\\":\\"tok123\\"' in line
         for line in lines

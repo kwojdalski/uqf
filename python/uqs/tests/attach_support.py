@@ -49,11 +49,11 @@ LEDGER_COLUMNS = [
     ["sym", "s"],
     ["account", "s"],
     ["amount", "f"],
-    ["note", " "],
+    ["note", "s"],
 ]
 LEDGER_Q = (
     "piggybank_general_ledger:([] time:`timestamp$(); sym:`symbol$(); account:`symbol$(); "
-    "amount:`float$(); note:())"
+    "amount:`float$(); note:`symbol$())"
 )
 JOB_Q = (
     ".qetl.job.stream.define[`pb_general_ledger;"

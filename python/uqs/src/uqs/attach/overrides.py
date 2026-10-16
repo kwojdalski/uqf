@@ -83,6 +83,11 @@ POLICY: dict[str, Policy] = {
     "SCHEMA_INCOMPATIBLE": Policy(
         False, "a proven schema mismatch: publishers send columns by position"
     ),
+    "UNTYPED_COLUMN": Policy(
+        False,
+        "an untyped column can change its stored type from one batch to the next, which makes "
+        "the wdb's write fail and aborts its end of day for every table",
+    ),
     "NOT_PUBLISHED": Policy(False, "the table is not a pub/sub table; ownership of it is unclear"),
     "STACK_MISMATCH": Policy(
         False, "the process belongs to another stack; identity is not negotiable"
