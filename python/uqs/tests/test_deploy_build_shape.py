@@ -29,12 +29,12 @@ STAGED_DEF = f".qetl.plant.{STAGED_ONLY}:([]time:`timestamp$(); sym:`symbol$(); 
 
 
 def _copy_tree(into: Path) -> Path:
-    """A staged copy of this checkout's release files - no lib/, as a
-    release never has one."""
+    """A staged copy of this checkout's release files - no TorQ, as a
+    release never has one; lib/ holds only the vendored dbmaint (#1423)."""
     for rel in payload.tracked_files(ROOT):
         (into / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, into / rel)
-    assert not (into / "lib").exists()
+    assert sorted(p.name for p in (into / "lib").iterdir()) == ["kx-dbmaint"]
     return into
 
 

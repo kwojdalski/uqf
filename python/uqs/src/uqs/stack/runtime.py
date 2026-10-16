@@ -37,8 +37,8 @@ log = get_logger(__name__)
 #: The q script that writes an empty table into a partition that lacks it,
 #: and a declared column into a table that lacks it. q rather than Python
 #: because both have to be written with their schema and enumerated against
-#: the HDB's sym file; a directory of the right name is not a table, and a
-#: file of the right name is not a column.
+#: the HDB's sym file; a directory of the right name is not a table, a file
+#: of the right name is not a column. Loads KX's dbmaint.q (lib/kx-dbmaint).
 FILL_HDB_SCRIPT = "gates/fill_hdb_partitions.q"
 
 

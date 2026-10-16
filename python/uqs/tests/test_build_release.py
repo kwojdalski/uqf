@@ -106,6 +106,8 @@ def _build(tmp_path: Path, *extra: str, dirty: str = "", fail: str | None = None
         "python/uqs/.env",
         "python/uqs/.venv/bin/python",
         "lib/torq/torq.q",
+        "lib/ml/ml/ml.q",
+        "lib/kx-dbmaint-extras/other.q",
         "output/uqs/hdb/sym",
         "scripts/torqconfig/permissions/gateway_users.csv",
         "python/uqs/tests/test_x.py",
@@ -133,6 +135,48 @@ def test_secrets_licences_data_and_external_trees_are_never_packaged(path):
 )
 def test_source_and_configuration_are_packaged(path):
     assert not payload.is_excluded(path)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "lib/kx-dbmaint/dbmaint.q",
+        "lib/kx-dbmaint/dbmaint.md",
+        "lib/kx-dbmaint/LICENSE-kx-kdb",
+        "lib/kx-dbmaint/NOTICE.md",
+    ],
+)
+def test_the_vendored_dbmaint_and_its_licence_are_packaged_though_lib_is_not(path):
+    """Apache 2.0 asks that the licence travel with the copy (#1423)."""
+    assert not payload.is_excluded(path)
+
+
+def test_the_artifact_carries_dbmaint_with_its_licence_and_notice(tmp_path):
+    kept = [
+        "lib/kx-dbmaint/dbmaint.q",
+        "lib/kx-dbmaint/LICENSE-kx-kdb",
+        "lib/kx-dbmaint/NOTICE.md",
+    ]
+    root = tmp_path / "tree"
+    files = _tree(root)
+    for f in [*kept, "lib/torq/torq.q"]:
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(f"content of {f}\n")
+    tools, _ = _tools([*files, *kept, "lib/torq/torq.q"])
+    art = _built(["--output", str(tmp_path / "dist")], root=root, runner=tools)
+    with tarfile.open(art.path) as tar:
+        names = set(tar.getnames())
+    assert set(kept) <= names
+    assert not any(n.startswith("lib/torq") for n in names), "the rest of lib/ still stays out"
+
+
+def test_the_real_checkout_ships_its_vendored_dbmaint():
+    """Against git itself: what a release of THIS checkout lists."""
+    files = payload.tracked_files(ROOT)
+    for f in ("dbmaint.q", "dbmaint.md", "LICENSE-kx-kdb", "NOTICE.md"):
+        assert f"lib/kx-dbmaint/{f}" in files
+    assert "scripts/gates/fill_hdb_partitions.q" in files
+    assert not any(f.startswith(("lib/torq", "lib/ml")) for f in files)
 
 
 def test_only_tracked_files_under_the_allowlist_are_listed():
