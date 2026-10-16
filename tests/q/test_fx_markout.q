@@ -327,3 +327,60 @@
     live:.qetl.transform.apply[`fx_markout_score_long;f];
     .qunit.assertEquals[delete time from .qetl.transform.apply[`hdb_fx_markouts_long;f];live;"the twin is the live transform plus a time"];
     .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.stamped[.qpipe.transform.fx_markout_outputs.job_spec;live];.qetl.transform.apply[`hdb_fx_markouts_long;f];"stamped as the header says"]};
+
+/ --- a source that stopped quoting does not set the reference (#1410) --------------------------------
+
+/ Source a quotes 1.1000/1.1010 (mid 1.1005) every few seconds, never more than 5s apart,
+/ from T-2s to T+11s. Source s quoted a BETTER 1.1006/1.1008 (mid 1.1007) at T-20s and has
+/ been silent since. Kept forever (the old max_age 0Wn) s sets both sides of the best-of.
+.qt.qpipe.job.fx_markout.dead_source_books:{[]
+    t:.qt.qpipe.job.fx_markout.t;
+    raze (.qt.qpipe.job.fx_markout.bk[t-0D00:00:20;`EURUSD;`s;1.1006;1.1008];
+        .qt.qpipe.job.fx_markout.bk[t-0D00:00:02;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:04;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:09;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:11;`EURUSD;`a;1.1000;1.1010])}
+
+.qt.qpipe.job.fx_markout.test_a_source_that_stopped_quoting_does_not_set_the_live_reference:{[tc]
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.dead_source_books[]];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
+    r:.qt.qpipe.job.fx_markout.published `fx_markout;
+    tot:select horizon, price_t1, status from r where kind=`total;
+    .qunit.assertEquals[count tot;4;"scored at all four horizons"];
+    .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[tot`price_t1;4#1.1005];"the live source's mid 1.1005 at every horizon, not the dead source's 1.1007"];
+    .qunit.assertTrue[not any `unavailable=tot`status;"a live source is quoting, so nothing is unavailable"]};
+
+.qt.qpipe.job.fx_markout.test_the_bounded_twin_ignores_the_dead_source_as_the_live_job_does:{[tc]
+    b:.qt.qpipe.job.fx_markout.dead_source_books[];
+    f:`executions`market_data!(select source_time, venue, sym, side, size, price, fill_id from .qt.qpipe.job.fx_markout.buy[];select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes from b);
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from b];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
+    live:.qt.qpipe.job.fx_markout.published `fx_markout;
+    twin:delete time from .qetl.transform.apply[`hdb_fx_markouts_long;f];
+    .qunit.assertEquals[live;twin;"live and bounded agree with a dead source in the history"];
+    .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[exec price_t1 from twin where kind=`total;4#1.1005];"and both price the live source"]};
+
+.qt.qpipe.job.fx_markout.test_the_history_drops_the_dead_sources_book_once_nothing_can_need_it:{[tc]
+    t:.qt.qpipe.job.fx_markout.t;
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.dead_source_books[]];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:00:10];
+    / a minute on: the queue reaches back max_lateness+lookback+max_age from the next execution, past s's book
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.bk[t+0D00:01:00;`EURUSD;`a;1.1000;1.1010]];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.ex[t+0D00:01:00;t+0D00:01:00.2;`EURUSD;1;1.1001;`x2]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:01:01];
+    held:exec source from .qt.qpipe.job.fx_markout.state[`fx_markout;`history];
+    .qunit.assertTrue[not `s in held;"the book of a source silent past max_age is not kept for ever"];
+    .qunit.assertTrue[`a in held;"while the live source's is"]};
+
+/ --- one definition of the reference's staleness (#1410) ---------------------------------------------
+
+.qt.qpipe.job.fx_markout.test_both_markout_families_take_the_reference_age_from_one_definition:{[tc]
+    .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.job_spec`max_age;.qf.mkt.reference_max_age;"fx_markout scores with the shared reference age"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout.default_spec`max_age;.qf.mkt.reference_max_age;"and so does its default spec"];
+    .qunit.assertEquals[.qpipe.job.crypto_markout.max_age;.qf.mkt.reference_max_age;"as does crypto_markout"];
+    .qunit.assertEquals[(.qetl.job.stream.horizons.def `fx_markout)`max_age;.qf.mkt.reference_max_age;"the long job's history ages out on it"];
+    .qunit.assertEquals[(.qetl.job.stream.horizons.def `fx_markout_wide)`max_age;.qf.mkt.reference_max_age;"and the wide job's"];
+    .qunit.assertEquals[(.qetl.job.stream.horizons.def `crypto_markout)`max_age;.qf.mkt.reference_max_age;"and crypto_markout's"]};
