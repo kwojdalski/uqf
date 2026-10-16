@@ -28,20 +28,19 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from uqs.attach.schema import TableSpec
-from uqs.paths import UqsError, repo_root
+from uqs.paths import UqsError
+from uqs.stack import attach_state
+from uqs.stack.attach_state import ATTACH_DIR_ENV as ATTACH_DIR_ENV  # re-exported
+from uqs.stack.attach_state import CONFIG_FILE
 
-ATTACH_DIR_ENV = "UQS_ATTACH_DIR"
-CONFIG_FILE = "attachment.json"
 SCHEMA_VERSION = 1
 PERSIST_MODES = ("schema-file", "runtime-only")
-NAME = re.compile(r"^[a-z][a-z0-9-]{0,47}$")
 #: The credential TorQ's starter pack ships (accesslist.txt). Used when no
 #: password variable is configured, and said so in every plan.
 DEFAULT_USER = "admin"
@@ -115,20 +114,14 @@ class Attachment:
 
 
 def state_root() -> Path:
-    configured = os.environ.get(ATTACH_DIR_ENV, "").strip()
-    if configured:
-        return Path(configured).expanduser()
-    data_root = os.environ.get("UQS_DATA_ROOT", "").strip()
-    return (Path(data_root).expanduser() if data_root else repo_root() / "output") / "attachments"
+    return attach_state.state_root()
 
 
 def directory(name: str, root: Path | None = None) -> Path:
-    if not NAME.match(name):
-        raise AttachmentError(
-            f"{name!r} is not an attachment name - lowercase letters, digits and '-', "
-            "starting with a letter"
-        )
-    return (root or state_root()) / name
+    try:
+        return attach_state.directory(name, root)
+    except UqsError as exc:
+        raise AttachmentError(str(exc)) from None
 
 
 def names(root: Path | None = None) -> list[str]:

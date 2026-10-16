@@ -26,7 +26,7 @@ from collections.abc import Sequence
 
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import occupancy, qtree, runtime_profiles
+from uqs.stack import attach_state, occupancy, qtree, runtime_profiles
 from uqs.stack import procs as stack_procs
 from uqs.stack.env import with_interpreter
 
@@ -41,6 +41,9 @@ def refuse_start(paths: UqsPaths, args: Sequence[str], base_port: int | None) ->
 
     The processes are the words between the verb and torq.sh's first flag
     (`-extras`, `-csv`): `uqs job backfill` starts `<procname> -extras ...`.
+
+    The publisher of an attachment (`uqs job attach`, #1424) is refused here
+    too, unless the attachment is verified and the start is under its stack id.
     """
     if not args or args[0] not in STARTING_VERBS:
         return
@@ -48,6 +51,7 @@ def refuse_start(paths: UqsPaths, args: Sequence[str], base_port: int | None) ->
     stack_procs.assert_known_procnames(paths, procs)
     qtree.refuse_unloadable(paths, with_interpreter(paths))
     occupancy.refuse_if_taken(paths, base_port, procs)
+    attach_state.refuse_unverified_start(paths, procs, base_port)
 
 
 def started_procs(args: Sequence[str]) -> str:

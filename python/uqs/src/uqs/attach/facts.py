@@ -48,3 +48,6 @@ class Facts:
 
     publisher: PublisherPort = field(default_factory=lambda: PublisherPort(None))
     host: Host = field(default_factory=Host)
+    #: the manifest's token, when the attachment has one: what tells a table
+    #: this attachment already registered from one it must only adopt or share
+    token: str = ""

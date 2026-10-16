@@ -61,7 +61,7 @@ def probe(procname: str, proctype: str, port: int, stack: str, **extra: Any) -> 
         "schemafile": "",
         "tplogdir": "",
         "procfile": "",
-        "owned": [],
+        "owned": {},
     }
     return {**base, **extra}
 
@@ -78,6 +78,8 @@ class FakeStack:
         self.down: set[int] = set()
         #: what the CLI's `_die` was handed, when a test wires it in
         self.errors: list[str] = []
+        #: publishers the CLI under test started
+        self.started: list[str] = []
         sid = str(stack_id)
         self.add(
             probe("discovery1", "discovery", stack_id + 1, sid, torq=torq, services=[]),
@@ -109,6 +111,10 @@ class FakeStack:
                 msgcount={},
                 rowcount={},
                 buffered={},
+                logged={},
+                updtab={},
+                logfiles={},
+                replay={},
             )
         )
         for name, offset in (("rdb1", 2), ("wdb1", 5)):
@@ -133,6 +139,7 @@ class FakeStack:
                 ext |= {
                     "subtabs": [""],
                     "subsyms": [""],
+                    "tablelist": ["quote", "trade"],
                     "mode": "save",
                     "writedownmode": "default",
                     "savedir": ":/data/wdbhdb",
@@ -173,10 +180,105 @@ class FakeStack:
         self.calls.append((endpoint.port, op, request))
         if endpoint.port in self.down or endpoint.port not in self.procs:
             raise IpcError(endpoint, op, "cannot connect: Connection refused")
-        if op != "probe":
-            raise AssertionError(f"FakeStack answers probe only, not {op}")
-        answer = dict(self.procs[endpoint.port])
-        return answer
+        proc = self.procs[endpoint.port]
+        if op == "probe":
+            return dict(proc)
+        handler = {
+            "stp_register": self._register,
+            "consumer_attach": self._attach,
+        }.get(op)
+        if handler is None:
+            raise AssertionError(f"FakeStack does not answer {op}")
+        return handler(proc, request)
+
+    def _register(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        t, cols = req["table"], req["columns"]
+        ledger = p["owned"].get(t)
+        if p["schemas"].get(t):
+            same = [list(c) for c in p["schemas"][t]] == cols
+            mine = ledger is not None and ledger["token"] == req["token"]
+            if same and ledger and not mine and req.get("join"):
+                users = ledger.setdefault("users", [])
+                if req["attachment"] not in users:
+                    users.append(req["attachment"])
+            return {
+                "status": "owned" if mine else "shared" if ledger else "existing",
+                "matches": same,
+                "published": t in p["published"],
+                "owner": ledger["attachment"] if ledger else "",
+                "users": ledger.get("users", []) if ledger else [],
+            }
+        if p["multilog"] not in ("tabperiod", "tabular"):
+            return {"status": "refused", "detail": "unsupported tickerplant mode"}
+        log = f"{p['dldir'].lstrip(':')}/stp1_{t}20261016090000"
+        p["schemas"][t] = cols
+        p["tables"].append(t)
+        p["published"].append(t)
+        p["subscribers"][t] = 0
+        p["logged"] = {**p.get("logged", {}), t: True}
+        p["updtab"] = {**p.get("updtab", {}), t: True}
+        p["logfiles"] = {**p.get("logfiles", {}), t: [{"name": log, "size": 8, "open": True}]}
+        p["replay"] = {**p.get("replay", {}), t: 1}
+        p["owned"][t] = {"token": req["token"], "attachment": req["attachment"], "created": "now"}
+        return {"status": "created", "logs": [{"name": log, "size": 8}], "handle": 18}
+
+    def _attach(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        t, cols = req["table"], req["columns"]
+        ledger = p["owned"].get(t)
+        had = bool(p["schemas"].get(t))
+        if had and [list(c) for c in p["schemas"][t]] != cols:
+            return {"status": "refused", "detail": "the table exists with a different schema"}
+        mine = ledger is not None and ledger["token"] == req["token"]
+        if had and ledger and not mine and req.get("join"):
+            users = ledger.setdefault("users", [])
+            if req["attachment"] not in users:
+                users.append(req["attachment"])
+        if had and t in p["subscribed"]:
+            return {
+                "status": "owned" if mine else "shared" if ledger else "existing",
+                "rows": 0,
+                "owner": ledger["attachment"] if ledger else "",
+            }
+        p["schemas"][t] = cols
+        p["subscribed"].append(t)
+        key = "subtables" if p["proctype"] == "rdb" else "tablelist"
+        p[key] = [*p.get(key, []), t]
+        self.named("stp1")["subscribers"][t] = self.named("stp1")["subscribers"].get(t, 0) + 1
+        if not had:
+            p["owned"][t] = {
+                "token": req["token"],
+                "attachment": req["attachment"],
+                "created": "now",
+            }
+        if mine:
+            status = "owned"
+        else:
+            status = ("shared" if ledger else "existing") if had else "created"
+        return {"status": status, "replayed": 0}
 
     def ops(self) -> set[str]:
         return {op for _, op, _ in self.calls}
+
+
+class FaultIpc:
+    """An Ipc that fails on purpose: before a call is sent, or after the process
+    has answered - the two ways a connection can be lost, and the second is the
+    dangerous one, because the change happened and the caller was not told."""
+
+    def __init__(self, inner, rules: list[tuple[str, int, str]]) -> None:
+        self.inner = inner
+        #: (operation, nth call of that operation from 0, "before" | "after")
+        self.rules = rules
+        self.ops: list[str] = []
+        self._seen: dict[str, int] = {}
+
+    def call(self, endpoint: Endpoint, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        self.ops.append(op)
+        n = self._seen.get(op, 0)
+        self._seen[op] = n + 1
+        if (op, n, "before") in self.rules:
+            raise IpcError(endpoint, op, "injected: connection lost before the call was sent")
+        answer = self.inner.call(endpoint, op, request)
+        if (op, n, "after") in self.rules:
+            raise IpcError(endpoint, op, "injected: connection lost after the process answered")
+        return answer

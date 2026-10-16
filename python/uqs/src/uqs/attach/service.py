@@ -11,6 +11,8 @@ from pathlib import Path
 
 from uqs.attach import config, jobs, plan
 from uqs.attach.config import Attachment, AttachmentError, Publisher, Stack, Storage
+from uqs.attach.facts import Facts
+from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Ipc, KolaIpc
 from uqs.attach.topology import Observation
 
@@ -84,7 +86,16 @@ def observed_storage(att: Attachment, obs: Observation) -> Storage:
 
 
 def make_plan(att: Attachment, ipc: Ipc, root: Path) -> plan.Plan:
-    return plan.build(att, ipc, root)
+    """The plan, read with the manifest's token when there is one, so a table
+    this attachment already registered reads as its own."""
+    facts = Facts()
+    if Manifest.exists(att.name):
+        facts.token = Manifest.load(att.name).token
+    return plan.build(att, ipc, root, facts)
+
+
+def manifest_of(name: str) -> Manifest | None:
+    return Manifest.load(name) if Manifest.exists(name) else None
 
 
 def save_planned(att: Attachment, p: plan.Plan, state_dir: Path | None = None) -> Path:

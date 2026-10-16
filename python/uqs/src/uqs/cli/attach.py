@@ -19,6 +19,7 @@ from rich.table import Table
 
 from uqs.attach import config, service
 from uqs.attach.findings import Finding
+from uqs.attach.manifest import Manifest
 from uqs.attach.plan import Plan
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
@@ -48,8 +49,8 @@ def _findings(findings: list[Finding]) -> None:
     console.print(table)
 
 
-def _render(p: Plan) -> None:
-    d = p.as_dict()
+def _render(p: Plan, m: Manifest | None = None) -> None:
+    d = p.as_dict(m)
     st = d["stack"]
     console.print(
         f"[bold]{d['attachment']}[/]: job {d['job']['name']} ({d['job']['procname']}) -> "
@@ -78,9 +79,24 @@ def _render(p: Plan) -> None:
         )
     console.print(steps)
     _findings(p.findings)
+    if m is not None:
+        _manifest(d)
     console.print(
         "[green]no blockers[/]" if p.ok else "[red]blocked: apply would refuse this stack[/]"
     )
+
+
+def _manifest(d: dict) -> None:
+    ops = Table(title=f"Manifest: {d['manifest']['state']}")
+    for column in ("#", "step", "process", "table", "status", "ownership", "note"):
+        ops.add_column(column, overflow="fold")
+    for o in d["manifest"]["operations"]:
+        ops.add_row(
+            str(o["id"]), o["op"], o["process"], o["table"], o["status"], o["ownership"], o["note"]
+        )
+    console.print(ops)
+    for line in d["health"]:
+        console.print(f"[yellow]{line}[/]")
 
 
 def _load(name: str):
@@ -214,14 +230,15 @@ def validate(name: NameArg, as_json: JsonOpt = False) -> None:
 
 @attach_app.command("status")
 def status(name: NameArg, as_json: JsonOpt = False) -> None:
-    """The saved attachment, and what the stack reports for its tables now."""
+    """The saved attachment, its manifest, and what the stack reports for its tables now."""
     try:
         att = _load(name)
         planned = service.make_plan(att, service.ipc_for(att), _paths().repo_root)
+        m = service.manifest_of(name)
     except UqsError as exc:
         _die(exc)
         return
     if as_json:
-        console.print_json(json.dumps(planned.as_dict()))
+        console.print_json(json.dumps(planned.as_dict(m)))
     else:
-        _render(planned)
+        _render(planned, m)
