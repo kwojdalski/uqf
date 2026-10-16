@@ -21,6 +21,7 @@ question (preflight_components.persistence); this assumes the answer was yes.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -63,10 +64,11 @@ def render(name: str, token: str, specs: tuple[TableSpec, ...]) -> str:
     ]
     for spec in specs:
         lines.append(spec.definition())
-        lines.append(
-            f".uqfattach.owned[`{spec.name}]:`token`attachment`created!"
-            f'("{token}";"{name}";"persisted");'
+        record = json.dumps(
+            {"token": token, "attachment": name, "created": "persisted"}, separators=(",", ":")
         )
+        quoted = record.replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'.uqfattach.owned[`{spec.name}]:"{quoted}";')
     lines.append(end_marker(name))
     return "\n".join(lines) + "\n"
 

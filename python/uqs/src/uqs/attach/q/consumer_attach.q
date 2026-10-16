@@ -22,14 +22,17 @@
  pt:.proc.proctype;
  if[not pt in `rdb`wdb;:.j.j `status`detail!("refused";"not an rdb or wdb")];
  own:g[`.uqfattach.owned;()!()];
+ own:$[count own;(key own)!.j.k each value own;()!()];
  inl:t in key own;
  mine:$[inl;tok~own[t]`token;0b];
  had:t in tables[];
  if[had;
-  if[not ((cols t)~cs) and (exec t from meta t)~ty;
+  if[not ((cols t)~cs) and all (ty=" ")|(exec t from meta t)=ty;
    :.j.j `status`detail!("refused";"the table exists with a different schema")]];
  if[had and inl and (not mine) and `join in key r;
-  .uqfattach.owned[t;`users]:distinct (),$[`users in key own t;own[t]`users;()],enlist att];
+  rec:own t;
+   rec[`users]:distinct (),$[`users in key rec;rec`users;()],enlist att;
+   .uqfattach.owned[t]:.j.j rec];
  subd:t in exec table from .sub.SUBSCRIPTIONS where active;
  tpt:$[pt~`rdb;.rdb.tickerplanttypes;.wdb.tickerplanttypes];
  if[subd and had;
@@ -47,5 +50,5 @@
   .dataaccess.metainfo:.dataaccess.metainfo upsert .checkinputs.getmetainfo[]];
  if[not had;
   if[not `owned in key `.uqfattach;`.uqfattach.owned set ()!()];
-  .uqfattach.owned[t]:`token`attachment`created!(tok;att;string .z.p)];
+  .uqfattach.owned[t]:.j.j `token`attachment`created!(tok;att;string .z.p)];
  .j.j `status`replayed!($[mine;"owned";had;$[inl;"shared";"existing"];"created"];count value t)}

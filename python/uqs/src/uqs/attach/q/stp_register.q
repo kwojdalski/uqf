@@ -30,13 +30,17 @@
  ty:first each r[`columns][;1];
  g:{@[value;x;y]};
  own:g[`.uqfattach.owned;()!()];
+ own:$[count own;(key own)!.j.k each value own;()!()];
  if[t in tables[];
   inl:t in key own;
   mine:$[inl;tok~own[t]`token;0b];
-  same:((cols t)~cs) and (exec t from meta t)~ty;
+  same:((cols t)~cs) and all (ty=" ")|(exec t from meta t)=ty;
   if[same and inl and (not mine) and `join in key r;
-   .uqfattach.owned[t;`users]:distinct (),$[`users in key own t;own[t]`users;()],enlist att];
+   rec:own t;
+   rec[`users]:distinct (),$[`users in key rec;rec`users;()],enlist att;
+   .uqfattach.owned[t]:.j.j rec];
   own:g[`.uqfattach.owned;()!()];
+  own:$[count own;(key own)!.j.k each value own;()!()];
   :.j.j `status`matches`published`owner`users!(
    $[mine;"owned";inl;"shared";"existing"];same;t in g[`.stpps.t;`$()];
    $[inl;own[t]`attachment;""];$[inl;$[`users in key own t;(),own[t]`users;()];()])];
@@ -72,6 +76,6 @@
    j-:1];
   :.j.j `status`detail`step`undone`undo_failed!("failed";bad;i;i-count failed;failed)];
  if[not `owned in key `.uqfattach;`.uqfattach.owned set ()!()];
- .uqfattach.owned[t]:`token`attachment`created!(tok;att;string .z.p);
+ .uqfattach.owned[t]:.j.j `token`attachment`created!(tok;att;string .z.p);
  ln:exec first logname from `..currlog where tbl=t;
  .j.j `status`logs`handle!("created";enlist `name`size!(string ln;hcount ln);exec first handle from `..currlog where tbl=t)}

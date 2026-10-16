@@ -186,6 +186,9 @@ class FakeStack:
         handler = {
             "stp_register": self._register,
             "consumer_attach": self._attach,
+            "consumer_detach": self._detach,
+            "stp_unregister": self._unregister,
+            "ledger_leave": self._leave,
         }.get(op)
         if handler is None:
             raise AssertionError(f"FakeStack does not answer {op}")
@@ -258,6 +261,86 @@ class FakeStack:
 
     def ops(self) -> set[str]:
         return {op for _, op, _ in self.calls}
+
+    # ------------------------------------------------ the operations that undo
+
+    def _owned_problems(self, p: dict[str, Any], req: dict[str, Any]) -> list[str]:
+        t, ledger = req["table"], p["owned"].get(req["table"])
+        out: list[str] = []
+        if ledger is None and not req.get("follows_plant"):
+            out.append("no ownership record for the table")
+        elif ledger is not None and ledger["token"] != req["token"]:
+            out.append("the ownership record is another attachment's")
+        elif ledger is not None and ledger.get("users"):
+            out.append("used by attachment(s) " + ", ".join(ledger["users"]))
+        if p.get("rows", {}).get(t, 0) > 0:
+            out.append(f"the table holds {p['rows'][t]} row(s)")
+        return out
+
+    def _detach(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        t = req["table"]
+        if not p["schemas"].get(t) and t not in p["owned"] and t not in p["subscribed"]:
+            return {"status": "absent", "problems": []}
+        problems = self._owned_problems(p, req)
+        if problems:
+            return {"status": "refused", "problems": problems}
+        if req["dry_run"]:
+            return {"status": "dry_run", "problems": []}
+        p["schemas"].pop(t, None)
+        p["owned"].pop(t, None)
+        for key in ("subscribed", "subtables", "tablelist"):
+            if t in p.get(key, []):
+                p[key].remove(t)
+        return {"status": "removed", "problems": []}
+
+    def _unregister(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        t = req["table"]
+        if not p["schemas"].get(t) and t not in p["owned"]:
+            return {"status": "absent", "problems": []}
+        problems = self._owned_problems(p, req)
+        if p["msgcount"].get(t, 0) > 0:
+            problems.append("messages were published to it")
+        problems += [
+            f"log {f['name']} is not the empty header"
+            for f in p["logfiles"].get(t, [])
+            if f["size"] != req["empty_size"]
+        ]
+        if p["subscribers"].get(t, 0) > req["expect_subscribers"]:
+            problems.append("subscribers other than the attached consumers")
+        if p["filtered"].get(t, 0):
+            problems.append("a filtered subscription exists")
+        if problems:
+            return {"status": "refused", "problems": problems}
+        if req["dry_run"]:
+            return {"status": "dry_run", "problems": []}
+        for key in ("schemas", "owned", "subscribers", "logged", "updtab", "logfiles", "replay"):
+            p[key].pop(t, None)
+        for key in ("tables", "published"):
+            if t in p[key]:
+                p[key].remove(t)
+        return {"status": "removed", "problems": []}
+
+    def _leave(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        ledger = p["owned"].get(req["table"])
+        if ledger is None:
+            return {"status": "absent", "users": []}
+        users = ledger.get("users", [])
+        if req["attachment"] in users:
+            users.remove(req["attachment"])
+        return {"status": "left", "users": users}
+
+    # ------------------------------------------------------ a publication
+
+    def publish(self, table: str, rows: int = 3) -> None:
+        """What a publisher's rows do to the processes' counters and logs."""
+        tp = self.named("stp1")
+        tp["msgcount"][table] = tp["msgcount"].get(table, 0) + 1
+        tp["rowcount"][table] = tp["rowcount"].get(table, 0) + rows
+        for f in tp["logfiles"][table]:
+            f["size"] += 40
+        for name in ("rdb1", "wdb1"):
+            self.named(name).setdefault("rows", {})
+            self.named(name)["rows"][table] = self.named(name)["rows"].get(table, 0) + rows
 
 
 class FaultIpc:

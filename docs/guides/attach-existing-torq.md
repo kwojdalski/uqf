@@ -23,8 +23,7 @@ plan -> validate -> apply -> verify -> start -> (detach)
 read-only            changes the stack    permits the publisher
 ```
 
-`plan`, `validate`, `status`, `apply`, `verify` and `start` exist; `detach`
-follows in the next change of #1424.
+`plan`, `validate`, `status`, `apply`, `verify`, `start` and `detach` exist.
 
 ## What the workflow guarantees
 
@@ -157,6 +156,72 @@ attachment's publisher unless the attachment is `verified` **and** the start is
 under the attachment's stack id. A bare `uqs start pb_ledger1`, which would use
 the runtime's default base port and look for discovery at `6051`, is refused,
 naming the attachment and the right command.
+
+## Detach
+
+```bash
+uqs job attach detach pb-uat --dry-run   # every check, nothing changed, publisher not even stopped
+uqs job attach detach pb-uat
+```
+
+Detach stops the publisher first, then decides from **evidence read off the
+stack** - never from a flag this tool set - whether anything was published: the
+tickerplant's message and row counters and buffered rows, any log larger than
+the empty header (today's, and earlier days' under the log directory), rows in
+the rdb/wdb, a partition in the wdb's save directory or the HDB. Evidence that
+cannot be read (storage on another machine, a location never recorded) counts as
+publication, because absence is unproven.
+
+**Before any publication**, the state this attachment *created* is removed, in
+the reverse of the order it was applied: the schema-file block, the wdb's and
+rdb's table and subscription, then the tickerplant's registration, log files and
+metadata. A pre-existing table, subscription, process or log configuration is
+never touched, and each removal is re-verified inside the process (empty, ours,
+nobody else subscribed) in the same call that does it.
+
+**After publication** nothing is deleted. The publisher is stopped and every
+registration, row, log and the schema block stays, because removing any of them
+breaks replay of the log, loses rows the consumers hold, or changes what a
+restart does. The attachment becomes `detached`; applying it again adopts what
+stayed. Destructive cleanup is outside this workflow.
+
+### When detach refuses
+
+A reversal is refused, changing nothing but the publisher (stopped first, and
+left stopped), when any of these holds, and each is listed with what a person
+has to do:
+
+  | Drift or unknown ownership                                                        | Manual action named                                     |
+  | -------------------------------------------------------------------------------   | ------------------------------------------------------- |
+  | a process that holds something this attachment created is not reachable           | start it, or remove the table by hand once it is safe   |
+  | a table no longer has the shape that was created                                  | leave it, or drop it by hand                            |
+  | the ownership record is missing or another attachment's                           | ownership cannot be shown; leave it                     |
+  | another attachment is a user of the table                                         | detach that one first, or keep the table                |
+  | a subscriber that is not one of the attached consumers, or a filtered one         | resolve it, then detach again                           |
+  | the schema file was edited inside the block, or outside it, since apply           | restore it, or edit the block out by hand               |
+  | a consumer's table was attached through a tickerplant table this one did not make | unsubscribe by hand                                     |
+
+A consumer that restarted rebuilt its table from the tickerplant and lost its
+in-memory ownership record; its copy is ours whenever the tickerplant's record
+is.
+
+A failure part way is reported as `rollback_partial` with what was done and what
+is still in place. Nothing is claimed to be atomic across processes. Every step
+is safe to repeat, so run detach again.
+
+## Restart behaviour
+
+  | State                          | A tickerplant restart                                                                                          |
+  | ------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+  | applied, `schema-file` persist | the block recreates the table and its ownership record; consumers restarted afterwards take it with the rest   |
+  | applied, `--runtime-only`      | the table is gone; `status` reports `registration-lost`, `verify` fails, `apply` restores it                   |
+  | rolled back                    | the block is gone with the registration: the table does not come back                                          |
+  | detached after publication     | the block stayed, so the table comes back, its logs replay, and `status` checks it                             |
+
+TorQ does not reconnect an rdb or wdb to a restarted tickerplant on its own;
+restarting the consumers afterwards is the usual TorQ practice, and they then
+subscribe to every table the tickerplant has. The workflow never restarts them
+for you.
 
 ## What "registering a table" touches, in TorQ 5.2.12
 
