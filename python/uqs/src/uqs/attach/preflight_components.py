@@ -74,8 +74,32 @@ def tickerplant(
     return out
 
 
+def name_taken(proc: Proc, spec: TableSpec) -> list[Finding]:
+    """A blocker when `spec.name` is already bound on `proc` to something that is
+    not a table (#1450): a root global (`upd`, a view, a namespace), a q keyword.
+    A table of that name is not this check's business - the schema comparison and
+    ownership rules judge it - and neither is the attachment's own table, which is
+    one. The probe reads the process's root names; registering would overwrite them."""
+    p = proc.probe or {}
+    if spec.name in p.get("tables", []) or spec.name not in p.get("names", []):
+        return []
+    return [
+        Finding(
+            "blocker",
+            "NAME_RESERVED",
+            proc.procname,
+            f"{spec.name} is already defined on {proc.procname} as something other than a "
+            "table; registering it would overwrite that for every table",
+            "rename the table in the bundle",
+            {"table": spec.name},
+        )
+    ]
+
+
 def _table_on_tickerplant(tp: Proc, spec: TableSpec, facts: Facts) -> list[Finding]:
     p = tp.probe or {}
+    if taken := name_taken(tp, spec):
+        return taken
     seen = p.get("schemas", {}).get(spec.name, [])
     if not seen:
         return [
@@ -150,6 +174,9 @@ def consumer(att: Attachment, c: Proc, specs: tuple[TableSpec, ...]) -> list[Fin
             )
         )
     for spec in specs:
+        if taken := name_taken(c, spec):
+            out += taken
+            continue
         if spec.name in p.get("ignorelist", []):
             out.append(
                 Finding(

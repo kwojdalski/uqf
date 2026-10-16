@@ -16,6 +16,12 @@
 / (or "owned" when our own token is on it, from an earlier run) with whether
 / its schema matches.
 / .
+/ A name that is not a table but is already bound on this process - a TorQ global
+/ (upd, a view such as loghandles, sym), a namespace, a q keyword - is REFUSED before
+/ anything changes: `t set e` would overwrite it for every table (#1450). The probe
+/ and preflight refuse it first; this is the check that holds when something
+/ defined the name between plan and apply.
+/ .
 / @param req JSON {"table", "columns": [[name, typechar], ...], "token", "attachment", "join": true?}
 / @return JSON {"status": "created"|"owned"|"shared"|"existing"|"refused"|"failed", ...}
 / .
@@ -34,6 +40,8 @@
  g:{@[value;x;y]};
  own:g[`.uqfattach.owned;()!()];
  own:$[count own;(key own)!.j.k each value own;()!()];
+ if[(not t in tables[]) and ((t in key `.) or t in .Q.res,key .q);
+  :.j.j `status`detail!("refused";"the name ",string[t]," is already defined on this process as something other than a table; registering it would overwrite it")];
  if[t in tables[];
   inl:t in key own;
   mine:$[inl;tok~own[t]`token;0b];

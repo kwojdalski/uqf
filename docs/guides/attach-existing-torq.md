@@ -210,6 +210,7 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
   | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                             |
   | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                              |
   | `UNTYPED_COLUMN`                                                                                                     | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                         |
+  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                   |
   | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                       |
   | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                 |
   | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                            |
@@ -256,10 +257,6 @@ the wdb hands its table list to the sort process.
   community licence allows 16 per process), an attachment adds one persistent
   publisher connection to the tickerplant and one to discovery. Preflight does
   not check the headroom.
-- **One rule until the bug below is fixed.** Do not name an attached table after
-  a q or TorQ global (`upd`, `sym`, `loghandles`, `date`, `endofday`): preflight
-  passes it and apply overwrites the global on the tickerplant, rdb and wdb
-  ([#1450](https://github.com/kwojdalski/uqf/issues/1450)).
 - **Every column needs a concrete type.** A bundle's `tables.q` is refused if a
   column is a bare `()` with no declared element type, or one declared
   `nested[...]` as `" "` (any value). The tickerplant resets such a column to
