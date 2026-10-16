@@ -90,7 +90,9 @@ The manifest records each operation's ownership: `created` (this attachment made
 it and may remove it), `existing` (never removed), or `shared` (another
 attachment made it and this one depends on it; detaching the first is refused
 while it is needed). The token is also written into the processes, including the
-schema file's block.
+schema file's block. An attachment that shares a table another one created
+writes a block of its own, `<name>+uses`, which makes it a user of that table
+again after a tickerplant restart; its detach removes that block.
 
 ### Verify and start
 
@@ -182,8 +184,10 @@ Detach's refusals are destructive-cleanup protections and cannot be overridden.
 ## Restart behaviour
 
 The registration lives in memory. By default (`schema-file`) apply appends one
-marked block to the tickerplant's `-schemafile` and leaves the rest untouched;
-`--runtime-only` skips it.
+marked block to the tickerplant's `-schemafile` and leaves every other byte
+untouched, line endings included; removing the block restores the file exactly,
+whatever order attachments sharing the file are removed in. `--runtime-only`
+skips it.
 
   | State                          | A tickerplant restart                                                                        |
   | ------------------------------ | -------------------------------------------------------------------------------------------  |

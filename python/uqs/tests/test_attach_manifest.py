@@ -249,6 +249,159 @@ def test_two_attachments_keep_separate_blocks_in_one_file(tmp_path, schema):
     assert rb.block_sha
 
 
+# ------------------------------------------- byte for byte, in any order (#1438, #1439)
+
+#: The stack's own text in the shapes a schema file comes in.
+ORIGINALS = {
+    "lf": b"trade:([] time:`timestamp$(); sym:`symbol$())\nquote:([] time:`timestamp$())\n",
+    "crlf": b"trade:([] time:`timestamp$(); sym:`symbol$())\r\nquote:([] time:`timestamp$())\r\n",
+    "lf-unterminated": b"trade:([] time:`timestamp$())\nquote:([] time:`timestamp$())",
+    "crlf-unterminated": b"trade:([] time:`timestamp$())\r\nquote:([] time:`timestamp$())",
+    "not-utf8": b"/ caf\xe9 \xff\ntrade:([] time:`timestamp$())",
+}
+OTHER = (TableSpec("pb_other", (("time", "p"), ("x", "j"))),)
+
+
+def two(tmp_path: Path) -> tuple[config.Attachment, config.Attachment]:
+    bundle = make_bundle(tmp_path / "two")
+    return (
+        service.create("pb-a", "pb_general_ledger", bundle, 6000, ROOT),
+        service.create("pb-b", "pb_general_ledger", bundle, 6000, ROOT),
+    )
+
+
+def loads(q_binary, schema: Path, tmp_path: Path, *tables: str) -> None:
+    """The file loads in q - a restarting tickerplant can start - with the stack's
+    own tables and `tables` defined."""
+    from attach_support import q_load
+
+    got = q_load(q_binary, schema, tmp_path)
+    assert got["loaded"], f"q could not load the schema file: {got['error']!r}"
+    assert {"trade", *tables} <= set(got["tables"]), got["tables"]
+
+
+@pytest.mark.parametrize("shape", sorted(ORIGINALS))
+def test_write_then_remove_gives_back_the_file_byte_for_byte(att, tmp_path, shape, q_binary):
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS[shape])
+    record = persist.write(att, "tok123", SPECS, str(schema))
+    after = schema.read_bytes()
+    assert after.startswith(ORIGINALS[shape]), (
+        "no byte outside the block changed, line ends included"
+    )
+    assert persist.problems(record, att, "tok123", SPECS) == []
+    loads(q_binary, schema, tmp_path, TABLE)
+    persist.remove(record, att, "tok123", SPECS)
+    assert schema.read_bytes() == ORIGINALS[shape]
+
+
+def test_a_line_ending_changed_outside_the_block_is_seen(att, tmp_path):
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS["crlf"])
+    record = persist.write(att, "tok123", SPECS, str(schema))
+    schema.write_bytes(schema.read_bytes().replace(b"\r\n", b"\n", 1))
+    (found,) = persist.problems(record, att, "tok123", SPECS)
+    assert "changed outside the block" in found
+
+
+@pytest.mark.parametrize("shape", sorted(ORIGINALS))
+@pytest.mark.parametrize("first_out", ["a", "b"])
+def test_two_attachments_added_and_removed_in_either_order_give_back_the_file(
+    tmp_path, shape, first_out, q_binary
+):
+    """A then B into one file; either leaves first. Nothing that is not the
+    leaving block moves, the other's block stays removable, and the file loads in
+    q after every step (#1438: the newline added for A must not go with A while
+    B's block still follows it)."""
+    a, b = two(tmp_path)
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS[shape])
+    ra = persist.write(a, "ta", SPECS, str(schema))
+    rb = persist.write(b, "tb", OTHER, str(schema))
+    loads(q_binary, schema, tmp_path, TABLE, "pb_other")
+    order = [(a, ra, "ta", SPECS), (b, rb, "tb", OTHER)]
+    if first_out == "b":
+        order.reverse()
+    (who, rec, tok, specs), (last, last_rec, last_tok, last_specs) = order
+    persist.remove(rec, who, tok, specs)
+    assert persist.problems(last_rec, last, last_tok, last_specs) == []
+    loads(q_binary, schema, tmp_path, last_specs[0].name)
+    persist.remove(last_rec, last, last_tok, last_specs)
+    assert schema.read_bytes() == ORIGINALS[shape]
+
+
+def test_a_block_written_after_the_one_that_added_the_newline_left_still_restores_it(tmp_path):
+    a, b = two(tmp_path)
+    c = service.create("pb-c", "pb_general_ledger", make_bundle(tmp_path / "c"), 6000, ROOT)
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS["lf-unterminated"])
+    ra = persist.write(a, "ta", SPECS, str(schema))
+    rb = persist.write(b, "tb", OTHER, str(schema))
+    persist.remove(ra, a, "ta", SPECS)
+    rc = persist.write(c, "tc", SPECS, str(schema))
+    persist.remove(rb, b, "tb", OTHER)
+    persist.remove(rc, c, "tc", SPECS)
+    assert schema.read_bytes() == ORIGINALS["lf-unterminated"]
+
+
+def test_a_retried_write_reports_what_the_first_did_and_rollback_restores_the_file(att, tmp_path):
+    """apply retried after the block went in but before the manifest said so."""
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS["lf-unterminated"])
+    first = persist.write(att, "tok123", SPECS, str(schema))
+    retried = persist.write(att, "tok123", SPECS, str(schema))
+    assert retried == first and retried.added_newline
+    persist.remove(retried, att, "tok123", SPECS)
+    assert schema.read_bytes() == ORIGINALS["lf-unterminated"]
+
+
+# ------------------------------------------------- shared ownership on restart (#1446)
+
+
+@pytest.mark.parametrize("creator_first", [True, False])
+def test_the_uses_block_puts_a_user_back_on_the_record_whichever_block_q_reads_first(
+    tmp_path, creator_first, q_binary
+):
+    from attach_support import q_load
+
+    a, b = two(tmp_path)
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS["lf"])
+    writes = [
+        lambda: persist.write(a, "ta", SPECS, str(schema)),
+        lambda: persist.write_uses(b, "tb", (TABLE,), str(schema)),
+    ]
+    for w in writes if creator_first else writes[::-1]:
+        w()
+    got = q_load(q_binary, schema, tmp_path)
+    assert got["loaded"], got["error"]
+    assert got["owned"][TABLE]["attachment"] == "pb-a"
+    assert got["owned"][TABLE]["users"] == ["pb-b"], "the restarted plant knows pb-b uses it"
+
+
+def test_a_uses_block_without_the_creators_block_loads_and_claims_nothing(tmp_path, q_binary):
+    from attach_support import q_load
+
+    _, b = two(tmp_path)
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS["lf"])
+    record = persist.write_uses(b, "tb", (TABLE,), str(schema))
+    got = q_load(q_binary, schema, tmp_path)
+    assert got["loaded"] and got["owned"] == {}
+    persist.remove(record, b, "tb", ())
+    assert schema.read_bytes() == ORIGINALS["lf"]
+
+
+def test_a_created_block_alone_records_no_users(att, tmp_path, q_binary):
+    from attach_support import q_load
+
+    schema = tmp_path / "database.q"
+    schema.write_bytes(ORIGINALS["lf"])
+    persist.write(att, "tok123", SPECS, str(schema))
+    got = q_load(q_binary, schema, tmp_path)
+    assert got["loaded"] and "users" not in got["owned"][TABLE]
+
+
 # --------------------------------------------------------------------- the gate
 
 

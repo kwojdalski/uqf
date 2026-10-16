@@ -360,6 +360,63 @@ def test_another_attachment_still_using_the_table_refuses_the_reversal(world):
     assert TABLE not in fake.named("stp1")["schemas"]
 
 
+def restart_from_schema_file(fake, schema: Path, scratch: Path, q_binary) -> None:
+    """What a stack restart leaves: the plant's ownership records are what q gets
+    from loading the schema file, and the consumers, restarted after it, rebuild
+    the table from the plant with no record of their own."""
+    from attach_support import q_load
+
+    got = q_load(q_binary, schema, scratch)
+    assert got["loaded"], got["error"]
+    fake.named("stp1")["owned"] = got["owned"]
+    for c in ("rdb1", "wdb1"):
+        fake.named(c)["owned"].pop(TABLE, None)
+
+
+def test_a_user_of_the_table_still_holds_the_creator_back_after_a_restart(
+    world, tmp_path, q_binary
+):
+    """#1446: the dependency is in the schema file, so it survives the restart."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b")
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    assert persist.present(str(schema), "pb-b+uses")
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert fake.named("stp1")["owned"][TABLE]["users"] == ["pb-b"]
+    before = stack_state(fake)
+    result = detach_(a, fake, state)
+    assert result.outcome == "refused" and "used by attachment(s) pb-b" in reasons(result)
+    assert stack_state(fake) == before and TABLE in fake.named("stp1")["schemas"]
+    # B leaves - its +uses block with it, so the next restart does not make it a user again
+    assert detach_(b, fake, state).outcome == "rolled_back"
+    assert not persist.present(str(schema), "pb-b+uses")
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert "users" not in fake.named("stp1")["owned"][TABLE]
+    assert detach_(a, fake, state).outcome == "rolled_back"
+    assert schema.read_text() == "trade:([] time:`timestamp$())\n"
+
+
+def test_a_user_the_plant_forgot_fails_verify_and_applying_again_joins_again(world):
+    """A restart without the +uses block (runtime-only, or written before it
+    existed) drops the user: verify closes the gate, and apply puts it back."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b")
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    assert verify.verify(b, fake, root=ROOT, state_dir=state).ok
+    fake.named("stp1")["owned"][TABLE].pop("users")
+    checks = verify.verify(b, fake, root=ROOT, state_dir=state)
+    assert not checks.ok and Manifest.load("pb-b", state).state == "applied"
+    assert "stp1: piggybank_general_ledger lists pb-b among its users" in [
+        c.name for c in checks.checks if not c.ok
+    ]
+    again = apply_(b, fake, state)
+    assert [s.outcome for s in again.steps if s.op == "stp_register"] == ["shared"]
+    assert fake.named("stp1")["owned"][TABLE]["users"] == ["pb-b"]
+    assert verify.verify(b, fake, root=ROOT, state_dir=state).ok
+
+
 def test_a_schema_file_edited_inside_or_outside_the_block_refuses_the_reversal(world):
     def inside(fake, schema, *a):
         schema.write_text(schema.read_text().replace("persisted", "hand edited"))

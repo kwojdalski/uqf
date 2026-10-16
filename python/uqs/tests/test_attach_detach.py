@@ -314,7 +314,8 @@ def test_another_attachment_using_the_table_blocks_the_creator_until_it_detaches
     b = att_for(stack, bundle, "pb-b")
     apply_(stack, a)
     shared = apply_(stack, b)
-    assert {s.outcome for s in shared.steps} == {"shared"}
+    assert {s.outcome for s in shared.steps if s.op != "schema_uses"} == {"shared"}
+    assert [s.outcome for s in shared.steps if s.op == "schema_uses"] == ["created"]
     ledger = json.loads(stack.q("stp1", f".j.j .j.k .uqfattach.owned`{TABLE}"))
     assert ledger["attachment"] == "pb-a" and ledger["users"] == ["pb-b"]
     snap = snapshot(stack)
@@ -327,9 +328,47 @@ def test_another_attachment_using_the_table_blocks_the_creator_until_it_detaches
     assert detach_(stack, b).outcome == "rolled_back", (
         "the dependent leaves without removing anything"
     )
-    assert snapshot(stack) == snap
+    # but its +uses block: a restart must not make it a user again
+    assert snapshot(stack) == {
+        **snap,
+        "schema_file": persist.outside(snap["schema_file"], "pb-b+uses"),
+    }
     assert detach_(stack, a, Publisher()).outcome == "rolled_back"
     assert TABLE not in stack.q("stp1", ".j.j string tables[]")
+
+
+def test_another_attachment_using_the_table_still_blocks_the_creator_after_a_restart(stack, bundle):
+    """#1446: the user's dependency is in the schema file, so a restarted
+    tickerplant still knows it, and the creator's detach still refuses."""
+    original = stack.schema_file.read_bytes()
+    a = att_for(stack, bundle, "pb-a")
+    b = att_for(stack, bundle, "pb-b")
+    apply_(stack, a)
+    apply_(stack, b)
+    restart(stack, "stp1")
+    wait_for(
+        lambda: TABLE in stack.q("stp1", ".j.j string tables[]"), "stp1 to come back with the table"
+    )
+    ledger = json.loads(stack.q("stp1", f".j.j .j.k .uqfattach.owned`{TABLE}"))
+    assert ledger["attachment"] == "pb-a" and ledger["users"] == ["pb-b"]
+    restart_consumers(stack)
+    wait_for(lambda: held_by_consumers(stack), "the restarted consumers to subscribe")
+    # the stopping wdb wrote its (empty) tables down; tidy that up so this is still
+    # before publication, where a detach would remove the table
+    for root in (stack.wdb_dir, stack.hdb_dir):
+        for leftover in root.glob(f"*/{TABLE}"):
+            shutil.rmtree(leftover)
+    assert verify.verify(b, stack.ipc(), state(stack)).ok
+    refused = detach_(stack, a)
+    assert refused.outcome == "refused", refused.evidence
+    assert any("used by attachment(s) pb-b" in x.reason for x in refused.blockers)
+    assert TABLE in stack.q("stp1", ".j.j string tables[]"), "the table pb-b needs stays"
+    assert detach_(stack, b).outcome == "rolled_back"
+    assert "pb-b+uses" not in stack.schema_file.read_text()
+    ledger = json.loads(stack.q("stp1", f".j.j .j.k .uqfattach.owned`{TABLE}"))
+    assert ledger["users"] == [], "pb-b left, so pb-a is free to go"
+    assert detach_(stack, a, dry_run=True).blockers == []
+    assert stack.schema_file.read_bytes() != original, "pb-a's own block is still there"
 
 
 def test_a_consumer_that_is_down_blocks_the_rollback_naming_it(stack, bundle):
