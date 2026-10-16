@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 import pytest
-from attach_support import LEDGER_COLUMNS, SORT_DEFAULT, FakeStack, make_bundle
+from attach_support import LEDGER_COLUMNS, LEDGER_Q, SORT_DEFAULT, FakeStack, make_bundle
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -70,6 +70,23 @@ def test_a_definition_round_trips_through_its_own_q_text():
     assert parse_definition(LEDGER.definition()) == LEDGER
 
 
+@pytest.mark.parametrize("ending", ["", ";", "; ", ";\t", " ;"])
+def test_a_statement_terminator_after_the_definition_is_accepted(ending):
+    """`t:([] ...);` is a q statement the same as `t:([] ...)` (#1430)."""
+    assert parse_definition(LEDGER.definition() + ending) == LEDGER
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [";;", "; delete from `t", ";exit 0", " 1", "; t:([] time:`timestamp$())"],
+)
+def test_anything_after_the_terminator_is_still_refused(suffix):
+    """Refused whichever check catches it: the head when the line no longer ends
+    in `)` or `);`, the column reader when a second definition follows."""
+    with pytest.raises(SchemaError):
+        parse_definition(LEDGER.definition() + suffix)
+
+
 @pytest.mark.parametrize(
     ("line", "why"),
     [
@@ -117,6 +134,13 @@ def test_differences_name_missing_extra_retyped_and_reordered_columns():
 def test_the_job_and_its_table_are_read_from_the_bundle_folder(bundle):
     spec = jobs.from_bundle("pb_general_ledger", bundle)
     assert (spec.procname, spec.external) == ("pb_ledger1", ())
+    assert spec.tables == (LEDGER,)
+
+
+def test_a_bundle_whose_tables_q_ends_its_definition_with_a_semicolon_resolves(tmp_path):
+    """The bundle that failed in #1430: resolved from text alone, no stack."""
+    folder = make_bundle(tmp_path / "piggybank", ledger_q=LEDGER_Q + ";")
+    spec = jobs.from_bundle("pb_general_ledger", folder)
     assert spec.tables == (LEDGER,)
     assert spec.origin["bundle"] == "piggybank"
 

@@ -48,7 +48,10 @@ TYPE_CHARS = {
 MIXED = " "
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_HEAD = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]\s*(.*)\)\s*$")
+#: One optional `;` may close the statement - `tables.q` lines are q statements,
+#: and `t:([] ...);` is the same definition as `t:([] ...)`. Nothing else may
+#: follow the closing paren: a further expression would run when the line loads.
+_HEAD = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]\s*(.*)\)\s*;?\s*$")
 _COLUMN = re.compile(r"^([a-z][a-zA-Z0-9_]*):\s*(?:`[a-z]#)?(?:`([a-z]+)\$\(\)|\(\))$")
 
 
