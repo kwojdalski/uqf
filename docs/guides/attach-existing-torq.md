@@ -201,12 +201,35 @@ uqs job backfill piggybank_ledger_backfill --attach pb-uat \
 ```
 
 **Only `--mode validate` and `--mode plan` exist so far.** `dry-run` and `run`
-with `--attach` are refused, because writing a native stack's HDB needs a
-coordination mechanism with its own writers (wdb save, end of day, sort) and
-guarded recovery, which are the later parts of
-[#1454](https://github.com/kwojdalski/uqf/issues/1454). Nothing is written, so
-there is nothing to certify: attachment safety checks do not, by themselves,
-certify direct native-HDB writes.
+with `--attach` are refused until guarded execution and recovery land
+([#1454](https://github.com/kwojdalski/uqf/issues/1454)). Attachment safety
+checks do not, by themselves, certify direct native-HDB writes; the coordination
+below is what `plan` adds.
+
+### Coordination with the native writers
+
+No native writer takes a lock a backfill could take, and the vendored TorQ is
+never edited to add one. uqf's own HDB write lock is honoured by uqf writers and
+`uqs data migrate` only. So `plan` checks, per writer, what *is* safe, and
+refuses (listing every blocker together) when it cannot establish it:
+
+- **Symbols.** The wdb, the rdb, the sort workers and uqf's writer all enumerate
+  with `.Q.en`, and kdb+ serialises extension of the HDB's `sym` file between
+  processes (a test starts six processes racing on the same new symbols and
+  checks no symbol is duplicated or mis-indexed). This holds on a **local
+  filesystem**: a network filesystem, a stack on another host and a segmented
+  HDB (`par.txt`) are refused.
+- **Completed history only.** Every affected date must be before the date any
+  writer is filling and before its trading date; the native active write date is
+  never touched, and an unreported date is a refusal.
+- **End-of-day fence.** Within an hour before the next roll, within an hour
+  after the last, or while a reload is open (all on the wdb's clock), the run is
+  refused.
+- **Nothing working in place.** A `compression` process is a blocker;
+  `housekeeping` is a warning.
+
+Not coordinated, and not claimed to be: a person running `dbmaint` or q against
+the directory, or an end of day started by hand during a run.
 
 `plan` resolves the destination offline, asks the stack read-only questions, and
 prints what a run would do: the source, the half-open UTC range, the windows and
