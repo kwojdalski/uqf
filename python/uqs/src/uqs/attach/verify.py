@@ -193,7 +193,7 @@ def verify(
         if m.state not in ("applied", "verified"):
             raise AttachmentError(
                 f"attachment {att.name} is {m.state}: verify checks an applied attachment "
-                f"(`uqs job attach apply {att.name}`)"
+                f"(`uqs job attach {att.name}`)"
             )
         obs, structural = observe(att, ipc)
         checks = [Check(f.component, False, f.message) for f in structural] + run(att, obs, m)

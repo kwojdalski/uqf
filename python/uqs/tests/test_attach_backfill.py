@@ -1,7 +1,7 @@
 """`uqs job backfill --attach NAME --mode plan`: resolving an attached destination and
 planning against it, read-only (#1454, part 1).
 
-The stack is scripted (attach_support.FakeStack, plus an HDB reader that answers
+The stack is scripted (attach_backfill_support.HdbStack, plus an HDB reader that answers
 `hdb_reader`); the plan itself is evaluated by a real q (scripts/dev/attached_plan.q)
 against a state directory this test owns. What is under test is what is refused,
 what is reported, and that nothing - on disk or on the stack - changes.
@@ -12,197 +12,40 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import pytest
-from attach_support import FakeStack
+from attach_backfill_support import (
+    DATASET,
+    FROM,
+    TO,
+    UQF_ROOT,
+    WORKER,
+    HdbStack,
+    facts_of,
+    make_world,
+    plan,
+    plan_with,
+    save_attachment,
+    snapshot,
+    tree_table,
+)
 from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill as attached
 from uqs.attach import backfill_plan as planning
-from uqs.attach import config, service
-from uqs.attach.config import Attachment, Publisher, Stack, Storage
-from uqs.attach.manifest import Manifest
-from uqs.attach.remote import Endpoint
+from uqs.attach import service
 from uqs.attach.schema import parse_definition
-from uqs.cli import shared
 from uqs.interpreter import PEACHQ, q_impl, q_interpreter
-from uqs.paths import UqsError, paths_for_root
+from uqs.paths import UqsError
 
-UQF_ROOT = Path(__file__).resolve().parents[3]
 runner = CliRunner()
-WORKER = "crypto_market_data_backfill"
-DATASET = "crypto_market_data"
-FROM = datetime(2026, 9, 11, tzinfo=UTC)
-TO = datetime(2026, 9, 13, tzinfo=UTC)
-
-
-def _tree_table() -> Any:
-    for line in (UQF_ROOT / "src/etl/plant_tables.q").read_text().splitlines():
-        if line.startswith(f".qetl.plant.{DATASET}:"):
-            return parse_definition(line)
-    raise AssertionError("plant table missing")
-
-
-class _ErrorLog:
-    """What the CLI's `_die` logged: refusals go to the log, not stdout."""
-
-    def __init__(self) -> None:
-        self.messages: list[str] = []
-
-    def error(self, message: str, *args) -> None:
-        self.messages.append(str(message).format(*args))
-
-    def __getattr__(self, _name: str):
-        return lambda *a, **kw: None
-
-
-class HdbStack(FakeStack):
-    """FakeStack whose HDB reader answers `hdb_reader` like a TorQ hdb process."""
-
-    def __init__(self, hdb: Path, other: Path | None = None) -> None:
-        super().__init__(6000)
-        for name in ("rdb1", "wdb1"):
-            self.named(name)["hdbdir"] = f":{hdb}"
-        self.readers = {
-            "hdb1": {"stackid": "6000", "hdbdir": str(hdb), "partitions": 2},
-        }
-        if other is not None:
-            self.add(
-                {**self.named("hdb1"), "procname": "hdb2", "port": self.stack_id + 4},
-                listed_only=True,
-            )
-            self.readers["hdb2"] = {"stackid": "6000", "hdbdir": str(other), "partitions": 1}
-        self.refresh_discovery()
-
-    def call(self, endpoint: Endpoint, op: str, request: dict[str, Any]) -> dict[str, Any]:
-        if op == "hdb_reader":
-            self.calls.append((endpoint.port, op, request))
-            if endpoint.port in self.down:
-                from uqs.attach.remote import IpcError
-
-                raise IpcError(endpoint, op, "cannot connect: Connection refused")
-            return {"procname": endpoint.procname, **self.readers[endpoint.procname]}
-        return super().call(endpoint, op, request)
-
-
-def snapshot(*roots: Path) -> dict[str, tuple[int, int]]:
-    """Every path under `roots` (and the roots themselves) with its size and mtime."""
-    seen: dict[str, tuple[int, int]] = {}
-    for root in roots:
-        seen[str(root)] = (-1, -1) if not root.exists() else (0, 0)
-        if root.is_dir():
-            for p in sorted(root.rglob("*")):
-                st = p.stat()
-                seen[str(p)] = (st.st_size, st.st_mtime_ns)
-    return seen
 
 
 @pytest.fixture
 def world(monkeypatch, tmp_path):
-    q = q_interpreter(os.environ)
-    if q is None:
-        pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
-    attach_dir, status = tmp_path / "attachments", tmp_path / "status"
-    hdb = tmp_path / "hdb"
-    (hdb / "2026.09.11" / DATASET).mkdir(parents=True)
-    monkeypatch.setenv(config.ATTACH_DIR_ENV, str(attach_dir))
-    monkeypatch.setenv("UQF_STATUS_DIR", str(status))
-    # a developer shell may hold the credential: these tests mean the unconfigured source
-    monkeypatch.setenv("UQF_SOURCE_CRED_CRYPTO_MARKET_DATA", "")
-    errors = _ErrorLog()
-    monkeypatch.setattr(shared, "log", errors)
-    stack = HdbStack(hdb)
-    monkeypatch.setattr(service, "ipc_for", lambda att: stack)
-    save_attachment("pb-uat", hdb)
-    paths = paths_for_root(UQF_ROOT)
-    return type(
-        "World",
-        (),
-        {
-            "stack": stack,
-            "hdb": hdb,
-            "status": status,
-            "attach_dir": attach_dir,
-            "paths": paths,
-            "tmp": tmp_path,
-            "errors": errors.messages,
-            "monkeypatch": monkeypatch,
-        },
-    )
-
-
-def save_attachment(
-    name: str,
-    hdb: Path,
-    *,
-    state: str | None = "verified",
-    stack_id: int = 6000,
-    pin: bool = True,
-    table=None,
-) -> Attachment:
-    att = Attachment(
-        name=name,
-        stack=Stack(stack_id, "testhost", "testhost", stack_id + 1, "stp1", ("rdb1", "wdb1")),
-        publisher=Publisher("pb_job", "pb_ledger1"),
-        tables=(table or _tree_table(),),
-        storage=Storage(hdb_dir=str(hdb) if pin else ""),
-    )
-    config.save(att)
-    Manifest.path_for(name).unlink(missing_ok=True)
-    if state is not None:
-        m = Manifest.new(att, Manifest.path_for(name))
-        m.set_state(state, "test")
-    return att
-
-
-def plan(world, *, ipc=None, port=None, fixture=False):
-    return planning.plan_attached(
-        world.paths,
-        "pb-uat",
-        WORKER,
-        "v1",
-        FROM,
-        TO,
-        ipc=ipc or world.stack,
-        port=port,
-        fixture=fixture,
-        on_conflict="replace",
-    )
-
-
-def facts_of(**over):
-    base = {
-        "worker": WORKER,
-        "dataset": DATASET,
-        "source": DATASET,
-        "source_version": "v1",
-        "live": True,
-        "custom_io": False,
-        "on_conflict": "upsert",
-        "width": "1D",
-        "partition": "",
-        "time_column": "source_time",
-        "planned": 2,
-        "cursor": "",
-        "windows": [
-            {
-                "range_from": "2026.09.11D00:00:00.000000000",
-                "range_to": "2026.09.12D00:00:00.000000000",
-                "decision": "covered",
-            },
-            {
-                "range_from": "2026.09.12D00:00:00.000000000",
-                "range_to": "2026.09.13D00:00:00.000000000",
-                "decision": "fetch",
-            },
-        ],
-        "dates": ["2026.09.12"],
-    }
-    return base | over
+    return make_world(monkeypatch, tmp_path)
 
 
 # ------------------------------------------------------------ destination resolution
@@ -272,7 +115,7 @@ def test_a_dataset_the_attachment_does_not_publish_is_refused(world):
 
 
 def test_schema_drift_between_attachment_and_worker_is_refused(world):
-    table = _tree_table()
+    table = tree_table()
     drifted = type(table)(table.name, (*table.columns[:-1], ("extra", "f")))
     save_attachment("pb-uat", world.hdb, table=drifted)
     with pytest.raises(
@@ -316,11 +159,6 @@ def test_the_writers_and_the_readers_that_serve_the_destination_are_found(world)
     plan_ = plan_with(world, facts_of())
     assert plan_["writers"] == ["rdb1", "wdb1"]
     assert plan_["reload_targets"] == [{"procname": "hdb1", "port": 6003}]
-
-
-def plan_with(world, facts, *, ipc=None):
-    world.monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts)
-    return plan(world, ipc=ipc)
 
 
 def test_a_reader_of_another_directory_is_not_a_reload_target(world, monkeypatch):
@@ -401,7 +239,7 @@ def test_a_plan_changes_nothing_on_disk_or_on_the_stack(world):
     calls = len(world.stack.calls)
     plan_with(world, facts_of())
     assert snapshot(world.hdb, world.status, world.attach_dir, world.status / "attached") == before
-    assert {op for _, op, _ in world.stack.calls[calls:]} <= {"probe", "hdb_reader"}
+    assert {op for _, op, _ in world.stack.calls[calls:]} <= {"probe", "hdb_reader", "writer_state"}
     assert not world.status.exists(), "not even the state directory is created by a plan"
 
 
