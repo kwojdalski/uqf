@@ -167,11 +167,12 @@ def from_json(data: dict) -> Attachment:
     )
 
 
-def atomic_write(path: Path, text: str) -> None:
-    """Replace `path` whole or not at all: a crash leaves the old file."""
+def atomic_write(path: Path, text: str | bytes) -> None:
+    """Replace `path` whole or not at all: a crash leaves the old file. Bytes
+    are written as given - no encoding, no newline translation."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    with tmp.open("w") as fh:
+    with tmp.open("wb" if isinstance(text, bytes) else "w") as fh:
         fh.write(text)
         fh.flush()
         os.fsync(fh.fileno())
@@ -188,7 +189,8 @@ def load(name: str, root: Path | None = None) -> Attachment:
     path = directory(name, root) / CONFIG_FILE
     if not path.is_file():
         raise AttachmentError(
-            f"no attachment {name!r} (looked in {path.parent}) - `uqs job attach plan` creates one"
+            f"no attachment {name!r} (looked in {path.parent}) - "
+            f"`uqs job attach {name} --job JOB --stack-id PORT` creates one"
         )
     try:
         return from_json(json.loads(path.read_text()))

@@ -24,6 +24,7 @@ The contract (issue #1424), as code:
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -50,6 +51,8 @@ from uqs.attach.topology import Observation, Proc, observe
 
 #: The q operation that undoes each forward one.
 INVERSE = {"consumer_attach": "consumer_detach", "stp_register": "stp_unregister"}
+#: The schema-file blocks: the created tables' (`created`) and the shared ones' `+uses` (`shared`).
+BLOCKS = ("schema_block", "schema_uses")
 
 
 @dataclass(frozen=True)
@@ -90,7 +93,7 @@ def drift(att: Attachment, obs: Observation, m: Manifest) -> list[Blocker]:
     for op in m.operations:
         if op.status not in (DONE, PENDING) or op.ownership not in (CREATED, SHARED):
             continue
-        if op.op == "schema_block":
+        if op.op in BLOCKS:
             found += _block(att, m, op)
         elif (proc := procs.get(op.process)) is None or not proc.up:
             found.append(
@@ -185,6 +188,9 @@ def _request(m: Manifest, op: Op, dry_run: bool, ours: set[str]) -> dict:
     req: dict = {"table": op.table, "token": m.token, "dry_run": dry_run}
     if op.op == "consumer_attach" and op.table in ours:
         req["follows_plant"] = True
+    if op.op == "consumer_attach":
+        stp = next((o.process for o in m.operations if o.op == "stp_register"), "")
+        req["tickerplant"] = stp
     if op.op == "stp_register":
         req |= {"empty_size": EMPTY_LOG, "expect_subscribers": _subscribers_added(m)}
     return req
@@ -247,7 +253,9 @@ def detach(
     changes nothing - it does not even stop the publisher.
     """
     host = host or Host()
-    with config.locked(att.name, state_dir):
+    # A dry run writes nothing - not even the lock file - and needs no lock: it
+    # only reads, and the manifest is replaced whole, never seen half-written.
+    with nullcontext() if dry_run else config.locked(att.name, state_dir):
         if not Manifest.exists(att.name, state_dir):
             raise AttachmentError(f"attachment {att.name} has not been applied: nothing to detach")
         m = Manifest.load(att.name, state_dir)
@@ -266,7 +274,7 @@ def detach(
         procs = {p.procname: p for p in obs.procs() if p.up}
         result.evidence = evidence(att, obs, host)
         if result.evidence.published:
-            return _retain(ipc, procs, m, result)
+            return _retain(att, ipc, procs, m, result)
         ours = plant_ours(obs, m)
         result.blockers = drift(att, obs, m) + _dry_runs(ipc, m, procs, ours)
         if result.blockers:
@@ -283,8 +291,11 @@ def detach(
         return _rollback(att, ipc, procs, m, result, ours)
 
 
-def _retain(ipc: Ipc, procs: dict[str, Proc], m: Manifest, result: DetachResult) -> DetachResult:
-    """After publication: keep every registration, row, log and block."""
+def _retain(
+    att: Attachment, ipc: Ipc, procs: dict[str, Proc], m: Manifest, result: DetachResult
+) -> DetachResult:
+    """After publication: keep every registration, row, log and block - except the
+    `+uses` block, which only says this attachment still depends on a table."""
     result.outcome = "detached"
     for op in m.operations:
         if op.ownership == CREATED and op.status in (DONE, PENDING):
@@ -292,6 +303,13 @@ def _retain(ipc: Ipc, procs: dict[str, Proc], m: Manifest, result: DetachResult)
             if not result.dry_run:
                 m.finish(op, RETAINED, note="published: kept for replay and restart")
         elif op.ownership == SHARED and op.status == DONE and not result.dry_run:
+            if op.op == "schema_uses":
+                # no longer a user, so a restart must not make it one again
+                try:
+                    result.steps.append(_unblock(att, m, op))
+                except (AttachmentError, OSError) as exc:
+                    result.retained.append(f"{op.op} {op.process}: {op.table} ({exc})")
+                continue
             _leave(ipc, procs, m, op)
             m.finish(op, REVERTED, note="no longer a user of the table")
             result.steps.append(
@@ -300,6 +318,13 @@ def _retain(ipc: Ipc, procs: dict[str, Proc], m: Manifest, result: DetachResult)
     if not result.dry_run:
         m.set_state("detached", "; ".join(result.evidence.reasons + result.evidence.unknown))
     return result
+
+
+def _unblock(att: Attachment, m: Manifest, op: Op) -> Step:
+    specs = tuple(s for s in att.tables if s.name in op.table.split(","))
+    persist.remove(persist.BlockRecord(**op.post), att, m.token, specs)
+    m.finish(op, REVERTED, note="block removed")
+    return Step(op.op, op.process, op.table, "removed", "block removed")
 
 
 def _rollback(
@@ -313,17 +338,12 @@ def _rollback(
     m.set_state("detaching", "pre-publication rollback")
     try:
         for op in [o for o in reversed(m.operations) if o.status in (DONE, PENDING)]:
-            if op.ownership == SHARED:
+            if op.op in BLOCKS and op.ownership in (CREATED, SHARED):
+                result.steps.append(_unblock(att, m, op))
+            elif op.ownership == SHARED:
                 _leave(ipc, procs, m, op)
                 m.finish(op, REVERTED, note="no longer a user of the table")
                 result.steps.append(Step("ledger_leave", op.process, op.table, "left", ""))
-            elif op.ownership == CREATED and op.op == "schema_block":
-                specs = tuple(s for s in att.tables if s.name in op.table.split(","))
-                persist.remove(persist.BlockRecord(**op.post), att, m.token, specs)
-                m.finish(op, REVERTED, note="block removed")
-                result.steps.append(
-                    Step("schema_block", op.process, op.table, "removed", "block removed")
-                )
             elif op.ownership == CREATED:
                 if op.process not in procs:
                     raise AttachmentError(f"{op.process} cannot be reached to remove {op.table}")
@@ -351,7 +371,7 @@ def _rollback(
             f"rollback stopped: {exc}. "
             f"Done: {[s.op + ' ' + s.process for s in result.steps] or 'nothing'}; "
             f"still in place: {left or 'nothing'}. Cross-process atomicity is not claimed: run "
-            f"`uqs job attach detach {att.name}` again (every step is safe to repeat), or remove "
+            f"`uqs job detach {att.name}` again (every step is safe to repeat), or remove "
             "the rest by hand."
         ) from None
     m.set_state("rolled_back", f"{len(result.steps)} step(s)")

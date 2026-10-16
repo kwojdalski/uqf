@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from attach_stack_support import CORE, IsolatedStack, requires_stack
-from attach_support import FaultIpc, make_bundle
+from attach_support import LEDGER_Q, FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
 from uqs.attach import config, persist, service, verify
@@ -44,6 +44,12 @@ class Publisher:
 
     def stop(self, att) -> None:
         self.on, self.stopped = False, self.stopped + 1
+
+
+def consumer_ownership(name, state_dir) -> str:
+    op = Manifest.load(name, state_dir).find("consumer_attach", "rdb1", TABLE)
+    assert op is not None
+    return op.ownership
 
 
 @pytest.fixture
@@ -262,6 +268,108 @@ def refuse_without_changing(stack, att, snap):
     return " | ".join(f"{b.component}: {b.reason}" for b in result.blockers)
 
 
+@pytest.mark.parametrize(("rows", "outcome"), [(0, "rolled_back"), (1, "detached")])
+def test_a_consumer_table_held_before_the_attachment_survives_detach_untouched(
+    stack, bundle, rows, outcome
+):
+    """#1437: rdb1 already holds the table (with a row) and a live subscription to a
+    second tickerplant; ours does not. Apply adopts it; a pre-publication rollback must
+    leave the table, its rows, both subscriptions and the subtables entry as they were."""
+    stack.q("rdb1", LEDGER_Q)
+    if rows:  # rows on a consumer are evidence of publication: detach keeps, not rolls back
+        stack.q("rdb1", f"`{TABLE} insert (.z.p;`AAA;`acc1;1.5;enlist `held)")
+    # a LIVE handle: TorQ marks (and a later subscribe purges) rows whose handle is not open
+    other = stack.endpoint("discovery1").port
+    stack.q("rdb1", f"h2:hopen `::{other}:admin:admin")
+    stack.q(
+        "rdb1",
+        f"`.sub.SUBSCRIPTIONS insert (`stp2;`segmentedtickerplant;h2;`{TABLE};`;.z.p;1b)",
+    )
+    stack.q("rdb1", f".rdb.subtables:distinct .rdb.subtables,`{TABLE}")
+    exprs = (
+        f"-3!`{TABLE} in tables[]",
+        f"-3!select from {TABLE}",
+        "-3!asc .rdb.subtables",
+        "-3!exec (procname;table;w;active) from .sub.SUBSCRIPTIONS",
+    )
+
+    def read():
+        return [stack.q("rdb1", e) for e in exprs]
+
+    held = read()
+    att = att_for(stack, bundle)
+    apply_(stack, att)
+    assert consumer_ownership("pb-uat", state(stack)) == "existing"
+    result = detach_(stack, att)
+    assert result.outcome == outcome, result.blockers
+    assert read() == held, "table, rows, both subscriptions and subtables"
+    if outcome == "rolled_back":
+        assert TABLE not in stack.q("stp1", ".j.j string tables[]")
+        assert TABLE not in stack.q("wdb1", ".j.j string tables[]")
+
+
+def test_consumer_detach_answers_removed_when_the_consumer_never_kept_an_ownership_record(stack):
+    """#1449: a restarted consumer has no `.uqfattach.owned`; dropping everything is still
+    `removed`, and only the rows of the named tickerplant go."""
+    stack.q("rdb1", LEDGER_Q)
+    stack.q(
+        "rdb1",
+        f"`.sub.SUBSCRIPTIONS insert (`stp1;`segmentedtickerplant;99i;`{TABLE};`;.z.p;1b)",
+    )
+    stack.q("rdb1", f".rdb.subtables:distinct .rdb.subtables,`{TABLE}")
+    assert stack.q("rdb1", "`owned in key `.uqfattach") in (False, 0)
+    req = {"table": TABLE, "token": "t", "dry_run": False, "follows_plant": True}
+    request = {**req, "tickerplant": "stp1"}
+    answer = stack.ipc().call(stack.endpoint("rdb1"), "consumer_detach", request)
+    assert answer == {"status": "removed", "problems": []}
+    assert TABLE not in stack.q("rdb1", ".j.j string tables[]")
+    assert TABLE not in stack.q("rdb1", ".j.j string .rdb.subtables")
+
+
+def test_consumer_detach_refuses_a_table_also_subscribed_from_another_tickerplant(stack):
+    stack.q("rdb1", LEDGER_Q)
+    for plant in ("stp1", "stp2"):
+        stack.q(
+            "rdb1",
+            f"`.sub.SUBSCRIPTIONS insert (`{plant};`segmentedtickerplant;99i;`{TABLE};`;.z.p;1b)",
+        )
+    req = {"table": TABLE, "token": "t", "dry_run": False, "follows_plant": True}
+    request = {**req, "tickerplant": "stp1"}
+    answer = stack.ipc().call(stack.endpoint("rdb1"), "consumer_detach", request)
+    assert answer["status"] == "refused"
+    assert answer["problems"] == ["also subscribed from another tickerplant: stp2"]
+    assert TABLE in stack.q("rdb1", ".j.j string tables[]")
+    assert int(stack.q("rdb1", f"count select from .sub.SUBSCRIPTIONS where table=`{TABLE}")) == 2
+
+
+def test_consumer_detach_on_a_restarted_rdb_removes_everything_and_says_removed(stack, bundle):
+    """#1449: the restarted rdb rebuilt the table from our tickerplant and has no
+    `.uqfattach.owned`; detaching it is `removed`, not `partial`. (Through the whole
+    detach the restart's empty HDB partition reads as publication - safe, documented -
+    so the operation is driven directly with what detach would send.)"""
+    att = att_for(stack, bundle)
+    apply_(stack, att)
+    restart(stack, "rdb1")
+    wait_for(
+        lambda: (
+            TABLE in stack.ipc().call(stack.endpoint("rdb1"), "probe", {"tables": []})["subscribed"]
+        ),
+        "rdb1 to resubscribe",
+    )
+    assert stack.q("rdb1", "`owned in key `.uqfattach") in (False, 0)
+    token = Manifest.load("pb-uat", state(stack)).token
+    request = {
+        "table": TABLE,
+        "token": token,
+        "dry_run": False,
+        "follows_plant": True,
+        "tickerplant": "stp1",
+    }
+    answer = stack.ipc().call(stack.endpoint("rdb1"), "consumer_detach", request)
+    assert answer == {"status": "removed", "problems": []}
+    assert TABLE not in stack.q("rdb1", ".j.j string tables[]")
+
+
 def test_a_subscriber_that_is_not_ours_blocks_the_rollback_until_it_goes(stack, bundle):
     import kola
 
@@ -314,7 +422,8 @@ def test_another_attachment_using_the_table_blocks_the_creator_until_it_detaches
     b = att_for(stack, bundle, "pb-b")
     apply_(stack, a)
     shared = apply_(stack, b)
-    assert {s.outcome for s in shared.steps} == {"shared"}
+    assert {s.outcome for s in shared.steps if s.op != "schema_uses"} == {"shared"}
+    assert [s.outcome for s in shared.steps if s.op == "schema_uses"] == ["created"]
     ledger = json.loads(stack.q("stp1", f".j.j .j.k .uqfattach.owned`{TABLE}"))
     assert ledger["attachment"] == "pb-a" and ledger["users"] == ["pb-b"]
     snap = snapshot(stack)
@@ -327,9 +436,47 @@ def test_another_attachment_using_the_table_blocks_the_creator_until_it_detaches
     assert detach_(stack, b).outcome == "rolled_back", (
         "the dependent leaves without removing anything"
     )
-    assert snapshot(stack) == snap
+    # but its +uses block: a restart must not make it a user again
+    assert snapshot(stack) == {
+        **snap,
+        "schema_file": persist.outside(snap["schema_file"], "pb-b+uses"),
+    }
     assert detach_(stack, a, Publisher()).outcome == "rolled_back"
     assert TABLE not in stack.q("stp1", ".j.j string tables[]")
+
+
+def test_another_attachment_using_the_table_still_blocks_the_creator_after_a_restart(stack, bundle):
+    """#1446: the user's dependency is in the schema file, so a restarted
+    tickerplant still knows it, and the creator's detach still refuses."""
+    original = stack.schema_file.read_bytes()
+    a = att_for(stack, bundle, "pb-a")
+    b = att_for(stack, bundle, "pb-b")
+    apply_(stack, a)
+    apply_(stack, b)
+    restart(stack, "stp1")
+    wait_for(
+        lambda: TABLE in stack.q("stp1", ".j.j string tables[]"), "stp1 to come back with the table"
+    )
+    ledger = json.loads(stack.q("stp1", f".j.j .j.k .uqfattach.owned`{TABLE}"))
+    assert ledger["attachment"] == "pb-a" and ledger["users"] == ["pb-b"]
+    restart_consumers(stack)
+    wait_for(lambda: held_by_consumers(stack), "the restarted consumers to subscribe")
+    # the stopping wdb wrote its (empty) tables down; tidy that up so this is still
+    # before publication, where a detach would remove the table
+    for root in (stack.wdb_dir, stack.hdb_dir):
+        for leftover in root.glob(f"*/{TABLE}"):
+            shutil.rmtree(leftover)
+    assert verify.verify(b, stack.ipc(), state(stack)).ok
+    refused = detach_(stack, a)
+    assert refused.outcome == "refused", refused.evidence
+    assert any("used by attachment(s) pb-b" in x.reason for x in refused.blockers)
+    assert TABLE in stack.q("stp1", ".j.j string tables[]"), "the table pb-b needs stays"
+    assert detach_(stack, b).outcome == "rolled_back"
+    assert "pb-b+uses" not in stack.schema_file.read_text()
+    ledger = json.loads(stack.q("stp1", f".j.j .j.k .uqfattach.owned`{TABLE}"))
+    assert ledger["users"] == [], "pb-b left, so pb-a is free to go"
+    assert detach_(stack, a, dry_run=True).blockers == []
+    assert stack.schema_file.read_bytes() != original, "pb-a's own block is still there"
 
 
 def test_a_consumer_that_is_down_blocks_the_rollback_naming_it(stack, bundle):

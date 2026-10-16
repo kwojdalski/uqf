@@ -42,7 +42,7 @@ class ApplyRefused(AttachmentError):
         super().__init__(
             "refused: "
             + "; ".join(f"{f.code} ({f.component})" for f in findings)
-            + " - run `uqs job attach validate` for the detail"
+            + " - `uqs job attach NAME --dry-run` shows the detail"
         )
 
 
@@ -138,10 +138,16 @@ def _in_place(proc: Proc, spec: TableSpec, token: str, consumer: bool) -> bool:
     return True
 
 
+def _joined(proc: Proc, table: str, name: str) -> bool:
+    return name in (proc.probe or {}).get("owned", {}).get(table, {}).get("users", [])
+
+
 def _register(m: Manifest, ipc: Ipc, att: Attachment, tp: Proc, spec: TableSpec) -> Step:
     prior = m.done("stp_register", tp.procname, spec.name)
     if prior is not None and _in_place(tp, spec, m.token, False):
-        if prior.ownership != CREATED or _mine(tp, spec.name, m.token):
+        if prior.ownership == SHARED and not _joined(tp, spec.name, att.name):
+            pass  # the plant forgot we use it (a restart without our +uses block): join again
+        elif prior.ownership != CREATED or _mine(tp, spec.name, m.token):
             return Step("stp_register", tp.procname, spec.name, "already")
     probe = tp.probe or {}
     op = m.begin(
@@ -185,6 +191,8 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
         if prior.ownership != CREATED or _mine(c, spec.name, m.token):
             return Step("consumer_attach", c.procname, spec.name, "already")
     before = _subscribers(ipc, tp, spec.name)
+    earlier = m.find("consumer_attach", c.procname, spec.name)
+    was = earlier.ownership if earlier is not None else ""
     op = m.begin(
         "consumer_attach", c.procname, spec.name,
         {"table_present": bool((c.probe or {}).get("schemas", {}).get(spec.name)),
@@ -198,10 +206,17 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
         raise
     step = _interpret(m, op, answer, c.procname, spec.name)
     plant = m.find("stp_register", tp.procname, spec.name)
-    if op.ownership == EXISTING and plant is not None and plant.ownership == CREATED:
-        # The tickerplant's table is ours, so the consumer's copy - rebuilt from it by a
-        # restart, or already subscribed - is ours too; leaving it `existing` would make
-        # detach keep a table the plant it came from no longer has.
+    if (
+        op.ownership == EXISTING
+        and plant is not None
+        and plant.ownership == CREATED
+        and (was == CREATED or not op.pre.get("table_present"))
+    ):
+        # The tickerplant's table is ours, and the consumer's copy did not exist before
+        # this attachment (the first attempt found it absent) or an earlier run already
+        # made it: a restart rebuilt it from our table. A copy the consumer held BEFORE
+        # the attachment is also answered `existing` and must stay so (#1437) - detach
+        # never removes pre-existing state.
         op.ownership = CREATED
         m.save()
     op.post = {**op.post, "subscribers_before": before, "subscribers_after": after}
@@ -214,26 +229,35 @@ def _subscribers(ipc: Ipc, tp: Proc, table: str) -> int:
 
 
 def _persist(
-    m: Manifest, att: Attachment, tp: Proc, specs: list[TableSpec], deps: list[int]
-) -> Step:
+    m: Manifest, att: Attachment, tp: Proc, specs: list[TableSpec], deps: list[int],
+    uses: bool = False,
+) -> Step:  # fmt: skip
+    """The schema-file block for the tables this attachment created - or, with
+    `uses`, the `+uses` block for the ones it shares, so the dependency is back
+    after a restart too (#1446)."""
+    kind, ownership = ("schema_uses", SHARED) if uses else ("schema_block", CREATED)
+    block = persist.uses_name(att.name) if uses else att.name
     path = (tp.probe or {}).get("schemafile", "")
-    prior = m.done("schema_block", "schema-file", ",".join(s.name for s in specs))
+    name = ",".join(s.name for s in specs)
+    prior = m.done(kind, "schema-file", name)
     if prior is not None:
         record = persist.BlockRecord(**prior.post)
         if not persist.problems(record, att, m.token, tuple(specs)):
-            return Step("schema_block", path, ",".join(s.name for s in specs), "already")
-    name = ",".join(s.name for s in specs)
-    op = m.begin("schema_block", "schema-file", name, {"path": path}, deps)
-    present = Path(path).is_file() and persist.locate(Path(path).read_text(), att.name) is not None
+            return Step(kind, path, name, "already")
+    op = m.begin(kind, "schema-file", name, {"path": path}, deps)
     try:
-        record = persist.write(att, m.token, tuple(specs), path)
+        present = persist.present(path, block)
+        if uses:
+            record = persist.write_uses(att, m.token, tuple(s.name for s in specs), path)
+        else:
+            record = persist.write(att, m.token, tuple(specs), path)
     except (OSError, AttachmentError) as exc:
         m.finish(op, FAILED, note=str(exc))
         raise AttachmentError(f"the schema file {path}: {exc}") from None
-    m.finish(op, DONE, CREATED, asdict(record))
+    m.finish(op, DONE, ownership, asdict(record))
     if present:
-        return Step("schema_block", path, name, "already", "the block was already there")
-    return Step("schema_block", path, name, "created", f"block added to {path}")
+        return Step(kind, path, name, "already", "the block was already there")
+    return Step(kind, path, name, "created", f"block added to {path}")
 
 
 def apply(
@@ -289,8 +313,14 @@ def apply(
                 s for s in att.tables
                 if (e := m.find("stp_register", tp.procname, s.name)) and e.ownership == CREATED
             ]  # fmt: skip
+            used = [
+                s for s in att.tables
+                if (e := m.find("stp_register", tp.procname, s.name)) and e.ownership == SHARED
+            ]  # fmt: skip
             if att.persist == "schema-file" and made:
                 result.steps.append(_persist(m, att, tp, made, deps))
+            if att.persist == "schema-file" and used:
+                result.steps.append(_persist(m, att, tp, used, deps, uses=True))
         except (IpcError, AttachmentError) as exc:
             m.set_state("partial", str(exc))
             result.state = "partial"
@@ -309,6 +339,7 @@ def _failure(m: Manifest, result: ApplyResult, exc: Exception) -> str:
     return (
         f"apply stopped: {exc}. The stack is partially changed (no cross-process atomicity is "
         f"claimed). done: {done or 'nothing'}; outcome unknown: {pending or 'none'}; "
-        f"failed: {failed or 'none'}. Re-run `uqs job attach apply {m.attachment}` (it is "
-        f"idempotent and resolves unknown steps by asking the process), or `detach` to reverse."
+        f"failed: {failed or 'none'}. Re-run `uqs job attach {m.attachment}` (it is "
+        f"idempotent and resolves unknown steps by asking the process), or "
+        f"`uqs job detach {m.attachment}` to reverse."
     )

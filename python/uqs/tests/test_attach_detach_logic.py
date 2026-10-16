@@ -57,6 +57,12 @@ class Spy(FakeStack):
         return super().call(endpoint, op, request)
 
 
+def consumer_ownership(name, state_dir) -> str:
+    op = Manifest.load(name, state_dir).find("consumer_attach", "rdb1", TABLE)
+    assert op is not None
+    return op.ownership
+
+
 @pytest.fixture
 def world(tmp_path: Path):
     bundle = make_bundle(tmp_path / "piggybank")
@@ -152,6 +158,51 @@ def test_only_what_was_created_is_removed_a_pre_existing_table_is_left(world):
     assert not [e for e in log if e.startswith(("stp_unregister", "consumer_detach"))]
     m = Manifest.load("pb-uat", state)
     assert {o.ownership for o in m.operations} == {"existing"}
+
+
+def test_a_consumer_table_held_before_the_attachment_is_not_ours_and_survives_rollback(world):
+    """#1437: the consumer already held the table (and subscribes to it from another
+    tickerplant); our tickerplant did not. Apply adopts it; a rollback must leave it,
+    its rows and every subscription exactly as they were."""
+    fake, make, state, schema, log = world
+    from attach_support import LEDGER_COLUMNS
+
+    rdb = fake.named("rdb1")
+    rdb["schemas"] = {TABLE: [list(c) for c in LEDGER_COLUMNS]}
+    rdb["subscribed"].append(TABLE)
+    rdb["subtables"] = [*rdb.get("subtables", []), TABLE]
+    rdb["foreign_subs"] = {TABLE: ["stp2"]}
+    before = stack_state(fake)
+    att = make()
+    apply_(att, fake, state)
+    assert consumer_ownership("pb-uat", state) == "existing"
+    log.clear()
+    result = detach_(att, fake, state)
+    assert result.outcome == "rolled_back", result.blockers
+    assert "consumer_detach@rdb1" not in log, "a table that was not ours is never asked to go"
+    after = stack_state(fake)
+    for port in after:
+        if fake.procs[port]["procname"] == "rdb1":
+            assert after[port] == before[port], "table, rows, subscriptions, subtables"
+
+
+def test_a_consumer_table_first_found_absent_stays_ours_when_a_rerun_finds_it_again(world):
+    """The upgrade existing -> created is for a table the consumer did NOT hold before the
+    first attempt (a restart rebuilt it from our tickerplant table)."""
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    assert consumer_ownership("pb-uat", state) == "created"
+    # the consumer restarts: it comes back holding the table, with no record of its own
+    rdb = fake.named("rdb1")
+    rdb["owned"].pop(TABLE)
+    rdb["subscribed"].remove(TABLE)
+    fake.named("stp1")["subscribers"][TABLE] = 0
+    apply_(att, fake, state)
+    assert consumer_ownership("pb-uat", state) == "created"
+    result = detach_(att, fake, state)
+    assert result.outcome == "rolled_back", result.blockers
+    assert TABLE not in rdb["schemas"]
 
 
 def test_dry_run_changes_nothing_not_even_the_publisher(world):
@@ -358,6 +409,63 @@ def test_another_attachment_still_using_the_table_refuses_the_reversal(world):
     assert fake.named("stp1")["owned"][TABLE].get("users") == []
     assert detach_(a, fake, state).outcome == "rolled_back"
     assert TABLE not in fake.named("stp1")["schemas"]
+
+
+def restart_from_schema_file(fake, schema: Path, scratch: Path, q_binary) -> None:
+    """What a stack restart leaves: the plant's ownership records are what q gets
+    from loading the schema file, and the consumers, restarted after it, rebuild
+    the table from the plant with no record of their own."""
+    from attach_support import q_load
+
+    got = q_load(q_binary, schema, scratch)
+    assert got["loaded"], got["error"]
+    fake.named("stp1")["owned"] = got["owned"]
+    for c in ("rdb1", "wdb1"):
+        fake.named(c)["owned"].pop(TABLE, None)
+
+
+def test_a_user_of_the_table_still_holds_the_creator_back_after_a_restart(
+    world, tmp_path, q_binary
+):
+    """#1446: the dependency is in the schema file, so it survives the restart."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b")
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    assert persist.present(str(schema), "pb-b+uses")
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert fake.named("stp1")["owned"][TABLE]["users"] == ["pb-b"]
+    before = stack_state(fake)
+    result = detach_(a, fake, state)
+    assert result.outcome == "refused" and "used by attachment(s) pb-b" in reasons(result)
+    assert stack_state(fake) == before and TABLE in fake.named("stp1")["schemas"]
+    # B leaves - its +uses block with it, so the next restart does not make it a user again
+    assert detach_(b, fake, state).outcome == "rolled_back"
+    assert not persist.present(str(schema), "pb-b+uses")
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert "users" not in fake.named("stp1")["owned"][TABLE]
+    assert detach_(a, fake, state).outcome == "rolled_back"
+    assert schema.read_text() == "trade:([] time:`timestamp$())\n"
+
+
+def test_a_user_the_plant_forgot_fails_verify_and_applying_again_joins_again(world):
+    """A restart without the +uses block (runtime-only, or written before it
+    existed) drops the user: verify closes the gate, and apply puts it back."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b")
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    assert verify.verify(b, fake, root=ROOT, state_dir=state).ok
+    fake.named("stp1")["owned"][TABLE].pop("users")
+    checks = verify.verify(b, fake, root=ROOT, state_dir=state)
+    assert not checks.ok and Manifest.load("pb-b", state).state == "applied"
+    assert "stp1: piggybank_general_ledger lists pb-b among its users" in [
+        c.name for c in checks.checks if not c.ok
+    ]
+    again = apply_(b, fake, state)
+    assert [s.outcome for s in again.steps if s.op == "stp_register"] == ["shared"]
+    assert fake.named("stp1")["owned"][TABLE]["users"] == ["pb-b"]
+    assert verify.verify(b, fake, root=ROOT, state_dir=state).ok
 
 
 def test_a_schema_file_edited_inside_or_outside_the_block_refuses_the_reversal(world):

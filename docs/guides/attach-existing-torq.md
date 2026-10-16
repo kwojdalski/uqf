@@ -10,8 +10,9 @@ lives under `job` because the unit is a job and its tables;
 [`connector`](uqs.md) is for external publishers that are not q processes.
 
 ```text
-plan -> validate -> apply -> verify -> start -> (detach)
-read-only            changes the stack    permits the publisher
+uqs job attach NAME --dry-run   preflight + plan; changes nothing
+uqs job attach NAME             preflight + plan, ask, then apply -> verify -> start
+uqs job detach NAME             stop the publisher, reverse what is safe to
 ```
 
 What it guarantees:
@@ -29,47 +30,77 @@ What it guarantees:
 ## Walkthrough
 
 ```bash
-uqs job attach plan pb-uat --job pb_general_ledger --bundle ../piggybank \
+uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank \
+    --stack-id 6000 --consumer rdb1 --consumer wdb1 --dry-run
+uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank \
     --stack-id 6000 --consumer rdb1 --consumer wdb1
-uqs job attach validate pb-uat    # exit 1 on any blocker
-uqs job attach apply pb-uat       # shows the plan, asks, then changes the stack
-uqs job attach verify pb-uat      # reads only; passing permits the publisher
-uqs job attach start pb-uat       # starts the job's process under the stack id
-uqs job attach status pb-uat      # the attachment, its manifest, the stack now
-uqs job attach detach pb-uat --dry-run
-uqs job attach detach pb-uat
+uqs list attachments                # attachment state and publisher state, per attachment
+uqs job detach pb-uat --dry-run
+uqs job detach pb-uat
 ```
 
-  | Command    | What it does                                                                                     |
-  | ---------- | -----------------------------------------------------------------------------------------------  |
-  | `plan`     | Reads the stack, prints every affected component, the changes and the findings; saves the config |
-  | `validate` | Re-checks the saved attachment against the stack; exit 1 on a blocker                            |
-  | `status`   | The saved attachment, its manifest, and what the stack reports for its tables                    |
-  | `apply`    | Registers the table, subscribes the consumers; `--yes` skips the prompt                          |
-  | `verify`   | Checks, publishing nothing, that the consumers can receive and persist the table                 |
-  | `start`    | Verifies again, then starts the publisher under the attachment's stack id                        |
-  | `detach`   | Stops the publisher and reverses what is safe to; `--dry-run` changes nothing                    |
+`--dry-run` resolves the configuration, reads the stack and prints the plan: the
+stack and publisher identity, the table schemas, every affected component, the
+changes and their reversibility, and the findings. It writes nothing - no
+`attachment.json`, no manifest, no lock file - and exits 1 on a blocker.
 
-`plan` takes `--stack-id`, `--host` (default `localhost`),
+Without `--dry-run` the same plan is shown, then a confirmation, then the stages
+in order: save the configuration, apply, verify, start the publisher. Every
+check runs again at execution, whatever a preview showed. A failed apply or
+verify stops there: the publisher is not started, the command exits 1 and prints
+what to run next. Running the same command again is safe: what is in place is
+left alone, and an already verified attachment with its publisher running is
+re-verified and left running.
+
+- `--no-start` applies and verifies, and leaves the publisher stopped; the same
+  command without it starts it later.
+- `--yes` skips the confirmation; the plan and results are still printed.
+- `--json` prints one JSON document; executing with it needs `--yes` (and
+  `--accept-risks` when risks are accepted), and refuses with a JSON error
+  otherwise.
+- The global `uqs --debug` adds the configuration resolution, every verify
+  check, timings and recovery detail. It works through `uqs --target`, and does
+  not change how the publisher logs.
+
+A new attachment needs `--job` and `--stack-id`; `--host` (default `localhost`),
 `--discovery HOST:PORT` (default: the stack id + 1), `--tickerplant`,
-`--consumer` (default: all), `--user` and `--password-env`, `--tplogdir` and
-`--schema-file` to pin storage, `--runtime-only`, `--replace` to rebuild a saved
-attachment, and `--no-save`. Every command takes `--json` except `start` and
-`detach`. `uqs job attach <command> --help` lists the rest.
+`--consumer` (default: all), `--user`, `--password-env`,
+`--tplogdir`/`--schema-file` (pin storage) and `--runtime-only` are optional.
+After the first execution the attachment is reused by name. Options that
+contradict the saved ones are refused; `--replace` rebuilds it from them,
+keeping its manifest and accepted risks, and is refused while the manifest holds
+changes on another stack or for other tables. Credentials are redacted from
+every output. `uqs job attach --help` lists the rest.
 
-### Plan
+### Migration from the stage commands
 
-`plan` writes `attachment.json` under `$UQS_ATTACH_DIR`, else
+  | Before                                   | Now                                                        |
+  | ---------------------------------------- | ---------------------------------------------------------- |
+  | `uqs job attach plan NAME ...`           | `uqs job attach NAME ... --dry-run`                        |
+  | `uqs job attach validate NAME`           | `uqs job attach NAME --dry-run`                            |
+  | `uqs job attach apply NAME`              | `uqs job attach NAME --no-start`                           |
+  | `uqs job attach verify NAME`             | `uqs job attach NAME --no-start`                           |
+  | `uqs job attach start NAME`              | `uqs job attach NAME`                                      |
+  | `uqs job attach status NAME`             | `uqs list attachments`, or `uqs job attach NAME --dry-run` |
+  | `uqs job attach detach NAME [--dry-run]` | `uqs job detach NAME [--dry-run]`                          |
+  | `plan --no-save`                         | `--dry-run`                                                |
+
+The old forms are refused with the command that replaced them.
+
+### Configuration
+
+The first execution writes `attachment.json` under `$UQS_ATTACH_DIR`, else
 `$UQS_DATA_ROOT/attachments`, else `output/attachments`: the stack id, discovery
 address, tickerplant and consumers, the user and the *name* of the environment
 variable holding the password (never the password), the persist mode, and the
 storage the stack reported (tickerplant log directory, schema file, wdb save
 directory, hdb directory). A later run that finds the stack somewhere else
-refuses. The stack is only ever asked `probe`, a read-only question.
+refuses. Preflight only ever asks the stack `probe`, a read-only question.
 
 ### Apply
 
-Apply carries out exactly the changes the plan showed, in order:
+Apply, the second stage, carries out exactly the changes the plan showed, in
+order:
 
 1. the tickerplant registers the table (one atomic call; a failing step undoes
    the steps already done inside it);
@@ -81,16 +112,18 @@ Apply carries out exactly the changes the plan showed, in order:
 The publisher is not started, and apply refuses if it is running. Each step is
 written to the manifest (`manifest.json`, beside `attachment.json`) as `pending`
 before it runs, so an interruption leaves an unknown outcome, never an
-unrecorded change. Re-running apply asks the process about each unknown step,
-and a stack that already matches is left alone. A failed step is reported with
-what is done, unknown and failed; nothing is rolled back behind your back. Run
-apply again, or `detach`.
+unrecorded change. Re-running asks the process about each unknown step, and a
+stack that already matches is left alone. A failed step is reported with what is
+done, unknown and failed; nothing is rolled back behind your back. Run
+`uqs job attach NAME` again, or `uqs job detach NAME`.
 
 The manifest records each operation's ownership: `created` (this attachment made
 it and may remove it), `existing` (never removed), or `shared` (another
 attachment made it and this one depends on it; detaching the first is refused
 while it is needed). The token is also written into the processes, including the
-schema file's block.
+schema file's block. An attachment that shares a table another one created
+writes a block of its own, `<name>+uses`, which makes it a user of that table
+again after a tickerplant restart; its detach removes that block.
 
 ### Verify and start
 
@@ -100,11 +133,18 @@ subscribed, does not ignore it and will include it at its next save, and that
 the ownership records and the schema block are ours. Passing makes the
 attachment `verified`; a failed re-verification takes it back to `applied`.
 
-The gate is not just `start`. `stack/start_policy.refuse_start`, below
+The gate is not just `uqs job attach`. `stack/start_policy.refuse_start`, below
 `uqs start`, the MCP server and the browser's start route, refuses the
 attachment's publisher unless the attachment is `verified` **and** the start is
 under its stack id. A bare `uqs start pb_ledger1` would use the runtime's
-default base port, and is refused with the right command named.
+default base port, and is refused with the right command named. `uqs start`,
+`start all` and `restart all` are gated too: `all` is expanded first to the
+startwithall=1 processes it launches, and a job declared `start_with_all 1b` is
+one of them. The gate fails closed: a publisher whose `manifest.json` cannot be
+read (permissions, truncated, no `state`) is refused, and an `attachment.json`
+that cannot be read refuses every start, since its publisher cannot be known.
+Make the file readable again, or move the folder out of the attachments
+directory if the attachment is gone.
 
 ### Detach
 
@@ -134,16 +174,15 @@ step is safe to repeat, so run detach again.
 
 ## Findings and overrides
 
-`plan` and `validate` list findings as blockers, warnings, or what will be
-adopted. A blocker can be accepted explicitly where the table says so; this is
-the supported alternative to editing the validation code.
+The plan lists findings as blockers, warnings, or what will be adopted. A
+blocker can be accepted explicitly where the table says so; this is the
+supported alternative to editing the validation code.
 
 ```bash
-uqs job attach plan pb-uat --job pb_general_ledger --stack-id 6000 \
+uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
     --override TORQ_VERSION:discovery1 --override TORQ_VERSION:stp1 \
     --override TORQ_VERSION:rdb1 --override TORQ_VERSION:wdb1 \
-    --override-reason "Reviewed against the site's TorQ build"
-uqs job attach apply pb-uat --yes --accept-risks
+    --override-reason "Reviewed against the site's TorQ build" --yes --accept-risks
 ```
 
 **An override accepts a risk. It does not establish compatibility.** Accepting
@@ -154,44 +193,46 @@ uqs job attach apply pb-uat --yes --accept-risks
 - **A reason is mandatory** (`--override-reason`); the override records who
   accepted it, when, and the facts it was accepted against.
 - **Still visible**: shown as `accepted` with the failure risk and what the
-  operator must do, in `plan`, `validate`, `status` and `verify`.
+  operator must do, in the plan and the verify checks.
 - **Void when the facts change** (another TorQ version, another missing sort
-  column, another process on the port): re-evaluated at every `plan`,
-  `validate`, `apply` and `verify`; `verify` fails on a stale acceptance.
-- **Confirmed separately**: `apply` asks for accepted risks by name. `--yes`
+  column, another process on the port): re-evaluated at every preflight, apply
+  and verify; verify fails on a stale acceptance.
+- **Confirmed separately**: execution asks for accepted risks by name. `--yes`
   answers only "change the stack?"; use `--accept-risks` without a terminal.
-- **Persisted** in `attachment.json` and the manifest; `plan --clear-overrides`
-  withdraws all of them.
+- **Persisted** in `attachment.json` and the manifest; `--clear-overrides`
+  withdraws all of them, and is saved even when that leaves a blocker.
 
-  | Code                                                                                                                 | Overridable | Refused because / risk accepted                                                                                                   |
-  | -----------------------------------------------------------------------------                                        | ----------- | -----------------------------------------------------------------------------------------------------------------                 |
-  | `TORQ_VERSION`                                                                                                       | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                   |
-  | `SORT_CONFIG`                                                                                                        | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Add a row first                                                |
-  | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                          |
-  | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                          |
-  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                           |
-  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                |
-  | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                    |
-  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                              |
-  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                         |
-  | `PERSIST_UNAVAILABLE`                                                                                                | no          | the registration could not survive a tickerplant restart (no writable local `-schemafile`); use `--runtime-only`                  |
-  | `STORAGE_MISMATCH`                                                                                                   | no          | a pinned location is not what the stack reports; plan again                                                                       |
-  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER` | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with |
+  | Code                                                                                                                 | Overridable | Refused because / risk accepted                                                                                                                      |
+  | -----------------------------------------------------------------------------                                        | ----------- | -----------------------------------------------------------------------------------------------------------------                                    |
+  | `TORQ_VERSION`                                                                                                       | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                      |
+  | `SORT_CONFIG`                                                                                                        | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Add a row first                                                                   |
+  | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                                             |
+  | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                             |
+  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                              |
+  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                   |
+  | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                       |
+  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                 |
+  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                            |
+  | `PERSIST_UNAVAILABLE`                                                                                                | no          | the registration could not survive a tickerplant restart (no writable local `-schemafile`); use `--runtime-only`                                     |
+  | `STORAGE_MISMATCH`                                                                                                   | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                      |
+  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER` | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                    |
 
 Detach's refusals are destructive-cleanup protections and cannot be overridden.
 
 ## Restart behaviour
 
 The registration lives in memory. By default (`schema-file`) apply appends one
-marked block to the tickerplant's `-schemafile` and leaves the rest untouched;
-`--runtime-only` skips it.
+marked block to the tickerplant's `-schemafile` and leaves every other byte
+untouched, line endings included; removing the block restores the file exactly,
+whatever order attachments sharing the file are removed in. `--runtime-only`
+skips it.
 
-  | State                          | A tickerplant restart                                                                        |
-  | ------------------------------ | -------------------------------------------------------------------------------------------  |
-  | applied, `schema-file` persist | the block recreates the table and its ownership record                                       |
-  | applied, `--runtime-only`      | the table is gone; `status` reports `registration-lost`, `verify` fails, `apply` restores it |
-  | rolled back                    | the block went with the registration: the table does not come back                           |
-  | detached after publication     | the block stayed, so the table comes back and its logs replay                                |
+  | State                          | A tickerplant restart                                                                                       |
+  | ------------------------------ | -------------------------------------------------------------------------------------------                 |
+  | applied, `schema-file` persist | the block recreates the table and its ownership record                                                      |
+  | applied, `--runtime-only`      | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attach NAME` restores it |
+  | rolled back                    | the block went with the registration: the table does not come back                                          |
+  | detached after publication     | the block stayed, so the table comes back and its logs replay                                               |
 
 End of day needs nothing extra: the tickerplant re-reads its tables then, and
 the wdb hands its table list to the sort process.
@@ -209,7 +250,7 @@ the wdb hands its table list to the sort process.
   tickerplant has; the workflow never restarts a process it did not start.
 - **Older HDB partitions lack the table** until repaired after the first end of
   day: `uqs data hdb-check --fix` (dbmaint,
-  [#1428](https://github.com/kwojdalski/uqf/pull/1428)). `plan` warns with
+  [#1428](https://github.com/kwojdalski/uqf/pull/1428)). The plan warns with
   `HDB_HISTORY`.
 - **Connection cap.** Under a licence with a connection limit (the KDB-X
   community licence allows 16 per process), an attachment adds one persistent
@@ -218,10 +259,6 @@ the wdb hands its table list to the sort process.
 - **One rule until the bug below is fixed.** Declare every column with a
   concrete type: an untyped `()` column fed different types can abort the wdb's
   end of day for every table
-  ([#1451](https://github.com/kwojdalski/uqf/issues/1451)). A table named like a
-  q or TorQ global (`upd`, `sym`, `loghandles`, `date`, `endofday`) needs no
-  rule any more: `NAME_RESERVED` refuses it in the bundle, in preflight, in the
-  q operations and in the schema-block writer
-  ([#1450](https://github.com/kwojdalski/uqf/issues/1450)).
+  ([#1451](https://github.com/kwojdalski/uqf/issues/1451)).
 - **Open bugs** in the workflow are tracked as [GitHub issues titled
   `uqs job attach`](https://github.com/kwojdalski/uqf/issues?q=is%3Aissue+is%3Aopen+%22uqs+job+attach%22).
