@@ -18,6 +18,10 @@ The contract (issue #1424), as code:
   * Drift or unknown ownership REFUSES the reversal and lists what a person has
     to do. A refused detach changes nothing but the publisher, which is stopped
     first and stays stopped.
+  * Once the publisher is stopped the manifest is no longer `verified`, so a detach
+    that stops part way (stack unreadable, an IPC error) leaves the start gate
+    closed until a retry finishes (#1443). A step apply never heard back from is
+    probed on the stack, never assumed pre-existing (#1447).
   * A failure part way is reported as exactly that; no atomicity across
     processes is claimed, and every step is safe to repeat.
 """
@@ -44,15 +48,11 @@ from uqs.attach.manifest import (
     Manifest,
     Op,
 )
-from uqs.attach.publisher import Publisher
+from uqs.attach.outcome import BLOCKS, INVERSE, interrupted, unresolved
+from uqs.attach.publisher import Publisher, stop_publisher
 from uqs.attach.remote import Ipc, IpcError
 from uqs.attach.schema import differences
 from uqs.attach.topology import Observation, Proc, observe
-
-#: The q operation that undoes each forward one.
-INVERSE = {"consumer_attach": "consumer_detach", "stp_register": "stp_unregister"}
-#: The schema-file blocks: the created tables' (`created`) and the shared ones' `+uses` (`shared`).
-BLOCKS = ("schema_block", "schema_uses")
 
 
 @dataclass(frozen=True)
@@ -73,6 +73,8 @@ class DetachResult:
     retained: list[str] = field(default_factory=list)
     publisher_stopped: bool = False
     dry_run: bool = False
+    #: set while the reversal is in progress: an error then leaves the gate closed
+    interrupted: bool = False
 
 
 # -------------------------------------------------------------------- drift
@@ -226,18 +228,6 @@ def _leave(ipc: Ipc, procs: dict[str, Proc], m: Manifest, op: Op) -> None:
         ipc.call(proc.endpoint, "ledger_leave", {"table": op.table, "attachment": m.attachment})
 
 
-def _stop_publisher(att: Attachment, publisher: Publisher) -> bool:
-    if not publisher.running(att):
-        return False
-    publisher.stop(att)
-    if publisher.running(att):
-        raise AttachmentError(
-            f"{att.publisher.procname} is still listening after stop - detach will not touch the "
-            "stack while the publisher may be publishing"
-        )
-    return True
-
-
 def detach(
     att: Attachment,
     ipc: Ipc,
@@ -265,32 +255,63 @@ def detach(
             return DetachResult("already", retained=[f"{att.name} is already {m.state}"])
         result = DetachResult("refused", dry_run=dry_run)
         if not dry_run:
-            result.publisher_stopped = _stop_publisher(att, publisher)
+            result.publisher_stopped = stop_publisher(att, publisher)
         previous = m.state
-        obs, structural = observe(att, ipc)
-        if obs.tickerplant is None or not obs.tickerplant.up:
-            raise AttachmentError(
-                "the stack cannot be read, so nothing can be verified or reversed: "
-                + "; ".join(f.message for f in structural)
+        if not dry_run and previous == "verified":
+            # The publisher is stopped, so the gate must not stay open on a manifest
+            # that still says `verified` whatever the rest of this detach does (#1443).
+            m.set_state("detaching", "detach started: the publisher is stopped")
+        try:
+            return _reverse(att, ipc, m, result, host, previous, dry_run)
+        except IpcError as exc:
+            raise AttachmentError(interrupted(att, m, str(exc), dry_run)) from None
+        except AttachmentError as exc:
+            if result.interrupted:
+                raise AttachmentError(interrupted(att, m, str(exc), dry_run)) from None
+            raise
+
+
+def _reverse(
+    att: Attachment,
+    ipc: Ipc,
+    m: Manifest,
+    result: DetachResult,
+    host: Host,
+    previous: str,
+    dry_run: bool,
+) -> DetachResult:
+    result.interrupted = True
+    obs, structural = observe(att, ipc)
+    if obs.tickerplant is None or not obs.tickerplant.up:
+        raise AttachmentError(
+            "the stack cannot be read, so nothing can be verified or reversed: "
+            + "; ".join(f.message for f in structural)
+        )
+    procs = {p.procname: p for p in obs.procs() if p.up}
+    unknown = [
+        Blocker(*found) for found in unresolved(m, plant_ours(obs, m), procs, save=not dry_run)
+    ]
+    result.evidence = evidence(att, obs, host)
+    if result.evidence.published:
+        return _retain(att, ipc, procs, m, result)
+    ours = plant_ours(obs, m)
+    result.blockers = unknown + drift(att, obs, m) + _dry_runs(ipc, m, procs, ours)
+    if result.blockers:
+        if not dry_run:
+            why = "; ".join(b.reason for b in result.blockers)
+            m.set_state(
+                "applied" if previous in ("verified", "detaching") else previous,
+                f"detach refused: {why}",
             )
-        procs = {p.procname: p for p in obs.procs() if p.up}
-        result.evidence = evidence(att, obs, host)
-        if result.evidence.published:
-            return _retain(att, ipc, procs, m, result)
-        ours = plant_ours(obs, m)
-        result.blockers = drift(att, obs, m) + _dry_runs(ipc, m, procs, ours)
-        if result.blockers:
-            if not dry_run:
-                why = "; ".join(b.reason for b in result.blockers)
-                m.set_state(
-                    "applied" if previous == "verified" else previous, f"detach refused: {why}"
-                )
-            return result
-        result.outcome = "rolled_back"
-        if dry_run:
-            result.retained = ["dry run: nothing was changed"]
-            return result
-        return _rollback(att, ipc, procs, m, result, ours)
+        result.interrupted = False
+        return result
+    result.outcome = "rolled_back"
+    if dry_run:
+        result.retained = ["dry run: nothing was changed"]
+        result.interrupted = False
+        return result
+    result.interrupted = False  # _rollback reports its own failures, and sets its own state
+    return _rollback(att, ipc, procs, m, result, ours)
 
 
 def _retain(

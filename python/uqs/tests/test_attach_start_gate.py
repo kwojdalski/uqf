@@ -95,7 +95,7 @@ STARTS = [
 
 
 @pytest.mark.parametrize("args", STARTS, ids=" ".join)
-@pytest.mark.parametrize("status", ["planned", "applied", "partial", "detached"])
+@pytest.mark.parametrize("status", ["planned", "applied", "partial", "detached", "detaching"])
 def test_an_unverified_publisher_is_refused_by_every_start_that_launches_it(att, args, status):
     if status != "planned":
         with_state(att, status)
@@ -295,3 +295,9 @@ def test_stop_is_never_gated(unverified, monkeypatch):
     )
     runtime.stop(default_paths(), "all")
     assert seen and seen[0][1:] == ["stop", "all"]
+
+
+def test_list_attachments_shows_a_detaching_state_as_it_is(att, state):
+    with_state(att, "detaching")
+    row = next(r for r in attach_state.inventory(state) if r["attachment"] == "ex-uat")
+    assert row["state"] == "detaching"
