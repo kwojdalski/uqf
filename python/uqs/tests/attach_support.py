@@ -312,6 +312,10 @@ class FakeStack:
         if not p["schemas"].get(t) and t not in p["owned"] and t not in p["subscribed"]:
             return {"status": "absent", "problems": []}
         problems = self._owned_problems(p, req)
+        # subscriptions from a tickerplant other than the one this attachment registered on
+        elsewhere = p.get("foreign_subs", {}).get(t, [])
+        if elsewhere:
+            problems.append("also subscribed from another tickerplant: " + ", ".join(elsewhere))
         if problems:
             return {"status": "refused", "problems": problems}
         if req["dry_run"]:
