@@ -96,8 +96,7 @@ INSTRUMENT_COLUMN_OVERRIDES = {"order_quality": "book"}
 
 def _plant_columns(table: str) -> set[str]:
     """The column names of a plant table's one-line `([]c:t;...)` definition."""
-    body = schemas.definition(table).split("]", 1)[1]
-    return set(re.findall(r"(?:^|[(;\s])([a-z_][a-z0-9_]*):", body))
+    return set(schemas.columns(table))
 
 
 def _row(table: str, time_column: str, instrument: str) -> str:
