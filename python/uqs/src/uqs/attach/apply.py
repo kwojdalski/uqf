@@ -138,10 +138,16 @@ def _in_place(proc: Proc, spec: TableSpec, token: str, consumer: bool) -> bool:
     return True
 
 
+def _joined(proc: Proc, table: str, name: str) -> bool:
+    return name in (proc.probe or {}).get("owned", {}).get(table, {}).get("users", [])
+
+
 def _register(m: Manifest, ipc: Ipc, att: Attachment, tp: Proc, spec: TableSpec) -> Step:
     prior = m.done("stp_register", tp.procname, spec.name)
     if prior is not None and _in_place(tp, spec, m.token, False):
-        if prior.ownership != CREATED or _mine(tp, spec.name, m.token):
+        if prior.ownership == SHARED and not _joined(tp, spec.name, att.name):
+            pass  # the plant forgot we use it (a restart without our +uses block): join again
+        elif prior.ownership != CREATED or _mine(tp, spec.name, m.token):
             return Step("stp_register", tp.procname, spec.name, "already")
     probe = tp.probe or {}
     op = m.begin(
@@ -214,26 +220,35 @@ def _subscribers(ipc: Ipc, tp: Proc, table: str) -> int:
 
 
 def _persist(
-    m: Manifest, att: Attachment, tp: Proc, specs: list[TableSpec], deps: list[int]
-) -> Step:
+    m: Manifest, att: Attachment, tp: Proc, specs: list[TableSpec], deps: list[int],
+    uses: bool = False,
+) -> Step:  # fmt: skip
+    """The schema-file block for the tables this attachment created - or, with
+    `uses`, the `+uses` block for the ones it shares, so the dependency is back
+    after a restart too (#1446)."""
+    kind, ownership = ("schema_uses", SHARED) if uses else ("schema_block", CREATED)
+    block = persist.uses_name(att.name) if uses else att.name
     path = (tp.probe or {}).get("schemafile", "")
-    prior = m.done("schema_block", "schema-file", ",".join(s.name for s in specs))
+    name = ",".join(s.name for s in specs)
+    prior = m.done(kind, "schema-file", name)
     if prior is not None:
         record = persist.BlockRecord(**prior.post)
         if not persist.problems(record, att, m.token, tuple(specs)):
-            return Step("schema_block", path, ",".join(s.name for s in specs), "already")
-    name = ",".join(s.name for s in specs)
-    op = m.begin("schema_block", "schema-file", name, {"path": path}, deps)
-    present = Path(path).is_file() and persist.locate(Path(path).read_text(), att.name) is not None
+            return Step(kind, path, name, "already")
+    op = m.begin(kind, "schema-file", name, {"path": path}, deps)
     try:
-        record = persist.write(att, m.token, tuple(specs), path)
+        present = persist.present(path, block)
+        if uses:
+            record = persist.write_uses(att, m.token, tuple(s.name for s in specs), path)
+        else:
+            record = persist.write(att, m.token, tuple(specs), path)
     except (OSError, AttachmentError) as exc:
         m.finish(op, FAILED, note=str(exc))
         raise AttachmentError(f"the schema file {path}: {exc}") from None
-    m.finish(op, DONE, CREATED, asdict(record))
+    m.finish(op, DONE, ownership, asdict(record))
     if present:
-        return Step("schema_block", path, name, "already", "the block was already there")
-    return Step("schema_block", path, name, "created", f"block added to {path}")
+        return Step(kind, path, name, "already", "the block was already there")
+    return Step(kind, path, name, "created", f"block added to {path}")
 
 
 def apply(
@@ -289,8 +304,14 @@ def apply(
                 s for s in att.tables
                 if (e := m.find("stp_register", tp.procname, s.name)) and e.ownership == CREATED
             ]  # fmt: skip
+            used = [
+                s for s in att.tables
+                if (e := m.find("stp_register", tp.procname, s.name)) and e.ownership == SHARED
+            ]  # fmt: skip
             if att.persist == "schema-file" and made:
                 result.steps.append(_persist(m, att, tp, made, deps))
+            if att.persist == "schema-file" and used:
+                result.steps.append(_persist(m, att, tp, used, deps, uses=True))
         except (IpcError, AttachmentError) as exc:
             m.set_state("partial", str(exc))
             result.state = "partial"

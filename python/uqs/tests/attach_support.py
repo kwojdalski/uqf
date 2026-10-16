@@ -9,10 +9,40 @@ asked only read-only questions.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
 from uqs.attach.remote import Endpoint, IpcError
+
+#: Loads a schema file the way a restarting tickerplant does (`\l`), and says what it defined.
+_LOAD_Q = """r:@[{system "l ",x;1b};getenv`UQS_SCHEMA_FILE;{x}];
+owned:@[value;`.uqfattach.owned;()!()];
+-1 .j.j `loaded`error`tables`owned!(1b~r;$[1b~r;"";r];string tables[];
+  $[count owned;(key owned)!.j.k each value owned;()!()]);
+exit 0
+"""
+
+
+def q_load(q_binary: tuple[str, dict[str, str]], schema: Path, scratch: Path) -> dict[str, Any]:
+    """What a q that loads `schema` - as a tickerplant restart does - ends up
+    with: whether it loaded, its tables and its `.uqfattach.owned` records."""
+    q, env = q_binary
+    script = scratch / "load_schema.q"
+    script.write_text(_LOAD_Q)
+    run = subprocess.run(
+        [q, str(script), "-q"],
+        env={**env, "UQS_SCHEMA_FILE": str(schema)},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    lines = [line for line in run.stdout.splitlines() if line.startswith("{")]
+    assert lines, f"q printed no answer: {run.stdout}{run.stderr}"
+    return json.loads(lines[-1])
+
 
 LEDGER_COLUMNS = [
     ["time", "p"],
