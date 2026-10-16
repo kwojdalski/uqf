@@ -1,0 +1,248 @@
+"""Backfilling into an ATTACHED native TorQ stack's HDB (#1454): which stack, which
+directory, and what a run there would do - decided before anything runs.
+
+`uqs job backfill` writes into the HDB of the uqf runtime it belongs to
+(`KDBHDB`); `--port` changes which stack it registers with, not where the rows
+go. A backfill for a dataset an attachment publishes must therefore name its
+destination out loud, and take it from the saved attachment - the stack id, the
+storage the stack reported and that `verify` has since checked - never from a
+default. This module is that resolution plus the read-only admission plan; it
+starts no worker and writes nothing, so a plan can be run against any stack,
+any number of times, and leave it as it found it.
+
+Two stages, the second in uqs.attach.backfill_plan because it needs a live stack:
+
+  resolve   (here) the saved attachment and the worker, offline: refuse a detached or
+            unverified attachment, an unpinned or missing HDB, a dataset the
+            attachment does not publish, a table whose shape differs from the
+            worker's, a worker with a custom IO manager, a fixture run, and an
+            override that names another stack
+  admit     the live stack: the processes that write the destination (their
+            HDB directory is the attachment's), and the HDB readers that serve
+            it - the ones a backfill would have to tell to reload
+
+The coverage ledger, checkpoint and run lock are not shared with anything else:
+they live in a directory named for the attachment and the destination's
+identity (`Destination.state_dir`), so coverage recorded for one HDB can never
+suppress a run into another.
+
+EXECUTION IS NOT HERE. Attached execution stays refused until native write
+coordination and guarded recovery exist (#1454's later parts); `refuse_execution`
+is the one place that says so.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from uqs.attach import config
+from uqs.attach.config import Attachment, AttachmentError
+from uqs.attach.manifest import Manifest
+from uqs.attach.schema import SchemaError, TableSpec, differences, parse_definition
+from uqs.model.declarations import Declaration, read_declarations
+from uqs.paths import TABLES_FILE, UqsError, UqsPaths
+from uqs.stack import backfill as stack_backfill
+from uqs.stack import runs
+from uqs.stack.attach_state import VERIFIED
+
+#: What an attached backfill may do for now: read configuration, code and the
+#: local ledgers. dry-run and run need the write coordination and the guarded
+#: writer, which later parts of #1454 add.
+READ_ONLY_MODES = ("validate", "plan")
+
+#: The q script that evaluates a plan, and the subdirectory (of the status
+#: directory) attached runs keep their state in.
+PLAN_SCRIPT = Path("scripts") / "dev" / "attached_plan.q"
+STATE_SUBDIR = "attached"
+_TABLE_LINE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
+
+
+@dataclass(frozen=True)
+class Destination:
+    """Where an attached backfill writes, fully resolved: no field is a default."""
+
+    attachment: str
+    stack_id: int
+    host: str
+    #: the canonical path of the native HDB (symlinks resolved)
+    hdb_dir: Path
+    dataset: str
+    #: 12 hex digits naming (host, stack id, canonical HDB): the key coverage,
+    #: the checkpoint and the run lock are filed under
+    identity: str
+    #: where this destination's coverage ledger, checkpoint, lock and run
+    #: ledger live - nothing else writes there
+    state_dir: Path
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "attachment": self.attachment,
+            "stack_id": self.stack_id,
+            "host": self.host,
+            "hdb_dir": str(self.hdb_dir),
+            "dataset": self.dataset,
+            "identity": self.identity,
+            "state_dir": str(self.state_dir),
+        }
+
+
+def identity_of(host: str, stack_id: int, hdb_dir: Path) -> str:
+    """The destination's identity: a stable digest of where the rows go.
+
+    Host and stack id are in it as well as the path because two stacks (or two
+    machines) can name the same relative layout; the path is canonical so a
+    symlink and its target are one destination.
+    """
+    text = f"{host}\0{stack_id}\0{hdb_dir}"
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
+
+
+def state_dir_for(paths: UqsPaths, attachment: str, identity: str) -> Path:
+    """The directory an attached run's ledgers live in."""
+    return runs.status_dir(paths) / STATE_SUBDIR / f"{attachment}-{identity}"
+
+
+def refuse_execution(mode: str | None) -> None:
+    """Attached execution is not available: only `validate` and `plan` are.
+
+    Said here, once, so every entry point refuses the same way and a later part
+    of #1454 lifts it in one place - when native writers are coordinated with
+    and recovery is guarded, not before.
+    """
+    if mode in READ_ONLY_MODES:
+        return
+    raise UqsError(
+        f"--attach supports --mode {' and '.join(READ_ONLY_MODES)} only (got "
+        f"{mode or 'run'}): writing into a native stack's HDB needs a coordination "
+        "mechanism with its own writers (wdb save, end of day, sort) and guarded "
+        "recovery, neither of which exists yet (#1454). Nothing was started."
+    )
+
+
+def _declaration(paths: UqsPaths, worker: str) -> Declaration:
+    stack_backfill.procname_for(worker)  # the refusal that names the known workers
+    found = [d for d in read_declarations(paths.repo_root) if d.worker == worker]
+    if not found or not found[0].dataset:
+        raise UqsError(f"{worker} declares no dataset, so there is nothing to attach it to")
+    return found[0]
+
+
+def _table_in(path: Path, table: str) -> TableSpec | None:
+    if not path.is_file():
+        return None
+    for line in path.read_text().splitlines():
+        match = _TABLE_LINE.match(line)
+        if match and match.group(1) == table:
+            try:
+                return parse_definition(line)
+            except SchemaError as exc:
+                raise AttachmentError(f"{path}: table {table}: {exc}") from None
+    return None
+
+
+def worker_table(paths: UqsPaths, att: Attachment, dataset: str) -> TableSpec | None:
+    """The table definition the worker's dataset has: the attachment's bundle
+    first (its own `tables.q`), else this tree's `plant_tables.q`."""
+    folder = att.origin.get("folder")
+    if folder:
+        found = _table_in(Path(folder) / "tables.q", dataset)
+        if found is not None:
+            return found
+    return _table_in(paths.repo_root / TABLES_FILE, dataset)
+
+
+def canonical(path: str) -> Path:
+    return Path(os.path.realpath(path))
+
+
+def resolve(
+    paths: UqsPaths,
+    attachment: str,
+    worker: str,
+    *,
+    port: int | None = None,
+    fixture: bool = False,
+    attach_root: Path | None = None,
+) -> Destination:
+    """The destination `worker` would write for `attachment`, or a refusal.
+
+    Offline: reads the saved attachment, its manifest and the tree's
+    declarations, and looks at the HDB directory on disk. Nothing is created.
+    """
+    att = config.load(attachment, attach_root)
+    if fixture:
+        raise UqsError(
+            "--fixture is refused with --attach: an attached backfill writes the "
+            "stack's real HDB, and a fixture there would be indistinguishable from data"
+        )
+    if port is not None and port != att.stack.id:
+        raise UqsError(
+            f"--port {port} conflicts with attachment {att.name}, which is stack "
+            f"{att.stack.id}: --attach takes the stack from the attachment, so drop --port "
+            f"or pass --port {att.stack.id}"
+        )
+    folder = config.directory(att.name, attach_root)
+    manifest = (
+        Manifest.load(att.name, attach_root) if Manifest.exists(att.name, attach_root) else None
+    )
+    state = manifest.state if manifest else "planned"
+    if state != VERIFIED:
+        raise UqsError(
+            f"attachment {att.name} is {state}, not {VERIFIED}: a backfill needs the "
+            f"attachment's identity and storage checked (`uqs job attach verify {att.name}`)"
+            + (
+                " - a detached attachment's stack is not ours to write"
+                if state == "detached"
+                else ""
+            )
+            + f" [{folder}]"
+        )
+    decl = _declaration(paths, worker)
+    try:
+        table = att.table(decl.dataset)
+    except AttachmentError:
+        raise UqsError(
+            f"{worker} writes {decl.dataset}, which attachment {att.name} does not publish "
+            f"(it has {', '.join(t.name for t in att.tables) or 'no tables'}): "
+            "a backfill only fills a dataset the attachment owns"
+        ) from None
+    wanted = worker_table(paths, att, decl.dataset)
+    if wanted is None:
+        raise UqsError(
+            f"no table definition for {decl.dataset} in the attachment's bundle or this tree: "
+            "its shape cannot be compared with the attachment's"
+        )
+    drift = differences(table, [[n, c] for n, c in wanted.columns])
+    if drift:
+        raise UqsError(
+            f"{decl.dataset} differs between attachment {att.name} and the worker's "
+            f"definition: {'; '.join(drift)}"
+        )
+    hdb = att.storage.hdb_dir
+    if not hdb:
+        raise UqsError(
+            f"attachment {att.name} pins no HDB directory (storage.hdb_dir is empty): an attached "
+            "backfill never falls back to uqf's own HDB - `uqs job attach plan --replace` "
+            "against the running stack records it"
+        )
+    if not Path(hdb).is_dir():
+        raise UqsError(
+            f"attachment {att.name}'s HDB directory {hdb} is not a directory on this machine: "
+            "it is not created, and nothing falls back to another HDB"
+        )
+    real = canonical(hdb)
+    ident = identity_of(att.stack.host, att.stack.id, real)
+    return Destination(
+        att.name,
+        att.stack.id,
+        att.stack.host,
+        real,
+        decl.dataset,
+        ident,
+        state_dir_for(paths, att.name, ident),
+    )

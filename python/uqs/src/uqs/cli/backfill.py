@@ -13,7 +13,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import completion
+from uqs.cli import backfill_attached, completion
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     PortOpt,
@@ -86,6 +86,20 @@ def backfill(
             "under <version>~fixture, so a later live run still fetches the range",
         ),
     ] = False,
+    attach: Annotated[
+        str | None,
+        typer.Option(
+            "--attach",
+            help="Backfill into the native HDB of this saved attachment (`uqs job attach`), "
+            "taking the stack and the destination from it. Only --mode validate and plan are "
+            "available: plan lists the windows, the native date partitions, the writers and "
+            "the readers to reload, and changes nothing",
+        ),
+    ] = None,
+    as_json: Annotated[
+        bool,
+        typer.Option("--json", help="With --attach: print the plan as JSON"),
+    ] = False,
     port: PortOpt = None,
     debug: Annotated[
         bool,
@@ -139,8 +153,32 @@ def backfill(
     ended. `--wait` follows the run to its outcome and exits with that - what
     a script or a scheduler wants.
     """
+    if as_json and attach is None:
+        _die(UqsError("--json is for --attach: it prints the attached admission plan"))
+        return
     if wait and mode in stack_backfill.NO_STATUS_MODES:
         _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
+        return
+    if attach is not None:
+        try:
+            resolved = stack_backfill.resolve_version(worker, version)
+            bound_from = stack_backfill.parse_bound("--from", range_from)
+            bound_to = stack_backfill.parse_bound("--to", range_to)
+        except UqsError as exc:
+            _die(exc)
+            return
+        backfill_attached.run(
+            attach,
+            worker,
+            resolved,
+            bound_from,
+            bound_to,
+            mode=mode,
+            port=port,
+            fixture=fixture,
+            on_conflict=on_conflict,
+            as_json=as_json,
+        )
         return
     try:
         paths = _paths()
