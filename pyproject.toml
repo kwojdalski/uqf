@@ -100,9 +100,12 @@ dev = [
 exclude = ["lib", ".venv", "build", ".claude/worktrees", "tools"]
 
 [tool.ty.environment]
+# python/uqs/tests: the attach tests share helper modules (attach_support.py)
+# the way pytest resolves them, by directory; ty needs to be told the same.
 root = [
     "python/uqs/src",
     "python/uqf_frontend/src",
+    "python/uqs/tests",
 ]
 
 # No [tool.ty.rules] block, deliberately.

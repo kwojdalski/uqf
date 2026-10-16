@@ -19,6 +19,8 @@ between them:
                        contexts (scripts/portable/full_suite.py), held to
                        tests/q/peachq_known_gaps.txt both ways. The q-unit
                        lane CI BLOCKS on, on PeachQ, where KDB-X cannot run.
+  attach-stack         the attach workflow (#1424) on isolated TorQ stacks: real
+                       processes, own ports and data. Needs KDB-X; not in `all`.
   q-metatables-hdb     metatable queries against a temporary partitioned HDB.
   q-order              the q suite again, suites in the opposite order, so a
                        test that depends on running after another one fails
@@ -458,6 +460,24 @@ def lane_stack_smoke() -> None:
     _run("stack-smoke", ["uv", "run", "python", "scripts/gates/stack_smoke.py"])
 
 
+def lane_attach_stack() -> None:
+    """The attach workflow (#1424) against real TorQ processes.
+
+    Starts isolated stacks - the starter pack as it ships, on a port span
+    nothing else uses, with their own data directory and copy of the pack - and
+    plans, applies, publishes through, restarts and detaches a table on them.
+    Needs KDB-X and about a minute per stack, so like stack-smoke it is asked
+    for, not part of `all`. The tests skip without UQS_ATTACH_STACK_TEST, which
+    is what this lane sets.
+    """
+    _banner("attach-stack: attaching a job's table to an existing TorQ stack")
+    _run(
+        "attach-stack",
+        ["uv", "run", "pytest", "-q", *(str(p.relative_to(REPO)) for p in ATTACH_TESTS)],
+        env={"UQS_ATTACH_STACK_TEST": "1"},
+    )
+
+
 # ---------------------------------------------------------------- coverage
 
 
@@ -527,9 +547,14 @@ LANES: dict[str, Callable[[], None]] = {
     "coverage": lane_coverage,
     "smoke": lane_smoke,
     "stack-smoke": lane_stack_smoke,
+    "attach-stack": lane_attach_stack,
 }
 
-#: `all` is every lane except smoke, stack-smoke, q-coverage and coverage.
+#: The attach tests; the ones that start an isolated stack run only with
+#: UQS_ATTACH_STACK_TEST, which the attach-stack lane sets.
+ATTACH_TESTS = sorted((REPO / "python" / "uqs" / "tests").glob("test_attach_*.py"))
+
+#: `all` is every lane except smoke, stack-smoke, attach-stack, q-coverage and coverage.
 #: coverage runs the q suite a second time under instrumentation;
 #: stack-smoke needs a licence, free ports and a couple of minutes because
 #: it starts the actual stack. Both are worth asking for and neither is
@@ -575,7 +600,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=[*LANES, "all"],
         help=(
             "which suite to run; 'all' is every lane except smoke, stack-smoke, "
-            "q-coverage and coverage"
+            "attach-stack, q-coverage and coverage"
         ),
     )
     smoke = parser.add_argument_group("smoke lane only")
