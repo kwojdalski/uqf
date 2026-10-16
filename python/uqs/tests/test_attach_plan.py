@@ -521,45 +521,43 @@ def invoke(*argv: str):
     return CliRunner().invoke(cli.app, ["job", "attach", *argv], catch_exceptions=False)
 
 
-def test_plan_needs_a_job_and_a_stack_id_for_a_new_attachment(cli_stack):
-    result = invoke("plan", "pb-uat")
+def test_a_new_attachment_needs_a_job_and_a_stack_id(cli_stack):
+    result = invoke("pb-uat", "--dry-run")
     assert result.exit_code != 0
     assert any("needs --job and --stack-id" in m for m in cli_stack.errors)
 
 
-def test_plan_saves_the_config_and_prints_json(cli_stack, bundle, tmp_path):
+def test_a_dry_run_prints_the_plan_as_json_and_saves_nothing(cli_stack, bundle, tmp_path):
     result = invoke(
-        "plan", "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle),
-        "--stack-id", "6000", "--runtime-only", "--json",
+        "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle),
+        "--stack-id", "6000", "--runtime-only", "--json", "--dry-run",
     )  # fmt: skip
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.output)["plan"]
     assert data["stack"]["id"] == 6000 and data["stack"]["discovery"] == "localhost:6001"
     assert data["ok"] is True and data["changes"][0]["action"] == "register table"
+    assert not (tmp_path / "attachments").exists()
+
+
+def test_executing_saves_the_config_with_the_observed_storage(cli_stack, bundle, tmp_path):
+    args = ["--job", "pb_general_ledger", "--bundle", str(bundle), "--stack-id", "6000"]
+    assert invoke("pb-uat", *args, "--runtime-only", "--yes", "--no-start").exit_code == 0
     saved = json.loads((tmp_path / "attachments" / "pb-uat" / config.CONFIG_FILE).read_text())
     assert saved["stack"]["discovery_port"] == 6001
     assert saved["storage"]["tplogdir"] == "/data/tplogs"
+    assert invoke("pb-uat", "--dry-run", "--json").exit_code == 0, "reuses the saved identity"
+    assert invoke("pb-uat", *args, "--runtime-only", "--dry-run").exit_code == 0, "the same"
 
 
-def test_a_saved_attachment_is_not_rebuilt_without_replace(cli_stack, bundle):
+def test_a_dry_run_exits_nonzero_on_a_blocker_and_zero_when_clean(cli_stack, bundle):
     args = ["--job", "pb_general_ledger", "--bundle", str(bundle), "--stack-id", "6000"]
-    assert invoke("plan", "pb-uat", *args, "--runtime-only", "--json").exit_code == 0
-    refused = invoke("plan", "pb-uat", *args)
-    assert refused.exit_code != 0 and any("already saved" in m for m in cli_stack.errors)
-    assert invoke("plan", "pb-uat", *args, "--runtime-only", "--replace", "--json").exit_code == 0
-    assert invoke("plan", "pb-uat", "--json").exit_code == 0, "reuses the saved identity"
-
-
-def test_validate_exits_nonzero_on_a_blocker_and_zero_when_clean(cli_stack, bundle):
-    args = ["--job", "pb_general_ledger", "--bundle", str(bundle), "--stack-id", "6000"]
-    invoke("plan", "pb-uat", *args, "--runtime-only", "--json")
-    assert invoke("validate", "pb-uat").exit_code == 0
+    assert invoke("pb-uat", *args, "--runtime-only", "--dry-run").exit_code == 0
     cli_stack.named("stp1")["multilog"] = "singular"
-    result = invoke("validate", "pb-uat", "--json")
+    result = invoke("pb-uat", *args, "--runtime-only", "--dry-run", "--json")
     assert result.exit_code == 1
-    assert "LOGGING_MODE" in {f["code"] for f in json.loads(result.output)["findings"]}
+    assert "LOGGING_MODE" in {f["code"] for f in json.loads(result.output)["plan"]["findings"]}
 
 
-def test_status_of_an_unknown_attachment_says_so(cli_stack):
-    result = invoke("status", "nope")
+def test_a_detach_of_an_unknown_attachment_says_so(cli_stack):
+    result = CliRunner().invoke(cli.app, ["job", "detach", "nope"], catch_exceptions=False)
     assert result.exit_code != 0 and any("no attachment 'nope'" in m for m in cli_stack.errors)

@@ -15,7 +15,7 @@ from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_b
 from uqs.model.jobs import job_rows
 from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
-from uqs.stack import runtime_report
+from uqs.stack import attach_state, runtime_report
 from uqs.stack.env import build_env, with_interpreter
 from uqs.stack.procs import (
     _read_overrides,
@@ -179,12 +179,19 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     return rows
 
 
+def _list_attachments(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
+    """Every `uqs job attach` attachment: its lifecycle state, and separately
+    whether its publisher is running (unreachable is never shown as stopped)."""
+    return attach_state.inventory(repo=paths.repo_root)
+
+
 def _list_jobs(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     """Every streaming job, normalizer and bounded worker, from its declaration."""
     return job_rows(paths.repo_root)
 
 
 LISTABLE_KINDS: dict[str, Any] = {
+    "attachments": _list_attachments,
     "jobs": _list_jobs,
     "processes": _list_processes,
     "profiles": _list_profiles,

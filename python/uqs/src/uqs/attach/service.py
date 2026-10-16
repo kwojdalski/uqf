@@ -116,8 +116,8 @@ def make_plan(att: Attachment, ipc: Ipc, root: Path) -> plan.Plan:
     return plan.build(att, ipc, root, facts)
 
 
-def manifest_of(name: str) -> Manifest | None:
-    return Manifest.load(name) if Manifest.exists(name) else None
+def manifest_of(name: str, state_dir: Path | None = None) -> Manifest | None:
+    return Manifest.load(name, state_dir) if Manifest.exists(name, state_dir) else None
 
 
 def save_planned(att: Attachment, p: plan.Plan, state_dir: Path | None = None) -> Path:

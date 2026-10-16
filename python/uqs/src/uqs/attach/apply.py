@@ -42,7 +42,7 @@ class ApplyRefused(AttachmentError):
         super().__init__(
             "refused: "
             + "; ".join(f"{f.code} ({f.component})" for f in findings)
-            + " - run `uqs job attach validate` for the detail"
+            + " - `uqs job attach NAME --dry-run` shows the detail"
         )
 
 
@@ -339,6 +339,7 @@ def _failure(m: Manifest, result: ApplyResult, exc: Exception) -> str:
     return (
         f"apply stopped: {exc}. The stack is partially changed (no cross-process atomicity is "
         f"claimed). done: {done or 'nothing'}; outcome unknown: {pending or 'none'}; "
-        f"failed: {failed or 'none'}. Re-run `uqs job attach apply {m.attachment}` (it is "
-        f"idempotent and resolves unknown steps by asking the process), or `detach` to reverse."
+        f"failed: {failed or 'none'}. Re-run `uqs job attach {m.attachment}` (it is "
+        f"idempotent and resolves unknown steps by asking the process), or "
+        f"`uqs job detach {m.attachment}` to reverse."
     )
