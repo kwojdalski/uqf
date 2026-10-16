@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.attach.config import Attachment, AttachmentError, atomic_write
-from uqs.attach.schema import TableSpec
+from uqs.attach.schema import SchemaError, TableSpec, check_publishable
 
 #: How the file's bytes become text and back: UTF-8, with any byte that is not
 #: UTF-8 carried through unchanged, and no newline translation - so text -> bytes
@@ -139,6 +139,12 @@ def render(name: str, token: str, specs: tuple[TableSpec, ...], separated: bool 
     """The block for the tables `name` created: their definitions and ownership records."""
     body: list[str] = []
     for spec in specs:
+        # The block is q the tickerplant runs at every start: a name that is a global
+        # there would overwrite it, persistently (#1450).
+        try:
+            check_publishable(spec)
+        except SchemaError as e:
+            raise AttachmentError(f"refusing to write the schema block: {e}") from e
         body.append(spec.definition())
         record = json.dumps(
             {"token": token, "attachment": name, "created": "persisted"}, separators=(",", ":")

@@ -21,6 +21,7 @@
  base:`procname`proctype`stackid`torq`kdb`port`host`schemafile`tplogdir`procfile`owned!(
   string .proc.procname;string pt;prm`stackid;.proc.getversion[];string .z.K;`long$system"p";string .z.h;
   prm`schemafile;prm`tplogdir;prm`procfile;own);
+ base[`names]:string each distinct (key `.),.Q.res,key .q;
  ext:()!();
  if[pt in `segmentedtickerplant`segmentedchainedtickerplant;
   subs:g[`.stpps.subrequestall;()!()];
