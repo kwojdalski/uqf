@@ -18,6 +18,9 @@
  att:r`attachment;
  cs:`$r[`columns][;0];
  ty:first each r[`columns][;1];
+ / an untyped column decides its stored type from each batch; a later batch of another shape
+ / makes the wdb's write fail and aborts its end of day for every table (#1451)
+ if[any ty=" ";:.j.j `status`detail!("refused";"untyped column(s) ",(", " sv string cs where ty=" ")," - declare a concrete type for each")];
  g:{@[value;x;y]};
  pt:.proc.proctype;
  if[not pt in `rdb`wdb;:.j.j `status`detail!("refused";"not an rdb or wdb")];
@@ -31,7 +34,8 @@
  if[(not had) and ((t in key `.) or t in .Q.res,key .q);
   :.j.j `status`detail!("refused";"the name ",string[t]," is already defined on this process as something other than a table; subscribing would overwrite it")];
  if[had;
-  if[not ((cols t)~cs) and all (ty=" ")|(exec t from meta t)=ty;
+  mt:exec t from meta t;
+  if[not $[(cols t)~cs;all (ty=mt)|(ty in .Q.A)&mt=" ";0b];
    :.j.j `status`detail!("refused";"the table exists with a different schema")]];
  if[had and inl and (not mine) and `join in key r;
   rec:own t;

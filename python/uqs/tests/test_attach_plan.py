@@ -55,14 +55,14 @@ def run(att: config.Attachment, fake: FakeStack, open_ports: tuple[int, ...] = (
 
 def test_a_table_definition_reads_into_ordered_typed_columns():
     spec = parse_definition(
-        "t_x:([] time:`timestamp$(); sym:`g#`symbol$(); px:`float$(); n:`long$(); extra:())"
+        "t_x:([] time:`timestamp$(); sym:`g#`symbol$(); px:`float$(); n:`long$(); extra:`char$())"
     )
     assert spec.columns == (
         ("time", "p"),
         ("sym", "s"),
         ("px", "f"),
         ("n", "j"),
-        ("extra", " "),
+        ("extra", "c"),
     )
 
 
@@ -111,11 +111,23 @@ def test_every_table_this_trees_plant_defines_that_an_attachment_could_take_pars
     text = (ROOT / TABLES_FILE).read_text()
     lines = [ln for ln in text.splitlines() if jobs._TABLE_LINE.match(ln)]
     assert lines, "plant_tables.q defines tables"
+    nested = jobs._nested(text, "plant_tables.q")
+    refused = {}
     for line in lines:
+        matched = jobs._TABLE_LINE.match(line)
+        assert matched is not None
+        name = matched.group(1)
         try:
-            parse_definition(line)
+            parse_definition(line, nested.get(name, {}))
         except SchemaError as exc:
-            assert "cannot read column" in str(exc) or "first column" in str(exc), exc
+            refused[name] = str(exc)
+            assert (
+                "cannot read column" in str(exc)
+                or "first column" in str(exc)
+                or ("holding any value" in str(exc))
+            ), exc
+    # config_change's old/new hold any value on purpose; the wdb cannot persist that safely
+    assert [n for n, why in refused.items() if "holding any value" in why] == ["config_change"]
 
 
 def test_differences_name_missing_extra_retyped_and_reordered_columns():
