@@ -310,3 +310,16 @@
 .qt.qtorq.querypolicy.test_a_symbol_value_on_a_guid_column_is_the_type_error_1042_fixed:{[t]
     .qunit.assertThrows[{.qt.qtorq.querypolicy.filtered enlist[`run_id]!enlist enlist (=;`$"8c6b8b64-6815-6084-0a3e-178401251b68")};::;
         "type";"why the value must be parsed"]};
+
+/ #1391: the frontend sends an `in` list for a short column as a short
+/ vector - KDB-X refuses `1 2h in 1 2j` with 'type, so the longs it sent
+/ before failed every such read. browse must hand the vector to getdata as
+/ it came, for the filter to match the column by its own type.
+.qt.qtorq.querypolicy.lots:([] lots:1 2 3h; dataset:`a`b`c)
+
+.qt.qtorq.querypolicy.test_browse_filters_a_short_column_on_a_short_in_list:{[t]
+    .qt.qtorq.querypolicy.browse_with[.checkinputs.policyceiling;{[] .uqf.browse[`lots;`lots`lots;`in`ne;(1 3h;3j);10;enlist `rdb]}];
+    f:.qt.qtorq.querypolicy.asked`filters;
+    .qunit.assertEquals[first f`lots;(in;1 3h);"the short vector, not widened"];
+    r:?[.qt.qtorq.querypolicy.lots;.eqp.extractfilters[enlist[`filters]!enlist f;.eqp.queryparams]`filters;0b;()];
+    .qunit.assertEquals[r`dataset;enlist `a;"in on shorts, then ne with a long atom"]};

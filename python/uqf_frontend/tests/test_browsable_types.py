@@ -14,6 +14,7 @@ import datetime as dt
 import typing
 from pathlib import Path
 
+import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
@@ -123,6 +124,16 @@ def test_coerce_refuses_a_bad_value_for_the_new_types(qtype, value, message):
         coerce(value, qtype, "c", as_list=False)
 
 
+def test_an_in_list_for_a_short_column_is_a_short_vector():
+    """KDB-X refuses `1 2h in 1 2j` with 'type, so the longs a list of ints
+    becomes cannot filter a short column (#1391): the list goes as an Int16
+    series, which kola sends as a short vector."""
+    got = coerce([1, -3], QType.SHORT, "c", as_list=True)
+    assert got.dtype == pl.Int16 and got.to_list() == [1, -3]
+    with pytest.raises(ValidationFailed, match="outside"):
+        coerce([1, 40000], QType.SHORT, "c", as_list=True)
+
+
 def test_unfilterable_types_are_exactly_list_and_char():
     assert UNFILTERABLE == {QType.LIST, QType.CHAR}
 
@@ -148,6 +159,8 @@ FILTER = """{[c;o;v]
         ("qi", QType.INT, "eq", 2, [2]),
         ("qi", QType.INT, "in", [1, 3], [1, 3]),
         ("qh", QType.SHORT, "gt", 1, [2, 3]),
+        ("qh", QType.SHORT, "in", [1, 3], [1, 3]),
+        ("qh", QType.SHORT, "in", [2], [2]),
         ("qd", QType.DATE, "eq", "2026-01-02", [2]),
         ("qd", QType.DATE, "in", ["2026-01-01", "2026-01-03"], [1, 3]),
         ("qt", QType.TIME, "ge", "00:00:02.250", [2, 3]),
