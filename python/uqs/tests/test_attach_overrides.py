@@ -398,7 +398,7 @@ def invoke(*argv: str, **kw):
 
 
 def plan_args(bundle: Path) -> list[str]:
-    return ["plan", "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle)] + [
+    return ["pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle)] + [
         "--stack-id", "6000", "--runtime-only",
     ]  # fmt: skip
 
@@ -410,48 +410,62 @@ def overrides_args() -> list[str]:
     return [*args, "--override-reason", "Validated against the site's TorQ 4.2.0 build"]
 
 
-def test_plan_without_the_override_is_blocked_and_with_it_shows_the_accepted_risk(world, bundle):
-    blocked = invoke(*plan_args(bundle), "--json")
-    assert json.loads(blocked.output)["ok"] is False
-    ok = invoke(*plan_args(bundle), *overrides_args(), "--replace", "--json")
-    data = json.loads(ok.output)
+def mutations(world) -> list[str]:
+    return [op for _, op, _ in world.calls if op != "probe"]
+
+
+def test_a_dry_run_without_the_override_is_blocked_and_with_it_shows_the_accepted_risk(
+    world, bundle
+):
+    blocked = invoke(*plan_args(bundle), "--json", "--dry-run")
+    assert json.loads(blocked.output)["plan"]["ok"] is False
+    ok = invoke(*plan_args(bundle), *overrides_args(), "--json", "--dry-run")
+    data = json.loads(ok.output)["plan"]
     assert data["ok"] is True and len(data["accepted_risks"]) == 4
-    human = invoke("validate", "pb-uat")
+    human = invoke(*plan_args(bundle), *overrides_args(), "--dry-run")
     assert human.exit_code == 0 and "ACCEPTED RISK" in human.output.replace("\n", " ")
 
 
-def test_plan_rejects_a_missing_reason_an_unknown_code_and_a_non_overridable_one(world, bundle):
-    no_reason = invoke(*plan_args(bundle), "--override", "TORQ_VERSION:stp1")
+def test_an_override_needs_a_reason_a_known_code_and_an_overridable_one(world, bundle):
+    no_reason = invoke(*plan_args(bundle), "--override", "TORQ_VERSION:stp1", "--dry-run")
     assert no_reason.exit_code != 0 and any("needs a reason" in m for m in world.errors)
-    unknown = invoke(*plan_args(bundle), "--override", "NOPE:stp1", "--override-reason", "x")
+    unknown = invoke(
+        *plan_args(bundle), "--override", "NOPE:stp1", "--override-reason", "x", "--dry-run"
+    )
     assert unknown.exit_code != 0 and any("not a finding code" in m for m in world.errors)
     world.named("stp1")["multilog"] = "singular"
     fixed = invoke(
-        *plan_args(bundle), "--override", "LOGGING_MODE:stp1", "--override-reason", "x", "--no-save"
+        *plan_args(bundle), "--override", "LOGGING_MODE:stp1", "--override-reason", "x", "--dry-run"
     )
     assert fixed.exit_code != 0 and any("cannot be overridden" in m for m in world.errors)
 
 
 def test_yes_alone_does_not_confirm_accepted_risks_but_accept_risks_does(world, bundle):
-    invoke(*plan_args(bundle), *overrides_args(), "--json")
-    refused = invoke("apply", "pb-uat", "--yes")
+    refused = invoke(*plan_args(bundle), *overrides_args(), "--yes", "--no-start")
     assert refused.exit_code != 0, "the second confirmation was asked for, and not given"
-    assert not [op for _, op, _ in world.calls if op != "probe"]
-    done = invoke("apply", "pb-uat", "--yes", "--accept-risks")
-    assert done.exit_code == 0
+    assert mutations(world) == []
+    as_json = invoke(*plan_args(bundle), *overrides_args(), "--yes", "--no-start", "--json")
+    assert as_json.exit_code == 1 and "--accept-risks" in json.loads(as_json.output)["error"]
+    assert mutations(world) == []
+    done = invoke(*plan_args(bundle), *overrides_args(), "--yes", "--accept-risks", "--no-start")
+    assert done.exit_code == 0, done.output
     assert world.named("stp1")["subscribers"][TABLE] == 2
 
 
 def test_the_risk_prompt_can_be_answered_interactively(world, bundle):
-    invoke(*plan_args(bundle), *overrides_args(), "--json")
-    done = invoke("apply", "pb-uat", "--yes", input="y\n")
+    done = invoke(*plan_args(bundle), *overrides_args(), "--yes", "--no-start", input="y\n")
     assert done.exit_code == 0 and "ACCEPTED RISK(S)" in done.output.replace("\n", " ")
 
 
-def test_clear_overrides_withdraws_every_acceptance(world, bundle):
-    invoke(*plan_args(bundle), *overrides_args(), "--json")
-    cleared = invoke("plan", "pb-uat", "--clear-overrides", "--json")
-    assert json.loads(cleared.output)["ok"] is False
+def test_clear_overrides_withdraws_every_acceptance_and_saves_the_withdrawal(world, bundle):
+    args = [*plan_args(bundle), *overrides_args()]
+    assert invoke(*args, "--yes", "--accept-risks", "--no-start").exit_code == 0
+    assert len(config.load("pb-uat").overrides) == 4
+    preview = invoke("pb-uat", "--clear-overrides", "--json", "--dry-run")
+    assert json.loads(preview.output)["plan"]["ok"] is False
+    assert len(config.load("pb-uat").overrides) == 4, "a dry run withdraws nothing"
+    cleared = invoke("pb-uat", "--clear-overrides", "--yes")
+    assert cleared.exit_code == 1, "blocked again, so nothing is applied"
     assert config.load("pb-uat").overrides == ()
 
 

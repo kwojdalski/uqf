@@ -24,6 +24,7 @@ The contract (issue #1424), as code:
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -187,6 +188,9 @@ def _request(m: Manifest, op: Op, dry_run: bool, ours: set[str]) -> dict:
     req: dict = {"table": op.table, "token": m.token, "dry_run": dry_run}
     if op.op == "consumer_attach" and op.table in ours:
         req["follows_plant"] = True
+    if op.op == "consumer_attach":
+        stp = next((o.process for o in m.operations if o.op == "stp_register"), "")
+        req["tickerplant"] = stp
     if op.op == "stp_register":
         req |= {"empty_size": EMPTY_LOG, "expect_subscribers": _subscribers_added(m)}
     return req
@@ -249,7 +253,9 @@ def detach(
     changes nothing - it does not even stop the publisher.
     """
     host = host or Host()
-    with config.locked(att.name, state_dir):
+    # A dry run writes nothing - not even the lock file - and needs no lock: it
+    # only reads, and the manifest is replaced whole, never seen half-written.
+    with nullcontext() if dry_run else config.locked(att.name, state_dir):
         if not Manifest.exists(att.name, state_dir):
             raise AttachmentError(f"attachment {att.name} has not been applied: nothing to detach")
         m = Manifest.load(att.name, state_dir)
@@ -365,7 +371,7 @@ def _rollback(
             f"rollback stopped: {exc}. "
             f"Done: {[s.op + ' ' + s.process for s in result.steps] or 'nothing'}; "
             f"still in place: {left or 'nothing'}. Cross-process atomicity is not claimed: run "
-            f"`uqs job attach detach {att.name}` again (every step is safe to repeat), or remove "
+            f"`uqs job detach {att.name}` again (every step is safe to repeat), or remove "
             "the rest by hand."
         ) from None
     m.set_state("rolled_back", f"{len(result.steps)} step(s)")

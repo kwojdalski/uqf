@@ -42,7 +42,7 @@ class ApplyRefused(AttachmentError):
         super().__init__(
             "refused: "
             + "; ".join(f"{f.code} ({f.component})" for f in findings)
-            + " - run `uqs job attach validate` for the detail"
+            + " - `uqs job attach NAME --dry-run` shows the detail"
         )
 
 
@@ -191,6 +191,8 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
         if prior.ownership != CREATED or _mine(c, spec.name, m.token):
             return Step("consumer_attach", c.procname, spec.name, "already")
     before = _subscribers(ipc, tp, spec.name)
+    earlier = m.find("consumer_attach", c.procname, spec.name)
+    was = earlier.ownership if earlier is not None else ""
     op = m.begin(
         "consumer_attach", c.procname, spec.name,
         {"table_present": bool((c.probe or {}).get("schemas", {}).get(spec.name)),
@@ -204,10 +206,17 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
         raise
     step = _interpret(m, op, answer, c.procname, spec.name)
     plant = m.find("stp_register", tp.procname, spec.name)
-    if op.ownership == EXISTING and plant is not None and plant.ownership == CREATED:
-        # The tickerplant's table is ours, so the consumer's copy - rebuilt from it by a
-        # restart, or already subscribed - is ours too; leaving it `existing` would make
-        # detach keep a table the plant it came from no longer has.
+    if (
+        op.ownership == EXISTING
+        and plant is not None
+        and plant.ownership == CREATED
+        and (was == CREATED or not op.pre.get("table_present"))
+    ):
+        # The tickerplant's table is ours, and the consumer's copy did not exist before
+        # this attachment (the first attempt found it absent) or an earlier run already
+        # made it: a restart rebuilt it from our table. A copy the consumer held BEFORE
+        # the attachment is also answered `existing` and must stay so (#1437) - detach
+        # never removes pre-existing state.
         op.ownership = CREATED
         m.save()
     op.post = {**op.post, "subscribers_before": before, "subscribers_after": after}
@@ -330,6 +339,7 @@ def _failure(m: Manifest, result: ApplyResult, exc: Exception) -> str:
     return (
         f"apply stopped: {exc}. The stack is partially changed (no cross-process atomicity is "
         f"claimed). done: {done or 'nothing'}; outcome unknown: {pending or 'none'}; "
-        f"failed: {failed or 'none'}. Re-run `uqs job attach apply {m.attachment}` (it is "
-        f"idempotent and resolves unknown steps by asking the process), or `detach` to reverse."
+        f"failed: {failed or 'none'}. Re-run `uqs job attach {m.attachment}` (it is "
+        f"idempotent and resolves unknown steps by asking the process), or "
+        f"`uqs job detach {m.attachment}` to reverse."
     )
