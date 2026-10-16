@@ -130,7 +130,10 @@ ALLOWED_IMPORTS = {
     "checks": {"generated", "model", "stack"},
     "scaffold": {"generated", "model", "stack"},
     "deploy": {"generated", "model", "stack"},
-    "cli": {"generated", "model", "stack", "scaffold", "external", "checks", "deploy"},
+    # attaching a job to a stack that already exists: reads declarations and bundles
+    # (model, stack) and talks to running processes; nothing above it but the CLI.
+    "attach": {"generated", "model", "stack"},
+    "cli": {"generated", "model", "stack", "scaffold", "external", "checks", "deploy", "attach"},
 }
 
 _IMPORT = re.compile(r"^\s*(?:from|import) uqs(?:\.(\w+))?(?: import ([\w, ]+))?", re.M)
