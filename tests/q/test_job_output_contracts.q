@@ -313,3 +313,26 @@
     .qunit.assertEquals[key .qetl.job.stream.jobs;before;"the registry is as it was"];
     .qunit.assertFalse[`joscratch1 in key .qetl.job.stream.procnames;"and its procname is free again"];
     .qunit.assertFalse[`jo_scratch in key .qetl.job.stream.initial;"and so is its initial state"]};
+
+/ Every `registry` a job kind keeps under .qetl.job.stream.*, found by walking
+/ the namespace rather than from a list - the list is what is under test (#1386).
+.qt.qpipe.job_output_contracts.kind_registries:{[]
+    ns:`.qetl.job.stream;
+    subs:key ns;
+    reg:{[ns;n] p:` sv ns,n,`registry; $[@[{get x; 1b};p;{[e] 0b}]; enlist p; `symbol$()]}[ns] each subs;
+    raze reg}
+
+.qt.qpipe.job_output_contracts.test_every_kinds_registry_is_named_in_the_stream_registries_list:{[t]
+    found:.qt.qpipe.job_output_contracts.kind_registries[];
+    .qunit.assertTrue[4<=count found;"the walk finds the kinds' registries (normalizer, horizons, rolling, bars)"];
+    missing:found except .qetl.job.stream.registries;
+    .qunit.assertEquals[missing;`symbol$();
+        "every registry under .qetl.job.stream.* is in .qetl.job.stream.registries; add the kind's append where it declares the registry"];
+    .qunit.assertEquals[(`.qetl.job.stream.jobs`.qetl.job.stream.procnames`.qetl.job.stream.initial) except .qetl.job.stream.registries;`symbol$();
+        "and so are the registries stream_job.q itself keeps"]};
+
+.qt.qpipe.job_output_contracts.test_the_helper_brackets_every_named_registry:{[t]
+    .qt.support.save_stream_jobs[`.qt.qpipe.job_output_contracts];
+    saved:key get `.qt.qpipe.job_output_contracts.saved_stream_registries;
+    .qt.support.restore_stream_jobs[`.qt.qpipe.job_output_contracts];
+    .qunit.assertEquals[asc saved;asc .qetl.job.stream.registries;"the helper saves exactly the registered registries"]};

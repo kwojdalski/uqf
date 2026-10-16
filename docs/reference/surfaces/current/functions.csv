@@ -336,6 +336,7 @@ qetl.job.stream,preview,function,2,job n
 qetl.job.stream,preview_recent,function,3,job n span
 qetl.job.stream,procnames,dict,,
 qetl.job.stream,recovery_keys,value,,
+qetl.job.stream,registries,value,,
 qetl.job.stream,replayed,function,1,job
 qetl.job.stream,replaying,value,,
 qetl.job.stream,require_recovery,function,2,job tr

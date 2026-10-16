@@ -45,6 +45,7 @@ import re
 from pathlib import Path
 
 from uqs.logger import get_logger
+from uqs.model import schemas
 
 log = get_logger(__name__)
 
@@ -55,13 +56,6 @@ _PARTITION = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 #: same convention model/schemas.py and model/plant_schema.py read by, applied to the
 #: merged file so vendored tables count too.
 _DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_0-9]+):\(\[\]", re.MULTILINE)
-
-#: One `name:` inside a table definition's body. Applied to the text BETWEEN
-#: the `([]` and its closing `)`, so it cannot match a table definition.
-#: Tolerates the attribute forms this tree writes - `` sym:`g#`symbol$() ``
-#: and `` time:`p#`timestamp$() `` - because the attribute sits on the value,
-#: after the colon, and this only reads what is before it.
-_COLUMN = re.compile(r"(?:^|[;(\[])\s*([a-z_][a-z_0-9]*)\s*:")
 
 
 def partitions(hdb_root: Path) -> list[str]:
@@ -166,24 +160,10 @@ def declared_columns(generated_schema: str) -> dict[str, list[str]]:
     report that lists columns in schema order is readable beside the file
     the reader will open next; nothing here depends on it.
     """
-    out: dict[str, list[str]] = {}
-    for match in _DEFINITION.finditer(generated_schema):
-        start = match.end()  # just past `([]`
-        depth = 1
-        i = start
-        while i < len(generated_schema) and depth:
-            if generated_schema[i] == "(":
-                depth += 1
-            elif generated_schema[i] == ")":
-                depth -= 1
-            i += 1
-        body = generated_schema[start : i - 1]
-        seen: list[str] = []
-        for name in _COLUMN.findall(body):
-            if name not in seen:
-                seen.append(name)
-        out[match.group(1)] = seen
-    return out
+    return {
+        match.group(1): list(dict.fromkeys(schemas.column_names(generated_schema[match.start() :])))
+        for match in _DEFINITION.finditer(generated_schema)
+    }
 
 
 def table_columns(table_dir: Path) -> set[str]:

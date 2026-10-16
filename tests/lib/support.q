@@ -215,15 +215,15 @@
 //   beforeNamespace_save_jobs:{[] .qt.support.save_stream_jobs[`.mytest]}
 //   afterNamespace_restore_jobs:{[] .qt.support.restore_stream_jobs[`.mytest]}
 
-// Every registry a stream job's definition writes.
-// @private
-.qt.support.stream_registries:`.qetl.job.stream.jobs`.qetl.job.stream.procnames`.qetl.job.stream.initial`.qetl.job.stream.normalizer.registry`.qetl.job.stream.horizons.registry`.qetl.job.stream.rolling.registry`.qetl.job.stream.bars.registry
+// Every registry a stream job's definition writes is .qetl.job.stream.registries
+// (src/etl/core/stream_registries.q): each job kind names its own where it
+// declares it, so a new kind is bracketed without editing this file (#1386).
 
 // Remember the stream registries, for the suite in namespace ns.
 // @param ns the suite's namespace, e.g. `.qt.qetl.job.stream.horizons
 // @return the registries saved
 .qt.support.save_stream_jobs:{[ns]
-    r:.qt.support.stream_registries where {@[{get x; 1b};x;{[e] 0b}]} each .qt.support.stream_registries;
+    r:.qetl.job.stream.registries where {@[{get x; 1b};x;{[e] 0b}]} each .qetl.job.stream.registries;
     / each value enlisted: dicts that share keys would otherwise collapse into a table
     (` sv ns,`saved_stream_registries) set r!{enlist get x} each r;
     r}

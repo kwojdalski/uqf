@@ -3,12 +3,14 @@
 `.u.upd` places columns by position, not by name, so a publisher must send
 them in the order `src/etl/plant_tables.q` declares. Every streamer that
 publishes onto a plant table reads that order here, so there is one parser of
-the declaration's format and a reorder in q reaches every publisher.
+the declaration's format (model/schemas.py) and a reorder in q reaches every publisher.
 """
 
 from __future__ import annotations
 
 import os
+
+from uqs.model import schemas
 
 #: The plant's declarations of the raw tables.
 PLANT_TABLES_Q = "src/etl/plant_tables.q"
@@ -23,13 +25,8 @@ def plant_table_fields(repo_root: str, table: str, *, text: str | None = None) -
     if text is None:
         with open(os.path.join(repo_root, PLANT_TABLES_Q), encoding="utf-8") as fh:
             text = fh.read()
-    # The `]` is part of the prefix: q's table literal opens `([]`, and a
-    # prefix of `([` leaves the first field named "]time".
-    prefix = f"{table}:([]"
-    line = next(
-        line for line in text.splitlines() if line.removeprefix(".qetl.plant.").startswith(prefix)
-    )
-    line = line.removeprefix(".qetl.plant.")
-    body = line[len(prefix) : line.rindex(")")]
-    fields = [chunk.split(":", 1)[0].strip() for chunk in body.split(";")]
-    return [f for f in fields if f and f != "time"]
+    # The one parser of the declaration format, release-prefix handling and
+    # the column split included (#1392); a miss names the table.
+    found = schemas.definitions_in(text)
+    fields = schemas.column_names(schemas.definition_from(found, table, PLANT_TABLES_Q))
+    return [f for f in fields if f != "time"]

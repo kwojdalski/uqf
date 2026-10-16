@@ -45,6 +45,16 @@ _RELEASE_DEFINITION = re.compile(
 )
 
 
+def definitions_in(text: str) -> dict[str, str]:
+    """{table name: its one-line q definition} for the q source `text`.
+
+    The one place a `name:([]...)` line is recognised, bare or under the
+    `.qetl.plant.` prefix a release carries; anything that reads a plant
+    declaration - from the tree or from text a test supplies - goes through it.
+    """
+    return {match.group(2): match.group(1) for match in _RELEASE_DEFINITION.finditer(text)}
+
+
 def _definitions() -> dict[str, str]:
     """{table name: its one-line q definition}, read from the q file.
 
@@ -56,8 +66,7 @@ def _definitions() -> dict[str, str]:
     """
     if not TABLES_Q.is_file():  # pragma: no cover - a broken checkout
         raise FileNotFoundError(f"table definitions not found at {TABLES_Q}")
-    text = TABLES_Q.read_text()
-    found = {match.group(2): match.group(1) for match in _RELEASE_DEFINITION.finditer(text)}
+    found = definitions_in(TABLES_Q.read_text())
     if not found:  # pragma: no cover - guarded by test_schemas.py
         raise ValueError(
             f"{TABLES_Q} defines no tables - the `name:([]...)` convention this "
@@ -67,6 +76,13 @@ def _definitions() -> dict[str, str]:
     return found
 
 
+def definition_from(found: dict[str, str], table: str, source: str) -> str:
+    """`table`'s definition in `found`, or a refusal naming the table and `source`."""
+    if table not in found:
+        raise KeyError(f"{table!r} is not defined in {source} - it has {', '.join(sorted(found))}")
+    return found[table]
+
+
 def definition(table: str) -> str:
     """One table's q definition, or a refusal naming it.
 
@@ -74,12 +90,50 @@ def definition(table: str) -> str:
     `_generated_schema_content` becomes a tickerplant without the table, and
     the first symptom is a feed failing to publish.
     """
-    found = _definitions()
-    if table not in found:
-        raise KeyError(
-            f"{table!r} is not defined in {TABLES_Q.name} - it has {', '.join(sorted(found))}"
-        )
-    return found[table]
+    return definition_from(_definitions(), table, TABLES_Q.name)
+
+
+#: One `name:literal` column of a `([]...)` body, split at the top level.
+_COLUMN = re.compile(r"^\s*([a-z_][a-z0-9_]*)\s*:\s*(.+?)\s*$", re.IGNORECASE | re.DOTALL)
+
+
+def column_pairs(definition_text: str) -> list[tuple[str, str]]:
+    """`t:([]a:`float$(); b:())` as [("a", "`float$()"), ("b", "()")] - literals as
+    written, attributes included.
+
+    The ONE splitter of a declaration's column list. It reads to the `)` that
+    closes the table literal and splits on `;` at the top level only, so a
+    trailing comment cannot widen the body and a `;` inside a bracketed
+    literal cannot cut a column in two. A chunk that is not `name:literal` is
+    skipped, not guessed at.
+    """
+    start = definition_text.index("([]") + 3
+    depth, chunk, parts = 1, start, []
+    for i in range(start, len(definition_text)):
+        c = definition_text[i]
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth -= 1
+            if depth == 0:
+                parts.append(definition_text[chunk:i])
+                break
+        elif c == ";" and depth == 1:
+            parts.append(definition_text[chunk:i])
+            chunk = i + 1
+    else:
+        parts.append(definition_text[chunk:])
+    return [(m.group(1), m.group(2)) for part in parts if (m := _COLUMN.match(part))]
+
+
+def column_names(definition_text: str) -> list[str]:
+    """The column names of a definition, in declared order."""
+    return [name for name, _ in column_pairs(definition_text)]
+
+
+def columns(table: str) -> list[str]:
+    """`table`'s column names in declared order, from the tree's plant_tables.q."""
+    return column_names(definition(table))
 
 
 _DEFS = _definitions()

@@ -153,8 +153,9 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
     Verified kola conversions: ``str`` becomes a symbol atom, ``list[str]`` a
     symbol vector, ``float`` a float atom, ``int`` a long atom, ``bool`` a
     boolean atom, a polars ``Datetime("ns", "UTC")`` series a timestamp
-    vector (`_utc`), and a polars ``Duration("ns")`` series a timespan vector
-    (`_nanoseconds`).
+    vector (`_utc`), a polars ``Duration("ns")`` series a timespan vector
+    (`_nanoseconds`), and a polars ``Int16`` series a short vector (an `in`
+    list for a short column, #1391).
 
     A timestamp must carry its timezone: this function requires UTC
     explicitly. That is not a workaround - it
@@ -166,7 +167,17 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
             raise ValidationFailed(
                 f"operator on column {column!r} needs a non-empty list of values"
             )
-        return [coerce(v, qtype, column, as_list=False) for v in value]
+        values = [coerce(v, qtype, column, as_list=False) for v in value]
+        if qtype is QType.SHORT:
+            # A list of ints goes to q as a LONG vector, and KDB-X's `in`
+            # refuses a short column against one with 'type (`1 2h in 1 2j`)
+            # where `=` and an int column compare by value (#1391). The
+            # gateway does not hold the table, so the column's type is known
+            # here, from the catalog, and nowhere on the way: send the
+            # column's own width. kola sends an Int16 series as a short
+            # vector, which .uqf.browse passes through (browse_value).
+            return pl.Series(column, values, dtype=pl.Int16)
+        return values
 
     match qtype:
         case QType.SYMBOL:
@@ -226,9 +237,11 @@ _SHORT_LIMIT = 2**15 - 1
 
 def _bounded_integer(value: Any, column: str, name: str, limit: int) -> int:
     """A JSON integer for an int or short column. Sent as a long, which q
-    compares with the column by value (`5i=5j`, `1 2i in 1 2j`), so no cast is
-    needed - only the range check, because a value q's int cannot hold would
-    otherwise match nothing and say nothing."""
+    compares with the column by value (`5i=5j`, `5h<6j`, `1 2i in 1 2j`), so
+    no cast is needed - only the range check, because a value q's int cannot
+    hold would otherwise match nothing and say nothing. The exception is an
+    `in` list for a short column, which `coerce` sends as a short vector:
+    KDB-X refuses `1 2h in 1 2j` with 'type (#1391)."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValidationFailed(f"column {column!r} is a {name}; expected an integer")
     if not -limit <= value <= limit:
