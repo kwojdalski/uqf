@@ -25,7 +25,7 @@ from uqs.attach import backfill_coordination as coordination
 from uqs.attach import backfill_plan as planning
 from uqs.attach.facts import Host
 from uqs.attach.remote import Endpoint, KolaIpc, source
-from uqs.interpreter import q_interpreter
+from uqs.interpreter import PEACHQ, q_impl, q_interpreter
 from uqs.paths import UqsError
 
 
@@ -310,6 +310,10 @@ def test_separate_processes_enumerating_one_sym_file_never_duplicate_or_misindex
     q = q_interpreter(os.environ)
     if q is None:
         pytest.skip("no q interpreter")
+    if q_impl() == PEACHQ:
+        pytest.skip(
+            "the writers of a native stack are kdb+ processes; PeachQ's enumeration is its own"
+        )
     procs, iterations = 6, 200
     hdb = tmp_path / "hdb"
     hdb.mkdir()
