@@ -138,3 +138,11 @@ def test_a_refused_file_can_be_left_out(tmp_path):
 def test_an_unknown_q_target_is_refused(tmp_path):
     with pytest.raises(ReleaseError, match="--q-target '3.6' must be one of 4.0"):
         _build(tmp_path, q_target="3.6")
+
+
+def test_the_vendored_dbmaint_ships_as_upstream_wrote_it(tmp_path):
+    """A conversion would change bytes whose provenance NOTICE.md records."""
+    art = _build(tmp_path, {"lib/kx-dbmaint/dbmaint.q": NESTED}, q_target="4.0")
+    assert _member(art, "lib/kx-dbmaint/dbmaint.q") == NESTED
+    assert _member(art, "src/m.q") == FLAT
+    assert "lib/kx-dbmaint/dbmaint.q" not in art.manifest["portable"]["transformed"]

@@ -35,7 +35,8 @@ level down.
 This module only LOOKS. Filling the gaps needs q - an empty table has to
 be written with its schema, a default column has to carry the declared
 type, and symbol columns have to be enumerated against the HDB's sym file
-- and that is `scripts/gates/fill_hdb_partitions.q`.
+- and that is `scripts/gates/fill_hdb_partitions.q`, a schema-driven wrapper
+around KX's dbmaint.q (`lib/kx-dbmaint`).
 """
 
 from __future__ import annotations

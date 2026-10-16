@@ -26,6 +26,7 @@ from pathlib import Path
 from types import ModuleType
 
 from uqs.deploy.artifact import ReleaseError
+from uqs.deploy.payload import VENDORED_IN_RELEASE
 
 CONVERTER = Path("scripts") / "portable" / "flatten_contexts.py"
 #: The kdb+ versions a release can be converted for. 5.0 needs no conversion.
@@ -70,7 +71,11 @@ def convert(
             "arguments", f"--q-target {q_target!r} must be one of {', '.join(Q_TARGETS)}"
         )
     fc = _converter(tree)
-    qfiles = sorted(f for f in files if f.endswith(".q"))
+    # vendored files ship as upstream wrote them: converting one would change
+    # bytes whose provenance lib/kx-dbmaint/NOTICE.md records
+    qfiles = sorted(
+        f for f in files if f.endswith(".q") and not f.startswith(f"{VENDORED_IN_RELEASE}/")
+    )
     held = [f for f in qfiles if fc._excluded(f, exclude)]
     texts = {f: (tree / f).read_text(encoding="utf-8") for f in qfiles}
     conv = fc.Converter(q_target, allow_computed)
