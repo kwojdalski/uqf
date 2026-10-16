@@ -18,6 +18,9 @@
 /   legs                        the route of each execution's instrument under the
 /                               convention - the same function scoring prices along
 /   lookback                    how far back the most negative horizon reaches
+/   max_age                     the spec's: a source silent for longer than the shared
+/                               .qf.mkt.reference_max_age sets no reference and its book
+/                               ages out of the history (#1410)
 /   by `sym, retain_by `sym`source
 /                               readiness waits on a leg; eviction keeps each source's
 /                               last book of a leg, as the best-of-sources reference needs
@@ -55,7 +58,7 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`fx_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral!(
+.qetl.job.stream.at_horizons[`fx_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral!(
     `fxmarkout1;
     `executions;
     `market_data;
@@ -68,6 +71,7 @@
     `both;
     .qpipe.job.fx_markout.legs;
     .qpipe.transform.fx_markout.lookback[.qpipe.transform.fx_markout_outputs.job_spec];
+    .qpipe.transform.fx_markout_outputs.job_spec`max_age;
     `sym;
     `sym`source;
     `venue`fill_id;

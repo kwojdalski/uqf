@@ -92,7 +92,8 @@
 
 .qt.qpipe.transform.fx_markout.test_the_markout_is_the_execution_residual_plus_the_reference_move:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(.qt.qpipe.transform.fx_markout.one_s,.qt.qpipe.transform.fx_markout.ten_s;1e-6)];
-    r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1001;`b1];.qt.qpipe.transform.fx_markout.direct_books[]];
+    / the +0.5s book re-quoted at +8s, so the 10s horizon finds a book inside the default max_age
+    r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1001;`b1];.qt.qpipe.transform.fx_markout.direct_books[],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t+0D00:00:08;`EURUSD;`a;1.1004;1.1006]];
     each_h:{[r;hz] (.qt.qpipe.transform.fx_markout.at[r;hz;`total];(.qt.qpipe.transform.fx_markout.at[r;hz;`execution])+sum exec pips from r where horizon=hz, kind=`leg)}[r] each .qt.qpipe.transform.fx_markout.one_s,.qt.qpipe.transform.fx_markout.ten_s;
     .qunit.assertTrue[all .qt.qpipe.transform.fx_markout.near'[each_h[;0];each_h[;1]];"total = execution residual + sum of the legs, at every horizon"]};
 
@@ -206,10 +207,22 @@
 
 .qt.qpipe.transform.fx_markout.test_a_source_older_than_max_age_does_not_count:{[tc]
     m:.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:30;`EURUSD;`stale;1.2000;1.2002],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`fresh;1.1000;1.1002];
-    anyage:.qt.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];m];
-    aged:.qt.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.spec_of[`horizons`max_age`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;0D00:00:05;1e-6)];.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];m];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from anyage where kind=`execution;enlist 1.1501];"as of however old: the stale source's 1.2000 bid wins"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from aged where kind=`execution;enlist 1.1001];"max_age 5s: only the fresh source"]};
+    e:.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];
+    hz:`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6);
+    anyage:.qt.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.spec_of[hz,enlist[`max_age]!enlist 0Wn];e;m];
+    aged:.qt.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.spec_of[hz,enlist[`max_age]!enlist 0D00:00:05];e;m];
+    dflt:.qt.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.spec_of[hz];e;m];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from anyage where kind=`execution;enlist 1.1501];"as of however old (explicit 0Wn): the stale source's 1.2000 bid wins"];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from aged where kind=`execution;enlist 1.1001];"max_age 5s: only the fresh source"];
+    .qunit.assertEquals[dflt;aged;"and 5s is the default (#1410)"]};
+
+/ #1410: before, the default was 0Wn and the stale source set the reference
+.qt.qpipe.transform.fx_markout.test_the_default_reference_age_is_the_shared_one_and_a_stale_only_leg_is_unavailable:{[tc]
+    .qunit.assertEquals[.qpipe.transform.fx_markout.default_spec`max_age;.qf.mkt.reference_max_age;"the shared definition"];
+    m:.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:30;`EURUSD;`stale;1.2000;1.2002];
+    r:.qt.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];m];
+    .qunit.assertEquals[distinct exec status from r where kind=`total;enlist `unavailable;"nothing but a 30s old book: unavailable, not 1.2001"];
+    .qunit.assertTrue[all null exec price_t1 from r where kind=`total;"and no reference price"]};
 
 .qt.qpipe.transform.fx_markout.test_a_withdrawn_side_is_not_a_price_and_does_not_fall_back_to_an_older_book:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
