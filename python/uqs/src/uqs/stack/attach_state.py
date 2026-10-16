@@ -179,19 +179,94 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
                 f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "
                 f"{pub.stack_id}), whose manifest is unreadable: {pub.problem}. It stays "
                 "stopped until that file is readable again - it records what apply changed on "
-                f"the stack, so restore it rather than delete it - and `uqs job attach verify "
-                f"{pub.attachment}` has passed. Nothing was started."
+                f"the stack, so restore it rather than delete it - and `uqs job attach "
+                f"{pub.attachment}` has verified it. Nothing was started."
             )
         if pub.state != VERIFIED:
             raise UqsError(
                 f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "
                 f"{pub.stack_id}), which is {pub.state}: it may start once "
-                f"`uqs job attach verify {pub.attachment}` has passed"
+                f"`uqs job attach {pub.attachment}` has verified it"
             )
         if effective != pub.stack_id:
             raise UqsError(
                 f"{pub.procname} belongs to attachment {pub.attachment} on stack {pub.stack_id}; "
                 f"started under base port {effective} it would look for discovery at "
                 f"{effective + 1}, not {pub.stack_id + 1}. Start it with "
-                f"`uqs job attach start {pub.attachment}`, or --port {pub.stack_id}"
+                f"`uqs job attach {pub.attachment}`, or --port {pub.stack_id}"
             )
+
+
+# ------------------------------------------------------- `uqs list attachments`
+
+#: What a TCP connect to the publisher's port says, as `list attachments` shows it.
+RUNNING, STOPPED, UNREACHABLE, UNKNOWN = "running", "stopped", "unreachable", "unknown"
+
+
+def _port_state(host: str, port: int, timeout: float = 0.5) -> tuple[str, str]:
+    """(state, detail) of host:port. A refused connection is the host answering
+    that nothing listens - stopped; anything else (no route, no name, a
+    timeout) says nothing about the publisher - unreachable, never stopped."""
+    import socket
+
+    address = "127.0.0.1" if host == "localhost" else host
+    try:
+        with socket.create_connection((address, port), timeout):
+            return RUNNING, ""
+    except ConnectionRefusedError:
+        return STOPPED, ""
+    except OSError as exc:
+        return UNREACHABLE, f"{host}:{port}: {exc.strerror or type(exc).__name__}"
+
+
+def _publisher_port(procname: str, stack_id: int, root: Path) -> int | None:
+    from uqs.model.registry import allocate_offsets, read_port_lock
+
+    try:
+        return stack_id + allocate_offsets([procname], read_port_lock(root))[procname]
+    except OSError, ValueError, KeyError:
+        return None
+
+
+def inventory(root: Path | None = None, repo: Path | None = None) -> list[dict[str, str]]:
+    """One row per attachment: what it is, where, its lifecycle state, and -
+    separately - whether its publisher is running now. Reads the two JSON
+    files and connects to one port; changes nothing, and takes no lock."""
+    rows: list[dict[str, str]] = []
+    base = root or state_root()
+    published, broken = _scan(base)
+    for pub in published:
+        try:
+            cfg = json.loads((base / pub.attachment / CONFIG_FILE).read_text())
+            job, host = str(cfg["publisher"]["job"]), str(cfg["stack"]["host"])
+            persist = str(cfg.get("persist", ""))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            job, host, persist = "", "", ""
+            log.warning("attachment {}: {}", pub.attachment, exc)
+        port = _publisher_port(pub.procname, pub.stack_id, repo or repo_root())
+        if port is None or not host:
+            running, detail = UNKNOWN, "the publisher's port cannot be worked out"
+        else:
+            running, detail = _port_state(host, port)
+        rows.append(
+            {
+                "attachment": pub.attachment,
+                "job": job,
+                "publisher": pub.procname,
+                "stack": str(pub.stack_id),
+                "host": host,
+                "state": pub.state,
+                "persist": persist,
+                "publisher_state": running,
+                "publisher_port": "" if port is None else str(port),
+                "detail": pub.problem or detail,
+            }
+        )
+    for line in broken:
+        blank = dict.fromkeys(("job", "publisher", "stack", "host", "persist"), "")
+        name = Path(line.split(" cannot be read")[0]).parent.name
+        rows.append(
+            {"attachment": name, **blank, "state": UNREADABLE,
+             "publisher_state": UNKNOWN, "publisher_port": "", "detail": line}
+        )  # fmt: skip
+    return rows

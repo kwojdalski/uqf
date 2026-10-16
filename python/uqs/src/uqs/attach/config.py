@@ -189,7 +189,8 @@ def load(name: str, root: Path | None = None) -> Attachment:
     path = directory(name, root) / CONFIG_FILE
     if not path.is_file():
         raise AttachmentError(
-            f"no attachment {name!r} (looked in {path.parent}) - `uqs job attach plan` creates one"
+            f"no attachment {name!r} (looked in {path.parent}) - "
+            f"`uqs job attach {name} --job JOB --stack-id PORT` creates one"
         )
     try:
         return from_json(json.loads(path.read_text()))
