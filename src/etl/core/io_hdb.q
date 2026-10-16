@@ -452,7 +452,9 @@
         if[count order; order xasc part];
         if[(`sym in c) and not .qetl.io.on_peachq; @[part;`sym;`p#]];
         }[root]'[todo`dt;todo`tbl];
-    if[not .qetl.io.on_peachq; .Q.chk root];
+    / Not over a native stack's root (io_hdb_scoped.q): it would fill dates and
+    / tables nobody asked about.
+    if[not .qetl.io.on_peachq or .qetl.io.is_scoped root; .Q.chk root];
     `.qetl.io.touched set .qetl.io.touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
 

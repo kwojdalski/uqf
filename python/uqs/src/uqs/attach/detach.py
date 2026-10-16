@@ -28,7 +28,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, persist
+from uqs.attach import backfill_owner, config, persist
 from uqs.attach.apply import Step
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.evidence import EMPTY_LOG, Evidence, evidence
@@ -253,6 +253,8 @@ def detach(
     changes nothing - it does not even stop the publisher.
     """
     host = host or Host()
+    # A run writing into this stack's HDB owns the attachment until it finishes (#1454)
+    backfill_owner.refuse_while_active(att.name, state_dir)
     # A dry run writes nothing - not even the lock file - and needs no lock: it
     # only reads, and the manifest is replaced whole, never seen half-written.
     with nullcontext() if dry_run else config.locked(att.name, state_dir):

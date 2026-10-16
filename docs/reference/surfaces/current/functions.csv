@@ -138,6 +138,8 @@ qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
 qetl.io,hdb_lock,function,1,root
 qetl.io,hdb_lock_wait,value,,
+qetl.io,hdb_scoped,function,3,root partition_col bounds
+qetl.io,is_scoped,function,1,root
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
 qetl.io,on_peachq,value,,
@@ -148,6 +150,7 @@ qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
 qetl.io,retire,function,3,root d t
+qetl.io,scoped_roots,value,,
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
 qetl.io,write,function,3,mgr target batch

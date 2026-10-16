@@ -17,7 +17,7 @@ import time
 
 import pytest
 from attach_backfill_support import WORKER, facts_of, make_world, plan_with
-from attach_support import probe
+from attach_support import SORT_DEFAULT, probe
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -58,6 +58,8 @@ def test_a_healthy_stack_reports_how_the_run_is_coordinated(world):
     assert co["active_date"] == "2026-10-16"
     assert co["next_roll"] == "2026-10-17T00:00:00+00:00"
     assert co["eod_guard_minutes"] == 60 and co["warnings"] == []
+    assert co["last_writable_date"] == "2026-10-15"
+    assert co["writes_stop_at"] == "2026-10-16T23:00:00+00:00"
     assert "uqf adds no lock the native writers honour" in co["mechanism"]
     assert co["wdb"] == "wdb1" and co["writers"] == ["rdb1", "wdb1"]
 
@@ -121,7 +123,7 @@ def test_the_earliest_active_date_of_all_writers_wins(world):
             tablelist=[],
             subscribed=[],
             ignorelist=[],
-            sortrows=[],
+            sortrows=list(SORT_DEFAULT),
             tables=[],
             schemas={},
             rows={},
@@ -136,6 +138,25 @@ def test_the_earliest_active_date_of_all_writers_wins(world):
         plan_with(world, facts_of(dates=["2026.10.14"]))
     co = plan_with(world, facts_of(dates=["2026.10.13"]))["coordination"]
     assert co["active_date"] == "2026-10-14" and co["writers"] == ["rdb1", "wdb1", "wdb2"]
+
+
+def test_a_sort_config_this_writer_would_not_reproduce_is_refused(world):
+    world.stack.named("wdb1")["sortrows"] = [
+        {"tabname": "default", "att": "g", "col": "time", "sort": True},
+    ]
+    refused(
+        world,
+        "wdb1's sort.csv sorts crypto_market_data by \\['time'\\] with attributes .*'time': 'g'",
+    )
+
+
+def test_a_table_with_its_own_sort_row_is_judged_by_that_row(world):
+    world.stack.named("wdb1")["sortrows"] = [
+        {"tabname": "default", "att": "g", "col": "time", "sort": True},
+        {"tabname": "crypto_market_data", "att": "p", "col": "sym", "sort": True},
+        {"tabname": "crypto_market_data", "att": "", "col": "time", "sort": True},
+    ]
+    assert plan_with(world, facts_of())["coordination"]["wdb"] == "wdb1"
 
 
 def test_an_rdb_that_saves_itself_is_only_held_to_its_trading_date(world):
@@ -163,7 +184,8 @@ def test_the_plan_prints_how_the_run_is_coordinated(world, monkeypatch):
     monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts_of())
     text = " ".join(invoke("--mode", "plan").output.split())
     assert "coordination active write date 2026-10-16 is never touched" in text
-    assert "end of day 2026-10-17T00:00:00+00:00 +/- 60 min fenced" in text
+    assert "last writable date 2026-10-15); writes stop at 2026-10-16T23:00:00+00:00" in text
+    assert "beside root" in text and ".staging (staging)" in text
 
 
 def test_a_compression_process_is_refused_and_housekeeping_only_warned(world):

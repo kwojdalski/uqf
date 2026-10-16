@@ -83,6 +83,8 @@ class Coordination:
             "wdb": self.wdb,
             "filesystem": self.filesystem,
             "active_date": self.active_date.isoformat(),
+            "last_writable_date": (self.active_date - timedelta(days=1)).isoformat(),
+            "writes_stop_at": (self.next_roll - timedelta(minutes=self.guard_minutes)).isoformat(),
             "now": self.now.isoformat(),
             "next_roll": self.next_roll.isoformat(),
             "eod_guard_minutes": self.guard_minutes,
@@ -135,6 +137,36 @@ def _state(proc: Proc, ipc: Ipc, blockers: list[str]) -> dict[str, Any] | None:
             "when, cannot be established"
         )
         return None
+
+
+def _sort_config(
+    att: Attachment, dest: Destination, writers: list[Proc], blockers: list[str]
+) -> None:
+    """The wdb's sort.csv must describe the order this writer produces.
+
+    Finishing a backfilled partition sorts it by sym then time and puts p# on sym - and
+    drops every other attribute, because the partition is rewritten. A stack that sorts or
+    attributes this table otherwise would get partitions in an order its own end of day
+    never makes, so the difference is a blocker, named, rather than a surprise in a query.
+    """
+    columns = {name for name, _ in att.table(dest.dataset).columns}
+    order = [c for c in ("sym", "time") if c in columns]
+    for proc in writers:
+        rows = (proc.probe or {}).get("sortrows")
+        if proc.proctype != "wdb" or rows is None:
+            continue
+        own = [r for r in rows if r.get("tabname") == dest.dataset]
+        use = own or [r for r in rows if r.get("tabname") == "default"]
+        sorted_by = [r["col"] for r in use if r.get("sort") and r.get("col")]
+        attrs = {r["col"]: r["att"] for r in use if r.get("att") and r.get("col")}
+        want_attrs = {"sym": "p"} if "sym" in columns else {}
+        if sorted_by != order or attrs != want_attrs:
+            blockers.append(
+                f"{proc.procname}'s sort.csv sorts {dest.dataset} by {sorted_by or 'nothing'} "
+                f"with attributes {attrs or 'none'}; this writer sorts by {order} with "
+                f"{want_attrs or 'none'} and drops every other attribute from a partition it "
+                "rewrites"
+            )
 
 
 def _others(obs: Observation, blockers: list[str], warnings: list[str]) -> None:
@@ -225,6 +257,7 @@ def assess(
             f"{dest.hdb_dir} is on a {kind} filesystem: kdb+'s serialisation of the sym file "
             "relies on local file locking"
         )
+    _sort_config(att, dest, [p for p in named.values() if p.procname in writers], blockers)
     if (dest.hdb_dir / "par.txt").exists():
         blockers.append(f"{dest.hdb_dir} is segmented (par.txt): partitions live outside it")
     _others(obs, blockers, warnings)

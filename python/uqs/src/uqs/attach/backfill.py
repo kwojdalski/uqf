@@ -26,9 +26,8 @@ they live in a directory named for the attachment and the destination's
 identity (`Destination.state_dir`), so coverage recorded for one HDB can never
 suppress a run into another.
 
-EXECUTION IS NOT HERE. Attached execution stays refused until native write
-coordination and guarded recovery exist (#1454's later parts); `refuse_execution`
-is the one place that says so.
+EXECUTION is uqs.attach.backfill_run's: it admits afresh, with the coordination checks of
+uqs.attach.backfill_coordination, immediately before anything starts.
 """
 
 from __future__ import annotations
@@ -50,10 +49,11 @@ from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs
 from uqs.stack.attach_state import VERIFIED
 
-#: What an attached backfill may do for now: read configuration, code and the
-#: local ledgers. dry-run and run need the write coordination and the guarded
-#: writer, which later parts of #1454 add.
+#: What an attached backfill may do: `validate` and `plan` read configuration, code
+#: and the local ledgers; `dry-run` and `run` start the runner (uqs.attach.backfill_run),
+#: which admits afresh first.
 READ_ONLY_MODES = ("validate", "plan")
+EXECUTION_MODES = ("dry-run", "run")
 
 #: The q script that evaluates a plan, and the subdirectory (of the status
 #: directory) attached runs keep their state in.
@@ -105,23 +105,6 @@ def identity_of(host: str, stack_id: int, hdb_dir: Path) -> str:
 def state_dir_for(paths: UqsPaths, attachment: str, identity: str) -> Path:
     """The directory an attached run's ledgers live in."""
     return runs.status_dir(paths) / STATE_SUBDIR / f"{attachment}-{identity}"
-
-
-def refuse_execution(mode: str | None) -> None:
-    """Attached execution is not available: only `validate` and `plan` are.
-
-    Said here, once, so every entry point refuses the same way and a later part
-    of #1454 lifts it in one place - when native writers are coordinated with
-    and recovery is guarded, not before.
-    """
-    if mode in READ_ONLY_MODES:
-        return
-    raise UqsError(
-        f"--attach supports --mode {' and '.join(READ_ONLY_MODES)} only (got "
-        f"{mode or 'run'}): writing into a native stack's HDB needs a coordination "
-        "mechanism with its own writers (wdb save, end of day, sort) and guarded "
-        "recovery, neither of which exists yet (#1454). Nothing was started."
-    )
 
 
 def _declaration(paths: UqsPaths, worker: str) -> Declaration:

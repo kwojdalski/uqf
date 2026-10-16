@@ -230,11 +230,37 @@ uqs job backfill piggybank_ledger_backfill --attach pb-uat \
     --on-conflict replace --mode plan
 ```
 
-**Only `--mode validate` and `--mode plan` exist so far.** `dry-run` and `run`
-with `--attach` are refused until guarded execution and recovery land
-([#1454](https://github.com/kwojdalski/uqf/issues/1454)). Attachment safety
-checks do not, by themselves, certify direct native-HDB writes; the coordination
-below is what `plan` adds.
+`validate` resolves the destination offline; `plan` also asks the stack
+read-only questions and reports what a run would do. `dry-run` and `run` (the
+default) admit **afresh** (everything `plan` checks, again, immediately before
+anything starts) and then start the runner, `scripts/dev/attached_backfill.q`.
+It is the bounded-worker lifecycle and the HDB writer, not a second engine: a
+window's rows are published, then its coverage is recorded, then the checkpoint
+saved, and a killed run leaves an under-claim that the next run redoes.
+
+What is different from a backfill into uqf's own stack:
+
+- The destination is a flag, never `KDBHDB`; the root must exist and is not
+  created.
+- Writes go through `.qetl.io.hdb_scoped`: staged in `<hdb>.staging` beside the
+  root (a reader maps every directory *in* the root), swapped in by rename, and
+  refused past the last completed date or after the end-of-day fence begins.
+  `replace` clears only its own window: rows outside it are kept, and other
+  dates and other tables are not rewritten.
+- Finishing a partition sorts it by sym then time with `p#sym`; it does **not**
+  fill other dates with the table (`.Q.chk`). An older partition without the
+  table stays without until `uqs data hdb-check --fix`. A stack whose `sort.csv`
+  sorts or attributes the table otherwise is refused, because the rewritten
+  partitions would not match its own.
+- Coverage, checkpoint and lock live under
+  `<status dir>/attached/<attachment>-<id>/`, and the run's log in its `logs/`.
+  Coverage is *written*, not *queryable*, until the stack's readers reload (part
+  4 of #1454).
+- While a run is alive its owner record sits in the attachment's folder
+  (`backfills/<worker>.owner.json`) and `uqs job attach detach` refuses; the run
+  removes it when it finishes, and a record whose process is gone owns nothing.
+- Attachment safety checks do not, by themselves, certify direct native-HDB
+  writes; the coordination below is what `plan` and `run` add.
 
 ### Coordination with the native writers
 
