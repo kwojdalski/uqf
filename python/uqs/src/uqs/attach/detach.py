@@ -187,6 +187,9 @@ def _request(m: Manifest, op: Op, dry_run: bool, ours: set[str]) -> dict:
     req: dict = {"table": op.table, "token": m.token, "dry_run": dry_run}
     if op.op == "consumer_attach" and op.table in ours:
         req["follows_plant"] = True
+    if op.op == "consumer_attach":
+        stp = next((o.process for o in m.operations if o.op == "stp_register"), "")
+        req["tickerplant"] = stp
     if op.op == "stp_register":
         req |= {"empty_size": EMPTY_LOG, "expect_subscribers": _subscribers_added(m)}
     return req
