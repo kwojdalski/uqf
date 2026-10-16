@@ -26,6 +26,10 @@
  inl:t in key own;
  mine:$[inl;tok~own[t]`token;0b];
  had:t in tables[];
+ / a name already bound to something that is not a table would be overwritten by the
+ / subscribe's `set`, for every table (#1450); refuse before anything changes
+ if[(not had) and ((t in key `.) or t in .Q.res,key .q);
+  :.j.j `status`detail!("refused";"the name ",string[t]," is already defined on this process as something other than a table; subscribing would overwrite it")];
  if[had;
   if[not ((cols t)~cs) and all (ty=" ")|(exec t from meta t)=ty;
    :.j.j `status`detail!("refused";"the table exists with a different schema")]];

@@ -104,11 +104,22 @@ def _request(m: Manifest, att: Attachment, spec: TableSpec) -> dict:
     }
 
 
+def refuse_detaching(name: str, state: str) -> None:
+    """Refuse to attach over a detach that is in progress or was interrupted (#1443)."""
+    if state == "detaching":
+        raise AttachmentError(
+            f"attachment {name} is detaching: a detach is in progress or was interrupted. "
+            "The publisher is stopped and its start gate is closed. Run "
+            f"`uqs job detach {name}` to finish it, then attach again."
+        )
+
+
 def _fresh(att: Attachment, state_dir: Path | None) -> Manifest:
     path = Manifest.path_for(att.name, state_dir)
     if not path.is_file():
         return Manifest.new(att, path)
     m = Manifest.load(att.name, state_dir)
+    refuse_detaching(att.name, m.state)
     if m.state == "rolled_back":
         # Everything it made was removed: a new run is a new attachment, with a new token
         # (the old one must not match anything left behind), and the history stays.
