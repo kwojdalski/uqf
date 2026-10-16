@@ -68,11 +68,11 @@ if[not `worker in key .Q.opt .z.x;
     every:.qetl.job.bounded.runtime.windows[r`range_from;r`range_to;cfg`width];
     decisions:.qdev.attachedplan.decisions[cfg,enlist[`worker]!enlist worker;r`source_version;r`plan;every];
     wins:([] range_from:string every`range_from; range_to:string every`range_to; decision:decisions);
-    `worker`dataset`source`source_version`live`custom_io`on_conflict`width`partition`time_column`windows`planned`cursor`dates!(
+    `worker`dataset`source`source_version`live`custom_io`on_conflict`width`partition`time_column`windows`planned`cursor`reload_owed`dates!(
         string worker;string cfg`dataset;string cfg`source;string r`source_version;r`live;
         not (::)~cfg`io;string r`on_conflict;string cfg`width;string .qetl.job.bounded.partition_of worker;
         string (.qetl.source.def cfg`source)`time_column;
-        wins;r`planned;string r`cursor;
+        wins;r`planned;string r`cursor;.qetl.coverage.outstanding[cfg`dataset;.qetl.job.bounded.partition_of worker;r`source_version];
         string each .qdev.attachedplan.dates every where decisions~\:"fetch")}
 
 \d .

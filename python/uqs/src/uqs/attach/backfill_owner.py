@@ -26,8 +26,9 @@ from typing import Any
 from uqs.attach import config
 from uqs.attach.config import AttachmentError
 from uqs.liveness import on_this_host, pid_alive
+from uqs.stack.backfill_status import OWNER_SUBDIR
 
-SUBDIR = "backfills"
+SUBDIR = OWNER_SUBDIR
 
 
 def owner_file(attachment: str, worker: str, root: Path | None = None) -> Path:

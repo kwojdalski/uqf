@@ -31,8 +31,13 @@ from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs
+from uqs.stack.backfill_status import result_line
 
 RUN_MODES = ("run", "dry-run")
+#: How the runner is handed the password of the readers it is to ask to reload.
+REACH_PASSWORD_ENV = "UQF_ATTACH_REACH_PASSWORD"
+#: The runner's exit code for rows that are written and covered but not yet queryable.
+EXIT_NOT_QUERYABLE = 3
 RUNNER = Path("scripts") / "dev" / "attached_backfill.q"
 LOGS = "logs"
 
@@ -75,6 +80,8 @@ def runner_flags(
     dest: Destination,
     owner: Path,
     *,
+    host: str,
+    user: str,
     worker: str,
     version: str,
     range_from: datetime,
@@ -110,6 +117,10 @@ def runner_flags(
         runs.to_q_timestamp(deadline),
         "-owner",
         str(owner),
+        "-readers",
+        ",".join(f"{r['procname']}@{host}:{r['port']}" for r in plan["reload_targets"]) or "_none_",
+        "-user",
+        user,
     ]
 
 
@@ -160,10 +171,13 @@ def launch(
         backfill_owner.refuse_while_active(attachment, attach_root)
         dest = Destination(**_destination(plan))
         owner = backfill_owner.owner_file(attachment, worker, attach_root)
+        att = config.load(attachment, attach_root)
         flags = runner_flags(
             plan,
             dest,
             owner,
+            host=att.stack.host,
+            user=att.stack.user,
             worker=worker,
             version=version,
             range_from=range_from,
@@ -176,7 +190,12 @@ def launch(
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
         log = logs / f"{worker}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}.log"
-        env = {**os.environ, "UQF_STATUS_DIR": str(dest.state_dir)}
+        # the readers' password goes to the child by environment, never by command line
+        env = {
+            **os.environ,
+            "UQF_STATUS_DIR": str(dest.state_dir),
+            REACH_PASSWORD_ENV: att.stack.password(),
+        }
         with log.open("wb") as out:
             proc = subprocess.Popen(
                 [str(q), str(paths.repo_root / RUNNER), *flags],
@@ -206,20 +225,10 @@ def _destination(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def result_line(log: Path) -> dict[str, Any]:
-    """The runner's closing `RESULT {...}` line, or {} when it has not written one."""
-    import json
-
-    try:
-        lines = [x for x in log.read_text(errors="replace").splitlines() if x.startswith("RESULT ")]
-    except OSError:
-        return {}
-    return json.loads(lines[-1][len("RESULT ") :]) if lines else {}
-
-
 def follow(run: Launched, *, poll: float = 0.5, timeout: float | None = None) -> tuple[int, dict]:
-    """Wait for the runner; its exit code and what it reported. The code is the lifecycle's:
-    0 for completed or idle, non-zero for anything that did not do its job."""
+    """Wait for the runner; its exit code and what it reported. The code is the lifecycle's: 0
+    for completed or idle, non-zero for anything that did not do its job, and EXIT_NOT_QUERYABLE
+    for rows written and covered that a reader has not yet reloaded."""
     started = time.monotonic()
     while True:
         code = run.process.poll()

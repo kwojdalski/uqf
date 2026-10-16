@@ -46,7 +46,7 @@ from uqs.attach.schema import SchemaError, TableSpec, differences, parse_definit
 from uqs.model.declarations import Declaration, read_declarations
 from uqs.paths import TABLES_FILE, UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
-from uqs.stack import runs
+from uqs.stack import backfill_status, runs
 from uqs.stack.attach_state import VERIFIED
 
 #: What an attached backfill may do: `validate` and `plan` read configuration, code
@@ -58,7 +58,7 @@ EXECUTION_MODES = ("dry-run", "run")
 #: The q script that evaluates a plan, and the subdirectory (of the status
 #: directory) attached runs keep their state in.
 PLAN_SCRIPT = Path("scripts") / "dev" / "attached_plan.q"
-STATE_SUBDIR = "attached"
+STATE_SUBDIR = backfill_status.STATE_SUBDIR
 _TABLE_LINE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
 
 
@@ -105,6 +105,17 @@ def identity_of(host: str, stack_id: int, hdb_dir: Path) -> str:
 def state_dir_for(paths: UqsPaths, attachment: str, identity: str) -> Path:
     """The directory an attached run's ledgers live in."""
     return runs.status_dir(paths) / STATE_SUBDIR / f"{attachment}-{identity}"
+
+
+def state_dir_of(paths: UqsPaths, attachment: str, attach_root: Path | None = None) -> Path:
+    """The state directory of `attachment`'s destination - where its attached backfills keep
+    coverage, checkpoints and the run ledger - without needing a worker: the identity is the
+    attachment's host, stack and pinned HDB alone."""
+    att = config.load(attachment, attach_root)
+    if not att.storage.hdb_dir:
+        raise UqsError(f"attachment {att.name} pins no HDB directory: it has no destination")
+    ident = identity_of(att.stack.host, att.stack.id, canonical(att.storage.hdb_dir))
+    return state_dir_for(paths, att.name, ident)
 
 
 def _declaration(paths: UqsPaths, worker: str) -> Declaration:

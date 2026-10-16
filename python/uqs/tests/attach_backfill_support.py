@@ -53,8 +53,12 @@ class _ErrorLog:
 class HdbStack(FakeStack):
     """FakeStack whose HDB reader answers `hdb_reader` like a TorQ hdb process."""
 
-    def __init__(self, hdb: Path, other: Path | None = None) -> None:
+    def __init__(
+        self, hdb: Path, other: Path | None = None, reader_ports: dict[str, int] | None = None
+    ) -> None:
         super().__init__(6000)
+        #: ports of readers that listen but never answer (a hung process, not a stopped one)
+        self.hung: set[int] = set()
         #: per-process overrides of writer_state's answer
         self.state_over: dict[str, dict[str, Any]] = {}
         for name in ("rdb1", "wdb1"):
@@ -68,6 +72,11 @@ class HdbStack(FakeStack):
                 listed_only=True,
             )
             self.readers["hdb2"] = {"stackid": "6000", "hdbdir": str(other), "partitions": 1}
+        for name, port in (reader_ports or {}).items():
+            reader = next(p for k, p in self.procs.items() if k < 0 and p["procname"] == name)
+            self.procs.pop(-reader["port"])
+            reader["port"] = port
+            self.procs[-port] = reader
         self.refresh_discovery()
 
     def writer_state(self, name: str) -> dict[str, Any]:
@@ -97,6 +106,8 @@ class HdbStack(FakeStack):
             self.calls.append((endpoint.port, op, request))
             if endpoint.port in self.down:
                 raise IpcError(endpoint, op, "cannot connect: Connection refused")
+            if endpoint.port in self.hung:
+                raise IpcError(endpoint, op, "q error: timed out")
             if op == "writer_state":
                 return {
                     **self.writer_state(endpoint.procname),
@@ -160,12 +171,13 @@ def save_attachment(
     state: str | None = "verified",
     stack_id: int = 6000,
     pin: bool = True,
+    host: str = "testhost",
     table=None,
     origin: dict | None = None,
 ) -> Attachment:
     att = Attachment(
         name=name,
-        stack=Stack(stack_id, "testhost", "testhost", stack_id + 1, "stp1", ("rdb1", "wdb1")),
+        stack=Stack(stack_id, host, host, stack_id + 1, "stp1", ("rdb1", "wdb1")),
         publisher=Publisher("pb_job", "pb_ledger1"),
         tables=(table or tree_table(),),
         storage=Storage(hdb_dir=str(hdb) if pin else ""),
@@ -208,6 +220,7 @@ def facts_of(**over):
         "time_column": "source_time",
         "planned": 2,
         "cursor": "",
+        "reload_owed": False,
         "windows": [
             {
                 "range_from": "2026.09.11D00:00:00.000000000",
@@ -228,3 +241,39 @@ def facts_of(**over):
 def plan_with(world, facts, *, ipc=None):
     world.monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts)
     return plan(world, ipc=ipc)
+
+
+def free_port() -> int:
+    import socket
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def start_upstream():
+    """The q process a worker reads over IPC (tests/q/upstream_instance.q): the starter pack's 2015
+    trades. Returns (process, port); the caller terminates it."""
+    import socket
+    import subprocess
+    import time
+
+    q = q_interpreter(os.environ)
+    if q is None:
+        pytest.skip("no q interpreter")
+    port = free_port()
+    proc = subprocess.Popen(
+        [str(q), "tests/q/upstream_instance.q", "-p", str(port), "-q"],
+        cwd=UQF_ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    for _ in range(100):
+        try:
+            socket.create_connection(("127.0.0.1", port), 0.2).close()
+            return proc, port
+        except OSError:
+            time.sleep(0.2)
+    proc.terminate()
+    pytest.fail("the upstream q process did not come up")

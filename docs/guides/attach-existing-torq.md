@@ -228,7 +228,7 @@ go. `--attach NAME` names the destination from the saved attachment instead:
 ```bash
 uqs job backfill piggybank_ledger_backfill --attach pb-uat \
     --from 2026-10-01 --to 2026-10-02 --version historical-v1 \
-    --on-conflict replace --mode plan
+    --on-conflict replace --mode plan          # then --mode dry-run, then run
 ```
 
 `validate` resolves the destination offline; `plan` also asks the stack
@@ -238,37 +238,38 @@ anything starts) and then start the runner, `scripts/dev/attached_backfill.q`.
 It is the bounded-worker lifecycle and the HDB writer, not a second engine: a
 window's rows are published, then its coverage is recorded, then the checkpoint
 saved, and a killed run leaves an under-claim that the next run redoes.
+`--wait`, `--debug`, `--trace` and `--on-conflict` work as they do elsewhere.
 
-What is different from a backfill into uqf's own stack:
+**A historical HDB backfill does not populate today's RDB and publishes nothing
+through the tickerplant.** The rows exist only in the HDB, in the partition of
+the day they happened, and only readers that reload see them.
 
-- The destination is a flag, never `KDBHDB`; the root must exist and is not
-  created.
-- Writes go through `.qetl.io.hdb_scoped`: staged in `<hdb>.staging` beside the
-  root (a reader maps every directory *in* the root), swapped in by rename, and
-  refused past the last completed date or after the end-of-day fence begins.
-  `replace` clears only its own window: rows outside it are kept, and other
-  dates and other tables are not rewritten.
-- Finishing a partition sorts it by sym then time with `p#sym`; it does **not**
-  fill other dates with the table (`.Q.chk`). An older partition without the
-  table stays without until `uqs data hdb-check --fix`. A stack whose `sort.csv`
-  sorts or attributes the table otherwise is refused, because the rewritten
-  partitions would not match its own.
-- Coverage, checkpoint and lock live under
-  `<status dir>/attached/<attachment>-<id>/`, and the run's log in its `logs/`.
-  Coverage is *written*, not *queryable*, until the stack's readers reload (part
-  4 of #1454).
-- While a run is alive its owner record sits in the attachment's folder
-  (`backfills/<worker>.owner.json`) and `uqs job attach detach` refuses; the run
-  removes it when it finishes, and a record whose process is gone owns nothing.
-- Attachment safety checks do not, by themselves, certify direct native-HDB
-  writes; the coordination below is what `plan` and `run` add.
+### What `plan` reports, and what it refuses
+
+The source, the half-open UTC range, the windows and which are already covered
+at this `--version` (read from the destination's own ledger), the conflict
+policy, the native date partitions the fetched windows fall on and whether each
+exists, the processes that write the destination, the HDB readers a reload would
+reach, and where the run would write beside the root. `--json` prints the same.
+It starts no worker and creates no directory, ledger, checkpoint or symbol file.
+
+It refuses, naming the cause: an attachment that is not `verified` (including a
+detached one), a stack that `--port` names differently, no pinned or existing
+HDB directory, a dataset the attachment does not publish, a table whose columns
+differ from the worker's, a worker with its own IO manager, `--fixture`, a
+source with no credential configured (its fixture would be written into a native
+HDB), a wdb or rdb reporting another HDB directory, no wdb reporting the pinned
+one, an HDB reader that listens but does not answer, and everything under
+coordination below. Nothing falls back to uqf's own HDB. An HDB reader that is
+not running is not an error: it serves nothing now and maps the partitions when
+it starts.
 
 ### Coordination with the native writers
 
 No native writer takes a lock a backfill could take, and the vendored TorQ is
 never edited to add one. uqf's own HDB write lock is honoured by uqf writers and
-`uqs data migrate` only. So `plan` checks, per writer, what *is* safe, and
-refuses (listing every blocker together) when it cannot establish it:
+`uqs data migrate` only. So `plan` and `run` check, per writer, what *is* safe,
+and refuse (listing every blocker together) when they cannot establish it:
 
 - **Symbols.** The wdb, the rdb, the sort workers and uqf's writer all enumerate
   with `.Q.en`, and kdb+ serialises extension of the HDB's `sym` file between
@@ -280,40 +281,80 @@ refuses (listing every blocker together) when it cannot establish it:
   writer is filling and before its trading date; the native active write date is
   never touched, and an unreported date is a refusal.
 - **End-of-day fence.** Within an hour before the next roll, within an hour
-  after the last, or while a reload is open (all on the wdb's clock), the run is
-  refused.
+  after the last, or while a reload is open (all on the wdb's clock), a run is
+  refused; a run that is under way stops writing when the fence begins.
 - **Nothing working in place.** A `compression` process is a blocker;
-  `housekeeping` is a warning.
+  `housekeeping` is a warning. A `sort.csv` that would order or attribute the
+  table differently from the finished partitions is a blocker.
 
 Not coordinated, and not claimed to be: a person running `dbmaint` or q against
-the directory, or an end of day started by hand during a run.
+the directory, or an end of day started by hand during a run. Attachment safety
+checks do not, by themselves, certify direct native-HDB writes.
 
-`plan` resolves the destination offline, asks the stack read-only questions, and
-prints what a run would do: the source, the half-open UTC range, the windows and
-which are already covered at this `--version` (coverage is read from the
-destination's own ledger), the conflict policy, the native date partitions the
-fetched windows fall on and whether each exists, the processes that write the
-destination, and the HDB readers a reload would have to reach. It starts no
-worker and creates no directory, ledger, checkpoint or symbol file; `--json`
-prints the same report as JSON.
+### How the writes are made
 
-It refuses, naming the cause: an attachment that is not `verified` (including a
-detached one), a stack that `--port` names differently, no pinned or existing
-HDB directory, a dataset the attachment does not publish, a table whose columns
-differ from the worker's, a worker with its own IO manager, `--fixture`, a
-source with no credential configured (its fixture would be written into a native
-HDB), a wdb or rdb reporting another HDB directory, no wdb reporting the pinned
-one, and an HDB reader that cannot be asked whether it serves the destination.
-Nothing falls back to uqf's own HDB.
+- The destination is a flag, never `KDBHDB`; the root must exist and is not
+  created. Writes go through `.qetl.io.hdb_scoped`: staged in `<hdb>.staging`
+  beside the root (a reader maps every directory *in* the root), swapped in by
+  rename, and refused past the last completed date.
+- `replace` clears only its own window: rows outside it are kept, and other
+  dates and other tables are not rewritten. Finishing a partition sorts it by
+  sym then time with `p#sym` and does **not** fill other dates with the table
+  (`.Q.chk`).
+- Coverage, checkpoint, lock and run ledger live under
+  `<status dir>/attached/<attachment>-<id>/`, where the id is a digest of the
+  host, stack id and canonical HDB path, so coverage recorded for one HDB cannot
+  suppress a run into another. The run's log is in its `logs/`.
+- While a run is alive its owner record sits in the attachment's folder
+  (`backfills/<worker>.owner.json`) and `uqs job detach` refuses; the run
+  removes it when it finishes, and a record whose process is gone owns nothing.
 
-Coverage, the checkpoint and the run lock for an attached backfill live in
-`<status dir>/attached/<attachment>-<identity>/`, where the identity is a digest
-of the host, stack id and canonical HDB path, so coverage recorded for one HDB
-cannot suppress a run into another.
+### Written, covered, queryable
 
-A historical HDB backfill does not populate today's RDB and publishes nothing
-through the tickerplant: the rows exist only in the HDB, and only readers that
-reload see them.
+These are three different things and the outcome says which one a run reached.
+
+  | outcome                 | exit | meaning                                                                        |
+  | ----------------------- | ---- | ------------------------------------------------------------------------------ |
+  | `queryable`             | 0    | written, covered, and every verified reader reloaded and serves the table      |
+  | `dry_run`               | 0    | nothing written                                                                |
+  | `written_not_queryable` | 3    | written and covered; a reader has not reloaded or does not serve the table     |
+  | `partial` / `failed`    | 1    | a window failed: neither written nor covered; covered windows are skipped      |
+
+Only the HDB readers that the stack's discovery lists *and* that report the
+destination's directory as the one they serve are asked to reload; one serving
+another directory is left alone. After a reload the runner asks the reader
+whether it serves the table, because **a partitioned HDB takes its table list
+from its latest partition**: a table written only into an older date stays
+invisible until the latest partition holds it too. On a freshly attached table
+that is the case until the stack's next end of day writes it (or
+`uqs data hdb-check --fix` fills it), and the run says so by name instead of
+reporting success.
+
+`written_not_queryable` is retryable without writing anything: run the same
+command again. Every window is covered, so the worker is idle, the readers are
+asked again, and the readiness record advances only when each has answered.
+
+### Boundaries
+
+- Exercised against TorQ 5.2.12 (the starter pack as it ships) on KDB-X, by the
+  `attach-stack` lane: plan, dry-run, run, a query against the native HDB
+  process and a retry, on a disposable stack. Another TorQ version is accepted
+  only through the attach workflow's `TORQ_VERSION` override, which accepts a
+  risk and certifies nothing about backfills.
+- One unsegmented HDB on a local filesystem of the machine running `uqs`;
+  completed historical dates only; the dataset of one worker per run.
+- Hosted CI cannot run the stack lane; `uqs` records a KDB-X attestation on the
+  PR.
+
+### Seeing what happened
+
+- `uqs list backfills` - per destination: attachment, worker, state (`running`,
+  `completed`, ...), outcome, whether the rows are queryable, the log, and what
+  to do next when they are not.
+- `uqs job runs list | status | show --attach NAME` - the destination's run
+  ledger; `show` prints the re-run command with `--attach` in it.
+- `uqs job backfill ... --attach NAME --mode plan` shows `reload owed` when an
+  earlier run left rows written and covered but not yet queryable.
 
 ## Restart behaviour
 

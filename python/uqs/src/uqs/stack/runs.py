@@ -190,12 +190,14 @@ def untagged(version: str) -> str:
     return version.removesuffix(FIXTURE_TAG).split(REVISION_TAG)[0]
 
 
-def rerun_command(run: dict) -> str | None:
+def rerun_command(run: dict, attach: str | None = None) -> str | None:
     """The command that re-runs `run`'s range - which, because coverage skips
     what is already covered, is also how a failed or interrupted run resumes.
 
     None when the row lacks what the command needs (a run begun before the
-    ledger recorded ranges; see `migrate`).
+    ledger recorded ranges; see `migrate`). `attach` names the attachment a run
+    into a native stack's HDB was for: the command must say so, or it would write
+    the runtime's own HDB (#1454).
     """
     needed = ("worker", "range_from", "range_to", "source_version")
     if any(not run.get(k) for k in needed):
@@ -210,6 +212,7 @@ def rerun_command(run: dict) -> str | None:
         f"uqs job backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
         f"--to {_as_bound(str(run['range_to']), upper=True)} --version {version}"
         + (" --fixture" if fixture else "")
+        + (f" --attach {attach}" if attach else "")
     )
 
 

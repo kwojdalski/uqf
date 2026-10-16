@@ -163,9 +163,18 @@ def test_a_reader_of_another_directory_is_not_a_reload_target(world, monkeypatch
     assert plan_["readers_not_serving"] == [{"procname": "hdb2", "detail": f"serves {elsewhere}"}]
 
 
-def test_an_hdb_reader_that_cannot_be_asked_blocks_the_plan(world):
+def test_an_hdb_reader_that_is_not_running_is_not_a_reload_target_and_is_said_so(world):
     world.stack.down.add(6003)
-    with pytest.raises(UqsError, match="HDB reader hdb1 .* does not answer"):
+    p = plan_with(world, facts_of())
+    assert p["reload_targets"] == []
+    assert p["readers_not_serving"] == [
+        {"procname": "hdb1", "detail": "not running (connection refused)"}
+    ]
+
+
+def test_an_hdb_reader_that_listens_but_does_not_answer_blocks_the_plan(world):
+    world.stack.hung.add(6003)
+    with pytest.raises(UqsError, match="HDB reader hdb1 .* does not answer: q error: timed out"):
         plan_with(world, facts_of())
 
 
