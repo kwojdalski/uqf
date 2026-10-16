@@ -12,6 +12,7 @@ python/uqs/tests/test_columns.py::test_every_type_agrees_with_q  # PeachQ result
 
 
 
+python/uqs/tests/test_fill_hdb_release.py::test_the_repair_runs_from_a_release_with_nothing_else_of_the_checkout  # PeachQ cannot append a column to a table's .d (the amend dbmaint's add1col uses is 'nyi), so a missing column is not written
 python/uqs/tests/test_fill_hdb_columns.py::test_the_query_fails_before_the_repair  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_is_idempotent  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_makes_the_query_run  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
