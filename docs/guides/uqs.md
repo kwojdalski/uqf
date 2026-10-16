@@ -82,7 +82,7 @@ actually short.
 
 ```
 uqs data hdb-check         # which partitions are missing what
-uqs data hdb-check --fix   # write an empty copy of each into them
+uqs data hdb-check --fix   # write each missing table and column, via vendored KX dbmaint
 ```
 
 `--fix` is additive and idempotent: a table directory that exists is never
@@ -142,14 +142,16 @@ and options. The sections below cover what `--help` cannot.
 
 Three groups gather what is not a lifecycle command. `uqs job` is everything
 about one ETL job: writing it into the tree (`new`, `remove`, `install`) and
-operating it (`backfill`, `preview`, `gaps`, and `runs` for the run ledger).
-`uqs setup` prepares the machine the stack runs on - `uqs setup odbc` installs,
-loads and rolls back a private ODBC setup. `uqs connector` starts, stops and
-checks the external publishers - databento, kafka, the cryptorust recorders -
-which are processes outside TorQ, not the q processes `uqs start` manages.
+operating it (`backfill`, `preview`, `gaps`, and `runs` for the run ledger), and
+putting it on a TorQ stack that is already running (`attach`, see [attaching to
+an existing TorQ](attach-existing-torq.md)). `uqs setup` prepares the machine
+the stack runs on - `uqs setup odbc` installs, loads and rolls back a private
+ODBC setup. `uqs connector` starts, stops and checks the external publishers -
+databento, kafka, the cryptorust recorders - which are processes outside TorQ,
+not the q processes `uqs start` manages.
 
-Putting a release on a server is `uqs deploy`: see [Deploying to a
-server](deploy.md).
+Putting a release on a server is `uqs deploy` (`history` lists what this machine
+deployed): see [Deploying to a server](deploy.md).
 
 `PROCS` is `all` (the default) or one or more process names, each its own word -
 `uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A

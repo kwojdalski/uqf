@@ -283,7 +283,7 @@ directories, one question each:
 
   | Directory                                         | Answers                                                                                                             |
   | ---                                               | ---                                                                                                                 |
-  | [`docs/guides/`](docs/guides/)                    | *How do I do this?* — running the stack, adding a pipeline, the CI gates                                            |
+  | [`docs/guides/`](docs/guides/)                    | *How do I do this?* — running the stack, adding a pipeline, deploying                                               |
   | [`docs/scaffolding/`](docs/scaffolding/README.md) | *How do I create one of these?* — one page per shape `uqs job new` writes                                           |
   | [`docs/services/`](docs/services/README.md)       | *What does the stack run?* — a showcase of every process, one short card each, with full pages linked               |
   | [`docs/architecture/`](docs/architecture/)        | *Why is it shaped this way?* — including the running stack                                                          |
@@ -364,7 +364,7 @@ verified, working order (baked into `gen-docs.sh`) is
 
 This repository's own code is MIT licensed --- see [`LICENSE`](LICENSE).
 
-Six vendored dependencies under `lib/` and `tests/lib/` carry their own terms,
+Seven vendored dependencies under `lib/` and `tests/lib/` carry their own terms,
 one of which (qUnit, the test framework) is **non-commercial**. See
 [**`LICENSING.md`**](LICENSING.md) for the per-dependency breakdown: the license
 each is under, where its full text lives, whether `src/init.q` loads it, and

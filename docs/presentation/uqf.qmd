@@ -272,15 +272,15 @@ cannot disagree about the maths.
 
 ## Storage and end of day {.smaller .scrollable}
 
-  |                  | TorQ                                               | uqf                                                                                                               |
-  | ---              | ---                                                | ---                                                                                                               |
-  | rdb, wdb, hdb    | the pack's rows and TorQ's end-of-day flow         | **unchanged** (rdb and hdb gain `-dataaccess`; hdb1 loads `.qf.util`)                                             |
-  | live data path   | plant, rdb, wdb, sort, hdb                         | the same; a streaming job's output is a plant table like any other                                                |
-  | history writes   | tickerplant log replay                             | `.qetl.io` managers: `memory`, `discard`, `hdb` (`io_hdb.q`) - rows land in the partition of their own date       |
-  | HDB safety       | none for a second writer                           | a write lock per root with stale-holder breaking; refuses today's partition; stage-and-swap with crash recovery   |
-  | HDB shape        | `.Q.chk` for the partition wdb writes              | every command bootstraps `fill_hdb_partitions.q`; `uqs data hdb-check` finds missing tables and columns           |
-  | completeness     | none                                               | the coverage ledger `etl_coverage`: a backfill skips what it covers and fills the gaps                            |
-  | removing data    | `housekeeping1`: zips and deletes logs and tplogs  | `housekeeping1` untouched; `.qetl.retention` is declared per dataset, dry-run by default, ledger-aware            |
+  |                  | TorQ                                               | uqf                                                                                                                                              |
+  | ---              | ---                                                | ---                                                                                                                                              |
+  | rdb, wdb, hdb    | the pack's rows and TorQ's end-of-day flow         | **unchanged** (rdb and hdb gain `-dataaccess`; hdb1 loads `.qf.util`)                                                                            |
+  | live data path   | plant, rdb, wdb, sort, hdb                         | the same; a streaming job's output is a plant table like any other                                                                               |
+  | history writes   | tickerplant log replay                             | `.qetl.io` managers: `memory`, `discard`, `hdb` (`io_hdb.q`) - rows land in the partition of their own date                                      |
+  | HDB safety       | none for a second writer                           | a write lock per root with stale-holder breaking; refuses today's partition; stage-and-swap with crash recovery                                  |
+  | HDB shape        | `.Q.chk` for the partition wdb writes              | every command bootstraps `fill_hdb_partitions.q` (over vendored KX `dbmaint.q`); `uqs data hdb-check` finds missing tables and columns           |
+  | completeness     | none                                               | the coverage ledger `etl_coverage`: a backfill skips what it covers and fills the gaps                                                           |
+  | removing data    | `housekeeping1`: zips and deletes logs and tplogs  | `housekeeping1` untouched; `.qetl.retention` is declared per dataset, dry-run by default, ledger-aware                                           |
 
 ## Recovery {.smaller .scrollable}
 
