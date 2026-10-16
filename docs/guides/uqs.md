@@ -143,12 +143,12 @@ and options. The sections below cover what `--help` cannot.
 Three groups gather what is not a lifecycle command. `uqs job` is everything
 about one ETL job: writing it into the tree (`new`, `remove`, `install`) and
 operating it (`backfill`, `preview`, `gaps`, and `runs` for the run ledger), and
-putting it on a TorQ stack that is already running (`attach`, see [attaching to
-an existing TorQ](attach-existing-torq.md)). `uqs setup` prepares the machine
-the stack runs on - `uqs setup odbc` installs, loads and rolls back a private
-ODBC setup. `uqs connector` starts, stops and checks the external publishers -
-databento, kafka, the cryptorust recorders - which are processes outside TorQ,
-not the q processes `uqs start` manages.
+putting it on a TorQ stack that is already running (`attach` and `detach`, see
+[attaching to an existing TorQ](attach-existing-torq.md)). `uqs setup` prepares
+the machine the stack runs on - `uqs setup odbc` installs, loads and rolls back
+a private ODBC setup. `uqs connector` starts, stops and checks the external
+publishers - databento, kafka, the cryptorust recorders - which are processes
+outside TorQ, not the q processes `uqs start` manages.
 
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
 deployed): see [Deploying to a server](deploy.md).
@@ -254,6 +254,10 @@ uqs list processes
   source, and its dataset and partition), whether it starts with the stack, and
   whether it is still a `scaffolded` job `uqs job new` wrote or `written` work.
   `uqs list jobs --sort state` puts the unfinished scaffolds together
+- `attachments` - every `uqs job attach` attachment: its job, publisher, stack
+  and host, its lifecycle `state` and persist mode, and - separately -
+  `publisher_state`: `running`, `stopped`, or `unreachable`/`unknown` when the
+  host or port cannot be checked. Read-only
 
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 

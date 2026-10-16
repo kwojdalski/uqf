@@ -313,3 +313,48 @@ def test_an_untested_version_is_refused_accepted_applied_and_the_acceptance_goes
     stack.publish(TABLE, ROWS)
     stack.flush()
     assert stack.rows("rdb1", TABLE) == 3
+
+
+# ------------------------------------------------- the one command, end to end (#1457)
+
+
+def test_the_cli_previews_executes_reruns_and_detaches_a_real_stack(stack, bundle):
+    """`uqs job attach NAME --dry-run`, then the same without it, then again,
+    then `uqs job detach` - as subprocesses, the way an operator runs them."""
+    cmd = ["job", "attach", "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle),
+           "--stack-id", str(stack.port), "--host", "127.0.0.1",
+           "--discovery", f"127.0.0.1:{stack.port + 1}"]  # fmt: skip
+    schema_before = stack.schema_file.read_bytes()
+
+    preview = stack.uqs(*cmd, "--dry-run", "--json")
+    assert preview.returncode == 0, preview.stdout + preview.stderr
+    assert json.loads(preview.stdout)["plan"]["ok"] is True
+    assert not state(stack).exists(), "a preview saves nothing"
+    assert TABLE not in stack.q("stp1", "string each tables[]")
+    assert stack.schema_file.read_bytes() == schema_before
+
+    done = stack.uqs(*cmd, "--yes", "--no-start", "--json")
+    assert done.returncode == 0, done.stdout + done.stderr
+    data = json.loads(done.stdout)
+    assert [s["stage"] for s in data["stages"]] == ["save", "apply", "verify", "start"]
+    assert data["verify"]["ok"] and Manifest.load("pb-uat", state(stack)).state == "verified"
+    after = facts_of(stack)
+    assert after["subscribers"] == 2 and stack.schema_file.read_bytes() != schema_before
+
+    again = stack.uqs(*cmd, "--yes", "--no-start", "--json")
+    assert again.returncode == 0, again.stdout + again.stderr
+    assert {s["outcome"] for s in json.loads(again.stdout)["apply"]["steps"]} == {"already"}
+    assert facts_of(stack) == after, "the re-run changed nothing"
+
+    manifest = (state(stack) / "pb-uat" / "manifest.json").read_bytes()
+    dry = stack.uqs("job", "detach", "pb-uat", "--dry-run", "--json")
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert json.loads(dry.stdout)["outcome"] == "rolled_back"
+    assert (state(stack) / "pb-uat" / "manifest.json").read_bytes() == manifest
+    assert facts_of(stack) == after
+
+    gone = stack.uqs("job", "detach", "pb-uat", "--yes", "--json")
+    assert gone.returncode == 0, gone.stdout + gone.stderr
+    assert json.loads(gone.stdout)["outcome"] == "rolled_back"
+    assert TABLE not in stack.q("stp1", "string each tables[]")
+    assert stack.schema_file.read_bytes() == schema_before, "the block went with it"
