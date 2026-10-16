@@ -83,6 +83,11 @@ POLICY: dict[str, Policy] = {
     "SCHEMA_INCOMPATIBLE": Policy(
         False, "a proven schema mismatch: publishers send columns by position"
     ),
+    "UNTYPED_COLUMN": Policy(
+        False,
+        "an untyped column can change its stored type from one batch to the next, which makes "
+        "the wdb's write fail and aborts its end of day for every table",
+    ),
     "NAME_RESERVED": Policy(
         False,
         "the name is already bound to something else on the process (a TorQ global, a view, a "

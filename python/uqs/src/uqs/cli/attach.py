@@ -123,7 +123,10 @@ def attach(
     ] = None,
     discovery: Annotated[
         str | None,
-        typer.Option("--discovery", help="HOST:PORT of its discovery (default: HOST:<stack-id>+1)"),
+        typer.Option(
+            "--discovery",
+            help="HOST:PORT of its discovery, on the --host machine (default: HOST:<stack-id>+1)",
+        ),
     ] = None,
     tickerplant: Annotated[
         str | None, typer.Option("--tickerplant", help="Its tickerplant, if several")
