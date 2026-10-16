@@ -22,7 +22,8 @@ from uqs.attach import config, persist, service, verify
 from uqs.attach import detach as detaching
 from uqs.attach.config import AttachmentError, Storage
 from uqs.attach.manifest import Manifest
-from uqs.paths import repo_root
+from uqs.paths import UqsError, default_paths, repo_root
+from uqs.stack import attach_state
 
 pytestmark = requires_stack()
 ROOT = repo_root()
@@ -519,6 +520,39 @@ def test_a_lost_connection_during_rollback_is_partial_and_a_retry_restores_the_s
     assert Manifest.load("pb-uat", state(stack)).state == "rollback_partial"
     assert detach_(stack, att).outcome == "rolled_back"
     assert snapshot(stack) == original
+
+
+@pytest.mark.parametrize("op", ["stp_register", "consumer_attach"])
+def test_an_apply_step_with_an_unknown_outcome_is_probed_and_removed_by_detach(stack, bundle, op):
+    """#1447: the connection died after the process acted; detach asks the process
+    instead of calling the table pre-existing and reporting a rollback that left it."""
+    original = snapshot(stack)
+    att = att_for(stack, bundle)
+    with pytest.raises(applying.ApplyFailed):
+        apply_(stack, att, ipc=FaultIpc(stack.ipc(), [(op, 0, "after")]))
+    pending = [o for o in Manifest.load("pb-uat", state(stack)).operations if o.status == "pending"]
+    assert [(o.op, o.ownership) for o in pending] == [(op, "")]
+    assert snapshot(stack) != original
+    assert detach_(stack, att).outcome == "rolled_back"
+    assert snapshot(stack) == original, "the table the unknown step made is gone"
+
+
+def test_a_detach_that_errors_after_stopping_the_publisher_keeps_the_start_gate_closed(
+    stack, bundle, monkeypatch
+):
+    """#1443: the manifest must not stay `verified` once the publisher is stopped."""
+    att = att_for(stack, bundle)
+    apply_(stack, att)
+    assert verify.verify(att, stack.ipc(), root=ROOT, state_dir=state(stack)).ok
+    pub = Publisher()
+    with pytest.raises(AttachmentError, match="start gate stays closed"):
+        detach_(stack, att, pub, ipc=FaultIpc(stack.ipc(), [("consumer_detach", 0, "before")]))
+    assert pub.stopped == 1
+    assert Manifest.load("pb-uat", state(stack)).state == "detaching"
+    monkeypatch.setenv(config.ATTACH_DIR_ENV, str(state(stack)))
+    with pytest.raises(UqsError, match="detaching"):
+        attach_state.refuse_unverified_start(default_paths(), att.publisher.procname, stack.port)
+    assert detach_(stack, att).outcome == "rolled_back"
 
 
 # ------------------------------------------------------------ restart behaviour
