@@ -298,12 +298,16 @@ def test_other_processes_and_start_all_are_not_gated(att, state, monkeypatch):
     attach_state.refuse_unverified_start(paths, "", None)
 
 
-def test_an_unreadable_attachment_does_not_stop_an_unrelated_start(att, state, monkeypatch):
+def test_an_unreadable_attachment_fails_the_gate_closed(att, state, monkeypatch):
+    """Its publisher cannot be known, so no start can be shown to be unrelated
+    to it (#1442): every start is refused, naming the file."""
     monkeypatch.setenv(config.ATTACH_DIR_ENV, str(state))
     (state / "broken").mkdir(parents=True)
     (state / "broken" / config.CONFIG_FILE).write_text("{nope")
     saved(att, state, "verified")
     assert [p.attachment for p in attach_state.publishers(state)] == ["pb-uat"]
+    with pytest.raises(UqsError, match=r"an attachment cannot be read.*broken/attachment\.json"):
+        attach_state.refuse_unverified_start(default_paths(), "rdb1", None)
 
 
 def test_every_start_goes_through_the_gate(att, state, monkeypatch):
