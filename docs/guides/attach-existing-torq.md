@@ -209,6 +209,7 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
   | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                                             |
   | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                             |
   | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                              |
+  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                   |
   | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                       |
   | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                 |
   | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                            |
@@ -230,11 +231,37 @@ uqs job backfill piggybank_ledger_backfill --attach pb-uat \
     --on-conflict replace --mode plan
 ```
 
-**Only `--mode validate` and `--mode plan` exist so far.** `dry-run` and `run`
-with `--attach` are refused until guarded execution and recovery land
-([#1454](https://github.com/kwojdalski/uqf/issues/1454)). Attachment safety
-checks do not, by themselves, certify direct native-HDB writes; the coordination
-below is what `plan` adds.
+`validate` resolves the destination offline; `plan` also asks the stack
+read-only questions and reports what a run would do. `dry-run` and `run` (the
+default) admit **afresh** (everything `plan` checks, again, immediately before
+anything starts) and then start the runner, `scripts/dev/attached_backfill.q`.
+It is the bounded-worker lifecycle and the HDB writer, not a second engine: a
+window's rows are published, then its coverage is recorded, then the checkpoint
+saved, and a killed run leaves an under-claim that the next run redoes.
+
+What is different from a backfill into uqf's own stack:
+
+- The destination is a flag, never `KDBHDB`; the root must exist and is not
+  created.
+- Writes go through `.qetl.io.hdb_scoped`: staged in `<hdb>.staging` beside the
+  root (a reader maps every directory *in* the root), swapped in by rename, and
+  refused past the last completed date or after the end-of-day fence begins.
+  `replace` clears only its own window: rows outside it are kept, and other
+  dates and other tables are not rewritten.
+- Finishing a partition sorts it by sym then time with `p#sym`; it does **not**
+  fill other dates with the table (`.Q.chk`). An older partition without the
+  table stays without until `uqs data hdb-check --fix`. A stack whose `sort.csv`
+  sorts or attributes the table otherwise is refused, because the rewritten
+  partitions would not match its own.
+- Coverage, checkpoint and lock live under
+  `<status dir>/attached/<attachment>-<id>/`, and the run's log in its `logs/`.
+  Coverage is *written*, not *queryable*, until the stack's readers reload (part
+  4 of #1454).
+- While a run is alive its owner record sits in the attachment's folder
+  (`backfills/<worker>.owner.json`) and `uqs job attach detach` refuses; the run
+  removes it when it finishes, and a record whose process is gone owns nothing.
+- Attachment safety checks do not, by themselves, certify direct native-HDB
+  writes; the coordination below is what `plan` and `run` add.
 
 ### Coordination with the native writers
 
@@ -325,12 +352,9 @@ the wdb hands its table list to the sort process.
   community licence allows 16 per process), an attachment adds one persistent
   publisher connection to the tickerplant and one to discovery. Preflight does
   not check the headroom.
-- **Two rules until the bugs below are fixed.** Do not name an attached table
-  after a q or TorQ global (`upd`, `sym`, `loghandles`, `date`, `endofday`):
-  preflight passes it and apply overwrites the global on the tickerplant, rdb
-  and wdb ([#1450](https://github.com/kwojdalski/uqf/issues/1450)). Declare
-  every column with a concrete type: an untyped `()` column fed different types
-  can abort the wdb's end of day for every table
+- **One rule until the bug below is fixed.** Declare every column with a
+  concrete type: an untyped `()` column fed different types can abort the wdb's
+  end of day for every table
   ([#1451](https://github.com/kwojdalski/uqf/issues/1451)).
 - **Open bugs** in the workflow are tracked as [GitHub issues titled
   `uqs job attach`](https://github.com/kwojdalski/uqf/issues?q=is%3Aissue+is%3Aopen+%22uqs+job+attach%22).

@@ -144,14 +144,6 @@ def test_an_unknown_attachment_and_an_unknown_worker_are_refused(world):
         attached.resolve(world.paths, "pb-uat", "nope_backfill")
 
 
-@pytest.mark.parametrize("mode", [None, "run", "dry-run"])
-def test_execution_modes_are_refused_for_now(mode):
-    with pytest.raises(UqsError, match="--attach supports --mode validate and plan only"):
-        attached.refuse_execution(mode)
-    for ok in ("validate", "plan"):
-        attached.refuse_execution(ok)
-
-
 # ------------------------------------------------------------------ admission
 
 
@@ -319,13 +311,15 @@ def invoke(*argv: str):
 COMMON = ["--attach", "pb-uat", "--from", "2026-09-11", "--to", "2026-09-13", "--version", "v1"]
 
 
-def test_cli_refuses_execution_before_touching_anything(world):
+def test_cli_run_of_an_unconfigured_source_is_refused_before_anything_starts(world):
+    """run is admitted like plan: the fixture that would be written is a refusal, and
+    no process, directory or owner record exists afterwards."""
     before = snapshot(world.hdb, world.status, world.attach_dir)
     for extra in ([], ["--mode", "run"], ["--mode", "dry-run"]):
         result = invoke(*COMMON, *extra)
         assert result.exit_code != 0
-        assert "--attach supports --mode validate and plan only" in world.errors[-1]
-    assert world.stack.calls == [] and snapshot(world.hdb, world.status, world.attach_dir) == before
+        assert "has no credential configured" in world.errors[-1]
+    assert snapshot(world.hdb, world.status, world.attach_dir) == before
 
 
 def test_cli_refuses_a_conflicting_port(world):

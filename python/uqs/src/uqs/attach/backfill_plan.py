@@ -247,6 +247,10 @@ def build_plan(
         "native_partitions": partitions_on_disk(dest, dates),
         "writers": admission.writers,
         "coordination": coordination.as_dict(),
+        "beside_the_root": {
+            "staging": f"{dest.hdb_dir}.staging",
+            "write_lock": f"{dest.hdb_dir}.write.lock",
+        },
         "reload_targets": [
             {"procname": r.procname, "port": r.port} for r in admission.reload_targets
         ],
@@ -288,10 +292,15 @@ def render(plan: dict[str, Any]) -> str:
     lines.append(f"  writes it     {', '.join(plan['writers'])}")
     co = plan["coordination"]
     lines.append(
-        f"  coordination  active write date {co['active_date']} is never touched; end of day "
-        f"{co['next_roll']} +/- {co['eod_guard_minutes']} min fenced; {co['filesystem']} filesystem"
+        f"  coordination  active write date {co['active_date']} is never touched (last writable "
+        f"date {co['last_writable_date']}); writes stop at {co['writes_stop_at']}, "
+        f"{co['eod_guard_minutes']} min before end of day; {co['filesystem']} filesystem"
     )
     lines.extend(f"    warning     {w}" for w in co["warnings"])
+    lines.append(
+        f"  beside root   {plan['beside_the_root']['staging']} (staging), "
+        f"{plan['beside_the_root']['write_lock']} (write lock)"
+    )
     targets = ", ".join(f"{t['procname']}:{t['port']}" for t in plan["reload_targets"]) or "none"
     lines.append(f"  reload        {targets}")
     for r in plan["readers_not_serving"]:

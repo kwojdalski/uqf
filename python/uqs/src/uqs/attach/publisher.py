@@ -25,6 +25,19 @@ class Publisher(Protocol):
     def stop(self, att: Attachment) -> None: ...
 
 
+def stop_publisher(att: Attachment, publisher: Publisher) -> bool:
+    """Stop the publisher if it runs; True when it did. Still listening afterwards is an error."""
+    if not publisher.running(att):
+        return False
+    publisher.stop(att)
+    if publisher.running(att):
+        raise AttachmentError(
+            f"{att.publisher.procname} is still listening after stop - detach will not touch the "
+            "stack while the publisher may be publishing"
+        )
+    return True
+
+
 class UqsPublisher:
     """The publisher as `uqs start` / `uqs stop` see it."""
 

@@ -91,9 +91,9 @@ def backfill(
         typer.Option(
             "--attach",
             help="Backfill into the native HDB of this saved attachment (`uqs job attach`), "
-            "taking the stack and the destination from it. Only --mode validate and plan are "
-            "available: plan lists the windows, the native date partitions, the writers and "
-            "the readers to reload, and changes nothing",
+            "taking the stack and the destination from it. plan lists the windows, the native "
+            "date partitions, the writers and the readers to reload, and changes nothing; run "
+            "and dry-run admit afresh and start the runner (completed historical dates only)",
         ),
     ] = None,
     as_json: Annotated[
@@ -178,6 +178,9 @@ def backfill(
             fixture=fixture,
             on_conflict=on_conflict,
             as_json=as_json,
+            wait=wait,
+            verbose=_debug_requested(ctx, debug),
+            trace=trace,
         )
         return
     try:
