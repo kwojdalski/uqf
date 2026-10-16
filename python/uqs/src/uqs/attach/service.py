@@ -12,7 +12,7 @@ from pathlib import Path
 
 from uqs.attach import config, jobs, overrides, plan
 from uqs.attach.config import Attachment, AttachmentError, Publisher, Stack, Storage
-from uqs.attach.facts import Facts
+from uqs.attach.facts import Facts, Host
 from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Ipc, KolaIpc
 from uqs.attach.topology import Observation
@@ -28,6 +28,15 @@ def parse_discovery(text: str) -> tuple[str, int]:
     if not sep or not port.isdigit() or not host:
         raise AttachmentError(f"--discovery must be HOST:PORT, not {text!r}")
     return host, int(port)
+
+
+def same_machine(host: str, discovery_host: str) -> bool:
+    """Whether `--discovery`'s HOST is the `--host` machine: the same name, or
+    both this machine (by name, loopback or an address it owns)."""
+    if host.lower() == discovery_host.lower():
+        return True
+    here = Host()
+    return here.is_local(host) and here.is_local(discovery_host)
 
 
 def create(
@@ -59,6 +68,15 @@ def create(
         raise AttachmentError(f"--stack-id {stack_id} is not a base port")
     spec = jobs.resolve(job, bundle.resolve() if bundle else None, root)
     d_host, d_port = parse_discovery(discovery) if discovery else (host, stack_id + 1)
+    if not same_machine(host, d_host):
+        # one stack, one machine: the processes are reached at the host:port
+        # discovery lists with --host's machine, and the publisher, started under
+        # stack_id, registers with the discovery its process.csv puts on that host
+        raise AttachmentError(
+            f"--discovery {d_host}:{d_port} is not on the --host machine ({host}): an "
+            "attachment reaches discovery and every process of the stack on one host. "
+            f"Give --host {d_host} if the stack runs there (#1440)"
+        )
     return Attachment(
         name=name,
         stack=Stack(
