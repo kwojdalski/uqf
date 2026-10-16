@@ -19,15 +19,20 @@
  own:g[`.uqfattach.owned;()!()];
  base:`procname`proctype`stackid`torq`kdb`port`host`schemafile`tplogdir`procfile`owned!(
   string .proc.procname;string pt;prm`stackid;.proc.getversion[];string .z.K;`long$system"p";string .z.h;
-  prm`schemafile;prm`tplogdir;prm`procfile;string each key own);
+  prm`schemafile;prm`tplogdir;prm`procfile;own);
  ext:()!();
  if[pt in `segmentedtickerplant`segmentedchainedtickerplant;
   subs:g[`.stpps.subrequestall;()!()];
   filt:g[`.stpps.subrequestfiltered;([]tbl:`$())];
   logs:g[`currlog;([tbl:`$()]logname:`$();handle:`int$())];
+  mt:g[`.stpm.metatable;([]logname:`$();tbls:())];
   mc:g[`.stplg.msgcount;()!()];
   rc:g[`.stplg.rowcount;()!()];
-  ext:`chained`multilog`batchmode`createlogs`errmode`replayperiod`kdbtplog`dldir`custom`tables`published`schemas`subscribers`filtered`logs`msgcount`rowcount`buffered!(
+  ut:g[`.stplg.updtab;()!()];
+  inl:{[l;t] t in l};
+  logfiles:{[l;m;t] names:distinct (exec logname from l where tbl=t),exec logname from m where t in/: tbls;
+   {[l;n] `name`size`open!(string n;@[hcount;n;-1];not null first exec handle from l where logname=n)}[l]each names};
+  ext:`chained`multilog`batchmode`createlogs`errmode`replayperiod`kdbtplog`dldir`custom`tables`published`schemas`subscribers`filtered`logs`msgcount`rowcount`buffered`updtab`logged`logfiles`replay!(
    g[`.sctp.chainedtp;0b];string g[`.stplg.multilog;`];string g[`.stplg.batchmode;`];g[`..createlogs;0b];g[`.stplg.errmode;0b];string g[`.stplg.replayperiod;`];
    string g[`.stplg.kdbtplog;`];string g[`.stplg.dldir;`];string each key g[`.stplg.custommode;()!()];
    string each tables[];string each g[`.stpps.t;`$()];
@@ -37,7 +42,11 @@
    want!{[l;t] $[t in exec tbl from l;string exec logname from l where tbl=t;()]}[logs]each want;
    want!{[m;t] $[t in key m;m t;0]}[mc]each want;
    want!{[m;t] $[t in key m;m t;0]}[rc]each want;
-   want!cnt each want)];
+   want!cnt each want;
+   want!{[u;t] t in key u}[ut]each want;
+   want!{[a;b;c;t] all t in/: (a;b;c)}[g[`.stplg.t;`$()];g[`.stplg.logtabs;`$()];g[`.stplg.rolltabs;`$()]]each want;
+   want!logfiles[logs;mt]each want;
+   want!{[t] count @[.stplg.replaylog;enlist t;()]}each want)];
  if[pt~`rdb;
   subs:g[`.sub.SUBSCRIPTIONS;([]table:`$();active:`boolean$())];
   ext:`subscribeto`subfiltered`ignorelist`subtables`tables`schemas`rows`hdbdir`reloadenabled`tickerplanttypes`subscribed!(
@@ -48,11 +57,12 @@
  if[pt~`wdb;
   subs:g[`.sub.SUBSCRIPTIONS;([]table:`$();active:`boolean$())];
   sp:g[`.sort.params;([]tabname:`$();att:`$();column:`$();sort:`boolean$())];
-  ext:`subtabs`subsyms`ignorelist`mode`writedownmode`savedir`hdbdir`tables`schemas`rows`tickerplanttypes`subscribed`sortrows!(
+  ext:`subtabs`subsyms`ignorelist`mode`writedownmode`savedir`hdbdir`tables`schemas`rows`tickerplanttypes`subscribed`sortrows`tablelist!(
    string each (),g[`.wdb.subtabs;`];string each (),g[`.wdb.subsyms;`];string each (),g[`.wdb.ignorelist;`$()];string g[`.wdb.mode;`];string g[`.wdb.writedownmode;`];
    string g[`.wdb.savedir;`];string g[`.wdb.hdbdir;`];string each tables[];want!sch each want;want!cnt each want;
    string each (),g[`.wdb.tickerplanttypes;`$()];string exec table from subs where active;
-   select tabname:string tabname,att:string att,col:string column,sort from sp)];
+   select tabname:string tabname,att:string att,col:string column,sort from sp;
+   string each @[.wdb.tablelist;::;`$()])];
  if[pt~`discovery;
   ext:enlist[`services]!enlist select procname:string procname,proctype:string proctype,hpup:string hpup from .servers.SERVERS];
  .j.j base,ext}

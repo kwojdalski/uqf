@@ -9,7 +9,7 @@
 / A table already present is never modified: an existing table with the same
 / schema is subscribed to (no schema set); a different one is refused.
 / .
-/ @param req JSON {"table", "columns": [[name, typechar], ...], "token", "attachment"}
+/ @param req JSON {"table", "columns": [[name, typechar], ...], "token", "attachment", "join": true?}
 / @return JSON {"status": "created"|"owned"|"existing"|"refused"|"failed", ...}
 {[req]
  r:.j.k $[10h=type req;req;string req];
@@ -22,15 +22,18 @@
  pt:.proc.proctype;
  if[not pt in `rdb`wdb;:.j.j `status`detail!("refused";"not an rdb or wdb")];
  own:g[`.uqfattach.owned;()!()];
- mine:$[t in key own;tok~own[t]`token;0b];
+ inl:t in key own;
+ mine:$[inl;tok~own[t]`token;0b];
  had:t in tables[];
  if[had;
   if[not ((cols t)~cs) and (exec t from meta t)~ty;
    :.j.j `status`detail!("refused";"the table exists with a different schema")]];
+ if[had and inl and (not mine) and `join in key r;
+  .uqfattach.owned[t;`users]:distinct (),$[`users in key own t;own[t]`users;()],enlist att];
  subd:t in exec table from .sub.SUBSCRIPTIONS where active;
  tpt:$[pt~`rdb;.rdb.tickerplanttypes;.wdb.tickerplanttypes];
  if[subd and had;
-  :.j.j `status`rows!($[mine;"owned";"existing"];count value t)];
+  :.j.j `status`rows`owner!($[mine;"owned";inl;"shared";"existing"];count value t;$[inl;own[t]`attachment;""])];
  hs:.sub.getsubscriptionhandles[tpt;();()!()];
  if[0=count hs;:.j.j `status`detail!("refused";"no tickerplant connection")];
  res:.[{[t;had;h] .sub.subscribe[t;`;not had;1b;h]};(t;had;first hs);{(1b;x)}];
@@ -45,4 +48,4 @@
  if[not had;
   if[not `owned in key `.uqfattach;`.uqfattach.owned set ()!()];
   .uqfattach.owned[t]:`token`attachment`created!(tok;att;string .z.p)];
- .j.j `status`replayed!($[had;"existing";"created"];count value t)}
+ .j.j `status`replayed!($[mine;"owned";had;$[inl;"shared";"existing"];"created"];count value t)}

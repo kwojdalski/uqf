@@ -16,8 +16,11 @@
 / (or "owned" when our own token is on it, from an earlier run) with whether
 / its schema matches.
 / .
-/ @param req JSON {"table", "columns": [[name, typechar], ...], "token", "attachment"}
-/ @return JSON {"status": "created"|"owned"|"existing"|"refused"|"failed", ...}
+/ @param req JSON {"table", "columns": [[name, typechar], ...], "token", "attachment", "join": true?}
+/ @return JSON {"status": "created"|"owned"|"shared"|"existing"|"refused"|"failed", ...}
+/ .
+/ "shared" is a table another attachment created: with "join" this attachment is added
+/ to that record's users, so the creator's detach knows it is still needed.
 {[req]
  r:.j.k $[10h=type req;req;string req];
  t:`$r`table;
@@ -28,10 +31,15 @@
  g:{@[value;x;y]};
  own:g[`.uqfattach.owned;()!()];
  if[t in tables[];
-  mine:$[t in key own;tok~own[t]`token;0b];
-  same:(cols t)~cs;
-  return:`status`matches`published!($[mine;"owned";"existing"];same and (exec t from meta t)~ty;t in g[`.stpps.t;`$()]);
-  :.j.j return];
+  inl:t in key own;
+  mine:$[inl;tok~own[t]`token;0b];
+  same:((cols t)~cs) and (exec t from meta t)~ty;
+  if[same and inl and (not mine) and `join in key r;
+   .uqfattach.owned[t;`users]:distinct (),$[`users in key own t;own[t]`users;()],enlist att];
+  own:g[`.uqfattach.owned;()!()];
+  :.j.j `status`matches`published`owner`users!(
+   $[mine;"owned";inl;"shared";"existing"];same;t in g[`.stpps.t;`$()];
+   $[inl;own[t]`attachment;""];$[inl;$[`users in key own t;(),own[t]`users;()];()])];
  if[g[`.sctp.chainedtp;0b];:.j.j `status`detail!("refused";"a chained tickerplant takes its tables from its parent")];
  if[not g[`.stplg.multilog;`] in `tabperiod`tabular;
   :.j.j `status`detail!("refused";"logging mode ",string[g[`.stplg.multilog;`]]," shares logs between tables")];

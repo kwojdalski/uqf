@@ -23,10 +23,8 @@ plan -> validate -> apply -> verify -> start -> (detach)
 read-only            changes the stack    permits the publisher
 ```
 
-**Today only the read-only half exists**: `plan`, `validate` and `status`.
-`apply`, `verify`, `start` and `detach` follow in the next changes of #1424; the
-tables below that describe what they will do are the design they are built to,
-and are marked as such.
+`plan`, `validate`, `status`, `apply`, `verify` and `start` exist; `detach`
+follows in the next change of #1424.
 
 ## What the workflow guarantees
 
@@ -100,7 +98,67 @@ partitions lack the table, so a query spanning dates before the first end of day
 after publication needs it added to them (that is `dbmaint`, #1423, not this
 workflow).
 
-## What "registering a table" touches, in TorQ 5.2.12 (what `apply` will do)
+## Apply, verify, start
+
+```bash
+uqs job attach apply pb-uat           # shows the plan, asks, then changes the stack
+uqs job attach verify pb-uat          # reads only; passing permits the publisher
+uqs job attach start pb-uat           # starts the job's process under the stack id
+```
+
+**apply** carries out exactly the changes the plan showed, in this order, and
+nothing is restarted:
+
+1. the tickerplant registers the table (one atomic call: if a step inside it
+   throws, the steps already done are undone inside the same call);
+2. each consumer subscribes to it, which creates the empty table and replays the
+   tickerplant's log for it;
+3. the marked block goes into the tickerplant's schema file. This is last on
+   purpose: it is the only step that changes what a *restart* does, so an
+   interrupted apply restarts back to the stack as it was.
+
+The publisher is not started, and apply refuses outright if it is already
+running. Every step is first written to the **manifest** (`manifest.json`, next
+to `attachment.json`) as `pending` and finished after the call, so an
+interruption leaves `pending` (outcome unknown), never a change nobody recorded.
+Re-running apply asks the process about each unknown step - our token is on
+whatever we created - instead of guessing, and a stack that already matches is
+left alone: **no call that changes anything is made.**
+
+A step that fails is reported with what is done, what is unknown and what
+failed. Nothing is rolled back behind your back: that would be a second sequence
+of remote changes with failures of its own, and cross-process atomicity is not
+claimed. Run apply again, or `detach`.
+
+What the manifest records for each operation: the step, the process, the table,
+its status, the **ownership** (`created`: this attachment made it and may remove
+it; `existing`: it was there and is never removed; `shared`: another attachment
+made it and this one depends on it), what was true before, what it produced and
+what it depends on. The ownership token is also written *into* the processes
+(`.uqfattach.owned`, and inside the schema file's block, so a restarted
+tickerplant comes back knowing the table is this attachment's). A second
+attachment to the same table joins the first's record as a user, so detaching
+the first is refused while it is still needed.
+
+**verify** checks, without publishing a row, that the consumers can receive and
+persist the table: the tickerplant holds it as a pub/sub table with the planned
+shape, logged and rolled with the rest, time-stamped, its log open and on disk
+and found by a replaying subscriber; every consumer holds the table, is
+subscribed, does not ignore it, and will include it at its next save; the
+subscriber handles on the tickerplant match; the ownership records are ours; the
+schema file's block is unchanged. (A canary row would be a publication that
+could never be taken back, so there isn't one.) Passing makes the attachment
+`verified`; a failed re-verification takes it back to `applied`.
+
+**start** is the only way the job's process is started under the attachment, and
+the gate is not just this command. `stack/start_policy.refuse_start` - below
+`uqs start`, the MCP server and the browser's start route - refuses the
+attachment's publisher unless the attachment is `verified` **and** the start is
+under the attachment's stack id. A bare `uqs start pb_ledger1`, which would use
+the runtime's default base port and look for discovery at `6051`, is refused,
+naming the attachment and the right command.
+
+## What "registering a table" touches, in TorQ 5.2.12
 
 TorQ builds a segmented tickerplant's tables, log handles and pub/sub state
 once, at start, from its schema file. There is no API to add a table to a
@@ -123,9 +181,9 @@ computed at each save and handed to the sort process at end of day, so it needs
 nothing else.
 
 **Restart behaviour.** The registration lives in memory. To survive a restart of
-the tickerplant, `apply` (default `--persist schema-file`) will append one
-marked block to its `-schemafile`, leaving the rest of the file untouched.
-`--runtime-only` is the explicit alternative: a restart drops the table and the
-attachment reports `registration-lost` until it is applied again; `plan` already
-records and checks the choice. The consumers need nothing persisted: restarted,
-they subscribe to what the tickerplant has.
+the tickerplant, `apply` (the default, `schema-file`) appends one marked block
+to its `-schemafile`, leaving the rest of the file untouched. `--runtime-only`
+is the explicit alternative: a restart drops the table and the attachment
+reports `registration-lost` until it is applied again; `plan` already records
+and checks the choice. The consumers need nothing persisted: restarted, they
+subscribe to what the tickerplant has.

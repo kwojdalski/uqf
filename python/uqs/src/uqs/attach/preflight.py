@@ -44,7 +44,7 @@ def _down(p: Proc) -> Finding:
     )
 
 
-def _identity(att: Attachment, p: Proc) -> list[Finding]:
+def identity(att: Attachment, p: Proc) -> list[Finding]:
     """Same stack, supported TorQ - for one process that answered."""
     out, probe = [], p.probe or {}
     if probe.get("stackid") != str(att.stack.id):
@@ -163,11 +163,11 @@ def check(att: Attachment, obs: Observation, facts: Facts | None = None) -> list
     out: list[Finding] = []
     if not obs.discovery.up:
         return out  # topology already reported it; nothing else can be asked
-    out += _identity(att, obs.discovery)
+    out += identity(att, obs.discovery)
     for p in obs.procs()[1:]:
-        out += [_down(p)] if not p.up else _identity(att, p)
+        out += [_down(p)] if not p.up else identity(att, p)
     if obs.tickerplant and obs.tickerplant.up:
-        out += components.tickerplant(att, obs.tickerplant, att.tables)
+        out += components.tickerplant(att, obs.tickerplant, att.tables, facts)
     if not obs.consumers:
         out.append(
             Finding(

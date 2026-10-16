@@ -15,6 +15,7 @@ from pathlib import Path
 from uqs.attach import preflight
 from uqs.attach.config import Attachment
 from uqs.attach.findings import Finding, blockers
+from uqs.attach.manifest import DONE, Manifest
 from uqs.attach.remote import Ipc
 from uqs.attach.topology import Observation, Proc, observe
 
@@ -25,6 +26,8 @@ class Plan:
     observation: Observation
     findings: list[Finding]
     publisher_port: preflight.PublisherPort
+    #: the manifest's token, "" before the first apply
+    token: str = ""
 
     @property
     def ok(self) -> bool:
@@ -44,10 +47,16 @@ class Plan:
         for spec in att.tables:
             tp = obs.tickerplant
             created = self._state(tp, spec.name) == "absent"
+            ledger = ((tp.probe or {}).get("owned", {}) if tp else {}).get(spec.name)
+            mine = bool(ledger and self.token and ledger.get("token") == self.token)
             steps.append(
                 {
                     "process": att.stack.tickerplant or (tp.procname if tp else "?"),
-                    "action": "register table" if created else "adopt existing table",
+                    "action": "register table"
+                    if created
+                    else "already registered by this attachment"
+                    if mine
+                    else "adopt existing table",
                     "table": spec.name,
                     "creates": created,
                     "reversible_before": "remove" if created else "n/a (pre-existing)",
@@ -116,9 +125,42 @@ class Plan:
         ]
         return out
 
-    def as_dict(self) -> dict:
+    def health(self, m: Manifest) -> list[str]:
+        """Where the stack no longer matches what the manifest says was applied -
+        a restart without a persisted schema being the usual cause."""
+        procs = {p.procname: p for p in self.observation.procs()}
+        lost = []
+        for op in m.operations:
+            if op.op not in ("stp_register", "consumer_attach") or op.status != DONE:
+                continue
+            proc = procs.get(op.process)
+            if proc is None or not proc.up:
+                lost.append(f"{op.process} is not reachable: {op.table} cannot be checked")
+            elif not (proc.probe or {}).get("schemas", {}).get(op.table):
+                lost.append(
+                    f"registration-lost: {op.process} no longer holds {op.table} "
+                    "(restarted without the persisted schema?) - apply it again"
+                )
+        return lost
+
+    def as_dict(self, m: Manifest | None = None) -> dict:
         att = self.attachment
-        return {
+        extra: dict = {}
+        if m is not None:
+            extra = {
+                "manifest": {
+                    "state": m.state,
+                    "operations": [
+                        {
+                            k: getattr(o, k)
+                            for k in ("id", "op", "process", "table", "status", "ownership", "note")
+                        }
+                        for o in m.operations
+                    ],
+                },
+                "health": self.health(m),
+            }
+        return extra | {
             "attachment": att.name,
             "ok": self.ok,
             "stack": {
@@ -158,4 +200,4 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
     port = publisher_port(att, root)
     facts = facts or preflight.Facts()
     facts.publisher = port
-    return Plan(att, obs, structural + preflight.check(att, obs, facts), port)
+    return Plan(att, obs, structural + preflight.check(att, obs, facts), port, facts.token)

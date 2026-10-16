@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from uqs.attach import persist
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
@@ -16,7 +17,9 @@ from uqs.attach.topology import Observation, Proc
 SUPPORTED_LOGGING = ("tabperiod", "tabular")
 
 
-def tickerplant(att: Attachment, tp: Proc, specs: tuple[TableSpec, ...]) -> list[Finding]:
+def tickerplant(
+    att: Attachment, tp: Proc, specs: tuple[TableSpec, ...], facts: Facts
+) -> list[Finding]:
     out, p = [], tp.probe or {}
     if p.get("chained"):
         out.append(
@@ -45,11 +48,11 @@ def tickerplant(att: Attachment, tp: Proc, specs: tuple[TableSpec, ...]) -> list
             )
         )
     for spec in specs:
-        out += _table_on_tickerplant(att, tp, spec)
+        out += _table_on_tickerplant(tp, spec, facts)
     return out
 
 
-def _table_on_tickerplant(att: Attachment, tp: Proc, spec: TableSpec) -> list[Finding]:
+def _table_on_tickerplant(tp: Proc, spec: TableSpec, facts: Facts) -> list[Finding]:
     p = tp.probe or {}
     seen = p.get("schemas", {}).get(spec.name, [])
     if not seen:
@@ -76,15 +79,33 @@ def _table_on_tickerplant(att: Attachment, tp: Proc, spec: TableSpec) -> list[Fi
                 "it was not created by a schema file; fix by hand",
             )
         ]
-    owners = [o for o in p.get("owned", []) if o == spec.name]
+    ledger = p.get("owned", {}).get(spec.name)
+    if ledger and facts.token and ledger.get("token") == facts.token:
+        return [
+            Finding(
+                "info",
+                "ALREADY_APPLIED",
+                tp.procname,
+                f"{spec.name}: registered by this attachment already - nothing to do",
+            )
+        ]
+    if ledger:
+        return [
+            Finding(
+                "info",
+                "SHARED_TABLE",
+                tp.procname,
+                f"{spec.name}: created by attachment {ledger.get('attachment')} - this attachment "
+                "will depend on it and never remove it",
+            )
+        ]
     return [
         Finding(
             "info",
             "WILL_ADOPT",
             tp.procname,
-            f"{spec.name}: already registered with the same shape"
-            + (" (an attachment owns it)" if owners else " (pre-existing)")
-            + " - adopted, never removed by this attachment",
+            f"{spec.name}: already registered with the same shape (pre-existing) - adopted, "
+            "never removed by this attachment",
         )
     ]
 
@@ -216,6 +237,15 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
         why = f"{path} does not exist on this machine"
     elif not _writable(Path(path)):
         why = f"{path} is not writable by this user"
+    elif persist.locate(Path(path).read_text(errors="replace"), att.name) is not None:
+        return [
+            Finding(
+                "info",
+                "ALREADY_PERSISTED",
+                "schema",
+                f"{path} already holds this attachment's block",
+            )
+        ]
     elif "GENERATED" in Path(path).read_text(errors="replace")[:400]:
         why = (
             f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "

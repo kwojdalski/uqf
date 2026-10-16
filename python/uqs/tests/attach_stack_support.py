@@ -17,6 +17,7 @@ sweep touch this stack's `-stackid` and no other.
 from __future__ import annotations
 
 import os
+import random
 import shutil
 import socket
 import subprocess
@@ -44,7 +45,7 @@ def requires_stack():
 
 def _free(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # a TIME_WAIT is not a listener
         try:
             s.bind(("127.0.0.1", port))
         except OSError:
@@ -52,11 +53,14 @@ def _free(port: int) -> bool:
     return True
 
 
-def pick_base_port(start: int = 7440, stop: int = 7960) -> int:
-    """The first base port from `start`, stepping by SPAN, whose whole span is
-    free and which no running stack already claims as a -stackid."""
+def pick_base_port(start: int = 7440, stop: int = 9040) -> int:
+    """A base port whose whole SPAN is free and which no running stack claims as
+    a -stackid. The candidates are tried in an order that differs per process,
+    so two test runs starting together do not both go for the first span."""
     claimed = subprocess.run(["ps", "-axo", "command"], capture_output=True, text=True).stdout
-    for base in range(start, stop, SPAN):
+    candidates = list(range(start, stop, SPAN))
+    random.Random(os.getpid()).shuffle(candidates)
+    for base in candidates:
         if f"-stackid {base} " in claimed:
             continue
         if all(_free(base + i) for i in range(SPAN)):
@@ -182,3 +186,37 @@ class IsolatedStack:
             except OSError:
                 pass
         time.sleep(1)
+
+    # ------------------------------------------------------------ raw access
+
+    def q(self, name: str, expr: str, *args):
+        """Evaluate `expr` on a process directly (kola, 127.0.0.1) - for the test to
+        look at, or drive, the stack independently of the code under test."""
+        import kola
+
+        conn = kola.Q(
+            "127.0.0.1", self.endpoint(name).port, user="admin", passwd="admin", timeout=15000
+        )
+        try:
+            return conn.sync(expr, *args)
+        finally:
+            conn.disconnect()
+
+    def publish(self, table: str, columns: list[list]) -> None:
+        """What a publisher does: `.u.upd[table; columns]` on the tickerplant."""
+        self.q("stp1", ".u.upd", table, columns)
+
+    def flush(self, seconds: float = 3.0) -> None:
+        """Let the tickerplant's 1s timer publish what it buffered."""
+        time.sleep(seconds)
+
+    def end_of_day(self, wait: float = 15.0) -> None:
+        """Drive the tickerplant's own end of day, as its timer would at the roll."""
+        self.q(
+            "stp1",
+            ".stplg.endofday[.eodtime.d; (.stplg.endofdaydata[]),(enlist `p)!enlist .z.p]",
+        )
+        time.sleep(wait)
+
+    def rows(self, name: str, table: str) -> int:
+        return int(self.q(name, f"count {table}"))
