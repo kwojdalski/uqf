@@ -11,10 +11,32 @@ from uqs.attach import persist
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
-from uqs.attach.schema import TableSpec, differences
+from uqs.attach.schema import MIXED, TableSpec, differences
 from uqs.attach.topology import Observation, Proc
 
 SUPPORTED_LOGGING = ("tabperiod", "tabular")
+
+
+def untyped_columns(specs: tuple[TableSpec, ...]) -> list[Finding]:
+    """A blocker for each table with an untyped (`()`) column (#1451).
+
+    A bundle cannot produce one any more - parsing refuses it - but an attachment
+    saved before that can, and applying it again would register the table.
+    Detach and verify do not come through here: taking such a table back stays possible."""
+    return [
+        Finding(
+            "blocker",
+            "UNTYPED_COLUMN",
+            "schema",
+            f"{spec.name}.{name} is an untyped `()` column: the wdb's write of a later batch of "
+            "another shape fails and TorQ then aborts end of day for every table",
+            "declare a concrete type for the column in the bundle and plan again",
+            {"table": spec.name, "column": name},
+        )
+        for spec in specs
+        for name, char in spec.columns
+        if char == MIXED
+    ]
 
 
 def tickerplant(

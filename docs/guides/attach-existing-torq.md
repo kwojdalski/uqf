@@ -131,8 +131,13 @@ again after a tickerplant restart; its detach removes that block.
 Verify checks, without publishing a row, that the tickerplant holds the table as
 a logged pub/sub table of the planned shape, that every consumer holds it, is
 subscribed, does not ignore it and will include it at its next save, and that
-the ownership records and the schema block are ours. Passing makes the
-attachment `verified`; a failed re-verification takes it back to `applied`.
+the ownership records and the schema block are ours. It also re-runs the whole
+preflight and fails on every blocker the plan would refuse on that is not
+validly accepted - a sort.csv that lost its default row, a wdb that stopped
+saving, a consumer that became filtered - with one exception: the attachment's
+own publisher running, which is what a started attachment looks like. Passing
+makes the attachment `verified`; a failed re-verification takes it back to
+`applied`.
 
 The gate is not just `uqs job attach`. `stack/start_policy.refuse_start`, below
 `uqs start`, the MCP server and the browser's start route, refuses the
@@ -210,6 +215,7 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
   | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                                             |
   | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                             |
   | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                              |
+  | `UNTYPED_COLUMN`                                                                                                     | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                         |
   | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                   |
   | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                       |
   | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                 |
@@ -257,9 +263,19 @@ the wdb hands its table list to the sort process.
   community licence allows 16 per process), an attachment adds one persistent
   publisher connection to the tickerplant and one to discovery. Preflight does
   not check the headroom.
-- **One rule until the bug below is fixed.** Declare every column with a
-  concrete type: an untyped `()` column fed different types can abort the wdb's
-  end of day for every table
-  ([#1451](https://github.com/kwojdalski/uqf/issues/1451)).
+- **Every column needs a concrete type.** A bundle's `tables.q` is refused if a
+  column is a bare `()` with no declared element type, or one declared
+  `nested[...]` as `" "` (any value). The tickerplant resets such a column to
+  `()` after every publish and the wdb keeps it general, so each batch decides
+  its stored type afresh; once the wdb has written one shape, a batch of another
+  fails the append, TorQ's writedown re-raises it, and end of day aborts for
+  every table (not just this one). Write ``note:`symbol$()``, or for a list per
+  row (an order book's price ladder) a `()` column plus a line giving the
+  element type, which the uqf publisher checks on every row:
+  ``nested[`book;`bid_prices`bid_sizes!"FJ"]``. Tested on a stack: such a column
+  survives flushes whose row counts and vector lengths differ, and end of day. A
+  publisher that is not uqf must keep to the declared element type itself
+  ([#1451](https://github.com/kwojdalski/uqf/issues/1451)). TorQ's own fix, a
+  per-table trap in the wdb's writedown, belongs upstream.
 - **Open bugs** in the workflow are tracked as [GitHub issues titled
   `uqs job attach`](https://github.com/kwojdalski/uqf/issues?q=is%3Aissue+is%3Aopen+%22uqs+job+attach%22).
