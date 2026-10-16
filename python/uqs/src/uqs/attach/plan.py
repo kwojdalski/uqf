@@ -15,7 +15,7 @@ from pathlib import Path
 from uqs.attach import preflight
 from uqs.attach.config import Attachment
 from uqs.attach.findings import Finding, blockers
-from uqs.attach.manifest import DONE, Manifest
+from uqs.attach.manifest import DONE, RETAINED, Manifest
 from uqs.attach.remote import Ipc
 from uqs.attach.topology import Observation, Proc, observe
 
@@ -131,7 +131,10 @@ class Plan:
         procs = {p.procname: p for p in self.observation.procs()}
         lost = []
         for op in m.operations:
-            if op.op not in ("stp_register", "consumer_attach") or op.status != DONE:
+            if op.op not in ("stp_register", "consumer_attach") or op.status not in (
+                DONE,
+                RETAINED,
+            ):
                 continue
             proc = procs.get(op.process)
             if proc is None or not proc.up:

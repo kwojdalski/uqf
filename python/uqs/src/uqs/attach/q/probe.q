@@ -17,6 +17,7 @@
  sch:{[t] $[t in tables[];flip (string exec c from meta t;string exec t from meta t);()]};
  prm:{[k] $[k in key .proc.params;"," sv .proc.params k;""]};
  own:g[`.uqfattach.owned;()!()];
+ own:$[count own;(key own)!.j.k each value own;()!()];
  base:`procname`proctype`stackid`torq`kdb`port`host`schemafile`tplogdir`procfile`owned!(
   string .proc.procname;string pt;prm`stackid;.proc.getversion[];string .z.K;`long$system"p";string .z.h;
   prm`schemafile;prm`tplogdir;prm`procfile;own);

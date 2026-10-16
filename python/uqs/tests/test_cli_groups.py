@@ -36,7 +36,7 @@ def _group(*path: str) -> TyperGroup:
     [
         ((), {"job", "setup", "connector"}),
         (("job",), {"new", "remove", "install", "backfill", "preview", "gaps", "runs", "attach"}),
-        (("job", "attach"), {"plan", "validate", "status", "apply", "verify", "start"}),
+        (("job", "attach"), {"plan", "validate", "status", "apply", "verify", "start", "detach"}),
         (("job", "runs"), {"status", "list", "show", "audit", "migrate"}),
         (("setup",), {"odbc"}),
         (("setup", "odbc"), {"install", "status", "env", "rollback"}),

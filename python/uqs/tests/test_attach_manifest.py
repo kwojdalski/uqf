@@ -163,8 +163,7 @@ def test_the_block_holds_the_definition_and_the_ownership_record(att):
     assert lines[0] == "/ BEGIN uqs-attach pb-uat tok123" and lines[-1] == "/ END uqs-attach pb-uat"
     assert f"{TABLE}:([] time:`timestamp$(); sym:`symbol$(); amount:`float$(); note:())" in lines
     assert any(
-        line.startswith(f".uqfattach.owned[`{TABLE}]:`token`attachment`created!")
-        and '"tok123"' in line
+        line.startswith(f".uqfattach.owned[`{TABLE}]:") and '\\"token\\":\\"tok123\\"' in line
         for line in lines
     ), "a restarted tickerplant comes back knowing the table is ours"
     assert not [line for line in lines if line.strip() in ("/", "\\")], (
@@ -205,7 +204,7 @@ def test_removal_restores_the_file_exactly_including_a_missing_final_newline(att
 
 def test_removal_is_refused_when_the_block_was_edited(att, schema):
     record = persist.write(att, "tok123", SPECS, str(schema))
-    schema.write_text(schema.read_text().replace('"persisted"', '"hand edited"'))
+    schema.write_text(schema.read_text().replace("persisted", "hand edited"))
     assert persist.problems(record, att, "tok123", SPECS) == [f"the block in {schema} was edited"]
     with pytest.raises(AttachmentError, match="was edited"):
         persist.remove(record, att, "tok123", SPECS)

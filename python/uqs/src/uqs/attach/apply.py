@@ -181,6 +181,13 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
         m.finish(op, manifest.PENDING, note=f"outcome unknown: {exc.reason}")
         raise
     step = _interpret(m, op, answer, c.procname, spec.name)
+    plant = m.find("stp_register", tp.procname, spec.name)
+    if op.ownership == EXISTING and plant is not None and plant.ownership == CREATED:
+        # The tickerplant's table is ours, so the consumer's copy - rebuilt from it by a
+        # restart, or already subscribed - is ours too; leaving it `existing` would make
+        # detach keep a table the plant it came from no longer has.
+        op.ownership = CREATED
+        m.save()
     op.post = {**op.post, "subscribers_before": before, "subscribers_after": after}
     m.save()
     return step
@@ -201,12 +208,15 @@ def _persist(
             return Step("schema_block", path, ",".join(s.name for s in specs), "already")
     name = ",".join(s.name for s in specs)
     op = m.begin("schema_block", "schema-file", name, {"path": path}, deps)
+    present = Path(path).is_file() and persist.locate(Path(path).read_text(), att.name) is not None
     try:
         record = persist.write(att, m.token, tuple(specs), path)
     except (OSError, AttachmentError) as exc:
         m.finish(op, FAILED, note=str(exc))
         raise AttachmentError(f"the schema file {path}: {exc}") from None
     m.finish(op, DONE, CREATED, asdict(record))
+    if present:
+        return Step("schema_block", path, name, "already", "the block was already there")
     return Step("schema_block", path, name, "created", f"block added to {path}")
 
 

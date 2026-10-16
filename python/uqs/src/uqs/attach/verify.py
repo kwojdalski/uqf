@@ -104,8 +104,11 @@ def _consumer(m: Manifest, c: Proc, spec: TableSpec) -> list[Check]:
         )
     op = m.find("consumer_attach", who, t)
     if op is not None and op.ownership == CREATED:
-        mine = p.get("owned", {}).get(t, {}).get("token") == m.token
-        out.append(Check(f"{who}: {t} carries this attachment's ownership record", mine))
+        ledger = p.get("owned", {}).get(t)
+        # a consumer that restarted rebuilt the table from the tickerplant and lost its
+        # in-memory record: the plant's record is then the one that counts
+        mine = ledger is None or ledger.get("token") == m.token
+        out.append(Check(f"{who}: {t} is not another attachment's", mine))
     return out
 
 

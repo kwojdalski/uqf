@@ -10,6 +10,7 @@ import typer
 from rich.table import Table
 
 from uqs.attach import apply as applying
+from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
 from uqs.attach import service
 from uqs.attach import verify as verifying
@@ -17,7 +18,15 @@ from uqs.cli.attach import JsonOpt, NameArg, _load, _render, attach_app
 from uqs.cli.shared import _die, _paths, console
 from uqs.paths import UqsError
 
-_OUTCOME_STYLE = {"created": "green", "adopted": "cyan", "shared": "cyan", "already": "dim"}
+_OUTCOME_STYLE = {
+    "created": "green",
+    "adopted": "cyan",
+    "shared": "cyan",
+    "already": "dim",
+    "removed": "green",
+    "absent": "dim",
+    "left": "cyan",
+}
 
 
 def _steps(steps) -> None:
@@ -135,3 +144,51 @@ def start(name: NameArg) -> None:
         _die(exc)
         return
     console.print(f"[green]started[/] {att.publisher.procname} on stack {att.stack.id}")
+
+
+@attach_app.command("detach")
+def detach(
+    name: NameArg,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Run every check and change nothing (not even stop the publisher)"
+        ),
+    ] = False,
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Do not ask before changing the stack")
+    ] = False,
+) -> None:
+    """Stop the publisher and reverse what this attachment created, if that is safe.
+
+    Before any publication, the empty state this attachment created is removed
+    (each process re-checks that it is empty and ours). After publication
+    nothing is deleted: the publisher is stopped and every registration, row,
+    log and the schema block stay, so replay and restart keep working. If the
+    stack drifted or ownership cannot be shown, nothing is removed and what a
+    person has to do is listed.
+    """
+    try:
+        att = _load(name)
+        if not dry_run and not yes:
+            typer.confirm(
+                f"Stop {att.publisher.procname} and detach {name} from stack {att.stack.id}?",
+                abort=True,
+            )
+        result = detaching.detach(
+            att, service.ipc_for(att), publishing.UqsPublisher(_paths()), dry_run=dry_run
+        )
+    except UqsError as exc:
+        _die(exc)
+        return
+    if result.steps:
+        _steps(result.steps)
+    for reason in result.evidence.reasons + result.evidence.unknown:
+        console.print(f"[yellow]published:[/] {reason}")
+    for line in result.retained:
+        console.print(f"[cyan]kept:[/] {line}")
+    for b in result.blockers:
+        console.print(f"[red]refused[/] {b.component}: {b.reason}\n  -> {b.action}")
+    console.print(f"{name}: {result.outcome}" + (" (dry run)" if dry_run else ""))
+    if result.outcome == "refused":
+        raise typer.Exit(code=1)

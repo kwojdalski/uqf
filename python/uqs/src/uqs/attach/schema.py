@@ -134,7 +134,11 @@ def differences(spec: TableSpec, observed: list[list[str]]) -> list[str]:
     """How a table a process reports (ordered [name, char] pairs) differs from
     `spec`, as sentences; empty when they are the same shape."""
     seen = [(n, c) for n, c in observed]
-    if seen == list(spec.columns):
+    # A mixed column (`col:()`) takes the type of the first rows put in it, so the
+    # same table reports it differently before and after publication.
+    if len(seen) == len(spec.columns) and all(
+        a == b and (x == y or y == MIXED) for (a, x), (b, y) in zip(seen, spec.columns, strict=True)
+    ):
         return []
     want = dict(spec.columns)
     have = dict(seen)
@@ -143,7 +147,7 @@ def differences(spec: TableSpec, observed: list[list[str]]) -> list[str]:
     found += [
         f"column {n} is type {have[n]!r}, expected {want[n]!r}"
         for n in want
-        if n in have and have[n] != want[n]
+        if n in have and have[n] != want[n] and want[n] != MIXED
     ]
     if not found:
         found = [
