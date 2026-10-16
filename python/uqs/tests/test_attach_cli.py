@@ -186,6 +186,21 @@ def test_a_dry_run_of_a_saved_attachment_leaves_every_file_as_it_was(world):
     assert len(changes(world)) == calls, "detach's own removal checks ran as dry runs only"
 
 
+@pytest.mark.parametrize("extra", [[], ["--dry-run"]])
+def test_attach_refuses_an_attachment_whose_detach_is_in_progress_and_changes_nothing(world, extra):
+    assert run("attach", *new(world, "--no-start", "--yes")).exit_code == 0
+    path = world.state_dir / "pb-uat" / "manifest.json"
+    m = Manifest.load("pb-uat", world.state_dir)
+    m.set_state("detaching", "set by the test")
+    before, calls = snapshot(world.state_dir), len(changes(world))
+    result = run("attach", "pb-uat", "--yes", *extra)
+    assert result.exit_code != 0
+    text = flat(result.output + " ".join(world.errors))
+    assert "is detaching" in text and "uqs job detach pb-uat" in text
+    assert snapshot(world.state_dir) == before and path.is_file()
+    assert len(changes(world)) == calls
+
+
 def test_a_dry_run_detach_creates_no_lock_file(world):
     assert run("attach", *new(world, "--no-start", "--yes")).exit_code == 0
     lock = world.state_dir / "pb-uat" / ".lock"

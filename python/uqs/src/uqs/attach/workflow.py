@@ -107,6 +107,8 @@ def resolve(
     manifest still holds changes to another stack or other tables.
     """
     path = config.directory(name, state_dir) / config.CONFIG_FILE
+    if (m := manifest_of(name, state_dir)) is not None:
+        applying.refuse_detaching(name, m.state)
     saved = config.load(name, state_dir) if path.is_file() else None
     changed: list[str] = []
     if saved is not None:

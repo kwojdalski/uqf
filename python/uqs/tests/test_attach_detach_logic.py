@@ -735,3 +735,16 @@ def test_apply_recognises_its_own_leftover_by_token_after_an_unknown_outcome(wor
     first = next(s for s in res.steps if s.op == "stp_register")
     assert first.outcome == "already", "its own table, not another attachment's `shared`"
     assert Manifest.load("pb-uat", state).operations[0].ownership == "created"
+
+
+def test_apply_refuses_an_attachment_that_is_detaching_and_changes_nothing(world):
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    m = Manifest.load("pb-uat", state)
+    m.set_state("detaching", "set by the test")
+    before = stack_state(fake)
+    with pytest.raises(AttachmentError, match="is detaching.*uqs job detach pb-uat"):
+        apply_(att, fake, state)
+    assert stack_state(fake) == before
+    assert Manifest.load("pb-uat", state).state == "detaching"
