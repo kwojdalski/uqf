@@ -23,8 +23,14 @@ from uqs.attach import backfill_owner, backfill_run, config, detach, service
 from uqs.attach.config import AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.schema import parse_definition
-from uqs.interpreter import q_interpreter
+from uqs.interpreter import PEACHQ, q_impl, q_interpreter
 from uqs.paths import UqsError, paths_for_root
+
+pytestmark = pytest.mark.skipif(
+    q_impl() == PEACHQ,
+    reason="the worker's source is the starter pack's partitioned HDB served by a kdb+ process, "
+    "and the destination is a kdb+ HDB: PeachQ loads neither",
+)
 
 WORKER = "upstream_trades_backfill"
 DATASET = "imported_trades"
