@@ -243,8 +243,7 @@ def detach(
     changes nothing - it does not even stop the publisher.
     """
     host = host or Host()
-    # A run writing into this stack's HDB owns the attachment until it finishes (#1454)
-    backfill_owner.refuse_while_active(att.name, state_dir)
+    backfill_owner.refuse_while_active(att.name, state_dir)  # a run owns it (#1454)
     # A dry run writes nothing - not even the lock file - and needs no lock: it
     # only reads, and the manifest is replaced whole, never seen half-written.
     with nullcontext() if dry_run else config.locked(att.name, state_dir):
