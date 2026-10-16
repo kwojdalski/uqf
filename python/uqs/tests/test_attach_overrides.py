@@ -21,6 +21,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs.attach import apply as applying
 from uqs.attach import config, facts, overrides, plan, preflight, service, verify
+from uqs.attach.findings import Finding
 from uqs.attach.manifest import Manifest
 from uqs.attach.overrides import OverrideError
 from uqs.cli import shared
@@ -366,6 +367,130 @@ def test_verify_passes_on_a_valid_acceptance_and_fails_once_it_is_stale(bundle, 
         for c in bad.checks
         if not c.ok
     )
+
+
+# ------------------------------------- verify refuses what the preflight refuses (#1444)
+
+
+def _verified(bundle, state, monkeypatch, fake, att=None):
+    """An attachment applied and verified - its publisher's start gate open."""
+    monkeypatch.setenv(config.ATTACH_DIR_ENV, str(state))
+    att = att or att_for(bundle)
+    config.save(att, state)
+    applying.apply(att, fake, ROOT, state_dir=state)
+    assert verify.verify(att, fake, state).state == "verified"
+    return att
+
+
+def _gate_closed(att) -> None:
+    from uqs.paths import UqsError, default_paths
+    from uqs.stack import attach_state
+
+    with pytest.raises(UqsError, match="which is applied"):
+        attach_state.refuse_unverified_start(default_paths(), att.publisher.procname, 6000)
+
+
+def test_verify_fails_on_the_blockers_validate_refuses_and_closes_the_start_gate(
+    bundle, tmp_path, monkeypatch
+):
+    """The issue's stack: sort.csv lost its default row, the wdb stopped saving, the
+    rdb became filtered. The plan refuses it, so verify may not open the gate."""
+    fake = FakeStack(6000)
+    att = _verified(bundle, tmp_path, monkeypatch, fake)
+    fake.named("wdb1")["sortrows"] = [{"tabname": "trade", "att": "p", "col": "sym", "sort": True}]
+    fake.named("wdb1")["mode"] = "none"
+    fake.named("rdb1")["subfiltered"] = True
+    p = plan.build(att, fake, ROOT)
+    refused = {(f.code, f.component) for f in p.findings if f.level == "blocker"}
+    assert refused == {("SORT_CONFIG", "wdb1"), ("WDB_MODE", "wdb1"), ("CONSUMER_FILTERED", "rdb1")}
+    r = verify.verify(att, fake, tmp_path)
+    assert not r.ok and r.state == "applied"
+    failed = {c.name for c in r.checks if not c.ok}
+    assert {f"{comp}: no unaccepted {code} blocker" for code, comp in refused} <= failed
+    _gate_closed(att)
+
+
+def _inject(monkeypatch, code: str, component: str) -> None:
+    """Every preflight from here on also raises `code` on `component`: one blocker
+    of each policy code, without having to stage the stack fault behind each."""
+    real = preflight.check
+
+    def check(att, obs, facts=None):
+        seen = {"injected": f"{code}:{component}"}
+        return real(att, obs, facts) + [
+            Finding("blocker", code, component, f"{code} on {component}", "", seen)
+        ]
+
+    monkeypatch.setattr(preflight, "check", check)
+
+
+def _component(att, code: str) -> str:
+    return att.publisher.procname if code in ("PORT_CONFLICT", "PUBLISHER_RUNNING") else "wdb1"
+
+
+@pytest.mark.parametrize("code", sorted(set(overrides.POLICY) - {"PUBLISHER_RUNNING"}))
+def test_every_unaccepted_policy_blocker_fails_verify_and_closes_the_gate(
+    code, bundle, tmp_path, monkeypatch
+):
+    fake = FakeStack(6000)
+    att = _verified(bundle, tmp_path, monkeypatch, fake)
+    component = _component(att, code)
+    _inject(monkeypatch, code, component)
+    r = verify.verify(att, fake, tmp_path)
+    assert not r.ok and r.state == "applied"
+    assert [c.name for c in r.checks if not c.ok] == [f"{component}: no unaccepted {code} blocker"]
+    _gate_closed(att)
+
+
+@pytest.mark.parametrize("code", sorted(c for c, p in overrides.POLICY.items() if p.overridable))
+def test_every_accepted_overridable_blocker_passes_verify_as_an_accepted_risk(
+    code, bundle, tmp_path, monkeypatch
+):
+    fake = FakeStack(6000)
+    att = _verified(bundle, tmp_path, monkeypatch, fake)
+    component = _component(att, code)
+    _inject(monkeypatch, code, component)
+    att = accept(att, fake, [f"{code}:{component}"])
+    r = verify.verify(att, fake, tmp_path)
+    assert r.ok and r.state == "verified", [c for c in r.checks if not c.ok]
+    assert f"accepted risk {code}:{component} still holds as accepted" in [c.name for c in r.checks]
+
+
+@pytest.mark.parametrize(
+    "code", sorted(c for c, p in overrides.POLICY.items() if not p.overridable)
+)
+def test_a_non_overridable_blocker_cannot_be_accepted_past_verify(
+    code, bundle, tmp_path, monkeypatch
+):
+    fake = FakeStack(6000)
+    att = _verified(bundle, tmp_path, monkeypatch, fake)
+    _inject(monkeypatch, code, "wdb1")
+    with pytest.raises(OverrideError, match=f"{code} cannot be overridden"):
+        accept(att, fake, [f"{code}:wdb1"])
+
+
+def test_the_own_publisher_running_is_the_one_blocker_verify_passes_over(
+    bundle, tmp_path, monkeypatch
+):
+    """A started attachment's publisher is running - verify of it must pass; the
+    same finding on any other component, or any other code on the publisher, fails."""
+    fake = FakeStack(6000)
+    att = _verified(bundle, tmp_path, monkeypatch, fake)
+    port = plan.publisher_port(att, ROOT).port
+    fake.named("discovery1")["services"].append(
+        {"procname": att.publisher.procname, "proctype": "pipeline", "hpup": f":testhost:{port}"}
+    )
+    monkeypatch.setattr(facts, "_tcp_open", lambda host, p: p == port)
+    p = plan.build(att, fake, ROOT)
+    assert [(f.code, f.component) for f in p.findings if f.level == "blocker"] == [
+        ("PUBLISHER_RUNNING", att.publisher.procname)
+    ]
+    assert verify.verify(att, fake, tmp_path).state == "verified"
+    _inject(monkeypatch, "PUBLISHER_RUNNING", "wdb1")
+    r = verify.verify(att, fake, tmp_path)
+    failed = [c.name for c in r.checks if not c.ok]
+    assert failed == ["wdb1: no unaccepted PUBLISHER_RUNNING blocker"]
+    _gate_closed(att)
 
 
 # -------------------------------------------------------------------- the CLI

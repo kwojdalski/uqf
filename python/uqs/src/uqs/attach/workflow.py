@@ -19,6 +19,7 @@ from uqs.attach import apply as applying
 from uqs.attach import config, jobs, plan
 from uqs.attach import verify as verifying
 from uqs.attach.config import Attachment, AttachmentError, Storage
+from uqs.attach.findings import blockers
 from uqs.attach.manifest import Manifest
 from uqs.attach.publisher import Publisher
 from uqs.attach.remote import Ipc
@@ -161,15 +162,14 @@ def already_running(att: Attachment, p: plan.Plan, state_dir: Path | None = None
     """An attachment already verified whose own publisher is running: the plan's
     only blocker is that publisher, and a re-run has nothing to apply - it
     re-verifies, and leaves the publisher as it is."""
-    found = [f for f in p.findings if f.level == "blocker"]
+    found = blockers(p.findings)
     m = manifest_of(att.name, state_dir)
     return (
         bool(found)
         and m is not None
         and m.state == "verified"
-        and all(f.code == "PUBLISHER_RUNNING" and f.component == att.publisher.procname
-                for f in found)
-    )  # fmt: skip
+        and all(plan.own_publisher_running(att, f) for f in found)
+    )
 
 
 @dataclass

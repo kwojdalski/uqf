@@ -130,8 +130,13 @@ again after a tickerplant restart; its detach removes that block.
 Verify checks, without publishing a row, that the tickerplant holds the table as
 a logged pub/sub table of the planned shape, that every consumer holds it, is
 subscribed, does not ignore it and will include it at its next save, and that
-the ownership records and the schema block are ours. Passing makes the
-attachment `verified`; a failed re-verification takes it back to `applied`.
+the ownership records and the schema block are ours. It also re-runs the whole
+preflight and fails on every blocker the plan would refuse on that is not
+validly accepted - a sort.csv that lost its default row, a wdb that stopped
+saving, a consumer that became filtered - with one exception: the attachment's
+own publisher running, which is what a started attachment looks like. Passing
+makes the attachment `verified`; a failed re-verification takes it back to
+`applied`.
 
 The gate is not just `uqs job attach`. `stack/start_policy.refuse_start`, below
 `uqs start`, the MCP server and the browser's start route, refuses the
