@@ -3,6 +3,7 @@ let the publisher near it. plan, validate and status are in attach.py."""
 
 from __future__ import annotations
 
+import getpass
 import json
 from typing import Annotated
 
@@ -45,6 +46,14 @@ def apply(
     yes: Annotated[
         bool, typer.Option("--yes", help="Do not ask before changing the stack")
     ] = False,
+    accept_risks: Annotated[
+        bool,
+        typer.Option(
+            "--accept-risks",
+            help="Confirm applying with the accepted risks the plan lists. Separate from "
+            "--yes, which never confirms them.",
+        ),
+    ] = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Register the tables and subscribe the consumers; the publisher stays stopped.
@@ -65,7 +74,19 @@ def apply(
             typer.confirm(
                 f"Change stack {att.stack.id} as above? (no process is restarted)", abort=True
             )
-        result = applying.apply(att, service.ipc_for(att), _paths().repo_root)
+        confirmed = ""
+        if planned.accepted:
+            if not accept_risks:
+                typer.confirm(
+                    f"Apply with {len(planned.accepted)} ACCEPTED RISK(S) "
+                    "(" + ", ".join(f"{f.code}:{f.component}" for f in planned.accepted) + ")? "
+                    "--yes does not answer this",
+                    abort=True,
+                )
+            confirmed = getpass.getuser()
+        result = applying.apply(
+            att, service.ipc_for(att), _paths().repo_root, confirmed_risks=confirmed
+        )
     except applying.ApplyRefused as exc:
         _die(exc)
         return

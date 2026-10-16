@@ -11,6 +11,7 @@ persisted configuration, written once by `plan`.
 from __future__ import annotations
 
 import json
+from dataclasses import replace as dc_replace
 from pathlib import Path
 from typing import Annotated
 
@@ -34,7 +35,18 @@ job_app.add_typer(attach_app, name="attach", rich_help_panel=JOB_OPERATIONS_PANE
 
 NameArg = Annotated[str, typer.Argument(help="The attachment's name, e.g. piggybank-uat")]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Print JSON instead of tables")]
-_STYLE = {"blocker": "red", "warning": "yellow", "info": "dim"}
+_STYLE = {"blocker": "red", "accepted": "bold magenta", "warning": "yellow", "info": "dim"}
+OverrideOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--override",
+        help="Accept ONE blocker, as CODE:COMPONENT (e.g. TORQ_VERSION:stp1); repeatable. "
+        "It accepts a risk, it does not establish compatibility. Needs --override-reason.",
+    ),
+]
+ReasonOpt = Annotated[
+    str, typer.Option("--override-reason", help="Why the accepted blocker is acceptable (required)")
+]
 
 
 def _findings(findings: list[Finding]) -> None:
@@ -43,7 +55,9 @@ def _findings(findings: list[Finding]) -> None:
     table = Table(title="Findings")
     for column in ("level", "code", "component", "message"):
         table.add_column(column, overflow="fold")
-    for f in sorted(findings, key=lambda f: ("blocker", "warning", "info").index(f.level)):
+    for f in sorted(
+        findings, key=lambda f: ("blocker", "accepted", "warning", "info").index(f.level)
+    ):
         action = f"\n[dim]-> {f.action}[/]" if f.action else ""
         table.add_row(f"[{_STYLE[f.level]}]{f.level}[/]", f.code, f.component, f.message + action)
     console.print(table)
@@ -81,9 +95,18 @@ def _render(p: Plan, m: Manifest | None = None) -> None:
     _findings(p.findings)
     if m is not None:
         _manifest(d)
-    console.print(
-        "[green]no blockers[/]" if p.ok else "[red]blocked: apply would refuse this stack[/]"
-    )
+    for problem in p.override_problems:
+        console.print(f"[yellow]override:[/] {problem}")
+    if not p.ok:
+        console.print("[red]blocked: apply would refuse this stack[/]")
+    elif p.accepted:
+        console.print(
+            f"[bold magenta]no blockers - but {len(p.accepted)} ACCEPTED RISK(S)[/]: "
+            + ", ".join(f"{f.code}:{f.component}" for f in p.accepted)
+            + ". Accepted is not verified: nothing here says this stack is compatible."
+        )
+    else:
+        console.print("[green]no blockers[/]")
 
 
 def _manifest(d: dict) -> None:
@@ -160,6 +183,11 @@ def plan(
         bool, typer.Option("--replace", help="Rebuild a saved attachment from these options")
     ] = False,
     no_save: Annotated[bool, typer.Option("--no-save", help="Do not write the config")] = False,
+    override: OverrideOpt = None,
+    override_reason: ReasonOpt = "",
+    clear_overrides: Annotated[
+        bool, typer.Option("--clear-overrides", help="Withdraw every accepted risk")
+    ] = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Identify the stack, the job and every affected component; change nothing.
@@ -197,6 +225,11 @@ def plan(
                 storage=config.Storage(tplogdir=tplogdir, schema_file=schema_file),
                 runtime=paths.runtime,
             )
+        if clear_overrides:
+            att = dc_replace(att, overrides=())
+        att = service.accept(
+            att, service.ipc_for(att), paths.repo_root, list(override or ()), override_reason
+        )
         planned = service.make_plan(att, service.ipc_for(att), paths.repo_root)
         where = None if no_save else service.save_planned(att, planned)
     except UqsError as exc:

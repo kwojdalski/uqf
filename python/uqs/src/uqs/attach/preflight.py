@@ -67,6 +67,7 @@ def identity(att: Attachment, p: Proc) -> list[Finding]:
                 f"{p.procname} runs TorQ {probe.get('torq')!r}; this procedure is tested on "
                 f"{', '.join(SUPPORTED_TORQ)}",
                 "run the attach-stack suite against that version before widening SUPPORTED_TORQ",
+                {"torq": str(probe.get("torq"))},
             )
         )
     return out
@@ -96,6 +97,7 @@ def _publisher(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]
                 f"{pub.procname} would listen on {port.port}{note}, which {clash[0]['procname']} "
                 "already holds in this stack",
                 "its port is stack id + its offset in process_ports.csv (append-only)",
+                {"port": str(port.port), "holder": clash[0]["procname"]},
             )
         )
     elif facts.host.listening(att.stack.host, port.port):
@@ -109,6 +111,7 @@ def _publisher(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]
                 f"port {port.port} ({pub.procname}{note}) is already in use",
                 "the publisher must be stopped while the table is registered; anything else on "
                 "the port must be moved by hand",
+                {"port": str(port.port)},
             )
         )
     if any(s["procname"] == pub.procname and port_of(s["hpup"]) != port.port for s in obs.services):
@@ -118,6 +121,12 @@ def _publisher(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]
                 "PORT_CONFLICT",
                 pub.procname,
                 f"discovery already lists a process named {pub.procname} on another port",
+                "",
+                {
+                    "listed": ",".join(
+                        s["hpup"] for s in obs.services if s["procname"] == pub.procname
+                    )
+                },
             )
         )
     return out

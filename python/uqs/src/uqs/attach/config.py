@@ -33,6 +33,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from uqs.attach.overrides import Override
 from uqs.attach.schema import TableSpec
 from uqs.paths import UqsError
 from uqs.stack import attach_state
@@ -105,6 +106,8 @@ class Attachment:
     persist: str = "schema-file"
     #: where the job came from: {"bundle": name, "version": v, "folder": path} or {}
     origin: dict = field(default_factory=dict)
+    #: blockers an operator accepted, with who/when/why and the facts accepted against
+    overrides: tuple[Override, ...] = ()
 
     def table(self, name: str) -> TableSpec:
         for spec in self.tables:
@@ -136,6 +139,7 @@ def to_json(att: Attachment) -> dict:
     data["schema"] = SCHEMA_VERSION
     data["tables"] = [{"name": t.name, "columns": t.as_pairs()} for t in att.tables]
     data["stack"]["consumers"] = list(att.stack.consumers)
+    data["overrides"] = [o.as_dict() for o in att.overrides]
     return data
 
 
@@ -159,6 +163,7 @@ def from_json(data: dict) -> Attachment:
         storage=Storage(**data.get("storage", {})),
         persist=data["persist"],
         origin=data.get("origin", {}),
+        overrides=tuple(Override(**o) for o in data.get("overrides", [])),
     )
 
 

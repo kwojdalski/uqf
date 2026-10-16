@@ -171,6 +171,8 @@ def _sorting(c: Proc, spec: TableSpec, rows: list[dict]) -> list[Finding]:
                 "SORT_CONFIG",
                 c.procname,
                 f"{c.procname}'s sort.csv has no row for {spec.name} and no default row",
+                "",
+                {"table": spec.name, "rows": "none"},
             )
         ]
     if missing:
@@ -182,6 +184,11 @@ def _sorting(c: Proc, spec: TableSpec, rows: list[dict]) -> list[Finding]:
                 f"{c.procname} sorts {spec.name} by {'own' if own else 'default'} sort.csv rows "
                 f"naming {', '.join(missing)}, which the table lacks - end of day would fail",
                 "add the column to the table, or a row for the table to sort.csv by hand",
+                {
+                    "table": spec.name,
+                    "rows": "own" if own else "default",
+                    "missing": ",".join(missing),
+                },
             )
         ]
     return []

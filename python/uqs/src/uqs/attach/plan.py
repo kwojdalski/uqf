@@ -9,10 +9,10 @@ of the preflight, so "can I apply this" is `plan.ok`, not a second question.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import preflight
+from uqs.attach import overrides, preflight
 from uqs.attach.config import Attachment
 from uqs.attach.findings import Finding, blockers
 from uqs.attach.manifest import DONE, RETAINED, Manifest
@@ -28,10 +28,16 @@ class Plan:
     publisher_port: preflight.PublisherPort
     #: the manifest's token, "" before the first apply
     token: str = ""
+    #: problems with the attachment's own overrides: stale, not allowed, no longer needed
+    override_problems: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
         return not blockers(self.findings)
+
+    @property
+    def accepted(self) -> list[Finding]:
+        return [f for f in self.findings if f.level == "accepted"]
 
     def _state(self, proc: Proc | None, table: str) -> str:
         if proc is None or not proc.up:
@@ -182,6 +188,8 @@ class Plan:
             "components": self.components(),
             "changes": self.changes(),
             "findings": [f.as_dict() for f in self.findings],
+            "accepted_risks": [f.as_dict() for f in self.accepted],
+            "override_problems": self.override_problems,
         }
 
 
@@ -203,4 +211,6 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
     port = publisher_port(att, root)
     facts = facts or preflight.Facts()
     facts.publisher = port
-    return Plan(att, obs, structural + preflight.check(att, obs, facts), port, facts.token)
+    found = structural + preflight.check(att, obs, facts)
+    found, problems = overrides.evaluate(att.overrides, found)
+    return Plan(att, obs, found, port, facts.token, problems)

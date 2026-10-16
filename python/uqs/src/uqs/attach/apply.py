@@ -46,6 +46,22 @@ class ApplyRefused(AttachmentError):
         )
 
 
+class RisksNotConfirmed(AttachmentError):
+    """The plan carries accepted risks and nobody confirmed applying with them.
+
+    `--yes` skips the question "change the stack as above?"; it is not an answer to
+    "apply with these risks accepted?", which is its own confirmation."""
+
+    def __init__(self, accepted: list[Finding]) -> None:
+        self.accepted = accepted
+        super().__init__(
+            "apply would proceed with accepted risks: "
+            + "; ".join(f"{f.code} ({f.component})" for f in accepted)
+            + " - confirm them explicitly (--accept-risks, or answer the prompt); "
+            "--yes alone does not"
+        )
+
+
 class ApplyFailed(AttachmentError):
     """A step failed after others had been applied. `result` says exactly where."""
 
@@ -227,6 +243,7 @@ def apply(
     *,
     facts: Facts | None = None,
     state_dir: Path | None = None,
+    confirmed_risks: str = "",
 ) -> ApplyResult:
     """Register `att`'s tables on the stack it names. Idempotent: on a stack it
     already converged, no call that changes anything is made.
@@ -241,9 +258,22 @@ def apply(
         planned = plan.build(att, ipc, root, facts)
         if not planned.ok:
             raise ApplyRefused(blockers(planned.findings))
+        if planned.accepted and not confirmed_risks:
+            raise RisksNotConfirmed(planned.accepted)
         obs = planned.observation
         tp = obs.tickerplant
         assert tp is not None  # no blocker means one was found
+        m.risk_acceptance = {}
+        if planned.accepted:
+            m.risk_acceptance = {
+                "confirmed_by": confirmed_risks,
+                "at": manifest.now(),
+                "overrides": [o.as_dict() for o in att.overrides],
+                "findings": [f.as_dict() for f in planned.accepted],
+            }
+            m.event(
+                "risks accepted", ", ".join(f"{f.code}:{f.component}" for f in planned.accepted)
+            )
         m.set_state("applying", f"{len(att.tables)} table(s), {len(obs.consumers)} consumer(s)")
         result = ApplyResult("applying", findings=planned.findings)
         try:

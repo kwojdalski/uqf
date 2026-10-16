@@ -6,10 +6,11 @@ through, so tests pass a scripted one and failure injection wraps the real one.
 
 from __future__ import annotations
 
+import getpass
 from dataclasses import replace
 from pathlib import Path
 
-from uqs.attach import config, jobs, plan
+from uqs.attach import config, jobs, overrides, plan
 from uqs.attach.config import Attachment, AttachmentError, Publisher, Stack, Storage
 from uqs.attach.facts import Facts
 from uqs.attach.manifest import Manifest
@@ -83,6 +84,27 @@ def observed_storage(att: Attachment, obs: Observation) -> Storage:
         "hdb_dir": wdb.get("hdbdir", "").lstrip(":"),
     }
     return Storage(**{k: getattr(att.storage, k) or v for k, v in seen.items()})
+
+
+def accept(
+    att: Attachment,
+    ipc: Ipc,
+    root: Path,
+    specs: list[str],
+    reason: str,
+    operator: str | None = None,
+) -> Attachment:
+    """`att` with the blockers `specs` (`CODE:COMPONENT`) accepted, each against what
+    the stack shows RIGHT NOW. The one place an acceptance is made: the CLI and any
+    other entry point call this, so the policy (overrides.POLICY) cannot be skipped.
+
+    Raises OverrideError for a missing reason, an unknown or non-overridable code,
+    or a finding the stack does not show."""
+    if not specs:
+        return att
+    bare = plan.build(replace(att, overrides=()), ipc, root)
+    made = overrides.create(specs, reason, bare.findings, operator or getpass.getuser())
+    return replace(att, overrides=overrides.merge(att.overrides, made))
 
 
 def make_plan(att: Attachment, ipc: Ipc, root: Path) -> plan.Plan:

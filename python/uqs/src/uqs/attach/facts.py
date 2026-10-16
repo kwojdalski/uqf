@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import socket
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -29,9 +30,48 @@ class Host:
         return (self.port_open or _tcp_open)(host, port)
 
     def is_local(self, name: str) -> bool:
-        return name.lower() in self.local_names or name.lower().split(".")[0] in {
-            n.split(".")[0] for n in self.local_names
-        }
+        """Whether `name` is this machine - by name, by loopback, or by ANY address it
+        owns. A stack host given as the machine's own IP (`--host 10.1.2.3`, or any
+        127.x) is as local as `localhost`; deciding by name alone called it remote,
+        so a schema file on this very disk was reported unreachable (#1435)."""
+        lowered = name.lower()
+        if lowered in self.local_names or lowered.split(".")[0] in {
+            n.split(".")[0] for n in self.local_names if not _is_ip(n)
+        }:
+            return True
+        return any(_owned(address) for address in _addresses(lowered))
+
+
+def _is_ip(text: str) -> bool:
+    try:
+        ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _addresses(name: str) -> list[str]:
+    if _is_ip(name):
+        return [name]
+    try:
+        return sorted({str(info[4][0]) for info in socket.getaddrinfo(name, None)})
+    except OSError:
+        return []
+
+
+def _owned(address: str) -> bool:
+    """Loopback, or an address a socket can be bound to - which only an address
+    assigned to this machine allows."""
+    ip = ipaddress.ip_address(address.split("%")[0])
+    if ip.is_loopback:
+        return True
+    family = socket.AF_INET6 if ip.version == 6 else socket.AF_INET
+    try:
+        with socket.socket(family, socket.SOCK_STREAM) as probe:
+            probe.bind((str(ip), 0))
+    except OSError:
+        return False
+    return True
 
 
 @dataclass(frozen=True)
