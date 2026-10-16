@@ -87,3 +87,68 @@ def test_no_definition_carries_rows():
     # tickerplant with rows nobody published.
     for definition in schemas._definitions().values():
         assert "([]" in definition, f"not an empty-table literal: {definition[:40]!r}"
+
+
+# --- one parser of the declaration format (#1392) ---------------------------
+#
+# plant_contract, scaffold/columns, gateway_access and hdb_shape each used to
+# split a `([]...)` body their own way. They read one parser now; these hold
+# each of them to the same columns on the tree's own text AND on a release
+# written by `uqs deploy build --q-target 4.0`, which prefixes `.qetl.plant.`.
+
+
+def _bare(text: str) -> str:
+    return text.replace(".qetl.plant.", "")
+
+
+def _prefixed(text: str) -> str:
+    """Every definition under the release prefix, whichever way the file holds it."""
+    return re.sub(r"^(?:\.qetl\.plant\.)?([a-z_0-9]+:\(\[\])", r".qetl.plant.\1", text, flags=re.M)
+
+
+@pytest.mark.parametrize("spell", [lambda t: t, _bare, _prefixed], ids=["tree", "bare", "release"])
+def test_every_reader_gets_the_same_columns_from_any_spelling(spell):
+    from uqs.external.plant_contract import plant_table_fields
+    from uqs.scaffold.columns import definition_columns
+    from uqs.stack.hdb_shape import declared_columns
+
+    text = spell(schemas.TABLES_Q.read_text())
+    repo = str(schemas.TABLES_Q.parents[2])
+    declared = declared_columns(text)
+    found = schemas.definitions_in(text)
+    assert set(found) == EXPECTED_TABLES
+    for table, line in found.items():
+        names = schemas.columns(table)
+        assert names, table
+        assert schemas.column_names(line) == names
+        assert [n for n, _ in definition_columns(line)] == names
+        assert plant_table_fields(repo, table, text=text) == [n for n in names if n != "time"]
+        assert declared[table] == list(dict.fromkeys(names))
+
+
+def test_gateway_access_reads_the_shared_columns():
+    from uqs.stack import gateway_access
+
+    for table in EXPECTED_TABLES:
+        assert gateway_access._plant_columns(table) == set(schemas.columns(table))
+
+
+def test_the_column_splitter_stops_at_the_literals_own_close_and_keeps_inner_semicolons():
+    line = (
+        ".qetl.plant.t:([]time:`timestamp$(); p:enlist[1;2]; q:`g#`symbol$())  / a (comment); x:1"
+    )
+    assert schemas.column_pairs(line) == [
+        ("time", "`timestamp$()"),
+        ("p", "enlist[1;2]"),
+        ("q", "`g#`symbol$()"),
+    ]
+
+
+def test_an_unknown_table_is_refused_by_name_by_every_text_reader():
+    from uqs.external.plant_contract import plant_table_fields
+
+    text = schemas.TABLES_Q.read_text()
+    with pytest.raises(KeyError, match="'no_such_table' is not defined in"):
+        plant_table_fields(str(schemas.TABLES_Q.parents[2]), "no_such_table", text=text)
+    with pytest.raises(KeyError, match="'no_such_table' is not defined in"):
+        schemas.columns("no_such_table")

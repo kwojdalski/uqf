@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from uqs.model import schemas
 from uqs.paths import UqsError
 
 #: The column every plant table leads with: `.u.upd` stamps it, and every
@@ -70,8 +71,6 @@ TYPES: tuple[ColumnType, ...] = (
 _BY_NAME = {t.name: t for t in TYPES}
 _BY_LITERAL = {t.literal: t for t in TYPES}
 
-#: One `name:literal` column inside a `([]...)` definition.
-_COLUMN = re.compile(r"^\s*([a-z_][a-z0-9_]*)\s*:\s*(.+?)\s*$", re.IGNORECASE)
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -241,13 +240,10 @@ def definition_columns(definition: str, *, keep_groups: bool = False) -> list[tu
     every example the scaffold writes - which has no attribute - fail
     `.qetl.transform.define` at load.
     """
-    body = definition[definition.index("([]") + 3 : definition.rindex(")")]
-    out = []
-    for part in body.split(";"):
-        if m := _COLUMN.match(part):
-            literal = m.group(2) if keep_groups else m.group(2).replace(GROUP, "")
-            out.append((m.group(1), literal))
-    return out
+    return [
+        (name, literal if keep_groups else literal.replace(GROUP, ""))
+        for name, literal in schemas.column_pairs(definition)
+    ]
 
 
 def table_columns(definition: str) -> list[tuple[str, str]]:
