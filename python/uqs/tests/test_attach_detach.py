@@ -277,7 +277,7 @@ def test_a_consumer_table_held_before_the_attachment_survives_detach_untouched(
     leave the table, its rows, both subscriptions and the subtables entry as they were."""
     stack.q("rdb1", LEDGER_Q)
     if rows:  # rows on a consumer are evidence of publication: detach keeps, not rolls back
-        stack.q("rdb1", f"`{TABLE} insert (.z.p;`AAA;`acc1;1.5;enlist `held)")
+        stack.q("rdb1", f"`{TABLE} insert (.z.p;`AAA;`acc1;1.5;`held)")
     # a LIVE handle: TorQ marks (and a later subscribe purges) rows whose handle is not open
     other = stack.endpoint("discovery1").port
     stack.q("rdb1", f"h2:hopen `::{other}:admin:admin")
