@@ -63,7 +63,8 @@ re-verified and left running.
   not change how the publisher logs.
 
 A new attachment needs `--job` and `--stack-id`; `--host` (default `localhost`),
-`--discovery HOST:PORT` (default: the stack id + 1), `--tickerplant`,
+`--discovery HOST:PORT` (default: the stack id + 1; its HOST must be the
+`--host` machine, since a stack is attached on one host), `--tickerplant`,
 `--consumer` (default: all), `--user`, `--password-env`,
 `--tplogdir`/`--schema-file` (pin storage) and `--runtime-only` are optional.
 After the first execution the attachment is reused by name. Options that

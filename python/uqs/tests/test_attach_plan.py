@@ -14,7 +14,7 @@ from attach_support import LEDGER_COLUMNS, LEDGER_Q, SORT_DEFAULT, FakeStack, ma
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.attach import config, facts, jobs, plan, preflight, service
+from uqs.attach import config, facts, jobs, plan, preflight, service, topology
 from uqs.attach.findings import blockers
 from uqs.attach.schema import SchemaError, TableSpec, differences, parse_definition
 from uqs.cli import shared
@@ -167,12 +167,51 @@ def test_a_published_table_the_bundle_does_not_define_is_external(tmp_path):
 def test_the_stack_id_has_no_default_and_discovery_is_stored_once(bundle):
     att = attachment(bundle, 6000)
     assert (att.stack.id, att.stack.discovery_port) == (6000, 6001)
-    other = attachment(bundle, 6000, discovery="otherhost:7001")
+    other = attachment(bundle, 6000, host="otherhost", discovery="otherhost:7001")
     assert (other.stack.discovery_host, other.stack.discovery_port) == ("otherhost", 7001)
     with pytest.raises(config.AttachmentError, match="not a base port"):
         attachment(bundle, 80)
     with pytest.raises(config.AttachmentError, match="HOST:PORT"):
         attachment(bundle, 6000, discovery="6001")
+
+
+class _Recording(FakeStack):
+    """The fake stack, also noting the host every call was addressed to."""
+
+    def __init__(self, *a, **kw) -> None:
+        super().__init__(*a, **kw)
+        self.hosts: list[tuple[str, str]] = []
+
+    def call(self, endpoint, op, request):
+        self.hosts.append((endpoint.procname, endpoint.host))
+        return super().call(endpoint, op, request)
+
+
+def test_a_discovery_host_other_than_the_stack_host_is_refused_not_ignored(bundle):
+    """#1440: `--discovery uat-box:6001` without `--host uat-box` was stored, shown,
+    and then ignored - discovery and every process were asked on localhost."""
+    with pytest.raises(
+        config.AttachmentError,
+        match=r"--discovery uat-box\.example:6001 is not on "
+        r"the --host machine \(localhost\).*Give --host uat-box\.example",
+    ):
+        attachment(bundle, 6000, discovery="uat-box.example:6001")
+
+
+def test_discovery_is_asked_at_the_address_the_attachment_records(bundle):
+    fake = _Recording(6000)
+    att = attachment(bundle, 6000, host="UAT-box.example", discovery="uat-box.example:6001")
+    obs, found = topology.observe(att, fake)
+    assert not found and obs.tickerplant is not None
+    assert fake.hosts[0] == ("discovery", "uat-box.example"), "the host --discovery gave"
+    assert {h for _, h in fake.hosts[1:]} == {"UAT-box.example"}, "processes: --host"
+
+
+def test_two_names_for_this_machine_are_one_host(bundle):
+    fake = _Recording(6000)
+    att = attachment(bundle, 6000, host="localhost", discovery="127.0.0.1:6001")
+    topology.observe(att, fake)
+    assert fake.hosts[0] == ("discovery", "127.0.0.1")
 
 
 def test_the_config_round_trips_and_a_foreign_schema_is_refused(bundle, tmp_path):
@@ -257,7 +296,7 @@ def test_discovery_at_the_wrong_stack_is_refused_as_that_stacks_not_ours(bundle)
     different stack than the fleet at 6000. Every process the saved discovery
     leads to must say it belongs to the stack the attachment names."""
     wrong = FakeStack(6050)
-    att = attachment(bundle, 6000, discovery="testhost:6051")
+    att = attachment(bundle, 6000, host="testhost", discovery="testhost:6051")
     p = run(att, wrong)
     assert not p.ok
     assert "STACK_MISMATCH" in codes(p.findings, "blocker")
@@ -549,3 +588,13 @@ def test_a_dry_run_exits_nonzero_on_a_blocker_and_zero_when_clean(cli_stack, bun
 def test_a_detach_of_an_unknown_attachment_says_so(cli_stack):
     result = CliRunner().invoke(cli.app, ["job", "detach", "nope"], catch_exceptions=False)
     assert result.exit_code != 0 and any("no attachment 'nope'" in m for m in cli_stack.errors)
+
+
+def test_the_cli_refuses_a_discovery_on_another_machine_before_asking_anything(cli_stack, bundle):
+    result = invoke(
+        "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle),
+        "--stack-id", "6000", "--discovery", "uat-box.example:6001", "--dry-run",
+    )  # fmt: skip
+    assert result.exit_code != 0
+    assert any("is not on the --host machine (localhost)" in m for m in cli_stack.errors)
+    assert cli_stack.calls == []
