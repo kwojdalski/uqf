@@ -106,7 +106,14 @@ The gate is not just `start`. `stack/start_policy.refuse_start`, below
 `uqs start`, the MCP server and the browser's start route, refuses the
 attachment's publisher unless the attachment is `verified` **and** the start is
 under its stack id. A bare `uqs start pb_ledger1` would use the runtime's
-default base port, and is refused with the right command named.
+default base port, and is refused with the right command named. `uqs start`,
+`start all` and `restart all` are gated too: `all` is expanded first to the
+startwithall=1 processes it launches, and a job declared `start_with_all 1b` is
+one of them. The gate fails closed: a publisher whose `manifest.json` cannot be
+read (permissions, truncated, no `state`) is refused, and an `attachment.json`
+that cannot be read refuses every start, since its publisher cannot be known.
+Make the file readable again, or move the folder out of the attachments
+directory if the attachment is gone.
 
 ### Detach
 
