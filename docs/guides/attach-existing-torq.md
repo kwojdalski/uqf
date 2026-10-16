@@ -97,6 +97,66 @@ partitions lack the table, so a query spanning dates before the first end of day
 after publication needs it added to them (that is `dbmaint`, #1423, not this
 workflow).
 
+## Accepting a blocker
+
+A blocker can be accepted explicitly. This is for a finding you have assessed
+yourself - most commonly `TORQ_VERSION`, because the site runs a TorQ this
+procedure was never tested on (the site's is TorQ 4.2.0; the tested version is
+5.2.12) - and it is the supported alternative to editing the validation code.
+
+```bash
+uqs job attach plan piggybank-uat --job piggybank_general_ledger --stack-id 6000 \
+    --host 127.0.0.1 --discovery 127.0.0.1:6001 \
+    --override TORQ_VERSION:discovery1 --override TORQ_VERSION:stp1 \
+    --override TORQ_VERSION:rdb1 --override TORQ_VERSION:wdb1 \
+    --override-reason "Validated against the site's TorQ 4.2.0 build"
+uqs job attach apply piggybank-uat --yes --accept-risks
+```
+
+**An override accepts a risk. It does not establish compatibility or
+correctness.** Accepting `TORQ_VERSION` does not add the version to
+`SUPPORTED_TORQ`, and nothing in the output says it works.
+
+- **Scoped.** `CODE:COMPONENT`, one finding on one process. An override for
+  `stp1` says nothing about `rdb1`. There is no blanket `--force`.
+- **A reason is mandatory**, and the override records who accepted it, when, and
+  the facts it was accepted against (for a version, the version reported).
+- **Still visible.** An accepted finding is shown as `accepted`, with its
+  reason, the concrete failure risk and what the operator has to do, in `plan`,
+  `validate`, `status` and `verify`. It is never shown as passing.
+- **Void when the facts change.** Every `plan`, `validate`, `apply` and `verify`
+  re-evaluates it against the stack as it is now; another TorQ version, another
+  missing sort column or another process on the port makes it stale, and the
+  blocker is back. `verify` fails on a stale acceptance, which closes the
+  publisher's start gate.
+- **Confirmed separately.** `apply` with accepted risks asks for them by name;
+  `--yes` answers only "change the stack?". Use `--accept-risks` where there is
+  no terminal. The confirmation and the overrides in force are recorded in the
+  manifest.
+- **Persisted** in `attachment.json` and the manifest. `plan --clear-overrides`
+  withdraws all of them.
+
+  | Code                                                                                               | Overridable | Because / the risk accepted                                                                         |
+  | ---------------------                                                                              | ----------- | ------------------------------------------------------------------------------------------------    |
+  | `TORQ_VERSION`                                                                                     | yes         | the TorQ internals driven here are unverified on that version; prefer `--runtime-only`              |
+  | `SORT_CONFIG`                                                                                      | yes         | the wdb's end-of-day sort of the table fails; add a `sort.csv` row before end of day                |
+  | `PORT_CONFLICT`                                                                                    | yes         | the publisher cannot bind its port; free it before starting the publisher                           |
+  | `PUBLISHER_RUNNING`                                                                                | yes         | rows published during registration may be lost; stop the publisher                                  |
+  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                             | no          | a proven mismatch, or ownership that is unclear                                                     |
+  | `STACK_MISMATCH`                                                                                   | no          | the process belongs to another stack                                                                |
+  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`, `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE` | no          | fixing them needs a restart or a config edit this workflow never makes; the table would not persist |
+  | `PERSIST_UNAVAILABLE`                                                                              | no          | use `--runtime-only`, which accepts losing the registration on a tickerplant restart                |
+  | `STORAGE_MISMATCH`, unreachable or missing processes                                               | no          | plan again; nothing can be verified                                                                 |
+
+Detach's refusals (drift, unknown ownership, a subscriber that is not ours) are
+the destructive-cleanup protections and cannot be overridden at all.
+
+The host check treats a stack host given as an address this machine owns
+(`127.0.0.1`, any `127.x`, or its own LAN address) as local; it used to compare
+names only, so the machine's own non-loopback IP made a schema file on this very
+disk look like it was on another machine. That was a false positive and is
+fixed, not something to override.
+
 ## Apply, verify, start
 
 ```bash

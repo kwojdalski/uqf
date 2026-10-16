@@ -264,3 +264,52 @@ def test_the_schema_block_is_what_apply_wrote_and_nothing_else_in_the_file_moved
     m = Manifest.load("pb-uat", state(stack))
     assert persist.outside(text, "pb-uat") == original
     assert f"/ BEGIN uqs-attach pb-uat {m.token}" in text
+
+
+# ------------------------------------------------------ accepting an untested version
+
+
+class _ReportsVersion:
+    """The real stack, whose processes say they run another TorQ - what the site's
+    TorQ 4.2.0 looks like to the preflight, without a 4.2.0 to hand."""
+
+    def __init__(self, inner, version: str) -> None:
+        self.inner, self.version = inner, version
+
+    def call(self, endpoint, op, request):
+        answer = self.inner.call(endpoint, op, request)
+        if op == "probe":
+            answer["torq"] = self.version
+        return answer
+
+
+def test_an_untested_version_is_refused_accepted_applied_and_the_acceptance_goes_stale(
+    stack, bundle
+):
+    from uqs.attach import overrides, plan, preflight
+
+    att = att_for(stack, bundle)
+    site = _ReportsVersion(stack.ipc(), "4.2.0")
+    with pytest.raises(applying.ApplyRefused, match="TORQ_VERSION"):
+        applying.apply(att, site, ROOT, state_dir=state(stack))
+    assert TABLE not in stack.q("stp1", ".j.j string tables[]")
+
+    specs = [f"TORQ_VERSION:{p}" for p in ("discovery1", "stp1", "rdb1", "wdb1")]
+    accepted = service.accept(att, site, ROOT, specs, "Validated against the site's TorQ 4.2.0")
+    config.save(accepted, state(stack))
+    with pytest.raises(applying.RisksNotConfirmed):
+        applying.apply(accepted, site, ROOT, state_dir=state(stack))
+    result = applying.apply(accepted, site, ROOT, state_dir=state(stack), confirmed_risks="tester")
+    assert result.state == "applied" and stack.rows("rdb1", TABLE) == 0
+    assert verify.verify(accepted, site, state(stack)).ok
+    assert "4.2.0" not in preflight.SUPPORTED_TORQ, "accepting is not testing"
+
+    # the same acceptance against what the stack says NOW: another version voids it
+    later = _ReportsVersion(stack.ipc(), "4.2.1")
+    p = plan.build(accepted, later, ROOT)
+    assert not p.ok and any("stale" in x for x in p.override_problems)
+    assert not verify.verify(accepted, later, state(stack)).ok
+    assert overrides.POLICY["TORQ_VERSION"].overridable
+    stack.publish(TABLE, ROWS)
+    stack.flush()
+    assert stack.rows("rdb1", TABLE) == 3

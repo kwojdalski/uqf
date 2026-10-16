@@ -78,6 +78,9 @@ class Manifest:
     history: list[dict] = field(default_factory=list)
     #: set once rows were seen anywhere downstream; evidence, not a flag to trust
     publication: dict = field(default_factory=lambda: {"observed": False})
+    #: accepted risks apply was confirmed against: who confirmed, when, and the overrides
+    #: (with the facts they were accepted against) in force at that moment
+    risk_acceptance: dict = field(default_factory=dict)
     path: Path = field(default_factory=Path, repr=False, compare=False)
 
     # ----------------------------------------------------------- creation

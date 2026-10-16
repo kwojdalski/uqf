@@ -21,13 +21,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.attach import config, persist
+from uqs.attach import config, persist, plan
 from uqs.attach.config import Attachment, AttachmentError
+from uqs.attach.facts import Facts
 from uqs.attach.manifest import CREATED, DONE, Manifest
 from uqs.attach.preflight import identity
 from uqs.attach.remote import Ipc
 from uqs.attach.schema import TableSpec, differences
 from uqs.attach.topology import Observation, Proc, observe
+from uqs.paths import repo_root
 
 
 @dataclass(frozen=True)
@@ -132,10 +134,8 @@ def run(att: Attachment, obs: Observation, m: Manifest) -> list[Check]:
     for p in obs.procs():
         if not p.up:
             out.append(Check(f"{p.procname} answers", False, p.error))
-        elif found := identity(att, p):
-            out.append(
-                Check(f"{p.procname} is this stack and a tested TorQ", False, found[0].message)
-            )
+        elif found := [f for f in identity(att, p) if f.code != "TORQ_VERSION"]:
+            out.append(Check(f"{p.procname} is on this stack", False, found[0].message))
     tp = obs.tickerplant
     if tp is None or not tp.up:
         return out + [Check("the tickerplant answers", False)]
@@ -147,7 +147,35 @@ def run(att: Attachment, obs: Observation, m: Manifest) -> list[Check]:
     return out + _schema_file(m, att, att.tables)
 
 
-def verify(att: Attachment, ipc: Ipc, state_dir: Path | None = None) -> VerifyResult:
+def accepted_risks(att: Attachment, ipc: Ipc, root: Path, m: Manifest) -> list[Check]:
+    """Every accepted risk, re-evaluated against the stack as it is NOW.
+
+    An acceptance is for the facts it was made against. If they changed - another
+    TorQ version, another missing sort column, another process on the port - it is
+    void, and verification fails rather than keep permitting what was never
+    accepted. A still-valid one passes, and says in the check's name that it is a
+    risk accepted, not a thing that works."""
+    now = plan.build(att, ipc, root, Facts(token=m.token))
+    out = [
+        Check(f"accepted risk {f.code}:{f.component} still holds as accepted", True, f.reason)
+        for f in now.accepted
+    ]
+    out += [
+        Check(f"{f.component} runs a TorQ this procedure was tested on", False, f.message)
+        for f in now.findings
+        if f.level == "blocker" and f.code == "TORQ_VERSION"
+    ]
+    out += [
+        Check("an accepted risk is still valid", False, problem)
+        for problem in now.override_problems
+        if "stale" in problem or "not overridable" in problem
+    ]
+    return out
+
+
+def verify(
+    att: Attachment, ipc: Ipc, state_dir: Path | None = None, root: Path | None = None
+) -> VerifyResult:
     """Read-only checks; records `verified` (or takes it back) in the manifest."""
     with config.locked(att.name, state_dir):
         if not Manifest.exists(att.name, state_dir):
@@ -160,6 +188,7 @@ def verify(att: Attachment, ipc: Ipc, state_dir: Path | None = None) -> VerifyRe
             )
         obs, structural = observe(att, ipc)
         checks = [Check(f.component, False, f.message) for f in structural] + run(att, obs, m)
+        checks += accepted_risks(att, ipc, root or repo_root(), m)
         result = VerifyResult(checks, m.state)
         if result.ok and m.state != "verified":
             m.set_state("verified", f"{len(checks)} check(s) passed")

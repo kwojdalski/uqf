@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
-LEVELS = ("blocker", "warning", "info")
+LEVELS = ("blocker", "accepted", "warning", "info")
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,9 @@ class Finding:
     or claim something false. `warning` is true and the operator should know
     it, but not a reason to stop. `info` is what the plan will do or adopt.
     `action` is what a person has to do when the workflow may not.
+
+    `accepted` is a blocker an operator explicitly accepted (overrides.py): it no
+    longer stops the operation, and is never shown as passing.
     """
 
     level: str
@@ -22,6 +25,11 @@ class Finding:
     component: str
     message: str
     action: str = ""
+    #: what was observed that makes this a finding; an override is accepted against
+    #: exactly these facts (see overrides.py) and is void when they change
+    facts: dict[str, str] = field(default_factory=dict)
+    #: for an `accepted` finding: why the operator accepted it
+    reason: str = ""
 
     def __post_init__(self) -> None:
         if self.level not in LEVELS:
