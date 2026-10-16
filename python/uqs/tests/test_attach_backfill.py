@@ -37,7 +37,7 @@ from uqs.attach import backfill as attached
 from uqs.attach import backfill_plan as planning
 from uqs.attach import service
 from uqs.attach.schema import parse_definition
-from uqs.interpreter import q_interpreter
+from uqs.interpreter import PEACHQ, q_impl, q_interpreter
 from uqs.paths import UqsError
 
 runner = CliRunner()
@@ -357,6 +357,11 @@ def test_json_without_attach_is_refused(world):
 def test_hdb_reader_reports_the_directory_a_real_q_loaded(world):
     """The operation a stack's HDB reader answers: the loaded directory and what it maps."""
     from uqs.attach.remote import source
+
+    if q_impl() == PEACHQ:
+        pytest.skip(
+            "a stack's HDB is a kdb+ process; PeachQ has no .Q.dpft to build the one it loads"
+        )
 
     hdb = world.tmp / "real-hdb"
     hdb.mkdir()
