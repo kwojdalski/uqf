@@ -23,7 +23,15 @@ ALLOWLIST = (
     "python/uqs",
     "python/uqf_frontend",
     "python/uqf_airflow_provider",
+    "lib/kx-dbmaint",
 )
+
+#: The one directory of lib/ a release carries (#1423): KX's dbmaint.q, which
+#: scripts/gates/fill_hdb_partitions.q loads for `uqs data hdb-check --fix`,
+#: with the Apache-2.0 licence and NOTICE that must travel with it. Every other
+#: lib/ tree is a reference or a runtime installed from elsewhere. Files here
+#: ship byte-for-byte: portable.convert leaves them alone.
+VENDORED_IN_RELEASE = "lib/kx-dbmaint"
 
 #: Never shipped, even when tracked under the allowlist: secrets and
 #: secret-bearing configuration, licences, environments, data, logs and
@@ -44,7 +52,7 @@ EXCLUDED_PATTERNS = (
     r"(^|/)id_(rsa|ed25519|ecdsa)",
     r"(^|/)passwords/",
     r"^scripts/torqconfig/permissions/gateway_users\.csv$",
-    r"^lib/",
+    r"^lib/(?!kx-dbmaint/)",
     rf"^{re.escape(RELEASE_DIR)}/",
 )
 _EXCLUDED = [re.compile(p) for p in EXCLUDED_PATTERNS]

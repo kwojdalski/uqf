@@ -1,7 +1,7 @@
 # qlinter's configuration (https://github.com/kwojdalski/q-lint), read by the
 # release CI pins (.github/workflows/ci.yml) and by a bare `qlinter` here. The
 # linter is installed separately and is not a dependency of this project.
-# lib/ is vendored code (TorQ, its starter pack, kdb-parquet, qAutomatedTrading, KX ml):
+# lib/ is vendored code (TorQ, its starter pack, kdb-parquet, qAutomatedTrading, KX ml, KX dbmaint):
 # never edited here, so its findings are not this tree's to act on.
 exclude = ["lib/", ".claude/worktrees/"]
 

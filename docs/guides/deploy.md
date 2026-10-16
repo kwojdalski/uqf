@@ -80,11 +80,15 @@ first 12 characters of the revision:
 Inside the artifact:
 
 - **The tree.** The tracked files under an allowlist (`src`, `scripts`, the
-  three Python packages, `pyproject.toml`, `uv.lock`), at their repository
-  paths, because the q loaders and `uqs` find each other by layout. Never
-  shipped: TorQ (`lib/`), `.env`, `.envrc`, keys and licences, virtual
-  environments, runtime data, logs, tests, build output, and
-  `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
+  three Python packages, `pyproject.toml`, `uv.lock`, and `lib/kx-dbmaint`), at
+  their repository paths, because the q loaders and `uqs` find each other by
+  layout. `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and
+  notice, the one part of `lib/` a release carries: the HDB repair below loads
+  it, offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and
+  the licence has to travel with the copy. Never shipped: the rest of `lib/`
+  (TorQ, the starter pack and the other vendored trees), `.env`, `.envrc`, keys
+  and licences, virtual environments, runtime data, logs, tests, build output,
+  and `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
   gateway passwords.
 - **`.release/`.** `requirements.txt`, the dependencies of `uqs` pinned with
   hashes from the committed `uv.lock`. `wheels/` holds the `uqs` wheel and a
@@ -275,7 +279,10 @@ release's own `uqs data hdb-check --json` against the shared HDB:
 - **Missing tables or columns** are refused, naming the partitions. With
   `--fix-hdb`, prepare runs `hdb-check --fix` and checks again. The fix is
   additive: each missing table is written empty, and each missing column is
-  written as its type's null.
+  written as its type's null. It is a thin wrapper over KX's `dbmaint.q` (it
+  decides what the declared schema lacks, `dbmaint` writes the columns), checks
+  the database afterwards and exits 1 if anything is still missing. It takes no
+  HDB lock, is not transactional, and does not reload a running HDB.
 - **A column whose type changed** is always refused, naming it. That is a
   migration, which no fill makes right.
 

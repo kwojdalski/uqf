@@ -37,8 +37,8 @@ lives.
   app
 - [Testing](#testing) --- how to run the suites, and what q coverage measures
 - [Documentation](#documentation) --- generating browsable API docs from qDoc
-- [Licensing](#licensing) --- MIT, plus six vendored dependencies with their own
-  terms
+- [Licensing](#licensing) --- MIT, plus seven vendored dependencies with their
+  own terms
 
 ## Requirements
 

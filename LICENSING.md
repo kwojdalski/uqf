@@ -1,7 +1,7 @@
 # Licensing
 
 Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
-**except** the six vendored dependencies below:
+**except** the seven vendored dependencies below:
 
 - `tests/lib/qunit.q`, vendored from [TimeStored's
   qUnit](https://github.com/timestored/kdb/blob/master/qunit/qunit.q) (see also
@@ -63,6 +63,17 @@ Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
   loaded by `src/init.q` or anything else in this repo, and not verified working
   here: it needs a Python bridge (PyKX or embedPy) that PeachQ does not support.
   Vendored for reference only, at the repo owner's explicit choice.
+- `lib/kx-dbmaint/`, vendored from
+  [KxSystems/kdb](https://github.com/KxSystems/kdb) (`utils/dbmaint.q` and its
+  `dbmaint.md`) at commit `1daebf7`, distributed under the Apache License 2.0
+  (full text at `lib/kx-dbmaint/LICENSE-kx-kdb`) - permissive and fine to
+  combine with this repository's MIT code; Apache 2.0 asks that its licence
+  travel with redistributed copies, and release artifacts carry it explicitly
+  (the one part of `lib/` they include). KX's partitioned-database maintenance
+  utility, loaded by `scripts/gates/fill_hdb_partitions.q` for
+  `uqs data hdb-check --fix` and `--fix-hdb`; provenance in
+  `lib/kx-dbmaint/NOTICE.md`. Distinct from the unmodified fixture copy inside
+  `lib/torq`, which nothing here uses.
 - `lib/torq-finance-starter-pack/`, vendored from
   [DataIntellectTech/TorQ-Finance-Starter-Pack](https://github.com/DataIntellectTech/TorQ-Finance-Starter-Pack)
   at commit `50fcd5a`, distributed under the MIT License (full text at
