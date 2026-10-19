@@ -24,6 +24,7 @@ from pathlib import Path
 from uqs.attach import config, persist, plan
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
+from uqs.attach.findings import blockers
 from uqs.attach.manifest import CREATED, DONE, SHARED, Manifest
 from uqs.attach.preflight import identity
 from uqs.attach.remote import Ipc
@@ -156,23 +157,29 @@ def run(att: Attachment, obs: Observation, m: Manifest) -> list[Check]:
     return out + _schema_file(m, att, att.tables)
 
 
-def accepted_risks(att: Attachment, ipc: Ipc, root: Path, m: Manifest) -> list[Check]:
-    """Every accepted risk, re-evaluated against the stack as it is NOW.
+def preflight_now(att: Attachment, ipc: Ipc, root: Path, m: Manifest) -> list[Check]:
+    """The whole preflight, re-run against the stack as it is NOW (#1444).
+
+    Verify opens the start gate, so it refuses on exactly what `plan.ok` refuses
+    on - every blocker `findings.blockers` returns once the attachment's overrides
+    are evaluated - and on nothing less. The one exception is the attachment's
+    own publisher running (`plan.own_publisher_running`): that is what a started
+    attachment looks like, and a re-verify of one must pass.
 
     An acceptance is for the facts it was made against. If they changed - another
     TorQ version, another missing sort column, another process on the port - it is
-    void, and verification fails rather than keep permitting what was never
-    accepted. A still-valid one passes, and says in the check's name that it is a
-    risk accepted, not a thing that works."""
+    void, the finding is a blocker again, and verification fails rather than keep
+    permitting what was never accepted. A still-valid one passes, and says in the
+    check's name that it is a risk accepted, not a thing that works."""
     now = plan.build(att, ipc, root, Facts(token=m.token))
     out = [
         Check(f"accepted risk {f.code}:{f.component} still holds as accepted", True, f.reason)
         for f in now.accepted
     ]
     out += [
-        Check(f"{f.component} runs a TorQ this procedure was tested on", False, f.message)
-        for f in now.findings
-        if f.level == "blocker" and f.code == "TORQ_VERSION"
+        Check(f"{f.component}: no unaccepted {f.code} blocker", False, f.message)
+        for f in blockers(now.findings)
+        if not plan.own_publisher_running(att, f)
     ]
     out += [
         Check("an accepted risk is still valid", False, problem)
@@ -197,7 +204,7 @@ def verify(
             )
         obs, structural = observe(att, ipc)
         checks = [Check(f.component, False, f.message) for f in structural] + run(att, obs, m)
-        checks += accepted_risks(att, ipc, root or repo_root(), m)
+        checks += preflight_now(att, ipc, root or repo_root(), m)
         result = VerifyResult(checks, m.state)
         if result.ok and m.state != "verified":
             m.set_state("verified", f"{len(checks)} check(s) passed")

@@ -193,6 +193,15 @@ class Plan:
         }
 
 
+def own_publisher_running(att: Attachment, f: Finding) -> bool:
+    """`f` says the attachment's OWN publisher is running. Apply must not run
+    under it (rows published mid-registration may be lost), but it is what a
+    started attachment looks like - so a re-run of a running attachment
+    (workflow.already_running) and verify (#1444) both pass over it, and over
+    no other blocker."""
+    return f.code == "PUBLISHER_RUNNING" and f.component == att.publisher.procname
+
+
 def publisher_port(att: Attachment, root: Path) -> preflight.PublisherPort:
     """stack id + the job's locked offset; provisional when the job is not in
     process_ports.csv yet (installing it appends the next free one)."""

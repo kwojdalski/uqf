@@ -52,8 +52,14 @@
 /               sources no older than max_age (.qf.mkt.best_across_venues);
 /               each leg oriented by the route and chained
 /               (.qf.mkt.invert_book, .qf.mkt.combine_oriented_books); the
-/               reference is the mid of that chain. max_age 0Wn, the default,
-/               is "as of however old", demo_markout's policy.
+/               reference is the mid of that chain. max_age defaults to
+/               .qf.mkt.reference_max_age, the same age crypto_markout and
+/               posbook use (#1410): a source that stopped quoting must not
+/               keep setting the best bid or ask, so a book older than that at
+/               the instant is not a price. When no source is that fresh the
+/               leg has no book and the row is `unavailable (see `missing`).
+/               0Wn ("as of however old") stays valid for a single-source
+/               site and is demo_markout's policy, but is no longer the default.
 /   missing     a leg with no book at the execution or the horizon gives a null
 /               reference and null allocations with status `unavailable, kept
 /               so the gap shows; an execution's own residual survives a
@@ -90,9 +96,14 @@
 / The default spec: what a job declares to change. horizons are timespans, signed;
 / convention is a .qf.mkt attribution convention (the proposed default is
 / unapproved, which is why it is a parameter and every row records its version);
-/ max_age is the oldest a source's book may be and still count (0Wn: however
-/ old); tolerance is the residual, in pips, that still counts as reconciled.
-.qpipe.transform.fx_markout.default_spec:`horizons`convention`max_age`tolerance!(0D00:00:01 0D00:00:10;.qf.mkt.attribution_convention;0Wn;1e-6)
+/ max_age is the oldest a source's book may be and still count; the default is
+/ the shared .qf.mkt.reference_max_age, one definition for every markout family
+/ (#1410), and 0Wn means however old. Why 5s is right for FX too: the plant's
+/ books are snapshots of an actively quoted top of book, and the longest horizon
+/ is 10s, so a source silent for 5s has missed several of its own updates. A
+/ site with sparse cross-pair quoting declares a longer age in its spec
+/ rather than every site inheriting an unbounded one; tolerance is the residual, in pips, that still counts as reconciled.
+.qpipe.transform.fx_markout.default_spec:`horizons`convention`max_age`tolerance!(0D00:00:01 0D00:00:10;.qf.mkt.attribution_convention;.qf.mkt.reference_max_age;1e-6)
 
 / Refuse a spec the calculation cannot honour, naming the first problem.
 / @param spec dict horizons, convention, max_age, tolerance
@@ -373,7 +384,8 @@
 / .
 / A USDPLN sell at 3.99 routes EURUSD (inverted) then EURPLN. At the execution
 / EURUSD is 1.25 and EURPLN 5.0, so USDPLN is (1/1.25)*5.0 = 4.0; afterwards
-/ EURUSD is 1.0 and EURPLN 5.5, so 5.5. The sell loses 10000*(5.5-3.99) = 15100
+/ EURUSD is 1.0 and EURPLN 5.5 (re-quoted at +8s so the +10s horizon finds a book
+/ inside max_age), so 5.5. The sell loses 10000*(5.5-3.99) = 15100
 / pips: -100 at the execution, -10000 to the EURUSD leg (4.0 -> 5.0) and -5000
 / to the EURPLN leg (5.0 -> 5.5), and nothing is left over.
 .qetl.transform.define[`fx_markout_calc;`inputs`output`fn`examples!(
@@ -399,10 +411,10 @@
         `executions`market_data!(
             ([] source_time:enlist 2026.09.17D10:00:00; venue:enlist `a; sym:enlist `USDPLN; side:enlist -1;
                 size:enlist 1e6; price:enlist 3.99; fill_id:enlist `y1);
-            ([] source_time:2026.09.17D09:59:59 2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:00.5;
-                sym:`EURUSD`EURPLN`EURUSD`EURPLN; source:4#`a;
-                bid_prices:(enlist 1.25;enlist 5.0;enlist 1.0;enlist 5.5); bid_sizes:4#enlist enlist 1e6;
-                ask_prices:(enlist 1.25;enlist 5.0;enlist 1.0;enlist 5.5); ask_sizes:4#enlist enlist 1e6));
+            ([] source_time:2026.09.17D09:59:59 2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:00.5 2026.09.17D10:00:08 2026.09.17D10:00:08;
+                sym:`EURUSD`EURPLN`EURUSD`EURPLN`EURUSD`EURPLN; source:6#`a;
+                bid_prices:(enlist 1.25;enlist 5.0;enlist 1.0;enlist 5.5;enlist 1.0;enlist 5.5); bid_sizes:6#enlist enlist 1e6;
+                ask_prices:(enlist 1.25;enlist 5.0;enlist 1.0;enlist 5.5;enlist 1.0;enlist 5.5); ask_sizes:6#enlist enlist 1e6));
         ([] source_time:10#2026.09.17D10:00:00; venue:10#`a; fill_id:10#`y1; sym:10#`USDPLN; side:10#-1; size:10#1e6;
             horizon:(5#0D00:00:01),5#0D00:00:10;
             kind:10#`total`execution`leg`leg`residual; step:10#0 0 1 2 0; leg:10#``,`EURUSD`EURPLN,`;

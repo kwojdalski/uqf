@@ -12,8 +12,15 @@ from uqs.attach.config import Attachment
 from uqs.attach.manifest import CREATED, DONE, EXISTING, PENDING, REVERTED, SHARED, Manifest
 from uqs.attach.topology import Proc
 
-#: The q operation that undoes each forward one.
-INVERSE = {"consumer_attach": "consumer_detach", "stp_register": "stp_unregister"}
+#: The q operation that undoes each forward one. `consumer_subscribe` is the
+#: subscription consumer_attach added to a table the consumer already held (#1459).
+INVERSE = {
+    "consumer_attach": "consumer_detach",
+    "consumer_subscribe": "consumer_unsubscribe",
+    "stp_register": "stp_unregister",
+}
+#: What a consumer's subscriber handle on the tickerplant can be recorded under.
+CONSUMER_OPS = ("consumer_attach", "consumer_subscribe")
 #: The schema-file blocks: the created tables' (`created`) and the shared ones' `+uses` (`shared`).
 BLOCKS = ("schema_block", "schema_uses")
 

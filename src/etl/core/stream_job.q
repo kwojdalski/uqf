@@ -738,11 +738,11 @@
 .qetl.job.stream.carry_cap:{[job] $[`cap in key .qetl.job.stream.def[job]`carry; .qetl.job.stream.def[job][`carry]`cap; 100000]}
 
 / Private: keep a replayed batch until the snapshot arrives, up to the cap; past it,
-/ note the latest `time` dropped (#1372; none counts as latest).
+/ note the latest `time` dropped (#1372; none counts as latest, #1384).
 / @private
 .qetl.job.stream.record:{[job;t;x]
     r:$[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; (`recording;0;();0Np)];
-    d:$[not (`time in cols x) and count x; 0Np; `time in cols x; max x`time; 0Wp];
+    d:$[0=count x; 0Np; `time in cols x; max x`time; 0Wp];
     if[(r 0) in `full`restored_full; .qetl.job.stream.carry_log[job]:(r 0;r 1;();max (r 3;d)); :()];
     if[.qetl.job.stream.carry_cap[job]<n:r[1]+count x; .qetl.job.stream.carry_log[job]:($[`restored=r 0; `restored_full; `full];n;();max (r 3;d)); :()];
     .qetl.job.stream.carry_log[job]:(r 0;n;r[2],enlist (t;x);r 3);

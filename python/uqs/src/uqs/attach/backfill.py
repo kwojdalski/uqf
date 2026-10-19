@@ -42,7 +42,7 @@ from typing import Any
 from uqs.attach import config
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.manifest import Manifest
-from uqs.attach.schema import SchemaError, TableSpec, differences, parse_definition
+from uqs.attach.schema import SchemaError, TableSpec, differences, parse_definition, parse_nested
 from uqs.model.declarations import Declaration, read_declarations
 from uqs.paths import TABLES_FILE, UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
@@ -116,15 +116,23 @@ def _declaration(paths: UqsPaths, worker: str) -> Declaration:
 
 
 def _table_in(path: Path, table: str) -> TableSpec | None:
+    """The table's definition in `path`, with the element types its `nested[...]`
+    lines declare: an untyped `()` column is refused without them (#1451)."""
     if not path.is_file():
         return None
-    for line in path.read_text().splitlines():
-        match = _TABLE_LINE.match(line)
-        if match and match.group(1) == table:
-            try:
-                return parse_definition(line)
-            except SchemaError as exc:
-                raise AttachmentError(f"{path}: table {table}: {exc}") from None
+    lines = path.read_text().splitlines()
+    try:
+        nested: dict[str, str] = {}
+        for line in lines:
+            found = parse_nested(line)
+            if found and found[0] == table:
+                nested.update(found[1])
+        for line in lines:
+            match = _TABLE_LINE.match(line)
+            if match and match.group(1) == table:
+                return parse_definition(line, nested)
+    except SchemaError as exc:
+        raise AttachmentError(f"{path}: table {table}: {exc}") from None
     return None
 
 

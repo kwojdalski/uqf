@@ -319,6 +319,29 @@
     .qunit.assertEquals[count e;1;"a batch after the snapshot's carried_to was dropped: really missing"];
     .qunit.assertEquals[e[0;1];`eod_cap2;"naming the job"]};
 
+/ #1384: past the cap, a dropped batch with no time column counts as latest
+/ (0Wp), so any snapshot is short of it; an empty batch drops nothing (0Np).
+/ The guard read `not[(time in cols x) and count x]`, which sent a non-empty
+/ batch without time to 0Np and made the restore check pass in silence.
+.qt.qetl.job.stream.endofday.test_a_dropped_batch_without_time_counts_as_latest:{[t]
+    .qt.qetl.job.stream.endofday.capped2[0b];
+    .qetl.job.stream.carry_log[`eod_cap2]:(`recording;2;();0Np);
+    .qetl.job.stream.record[`eod_cap2;`eodx_notime;([] sym:`AAA`BBB; qty:1 2f)];
+    r:.qetl.job.stream.carry_log`eod_cap2;
+    / the recording is this test's alone: the next test's replay must not inherit it
+    .qetl.job.stream.carry_log:(enlist `eod_cap2) _ .qetl.job.stream.carry_log;
+    .qunit.assertEquals[r 0;`full;"the batch overran the cap"];
+    .qunit.assertEquals[r 3;0Wp;"and, with no time to say otherwise, it is the latest dropped"]};
+
+.qt.qetl.job.stream.endofday.test_an_empty_batch_past_the_cap_drops_nothing:{[t]
+    .qt.qetl.job.stream.endofday.capped2[0b];
+    .qetl.job.stream.carry_log[`eod_cap2]:(`full;3;();0Np);
+    .qetl.job.stream.record[`eod_cap2;`eodx_notime;([] sym:`symbol$(); qty:`float$())];
+    r:.qetl.job.stream.carry_log`eod_cap2;
+    .qetl.job.stream.carry_log:(enlist `eod_cap2) _ .qetl.job.stream.carry_log;
+    / max over two nulls is -0Wp: below every carried_to, so the restore check stays quiet
+    .qunit.assertTrue[(r 3) in (0Np;-0Wp);"nothing was dropped, so nothing is latest"]};
+
 / --- a missed end of day (#1072) -------------------------------------------
 
 / The errors missed_end_of_day logs for fx_positions with `marker` as the

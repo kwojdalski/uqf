@@ -42,6 +42,11 @@
 / several sources has an as-of answer per source, and keeping only the latest
 / row per key would evict a quiet source's book when another one ticks.
 / .
+/ With max_age the anchor kept is one per `by` key, not one per retain_by series:
+/ a source's pre-cutoff book is older than max_age for every pending event, so it
+/ can answer nothing, and keeping one per source would hold a source that stopped
+/ quoting for ever (#1410). Readiness needs only the key's anchor.
+/ .
 / Either way the history is bounded by the events still waiting, and the
 / answer for every pending event is the one the full history would give.
 / .
@@ -347,7 +352,11 @@
     / the latest pre-cutoff row per key is still an as-of answer
     / by reference time, not arrival: out-of-order rows must not evict the true as-of row (#1283)
     o:old iasc rt old;
-    latest:o last each value group (d`retain_by)#hist o;
+    / a series' anchor is only an ANSWER while it is within max_age; with max_age the
+    / only anchor still needed is readiness's, one per `by` key, so a source that
+    / stopped quoting does not keep its last book for ever (#1410)
+    series:$[`max_age in key d; (),d`by; d`retain_by];
+    latest:o last each value group series#hist o;
     hist asc (til[count hist] except old),latest}
 
 / Private: score every event that is ready by `now`, publish the rows, then

@@ -187,6 +187,63 @@ def test_a_consumer_table_held_before_the_attachment_is_not_ours_and_survives_ro
             assert after[port] == before[port], "table, rows, subscriptions, subtables"
 
 
+def held_unsubscribed(fake: FakeStack) -> dict:
+    """rdb1 already holds the table - empty, the attachment's shape - but has no
+    subscription for it and it is not in .rdb.subtables."""
+    from attach_support import LEDGER_COLUMNS
+
+    rdb = fake.named("rdb1")
+    rdb["schemas"] = {TABLE: [list(c) for c in LEDGER_COLUMNS]}
+    return rdb
+
+
+def test_a_subscription_added_to_a_held_table_is_ours_and_rollback_completes(world):
+    """#1459: apply subscribed rdb1's pre-existing table to our tickerplant. The table
+    stays `existing`, the subscription is recorded as this attachment's, and a
+    pre-publication rollback takes back exactly it - so the tickerplant's unregister
+    counts its handle and completes, instead of refusing on a subscriber it cannot
+    account for and leaving the rollback partial."""
+    fake, make, state, schema, log = world
+    rdb = held_unsubscribed(fake)
+    before = stack_state(fake)
+    att = make()
+    result = apply_(att, fake, state)
+    assert ("consumer_attach", "rdb1", "subscribed") in [
+        (s.op, s.process, s.outcome) for s in result.steps
+    ]
+    m = Manifest.load("pb-uat", state)
+    assert consumer_ownership("pb-uat", state) == "existing"
+    sub = m.find("consumer_subscribe", "rdb1", TABLE)
+    assert sub is not None and (sub.ownership, sub.status) == ("created", "done")
+    assert sub.post["subtables"] is True
+    log.clear()
+    detached = detach_(att, fake, state)
+    assert detached.outcome == "rolled_back", detached.blockers
+    assert "consumer_unsubscribe@rdb1" in log and "consumer_detach@rdb1" not in log
+    assert log.index("consumer_unsubscribe@rdb1") < log.index("stp_unregister@stp1")
+    assert TABLE in rdb["schemas"], "the pre-existing table is never removed"
+    after = stack_state(fake)
+    for port in after:
+        if fake.procs[port]["procname"] == "rdb1":
+            assert after[port] == before[port], "table, subscriptions and subtables as before"
+    assert TABLE not in fake.named("stp1")["schemas"]
+    assert Manifest.load("pb-uat", state).state == "rolled_back"
+
+
+def test_a_subscription_added_to_a_held_table_stays_after_publication(world):
+    """#1459: after publication nothing is deleted - the subscription included."""
+    fake, make, state, schema, log = world
+    rdb = held_unsubscribed(fake)
+    att = make()
+    apply_(att, fake, state)
+    fake.publish(TABLE)
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached"
+    assert TABLE in rdb["subscribed"]
+    sub = Manifest.load("pb-uat", state).find("consumer_subscribe", "rdb1", TABLE)
+    assert sub is not None and sub.status == "retained"
+
+
 def test_a_consumer_table_first_found_absent_stays_ours_when_a_rerun_finds_it_again(world):
     """The upgrade existing -> created is for a table the consumer did NOT hold before the
     first attempt (a restart rebuilt it from our tickerplant table)."""
