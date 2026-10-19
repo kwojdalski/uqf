@@ -226,6 +226,7 @@ class FakeStack:
             "stp_register": self._register,
             "consumer_attach": self._attach,
             "consumer_detach": self._detach,
+            "consumer_unsubscribe": self._unsubscribe,
             "stp_unregister": self._unregister,
             "ledger_leave": self._leave,
         }.get(op)
@@ -282,12 +283,15 @@ class FakeStack:
                 "rows": 0,
                 "owner": ledger["attachment"] if ledger else "",
             }
-        p["schemas"][t] = cols
-        p["names"].append(t)
-        p["tables"].append(t)
-        p["subscribed"].append(t)
         key = "subtables" if p["proctype"] == "rdb" else "tablelist"
-        p[key] = [*p.get(key, []), t]
+        added = p["proctype"] == "rdb" and t not in p.get(key, [])
+        p["schemas"][t] = cols
+        if not had:
+            p["names"].append(t)
+            p["tables"].append(t)
+        p["subscribed"].append(t)
+        if t not in p.get(key, []):
+            p[key] = [*p.get(key, []), t]
         self.named("stp1")["subscribers"][t] = self.named("stp1")["subscribers"].get(t, 0) + 1
         if not had:
             p["owned"][t] = {
@@ -298,8 +302,8 @@ class FakeStack:
         if mine:
             status = "owned"
         else:
-            status = ("shared" if ledger else "existing") if had else "created"
-        return {"status": status, "replayed": 0}
+            status = ("shared" if ledger else "subscribed") if had else "created"
+        return {"status": status, "replayed": 0, "subtables": added}
 
     def ops(self) -> set[str]:
         return {op for _, op, _ in self.calls}
@@ -337,6 +341,20 @@ class FakeStack:
         for key in ("subscribed", "subtables", "tablelist", "names", "tables"):
             if t in p.get(key, []):
                 p[key].remove(t)
+        return {"status": "removed", "problems": []}
+
+    def _unsubscribe(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        """consumer_unsubscribe.q: only the subscription, never the table or its rows."""
+        t = req["table"]
+        if not req.get("tickerplant"):
+            return {"status": "refused", "problems": ["the request names no tickerplant"]}
+        if t not in p["subscribed"]:
+            return {"status": "absent", "problems": []}
+        if req["dry_run"]:
+            return {"status": "dry_run", "problems": []}
+        p["subscribed"].remove(t)
+        if req.get("subtables") and t in p.get("subtables", []):
+            p["subtables"].remove(t)
         return {"status": "removed", "problems": []}
 
     def _unregister(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
