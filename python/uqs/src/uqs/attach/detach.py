@@ -240,8 +240,7 @@ def detach(
 ) -> DetachResult:
     """Stop the publisher and reverse what is safe to reverse.
 
-    `dry_run` reads everything and runs each process's own removal checks, and
-    changes nothing - it does not even stop the publisher.
+    `dry_run` runs each process's own removal checks and changes nothing, not even the publisher.
     """
     host = host or Host()
     backfill_owner.refuse_while_active(att.name, state_dir)  # a run owns it (#1454)
