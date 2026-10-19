@@ -161,6 +161,7 @@ def save_attachment(
     stack_id: int = 6000,
     pin: bool = True,
     table=None,
+    origin: dict | None = None,
 ) -> Attachment:
     att = Attachment(
         name=name,
@@ -168,6 +169,7 @@ def save_attachment(
         publisher=Publisher("pb_job", "pb_ledger1"),
         tables=(table or tree_table(),),
         storage=Storage(hdb_dir=str(hdb) if pin else ""),
+        origin=origin or {},
     )
     config.save(att)
     Manifest.path_for(name).unlink(missing_ok=True)

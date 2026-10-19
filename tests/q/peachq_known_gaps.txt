@@ -23,6 +23,8 @@ platform: Linux-x86_64
 .qt.qetl.dag.test_d2_marks_an_external_input  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .qt.qetl.dag.test_d2_names_each_edge_with_its_table  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
+.qt.qetl.hdb_scoped.test_a_second_identical_run_changes_nothing  # peachq-lacks: re-reading, in the process that replaced it, a splayed table renamed into place ('corrupt) - the second replace reads the first's partition
+.qt.qetl.hdb_scoped.test_the_unscoped_writer_does_fill_them_which_is_why_the_scoped_one_must_not  # peachq-lacks: .Q.chk, which the unscoped finish calls to fill other dates with the table (finish_parts skips it on PeachQ), so the control has nothing to show
 .qt.qpipe.job.demo_deals_backfill.test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
 .qt.qpipe.job.demo_deals_backfill.test_a_dry_rerun_repairs_nothing  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
 
