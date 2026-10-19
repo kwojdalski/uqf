@@ -41,10 +41,18 @@ TO = datetime(2026, 9, 13, tzinfo=UTC)
 
 
 def _tree_table() -> Any:
-    for line in (UQF_ROOT / "src/etl/plant_tables.q").read_text().splitlines():
-        if line.startswith(f".qetl.plant.{DATASET}:"):
-            return parse_definition(line)
-    raise AssertionError("plant table missing")
+    found = attached._table_in(UQF_ROOT / "src/etl/plant_tables.q", DATASET)
+    if found is None:
+        raise AssertionError("plant table missing")
+    return found
+
+
+def test_a_plant_table_with_nested_columns_is_read_with_its_element_types() -> None:
+    """crypto_market_data's book columns are untyped `()` with their element types on
+    a separate nested[...] line; reading the table without them refused every
+    worker whose dataset has list columns (#1451 tightened parse_definition)."""
+    spec = attached._table_in(UQF_ROOT / "src/etl/plant_tables.q", "crypto_market_data")
+    assert spec is not None
 
 
 class _ErrorLog:
