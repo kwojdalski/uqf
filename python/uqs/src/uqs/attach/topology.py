@@ -80,7 +80,7 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     """
     stack, names = att.stack, [t.name for t in att.tables]
     found: list[Finding] = []
-    disc = _ask(ipc, stack.host, "discovery", "discovery", stack.discovery_port, names)
+    disc = _ask(ipc, stack.discovery_host, "discovery", "discovery", stack.discovery_port, names)
     obs = Observation(disc)
     if not disc.up:
         found.append(

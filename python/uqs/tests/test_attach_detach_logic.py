@@ -20,7 +20,8 @@ from uqs.attach import detach as detaching
 from uqs.attach.config import AttachmentError, Storage
 from uqs.attach.manifest import Manifest
 from uqs.attach.preflight import Host
-from uqs.paths import repo_root
+from uqs.paths import UqsError, default_paths, repo_root
+from uqs.stack import attach_state
 
 ROOT = repo_root()
 TABLE = "piggybank_general_ledger"
@@ -184,6 +185,63 @@ def test_a_consumer_table_held_before_the_attachment_is_not_ours_and_survives_ro
     for port in after:
         if fake.procs[port]["procname"] == "rdb1":
             assert after[port] == before[port], "table, rows, subscriptions, subtables"
+
+
+def held_unsubscribed(fake: FakeStack) -> dict:
+    """rdb1 already holds the table - empty, the attachment's shape - but has no
+    subscription for it and it is not in .rdb.subtables."""
+    from attach_support import LEDGER_COLUMNS
+
+    rdb = fake.named("rdb1")
+    rdb["schemas"] = {TABLE: [list(c) for c in LEDGER_COLUMNS]}
+    return rdb
+
+
+def test_a_subscription_added_to_a_held_table_is_ours_and_rollback_completes(world):
+    """#1459: apply subscribed rdb1's pre-existing table to our tickerplant. The table
+    stays `existing`, the subscription is recorded as this attachment's, and a
+    pre-publication rollback takes back exactly it - so the tickerplant's unregister
+    counts its handle and completes, instead of refusing on a subscriber it cannot
+    account for and leaving the rollback partial."""
+    fake, make, state, schema, log = world
+    rdb = held_unsubscribed(fake)
+    before = stack_state(fake)
+    att = make()
+    result = apply_(att, fake, state)
+    assert ("consumer_attach", "rdb1", "subscribed") in [
+        (s.op, s.process, s.outcome) for s in result.steps
+    ]
+    m = Manifest.load("pb-uat", state)
+    assert consumer_ownership("pb-uat", state) == "existing"
+    sub = m.find("consumer_subscribe", "rdb1", TABLE)
+    assert sub is not None and (sub.ownership, sub.status) == ("created", "done")
+    assert sub.post["subtables"] is True
+    log.clear()
+    detached = detach_(att, fake, state)
+    assert detached.outcome == "rolled_back", detached.blockers
+    assert "consumer_unsubscribe@rdb1" in log and "consumer_detach@rdb1" not in log
+    assert log.index("consumer_unsubscribe@rdb1") < log.index("stp_unregister@stp1")
+    assert TABLE in rdb["schemas"], "the pre-existing table is never removed"
+    after = stack_state(fake)
+    for port in after:
+        if fake.procs[port]["procname"] == "rdb1":
+            assert after[port] == before[port], "table, subscriptions and subtables as before"
+    assert TABLE not in fake.named("stp1")["schemas"]
+    assert Manifest.load("pb-uat", state).state == "rolled_back"
+
+
+def test_a_subscription_added_to_a_held_table_stays_after_publication(world):
+    """#1459: after publication nothing is deleted - the subscription included."""
+    fake, make, state, schema, log = world
+    rdb = held_unsubscribed(fake)
+    att = make()
+    apply_(att, fake, state)
+    fake.publish(TABLE)
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached"
+    assert TABLE in rdb["subscribed"]
+    sub = Manifest.load("pb-uat", state).find("consumer_subscribe", "rdb1", TABLE)
+    assert sub is not None and sub.status == "retained"
 
 
 def test_a_consumer_table_first_found_absent_stays_ours_when_a_rerun_finds_it_again(world):
@@ -593,3 +651,157 @@ def test_a_failure_removing_the_block_is_partial_and_names_what_is_still_in_plac
     assert TABLE in fake.named("stp1")["schemas"], "nothing else was undone before the block"
     monkeypatch.undo()
     assert detach_(att, fake, state).outcome == "rolled_back"
+
+
+# ------------------------------------- a failed detach keeps the start gate closed (#1443)
+
+
+def verified(world):
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    assert verify.verify(att, fake, state).ok
+    assert Manifest.load("pb-uat", state).state == "verified"
+    return att
+
+
+def gate_open(att, state, monkeypatch) -> bool:
+    monkeypatch.setenv(config.ATTACH_DIR_ENV, str(state))
+    try:
+        attach_state.refuse_unverified_start(default_paths(), att.publisher.procname, 6000)
+    except UqsError:
+        return False
+    return True
+
+
+@pytest.mark.parametrize(
+    ("op", "nth", "when"),
+    [
+        ("consumer_detach", 0, "before"),  # a dry-run removal check
+        ("stp_unregister", 0, "after"),
+    ],
+)
+def test_an_ipc_error_after_the_publisher_stopped_leaves_the_start_gate_closed(
+    world, monkeypatch, op, nth, when
+):
+    fake, make, state, schema, log = world
+    att = verified(world)
+    with pytest.raises(AttachmentError, match="start gate stays closed") as caught:
+        detaching.detach(
+            att,
+            FaultIpc(fake, [(op, nth, when)]),
+            Publisher(log, running=True),
+            host=LOCAL,
+            state_dir=state,
+        )
+    assert "uqs job detach pb-uat" in str(caught.value), "the message says how to recover"
+    assert "publisher stopped" in log
+    assert Manifest.load("pb-uat", state).state in ("detaching", "rollback_partial")
+    assert not gate_open(att, state, monkeypatch)
+    assert detach_(att, fake, state).outcome == "rolled_back", "a retry continues"
+
+
+def test_a_stack_that_cannot_be_read_after_the_publisher_stopped_leaves_the_gate_closed(
+    world, monkeypatch
+):
+    fake, make, state, schema, log = world
+    att = verified(world)
+    fake.down.add(6000)
+    with pytest.raises(AttachmentError, match="cannot be read") as caught:
+        detach_(att, fake, state, Publisher(log, running=True))
+    assert "uqs job detach pb-uat" in str(caught.value)
+    assert Manifest.load("pb-uat", state).state == "detaching"
+    assert not gate_open(att, state, monkeypatch)
+    fake.down.clear()
+    assert detach_(att, fake, state).outcome == "rolled_back"
+
+
+def test_an_ipc_error_in_ledger_leave_after_publication_leaves_the_gate_closed(world, monkeypatch):
+    fake, make, state, schema, log = world
+    a, att = make("pb-a"), make("pb-b")
+    apply_(a, fake, state)
+    apply_(att, fake, state)
+    assert verify.verify(att, fake, root=ROOT, state_dir=state).ok
+    fake.publish(TABLE, 3)
+    with pytest.raises(AttachmentError, match="start gate stays closed"):
+        detaching.detach(
+            att,
+            FaultIpc(fake, [("ledger_leave", 0, "before")]),
+            Publisher(log, running=True),
+            host=LOCAL,
+            state_dir=state,
+        )
+    assert Manifest.load("pb-b", state).state == "detaching"
+    assert not gate_open(att, state, monkeypatch)
+    assert detach_(att, fake, state).outcome == "detached"
+
+
+# ------------------------- a step with an unknown outcome is probed, not abandoned (#1447)
+
+
+@pytest.mark.parametrize("op", ["stp_register", "consumer_attach"])
+def test_detach_removes_what_an_unknown_outcome_apply_step_made(world, op):
+    fake, make, state, schema, log = world
+    before = stack_state(fake)
+    att = make()
+    with pytest.raises(applying.ApplyFailed):
+        applying.apply(att, FaultIpc(fake, [(op, 0, "after")]), ROOT, state_dir=state)
+    pending = [o for o in Manifest.load("pb-uat", state).operations if o.status == "pending"]
+    assert [(o.op, o.ownership) for o in pending] == [(op, "")], "outcome unknown, no ownership"
+    assert stack_state(fake) != before
+    result = detach_(att, fake, state)
+    assert result.outcome == "rolled_back", [b.reason for b in result.blockers]
+    assert stack_state(fake) == before, "the table the unknown step made is gone"
+    assert "pre-existing" not in " ".join(o.note for o in Manifest.load("pb-uat", state).operations)
+
+
+def test_an_unknown_outcome_step_that_never_took_effect_is_reverted_as_such(world):
+    fake, make, state, schema, log = world
+    att = make()
+    with pytest.raises(applying.ApplyFailed):
+        applying.apply(att, FaultIpc(fake, [("stp_register", 0, "before")]), ROOT, state_dir=state)
+    assert detach_(att, fake, state).outcome == "rolled_back"
+    note = Manifest.load("pb-uat", state).operations[0].note
+    assert "never took effect" in note
+
+
+def test_an_unknown_outcome_step_on_an_unreachable_process_refuses_with_the_manual_action(world):
+    fake, make, state, schema, log = world
+    att = make()
+    with pytest.raises(applying.ApplyFailed):
+        applying.apply(
+            att, FaultIpc(fake, [("consumer_attach", 0, "after")]), ROOT, state_dir=state
+        )
+    port = next(p for p, d in fake.procs.items() if d.get("procname") == "rdb1")
+    fake.down.add(port)
+    result = detach_(att, fake, state)
+    assert result.outcome == "refused"
+    assert any(
+        "unknown outcome" in b.reason or "not reachable" in b.reason for b in result.blockers
+    )
+    assert Manifest.load("pb-uat", state).state != "rolled_back"
+    assert TABLE in fake.named("stp1")["schemas"], "nothing was abandoned or removed"
+
+
+def test_apply_recognises_its_own_leftover_by_token_after_an_unknown_outcome(world):
+    fake, make, state, schema, log = world
+    att = make()
+    with pytest.raises(applying.ApplyFailed):
+        applying.apply(att, FaultIpc(fake, [("stp_register", 0, "after")]), ROOT, state_dir=state)
+    res = apply_(att, fake, state)
+    first = next(s for s in res.steps if s.op == "stp_register")
+    assert first.outcome == "already", "its own table, not another attachment's `shared`"
+    assert Manifest.load("pb-uat", state).operations[0].ownership == "created"
+
+
+def test_apply_refuses_an_attachment_that_is_detaching_and_changes_nothing(world):
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    m = Manifest.load("pb-uat", state)
+    m.set_state("detaching", "set by the test")
+    before = stack_state(fake)
+    with pytest.raises(AttachmentError, match="is detaching.*uqs job detach pb-uat"):
+        apply_(att, fake, state)
+    assert stack_state(fake) == before
+    assert Manifest.load("pb-uat", state).state == "detaching"

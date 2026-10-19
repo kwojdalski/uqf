@@ -21,7 +21,7 @@ from uqs.paths import UqsError
 
 _STYLE = {"blocker": "red", "accepted": "bold magenta", "warning": "yellow", "info": "dim"}
 _OUTCOME = {
-    "created": "green", "adopted": "cyan", "shared": "cyan", "already": "dim",
+    "created": "green", "adopted": "cyan", "subscribed": "cyan", "shared": "cyan", "already": "dim",
     "removed": "green", "absent": "dim", "left": "cyan", "done": "green", "skipped": "dim",
 }  # fmt: skip
 

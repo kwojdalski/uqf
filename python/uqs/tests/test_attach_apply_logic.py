@@ -226,6 +226,7 @@ def test_applying_again_after_the_tickerplant_forgot_the_table_restores_it_as_ou
     for key in ("schemas", "owned", "subscribers", "logfiles", "replay", "logged", "updtab"):
         stp[key].pop(TABLE, None)
     stp["tables"].remove(TABLE)
+    stp["names"].remove(TABLE)
     stp["published"].remove(TABLE)
     for name in ("rdb1", "wdb1"):
         fake.named(name)["subscribed"].remove(TABLE)

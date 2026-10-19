@@ -28,7 +28,7 @@ from uqs.attach import config, manifest, persist, plan
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding, blockers
-from uqs.attach.manifest import CREATED, DONE, EXISTING, FAILED, SHARED, Manifest
+from uqs.attach.manifest import CREATED, DONE, EXISTING, FAILED, SHARED, Manifest, Op
 from uqs.attach.remote import Ipc, IpcError
 from uqs.attach.schema import TableSpec
 from uqs.attach.topology import Proc
@@ -75,7 +75,7 @@ class Step:
     op: str
     process: str
     table: str
-    #: created | adopted | shared | already | failed | pending | not-started
+    #: created | adopted | subscribed | shared | already | failed | pending | not-started
     outcome: str
     detail: str = ""
 
@@ -87,7 +87,9 @@ class ApplyResult:
     findings: list[Finding] = field(default_factory=list)
 
     def mutations(self) -> int:
-        return sum(1 for s in self.steps if s.outcome in ("created", "adopted", "shared"))
+        return sum(
+            1 for s in self.steps if s.outcome in ("created", "adopted", "subscribed", "shared")
+        )
 
 
 def _columns(spec: TableSpec) -> list[list[str]]:
@@ -104,11 +106,22 @@ def _request(m: Manifest, att: Attachment, spec: TableSpec) -> dict:
     }
 
 
+def refuse_detaching(name: str, state: str) -> None:
+    """Refuse to attach over a detach that is in progress or was interrupted (#1443)."""
+    if state == "detaching":
+        raise AttachmentError(
+            f"attachment {name} is detaching: a detach is in progress or was interrupted. "
+            "The publisher is stopped and its start gate is closed. Run "
+            f"`uqs job detach {name}` to finish it, then attach again."
+        )
+
+
 def _fresh(att: Attachment, state_dir: Path | None) -> Manifest:
     path = Manifest.path_for(att.name, state_dir)
     if not path.is_file():
         return Manifest.new(att, path)
     m = Manifest.load(att.name, state_dir)
+    refuse_detaching(att.name, m.state)
     if m.state == "rolled_back":
         # Everything it made was removed: a new run is a new attachment, with a new token
         # (the old one must not match anything left behind), and the history stays.
@@ -180,6 +193,9 @@ def _interpret(m: Manifest, op: manifest.Op, answer: dict, process: str, table: 
     if status == "existing" and answer.get("matches", True):
         m.finish(op, DONE, EXISTING, {}, "pre-existing; never removed")
         return Step(op.op, process, table, "adopted", "pre-existing, same shape")
+    if status == "subscribed":
+        m.finish(op, DONE, EXISTING, {}, "pre-existing table; never removed")
+        return Step(op.op, process, table, "subscribed", "pre-existing table, subscription added")
     detail = answer.get("detail") or "the table exists with another shape"
     m.finish(op, FAILED, note=str(detail))
     raise AttachmentError(f"{process}: {table}: {status}: {detail}")
@@ -204,14 +220,15 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
     except IpcError as exc:
         m.finish(op, manifest.PENDING, note=f"outcome unknown: {exc.reason}")
         raise
-    step = _interpret(m, op, answer, c.procname, spec.name)
     plant = m.find("stp_register", tp.procname, spec.name)
-    if (
-        op.ownership == EXISTING
-        and plant is not None
-        and plant.ownership == CREATED
-        and (was == CREATED or not op.pre.get("table_present"))
-    ):
+    ours = plant is not None and plant.ownership == CREATED
+    rebuilt = ours and (was == CREATED or not op.pre.get("table_present"))
+    if answer.get("status") == "subscribed" and ours and not rebuilt:
+        # Saved with the consumer_attach step, in one write, so the subscription is never
+        # left unrecorded (#1459).
+        _subscription(m, op, answer, c.procname, spec.name, before, after)
+    step = _interpret(m, op, answer, c.procname, spec.name)
+    if op.ownership == EXISTING and rebuilt:
         # The tickerplant's table is ours, and the consumer's copy did not exist before
         # this attachment (the first attempt found it absent) or an earlier run already
         # made it: a restart rebuilt it from our table. A copy the consumer held BEFORE
@@ -222,6 +239,26 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
     op.post = {**op.post, "subscribers_before": before, "subscribers_after": after}
     m.save()
     return step
+
+
+def _subscription(m: Manifest, attach: Op, answer: dict, process: str, table: str,
+                  before: int, after: int) -> None:  # fmt: skip
+    """Record, as this attachment's own, the subscription it added to a table the
+    consumer already held (#1459). The table stays `existing` and is never removed;
+    the subscription is `created`, so a rollback takes back exactly it
+    (consumer_unsubscribe.q) and the tickerplant's unregister counts its handle."""
+    entry = m.find("consumer_subscribe", process, table)
+    if entry is None:
+        entry = Op(len(m.operations) + 1, "consumer_subscribe", process, table)
+        m.operations.append(entry)
+    entry.status, entry.ownership, entry.at = DONE, CREATED, manifest.now()
+    entry.depends_on, entry.pre = [attach.id], {"table_present": True}
+    entry.post = {
+        "subscribers_before": before,
+        "subscribers_after": after,
+        "subtables": bool(answer.get("subtables")),
+    }
+    entry.note = "subscription added to a pre-existing table"
 
 
 def _subscribers(ipc: Ipc, tp: Proc, table: str) -> int:

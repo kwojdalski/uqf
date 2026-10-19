@@ -49,17 +49,23 @@ LEDGER_COLUMNS = [
     ["sym", "s"],
     ["account", "s"],
     ["amount", "f"],
-    ["note", " "],
+    ["note", "s"],
 ]
 LEDGER_Q = (
     "piggybank_general_ledger:([] time:`timestamp$(); sym:`symbol$(); account:`symbol$(); "
-    "amount:`float$(); note:())"
+    "amount:`float$(); note:`symbol$())"
 )
 JOB_Q = (
     ".qetl.job.stream.define[`pb_general_ledger;"
     "`procname`subscribe_to`publishes`note!(`pb_ledger1;`symbol$();enlist `{table};"
     '"publishes the general ledger")];\n'
 )
+#: Root globals of a starter-pack process (`system"f"` / `system"v"`), as the probe reports them.
+TP_GLOBALS = ["upd", "tablelist", "init", "setup", "loghandles"]
+CONSUMER_GLOBALS = {
+    "rdb": ["upd", "endofday", "endofperiod", "reload", "countbysym", "hloc"],
+    "wdb": ["upd", "endofday", "endofperiod", "sym"],
+}
 SORT_DEFAULT = [
     {"tabname": "default", "att": "p", "col": "sym", "sort": True},
     {"tabname": "default", "att": "", "col": "time", "sort": True},
@@ -92,6 +98,7 @@ def probe(procname: str, proctype: str, port: int, stack: str, **extra: Any) -> 
         "tplogdir": "",
         "procfile": "",
         "owned": {},
+        "names": [],
     }
     return {**base, **extra}
 
@@ -134,6 +141,7 @@ class FakeStack:
                 custom=[],
                 tables=["currlog", "logmsg", "quote", "trade"],
                 published=["quote", "trade"],
+                names=[*TP_GLOBALS, "currlog", "logmsg", "quote", "trade"],
                 schemas={},
                 subscribers={},
                 filtered={},
@@ -150,6 +158,7 @@ class FakeStack:
         for name, offset in (("rdb1", 2), ("wdb1", 5)):
             kind = name[:3]
             ext: dict[str, Any] = {
+                "names": [*CONSUMER_GLOBALS[kind], "quote", "trade"],
                 "ignorelist": ["heartbeat", "logmsg"],
                 "tables": ["quote", "trade"],
                 "schemas": {},
@@ -217,6 +226,7 @@ class FakeStack:
             "stp_register": self._register,
             "consumer_attach": self._attach,
             "consumer_detach": self._detach,
+            "consumer_unsubscribe": self._unsubscribe,
             "stp_unregister": self._unregister,
             "ledger_leave": self._leave,
         }.get(op)
@@ -245,6 +255,7 @@ class FakeStack:
             return {"status": "refused", "detail": "unsupported tickerplant mode"}
         log = f"{p['dldir'].lstrip(':')}/stp1_{t}20261016090000"
         p["schemas"][t] = cols
+        p["names"].append(t)
         p["tables"].append(t)
         p["published"].append(t)
         p["subscribers"][t] = 0
@@ -272,10 +283,15 @@ class FakeStack:
                 "rows": 0,
                 "owner": ledger["attachment"] if ledger else "",
             }
-        p["schemas"][t] = cols
-        p["subscribed"].append(t)
         key = "subtables" if p["proctype"] == "rdb" else "tablelist"
-        p[key] = [*p.get(key, []), t]
+        added = p["proctype"] == "rdb" and t not in p.get(key, [])
+        p["schemas"][t] = cols
+        if not had:
+            p["names"].append(t)
+            p["tables"].append(t)
+        p["subscribed"].append(t)
+        if t not in p.get(key, []):
+            p[key] = [*p.get(key, []), t]
         self.named("stp1")["subscribers"][t] = self.named("stp1")["subscribers"].get(t, 0) + 1
         if not had:
             p["owned"][t] = {
@@ -286,8 +302,8 @@ class FakeStack:
         if mine:
             status = "owned"
         else:
-            status = ("shared" if ledger else "existing") if had else "created"
-        return {"status": status, "replayed": 0}
+            status = ("shared" if ledger else "subscribed") if had else "created"
+        return {"status": status, "replayed": 0, "subtables": added}
 
     def ops(self) -> set[str]:
         return {op for _, op, _ in self.calls}
@@ -322,9 +338,23 @@ class FakeStack:
             return {"status": "dry_run", "problems": []}
         p["schemas"].pop(t, None)
         p["owned"].pop(t, None)
-        for key in ("subscribed", "subtables", "tablelist"):
+        for key in ("subscribed", "subtables", "tablelist", "names", "tables"):
             if t in p.get(key, []):
                 p[key].remove(t)
+        return {"status": "removed", "problems": []}
+
+    def _unsubscribe(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        """consumer_unsubscribe.q: only the subscription, never the table or its rows."""
+        t = req["table"]
+        if not req.get("tickerplant"):
+            return {"status": "refused", "problems": ["the request names no tickerplant"]}
+        if t not in p["subscribed"]:
+            return {"status": "absent", "problems": []}
+        if req["dry_run"]:
+            return {"status": "dry_run", "problems": []}
+        p["subscribed"].remove(t)
+        if req.get("subtables") and t in p.get("subtables", []):
+            p["subtables"].remove(t)
         return {"status": "removed", "problems": []}
 
     def _unregister(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
@@ -349,7 +379,7 @@ class FakeStack:
             return {"status": "dry_run", "problems": []}
         for key in ("schemas", "owned", "subscribers", "logged", "updtab", "logfiles", "replay"):
             p[key].pop(t, None)
-        for key in ("tables", "published"):
+        for key in ("tables", "published", "names"):
             if t in p[key]:
                 p[key].remove(t)
         return {"status": "removed", "problems": []}
