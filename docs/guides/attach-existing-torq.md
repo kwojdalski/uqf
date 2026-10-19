@@ -106,7 +106,9 @@ order:
 1. the tickerplant registers the table (one atomic call; a failing step undoes
    the steps already done inside it);
 2. each consumer subscribes, which creates the empty table and replays the
-   tickerplant's log for it;
+   tickerplant's log for it. Every other subscription the consumer holds stays
+   as it was, including the inactive ones TorQ resubscribes from when their
+   tickerplant comes back (TorQ's own subscribe would delete those);
 3. a marked block goes into the tickerplant's schema file. This is last on
    purpose: it is the only step that changes what a *restart* does.
 
@@ -125,6 +127,15 @@ while it is needed). The token is also written into the processes, including the
 schema file's block. An attachment that shares a table another one created
 writes a block of its own, `<name>+uses`, which makes it a user of that table
 again after a tickerplant restart; its detach removes that block.
+
+A consumer that already held the table, with the same shape, but had no live
+subscription for it is subscribed to the attachment's tickerplant. The table
+stays `existing`; the subscription it gained (and its `.rdb.subtables` entry,
+when attach added one) is recorded separately as `created`, as a
+`consumer_subscribe` operation, so a rollback takes back exactly that
+subscription and nothing else. This is recorded only when the tickerplant's table
+is the attachment's own; through a table it does not own, the subscription is
+left in place, as before.
 
 ### Verify and start
 
@@ -161,7 +172,8 @@ rdb/wdb, a partition in the wdb's save directory or the hdb. Evidence that
 cannot be read counts as publication.
 
 - **Before any publication**, what the attachment *created* is removed in
-  reverse order: the schema block, the consumers' table and subscription, then
+  reverse order: the schema block, the consumers' table and subscription (or,
+  for a table a consumer already held, only the subscription attach added), then
   the tickerplant's registration, logs and metadata. Anything that pre-existed
   is never touched, and each removal is re-checked inside the process (empty,
   ours, nobody else subscribed).
