@@ -92,17 +92,20 @@
         venue:`a`a`binance_spot; sym:(`EURUSD;`USDPLN;`$"BTC-USDT"); side:1 -1 1;
         size:1e6 1e6 0.5; price:1.1001 3.99 62000f; fill_id:`x1`y1`z1)}
 
-/ The books: EURUSD on sources a and b, and EURPLN on a.
+/ The books: EURUSD on sources a and b, and EURPLN on a. Each is re-quoted within
+/ the reference's max_age (.qf.mkt.reference_max_age, 5s) of every instant a fill is
+/ scored at, with the same prices, because a book older than that is not a reference
+/ (#1410): the +18s and +25s rows repeat what was already quoted.
 / @return the books, as the HDB's market_data holds them
-/ @eg count .qpipe.source.hdb_fx_markouts.raw_market_data[]  ->  7
+/ @eg count .qpipe.source.hdb_fx_markouts.raw_market_data[]  ->  12
 .qpipe.source.hdb_fx_markouts.raw_market_data:{[]
-    ([] source_time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00.5 2026.09.17D10:00:08 2026.09.17D09:59:59 2026.09.17D10:00:25;
-        sym:`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD`EURPLN`EURPLN;
-        source:`a`a`a`b`b`a`a;
-        bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008;enlist 4.9999;enlist 5.0999);
-        bid_sizes:7#enlist enlist 1e6;
-        ask_prices:(enlist 1.1001;enlist 1.1006;enlist 1.1011;enlist 1.1007;enlist 1.1010;enlist 5.0001;enlist 5.1001);
-        ask_sizes:7#enlist enlist 1e6)}
+    ([] source_time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00.5 2026.09.17D10:00:08 2026.09.17D09:59:59 2026.09.17D10:00:25,2026.09.17D10:00:18 2026.09.17D10:00:18 2026.09.17D10:00:18 2026.09.17D10:00:25 2026.09.17D10:00:25;
+        sym:`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD`EURPLN`EURPLN`EURUSD`EURUSD`EURPLN`EURUSD`EURUSD;
+        source:`a`a`a`b`b`a`a`a`b`a`a`b;
+        bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008;enlist 4.9999;enlist 5.0999;enlist 1.1009;enlist 1.1008;enlist 4.9999;enlist 1.1009;enlist 1.1008);
+        bid_sizes:12#enlist enlist 1e6;
+        ask_prices:(enlist 1.1001;enlist 1.1006;enlist 1.1011;enlist 1.1007;enlist 1.1010;enlist 5.0001;enlist 5.1001;enlist 1.1011;enlist 1.1010;enlist 5.0001;enlist 1.1011;enlist 1.1010);
+        ask_sizes:12#enlist enlist 1e6)}
 
 / What query returns for the fixture's day.
 / @return `executions`market_data!(raw_executions[];raw_market_data[])
