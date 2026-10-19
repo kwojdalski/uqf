@@ -103,8 +103,10 @@ refuses. Preflight only ever asks the stack `probe`, a read-only question.
 Apply, the second stage, carries out exactly the changes the plan showed, in
 order:
 
-1. the tickerplant registers the table (one atomic call; a failing step undoes
-   the steps already done inside it);
+1. the tickerplant registers the table in one call with a best-effort in-process
+   rollback, not an atomic one: when a step fails, it and the steps before it
+   are undone inside the same call, and the answer lists any step whose undo
+   itself failed;
 2. each consumer subscribes, which creates the empty table and replays the
    tickerplant's log for it;
 3. a marked block goes into the tickerplant's schema file. This is last on
