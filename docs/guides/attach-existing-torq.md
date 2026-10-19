@@ -133,9 +133,9 @@ subscription for it is subscribed to the attachment's tickerplant. The table
 stays `existing`; the subscription it gained (and its `.rdb.subtables` entry,
 when attach added one) is recorded separately as `created`, as a
 `consumer_subscribe` operation, so a rollback takes back exactly that
-subscription and nothing else. This is recorded only when the tickerplant's table
-is the attachment's own; through a table it does not own, the subscription is
-left in place, as before.
+subscription and nothing else. This is recorded only when the tickerplant's
+table is the attachment's own; through a table it does not own, the subscription
+is left in place, as before.
 
 ### Verify and start
 
