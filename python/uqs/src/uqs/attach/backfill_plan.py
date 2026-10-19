@@ -19,6 +19,7 @@ from typing import Any
 
 from uqs.attach import config
 from uqs.attach.backfill import PLAN_SCRIPT, Destination, canonical, resolve
+from uqs.attach.backfill_coordination import assess
 from uqs.attach.config import Attachment
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.attach.topology import Observation, observe, port_of
@@ -43,6 +44,8 @@ class Admission:
 
     writers: list[str] = field(default_factory=list)
     readers: list[Reader] = field(default_factory=list)
+    #: what the stack showed, kept for the coordination checks that follow
+    observation: Observation | None = None
 
     @property
     def reload_targets(self) -> list[Reader]:
@@ -120,7 +123,7 @@ def admit(att: Attachment, dest: Destination, ipc: Ipc) -> Admission:
     obs, structural = observe(att, ipc)
     if structural:
         raise UqsError("; ".join(f"{f.component}: {f.message}" for f in structural))
-    return Admission(_writers(att, obs, dest), _readers(att, obs, dest, ipc))
+    return Admission(_writers(att, obs, dest), _readers(att, obs, dest, ipc), obs)
 
 
 def partitions_on_disk(dest: Destination, dates: list[date]) -> list[dict[str, Any]]:
@@ -192,6 +195,7 @@ def build_plan(
     dest: Destination,
     admission: Admission,
     facts: dict[str, Any],
+    ipc: Ipc,
     *,
     worker: str,
     version: str,
@@ -219,6 +223,8 @@ def build_plan(
         for w in facts["windows"]
     ]
     dates = [date.fromisoformat(d.replace(".", "-")) for d in facts["dates"]]
+    assert admission.observation is not None
+    coordination = assess(att, dest, admission.observation, admission.writers, ipc, dates)
     return {
         "mode": "plan",
         "worker": worker,
@@ -240,6 +246,7 @@ def build_plan(
         },
         "native_partitions": partitions_on_disk(dest, dates),
         "writers": admission.writers,
+        "coordination": coordination.as_dict(),
         "reload_targets": [
             {"procname": r.procname, "port": r.port} for r in admission.reload_targets
         ],
@@ -279,6 +286,12 @@ def render(plan: dict[str, Any]) -> str:
         )
         lines.append(f"    {p['date']}  {state}")
     lines.append(f"  writes it     {', '.join(plan['writers'])}")
+    co = plan["coordination"]
+    lines.append(
+        f"  coordination  active write date {co['active_date']} is never touched; end of day "
+        f"{co['next_roll']} +/- {co['eod_guard_minutes']} min fenced; {co['filesystem']} filesystem"
+    )
+    lines.extend(f"    warning     {w}" for w in co["warnings"])
     targets = ", ".join(f"{t['procname']}:{t['port']}" for t in plan["reload_targets"]) or "none"
     lines.append(f"  reload        {targets}")
     for r in plan["readers_not_serving"]:
@@ -315,6 +328,7 @@ def plan_attached(
         dest,
         admission,
         facts,
+        ipc,
         worker=worker,
         version=version,
         range_from=range_from,
