@@ -43,6 +43,14 @@ from uqs.paths import UqsError
 runner = CliRunner()
 
 
+def test_a_plant_table_with_nested_columns_is_read_with_its_element_types() -> None:
+    """crypto_market_data's book columns are untyped `()` with their element types on
+    a separate nested[...] line; reading the table without them refused every
+    worker whose dataset has list columns (#1451 tightened parse_definition)."""
+    spec = attached._table_in(UQF_ROOT / "src/etl/plant_tables.q", "crypto_market_data")
+    assert spec is not None
+
+
 @pytest.fixture
 def world(monkeypatch, tmp_path):
     return make_world(monkeypatch, tmp_path)

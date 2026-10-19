@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from attach_support import FakeStack
 
+from uqs.attach import backfill as attached
 from uqs.attach import backfill_coordination as coordination
 from uqs.attach import backfill_plan as planning
 from uqs.attach import config, service
@@ -18,7 +19,6 @@ from uqs.attach.config import Attachment, Publisher, Stack, Storage
 from uqs.attach.facts import Host
 from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Endpoint, IpcError
-from uqs.attach.schema import parse_definition
 from uqs.cli import shared
 from uqs.interpreter import q_interpreter
 from uqs.paths import paths_for_root
@@ -31,10 +31,10 @@ TO = datetime(2026, 9, 13, tzinfo=UTC)
 
 
 def tree_table() -> Any:
-    for line in (UQF_ROOT / "src/etl/plant_tables.q").read_text().splitlines():
-        if line.startswith(f".qetl.plant.{DATASET}:"):
-            return parse_definition(line)
-    raise AssertionError("plant table missing")
+    found = attached._table_in(UQF_ROOT / "src/etl/plant_tables.q", DATASET)
+    if found is None:
+        raise AssertionError("plant table missing")
+    return found
 
 
 class _ErrorLog:
