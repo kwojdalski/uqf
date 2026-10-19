@@ -240,6 +240,53 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
 
 Detach's refusals are destructive-cleanup protections and cannot be overridden.
 
+## Backfilling into the attached stack's HDB
+
+`uqs job backfill` writes into the HDB of the uqf runtime it belongs to
+(`KDBHDB`); `--port` changes which stack it registers with, not where the rows
+go. `--attach NAME` names the destination from the saved attachment instead:
+
+```bash
+uqs job backfill piggybank_ledger_backfill --attach pb-uat \
+    --from 2026-10-01 --to 2026-10-02 --version historical-v1 \
+    --on-conflict replace --mode plan
+```
+
+**Only `--mode validate` and `--mode plan` exist so far.** `dry-run` and `run`
+with `--attach` are refused, because writing a native stack's HDB needs a
+coordination mechanism with its own writers (wdb save, end of day, sort) and
+guarded recovery, which are the later parts of
+[#1454](https://github.com/kwojdalski/uqf/issues/1454). Nothing is written, so
+there is nothing to certify: attachment safety checks do not, by themselves,
+certify direct native-HDB writes.
+
+`plan` resolves the destination offline, asks the stack read-only questions, and
+prints what a run would do: the source, the half-open UTC range, the windows and
+which are already covered at this `--version` (coverage is read from the
+destination's own ledger), the conflict policy, the native date partitions the
+fetched windows fall on and whether each exists, the processes that write the
+destination, and the HDB readers a reload would have to reach. It starts no
+worker and creates no directory, ledger, checkpoint or symbol file; `--json`
+prints the same report as JSON.
+
+It refuses, naming the cause: an attachment that is not `verified` (including a
+detached one), a stack that `--port` names differently, no pinned or existing
+HDB directory, a dataset the attachment does not publish, a table whose columns
+differ from the worker's, a worker with its own IO manager, `--fixture`, a
+source with no credential configured (its fixture would be written into a native
+HDB), a wdb or rdb reporting another HDB directory, no wdb reporting the pinned
+one, and an HDB reader that cannot be asked whether it serves the destination.
+Nothing falls back to uqf's own HDB.
+
+Coverage, the checkpoint and the run lock for an attached backfill live in
+`<status dir>/attached/<attachment>-<identity>/`, where the identity is a digest
+of the host, stack id and canonical HDB path, so coverage recorded for one HDB
+cannot suppress a run into another.
+
+A historical HDB backfill does not populate today's RDB and publishes nothing
+through the tickerplant: the rows exist only in the HDB, and only readers that
+reload see them.
+
 ## Restart behaviour
 
 The registration lives in memory. By default (`schema-file`) apply appends one
