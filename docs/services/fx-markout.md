@@ -67,12 +67,35 @@ the instant; level 0 only (`.qf.mkt.top_sides`: sizes decide whether a level is
 usable, never what the price is, so there is no depth sweep). A source that has
 withdrawn a side contributes nothing on it, and does not fall back to an older
 book. Across sources, the best bid and best ask among those no older than
-`max_age` (`.qf.mkt.best_across_venues`). `max_age` defaults to none, "as of
-however old", the same as `demo_markout`; a site that wants a bound declares it.
-Each leg is oriented by the route and chained; the reference is the mid of the
-chain. A best bid above the best ask across sources is not corrected: each
-source's own crossed book is refused by `market_data`'s publish check, and a
-cross-source cross is a market state, not bad data.
+`max_age` (`.qf.mkt.best_across_venues`). `max_age` defaults to
+`.qf.mkt.reference_max_age` (5s), the age `crypto_markout` and `posbook` use:
+one definition of how stale a reference may be. Both the live jobs and the
+`hdb_fx_markouts*` backfills score with the job spec's `max_age`
+(`.qpipe.transform.fx_markout_outputs.job_spec`), and the jobs pass the same
+value to their horizon declaration, so a source that stopped quoting neither
+sets a price nor is kept in the book history. A leg whose every source is older
+than that has no book, so the row is `unavailable` (see below). `0Wn` ("as of
+however old") is still accepted for a single-source site, but is not the
+default: with several sources it lets a source that went quiet set the best bid
+or ask indefinitely (#1410). A site with sparse cross-pair quoting declares a
+longer age in its spec.
+
+**Policy change (#1410), before and after.** A buy at 1.1001; source `a` quotes
+1.1000/1.1010 (mid 1.1005) every few seconds; source `s` quoted 1.1006/1.1008
+once, 20s before the execution, and has been silent since. Before: the reference
+is 1.1007 at every horizon (the stale `s` book wins both sides), markout +6
+pips, status `ok`, nothing flagged. After: the reference is 1.1005, markout +4
+pips. If `a` too had been silent past 5s, the leg is `unavailable` rather than
+priced at 1.1007. Pinned by
+`test_a_source_that_stopped_quoting_does_not_set_the_live_reference`,
+`test_the_bounded_twin_ignores_the_dead_source_as_the_live_job_does` (live
+equals bounded),
+`test_the_history_drops_the_dead_sources_book_once_nothing_can_need_it` and
+`test_both_markout_families_take_the_reference_age_from_one_definition`. Each
+leg is oriented by the route and chained; the reference is the mid of the chain.
+A best bid above the best ask across sources is not corrected: each source's own
+crossed book is refused by `market_data`'s publish check, and a cross-source
+cross is a market state, not bad data.
 
 **Missing reference.** A leg with no book at the execution or the horizon gives
 a null reference and null allocations with status `unavailable`. The rows are
