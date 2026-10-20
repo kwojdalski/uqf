@@ -48,14 +48,19 @@
     cross_sym:.qf.px.normalize_ccy_pair sym;
     route:.qf.mkt.attribution_route_with[conv;cross_sym];
     n:count route;
+    / quotes may spell a sym EUR/USD or eurusd (#1110): match each canonical route leg
+    / to the spelling quotes uses, as cross_markout_decomp's path does (#1475). A leg
+    / with no book keeps its canonical name, which has_book then finds empty.
+    spelled:(.qf.px.normalize_ccy_pair each us)!us:distinct quotes`sym;
+    quote_legs:{[spelled;leg] $[leg in key spelled;spelled leg;leg]}[spelled;] each route`leg;
     / a leg is available only if ITS OWN book exists at both times: cross_ref_price_at
     / would happily price a missing leg by another path, which is the very thing refused here
     has_book:{[quotes;t;leg] 0<count select from quotes where sym=leg,time<=t};
-    leg_books:(has_book[quotes;t0;] each route`leg) and has_book[quotes;t1;] each route`leg;
+    leg_books:(has_book[quotes;t0;] each quote_legs) and has_book[quotes;t1;] each quote_legs;
     leg_price:{[quotes;ref_size;t;leg;ok] $[ok;.qf.mkt.cross_ref_price_at[quotes;leg;t;ref_size];0n]};
     d:$[all leg_books;
-        .qf.exec.decomp_legs[quotes;cross_sym;route`leg;t0;t1;ref_size];
-        `price_t0`price_t1`contribution!(leg_price[quotes;ref_size;t0;;]'[route`leg;leg_books];leg_price[quotes;ref_size;t1;;]'[route`leg;leg_books];n#0n)];
+        .qf.exec.decomp_legs[quotes;cross_sym;quote_legs;t0;t1;ref_size];
+        `price_t0`price_t1`contribution!(leg_price[quotes;ref_size;t0;;]'[quote_legs;leg_books];leg_price[quotes;ref_size;t1;;]'[quote_legs;leg_books];n#0n)];
     ref_0:.qf.mkt.cross_ref_price_at[quotes;cross_sym;t0;ref_size];
     ref_1:.qf.mkt.cross_ref_price_at[quotes;cross_sym;t1;ref_size];
     total:.qf.exec.markout[side;ref_0;ref_1;pip_factor];
