@@ -152,7 +152,10 @@
 / @param existing the rows the target holds, 0# when it holds none
 / @param batch the rows being written, the same columns as `existing`
 / @param opts row_key, target (for messages), and for replace time_column,
-/   range_from and range_to - the window, end exclusive
+/   range_from and range_to - the window, end exclusive - and, when several
+/   workers fill the dataset, partition_column and partition: the column that
+/   holds a worker's partition and its value, which confine the clear to that
+/   worker's rows (#1476)
 / @return the table the target should hold afterwards
 / @throws error when the columns differ, or under `fail when a key clashes
 / @eg .qetl.io.resolve[`upsert;([] id:1 2; v:10 20);([] id:2 3; v:21 30);`row_key`target!(`id;`t)]  ->  ([] id:1 2 3; v:10 21 30)
@@ -182,7 +185,13 @@
     kept:existing where not (kc#existing) in kc#fresh;
     if[`replace=strategy;
         t:kept opts`time_column;
-        kept:kept where not (t>=opts`range_from) and t<opts`range_to];
+        inside:(t>=opts`range_from) and t<opts`range_to;
+        / A partitioned worker clears its own rows only: the window holds its
+        / siblings' rows too, and they are not this batch's to withdraw (#1476).
+        / Absent for a dataset one worker fills, where the window is all its own.
+        if[(`partition_column in key opts) and not null opts`partition_column;
+            inside:inside and (kept opts`partition_column)=opts`partition];
+        kept:kept where not inside];
     kept,fresh}
 
 / ------------------------------------------------------------- MANAGERS
