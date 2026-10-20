@@ -149,6 +149,11 @@
     if[any trimmed="/"; :0Np];
     zoned:.qetl.coerce.utc_offset[trimmed];
     if[null last zoned; :0Np];
+    / The date-only test above ran with the zone suffix still on, so "2026-09-15Z"
+    / passed it. Run it again on the text the suffix was stripped from, and refuse
+    / a T/D/space with no digit after it: that is a date, not a clock.
+    if[.qetl.coerce.is_date_only[first zoned]; :0Np];
+    if[not .qetl.coerce.has_clock first zoned; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
@@ -156,6 +161,16 @@
     parsed:@[{"P"$x};normalised;{0Np}];
     if[not .qetl.coerce.clock_in_range normalised; :0Np];
     parsed - last zoned}
+
+/ Does this text carry a clock, if it has a time separator at all? "2026-09-15T"
+/ has the separator and nothing after it, which "P"$ reads as midnight.
+/ @param str timestamp text, zone suffix already stripped
+/ @return 0b when a T, D or space is followed by no digit; 1b otherwise
+/ @eg .qetl.coerce.has_clock each ("2026-09-15T";"2026-09-15T09:30:00";"2026-09-15")  ->  011b
+/ @private
+.qetl.coerce.has_clock:{[str]
+    at:first where str in "TD ";
+    $[null at; 1b; any (at+1)_str in .Q.n]}
 
 / Is the hour of this normalised timestamp text a real one? "P"$ rolls an
 / impossible hour into the next day - "...D25:00:00" reads as 01:00 the day
