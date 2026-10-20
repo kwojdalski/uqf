@@ -94,6 +94,11 @@ def _readers(att: Attachment, obs: Observation, dest: Destination, ipc: Ipc) -> 
         try:
             answer = ipc.call(Endpoint(who, att.stack.host, port), "hdb_reader", {})
         except IpcError as exc:
+            if "refused" in exc.reason.lower():
+                # Nothing listens: it serves nothing now and maps the partitions when it starts, as
+                # discovery's stale entries for processes never started do. Not a reload target.
+                out.append(Reader(who, port, False, "not running (connection refused)"))
+                continue
             raise UqsError(
                 f"HDB reader {who} (port {port}) does not answer: {exc.reason} - whether it "
                 "serves the destination cannot be established, so it cannot be left out of a reload"
@@ -239,6 +244,7 @@ def build_plan(
             "half_open": "[from, to)",
         },
         "conflict_policy": facts["on_conflict"],
+        "reload_owed": facts["reload_owed"],
         "windows": windows,
         "coverage": {
             k: sum(1 for w in windows if w["decision"] == k)
@@ -290,6 +296,11 @@ def render(plan: dict[str, Any]) -> str:
         )
         lines.append(f"    {p['date']}  {state}")
     lines.append(f"  writes it     {', '.join(plan['writers'])}")
+    if plan["reload_owed"]:
+        lines.append(
+            "  reload owed   an earlier run's rows are written and covered but not yet queryable; "
+            "a run asks the readers again without rewriting them"
+        )
     co = plan["coordination"]
     lines.append(
         f"  coordination  active write date {co['active_date']} is never touched (last writable "

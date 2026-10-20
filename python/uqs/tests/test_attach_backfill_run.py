@@ -20,6 +20,7 @@ from attach_backfill_support import UQF_ROOT, HdbStack, save_attachment, snapsho
 
 from uqs.attach import backfill_coordination as coordination
 from uqs.attach import backfill_owner, backfill_run, config, detach, service
+from uqs.attach import backfill_plan as planning
 from uqs.attach.config import AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.schema import parse_definition
@@ -82,6 +83,56 @@ def upstream():
     proc.wait(timeout=10)
 
 
+class FakeReader:
+    """A q process that answers `reload` the way a TorQ HDB does, and says it was asked."""
+
+    def __init__(self, tmp: Path, name: str) -> None:
+        self.port = _free_port()
+        self.flag = tmp / f"{name}.refuse"
+        self.log = tmp / f"{name}.reloads"
+        script = tmp / f"{name}.q"
+        self.hide = tmp / f"{name}.hide"
+        script.write_text(
+            f'flag:hsym `$"{self.flag}"; hide:hsym `$"{self.hide}"; trail:hsym `$"{self.log}";\n'
+            f"{DATASET}:([] time:`timestamp$());\n"
+            'reload:{[x] if[not ()~key flag; \'"injected: this reader refuses to reload"];\n'
+            '  h:hopen trail; h "reload\\n"; hclose h;\n'
+            f"  $[()~key hide; `{DATASET} set ([] time:`timestamp$());\n"
+            f'    value "delete {DATASET} from `."];\n'
+            "  1b};\n"
+        )
+        q = q_interpreter(os.environ)
+        self.process = subprocess.Popen(
+            [str(q), str(script), "-p", str(self.port), "-q"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        for _ in range(100):
+            try:
+                socket.create_connection(("127.0.0.1", self.port), 0.2).close()
+                return
+            except OSError:
+                time.sleep(0.1)
+        self.process.terminate()
+        pytest.fail("the fake reader did not come up")
+
+    def refuse(self, on: bool = True) -> None:
+        self.flag.touch() if on else self.flag.unlink(missing_ok=True)
+
+    def forget_table(self, on: bool = True) -> None:
+        """After its next reload this reader's database no longer defines the dataset."""
+        self.hide.touch() if on else self.hide.unlink(missing_ok=True)
+
+    @property
+    def reloads(self) -> int:
+        return len(self.log.read_text().splitlines()) if self.log.exists() else 0
+
+    def stop(self) -> None:
+        self.process.terminate()
+        self.process.wait(timeout=10)
+
+
 @pytest.fixture
 def world(monkeypatch, tmp_path, upstream):
     attach_dir, status = tmp_path / "attachments", tmp_path / "status"
@@ -97,11 +148,18 @@ def world(monkeypatch, tmp_path, upstream):
     for var in ("UQF_MODE", "UQF_ON_CONFLICT", "UQF_FIXTURE_WRITES"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(coordination, "HOST", Host(local_names=("testhost",)))
-    stack = HdbStack(hdb)
+    reader = FakeReader(tmp_path, "hdb1")
+    stack = HdbStack(hdb, reader_ports={"hdb1": reader.port})
     stack.state_over = {n: dict(FUTURE) | {"partition": "2090.01.01"} for n in ("rdb1", "wdb1")}
     monkeypatch.setattr(service, "ipc_for", lambda att: stack)
-    save_attachment("pb-uat", hdb, table=parse_definition(TABLE), origin={"folder": str(bundle)})
-    return type(
+    save_attachment(
+        "pb-uat",
+        hdb,
+        host="localhost",
+        table=parse_definition(TABLE),
+        origin={"folder": str(bundle)},
+    )
+    world = type(
         "W",
         (),
         {
@@ -113,8 +171,11 @@ def world(monkeypatch, tmp_path, upstream):
             "paths": paths_for_root(UQF_ROOT),
             "monkeypatch": monkeypatch,
             "bundle": bundle,
+            "reader": reader,
         },
     )
+    yield world
+    reader.stop()
 
 
 def _native_partition(hdb: Path, tmp_path: Path) -> None:
@@ -246,6 +307,164 @@ def test_a_refused_admission_starts_nothing_and_leaves_nothing(world):
     assert snapshot(world.hdb, world.status, world.attach_dir) == before
 
 
+# ----------------------------------------------------------- the runner has no default
+
+
+def _runner(world, *flags: str, status: Path | None = None, decoy: Path | None = None):
+    env = {**os.environ, "UQF_STATUS_DIR": str(status or world.tmp / "st-abc123")}
+    if decoy is not None:
+        env["KDBHDB"] = str(decoy)
+    return subprocess.run(
+        [str(q_interpreter(os.environ)), str(UQF_ROOT / backfill_run.RUNNER), *flags],
+        cwd=UQF_ROOT, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        timeout=60, check=False,
+    )  # fmt: skip
+
+
+RANGE_FLAGS = [
+    "-worker",
+    WORKER,
+    "-version",
+    "v1",
+    "-from",
+    "2015.01.07D09:00",
+    "-to",
+    "2015.01.07D11:00",
+]
+
+
+def test_the_runner_given_no_destination_refuses_and_never_falls_back_to_kdbhdb(world):
+    decoy = world.tmp / "uqf-default-hdb"
+    decoy.mkdir()
+    result = _runner(world, *RANGE_FLAGS, decoy=decoy)
+    assert result.returncode == 2
+    assert "missing -hdb, -destid, -attachment, -max_date, -deadline, -owner, -readers, -user" in (
+        result.stdout + result.stderr
+    )
+    assert list(decoy.iterdir()) == [], "KDBHDB is not consulted, let alone written"
+
+
+def test_the_runner_refuses_a_state_directory_that_is_not_the_destinations(world):
+    flags = [
+        *RANGE_FLAGS, "-hdb", str(world.hdb), "-destid", "abc123", "-attachment", "pb-uat",
+        "-max_date", "2026.01.01", "-deadline", "2099.01.01D00:00", "-owner",
+        str(world.tmp / "o.json"), "-readers", "_none_", "-user", "admin",
+    ]  # fmt: skip
+    wrong = _runner(world, *flags, status=world.tmp / "st-someone-else")
+    assert wrong.returncode != 0
+    assert "is not the directory for destination abc123" in wrong.stdout + wrong.stderr
+    assert not (world.hdb / "2015.01.07").exists()
+
+
+def test_the_runner_refuses_a_fixture_and_a_plan_mode(world):
+    base = [
+        "-hdb", str(world.hdb), "-destid", "abc123", "-attachment", "pb-uat", "-max_date",
+        "2026.01.01", "-deadline", "2099.01.01D00:00", "-owner", str(world.tmp / "o.json"),
+        "-readers", "_none_", "-user", "admin",
+    ]  # fmt: skip
+    fixture = _runner(world, *RANGE_FLAGS, *base, "-fixture")
+    assert "-fixture is refused" in fixture.stdout + fixture.stderr
+    plan_ = _runner(world, *RANGE_FLAGS, *base, "-mode", "plan")
+    assert "-mode plan is the launcher's" in plan_.stdout + plan_.stderr
+
+
+# --------------------------------------------------------------- written is not queryable
+
+
+def test_a_run_whose_readers_reloaded_is_queryable_and_releases_coverage(world):
+    started, _ = run(world)
+    code, result = backfill_run.follow(started, timeout=120)
+    assert code == 0 and result["outcome"] == "queryable" and result["queryable"] is True
+    assert result["readers"] == ["hdb1"] and result["failed_readers"] == []
+    assert world.reader.reloads == 1, "the verified reader was asked once"
+    assert (started.state_dir / "etl_ready").is_file(), "the readiness watermark advanced"
+
+
+def test_only_the_readers_that_serve_the_destination_are_asked_to_reload(world, tmp_path):
+    other = FakeReader(tmp_path, "hdb2")
+    elsewhere = tmp_path / "elsewhere-hdb"
+    elsewhere.mkdir()
+    world.stack = HdbStack(
+        world.hdb, other=elsewhere, reader_ports={"hdb1": world.reader.port, "hdb2": other.port}
+    )
+    world.monkeypatch.setattr(service, "ipc_for", lambda att: world.stack)
+    world.stack.state_over = {
+        n: dict(FUTURE) | {"partition": "2090.01.01"} for n in ("rdb1", "wdb1")
+    }
+    try:
+        started, plan = run(world)
+        code, result = backfill_run.follow(started, timeout=120)
+    finally:
+        other.stop()
+    assert code == 0 and result["readers"] == ["hdb1"], "hdb2 serves another directory"
+    assert [t["procname"] for t in plan["reload_targets"]] == ["hdb1"]
+    assert (world.reader.reloads, other.reloads) == (1, 0)
+
+
+def test_a_reader_that_will_not_reload_leaves_rows_written_and_covered_but_not_queryable(world):
+    world.reader.refuse()
+    started, _ = run(world)
+    code, result = backfill_run.follow(started, timeout=120)
+    log = started.log.read_text()
+    assert code == backfill_run.EXIT_NOT_QUERYABLE == 3, log
+    assert result["state"] == "completed", "the write itself succeeded"
+    assert result["outcome"] == "written_not_queryable" and result["queryable"] is False
+    assert result["failed_readers"] == [
+        "hdb1: reload failed: injected: this reader refuses to reload"
+    ]
+    assert read_rows(world.hdb, "2015.01.07") > 0, "the rows are on disk"
+    assert (started.state_dir / "etl_coverage").is_file(), "and covered"
+    assert not (started.state_dir / "etl_ready").exists(), "but not released to the readers"
+    assert "NOT queryable" in log and "nothing will be rewritten" in log
+    assert backfill_owner.active("pb-uat") == [], "the run still releases the attachment"
+
+
+def test_a_reader_that_reloads_but_does_not_serve_the_table_is_not_queryable(world):
+    """The real-stack case: an HDB takes its tables from its latest partition, so a table written
+    only into an older date is invisible after a successful reload."""
+    world.reader.forget_table()
+    started, _ = run(world)
+    code, result = backfill_run.follow(started, timeout=120)
+    assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
+    (why,) = result["failed_readers"]
+    assert why.startswith("hdb1: reloaded, but its HDB does not define imported_trades yet")
+    assert "next end of day" in why and "hdb-check --fix" in why, "it says how to fix it"
+    assert not (started.state_dir / "etl_ready").exists()
+    world.reader.forget_table(False)
+    second, _ = run(world)
+    code, result = backfill_run.follow(second, timeout=120)
+    assert code == 0 and result["outcome"] == "queryable" and result["state"] == "idle"
+
+
+def test_retrying_after_a_failed_reload_rewrites_nothing_and_makes_the_rows_queryable(world):
+    world.reader.refuse()
+    first, _ = run(world)
+    assert backfill_run.follow(first, timeout=120)[0] == 3
+    written = snapshot(world.hdb)
+    plan_ = planning.plan_attached(
+        world.paths, "pb-uat", WORKER, "v1", FROM, TO, ipc=world.stack, on_conflict="replace"
+    )
+    assert plan_["reload_owed"] is True
+    assert plan_["coverage"] == {"fetch": 0, "covered": 2, "deferred": 0}, "every window is covered"
+    world.reader.refuse(False)
+    second, _ = run(world)
+    code, result = backfill_run.follow(second, timeout=120)
+    assert code == 0 and result["outcome"] == "queryable", second.log.read_text()
+    assert result["state"] == "idle", "nothing was fetched or written"
+    assert snapshot(world.hdb) == written, "not one file of the destination changed"
+    assert world.reader.reloads == 1 and (second.state_dir / "etl_ready").is_file()
+    again = planning.plan_attached(
+        world.paths, "pb-uat", WORKER, "v1", FROM, TO, ipc=world.stack, on_conflict="replace"
+    )
+    assert again["reload_owed"] is False
+
+
+def test_a_dry_run_asks_no_reader_to_reload(world):
+    started, _ = run(world, mode="dry-run")
+    code, result = backfill_run.follow(started, timeout=120)
+    assert code == 0 and result["outcome"] == "dry_run" and world.reader.reloads == 0
+
+
 # ------------------------------------------------------------------------ ownership
 
 
@@ -326,3 +545,33 @@ def test_cli_run_without_wait_returns_at_once_and_the_run_finishes_on_its_own(wo
         time.sleep(0.1)
     assert backfill_owner.active("pb-uat") == [], "ownership is released when the run ends"
     assert not (world.hdb / "2015.01.07").exists(), "a dry run wrote nothing"
+
+
+# ------------------------------------------------------------- status, runs and logs
+
+
+def _cli_any(*argv: str):
+    from typer.testing import CliRunner
+
+    from uqs import cli
+
+    return CliRunner().invoke(cli.app, list(argv), catch_exceptions=False, env={"COLUMNS": "300"})
+
+
+def test_the_listing_and_the_run_ledger_show_the_attached_run(world):
+    from uqs.stack import runs as stack_runs
+
+    world.reader.refuse()
+    started, _ = run(world)
+    assert backfill_run.follow(started, timeout=120)[0] == 3
+    listing_ = _cli_any("list", "backfills")
+    flat = " ".join(listing_.output.split())
+    assert "pb-uat" in flat and WORKER in flat and "written_not_queryable" in flat
+    ledger = _cli_any("job", "runs", "list", "--attach", "pb-uat")
+    assert WORKER in ledger.output, "the destination's own run ledger"
+    run_id = stack_runs.history(world.paths, directory=started.state_dir)[0]["run_id"]
+    shown = " ".join(_cli_any("job", "runs", "show", run_id, "--attach", "pb-uat").output.split())
+    assert "--attach pb-uat" in shown, (
+        "the re-run command names the destination, or it would write uqf's HDB"
+    )
+    assert str(started.state_dir / "logs") in shown.replace("\n", "")
