@@ -93,6 +93,10 @@
 .qt.qetl.coerce.test_a_date_only_value_is_refused_not_widened:{[t]
     .qunit.assertEquals[null .qetl.coerce.to_timestamp["2026-09-15"];1b;"refusing beats destroying intraday ordering"]};
 
+.qt.qetl.coerce.test_a_zoned_or_bare_separator_date_is_refused_like_a_date_only_one:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15Z";"2026-09-15z";"2026.09.15D";"2026-09-15T";"2026-09-15T+02:00";"2026-09-15 Z");
+    .qunit.assertEquals[null r;111111b;"a zone suffix or a separator with no clock is still a date with no time"]};
+
 .qt.qetl.coerce.test_a_date_only_q_format_value_is_also_refused:{[t]
     .qunit.assertEquals[null .qetl.coerce.to_timestamp["2026.09.15"];1b;"the refusal is about the missing time, not the separator style"]};
 
