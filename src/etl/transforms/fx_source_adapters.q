@@ -49,7 +49,7 @@
     last_qty:`float$(); cum_qty:`float$())
 
 / The order book as a feed of levels. side is `bid or `ask, lvl 0 the best, a
-/ null price (or a zero quantity) marks a side the feed has emptied. category
+/ null price (with a null or zero quantity) marks a side the feed has emptied. category
 / `FULL_AMOUNT is liquidity for the whole quoted size; settle `SP and `T2 are
 / spot.
 .qpipe.transform.fx_source_adapters.book_levels:([] ts:`timestamp$(); instrument:`symbol$(); feed:`symbol$(); category:`symbol$();
@@ -137,8 +137,8 @@
 / documents, never a price. Levels of another category or settlement, and
 / instruments that are not a currency pair, are dropped; a snapshot all of whose
 / levels were dropped is not published. A level with a price that is not positive
-/ and finite (a null price with no quantity is the emptied-side marker), a negative
-/ quantity or an unknown side is refused.
+/ and finite (a null price with a null or zero quantity is the emptied-side marker),
+/ a price with no quantity, a negative quantity or an unknown side is refused.
 / @param batch a book_levels batch, whole snapshots
 / @return canonical market_data, market `fx
 / @throws error naming a level that cannot be represented
@@ -149,8 +149,9 @@
     spot:.qpipe.transform.fx_source_adapters.spot_codes;
     kept:select from (update pair:pair from batch) where category=wanted, settle in spot, not null pair;
     .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a side other than bid or ask";kept`side;not kept[`side] in `bid`ask];
-    .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a negative quantity";kept`qty;kept[`qty]<0f];
+    .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a negative quantity";kept`qty;(not null kept`qty) & kept[`qty]<0f];
     marker:null[kept`px] & (null[kept`qty] | 0f>=kept`qty);
+    .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a price but no quantity";kept`px;(not null kept`px) & null kept`qty];
     .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a price that is not positive and finite";kept`px;(not marker) & not .qpipe.transform.fx_source_adapters.positive[kept`px]];
     levels:select from kept where not marker;
     if[0=count kept; :0#.qpipe.transform.fx_source_adapters.market_data];
