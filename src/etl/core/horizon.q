@@ -29,10 +29,11 @@
 /                    not set the price). Every row older than the oldest
 /                    pending event minus max_age is dropped.
 /   max_age absent   the latest reference row is used however old - an
-/                    as-of join (demo_markout). Rows older than the oldest
-/                    pending event are dropped, EXCEPT the latest such row
-/                    per `by` key: it is still the as-of answer for any
-/                    horizon before that key's next row.
+/   (or 0Wn)         as-of join (demo_markout). 0Wn, how a spec says
+/                    "however old", is the same declaration (#1480). Rows
+/                    older than the oldest pending event are dropped, EXCEPT
+/                    the latest such row per `by` key: it is still the as-of
+/                    answer for any horizon before that key's next row.
 / .
 / Under ready_on `reference (or `both) the latest pre-cutoff row per series is
 / kept with max_age too: readiness needs an anchor at or before event_time -
@@ -343,19 +344,22 @@
 / @private
 .qetl.job.stream.horizons.retain:{[d;hist;earliest]
     rt:hist d`reference_time;
-    cutoff:$[`max_age in key d; earliest-d`max_age; earliest];
+    / 0Wn is "as of however old" (fx_markout's spec), the same as no max_age:
+    / earliest-0Wn is the 1734 floor, which would evict nothing for ever (#1480)
+    aged:$[`max_age in key d; d[`max_age]<0Wn; 0b];
+    cutoff:$[aged; earliest-d`max_age; earliest];
     old:where rt<cutoff;
     if[0=count old; :hist];
     / with max_age a row below the cutoff is never an answer - except as the
     / anchor ready_on `reference needs (#959)
-    if[(`max_age in key d) and not .qetl.job.stream.horizons.reads_reference[d`ready_on]; :hist where rt>=cutoff];
+    if[aged and not .qetl.job.stream.horizons.reads_reference[d`ready_on]; :hist where rt>=cutoff];
     / the latest pre-cutoff row per key is still an as-of answer
     / by reference time, not arrival: out-of-order rows must not evict the true as-of row (#1283)
     o:old iasc rt old;
     / a series' anchor is only an ANSWER while it is within max_age; with max_age the
     / only anchor still needed is readiness's, one per `by` key, so a source that
     / stopped quoting does not keep its last book for ever (#1410)
-    series:$[`max_age in key d; (),d`by; d`retain_by];
+    series:$[aged; (),d`by; d`retain_by];
     latest:o last each value group series#hist o;
     hist asc (til[count hist] except old),latest}
 
