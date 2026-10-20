@@ -8,6 +8,7 @@ proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeof
 ,cross_arbitrage,time,sym,sym,,,,
 ,crypto_book,time,sym,sym,,,,
 ,crypto_book_1s,time,sym,sym,,,,
+,crypto_book_snapshot,time,sym,sym,,,,
 ,crypto_execution_quality,time,sym,sym,,,,
 ,crypto_market_data,time,sym,sym,,,,
 ,crypto_sim_fills,time,sym,sym,,,,

@@ -151,6 +151,10 @@ UNPROFILED: dict[str, str] = {
         "a live external feed - its rows come from a Kafka consumer (the q feed "
         "kafka_feed1, or `uqs connector start kafka`), so it is started with that or not at all"
     ),
+    "crypto_book_decoder1": (
+        "a live external feed - its rows come from a Kafka consumer (kafka_feed1 with "
+        "UQF_KAFKA_TOPICS=cryptorust.book_snapshots), so it is started with that or not at all"
+    ),
     "kafka_feed1": (
         "a live external feed - it consumes a Kafka topic with KX's kfk library "
         "(UQF_KFK_HOME, UQF_KAFKA_BROKERS), so it is started on demand, never with the stack"
