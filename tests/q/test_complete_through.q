@@ -32,6 +32,8 @@
             ([] time:enlist 2026.09.01D00:00; px:enlist 1f)))];
     .qetl.job.bounded.define[`ct_backfill;
         `source`dataset`width`transform!(`ct_src;`ct_out;1D;`ct_passthrough)];
+    .qetl.job.bounded.define[`ct_bar_backfill;
+        `source`dataset`width`transform`align!(`ct_src;`ct_bar_out;1D;`ct_passthrough;0D01:00)];
     }
 
 .qt.qetl.source.complete_through.setUp_fresh:{[]
@@ -111,6 +113,19 @@
     w:.qpipe.job.ct_backfill.plan 0Np;
     .qunit.assertEquals[(w`range_from;w`range_to);(enlist 2026.09.01D00:00;enlist 2026.09.01D12:00);
         "one window, cut at the bound"]};
+
+.qt.qetl.source.complete_through.test_an_aligned_worker_is_clipped_to_a_bar_edge:{[t]
+    / #1477: a bound inside a bar would build that bar from part of its fills now and the rest later.
+    .qt.qetl.source.complete_through.bound:2026.09.01D12:30;
+    .qpipe.job.ct_bar_backfill.init[.qt.qetl.source.complete_through.spec[]];
+    .qetl.job.bounded.write_state[`ct_bar_backfill;`source_version;`v1];
+    .qetl.job.bounded.write_state[`ct_bar_backfill;`handle;7i];
+    .qetl.job.bounded.write_state[`ct_bar_backfill;`live;1b];
+    w:.qpipe.job.ct_bar_backfill.plan 0Np;
+    .qetl.job.bounded.write_state[`ct_bar_backfill;`handle;0Ni];
+    .qpipe.job.ct_bar_backfill.cleanup[];
+    .qunit.assertEquals[(w`range_from;w`range_to);(enlist 2026.09.01D00:00;enlist 2026.09.01D12:00);
+        "the partial hour stays uncovered until the source vouches for all of it"]};
 
 .qt.qetl.source.complete_through.test_a_bound_behind_the_range_plans_nothing:{[t]
     .qt.qetl.source.complete_through.bound:2026.08.31D00:00;

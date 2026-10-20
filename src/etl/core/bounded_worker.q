@@ -938,9 +938,9 @@
 .qetl.job.bounded.plan:{[worker;cursor]
     cfg:.qetl.job.bounded.def worker;
     s:.qetl.job.bounded.spec worker;
-    / The range ends where the source can vouch for its data (#1187): a read
-    / past that succeeds but is not a complete window.
-    to:.qetl.source.clip_to_complete[worker;cfg`source;.qetl.job.bounded.read_state[worker;`handle];.qetl.job.bounded.read_state[worker;`live];s`range_to];
+    / The range ends where the source can vouch for its data (#1187), rounded down to an `align` worker's
+    / bar edge so a bar is never built from part of its fills (#1477, as #1303 refuses at the edges).
+    to:{[g;t] $[(not null g) and t>-0Wp; g xbar t; t]}[cfg`align] .qetl.source.clip_to_complete[worker;cfg`source;.qetl.job.bounded.read_state[worker;`handle];.qetl.job.bounded.read_state[worker;`live];s`range_to];
     if[to<=s`range_from; :.qetl.job.bounded.empty_windows[]];
     / ONE as_of for the whole plan, captured once: a ledger superseded midway
     / would report a range both covered and uncovered in one pass.
