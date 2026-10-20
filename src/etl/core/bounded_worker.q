@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 .qetl.job.bounded.worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); revision:`long$(); align:`timespan$())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -208,7 +208,7 @@
 /   on_conflict (default `upsert - see .qetl.io's CONFLICTS), target_key
 /   (default the source's row_key - see require_target_key),
 /   window_column (the OUTPUT column that carries the window's time - see
-/   require_window_column) and
+/   require_window_column), partition_column (the output column holding the partition, #1476) and
 /   source_version (the default release a run records coverage under; none
 /   by default, so a run must name one), revision (the output logic's, #1097) and align (bar width; an unaligned run is refused, #1303)
 / @throws error naming every missing or malformed field at once
@@ -300,7 +300,7 @@
     decl[`source_version]:dv;
     decl[`target_key]:.qetl.job.bounded.require_target_key[worker;decl];
     decl[`window_column]:.qetl.job.bounded.require_window_column[worker;decl];
-    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl];
+    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl]; decl[`partition_column]:.qetl.job.bounded.runtime.require_partition_column[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -1021,7 +1021,7 @@
     cfg:.qetl.job.bounded.def worker; w:.qetl.job.bounded.read_state[worker;`last_window];
     strategy:.qetl.job.bounded.runtime.write_strategy[worker;w];
     if[`replace=strategy; .qetl.job.bounded.runtime.require_inside_window[worker;batch;w]];
-    opts:`on_conflict`row_key`time_column`range_from`range_to!(strategy;cfg`target_key;cfg`window_column;w`range_from;w`range_to);
+    opts:.qetl.job.bounded.runtime.write_opts[worker;strategy;w];
     .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}
 
 / The conflict strategy this run writes under: the operator's override when
