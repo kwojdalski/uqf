@@ -51,6 +51,25 @@ _RUN_COLUMNS = (
 _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
 
 
+AttachOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--attach",
+        help="Read the ledger of this attachment's destination (`uqs job backfill --attach`) "
+        "instead of the runtime's own",
+    ),
+]
+
+
+def _where(attach: str | None) -> dict:
+    """The `directory=` for the ledger reads: the attached destination's, or none (the default)."""
+    if attach is None:
+        return {}
+    from uqs.attach import backfill as attached
+
+    return {"directory": attached.state_dir_of(_paths(), attach)}
+
+
 def _cell(value: object) -> str:
     """A ledger value for display: counts arrive as floats (see stack/runs.py),
     and a null - a run that never finished has no counts - as blank."""
@@ -80,14 +99,14 @@ def _print(
 
 
 @runs_app.command("status")
-def status(interactive: InteractiveOpt = False) -> None:
+def status(interactive: InteractiveOpt = False, attach: AttachOpt = None) -> None:
     """Runs that began and never finished.
 
     Includes runs whose process has died: `running` on a run whose process is
     gone means that execution was interrupted, which is what this is for.
     """
     try:
-        rows = stack_runs.unfinished(_paths())
+        rows = stack_runs.unfinished(_paths(), **_where(attach))
     except UqsError as exc:
         _die(exc)
         return
@@ -95,10 +114,10 @@ def status(interactive: InteractiveOpt = False) -> None:
 
 
 @runs_app.command("list")
-def list_runs(interactive: InteractiveOpt = False) -> None:
+def list_runs(interactive: InteractiveOpt = False, attach: AttachOpt = None) -> None:
     """Every run in the ledger, newest first."""
     try:
-        rows = stack_runs.history(_paths())
+        rows = stack_runs.history(_paths(), **_where(attach))
     except UqsError as exc:
         _die(exc)
         return
@@ -125,10 +144,13 @@ def migrate() -> None:
 
 
 @runs_app.command("show")
-def show(run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")]) -> None:
+def show(
+    run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
+    attach: AttachOpt = None,
+) -> None:
     """One run, and every fact it recorded about what it published."""
     try:
-        run, facts = stack_runs.show(_paths(), run_id)
+        run, facts = stack_runs.show(_paths(), run_id, **_where(attach))
     except UqsError as exc:
         _die(exc)
         return
@@ -137,15 +159,18 @@ def show(run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job run
         return
     _print("run", run, _RUN_COLUMNS, "")
     _print("facts", facts, _FACT_COLUMNS, "this run recorded no facts")
-    _print_next_steps(run[0])
+    _print_next_steps(run[0], attach)
 
 
-def _print_next_steps(run: dict) -> None:
+def _print_next_steps(run: dict, attach: str | None = None) -> None:
     """Where to look, and what to type: the two things a reader of a failed
     or interrupted run wants next, without a trip through the docs."""
     paths = _paths()
     logs = stack_runs.log_files(paths, run)
-    if logs:
+    if attach:
+        state = _where(attach)["directory"]
+        console.print(f"\n[bold]logs[/]   {state / 'logs'}  (attached run; `uqs list backfills`)")
+    elif logs:
         console.print(f"\n[bold]logs[/]   uqs logs {run['process']} --level ERROR")
         for path in logs:
             note = "" if path.is_file() else "  [dim](not found)[/]"
@@ -154,7 +179,7 @@ def _print_next_steps(run: dict) -> None:
         console.print(
             "\n[bold]logs[/]   this run recorded no TorQ process - plain q logs to its console"
         )
-    command = stack_runs.rerun_command(run)
+    command = stack_runs.rerun_command(run, attach)
     if command:
         # Re-running IS the resume: coverage skips every window already covered.
         console.print(f"[bold]re-run[/] {command}", soft_wrap=True)

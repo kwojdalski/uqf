@@ -163,10 +163,27 @@ def _execute(
     _report(
         {**info, "result": result, "exit_code": code},
         as_json,
-        f"{worker}: {result.get('state', 'unknown')} (exit {code}); log {run_.log}"
-        + (f"\n  {result['error']}" if result.get("error") else ""),
+        _outcome_text(worker, run_, code, result),
     )
     raise typer.Exit(code=code)
+
+
+def _outcome_text(worker, run_, code, result) -> str:
+    """What the run did, in the words that keep written and queryable apart."""
+    outcome = result.get("outcome") or result.get("state", "unknown")
+    head = f"{worker}: {outcome} (exit {code}); log {run_.log}"
+    if outcome == "written_not_queryable":
+        failed = "; ".join(result.get("failed_readers", [])) or "a reader"
+        return (
+            f"{head}\n  the rows are WRITTEN and covered but NOT queryable: {failed}."
+            f"\n  Re-run the same command: nothing is rewritten, the readers are asked again."
+        )
+    if outcome == "queryable":
+        readers = ", ".join(result.get("readers", [])) or "none"
+        return f"{head}\n  written, covered and queryable (readers reloaded: {readers})"
+    if result.get("error"):
+        return f"{head}\n  {result['error']}"
+    return head
 
 
 def _report(info, as_json, text):

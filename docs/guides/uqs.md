@@ -258,6 +258,11 @@ uqs list processes
   and host, its lifecycle `state` and persist mode, and - separately -
   `publisher_state`: `running`, `stopped`, or `unreachable`/`unknown` when the
   host or port cannot be checked. Read-only
+- `backfills` - every attached destination a `uqs job backfill --attach` has run
+  into: attachment, destination id, worker, `state` (`running`, `completed`,
+  ...), `outcome` and `queryable` - written rows are not queryable until the
+  readers reload
+  - the latest log, and what to do next. Read-only
 
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 

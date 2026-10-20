@@ -171,9 +171,18 @@ def test_a_reader_of_another_directory_is_not_a_reload_target(world, monkeypatch
     assert plan_["readers_not_serving"] == [{"procname": "hdb2", "detail": f"serves {elsewhere}"}]
 
 
-def test_an_hdb_reader_that_cannot_be_asked_blocks_the_plan(world):
+def test_an_hdb_reader_that_is_not_running_is_not_a_reload_target_and_is_said_so(world):
     world.stack.down.add(6003)
-    with pytest.raises(UqsError, match="HDB reader hdb1 .* does not answer"):
+    p = plan_with(world, facts_of())
+    assert p["reload_targets"] == []
+    assert p["readers_not_serving"] == [
+        {"procname": "hdb1", "detail": "not running (connection refused)"}
+    ]
+
+
+def test_an_hdb_reader_that_listens_but_does_not_answer_blocks_the_plan(world):
+    world.stack.hung.add(6003)
+    with pytest.raises(UqsError, match="HDB reader hdb1 .* does not answer: q error: timed out"):
         plan_with(world, facts_of())
 
 
@@ -285,12 +294,12 @@ def test_coverage_recorded_for_this_destination_decides_its_windows_and_no_other
     )
 
 
-def _record_coverage(world, dest, version: str) -> None:
+def _record_coverage(world, dest, version: str, to: str = "2026.09.12D00:00") -> None:
     script = f"""
 \\l src/init.q
 \\l src/etl/init.q
 .qetl.coverage.attach[];
-.qetl.coverage.stage_completion[`{DATASET};`;`$"{version}";2026.09.11D00:00;2026.09.12D00:00;5];
+.qetl.coverage.stage_completion[`{DATASET};`;`$"{version}";2026.09.11D00:00;{to};5];
 exit 0
 """
     path = world.tmp / "cov.q"
@@ -317,6 +326,21 @@ def invoke(*argv: str):
 
 
 COMMON = ["--attach", "pb-uat", "--from", "2026-09-11", "--to", "2026-09-13", "--version", "v1"]
+
+
+def test_coverage_ending_mid_window_still_plans_the_windows_it_leaves_and_their_dates(world):
+    """#1479: the plan cuts windows from each gap's own start, so a gap that begins mid-window
+    must not read as 'deferred' with no dates."""
+    dest = attached.resolve(world.paths, "pb-uat", WORKER)
+    _record_coverage(world, dest, "v1~fixture", to="2026.09.11D05:30")
+    facts = planning.evaluate(world.paths, dest, WORKER, "v1", FROM, TO, None)
+    decisions = [w["decision"] for w in facts["windows"]]
+    assert "deferred" not in decisions
+    assert (
+        decisions.count("fetch") == facts["planned"] + 0
+        or decisions.count("fetch") >= facts["planned"]
+    )
+    assert facts["dates"] == ["2026.09.11", "2026.09.12"]
 
 
 def test_cli_run_of_an_unconfigured_source_is_refused_before_anything_starts(world):
