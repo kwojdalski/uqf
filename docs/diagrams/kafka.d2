@@ -1,4 +1,4 @@
-# kafka.d2 - client flow off a Kafka topic: a Python consumer and kafka_flow1.
+# kafka.d2 - client flow off a Kafka topic: a consumer publishing envelopes and kafka_flow1.
 #
 # Rendered by scripts/generate/render_diagrams.py, which CI runs with
 # --check. Embedded from docs/services/kafka.md.
@@ -6,8 +6,9 @@
 # WHAT THIS DIAGRAM IS FOR. The ORDER of two steps, and why neither half is
 # correct alone: the consumer publishes and only then commits the offset, so a
 # crash in between redelivers rather than loses; kafka_flow1 then drops what
-# was redelivered by comparing (partition;offset) with a per-partition
-# high-water mark. The numbered labels carry the ordering. The mark is the
+# was redelivered by comparing (topic;partition;offset) with a per-partition
+# high-water mark, decoding what is new through the topic's mapping and
+# sending what it cannot decode to kafka_dead_letter. The numbered labels carry the ordering. The mark is the
 # job's own process state, rebuilt on a restart from the client_flow rows in the
 # log - drawn as its own box so that is visible.
 
@@ -34,14 +35,16 @@ classes: {
 }
 
 broker: "Kafka topic\nuqf.client.flow" { class: ext }
-consumer: "kafka_feed.py - uqs connector start kafka\nauto-commit off" { class: py }
+consumer: "kafka_feed.py - uqs connector start kafka\nauto-commit off, decodes nothing" { class: py }
 stp1: "stp1 - tickerplant" { class: plant }
 flow: "kafka_flow1 - kafka_flow.q\nkeeps rows above the mark" { class: job }
-mark: "high-water mark per partition\nprocess state - rebuilt from the\nclient_flow log on a restart" { class: table }
+mark: "high-water mark per topic and partition\nprocess state - rebuilt on a restart\nfrom the handled rows in the log" { class: table }
+dead: "kafka_dead_letter\nrecords that could not be decoded,\nwith the reason" { class: table }
 
 broker -> consumer: "poll" { style.stroke: "#8a7f6a" }
-consumer -> stp1: "1. .u.upd kafka_client_flow\n(partition and offset as columns)" { style.stroke: "#6f4aa5" }
+consumer -> stp1: "1. .u.upd kafka_message\n(topic, partition, offset, key, payload)" { style.stroke: "#6f4aa5" }
 broker <- consumer: "2. commit the offset,\nonly after the publish returned" { style.stroke: "#6f4aa5"; style.stroke-dash: 4 }
 stp1 -> flow: "subscribe" { style.stroke: "#a54a5c" }
 flow -> mark: "compare, then advance" { style.stroke: "#3d7a5a" }
 stp1 <- flow: "publish client_flow\nnew records only" { style.stroke: "#3d7a5a" }
+flow -> dead: "malformed, no mapping,\nrefused rows" { style.stroke: "#3d7a5a"; style.stroke-dash: 4 }

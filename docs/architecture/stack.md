@@ -110,19 +110,22 @@ process here, for the reason cryptorust is not: a q process cannot hold that
 subscription, so it is started by `uqs connector start databento` rather than by
 `torq.sh`.
 
-`kafka_flow1` is the second subscriber fed from outside q, and it exists to
-answer a question `databento1` never has to. Its input comes from an external
-Python consumer (`external/kafka_streamer.py`) holding a Kafka subscription, and
-a Kafka topic is the same kind of object as the tickerplant log it feeds: an
-ordered, replayable record of what happened. Joining the two means choosing
-where the offset commit sits relative to `.u.upd`. Committing first loses a
-record undetectably if the consumer dies in the gap; committing after replays
-it. The consumer commits after, so every failure is a duplicate rather than a
-hole, and `kafka_flow1` removes the duplicates by comparing each record's
-`(partition;offset)` against a per-partition high-water mark. That is why those
-two coordinates are columns on `kafka_client_flow` and survive onto
-`client_flow`: the plant is what has to outlive a redelivery. Neither half is
-correct alone.
+`kafka_flow1` is the second subscriber fed from outside its own process, and it
+exists to answer a question `databento1` never has to. Its input comes from a
+Kafka consumer holding a subscription - today the Python one
+(`external/kafka_streamer.py`); a q feed on KX's `kfk` interface replaces the
+need for it under #1481 - and a Kafka topic is the same kind of object as the
+tickerplant log it feeds: an ordered, replayable record of what happened.
+Joining the two means choosing where the offset commit sits relative to
+`.u.upd`. Committing first loses a record undetectably if the consumer dies in
+the gap; committing after replays it. The consumer commits after, so every
+failure is a duplicate rather than a hole, and `kafka_flow1` removes the
+duplicates by comparing each record's `(topic;partition;offset)` against a
+per-partition high-water mark. That is why those three coordinates are columns
+on `kafka_message` and survive onto `client_flow`: the plant is what has to
+outlive a redelivery. Neither half is correct alone. (This page used to say a q
+process cannot hold a Kafka subscription. It can: KX's `kfk` interface wraps
+`librdkafka`. The consumer is outside the tickerplant either way.)
 
 The crypto half of the stack has the same shape, with one difference in who
 publishes the raw rows. `crypto_book` and `crypto_trades` are declared for
@@ -205,7 +208,7 @@ their schema row and their place in the DAG, and are one command away:
   | `cross1`                                  | a leaf: it subscribes to `fx_orderbook` and publishes no table, so nothing stalls while it is stopped                                                                                      |
   | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_orderbook` and its only consumer - so they start and stop together                                                                              |
   | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                         |
-  | `kafka_flow1`                             | subscribes to `kafka_client_flow`, which only the external Kafka consumer publishes, so on a default start it consumes nothing                                                             |
+  | `kafka_flow1`                             | subscribes to `kafka_message`, which only a Kafka consumer (`uqs connector start kafka`) publishes, so on a default start it consumes nothing                                              |
   | `flink_vwap1`                             | subscribes to `flink_vwap_raw`, which only the external Flink job publishes, so on a default start it consumes nothing                                                                     |
   | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                                      |
   | `superbook1`, `arbitrage1`                | the direct-arbitrage chain off `market_data`: `superbook` is read only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together                          |

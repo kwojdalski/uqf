@@ -237,7 +237,7 @@ def start(
     """Start a feed publishing onto the running stack's tickerplant.
 
     databento: live MBP-10 onto `databento_mbp10`, folded by databento1.
-    kafka: a topic onto `kafka_client_flow`, deduplicated by kafka_flow1; needs
+    kafka: a topic onto `kafka_message`, decoded and deduplicated by kafka_flow1; needs
     a reachable broker and `confluent-kafka` installed.
     crypto: a sibling cryptorust checkout's order-book recorder into
     `crypto_book` (see $CRYPTORUST_ROOT in crypto.cryptorust_root).
