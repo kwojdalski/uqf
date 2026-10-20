@@ -401,6 +401,7 @@ qetl.kafka,coordinates,value,,
 qetl.kafka,cycle,function,2,tr st
 qetl.kafka,dead_empty,table,,
 qetl.kafka,decode_json,function,2,schema payload
+qetl.kafka,decoder,dict,,
 qetl.kafka,decoders,dict,,
 qetl.kafka,envelope_columns,value,,
 qetl.kafka,envelope_empty,table,,
@@ -417,10 +418,21 @@ qetl.kafka,process,function,1,rows
 qetl.kafka,state_new,function,1,
 qetl.kafka,topic,dict,,
 qetl.kafka,transport_keys,value,,
+qetl.kafka.decoder,catch_all,value,,
+qetl.kafka.decoder,check,function,1,job
+qetl.kafka.decoder,init,function,1,job
+qetl.kafka.decoder,mine,function,2,job rows
+qetl.kafka.decoder,on_batch,function,3,job t x
+qetl.kafka.decoder,on_replayed,function,1,job
+qetl.kafka.decoder,state_names,value,,
+qetl.kafka.decoder,unpublished,function,1,job
+qetl.kafka.topic,claims,function,1,
 qetl.kafka.topic,def,function,1,topic
 qetl.kafka.topic,define,function,2,topic decl
 qetl.kafka.topic,defined,function,1,
+qetl.kafka.topic,known,function,1,
 qetl.kafka.topic,outputs,function,1,
+qetl.kafka.topic,owned,function,1,job
 qetl.kafka.topic,registry,dict,,
 qetl.livecheck,check,function,2,source window
 qetl.livecheck,redact,function,2,text cred
@@ -437,6 +449,7 @@ qetl.load,procs,dict,,
 qetl.load,selected,function,1,dirs
 qetl.load,source_files,function,1,names
 qetl.load,sources,dict,,
+qetl.load,topics,dict,,
 qetl.log,context,dict,,
 qetl.log,dbg,function,3,id text fields
 qetl.log,debug,function,1,on
@@ -1516,9 +1529,7 @@ qpipe.job.kafka_flow,held,table,,
 qpipe.job.kafka_flow,marks,dict,,
 qpipe.job.kafka_flow,on_batch,function,2,t x
 qpipe.job.kafka_flow,on_replayed,function,1,
-qpipe.job.kafka_flow,outputs,value,,
 qpipe.job.kafka_flow,publish,value,,
-qpipe.job.kafka_flow,unpublished,function,1,
 qpipe.job.last_value,apply,function,3,state tob batch
 qpipe.job.last_value,last_value,table,,
 qpipe.job.last_value,market_data,table,,

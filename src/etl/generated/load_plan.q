@@ -86,7 +86,7 @@
 .qetl.load.jobs[`hdb_order_quality_backfill]:("src/etl/sources/hdb_orders.q";"src/etl/transforms/order_outcome.q";"src/etl/transforms/order_quality.q";"src/etl/workers/hdb_order_quality_backfill.q")
 .qetl.load.jobs[`hdb_transfer_backfill]:("src/etl/sources/hdb_transfer.q";"src/etl/workers/hdb_transfer_backfill.q")
 .qetl.load.jobs[`kafka_feed]:enlist "src/etl/streaming/kafka_feed.q"
-.qetl.load.jobs[`kafka_flow]:enlist "src/etl/streaming/kafka_flow.q"
+.qetl.load.jobs[`kafka_flow]:("src/etl/transforms/kafka_client_flow.q";"src/etl/streaming/kafka_flow.q")
 .qetl.load.jobs[`last_value]:enlist "src/etl/streaming/last_value.q"
 .qetl.load.jobs[`market_data]:enlist "src/etl/streaming/market_data.q"
 .qetl.load.jobs[`order_outcomes]:("src/etl/transforms/order_outcome.q";"src/etl/streaming/order_outcomes.q")
@@ -131,7 +131,7 @@
 .qetl.load.procs[`hdb_order_quality_backfill1]:("src/etl/sources/hdb_orders.q";"src/etl/transforms/order_outcome.q";"src/etl/transforms/order_quality.q";"src/etl/workers/hdb_order_quality_backfill.q")
 .qetl.load.procs[`hdb_transfer_backfill1]:("src/etl/sources/hdb_transfer.q";"src/etl/workers/hdb_transfer_backfill.q")
 .qetl.load.procs[`kafka_feed1]:enlist "src/etl/streaming/kafka_feed.q"
-.qetl.load.procs[`kafka_flow1]:enlist "src/etl/streaming/kafka_flow.q"
+.qetl.load.procs[`kafka_flow1]:("src/etl/transforms/kafka_client_flow.q";"src/etl/streaming/kafka_flow.q")
 .qetl.load.procs[`last_value1]:enlist "src/etl/streaming/last_value.q"
 .qetl.load.procs[`marketdata1]:enlist "src/etl/streaming/market_data.q"
 .qetl.load.procs[`order_outcomes1]:("src/etl/transforms/order_outcome.q";"src/etl/streaming/order_outcomes.q")
@@ -155,3 +155,5 @@
 .qetl.load.sources[`hdb_orders]:("src/etl/sources/hdb_orders.q";"src/etl/transforms/order_outcome.q";"src/etl/transforms/order_quality.q")
 .qetl.load.sources[`hdb_transfer]:enlist "src/etl/sources/hdb_transfer.q"
 .qetl.load.sources[`upstream_trades]:enlist "src/etl/sources/upstream_trades.q"
+.qetl.load.topics:(`symbol$())!`symbol$()
+.qetl.load.topics[`$"uqf.client.flow"]:`kafka_flow

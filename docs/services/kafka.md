@@ -102,23 +102,28 @@ Whatever holds the subscription publishes one **envelope** row per record on
   | `broker_time` | the broker's own timestamp (null when the producer set none)        |
   | `payload`     | the payload as received --- a string, not interpreted               |
 
-What a payload *means* is decided in q, per topic, by a declaration
-([`src/etl/transforms/kafka_client_flow.q`](../../src/etl/transforms/kafka_client_flow.q)
-is the worked one):
+What a payload *means* is decided in q, per topic, by a declaration. The mapping
+is
+[`src/etl/transforms/kafka_client_flow.q`](../../src/etl/transforms/kafka_client_flow.q);
+the declaration sits in the job that owns the topic,
+[`src/etl/streaming/kafka_flow.q`](../../src/etl/streaming/kafka_flow.q):
 
 ```q
-decl:`mapping`output!(`kafka_client_flow;`client_flow)
+decl:`mapping`output`job!(`kafka_client_flow;`client_flow;`kafka_flow)
 .qetl.kafka.topic.define[`uqf.client.flow;decl]
 ```
+
+Declaring it beside the job is what makes a process that loads only its own
+declarations (every TorQ process does) have the topic's mapping.
 
 The mapping is a declared [`.qetl.transform`](../../src/etl/core/transform.q),
 so its examples are verified on every test run. Its input is the record's four
 coordinates followed by the payload's fields, each typed; its output is rows for
 a plant table that must carry `topic`, `partition` and `offset`. A second topic
-with its own wire shape is another file like that one --- nothing in the
-consumer, the envelope or `kafka_flow` changes. A second wire *format* (Avro,
-protobuf) is a function added to `.qetl.kafka.decoders`; the mapping above it
-does not change.
+with its own wire shape is another mapping like that one, declared by a decoder
+job (below) --- nothing in the consumer, the envelope or `kafka_flow` changes. A
+second wire *format* (Avro, protobuf) is a function added to
+`.qetl.kafka.decoders`; the mapping above it does not change.
 
 JSON is read as the payload's declared fields; extra fields are ignored. Because
 q reads every JSON number as a float, a `long` field refuses a number from 2^53
@@ -132,7 +137,7 @@ coordinates, key and payload as received:
 
   | `reason`        | when                                                                   |
   | ---             | ---                                                                    |
-  | `no_mapping`    | no `.qetl.kafka.topic.define` names the topic                          |
+  | `no_mapping`    | no decoder job owns the topic (`kafka_flow1` dead-letters these)       |
   | `empty_payload` | the record had no payload (a tombstone, or a producer bug)             |
   | `malformed`     | not JSON, not an object, or a declared field absent, null or mistyped  |
   | `mapping`       | decoded, but the mapping refused the row (a non-positive quantity)     |
@@ -143,6 +148,34 @@ health of a topic.
 ```
 uqs query "select n:count i by topic, reason from kafka_dead_letter" --port 6052
 ```
+
+## Adding topics from a sidecar
+
+A [sidecar bundle](../guides/sidecar-bundles.md) adds topics without editing
+this tree by declaring a decoder job of its own.
+[`sidecars/kafka_example`](../../sidecars/kafka_example/example_quotes_decoder.q)
+is the generic worked one. The job file holds the topic's mapping (a
+`.qetl.transform`), the `.qetl.kafka.topic.define` with `job` set to the job,
+and the job itself, with its own `procname`, a literal `publishes` and a literal
+branch in `publish_decoded` for each output table. The table goes in the
+bundle's `tables.q` and must carry `topic`, `partition` and `offset`. The
+machinery --- marks, deduplication, dead letters, restart replay --- is
+[`.qetl.kafka.decoder`](../../src/etl/core/kafka_decoder.q), keyed by the job's
+name, and the job's state lives in its own namespace, so
+`.qetl.job.stream.reset` restores it.
+
+**Who decodes a record.** A topic is owned by exactly one job, the one whose
+file declares it. A decoder handles only the records of topics it owns: it
+marks, publishes or dead-letters them, and ignores the rest, so two decoders
+never both handle or both dead-letter one record. Two jobs declaring one topic
+is refused when the load plan is generated (and in a process that loads both).
+`kafka_flow` is the catch-all: besides its own topic it takes every topic *no*
+job owns and dead-letters it as `no_mapping`. The load plan
+(`src/etl/generated/load_plan.q`) lists every owned topic of the tree and its
+installed bundles, which is how `kafka_flow1` knows to leave a sidecar's topics
+to the sidecar. The consumer subscribes to those topics too. If `kafka_flow1` is
+not running, a record for an unowned topic is kept raw on `kafka_message` and
+nothing reports it; a decoder started later catches up from the log.
 
 ## Where the offset commit goes
 

@@ -281,11 +281,16 @@
 / test registers a throwaway job of its own.
 .qt.qpipe.replay_equivalence.tree_replaying:asc .qetl.job.stream.defined[] where {[j] $[`replay in key d:.qetl.job.stream.def j; d`replay; 0b]} each .qetl.job.stream.defined[]
 
+/ The reason a job's own test file gives for not being scripted, as .qt.qpipe.job.<job>.replay_excluded - or "". A second home, as for
+/ .qt.qpipe.job_output_contracts.own_driver: a sidecar bundle's replaying job cannot add to the dictionary above, which is one literal in this file.
+.qt.qpipe.replay_equivalence.own_excluded:{[j] @[get;` sv .qt.support.job_suite[j],`replay_excluded;{[e] ""}]}
+
 / Every replaying job is scripted or excluded with a reason, and no job is both.
 .qt.qpipe.replay_equivalence.test_every_replaying_job_is_scripted_or_excluded:{[t]
     reps:.qt.qpipe.replay_equivalence.tree_replaying;
-    .qunit.assertEquals[asc (key .qt.qpipe.replay_equivalence.scripts),key .qt.qpipe.replay_equivalence.excluded;reps;"scripted + excluded is exactly the replaying jobs"];
-    .qunit.assertEquals[(key .qt.qpipe.replay_equivalence.scripts) inter key .qt.qpipe.replay_equivalence.excluded;`symbol$();"scripted or excluded, not both"]};
+    own:reps where 0<count each .qt.qpipe.replay_equivalence.own_excluded each reps;
+    .qunit.assertEquals[asc (key .qt.qpipe.replay_equivalence.scripts),(key .qt.qpipe.replay_equivalence.excluded),own;reps;"scripted + excluded is exactly the replaying jobs"];
+    .qunit.assertEquals[(key .qt.qpipe.replay_equivalence.scripts) inter (key .qt.qpipe.replay_equivalence.excluded),own;`symbol$();"scripted or excluded, not both"]};
 
 / The horizon kind is outside the check, and this is why: it declares no replay,
 / so a restart empties its pending events rather than rebuilding them, and its

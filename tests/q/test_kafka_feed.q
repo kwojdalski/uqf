@@ -50,7 +50,7 @@
     .qunit.assertEquals[c`sasl.password;`s3cret;"read from the variable the setting names"]};
 
 .qt.qpipe.job.kafka_feed.test_topics_default_to_every_declared_topic_and_refuse_an_undeclared_one:{[t]
-    .qunit.assertEquals[.qpipe.job.kafka_feed.topics_from ()!();.qetl.kafka.topic.defined[];"all declared"];
+    .qunit.assertEquals[.qpipe.job.kafka_feed.topics_from ()!();.qetl.kafka.topic.known[];"all declared"];
     .qunit.assertEquals[.qpipe.job.kafka_feed.topics_from (enlist `TOPICS)!enlist " uqf.client.flow ";enlist `uqf.client.flow;"trimmed"];
     .qunit.assertThrows[.qpipe.job.kafka_feed.topics_from;(enlist `TOPICS)!enlist "nope.topic";"*nope.topic*";"a topic nothing would decode"]};
 

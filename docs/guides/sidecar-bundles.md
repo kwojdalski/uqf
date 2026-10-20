@@ -22,10 +22,14 @@ piggybank/
 
 Each `.q` file is placed by what it declares, as `uqs job install` does for any
 folder. `test_*.q` and every non-`.q` file (`.env`, logs, data) stay out of the
-tree. `tables.q` takes one `name:([]...)` or `nested[...]` line per entry, and
-`catalog.q` must describe every table it defines. A bundle cannot add rows to
-`querypolicy.csv`, so a table of its own that the browser may read without a
-policy needs a `.qcat.unbounded[`table\]:"reason"` line in `catalog.q\`.
+tree. A job's own file may also hold the transforms it uses and, for a Kafka
+decoder, its topics (`sidecars/kafka_example`, [Kafka](../services/kafka.md)): a
+process loads only the files its jobs reach, and the file's own definitions are
+always among them. `tables.q` takes one `name:([]...)` or `nested[...]` line per
+entry, and `catalog.q` must describe every table it defines. A bundle cannot add
+rows to `querypolicy.csv`, so a table of its own that the browser may read
+without a policy needs a
+`.qcat.unbounded[`table\]:"reason"` line in `catalog.q\`.
 
 ## Scaffold a bundle job
 

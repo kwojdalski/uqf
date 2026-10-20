@@ -20,6 +20,10 @@ avoid. A reference is any of
     (a shared transform's namespace, #884), outside a comment;
   - `.qetl.transform.apply[`X` (and its variants), or a declared `transform`;
   - a worker's declared `source`;
+  - a Kafka topic declaration's mapping,
+    `.qetl.kafka.topic.define[`topic;`mapping`output!(`transform;`table)]`
+    (#1481): the job whose file holds it reaches the transform, so a decoder
+    process that loads only its own closure has its topics' mappings;
 
 and it resolves to the file that defines that name. A reference nothing defines is
 someone else's (a library namespace) and is ignored. Over-including is safe;
@@ -68,6 +72,13 @@ _QPIPE_REF = re.compile(r"\.qpipe\.(job|source|transform)\.([a-zA-Z_]\w*)")
 _TRANSFORM_DEF = re.compile(r"\.qetl\.transform\.define\[\s*`(\w+)")
 _TRANSFORM_USE = re.compile(r"\.qetl\.transform\.\w+\[\s*`(\w+)")
 _SOURCE_DEF = re.compile(r"\.qetl\.source\.define\[\s*`(\w+)")
+#: A topic declaration as the one shape the plan can read: a literal topic, and
+#: `mapping` the first key, so the first value is the transform it maps through.
+_TOPIC_DEF = re.compile(
+    r"\.qetl\.kafka\.topic\.define\[\s*`(?P<topic>[\w.\-]+)\s*;"
+    r"\s*`mapping(?:`\w+)*!\(\s*`(?P<mapping>\w+)"
+)
+_TOPIC_ANY = re.compile(r"\.qetl\.kafka\.topic\.define\[")
 
 
 @dataclass(frozen=True)
@@ -83,6 +94,8 @@ class FileFacts:
     writes: frozenset[str]
     #: for a reaction file, the datasets it watches
     watches: frozenset[str]
+    #: the Kafka topics it declares, each owned by the one job the file declares
+    topics: tuple[str, ...] = ()
 
 
 def declaration_files(root: Path) -> list[str]:
@@ -114,6 +127,8 @@ def facts(rel: str, text: str) -> FileFacts:
         jobs.append((d.name, d.procname))
     watches = {r.dataset for r in reaction_calls(text)}
     defines |= {f"job:{r.name}" for r in reaction_calls(text)}
+    topics = _topics(rel, code, jobs)
+    refers |= {f"transform:{m.group('mapping')}" for m in _TOPIC_DEF.finditer(code)}
     return FileFacts(
         rel,
         frozenset(defines),
@@ -121,7 +136,25 @@ def facts(rel: str, text: str) -> FileFacts:
         tuple(jobs),
         frozenset(writes),
         frozenset(watches),
+        topics,
     )
+
+
+def _topics(rel: str, code: str, jobs: list[tuple[str, str]]) -> tuple[str, ...]:
+    """The topics `code` declares. Each must be a literal the plan can read and
+    sit in a file of exactly one job: a topic is owned by one decoder."""
+    found = [m.group("topic") for m in _TOPIC_DEF.finditer(code)]
+    if len(_TOPIC_ANY.findall(code)) != len(found):
+        raise UqsError(
+            f"{rel}: a .qetl.kafka.topic.define must read "
+            "define[`topic;`mapping`output!(`transform;`table)] - a literal topic, mapping first"
+        )
+    if found and len(jobs) != 1:
+        raise UqsError(
+            f"{rel}: declares topic(s) {', '.join(found)} in a file of {len(jobs)} jobs - "
+            "a topic belongs to exactly one decoder job, so its file declares exactly one"
+        )
+    return tuple(found)
 
 
 def read_facts(root: Path, extra: Mapping[str, str] | None = None) -> list[FileFacts]:
@@ -154,10 +187,20 @@ class LoadPlan:
             for key, path in self._definer.items()
             if key.startswith("source:")
         }
+        #: each Kafka topic and the one job that decodes it (#1481)
+        self.topics: dict[str, str] = {}
         for f in self.files:
             for name, procname in f.jobs:
                 self.jobs[name] = f.path
                 self.procs.setdefault(procname, []).append(name)
+            for topic in f.topics:
+                if topic in self.topics:
+                    raise UqsError(
+                        f"kafka topic {topic} is declared by both {self.topics[topic]} and "
+                        f"{f.jobs[0][0]} - two decoders would both handle (or both dead-letter) "
+                        "its records"
+                    )
+                self.topics[topic] = f.jobs[0][0]
 
     def _deps(self, f: FileFacts) -> set[str]:
         found = {self._definer[k] for k in f.refers if k in self._definer}
@@ -246,4 +289,7 @@ def render(plan: LoadPlan) -> str:
     lines.append(".qetl.load.sources:(`symbol$())!()")
     for name in sorted(plan.sources):
         lines.append(f".qetl.load.sources[`{name}]:{_q_strings(plan.for_source(name))}")
+    lines.append(".qetl.load.topics:(`symbol$())!`symbol$()")
+    for topic in sorted(plan.topics):
+        lines.append(f'.qetl.load.topics[`$"{topic}"]:`{plan.topics[topic]}')
     return "\n".join(lines) + "\n"

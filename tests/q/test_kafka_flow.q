@@ -343,6 +343,6 @@
         "partition 0: 0-2; partition 1: 0-3 - every record once, none missing"]};
 
 .qt.qpipe.job.kafka_flow.test_a_topic_whose_output_is_not_published_is_found:{[t]
-    .qunit.assertEquals[.qpipe.job.kafka_flow.unpublished[];`symbol$();"every declared topic's output is one the job publishes"];
-    .qetl.kafka.topic.registry[`orphan.topic]:`mapping`output`format!(`kafka_client_flow;`trades;`json);
-    .qunit.assertEquals[.qpipe.job.kafka_flow.unpublished[];enlist `orphan.topic;"and one that is not is named"]};
+    .qunit.assertEquals[.qetl.kafka.decoder.unpublished `kafka_flow;`symbol$();"every declared topic's output is one the job publishes"];
+    .qetl.kafka.topic.registry[`orphan.topic]:`mapping`output`format`owner!(`kafka_client_flow;`trades;`json;`kafka_flow);
+    .qunit.assertEquals[.qetl.kafka.decoder.unpublished `kafka_flow;enlist `orphan.topic;"and one that is not is named"]};

@@ -100,16 +100,19 @@
     cfg[`$"enable.auto.commit"]:`false;
     cfg}
 
-/ The topics to subscribe to: UQF_KAFKA_TOPICS (comma separated) or every declared topic.
+/ The topics to subscribe to: UQF_KAFKA_TOPICS (comma separated) or every known topic.
+/ .
+/ Known is declared here or claimed by a decoder job in the generated load plan:
+/ this process loads no decoder, and a sidecar's topics are theirs to declare.
 / @param env dict of setting suffix -> string
 / @return a symbol list
-/ @throws error when a listed topic has no declaration - it would be dead-lettered record by record
-/ @eg .qpipe.job.kafka_feed.topics_from[()!()]  ->  .qetl.kafka.topic.defined[]
+/ @throws error when a listed topic is declared by no decoder job - it would be dead-lettered record by record
+/ @eg .qpipe.job.kafka_feed.topics_from[()!()]  ->  .qetl.kafka.topic.known[]
 .qpipe.job.kafka_feed.topics_from:{[env]
     raw:$[`TOPICS in key env; env`TOPICS; ""];
-    if[0=count trim raw; :.qetl.kafka.topic.defined[]];
+    if[0=count trim raw; :.qetl.kafka.topic.known[]];
     t:`$trim each "," vs raw;
-    if[count bad:t except .qetl.kafka.topic.defined[];
+    if[count bad:t except .qetl.kafka.topic.known[];
         '"kafka_feed: UQF_KAFKA_TOPICS names ",(", " sv string bad),", which no .qetl.kafka.topic.define declares"];
     t}
 

@@ -21,6 +21,14 @@
 /   .qetl.kafka.decoders - Avro or protobuf would register one there - and
 /   the mapping above it does not change.
 / .
+/ A TOPIC BELONGS TO ONE DECODER JOB (#1481). Declare it with `job` - the
+/ streaming job that decodes it - and put the declaration in that job's own
+/ file: the topic's mapping then loads wherever the job does, which a
+/ selective load (.qetl.load.only) relies on, and the load plan reads the same
+/ line to write down which job owns which topic (.qetl.load.topics). A second
+/ job declaring a topic is refused here, and at generation across processes.
+/ kafka_decoder.q is what a job does with the topics it owns.
+/ .
 / THE OUTPUT MUST CARRY topic, partition AND offset. They are how the
 / deduplication survives a restart: kafka_flow rebuilds what it has
 / processed from the rows it already published, and a table that dropped the
@@ -53,8 +61,9 @@
 .qetl.kafka.exact_limit:9007199254740992f
 
 / topic -> its declaration. Keyed, so one row per topic and a second define
-/ of a topic replaces it.
-.qetl.kafka.topic.registry:([topic:`symbol$()] mapping:`symbol$(); output:`symbol$(); format:`symbol$())
+/ of a topic replaces it. `owner` is the decoder job, null for a topic declared
+/ without one (a test's, or a worked example read before there were decoders).
+.qetl.kafka.topic.registry:([topic:`symbol$()] mapping:`symbol$(); output:`symbol$(); format:`symbol$(); owner:`symbol$())
 
 / ------------------------------------------------------------- THE DECODERS
 
@@ -139,18 +148,33 @@
         'who,": transform ",string[mapping],"'s fields ",(", " sv string bad)," must be float, long, symbol, timestamp or boolean"];
     `input`schema!(first key d`inputs;fields!meta_t fields)}
 
+/ Private: refuse a topic another job already owns.
+/ @param who the caller's name, for the message
+/ @param topic the topic
+/ @param owner the job declaring it, null for none
+/ @throws error naming the owner, from this process or from the generated plan
+/ @private
+.qetl.kafka.topic.require_free:{[who;topic;owner]
+    claims:.qetl.kafka.topic.claims[];
+    if[null owner; :()];
+    if[(topic in key claims) and not owner=claims topic;
+        'who," is owned by ",string[claims topic],", not ",string[owner]," - a topic is decoded by exactly one job"]}
+
 / Declare how one topic's records become rows of a plant table.
 / @param topic the Kafka topic name, as a symbol
-/ @param decl dict of mapping (a registered transform) and output (a plant table), and optionally format (default `json)
+/ @param decl dict of mapping (a registered transform) and output (a plant table), and optionally format (default `json) and job (the decoder job that owns the topic)
 / @return the topic
-/ @throws error naming what is wrong: an unregistered mapping, an input that is not coordinates then typed fields, an output that is not the plant table's shape or lacks topic/partition/offset, an unknown format
-/ @eg decl:`mapping`output!(`kafka_client_flow;`client_flow); .qetl.kafka.topic.define[`uqf.client.flow;decl]
+/ @throws error naming what is wrong: an unregistered mapping, an input that is not coordinates then typed fields, an output that is not the plant table's shape or lacks topic/partition/offset, an unknown format, a topic another job already owns
+/ @eg decl:`mapping`output`job!(`kafka_client_flow;`client_flow;`kafka_flow); .qetl.kafka.topic.define[`uqf.client.flow;decl]
 .qetl.kafka.topic.define:{[topic;decl]
     who:"define: kafka topic ",string topic;
     if[not -11h=type topic; '"define: a kafka topic is named by a symbol"];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     if[count miss:`mapping`output except key decl; 'who," is missing ",", " sv string miss];
     fmt:$[`format in key decl; decl`format; `json];
+    owner:$[`job in key decl; decl`job; `];
+    if[not -11h=type owner; 'who,"'s job must be a symbol"];
+    .qetl.kafka.topic.require_free[who;topic;owner];
     if[not fmt in key .qetl.kafka.decoders;
         'who," declares format ",string[fmt],", which has no decoder - known: ",", " sv string key .qetl.kafka.decoders];
     if[not (decl`mapping) in .qetl.transform.defined[];
@@ -163,7 +187,7 @@
         'who,": ",string[out]," carries no ",(", " sv string lost)," - an output must carry the record's coordinates, or a restart cannot tell which records it already handled"];
     p:.qetl.transform.problems[.qetl.plant.published out;(.qetl.transform.def decl`mapping)`output;1b];
     if[count p; 'who,": transform ",string[decl`mapping]," does not produce ",string[out],": ","; " sv p];
-    `.qetl.kafka.topic.registry upsert (topic;decl`mapping;out;fmt);
+    `.qetl.kafka.topic.registry upsert (topic;decl`mapping;out;fmt;owner);
     topic}
 
 / One topic's declaration, or a refusal naming it.
@@ -185,3 +209,28 @@
 / @return a symbol vector, each table once
 / @eg `client_flow in .qetl.kafka.topic.outputs[]
 .qetl.kafka.topic.outputs:{[] distinct exec output from .qetl.kafka.topic.registry}
+
+/ Which job decodes each topic: the generated plan's claims (every topic the
+/ tree and its installed bundles declare, whichever process loads them), with
+/ this process's own declarations over them.
+/ .
+/ The plan is what lets one process know another's topics: kafka_flow1 never
+/ loads a sidecar's decoder, but must not dead-letter the sidecar's records.
+/ @return dict topic -> the owning job
+/ @eg .qetl.kafka.topic.claims[]`uqf.client.flow  ->  `kafka_flow
+.qetl.kafka.topic.claims:{[]
+    plan:$[`topics in key `.qetl.load; .qetl.load.topics; (`symbol$())!`symbol$()];
+    r:exec topic!owner from .qetl.kafka.topic.registry where not null owner;
+    plan,r}
+
+/ The topics a job owns.
+/ @param job the decoder job
+/ @return a symbol vector
+/ @eg .qetl.kafka.topic.owned `kafka_flow  ->  enlist `uqf.client.flow
+.qetl.kafka.topic.owned:{[job] exec topic from .qetl.kafka.topic.registry where owner=job}
+
+/ Every topic a consumer may subscribe to: those declared here and those the
+/ plan says another process's decoder owns.
+/ @return a symbol vector
+/ @eg `uqf.client.flow in .qetl.kafka.topic.known[]
+.qetl.kafka.topic.known:{[] distinct .qetl.kafka.topic.defined[],key .qetl.kafka.topic.claims[]}

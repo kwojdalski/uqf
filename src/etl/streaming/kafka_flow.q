@@ -2,7 +2,7 @@
 / their own coordinates (.qpipe.job.kafka_flow).
 / .
 / Reads `kafka_message` - every record a consumer delivered, undecoded - and
-/ publishes each declared topic's decoded rows (`client_flow` for the client
+/ publishes the decoded rows of the topics it owns (`client_flow` for the client
 / trade topic) and `kafka_dead_letter` for what could not be decoded.
 / .
 / WHY THIS EXISTS, given the stack already has feeds
@@ -67,10 +67,16 @@
 / A PUBLISH THAT THROWS leaves the marks where they were and the batch
 / unhandled; the rows are in the log, so the next restart's replay handles them.
 / .
+/ THE MACHINERY IS NOT HERE. Marks, dedupe, dead letters and the restart replay
+/ are .qetl.kafka.decoder (core/kafka_decoder.q), parameterised by job name; this
+/ file is the worked example built on it and the catch-all decoder: it owns the
+/ client trade topic (declared below, with its mapping, so the topic's transform
+/ loads wherever this job does) and dead-letters every topic no job has
+/ claimed. A sidecar adds topics by declaring a decoder job of its own the same
+/ way - sidecars/kafka_example, docs/services/kafka.md - and edits nothing here.
+/ .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
-
-\d .
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
@@ -78,29 +84,24 @@
 
 / ------------------------------------------------------------- THE STATE
 
-/ (topic;partition) -> the highest offset handled from it.
-/ .
-/ Bounded by the topics' partition counts, so there is nothing to evict.
-.qpipe.job.kafka_flow.marks:.qetl.kafka.marks_empty
+/ marks, held and done, as .qetl.kafka.decoder keeps them: the highest offset
+/ handled per (topic;partition); raw rows held during a replay; the coordinates
+/ the replay found already handled.
+.qetl.kafka.decoder.init `kafka_flow;
 
-/ Raw rows held during a replay, judged by on_replayed once the handled set is complete.
-.qpipe.job.kafka_flow.held:.qetl.kafka.envelope_empty
-
-/ The (topic;partition;offset) coordinates the replay found already handled.
-.qpipe.job.kafka_flow.done:.qetl.kafka.coordinate_set 0#.qetl.kafka.envelope_empty
-
-/ The tables this job publishes: set from the declaration below, which is where
-/ they are written out (python/uqs reads `publishes` as a literal).
-.qpipe.job.kafka_flow.outputs:`symbol$()
+/ Publish a decoder's dead letters.
+/ @param x dead-letter rows
+/ @private
+.qpipe.job.kafka_flow.publish_dead:{[x] .qpipe.job.kafka_flow.publish[`kafka_dead_letter;x]}
 
 / Publish decoded rows onto the plant table a topic declared.
 / .
 / One literal branch per output table, and that is the convention rather than an
 / oversight: the registry, the DAG and `uqs summary` read each job's publishes
 / and its publish calls as literals (test_publish_declarations.py), so a table
-/ reached through a variable would be an output nothing could see. A new
-/ topic whose output is a new table adds its name to `publishes` below AND a
-/ branch here; the check after define refuses a topic that did one without the other.
+/ reached through a variable would be an output nothing could see. A topic
+/ whose output is a new table adds its name to `publishes` below AND a branch
+/ here; .qetl.kafka.decoder.check refuses a topic that did one without the other.
 / @param t the plant table
 / @param x its rows
 / @private
@@ -110,71 +111,20 @@
 
 / ---------------------------------------------------------------- THE JOB
 
-/ Private: decode rows and publish what they became, then raise the marks.
-/ .
-/ PUBLISH FIRST. Raising the marks before publishing meant a publish that
-/ threw left them raised over rows that never went out, so a redelivery was
-/ dropped as already seen. Dead letters go first: a record that cannot be
-/ mapped should be on record even if an output table's publish then fails.
-/ @param rows envelope rows, already judged fresh
-/ @return the number of rows published onto output tables
-/ @private
-.qpipe.job.kafka_flow.handle:{[rows]
-    if[0=count rows; :0];
-    r:.qetl.kafka.process rows;
-    if[count r`dead; .qpipe.job.kafka_flow.publish[`kafka_dead_letter;r`dead]];
-    {[t;x] if[count x; .qpipe.job.kafka_flow.publish_decoded[t;x]]}'[key r`out;value r`out];
-    `.qpipe.job.kafka_flow.marks set .qetl.kafka.advance[.qpipe.job.kafka_flow.marks;rows];
-    sum count each r`out}
-
-/ Private: a batch of envelope rows, minus what has been handled before.
-/ @private
-.qpipe.job.kafka_flow.fresh:{[rows]
-    .qetl.kafka.first_per_coordinate .qetl.kafka.above_marks[.qpipe.job.kafka_flow.marks;.qetl.kafka.envelope_columns#rows]}
-
-/ Handle a batch.
-/ .
-/ kafka_message rows are judged against the marks and decoded; rows of the job's
-/ own outputs coming back (live) change nothing, because their coordinates were
-/ marked when they were published; during a replay both kinds are bookkeeping -
-/ outputs add to the handled set, raw rows are held for on_replayed.
-/ .
-/ Publishing nothing is a normal outcome, not a failure: a batch that is
-/ entirely a redelivery is exactly what this job is for.
+/ Handle a batch: see .qetl.kafka.decoder.on_batch.
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
-.qpipe.job.kafka_flow.on_batch:{[t;x]
-    if[0=count x; :()];
-    if[t in .qpipe.job.kafka_flow.outputs;
-        if[.qetl.job.stream.replaying;
-            `.qpipe.job.kafka_flow.done set (.qpipe.job.kafka_flow.done) upsert .qetl.kafka.coordinate_set x];
-        :()];
-    if[not t=`kafka_message; :()];
-    rows:.qetl.kafka.envelope_columns#x;
-    if[.qetl.job.stream.replaying;
-        `.qpipe.job.kafka_flow.held set .qpipe.job.kafka_flow.held,rows;
-        :()];
-    .qpipe.job.kafka_flow.handle .qpipe.job.kafka_flow.fresh rows;
-    }
+.qpipe.job.kafka_flow.on_batch:{[t;x] .qetl.kafka.decoder.on_batch[`kafka_flow;t;x]}
 
-/ After the replay: handle what was never handled.
-/ .
-/ Raises the marks to everything the log shows handled, then processes the held
-/ raw rows whose coordinates are NOT in that set - they are exactly the records
-/ that arrived while the job was down, or whose output never left it.
+/ After the replay: handle what was never handled (.qetl.kafka.decoder.on_replayed).
 / @return the number of rows published onto output tables
-.qpipe.job.kafka_flow.on_replayed:{[]
-    done:0!.qpipe.job.kafka_flow.done;
-    `.qpipe.job.kafka_flow.marks set .qetl.kafka.advance[.qpipe.job.kafka_flow.marks;done];
-    todo:.qetl.kafka.first_per_coordinate .qetl.kafka.not_in[.qpipe.job.kafka_flow.held;.qpipe.job.kafka_flow.done];
-    n:.qpipe.job.kafka_flow.handle todo;
-    `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
-    `.qpipe.job.kafka_flow.done set .qetl.kafka.coordinate_set 0#.qetl.kafka.envelope_empty;
-    if[count todo; .[{.qetl.log.info[x;y;z]};(`kafka_flow;"handled records that arrived while this job was down";enlist[`records]!enlist count todo);::]];
-    n}
+.qpipe.job.kafka_flow.on_replayed:{[] .qetl.kafka.decoder.on_replayed `kafka_flow}
 
-\d .
+/ ------------------------------------------------------------ THE TOPIC
+
+/ The client trade topic, owned by this job; its mapping is the shared transform.
+.qetl.kafka.topic.define[`uqf.client.flow;`mapping`output`job!(`kafka_client_flow;`client_flow;`kafka_flow)];
 
 .qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note`state!(
     `kafka_flow1;
@@ -184,15 +134,7 @@
     1b;
     `client_flow`kafka_dead_letter;
     .qpipe.job.kafka_flow.on_replayed;
-    "decodes the Kafka records on kafka_message into each declared topic's plant table (client_flow for the client trade topic), deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter. The records are published by a consumer - the q feed kafka_feed1, or the legacy Python one - so kafka_message has no producer in a default start. That is why it does not start with the stack: it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer";
+    "decodes the Kafka records on kafka_message into each declared topic's plant table (client_flow for the client trade topic), deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter - including every topic no decoder job has claimed. The records are published by a consumer - the q feed kafka_feed1, or the legacy Python one - so kafka_message has no producer in a default start. That is why it does not start with the stack: it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer";
     `marks`held`done)];
 
-.qpipe.job.kafka_flow.outputs:(.qetl.job.stream.def `kafka_flow)`publishes;
-
-/ A declared topic whose output this job does not publish would decode into
-/ rows with nowhere to go: refused at load, naming the topic.
-.qpipe.job.kafka_flow.unpublished:{[]
-    exec topic from .qetl.kafka.topic.registry where not output in .qpipe.job.kafka_flow.outputs}
-
-if[count bad:.qpipe.job.kafka_flow.unpublished[];
-    '"kafka_flow: topic(s) ",(", " sv string bad)," declare an output kafka_flow does not publish - add the table to its publishes"];
+.qetl.kafka.decoder.check `kafka_flow;
