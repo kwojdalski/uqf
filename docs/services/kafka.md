@@ -25,11 +25,68 @@ q half is therefore demonstrable on its own: `tests/q/test_kafka_ingest.q` and
 order and the recovery with a fake transport, no broker, no network and no
 Python.
 
-> **A q process can hold a Kafka subscription.** This page used to say it could
-> not. KX's [`kfk`](https://github.com/KxSystems/kafka) interface wraps
-> `librdkafka` and runs inside q; #1481 adds a q feed that uses it, so the
-> Python consumer becomes optional. Either publishes the same envelope, so
-> everything below is the same whichever holds the subscription.
+## The q feed: `kafka_feed1`
+
+A q process holds the subscription with KX's
+[`kfk`](https://github.com/KxSystems/kafka) interface (a wrapper over
+`librdkafka`) and publishes the envelope; the Python consumer above publishes
+the same table and is the alternative where the native library is not built.
+**Run one per consumer group** --- two members of a group split the partitions,
+so each would see half the topic. It is a declared feed
+([`src/etl/streaming/kafka_feed.q`](../../src/etl/streaming/kafka_feed.q)), so
+TorQ starts it like `fxfeed1`, with a tickerplant handle, port, heartbeat and
+process row; it is on demand (`uqs start kafka_feed1`), never in the default
+start. Consumption stays outside the tickerplant: this is a client of it.
+
+```
+export UQF_KFK_HOME=$HOME/.local/kfk          # holds kfk.q and libkfk.so
+export UQF_KAFKA_BROKERS=broker:9092
+uqs start kafka_feed1
+```
+
+**Version pin.** KxSystems/kafka **v1.6.6** (commit `d5840faa`, Apache-2.0), the
+last release for kdb+ 4.x, loaded with `2:` from `libkfk`. KX's 2.0.0 is a KDB-X
+*module* (loaded with `use` in KDB-X) with a different API and is not supported
+here --- there is no 2.0.0 code path. v1.6.6 was built against librdkafka 2.16.0
+and run on KDB-X 5.0 (2026.07.23, macOS arm64) against Apache Kafka 4.3.1;
+**kdb+ 4.x itself was not available to test on.**
+
+**Building the library** (into a directory of your choosing; nothing is
+installed system-wide, and `lib/` is untouched):
+
+```
+# librdkafka v2.16.0
+./configure --prefix=$PREFIX --disable-sasl --disable-lz4-ext --disable-ssl && make && make install
+# kfk v1.6.6 (curl -O the k.h from KxSystems/kdb c/c/k.h)
+cc kfk.c -m64 -DKXVER=3 -shared -fPIC -L$PREFIX/lib -lrdkafka -lz -lpthread -O2 \
+   -I$PREFIX/include -I. -undefined dynamic_lookup -o libkfk.so      # Linux: drop -undefined..., add -lrt
+cp kfk.q libkfk.so $UQF_KFK_HOME/
+```
+
+(`--disable-ssl --disable-sasl` is for a plaintext test broker; omit both for
+TLS or SASL.)
+
+**Configuration is environment only** (`UQF_KAFKA_<SETTING>`, listed in
+[`environment.md`](../reference/environment.md)): brokers, topics, consumer
+group (default `uqf-kafka-q`, never a group another application uses), initial
+offset policy (`OFFSET_RESET`, default `earliest`), security protocol, SASL
+mechanism and user, CA file, and `SASL_PASSWORD_ENV` --- the *name* of the
+variable holding the password, so a secret is never in a file or a process
+table. `enable.auto.commit` is forced off.
+
+**Optional.** Nothing loads the library at start-up of any other process or in
+any test. `kafka_feed1` loads it in `on_start`; with `UQF_KFK_HOME` or
+`UQF_KAFKA_BROKERS` unset it refuses to start and says which. The unit tests use
+a fake `kfk` ([`test_kafka_feed.q`](../../tests/q/test_kafka_feed.q)).
+[`tests/q/smoke_kafka_feed.q`](../../tests/q/smoke_kafka_feed.q) runs the feed
+against a real broker and the real library and prints `SKIPPED: <reason>` when
+either is absent.
+
+**Shutdown, reconnect, rebalance.** On exit the feed publishes what it holds,
+commits it, unsubscribes and closes the client, which leaves the group cleanly.
+librdkafka reconnects on its own; the error callback logs. When the group
+rebalances, offsets of partitions the consumer no longer holds are not
+committed, and the new owner's re-read is absorbed by `kafka_flow1`'s marks.
 
 ## Transport and decoding are two things
 

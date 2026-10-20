@@ -416,6 +416,7 @@ qetl.kafka,poll_max,value,,
 qetl.kafka,process,function,1,rows
 qetl.kafka,state_new,function,1,
 qetl.kafka,topic,dict,,
+qetl.kafka,transport_keys,value,,
 qetl.kafka.topic,def,function,1,topic
 qetl.kafka.topic,define,function,2,topic decl
 qetl.kafka.topic,defined,function,1,
@@ -1489,6 +1490,27 @@ qpipe.job.hdb_transfer_backfill,run,function,1,
 qpipe.job.hdb_transfer_backfill,source_version,value,,
 qpipe.job.hdb_transfer_backfill,spec,function,1,
 qpipe.job.hdb_transfer_backfill,with_notional,function,1,batch
+qpipe.job.kafka_feed,api,dict,,
+qpipe.job.kafka_feed,client,value,,
+qpipe.job.kafka_feed,config_from,function,1,env
+qpipe.job.kafka_feed,defaults,dict,,
+qpipe.job.kafka_feed,inbox,value,,
+qpipe.job.kafka_feed,load_library,function,1,
+qpipe.job.kafka_feed,messages_table,function,1,ms
+qpipe.job.kafka_feed,on_error,function,3,cid code reason
+qpipe.job.kafka_feed,on_message,function,1,m
+qpipe.job.kafka_feed,on_start,function,1,
+qpipe.job.kafka_feed,on_timer,function,1,
+qpipe.job.kafka_feed,open,function,2,cfg topics
+qpipe.job.kafka_feed,properties,dict,,
+qpipe.job.kafka_feed,publish,value,,
+qpipe.job.kafka_feed,read_env,function,1,
+qpipe.job.kafka_feed,real_api,function,1,
+qpipe.job.kafka_feed,shutdown,function,1,
+qpipe.job.kafka_feed,state,dict,,
+qpipe.job.kafka_feed,suffixes,value,,
+qpipe.job.kafka_feed,topics_from,function,1,env
+qpipe.job.kafka_feed,transport,function,1,
 qpipe.job.kafka_flow,done,dict,,
 qpipe.job.kafka_flow,held,table,,
 qpipe.job.kafka_flow,marks,dict,,

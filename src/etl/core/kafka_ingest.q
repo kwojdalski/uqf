@@ -60,6 +60,9 @@
 / The dead letter as it is published on kafka_dead_letter.
 .qetl.kafka.dead_empty:([] topic:`symbol$(); partition:`long$(); offset:`long$(); msg_key:(); broker_time:`timestamp$(); reason:`symbol$(); detail:(); payload:())
 
+/ The functions a transport supplies, in the order a feed lists them.
+.qetl.kafka.transport_keys:`poll`publish`commit`assigned
+
 / Most envelope rows a consumer holds unpublished before it stops polling.
 .qetl.kafka.backlog_cap:50000
 

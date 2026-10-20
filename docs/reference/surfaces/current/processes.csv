@@ -32,6 +32,7 @@ hdb_fx_markout_wide_backfill1,backfill,66,,
 hdb_fx_markouts_backfill1,backfill,67,,
 hdb_order_quality_backfill1,backfill,61,,
 hdb_transfer_backfill1,backfill,50,,
+kafka_feed1,feed,68,,kafka_message
 kafka_flow1,metrics,47,kafka_message,client_flow kafka_dead_letter
 last_value1,metrics,53,market_data,last_value
 marketdata1,metrics,42,crypto_book fx_orderbook quote,market_data

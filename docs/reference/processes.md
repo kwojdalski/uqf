@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **44 uqf processes** — 67 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **45 uqf processes** — 68 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -59,6 +59,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `fxmarkoutwide1` | 6115 | etl | `processes/torq_stream.q` | `fx_markout_wide` | `executions`, `market_data` | `fx_markout_wide` |
 | `hdb_fx_markout_wide_backfill1` | 6116 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_fx_markouts_backfill1` | 6117 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `kafka_feed1` | 6118 | feed | `processes/torq_stream.q` | `kafka_message` | — | `kafka_message` |
 
 ### Why a row deviates from the defaults
 
@@ -104,6 +105,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`fxmarkoutwide1`** — normalized FX markouts, wide layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in
 - **`hdb_fx_markout_wide_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout_wide, with the calculation fxmarkoutwide1 applies live
 - **`hdb_fx_markouts_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live
+- **`kafka_feed1`** — the native q Kafka consumer (KX kfk, pinned v1.6.6): publishes every record undecoded onto kafka_message, committing offsets only after the publish returned. Needs UQF_KFK_HOME and UQF_KAFKA_BROKERS, so it is started on demand, never with the stack. The Python consumer (uqs connector start kafka) publishes the same table; run one per group
 
 ## Tables these processes publish
 
@@ -130,6 +132,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `fx_position` | `plant_tables.q` | `fxpositions1` |
 | `fx_position_open` | `plant_tables.q` | `fxpositions1` |
 | `kafka_dead_letter` | `plant_tables.q` | `kafka_flow1` |
+| `kafka_message` | `plant_tables.q` | `kafka_feed1` |
 | `last_value` | `plant_tables.q` | `last_value1` |
 | `market_data` | `plant_tables.q` | `marketdata1` |
 | `mkt_orderbook` | `plant_tables.q` | `vectorize1` |

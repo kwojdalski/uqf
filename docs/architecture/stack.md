@@ -5,19 +5,19 @@ Diagrams for the running state of the uqf stack (see
 Reflects what `uqs list processes` shows today: the vendored 23-process stack
 plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `demo_markout1`,
-`databento1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
-`fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
-`crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`, `flink_vwap1`,
-`crypto_book_1s1`, `order_quality1`, `fxmarkout1`, `fxmarkoutwide1`,
-`order_outcomes1`, `book_liquidity_1m1`), and fourteen bounded backfill
-processes (`deals_backfill1`, `events_backfill1`, `databento_backfill1`,
-`upstream_backfill1`, `duckdb_deals_backfill1`, `crypto_market_data_backfill1`,
-`hdb_demo_markouts_backfill1`, `hdb_transfer_backfill1`,
-`hdb_exec_bars_backfill1`, `hdb_crypto_book_backfill1`,
-`hdb_order_quality_backfill1`, `hdb_book_liquidity_1m_backfill1`,
-`hdb_fx_markouts_backfill1`, `hdb_fx_markout_wide_backfill1`). Declared is not
-the same as running here - see [what starts with the
-stack](#what-starts-and-why-not-all-of-it).
+`databento1`, `kafka_feed1`, `kafka_flow1`, `cryptomock1`, `executions1`,
+`fxordersfeed1`, `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`,
+`crossarb1`, `crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`,
+`flink_vwap1`, `crypto_book_1s1`, `order_quality1`, `fxmarkout1`,
+`fxmarkoutwide1`, `order_outcomes1`, `book_liquidity_1m1`), and fourteen bounded
+backfill processes (`deals_backfill1`, `events_backfill1`,
+`databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`,
+`crypto_market_data_backfill1`, `hdb_demo_markouts_backfill1`,
+`hdb_transfer_backfill1`, `hdb_exec_bars_backfill1`,
+`hdb_crypto_book_backfill1`, `hdb_order_quality_backfill1`,
+`hdb_book_liquidity_1m_backfill1`, `hdb_fx_markouts_backfill1`,
+`hdb_fx_markout_wide_backfill1`). Declared is not the same as running here - see
+[what starts with the stack](#what-starts-and-why-not-all-of-it).
 
 Direct FX arbitrage flows through `marketdata1` (`quote`, `fx_orderbook` and
 `crypto_book` into `market_data`), `superbook1` (the FX source books merged into
@@ -208,6 +208,7 @@ their schema row and their place in the DAG, and are one command away:
   | `cross1`                                  | a leaf: it subscribes to `fx_orderbook` and publishes no table, so nothing stalls while it is stopped                                                                                      |
   | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_orderbook` and its only consumer - so they start and stop together                                                                              |
   | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                         |
+  | `kafka_feed1`                             | consumes a Kafka topic with the native `kfk` library, so it needs `UQF_KFK_HOME` and a broker; on demand, and one per consumer group alongside the Python consumer                         |
   | `kafka_flow1`                             | subscribes to `kafka_message`, which only a Kafka consumer (`uqs connector start kafka`) publishes, so on a default start it consumes nothing                                              |
   | `flink_vwap1`                             | subscribes to `flink_vwap_raw`, which only the external Flink job publishes, so on a default start it consumes nothing                                                                     |
   | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                                      |
