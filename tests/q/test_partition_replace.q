@@ -72,7 +72,7 @@
 / to replace by itself, whatever the worker declared.
 .qt.qetl.partition_replace.test_the_automatic_replace_is_withheld_when_it_cannot_be_scoped:{[t]
     .qt.qetl.partition_replace.both[()!();()!()];
-    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;"x"];
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;enlist "x"];
     fv:.qetl.source.fixture_version `v1;
     .qetl.job.bounded.write_state[`ppx_eur;`source_version;`v1];
     .qetl.coverage.stage_completion[`ppx;`EURUSD;fv;.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1];4];
@@ -83,7 +83,7 @@
 
 .qt.qetl.partition_replace.test_the_automatic_replace_is_kept_when_scoped:{[t]
     .qt.qetl.partition_replace.both[enlist[`partition_column]!enlist `sym;enlist[`partition_column]!enlist `sym];
-    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;"x"];
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;enlist "x"];
     fv:.qetl.source.fixture_version `v1;
     .qetl.job.bounded.write_state[`ppx_eur;`source_version;`v1];
     .qetl.coverage.stage_completion[`ppx;`EURUSD;fv;.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1];4];
