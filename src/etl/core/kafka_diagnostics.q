@@ -177,11 +177,6 @@
 / @private
 .qetl.kafka.diag.shorten:{[s] $[300<count s; 300#s; s]}
 
-/ The stages with an open (unrecovered) cause.
-/ @return a symbol vector
-/ @eg .qetl.kafka.diag.failed[]
-.qetl.kafka.diag.failed:{[] distinct exec stage from .qetl.kafka.diag.causes}
-
 / Forget the causes of some stages because they have come good, logging each recovery once.
 / @param stages a symbol vector of stages
 / @return the number of causes cleared

@@ -431,7 +431,6 @@ qetl.kafka.diag,causes,dict,,
 qetl.kafka.diag,classify,function,2,code reason
 qetl.kafka.diag,clear,function,1,stages
 qetl.kafka.diag,context,dict,,
-qetl.kafka.diag,failed,function,1,
 qetl.kafka.diag,kind_of,function,2,code reason
 qetl.kafka.diag,kind_stage,dict,,
 qetl.kafka.diag,names,dict,,
