@@ -1,0 +1,2 @@
+/ cryptotrades1's output: one synthetic crypto trade decoded from a Kafka record. event_time is the trade's own clock, broker_time the broker's, time the plant's. trade_id is the producer's identifier (kept as sent, case and all); topic, partition and offset are the record's coordinates, which a restart reads back to know what it handled.
+crypto_trade:([]time:`timestamp$(); event_time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); trade_id:`symbol$(); price:`float$(); qty:`float$(); side:`symbol$(); topic:`symbol$(); partition:`long$(); offset:`long$())

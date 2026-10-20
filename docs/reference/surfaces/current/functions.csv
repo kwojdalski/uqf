@@ -403,6 +403,7 @@ qetl.kafka,dead_empty,table,,
 qetl.kafka,decode_json,function,2,schema payload
 qetl.kafka,decoder,dict,,
 qetl.kafka,decoders,dict,,
+qetl.kafka,diag,dict,,
 qetl.kafka,envelope_columns,value,,
 qetl.kafka,envelope_empty,table,,
 qetl.kafka,events,function,1,msgs
@@ -426,6 +427,17 @@ qetl.kafka.decoder,on_batch,function,3,job t x
 qetl.kafka.decoder,on_replayed,function,1,job
 qetl.kafka.decoder,state_names,value,,
 qetl.kafka.decoder,unpublished,function,1,job
+qetl.kafka.diag,causes,dict,,
+qetl.kafka.diag,classify,function,2,code reason
+qetl.kafka.diag,clear,function,1,stages
+qetl.kafka.diag,context,dict,,
+qetl.kafka.diag,failed,function,1,
+qetl.kafka.diag,kind_of,function,2,code reason
+qetl.kafka.diag,kind_stage,dict,,
+qetl.kafka.diag,names,dict,,
+qetl.kafka.diag,numbers,dict,,
+qetl.kafka.diag,readiness,function,1,facts
+qetl.kafka.diag,report,function,2,code reason
 qetl.kafka.topic,claims,function,1,
 qetl.kafka.topic,def,function,1,topic
 qetl.kafka.topic,define,function,2,topic decl
@@ -1507,7 +1519,9 @@ qpipe.job.kafka_feed,api,dict,,
 qpipe.job.kafka_feed,client,value,,
 qpipe.job.kafka_feed,config_from,function,1,env
 qpipe.job.kafka_feed,defaults,dict,,
+qpipe.job.kafka_feed,facts,function,1,
 qpipe.job.kafka_feed,inbox,value,,
+qpipe.job.kafka_feed,last_readiness,value,,
 qpipe.job.kafka_feed,load_library,function,1,
 qpipe.job.kafka_feed,messages_table,function,1,ms
 qpipe.job.kafka_feed,on_error,function,3,cid code reason
@@ -1518,7 +1532,9 @@ qpipe.job.kafka_feed,open,function,2,cfg topics
 qpipe.job.kafka_feed,properties,dict,,
 qpipe.job.kafka_feed,publish,value,,
 qpipe.job.kafka_feed,read_env,function,1,
+qpipe.job.kafka_feed,readiness,function,1,
 qpipe.job.kafka_feed,real_api,function,1,
+qpipe.job.kafka_feed,report_readiness,function,1,
 qpipe.job.kafka_feed,shutdown,function,1,
 qpipe.job.kafka_feed,state,dict,,
 qpipe.job.kafka_feed,suffixes,value,,
