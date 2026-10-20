@@ -41,7 +41,9 @@ if[not `worker in key .Q.opt .z.x;
 .qdev.attachedplan.decisions:{[cfg;version;planned;every]
     part:.qetl.job.bounded.partition_of cfg`worker;
     as_of:.z.p;
-    f:{[planned;w] any (planned`range_from)=w`range_from}[planned];
+    / overlap, not equal starts: plan cuts windows from each gap's own start, so a gap that
+    / begins mid-window does not start where the range's grid does (#1479)
+    f:{[planned;w] any ((planned`range_from)<w`range_to) and (planned`range_to)>w`range_from}[planned];
     {[cfg;part;version;as_of;f;w]
         $[f w; "fetch";
           .qetl.coverage.is_covered[cfg`dataset;part;version;as_of;w`range_from;w`range_to]; "covered";
@@ -73,7 +75,7 @@ if[not `worker in key .Q.opt .z.x;
         not (::)~cfg`io;string r`on_conflict;string cfg`width;string .qetl.job.bounded.partition_of worker;
         string (.qetl.source.def cfg`source)`time_column;
         wins;r`planned;string r`cursor;.qetl.coverage.outstanding[cfg`dataset;.qetl.job.bounded.partition_of worker;r`source_version];
-        string each .qdev.attachedplan.dates every where decisions~\:"fetch")}
+        string each .qdev.attachedplan.dates r`plan)}
 
 \d .
 
