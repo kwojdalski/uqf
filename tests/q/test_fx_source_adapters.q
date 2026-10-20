@@ -170,6 +170,16 @@
     .qunit.assertThrows[.qt.qpipe.transform.fx_source_adapters.from_levels;.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.1;-5f)];
         "*with a negative quantity*";"a negative size"]};
 
+.qt.qpipe.transform.fx_source_adapters.test_a_null_price_null_quantity_marker_empties_the_side_it_is_not_a_negative_size:{[tc]
+    / q sorts a null below zero (0n<0f is 1b), so the null-size marker must not reach the negative-quantity check
+    b:raze (.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(0n;0n)];.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1012;1e6)]);
+    r:.qt.qpipe.transform.fx_source_adapters.from_levels[b];
+    .qunit.assertEquals[count r;1;"one snapshot"];
+    .qunit.assertEquals[count first r`bid_prices;0;"the bid ladder is empty"];
+    .qunit.assertEquals[first r`ask_prices;enlist 1.1012;"the ask survives"];
+    .qunit.assertThrows[.qt.qpipe.transform.fx_source_adapters.from_levels;.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.1;0n)];
+        "*with a price but no quantity*";"a priced level with no size is still refused, under its own message"]};
+
 .qt.qpipe.transform.fx_source_adapters.test_an_ineligible_row_is_not_judged_malformed:{[tc]
     / a forward with no price at all is not this contract's business, so it is not an error either
     b:raze (.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`1W;`bid;0;(0n;0n)];.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.0999;1e6)]);
