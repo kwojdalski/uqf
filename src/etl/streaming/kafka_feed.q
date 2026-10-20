@@ -149,8 +149,25 @@
     r:@[{system "l kfk.q"; `ok};::;{x}];
     system "cd ",cwd;
     if[not r~`ok; '"kafka_feed: could not load kfk from ",home,": ",r];
+    `.kfk.logcb set .qpipe.job.kafka_feed.on_log;
+    / kfk.q hands a message whose topic has no subscribed callback to
+    / consumetopic[`], a no-op - and a group refusal has no topic, so it was
+    / dropped and a feed with no group permission logged nothing (#1492).
+    .kfk.consumetopic[`]:.qpipe.job.kafka_feed.on_message;
     `.qpipe.job.kafka_feed.api set .qpipe.job.kafka_feed.real_api[];
     }
+
+/ librdkafka's log callback, in place of kfk.q's, which `show`s every line.
+/ .
+/ Those lines repeat what the error callback reports, at librdkafka's retry
+/ rate: against an unresolvable advertised host, ten "FAIL" lines a second
+/ beside the one ERROR on_error writes (#1492). They go to DEBUG, so
+/ `.qetl.log.debug 1b` brings them back when they are wanted.
+/ @param level the syslog level librdkafka gave
+/ @param facility its facility, e.g. "FAIL"
+/ @param text the line
+.qpipe.job.kafka_feed.on_log:{[level;facility;text]
+    .[.qetl.log.dbg;(`kafka;"librdkafka";`level`facility`text!(level;facility;text));::];}
 
 / The kfk calls, as functions over a client id. Bound late: `.kfk` exists only once load_library has run.
 / @return the api dictionary
@@ -241,7 +258,8 @@
 / One turn: poll, publish, commit - in that order (kafka_ingest.q).
 .qpipe.job.kafka_feed.on_timer:{[]
     `.qpipe.job.kafka_feed.state set .qetl.kafka.cycle[.qpipe.job.kafka_feed.transport[];.qpipe.job.kafka_feed.state];
-    .[.qpipe.job.kafka_feed.report_readiness;();{[e] ::}];
+    / @[f;::;e], not .[f;();e]: the dot form never calls a niladic f (#1492)
+    @[.qpipe.job.kafka_feed.report_readiness;::;{[e] ::}];
     }
 
 / Leave cleanly: publish and commit what is held, then close the client.

@@ -56,7 +56,8 @@
 
 .qt.qpipe.job.kafka_feed.test_the_library_is_not_loaded_at_load_time_and_start_refuses_without_it:{[t]
     .qunit.assertEquals[0;count (.qt.qpipe.job.kafka_feed.saved) 0;"loading the tree touched no kfk"];
-    .qunit.assertTrue[()~key `.kfk;"and defined no .kfk namespace"];
+    / a namespace q cannot drop once made: empty is what a test that loads a stub leaves
+    .qunit.assertTrue[0=count (key `.kfk) except `;"and defined nothing in .kfk"];
     if[0=count getenv `UQF_KFK_HOME;
         .qunit.assertThrows[.qpipe.job.kafka_feed.load_library;::;"*UQF_KFK_HOME is not set*";"a missing library is a clear start-up error"]]};
 
@@ -174,6 +175,68 @@
         .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines;2;"a stage turning ok is a new line"];
         m:last last .qt.qpipe.job.kafka_feed.lines;
         .qunit.assertTrue[(m like "*group=ok*") and m like "*consume=ok*";"an assignment and a polled record: group and consume ok"]}}
+
+/ The timer is what runs in kafka_feed1, so the line must come from on_timer, not
+/ only from report_readiness called by hand: on_timer's trap was `.[f;();e]`,
+/ which never calls a niladic f, and the real feed logged no readiness at all.
+.qt.qpipe.job.kafka_feed.test_the_timer_turn_logs_the_readiness_line:{[t]
+    `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[];
+    `.qpipe.job.kafka_feed.client set 7i;
+    `.qpipe.job.kafka_feed.state set .qetl.kafka.state_new[];
+    .qt.qpipe.job.kafka_feed.with_log {
+        do[3; .qpipe.job.kafka_feed.on_timer[]];
+        m:(last each .qt.qpipe.job.kafka_feed.lines) where (last each .qt.qpipe.job.kafka_feed.lines) like "*readiness*";
+        .qunit.assertEquals[count m;1;"three turns of the feed's own timer: one readiness line"];
+        .qunit.assertTrue[all (first m) like/: ("*library=ok*";"*group=ok*";"*consume=pending*");"from the stages the turn saw"]}}
+
+/ Load a stub kfk.q through load_library - the callbacks the feed rebinds, with
+/ kfk.q v1.6.6's dispatch rule (a topic with no callback goes to the one under
+/ the null key), written without its `consumetopic.:` form, which PeachQ lacks -
+/ and run f with the fake api, then put it all back.
+.qt.qpipe.job.kafka_feed.with_stub_kfk:{[f]
+    home:getenv `UQF_KFK_HOME;
+    api:.qpipe.job.kafka_feed.api;
+    dir:"/tmp/uqf_test_kfk_",string first 1?0Ng;
+    (hsym `$dir,"/kfk.q") 0: ("\\d .kfk";"logcb:{[level;fac;buf] show -3!(level;fac;buf);}";"consumetopic:(enlist `)!enlist {[msg]}";"consumecb:{[msg] $[(t:msg`topic) in key consumetopic; consumetopic t; consumetopic`] msg}";"\\d .");
+    `UQF_KFK_HOME setenv dir;
+    r:@[{[f] .qpipe.job.kafka_feed.load_library[]; `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[]; f[]};f;{[e] (`failed;e)}];
+    `UQF_KFK_HOME setenv home;
+    `.qpipe.job.kafka_feed.api set api;
+    delete logcb, consumetopic, consumecb from `.kfk;
+    hdel hsym `$dir,"/kfk.q"; hdel hsym `$dir;
+    if[(2=count r) and `failed~first r; 'last r];
+    r}
+
+/ kfk.q's own log callback `show`s every librdkafka log line, so against an
+/ unresolvable advertised host the real feed's stdout log got ten "FAIL" lines
+/ a second beside the one ERROR the diagnostics wrote (#1492). Loading the
+/ library rebinds .kfk.logcb to on_log, which logs at DEBUG only.
+.qt.qpipe.job.kafka_feed.test_loading_the_library_keeps_librdkafkas_log_lines_out_of_the_log:{[t]
+    .qt.qpipe.job.kafka_feed.with_stub_kfk {
+        .qunit.assertTrue[.kfk.logcb~.qpipe.job.kafka_feed.on_log;"kfk's show-everything log callback is replaced"];
+        .qt.qpipe.job.kafka_feed.with_log {
+            do[100; .qpipe.job.kafka_feed.on_log[3i;"FAIL";"b:1/1: Failed to resolve 'b:1'"]];
+            .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines where not (first each .qt.qpipe.job.kafka_feed.lines) in `DEBUG`TRACE;0;"a hundred librdkafka log lines: nothing above DEBUG"]}}}
+
+/ A group refusal reaches q as a consumer message with an mtype and NO topic, and
+/ kfk.q hands a message whose topic has no subscribed callback to
+/ consumetopic[`] - a no-op. A principal with no group permission was a feed
+/ that logged nothing at all, for ever (#1492). Loading the library routes
+/ those to on_message, so the cycle reports them.
+.qt.qpipe.job.kafka_feed.test_a_group_refusal_with_no_topic_is_reported_at_the_group_stage:{[t]
+    .qt.qpipe.job.kafka_feed.with_stub_kfk {
+        `.qpipe.job.kafka_feed.api set (.qt.qpipe.job.kafka_feed.fake[]),(enlist `assignment)!enlist {[c] ()};
+        `.qpipe.job.kafka_feed.client set 7i;
+        `.qpipe.job.kafka_feed.state set .qetl.kafka.state_new[];
+        `.qpipe.job.kafka_feed.inbox set ();
+        .qt.qpipe.job.kafka_feed.with_log {
+            m:`mtype`topic`client`partition`offset`msgtime`data`key`headers!(`GROUP_AUTHORIZATION_FAILED;`;7i;-1i;-1001;0Np;"x"$"FindCoordinator response error: Group authorization failed.";`byte$();()!());
+            do[3; .kfk.consumecb m; .qpipe.job.kafka_feed.on_timer[]];
+            errs:.qt.qpipe.job.kafka_feed.lines where `ERROR=first each .qt.qpipe.job.kafka_feed.lines;
+            .qunit.assertEquals[count errs;1;"three refusals: one ERROR"];
+            .qunit.assertTrue[(last first errs) like "*group stage failed*";"naming the group stage"];
+            r:.qpipe.job.kafka_feed.readiness[];
+            .qunit.assertEquals[(exec status from r where stage=`group);enlist `failed;"readiness says group failed"]}}}
 
 .qt.qpipe.job.kafka_feed.test_an_unresolvable_advertised_host_across_many_turns_logs_one_error_and_the_stage:{[t]
     `.qpipe.job.kafka_feed.api set (.qt.qpipe.job.kafka_feed.fake[]),(enlist `assignment)!enlist {[c] ()};

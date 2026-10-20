@@ -22,8 +22,11 @@ boot, elsewhere ps's lstart (see `process_identity`, #1167). A pid alone
 outlives the process: once the OS gives it to something else, `running` would say the feed
 is up and `stop` would SIGTERM a stranger (#1043). A pid whose identity no
 longer matches, or a file with no identity to check, is stale: it is never
-signalled. On Linux only the start ticks are compared: they are fixed at fork,
-while the argv can be recorded mid-exec, before the kernel has set it (#1398).
+signalled. Only the start time is compared - the kernel's ticks on Linux, ps's
+lstart elsewhere: it is fixed at fork, while the argv can be recorded
+mid-exec, before the kernel has set it (#1398), and changes when a launcher
+script execs its real program (#1492). The argv is kept for the operator and
+for telling a formatting-only mismatch from a stranger.
 
 `ps` prints the start time in the caller's locale and timezone, so the
 identity is always read under a fixed one: a feed started from an en_GB
@@ -71,6 +74,10 @@ def _ps(pid: int, *fields: str, fixed: bool = True) -> str | None:
         return None
     return " ".join(out.split()) or None
 
+
+#: How many whitespace-separated fields ps's lstart has in the C locale:
+#: "Tue Oct 20 19:43:43 2026". The identity's argv follows them.
+_LSTART_FIELDS = 5
 
 #: Where Linux keeps each process's start time as the kernel stored it.
 _PROC = Path("/proc")
@@ -159,12 +166,17 @@ class DetachedProcess:
             # between records ps's "[comm]" - and would disown its own feed
             # on every later look (#1398).
             return identity.split(" ", 1)[0] == _boot_ticks(pid)
-        # The second read is a pid file from before #1055, in the caller's
-        # environment: it still matches when read back in the same one.
-        return bool(identity) and identity in (
-            process_identity(pid),
-            _ps(pid, "lstart", "args", fixed=False),
-        )
+        if not identity:
+            return False
+        # Elsewhere (macOS) the start time alone decides too: exec keeps the
+        # pid and the start time but replaces the argv, so a launcher script
+        # that execs its real program - kafka-server-start.sh execs the JVM -
+        # would otherwise read as a stranger a moment after start (#1492).
+        if " ".join(identity.split()[:_LSTART_FIELDS]) == _ps(pid, "lstart"):
+            return True
+        # A pid file from before #1055, in the caller's environment: it still
+        # matches when read back in the same one.
+        return identity == _ps(pid, "lstart", "args", fixed=False)
 
     def _unconfirmed(self) -> int | None:
         """The pid, when it is alive and not provably ours but runs the very

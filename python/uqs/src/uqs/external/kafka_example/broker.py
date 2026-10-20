@@ -277,8 +277,10 @@ def start(
     proc = broker.process()
     proc.start([str(home / "bin" / "kafka-server-start.sh"), str(props)], cwd=directory, env=env)
     deadline = time.monotonic() + timeout
+    why = f"did not accept connections within {timeout:.0f}s"
     while time.monotonic() < deadline:
         if not proc.running():
+            why = "exited before accepting connections"
             break
         with socket.socket() as s:
             s.settimeout(1)
@@ -291,9 +293,7 @@ def start(
         else ""
     )
     stop(broker, remove=False)
-    raise UqsError(
-        f"the broker did not accept connections within {timeout:.0f}s; its log ends:\n{tail}"
-    )
+    raise UqsError(f"the broker {why}; its log ends:\n{tail}")
 
 
 def stop(broker: Broker, *, remove: bool = True, wait: float = 30.0) -> None:

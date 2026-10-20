@@ -1524,6 +1524,7 @@ qpipe.job.kafka_feed,last_readiness,value,,
 qpipe.job.kafka_feed,load_library,function,1,
 qpipe.job.kafka_feed,messages_table,function,1,ms
 qpipe.job.kafka_feed,on_error,function,3,cid code reason
+qpipe.job.kafka_feed,on_log,function,3,level facility text
 qpipe.job.kafka_feed,on_message,function,1,m
 qpipe.job.kafka_feed,on_start,function,1,
 qpipe.job.kafka_feed,on_timer,function,1,

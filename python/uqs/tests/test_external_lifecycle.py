@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 
 import pytest
@@ -245,3 +246,23 @@ def test_on_linux_the_identity_is_the_kernels_and_never_moves(proc):
     identity = process_identity(pid)
     assert identity is not None and identity.startswith("boot+")
     assert all(process_identity(pid) == identity for _ in range(50))
+
+
+def test_a_launcher_that_execs_its_real_program_is_still_ours(proc):
+    """#1492: Kafka's kafka-server-start.sh is a shell script that `exec`s the
+    JVM, so the pid start() recorded keeps running under another argv. On
+    macOS the identity compared that argv as well as the start time, so the
+    broker read as "not running" a moment after it started: `broker start`
+    gave up on a broker that was coming up, then left it running, refused as
+    "now another process". exec keeps the pid and the start time - it is the
+    same process, and still ours."""
+    launcher = ["/bin/sh", "-c", f"sleep 0.3; exec {' '.join(SLEEP[:2])} '{SLEEP[2]}'"]
+    pid = proc.start(launcher, cwd=proc.pid_path.parent)
+    recorded = proc.pid_path.read_text().split("\n")[1]
+    deadline = time.monotonic() + 10
+    while (lifecycle._ps(pid, "args") or "/bin/sh").startswith("/bin/sh"):
+        assert time.monotonic() < deadline, "the launcher never exec'd"
+        time.sleep(0.05)
+    assert "/bin/sh" in recorded or recorded.startswith("boot+"), "recorded before the exec"
+    assert proc.running(), "the exec'd launcher is the process start() spawned"
+    assert proc.stop(missing_ok=False) == pid

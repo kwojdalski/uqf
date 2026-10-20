@@ -309,12 +309,25 @@ a returned publish are not rows in the RDB.**
 
 ## What ran where
 
-The Python consumer path, the broker, the publisher, every phase above and the
-unit tests were run against a real broker and a real PeachQ stack (`stp1`,
-`rdb1`, `cryptotrades1`). The native feed (`kafka_feed1`) needs KX's `kfk`
-library, which needs a kdb+/KDB-X host: its readiness and diagnostics are
-unit-tested over a fake `kfk` and over text read from a real broker, and the
-commands to run it for real are the ones above with `--feed native`.
+Both consumers were run against a real broker. The Python one on a PeachQ stack
+(`stp1`, `rdb1`, `cryptotrades1`); the native one, `kafka_feed1` with `kfk`
+v1.6.6 on librdkafka 2.16.0, on a KDB-X stack on macOS:
+`verify all --feed native` (29 stages), the decoy bootstrap (one
+`advertised stage failed` ERROR for 1,105 client errors in a minute), and
+`--secure` as `nogroup` (one `group stage failed`) and as `notopic` (one
+`consume stage failed`).
+
+That run found three things the fake `kfk` could not. The readiness line was
+never logged (the timer trapped it with `.[f;();e]`, which never calls a niladic
+`f`). kfk.q's own log callback printed every librdkafka log line, ten `FAIL`
+lines a second beside the one ERROR; the feed now sends them to DEBUG
+(`.qetl.log.debug 1b` brings them back). And a group refusal arrives with no
+topic, which kfk.q hands to a no-op callback, so a feed with no group permission
+logged nothing at all; the feed now takes those messages too.
+
+`--uqs` is a command prefix and `--port` belongs after `uqs start`, so a stack
+on another base port needs a small wrapper that inserts it. The SSH-tunnel
+variant was not run.
 
 ## Cleaning up
 

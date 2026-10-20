@@ -59,3 +59,17 @@
 
 .qt.qetl.kafka.decoder.test_kafka_flow_is_a_whole_decoder:{[t]
     .qunit.assertEquals[.qetl.kafka.decoder.check `kafka_flow;`kafka_flow;"publishes what it decodes into, and the dead letters"]};
+
+/ init gives a decoder job its state, empty and typed, in its own namespace:
+/ two decoders never share marks, so neither drops the other's records as repeats.
+.qt.qetl.kafka.decoder.test_init_gives_each_job_its_own_empty_state:{[t]
+    .qunit.assertEquals[.qetl.kafka.decoder.init `qt_decoder_a;`qt_decoder_a;"returns the job"];
+    .qetl.kafka.decoder.init `qt_decoder_b;
+    ns:.qetl.job.stream.namespace each `qt_decoder_a`qt_decoder_b;
+    got:{[ns] get each ` sv/: ns,/:.qetl.kafka.decoder.state_names} each ns;
+    .qunit.assertEquals[first got;last got;"the same empty state for each"];
+    .qunit.assertEquals[count each first got;0 0 0;"marks, held and done all empty"];
+    .qunit.assertEquals[meta (first got) 1;meta .qetl.kafka.envelope_empty;"held has the envelope's columns"];
+    (` sv (first ns),`marks) set 1#.qetl.kafka.marks_empty;
+    .qunit.assertEquals[count get ` sv (last ns),`marks;0;"and is the job's own"];
+    {[ns] ![ns;();0b;.qetl.kafka.decoder.state_names]} each ns;}
