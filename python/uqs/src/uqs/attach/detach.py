@@ -107,10 +107,10 @@ def drift(att: Attachment, obs: Observation, m: Manifest) -> list[Blocker]:
             )
         elif op.ownership == CREATED and op.op != "consumer_subscribe":  # the table is not ours
             found += _table_state(att, m, op, proc, plant_ours(obs, m))
-    stp = next((o for o in m.operations if o.op == "stp_register"), None)
+    plant = {o.table: o.ownership for o in m.operations if o.op == "stp_register"}  # #1472
     for op in m.operations:
         if op.op in CONSUMER_OPS and op.ownership == CREATED and op.status in (DONE, PENDING):
-            if stp is None or stp.ownership != CREATED:
+            if plant.get(op.table) != CREATED:  # the consumer's own table, not the first
                 found.append(
                     Blocker(
                         op.process,
@@ -175,14 +175,14 @@ def _table_state(att: Attachment, m: Manifest, op: Op, proc: Proc, ours: set[str
 # ------------------------------------------------------------------ steps
 
 
-def _subscribers_added(m: Manifest) -> int:
-    """The tickerplant subscriber handles this attachment's consumers added (with a
-    table, or a subscription to one they held, #1459). Reverted consumers count: the
-    tickerplant lists their handles until the table is unregistered, the last step."""
+def _subscribers_added(m: Manifest, table: str) -> int:
+    """Handles our consumers added to `table` alone, as stp_unregister.q counts (#1471, #1459);
+    reverted ones too: the tickerplant lists them until the table is unregistered, last."""
+    added = (o for o in m.operations if o.op in CONSUMER_OPS and o.table == table)
     return sum(
         max(0, int(o.post.get("subscribers_after", 0)) - int(o.post.get("subscribers_before", 0)))
-        for o in m.operations
-        if o.op in CONSUMER_OPS and o.ownership == CREATED and o.status != FAILED
+        for o in added
+        if o.ownership == CREATED and o.status != FAILED
     )
 
 
@@ -195,7 +195,7 @@ def _request(m: Manifest, op: Op, dry_run: bool, ours: set[str]) -> dict:
     if op.op == "consumer_subscribe":
         req["subtables"] = bool(op.post.get("subtables"))
     if op.op == "stp_register":
-        req |= {"empty_size": EMPTY_LOG, "expect_subscribers": _subscribers_added(m)}
+        req |= {"empty_size": EMPTY_LOG, "expect_subscribers": _subscribers_added(m, op.table)}
     return req
 
 
