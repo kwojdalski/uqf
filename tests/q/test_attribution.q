@@ -179,6 +179,23 @@
     .qt.support.assertApprox[first exec pips from r where kind=`residual;total;1e-9;"the whole total is residual"];
     .qunit.assertTrue[not null total;"the total still comes from the reference price"]};
 
+/ #1475: the same books spelled EUR/USD or eurusd must allocate identically.
+.qt.qf.exec.attribution.test_non_canonical_quote_spelling_allocates_like_canonical:{[t]
+    base:.qt.qf.exec.attribution.attribute[.qt.qf.exec.attribution.specs_route[]];
+    {[t;base;spell]
+        q:.qt.qf.exec.attribution.mk_quotes[.qt.qf.exec.attribution.specs_route[]];
+        q:`sym`time xasc update sym:spell each sym from q;
+        r:.qf.exec.cross_markout_attribution[q;`USDPLN;1;.qt.qf.exec.attribution.tm_zero;.qt.qf.exec.attribution.tm_one;10000;1];
+        .qunit.assertEquals[r`status;base`status;"every leg is available whatever the spelling"];
+        .qt.support.assertApprox[r`pips;base`pips;1e-9;"allocations, residual and total match the canonical spelling"]}[t;base;] each (
+        {`$ssr[string x;"USD";"/USD"]}; {`$ssr[string x;"PLN";"/PLN"]}; {lower x});
+    / the per-leg decomposition agrees with the first test's reference values
+    q:`sym`time xasc update sym:{s:string x; `$(3#s),"/",3_s} each sym from .qt.qf.exec.attribution.mk_quotes[.qt.qf.exec.attribution.specs_route[]];
+    r:.qf.exec.cross_markout_attribution[q;`USDPLN;1;.qt.qf.exec.attribution.tm_zero;.qt.qf.exec.attribution.tm_one;10000;1];
+    .qunit.assertEquals[(select from r where kind=`leg)`status;`ok`ok;"slash spelling: both legs ok"];
+    .qt.support.assertApprox[first exec pips from r where kind=`leg;-698.052;1e-2;"EURUSD leg"];
+    .qt.support.assertApprox[first exec pips from r where kind=`residual;0f;1e-6;"reconciled"]};
+
 .qt.qf.exec.attribution.test_attribution_records_the_convention_version:{[t]
     r:.qt.qf.exec.attribution.attribute[.qt.qf.exec.attribution.specs_route[]];
     .qunit.assertEquals[distinct r`version;enlist `proposed_v1;"every row records the version"];
