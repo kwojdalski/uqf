@@ -89,6 +89,7 @@
 \l src/etl/core/normalizer.q
 \l src/etl/core/kafka_topics.q
 \l src/etl/core/kafka_ingest.q
+\l src/etl/core/kafka_diagnostics.q
 \l src/etl/core/kafka_decoder.q
 \l src/etl/core/horizon.q
 \l src/etl/core/bars.q

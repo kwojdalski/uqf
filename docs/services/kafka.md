@@ -15,6 +15,10 @@ uqs connector status kafka
 uqs connector stop kafka
 ```
 
+A runnable end-to-end example - a disposable broker, synthetic crypto trades, a
+decoder in a sidecar bundle and a verifier that queries the RDB - is
+[`kafka-crypto-example.md`](../guides/kafka-crypto-example.md).
+
 Needs a reachable broker and `confluent-kafka`, and **neither ships with this
 repository**. That follows the rule
 [`singlestore_odbc.q`](../../src/etl/core/singlestore_odbc.q) states for the
@@ -84,9 +88,24 @@ either is absent.
 
 **Shutdown, reconnect, rebalance.** On exit the feed publishes what it holds,
 commits it, unsubscribes and closes the client, which leaves the group cleanly.
-librdkafka reconnects on its own; the error callback logs. When the group
-rebalances, offsets of partitions the consumer no longer holds are not
-committed, and the new owner's re-read is absorbed by `kafka_flow1`'s marks.
+librdkafka reconnects on its own; the error callback reports each *cause* once
+(below). When the group rebalances, offsets of partitions the consumer no longer
+holds are not committed, and the new owner's re-read is absorbed by
+`kafka_flow1`'s marks.
+
+**Readiness is stage by stage, and "subscribed" is not one of them.** The feed
+logs a `readiness` line (library, bootstrap, advertised, group, consume,
+published, committed - each `ok`, `pending` or `failed`) whenever it changes.
+`ok` needs proof: an assignment proves the bootstrap broker answered, the
+addresses *in its metadata* (the advertised listeners, which are not the
+bootstrap list) are reachable and the group joined; a polled record proves the
+topic may be read. A failure is reported **once per cause** - stage, endpoint,
+code, and the broker's own text - not once a second: an unresolvable advertised
+hostname is one `ERROR` naming `host:port`, with the repeats counted and a
+`recovered` line when it clears.
+[`kafka_diagnostics.q`](../../src/etl/core/kafka_diagnostics.q) has the stages;
+[the crypto example](../guides/kafka-crypto-example.md) runs each failure
+against a real broker, with a verifier that checks every stage against the RDB.
 
 ## Transport and decoding are two things
 

@@ -1,0 +1,1 @@
+{"name": "kafka_crypto_example", "version": "0.1.0", "description": "Generic crypto trades from Kafka topics into a declared table: the runnable end-to-end example for docs/guides/kafka-crypto-example.md"}

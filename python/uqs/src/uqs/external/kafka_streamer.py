@@ -128,13 +128,27 @@ def rows_from_messages(messages: list[Any], fields: list[str]) -> dict[str, list
     return out
 
 
+def publish_message(q: Any, table: str, msg: Any, fields: list[str]) -> None:
+    """Send one message to the tickerplant as `.u.upd` takes it: a LIST of columns.
+
+    Not the dict `rows_from_messages` builds. Over IPC a Python dict arrives as a
+    q dictionary, and the segmented tickerplant's update chain prepends its own
+    `time` column with `(enlist ...),x`, which a dictionary does not accept: it
+    answered `type` for every record while the consumer, whose `sync` returned,
+    carried on and committed (#1492). The column order is the contract's -
+    `.u.upd` places columns by position (invariant 3).
+    """
+    cols = rows_from_messages([msg], fields)
+    q.sync(".u.upd", table, [cols[f] for f in fields])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--credential", required=True, help="user:password for stp1")
     parser.add_argument("--brokers", required=True, help="bootstrap.servers")
-    parser.add_argument("--topic", required=True)
+    parser.add_argument("--topic", required=True, help="one topic, or several separated by commas")
     parser.add_argument("--group", required=True, help="consumer group id")
     parser.add_argument("--table", required=True)
     parser.add_argument("--repo-root", default=os.getcwd())
@@ -171,21 +185,27 @@ def main(argv: list[str] | None = None) -> int:
             "auto.offset.reset": "earliest",
         }
     )
-    consumer.subscribe([args.topic])
+    consumer.subscribe([t.strip() for t in args.topic.split(",") if t.strip()])
 
+    reported: set[str] = set()
     try:
         while True:
             msg = consumer.poll(1.0)
             if msg is None:
                 continue
             if msg.error():
-                print(f"kafka error: {msg.error()}", file=sys.stderr)
+                # Once per distinct error: a broker refusing the group or the topic
+                # answers the same thing every poll, and a line a second hides the
+                # one line that matters (#1492).
+                text = f"{msg.error().name()}: {msg.error().str()}"
+                if text not in reported:
+                    reported.add(text)
+                    print(f"kafka error (reported once): {text}", file=sys.stderr, flush=True)
                 continue
-            cols = rows_from_messages([msg], fields)
             # PUBLISH, THEN COMMIT, and never the other way round. `sync`
             # rather than `asyn`: an asynchronous publish returns before the
             # plant has the row, which would make the commit below a lie.
-            q.sync(".u.upd", args.table, cols)
+            publish_message(q, args.table, msg, fields)
             consumer.commit(msg, asynchronous=False)
     finally:
         consumer.close()

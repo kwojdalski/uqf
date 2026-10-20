@@ -39,6 +39,14 @@
 / (default `earliest`: replaying the backlog is the case q handles; losing it
 / silently is not). Default group is `uqf-kafka-q`, never the Python consumer's.
 / .
+/ READINESS AND DIAGNOSTICS (#1492). "subscribed" is not ready. The error
+/ callback hands every client error to core/kafka_diagnostics.q, which names the
+/ stage (bootstrap, advertised, group, consume) and logs each CAUSE once, with
+/ the endpoint and the broker's own text, instead of a WARNING a second for as
+/ long as librdkafka keeps retrying; on_timer then logs a `readiness` line when
+/ the stage-by-stage picture changes. An assignment proves the bootstrap, the
+/ advertised endpoints and the group; a polled record proves the topic may be read.
+/ .
 / SHUTDOWN, RECONNECT, REBALANCE. On exit the feed publishes what it holds,
 / commits it, unsubscribes and closes the client, which leaves the group
 / cleanly so a restart does not wait out the session timeout. Reconnection is
@@ -162,9 +170,50 @@
 / @param m a kfk message dictionary
 .qpipe.job.kafka_feed.on_message:{[m] `.qpipe.job.kafka_feed.inbox set .qpipe.job.kafka_feed.inbox,enlist m;}
 
-/ The client's error callback: log, never throw (librdkafka reconnects on its own).
+/ The client's error callback: report once per cause, never throw (librdkafka reconnects on its own).
+/ .
+/ librdkafka calls this every second for as long as a broker is unreachable, so
+/ logging each call is the bug (#1492): an unresolvable ADVERTISED hostname was a
+/ WARNING a second. core/kafka_diagnostics.q names the stage and the endpoint
+/ and logs a cause the first time only.
+/ @param cid the client id
+/ @param code librdkafka's error code
+/ @param reason the text it gave
 .qpipe.job.kafka_feed.on_error:{[cid;code;reason]
-    .[{.qetl.log.warn[`kafka;"client error";`client`code`reason!(x;y;z)]};(cid;code;reason);::];}
+    .[.qetl.kafka.diag.report;(code;reason);::];}
+
+/ What the readiness report said last, so a change is logged and a steady state is not.
+.qpipe.job.kafka_feed.last_readiness:""
+
+/ The facts the readiness table is derived from.
+/ @return dict for .qetl.kafka.diag.readiness
+.qpipe.job.kafka_feed.facts:{[]
+    a:.qetl.kafka.try[{[x] .qpipe.job.kafka_feed.transport[][`assigned] 0b};enlist 0b];
+    n:$[first a; $[98h=type last a; count last a; 0]; 0];
+    s:(.qpipe.job.kafka_feed.state)`stats;
+    `library`assigned`polled`published`commits`publish_errors`commit_errors!(0<count .qpipe.job.kafka_feed.api;n;s`polled;s`published;s`commits;s`publish_errors;s`commit_errors)}
+
+/ The stage-by-stage readiness of this consumer (core/kafka_diagnostics.q).
+/ .
+/ "Subscribed" is not ready: a stage is ok only on proof - an assignment proves
+/ the broker and its advertised endpoints were reached and the group joined; a
+/ polled record proves the topic may be read.
+/ @return a table of stage, status and detail
+/ @eg exec stage from .qpipe.job.kafka_feed.readiness[]
+.qpipe.job.kafka_feed.readiness:{[]
+    .qetl.kafka.diag.readiness .qpipe.job.kafka_feed.facts[]}
+
+/ Log the readiness when it changed, and retire the causes of stages that came good.
+.qpipe.job.kafka_feed.report_readiness:{[]
+    f:.qpipe.job.kafka_feed.facts[];
+    if[0<f`assigned; .qetl.kafka.diag.clear `bootstrap`advertised`group];
+    if[0<f`polled; .qetl.kafka.diag.clear enlist `consume];
+    r:.qetl.kafka.diag.readiness f;
+    line:" " sv {string[x`stage],"=",string x`status} each r;
+    if[not line~.qpipe.job.kafka_feed.last_readiness;
+        `.qpipe.job.kafka_feed.last_readiness set line;
+        .qetl.log.info[`kafka_feed;"readiness";enlist[`stages]!enlist line]];
+    }
 
 / The messages received since the last call, as the table kafka_ingest.q expects.
 / @param ms a list of kfk message dictionaries
@@ -192,6 +241,7 @@
 / One turn: poll, publish, commit - in that order (kafka_ingest.q).
 .qpipe.job.kafka_feed.on_timer:{[]
     `.qpipe.job.kafka_feed.state set .qetl.kafka.cycle[.qpipe.job.kafka_feed.transport[];.qpipe.job.kafka_feed.state];
+    .[.qpipe.job.kafka_feed.report_readiness;();{[e] ::}];
     }
 
 / Leave cleanly: publish and commit what is held, then close the client.
@@ -209,6 +259,7 @@
 / @param cfg the librdkafka configuration
 / @param topics the topics
 .qpipe.job.kafka_feed.open:{[cfg;topics]
+    `.qetl.kafka.diag.context set `bootstrap`group!(trim each "," vs string cfg`metadata.broker.list;string cfg`group.id);
     c:.qpipe.job.kafka_feed.api[`consumer] cfg;
     `.qpipe.job.kafka_feed.client set c;
     .qpipe.job.kafka_feed.api[`on_error][c;.qpipe.job.kafka_feed.on_error];

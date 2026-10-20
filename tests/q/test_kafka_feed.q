@@ -126,6 +126,75 @@
     .qunit.assertEquals[k;`consumer`subscribe;"created, then subscribed"];
     .qunit.assertEquals[.qpipe.job.kafka_feed.client;7i;"the client id is kept"]};
 
+/ --- readiness and diagnostics (#1492) --------------------------------------
+
+.qt.qpipe.job.kafka_feed.lines:()
+
+/ Run f with the log captured and the diagnostics empty, then put everything back.
+.qt.qpipe.job.kafka_feed.with_log:{[f]
+    emit:.qetl.log.emit; ctx:.qetl.kafka.diag.context; causes:.qetl.kafka.diag.causes; last_r:.qpipe.job.kafka_feed.last_readiness;
+    `.qt.qpipe.job.kafka_feed.lines set ();
+    delete from `.qetl.kafka.diag.causes;
+    `.qpipe.job.kafka_feed.last_readiness set "";
+    `.qetl.log.emit set {[level;id;msg] `.qt.qpipe.job.kafka_feed.lines set .qt.qpipe.job.kafka_feed.lines,enlist (level;msg)};
+    r:@[f;::;{[e] (`failed;e)}];
+    `.qetl.log.emit set emit; `.qetl.kafka.diag.context set ctx; `.qetl.kafka.diag.causes set causes; `.qpipe.job.kafka_feed.last_readiness set last_r;
+    if[(2=count r) and `failed~first r; 'last r];
+    r}
+
+.qt.qpipe.job.kafka_feed.test_open_tells_the_diagnostics_what_it_connects_to:{[t]
+    `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[];
+    older:@[value;`.z.exit;{(::)}];
+    ctx:.qetl.kafka.diag.context;
+    .qpipe.job.kafka_feed.open[`metadata.broker.list`group.id!(`$"b1:9092, b2:9092";`g1);enlist `uqf.client.flow];
+    got:.qetl.kafka.diag.context;
+    `.qetl.kafka.diag.context set ctx; `.z.exit set older;
+    .qunit.assertEquals[got`bootstrap;("b1:9092";"b2:9092");"the bootstrap list, trimmed, so an endpoint can be told from an advertised one"];
+    .qunit.assertEquals[got`group;"g1";"and the group, for the remedy"]};
+
+.qt.qpipe.job.kafka_feed.test_readiness_is_not_ready_until_it_is_proved:{[t]
+    `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[];
+    `.qpipe.job.kafka_feed.client set 7i;
+    `.qpipe.job.kafka_feed.state set .qetl.kafka.state_new[];
+    / with_log empties the causes first: other suites' polled events leave some behind.
+    r:.qt.qpipe.job.kafka_feed.with_log {.qpipe.job.kafka_feed.readiness[]};
+    .qunit.assertEquals[exec stage from r;`library`bootstrap`advertised`group`consume`published`committed;"every stage named"];
+    .qunit.assertEquals[(exec status from r where stage=`library);enlist `ok;"the fake library is loaded"];
+    .qunit.assertEquals[(exec status from r where stage=`consume);enlist `pending;"and nothing has been polled: not ready, whatever was logged"]};
+
+.qt.qpipe.job.kafka_feed.test_the_readiness_line_is_logged_when_it_changes_and_not_otherwise:{[t]
+    `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[];
+    `.qpipe.job.kafka_feed.client set 7i;
+    `.qpipe.job.kafka_feed.state set .qetl.kafka.state_new[];
+    .qt.qpipe.job.kafka_feed.with_log {
+        do[5; .qpipe.job.kafka_feed.report_readiness[]];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines;1;"five identical turns, one line"];
+        st:.qpipe.job.kafka_feed.state; st[`stats;`polled]:3; `.qpipe.job.kafka_feed.state set st;
+        .qpipe.job.kafka_feed.report_readiness[];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines;2;"a stage turning ok is a new line"];
+        m:last last .qt.qpipe.job.kafka_feed.lines;
+        .qunit.assertTrue[(m like "*group=ok*") and m like "*consume=ok*";"an assignment and a polled record: group and consume ok"]}}
+
+.qt.qpipe.job.kafka_feed.test_an_unresolvable_advertised_host_across_many_turns_logs_one_error_and_the_stage:{[t]
+    `.qpipe.job.kafka_feed.api set (.qt.qpipe.job.kafka_feed.fake[]),(enlist `assignment)!enlist {[c] ()};
+    `.qpipe.job.kafka_feed.client set 7i;
+    `.qpipe.job.kafka_feed.state set .qetl.kafka.state_new[];
+    .qt.qpipe.job.kafka_feed.with_log {
+        `.qetl.kafka.diag.context set `bootstrap`group!(enlist "127.0.0.1:9092";"g1");
+        reason:"broker-unresolvable.invalid:43687/1: Failed to resolve 'broker-unresolvable.invalid:43687': Name or service not known (after 1ms in state CONNECT)";
+        do[60;
+            .qpipe.job.kafka_feed.on_error[7i;-193i;reason];
+            .qpipe.job.kafka_feed.on_error[7i;-187i;"1/1 brokers are down"];
+            .qpipe.job.kafka_feed.on_timer[]];
+        errs:.qt.qpipe.job.kafka_feed.lines where `ERROR=first each .qt.qpipe.job.kafka_feed.lines;
+        .qunit.assertEquals[count errs;1;"120 client errors over 60 timer turns: one ERROR line"];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines where `WARNING=first each .qt.qpipe.job.kafka_feed.lines;0;"and no WARNING repeated every second"];
+        m:last first errs;
+        .qunit.assertTrue[(m like "*advertised stage failed*") and (m like "*broker-unresolvable.invalid:43687*") and m like "*Name or service not known*";"naming the stage, the host:port and the resolver's error"];
+        r:.qpipe.job.kafka_feed.readiness[];
+        .qunit.assertEquals[(exec status from r where stage=`advertised);enlist `failed;"readiness says advertised failed"];
+        .qunit.assertEquals[(exec status from r where stage=`group);enlist `pending;"and the group is merely pending: nothing else is blamed"]}}
+
 .qt.qpipe.job.kafka_feed.test_start_stops_before_connecting_when_kafka_is_not_set_up:{[t]
     if[0=count getenv `UQF_KAFKA_BROKERS;
         .qunit.assertThrows[.qpipe.job.kafka_feed.on_start;::;"*UQF_KAFKA_BROKERS is not set*";"no brokers: the process does not start"]]};

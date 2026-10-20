@@ -276,7 +276,8 @@
     msgs:last r;
     ev:.qetl.kafka.events msgs;
     if[count ev;
-        .qetl.log.warn[`kafka;"the client reported";`count`first_type`first_topic!(count ev;first ev`mtype;first ev`topic)];
+        / Once per cause (kafka_diagnostics.q): a client report that repeats every poll was a log line every poll.
+        {.qetl.kafka.diag.report[x`mtype;$[10h=type r:x`data; r; 4h=type r; "c"$r; ""]]} each ev;
         st:.qetl.kafka.bump[st;`events;count ev]];
     env:.qetl.kafka.from_messages msgs;
     st[`backlog]:(st`backlog),env;

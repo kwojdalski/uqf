@@ -148,3 +148,32 @@ def test_the_raw_table_is_the_one_the_q_job_subscribes_to() -> None:
     """The two halves name the same table, or the feed publishes into the void."""
     job = (REPO / "src" / "etl" / "streaming" / "kafka_flow.q").read_text()
     assert f"`{KAFKA_RAW_TABLE}" in job
+
+
+class RecordingQ:
+    """A stand-in for kola.Q that remembers what it was asked to run."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def sync(self, *args: object) -> None:
+        self.calls.append(args)
+
+
+def test_a_message_is_sent_as_a_list_of_columns_in_the_contracts_order() -> None:
+    """#1492: a dict reached the segmented tickerplant as a q dictionary, its update
+    chain's `(enlist time),x` answered `type`, and the consumer - whose `sync` still
+    returned - committed the offset of a record the plant never stored."""
+    from uqs.external.kafka_streamer import publish_message
+
+    fields = contract_fields(str(REPO))
+    q = RecordingQ()
+    publish_message(q, "kafka_message", a_message(), fields)
+    ((func, table, payload),) = q.calls
+    assert (func, table) == (".u.upd", "kafka_message")
+    assert isinstance(payload, list) and not isinstance(payload, dict)
+    assert len(payload) == len(fields)
+    assert all(isinstance(col, list) and len(col) == 1 for col in payload)
+    assert payload[fields.index("topic")] == ["uqf.client.flow"]
+    by_name = rows_from_messages([a_message()], fields)
+    assert [c[0] for c in payload] == [by_name[f][0] for f in fields]
