@@ -131,6 +131,15 @@
     (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:11;
     .qunit.assertEquals[exec ref from last last .qt.qetl.job.stream.horizons.sent;enlist 7f;"so b's fill is priced as if nothing was evicted"]};
 
+.qt.qetl.job.stream.horizons.test_an_infinite_max_age_evicts_like_no_max_age:{[t]
+    / 0Wn is "as of however old" (fx_markout's spec): earliest-0Wn is the 1734 floor,
+    / so taken as a bound it would evict nothing, and the history would grow for ever (#1480)
+    nm:.qt.qetl.job.stream.horizons.job[`hz_inf;enlist[`max_age]!enlist 0Wn];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+0D00:00:00 0D00:00:02 0D00:00:04;1 2 3f]];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0+0D00:00:10]];
+    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:05;
+    .qunit.assertEquals[exec mid from .qt.qetl.job.stream.horizons.ns[nm;`history];enlist 3f;"only the latest row before the waiting fill is kept, as with no max_age"]};
+
 .qt.qetl.job.stream.horizons.test_with_max_age_the_history_drops_what_is_too_old_to_count:{[t]
     nm:.qt.qetl.job.stream.horizons.job[`hz_j;enlist[`max_age]!enlist 0D00:00:02];
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+0D00:00:00 0D00:00:09;1 2f]];

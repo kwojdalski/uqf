@@ -77,8 +77,9 @@ sets a price nor is kept in the book history. A leg whose every source is older
 than that has no book, so the row is `unavailable` (see below). `0Wn` ("as of
 however old") is still accepted for a single-source site, but is not the
 default: with several sources it lets a source that went quiet set the best bid
-or ask indefinitely (#1410). A site with sparse cross-pair quoting declares a
-longer age in its spec.
+or ask indefinitely (#1410). The horizon then keeps the as-of history, one row
+per source before the oldest waiting fill, rather than a max_age window (#1480).
+A site with sparse cross-pair quoting declares a longer age in its spec.
 
 **Policy change (#1410), before and after.** A buy at 1.1001; source `a` quotes
 1.1000/1.1010 (mid 1.1005) every few seconds; source `s` quoted 1.1006/1.1008
