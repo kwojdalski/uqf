@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **44 uqf processes** — 67 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **45 uqf processes** — 68 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -38,7 +38,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `arbitrage1` | 6094 | etl | `processes/torq_stream.q` | `arbitrage` | `superbook` | `arbitrage` |
 | `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage`, `config_change` |
 | `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | `client_flow` | `kafka_client_flow` | `client_flow` |
+| `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | — | `kafka_message` | `client_flow`, `kafka_dead_letter` |
 | `crypto_market_data_backfill1` | 6098 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_demo_markouts_backfill1` | 6099 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_transfer_backfill1` | 6100 | backfill | `processes/torq_backfill.q` | — | — | — |
@@ -59,6 +59,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `fxmarkoutwide1` | 6115 | etl | `processes/torq_stream.q` | `fx_markout_wide` | `executions`, `market_data` | `fx_markout_wide` |
 | `hdb_fx_markout_wide_backfill1` | 6116 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_fx_markouts_backfill1` | 6117 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `kafka_feed1` | 6118 | feed | `processes/torq_stream.q` | `kafka_message` | — | `kafka_message` |
 
 ### Why a row deviates from the defaults
 
@@ -83,7 +84,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`arbitrage1`** — gross direct cross-source opportunities, including inactive clearing rows. Tail of the marketdata1 chain - see there
 - **`crossarb1`** — the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default
 - **`duckdb_deals_backfill1`** — bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time
-- **`kafka_flow1`** — deduplicates client FX flow consumed off a Kafka topic, on the (partition;offset) the record carries. The raw rows are published by an EXTERNAL Python consumer (external/kafka_feed.py) - a q process cannot hold a Kafka subscription - so kafka_client_flow has a schema row but no producer in this list. That is why it does not start with the stack: on a default start nothing publishes the table it subscribes to, and it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer
+- **`kafka_flow1`** — decodes the Kafka records on kafka_message into each declared topic's plant table (client_flow for the client trade topic), deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter. The records are published by a consumer - the q feed kafka_feed1, or the legacy Python one - so kafka_message has no producer in a default start. That is why it does not start with the stack: it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer
 - **`crypto_market_data_backfill1`** — bounded: replays cryptorust's recorded crypto book and trade capture from a DuckDB file over ODBC, an hour at a time
 - **`hdb_demo_markouts_backfill1`** — bounded: marks out the HDB's fills against its quotes, into demo_execution_quality
 - **`hdb_transfer_backfill1`** — bounded - copies trades from a kdb+ HDB on this machine into trades_copy, adding notional; the HDB-to-HDB example
@@ -104,6 +105,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`fxmarkoutwide1`** — normalized FX markouts, wide layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in
 - **`hdb_fx_markout_wide_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout_wide, with the calculation fxmarkoutwide1 applies live
 - **`hdb_fx_markouts_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live
+- **`kafka_feed1`** — the native q Kafka consumer (KX kfk, pinned v1.6.6): publishes every record undecoded onto kafka_message, committing offsets only after the publish returned. Needs UQF_KFK_HOME and UQF_KAFKA_BROKERS, so it is started on demand, never with the stack. The Python consumer (uqs connector start kafka) publishes the same table; run one per group
 
 ## Tables these processes publish
 
@@ -129,6 +131,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |
 | `fx_position` | `plant_tables.q` | `fxpositions1` |
 | `fx_position_open` | `plant_tables.q` | `fxpositions1` |
+| `kafka_dead_letter` | `plant_tables.q` | `kafka_flow1` |
+| `kafka_message` | `plant_tables.q` | `kafka_feed1` |
 | `last_value` | `plant_tables.q` | `last_value1` |
 | `market_data` | `plant_tables.q` | `marketdata1` |
 | `mkt_orderbook` | `plant_tables.q` | `vectorize1` |

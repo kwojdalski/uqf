@@ -1500,10 +1500,10 @@
         "start: the transport is missing subscribe, timer";"named, before anything connects"]};
 
 .qt.qetl.job.stream.test_restore_tables_are_subscribed_but_are_not_inputs:{[t]
-    .qunit.assertEquals[.qetl.job.stream.subscriptions `kafka_flow;`kafka_client_flow`client_flow;
-        "kafka_flow reads its own output back, to restore its marks"];
+    .qunit.assertEquals[.qetl.job.stream.subscriptions `kafka_flow;`kafka_message`client_flow`kafka_dead_letter;
+        "kafka_flow reads its own output back, to restore what it has handled"];
     .qetl.dag.adopt_all[];
-    .qunit.assertEquals[(.qetl.dag.def `kafka_flow)`inputs;enlist `kafka_client_flow;
+    .qunit.assertEquals[(.qetl.dag.def `kafka_flow)`inputs;enlist `kafka_message;
         "but the graph sees only its input, so it draws no cycle"]};
 
 .qt.qetl.job.stream.test_restore_declarations_are_refused_without_a_replay:{[t]

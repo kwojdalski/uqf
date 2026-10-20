@@ -87,6 +87,8 @@
 \l src/etl/core/webhook.q
 \l src/etl/core/config_audit.q
 \l src/etl/core/normalizer.q
+\l src/etl/core/kafka_topics.q
+\l src/etl/core/kafka_ingest.q
 \l src/etl/core/horizon.q
 \l src/etl/core/bars.q
 \l src/etl/core/rolling.q

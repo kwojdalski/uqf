@@ -55,10 +55,11 @@ EXTERNAL_PRODUCERS: dict[str, str] = {
         "the external Databento feed handler (`uqs connector start databento`) "
         "or a `databento_backfill1` run"
     ),
-    "kafka_client_flow": (
-        "the external Kafka consumer (`uqs connector start kafka`). There is no backfill "
-        "alternative: replaying a topic from offset 0 is Kafka's own answer to "
-        "that, and it needs the same broker"
+    "kafka_message": (
+        "a Kafka consumer: the q feed kafka_feed1, or the legacy Python one "
+        "(`uqs connector start kafka`). There is no backfill alternative: "
+        "replaying a topic from offset 0 is Kafka's own answer to that, and it "
+        "needs the same broker"
     ),
     "crypto_book": "cryptorust's kdb recorder, which cryptomock1 stands in for",
     "crypto_trades": "cryptorust's kdb recorder, which cryptomock1 stands in for",

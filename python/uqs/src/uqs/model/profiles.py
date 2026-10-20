@@ -148,8 +148,12 @@ UNPROFILED: dict[str, str] = {
         "(`uqs connector start databento`), so it is started with that or not at all"
     ),
     "kafka_flow1": (
-        "a live external feed - its rows come from the Kafka consumer "
-        "(`uqs connector start kafka`), so it is started with that or not at all"
+        "a live external feed - its rows come from a Kafka consumer (the q feed "
+        "kafka_feed1, or `uqs connector start kafka`), so it is started with that or not at all"
+    ),
+    "kafka_feed1": (
+        "a live external feed - it consumes a Kafka topic with KX's kfk library "
+        "(UQF_KFK_HOME, UQF_KAFKA_BROKERS), so it is started on demand, never with the stack"
     ),
     "exec_bars1": (
         "on demand: it bars the executions tape, which the fx and crypto chains "

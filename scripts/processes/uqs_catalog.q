@@ -118,8 +118,8 @@ hidden[`fx_position_open]:
     "fxpositions1's book as each day opens (#943), published so a restart restores the carried positions from the day's log. A record for recovery, not a view: fx_position is the book to browse";
 hidden[`position_open]:
     "posbook1's book as each day opens (#943), for the same recovery; position is the one to browse";
-hidden[`kafka_client_flow]:
-    "the RAW Kafka consumer output, published by an external Python consumer and read only by kafka_flow1, which deduplicates it into client_flow. It holds every redelivery the broker sent, so a desk reading it would see replayed trades twice - client_flow is the one to browse";
+hidden[`kafka_message]:
+    "the RAW Kafka envelope - every record a consumer delivered, undecoded, published by the q feed kafka_feed1 (or the legacy Python consumer) and read only by kafka_flow1, which decodes and deduplicates it. It holds every redelivery the broker sent, so a desk reading it would see replayed records twice - the decoded tables (client_flow) are the ones to browse; kafka_dead_letter is the one to watch";
 
 / Browsable tables with NO row in scripts/torqconfig/dataaccess/querypolicy.csv,
 / each with the reason (#889). The browser's /query runs a whole select on
@@ -161,6 +161,8 @@ unbounded[`flink_vwap]:
     enlist "one row per sym per one-minute window Flink closes - a few thousand a day";
 unbounded[`deal_positions]:
     enlist "one row per pair per published window of demo_deals";
+unbounded[`kafka_dead_letter]:
+    enlist "NOT YET ASSESSED (#1481): empty on a healthy topic and one row per undecodable record otherwise, so its volume is the producer's, not ours. Read with no time range until a querypolicy.csv row has a measured basis";
 unbounded[`imported_trades]:
     enlist "NOT YET ASSESSED (#1363): found by the catalog gate once it counted worker datasets; a backfilled sample, not a feed - its policy row is due with a measured basis";
 unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`eq_orderbook`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`crypto_market_data`trades_copy]:
@@ -195,7 +197,9 @@ surface:{[]
 .qcat.describe[`deal_positions]:
     "Net FX notional per pair for one published window of demo_deals - buys add, sells take away - built by the rebuild_positions reaction as each window is backfilled, and written where the deals were. Appended per release: a re-published window adds its rows again, so read the latest";
 .qcat.describe[`client_flow]:
-    "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
+    "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (topic;partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
+.qcat.describe[`kafka_dead_letter]:
+    "A Kafka record kafka_flow1 could not turn into a row, kept instead of dropped: its coordinates, key and payload exactly as received, a reason (no_mapping, empty_payload, malformed or mapping) and what the decoder said. The count by reason is the health of a topic";
 .qcat.describe[`crypto_market_data]:
     "One moment of a crypto pair on one venue, replayed out of cryptorust's own recorded DuckDB capture: five book levels a side as vectors, the trade printed alongside them, and both clocks - the venue's source_time and the recorder's local_time, whose difference is the wire lag. The repeatable counterpart to crypto_book, which the same recorder fills live and which carries source_time but not the recorder's local_time";
 .qcat.describe[`trades_copy]:

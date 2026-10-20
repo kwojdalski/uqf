@@ -316,29 +316,42 @@
 .qetl.plant.eq_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 .qetl.plant.nested[`eq_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
 
-/ Client FX flow as the external Kafka consumer publishes it - one row per
-/ consumed record, in the source contract's own field order. Written by
-/ python/uqs/src/uqs/external/kafka_feed.py rather than by any q process,
-/ the same way databento_mbp10 above and crypto_book below are.
+/ Every Kafka record a consumer delivered, undecoded - the ENVELOPE (#1481).
+/ One row per DELIVERY, so a record the broker sent twice is here twice; that is
+/ deliberate. This table is the audit trail the decoded tables are checked
+/ against, and kafka_flow1 is what removes the repeats before they reach one.
 / .
-/ `partition` and `offset` are the Kafka coordinates of the record, and they
-/ are columns rather than consumer-side bookkeeping BECAUSE the plant is the
-/ thing that has to survive a redelivery. At-least-once delivery means a
-/ rebalance or a restart can replay a record this table has already seen;
-/ kafka1 drops those by comparing against a per-partition high-water mark,
-/ which it can only do if the coordinates travel with the row.
+/ `topic`, `partition` and `offset` are the record's coordinates, read off the
+/ message by the consumer and never out of the payload, so a producer cannot
+/ forge a replay into looking fresh. Together they are unique in the cluster;
+/ `offset` alone is not - two topics both have an offset 5 on partition 0.
+/ `msg_key` and `payload` are the characters as received. `broker_time` is the
+/ broker's own timestamp (null when the producer set none): `time` says when
+/ we heard, this says when the broker took it, and the difference is the lag.
 / .
-/ `broker_time` is the broker's own timestamp, kept for the reason
-/ databento_mbp10 keeps ts_event: `time` says when we heard about the
-/ record, not when it happened, and their difference is the lag.
-.qetl.plant.kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`long$(); offset:`long$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$())
+/ Published by whatever holds the subscription - the q feed kafka_feed1, or the
+/ legacy Python consumer. They are interchangeable on purpose: neither decodes.
+.qetl.plant.kafka_message:([]time:`timestamp$(); topic:`g#`symbol$(); partition:`long$(); offset:`long$(); msg_key:(); broker_time:`timestamp$(); payload:())
+.qetl.plant.nested[`kafka_message;`msg_key`payload!"CC"];
+
+/ A Kafka record kafka_flow1 could not turn into a row (#1481): the record's
+/ coordinates, key and payload exactly as received, why, and what the decoder
+/ said. `reason` is one of
+/   no_mapping     no kafka topic declaration names this topic
+/   empty_payload  the record had no payload (a tombstone, or a producer bug)
+/   malformed      not valid JSON, not an object, or a declared field absent or mistyped
+/   mapping        decoded, but the topic's mapping refused the row
+/ A record lands here INSTEAD of being dropped, and this table is read by
+/ whoever is told the feed is quiet: the count by reason is the health of a topic.
+.qetl.plant.kafka_dead_letter:([]time:`timestamp$(); topic:`g#`symbol$(); partition:`long$(); offset:`long$(); msg_key:(); broker_time:`timestamp$(); reason:`symbol$(); detail:(); payload:())
+.qetl.plant.nested[`kafka_dead_letter;`msg_key`detail`payload!"CCC"];
 
 / Written by the external cryptorust recorder rather than by any
 / scripts/torq_*.q process - see start_crypto_recorder. Carries `venue`
 / because a crypto book is venue-specific in a way an FX book here is not.
 / .
 / `time` is THIS stack's receipt stamp and `source_time` is the venue's own,
-/ as for market_data and kafka_client_flow. They were one column until the
+/ as for market_data and kafka_message. They were one column until the
 / two were found to be conflated: marks read `time` and published it AS
 / source_time, so the plant's clock reached a downstream consumer wearing the
 / venue's name, and no reader could tell them apart. cryptorust's BookUpdate
@@ -514,8 +527,11 @@
 / deal_time is when it was dealt; time, as on every plant table, is the plant's.
 .qetl.plant.duckdb_deals:([]time:`timestamp$(); deal_time:`timestamp$(); deal_id:`long$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
 
-/ kafka_flow1's output. <one line: what a row means>
-.qetl.plant.client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())
+/ One client FX trade, decoded by kafka_flow1 from a Kafka record on the `uqf.client.flow`
+/ topic (#1481). `topic`, `partition` and `offset` are the record's coordinates: they travel
+/ with the row so a restart can tell which records it already handled, and so any row
+/ can be traced to the exact record it came from. `broker_time` is the broker's clock.
+.qetl.plant.client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); topic:`symbol$(); partition:`long$(); offset:`long$())
 
 / crypto_market_data_backfill1's target: one recorded crypto book-and-trade
 / update, replayed from cryptorust's data/live.duckdb. Carries BOTH

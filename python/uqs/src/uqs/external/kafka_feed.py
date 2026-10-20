@@ -1,14 +1,18 @@
-"""The Kafka consumer - an external, non-TorQ publisher.
+"""The Python Kafka consumer - an external, non-TorQ publisher.
+
+A q process *can* hold a Kafka subscription - KX's ``kfk`` interface wraps
+``librdkafka`` - and #1481 adds a native q feed. This consumer publishes the
+same envelope and remains for hosts where the native library is not built.
+Pick one per consumer group.
 
 Like the Databento handler and the cryptorust recorders next door, this is
 not a ``process.csv`` row: it opens its own kdb+ IPC handle straight to the
 tickerplant and calls ``.u.upd``, so it is started and stopped here rather
-than by ``torq.sh``. A q process cannot hold a Kafka subscription, and TorQ
-only drives q.
+than by ``torq.sh``.
 
 **It carries bytes and decides nothing.** Records go onto the tickerplant in
-the plant table's own field order, and ``kafka_flow1``
-(``src/etl/streaming/kafka_flow.q``) decides which of them are new. The
+the plant table's own field order, undecoded, and ``kafka_flow1``
+(``src/etl/streaming/kafka_flow.q``) decides what they mean and which are new. The
 offset-commit ordering that makes that split correct is documented in
 ``kafka_streamer``, which is where it is implemented.
 
@@ -23,7 +27,8 @@ great deal heavier than a driver.
 
 So the q half stands alone: ``kafka_flow`` is driven by fixtures in
 ``tests/q/test_kafka_flow.q`` and proves its dedupe with no broker, no
-network and no Python. This file is what you add when you have a real topic.
+network and no Python. This file is what you add when you have a real topic
+and no native ``kfk`` library.
 """
 
 from __future__ import annotations
@@ -129,5 +134,5 @@ def stop_kafka_feed(paths: UqsPaths) -> None:
 def kafka_feed_status(paths: UqsPaths) -> dict[str, str]:
     """What the CLI renders. Strings, because it is a display table."""
     return _process(paths).status(
-        publishes=KAFKA_RAW_TABLE, **{"deduplicated by": "kafka_flow1 -> client_flow"}
+        publishes=KAFKA_RAW_TABLE, **{"decoded and deduplicated by": "kafka_flow1"}
     )
