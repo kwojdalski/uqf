@@ -196,6 +196,34 @@ to the sidecar. The consumer subscribes to those topics too. If `kafka_flow1` is
 not running, a record for an unowned topic is kept raw on `kafka_message` and
 nothing reports it; a decoder started later catches up from the log.
 
+## cryptorust book snapshots
+
+cryptorust's `kafka-market-data-recorder` publishes sampled full books to
+`cryptorust.book_snapshots` (key `venue:symbol`). `crypto_book_decoder1`
+([`crypto_book_decoder.q`](../../src/etl/streaming/crypto_book_decoder.q),
+mapping [`kafka_crypto_book.q`](../../src/etl/transforms/kafka_crypto_book.q))
+decodes them into `crypto_book_snapshot`. Subscribe with a consumer and the
+decoder side by side:
+
+```
+UQF_KAFKA_TOPICS=cryptorust.book_snapshots uqs start kafka_feed1
+uqs start crypto_book_decoder1
+```
+
+A record is JSON with `schema_version: 1`, `kind: "book_snapshot"`, three
+epoch-millisecond clocks, `venue`, `symbol` and `bids`/`asks` as `[price, size]`
+pairs, best first. The table has `sym`, `venue`, `source_time` (exchange),
+`local_time`, `sampled_time`, `bid_px0..4`, `bid_sz0..4`, `ask_px0..4`,
+`ask_sz0..4` and the record's `topic`, `partition`, `offset`. A side with fewer
+than five levels, or none, leaves null floats; levels past five are cut. Not
+`crypto_book`, the kdb recorder's vector-shaped book. An unknown
+`schema_version` or `kind`, a level that is not a pair, a missing field or a
+payload that is not JSON goes to `kafka_dead_letter`.
+
+The decoder's typed fields cover this record: `F` is a JSON array of numbers and
+a blank (`" "`) an array of arrays of numbers, so a mapping reads
+`[[price, size], ...]` without parsing JSON itself.
+
 ## Where the offset commit goes
 
 There are two places to put it, and neither is free.

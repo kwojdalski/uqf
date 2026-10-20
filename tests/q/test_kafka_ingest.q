@@ -157,6 +157,21 @@
     .qunit.assertEquals[f "{\"id\":\"9007199254740993\"}";enlist 9007199254740993j;"the same value sent as a string is read exactly"];
     .qunit.assertThrows[f;"{\"id\":1.5}";"id: expected a whole number below 2^53*";"a fraction is not an id"]};
 
+.qt.qetl.kafka.test_decode_json_reads_arrays_of_numbers_and_arrays_of_pairs:{[t]
+    r:.qetl.kafka.decode_json[`v`m`e!"F F";"{\"v\":[1,2.5],\"m\":[[1,2],[3,4.5]],\"e\":[]}"];
+    .qunit.assertEquals[r 0;1 2.5;"a flat array is a float list"];
+    .qunit.assertEquals[r 1;(1 2f;3 4.5);"an array of pairs is a list of float lists"];
+    .qunit.assertEquals[r 2;0#0f;"an empty array is an empty float list"];
+    m:.qetl.kafka.decode_json[(enlist `m)!enlist " ";];
+    .qunit.assertEquals[first m "{\"m\":[[1,2]]}";enlist 1 2f;"a single pair is still a list of pairs"];
+    .qunit.assertEquals[count first m "{\"m\":[]}";0;"no pairs at all"];
+    .qunit.assertThrows[m;"{\"m\":[1,2]}";"m: expected an array of arrays of numbers";"a flat array is not nested"];
+    .qunit.assertThrows[m;"{\"m\":[[1,\"a\"]]}";"m: expected an array of arrays of numbers";"a string inside a pair"];
+    .qunit.assertThrows[m;"{\"m\":3}";"m: expected an array of arrays of numbers";"a number is not an array"];
+    f:.qetl.kafka.decode_json[(enlist `v)!enlist "F";];
+    .qunit.assertThrows[f;"{\"v\":[1,\"a\"]}";"v: expected an array of numbers";"a string in a number array"];
+    .qunit.assertThrows[f;"{\"v\":\"1\"}";"v: expected an array of numbers";"a string is not an array"]};
+
 .qt.qetl.kafka.test_a_timestamp_with_only_a_date_is_refused:{[t]
     / The shared coercion layer's rule: a date where a timestamp belongs
     / collapses a whole day onto midnight.

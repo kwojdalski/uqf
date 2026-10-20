@@ -67,6 +67,13 @@ Kafka topic by `external/kafka_feed.py`, deduplicated on the record's
 (partition; offset) so a redelivery is never counted twice. Reads
 `kafka_client_flow`, publishes `client_flow`. [Details](kafka.md)
 
+**`crypto_book_decoder1` · cryptorust books from Kafka** --- the sampled full
+books cryptorust's `kafka-market-data-recorder` publishes to
+`cryptorust.book_snapshots`, five levels a side in wide columns, deduplicated on
+the record's (topic; partition; offset). Reads `kafka_message`, publishes
+`crypto_book_snapshot`. In the `crypto` profile; needs `kafka_feed1`.
+[Details](kafka.md#cryptorust-book-snapshots)
+
 **`flink_vwap1` · VWAP windows from Apache Flink** --- per-sym one-minute VWAP
 windows computed by a PyFlink job in `external/flink_vwap_streamer.py`, each
 published once: a window Flink emits again is dropped on `(sym; window_end)`.

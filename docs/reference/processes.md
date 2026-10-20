@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **45 uqf processes** — 68 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **46 uqf processes** — 69 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -38,7 +38,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `arbitrage1` | 6094 | etl | `processes/torq_stream.q` | `arbitrage` | `superbook` | `arbitrage` |
 | `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage`, `config_change` |
 | `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | — | `kafka_message` | `client_flow`, `kafka_dead_letter` |
+| `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | `client_flow` | `kafka_message` | `client_flow`, `kafka_dead_letter` |
 | `crypto_market_data_backfill1` | 6098 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_demo_markouts_backfill1` | 6099 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_transfer_backfill1` | 6100 | backfill | `processes/torq_backfill.q` | — | — | — |
@@ -60,6 +60,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `hdb_fx_markout_wide_backfill1` | 6116 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_fx_markouts_backfill1` | 6117 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `kafka_feed1` | 6118 | feed | `processes/torq_stream.q` | `kafka_message` | — | `kafka_message` |
+| `crypto_book_decoder1` | 6119 | etl | `processes/torq_stream.q` | `crypto_book_snapshot` | `kafka_message` | `crypto_book_snapshot`, `kafka_dead_letter` |
 
 ### Why a row deviates from the defaults
 
@@ -106,6 +107,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`hdb_fx_markout_wide_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout_wide, with the calculation fxmarkoutwide1 applies live
 - **`hdb_fx_markouts_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live
 - **`kafka_feed1`** — the native q Kafka consumer (KX kfk, pinned v1.6.6): publishes every record undecoded onto kafka_message, committing offsets only after the publish returned. Needs UQF_KFK_HOME and UQF_KAFKA_BROKERS, so it is started on demand, never with the stack. The Python consumer (uqs connector start kafka) publishes the same table; run one per group
+- **`crypto_book_decoder1`** — decodes cryptorust's Kafka book snapshots (topic cryptorust.book_snapshots) from kafka_message into crypto_book_snapshot, the top five levels a side as wide columns, deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter. The records come from a Kafka consumer (kafka_feed1 with UQF_KAFKA_TOPICS=cryptorust.book_snapshots), so it does not start with the stack: it would hold a plant connection to consume nothing
 
 ## Tables these processes publish
 
@@ -118,6 +120,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `cross_arbitrage` | `plant_tables.q` | `crossarb1` |
 | `crypto_book` | `plant_tables.q` | `cryptomock1` |
 | `crypto_book_1s` | `plant_tables.q` | `crypto_book_1s1` |
+| `crypto_book_snapshot` | `plant_tables.q` | `crypto_book_decoder1` |
 | `crypto_execution_quality` | `plant_tables.q` | `crypto_markout1` |
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
 | `demo_execution_quality` | `plant_tables.q` | `demo_markout1` |
@@ -131,7 +134,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |
 | `fx_position` | `plant_tables.q` | `fxpositions1` |
 | `fx_position_open` | `plant_tables.q` | `fxpositions1` |
-| `kafka_dead_letter` | `plant_tables.q` | `kafka_flow1` |
+| `kafka_dead_letter` | `plant_tables.q` | `crypto_book_decoder1`, `kafka_flow1` |
 | `kafka_message` | `plant_tables.q` | `kafka_feed1` |
 | `last_value` | `plant_tables.q` | `last_value1` |
 | `market_data` | `plant_tables.q` | `marketdata1` |

@@ -165,8 +165,8 @@ unbounded[`kafka_dead_letter]:
     enlist "NOT YET ASSESSED (#1481): empty on a healthy topic and one row per undecodable record otherwise, so its volume is the producer's, not ours. Read with no time range until a querypolicy.csv row has a measured basis";
 unbounded[`imported_trades]:
     enlist "NOT YET ASSESSED (#1363): found by the catalog gate once it counted worker datasets; a backfilled sample, not a feed - its policy row is due with a measured basis";
-unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`eq_orderbook`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`crypto_market_data`trades_copy]:
-    20#enlist "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this";
+unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`eq_orderbook`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`crypto_market_data`trades_copy`crypto_book_snapshot]:
+    21#enlist "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this";
 
 / The browsable surface: every described table that is not hidden.
 / .
@@ -216,3 +216,5 @@ surface:{[]
     "One component of one execution at one horizon, from the normalized FX markout calculation: the markout against the reference mid, the execution residual, each cross leg's allocation, or the reconciling residual (kind), in pips, with the prices behind it - a row per (venue, fill_id, horizon, kind, step)";
 .qcat.describe[`fx_markout_wide]:
     "One execution at one horizon, from the normalized FX markout calculation: the markout, the execution residual and the reconciling residual side by side, with up to three cross legs and their allocations - the wide layout of fx_markout, a row per (venue, fill_id, horizon)";
+.qcat.describe[`crypto_book_snapshot]:
+    "One sampled full order book from cryptorust's Kafka book snapshots (cryptorust.book_snapshots), decoded by crypto_book_decoder1 and deduplicated on the (topic;partition;offset) the record carries: the top five levels a side as wide columns (bid_px0 is the best bid, ask_sz4 the size at the fifth ask), null where a side is shorter, with the exchange, local and sampling clocks. Not crypto_book, which is the kdb recorder's vector-shaped book";

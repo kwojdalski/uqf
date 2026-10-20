@@ -55,7 +55,10 @@ def test_a_topic_declaration_pulls_in_the_transform_it_maps_through():
 
 
 def test_every_topic_is_claimed_by_the_job_whose_file_declares_it(plan):
-    assert plan.topics == {"uqf.client.flow": "kafka_flow"}
+    assert plan.topics == {
+        "uqf.client.flow": "kafka_flow",
+        "cryptorust.book_snapshots": "crypto_book_decoder",
+    }
     extra = {"src/etl/transforms/zz_map.q": SIDE_MAP, "src/etl/streaming/zz_decoder.q": SIDE_JOB}
     assert load_plan.load_plan(REPO, extra).topics["zz.topic"] == "zz_decoder"
     assert '.qetl.load.topics[`$"uqf.client.flow"]:`kafka_flow' in load_plan.render(plan)
@@ -77,6 +80,7 @@ def test_the_example_bundle_adds_a_topic_and_a_process_without_touching_the_tree
     assert with_bundle.select(["examplequotes1"]) == [rel]
     assert with_bundle.topics == {
         "uqf.client.flow": "kafka_flow",
+        "cryptorust.book_snapshots": "crypto_book_decoder",
         "example.quotes": "example_quotes_decoder",
     }
     # and no other process's closure changes

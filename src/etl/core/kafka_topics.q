@@ -54,8 +54,11 @@
 .qetl.kafka.coordinate_types:"sjjp"
 
 / The meta types a payload field may be declared as: float, long, symbol,
-/ timestamp, boolean.
-.qetl.kafka.field_types:"fjspb"
+/ timestamp, boolean; "F", a JSON array of numbers (a float list); and " ", a
+/ JSON array of arrays of numbers (a list of float lists - q's meta type for a
+/ column of nested lists). The two array types are what lets a record carry
+/ [[price,size],...] without the mapping parsing JSON itself.
+.qetl.kafka.field_types:"fjspbF "
 
 / The first whole number a JSON (float) number cannot be told from its neighbour: 2^53 and 2^53+1 read as the same float, so only values below it are exact.
 .qetl.kafka.exact_limit:9007199254740992f
@@ -100,6 +103,13 @@
     if[t="b";
         if[-1h=type v; :v];
         'who,"expected true or false"];
+    if[t="F";
+        / .j.k reads [] as the empty general list and [1,2] as a float vector.
+        if[(9h=type v) or (0h=type v) and 0=count v; :"f"$v];
+        'who,"expected an array of numbers"];
+    if[t=" ";
+        if[(0h=type v) and all {(9h=type x) or 0=count x} each v; :{"f"$x} each v];
+        'who,"expected an array of arrays of numbers"];
     'who,"has the undecodable declared type ",string t}
 
 / Decode a JSON object payload into the declared fields.
@@ -145,7 +155,7 @@
     fields:lead _ cols tbl;
     if[0=count fields; 'who,": transform ",string[mapping]," declares no payload fields"];
     if[count bad:fields where not meta_t[fields] in .qetl.kafka.field_types;
-        'who,": transform ",string[mapping],"'s fields ",(", " sv string bad)," must be float, long, symbol, timestamp or boolean"];
+        'who,": transform ",string[mapping],"'s fields ",(", " sv string bad)," must be float, long, symbol, timestamp, boolean, a float list or a list of float lists"];
     `input`schema!(first key d`inputs;fields!meta_t fields)}
 
 / Private: refuse a topic another job already owns.

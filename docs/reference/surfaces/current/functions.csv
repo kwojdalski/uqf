@@ -489,6 +489,7 @@ qetl.plant,connections,table,,
 qetl.plant,cross_arbitrage,table,,
 qetl.plant,crypto_book,table,,
 qetl.plant,crypto_book_1s,table,,
+qetl.plant,crypto_book_snapshot,table,,
 qetl.plant,crypto_execution_quality,table,,
 qetl.plant,crypto_market_data,table,,
 qetl.plant,crypto_sim_fills,table,,
@@ -1102,6 +1103,12 @@ qpipe.job.crypto_book_1s,on_endofday,value,,
 qpipe.job.crypto_book_1s,on_timer,value,,
 qpipe.job.crypto_book_1s,pending,table,,
 qpipe.job.crypto_book_1s,publish,value,,
+qpipe.job.crypto_book_decoder,done,dict,,
+qpipe.job.crypto_book_decoder,held,table,,
+qpipe.job.crypto_book_decoder,marks,dict,,
+qpipe.job.crypto_book_decoder,on_batch,function,2,t x
+qpipe.job.crypto_book_decoder,on_replayed,function,1,
+qpipe.job.crypto_book_decoder,publish,value,,
 qpipe.job.crypto_market_data_backfill,checkpoint,function,1,cursor
 qpipe.job.crypto_market_data_backfill,cleanup,function,1,
 qpipe.job.crypto_market_data_backfill,facts,function,1,batch
@@ -1876,6 +1883,10 @@ qpipe.transform.fx_source_adapters,spot_codes,value,,
 qpipe.transform.fx_source_adapters,tape_sides,value,,
 qpipe.transform.kafka_client_flow,map,function,1,m
 qpipe.transform.kafka_client_flow,message,table,,
+qpipe.transform.kafka_crypto_book,depth,value,,
+qpipe.transform.kafka_crypto_book,map,function,1,m
+qpipe.transform.kafka_crypto_book,message,table,,
+qpipe.transform.kafka_crypto_book,ts,function,1,ms
 qpipe.transform.order_outcome,dimensions,value,,
 qpipe.transform.order_outcome,outcomes,value,,
 qpipe.transform.order_outcome,status_map,function,2,codes outs
