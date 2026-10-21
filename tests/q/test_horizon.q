@@ -549,8 +549,8 @@
 
 .qt.qetl.job.stream.horizons.why:{[rows;now]
     d:.qt.qetl.job.stream.horizons.rd[];
-    h:([] sym:count[rows]#`a; source:rows[;0]; time:.qt.qetl.job.stream.horizons.t0+0D00:00:01*rows[;1]);
-    first .qetl.job.stream.horizons.not_ready[d;.qetl.job.stream.horizons.reach[d;h];enlist .qt.qetl.job.stream.horizons.t0;enlist enlist `a;.qt.qetl.job.stream.horizons.t0+0D00:00:01*now]}
+    h:([] sym:count[rows]#`a; source:rows[;0]; time:.qt.qetl.job.stream.horizons.t0+`timespan$1e9*rows[;1]);
+    first .qetl.job.stream.horizons.not_ready[d;.qetl.job.stream.horizons.reach[d;h];enlist .qt.qetl.job.stream.horizons.t0;enlist enlist `a;.qt.qetl.job.stream.horizons.t0+`timespan$1e9*now]}
 
 .qt.qetl.job.stream.horizons.test_readiness_needs_every_source_with_a_book_inside_max_age_of_the_horizon:{[t]
     / a at T+11 has passed the horizon; b's last book, T+8, is inside max_age of it and has not
