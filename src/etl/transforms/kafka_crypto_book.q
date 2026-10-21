@@ -20,8 +20,10 @@
 / .
 / A RECORD THIS MAPPING CANNOT STAND BEHIND is refused, by name, and goes to
 / kafka_dead_letter with reason `mapping`: a schema_version other than 1, a kind
-/ other than book_snapshot, a level that is not a [price,size] pair, a
-/ non-positive timestamp. Its neighbours in the batch publish normally. The
+/ other than book_snapshot, a level that is not a [price,size] pair (a null
+/ price or size is not a number: serde_json writes a NaN or infinite f64 as
+/ null), a timestamp outside [2000.01.01; 2100.01.01) as epoch milliseconds
+/ (microseconds overflow past it, seconds land in 1970). Its neighbours in the batch publish normally. The
 / topic is DECLARED in streaming/crypto_book_decoder.q, beside its job.
 
 \d .
@@ -51,14 +53,16 @@
 / The mapping: refuse what is not a version-1 book snapshot, else lay the levels out wide.
 / @param m the decoded records
 / @return crypto_book_snapshot's published columns
-/ @throws error naming the offending offsets when a record is of another version or kind, has a level that is not a pair, or a non-positive timestamp
+/ @throws error naming the offending offsets when a record is of another version or kind, has a level that is not a pair, or a timestamp outside the plausible epoch-millisecond window
 / @eg cols .qpipe.transform.kafka_crypto_book.map .qpipe.transform.kafka_crypto_book.message
 .qpipe.transform.kafka_crypto_book.map:{[m]
-    pairs:{all 2=count each x};
+    pairs:{all (2=count each x) and not any each null x};
     badpair:not (pairs each m`bids) and pairs each m`asks;
-    badtime:(m[`sampled_at_ms]<=0) or (m[`exchange_timestamp_ms]<=0) or m[`local_timestamp_ms]<=0;
+    / plausible epoch milliseconds, [2000.01.01; 2100.01.01): a unit slip is refused, not published
+    inwin:{[w;x] (x>=w 0) and x<w 1}[946684800000 4102444800000j];
+    badtime:not (inwin m`sampled_at_ms) and (inwin m`exchange_timestamp_ms) and inwin m`local_timestamp_ms;
     bad:(m[`schema_version]<>1) or (m[`kind]<>`book_snapshot) or badpair or badtime;
-    if[any bad; '"not a version-1 book_snapshot with [price,size] levels and positive timestamps: offsets ",", " sv string m[`offset] where bad];
+    if[any bad; '"not a version-1 book_snapshot with [price,size] levels and epoch-millisecond timestamps: offsets ",", " sv string m[`offset] where bad];
     n:til .qpipe.transform.kafka_crypto_book.depth;
     px:{[m;s;n] .qpipe.transform.kafka_crypto_book.level[m s;n;0]}[m];
     sz:{[m;s;n] .qpipe.transform.kafka_crypto_book.level[m s;n;1]}[m];
