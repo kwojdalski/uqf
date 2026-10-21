@@ -2,6 +2,44 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-10-21
+
+**Overview.** A week of work, 59 merged PRs. The headline additions: attaching
+uqf jobs to an existing TorQ stack, including attached backfills; native Kafka
+ingestion in q (KX kfk) with per-topic decoders; and a wide crypto book table
+decoded from cryptorust's Kafka feed. Also: the quant library consolidated into
+seven `.qf` domains, test suites organised under `.qt`, new markout, liquidity
+and order-quality jobs with bounded twins, and a long run of bugfinder fixes.
+
+**Changes by area**
+
+- **`src/etl/core`:** Kafka ingest, topics, decoders and diagnostics: an
+  envelope table, dedup on (topic, partition, offset), dead letters, and offsets
+  committed only after their rows are published. Horizon `ready_on`/`retain_by`.
+  Fixes: a replace write confined to its own partition, the clip rounded down to
+  the bar edge, `max_age` 0Wn, zoned dates refused, rolling eviction on the
+  grid, and the carry replay.
+- **`src/etl/streaming`, `transforms`, `workers`:** `kafka_feed1`, `kafka_flow1`
+  and `crypto_book_decoder1` (`crypto_book_snapshot`). fx_markout long and wide
+  plus bounded twins, a one-minute book liquidity job, and the order-quality
+  series and its twin. Bounded outputs take their shape from the plant.
+- **`src/` quant library:** seven PeachQ-native `.qf` domains with one-level
+  `\d` everywhere. Fixes: cross attribution with non-canonical syms,
+  `.qdesk.apply_fills` refusing null fills, and `cross_pairs` excluding pairs
+  that are quoted directly.
+- **`python/uqs`:** `uqs job attach`/`detach`/`list attachments` with a plan,
+  preflight, verify, rollback, auditable overrides and a start gate. The CLI is
+  regrouped; `deploy history`; connection-budget planning for monitor1.
+- **`tests/`, `scripts/`, CI:** test suites under `.qt`, found by discovery.
+  Closed CI and hook gate holes, a diagram port-label gate, and qlinter findings
+  in our own q cut from 105 to 4.
+- **`lib/`:** vendored KX ml 4.1.0; HDB repair through KX dbmaint.
+- **`sidecars/`, `docs/`:** Kafka example and crypto example bundles, a
+  cryptorust Kafka books guide, and the attach workflow documented.
+
+**Files changed:** 1212 files changed, 156517 insertions(+), 17864 deletions(-)
+(702 files and 52804 insertions outside the vendored `lib/`).
+
 ## stable/2026-10-14
 
 **Overview.** Four days of bug and architecture fixes, 101 merged PRs. Most

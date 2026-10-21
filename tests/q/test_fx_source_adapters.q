@@ -180,6 +180,14 @@
     .qunit.assertThrows[.qt.qpipe.transform.fx_source_adapters.from_levels;.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.1;0n)];
         "*with a price but no quantity*";"a priced level with no size is still refused, under its own message"]};
 
+.qt.qpipe.transform.fx_source_adapters.test_a_priced_zero_quantity_level_is_withdrawn_not_top_of_book:{[tc]
+    / #1502: 1.1003 with no size must not be the best bid nor move the mid
+    b:raze (.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.1003;0f)];.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;1;(1.1001;1e6)];.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1012;1e6)]);
+    r:.qt.qpipe.transform.fx_source_adapters.from_levels[b];
+    .qunit.assertEquals[(first r`bid_prices;first r`bid_sizes);(enlist 1.1001;enlist 1e6);"only the sized bid is a level"];
+    c:.qt.qpipe.transform.fx_source_adapters.from_levels[.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.1003;0f)]];
+    .qunit.assertEquals[(count c;count first c`bid_prices);(1;0);"a snapshot of only withdrawn levels has an empty ladder"]};
+
 .qt.qpipe.transform.fx_source_adapters.test_an_ineligible_row_is_not_judged_malformed:{[tc]
     / a forward with no price at all is not this contract's business, so it is not an error either
     b:raze (.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`1W;`bid;0;(0n;0n)];.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.0999;1e6)]);

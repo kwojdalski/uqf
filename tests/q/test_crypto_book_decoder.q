@@ -106,6 +106,24 @@
         "malformed or empty by the decoder, the unknown version, kind and a 3-element level by the mapping"];
     .qunit.assertTrue[(d[`detail] 2) like "*offsets 3*";"the refusal names the record"]};
 
+.qt.qpipe.job.crypto_book_decoder.test_a_null_in_a_level_or_a_unit_slip_in_a_time_is_dead_lettered:{[t]
+    / #1503: serde_json writes NaN/inf as null; #1501: us overflow to 2239, seconds land in 1970
+    .qt.qpipe.job.crypto_book_decoder.drive_ready[];
+    r:.qt.qpipe.job.crypto_book_decoder.record;
+    v:"\"venue\":\"binance\",";
+    k:"\"book_snapshot\"";
+    ok:"[[65000.5,0.25]]";
+    us:ssr[.qt.qpipe.job.crypto_book_decoder.full;"1760950800050";"1760950800050000"];
+    sec:ssr[.qt.qpipe.job.crypto_book_decoder.full;"1760950800100";"1760950800"];
+    pl:(.qt.qpipe.job.crypto_book_decoder.full; r["1";k;v;"[[65000.5,0.25],[null,1.5],[64999.0,2.0]]";ok];
+        r["1";k;v;"[[65001.0,null]]";ok]; r["1";k;v;ok;"[[null,null]]"]; us; sec);
+    .qt.qpipe.job.crypto_book_decoder.push[(count pl)#0j;til count pl;pl];
+    b:.qt.qpipe.job.crypto_book_decoder.rows_of[`crypto_book_snapshot];
+    d:`offset xasc .qt.qpipe.job.crypto_book_decoder.rows_of `kafka_dead_letter;
+    .qunit.assertEquals[b`offset;enlist 0j;"only the clean record is a book"];
+    .qunit.assertEquals[d`offset;1 2 3 4 5j;"each bad one is a dead letter"];
+    .qunit.assertEquals[d`reason;5#`mapping;"refused by the mapping"]};
+
 .qt.qpipe.job.crypto_book_decoder.test_the_two_book_tables_are_distinct:{[t]
     .qunit.assertTrue[not `crypto_book_snapshot~`crypto_book;"declared apart"];
     .qunit.assertTrue[`bid_prices in cols .qetl.plant.published `crypto_book;"crypto_book keeps its vector shape"];

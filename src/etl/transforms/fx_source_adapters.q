@@ -136,7 +136,8 @@
 / snapshot does not list - is an EMPTY ladder, the withdrawal market_data
 / documents, never a price. Levels of another category or settlement, and
 / instruments that are not a currency pair, are dropped; a snapshot all of whose
-/ levels were dropped is not published. A level with a price that is not positive
+/ levels were dropped is not published. A priced level of zero quantity is a
+/ withdrawn one and is dropped, never the best level. A level with a price that is not positive
 / and finite (a null price with a null or zero quantity is the emptied-side marker),
 / a price with no quantity, a negative quantity or an unknown side is refused.
 / @param batch a book_levels batch, whole snapshots
@@ -153,7 +154,8 @@
     marker:null[kept`px] & (null[kept`qty] | 0f>=kept`qty);
     .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a price but no quantity";kept`px;(not null kept`px) & null kept`qty];
     .qpipe.transform.fx_source_adapters.refuse["book_levels";"with a price that is not positive and finite";kept`px;(not marker) & not .qpipe.transform.fx_source_adapters.positive[kept`px]];
-    levels:select from kept where not marker;
+    / a zero-quantity level is a withdrawn one (book_levels): priced or not, it is no liquidity and no top of book
+    levels:select from kept where not marker, not qty=0f;
     if[0=count kept; :0#.qpipe.transform.fx_source_adapters.market_data];
     snaps:0!select by sym:pair, source:feed, source_time:ts from kept;
     n:count snaps;
