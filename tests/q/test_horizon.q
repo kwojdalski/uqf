@@ -541,3 +541,30 @@
     (.qt.qetl.job.stream.horizons.ns[ok;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0]];
     (.qt.qetl.job.stream.horizons.ns[ok;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:01;
     .qunit.assertEquals[count .qt.qetl.job.stream.horizons.sent;1;"a passing check lets it through"]};
+
+/ --- readiness per series, and the grace that bounds it (#1523, #1524) -----------------------------
+
+/ The declaration fields readiness reads: horizon 10s, lookback 2s, max_age 5s, max_lateness 30s.
+.qt.qetl.job.stream.horizons.rd:{[] `by`retain_by`reference_time`horizon`lookback`max_age`max_lateness!(enlist `sym;`sym`source;`time;0D00:00:10;0D00:00:02;0D00:00:05;0D00:00:30)}
+
+.qt.qetl.job.stream.horizons.why:{[rows;now]
+    d:.qt.qetl.job.stream.horizons.rd[];
+    h:([] sym:count[rows]#`a; source:rows[;0]; time:.qt.qetl.job.stream.horizons.t0+`timespan$1e9*rows[;1]);
+    first .qetl.job.stream.horizons.not_ready[d;.qetl.job.stream.horizons.reach[d;h];enlist .qt.qetl.job.stream.horizons.t0;enlist enlist `a;.qt.qetl.job.stream.horizons.t0+`timespan$1e9*now]}
+
+.qt.qetl.job.stream.horizons.test_readiness_needs_every_source_with_a_book_inside_max_age_of_the_horizon:{[t]
+    / a at T+11 has passed the horizon; b's last book, T+8, is inside max_age of it and has not
+    rows:((`a;-3);(`b;-3);(`a;11);(`b;8));
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[rows;12];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"b is behind, whatever a has reached"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[rows,enlist (`b;10);12];"";"ready once b has reached the horizon too"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[((`a;-3);(`b;-3);(`a;11);(`b;4));12];"";"a source whose last book is older than max_age at the horizon sets nothing"]};
+
+.qt.qetl.job.stream.horizons.test_the_grace_after_max_lateness_waives_a_silent_source_and_the_lookback_reach:{[t]
+    behind:((`a;-3);(`b;-3);(`a;11);(`b;8));
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;39];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"a second short of horizon + max_lateness"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;40];"";"at horizon + max_lateness a book stamped earlier cannot still arrive"];
+    / no book at or before T-2s, one at T-0.5s: the lookback reach alone
+    start:((`a;-0.5);(`a;11));
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[start;12];"no time at or before 2026.10.09D09:59:58.000000000 for a";"an older book could still arrive"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[start;40];"";"waived at the grace"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[enlist (`a;11);40];"no time at or before 2026.10.09D10:00:00.000000000 for a";"but an anchor at the event itself is still required"]};

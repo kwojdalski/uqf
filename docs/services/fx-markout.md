@@ -188,6 +188,13 @@ kind's existing `reference` readiness, kept; the wall condition added by `both`
 stops an execution being scored early, it does not let one be scored without
 coverage.
 
+Coverage is per source: every source with a book within `max_age` of the
+furthest horizon must have advanced to it, not just the first to pass it. The
+source wait and the reach back to the most negative horizon each last only until
+`max_lateness` after the horizon on the plant clock; then a silent source, or
+books that start inside the lookback, leave those horizons `unavailable` as a
+refill does, rather than holding or dropping the execution.
+
 Under the same rule a live job and a refill can differ in one place only: an
 execution whose books never cover it is **not scored** live (and sits in
 `expired`), and is scored with status `unavailable` by a refill. For executions
