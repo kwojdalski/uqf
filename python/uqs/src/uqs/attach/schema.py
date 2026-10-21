@@ -106,9 +106,16 @@ class TableSpec:
     #: (column, char): `meta`'s char - lower case typed, UPPER case a nested column of that
     #: element type, " " an untyped column (refused by check_publishable)
     columns: tuple[tuple[str, str], ...]
+    #: the declared TorQ sort rule (#1517), in sort order: (column, attribute), attribute
+    #: one of SORT_ATTRIBUTES ("" = none). Empty = nothing declared: the stack's own
+    #: sort.csv decides, and preflight checks that it can.
+    sort: tuple[tuple[str, str], ...] = ()
 
     def as_pairs(self) -> list[list[str]]:
         return [[name, char] for name, char in self.columns]
+
+    def sort_pairs(self) -> list[list[str]]:
+        return [[name, att] for name, att in self.sort]
 
     @property
     def sha(self) -> str:
@@ -123,6 +130,65 @@ class TableSpec:
             ty = next((k for k, v in TYPE_CHARS.items() if v == char), None)
             parts.append(f"{name}:()" if char == MIXED or char.isupper() else f"{name}:`{ty}$()")
         return f"{self.name}:([] {'; '.join(parts)})"
+
+
+#: The attributes a sort.csv row may name, as TorQ's `.sort.getsortcsv` allows them.
+SORT_ATTRIBUTES = ("", "p", "s", "g", "u")
+_SORTING_LINE = re.compile(r"^(?:\.qetl\.plant\.)?sorting\[`([a-z_][a-z0-9_]*);(.*)\]\s*;?\s*$")
+
+
+def parse_sorting(line: str) -> tuple[str, tuple[tuple[str, str], ...]] | None:
+    """(table, ((column, attribute), ...)) of one `sorting[`table;`sym`time!`p`]` line -
+    the columns in sort order, each with its attribute (`` ` `` for none) - or None when
+    `line` is not one. Raises SchemaError for a sorting line it cannot read: the
+    declaration is the storage layout, so a guess would defeat it (#1517)."""
+    m = _SORTING_LINE.match(line.strip())
+    if m is None:
+        return None
+    table, body = m.group(1), m.group(2)
+    left, sep, right = body.partition("!")
+    cols = re.findall(r"`([a-z][a-zA-Z0-9_]*)", left)
+    atts = re.sub(r"enlist|[()\s]", "", right)
+    if not sep or not atts.startswith("`") or not cols:
+        raise SchemaError(
+            f"{table}: cannot read the sorting[] line {line.strip()[:80]!r} - an attachment "
+            "takes `sorting[`table;`sym`time!`p`]` or `(enlist `time)!enlist `"
+        )
+    names = atts.split("`")[1:]
+    if len(names) != len(cols) or re.sub(r"[`a-z]", "", atts):
+        raise SchemaError(
+            f"{table}: sorting[] names {len(cols)} column(s) and {len(names)} attribute(s) in "
+            f"{line.strip()[:80]!r}; give one attribute per column, `` ` `` for none"
+        )
+    return table, tuple(zip(cols, names, strict=True))
+
+
+def check_sorting(spec: TableSpec) -> None:
+    """The declared sort rule is one TorQ can apply to `spec` (#1517): every column is
+    one of the table's own scalar columns, named once; every attribute is one
+    `.sort.getsortcsv` accepts; and `p` or `s` sits on the FIRST sort column only - the
+    one the sort leaves in runs or in order, so any other would fail at end of day."""
+    have = dict(spec.columns)
+    seen: list[str] = []
+    for i, (column, att) in enumerate(spec.sort):
+        where = f"{spec.name}: sort column {column}"
+        if column not in have:
+            raise SchemaError(f"{where} is not one of the table's columns")
+        if have[column] == MIXED or have[column].isupper():
+            raise SchemaError(f"{where} holds a list per row; a sort needs a scalar column")
+        if column in seen:
+            raise SchemaError(f"{where} is named twice")
+        if att not in SORT_ATTRIBUTES:
+            raise SchemaError(
+                f"{where}: attribute {att!r} is not one TorQ's sort.csv takes "
+                f"({', '.join(repr(a) for a in SORT_ATTRIBUTES)})"
+            )
+        if att in ("p", "s") and i:
+            raise SchemaError(
+                f"{where}: `{att}# only holds on the first sort column, which the sort leaves "
+                f"{'grouped' if att == 'p' else 'in order'}; {spec.sort[0][0]} is first"
+            )
+        seen.append(column)
 
 
 _NESTED_LINE = re.compile(r"^(?:\.qetl\.plant\.)?nested\[`([a-z_][a-z0-9_]*);(.*)\]\s*;?\s*$")

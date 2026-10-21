@@ -540,6 +540,8 @@ qetl.plant,quote,table,,
 qetl.plant,reference_data,table,,
 qetl.plant,schema,function,1,t
 qetl.plant,shape,function,1,t
+qetl.plant,sort_rules,dict,,
+qetl.plant,sorting,function,2,table_name rule
 qetl.plant,superbook,table,,
 qetl.plant,trade,table,,
 qetl.plant,trades,table,,

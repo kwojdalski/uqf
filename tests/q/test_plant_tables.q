@@ -138,6 +138,44 @@
     .qunit.assertThrows[.qetl.plant.nested[`mkt_orderbook;];`bid_prices;
         "nested: mkt_orderbook's element types must be a dictionary*";"refused before `value` could read a variable"]};
 
+/ --- sort rules: a table's storage layout, declared (#1517) ---------------
+
+.qt.qetl.plant.test_sorting_records_the_columns_in_order_with_their_attributes:{[t]
+    r:.qetl.plant.sorting[`arbitrage;`sym`time!`p`];
+    got:select column,att from .qetl.plant.sort_rules where table=`arbitrage;
+    delete from `.qetl.plant.sort_rules where table=`arbitrage;
+    .qunit.assertEquals[(r;got);(`arbitrage;([] column:`sym`time; att:`p`));
+        "sorted by sym then time, p# on sym - what attach writes to sort.csv"]};
+
+.qt.qetl.plant.test_sort_rules_are_not_a_plant_table:{[t]
+    .qunit.assertTrue[not `sort_rules in .qetl.plant.names[];"a keyed lookup, not a table the plant carries"]};
+
+.qt.qetl.plant.test_sorting_refuses_a_column_the_table_lacks:{[t]
+    .qunit.assertThrows[.qetl.plant.sorting[`arbitrage;];(enlist `securityId)!enlist `p;
+        "sorting: arbitrage has no column securityId";"never inferred, never invented"]};
+
+.qt.qetl.plant.test_sorting_refuses_a_nested_column:{[t]
+    .qunit.assertThrows[.qetl.plant.sorting[`mkt_orderbook;];(enlist `bid_prices)!enlist `;
+        "sorting: mkt_orderbook's bid_prices hold a list per row*";"a sort needs a scalar column"]};
+
+.qt.qetl.plant.test_sorting_refuses_p_off_the_first_column:{[t]
+    .qunit.assertThrows[.qetl.plant.sorting[`arbitrage;];`time`sym!``p;
+        "sorting: arbitrage: p and s hold only on the first sort column, time";"p# needs the runs the first sort column leaves"]};
+
+.qt.qetl.plant.test_sorting_refuses_an_attribute_torq_does_not_take:{[t]
+    .qunit.assertThrows[.qetl.plant.sorting[`arbitrage;];(enlist `sym)!enlist `x;
+        "sorting: arbitrage: attribute x is not one TorQ's sort.csv takes*";".sort.getsortcsv takes ` p s g u"]};
+
+.qt.qetl.plant.test_sorting_refuses_a_symbol_without_looking_it_up:{[t]
+    .qunit.assertThrows[.qetl.plant.sorting[`arbitrage;];`sym;
+        "sorting: arbitrage's rule must be a dictionary*";"refused before anything reads it"]};
+
+.qt.qetl.plant.test_sorting_refuses_a_table_declared_twice:{[t]
+    .qetl.plant.sorting[`arbitrage;(enlist `time)!enlist `];
+    r:@[.qetl.plant.sorting[`arbitrage;];(enlist `sym)!enlist `p;{x}];
+    delete from `.qetl.plant.sort_rules where table=`arbitrage;
+    .qunit.assertEquals[r;"sorting: arbitrage already has a sort rule";"one layout per table"]};
+
 / --- transform inputs are the plant's tables (#817) -----------------------
 / .
 / The output side is held to the plant by test_job_output_contracts.q, which

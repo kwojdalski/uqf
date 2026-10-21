@@ -63,7 +63,7 @@ def port_of(hpup: str) -> int | None:
     return int(tail) if tail.isdigit() else None
 
 
-def _ask(ipc: Ipc, host: str, procname: str, proctype: str, port: int, tables: list[str]) -> Proc:
+def ask(ipc: Ipc, host: str, procname: str, proctype: str, port: int, tables: list[str]) -> Proc:
     endpoint = Endpoint(procname, host, port)
     try:
         answer = ipc.call(endpoint, "probe", {"tables": tables})
@@ -80,7 +80,7 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     """
     stack, names = att.stack, [t.name for t in att.tables]
     found: list[Finding] = []
-    disc = _ask(ipc, stack.discovery_host, "discovery", "discovery", stack.discovery_port, names)
+    disc = ask(ipc, stack.discovery_host, "discovery", "discovery", stack.discovery_port, names)
     obs = Observation(disc)
     if not disc.up:
         found.append(
@@ -118,7 +118,7 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     else:
         port = port_of(tps[0]["hpup"])
         if port is not None:
-            obs.tickerplant = _ask(ipc, stack.host, tps[0]["procname"], TICKERPLANT, port, names)
+            obs.tickerplant = ask(ipc, stack.host, tps[0]["procname"], TICKERPLANT, port, names)
 
     want = set(stack.consumers)
     for kind in CONSUMERS:
@@ -126,7 +126,7 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
             port = port_of(svc["hpup"])
             if port is None:
                 continue
-            proc = _ask(ipc, stack.host, svc["procname"], kind, port, names)
+            proc = ask(ipc, stack.host, svc["procname"], kind, port, names)
             if not want or svc["procname"] in want:
                 obs.consumers.append(proc)
             elif proc.up:
@@ -144,7 +144,7 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     for svc in by_type.get(CHAINED, []):
         port = port_of(svc["hpup"])
         if port is not None:
-            obs.chained.append(_ask(ipc, stack.host, svc["procname"], CHAINED, port, names))
+            obs.chained.append(ask(ipc, stack.host, svc["procname"], CHAINED, port, names))
     skip = {"discovery", TICKERPLANT, CHAINED, *CONSUMERS}
     obs.others = [s for s in obs.services if s["proctype"] not in skip]
     return obs, found
