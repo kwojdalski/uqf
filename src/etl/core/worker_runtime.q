@@ -576,32 +576,29 @@
     `on_conflict`row_key`time_column`range_from`range_to`partition_column`partition!
         (strategy;cfg`target_key;cfg`window_column;w`range_from;w`range_to;cfg`partition_column;cfg`partition)}
 
-/ The workers other than this one that fill its dataset.
-/ @param worker the worker's name
-/ @return a symbol vector of worker names
-/ @private
-.qetl.job.bounded.runtime.siblings:{[worker]
-    ds:(.qetl.job.bounded.def worker)`dataset;
-    (exec name from .qetl.job.bounded.worker_cfg where dataset=ds) except worker}
-
-/ Would a `replace by this worker clear rows it did not write? True when
-/ another worker fills the dataset and this one has no partition_column to
-/ tell its rows from theirs (#1476).
+/ Would a `replace by this worker clear rows it did not write? True when the
+/ worker is one partition of its dataset and has no partition_column to tell
+/ its rows from the other partitions' (#1476). Decided from the worker's own
+/ declaration: a real worker process loads only its own worker
+/ (.qetl.load.only), so looking for siblings among the loaded workers found
+/ none there and the guard never fired (#1499). The unpartitioned sentinel
+/ declares the dataset is not shared by partition, so it is exempt.
 / @param worker the worker's name
 / @return 1b when a replace cannot be confined to the worker's own rows
 / @private
 .qetl.job.bounded.runtime.replace_unscoped:{[worker]
-    (null (.qetl.job.bounded.def worker)`partition_column) and 0<count .qetl.job.bounded.runtime.siblings worker}
+    cfg:.qetl.job.bounded.def worker;
+    (null cfg`partition_column) and not cfg[`partition]=.qetl.job.bounded.unpartitioned}
 
-/ Refuse a `replace that would delete a sibling's rows.
+/ Refuse a `replace that would delete another partition's rows.
 / @param worker the worker's name
-/ @throws error naming the siblings and the way out
+/ @throws error naming the partition and the way out
 / @private
 .qetl.job.bounded.runtime.require_replace_scoped:{[worker]
     if[not .qetl.job.bounded.runtime.replace_unscoped[worker]; :(::)];
-    '"on_conflict replace: ",string[worker]," shares dataset ",string[(.qetl.job.bounded.def worker)`dataset],
-     " with ",(", " sv string .qetl.job.bounded.runtime.siblings worker),
-     ", and its window holds their rows too - declare partition_column, the output column that holds each worker's partition, or use upsert"}
+    cfg:.qetl.job.bounded.def worker;
+    '"on_conflict replace: ",string[worker]," is partition ",string[cfg`partition]," of dataset ",string[cfg`dataset],
+     ", and its window may hold other partitions' rows too - declare partition_column, the output column that holds each worker's partition, or use upsert"}
 
 / The strategy a window is written under: the run's own, unless a fixture
 / run claimed the window. Its rows are then still there, and an upsert would
@@ -618,7 +615,7 @@
         / Switched to by the framework, not asked for, so it must not do what a
         / declared replace is refused for: delete a sibling's rows (#1476).
         if[.qetl.job.bounded.runtime.replace_unscoped[worker];
-            .qetl.log.warn[worker;"a fixture run wrote this window, but its rows cannot be cleared without clearing a sibling partition's - declare partition_column to clear them";
+            .qetl.log.warn[worker;"a fixture run wrote this window, but its rows cannot be cleared without clearing another partition's - declare partition_column to clear them";
                 `range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
             :oc];
         :`replace];
