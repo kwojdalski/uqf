@@ -60,6 +60,7 @@
     .qt.qpipe.job.example_quotes_decoder.push[enlist 0j;enlist 5j];
     r:first .qt.qpipe.job.example_quotes_decoder.quotes[];
     .qunit.assertEquals[(r`sym;r`topic;r`partition;r`offset);(`EURUSD;`example.quotes;0j;5j);"typed, with the record's coordinates"];
+    .qunit.assertEquals[r`broker_time;.qt.qpipe.job.example_quotes_decoder.t0-0D00:00:00.002;"the Kafka record's timestamp, appended by the framework"];
     .qunit.assertEquals[(r`bid;r`ask);1.0805 1.0807;"the prices the producer wrote"];
     .qunit.assertTrue[not `time in cols .qt.qpipe.job.example_quotes_decoder.quotes[];"the plant stamps time"]};
 

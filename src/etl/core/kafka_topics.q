@@ -12,7 +12,8 @@
 / per topic, the mapping, reads ONE table: the record's four coordinates
 / (topic, partition, offset, broker_time) followed by the payload's fields,
 / each typed by the table the transform declares. The decoder fills that
-/ table from the payload; the transform's output is rows for a declared plant
+/ table from the payload; the transform's output is the payload's columns only, and
+/ the framework appends the provenance (below) to make rows of a declared plant
 / table. tests/q/test_transform.q verifies the transform's examples on every
 / run, so a mapping is tested before a topic ever points at it.
 / .
@@ -29,12 +30,34 @@
 / job declaring a topic is refused here, and at generation across processes.
 / kafka_decoder.q is what a job does with the topics it owns.
 / .
-/ THE OUTPUT MUST CARRY topic, partition AND offset. They are how the
-/ deduplication survives a restart: kafka_flow rebuilds what it has
-/ processed from the rows it already published, and a table that dropped the
-/ coordinates could not say which records those were. It is also what lets a
-/ desk point at any output row and name the exact Kafka record it came from.
-/ Refused at define, not discovered at the first restart.
+/ THE PROVENANCE CONTRACT (#1511). Every decoded output table carries the same
+/ four columns, with the same types, whichever decoder fills it:
+/ topic (symbol), partition (long), offset (long), broker_time (timestamp).
+/ They are how the deduplication survives a restart - kafka_flow rebuilds what
+/ it has processed from the rows it already published - and what lets a desk
+/ name the exact Kafka record a row came from. broker_time is the Kafka
+/ RECORD's timestamp, as the consumer read it; it is never a payload time, and
+/ never stands in for one: a payload that has no time leaves the payload's own
+/ column null. A mapping does not build these columns. It returns the payload's
+/ columns only and the framework appends the four from the record
+/ (.qetl.kafka.propagate, kafka_ingest.q), so no decoder can spell them
+/ differently. A table that lacks one, or types it differently, is refused at
+/ define, not discovered at the first restart.
+/ .
+/ ONE RECORD, MANY ROWS. A mapping may return several rows for one record if
+/ its topic is declared `expand`. The output table then also carries
+/ row_index (long): the row's position among the rows its record produced,
+/ 0 for the first. The mapping returns a leading message_index column (which
+/ record of the batch the row came from, non-decreasing) and the framework
+/ numbers the rows. The index depends only on the mapping's output for that
+/ record, so a retry or a replay gives the same one. A record's rows are
+/ published together and handled together: the deduplication keys on the
+/ record's coordinates, and (coordinates, row_index) is a unique key of an
+/ expanded row. A one-to-one table does not carry row_index.
+/ .
+/ KEYS AND HEADERS stay on the raw envelope (kafka_message.msg_key). Headers are
+/ not carried: nothing in this tree reads one, and a column added to a live
+/ table breaks its tickerplant log's replay (docs/services/kafka.md).
 / .
 / A RECORD IS NEVER DROPPED SILENTLY. process (kafka_ingest.q) sends a record
 / it cannot map - no declaration for its topic, an empty or undecodable
@@ -49,9 +72,17 @@
 
 \d .
 
-/ The four columns every mapping's input starts with, and their meta types.
-.qetl.kafka.coordinates:`topic`partition`offset`broker_time
-.qetl.kafka.coordinate_types:"sjjp"
+/ The provenance contract: the four columns every decoded output table carries
+/ and every mapping's input starts with, and their meta types (see the header).
+.qetl.kafka.provenance:`topic`partition`offset`broker_time!"sjjp"
+.qetl.kafka.coordinates:key .qetl.kafka.provenance
+.qetl.kafka.coordinate_types:value .qetl.kafka.provenance
+
+/ The column an expanded output also carries: the row's position within its record.
+.qetl.kafka.row_index:`row_index
+
+/ The column an expanding mapping returns first: which record of the batch each row came from.
+.qetl.kafka.message_index:`message_index
 
 / The meta types a payload field may be declared as: float, long, symbol,
 / timestamp, boolean; "F", a JSON array of numbers (a float list); and " ", a
@@ -66,7 +97,7 @@
 / topic -> its declaration. Keyed, so one row per topic and a second define
 / of a topic replaces it. `owner` is the decoder job, null for a topic declared
 / without one (a test's, or a worked example read before there were decoders).
-.qetl.kafka.topic.registry:([topic:`symbol$()] mapping:`symbol$(); output:`symbol$(); format:`symbol$(); owner:`symbol$())
+.qetl.kafka.topic.registry:([topic:`symbol$()] mapping:`symbol$(); output:`symbol$(); format:`symbol$(); owner:`symbol$(); expand:`boolean$())
 
 / ------------------------------------------------------------- THE DECODERS
 
@@ -170,11 +201,44 @@
     if[(topic in key claims) and not owner=claims topic;
         'who," is owned by ",string[claims topic],", not ",string[owner]," - a topic is decoded by exactly one job"]}
 
+/ The columns a mapping returns for an output table: the payload's, in the table's order - the declared output of a topic's mapping transform.
+/ @param out the plant table
+/ @param expand 1b when the topic expands
+/ @return an empty table: message_index first when expanding, then the payload columns
+/ @eg cols .qetl.kafka.topic.payload_schema[`client_flow;0b]  ->  `sym`side`qty`price`client`trade_id
+.qetl.kafka.topic.payload_schema:{[out;expand]
+    pub:.qetl.plant.published out;
+    pay:(cols[pub] except .qetl.kafka.coordinates,.qetl.kafka.row_index)#pub;
+    $[expand;
+        flip (enlist[.qetl.kafka.message_index],cols pay)!(enlist `long$()),value flip pay;
+        pay]}
+
+/ Private: refuse an output table that does not carry the provenance contract.
+/ @param who the caller's name, for the message
+/ @param out the plant table
+/ @param expand 1b when the topic expands
+/ @throws error naming the missing or mistyped columns, or a row_index the topic does not use
+/ @private
+.qetl.kafka.topic.require_provenance:{[who;out;expand]
+    pub:.qetl.plant.published out;
+    if[count lost:.qetl.kafka.coordinates except cols pub;
+        'who,": ",string[out]," carries no ",(", " sv string lost)," - an output must carry the record's provenance (topic, partition, offset, broker_time), or a restart cannot tell which records it already handled"];
+    t:exec c!t from meta pub;
+    if[count bad:where not t[.qetl.kafka.coordinates]=.qetl.kafka.coordinate_types;
+        bad:.qetl.kafka.coordinates bad;
+        'who,": ",string[out],"'s ",", " sv {string[x]," must be a ",("sjp"!("symbol";"long";"timestamp")) .qetl.kafka.provenance x} each bad];
+    ri:.qetl.kafka.row_index;
+    if[expand and not ri in cols pub;
+        'who,": ",string[out]," carries no ",string[ri]," - an expanding topic numbers the rows of a record"];
+    if[expand and not "j"=t ri; 'who,": ",string[out],"'s ",string[ri]," must be a long"];
+    if[(not expand) and ri in cols pub;
+        'who,": ",string[out]," carries ",string[ri]," but the topic does not expand - declare `expand or drop the column"]}
+
 / Declare how one topic's records become rows of a plant table.
 / @param topic the Kafka topic name, as a symbol
-/ @param decl dict of mapping (a registered transform) and output (a plant table), and optionally format (default `json) and job (the decoder job that owns the topic)
+/ @param decl dict of mapping (a registered transform) and output (a plant table), and optionally format (default `json), job (the decoder job that owns the topic) and expand (1b when a record may become several rows; the output then carries row_index)
 / @return the topic
-/ @throws error naming what is wrong: an unregistered mapping, an input that is not coordinates then typed fields, an output that is not the plant table's shape or lacks topic/partition/offset, an unknown format, a topic another job already owns
+/ @throws error naming what is wrong: an unregistered mapping, an input that is not coordinates then typed fields, an output that is not the plant table's shape or lacks or mistypes topic/partition/offset/broker_time, an unknown format, a topic another job already owns
 / @eg decl:`mapping`output`job!(`kafka_client_flow;`client_flow;`kafka_flow); .qetl.kafka.topic.define[`uqf.client.flow;decl]
 .qetl.kafka.topic.define:{[topic;decl]
     who:"define: kafka topic ",string topic;
@@ -184,6 +248,8 @@
     fmt:$[`format in key decl; decl`format; `json];
     owner:$[`job in key decl; decl`job; `];
     if[not -11h=type owner; 'who,"'s job must be a symbol"];
+    expand:$[`expand in key decl; decl`expand; 0b];
+    if[not -1h=type expand; 'who,"'s expand must be a boolean"];
     .qetl.kafka.topic.require_free[who;topic;owner];
     if[not fmt in key .qetl.kafka.decoders;
         'who," declares format ",string[fmt],", which has no decoder - known: ",", " sv string key .qetl.kafka.decoders];
@@ -193,11 +259,10 @@
     out:decl`output;
     if[not out in .qetl.plant.names[];
         'who," publishes to ",string[out],", which the plant does not define"];
-    if[count lost:`topic`partition`offset except cols .qetl.plant.published out;
-        'who,": ",string[out]," carries no ",(", " sv string lost)," - an output must carry the record's coordinates, or a restart cannot tell which records it already handled"];
-    p:.qetl.transform.problems[.qetl.plant.published out;(.qetl.transform.def decl`mapping)`output;1b];
-    if[count p; 'who,": transform ",string[decl`mapping]," does not produce ",string[out],": ","; " sv p];
-    `.qetl.kafka.topic.registry upsert (topic;decl`mapping;out;fmt;owner);
+    .qetl.kafka.topic.require_provenance[who;out;expand];
+    p:.qetl.transform.problems[.qetl.kafka.topic.payload_schema[out;expand];(.qetl.transform.def decl`mapping)`output;1b];
+    if[count p; 'who,": transform ",string[decl`mapping]," does not return the payload columns of ",string[out],": ","; " sv p];
+    `.qetl.kafka.topic.registry upsert (topic;decl`mapping;out;fmt;owner;expand);
     topic}
 
 / One topic's declaration, or a refusal naming it.

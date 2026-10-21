@@ -65,8 +65,13 @@ second, so many rows share it. For when a book was seen, read `source_time` (the
 venue's stamp) or `sampled_time`. cryptorust samples every 100 ms
 (`--interval-ms`), and `kafka_feed1` polls every 200 ms. The table has `sym`,
 `venue`, `source_time`, `local_time`, `sampled_time`, `bid_px0..4`,
-`bid_sz0..4`, `ask_px0..4`, `ask_sz0..4`, `topic`, `partition` and `offset`
-([definition](../../src/etl/plant_tables.q)).
+`bid_sz0..4`, `ask_px0..4`, `ask_sz0..4`, `broker_time` (Kafka's record
+timestamp, not the venue's), `topic`, `partition` and `offset`
+([definition](../../src/etl/plant_tables.q)). `broker_time` was added by the
+[provenance
+contract](../services/kafka.md#provenance-what-every-decoded-row-says-about-its-record):
+after pulling it, roll the day or set the old `crypto_book_snapshot` log segment
+aside (the `length` row below) before restarting `rdb1`.
 
 cryptorust sends a book only when it has changed, and re-sends every book after
 it restarts. The re-sent books are new Kafka messages, so they are not
