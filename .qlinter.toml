@@ -34,6 +34,16 @@ ignore = ["QS001", "QS008", "QS010"]
 # handler, a transport step) and must keep their signatures, read or not;
 # QF016 stays on for src/, where an unread parameter can be a real bug (#1243).
 "tests/**" = ["QF016"]
+"sidecars/**/test_*.q" = ["QF016"]
+# The attach scripts are each one lambda sent to a live TorQ process, so they
+# run long. Their `steps` lists share one signature so a single loop can run,
+# snapshot and roll back every step, whatever arguments that step reads.
+"python/uqs/src/uqs/attach/q/*.q" = ["QF016", "QS006"]
+# kfk calls the error callback with (client id; code; reason).
+"src/etl/streaming/kafka_feed.q" = ["QF016"]
+# Documentation comments show definitions as examples.
+"tests/lib/discovery.q" = ["QL002"]
+"tests/lib/support.q" = ["QL002"]
 # `l` is the line-hit probe the coverage tool injects into instrumented source.
 "scripts/dev/coverage.q" = ["QS003", "QS006"]
 # QP003 (wall-clock-temporal) flags `.z.D` since q-lint 0.14.13. Here it is the

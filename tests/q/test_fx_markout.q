@@ -150,7 +150,7 @@
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.covered[]];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
-    r:.qt.qpipe.job.fx_markout.published `fx_markout;
+    r:.qt.qpipe.job.fx_markout.published[`fx_markout];
     .qunit.assertEquals[r;.qpipe.transform.fx_markout_outputs.sample_long[];
         "-1s, 0, +1s and +10s: markout -1, -1, 4, 8.5; the execution residual -1; the leg 0, 0, 5, 9.5"]};
 
@@ -165,7 +165,7 @@
     .qunit.assertTrue[(.qt.qpipe.job.fx_markout.t-0D00:00:03) in held;"the T-3s book is still the as-of answer for T-1s"];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.bk[.qt.qpipe.job.fx_markout.t+0D00:00:10.5;`EURUSD;`a;1.1000;1.1002]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:11];
-    r:.qt.qpipe.job.fx_markout.published `fx_markout;
+    r:.qt.qpipe.job.fx_markout.published[`fx_markout];
     mid:first exec price_t1 from r where kind=`total, horizon=-0D00:00:01;
     .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[mid;1.09];"scored against the T-3s book's mid 1.0900"];
     .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[first exec pips from r where kind=`total, horizon=-0D00:00:01;10000*1.09-1.1001];"-1010 pips"]};
@@ -174,7 +174,7 @@
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.covered[]];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
-    r:.qt.qpipe.job.fx_markout.published `fx_markout;
+    r:.qt.qpipe.job.fx_markout.published[`fx_markout];
     atzero:select from r where horizon=0D00:00:00;
     .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[first exec pips from atzero where kind=`total;first exec pips from atzero where kind=`execution];"at the execution the markout is the residual"];
     .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[first exec pips from atzero where kind=`leg;0f];"and nothing moved"]};
@@ -185,12 +185,12 @@
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.covered[]];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
-    inorder:.qt.qpipe.job.fx_markout.published `fx_markout;
+    inorder:.qt.qpipe.job.fx_markout.published[`fx_markout];
     .qt.qpipe.job.fx_markout.setUp_fresh[];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;reverse .qt.qpipe.job.fx_markout.covered[]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
-    .qunit.assertEquals[.qt.qpipe.job.fx_markout.published `fx_markout;inorder;"the execution first, the books newest first"]};
+    .qunit.assertEquals[.qt.qpipe.job.fx_markout.published[`fx_markout];inorder;"the execution first, the books newest first"]};
 
 .qt.qpipe.job.fx_markout.test_the_history_is_bounded_by_what_a_pending_execution_can_still_need:{[tc]
     / an hour of per-second books for each of two sources, with no execution waiting
@@ -275,8 +275,8 @@
 
 .qt.qpipe.job.fx_markout.test_long_and_wide_carry_the_same_values_identities_and_alignment:{[tc]
     .qt.qpipe.job.fx_markout.both .qt.qpipe.job.fx_markout.buy[];
-    long:.qt.qpipe.job.fx_markout.published `fx_markout;
-    wide:.qt.qpipe.job.fx_markout.published `fx_markout_wide;
+    long:.qt.qpipe.job.fx_markout.published[`fx_markout];
+    wide:.qt.qpipe.job.fx_markout.published[`fx_markout_wide];
     .qunit.assertEquals[count wide;4;"a row per horizon"];
     .qunit.assertEquals[(distinct wide`fill_id;distinct wide`venue;wide`horizon);(enlist `x1;enlist `a;exec distinct horizon from long);"the same identities and horizons"];
     keyed:{[long;hz;knd] first exec pips from long where horizon=hz, kind=knd}[long];
@@ -295,8 +295,8 @@
     {[e;nm] .qt.qpipe.job.fx_markout.feed[nm;`executions;e]}[e] each `fx_markout`fx_markout_wide;
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
     .qt.qpipe.job.fx_markout.tick[`fx_markout_wide;.qt.qpipe.job.fx_markout.t+0D00:00:10];
-    long:.qt.qpipe.job.fx_markout.published `fx_markout;
-    wide:.qt.qpipe.job.fx_markout.published `fx_markout_wide;
+    long:.qt.qpipe.job.fx_markout.published[`fx_markout];
+    wide:.qt.qpipe.job.fx_markout.published[`fx_markout_wide];
     w:first select from wide where horizon=0D00:00:01;
     / EURUSD (inverted, 1.25 -> 1.0) and EURPLN (5 -> 5.5): -10000 and -5000, markout -15100
     .qunit.assertEquals[(w`leg1;w`leg1_invert;w`leg2;w`leg2_invert);(`EURUSD;1b;`EURPLN;0b);"the legs in route order, with their inversion"];
@@ -314,7 +314,7 @@
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from f`market_data];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;update time:source_time+0D00:00:00.2, fee:0f, fee_ccy:`, book:`, product:` from f`executions];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;2026.09.17D11:00:30];
-    live:.qt.qpipe.job.fx_markout.published `fx_markout;
+    live:.qt.qpipe.job.fx_markout.published[`fx_markout];
     twin:.qetl.transform.apply[`hdb_fx_markouts_long;f];
     .qunit.assertTrue[0<count live;"the live job scored"];
     .qunit.assertEquals[live;delete time from twin;"identical rows: the same calculation, the same inputs"];
@@ -345,7 +345,7 @@
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.dead_source_books[]];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
-    r:.qt.qpipe.job.fx_markout.published `fx_markout;
+    r:.qt.qpipe.job.fx_markout.published[`fx_markout];
     tot:select horizon, price_t1, status from r where kind=`total;
     .qunit.assertEquals[count tot;4;"scored at all four horizons"];
     .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[tot`price_t1;4#1.1005];"the live source's mid 1.1005 at every horizon, not the dead source's 1.1007"];
@@ -357,7 +357,7 @@
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from b];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
-    live:.qt.qpipe.job.fx_markout.published `fx_markout;
+    live:.qt.qpipe.job.fx_markout.published[`fx_markout];
     twin:delete time from .qetl.transform.apply[`hdb_fx_markouts_long;f];
     .qunit.assertEquals[live;twin;"live and bounded agree with a dead source in the history"];
     .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[exec price_t1 from twin where kind=`total;4#1.1005];"and both price the live source"]};

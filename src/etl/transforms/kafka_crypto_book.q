@@ -63,9 +63,9 @@
     px:{[m;s;n] .qpipe.transform.kafka_crypto_book.level[m s;n;0]}[m];
     sz:{[m;s;n] .qpipe.transform.kafka_crypto_book.level[m s;n;1]}[m];
     head:`sym`venue`source_time`local_time`sampled_time!(m`symbol;m`venue;
-        .qpipe.transform.kafka_crypto_book.ts m`exchange_timestamp_ms;
-        .qpipe.transform.kafka_crypto_book.ts m`local_timestamp_ms;
-        .qpipe.transform.kafka_crypto_book.ts m`sampled_at_ms);
+        .qpipe.transform.kafka_crypto_book.ts[m`exchange_timestamp_ms];
+        .qpipe.transform.kafka_crypto_book.ts[m`local_timestamp_ms];
+        .qpipe.transform.kafka_crypto_book.ts[m`sampled_at_ms]);
     names:{`$x,/:string y};
     levels:(names["bid_px";n],names["bid_sz";n],names["ask_px";n],names["ask_sz";n])!(px[`bids]'[n]),(sz[`bids]'[n]),(px[`asks]'[n]),sz[`asks]'[n];
     flip head,levels,`topic`partition`offset!(m`topic;m`partition;m`offset)}

@@ -185,30 +185,30 @@
 .qt.qpipe.job.order_quality.test_a_redelivered_outcome_is_one_request:{[t]
     / the same row three times, and the same outcome re-sent with a later stamp
     r:raze (.qt.qpipe.job.order_quality.out[`a;`r1;30;`filled;`london];.qt.qpipe.job.order_quality.out[`a;`r1;30;`filled;`london];.qt.qpipe.job.order_quality.out[`a;`r1;30;`filled;`london];.qt.qpipe.job.order_quality.out[`a;`r1;20;`filled;`london]);
-    x:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`london;0D00:01];1 1 0;"four deliveries, one request"];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`london;0D01];1 1 0;"and in every window"]};
+    st:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`london;0D00:01];1 1 0;"four deliveries, one request"];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`london;0D01];1 1 0;"and in every window"]};
 
 .qt.qpipe.job.order_quality.test_a_multi_update_lifecycle_is_counted_once_at_its_terminal_outcome:{[t]
     / new, partially filled twice, filled: four status events, one request
     r:raze (.qt.qpipe.job.order_quality.out[`a;`r1;50;`unresolved;`london];.qt.qpipe.job.order_quality.out[`a;`r1;40;`unresolved;`london];.qt.qpipe.job.order_quality.out[`a;`r1;30;`unresolved;`london];.qt.qpipe.job.order_quality.out[`a;`r1;20;`filled;`london]);
-    x:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`london;0D00:01];1 1 0;"the denominator is 1, not 4"];
-    .qt.support.assertApprox[(first select from x where window=0D00:01)`fill_ratio;1f;1e-12;"fully filled"]};
+    st:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`london;0D00:01];1 1 0;"the denominator is 1, not 4"];
+    .qt.support.assertApprox[(first select from st where window=0D00:01)`fill_ratio;1f;1e-12;"fully filled"]};
 
 .qt.qpipe.job.order_quality.test_a_request_is_counted_when_it_ends_not_when_it_opens:{[t]
     / opened 5m ago, filled 30s ago: in the 1m window as a fill, and in the 5m window once
     r:raze (.qt.qpipe.job.order_quality.out[`a;`r1;290;`unresolved;`london];.qt.qpipe.job.order_quality.out[`a;`r1;30;`filled;`london]);
-    x:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`london;0D00:01];1 1 0;"in the minute its terminal event falls in"];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`london;0D00:05];1 1 0;"and once in the five minutes"]};
+    st:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`london;0D00:01];1 1 0;"in the minute its terminal event falls in"];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`london;0D00:05];1 1 0;"and once in the five minutes"]};
 
 .qt.qpipe.job.order_quality.test_a_request_still_open_is_in_no_count_and_its_group_has_null_ratios:{[t]
-    x:.qt.qpipe.job.order_quality.stat[.qt.qpipe.job.order_quality.out[`a;`r1;20;`unresolved;`boston];.qt.qpipe.job.order_quality.as_of];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`boston;0D00:01];0 0 0;"not in the denominator"];
-    r:first select from x where window=0D00:01;
+    st:.qt.qpipe.job.order_quality.stat[.qt.qpipe.job.order_quality.out[`a;`r1;20;`unresolved;`boston];.qt.qpipe.job.order_quality.as_of];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`boston;0D00:01];0 0 0;"not in the denominator"];
+    r:first select from st where window=0D00:01;
     .qunit.assertTrue[(null r`fill_ratio) and null r`reject_ratio;"null ratios, not a rate of zero"];
-    .qunit.assertEquals[count x;3;"the group is still a row per window: it has an outcome in the hour"]};
+    .qunit.assertEquals[count st;3;"the group is still a row per window: it has an outcome in the hour"]};
 
 .qt.qpipe.job.order_quality.test_an_unmapped_status_is_in_no_count:{[t]
     r:raze (.qt.qpipe.job.order_quality.out[`a;`r1;20;`unmapped;`london];.qt.qpipe.job.order_quality.out[`a;`r2;20;`filled;`london]);
@@ -222,9 +222,9 @@
 
 .qt.qpipe.job.order_quality.test_a_reject_followed_by_a_retry_is_two_requests:{[t]
     r:raze (.qt.qpipe.job.order_quality.out[`a;`r1;50;`rejected;`london];.qt.qpipe.job.order_quality.out[`a;`r2;20;`filled;`london]);
-    x:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`london;0D00:01];2 1 1;"a retry has its own id: two requests"];
-    .qt.support.assertApprox[(first select from x where window=0D00:01)`reject_ratio;0.5;1e-12;"half rejected"]};
+    st:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`london;0D00:01];2 1 1;"a retry has its own id: two requests"];
+    .qt.support.assertApprox[(first select from st where window=0D00:01)`reject_ratio;0.5;1e-12;"half rejected"]};
 
 .qt.qpipe.job.order_quality.test_the_same_id_from_two_sources_is_two_requests:{[t]
     r:raze (.qt.qpipe.job.order_quality.out[`a;`r1;50;`rejected;`london];.qt.qpipe.job.order_quality.out[`b;`r1;20;`filled;`london]);
@@ -236,9 +236,9 @@
 .qt.qpipe.job.order_quality.test_the_counting_policy_on_a_mixed_population:{[t]
     r:raze (.qt.qpipe.job.order_quality.out[`a;`r1;50;`filled;`london];.qt.qpipe.job.order_quality.out[`a;`r2;45;`filled;`london];.qt.qpipe.job.order_quality.out[`a;`r3;40;`rejected;`london];
         .qt.qpipe.job.order_quality.out[`a;`r4;35;`cancelled;`london];.qt.qpipe.job.order_quality.out[`a;`r5;30;`unresolved;`london];.qt.qpipe.job.order_quality.out[`a;`r6;25;`unmapped;`london]);
-    x:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
-    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[x;`london;0D00:01];4 2 1;"cancelled counts, open and unmapped do not"];
-    m:first select from x where window=0D00:01;
+    st:.qt.qpipe.job.order_quality.stat[r;.qt.qpipe.job.order_quality.as_of];
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.counts[st;`london;0D00:01];4 2 1;"cancelled counts, open and unmapped do not"];
+    m:first select from st where window=0D00:01;
     .qt.support.assertApprox[m`fill_ratio;0.5;1e-12;"2 of 4"];
     .qt.support.assertApprox[m`reject_ratio;0.25;1e-12;"1 of 4"]};
 
@@ -246,8 +246,8 @@
     .qunit.assertEquals[count .qt.qpipe.job.order_quality.stat[0#.qt.qpipe.job.order_quality.out[`a;`r1;20;`filled;`london];.qt.qpipe.job.order_quality.as_of];0;"no outcomes, no rows"];
     e:.qpipe.transform.order_quality.stats 0#.qetl.plant.columns[`order_outcomes;`source_time`source`request_id`outcome`book];
     .qunit.assertEquals[count e;0;"the transform itself, on an empty table"];
-    x:.qt.qpipe.job.order_quality.stat[.qt.qpipe.job.order_quality.out[`a;`r1;200;`filled;`london];.qt.qpipe.job.order_quality.as_of];
-    r:first select from x where window=0D00:01;
+    st:.qt.qpipe.job.order_quality.stat[.qt.qpipe.job.order_quality.out[`a;`r1;200;`filled;`london];.qt.qpipe.job.order_quality.as_of];
+    r:first select from st where window=0D00:01;
     .qunit.assertTrue[(r`n_orders)=0;"nothing in the minute"];
     .qunit.assertTrue[null r`fill_ratio;"null, as .qf.exec.fill_ratio says no requests is"]};
 

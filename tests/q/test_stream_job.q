@@ -1143,7 +1143,7 @@
     saved:.qetl.log.warn;
     `.qetl.log.warn set {[id;text;fields] `.qt.qetl.job.stream.fx_warned set (id;text;fields);};
     b:update price:0n from .qt.qetl.job.stream.orders_batch[] where order_id=2;
-    r:@[{.qt.qetl.job.stream.to_fx_positions x; 1b};b;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
+    r:@[{.qt.qetl.job.stream.to_fx_positions[x]; 1b};b;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
     `.qetl.log.warn set saved;
     .qunit.assertEquals[r;1b;"a null-priced fill does not crash the stream job"];
     .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 0);`fx_positions;"it is logged"];

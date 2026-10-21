@@ -86,7 +86,7 @@
 .qt.qetl.enrich.test_null_time_reference_row_is_never_attached:{[t]
     / A null-time row sorts first, so aj would match it for an event with no earlier
     / valid row: the status said missing while the row's mid came along (#1251).
-    nr:([] sym:`a`a; time:(0Np;.qt.qetl.enrich.s 10); mid:1.3 1.2);
+    nr:([] sym:`a`a; time:(0Np;.qt.qetl.enrich.s[10]); mid:1.3 1.2);
     r:.qf.mkt.lookup[nr;.qt.qetl.enrich.ev[`a`a;5 12];.qt.qetl.enrich.spec[0Nn]];
     .qunit.assertEquals[r`status;`missing`ok;"the early event has no valid prevailing row"];
     .qunit.assertEquals[r`mid;0n 1.2;"missing means null values: the null-time row's mid is not attached"];

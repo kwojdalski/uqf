@@ -177,9 +177,9 @@
 
 .qt.qpipe.job.kafka_flow.test_a_malformed_record_is_dead_lettered_and_marked_handled:{[t]
     .qt.qpipe.job.kafka_flow.drive_ready[];
-    b:.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;0 0 0j;0 1 2j;(.qt.qpipe.job.kafka_flow.payload 0;"not json";.qt.qpipe.job.kafka_flow.payload 2)];
+    b:.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;0 0 0j;0 1 2j;(.qt.qpipe.job.kafka_flow.payload[0];"not json";.qt.qpipe.job.kafka_flow.payload[2])];
     .qpipe.job.kafka_flow.on_batch[`kafka_message;b];
-    d:.qt.qpipe.job.kafka_flow.rows_of `kafka_dead_letter;
+    d:.qt.qpipe.job.kafka_flow.rows_of[`kafka_dead_letter];
     .qunit.assertEquals[(d`offset;d`reason;d`payload);(enlist 1j;enlist `malformed;enlist "not json");"on record, with its payload as received"];
     .qunit.assertEquals[exec offset from .qt.qpipe.job.kafka_flow.all_rows[];0 2j;"the neighbours publish"];
     .qpipe.job.kafka_flow.on_batch[`kafka_message;b];
@@ -188,7 +188,7 @@
 .qt.qpipe.job.kafka_flow.test_a_record_on_an_undeclared_topic_is_dead_lettered:{[t]
     .qt.qpipe.job.kafka_flow.drive_ready[];
     .qpipe.job.kafka_flow.on_batch[`kafka_message;.qt.qpipe.job.kafka_flow.batch_on[`unknown.topic;enlist 0j;enlist 0j;enlist "{}"]];
-    .qunit.assertEquals[(.qt.qpipe.job.kafka_flow.rows_of `kafka_dead_letter)`reason;enlist `no_mapping;"never silently dropped"];
+    .qunit.assertEquals[(.qt.qpipe.job.kafka_flow.rows_of[`kafka_dead_letter])`reason;enlist `no_mapping;"never silently dropped"];
     .qunit.assertEquals[.qt.qpipe.job.kafka_flow.published_to[];enlist `kafka_dead_letter;"and nothing else was published"]};
 
 / --- the shape ------------------------------------------------------------
@@ -229,7 +229,7 @@
 / marks: a driver whose every record was a repeat would publish nothing.
 .qt.qpipe.job.kafka_flow.contract_driver:{[]
     .qetl.job.stream.reset `kafka_flow;
-    .qpipe.job.kafka_flow.on_batch[`kafka_message;.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;0 0 0j;0 1 2j;(.qt.qpipe.job.kafka_flow.payload 0;"not json";.qt.qpipe.job.kafka_flow.payload 2)]];
+    .qpipe.job.kafka_flow.on_batch[`kafka_message;.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;0 0 0j;0 1 2j;(.qt.qpipe.job.kafka_flow.payload[0];"not json";.qt.qpipe.job.kafka_flow.payload[2])]];
     }
 
 / --- restarts: restoring what was handled and catching up ------------------
@@ -239,7 +239,7 @@
 / raw rows and the rows they produced, in the order they were logged. Offset 2
 / is a GAP below the highest handled offset, which a mark would call done.
 .qt.qpipe.job.kafka_flow.restart_log:{[]
-    pl:(.qt.qpipe.job.kafka_flow.payload 0;"not json";.qt.qpipe.job.kafka_flow.payload 2;.qt.qpipe.job.kafka_flow.payload 3;.qt.qpipe.job.kafka_flow.payload 4);
+    pl:(.qt.qpipe.job.kafka_flow.payload[0];"not json";.qt.qpipe.job.kafka_flow.payload[2];.qt.qpipe.job.kafka_flow.payload[3];.qt.qpipe.job.kafka_flow.payload[4]);
     raw:.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;5#0j;til 5;pl];
     out:.qetl.kafka.process .qetl.kafka.envelope_columns#raw 0 1 3;
     flow:out[`out]`client_flow;

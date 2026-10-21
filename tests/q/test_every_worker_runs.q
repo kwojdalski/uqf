@@ -284,8 +284,8 @@
 / @param dataset the plant table the worker writes
 / @return a short description of the departure, or an empty string when the output is either plant shape
 .qt.qpipe.worker_runs.departure:{[output;dataset]
-    sig:.qt.qpipe.worker_runs.signature output;
-    $[(sig~.qt.qpipe.worker_runs.signature .qetl.plant.shape dataset) or sig~.qt.qpipe.worker_runs.signature .qetl.plant.published dataset;
+    sig:.qt.qpipe.worker_runs.signature[output];
+    $[(sig~.qt.qpipe.worker_runs.signature[.qetl.plant.shape dataset]) or sig~.qt.qpipe.worker_runs.signature[.qetl.plant.published dataset];
       "";
       string[dataset]," output is ",(", " sv string cols output),
         " - neither .qetl.plant.shape nor .qetl.plant.published of it"]}
