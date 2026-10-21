@@ -198,11 +198,10 @@
 
 .qt.qetl.kafka.provenance.test_an_empty_output_is_the_tables_published_shape:{[t]
     d:.qetl.kafka.topic.def `prov.many;
-    src:.qt.qetl.kafka.provenance.many_in;
-    src:src upsert (`prov.many;0j;1j;.qt.qetl.kafka.provenance.t0;0j;1f);
+    src:([] topic:enlist `prov.many; partition:enlist 0j; offset:enlist 1j; broker_time:enlist .qt.qetl.kafka.provenance.t0; legs:enlist 0j; px:enlist 1f);
     r:.qetl.kafka.propagate[d;src;.qetl.kafka.topic.payload_schema[`prov_many;1b]];
     .qunit.assertEquals[count r;0;"a record that expanded to nothing"];
-    .qunit.assertEquals[meta r;meta .qetl.plant.published `prov_many;"and still the table's columns and types"];
+    .qunit.assertEquals[(cols r;exec t from meta r);(cols pub;exec t from meta pub:.qetl.plant.published `prov_many);"and still the table's columns and types"];
     .qunit.assertEquals[count (.qetl.kafka.process .qt.qetl.kafka.provenance.env[`prov.many;`long$();()])`dead;0;"an empty batch dead-letters nothing"]};
 
 / --- malformed metadata ----------------------------------------------------------

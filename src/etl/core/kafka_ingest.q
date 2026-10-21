@@ -240,6 +240,8 @@
         if[not mk in cols mapped; 'who,"returned no ",string[mk]," - an expanding mapping says which record each row came from"];
         idx:mapped mk;
         if[not 7h=type idx; 'who,string[mk]," must be a long"];
+        / A record that expanded to nothing publishes nothing.
+        if[0=count mapped; :0#pub];
         if[not (all idx<n) and all 0<=deltas idx; 'who,string[mk]," must be positions of the records, non-decreasing"];
         rows:(cols[mapped] except mk)#mapped;
         num:(til count idx)-idx?idx];
