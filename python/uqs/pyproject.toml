@@ -21,6 +21,11 @@ dependencies = [
 uqs = "uqs.cli:main"
 uqs-mcp = "uqs.mcp:main"
 
+[project.optional-dependencies]
+kafka = [
+    "confluent-kafka>=2.16.0",
+]
+
 [build-system]
 requires = ["uv_build>=0.11.19,<0.12.0"]
 build-backend = "uv_build"

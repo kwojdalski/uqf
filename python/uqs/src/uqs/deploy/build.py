@@ -19,6 +19,9 @@ WHAT IS IN IT:
                 the committed uv.lock, and wheels/: the uqs wheel and every
                 pinned dependency's wheel for the TARGET, so the server
                 installs without a network.
+  .release/kafka/
+                only with --kafka-home (#1515): KX's kfk for the target, with
+                its libraries and notices (uqs.deploy.kafka).
   RELEASE_MANIFEST.json
                 the revision, whether the tree was dirty, the target OS,
                 architecture and Python, and every member's sha256.
@@ -53,7 +56,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from uqs.deploy import foreign_blocks, portable
+from uqs.deploy import foreign_blocks, kafka, portable
 from uqs.deploy.artifact import (
     FORMAT,
     MANIFEST,
@@ -65,7 +68,16 @@ from uqs.deploy.artifact import (
     Target,
     _sha256,
 )
-from uqs.deploy.payload import ALLOWLIST, Runner, is_excluded, python_payload, tracked_files
+from uqs.deploy.payload import (
+    ALLOWLIST,
+    Runner,
+    default_python,
+    is_excluded,
+    python_payload,
+    release_id,
+    revision,
+    tracked_files,
+)
 from uqs.logger import get_logger
 from uqs.paths import repo_root
 from uqs.runtimes import DEFAULT_RUNTIME
@@ -80,39 +92,6 @@ GENERATOR = "scripts/generate/generate_operational_docs.py"
 STAGED_EXTRA = ("docs",)
 
 _PYTHON = re.compile(r"3\.\d{1,2}")
-
-
-def revision(root: Path, runner: Runner = subprocess.run) -> tuple[str, bool]:
-    head = runner(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
-    )
-    status = runner(
-        ["git", "-C", str(root), "status", "--porcelain", "--", *ALLOWLIST],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if head.returncode or status.returncode:
-        raise ReleaseError(
-            "package", "this is not a git checkout - a release must name its revision"
-        )
-    return head.stdout.strip(), bool(status.stdout.strip())
-
-
-def release_id(rev: str, now: datetime | None = None) -> str:
-    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
-    return f"{stamp}-{rev[:12]}"
-
-
-def default_python(root: Path) -> str:
-    """The Python a release targets: the lower bound of requires-python."""
-    text = (root / "python" / "uqs" / "pyproject.toml").read_text()
-    m = re.search(r'requires-python\s*=\s*">=\s*(3\.\d+)', text)
-    if not m:
-        raise ReleaseError(
-            "arguments", "cannot read requires-python from python/uqs/pyproject.toml"
-        )
-    return m.group(1)
 
 
 # ---------------------------------------------------------------- bundles
@@ -220,6 +199,7 @@ def build_artifact(
     runtime: str | None = None,
     portable: dict | None = None,
     hdb_shape: dict[str, list[str]] | None = None,
+    kafka_sel: kafka.Selected | None = None,
 ) -> Artifact:
     """The archive, its .sha256 and its manifest, written into `out_dir`.
 
@@ -232,6 +212,8 @@ def build_artifact(
     for w in wheels:
         members[f"{WHEEL_DIR}/{w.name}"] = w
     app = [f"{WHEEL_DIR}/{w.name}" for w in wheels if w.name.startswith("uqs-")]
+    kafka_sel = kafka_sel or kafka.Selected()
+    members.update(kafka_sel.members())
     manifest = {
         "format": FORMAT,
         "release": rid,
@@ -255,6 +237,7 @@ def build_artifact(
     if portable:
         # what was converted for the server's kdb+ (#861); target["q"] says which
         manifest["portable"] = portable
+    kafka_sel.annotate(manifest)
     if hdb_shape:
         # the tables and columns this release declares, for a dry run to judge
         # the server's HDB by before any of the release is there (#870)
@@ -293,9 +276,11 @@ def build(
     q_target: str | None = None,
     q_exclude: Sequence[str] = (),
     allow_computed_names: bool = False,
+    kafka_home: Path | str | None = None,
+    kafka_connector: bool = False,
 ) -> Artifact:
     """Build the artifact for the checkout at `root` into `output`, by
-    default `root`/dist.
+    default `root`/dist. Kafka is opt-in (uqs.deploy.kafka.select).
 
     With `q_target`, its q is converted for that kdb+ (#861), in a staged
     copy: the checkout is never written (uqs.deploy.portable).
@@ -321,6 +306,7 @@ def build(
     files = tracked_files(root, runner)
     foreign_blocks.refuse(root, files, runtime, {m.bundle.name for m in members})
     with tempfile.TemporaryDirectory() as tmp:
+        kafka_sel = kafka.select(kafka_home, kafka_connector, arch, Path(tmp) / "kafka", runner)
         tree, record = root, None
         if members:
             tree = Path(tmp) / "tree"
@@ -344,7 +330,7 @@ def build(
                 len(converted["excluded"]),
             )
         log.info("Python {} wheels for linux/{}", target.python, target.arch)
-        python_payload(root, Path(tmp) / "python", target, runner)
+        python_payload(root, Path(tmp) / "python", target, runner, kafka_sel.extras)
         log.info("packaging {} files", len(files))
         return build_artifact(
             tree,
@@ -360,6 +346,7 @@ def build(
             runtime=runtime,
             portable=converted,
             hdb_shape=declared_shape(tree, runtime, root, runner),
+            kafka_sel=kafka_sel,
         )
 
 

@@ -18,7 +18,8 @@ offset-commit ordering that makes that split correct is documented in
 
 ## Why no broker ships with this
 
-``confluent-kafka`` is deliberately NOT a dependency of ``uqs``, and no test
+``confluent-kafka`` is deliberately NOT a dependency of ``uqs`` - it is the
+optional ``kafka`` extra (``uqs.stack.kafka_extra``) - and no test
 in the default lane needs a broker. That follows the rule
 ``etl/core/singlestore_odbc.q`` states for the ODBC driver - a public
 single-host demo cannot require infrastructure nobody has, or the path
@@ -33,12 +34,14 @@ and no native ``kfk`` library.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from uqs.external.kafka_streamer import KAFKA_RAW_TABLE
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.paths import UqsPaths
+from uqs.stack import kafka_extra
 from uqs.stack.procs import get_process_config
 
 log = get_logger(__name__)
@@ -82,17 +85,21 @@ def start_kafka_feed(
     Refuses rather than starting a second one: two consumers in the same
     group would split the partitions between them, so the second would look
     like it worked while each received half the topic.
+
+    Refused, before anything starts, when confluent-kafka (the uqs `kafka`
+    extra) is not installed: the detached streamer would only say so in its
+    log, after the PID file was written.
     """
+    kafka_extra.require()
     stp1 = get_process_config(paths, "stp1")
     port = stp1.get("port") or paths.runtime_declaration.resolve_base_port(None)
 
     runner = Path(__file__).resolve().parent / "kafka_streamer.py"
+    # This interpreter, the one kafka_extra just checked: a release's .venv
+    # holds the extra's wheels only when it was built --with-kafka-connector,
+    # and `uv run` would try to sync that venv to the lock, offline (#1515).
     cmd = [
-        "uv",
-        "run",
-        "--project",
-        str(paths.repo_root / "python" / "uqs"),
-        "python",
+        sys.executable,
         str(runner),
         "--host",
         "localhost",

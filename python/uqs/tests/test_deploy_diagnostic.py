@@ -25,8 +25,9 @@ NOISE = (
     "** WARNING: connection is not using a post-quantum key exchange algorithm.\n"
 )
 DEPLOY = Path(control.__file__).parent
-#: build.py and payload.py run local commands (uv, git, pip), not remote ones.
-LOCAL = {"remote.py", "build.py", "payload.py"}
+#: build.py, payload.py and kafka.py run local commands (uv, git, pip, ldd), not
+#: remote ones; kafka.py's server-side check is read by stages.py through _checked.
+LOCAL = {"remote.py", "build.py", "payload.py", "kafka.py"}
 
 
 def _refused() -> subprocess.CompletedProcess:

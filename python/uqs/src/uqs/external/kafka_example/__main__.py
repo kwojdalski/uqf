@@ -24,6 +24,7 @@ from uqs.external.kafka_example.feeds import Feed
 from uqs.external.kafka_example.kclient import GROUP_1
 from uqs.external.kafka_example.report import Report
 from uqs.paths import UqsError
+from uqs.stack import kafka_extra
 
 DEFAULT_CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "uqs" / "kafka"
 
@@ -173,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
         c.set_defaults(fn=fn)
     a = p.parse_args(argv)
     try:
+        if a.fn is not _broker_stop:  # every other command talks to the broker
+            kafka_extra.require("python -m uqs.external.kafka_example")
         return a.fn(a)
     except UqsError as exc:
         print(f"error: {exc}", file=sys.stderr)

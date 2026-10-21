@@ -158,11 +158,9 @@ def main(argv: list[str] | None = None) -> int:
         import kola
         from confluent_kafka import Consumer  # ty: ignore[unresolved-import]
     except ImportError as exc:  # pragma: no cover - depends on the extra
-        print(
-            f"missing dependency: {exc}. Install the live-feed extra:\n"
-            "    uv pip install confluent-kafka kola",
-            file=sys.stderr,
-        )
+        from uqs.stack.kafka_extra import missing
+
+        print(f"missing dependency: {exc}. {missing('the Kafka streamer')}", file=sys.stderr)
         return 1
 
     fields = contract_fields(args.repo_root)

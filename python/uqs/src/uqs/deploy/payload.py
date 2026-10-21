@@ -1,11 +1,13 @@
-"""What a release is made of: the tracked files it ships, and the Python
-wheels the server installs offline. uqs.deploy.build packages them."""
+"""What a release is made of: the tracked files it ships, the revision and
+Python it names, and the wheels the server installs offline.
+uqs.deploy.build packages them."""
 
 from __future__ import annotations
 
 import re
 import subprocess
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 from uqs.deploy.artifact import RELEASE_DIR, ReleaseError, Target
@@ -76,8 +78,50 @@ def tracked_files(
     return sorted(f for f in r.stdout.split("\0") if f and not is_excluded(f))
 
 
-def python_payload(root: Path, into: Path, target: Target, runner: Runner = subprocess.run) -> None:
+def revision(root: Path, runner: Runner = subprocess.run) -> tuple[str, bool]:
+    head = runner(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+    )
+    status = runner(
+        ["git", "-C", str(root), "status", "--porcelain", "--", *ALLOWLIST],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if head.returncode or status.returncode:
+        raise ReleaseError(
+            "package", "this is not a git checkout - a release must name its revision"
+        )
+    return head.stdout.strip(), bool(status.stdout.strip())
+
+
+def release_id(rev: str, now: datetime | None = None) -> str:
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
+    return f"{stamp}-{rev[:12]}"
+
+
+def default_python(root: Path) -> str:
+    """The Python a release targets: the lower bound of requires-python."""
+    text = (root / "python" / "uqs" / "pyproject.toml").read_text()
+    m = re.search(r'requires-python\s*=\s*">=\s*(3\.\d+)', text)
+    if not m:
+        raise ReleaseError(
+            "arguments", "cannot read requires-python from python/uqs/pyproject.toml"
+        )
+    return m.group(1)
+
+
+def python_payload(
+    root: Path,
+    into: Path,
+    target: Target,
+    runner: Runner = subprocess.run,
+    extras: Sequence[str] = (),
+) -> None:
     """requirements.txt and every wheel the target needs, under `into`.
+
+    `extras` are uqs extras whose locked dependencies join the default ones
+    (`kafka`: confluent-kafka, for `--with-kafka-connector`); none by default.
 
     The pins come from the committed uv.lock (`--frozen`, never re-resolved),
     with hashes, so the server's install refuses a wheel that is not the one
@@ -93,6 +137,7 @@ def python_payload(root: Path, into: Path, target: Target, runner: Runner = subp
             [
                 "uv", "export", "--package", "uqs", "--no-dev", "--frozen",
                 "--no-emit-workspace", "--format", "requirements-txt",
+                *[arg for e in extras for arg in ("--extra", e)],
                 "--quiet", "-o", str(requirements),
             ],
         ),

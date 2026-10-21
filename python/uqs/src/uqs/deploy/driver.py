@@ -8,7 +8,7 @@ import sys
 import time
 from datetime import UTC, datetime
 
-from uqs.deploy import converted_override, fetch, hdb
+from uqs.deploy import converted_override, fetch, hdb, kafka
 from uqs.deploy.artifact import Artifact, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.prune import prune_locked
@@ -58,7 +58,7 @@ def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deplo
         ),
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "
-        + f"{pkg.manifest['python']['wheels']} wheels",
+        + f"{pkg.manifest['python']['wheels']} wheels{kafka.plan_note(release, pkg.manifest)}",
         "hdb       " + facts.get("hdb", "not judged"),
         "smoke     "
         + " ".join(["q scripts/deploy_smoke.q", *smoke_args(cfg.profile, sel)])
