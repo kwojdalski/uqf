@@ -107,6 +107,20 @@
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];8f];"100 pips per unit of price"];
     .qunit.assertEquals[first exec pip_factor from r;100;"the pair's pip factor is on the row"]};
 
+.qt.qpipe.transform.fx_markout.test_a_huf_pair_uses_a_pip_of_one_hundredth:{[tc]
+    / #1525: HUF was priced at 10000 pips per unit, 100x too many.
+    sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
+    t1:.qt.qpipe.transform.fx_markout.t+0D00:00:00.5;
+    / EURUSD stays at 1, so USDHUF = EURHUF: 400.00 then 400.50
+    m:raze (.qt.qpipe.transform.fx_markout.lk[.qt.qpipe.transform.fx_markout.t;`EURUSD;`a;1f];
+        .qt.qpipe.transform.fx_markout.lk[t1;`EURUSD;`a;1f];
+        .qt.qpipe.transform.fx_markout.lk[.qt.qpipe.transform.fx_markout.t;`EURHUF;`a;400f];
+        .qt.qpipe.transform.fx_markout.lk[t1;`EURHUF;`a;400.5]);
+    r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`USDHUF;1;399.9;`h1];m];
+    / a buy at 399.9 marked at 400.5: 100*(400.5-399.9) = 60 pips
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];60f];"100 pips per unit of price"];
+    .qunit.assertEquals[first exec pip_factor from r;100;"the pair's pip factor is on the row"]};
+
 .qt.qpipe.transform.fx_markout.test_the_inverse_spelling_of_a_pair_is_priced_from_the_inverted_book:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
     m:.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t;`USDJPY;`a;150.00;150.02],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t+0D00:00:00.5;`USDJPY;`a;150.10;150.12];
