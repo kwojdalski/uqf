@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from uqs.attach import backfill_owner, config
-from uqs.attach.backfill import Destination
+from uqs.attach.backfill import Destination, require_verified
 from uqs.attach.backfill_plan import plan_attached
 from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter
@@ -168,6 +168,8 @@ def launch(
         attach_root=attach_root,
     )
     with config.locked(attachment, attach_root):
+        # Read again under the lock: a detach may have finished since admission (#1526).
+        require_verified(attachment, attach_root)
         backfill_owner.refuse_while_active(attachment, attach_root)
         dest = Destination(**_destination(plan))
         owner = backfill_owner.owner_file(attachment, worker, attach_root)

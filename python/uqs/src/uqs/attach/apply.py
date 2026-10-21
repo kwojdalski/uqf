@@ -225,9 +225,10 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
     plant = m.find("stp_register", tp.procname, spec.name)
     ours = plant is not None and plant.ownership == CREATED
     rebuilt = ours and (was == CREATED or not op.pre.get("table_present"))
-    if answer.get("status") == "subscribed" and ours and not rebuilt:
+    if answer.get("status") == "subscribed" and not rebuilt:
         # Saved with the consumer_attach step, in one write, so the subscription is never
-        # left unrecorded (#1459).
+        # left unrecorded (#1459) - through a tickerplant table that is not ours too, so
+        # detach's drift guard refuses rather than reporting a rollback it did not do (#1527).
         _subscription(m, op, answer, c.procname, spec.name, before, after)
     step = _interpret(m, op, answer, c.procname, spec.name)
     if op.ownership == EXISTING and rebuilt:
@@ -248,7 +249,9 @@ def _subscription(m: Manifest, attach: Op, answer: dict, process: str, table: st
     """Record, as this attachment's own, the subscription it added to a table the
     consumer already held (#1459). The table stays `existing` and is never removed;
     the subscription is `created`, so a rollback takes back exactly it
-    (consumer_unsubscribe.q) and the tickerplant's unregister counts its handle."""
+    (consumer_unsubscribe.q) and the tickerplant's unregister counts its handle. Added
+    through a tickerplant table this attachment does not own, it cannot be taken back,
+    and detach refuses on it (drift.py) instead of claiming a rollback (#1527)."""
     entry = m.find("consumer_subscribe", process, table)
     if entry is None:
         entry = Op(len(m.operations) + 1, "consumer_subscribe", process, table)
