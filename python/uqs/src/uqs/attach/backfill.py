@@ -162,6 +162,28 @@ def canonical(path: str) -> Path:
     return Path(os.path.realpath(path))
 
 
+def require_verified(attachment: str, attach_root: Path | None = None) -> None:
+    """Refuse unless the attachment's manifest, read now, says `verified`. Admission
+    calls it, and launch again under the attachment's lock (#1526): a detach can land
+    between the two."""
+    folder = config.directory(attachment, attach_root)
+    manifest = (
+        Manifest.load(attachment, attach_root) if Manifest.exists(attachment, attach_root) else None
+    )
+    state = manifest.state if manifest else "planned"
+    if state != VERIFIED:
+        raise UqsError(
+            f"attachment {attachment} is {state}, not {VERIFIED}: a backfill needs the "
+            f"attachment's identity and storage checked (`uqs job attach verify {attachment}`)"
+            + (
+                " - a detached attachment's stack is not ours to write"
+                if state == "detached"
+                else ""
+            )
+            + f" [{folder}]"
+        )
+
+
 def resolve(
     paths: UqsPaths,
     attachment: str,
@@ -188,22 +210,7 @@ def resolve(
             f"{att.stack.id}: --attach takes the stack from the attachment, so drop --port "
             f"or pass --port {att.stack.id}"
         )
-    folder = config.directory(att.name, attach_root)
-    manifest = (
-        Manifest.load(att.name, attach_root) if Manifest.exists(att.name, attach_root) else None
-    )
-    state = manifest.state if manifest else "planned"
-    if state != VERIFIED:
-        raise UqsError(
-            f"attachment {att.name} is {state}, not {VERIFIED}: a backfill needs the "
-            f"attachment's identity and storage checked (`uqs job attach verify {att.name}`)"
-            + (
-                " - a detached attachment's stack is not ours to write"
-                if state == "detached"
-                else ""
-            )
-            + f" [{folder}]"
-        )
+    require_verified(att.name, attach_root)
     decl = _declaration(paths, worker)
     try:
         table = att.table(decl.dataset)
