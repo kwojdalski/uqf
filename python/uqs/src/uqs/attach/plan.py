@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import overrides, preflight
+from uqs.attach import overrides, preflight, sort_plan
 from uqs.attach.config import Attachment
 from uqs.attach.findings import Finding, blockers
 from uqs.attach.manifest import DONE, RETAINED, Manifest
@@ -30,6 +30,8 @@ class Plan:
     token: str = ""
     #: problems with the attachment's own overrides: stale, not allowed, no longer needed
     override_problems: list[str] = field(default_factory=list)
+    #: what attaching does to the stack's sort.csv for tables that declare a sort rule (#1517)
+    sort_changes: list[sort_plan.Change] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -50,6 +52,9 @@ class Plan:
         publication: before it, newly created empty state can be removed; after
         it, nothing is deleted (rows, logs and history are kept)."""
         att, obs, steps = self.attachment, self.observation, []
+        # sort rows first: rows for a table no process holds yet are inert, and they are
+        # live before any process holds it (apply.py)
+        steps += [s for c in self.sort_changes if (s := c.step()) is not None]
         for spec in att.tables:
             tp = obs.tickerplant
             created = self._state(tp, spec.name) == "absent"
@@ -182,7 +187,11 @@ class Plan:
             },
             "job": {"name": att.publisher.job, "procname": att.publisher.procname, **att.origin},
             "publisher_port": self.publisher_port.port,
-            "tables": [{"name": t.name, "columns": t.as_pairs()} for t in att.tables],
+            "tables": [
+                {"name": t.name, "columns": t.as_pairs(), "sort": t.sort_pairs()}
+                for t in att.tables
+            ],
+            "sorting": [c.as_dict() for c in self.sort_changes],
             "persist": att.persist,
             "storage": att.storage.__dict__,
             "components": self.components(),
@@ -220,6 +229,7 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
     port = publisher_port(att, root)
     facts = facts or preflight.Facts()
     facts.publisher = port
-    found = structural + preflight.check(att, obs, facts)
+    changes, sort_findings = sort_plan.assess(att, obs, ipc, facts, root)
+    found = structural + preflight.check(att, obs, facts) + sort_findings
     found, problems = overrides.evaluate(att.overrides, found)
-    return Plan(att, obs, found, port, facts.token, problems)
+    return Plan(att, obs, found, port, facts.token, problems, changes)

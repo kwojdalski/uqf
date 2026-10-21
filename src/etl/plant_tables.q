@@ -146,6 +146,54 @@
     `symbol$raze {[t] cs:.qetl.plant.nested_columns[t] except exec column from .qetl.plant.elements where table=t;
         `$(string[t],"."),/:string cs} each .qetl.plant.own[]}
 
+/ ------------------------------------------------------ SORT RULES (#1517)
+/ .
+/ How a table is laid out on disk at end of day is TorQ's sort.csv: the
+/ columns it is sorted by, in order, and the attribute each one gets. A stack's
+/ `default` rows fit the tables it was built for - sorted by sym, say - and
+/ cannot be assumed to fit a table attached to it later. Nor can a column's
+/ name stand in for the policy: holding `sym` and `time` says nothing about
+/ how the table should be stored.
+/ .
+/ So a table that needs its own rule declares it here, beside the table, with
+/ `sorting`: the sort columns in order, each with its attribute (` for none).
+/ `uqs job attach` writes exactly these rows to the stack's sort.csv - and
+/ refuses when the stack already has other rows for the table.
+
+/ Declared sort rules: (table; column) -> attribute, in sort order.
+.qetl.plant.sort_rules:([table:`symbol$(); column:`symbol$()] att:`symbol$())
+
+/ Declare a table's TorQ sort rule. Call it after the table's line.
+/ @param table_name the table, as a symbol
+/ @param rule sort column -> attribute, in sort order: `sym`time!`p` sorts by
+/   sym then time and puts p# on sym. Attributes are TorQ sort.csv's: ` p s g u
+/ @return table_name
+/ @throws error naming a column the table lacks or holds lists in, a column named
+/   twice, an attribute TorQ does not take, p or s off the first column, or a
+/   table declared twice
+/ @eg .qetl.plant.sorting[`mkt_orderbook;`sym`time!`p`]
+.qetl.plant.sorting:{[table_name;rule]
+    / Two checks, not one `and`: q evaluates both sides.
+    if[not 99h=type rule;
+        '"sorting: ",string[table_name],"'s rule must be a dictionary of column -> attribute, e.g. `sym`time!`p` - one column needs enlist: (enlist `time)!enlist `"];
+    if[not (11h=type key rule) and 11h=type value rule;
+        '"sorting: ",string[table_name],"'s rule must map column symbols to attribute symbols, e.g. `sym`time!`p`"];
+    m:0!meta .qetl.plant.schema table_name;
+    if[count bad:(key rule) except m`c;
+        '"sorting: ",string[table_name]," has no column ",", " sv string bad];
+    if[count bad:(key rule) inter exec c from m where t=" ";
+        '"sorting: ",string[table_name],"'s ",(", " sv string bad)," hold a list per row; a sort needs a scalar column"];
+    if[not count[key rule]=count distinct key rule;
+        '"sorting: ",string[table_name]," names a column twice"];
+    if[count bad:(value rule) except ``p`s`g`u;
+        '"sorting: ",string[table_name],": attribute ",(", " sv string bad)," is not one TorQ's sort.csv takes (` p s g u)"];
+    if[any (1_value rule) in `p`s;
+        '"sorting: ",string[table_name],": p and s hold only on the first sort column, ",string first key rule];
+    if[table_name in exec table from .qetl.plant.sort_rules;
+        '"sorting: ",string[table_name]," already has a sort rule"];
+    `.qetl.plant.sort_rules upsert ([] table:(count rule)#table_name; column:key rule; att:value rule);
+    table_name}
+
 / What is wrong with `rows` as a page for plant table `table_name`: its
 / columns and their order against what a job publishes there, each column's
 / type, and each nested column's every row against its declared element type

@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, manifest, persist, plan
+from uqs.attach import config, manifest, persist, plan, sorting
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding, blockers
@@ -88,7 +88,9 @@ class ApplyResult:
 
     def mutations(self) -> int:
         return sum(
-            1 for s in self.steps if s.outcome in ("created", "adopted", "subscribed", "shared")
+            1
+            for s in self.steps
+            if s.outcome in ("created", "adopted", "subscribed", "shared", "reloaded")
         )
 
 
@@ -223,9 +225,10 @@ def _attach(m, ipc, att, c: Proc, spec: TableSpec, tp: Proc, depends: list[int])
     plant = m.find("stp_register", tp.procname, spec.name)
     ours = plant is not None and plant.ownership == CREATED
     rebuilt = ours and (was == CREATED or not op.pre.get("table_present"))
-    if answer.get("status") == "subscribed" and ours and not rebuilt:
+    if answer.get("status") == "subscribed" and not rebuilt:
         # Saved with the consumer_attach step, in one write, so the subscription is never
-        # left unrecorded (#1459).
+        # left unrecorded (#1459) - through a tickerplant table that is not ours too, so
+        # detach's drift guard refuses rather than reporting a rollback it did not do (#1527).
         _subscription(m, op, answer, c.procname, spec.name, before, after)
     step = _interpret(m, op, answer, c.procname, spec.name)
     if op.ownership == EXISTING and rebuilt:
@@ -246,7 +249,9 @@ def _subscription(m: Manifest, attach: Op, answer: dict, process: str, table: st
     """Record, as this attachment's own, the subscription it added to a table the
     consumer already held (#1459). The table stays `existing` and is never removed;
     the subscription is `created`, so a rollback takes back exactly it
-    (consumer_unsubscribe.q) and the tickerplant's unregister counts its handle."""
+    (consumer_unsubscribe.q) and the tickerplant's unregister counts its handle. Added
+    through a tickerplant table this attachment does not own, it cannot be taken back,
+    and detach refuses on it (drift.py) instead of claiming a rollback (#1527)."""
     entry = m.find("consumer_subscribe", process, table)
     if entry is None:
         entry = Op(len(m.operations) + 1, "consumer_subscribe", process, table)
@@ -305,9 +310,13 @@ def apply(
     facts: Facts | None = None,
     state_dir: Path | None = None,
     confirmed_risks: str = "",
+    expected_sort: dict[str, str] | None = None,
 ) -> ApplyResult:
     """Register `att`'s tables on the stack it names. Idempotent: on a stack it
     already converged, no call that changes anything is made.
+
+    `expected_sort` is {sort.csv path: hash} as the plan the operator confirmed
+    saw them; a file that changed since is refused before anything is touched.
 
     Raises ApplyRefused (before touching anything) when the preflight has a
     blocker, ApplyFailed when a step fails after others were applied.
@@ -321,6 +330,7 @@ def apply(
             raise ApplyRefused(blockers(planned.findings))
         if planned.accepted and not confirmed_risks:
             raise RisksNotConfirmed(planned.accepted)
+        sorting.refuse_moved(planned.sort_changes, expected_sort)
         obs = planned.observation
         tp = obs.tickerplant
         assert tp is not None  # no blocker means one was found
@@ -338,6 +348,12 @@ def apply(
         m.set_state("applying", f"{len(att.tables)} table(s), {len(obs.consumers)} consumer(s)")
         result = ApplyResult("applying", findings=planned.findings)
         try:
+            # Sort rules first: rows for a table no process holds are inert, and they are
+            # live before the wdb holds it. A failed write or reload stops here, so the
+            # publisher - started only after verify - never starts on them (#1517).
+            backups = config.directory(att.name, state_dir) / "backups"
+            sorted_ = sorting.apply_all(m, ipc, planned.sort_changes, backups)
+            result.steps += [Step(*s) for s in sorted_]
             deps: list[int] = []
             for spec in att.tables:
                 result.steps.append(_register(m, ipc, att, tp, spec))

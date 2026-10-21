@@ -346,6 +346,20 @@
         where dataset=ds, partition=part, source_version=release,
               recorded_at<=at, at<superseded_at, range_to>range_from}
 
+/ The named partitions a dataset has ever been claimed under, in this
+/ process's ledger or the persisted one: what a worker that loads only itself
+/ can still see of its siblings (#1518). Superseded claims count - a
+/ restatement withdraws coverage, not the rows. The unpartitioned sentinel
+/ is not a partition and is left out.
+/ @param ds the dataset
+/ @return a sorted symbol list, empty when only the unpartitioned dataset was claimed
+/ @eg .qetl.coverage.partitions_of `no_such_dataset  ->  `symbol$()
+.qetl.coverage.partitions_of:{[ds]
+    p:hsym `$.qetl.coverage.ledger_path[];
+    disk:$[()~key p; `symbol$(); exec partition from .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[] where dataset=ds];
+    mem:$[`etl_coverage in tables `.; exec partition from .qetl.coverage.ledger[] where dataset=ds; `symbol$()];
+    asc distinct (disk,mem) except `}
+
 / Private: the run this process is executing, or the null guid.
 / .
 / Protected rather than a bare .qetl.run.current[] call, because run.q is not a

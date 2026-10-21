@@ -11,8 +11,8 @@ workstation drift apart. A bundle declares them beside its jobs:
       bundle.json              {"name": "piggybank", "version": "1.4.0"}
       *.q                      sources, workers, streaming jobs - placed by
                                what each declares, exactly as stack/install.py
-      tables.q                 optional: `name:([]...)` plant tables and
-                               `nested[...]` contracts, one per line
+      tables.q                 optional: `name:([]...)` plant tables, and
+                               `nested[...]` / `sorting[...]` lines, one each
       catalog.q                optional: `.qcat.describe[`table]:"..."` entries,
                                and `.qcat.unbounded[`table]:"..."` reasons a
                                table of its own is browsable without a policy
@@ -66,7 +66,7 @@ _MANIFEST_KEYS = frozenset({"name", "version", "description"})
 #: `name:([]...)` as uqs.model.schemas reads the plant: a bundle writes it bare, the
 #: tree holds it qualified (#1411), so both match and `table_lines` qualifies.
 _TABLE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
-_NESTED = re.compile(r"^(?:\.qetl\.plant\.)?nested\[`([a-z_][a-z0-9_]*);")
+_CONTRACT = re.compile(r"^(?:\.qetl\.plant\.)?(nested|sorting)\[`([a-z_][a-z0-9_]*);")
 _DESCRIBE = re.compile(r"^\.qcat\.describe\[`([a-z_][a-z0-9_]*)\]:")
 #: A bundle cannot add querypolicy.csv rows, so a reason its table is browsable
 #: unbounded is how it meets the catalog's policy-or-reason rule (#889).
@@ -138,21 +138,21 @@ def table_lines(bundle: Bundle, known: set[str]) -> tuple[list[str], list[str]]:
             if m.group(1) in tables:
                 raise BundleError(f"{where}: table {m.group(1)} is defined twice")
             tables.append(m.group(1))
-        elif m := _NESTED.match(line):
-            if m.group(1) not in tables:
+        elif m := _CONTRACT.match(line):
+            if m.group(2) not in tables:
                 raise BundleError(
-                    f"{where}: nested[] for {m.group(1)}, which this bundle does not define "
+                    f"{where}: {m.group(1)}[] for {m.group(2)}, which this bundle does not define "
                     "(above this line)"
                 )
         else:
             raise BundleError(
-                f"{where}: expected `name:([]...)`, `nested[...]` or a `/ ` comment, one per line"
+                f"{where}: expected `name:([]...)`, `nested[...]`, `sorting[...]` or `/ ` lines"
             )
     return [_qualified(line) for line in lines], tables
 
 
 def _qualified(line: str) -> str:  # a tables.q line as the tree holds it
-    matched = (_TABLE.match(line) or _NESTED.match(line)) and not line.startswith(".qetl.")
+    matched = (_TABLE.match(line) or _CONTRACT.match(line)) and not line.startswith(".qetl.")
     return ".qetl.plant." + line if matched else line
 
 

@@ -9,13 +9,16 @@ partial failure is reported as partial and a retry finishes it.
 from __future__ import annotations
 
 import copy
+import os
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from attach_support import FakeStack, FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import config, facts, persist, service, verify
+from uqs.attach import backfill_owner, backfill_run, config, facts, persist, service, verify
 from uqs.attach import detach as detaching
 from uqs.attach.config import AttachmentError, Storage
 from uqs.attach.manifest import Manifest
@@ -242,6 +245,35 @@ def test_a_subscription_added_to_a_held_table_stays_after_publication(world):
     assert TABLE in rdb["subscribed"]
     sub = Manifest.load("pb-uat", state).find("consumer_subscribe", "rdb1", TABLE)
     assert sub is not None and sub.status == "retained"
+
+
+def test_a_subscription_added_through_a_pre_existing_tickerplant_table_refuses_rollback(world):
+    """#1527: the tickerplant table already existed (not ours), and rdb1 held the table
+    unsubscribed. Apply subscribed it through that table, so the subscription is this
+    attachment's and is recorded; detach cannot take it back (the tickerplant side is not
+    ours), so it refuses and says so - never `rolled_back` with rdb1 still subscribed."""
+    fake, make, state, schema, log = world
+    from attach_support import LEDGER_COLUMNS
+
+    fake.named("stp1")["schemas"] = {TABLE: LEDGER_COLUMNS}
+    fake.named("stp1")["published"] = [TABLE]
+    fake.named("wdb1")["schemas"] = {TABLE: LEDGER_COLUMNS}
+    fake.named("wdb1")["subscribed"].append(TABLE)
+    rdb = held_unsubscribed(fake)
+    att = make()
+    result = apply_(att, fake, state)
+    assert ("consumer_attach", "rdb1", "subscribed") in [
+        (s.op, s.process, s.outcome) for s in result.steps
+    ]
+    sub = Manifest.load("pb-uat", state).find("consumer_subscribe", "rdb1", TABLE)
+    assert sub is not None and (sub.ownership, sub.status) == ("created", "done")
+    detached = detach_(att, fake, state)
+    assert TABLE in rdb["subscribed"], "nothing takes the subscription back"
+    assert detached.outcome == "refused"
+    assert any(b.component == "rdb1" and "does not own" in b.reason for b in detached.blockers), (
+        detached.blockers
+    )
+    assert Manifest.load("pb-uat", state).state != "rolled_back"
 
 
 def test_a_consumer_table_first_found_absent_stays_ours_when_a_rerun_finds_it_again(world):
@@ -805,3 +837,80 @@ def test_apply_refuses_an_attachment_that_is_detaching_and_changes_nothing(world
         apply_(att, fake, state)
     assert stack_state(fake) == before
     assert Manifest.load("pb-uat", state).state == "detaching"
+
+
+# --------------------------------------------- a backfill and a detach in a race (#1526)
+
+
+def _just_before_the_lock(monkeypatch, interleave):
+    """`config.locked`, with `interleave` run first: the other command's whole critical
+    section, landing between this one's earlier checks and its taking the lock."""
+    real = config.locked
+
+    @contextmanager
+    def locked(name, root=None):
+        interleave()
+        with real(name, root):
+            yield
+
+    monkeypatch.setattr(config, "locked", locked)
+
+
+def test_detach_refuses_a_backfill_that_claimed_the_attachment_before_it_took_the_lock(
+    world, monkeypatch
+):
+    """#1526: a launch that claims the attachment after detach's ownership check and
+    before its lock - detach must still see the run, and change nothing."""
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    before, was = stack_state(fake), Manifest.load("pb-uat", state).state
+    _just_before_the_lock(
+        monkeypatch,
+        lambda: backfill_owner.claim("pb-uat", "some_worker", os.getpid(), "abc", state),
+    )
+    log.clear()
+    with pytest.raises(AttachmentError, match="has an attached backfill running: some_worker"):
+        detach_(att, fake, state, Publisher(log, running=True))
+    assert log == [], "not even the publisher was stopped"
+    assert stack_state(fake) == before
+    assert Manifest.load("pb-uat", state).state == was
+
+
+def test_a_backfill_launch_refuses_an_attachment_detached_after_its_admission(world, monkeypatch):
+    """#1526: admission saw `verified`; a detach finished before launch took the lock.
+    The launch must read the manifest again under the lock and start nothing."""
+    fake, make, state, schema, log = world
+    att = make()
+    m = Manifest.new(att, Manifest.path_for("pb-uat", state))
+    m.set_state("verified", "set by the test")
+    monkeypatch.setattr(backfill_run, "q_interpreter", lambda env: Path("/bin/false"))
+    where = {"hdb_dir": str(state / "hdb"), "state_dir": str(state / "run")}
+    admitted = {
+        "destination": {"attachment": "pb-uat", "stack_id": 6000, "host": "localhost",
+                        "dataset": TABLE, "identity": "abc"} | where,
+        "reload_targets": [],
+    }  # fmt: skip
+    monkeypatch.setattr(backfill_run, "plan_attached", lambda *a, **kw: admitted)
+    monkeypatch.setattr(backfill_run, "runner_flags", lambda *a, **kw: [])
+    started: list = []
+
+    def popen(*a, **kw):
+        started.append(a)
+        return type("P", (), {"pid": os.getpid()})()
+
+    monkeypatch.setattr(backfill_run.subprocess, "Popen", popen)
+
+    def detached() -> None:
+        found = Manifest.load("pb-uat", state)
+        found.set_state("detached", "a detach that finished in between")
+
+    _just_before_the_lock(monkeypatch, detached)
+    with pytest.raises(UqsError, match="is detached, not verified"):
+        backfill_run.launch(
+            default_paths(), "pb-uat", "some_worker", "v1",
+            datetime(2015, 1, 7, tzinfo=UTC), datetime(2015, 1, 8, tzinfo=UTC),
+            ipc=fake, mode="run", attach_root=state,
+        )  # fmt: skip
+    assert started == [], "no runner was started"
+    assert backfill_owner.active("pb-uat", state) == []
