@@ -110,6 +110,7 @@
 "crypto_book_snapshot","ask_sz2","f"
 "crypto_book_snapshot","ask_sz3","f"
 "crypto_book_snapshot","ask_sz4","f"
+"crypto_book_snapshot","broker_time","p"
 "crypto_book_snapshot","topic","s"
 "crypto_book_snapshot","partition","j"
 "crypto_book_snapshot","offset","j"

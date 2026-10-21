@@ -63,7 +63,9 @@
     .qunit.assertEquals[f`bid_sz0`bid_sz1`bid_sz2`bid_sz3`bid_sz4;0.25 1.5 2 0.1 3f;"the bid sizes"];
     .qunit.assertEquals[f`ask_px0`ask_px1`ask_px2`ask_px3`ask_px4;65001 65001.5 65002 65002.5 65003f;"the ask prices"];
     .qunit.assertEquals[f`ask_sz0`ask_sz1`ask_sz2`ask_sz3`ask_sz4;0.4 0.6 1 1.2 2.2;"the ask sizes"];
-    .qunit.assertEquals[(f`topic;f`partition;f`offset);(`cryptorust.book_snapshots;0j;10j);"the record's coordinates travel with the row"]};
+    .qunit.assertEquals[(f`topic;f`partition;f`offset);(`cryptorust.book_snapshots;0j;10j);"the record's coordinates travel with the row"];
+    .qunit.assertEquals[f`broker_time;.qt.qpipe.job.crypto_book_decoder.t0-0D00:00:00.002;"and the Kafka record's timestamp, which is not the exchange's"];
+    .qunit.assertTrue[(f`broker_time)<>f`source_time;"two different clocks"]};
 
 .qt.qpipe.job.crypto_book_decoder.test_a_short_side_and_an_empty_side_are_null_floats:{[t]
     .qt.qpipe.job.crypto_book_decoder.drive_ready[];

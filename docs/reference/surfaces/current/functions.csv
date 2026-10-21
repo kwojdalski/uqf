@@ -413,9 +413,13 @@ qetl.kafka,first_per_coordinate,function,1,rows
 qetl.kafka,flush,function,2,tr st
 qetl.kafka,from_messages,function,1,msgs
 qetl.kafka,marks_empty,dict,,
+qetl.kafka,message_index,value,,
 qetl.kafka,not_in,function,2,rows done
 qetl.kafka,poll_max,value,,
 qetl.kafka,process,function,1,rows
+qetl.kafka,propagate,function,3,d src mapped
+qetl.kafka,provenance,dict,,
+qetl.kafka,row_index,value,,
 qetl.kafka,state_new,function,1,
 qetl.kafka,topic,dict,,
 qetl.kafka,transport_keys,value,,
@@ -444,6 +448,7 @@ qetl.kafka.topic,defined,function,1,
 qetl.kafka.topic,known,function,1,
 qetl.kafka.topic,outputs,function,1,
 qetl.kafka.topic,owned,function,1,job
+qetl.kafka.topic,payload_schema,function,2,out expand
 qetl.kafka.topic,registry,dict,,
 qetl.livecheck,check,function,2,source window
 qetl.livecheck,redact,function,2,text cred

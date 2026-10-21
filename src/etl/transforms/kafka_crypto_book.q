@@ -52,7 +52,7 @@
 
 / The mapping: refuse what is not a version-1 book snapshot, else lay the levels out wide.
 / @param m the decoded records
-/ @return crypto_book_snapshot's published columns
+/ @return crypto_book_snapshot's payload columns (the provenance is appended by the framework)
 / @throws error naming the offending offsets when a record is of another version or kind, has a level that is not a pair, or a timestamp outside the plausible epoch-millisecond window
 / @eg cols .qpipe.transform.kafka_crypto_book.map .qpipe.transform.kafka_crypto_book.message
 .qpipe.transform.kafka_crypto_book.map:{[m]
@@ -72,11 +72,11 @@
         .qpipe.transform.kafka_crypto_book.ts[m`sampled_at_ms]);
     names:{`$x,/:string y};
     levels:(names["bid_px";n],names["bid_sz";n],names["ask_px";n],names["ask_sz";n])!(px[`bids]'[n]),(sz[`bids]'[n]),(px[`asks]'[n]),sz[`asks]'[n];
-    flip head,levels,`topic`partition`offset!(m`topic;m`partition;m`offset)}
+    flip head,levels}
 
 .qetl.transform.define[`kafka_crypto_book;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.kafka_crypto_book.message;
-    .qetl.plant.published `crypto_book_snapshot;
+    .qetl.kafka.topic.payload_schema[`crypto_book_snapshot;0b];
     .qpipe.transform.kafka_crypto_book.map;
     / a full book; a one-level bid side and a two-level ask side; two bids and an empty ask side
     enlist `inputs`expected!(
@@ -113,7 +113,6 @@
             ask_sz1:0.6 0.8 0n;
             ask_sz2:1.0 0n 0n;
             ask_sz3:1.2 0n 0n;
-            ask_sz4:2.2 0n 0n;
-            topic:3#`cryptorust.book_snapshots; partition:0 0 1j; offset:10 11 5j)))];
+            ask_sz4:2.2 0n 0n)))];
 
 \d .

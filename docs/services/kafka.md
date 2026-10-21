@@ -137,29 +137,92 @@ declarations (every TorQ process does) have the topic's mapping.
 
 The mapping is a declared [`.qetl.transform`](../../src/etl/core/transform.q),
 so its examples are verified on every test run. Its input is the record's four
-coordinates followed by the payload's fields, each typed; its output is rows for
-a plant table that must carry `topic`, `partition` and `offset`. A second topic
-with its own wire shape is another mapping like that one, declared by a decoder
-job (below) --- nothing in the consumer, the envelope or `kafka_flow` changes. A
-second wire *format* (Avro, protobuf) is a function added to
-`.qetl.kafka.decoders`; the mapping above it does not change.
+provenance columns followed by the payload's fields, each typed; its output is
+the payload's columns only, and the framework appends the provenance (next
+section). A second topic with its own wire shape is another mapping like that
+one, declared by a decoder job (below) --- nothing in the consumer, the envelope
+or `kafka_flow` changes. A second wire *format* (Avro, protobuf) is a function
+added to `.qetl.kafka.decoders`; the mapping above it does not change.
 
 JSON is read as the payload's declared fields; extra fields are ignored. Because
 q reads every JSON number as a float, a `long` field refuses a number from 2^53
 upwards and accepts the same value sent as a string --- refusing is the point, a
 rounded trade id is worse than a dead-lettered record.
 
+## Provenance: what every decoded row says about its record
+
+Four kinds of metadata, four owners. **Kafka metadata** (topic, partition,
+offset, the record timestamp, key, headers) belongs to the transport and is kept
+once, on the envelope. **Payload metadata** (the exchange's clock, a trade id)
+belongs to the decoder and is a column of its table. **Storage metadata**
+(`time`) is the tickerplant's. **Operational metadata** (consumer group, lag,
+decoder version, errors) is job diagnostics, never a per-row column.
+
+Every decoded output table carries the same four columns, checked when the topic
+is declared (`.qetl.kafka.topic.define` refuses a table that lacks one or types
+it differently):
+
+  | column        | q type      | meaning                                                         |
+  | ---           | ---         | ---                                                             |
+  | `topic`       | `symbol`    | the record's topic                                              |
+  | `partition`   | `long`      | its partition                                                   |
+  | `offset`      | `long`      | its offset                                                      |
+  | `broker_time` | `timestamp` | the Kafka **record's** timestamp; null when the record has none |
+
+`broker_time` is never a payload time and never stands in for one: a payload
+that carries no time leaves the payload's own column null, and a record without
+a timestamp leaves `broker_time` null. Nothing substitutes the receipt time or
+the plant's `time`.
+
+A mapping does not build these. It returns the payload's columns, and
+`.qetl.kafka.propagate` ([`kafka_ingest.q`](../../src/etl/core/kafka_ingest.q))
+appends the four from the record the row came from and puts the table's columns
+in order. A one-to-one mapping must return a row per record (anything else is
+dead-lettered `mapping`). The payload columns a mapping returns are
+`.qetl.kafka.topic.payload_schema[table;expand]`.
+
+**One record, many rows.** Declare the topic with `expand` (1b) and give the
+table a `row_index` (`long`) column. The mapping then returns a leading
+`message_index` column (which record of the batch each row came from,
+non-decreasing) and the framework sets `row_index`, 0 for a record's first row.
+The index depends only on the mapping's output for that record, so a retry, a
+replay or another batching gives the same one.
+`(topic, partition, offset, row_index)` is unique. Deduplication still keys on
+the record's coordinates: a record's rows are published in one call, so a
+redelivered record is dropped whole, and a restart reads the handled records
+back from the published rows. A record that expanded to no rows leaves nothing
+to read back, and is decoded again to nothing. One-to-one tables do not carry
+`row_index`.
+
+**Keys and headers** stay on the raw envelope (`msg_key`) and are not copied
+into decoded tables: join on the coordinates. **Headers are not carried:** the
+consumer does not read them and nothing in this tree uses one, and a column
+added to `kafka_message` or `kafka_dead_letter` is a live-table migration for no
+current reader. If a topic needs one, add a typed payload column from the
+payload, or open an issue to carry headers on the envelope.
+
+**Migrating an existing table.** The contract added one column to a table that
+existed: `crypto_book_snapshot` gained `broker_time` (before `topic`). A running
+RDB replays the day's tickerplant log into the new schema and fails with
+`length`, as for any column change mid-day. Roll the day, or set the old segment
+of that table's log aside (the recipe is in [streaming cryptorust's
+books](../guides/cryptorust-kafka-books.md#when-it-breaks)), then restart the
+decoder. Rows already in a persisted HDB partition lack the column; queries
+across the change see it null before. A table you own that lacks one of the four
+columns, or a mapping returning provenance columns itself, is refused at load:
+add the column to the table and drop it from the mapping.
+
 ## A record is never silently dropped
 
 `kafka_flow1` sends a record it cannot map to `kafka_dead_letter`, with its
 coordinates, key and payload as received:
 
-  | `reason`        | when                                                                   |
-  | ---             | ---                                                                    |
-  | `no_mapping`    | no decoder job owns the topic (`kafka_flow1` dead-letters these)       |
-  | `empty_payload` | the record had no payload (a tombstone, or a producer bug)             |
-  | `malformed`     | not JSON, not an object, or a declared field absent, null or mistyped  |
-  | `mapping`       | decoded, but the mapping refused the row (a non-positive quantity)     |
+  | `reason`        | when                                                                                                               |
+  | ---             | ---                                                                                                                |
+  | `no_mapping`    | no decoder job owns the topic (`kafka_flow1` dead-letters these)                                                   |
+  | `empty_payload` | the record had no payload (a tombstone, or a producer bug)                                                         |
+  | `malformed`     | not JSON, not an object, a declared field absent, null or mistyped, or a record with no topic, partition or offset |
+  | `mapping`       | decoded, but the mapping refused the row (a non-positive quantity)                                                 |
 
 One refused row does not take its batch with it. The count by `reason` is the
 health of a topic.
@@ -177,8 +240,8 @@ is the generic worked one. The job file holds the topic's mapping (a
 `.qetl.transform`), the `.qetl.kafka.topic.define` with `job` set to the job,
 and the job itself, with its own `procname`, a literal `publishes` and a literal
 branch in `publish_decoded` for each output table. The table goes in the
-bundle's `tables.q` and must carry `topic`, `partition` and `offset`. The
-machinery --- marks, deduplication, dead letters, restart replay --- is
+bundle's `tables.q` and must carry the provenance columns below. The machinery ---
+marks, deduplication, dead letters, restart replay --- is
 [`.qetl.kafka.decoder`](../../src/etl/core/kafka_decoder.q), keyed by the job's
 name, and the job's state lives in its own namespace, so
 `.qetl.job.stream.reset` restores it.
@@ -215,9 +278,9 @@ A record is JSON with `schema_version: 1`, `kind: "book_snapshot"`, three
 epoch-millisecond clocks, `venue`, `symbol` and `bids`/`asks` as `[price, size]`
 pairs, best first. The table has `sym`, `venue`, `source_time` (exchange),
 `local_time`, `sampled_time`, `bid_px0..4`, `bid_sz0..4`, `ask_px0..4`,
-`ask_sz0..4` and the record's `topic`, `partition`, `offset`. A side with fewer
-than five levels, or none, leaves null floats; levels past five are cut. Not
-`crypto_book`, the kdb recorder's vector-shaped book. An unknown
+`ask_sz0..4` and the record's `broker_time`, `topic`, `partition`, `offset`. A
+side with fewer than five levels, or none, leaves null floats; levels past five
+are cut. Not `crypto_book`, the kdb recorder's vector-shaped book. An unknown
 `schema_version` or `kind`, a level that is not a pair, a missing field or a
 payload that is not JSON goes to `kafka_dead_letter`.
 

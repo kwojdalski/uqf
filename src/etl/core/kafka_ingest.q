@@ -194,7 +194,7 @@
     inp:.qetl.kafka.topic.input_of["decode";d`mapping];
     schema:inp`schema;
     dec:.qetl.kafka.decoders d`format;
-    out:(.qetl.transform.def d`mapping)`output;
+    out:.qetl.plant.published d`output;
     res:{[dec;schema;p] .qetl.kafka.try[dec;(schema;p)]}[dec;schema] each rows`payload;
     ok:$[count res; res[;0]; `boolean$()];
     bad:rows where not ok;
@@ -207,14 +207,52 @@
     gv:res[;1] where ok;
     fvals:{[gv;k] gv[;k]}[gv] each til count schema;
     tbl:(select topic,partition,offset,broker_time from good),'flip (key schema)!fvals;
-    r:.qetl.kafka.try[.qetl.kafka.apply_mapping[d`mapping;inp`input];enlist tbl];
+    mapf:{[d;inp;t] .qetl.kafka.propagate[d;t;.qetl.kafka.apply_mapping[d`mapping;inp;t]]}[d;inp`input];
+    r:.qetl.kafka.try[mapf;enlist tbl];
     if[first r; :`out`dead!(last r;dead)];
     / One refused row must not take its neighbours with it: map them singly.
-    singles:{[mp;inp;tbl;i] .qetl.kafka.try[.qetl.kafka.apply_mapping[mp;inp];enlist tbl enlist i]}[d`mapping;inp`input;tbl] each til count tbl;
+    singles:{[mapf;tbl;i] .qetl.kafka.try[mapf;enlist tbl enlist i]}[mapf;tbl] each til count tbl;
     mapped:singles[;0];
     refused:good where not mapped;
     dead:dead,.qetl.kafka.dead_rows[refused;`mapping;singles[;1] where not mapped];
     `out`dead!((,/) enlist[0#out],singles[;1] where mapped;dead)}
+
+/ Append the provenance contract to what a mapping returned: the one place a decoded row gets its topic, partition, offset and broker_time (and row_index).
+/ .
+/ The mapping returns the payload's columns only. The four provenance columns are
+/ copied from the record the row came from - broker_time is the Kafka record's
+/ timestamp, null if the record had none, and nothing here ever replaces a null
+/ or fills a payload column. A one-to-one topic must return one row per record;
+/ an expanding one returns message_index first (which record, non-decreasing)
+/ and gets row_index, the row's position within its record, from it.
+/ @param d the topic's declaration (mapping, output, expand)
+/ @param src the records the mapping read: a table with the provenance columns, a row each
+/ @param mapped the mapping's result
+/ @return the rows of the output table, in its published column order
+/ @throws error when a one-to-one mapping returns another number of rows than records, or an expanding one's message_index is not a non-decreasing run of positions in src, or the result is not the output table's shape
+/ @eg count .qetl.kafka.propagate[`mapping`output`expand!(`kafka_client_flow;`client_flow;0b);([] topic:enlist `t; partition:enlist 0j; offset:enlist 5j; broker_time:enlist 2026.10.20D09:00:00.000000000);([] sym:enlist `EURUSD; side:enlist `buy; qty:enlist 1f; price:enlist 1f; client:enlist `A; trade_id:enlist 1j)]  ->  1
+.qetl.kafka.propagate:{[d;src;mapped]
+    who:"mapping ",string[d`mapping],": ";
+    n:count src;
+    pub:.qetl.plant.published d`output;
+    if[d`expand;
+        mk:.qetl.kafka.message_index;
+        if[not mk in cols mapped; 'who,"returned no ",string[mk]," - an expanding mapping says which record each row came from"];
+        idx:mapped mk;
+        if[not 7h=type idx; 'who,string[mk]," must be a long"];
+        if[not (all idx<n) and all 0<=deltas idx; 'who,string[mk]," must be positions of the records, non-decreasing"];
+        rows:(cols[mapped] except mk)#mapped;
+        num:(til count idx)-idx?idx];
+    if[not d`expand;
+        if[not n=count mapped; 'who,"returned ",string[count mapped]," row(s) for ",string[n]," record(s) - a mapping that expands a record into several rows is declared with expand"];
+        idx:til n;
+        rows:mapped];
+    res:rows,'.qetl.kafka.coordinates#src idx;
+    if[d`expand; res:res,'([] row_index:num)];
+    res:cols[pub]#res;
+    p:.qetl.transform.problems[pub;res;1b];
+    if[count p; 'who,"does not produce ",string[d`output],": ","; " sv p];
+    res}
 
 / Private: apply a topic's mapping to its decoded table.
 / @private
@@ -230,9 +268,14 @@
 / @eg count .qetl.kafka.process[.qetl.kafka.envelope_empty]`dead  ->  0
 .qetl.kafka.process:{[rows]
     rows:.qetl.kafka.envelope_columns#rows;
+    / A record without its own coordinates cannot be keyed, deduplicated or traced.
+    nocoord:(null rows`topic) or (null rows`partition) or null rows`offset;
+    nometa:rows where nocoord;
+    rows:rows where not nocoord;
     declared:.qetl.kafka.topic.defined[];
     unknown:rows where not rows[`topic] in declared;
     dead:.qetl.kafka.dead_rows[unknown;`no_mapping;{"no mapping is declared for topic ",string x} each unknown`topic];
+    dead:dead,.qetl.kafka.dead_rows[nometa;`malformed;(count nometa)#enlist "the record has no topic, partition or offset"];
     known:rows where rows[`topic] in declared;
     topics:distinct known`topic;
     parts:{[known;t] .qetl.kafka.decode_topic[t;select from known where topic=t]}[known] each topics;

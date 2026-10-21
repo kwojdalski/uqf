@@ -72,6 +72,7 @@
     .qunit.assertEquals[(r`price;r`qty);65003.5 0.25;"the price and quantity the producer wrote"];
     .qunit.assertEquals[r`event_time;2026.10.20D09:00:07.250000000;"the trade's own clock, not the plant's or the broker's"];
     .qunit.assertEquals[(r`topic;r`partition;r`offset);(`example.crypto.trades;1j;7j);"the record's coordinates"];
+    .qunit.assertEquals[r`broker_time;.qt.qpipe.job.crypto_trades_decoder.t0-0D00:00:00.002;"the Kafka record's timestamp, not the trade's"];
     .qunit.assertEquals[type each (r`event_time;r`price;r`partition);-12 -9 -7h;"typed: timestamp, float, long"];
     .qunit.assertTrue[not `time in cols .qt.qpipe.job.crypto_trades_decoder.trades[];"the plant stamps time"]};
 

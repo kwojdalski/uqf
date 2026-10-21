@@ -27,23 +27,22 @@
 
 / The mapping: refuse a crossed quote, else reorder into example_quote's columns.
 / @param m the decoded records
-/ @return example_quote's published columns
+/ @return example_quote's payload columns (the framework appends topic, partition, offset and broker_time)
 / @throws error naming the offending offsets when any bid is above its ask
 / @eg cols .qpipe.transform.example_quote_map.map .qpipe.transform.example_quote_map.message
 .qpipe.transform.example_quote_map.map:{[m]
     bad:m[`bid]>m`ask;
     if[any bad; '"bid above ask: offsets ",", " sv string m[`offset] where bad];
-    select broker_time, sym, bid, ask, topic, partition, offset from m}
+    select sym, bid, ask from m}
 
 .qetl.transform.define[`example_quote_map;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.example_quote_map.message;
-    .qetl.plant.published `example_quote;
+    .qetl.kafka.topic.payload_schema[`example_quote;0b];
     .qpipe.transform.example_quote_map.map;
     enlist `inputs`expected!(
         enlist[`message]!enlist ([] topic:2#`example.quotes; partition:0 1j; offset:7 7j; broker_time:2#2026.10.20D09:00:00.000000000;
             sym:`EURUSD`GBPUSD; bid:1.085 1.265; ask:1.0852 1.2653);
-        ([] broker_time:2#2026.10.20D09:00:00.000000000; sym:`EURUSD`GBPUSD; bid:1.085 1.265; ask:1.0852 1.2653;
-            topic:2#`example.quotes; partition:0 1j; offset:7 7j)))];
+        ([] sym:`EURUSD`GBPUSD; bid:1.085 1.265; ask:1.0852 1.2653)))];
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
