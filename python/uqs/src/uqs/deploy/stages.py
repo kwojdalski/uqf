@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from uqs.deploy import kafka
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import (
     REPLACE_PY,
@@ -184,6 +185,9 @@ class Deployment(Server):
             f"cd {q(release)}",
             "cat > deploy.env <<'DEPLOYENV'",
             *self.env_lines(),
+            # the native Kafka client the release carries (#1515): its own
+            # copy for every process, ahead of the server's libraries
+            *(kafka.env_lines(release) if pkg.manifest.get("kafka") else []),
             f"if [ -f {q(secrets)} ]; then set -a; . {q(secrets)}; set +a; fi",
             # the private ODBC setup: its overlay QHOME, driver registry and
             # libraries, for every process the release starts
@@ -223,6 +227,22 @@ class Deployment(Server):
             " ".join(["uv pip install", *offline, "--no-deps", q(py["app_wheel"])]),
         ]
         self.run("prepare", "installing the release's Python environment offline", *lines)
+        if pkg.manifest.get("kafka"):  # before anything starts, or reads the HDB
+            log.info("{}", self.kafka_check(release))
+
+    def kafka_check(self, release: str) -> str:
+        """Load the release's kfk in the server's q, with no broker (#1515):
+        the library and every library it needs resolve, before any process
+        starts. Returns the line naming librdkafka's version."""
+        out = self.run(
+            "kafka",
+            "loading the release's native Kafka client",
+            *self.in_release(release, *kafka.load_check_lines(self.cfg.smoke_timeout)),
+            timeout=self.cfg.smoke_timeout + 30,
+        )
+        if kafka.LOAD_MARKER not in out:
+            raise DeployError("kafka", f"the kfk load check printed no {kafka.LOAD_MARKER}")
+        return out.strip().splitlines()[-1]
 
     def smoke(self, release: str) -> None:
         out = self.run(

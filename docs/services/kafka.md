@@ -19,8 +19,9 @@ A runnable end-to-end example - a disposable broker, synthetic crypto trades, a
 decoder in a sidecar bundle and a verifier that queries the RDB - is
 [`kafka-crypto-example.md`](../guides/kafka-crypto-example.md).
 
-Needs a reachable broker and `confluent-kafka`, and **neither ships with this
-repository**. That follows the rule
+Needs a reachable broker and `confluent-kafka`, the optional `kafka` extra of
+`uqs` (`uv sync --extra kafka`); `uqs connector start kafka` refuses without it.
+**Neither is installed by default**. That follows the rule
 [`singlestore_odbc.q`](../../src/etl/core/singlestore_odbc.q) states for the
 ODBC driver --- a public single-host demo cannot require infrastructure nobody
 has --- and it binds harder here, because a broker is heavier than a driver. The
@@ -106,6 +107,31 @@ hostname is one `ERROR` naming `host:port`, with the repeats counted and a
 [`kafka_diagnostics.q`](../../src/etl/core/kafka_diagnostics.q) has the stages;
 [the crypto example](../guides/kafka-crypto-example.md) runs each failure
 against a real broker, with a verifier that checks every stage against the RDB.
+
+## In a release
+
+Both clients are opt-in at `uqs deploy build` time; a default release carries
+neither, and the decoders need neither. Brokers, groups and credentials stay
+runtime configuration (`UQF_KAFKA_*`), and no check connects to a broker.
+
+```
+uqs deploy build --kafka-home $HOME/kfk-linux     # the native client, for kafka_feed1
+uqs deploy build --with-kafka-connector           # confluent-kafka, for uqs connector start kafka
+```
+
+**`--kafka-home DIR`** copies `kfk.q`, `libkfk.so`, every shared library `ldd`
+resolves it to apart from glibc's (into `lib/`), and every `LICENSE*`, `NOTICE*`
+or `COPYING*` file under `DIR` (into `notices/`) to `.release/kafka/`. Build on
+Linux: the build refuses a missing file, a `DIR` with no licence, a library
+`ldd` cannot find, and any library that is not an ELF object for `--arch`. On
+the server, `deploy.env` sets `UQF_KFK_HOME` to that copy and puts its `lib/`
+first on `LD_LIBRARY_PATH`, for every process the release starts, so any job
+using the native loader finds it with no setting of its own. Before anything
+starts, push loads `kfk.q` in the server's q from that copy (the `kafka` stage)
+and stops naming the reason when it does not load.
+
+**`--with-kafka-connector`** exports the lock with the `kafka` extra, so
+confluent-kafka's wheel for the target is installed offline with the rest.
 
 ## Transport and decoding are two things
 

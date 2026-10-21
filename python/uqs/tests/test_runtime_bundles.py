@@ -310,7 +310,7 @@ def test_the_build_installs_for_its_runtime_and_records_it(
     monkeypatch.setattr(release_build, "tracked_files", lambda root, runner: [])
     monkeypatch.setattr(release_build, "default_python", lambda root: "3.14")
 
-    def fake_payload(root, into, target, runner):
+    def fake_payload(root, into, target, runner, extras=()):
         (into / "wheels").mkdir(parents=True)
         (into / "requirements.txt").write_text("")
         (into / "wheels" / "uqs-0.1.0-py3-none-any.whl").write_bytes(b"u")
@@ -333,7 +333,7 @@ def test_a_default_runtime_build_records_its_runtime_too(
     monkeypatch.setattr(release_build, "tracked_files", lambda root, runner: [])
     monkeypatch.setattr(release_build, "default_python", lambda root: "3.14")
 
-    def fake_payload(root, into, target, runner):
+    def fake_payload(root, into, target, runner, extras=()):
         (into / "wheels").mkdir(parents=True)
         (into / "requirements.txt").write_text("")
         (into / "wheels" / "uqs-0.1.0-py3-none-any.whl").write_bytes(b"u")

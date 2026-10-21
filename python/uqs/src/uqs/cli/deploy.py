@@ -22,7 +22,7 @@ import typer
 
 from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, history, targets
+from uqs.deploy import config, driver, history, kafka, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import configure_logging, get_logger
@@ -104,6 +104,12 @@ def build(
             help="With --q-target: accept a load-time lookup of a computed name, with a warning",
         ),
     ] = False,
+    kafka_home: Annotated[
+        Path | None, typer.Option("--kafka-home", metavar="DIR", help=kafka.HOME_HELP)
+    ] = None,
+    with_kafka_connector: Annotated[
+        bool, typer.Option("--with-kafka-connector", help=kafka.CONNECTOR_HELP)
+    ] = False,
 ) -> None:
     """Build a release artifact once, for `uqs deploy push` to put on any number of servers.
 
@@ -131,6 +137,8 @@ def build(
             q_target=q_target,
             q_exclude=q_exclude or (),
             allow_computed_names=allow_computed_names,
+            kafka_home=kafka_home,
+            kafka_connector=with_kafka_connector,
         )
     except ReleaseError as exc:
         _failed("uqs deploy build", exc.stage, exc)
