@@ -60,9 +60,13 @@ uqs query "select [-5] time, sym, venue, bid_px0, bid_sz0, ask_px0, ask_sz0 from
 uqs query "select [-5] from kafka_dead_letter" --proc rdb1
 ```
 
-`time` is UTC. The table has `sym`, `venue`, `source_time`, `local_time`,
-`sampled_time`, `bid_px0..4`, `bid_sz0..4`, `ask_px0..4`, `ask_sz0..4`, `topic`,
-`partition` and `offset` ([definition](../../src/etl/plant_tables.q)).
+`time` is UTC, and it is stamped when the tickerplant flushes its batch, once a
+second, so many rows share it. For when a book was seen, read `source_time` (the
+venue's stamp) or `sampled_time`. cryptorust samples every 100 ms
+(`--interval-ms`), and `kafka_feed1` polls every 200 ms. The table has `sym`,
+`venue`, `source_time`, `local_time`, `sampled_time`, `bid_px0..4`,
+`bid_sz0..4`, `ask_px0..4`, `ask_sz0..4`, `topic`, `partition` and `offset`
+([definition](../../src/etl/plant_tables.q)).
 
 cryptorust sends a book only when it has changed, and re-sends every book after
 it restarts. The re-sent books are new Kafka messages, so they are not
