@@ -2,7 +2,7 @@
 
 What each module under `src/` is for, the namespace it loads into, and the
 conventions every one of them follows. The per-function reference is the
-[qDoc](../../README.md#documentation) block on each function, collected in
+[qDoc](#browsable-api-docs) block on each function, collected in
 [`man.q`](../man.q) --- this page is the inventory above that.
 
 Each module loads into one of seven domain namespaces under `.qf` after
@@ -26,9 +26,9 @@ nesting (`.qf.*` as much as `.qpipe.*`); any tool listing namespaces goes
 through it rather than scanning the root for a `q` prefix.
 
 Every module has a matching test file, and every function carries a
-[qDoc](../../README.md#documentation) block with `@param`/`@return`/`@eg` ---
-those are the per-function reference, so the table below only says what each
-module is *for*.
+[qDoc](#browsable-api-docs) block with `@param`/`@return`/`@eg` --- those are
+the per-function reference, so the table below only says what each module is
+*for*.
 
   | Module                                                                             | Namespace     | For                                                                                                                                                        | Tests                                          |
   | ---                                                                                | ---           | ---                                                                                                                                                        | ---                                            |
@@ -218,3 +218,25 @@ abs[(sum exec pips from out where kind in `leg`residual)-exec first pips from ou
 gap:`sym`time xasc flip flip (mk_row[t0;`EURUSD;1.10];mk_row[t1;`EURUSD;1.12];mk_row[t0;`USDPLN;3.9];mk_row[t1;`USDPLN;3.8]);
 exec status from .qf.exec.cross_markout_attribution[gap;`USDPLN;1;t0;t1;10000;1] where kind in `leg`residual
 ```
+
+## Browsable API docs
+
+Every function in `src/*.q` has a
+[qDoc](https://www.timestored.com/qstudio/help/qdoc) comment block (`@param`,
+`@return`, `@throws`, `@eg`). Generate HTML from them with:
+
+```
+brew install openjdk                        # or any JDK 8+
+curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place at repo root
+./scripts/dev/gen-docs.sh                   # writes build/docs/index.html (gitignored)
+```
+
+`qstudio.jar` bundles a small q linter that `gen-docs.sh` runs as a side effect
+(`build/docs/lint.csv`, `lint.html`). It checks each file in isolation, so
+cross-module calls between namespaces (e.g. `forwards.q` calling
+`.qf.px.ccy_pair_legs`) show up as expected "undeclared variable" false
+positives.
+
+TimeStored's own docs give the CLI as `QDocMain <sourceFolder> <targetFolder>`;
+that order is backwards. The working one, baked into `gen-docs.sh`, is
+`QDocMain <targetFolder> <sourceFolder>`.

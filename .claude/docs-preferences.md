@@ -214,6 +214,14 @@ instead of restating them. Implementation detail belongs in the code.
 > Corrections and missing facts go in reference pages and tables; the README and
 > main guides get a line at most.
 
+> *2026-10-21.* Asked how to shorten the documentation, starting from the main
+> README, and approved the plan: "i want it to be more concise". `README.md` 371
+> -> ~180 lines, cut to the first-run path. PeachQ detail (mismatch refusal,
+> pinned build and cache, override, no connection cap) moved to
+> `reference/environment.md#peachq`; qDoc HTML generation to
+> `reference/quant-modules.md#browsable-api-docs`; the browser-application
+> section, contents list and CI-only PeachQ gate text were dropped.
+
 **The presentation's appendix is where exhaustive detail goes, when asked.** The
 narrative slides of `docs/presentation/uqf.qmd` stay short; a request for depth
 is answered in the appendix at its end, one area per slide.
