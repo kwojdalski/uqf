@@ -33,6 +33,7 @@ dependencies = [
     "uqs",
     "uqf-frontend",
     "uqf-airflow-provider",
+    "textual>=8.2.8",
 ]
 
 [tool.uv]

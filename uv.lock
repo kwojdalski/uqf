@@ -1500,6 +1500,7 @@ name = "uqf-workspace"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "textual" },
     { name = "uqf-airflow-provider" },
     { name = "uqf-frontend" },
     { name = "uqs" },
@@ -1516,6 +1517,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "textual", specifier = ">=8.2.8" },
     { name = "uqf-airflow-provider", editable = "python/uqf_airflow_provider" },
     { name = "uqf-frontend", editable = "python/uqf_frontend" },
     { name = "uqs", editable = "python/uqs" },
