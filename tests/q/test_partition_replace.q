@@ -115,6 +115,40 @@
     setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
     .qunit.assertEquals[r;`replace;"scoped to its partition, the clear is safe"]};
 
+/ #1518: an unpartitioned replace clears the whole window, partitioned
+/ siblings' rows included. Both workers loaded, as in one process.
+.qt.qetl.partition_replace.test_an_unpartitioned_replace_is_refused_beside_a_partitioned_sibling:{[t]
+    .qetl.job.bounded.define[`ppx_jpy;.qt.qetl.partition_replace.decl[`USDJPY;`on_conflict`partition_column!(`replace;`sym)]];
+    .qetl.job.bounded.define[`ppx_eur;.qt.qetl.partition_replace.decl[`;enlist[`on_conflict]!enlist `replace]];
+    .qt.qetl.partition_replace.publish[`ppx_jpy;.qt.qetl.partition_replace.deals[`USDJPY;1;4]];
+    .qunit.assertThrows[{.qt.qetl.partition_replace.publish[`ppx_eur;.qt.qetl.partition_replace.deals[`EURUSD;11;4]]};::;
+        "on_conflict replace: ppx_eur is unpartitioned but dataset ppx is also filled as partition USDJPY*";
+        "the unscoped clear would delete the USDJPY rows"];
+    .qunit.assertEquals[.qt.qetl.partition_replace.held[];enlist[`USDJPY]!enlist 4;"nothing was deleted"]};
+
+/ The worker alone (#1499's shape): the sibling is known only from the ledger.
+.qt.qetl.partition_replace.test_a_lone_unpartitioned_replace_is_refused_when_the_ledger_has_a_partition:{[t]
+    .qetl.job.bounded.define[`ppx_eur;.qt.qetl.partition_replace.decl[`;enlist[`on_conflict]!enlist `replace]];
+    `ppx set .qt.qetl.partition_replace.deals[`USDJPY;1;4];
+    .qetl.coverage.stage_completion[`ppx;`USDJPY;`v1;.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1];4];
+    .qunit.assertEquals[exec name from .qetl.job.bounded.worker_cfg where dataset=`ppx;enlist `ppx_eur;"only one worker fills ppx"];
+    .qunit.assertThrows[{.qt.qetl.partition_replace.publish[`ppx_eur;.qt.qetl.partition_replace.deals[`EURUSD;11;4]]};::;
+        "on_conflict replace: ppx_eur is unpartitioned but dataset ppx is also filled as partition USDJPY*";
+        "the ledger names a partition no loaded worker accounts for"];
+    .qunit.assertEquals[.qt.qetl.partition_replace.held[];enlist[`USDJPY]!enlist 4;"nothing was deleted"]};
+
+.qt.qetl.partition_replace.test_a_lone_unpartitioned_automatic_replace_is_withheld_when_the_ledger_has_a_partition:{[t]
+    .qetl.job.bounded.define[`ppx_eur;.qt.qetl.partition_replace.decl[`;()!()]];
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;enlist "x"];
+    fv:.qetl.source.fixture_version `v1;
+    .qetl.job.bounded.write_state[`ppx_eur;`source_version;`v1];
+    .qetl.coverage.stage_completion[`ppx;`;fv;.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1];4];
+    .qetl.coverage.stage_completion[`ppx;`USDJPY;`v1;.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1];4];
+    w:`range_from`range_to!(.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1]);
+    r:.qetl.job.bounded.runtime.write_strategy[`ppx_eur;w];
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
+    .qunit.assertEquals[r;`upsert;"the switch to replace would clear USDJPY's rows, so it is withheld"]};
+
 / --- define -------------------------------------------------------------
 
 .qt.qetl.partition_replace.test_a_partition_column_needs_a_partition:{[t]

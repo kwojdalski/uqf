@@ -576,27 +576,44 @@
     `on_conflict`row_key`time_column`range_from`range_to`partition_column`partition!
         (strategy;cfg`target_key;cfg`window_column;w`range_from;w`range_to;cfg`partition_column;cfg`partition)}
 
-/ Would a `replace by this worker clear rows it did not write? True when the
-/ worker is one partition of its dataset and has no partition_column to tell
-/ its rows from the other partitions' (#1476). Decided from the worker's own
-/ declaration: a real worker process loads only its own worker
-/ (.qetl.load.only), so looking for siblings among the loaded workers found
-/ none there and the guard never fired (#1499). The unpartitioned sentinel
-/ declares the dataset is not shared by partition, so it is exempt.
+/ The other partitions of this worker's dataset that it can see: those of
+/ loaded workers' declarations, and those the coverage ledger has recorded.
+/ A worker process loads only itself (#1499), so the ledger is what a lone
+/ worker has (#1518).
+/ @param worker the worker's name
+/ @return a sorted symbol list, excluding the worker's own partition
+/ @private
+.qetl.job.bounded.runtime.other_partitions:{[worker]
+    cfg:.qetl.job.bounded.def worker;
+    decl:exec partition from .qetl.job.bounded.worker_cfg where dataset=cfg`dataset, not name=worker;
+    asc distinct (decl,.qetl.coverage.partitions_of cfg`dataset) except cfg[`partition],.qetl.job.bounded.unpartitioned}
+
+/ Would a `replace by this worker clear rows it did not write? True when it
+/ has no partition_column to tell its rows from other partitions' and either
+/ is one partition of its dataset (#1476) or is unpartitioned while a named
+/ partition of the dataset exists (#1518). Decided from the worker's own
+/ declaration and the ledger: a real worker process loads only its own
+/ worker, so looking among the loaded workers found none (#1499).
 / @param worker the worker's name
 / @return 1b when a replace cannot be confined to the worker's own rows
 / @private
 .qetl.job.bounded.runtime.replace_unscoped:{[worker]
     cfg:.qetl.job.bounded.def worker;
-    (null cfg`partition_column) and not cfg[`partition]=.qetl.job.bounded.unpartitioned}
+    if[not null cfg`partition_column; :0b];
+    if[not cfg[`partition]=.qetl.job.bounded.unpartitioned; :1b];
+    0<count .qetl.job.bounded.runtime.other_partitions worker}
 
 / Refuse a `replace that would delete another partition's rows.
 / @param worker the worker's name
-/ @throws error naming the partition and the way out
+/ @throws error naming the partition(s) and the way out
 / @private
 .qetl.job.bounded.runtime.require_replace_scoped:{[worker]
     if[not .qetl.job.bounded.runtime.replace_unscoped[worker]; :(::)];
     cfg:.qetl.job.bounded.def worker;
+    if[cfg[`partition]=.qetl.job.bounded.unpartitioned;
+        '"on_conflict replace: ",string[worker]," is unpartitioned but dataset ",string[cfg`dataset],
+         " is also filled as partition ",(", " sv string .qetl.job.bounded.runtime.other_partitions worker),
+         " - its window clear would delete their rows; use upsert, or give each worker a partition and partition_column"];
     '"on_conflict replace: ",string[worker]," is partition ",string[cfg`partition]," of dataset ",string[cfg`dataset],
      ", and its window may hold other partitions' rows too - declare partition_column, the output column that holds each worker's partition, or use upsert"}
 
