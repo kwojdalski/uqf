@@ -49,24 +49,24 @@
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_twin_scores_what_the_live_transform_scores_and_stamps_a_time:{[t]
     f:.qpipe.source.hdb_fx_markouts.fixture[];
-    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored f;
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored[f];
     live:.qetl.transform.apply[`fx_markout_score_long;f];
     .qunit.assertEquals[delete time from r;live;"the same rows"];
     .qunit.assertEquals[r`time;(r`source_time)+0D00:00:10;"time is source_time plus the furthest horizon"]};
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_fixtures_unroutable_fill_is_excluded_and_the_rest_scored:{[t]
-    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored .qpipe.source.hdb_fx_markouts.fixture[];
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored[.qpipe.source.hdb_fx_markouts.fixture[]];
     .qunit.assertEquals[asc exec distinct fill_id from r;`x1`y1;"the crypto fill cannot be routed"];
     .qunit.assertEquals[count r;36;"x1: four horizons of four components; y1: four of five"]};
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_no_executions_score_to_nothing_whatever_the_books_hold:{[t]
     inputs:@[.qpipe.source.hdb_fx_markouts.fixture[];`executions;0#];
-    .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.scored inputs;0#.qetl.plant.shape `fx_markout;"the primary input owns the window"]};
+    .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.scored[inputs];0#.qetl.plant.shape `fx_markout;"the primary input owns the window"]};
 
 / --- the quality gate and facts -----------------------------------------------------------
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_gate_passes_the_fixture_and_names_what_it_refuses:{[t]
-    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored .qpipe.source.hdb_fx_markouts.fixture[];
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored[.qpipe.source.hdb_fx_markouts.fixture[]];
     .qunit.assertEquals[count .qpipe.job.hdb_fx_markouts_backfill.quality_check r;0;"clean"];
     bad:update pips:0w from r where i=0;
     f:.qpipe.job.hdb_fx_markouts_backfill.quality_check bad;
@@ -75,7 +75,7 @@
     .qunit.assertEquals[(.qpipe.job.hdb_fx_markouts_backfill.quality_check unrec)`check;enlist `unreconciled_residual;"and so is a leg allocation that does not add up"]};
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_facts_count_executions_horizons_and_the_unpriced:{[t]
-    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored .qpipe.source.hdb_fx_markouts.fixture[];
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored[.qpipe.source.hdb_fx_markouts.fixture[]];
     .qunit.assertEquals[.qpipe.job.hdb_fx_markouts_backfill.facts r;`executions`horizons`unpriced!(2;4;0);"two executions at four horizons, all priced"];
     .qunit.assertEquals[.qpipe.job.hdb_fx_markouts_backfill.facts 0#r;(enlist `span)!enlist "empty window";"and an empty window says so"]};
 
@@ -124,7 +124,7 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_live_path_scores_exactly_as_the_fixture_does:{[t]
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;(.qt.qpipe.job.hdb_fx_markouts_backfill.day[])0;(.qt.qpipe.job.hdb_fx_markouts_backfill.day[])1]};
     .qunit.assertTrue[.qetl.source.validate[`hdb_fx_markouts;r];"the live inputs satisfy both contracts"];
-    .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.scored r;.qt.qpipe.job.hdb_fx_markouts_backfill.scored .qpipe.source.hdb_fx_markouts.fixture[];"live and fixture agree"]};
+    .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.scored[r];.qt.qpipe.job.hdb_fx_markouts_backfill.scored[.qpipe.source.hdb_fx_markouts.fixture[]];"live and fixture agree"]};
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_only_the_books_the_routes_need_are_read:{[t]
     / USDPLN needs EURUSD and EURPLN; a GBPJPY book exists and is not read

@@ -120,7 +120,7 @@
 .qt.support.suites_under:{[root]
     if[not .qt.support.is_namespace @[value;root;{[e] (::)}];
         '"suites: there is no ",(string root)," namespace - no suite file defined one"];
-    nss:.qt.support.walk root;
+    nss:.qt.support.walk[root];
     helperless:nss where {[ns] (0<count system "f ",string ns) and 0=count .qt.support.tests_in ns} each nss;
     if[count helperless;
         '(string first helperless)," holds functions but no test* - a helper belongs under .qt.support or .qt.fixture"];
@@ -210,7 +210,7 @@
 // @param lines a file's source lines
 // @return symbols
 .qt.support.declared_tests:{[lines]
-    named:.qt.support.defined_paths lines;
+    named:.qt.support.defined_paths[lines];
     named:named where not {[p] any (string p) like/: (".qt.support.*";".qt.fixture.*")} each named;
     named where (string last each ` vs/: named) like "test*"}
 
@@ -235,10 +235,10 @@
 .qt.support.layout_problems:{[]
     files:.qt.support.layout_files[];
     lines:{read0 hsym `$x} each files;
-    problems:.qt.support.collisions raze .qt.support.defined_paths each lines;
+    problems:.qt.support.collisions[raze .qt.support.defined_paths each lines];
     declared:distinct raze .qt.support.declared_tests each lines;
     suites:.qt.support.suites[];
-    live:raze {[ns] ` sv/: ns,/:.qt.support.tests_in ns} each suites;
+    live:raze {[ns] ` sv/: ns,/:.qt.support.tests_in[ns]} each suites;
     problems,:("a suite outside .qt: ",/:string each .qt.support.outside_suites[]);
     problems,:("declared but not discovered as a test: ",/:string each asc declared except live);
     problems,:("discovered but not declared in a suite file: ",/:string each asc live except declared);

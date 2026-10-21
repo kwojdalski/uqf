@@ -65,7 +65,6 @@
     `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[];
     `.qpipe.job.kafka_feed.client set 7i;
     `.qpipe.job.kafka_feed.state set .qetl.kafka.state_new[];
-    pub:();
     `.qpipe.job.kafka_feed.publish set {[t;x] `.qt.qpipe.job.kafka_feed.pub set .qt.qpipe.job.kafka_feed.pub,enlist (t;x); count x};
     `.qt.qpipe.job.kafka_feed.pub set ();
     `.qt.qpipe.job.kafka_feed.calls set ();

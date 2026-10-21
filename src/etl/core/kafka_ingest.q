@@ -274,12 +274,12 @@
         .qetl.log.err[`kafka;"poll failed";enlist[`error]!enlist last r];
         :.qetl.kafka.bump[st;`poll_errors;1]];
     msgs:last r;
-    ev:.qetl.kafka.events msgs;
+    ev:.qetl.kafka.events[msgs];
     if[count ev;
         / Once per cause (kafka_diagnostics.q): a client report that repeats every poll was a log line every poll.
         {.qetl.kafka.diag.report[x`mtype;$[10h=type r:x`data; r; 4h=type r; "c"$r; ""]]} each ev;
         st:.qetl.kafka.bump[st;`events;count ev]];
-    env:.qetl.kafka.from_messages msgs;
+    env:.qetl.kafka.from_messages[msgs];
     st[`backlog]:(st`backlog),env;
     .qetl.kafka.bump[st;`polled;count env]}
 
@@ -289,7 +289,7 @@
 .qetl.kafka.publish_backlog:{[tr;st]
     b:st`backlog;
     if[0=count b; :st];
-    fresh:.qetl.kafka.first_per_coordinate .qetl.kafka.above_marks[st`marks;b];
+    fresh:.qetl.kafka.first_per_coordinate[.qetl.kafka.above_marks[st`marks;b]];
     r:.qetl.kafka.try[{[tr;f] if[count f; tr[`publish][`kafka_message;f]]; count f};(tr;fresh)];
     if[not first r;
         .qetl.log.err[`kafka;"publish failed - nothing will be committed";`rows`error!(count fresh;last r)];

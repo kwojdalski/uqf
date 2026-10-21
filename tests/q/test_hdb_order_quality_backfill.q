@@ -118,21 +118,21 @@
 .qt.qpipe.job.hdb_order_quality_backfill.test_the_twin_gives_the_live_series_over_an_hour_row_for_row:{[t]
     from_ts:.qt.qpipe.job.hdb_order_quality_backfill.t0;
     to_ts:.qt.qpipe.job.hdb_order_quality_backfill.t0+0D01;
-    lv:.qt.qpipe.job.hdb_order_quality_backfill.norm .qt.qpipe.job.hdb_order_quality_backfill.live[.qt.qpipe.job.hdb_order_quality_backfill.scn;from_ts;to_ts];
+    lv:.qt.qpipe.job.hdb_order_quality_backfill.norm[.qt.qpipe.job.hdb_order_quality_backfill.live[.qt.qpipe.job.hdb_order_quality_backfill.scn;from_ts;to_ts]];
     tw:.qt.qpipe.job.hdb_order_quality_backfill.twin[from_ts;to_ts];
     .qunit.assertEquals[(tw 0)`state;`completed;"the worker ran"];
     .qunit.assertTrue[(count lv)>2000;"a real series: an hour of grid points, both books, three windows"];
     .qunit.assertEquals[count .qt.qpipe.job.hdb_order_quality_backfill.norm tw 1;count lv;"as many rows"];
-    .qunit.assertEquals[.qt.qpipe.job.hdb_order_quality_backfill.norm tw 1;lv;"the same series, row for row, to the last ratio"];
+    .qunit.assertEquals[.qt.qpipe.job.hdb_order_quality_backfill.norm[tw 1];lv;"the same series, row for row, to the last ratio"];
     / the first grid point: the 10:00 hour window holds the 09:00-10:00 orders, from the source's lookback
     f:{select from x where as_of=2026.10.09D10:00:00, window=0D01};
     .qunit.assertTrue[0<first (f lv)`n_orders;"the first publication has a buffer behind it"];
     .qunit.assertEquals[f .qt.qpipe.job.hdb_order_quality_backfill.norm tw 1;f lv;"and the twin read the same one"]};
 
 .qt.qpipe.job.hdb_order_quality_backfill.test_rerunning_a_window_replaces_its_rows_rather_than_duplicating_them:{[t]
-    a:.qt.qpipe.job.hdb_order_quality_backfill.twin[.qt.qpipe.job.hdb_order_quality_backfill.t0;.qt.qpipe.job.hdb_order_quality_backfill.t0+0D01];
+    .qt.qpipe.job.hdb_order_quality_backfill.twin[.qt.qpipe.job.hdb_order_quality_backfill.t0;.qt.qpipe.job.hdb_order_quality_backfill.t0+0D01];
     n:count get `order_quality;
-    b:.qt.qpipe.job.hdb_order_quality_backfill.twin[.qt.qpipe.job.hdb_order_quality_backfill.t0;.qt.qpipe.job.hdb_order_quality_backfill.t0+0D01];
+    .qt.qpipe.job.hdb_order_quality_backfill.twin[.qt.qpipe.job.hdb_order_quality_backfill.t0;.qt.qpipe.job.hdb_order_quality_backfill.t0+0D01];
     .qunit.assertEquals[count get `order_quality;n;"same count after a second run"];
     .qunit.assertEquals[count distinct `book`window`as_of#get `order_quality;n;"and the key is unique"]};
 

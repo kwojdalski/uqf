@@ -53,7 +53,7 @@
 .qt.qpipe.job.crypto_book_decoder.test_real_shaped_books_become_wide_rows:{[t]
     .qt.qpipe.job.crypto_book_decoder.drive_ready[];
     .qt.qpipe.job.crypto_book_decoder.push[0 1j;10 5j;(.qt.qpipe.job.crypto_book_decoder.full;.qt.qpipe.job.crypto_book_decoder.short)];
-    r:.qt.qpipe.job.crypto_book_decoder.rows_of `crypto_book_snapshot;
+    r:.qt.qpipe.job.crypto_book_decoder.rows_of[`crypto_book_snapshot];
     .qunit.assertEquals[count r;2;"a row per record"];
     f:r 0;
     .qunit.assertEquals[(f`sym;f`venue);(`$"BTC-USDT";`binance);"the market, case kept"];
@@ -85,7 +85,7 @@
     .qt.qpipe.job.crypto_book_decoder.drive_ready[];
     .qt.qpipe.job.crypto_book_decoder.push[0 0j;10 11j;2#enlist .qt.qpipe.job.crypto_book_decoder.full];
     .qt.qpipe.job.crypto_book_decoder.push[0 0 0j;10 11 12j;3#enlist .qt.qpipe.job.crypto_book_decoder.full];
-    r:.qt.qpipe.job.crypto_book_decoder.rows_of `crypto_book_snapshot;
+    r:.qt.qpipe.job.crypto_book_decoder.rows_of[`crypto_book_snapshot];
     .qunit.assertEquals[r`offset;10 11 12j;"offsets 10 and 11 once, and the new 12"]};
 
 .qt.qpipe.job.crypto_book_decoder.test_what_it_cannot_read_is_dead_lettered:{[t]
@@ -98,7 +98,7 @@
         r["2";k;v;ok;ok]; r["1";"\"trade\"";v;ok;ok]; r["1";k;v;"[[65000.5,0.25,9.0]]";ok];
         r["1";k;"";ok;ok]; r["1";k;v;ok;"\"none\""]);
     .qt.qpipe.job.crypto_book_decoder.push[(count pl)#0j;til count pl;pl];
-    r:.qt.qpipe.job.crypto_book_decoder.rows_of `crypto_book_snapshot;
+    r:.qt.qpipe.job.crypto_book_decoder.rows_of[`crypto_book_snapshot];
     d:`offset xasc .qt.qpipe.job.crypto_book_decoder.rows_of `kafka_dead_letter;
     .qunit.assertEquals[r`offset;enlist 0j;"only the good record is a book"];
     .qunit.assertEquals[d`offset;1 2 3 4 5 6 7j;"and every bad one is a dead letter, once"];
@@ -128,7 +128,7 @@
 .qt.qpipe.job.crypto_book_decoder.test_a_restart_handles_exactly_the_records_that_were_not_handled:{[t]
     .qt.qpipe.job.crypto_book_decoder.drive_ready[];
     .qetl.job.stream.start[`crypto_book_decoder;.qt.qpipe.job.crypto_book_decoder.replay_transport[.qt.qpipe.job.crypto_book_decoder.restart_log[]]];
-    .qunit.assertEquals[(.qt.qpipe.job.crypto_book_decoder.rows_of `crypto_book_snapshot)`offset;2 4j;
+    .qunit.assertEquals[(.qt.qpipe.job.crypto_book_decoder.rows_of[`crypto_book_snapshot])`offset;2 4j;
         "offset 2 (the gap) and 4 (arrived while down); 0 and 3 are not handled a second time"];
     .qunit.assertEquals[count .qt.qpipe.job.crypto_book_decoder.rows_of `kafka_dead_letter;0;"the dead letter at 1 is not repeated"]};
 

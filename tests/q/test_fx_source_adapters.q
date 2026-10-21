@@ -238,7 +238,7 @@
     a:.qt.qpipe.transform.fx_source_adapters.norm_a[];
     b:.qt.qpipe.transform.fx_source_adapters.norm_b[];
     .qunit.assertEquals[count a 1;5;"five snapshots: the partial, forward and equity levels are not among them"];
-    .qunit.assertEquals[.qt.qpipe.transform.fx_source_adapters.by_key a 1;.qt.qpipe.transform.fx_source_adapters.by_key b 1;"the same snapshots"]};
+    .qunit.assertEquals[.qt.qpipe.transform.fx_source_adapters.by_key[a 1];.qt.qpipe.transform.fx_source_adapters.by_key[b 1];"the same snapshots"]};
 
 .qt.qpipe.transform.fx_source_adapters.test_two_sources_give_the_same_markouts_with_the_one_calculation:{[tc]
     a:.qt.qpipe.transform.fx_source_adapters.norm_a[];
