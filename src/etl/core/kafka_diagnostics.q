@@ -100,7 +100,7 @@
 / @return one of connect, topic_auth, group_auth, unknown_topic, sasl, all_down, other
 / @eg .qetl.kafka.diag.kind_of[30i;"Group authorization failed"]  ->  `group_auth
 .qetl.kafka.diag.kind_of:{[code;reason]
-    k:$[-11h=type code; .qetl.kafka.diag.names code; (type code) in -5 -6h; .qetl.kafka.diag.numbers `long$code; `];
+    k:$[-11h=type code; .qetl.kafka.diag.names code; (type code) in -5 -6 -7h; .qetl.kafka.diag.numbers `long$code; `];
     if[not null k; :k];
     h:.qetl.kafka.diag.has[reason;];
     if[h "group authorization"; :`group_auth];

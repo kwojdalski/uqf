@@ -283,12 +283,35 @@
     st[`backlog]:(st`backlog),env;
     .qetl.kafka.bump[st;`polled;count env]}
 
+/ Private: forget the mark of a partition whose offsets have restarted.
+/ .
+/ A held partition whose polled records all sit BELOW its mark has had its log
+/ truncated or its topic recreated (#1504): its new records would be counted as
+/ duplicates, never published, and then committed. A redelivery overlaps the
+/ mark (it reaches it, or goes past it), so it is not taken for a restart. The
+/ trade-off: a redelivery wholly below the mark is also republished, which
+/ kafka_flow dedups downstream and kafka_message is meant to keep.
+/ @param st the state
+/ @param b the backlog (envelope rows)
+/ @return the state, with those partitions' marks dropped
+/ @private
+.qetl.kafka.reset_restarted:{[st;b]
+    m:0!select top:max offset by topic,partition from b;
+    before:((st`marks) select topic,partition from m)`offset;
+    back:m where (m`top)<before;
+    if[0=count back; :st];
+    .qetl.log.warn[`kafka;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
+    mk:0!st`marks;
+    st[`marks]:.qetl.kafka.keep[st`marks;not .qetl.kafka.pair_key[mk`topic;mk`partition] in .qetl.kafka.pair_key[back`topic;back`partition]];
+    st}
+
 / Private: publish the backlog onto kafka_message; on success raise the marks
 / and owe the commits, on failure change nothing.
 / @private
 .qetl.kafka.publish_backlog:{[tr;st]
     b:st`backlog;
     if[0=count b; :st];
+    st:.qetl.kafka.reset_restarted[st;b];
     fresh:.qetl.kafka.first_per_coordinate[.qetl.kafka.above_marks[st`marks;b]];
     r:.qetl.kafka.try[{[tr;f] if[count f; tr[`publish][`kafka_message;f]]; count f};(tr;fresh)];
     if[not first r;

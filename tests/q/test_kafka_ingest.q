@@ -325,6 +325,18 @@
     .qunit.assertEquals[st[`stats]`duplicates;2;"two repeats counted"];
     .qunit.assertEquals[(last .qt.qetl.kafka.log) 2;(enlist 0i)!enlist 3j;"the commit covers the repeats too"]};
 
+.qt.qetl.kafka.test_offsets_restarting_on_a_held_partition_are_published_not_dropped:{[t]
+    / The topic is recreated under a held assignment: new records at 0..2 after 0..4.
+    .qt.qetl.kafka.reset[];
+    `.qt.qetl.kafka.assignment set ([] topic:enlist `t; partition:enlist 0i);
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;5#0;til 5;5#enlist "old"];
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;3#0;til 3;3#enlist "new"];
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;st];
+    .qunit.assertEquals[.qt.qetl.kafka.published[]`offset;0 1 2 3 4 0 1 2j;"the restarted records are published"];
+    .qunit.assertEquals[st[`stats]`duplicates;0;"none counted as duplicates"];
+    .qunit.assertEquals[(last .qt.qetl.kafka.log) 2;(enlist 0i)!enlist 3j;"and the commit follows the new log"]};
+
 .qt.qetl.kafka.test_the_same_offset_on_two_topics_is_published_twice:{[t]
     .qt.qetl.kafka.reset[];
     `.qt.qetl.kafka.inbox set (.qt.qetl.kafka.msgs[`a;enlist 0;enlist 5;enlist "x"];.qt.qetl.kafka.msgs[`b;enlist 0;enlist 5;enlist "y"]);
