@@ -68,6 +68,7 @@ qetl.coverage,materialisations_of,function,1,id
 qetl.coverage,missing,function,6,ds part version as_of from_ts to_ts
 qetl.coverage,note_written,function,3,ds part version
 qetl.coverage,outstanding,function,3,ds part version
+qetl.coverage,partitions_of,function,1,ds
 qetl.coverage,persist,function,1,
 qetl.coverage,ready_claims,function,4,ds part release at
 qetl.coverage,ready_path,function,1,
