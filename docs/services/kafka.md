@@ -203,7 +203,8 @@ cryptorust's `kafka-market-data-recorder` publishes sampled full books to
 ([`crypto_book_decoder.q`](../../src/etl/streaming/crypto_book_decoder.q),
 mapping [`kafka_crypto_book.q`](../../src/etl/transforms/kafka_crypto_book.q))
 decodes them into `crypto_book_snapshot`. Subscribe with a consumer and the
-decoder side by side:
+decoder side by side (a walkthrough: [streaming cryptorust's
+books](../guides/cryptorust-kafka-books.md)):
 
 ```
 UQF_KAFKA_TOPICS=cryptorust.book_snapshots uqs start kafka_feed1
