@@ -19,6 +19,9 @@ from pathlib import Path
 
 import pytest
 
+from uqs.paths import UqsPaths
+from uqs.stack import hdb_fill
+
 #: A table whose shape grew: `venue` (a symbol, so enumerated) and `bids`
 #: (a list of lists, so nested) were added after the first partition.
 SCHEMA = (
@@ -51,6 +54,10 @@ def _run(
     q, env = q_binary
     return subprocess.run(
         [q, script, *args, "-q"],
+        # closed stdin and a bound: a q that signals while loading a script
+        # waits on stdin, and an inherited one would hang the test (#1513)
+        stdin=subprocess.DEVNULL,
+        timeout=120,
         capture_output=True,
         text=True,
         env=env,
@@ -115,3 +122,57 @@ def test_the_repair_is_idempotent(drifted_hdb, q_binary, repo_root):
     again = _run(q_binary, repo_root, str(filler), str(hdb), str(schema))
     assert again.returncode == 0, again.stderr
     assert "already rectangular - nothing to do" in again.stdout
+
+
+def test_an_empty_hdb_is_a_no_op(tmp_path: Path, q_binary, repo_root):
+    """A fresh install's HDB exists and holds no partition. That is already
+    whole: exit 0, say so, write nothing. It used to signal 'type in the
+    final report, and q then sat on stdin, hanging the bootstrap (#1513)."""
+    hdb = tmp_path / "hdb"
+    hdb.mkdir()
+    schema = tmp_path / "database.q"
+    schema.write_text(SCHEMA)
+    filler = repo_root / "scripts" / "gates" / "fill_hdb_partitions.q"
+    result = _run(q_binary, repo_root, str(filler), str(hdb), str(schema))
+    assert result.returncode == 0, result.stderr
+    assert "already rectangular - nothing to do" in result.stdout
+    assert result.stderr == ""
+    assert list(hdb.iterdir()) == []
+
+
+def _wrapper_paths(root: Path) -> UqsPaths:
+    """A path bundle with the HDB and the filler present, so the wrapper
+    reaches its subprocess call."""
+    paths = UqsPaths(
+        repo_root=root,
+        torqhome=root / "lib" / "torq",
+        torqapphome=root / "lib" / "torq-finance-starter-pack",
+        torqdata=root / "output" / "uqs",
+        scripts_dir=root / "scripts",
+        orchestrator_dir=root / "python" / "uqs",
+    )
+    paths.hdb_dir.mkdir(parents=True)
+    script = paths.scripts_dir / hdb_fill.FILL_HDB_SCRIPT
+    script.parent.mkdir(parents=True)
+    script.write_text("exit 0\n")
+    return paths
+
+
+def test_the_wrapper_closes_stdin_and_survives_a_hang(tmp_path: Path, monkeypatch):
+    """Every uqs command bootstraps through this, so a filler that never
+    exits must neither inherit a terminal to wait on nor block forever: it
+    is run with stdin closed and a timeout, and a timeout is a warning."""
+    paths = _wrapper_paths(tmp_path)
+    seen: dict[str, object] = {}
+
+    def hangs(argv, **kwargs):
+        seen.update(kwargs)
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(hdb_fill, "with_interpreter", lambda _paths: {})
+    monkeypatch.setattr(hdb_fill, "q_interpreter", lambda _env: Path("/usr/bin/q"))
+    monkeypatch.setattr(hdb_fill.subprocess, "run", hangs)
+
+    assert hdb_fill.fill_hdb_partitions(paths) is False
+    assert seen["stdin"] is subprocess.DEVNULL
+    assert seen["timeout"] == hdb_fill.FILL_HDB_TIMEOUT_S

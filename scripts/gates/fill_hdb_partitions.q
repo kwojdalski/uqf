@@ -77,7 +77,7 @@
 
 / A refusal: said on stderr, and exit 1. A script q loads that signals does not
 / end the process - q prints the error and waits on stdin, which is closed, and
-/ exits 0 - so the caller (runtime.fill_hdb_partitions, which reads the exit
+/ exits 0 - so the caller (hdb_fill.fill_hdb_partitions, which reads the exit
 / code) would be told a repair that never ran had succeeded.
 die:{[msg] -2 "fill_hdb_partitions: ",msg; exit 1}
 
@@ -196,12 +196,20 @@ parts:partition_name each dirs;
 partitions:asc distinct parts;
 -1 "partitions: ", string[count partitions], " (", (", " sv partitions), ")";
 
+/ No partition at all - an empty HDB, the state of a fresh install - is
+/ already whole: there is nothing a declared table could be missing from, and
+/ this script never creates a partition (#1513).
+if[0=count partitions; -1 ""; -1 "already rectangular - nothing to do"; exit 0];
+
 outcomes:.[{[tb;dr] repair_dir[hdb_root]'[tb;dr]};(tabs;dirs);{[e] die "repair stopped: ",e}];
-wrote:{x~`table} each outcomes;
-skipped:{x~`skipped} each outcomes;
+/ Cast to boolean and long: `each` over an empty general list returns an
+/ empty general list, and `sum` of that is () rather than 0, which would make
+/ the report's `$[...]` condition a list and signal 'type (#1513).
+wrote:"b"${x~`table} each outcomes;
+skipped:"b"${x~`skipped} each outcomes;
 added:not wrote or skipped;
 written:sum wrote;
-patched:sum count each outcomes where added;
+patched:sum "j"$count each outcomes where added;
 {[parts;outcomes;wrote;added;part]
     here:parts~\:part;
     n:sum wrote and here;

@@ -31,7 +31,7 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.paths import UqsError
-from uqs.stack import hdb_shape, hdb_types, runtime
+from uqs.stack import hdb_fill, hdb_shape, hdb_types
 
 #: How often `schema -i` re-reads the process: often enough to watch a table
 #: fill as a feed publishes, rarely enough that a few IPC queries a tick stay
@@ -74,7 +74,7 @@ def hdb_check(
         # what bootstrap writes, so the filler fills from THIS release's schema
         paths.generated_schema.parent.mkdir(parents=True, exist_ok=True)
         paths.generated_schema.write_text(schema)
-        runtime.fill_hdb_partitions(paths)
+        hdb_fill.fill_hdb_partitions(paths)
     expected = hdb_shape.declared_tables(schema)
     short, thin = hdb_shape.shape_gaps(
         hdb_shape.listing(hdb_root), hdb_shape.declared_columns(schema)

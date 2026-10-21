@@ -15,7 +15,7 @@ from datetime import date
 
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack.runtime import fill_hdb_partitions
+from uqs.stack.hdb_fill import fill_hdb_partitions
 
 #: The q that copies, relative to the scripts directory.
 SEED_SCRIPT = "gates/seed_hdb_partitions.q"
