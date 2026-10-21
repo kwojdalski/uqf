@@ -38,10 +38,15 @@
 
 .qt.qpipe.job.fx_markout.buy:{[] .qt.qpipe.job.fx_markout.ex[.qt.qpipe.job.fx_markout.t;.qt.qpipe.job.fx_markout.t+0D00:00:00.2;`EURUSD;1;1.1001;`x1]}
 
-/ The worked books and one closing book after the furthest horizon: the reference
-/ covers an instant only once a row at or after it has arrived, because a book that
-/ has not been delivered yet could still be the one that supersedes the last.
-.qt.qpipe.job.fx_markout.covered:{[] .qt.qpipe.job.fx_markout.books[],.qt.qpipe.job.fx_markout.bk[.qt.qpipe.job.fx_markout.t+0D00:00:11;`EURUSD;`a;1.1012;1.1014]}
+/ The worked books and, per (pair, source), one closing book after the furthest horizon,
+/ quoting what that series last quoted: the reference covers an instant only once a row
+/ at or after it has arrived, because a book that has not been delivered yet could still
+/ be the one that supersedes the last - and readiness waits for EVERY source with a
+/ book inside max_age of the horizon, not only the first to pass it (#1523).
+.qt.qpipe.job.fx_markout.covered:{[]
+    b:.qt.qpipe.job.fx_markout.books[];
+    last_of:select by sym, source from b;
+    b,update time:.qt.qpipe.job.fx_markout.t+0D00:00:11.1, source_time:.qt.qpipe.job.fx_markout.t+0D00:00:11 from 0!last_of}
 
 .qt.qpipe.job.fx_markout.feed:{[nm;tb;x] ((get ` sv `.qpipe.job,nm,`on_batch))[tb;x]}
 .qt.qpipe.job.fx_markout.tick:{[nm;now] ((get ` sv `.qpipe.job,nm,`score_ready))[now]}
@@ -384,3 +389,72 @@
     .qunit.assertEquals[(.qetl.job.stream.horizons.def `fx_markout)`max_age;.qf.mkt.reference_max_age;"the long job's history ages out on it"];
     .qunit.assertEquals[(.qetl.job.stream.horizons.def `fx_markout_wide)`max_age;.qf.mkt.reference_max_age;"and the wide job's"];
     .qunit.assertEquals[(.qetl.job.stream.horizons.def `crypto_markout)`max_age;.qf.mkt.reference_max_age;"and crypto_markout's"]};
+
+/ --- readiness waits for every live source, and for the anchor only so long (#1523, #1524) ---------
+
+/ The bounded twin over the same rows the live job was fed, without the plant's receipt time.
+.qt.qpipe.job.fx_markout.twin_of:{[b]
+    f:`executions`market_data!(select source_time, venue, sym, side, size, price, fill_id from .qt.qpipe.job.fx_markout.buy[];select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes from b);
+    delete time from .qetl.transform.apply[`hdb_fx_markouts_long;f]}
+
+/ Source a quotes 1.1000/1.1010 through T+11s. Source b quotes a better 1.1006/1.1008 at T-2s and T+8s:
+/ its book at T+8s is within max_age of the 10s horizon, and nothing of it has been seen since.
+.qt.qpipe.job.fx_markout.slow_source_books:{[]
+    t:.qt.qpipe.job.fx_markout.t;
+    raze (.qt.qpipe.job.fx_markout.bk[t-0D00:00:02;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:04;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:09;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:11;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t-0D00:00:02;`EURUSD;`b;1.1006;1.1008];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:08;`EURUSD;`b;1.1006;1.1008])}
+
+.qt.qpipe.job.fx_markout.test_an_execution_waits_for_a_slower_source_and_then_scores_as_the_twin_does:{[tc]
+    t:.qt.qpipe.job.fx_markout.t;
+    b:.qt.qpipe.job.fx_markout.slow_source_books[];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from b];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:00:12];
+    .qunit.assertEquals[count .qt.qpipe.job.fx_markout.published[`fx_markout];0;"source a is past the horizon but b's book may still be in flight"];
+    .qunit.assertEquals[count .qt.qpipe.job.fx_markout.state[`fx_markout;`pending];1;"so the execution waits"];
+    late:.qt.qpipe.job.fx_markout.bk[t+0D00:00:10.5;`EURUSD;`b;1.1006;1.1008];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;late];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:00:13];
+    live:.qt.qpipe.job.fx_markout.published[`fx_markout];
+    all_b:b,late;
+    .qunit.assertEquals[live;.qt.qpipe.job.fx_markout.twin_of[all_b];"once b has advanced, live is the twin on the same rows"];
+    .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[exec price_t1 from live where kind=`total;4#1.1007];"priced on b's better book, not a's alone"]};
+
+.qt.qpipe.job.fx_markout.test_a_source_that_never_delivers_holds_an_execution_only_for_the_grace:{[tc]
+    t:.qt.qpipe.job.fx_markout.t;
+    b:.qt.qpipe.job.fx_markout.slow_source_books[];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from b];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
+    grace:.qpipe.transform.fx_markout_outputs.max_lateness;
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:00:10+grace-0D00:00:01];
+    .qunit.assertEquals[count .qt.qpipe.job.fx_markout.published[`fx_markout];0;"still within max_lateness of the horizon"];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:00:10+grace];
+    .qunit.assertEquals[.qt.qpipe.job.fx_markout.published[`fx_markout];.qt.qpipe.job.fx_markout.twin_of[b];"past it, the execution scores as the twin does"]};
+
+/ Source a's first book is at T-0.5s: nothing is at or before the -1s anchor.
+.qt.qpipe.job.fx_markout.late_start_books:{[]
+    t:.qt.qpipe.job.fx_markout.t;
+    raze (.qt.qpipe.job.fx_markout.bk[t-0D00:00:00.5;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:04;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:09;`EURUSD;`a;1.1000;1.1010];
+        .qt.qpipe.job.fx_markout.bk[t+0D00:00:11;`EURUSD;`a;1.1000;1.1010])}
+
+.qt.qpipe.job.fx_markout.test_books_that_start_inside_the_lookback_leave_only_the_negative_horizon_unavailable:{[tc]
+    t:.qt.qpipe.job.fx_markout.t;
+    b:.qt.qpipe.job.fx_markout.late_start_books[];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from b];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:00:12];
+    .qunit.assertEquals[count .qt.qpipe.job.fx_markout.published[`fx_markout];0;"an older book could still arrive within max_lateness"];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;t+0D00:00:10+.qpipe.transform.fx_markout_outputs.max_lateness];
+    live:.qt.qpipe.job.fx_markout.published[`fx_markout];
+    twin:.qt.qpipe.job.fx_markout.twin_of[b];
+    .qunit.assertTrue[0<count live;"the execution is scored, not dropped"];
+    .qunit.assertEquals[live;twin;"live is the twin on the same rows"];
+    .qunit.assertEquals[0;count .qt.qpipe.job.fx_markout.state[`fx_markout;`expired];"and it did not expire"];
+    st:select horizon, status from live where kind=`total;
+    .qunit.assertEquals[exec horizon from st where status=`unavailable;enlist neg 0D00:00:01;"only the -1s horizon is unavailable"]};
