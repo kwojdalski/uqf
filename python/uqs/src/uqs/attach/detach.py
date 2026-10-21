@@ -32,9 +32,10 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import backfill_owner, config, persist
+from uqs.attach import backfill_owner, config, persist, sorting
 from uqs.attach.apply import Step
 from uqs.attach.config import Attachment, AttachmentError
+from uqs.attach.drift import Blocker, drift, plant_ours
 from uqs.attach.evidence import EMPTY_LOG, Evidence, evidence
 from uqs.attach.facts import Host
 from uqs.attach.manifest import (
@@ -51,15 +52,7 @@ from uqs.attach.manifest import (
 from uqs.attach.outcome import BLOCKS, CONSUMER_OPS, INVERSE, interrupted, unresolved
 from uqs.attach.publisher import Publisher, stop_publisher
 from uqs.attach.remote import Ipc, IpcError
-from uqs.attach.schema import differences
 from uqs.attach.topology import Observation, Proc, observe
-
-
-@dataclass(frozen=True)
-class Blocker:
-    component: str
-    reason: str
-    action: str
 
 
 @dataclass
@@ -75,101 +68,6 @@ class DetachResult:
     dry_run: bool = False
     #: set while the reversal is in progress: an error then leaves the gate closed
     interrupted: bool = False
-
-
-# -------------------------------------------------------------------- drift
-
-
-def plant_ours(obs: Observation, m: Manifest) -> set[str]:
-    """The tables whose tickerplant record carries this attachment's token. A
-    consumer's copy of such a table is ours too, even with no record of its own:
-    a consumer that restarted rebuilt it from the tickerplant."""
-    tp = (obs.tickerplant.probe or {}) if obs.tickerplant else {}
-    return {t for t, led in tp.get("owned", {}).items() if led.get("token") == m.token}
-
-
-def drift(att: Attachment, obs: Observation, m: Manifest) -> list[Blocker]:
-    """Everything that makes a reversal unsafe or unprovable right now."""
-    found: list[Blocker] = []
-    procs = {p.procname: p for p in obs.procs()}
-    for op in m.operations:
-        if op.status not in (DONE, PENDING) or op.ownership not in (CREATED, SHARED):
-            continue
-        if op.op in BLOCKS:
-            found += _block(att, m, op)
-        elif (proc := procs.get(op.process)) is None or not proc.up:
-            found.append(
-                Blocker(
-                    op.process,
-                    "not reachable, so what this attachment created there cannot be verified",
-                    f"start {op.process}, or remove {op.table} by hand once it is safe",
-                )
-            )
-        elif op.ownership == CREATED and op.op != "consumer_subscribe":  # the table is not ours
-            found += _table_state(att, m, op, proc, plant_ours(obs, m))
-    plant = {o.table: o.ownership for o in m.operations if o.op == "stp_register"}  # #1472
-    for op in m.operations:
-        if op.op in CONSUMER_OPS and op.ownership == CREATED and op.status in (DONE, PENDING):
-            if plant.get(op.table) != CREATED:  # the consumer's own table, not the first
-                found.append(
-                    Blocker(
-                        op.process,
-                        f"{op.table} was attached here through a tickerplant table this "
-                        "attachment does not own",
-                        "removing that subscription needs a tickerplant-side change this "
-                        "workflow does not make; unsubscribe by hand",
-                    )
-                )
-    return found
-
-
-def _block(att: Attachment, m: Manifest, op: Op) -> list[Blocker]:
-    specs = tuple(s for s in att.tables if s.name in op.table.split(","))
-    problems = persist.problems(persist.BlockRecord(**op.post), att, m.token, specs)
-    where = op.post.get("path")
-    return [
-        Blocker(
-            "schema file",
-            p,
-            f"restore {where} to its recorded state, or edit the block out by hand",
-        )
-        for p in problems
-    ]
-
-
-def _table_state(att: Attachment, m: Manifest, op: Op, proc: Proc, ours: set[str]) -> list[Blocker]:
-    p, t = proc.probe or {}, op.table
-    seen = p.get("schemas", {}).get(t, [])
-    if not seen:
-        return []  # already gone: a retry after a partial rollback; the q operation says "absent"
-    out: list[Blocker] = []
-    if differences(att.table(t), seen):
-        out.append(
-            Blocker(
-                proc.procname,
-                f"{t} no longer has the shape this attachment created",
-                "it was altered by someone else; leave it, or drop it by hand",
-            )  # fmt: skip
-        )
-    ledger = p.get("owned", {}).get(t)
-    follows = op.op == "consumer_attach" and op.table in ours
-    if (ledger is None and not follows) or (ledger is not None and ledger.get("token") != m.token):
-        out.append(
-            Blocker(
-                proc.procname,
-                f"{t} carries no ownership record of this attachment",
-                "ownership cannot be established; leave it",
-            )  # fmt: skip
-        )
-    elif ledger is not None and ledger.get("users"):
-        out.append(
-            Blocker(
-                proc.procname,
-                f"{t} is used by attachment(s) {', '.join(ledger['users'])}",
-                "detach those first, or keep the table",
-            )  # fmt: skip
-        )
-    return out
 
 
 # ------------------------------------------------------------------ steps
@@ -261,7 +159,7 @@ def detach(
             # that still says `verified` whatever the rest of this detach does (#1443).
             m.set_state("detaching", "detach started: the publisher is stopped")
         try:
-            return _reverse(att, ipc, m, result, host, previous, dry_run)
+            return _reverse(att, ipc, m, result, host, previous, dry_run, state_dir)
         except IpcError as exc:
             raise AttachmentError(interrupted(att, m, str(exc), dry_run)) from None
         except AttachmentError as exc:
@@ -278,6 +176,7 @@ def _reverse(
     host: Host,
     previous: str,
     dry_run: bool,
+    state_dir: Path | None = None,
 ) -> DetachResult:
     result.interrupted = True
     obs, structural = observe(att, ipc)
@@ -290,11 +189,17 @@ def _reverse(
     unknown = [
         Blocker(*found) for found in unresolved(m, plant_ours(obs, m), procs, save=not dry_run)
     ]
+    unknown += [Blocker(*found) for found in sorting.resolve_pending(m, save=not dry_run)]
     result.evidence = evidence(att, obs, host)
     if result.evidence.published:
         return _retain(att, ipc, procs, m, result)
     ours = plant_ours(obs, m)
-    result.blockers = unknown + drift(att, obs, m) + _dry_runs(ipc, m, procs, ours)
+    result.blockers = (
+        unknown
+        + drift(att, obs, m)
+        + [Blocker(*b) for b in sorting.blockers(att, obs, ipc, m, state_dir, host)]
+        + _dry_runs(ipc, m, procs, ours)
+    )
     if result.blockers:
         if not dry_run:
             why = "; ".join(b.reason for b in result.blockers)
@@ -310,7 +215,8 @@ def _reverse(
         result.interrupted = False
         return result
     result.interrupted = False  # _rollback reports its own failures, and sets its own state
-    return _rollback(att, ipc, procs, m, result, ours)
+    backups = config.directory(att.name, state_dir) / "backups"
+    return _rollback(att, ipc, procs, m, result, ours, obs, backups)
 
 
 def _retain(
@@ -356,11 +262,17 @@ def _rollback(
     m: Manifest,
     result: DetachResult,
     ours: set[str],
+    obs: Observation | None = None,
+    backups: Path | None = None,
 ) -> DetachResult:
     m.set_state("detaching", "pre-publication rollback")
     try:
         for op in [o for o in reversed(m.operations) if o.status in (DONE, PENDING)]:
-            if op.op in BLOCKS and op.ownership in (CREATED, SHARED):
+            if op.op in sorting.SORT_OPS and op.ownership == CREATED:
+                assert obs is not None and backups is not None
+                steps = sorting.revert(att, obs, ipc, m, op, backups)
+                result.steps += [Step(*s) for s in steps]
+            elif op.op in BLOCKS and op.ownership in (CREATED, SHARED):
                 result.steps.append(_unblock(att, m, op))
             elif op.ownership == SHARED:
                 _leave(ipc, procs, m, op)
