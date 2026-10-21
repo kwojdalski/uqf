@@ -130,7 +130,7 @@ def test_endpoint_says_what_is_missing_when_unconfigured():
     c = TestClient(create_app(gateway=FakeGateway(), settings=Settings(), fleet=FakeFleet()))
     resp = c.get("/ops/processes")
     assert resp.status_code == 422
-    assert "UQF_FRONTEND_PROCESS_CSV" in resp.json()["detail"]
+    assert "UQF_FRONTEND_STACK_ROOT" in resp.json()["detail"]
 
 
 def test_endpoint_reports_a_missing_file_rather_than_crashing(tmp_path):

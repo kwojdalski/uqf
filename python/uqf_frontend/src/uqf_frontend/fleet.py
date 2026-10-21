@@ -16,7 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from uqf_frontend.config import Process, Settings
+from uqf_frontend.config import Settings
+from uqf_frontend.stack import Process
 
 
 @dataclass(frozen=True)

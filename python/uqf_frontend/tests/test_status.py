@@ -232,7 +232,7 @@ def test_files_not_matching_the_convention_are_ignored(tmp_path):
 
 
 def test_unconfigured_names_the_variable(tmp_path):
-    with pytest.raises(ValidationFailed, match="UQF_FRONTEND_STATUS_DIR"):
+    with pytest.raises(ValidationFailed, match="UQF_FRONTEND_STACK_ROOT"):
         status.read_dir(None)
 
 
@@ -275,20 +275,8 @@ def test_a_stack_root_defaults_the_status_dir_to_the_workers(tmp_path, monkeypat
     assert status.status_directory(settings) == tmp_path
 
 
-def test_an_explicit_status_dir_wins_but_a_difference_is_logged(tmp_path, caplog, monkeypatch):
-    from uqs import paths as stack_paths
-
-    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path / "workers"))
-    elsewhere = tmp_path / "elsewhere"
-    settings = Settings(stack_root=stack_paths.repo_root(), status_dir=elsewhere)
-    status._WARNED.clear()
-    with caplog.at_level("WARNING", logger="uqf_frontend.status"):
-        assert status.status_directory(settings) == elsewhere
-    assert "differs" in caplog.text
-
-
-def test_without_a_stack_root_the_explicit_setting_is_all_there_is(tmp_path):
-    assert status.status_directory(Settings(status_dir=tmp_path)) == tmp_path
+def test_without_a_stack_root_there_is_no_status_dir():
+    """#1536: no second setting - the view reports itself unconfigured."""
     assert status.status_directory(Settings()) is None
 
 
@@ -312,26 +300,33 @@ def test_the_endpoint_reads_the_workers_directory_given_only_a_stack_root(tmp_pa
 # --- the endpoint ----------------------------------------------------------
 
 
-def client_for(status_dir):
+def client_for(status_dir, monkeypatch):
+    """A client over this checkout's stack, its workers writing to *status_dir*
+    (UQF_STATUS_DIR, the workers' own variable); None, no stack root at all."""
+    from uqs import paths as stack_paths
+
+    if status_dir is not None:
+        monkeypatch.setenv("UQF_STATUS_DIR", str(status_dir))
+    root = None if status_dir is None else stack_paths.repo_root()
     return TestClient(
         create_app(
             gateway=FakeGateway(),
-            settings=Settings(status_dir=status_dir),
+            settings=Settings(stack_root=root),
             fleet=FakeFleet(),
         )
     )
 
 
-def test_endpoint_returns_workers_and_a_poll_cadence(tmp_path):
+def test_endpoint_returns_workers_and_a_poll_cadence(tmp_path, monkeypatch):
     write_status_file(tmp_path, "demo_markout1")
-    body = client_for(tmp_path).get("/ops/backfill").json()
+    body = client_for(tmp_path, monkeypatch).get("/ops/backfill").json()
     assert body["summary"]["workers"] == 1
     assert body["workers"][0]["instance_id"] == "demo_markout1"
     assert body["poll_seconds"] > 0
     assert body["source"] == str(tmp_path)
 
 
-def test_owed_reactions_reach_the_api_with_the_failure_they_explain(tmp_path):
+def test_owed_reactions_reach_the_api_with_the_failure_they_explain(tmp_path, monkeypatch):
     """#632: a run whose windows landed but whose reactions did not ends q's
     `partial`, which the file records as `failed`. The count says why - a
     derived dataset is stale - where the bare state could not."""
@@ -343,24 +338,24 @@ def test_owed_reactions_reach_the_api_with_the_failure_they_explain(tmp_path):
         error="2 reaction(s) owed over 1 window(s) (rebuild_positions) - a dataset "
         "derived from this one is stale; the next run re-fires them first",
     )
-    row = client_for(tmp_path).get("/ops/backfill").json()["workers"][0]
+    row = client_for(tmp_path, monkeypatch).get("/ops/backfill").json()["workers"][0]
     assert row["reactions_owed"] == 2
     assert "rebuild_positions" in row["error"]
 
 
-def test_endpoint_reports_unconfigured_as_422(tmp_path):
-    resp = client_for(None).get("/ops/backfill")
+def test_endpoint_reports_unconfigured_as_422(tmp_path, monkeypatch):
+    resp = client_for(None, monkeypatch).get("/ops/backfill")
     assert resp.status_code == 422
-    assert "UQF_FRONTEND_STATUS_DIR" in resp.json()["detail"]
+    assert "UQF_FRONTEND_STACK_ROOT" in resp.json()["detail"]
 
 
-def test_endpoint_carries_no_airflow_owned_fields(tmp_path):
+def test_endpoint_carries_no_airflow_owned_fields(tmp_path, monkeypatch):
     """These files carry q's facts only. Retry counts, task ordering,
     timeouts and concurrency are Airflow's, and inferring them here is the
     cross-layer inference the framework forbids.
     """
     write_status_file(tmp_path, "demo_markout1")
-    row = client_for(tmp_path).get("/ops/backfill").json()["workers"][0]
+    row = client_for(tmp_path, monkeypatch).get("/ops/backfill").json()["workers"][0]
     for forbidden in ("retries", "retry_count", "try_number", "timeout", "concurrency", "queue"):
         assert forbidden not in row
 

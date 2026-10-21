@@ -36,8 +36,3 @@ def test_built_web_app_is_optional_and_does_not_shadow_api(tmp_path: Path):
     assert client.get("/ui/missing-file.js").status_code == 404
     without_web = TestClient(create_app(gateway=FakeGateway(), settings=Settings()))
     assert without_web.get("/ui/").status_code == 404
-
-
-def test_web_directory_comes_from_server_environment(monkeypatch, tmp_path: Path):
-    monkeypatch.setenv("UQF_FRONTEND_WEB_DIST", str(tmp_path))
-    assert Settings.from_env().web_dist == tmp_path

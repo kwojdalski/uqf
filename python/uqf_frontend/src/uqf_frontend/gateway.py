@@ -238,8 +238,8 @@ class KolaGateway:
             # guessing at a package they did not write.
             raise GatewayUnavailable(
                 f"gateway at {s.host}:{s.port} is not reachable: {exc} "
-                f"(set UQF_FRONTEND_GATEWAY_PORT / _USER / _PASSWD; against the "
-                f"local demo stack that is the gateway's port and admin/admin)"
+                f"(set UQF_FRONTEND_STACK_ROOT and UQF_FRONTEND_GATEWAY_USER / _PASSWD; "
+                f"against the local demo stack that is the checkout and admin/admin)"
             ) from exc
         return q
 

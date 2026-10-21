@@ -129,7 +129,9 @@ def test_the_documented_gateway_port_is_the_one_the_code_actually_defaults_to():
     row = next(
         line.lstrip()
         for line in reference.read_text().splitlines()
-        if line.lstrip().startswith("| `UQF_FRONTEND_GATEWAY_PORT`")
+        # The gateway port is derived from the stack root since #1536; that
+        # row states what it is without one.
+        if line.lstrip().startswith("| `UQF_FRONTEND_STACK_ROOT`")
     )
     assert str(Settings().port) in row, (
         f"environment.md documents a default the code does not use; "

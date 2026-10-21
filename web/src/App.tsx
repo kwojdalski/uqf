@@ -404,7 +404,7 @@ function BackfillView() {
             <h2>Worker runs</h2>
             {!resource.data.source ? (
               <p className="notice pending">
-                No status directory configured. Set UQF_FRONTEND_STATUS_DIR on
+                No status directory configured. Set UQF_FRONTEND_STACK_ROOT on
                 the API.
               </p>
             ) : (
@@ -1016,7 +1016,7 @@ function ControlView() {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   // Liveness for the picker, when the API has the fleet configured. The
   // error is deliberately not rendered here: a missing
-  // UQF_FRONTEND_PROCESS_CSV is the Fleet view's problem to report, and the
+  // UQF_FRONTEND_STACK_ROOT is the Fleet view's problem to report, and the
   // picker is complete without it.
   const fleet = useResource<OpsData>("/ops/processes");
   const liveness = fleet.data?.processes

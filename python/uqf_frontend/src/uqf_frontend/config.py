@@ -11,6 +11,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqf_frontend import stack
+from uqf_frontend.stack import Process
+
 #: Seconds between usage-capture sweeps when nothing overrides it. Well
 #: under `.usage.flushtime`, which is one day in a standard TorQ stack - see
 #: capture.py on why three hours is the figure usually quoted and why it is
@@ -40,70 +43,15 @@ REQUEST_HEADROOM = 15
 #: while torq.sh is still running (#1370).
 LIFECYCLE_MARGIN = 5
 
-#: What ``{KDBBASEPORT}`` resolves to when the stack is started with defaults.
-DEFAULT_BASE_PORT = 6050
-
-#: The gateway's offset from the base port, as TorQ's generated process.csv
-#: declares it: ``{KDBBASEPORT}+7,gateway,gateway1``.
-#:
-#: Written down because the default port used to be 6050+2 - which is
-#: **rdb1** - and the failure that produced is the one worth naming. The BFF
-#: sends every data query as ``.gw.syncexec`` and reads ``.gw.getqueue`` /
-#: ``.gw.servers`` / ``.gw.clients``; none of those exists on an RDB, so
-#: every routed query and every ops view errored while ``/health``, which
-#: only opened a handle, reported ``up``. Connected to the wrong process is
-#: worse than not connected: it looks fine.
-GATEWAY_PORT_OFFSET = 7
-
-
-@dataclass(frozen=True)
-class Process:
-    """One TorQ process this layer can reach directly.
-
-    Needed because ``.usage.usage`` is per-process with **no fleet-wide
-    rollup**, so a single query log across the stack has to be
-    fanned out and merged here.
-    """
-
-    name: str
-    host: str
-    port: int
-
-
-def _parse_processes(raw: str) -> tuple[Process, ...]:
-    """Parse ``name:host:port,name:port,...`` - host defaults to localhost."""
-    out: list[Process] = []
-    for chunk in (c.strip() for c in raw.split(",")):
-        if not chunk:
-            continue
-        parts = chunk.split(":")
-        if len(parts) == 2:
-            name, host, port = parts[0], "localhost", parts[1]
-        elif len(parts) == 3:
-            name, host, port = parts
-        else:
-            raise ValueError(
-                f"UQF_FRONTEND_PROCESSES entry {chunk!r} must be name:port or name:host:port"
-            )
-        try:
-            out.append(Process(name=name, host=host, port=int(port)))
-        except ValueError:
-            raise ValueError(
-                f"UQF_FRONTEND_PROCESSES entry {chunk!r} has a non-integer port"
-            ) from None
-    return tuple(out)
-
 
 @dataclass(frozen=True)
 class Settings:
     """Where the gateway is, and the caps this layer enforces."""
 
-    host: str = "localhost"
-    #: Derived from the base port rather than written as a literal, so the
-    #: two cannot disagree - see GATEWAY_PORT_OFFSET. ``from_env`` re-derives
-    #: it when UQF_FRONTEND_BASE_PORT is set and the port is not, so a stack
-    #: on a non-default base port still reaches its own gateway.
-    port: int = DEFAULT_BASE_PORT + GATEWAY_PORT_OFFSET
+    #: The gateway, from the stack's process.csv (stack.derive): never a
+    #: setting of its own, so it cannot disagree with where the stack put it.
+    host: str = stack.DEFAULT_HOST
+    port: int = stack.DEFAULT_BASE_PORT + stack.GATEWAY_PORT_OFFSET
     #: Empty, and it stays empty: credentials belong in the server
     #: environment and never in a default baked into the package, which
     #: test_config.py asserts. The local demo stack does want a credential
@@ -125,27 +73,16 @@ class Settings:
     #: cannot usefully render more, and an unbounded select against an HDB
     #: is how a demo process runs out of memory.
     max_rows: int = DEFAULT_MAX_ROWS
-    #: TorQ's generated process.csv - the declared process set for fleet
-    #: health. None means fleet health reports itself unconfigured
-    #: rather than returning an empty fleet.
+    #: The rest of what stack.derive reads from UQF_FRONTEND_STACK_ROOT.
+    #: process.csv is the declared process set for fleet health; None (no
+    #: stack root) means fleet health reports itself unconfigured rather than
+    #: returning an empty fleet. base_port is what its {KDBBASEPORT}
+    #: placeholders resolve against. processes is the per-process query
+    #: log's fan-out; empty, the view says it has nothing configured. web_dist
+    #: is the built React app served under /ui/, when there is one.
     process_csv: Path | None = None
-    #: Base port the {KDBBASEPORT} placeholders in process.csv resolve
-    #: against. Must match whatever the stack was started with, or every
-    #: probe targets the wrong port - and, since `port` is derived from it,
-    #: so does the gateway connection itself.
-    base_port: int = DEFAULT_BASE_PORT
-    #: Directory q writes backfill status files into. Read through
-    #: status.status_directory, which defaults it to the workers' own
-    #: (uqs.stack.runs.status_dir) when stack_root is set; an explicit value
-    #: wins and is logged if it differs. None with no stack root means the
-    #: backfill view reports itself unconfigured rather than returning an
-    #: empty list, which would be indistinguishable from an idle fleet.
-    status_dir: Path | None = None
-    #: Processes to fan out to for the per-process query log. Empty by
-    #: default: the fleet view then reports that it has nothing configured,
-    #: rather than silently showing an empty log as if the fleet were idle.
+    base_port: int = stack.DEFAULT_BASE_PORT
     processes: tuple[Process, ...] = ()
-    #: Optional built React app, served under /ui/ on the same origin as the API.
     web_dist: Path | None = None
     #: Whether the /control/* routes do anything. OFF by default, and that
     #: default is the security posture rather than caution: this deployment
@@ -175,9 +112,8 @@ class Settings:
     #: the interval IS the guarantee, and one longer than the window loses
     #: rows silently.
     capture_interval: int = DEFAULT_CAPTURE_INTERVAL
-    #: Where torq.sh and process.csv live, for the control routes. None means
-    #: they refuse and say which variable is unset, rather than guessing a
-    #: path and acting on the wrong stack.
+    #: The stack this frontend serves: where torq.sh, process.csv and the
+    #: status files live, and what every derived fact above is read from.
     stack_root: Path | None = None
 
     @property
@@ -195,36 +131,32 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
-        """Build settings from UQF_FRONTEND_* environment variables.
+        """Build settings from UQF_FRONTEND_* environment variables, and the
+        stack facts from the stack UQF_FRONTEND_STACK_ROOT names (stack.py).
 
         Fails loudly on a malformed numeric value rather than silently
         falling back to a default, matching the q side's config posture
         (refuse to start rather than start misconfigured).
         """
-        base_port = _int_env("UQF_FRONTEND_BASE_PORT", cls.base_port)
+        stack_root = _path_env("UQF_FRONTEND_STACK_ROOT")
+        facts = stack.derive(stack_root)
         return cls(
-            host=os.environ.get("UQF_FRONTEND_GATEWAY_HOST", cls.host),
-            # Falls back to the base port's gateway rather than to cls.port,
-            # so moving the stack to another base port moves this with it.
-            # An explicit UQF_FRONTEND_GATEWAY_PORT still wins - that is the
-            # escape hatch for a gateway that is not where process.csv puts
-            # it.
-            port=_int_env("UQF_FRONTEND_GATEWAY_PORT", base_port + GATEWAY_PORT_OFFSET),
+            host=facts.host,
+            port=facts.port,
             user=os.environ.get("UQF_FRONTEND_GATEWAY_USER", cls.user),
             passwd=os.environ.get("UQF_FRONTEND_GATEWAY_PASSWD", cls.passwd),
             data_user=os.environ.get("UQF_FRONTEND_DATA_USER", cls.data_user),
             data_passwd=os.environ.get("UQF_FRONTEND_DATA_PASSWD", cls.data_passwd),
             timeout=_int_env("UQF_FRONTEND_TIMEOUT", cls.timeout),
             max_rows=_int_env("UQF_FRONTEND_MAX_ROWS", cls.max_rows),
-            processes=_parse_processes(os.environ.get("UQF_FRONTEND_PROCESSES", "")),
-            process_csv=_path_env("UQF_FRONTEND_PROCESS_CSV"),
-            status_dir=_path_env("UQF_FRONTEND_STATUS_DIR"),
-            web_dist=_path_env("UQF_FRONTEND_WEB_DIST"),
-            base_port=base_port,
+            processes=facts.processes,
+            process_csv=facts.process_csv,
+            web_dist=facts.web_dist,
+            base_port=facts.base_port,
             enable_writes=_flag_env("UQF_FRONTEND_ENABLE_WRITES"),
             write_token=os.environ.get("UQF_FRONTEND_WRITE_TOKEN", cls.write_token),
             allowed_hosts=_hosts_env("UQF_FRONTEND_ALLOWED_HOSTS", cls.allowed_hosts),
-            stack_root=_path_env("UQF_FRONTEND_STACK_ROOT"),
+            stack_root=stack_root,
             capture_dir=_path_env("UQF_FRONTEND_CAPTURE_DIR"),
             capture_interval=_int_env("UQF_FRONTEND_CAPTURE_INTERVAL", cls.capture_interval),
         )

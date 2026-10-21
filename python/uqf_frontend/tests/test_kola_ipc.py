@@ -22,10 +22,11 @@ from typing import Any
 
 import pytest
 
-from uqf_frontend.config import Process, Settings
+from uqf_frontend.config import Settings
 from uqf_frontend.errors import GatewayReloading, GatewayUnavailable, QueryRejected, QueryTimedOut
 from uqf_frontend.fleet import KolaFleet
 from uqf_frontend.gateway import KolaGateway, _classify
+from uqf_frontend.stack import Process
 
 SERVER_SCRIPT = """
 / Stands in for TorQ's gateway entry point: evaluate the query list as given.

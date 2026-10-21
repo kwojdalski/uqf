@@ -38,12 +38,12 @@ This is a server-side development proxy, not a credential exposed to React.
 
 ```sh
 npm --prefix web run build
-UQF_FRONTEND_WEB_DIST="$PWD/web/dist" uv run uvicorn --factory uqf_frontend.app:create_app --host 127.0.0.1 --port 8000
+UQF_FRONTEND_STACK_ROOT="$PWD" uv run uvicorn --factory uqf_frontend.app:create_app --host 127.0.0.1 --port 8000
 ```
 
 Open `http://127.0.0.1:8000/ui/`. API routes and static assets share the same
-origin. The optional static mount fails at startup if the configured directory
-does not exist. The API continues to run without the web directory configured.
+origin. The stack root's `web/dist` is mounted when it exists at startup; without
+it the API runs alone.
 
 ## Views
 
