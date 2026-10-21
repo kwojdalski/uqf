@@ -184,6 +184,11 @@ class FakeStack:
                     "savedir": ":/data/wdbhdb",
                     "hdbdir": ":/data/hdb",
                     "sortrows": list(SORT_DEFAULT),
+                    "sortcsv": ":config/sort.csv",
+                    "cwd": "/data",
+                    "sortreload": True,
+                    "sorttypes": ["sort"],
+                    "sortworkertypes": [],
                 }
             self.add(probe(name, kind, stack_id + offset, sid, torq=torq, **ext))
         self.add(probe("hdb1", "hdb", stack_id + 3, sid, torq=torq), listed_only=True)
@@ -229,6 +234,7 @@ class FakeStack:
             "consumer_unsubscribe": self._unsubscribe,
             "stp_unregister": self._unregister,
             "ledger_leave": self._leave,
+            "sort_reload": self._sort_reload,
         }.get(op)
         if handler is None:
             raise AssertionError(f"FakeStack does not answer {op}")
@@ -304,6 +310,41 @@ class FakeStack:
         else:
             status = ("shared" if ledger else "subscribed") if had else "created"
         return {"status": status, "replayed": 0, "subtables": added}
+
+    # ------------------------------------------------------------ sort.csv (#1517)
+
+    def use_sort_file(self, path: Path, *, sort_process: bool = False) -> None:
+        """Point wdb1 (and, with `sort_process`, a sort1 the wdb names) at the real
+        file `path`, holding its rows live as a process that started on it does."""
+        procs = [self.named("wdb1")]
+        if sort_process:
+            sid = str(self.stack_id)
+            self.add(probe("sort1", "sort", self.stack_id + 6, sid, sortreload=True))
+            self.refresh_discovery()
+            procs.append(self.named("sort1"))
+        for p in procs:
+            p["sortcsv"], p["cwd"] = ":" + str(path), "/elsewhere"
+            self._load_sort(p)
+
+    def _load_sort(self, p: dict[str, Any]) -> None:
+        from uqs.attach import sort_file
+
+        rules = sort_file.read(Path(p["sortcsv"].lstrip(":"))).rules
+        p["sortrows"] = [
+            {"tabname": r.table, "att": r.att, "col": r.column, "sort": r.sort} for r in rules
+        ]
+
+    def _sort_reload(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        """sort_reload.q: `.sort.getsortcsv` on the process's own file."""
+        if p.get("reload_fails"):
+            return {"status": "failed", "detail": p["reload_fails"], "path": p["sortcsv"]}
+        self._load_sort(p)
+        rows = [
+            {"att": r["att"], "col": r["col"], "sort": r["sort"]}
+            for r in p["sortrows"]
+            if r["tabname"] == req["table"]
+        ]
+        return {"status": "reloaded", "detail": "", "path": p["sortcsv"], "rows": rows}
 
     def ops(self) -> set[str]:
         return {op for _, op, _ in self.calls}

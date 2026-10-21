@@ -197,7 +197,8 @@ def consumer(att: Attachment, c: Proc, specs: tuple[TableSpec, ...]) -> list[Fin
                     f"{spec.name} exists on {c.procname} with a different shape: {'; '.join(diff)}",
                 )
             )
-        if c.proctype == "wdb":
+        if c.proctype == "wdb" and not spec.sort:
+            # a declared rule is sorting.assess's: it reads the file and every sort process
             out += _sorting(c, spec, p.get("sortrows", []))
     if c.proctype == "wdb" and p.get("mode") not in ("save", "saveandsort"):
         out.append(
@@ -232,7 +233,8 @@ def _sorting(c: Proc, spec: TableSpec, rows: list[dict]) -> list[Finding]:
                 c.procname,
                 f"{c.procname} sorts {spec.name} by {'own' if own else 'default'} sort.csv rows "
                 f"naming {', '.join(missing)}, which the table lacks - end of day would fail",
-                "add the column to the table, or a row for the table to sort.csv by hand",
+                "declare the table's sort rule beside it (`sorting[`table;`sym`time!`p`]`, "
+                "which attaching writes to sort.csv), or add a row to sort.csv by hand",
                 {
                     "table": spec.name,
                     "rows": "own" if own else "default",

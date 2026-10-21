@@ -22,6 +22,16 @@
   string .proc.procname;string pt;prm`stackid;.proc.getversion[];string .z.K;`long$system"p";string .z.h;
   prm`schemafile;prm`tplogdir;prm`procfile;own);
  base[`names]:string each distinct (key `.),.Q.res,key .q;
+ / The TorQ sort rules the process holds, and where it reads them from (#1517): the
+ / wdb, sort and sortworker settings name .wdb.sortcsv, the rdb .rdb.sortcsv, and
+ / .sort.sorttab falls back to .sort.defaultfile. A relative path is the process's cwd's.
+ sp:g[`.sort.params;([]tabname:`$();att:`$();column:`$();sort:`boolean$())];
+ base[`sortrows]:select tabname:string tabname,att:string att,col:string column,sort from sp;
+ base[`sortcsv]:string g[`.wdb.sortcsv;g[`.rdb.sortcsv;g[`.sort.defaultfile;`]]];
+ base[`cwd]:system"cd";
+ base[`sortreload]:@[{`getsortcsv in key x};`.sort;0b];
+ base[`sorttypes]:string each (),g[`.wdb.sorttypes;`$()];
+ base[`sortworkertypes]:string each (),g[`.wdb.sortworkertypes;`$()];
  ext:()!();
  if[pt in `segmentedtickerplant`segmentedchainedtickerplant;
   subs:g[`.stpps.subrequestall;()!()];
@@ -58,7 +68,6 @@
    string exec table from subs where active)];
  if[pt~`wdb;
   subs:g[`.sub.SUBSCRIPTIONS;([]table:`$();active:`boolean$())];
-  sp:g[`.sort.params;([]tabname:`$();att:`$();column:`$();sort:`boolean$())];
   ext:`subtabs`subsyms`ignorelist`mode`writedownmode`savedir`hdbdir`tables`schemas`rows`tickerplanttypes`subscribed`sortrows`tablelist!(
    string each (),g[`.wdb.subtabs;`];string each (),g[`.wdb.subsyms;`];string each (),g[`.wdb.ignorelist;`$()];string g[`.wdb.mode;`];string g[`.wdb.writedownmode;`];
    string g[`.wdb.savedir;`];string g[`.wdb.hdbdir;`];string each tables[];want!sch each want;want!cnt each want;

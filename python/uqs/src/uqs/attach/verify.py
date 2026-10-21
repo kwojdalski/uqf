@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.attach import config, persist, plan
+from uqs.attach import config, persist, plan, sorting
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
 from uqs.attach.findings import blockers
@@ -204,6 +204,7 @@ def verify(
             )
         obs, structural = observe(att, ipc)
         checks = [Check(f.component, False, f.message) for f in structural] + run(att, obs, m)
+        checks += [Check(*c) for c in sorting.checks(att, obs, ipc)]
         checks += preflight_now(att, ipc, root or repo_root(), m)
         result = VerifyResult(checks, m.state)
         if result.ok and m.state != "verified":

@@ -18,11 +18,18 @@ exists on the stack instead.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from uqs.attach.config import AttachmentError
-from uqs.attach.schema import SchemaError, TableSpec, parse_definition, parse_nested
+from uqs.attach.schema import (
+    SchemaError,
+    TableSpec,
+    check_sorting,
+    parse_definition,
+    parse_nested,
+    parse_sorting,
+)
 from uqs.model.declarations import Declaration, read_file
 from uqs.paths import UqsError
 from uqs.stack import bundles
@@ -59,11 +66,29 @@ def _nested(text: str, where: str) -> dict[str, dict[str, str]]:
     return out
 
 
-def _spec(table: str, line: str, where: str, nested: dict[str, str]) -> TableSpec:
+def _sorting(text: str, where: str) -> dict[str, tuple[tuple[str, str], ...]]:
+    """The `sorting[...]` rules the file declares: {table: ((column, attribute), ...)}.
+    A table declared twice is refused: which one is the layout would be a guess."""
+    out: dict[str, tuple[tuple[str, str], ...]] = {}
+    for line in text.splitlines():
+        try:
+            found = parse_sorting(line)
+        except SchemaError as exc:
+            raise AttachmentError(f"{where}: {exc}") from None
+        if found:
+            if found[0] in out:
+                raise AttachmentError(f"{where}: sorting[] for {found[0]} is declared twice")
+            out[found[0]] = found[1]
+    return out
+
+
+def _spec(table: str, line: str, where: str, nested: dict[str, str], sort: tuple = ()) -> TableSpec:
     try:
-        return parse_definition(line, nested)
+        spec = replace(parse_definition(line, nested), sort=sort)
+        check_sorting(spec)
     except SchemaError as exc:
         raise AttachmentError(f"{where}: table {table}: {exc}") from None
+    return spec
 
 
 def _pick(declarations: list[Declaration], job: str, where: str) -> Declaration:
@@ -94,7 +119,9 @@ def from_bundle(job: str, folder: Path) -> JobSpec:
     tables_q = folder / bundles.TABLES
     where = f"bundle {bundle.name}/{bundles.TABLES}"
     text = tables_q.read_text() if tables_q.is_file() else ""
-    return _build(decl, _definitions(text), where, bundle, _nested(text, where))
+    return _build(
+        decl, _definitions(text), where, bundle, _nested(text, where), _sorting(text, where)
+    )
 
 
 def from_tree(job: str, root: Path) -> JobSpec:
@@ -105,8 +132,10 @@ def from_tree(job: str, root: Path) -> JobSpec:
     decl = _pick(read_declarations(root), job, "this tree")
     if not decl.publishes:
         raise AttachmentError(f"{job} publishes nothing, so there is nothing to attach")
-    text = (root / TABLES_FILE).read_text()
-    return _build(decl, _definitions(text), str(TABLES_FILE), None, _nested(text, str(TABLES_FILE)))
+    text, where = (root / TABLES_FILE).read_text(), str(TABLES_FILE)
+    return _build(
+        decl, _definitions(text), where, None, _nested(text, where), _sorting(text, where)
+    )
 
 
 def _build(
@@ -115,9 +144,12 @@ def _build(
     where: str,
     bundle,
     nested: dict[str, dict[str, str]],
+    sorting: dict[str, tuple[tuple[str, str], ...]] | None = None,
 ) -> JobSpec:
     tables = tuple(
-        _spec(t, defined[t], where, nested.get(t, {})) for t in decl.publishes if t in defined
+        _spec(t, defined[t], where, nested.get(t, {}), (sorting or {}).get(t, ()))
+        for t in decl.publishes
+        if t in defined
     )
     external = tuple(t for t in decl.publishes if t not in defined)
     origin = (
