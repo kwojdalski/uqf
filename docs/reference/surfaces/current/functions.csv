@@ -412,6 +412,7 @@ qetl.kafka,exact_limit,value,,
 qetl.kafka,field_types,value,,
 qetl.kafka,first_per_coordinate,function,1,rows
 qetl.kafka,flush,function,2,tr st
+qetl.kafka,forget,function,2,keyed pairs
 qetl.kafka,from_messages,function,1,msgs
 qetl.kafka,marks_empty,dict,,
 qetl.kafka,message_index,value,,
@@ -420,6 +421,7 @@ qetl.kafka,poll_max,value,,
 qetl.kafka,process,function,1,rows
 qetl.kafka,propagate,function,3,d src mapped
 qetl.kafka,provenance,dict,,
+qetl.kafka,restarted,function,2,marks rows
 qetl.kafka,row_index,value,,
 qetl.kafka,state_new,function,1,
 qetl.kafka,topic,dict,,
@@ -434,14 +436,22 @@ qetl.kafka.decoder,state_names,value,,
 qetl.kafka.decoder,unpublished,function,1,job
 qetl.kafka.diag,causes,dict,,
 qetl.kafka.diag,classify,function,2,code reason
+qetl.kafka.diag,classify_topic,function,3,code reason topic
 qetl.kafka.diag,clear,function,1,stages
+qetl.kafka.diag,clear_delivered,function,1,topics
+qetl.kafka.diag,clear_quiet,function,1,stages
 qetl.kafka.diag,context,dict,,
+qetl.kafka.diag,delivered,value,,
 qetl.kafka.diag,kind_of,function,2,code reason
 qetl.kafka.diag,kind_stage,dict,,
 qetl.kafka.diag,names,dict,,
+qetl.kafka.diag,note_delivered,function,1,topics
 qetl.kafka.diag,numbers,dict,,
+qetl.kafka.diag,quiet,value,,
 qetl.kafka.diag,readiness,function,1,facts
 qetl.kafka.diag,report,function,2,code reason
+qetl.kafka.diag,report_topic,function,3,code reason topic
+qetl.kafka.diag,take_delivered,function,1,
 qetl.kafka.topic,claims,function,1,
 qetl.kafka.topic,def,function,1,topic
 qetl.kafka.topic,define,function,2,topic decl
@@ -449,7 +459,7 @@ qetl.kafka.topic,defined,function,1,
 qetl.kafka.topic,known,function,1,
 qetl.kafka.topic,outputs,function,1,
 qetl.kafka.topic,owned,function,1,job
-qetl.kafka.topic,payload_schema,function,2,out expand
+qetl.kafka.topic,payload_schema,function,1,out
 qetl.kafka.topic,registry,dict,,
 qetl.livecheck,check,function,2,source window
 qetl.livecheck,redact,function,2,text cred

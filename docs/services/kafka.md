@@ -103,7 +103,11 @@ bootstrap list) are reachable and the group joined; a polled record proves the
 topic may be read. A failure is reported **once per cause** - stage, endpoint,
 code, and the broker's own text - not once a second: an unresolvable advertised
 hostname is one `ERROR` naming `host:port`, with the repeats counted and a
-`recovered` line when it clears.
+`recovered` line when it clears. A cause clears on evidence about *its own*
+subject --- a record from the refused topic --- or once it has gone quiet (30 s
+unreported) while the stage is proved elsewhere; another topic or broker
+delivering does not clear it, and readiness says `failed` for as long as it is
+still being reported.
 [`kafka_diagnostics.q`](../../src/etl/core/kafka_diagnostics.q) has the stages;
 [the crypto example](../guides/kafka-crypto-example.md) runs each failure
 against a real broker, with a verifier that checks every stage against the RDB.
@@ -203,16 +207,19 @@ the plant's `time`.
 A mapping does not build these. It returns the payload's columns, and
 `.qetl.kafka.propagate` ([`kafka_ingest.q`](../../src/etl/core/kafka_ingest.q))
 appends the four from the record the row came from and puts the table's columns
-in order. A one-to-one mapping must return a row per record (anything else is
-dead-lettered `mapping`). The payload columns a mapping returns are
-`.qetl.kafka.topic.payload_schema[table;expand]`.
+in order. Every mapping returns a leading `message_index` (`long`): which record
+of the batch each row came from. Provenance follows it, never the row's
+position, so a mapping that sorts, groups or drops a duplicate still gives each
+row its own record's coordinates. A one-to-one mapping must return exactly one
+row per record, `message_index` naming each once, in any order (anything else is
+dead-lettered `mapping`). The columns a mapping returns are
+`.qetl.kafka.topic.payload_schema[table]`, `message_index` first.
 
 **One record, many rows.** Declare the topic with `expand` (1b) and give the
-table a `row_index` (`long`) column. The mapping then returns a leading
-`message_index` column (which record of the batch each row came from,
-non-decreasing) and the framework sets `row_index`, 0 for a record's first row.
-The index depends only on the mapping's output for that record, so a retry, a
-replay or another batching gives the same one.
+table a `row_index` (`long`) column. The mapping's `message_index` is then
+non-decreasing (a record's rows together) and the framework sets `row_index`, 0
+for a record's first row. The index depends only on the mapping's output for
+that record, so a retry, a replay or another batching gives the same one.
 `(topic, partition, offset, row_index)` is unique. Deduplication still keys on
 the record's coordinates: a record's rows are published in one call, so a
 redelivered record is dropped whole, and a restart reads the handled records
@@ -366,7 +373,17 @@ processed once.
 
 The handled records are a **set**, not a mark, for the recovery: a crash between
 two tables' publishes leaves a gap below the highest handled offset, and a mark
-would call the gap done.
+would call the gap done. A record is identified by its coordinates *and* its
+`broker_time`, because a partition whose offsets restart (below) reuses them.
+
+**A partition whose offsets restart** (a truncated log, a recreated topic) is
+recognised by the feed and by every decoder with the same rule
+(`.qetl.kafka.restarted`): a partition whose polled rows all sit below its mark
+has restarted, so its mark is reset, a warning is logged, and the new records
+are published and decoded. A redelivery that reaches the mark is a plain
+redelivery and is dropped. The cost of the rule is that a redelivery *wholly*
+below the mark is taken for a restart and decoded again; after a decoder restart
+the replay marks such a partition by the top of its last run of offsets.
 
 ## Limits worth knowing
 

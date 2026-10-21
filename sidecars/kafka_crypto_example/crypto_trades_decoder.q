@@ -44,24 +44,24 @@
 
 / The mapping: refuse a trade that cannot have happened, else reorder into crypto_trade's columns.
 / @param m the decoded records
-/ @return crypto_trade's payload columns (the framework appends topic, partition, offset and broker_time)
+/ @return message_index (which record each row came from), then crypto_trade's payload columns (the framework appends topic, partition, offset and broker_time)
 / @throws error naming the offending offsets when a price or quantity is not positive, or a side is neither buy nor sell
 / @eg cols .qpipe.transform.crypto_trade_map.map .qpipe.transform.crypto_trade_map.message
 .qpipe.transform.crypto_trade_map.map:{[m]
     side:lower m`side;
     bad:(m[`price]<=0f) or (m[`qty]<=0f) or not side in `buy`sell;
     if[any bad; '"not a trade (price and qty must be positive, side buy or sell): offsets ",", " sv string m[`offset] where bad];
-    select event_time:ts, sym, trade_id, price, qty, side from update side:lower side from m}
+    select message_index:`long$i, event_time:ts, sym, trade_id, price, qty, side from update side:lower side from m}
 
 .qetl.transform.define[`crypto_trade_map;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.crypto_trade_map.message;
-    .qetl.kafka.topic.payload_schema[`crypto_trade;0b];
+    .qetl.kafka.topic.payload_schema[`crypto_trade];
     .qpipe.transform.crypto_trade_map.map;
     enlist `inputs`expected!(
         enlist[`message]!enlist ([] topic:2#`example.crypto.trades; partition:0 1j; offset:7 7j; broker_time:2#2026.10.20D09:00:00.002000000;
             sym:`$("BTC-USD";"ETH-USD"); trade_id:`$("BTC-000007";"ETH-000007"); ts:2#2026.10.20D09:00:00.000000000;
             price:65000.5 3200.25; qty:0.25 1.5; side:`buy`SELL);
-        ([] event_time:2#2026.10.20D09:00:00.000000000;
+        ([] message_index:0 1j; event_time:2#2026.10.20D09:00:00.000000000;
             sym:`$("BTC-USD";"ETH-USD"); trade_id:`$("BTC-000007";"ETH-000007");
             price:65000.5 3200.25; qty:0.25 1.5; side:`buy`sell)))];
 

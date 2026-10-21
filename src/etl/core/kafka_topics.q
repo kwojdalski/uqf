@@ -49,7 +49,9 @@
 / row_index (long): the row's position among the rows its record produced,
 / 0 for the first. The mapping returns a leading message_index column (which
 / record of the batch the row came from, non-decreasing) and the framework
-/ numbers the rows. The index depends only on the mapping's output for that
+/ numbers the rows. A one-to-one mapping returns message_index too, a
+/ permutation of the batch's positions: provenance follows it, so a mapping
+/ that sorts or groups its rows still gets each row's own record. The index depends only on the mapping's output for that
 / record, so a retry or a replay gives the same one. A record's rows are
 / published together and handled together: the deduplication keys on the
 / record's coordinates, and (coordinates, row_index) is a unique key of an
@@ -189,29 +191,30 @@
         'who,": transform ",string[mapping],"'s fields ",(", " sv string bad)," must be float, long, symbol, timestamp, boolean, a float list or a list of float lists"];
     `input`schema!(first key d`inputs;fields!meta_t fields)}
 
-/ Private: refuse a topic another job already owns.
+/ Private: refuse a topic another job already owns - and a define with no job over a topic that has one.
+/ .
+/ A define without `job` used to skip this check and upsert over the owner's
+/ entry (#1522): the plan still routed the topic to the owner, which then
+/ decoded it into the new output and threw. A topic with an owner is only ever
+/ redefined by that owner.
 / @param who the caller's name, for the message
 / @param topic the topic
 / @param owner the job declaring it, null for none
-/ @throws error naming the owner, from this process or from the generated plan
+/ @throws error naming both the owner and the job (or "no job") declaring it, from this process or from the generated plan
 / @private
 .qetl.kafka.topic.require_free:{[who;topic;owner]
     claims:.qetl.kafka.topic.claims[];
-    if[null owner; :()];
     if[(topic in key claims) and not owner=claims topic;
-        'who," is owned by ",string[claims topic],", not ",string[owner]," - a topic is decoded by exactly one job"]}
+        'who," is owned by ",string[claims topic],", not ",$[null owner; "a define with no job"; string owner]," - a topic is decoded by exactly one job"]}
 
 / The columns a mapping returns for an output table: the payload's, in the table's order - the declared output of a topic's mapping transform.
 / @param out the plant table
-/ @param expand 1b when the topic expands
-/ @return an empty table: message_index first when expanding, then the payload columns
-/ @eg cols .qetl.kafka.topic.payload_schema[`client_flow;0b]  ->  `sym`side`qty`price`client`trade_id
-.qetl.kafka.topic.payload_schema:{[out;expand]
+/ @return an empty table: message_index first, then the payload columns
+/ @eg cols .qetl.kafka.topic.payload_schema[`client_flow]  ->  `message_index`sym`side`qty`price`client`trade_id
+.qetl.kafka.topic.payload_schema:{[out]
     pub:.qetl.plant.published out;
     pay:(cols[pub] except .qetl.kafka.coordinates,.qetl.kafka.row_index)#pub;
-    $[expand;
-        flip (enlist[.qetl.kafka.message_index],cols pay)!(enlist `long$()),value flip pay;
-        pay]}
+    flip (enlist[.qetl.kafka.message_index],cols pay)!(enlist `long$()),value flip pay}
 
 / Private: refuse an output table that does not carry the provenance contract.
 / @param who the caller's name, for the message
@@ -260,7 +263,7 @@
     if[not out in .qetl.plant.names[];
         'who," publishes to ",string[out],", which the plant does not define"];
     .qetl.kafka.topic.require_provenance[who;out;expand];
-    p:.qetl.transform.problems[.qetl.kafka.topic.payload_schema[out;expand];(.qetl.transform.def decl`mapping)`output;1b];
+    p:.qetl.transform.problems[.qetl.kafka.topic.payload_schema[out];(.qetl.transform.def decl`mapping)`output;1b];
     if[count p; 'who,": transform ",string[decl`mapping]," does not return the payload columns of ",string[out],": ","; " sv p];
     `.qetl.kafka.topic.registry upsert (topic;decl`mapping;out;fmt;owner;expand);
     topic}

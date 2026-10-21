@@ -36,6 +36,18 @@
 / topic. The only proof of consume permission is polling a record, which is
 / why the `consume` stage turns ok on a polled record and on nothing else.
 / .
+/ A CAUSE IS RETIRED ONLY BY EVIDENCE ABOUT ITS OWN SUBJECT (#1521). A polled
+/ record from topic A says nothing about topic B's refusal, nor about one
+/ unreachable broker among several, so "some partition delivered" never retires
+/ a `consume` or `advertised` cause. What does:
+/   - a record from the refused topic (the cause's `subject`, when the report
+/     named a topic: clear_delivered);
+/   - the cause having gone quiet - not reported for `quiet` - while the stage
+/     is proved elsewhere (clear_quiet). A cause that is still being reported is
+/     open whatever else works, so readiness says failed and the log is not
+/     told "recovered" only for the error to come back on the next callback.
+/ A `consume` cause whose report named no topic can only go quiet.
+/ .
 / Nothing here reads a secret, and nothing here throws: a diagnostic that
 / threw inside librdkafka's callback thread would be swallowed and lost.
 
@@ -44,10 +56,17 @@
 / What the process connects to, for naming an endpoint and the right remedy.
 / Set by the feed when it opens: `bootstrap` is the list of host:port strings,
 / `group` the consumer group.
-.qetl.kafka.diag.context:`bootstrap`group!(();"")
+/ `topics` is the subscribed list: a report that names one of them is about that topic.
+.qetl.kafka.diag.context:`bootstrap`group`topics!(();"";`symbol$())
 
-/ The causes seen and not yet cleared. `repeats` counts the occurrences after the logged first.
-.qetl.kafka.diag.causes:([cause:`symbol$()] stage:`symbol$(); kind:`symbol$(); endpoint:(); first_seen:`timestamp$(); repeats:`long$())
+/ The causes seen and not yet cleared. `repeats` counts the occurrences after the logged first, `touched` is when it was last reported, `subject` the topic it is about (null when unknown or not about one).
+.qetl.kafka.diag.causes:([cause:`symbol$()] stage:`symbol$(); kind:`symbol$(); endpoint:(); first_seen:`timestamp$(); repeats:`long$(); subject:`symbol$(); touched:`timestamp$())
+
+/ How long a cause must go unreported before a stage proved elsewhere may retire it. librdkafka repeats a failing connection every second or so (reconnect.backoff.max.ms defaults to 10s), so this is several of its periods.
+.qetl.kafka.diag.quiet:0D00:00:30
+
+/ The topics that delivered a record since the feed last asked (take_delivered).
+.qetl.kafka.diag.delivered:`symbol$()
 
 / librdkafka's names for the errors that need a different remedy, and what each is.
 .qetl.kafka.diag.names:(`TOPIC_AUTHORIZATION_FAILED`GROUP_AUTHORIZATION_FAILED`UNKNOWN_TOPIC_OR_PART,`$("_UNKNOWN_TOPIC";"_AUTHENTICATION";"_ALL_BROKERS_DOWN"))!`topic_auth`group_auth`unknown_topic`unknown_topic`sasl`all_down
@@ -120,9 +139,17 @@
 / there.
 / @param code an int or long error code, a symbol error name, or null
 / @param reason the text librdkafka gave
-/ @return dict stage, kind, endpoint, node, code, detail (the text), hint, cause (a symbol identifying it)
+/ @return dict stage, kind, endpoint, node, code, detail (the text), hint, subject, cause (a symbol identifying it)
 / @eg .qetl.kafka.diag.classify[-195i;"kafka-1:9093/1: Failed to resolve 'kafka-1:9093': No address associated with hostname"]`stage  ->  `advertised
-.qetl.kafka.diag.classify:{[code;reason]
+.qetl.kafka.diag.classify:{[code;reason] .qetl.kafka.diag.classify_topic[code;reason;`]}
+
+/ Classify one client report, knowing which topic the client attached it to.
+/ @param code an int or long error code, a symbol error name, or null
+/ @param reason the text librdkafka gave
+/ @param topic the topic the report came with, null when none
+/ @return the dict classify returns, with `subject` the topic of a consume report
+/ @eg .qetl.kafka.diag.classify_topic[29i;"Topic authorization failed";`orders]`subject  ->  `orders
+.qetl.kafka.diag.classify_topic:{[code;reason;topic]
     reason:$[10h=type reason; reason; -11h=type reason; string reason; ""];
     kind:.qetl.kafka.diag.kind_of[code;reason];
     p:.qetl.kafka.diag.prefix[reason];
@@ -139,8 +166,18 @@
         kind=`topic_auth; "this principal may not read the topic - grant Read and Describe on it; permission to describe the group proves nothing about this";
         kind=`unknown_topic; "the topic does not exist, or this principal cannot see it";
         "unclassified client report"];
-    cause:`$"|" sv (string stage;string kind;ep;string $[null code; `; code]);
-    `stage`kind`endpoint`node`code`detail`hint`cause!(stage;kind;ep;p`node;code;reason;hint;cause)}
+    subject:$[stage=`consume; .qetl.kafka.diag.subject_of[topic;reason]; `];
+    cause:`$"|" sv (string stage;string kind;ep;string $[null code; `; code]),$[null subject; (); enlist string subject];
+    `stage`kind`endpoint`node`code`detail`hint`subject`cause!(stage;kind;ep;p`node;code;reason;hint;subject;cause)}
+
+/ Private: the topic a consume report is about - the one it came with, else a subscribed topic its text names.
+/ @private
+.qetl.kafka.diag.subject_of:{[topic;reason]
+    if[(-11h=type topic) and not null topic; :topic];
+    ctx:.qetl.kafka.diag.context;
+    topics:$[`topics in key ctx; (),ctx`topics; `symbol$()];
+    named:topics where {[r;t] 0<count ss[r;string t]}[reason] each topics;
+    $[count named; first named; `]}
 
 / Private: log, and never throw.
 / @private
@@ -155,27 +192,46 @@
 / @param code an int or long error code, a symbol error name, or null
 / @param reason the text librdkafka gave
 / @return 1b when this was the first sighting (and was logged), else 0b
-.qetl.kafka.diag.report:{[code;reason]
-    r:.qetl.kafka.try[{[c;t] .qetl.kafka.diag.classify[c;t]};(code;reason)];
+.qetl.kafka.diag.report:{[code;reason] .qetl.kafka.diag.report_topic[code;reason;`]}
+
+/ Report a client error that came with a topic (a consumer message with an mtype), once per cause.
+/ @param code an int or long error code, a symbol error name, or null
+/ @param reason the text librdkafka gave
+/ @param topic the topic the report came with, null when none
+/ @return 1b when this was the first sighting (and was logged), else 0b
+/ @eg .qetl.kafka.diag.report_topic[29i;"Topic authorization failed";`orders]
+.qetl.kafka.diag.report_topic:{[code;reason;topic]
+    r:.qetl.kafka.try[{[c;t;p] .qetl.kafka.diag.classify_topic[c;t;p]};(code;reason;topic)];
     if[not first r; :0b];
     d:last r;
     c:d`cause;
     / "N/N brokers are down" names no endpoint and follows the failure that took them down: it is that failure's repeat, not a second cause.
     if[(d[`kind]=`all_down) and 0<count open:select from .qetl.kafka.diag.causes where stage in `bootstrap`advertised, not kind=`all_down;
-        update repeats:repeats+1 from `.qetl.kafka.diag.causes where cause=first exec cause from open;
+        update repeats:repeats+1, touched:.z.p from `.qetl.kafka.diag.causes where cause=first exec cause from open;
         :0b];
     if[c in key .qetl.kafka.diag.causes;
-        update repeats:repeats+1 from `.qetl.kafka.diag.causes where cause=c;
+        update repeats:repeats+1, touched:.z.p from `.qetl.kafka.diag.causes where cause=c;
         :0b];
-    `.qetl.kafka.diag.causes upsert (c;d`stage;d`kind;d`endpoint;.z.p;0);
+    `.qetl.kafka.diag.causes upsert (c;d`stage;d`kind;d`endpoint;.z.p;0;d`subject;.z.p);
     / A report nothing classified may be benign, so it is a WARNING, once; a named stage failing is an ERROR.
     .qetl.kafka.diag.say[$[d[`kind]=`other; `warn; `err];string[d`stage]," stage failed: ",d`hint;
-        `stage`kind`endpoint`code`error!(d`stage;d`kind;d`endpoint;d`code;.qetl.kafka.diag.shorten[d`detail])];
+        `stage`kind`endpoint`code`topic`error!(d`stage;d`kind;d`endpoint;d`code;d`subject;.qetl.kafka.diag.shorten[d`detail])];
     1b}
 
 / Private: a broker's text, bounded - it is untrusted input to a log line.
 / @private
 .qetl.kafka.diag.shorten:{[s] $[300<count s; 300#s; s]}
+
+/ Private: forget some causes, logging each recovery once.
+/ @param gone the causes table rows to retire (unkeyed, with their cause column)
+/ @return the number retired
+/ @private
+.qetl.kafka.diag.retire:{[gone]
+    if[0=count gone; :0];
+    ids:gone`cause;
+    delete from `.qetl.kafka.diag.causes where cause in ids;
+    {.qetl.kafka.diag.say[`info;string[x`stage]," stage recovered";`stage`endpoint`repeats_suppressed!(x`stage;x`endpoint;x`repeats)]} each gone;
+    count gone}
 
 / Forget the causes of some stages because they have come good, logging each recovery once.
 / @param stages a symbol vector of stages
@@ -184,11 +240,44 @@
 .qetl.kafka.diag.clear:{[stages]
     / `(),stages` inside a where clause would be read as two clauses: the comma separates them.
     which:(),stages;
-    gone:select from .qetl.kafka.diag.causes where stage in which;
-    if[0=count gone; :0];
-    delete from `.qetl.kafka.diag.causes where stage in which;
-    {.qetl.kafka.diag.say[`info;string[x`stage]," stage recovered";`stage`endpoint`repeats_suppressed!(x`stage;x`endpoint;x`repeats)]} each 0!gone;
-    count gone}
+    .qetl.kafka.diag.retire[0!select from .qetl.kafka.diag.causes where stage in which]}
+
+/ Retire the causes of some stages that have gone quiet: not reported for `quiet`.
+/ .
+/ For a stage proved elsewhere (an assignment, a polled record). A cause that
+/ is still being reported is open, whatever else works; and a `consume` cause
+/ with a known subject is never retired this way - only by its topic delivering.
+/ @param stages a symbol vector of stages
+/ @return the number of causes cleared
+/ @eg .qetl.kafka.diag.clear_quiet `bootstrap`advertised`group
+.qetl.kafka.diag.clear_quiet:{[stages]
+    which:(),stages;
+    cutoff:.z.p-.qetl.kafka.diag.quiet;
+    .qetl.kafka.diag.retire[0!select from .qetl.kafka.diag.causes where stage in which, touched<=cutoff, (not stage=`consume) or null subject]}
+
+/ Retire the `consume` causes whose own topic delivered a record.
+/ @param topics a symbol vector of the topics that delivered
+/ @return the number of causes cleared
+/ @eg .qetl.kafka.diag.clear_delivered enlist `orders
+.qetl.kafka.diag.clear_delivered:{[topics]
+    which:(),topics;
+    .qetl.kafka.diag.retire[0!select from .qetl.kafka.diag.causes where stage=`consume, subject in which, not null subject]}
+
+/ Note the topics that delivered a record, for the feed's next readiness turn.
+/ @param topics a symbol vector
+/ @return nothing
+/ @eg .qetl.kafka.diag.note_delivered enlist `orders
+.qetl.kafka.diag.note_delivered:{[topics]
+    `.qetl.kafka.diag.delivered set distinct .qetl.kafka.diag.delivered,topics;
+    }
+
+/ The topics that delivered since the last call, and forget them.
+/ @return a symbol vector
+/ @eg .qetl.kafka.diag.take_delivered[]
+.qetl.kafka.diag.take_delivered:{[]
+    r:.qetl.kafka.diag.delivered;
+    `.qetl.kafka.diag.delivered set `symbol$();
+    r}
 
 / The readiness of each stage, from what a consumer knows about itself.
 / .
