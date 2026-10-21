@@ -65,6 +65,19 @@
     .qunit.assertEquals[.qf.px.pip_factor `EURUSD`USDJPY`EURJPY`GBPUSD`AUDUSD;10000 100 100 10000 10000;
         "100 for a JPY quote, 10000 otherwise"]};
 
+.qt.qf.px.ccy.test_pip_factor_for_the_em_quote_currencies:{[t]
+    .qunit.assertEquals[.qf.px.pip_factor `USDHUF`EURCZK`USDKRW`USDIDR`USDCLP`USDCOP`USDINR`USDPHP`USDTWD;
+        100 1000 100 1 100 1 100 100 1000;"market pip sizes, not 0.0001 (#1525)"];
+    .qunit.assertEquals[.qf.px.pip_size `USDIDR`EURCZK;1 0.001;"the pip size is the inverse"]};
+
+.qt.qf.px.ccy.test_every_attribution_currency_has_a_pip_size_decision:{[t]
+    ccys:.qf.mkt.attribution_convention[`currencies]`ccy;
+    decided:(key .qf.px.pip_size_by_quote),.qf.px.pip_size_default_quotes;
+    .qunit.assertEquals[ccys except decided;`symbol$();
+        "a currency in the attribution convention needs a pip_size_by_quote entry or a place in pip_size_default_quotes"];
+    .qunit.assertEquals[(key .qf.px.pip_size_by_quote) inter .qf.px.pip_size_default_quotes;`symbol$();
+        "a currency is not both an exception and a default"]};
+
 .qt.qf.px.ccy.test_pip_factor_takes_an_atom_and_any_pair_spelling:{[t]
     .qunit.assertEquals[(.qf.px.pip_factor `USDJPY;.qf.px.pip_factor "usd/jpy");100 100;
         "an atom in, an atom out, however the pair is written"]};
