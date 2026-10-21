@@ -209,10 +209,9 @@
 
 / The columns a mapping returns for an output table: the payload's, in the table's order - the declared output of a topic's mapping transform.
 / @param out the plant table
-/ @param expand 1b when the topic expands (the columns are the same either way: message_index leads for both, #1520)
 / @return an empty table: message_index first, then the payload columns
-/ @eg cols .qetl.kafka.topic.payload_schema[`client_flow;0b]  ->  `message_index`sym`side`qty`price`client`trade_id
-.qetl.kafka.topic.payload_schema:{[out;expand]
+/ @eg cols .qetl.kafka.topic.payload_schema[`client_flow]  ->  `message_index`sym`side`qty`price`client`trade_id
+.qetl.kafka.topic.payload_schema:{[out]
     pub:.qetl.plant.published out;
     pay:(cols[pub] except .qetl.kafka.coordinates,.qetl.kafka.row_index)#pub;
     flip (enlist[.qetl.kafka.message_index],cols pay)!(enlist `long$()),value flip pay}
@@ -264,7 +263,7 @@
     if[not out in .qetl.plant.names[];
         'who," publishes to ",string[out],", which the plant does not define"];
     .qetl.kafka.topic.require_provenance[who;out;expand];
-    p:.qetl.transform.problems[.qetl.kafka.topic.payload_schema[out;expand];(.qetl.transform.def decl`mapping)`output;1b];
+    p:.qetl.transform.problems[.qetl.kafka.topic.payload_schema[out];(.qetl.transform.def decl`mapping)`output;1b];
     if[count p; 'who,": transform ",string[decl`mapping]," does not return the payload columns of ",string[out],": ","; " sv p];
     `.qetl.kafka.topic.registry upsert (topic;decl`mapping;out;fmt;owner;expand);
     topic}

@@ -37,7 +37,7 @@
 
 .qetl.transform.define[`example_quote_map;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.example_quote_map.message;
-    .qetl.kafka.topic.payload_schema[`example_quote;0b];
+    .qetl.kafka.topic.payload_schema[`example_quote];
     .qpipe.transform.example_quote_map.map;
     enlist `inputs`expected!(
         enlist[`message]!enlist ([] topic:2#`example.quotes; partition:0 1j; offset:7 7j; broker_time:2#2026.10.20D09:00:00.000000000;

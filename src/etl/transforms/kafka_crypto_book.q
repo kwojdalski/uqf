@@ -76,7 +76,7 @@
 
 .qetl.transform.define[`kafka_crypto_book;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.kafka_crypto_book.message;
-    .qetl.kafka.topic.payload_schema[`crypto_book_snapshot;0b];
+    .qetl.kafka.topic.payload_schema[`crypto_book_snapshot];
     .qpipe.transform.kafka_crypto_book.map;
     / a full book; a one-level bid side and a two-level ask side; two bids and an empty ask side
     enlist `inputs`expected!(

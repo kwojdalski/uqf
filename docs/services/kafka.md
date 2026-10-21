@@ -213,7 +213,7 @@ position, so a mapping that sorts, groups or drops a duplicate still gives each
 row its own record's coordinates. A one-to-one mapping must return exactly one
 row per record, `message_index` naming each once, in any order (anything else is
 dead-lettered `mapping`). The columns a mapping returns are
-`.qetl.kafka.topic.payload_schema[table;expand]`, `message_index` first.
+`.qetl.kafka.topic.payload_schema[table]`, `message_index` first.
 
 **One record, many rows.** Declare the topic with `expand` (1b) and give the
 table a `row_index` (`long`) column. The mapping's `message_index` is then

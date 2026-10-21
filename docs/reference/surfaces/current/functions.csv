@@ -458,7 +458,7 @@ qetl.kafka.topic,defined,function,1,
 qetl.kafka.topic,known,function,1,
 qetl.kafka.topic,outputs,function,1,
 qetl.kafka.topic,owned,function,1,job
-qetl.kafka.topic,payload_schema,function,2,out expand
+qetl.kafka.topic,payload_schema,function,1,out
 qetl.kafka.topic,registry,dict,,
 qetl.livecheck,check,function,2,source window
 qetl.livecheck,redact,function,2,text cred

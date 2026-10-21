@@ -38,7 +38,7 @@
 
 .qetl.transform.define[`kafka_client_flow;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.kafka_client_flow.message;
-    .qetl.kafka.topic.payload_schema[`client_flow;0b];
+    .qetl.kafka.topic.payload_schema[`client_flow];
     .qpipe.transform.kafka_client_flow.map;
     enlist `inputs`expected!(
         enlist[`message]!enlist ([] topic:2#`uqf.client.flow; partition:0 1j; offset:7 7j; broker_time:2#2026.10.20D09:00:00.000000000;

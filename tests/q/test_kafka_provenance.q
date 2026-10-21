@@ -54,20 +54,20 @@
         enlist[`m]!enlist ([] topic:2#`prov.one; partition:0 0j; offset:1 2j; broker_time:2#.qt.qetl.kafka.provenance.t0; a:1 2f; t_ms:0 1000j);
         ([] message_index:0 1j; a:1 2f; event_time:(0Np;1970.01.01D00:00:01.000000000)));
     .qetl.transform.define[`prov_one_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
-        .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.one_map;enlist one_ex)];
+        .qetl.kafka.topic.payload_schema[`prov_one];.qt.qetl.kafka.provenance.one_map;enlist one_ex)];
     .qetl.transform.define[`prov_drop_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
-        .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.drop_map;enlist one_ex)];
+        .qetl.kafka.topic.payload_schema[`prov_one];.qt.qetl.kafka.provenance.drop_map;enlist one_ex)];
     .qetl.transform.define[`prov_sort_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
-        .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.sort_map;enlist one_ex)];
+        .qetl.kafka.topic.payload_schema[`prov_one];.qt.qetl.kafka.provenance.sort_map;enlist one_ex)];
     .qetl.transform.define[`prov_dup_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
-        .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.dup_map;enlist `inputs`expected!(one_ex`inputs;([] message_index:0 0j; a:1 2f; event_time:(0Np;1970.01.01D00:00:01.000000000))))];
+        .qetl.kafka.topic.payload_schema[`prov_one];.qt.qetl.kafka.provenance.dup_map;enlist `inputs`expected!(one_ex`inputs;([] message_index:0 0j; a:1 2f; event_time:(0Np;1970.01.01D00:00:01.000000000))))];
     many_ex:`inputs`expected!(
         enlist[`m]!enlist ([] topic:enlist `prov.many; partition:enlist 0j; offset:enlist 1j; broker_time:enlist .qt.qetl.kafka.provenance.t0; legs:enlist 2j; px:enlist 1.5);
         ([] message_index:0 0j; leg:`leg0`leg1; px:1.5 1.5));
     .qetl.transform.define[`prov_many_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.many_in;
-        .qetl.kafka.topic.payload_schema[`prov_many;1b];.qt.qetl.kafka.provenance.many_map;enlist many_ex)];
+        .qetl.kafka.topic.payload_schema[`prov_many];.qt.qetl.kafka.provenance.many_map;enlist many_ex)];
     .qetl.transform.define[`prov_bad_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.many_in;
-        .qetl.kafka.topic.payload_schema[`prov_many;1b];.qt.qetl.kafka.provenance.bad_map;enlist `inputs`expected!(many_ex`inputs;([] message_index:enlist 7j; leg:enlist `x; px:enlist 1f)))];
+        .qetl.kafka.topic.payload_schema[`prov_many];.qt.qetl.kafka.provenance.bad_map;enlist `inputs`expected!(many_ex`inputs;([] message_index:enlist 7j; leg:enlist `x; px:enlist 1f)))];
     .qetl.kafka.topic.define[`prov.one;`mapping`output!(`prov_one_map;`prov_one)];
     .qetl.kafka.topic.define[`prov.drop;`mapping`output!(`prov_drop_map;`prov_one)];
     .qetl.kafka.topic.define[`prov.sorted;`mapping`output!(`prov_sort_map;`prov_one)];
@@ -112,7 +112,7 @@
 .qt.qetl.kafka.provenance.test_a_declared_mapping_returns_the_payload_columns_only:{[t]
     reg:0!.qetl.kafka.topic.registry;
     got:{cols (.qetl.transform.def x)`output} each reg`mapping;
-    want:{cols .qetl.kafka.topic.payload_schema[x;y]}'[reg`output;reg`expand];
+    want:{cols .qetl.kafka.topic.payload_schema[x]} each reg`output;
     .qunit.assertTrue[0<count reg;"there are mappings"];
     .qunit.assertTrue[got~want;"no mapping builds a provenance column"]};
 
@@ -241,7 +241,7 @@
 .qt.qetl.kafka.provenance.test_an_empty_output_is_the_tables_published_shape:{[t]
     d:.qetl.kafka.topic.def `prov.many;
     src:([] topic:enlist `prov.many; partition:enlist 0j; offset:enlist 1j; broker_time:enlist .qt.qetl.kafka.provenance.t0; legs:enlist 0j; px:enlist 1f);
-    r:.qetl.kafka.propagate[d;src;.qetl.kafka.topic.payload_schema[`prov_many;1b]];
+    r:.qetl.kafka.propagate[d;src;.qetl.kafka.topic.payload_schema[`prov_many]];
     .qunit.assertEquals[count r;0;"a record that expanded to nothing"];
     .qunit.assertEquals[(cols r;exec t from meta r);(cols pub;exec t from meta pub:.qetl.plant.published `prov_many);"and still the table's columns and types"];
     .qunit.assertEquals[count (.qetl.kafka.process .qt.qetl.kafka.provenance.env[`prov.many;`long$();()])`dead;0;"an empty batch dead-letters nothing"]};

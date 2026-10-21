@@ -55,7 +55,7 @@
 
 .qetl.transform.define[`crypto_trade_map;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.crypto_trade_map.message;
-    .qetl.kafka.topic.payload_schema[`crypto_trade;0b];
+    .qetl.kafka.topic.payload_schema[`crypto_trade];
     .qpipe.transform.crypto_trade_map.map;
     enlist `inputs`expected!(
         enlist[`message]!enlist ([] topic:2#`example.crypto.trades; partition:0 1j; offset:7 7j; broker_time:2#2026.10.20D09:00:00.002000000;
