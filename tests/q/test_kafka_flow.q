@@ -121,6 +121,56 @@
         "the replay publishes NOTHING - not an empty batch, no call at all"];
     .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];3;"the three original rows, once"]};
 
+/ --- a partition whose offsets restart (#1519) ---------------------------------
+
+/ The feed resets its mark and republishes records 0-2 of a recreated topic after 0-4; kafka_flow's own mark was still 4 and dropped all three.
+.qt.qpipe.job.kafka_flow.push_later:{[parts;offs]
+    b:.qt.qpipe.job.kafka_flow.batch[parts;offs];
+    .qpipe.job.kafka_flow.on_batch[`kafka_message;update broker_time:broker_time+0D01:00:00 from b]}
+
+.qt.qpipe.job.kafka_flow.test_records_after_a_partitions_offsets_restart_are_decoded:{[t]
+    .qt.qpipe.job.kafka_flow.drive_ready[];
+    .qt.qpipe.job.kafka_flow.push[5#0j;0 1 2 3 4j];
+    .qt.qpipe.job.kafka_flow.push_later[3#0j;0 1 2j];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];8;"five records, then the three that restarted: eight rows"];
+    .qunit.assertEquals[.qt.qpipe.job.kafka_flow.mark[.qt.qpipe.job.kafka_flow.topic;0j];2j;"the mark follows the restarted run"];
+    / and a redelivery of that run is a plain redelivery again
+    .qt.qpipe.job.kafka_flow.push_later[3#0j;0 1 2j];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];8;"a redelivery that reaches the mark is still dropped"]};
+
+/ A rebalance that re-reads batches the job has already decoded is wholly below the mark, but it is not a restart: the records are not newer.
+.qt.qpipe.job.kafka_flow.test_a_redelivery_wholly_below_the_mark_is_not_decoded_again:{[t]
+    .qt.qpipe.job.kafka_flow.drive_ready[];
+    .qt.qpipe.job.kafka_flow.push[8#0j;til 8];
+    .qt.qpipe.job.kafka_flow.push[3#0j;2 3 4j];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];8;"offsets 2-4 again, after 0-7: dropped, not mistaken for a restart"];
+    .qunit.assertEquals[.qt.qpipe.job.kafka_flow.mark[.qt.qpipe.job.kafka_flow.topic;0j];7j;"and the mark did not move"]};
+
+.qt.qpipe.job.kafka_flow.test_a_restart_on_one_partition_does_not_touch_another:{[t]
+    .qt.qpipe.job.kafka_flow.drive_ready[];
+    .qt.qpipe.job.kafka_flow.push[(3#0j),3#1j;0 1 2 0 1 2j];
+    .qt.qpipe.job.kafka_flow.push_later[(2#0j),1#1j;0 1 2j];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];8;"partition 0 restarted; partition 1's 2 is only a redelivery"]};
+
+/ The log of a run in which partition 0 went 0 1 2, then restarted with new records 0 1 (a later broker_time), and kafka_flow decoded only the new 0 before going down.
+.qt.qpipe.job.kafka_flow.offset_restart_log:{[]
+    raw:.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;5#0j;0 1 2 0 1j;.qt.qpipe.job.kafka_flow.payload each 0 1 2 5 6j];
+    raw:update broker_time:broker_time+0D01:00:00 from raw where i>=3;
+    env:.qetl.kafka.envelope_columns#raw;
+    old:(.qetl.kafka.process env 0 1 2)[`out]`client_flow;
+    new0:(.qetl.kafka.process env enlist 3)[`out]`client_flow;
+    ((`kafka_message;raw 0 1 2);(`client_flow;old);(`kafka_message;raw 3 4);(`client_flow;new0))}
+
+.qt.qpipe.job.kafka_flow.test_a_replay_after_an_offset_restart_handles_the_restarted_record_that_was_not_handled:{[t]
+    .qt.qpipe.job.kafka_flow.drive_ready[];
+    .qetl.job.stream.start[`kafka_flow;.qt.qpipe.job.kafka_flow.replay_transport[.qt.qpipe.job.kafka_flow.offset_restart_log[]]];
+    r:.qt.qpipe.job.kafka_flow.all_rows[];
+    .qunit.assertEquals[(r`offset;r`trade_id);(enlist 1j;enlist 106j);"only the restarted offset 1 is owed: its coordinates match a record handled before, its broker_time does not"];
+    .qunit.assertEquals[.qt.qpipe.job.kafka_flow.mark[.qt.qpipe.job.kafka_flow.topic;0j];1j;"and the mark is the top of the last run, not the old run's 2"];
+    n:count .qt.qpipe.job.kafka_flow.published;
+    .qt.qpipe.job.kafka_flow.push[(enlist 0j);enlist 2j];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.published;n+1;"the new run's offset 2 is not mistaken for the old run's"]};
+
 .qt.qpipe.job.kafka_flow.test_a_batch_straddling_the_mark_publishes_only_the_new_part:{[t]
     .qt.qpipe.job.kafka_flow.drive_ready[];
     .qt.qpipe.job.kafka_flow.push[0 0 0j;0 1 2j];

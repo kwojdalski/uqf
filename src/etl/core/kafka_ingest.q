@@ -108,8 +108,8 @@
 
 / ------------------------------------------------------ MARKS AND DEDUPE
 
-/ The marks: the highest offset published, per topic and partition.
-.qetl.kafka.marks_empty:([topic:`symbol$(); partition:`long$()] offset:`long$())
+/ The marks: the highest offset published, per topic and partition, and the broker_time of that record (what tells a restarted partition's new records from a redelivery of old ones - see restarted).
+.qetl.kafka.marks_empty:([topic:`symbol$(); partition:`long$()] offset:`long$(); broker_time:`timestamp$())
 
 / The rows above their partition's mark.
 / .
@@ -135,42 +135,61 @@
     if[0=count rows; :rows];
     rows asc value exec first i by topic,partition,offset from rows}
 
-/ The marks raised to the highest offset in rows; never lowered.
+/ The marks raised to the highest offset in rows (with that record's broker_time); never lowered.
 / .
-/ `|` against the previous mark: a batch that arrives out of order must not
-/ pull a mark BACKWARDS, which would re-admit every record between the two.
+/ A batch that arrives out of order must not pull a mark BACKWARDS, which would
+/ re-admit every record between the two.
 / @param marks the marks table
 / @param rows envelope rows
 / @return the new marks
 / @eg exec offset from .qetl.kafka.advance[.qetl.kafka.marks_empty; ([] topic:2#`a; partition:2#0; offset:3 7)]  ->  enlist 7
 .qetl.kafka.advance:{[marks;rows]
     if[0=count rows; :marks];
-    m:select max offset by topic,partition from rows;
-    before:(marks key m)`offset;
-    marks upsert update offset:offset|before from m}
+    bt:$[`broker_time in cols rows; rows`broker_time; (count rows)#0Np];
+    t:([] topic:rows`topic; partition:rows`partition; offset:rows`offset; broker_time:bt);
+    m:0!select offset:max offset, broker_time:first broker_time where offset=max offset by topic,partition from t;
+    before:marks select topic,partition from m;
+    po:before`offset;
+    pb:before`broker_time;
+    keep:po>m`offset;
+    marks upsert `topic`partition xkey update offset:?[keep;po;offset], broker_time:?[keep;pb;broker_time] from m}
 
 / Rows whose (topic;partition;offset) is not in a set of coordinates.
+/ .
+/ A coordinate is the same record only if its broker_time agrees: a restarted
+/ partition (#1519) reuses offsets for different records. A coordinate in the
+/ set with a null broker_time stands for any record at that offset (a set built
+/ from rows that carried no timestamp).
 / .
 / A SET, not a mark, because a restart's recovery cannot assume the processed
 / records were contiguous: a crash between two tables' publishes leaves a gap
 / below the highest offset, and a mark would call the gap done.
 / @param rows envelope rows
-/ @param done a keyed table of topic, partition, offset with a `seen` column
+/ @param done a keyed table of topic, partition, offset, broker_time with a `seen` column
 / @return the rows not in done
 / @eg count .qetl.kafka.not_in[([] topic:enlist `a; partition:enlist 0; offset:enlist 5); .qetl.kafka.coordinate_set 0#.qetl.kafka.envelope_empty]  ->  1
 .qetl.kafka.not_in:{[rows;done]
     if[0=count rows; :rows];
-    k:select topic,partition,offset from rows;
-    rows where null (done k)`seen}
+    bt:$[`broker_time in cols rows; rows`broker_time; (count rows)#0Np];
+    k:([] topic:rows`topic; partition:rows`partition; offset:rows`offset; broker_time:bt);
+    any_time:update broker_time:0Np from k;
+    hit:(not null (done k)`seen) or not null (done any_time)`seen;
+    rows where not hit}
 
 / The coordinates of rows, as a set for not_in.
-/ @param rows any table carrying topic, partition and offset
+/ .
+/ A coordinate includes the record's broker_time (null when the rows have
+/ none): a partition whose offsets restarted (#1519) reuses coordinates, and the
+/ timestamp is what tells the restarted record from the one it shares an offset
+/ with.
+/ @param rows any table carrying topic, partition and offset, and optionally broker_time
 / @return a keyed table of those coordinates with seen=1
 / @eg count .qetl.kafka.coordinate_set ([] topic:2#`a; partition:2#0; offset:2#5)  ->  1
 .qetl.kafka.coordinate_set:{[rows]
-    if[0=count rows; :([topic:`symbol$();partition:`long$();offset:`long$()] seen:`long$())];
-    c:select distinct topic,partition,offset from rows;
-    `topic`partition`offset xkey update seen:1 from c}
+    if[0=count rows; :([topic:`symbol$();partition:`long$();offset:`long$();broker_time:`timestamp$()] seen:`long$())];
+    bt:$[`broker_time in cols rows; rows`broker_time; (count rows)#0Np];
+    t:([] topic:rows`topic; partition:rows`partition; offset:rows`offset; broker_time:bt);
+    select seen:1 by topic,partition,offset,broker_time from t}
 
 / ---------------------------------------------------------- DECODE AND ROUTE
 
@@ -219,36 +238,40 @@
 
 / Append the provenance contract to what a mapping returned: the one place a decoded row gets its topic, partition, offset and broker_time (and row_index).
 / .
-/ The mapping returns the payload's columns only. The four provenance columns are
-/ copied from the record the row came from - broker_time is the Kafka record's
-/ timestamp, null if the record had none, and nothing here ever replaces a null
-/ or fills a payload column. A one-to-one topic must return one row per record;
-/ an expanding one returns message_index first (which record, non-decreasing)
-/ and gets row_index, the row's position within its record, from it.
+/ The mapping returns the payload's columns, led by message_index: which record
+/ of the batch each row came from (#1520). The four provenance columns are
+/ copied from THAT record - never from the row's position, which a mapping that
+/ sorts, groups or drops a duplicate would have moved - and broker_time is the
+/ Kafka record's timestamp, null if the record had none; nothing here ever
+/ replaces a null or fills a payload column. A one-to-one topic must return
+/ exactly one row per record (message_index a permutation of the positions; the
+/ rows may be in any order). An expanding one returns message_index
+/ non-decreasing and gets row_index, the row's position within its record,
+/ from it.
 / @param d the topic's declaration (mapping, output, expand)
 / @param src the records the mapping read: a table with the provenance columns, a row each
-/ @param mapped the mapping's result
+/ @param mapped the mapping's result, message_index first
 / @return the rows of the output table, in its published column order
-/ @throws error when a one-to-one mapping returns another number of rows than records, or an expanding one's message_index is not a non-decreasing run of positions in src, or the result is not the output table's shape
-/ @eg count .qetl.kafka.propagate[`mapping`output`expand!(`kafka_client_flow;`client_flow;0b);([] topic:enlist `t; partition:enlist 0j; offset:enlist 5j; broker_time:enlist 2026.10.20D09:00:00.000000000);([] sym:enlist `EURUSD; side:enlist `buy; qty:enlist 1f; price:enlist 1f; client:enlist `A; trade_id:enlist 1j)]  ->  1
+/ @throws error when the mapping returns no message_index or a non-long one, a one-to-one mapping returns another number of rows than records or a message_index that is not each record once, an expanding one's message_index is not a non-decreasing run of positions in src, or the result is not the output table's shape
+/ @eg count .qetl.kafka.propagate[`mapping`output`expand!(`kafka_client_flow;`client_flow;0b);([] topic:enlist `t; partition:enlist 0j; offset:enlist 5j; broker_time:enlist 2026.10.20D09:00:00.000000000);([] message_index:enlist 0j; sym:enlist `EURUSD; side:enlist `buy; qty:enlist 1f; price:enlist 1f; client:enlist `A; trade_id:enlist 1j)]  ->  1
 .qetl.kafka.propagate:{[d;src;mapped]
     who:"mapping ",string[d`mapping],": ";
     n:count src;
     pub:.qetl.plant.published d`output;
+    mk:.qetl.kafka.message_index;
+    if[(not d`expand) and not n=count mapped;
+        'who,"returned ",string[count mapped]," row(s) for ",string[n]," record(s) - a mapping that expands a record into several rows is declared with expand"];
+    if[not mk in cols mapped; 'who,"returned no ",string[mk]," - a mapping says which record each row came from"];
+    idx:mapped mk;
+    if[not 7h=type idx; 'who,string[mk]," must be a long"];
+    rows:(cols[mapped] except mk)#mapped;
     if[d`expand;
-        mk:.qetl.kafka.message_index;
-        if[not mk in cols mapped; 'who,"returned no ",string[mk]," - an expanding mapping says which record each row came from"];
-        idx:mapped mk;
-        if[not 7h=type idx; 'who,string[mk]," must be a long"];
         / A record that expanded to nothing publishes nothing.
         if[0=count mapped; :0#pub];
         if[not (all idx<n) and all 0<=deltas idx; 'who,string[mk]," must be positions of the records, non-decreasing"];
-        rows:(cols[mapped] except mk)#mapped;
         num:(til count idx)-idx?idx];
     if[not d`expand;
-        if[not n=count mapped; 'who,"returned ",string[count mapped]," row(s) for ",string[n]," record(s) - a mapping that expands a record into several rows is declared with expand"];
-        idx:til n;
-        rows:mapped];
+        if[not (asc idx)~til n; 'who,string[mk]," must name each of the ",string[n]," record(s) exactly once"]];
     res:rows,'.qetl.kafka.coordinates#src idx;
     if[d`expand; res:res,'([] row_index:num)];
     res:cols[pub]#res;
@@ -322,32 +345,61 @@
     ev:.qetl.kafka.events[msgs];
     if[count ev;
         / Once per cause (kafka_diagnostics.q): a client report that repeats every poll was a log line every poll.
-        {.qetl.kafka.diag.report[x`mtype;$[10h=type r:x`data; r; 4h=type r; "c"$r; ""]]} each ev;
+        {.qetl.kafka.diag.report_topic[x`mtype;$[10h=type r:x`data; r; 4h=type r; "c"$r; ""];$[`topic in key x; x`topic; `]]} each ev;
         st:.qetl.kafka.bump[st;`events;count ev]];
     env:.qetl.kafka.from_messages[msgs];
+    if[count env; .qetl.kafka.diag.note_delivered distinct env`topic];
     st[`backlog]:(st`backlog),env;
     .qetl.kafka.bump[st;`polled;count env]}
 
-/ Private: forget the mark of a partition whose offsets have restarted.
+/ The partitions whose offsets have restarted: those whose rows all sit BELOW their mark and are not older than it.
 / .
-/ A held partition whose polled records all sit BELOW its mark has had its log
-/ truncated or its topic recreated (#1504): its new records would be counted as
+/ A held partition whose rows are all below its mark has had its log truncated
+/ or its topic recreated (#1504): its new records would be counted as
 / duplicates, never published, and then committed. A redelivery overlaps the
-/ mark (it reaches it, or goes past it), so it is not taken for a restart. The
-/ trade-off: a redelivery wholly below the mark is also republished, which
-/ kafka_flow dedups downstream and kafka_message is meant to keep.
+/ mark (it reaches it, or goes past it), so it is not taken for a restart.
+/ A redelivery WHOLLY below the mark (a rebalance that re-reads several
+/ batches) does not overlap it, and is told apart by time: the records of a
+/ redelivery were written no later than the record the mark stands for, while a
+/ restarted partition's new records come after it. Only when the timestamps say
+/ "not newer" (both known) is the batch a redelivery; unknown times take the
+/ restart reading, as before. The feed (reset_restarted) and every decoder
+/ (decoder.fresh, #1519) apply this one rule, so a restarted record is neither
+/ lost at the feed nor at a decoder, and a redelivery is not decoded twice.
+/ @param marks the marks table
+/ @param rows envelope rows
+/ @return a table of topic and partition, one row for each restarted partition
+/ @eg .qetl.kafka.restarted[([topic:enlist `a; partition:enlist 0j] offset:enlist 4j; broker_time:enlist 2026.10.20D09:00:04.000000000); ([] topic:2#`a; partition:2#0j; offset:0 1j; broker_time:2026.10.20D10:00:00.000000000+0 1000000000)]`partition  ->  enlist 0j
+.qetl.kafka.restarted:{[marks;rows]
+    if[0=count rows; :select topic,partition from 0#rows];
+    m:0!select top:max offset, newest:max broker_time by topic,partition from rows;
+    held:marks select topic,partition from m;
+    before:held`offset;
+    mbt:$[`broker_time in cols held; held`broker_time; (count m)#0Np];
+    / max of nothing but nulls is -0Wp, not null
+    older:(not null mbt) and (m[`newest]>-0Wp) and m[`newest]<=mbt;
+    select topic,partition from m where (top<before) and not older}
+
+/ A marks-shaped or done-shaped keyed table without the rows of some partitions.
+/ @param keyed a keyed table whose key starts with topic, partition
+/ @param pairs a table of topic and partition
+/ @return the table, rekeyed as it was
+/ @eg count .qetl.kafka.forget[.qetl.kafka.marks_empty;([] topic:enlist `a; partition:enlist 0j)]  ->  0
+.qetl.kafka.forget:{[keyed;pairs]
+    k:keys keyed;
+    t:0!keyed;
+    k xkey t where not .qetl.kafka.pair_key[t`topic;t`partition] in .qetl.kafka.pair_key[pairs`topic;pairs`partition]}
+
+/ Private: forget the mark of a partition whose offsets have restarted (see restarted).
 / @param st the state
 / @param b the backlog (envelope rows)
 / @return the state, with those partitions' marks dropped
 / @private
 .qetl.kafka.reset_restarted:{[st;b]
-    m:0!select top:max offset by topic,partition from b;
-    before:((st`marks) select topic,partition from m)`offset;
-    back:m where (m`top)<before;
+    back:.qetl.kafka.restarted[st`marks;b];
     if[0=count back; :st];
     .qetl.log.warn[`kafka;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
-    mk:0!st`marks;
-    st[`marks]:.qetl.kafka.keep[st`marks;not .qetl.kafka.pair_key[mk`topic;mk`partition] in .qetl.kafka.pair_key[back`topic;back`partition]];
+    st[`marks]:.qetl.kafka.forget[st`marks;back];
     st}
 
 / Private: publish the backlog onto kafka_message; on success raise the marks

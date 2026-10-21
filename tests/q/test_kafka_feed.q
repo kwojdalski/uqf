@@ -297,7 +297,85 @@
         .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `failed;"consume reads failed, not ok"];
         st:.qpipe.job.kafka_feed.state; st[`stats;`polled]:11; `.qpipe.job.kafka_feed.state set st;
         .qpipe.job.kafka_feed.report_readiness[];
-        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `ok;"a record polled after the cause does clear it"]}}
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `failed;"a record polled in a tick the cause was reported in does not clear it (#1521)"];
+        / the cause stops: after the quiet period, a record polled does clear it
+        q:.qetl.kafka.diag.quiet;
+        `.qetl.kafka.diag.quiet set 0D;
+        st:.qpipe.job.kafka_feed.state; st[`stats;`polled]:12; `.qpipe.job.kafka_feed.state set st;
+        .qpipe.job.kafka_feed.report_readiness[];
+        `.qetl.kafka.diag.quiet set q;
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `ok;"a record polled after the cause went quiet does clear it"]}}
+
+/ --- another topic or broker delivering retires nothing of its own (#1521) ----
+
+.qt.qpipe.job.kafka_feed.polled:{[n] st:.qpipe.job.kafka_feed.state; st[`stats;`polled]:n; `.qpipe.job.kafka_feed.state set st;}
+
+.qt.qpipe.job.kafka_feed.with_two_topics:{[f]
+    `.qpipe.job.kafka_feed.api set (.qt.qpipe.job.kafka_feed.fake[]),(enlist `assignment)!enlist {[c] enlist `topic`partition!(`topic_a;0i)};
+    `.qpipe.job.kafka_feed.client set 7i;
+    `.qpipe.job.kafka_feed.state set .qetl.kafka.state_new[];
+    q:.qetl.kafka.diag.quiet; dl:.qetl.kafka.diag.delivered;
+    r:.qt.qpipe.job.kafka_feed.with_log {[f;u]
+        `.qetl.kafka.diag.context set `bootstrap`group`topics!(enlist "b:9092";"g1";`topic_a`topic_b);
+        `.qetl.kafka.diag.delivered set `symbol$();
+        .qpipe.job.kafka_feed.report_readiness[];
+        f[]}[f];
+    `.qetl.kafka.diag.quiet set q; `.qetl.kafka.diag.delivered set dl;
+    r}
+
+/ Topic A delivers every turn, topic B is refused every turn, and the report names B.
+.qt.qpipe.job.kafka_feed.test_a_refused_topic_stays_failed_while_another_topic_delivers:{[t]
+    .qt.qpipe.job.kafka_feed.with_two_topics {
+        k:0;
+        do[5;
+            .qetl.kafka.diag.report[`TOPIC_AUTHORIZATION_FAILED;"Subscribed topic not available: topic_b: Broker: Topic authorization failed"];
+            .qetl.kafka.diag.note_delivered enlist `topic_a;
+            k+:3;
+            .qt.qpipe.job.kafka_feed.polled[k];
+            .qpipe.job.kafka_feed.report_readiness[]];
+        errs:.qt.qpipe.job.kafka_feed.lines where `ERROR=first each .qt.qpipe.job.kafka_feed.lines;
+        .qunit.assertEquals[count errs;1;"five refusals of topic_b: one ERROR"];
+        .qunit.assertTrue[(last first errs) like "*consume stage failed*";"naming the consume stage"];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines where (last each .qt.qpipe.job.kafka_feed.lines) like "*recovered*";0;"and no recovery claimed while it persists"];
+        .qunit.assertEquals[exec subject from .qetl.kafka.diag.causes;enlist `topic_b;"the cause is about topic_b"];
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `failed;"readiness says consume failed, not ok"];
+        / only topic_b delivering is evidence about topic_b
+        .qetl.kafka.diag.note_delivered enlist `topic_b;
+        .qpipe.job.kafka_feed.report_readiness[];
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `ok;"a record from the refused topic retires its cause"];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines where (last each .qt.qpipe.job.kafka_feed.lines) like "*consume stage recovered*";1;"and logs the recovery once"]}}
+
+/ The same, when the report names no topic: the exact repro of #1521.
+.qt.qpipe.job.kafka_feed.test_an_unattributed_refusal_is_not_retired_by_records_polled_in_the_turns_it_recurs:{[t]
+    .qt.qpipe.job.kafka_feed.with_two_topics {
+        k:0;
+        do[5;
+            .qetl.kafka.diag.report[`TOPIC_AUTHORIZATION_FAILED;"Topic authorization failed"];
+            k+:3;
+            .qt.qpipe.job.kafka_feed.polled[k];
+            .qpipe.job.kafka_feed.report_readiness[]];
+        errs:.qt.qpipe.job.kafka_feed.lines where `ERROR=first each .qt.qpipe.job.kafka_feed.lines;
+        .qunit.assertEquals[count errs;1;"five rounds: one ERROR"];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines where (last each .qt.qpipe.job.kafka_feed.lines) like "*recovered*";0;"no recovery"];
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `failed;"consume stays failed"]}}
+
+/ One unreachable broker among several: the others delivering says nothing about it.
+.qt.qpipe.job.kafka_feed.test_an_unreachable_broker_stays_failed_while_another_broker_delivers:{[t]
+    .qt.qpipe.job.kafka_feed.with_two_topics {
+        k:0;
+        do[5;
+            .qetl.kafka.diag.report[-193i;"broker-2.invalid:9093/2: Failed to resolve 'broker-2.invalid:9093': Name or service not known"];
+            k+:3;
+            .qt.qpipe.job.kafka_feed.polled[k];
+            .qpipe.job.kafka_feed.report_readiness[]];
+        errs:.qt.qpipe.job.kafka_feed.lines where `ERROR=first each .qt.qpipe.job.kafka_feed.lines;
+        .qunit.assertEquals[count errs;1;"five reports across five turns of other brokers delivering: one ERROR"];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines where (last each .qt.qpipe.job.kafka_feed.lines) like "*recovered*";0;"and no recovery claimed"];
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`advertised;enlist `failed;"advertised stays failed"];
+        / the broker stops being reported: the stage is proved by the assignment, and the cause retires
+        `.qetl.kafka.diag.quiet set 0D;
+        .qpipe.job.kafka_feed.report_readiness[];
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`advertised;enlist `ok;"a cause that has gone quiet retires"]}}
 
 / --- the exit handler is chained whatever its type (#1505) ------------------
 

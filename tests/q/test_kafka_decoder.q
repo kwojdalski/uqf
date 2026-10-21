@@ -48,6 +48,20 @@
         "two jobs would both decode it"];
     .qunit.assertEquals[.qetl.kafka.topic.owned `job_a;enlist `example.a;"and the owner is unchanged"]};
 
+/ A define with no job used to skip the ownership check (#1522) and upsert over the owner's entry.
+.qt.qetl.kafka.decoder.test_a_define_with_no_job_cannot_take_over_an_owned_topic:{[t]
+    .qt.qetl.kafka.decoder.claim[`example.a;`job_a];
+    before:.qetl.kafka.topic.registry;
+    .qunit.assertThrows[.qetl.kafka.topic.define[`example.a];`mapping`output!(`kafka_crypto_book;`crypto_book_snapshot);"*example.a is owned by job_a, not a define with no job*";
+        "an owner is named, and so is the lack of one"];
+    .qunit.assertEquals[.qetl.kafka.topic.registry;before;"and the registry is untouched"];
+    .qunit.assertEquals[.qetl.kafka.topic.owned `job_a;enlist `example.a;"job_a still owns it"];
+    .qunit.assertThrows[.qetl.kafka.topic.define[`uqf.client.flow];`mapping`output!(`kafka_client_flow;`client_flow);"*owned by kafka_flow, not a define with no job*";
+        "a topic the generated plan claims is protected the same way"];
+    .qetl.kafka.topic.define[`example.free;`mapping`output!(`kafka_client_flow;`client_flow)];
+    .qunit.assertEquals[.qetl.kafka.topic.define[`example.free;`mapping`output!(`kafka_client_flow;`client_flow)];`example.free;"two ownerless defines of one topic are still the test's own business"];
+    .qunit.assertEquals[.qt.qetl.kafka.decoder.claim[`example.free;`job_c];`example.free;"and a job may claim an ownerless topic"]};
+
 .qt.qetl.kafka.decoder.test_the_plan_agrees_with_the_declarations:{[t]
     / .qetl.load.topics is written from the files' text; the registry from running them.
     c:.qetl.load.topics;

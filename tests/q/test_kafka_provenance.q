@@ -18,10 +18,16 @@
 / One-to-one: a payload value and an optional payload time (0 = the payload has none).
 .qt.qetl.kafka.provenance.one_map:{[m]
     ts:1970.01.01D00:00:00.000000000+1000000*m`t_ms;
-    ([] a:m`a; event_time:@[ts;where 0=m`t_ms;:;0Np])}
+    ([] message_index:til count m; a:m`a; event_time:@[ts;where 0=m`t_ms;:;0Np])}
 
 / A one-to-one mapping that drops a negative record instead of refusing it: it returns the wrong number of rows.
-.qt.qetl.kafka.provenance.drop_map:{[m] .qt.qetl.kafka.provenance.one_map select from m where a>=0}
+.qt.qetl.kafka.provenance.drop_map:{[m] k:where m[`a]>=0; update message_index:k from .qt.qetl.kafka.provenance.one_map select from m where a>=0}
+
+/ A one-to-one mapping that returns one row per record, SORTED by the payload: the same count, a different order (#1520).
+.qt.qetl.kafka.provenance.sort_map:{[m] `a xasc .qt.qetl.kafka.provenance.one_map m}
+
+/ A one-to-one mapping that keeps the count but names record 0 twice: one record's coordinates would be copied onto another's row.
+.qt.qetl.kafka.provenance.dup_map:{[m] update message_index:0 from .qt.qetl.kafka.provenance.one_map m}
 
 / One-to-many: `legs` rows for each record, numbered by the mapping only through message_index.
 .qt.qetl.kafka.provenance.many_map:{[m]
@@ -46,11 +52,15 @@
     `.qetl.plant.prov_float set ([] time:`timestamp$(); leg:`symbol$(); px:`float$(); broker_time:`timestamp$(); topic:`symbol$(); partition:`long$(); offset:`long$(); row_index:`float$());
     one_ex:`inputs`expected!(
         enlist[`m]!enlist ([] topic:2#`prov.one; partition:0 0j; offset:1 2j; broker_time:2#.qt.qetl.kafka.provenance.t0; a:1 2f; t_ms:0 1000j);
-        ([] a:1 2f; event_time:(0Np;1970.01.01D00:00:01.000000000)));
+        ([] message_index:0 1j; a:1 2f; event_time:(0Np;1970.01.01D00:00:01.000000000)));
     .qetl.transform.define[`prov_one_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
         .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.one_map;enlist one_ex)];
     .qetl.transform.define[`prov_drop_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
         .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.drop_map;enlist one_ex)];
+    .qetl.transform.define[`prov_sort_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
+        .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.sort_map;enlist one_ex)];
+    .qetl.transform.define[`prov_dup_map;`inputs`output`fn`examples!(enlist[`m]!enlist .qt.qetl.kafka.provenance.one_in;
+        .qetl.kafka.topic.payload_schema[`prov_one;0b];.qt.qetl.kafka.provenance.dup_map;enlist `inputs`expected!(one_ex`inputs;([] message_index:0 0j; a:1 2f; event_time:(0Np;1970.01.01D00:00:01.000000000))))];
     many_ex:`inputs`expected!(
         enlist[`m]!enlist ([] topic:enlist `prov.many; partition:enlist 0j; offset:enlist 1j; broker_time:enlist .qt.qetl.kafka.provenance.t0; legs:enlist 2j; px:enlist 1.5);
         ([] message_index:0 0j; leg:`leg0`leg1; px:1.5 1.5));
@@ -60,6 +70,8 @@
         .qetl.kafka.topic.payload_schema[`prov_many;1b];.qt.qetl.kafka.provenance.bad_map;enlist `inputs`expected!(many_ex`inputs;([] message_index:enlist 7j; leg:enlist `x; px:enlist 1f)))];
     .qetl.kafka.topic.define[`prov.one;`mapping`output!(`prov_one_map;`prov_one)];
     .qetl.kafka.topic.define[`prov.drop;`mapping`output!(`prov_drop_map;`prov_one)];
+    .qetl.kafka.topic.define[`prov.sorted;`mapping`output!(`prov_sort_map;`prov_one)];
+    .qetl.kafka.topic.define[`prov.dup;`mapping`output!(`prov_dup_map;`prov_one)];
     .qetl.kafka.topic.define[`prov.many;`mapping`output`expand!(`prov_many_map;`prov_many;1b)];
     .qetl.kafka.topic.define[`prov.bad;`mapping`output`expand!(`prov_bad_map;`prov_many;1b)];
     }
@@ -87,7 +99,7 @@
 
 / Every declared topic's output, in this tree, meets the one contract - a decoder cannot have drifted.
 .qt.qetl.kafka.provenance.test_every_declared_output_carries_the_contract_in_the_same_types:{[t]
-    reg:0!select from .qetl.kafka.topic.registry where not topic in `prov.one`prov.drop`prov.many`prov.bad;
+    reg:0!select from .qetl.kafka.topic.registry where not topic in `prov.one`prov.drop`prov.sorted`prov.dup`prov.many`prov.bad;
     check:{[r]
         pub:.qetl.plant.published r`output;
         m:exec c!t from meta pub;
@@ -160,6 +172,36 @@
     .qunit.assertEquals[r[`out;`prov_one]`offset;0 2j;"the records the mapping kept"];
     .qunit.assertEquals[(r[`dead]`offset;r[`dead]`reason);(enlist 1j;enlist `mapping);"the dropped one is on record"];
     .qunit.assertTrue[(first r[`dead]`detail) like "*declared with expand*";"saying what to do"]};
+
+/ --- provenance follows message_index, not position (#1520) ---------------------
+
+/ Offset 10 has the larger payload, so a sorting mapping puts it second: its row must still carry offset 10.
+.qt.qetl.kafka.provenance.test_a_reordering_mapping_gets_each_rows_own_records_coordinates:{[t]
+    e:.qt.qetl.kafka.provenance.env[`prov.sorted;10 11j;(.qt.qetl.kafka.provenance.one[2f;0];.qt.qetl.kafka.provenance.one[1f;0])];
+    r:.qetl.kafka.process e;
+    o:r[`out;`prov_one];
+    .qunit.assertEquals[o`a;1 2f;"the mapping sorted its rows"];
+    .qunit.assertEquals[o`offset;11 10j;"a=1 came from offset 11, a=2 from offset 10"];
+    .qunit.assertEquals[o`broker_time;reverse e`broker_time;"and carries that record's broker_time"];
+    .qunit.assertEquals[count r`dead;0;"nothing is refused"]};
+
+.qt.qetl.kafka.provenance.test_a_one_to_one_mapping_must_name_each_record_exactly_once:{[t]
+    e:.qt.qetl.kafka.provenance.env[`prov.dup;10 11j;(.qt.qetl.kafka.provenance.one[2f;0];.qt.qetl.kafka.provenance.one[1f;0])];
+    r:.qetl.kafka.process e;
+    / the batch is refused, so it is mapped record by record, where each is one row for one record
+    .qunit.assertEquals[r[`out;`prov_one]`offset;10 11j;"a row never borrows another record's coordinates: the refused batch is mapped singly"];
+    src:select topic,partition,offset,broker_time from e;
+    .qunit.assertThrows[.qetl.kafka.propagate[`mapping`output`expand!(`prov_one_map;`prov_one;0b);src];([] message_index:0 0j; a:1 2f; event_time:2#0Np);"*message_index must name each of the 2 record(s) exactly once*";"a repeat is refused"];
+    .qunit.assertThrows[.qetl.kafka.propagate[`mapping`output`expand!(`prov_one_map;`prov_one;0b);src];([] message_index:0 2j; a:1 2f; event_time:2#0Np);"*message_index must name each of the 2 record(s) exactly once*";"a position past the batch is refused"];
+    .qunit.assertThrows[.qetl.kafka.propagate[`mapping`output`expand!(`prov_one_map;`prov_one;0b);src];([] a:1 2f; event_time:2#0Np);"*returned no message_index*";"a mapping that does not say is refused"]};
+
+.qt.qetl.kafka.provenance.test_every_mapping_leads_with_message_index:{[t]
+    reg:0!.qetl.kafka.topic.registry;
+    got:{first cols (.qetl.transform.def x)`output} each reg`mapping;
+    .qunit.assertTrue[0<count reg;"there are mappings"];
+    .qunit.assertTrue[all got=\:`message_index;"one-to-one and expanding alike"];
+    pub:.qetl.plant.published `client_flow;
+    .qunit.assertEquals[cols pub;`broker_time`sym`side`qty`price`client`trade_id`topic`partition`offset;"and the published table does not carry it"]};
 
 / --- one-to-many ---------------------------------------------------------------
 

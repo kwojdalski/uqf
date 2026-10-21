@@ -120,9 +120,45 @@
     sum count each r`out}
 
 / Private: a batch of envelope rows, minus what has been handled before.
+/ .
+/ A partition whose rows all sit below the job's mark has had its offsets
+/ restart (#1519): the feed has already reset ITS mark and republished the new
+/ records (.qetl.kafka.restarted, one rule for both), so this job forgets the
+/ partition's mark and handled coordinates too and decodes them. Left alone, the
+/ mark would drop every one of them with no output, no dead letter and no log.
+/ A redelivery wholly below the mark stays a redelivery when its records are not
+/ newer than the mark's (restarted's rule).
 / @private
 .qetl.kafka.decoder.fresh:{[job;rows]
-    .qetl.kafka.first_per_coordinate .qetl.kafka.above_marks[.qetl.kafka.decoder.var[job;`marks];.qetl.kafka.envelope_columns#rows]}
+    rows:.qetl.kafka.envelope_columns#rows;
+    back:.qetl.kafka.restarted[.qetl.kafka.decoder.var[job;`marks];rows];
+    if[count back;
+        .qetl.log.warn[job;"partition offsets went backwards - its mark is reset and the new records are decoded";enlist[`partitions]!enlist count back];
+        .qetl.kafka.decoder.put[job;`marks;.qetl.kafka.forget[.qetl.kafka.decoder.var[job;`marks];back]];
+        .qetl.kafka.decoder.put[job;`done;.qetl.kafka.forget[.qetl.kafka.decoder.var[job;`done];back]]];
+    .qetl.kafka.first_per_coordinate .qetl.kafka.above_marks[.qetl.kafka.decoder.var[job;`marks];rows]}
+
+/ Private: the marks, with each partition whose rows restart in the held log set to the highest offset of its last run.
+/ .
+/ Rows are in arrival order. A run ends where an offset falls below the highest
+/ before it; the mark of a partition with more than one run is the top of the
+/ last, which can be lower than the old run's top - the one case a mark moves
+/ down.
+/ @param marks the marks table
+/ @param held the raw rows in arrival order
+/ @return the marks
+/ @private
+.qetl.kafka.decoder.restart_marks:{[marks;held]
+    if[0=count held; :marks];
+    t:update back:offset<prev maxs offset by topic,partition from held;
+    t:update run:sums back by topic,partition from t;
+    t:update in_last:run=max run by topic,partition from t;
+    multi:0!select runs:max run by topic,partition from t;
+    multi:select topic,partition from multi where runs>0;
+    if[0=count multi; :marks];
+    r:0!select offset:max offset, broker_time:first broker_time where offset=max offset by topic,partition from t where in_last;
+    r:r where .qetl.kafka.pair_key[r`topic;r`partition] in .qetl.kafka.pair_key[multi`topic;multi`partition];
+    marks upsert `topic`partition xkey r}
 
 / Handle a batch on one of the job's tables.
 / .
@@ -168,6 +204,8 @@
     held:.qetl.kafka.decoder.var[job;`held];
     todo:.qetl.kafka.first_per_coordinate .qetl.kafka.not_in[held;.qetl.kafka.decoder.var[job;`done]];
     n:.qetl.kafka.decoder.handle[job;todo];
+    / A partition whose log shows its offsets restart is marked by its LAST run of offsets, not by the old run's higher ones (#1519).
+    .qetl.kafka.decoder.put[job;`marks;.qetl.kafka.decoder.restart_marks[.qetl.kafka.decoder.var[job;`marks];held]];
     .qetl.kafka.decoder.put[job;`held;0#held];
     .qetl.kafka.decoder.put[job;`done;.qetl.kafka.coordinate_set 0#.qetl.kafka.envelope_empty];
     if[count todo; .[{.qetl.log.info[x;y;z]};(job;"handled records that arrived while this job was down";enlist[`records]!enlist count todo);::]];

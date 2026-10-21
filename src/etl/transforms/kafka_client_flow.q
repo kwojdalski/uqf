@@ -28,13 +28,13 @@
 
 / The mapping: refuse a non-positive quantity or price, else reorder into client_flow's columns.
 / @param m the decoded records
-/ @return client_flow's payload columns (the provenance is appended by the framework)
+/ @return message_index (which record each row came from), then client_flow's payload columns (the provenance is appended by the framework)
 / @throws error naming the offending offsets when any quantity or price is not positive
 / @eg cols .qpipe.transform.kafka_client_flow.map .qpipe.transform.kafka_client_flow.message
 .qpipe.transform.kafka_client_flow.map:{[m]
     bad:(m[`qty]<=0f) or m[`price]<=0f;
     if[any bad; '"quantity and price must be positive: offsets ",", " sv string m[`offset] where bad];
-    select sym, side, qty, price, client, trade_id from m}
+    select message_index:`long$i, sym, side, qty, price, client, trade_id from m}
 
 .qetl.transform.define[`kafka_client_flow;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.kafka_client_flow.message;
@@ -43,7 +43,7 @@
     enlist `inputs`expected!(
         enlist[`message]!enlist ([] topic:2#`uqf.client.flow; partition:0 1j; offset:7 7j; broker_time:2#2026.10.20D09:00:00.000000000;
             sym:`EURUSD`GBPUSD; side:`buy`sell; qty:1000000 2000000f; price:1.1 1.27; client:`ACME`BETA; trade_id:100 101j);
-        ([] sym:`EURUSD`GBPUSD; side:`buy`sell; qty:1000000 2000000f; price:1.1 1.27;
+        ([] message_index:0 1j; sym:`EURUSD`GBPUSD; side:`buy`sell; qty:1000000 2000000f; price:1.1 1.27;
             client:`ACME`BETA; trade_id:100 101j)))];
 
 \d .

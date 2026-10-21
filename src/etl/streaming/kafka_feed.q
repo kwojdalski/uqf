@@ -229,14 +229,23 @@
 / to some, or the polled count rising since the last tick. librdkafka keeps its
 / assignment through a broker outage and `polled` is cumulative, so testing
 / their level cleared the cause every tick and the next callback logged it again.
+/ .
+/ Nor is a cause retired by evidence about something else (#1521): a record from
+/ topic A does not retire topic B's refusal, nor one unreachable broker's cause
+/ while another broker delivers. A cause goes when its own topic delivers, or
+/ when it has gone quiet (core/kafka_diagnostics.q, "A cause is retired only by
+/ evidence about its own subject"). A cause still being reported keeps its stage
+/ failed and logs nothing more.
 .qpipe.job.kafka_feed.report_readiness:{[]
     f:.qpipe.job.kafka_feed.facts[];
     seen:.qpipe.job.kafka_feed.last_seen;
-    joined:(0=seen`assigned) and 0<f`assigned;
     rose:(f`polled)>seen`polled;
     `.qpipe.job.kafka_feed.last_seen set `assigned`polled!(f`assigned;f`polled);
-    if[joined or rose; .qetl.kafka.diag.clear `bootstrap`advertised`group];
-    if[rose; .qetl.kafka.diag.clear enlist `consume];
+    / Evidence about a cause's OWN subject (#1521): the refused topic delivering. Any other partition delivering says nothing about it.
+    .qetl.kafka.diag.clear_delivered .qetl.kafka.diag.take_delivered[];
+    / Proof the stage works elsewhere retires only a cause that has gone quiet: a failing broker is reported every second or so whatever other brokers deliver.
+    if[rose or 0<f`assigned; .qetl.kafka.diag.clear_quiet `bootstrap`advertised`group];
+    if[rose; .qetl.kafka.diag.clear_quiet enlist `consume];
     r:.qetl.kafka.diag.readiness f;
     line:" " sv {string[x`stage],"=",string x`status} each r;
     if[not line~.qpipe.job.kafka_feed.last_readiness;
@@ -289,7 +298,7 @@
 / @param cfg the librdkafka configuration
 / @param topics the topics
 .qpipe.job.kafka_feed.open:{[cfg;topics]
-    `.qetl.kafka.diag.context set `bootstrap`group!(trim each "," vs string cfg`metadata.broker.list;string cfg`group.id);
+    `.qetl.kafka.diag.context set `bootstrap`group`topics!(trim each "," vs string cfg`metadata.broker.list;string cfg`group.id;(),topics);
     c:.qpipe.job.kafka_feed.api[`consumer] cfg;
     `.qpipe.job.kafka_feed.client set c;
     .qpipe.job.kafka_feed.api[`on_error][c;.qpipe.job.kafka_feed.on_error];

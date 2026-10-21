@@ -52,7 +52,7 @@
 
 / The mapping: refuse what is not a version-1 book snapshot, else lay the levels out wide.
 / @param m the decoded records
-/ @return crypto_book_snapshot's payload columns (the provenance is appended by the framework)
+/ @return message_index (which record each row came from), then crypto_book_snapshot's payload columns (the provenance is appended by the framework)
 / @throws error naming the offending offsets when a record is of another version or kind, has a level that is not a pair, or a timestamp outside the plausible epoch-millisecond window
 / @eg cols .qpipe.transform.kafka_crypto_book.map .qpipe.transform.kafka_crypto_book.message
 .qpipe.transform.kafka_crypto_book.map:{[m]
@@ -72,7 +72,7 @@
         .qpipe.transform.kafka_crypto_book.ts[m`sampled_at_ms]);
     names:{`$x,/:string y};
     levels:(names["bid_px";n],names["bid_sz";n],names["ask_px";n],names["ask_sz";n])!(px[`bids]'[n]),(sz[`bids]'[n]),(px[`asks]'[n]),sz[`asks]'[n];
-    flip head,levels}
+    flip (enlist[`message_index]!enlist `long$til count m),head,levels}
 
 .qetl.transform.define[`kafka_crypto_book;`inputs`output`fn`examples!(
     enlist[`message]!enlist .qpipe.transform.kafka_crypto_book.message;
@@ -92,7 +92,7 @@
                 (65001 0.4;65001.5 0.6;65002 1f;65002.5 1.2;65003 2.2);
                 (65002 0.7;65002.5 0.8);
                 ()));
-        ([] sym:`$("BTC-USDT";"BTC-USDT";"ETH-USD"); venue:`binance`binance`kraken;
+        ([] message_index:0 1 2j; sym:`$("BTC-USDT";"BTC-USDT";"ETH-USD"); venue:`binance`binance`kraken;
             source_time:3#2025.10.20D09:00:00.050000000; local_time:3#2025.10.20D09:00:00.060000000; sampled_time:3#2025.10.20D09:00:00.100000000;
             bid_px0:65000.5 65001.5 3200.5;
             bid_px1:64999.5 0n 3200.0;
