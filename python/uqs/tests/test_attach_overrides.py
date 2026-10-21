@@ -61,7 +61,7 @@ def test_every_code_the_preflight_raises_has_a_policy():
     """A code added to the preflight without a decision about overriding it would
     be silently non-overridable, or worse, unreviewed: this keeps the table whole."""
     found: set[str] = set()
-    for name in ("preflight.py", "preflight_components.py", "topology.py"):
+    for name in ("preflight.py", "preflight_components.py", "topology.py", "sorting.py"):
         tree = ast.parse((ROOT / "python/uqs/src/uqs/attach" / name).read_text())
         found |= {
             n.value

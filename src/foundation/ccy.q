@@ -76,10 +76,18 @@
 / Pip size by QUOTE currency, where it is not the 0.0001 most pairs use.
 / One entry per exception, so a new one is a line here, not a literal at
 / every producer: a JPY slip moves a markout 100x and passes every check
-/ (#623).
-.qf.px.pip_size_by_quote:(enlist `JPY)!enlist 0.01
+/ (#623; #1525 for the EM quotes). Market conventions: 0.01 for JPY, HUF, KRW,
+/ CLP, INR, PHP; 0.001 for CZK, TWD; 1 for IDR, COP.
+.qf.px.pip_size_by_quote:`JPY`HUF`CZK`KRW`IDR`CLP`COP`INR`PHP`TWD!0.01 0.01 0.001 0.01 1 0.01 1 0.01 0.01 0.001
 
-/ The pip size of a pair: 0.01 for a JPY quote, 0.0001 otherwise.
+/ Quote currencies whose pip is the 0.0001 default, decided explicitly. Together
+/ with the keys of pip_size_by_quote it must cover every currency in
+/ .qf.mkt.attribution_convention (a test enforces it), so a newly supported
+/ currency needs a pip-size decision rather than silently getting 0.0001.
+.qf.px.pip_size_default_quotes:`EUR`GBP`AUD`NZD`USD`CAD`CHF`NOK`SEK`PLN`RON`TRY`ZAR`MXN`BRL`CNH`SGD`HKD`THB`ILS
+
+/ The pip size of a pair: by quote currency (pip_size_by_quote, e.g. 0.01 for
+/ JPY, 0.001 for CZK, 1 for IDR), 0.0001 otherwise.
 / @param pair a pair, or a list of pairs, in any format normalize_ccy_pair accepts
 / @return the pip size, as a float - one per pair for a list
 / @eg .qf.px.pip_size `EURUSD`USDJPY  -> 0.0001 0.01
@@ -91,11 +99,11 @@
     sz:0.0001^.qf.px.pip_size_by_quote quotes;
     $[one; first sz; sz]}
 
-/ How many pips one unit of price is: 10000 for EURUSD, 100 for USDJPY.
+/ How many pips one unit of price is: 10000 for EURUSD, 100 for USDJPY, 1 for USDIDR.
 / What .qf.exec.markout and every `pip_factor` column multiply by.
 / @param pair a pair, or a list of pairs
 / @return the factor, as a long - one per pair for a list
-/ @eg .qf.px.pip_factor `EURUSD`USDJPY`EURJPY  -> 10000 100 100
+/ @eg .qf.px.pip_factor `EURUSD`USDJPY`EURJPY`USDHUF`EURCZK`USDIDR  -> 10000 100 100 100 1000 1
 .qf.px.pip_factor:{[pair] "j"$1%.qf.px.pip_size[pair]}
 
 \d .

@@ -550,6 +550,8 @@ qetl.plant,quote,table,,
 qetl.plant,reference_data,table,,
 qetl.plant,schema,function,1,t
 qetl.plant,shape,function,1,t
+qetl.plant,sort_rules,dict,,
+qetl.plant,sorting,function,2,table_name rule
 qetl.plant,superbook,table,,
 qetl.plant,trade,table,,
 qetl.plant,trades,table,,
@@ -1030,6 +1032,7 @@ qf.px,normalize_ccy_pair,function,1,x
 qf.px,pip_factor,function,1,pair
 qf.px,pip_size,function,1,pair
 qf.px,pip_size_by_quote,dict,,
+qf.px,pip_size_default_quotes,value,,
 qf.px,points_to_outright,function,3,spot points pip_factor
 qf.px,rolls,value,,
 qf.px,simple_to_cont,function,2,r t

@@ -137,7 +137,9 @@ def names(root: Path | None = None) -> list[str]:
 def to_json(att: Attachment) -> dict:
     data = asdict(att)
     data["schema"] = SCHEMA_VERSION
-    data["tables"] = [{"name": t.name, "columns": t.as_pairs()} for t in att.tables]
+    data["tables"] = [
+        {"name": t.name, "columns": t.as_pairs(), "sort": t.sort_pairs()} for t in att.tables
+    ]
     data["stack"]["consumers"] = list(att.stack.consumers)
     data["overrides"] = [o.as_dict() for o in att.overrides]
     return data
@@ -158,7 +160,12 @@ def from_json(data: dict) -> Attachment:
         stack=Stack(**stack),
         publisher=Publisher(**data["publisher"]),
         tables=tuple(
-            TableSpec(t["name"], tuple((n, c) for n, c in t["columns"])) for t in data["tables"]
+            TableSpec(
+                t["name"],
+                tuple((n, c) for n, c in t["columns"]),
+                tuple((n, a) for n, a in t.get("sort", [])),
+            )
+            for t in data["tables"]
         ),
         storage=Storage(**data.get("storage", {})),
         persist=data["persist"],

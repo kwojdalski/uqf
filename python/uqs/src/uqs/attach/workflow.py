@@ -237,8 +237,9 @@ def execute(
         t = time.monotonic()
         try:
             out.applied = applying.apply(
-                att, ipc, root, state_dir=state_dir, confirmed_risks=confirmed_risks
-            )
+                att, ipc, root, state_dir=state_dir, confirmed_risks=confirmed_risks,
+                expected_sort={c.path: c.sha for c in p.sort_changes},
+            )  # fmt: skip
         except applying.ApplyFailed as exc:
             out.applied = exc.result
             stage("apply", "failed", str(exc), t)

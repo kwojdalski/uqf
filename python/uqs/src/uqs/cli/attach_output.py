@@ -114,6 +114,21 @@ def render_plan(out: Output, d: dict) -> None:
         out.text(
             f"table {t['name']}: " + ", ".join(f"{n}:{c.strip() or '*'}" for n, c in t["columns"])
         )
+        if t.get("sort"):
+            out.text(
+                "  declared sort: " + ", ".join(f"{n}{f' {a}#' if a else ''}" for n, a in t["sort"])
+            )
+    if d.get("sorting"):
+        rules = Table(title="Sort rules (sort.csv): existing vs declared")
+        for column in ("file", "table", "status", "existing", "declared", "read by", "reload"):
+            rules.add_column(column, overflow="fold")
+        rows = lambda keys: "; ".join(f"{a},{c},{int(s)}" for a, c, s in keys) or "-"  # noqa: E731
+        for c in d["sorting"]:
+            rules.add_row(
+                c["file"], c["table"], c["status"], rows(c["existing"]), rows(c["declared"]),
+                ", ".join(c["processes"]), ", ".join(c["reload"]) or "-",
+            )  # fmt: skip
+        out.table(rules)
     comps = Table(title="Affected components")
     for column in ("role", "procname", "endpoint", "up", "effect"):
         comps.add_column(column, overflow="fold")

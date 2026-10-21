@@ -121,6 +121,17 @@ POLICY: dict[str, Policy] = {
     "AMBIGUOUS_TICKERPLANT": Policy(False, "name the tickerplant with --tickerplant"),
     "NO_CONSUMER": Policy(False, "nothing would receive and persist the table"),
     "UNKNOWN_CONSUMER": Policy(False, "the named consumer does not exist"),
+    "SORT_DECLARATION": Policy(False, "the declared sort rule is one TorQ cannot apply"),
+    "SORT_CONFLICT": Policy(
+        False, "an attachment never replaces an operator's sort policy for a table"
+    ),
+    "SORT_FILE": Policy(False, "the declared rows cannot be written to the sort.csv from here"),
+    "SORT_DRIFT": Policy(
+        False, "a reload would also apply an edit to sort.csv that is not this attachment's"
+    ),
+    "SORT_RELOAD_UNAVAILABLE": Policy(
+        False, "rows in a file that no process has loaded are not configuration"
+    ),
 }
 
 #: Codes that are not refusals at all - warnings and what the plan will do.
@@ -128,7 +139,8 @@ NOT_BLOCKERS = frozenset(
     {
         "WILL_CREATE", "WILL_ADOPT", "ALREADY_APPLIED", "SHARED_TABLE", "WILL_PERSIST",
         "ALREADY_PERSISTED", "RUNTIME_ONLY", "PUBLISHER_PORT_UNKNOWN", "UNMANAGED_CONSUMER",
-        "CHAINED_UNMANAGED", "HDB_HISTORY",
+        "CHAINED_UNMANAGED", "HDB_HISTORY", "SORT_RULES_ADD", "SORT_RULES_PRESENT",
+        "SORT_FILE_UNCHECKED", "SORT_READER_STOPPED",
     }
 )  # fmt: skip
 

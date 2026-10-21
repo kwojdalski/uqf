@@ -139,6 +139,57 @@ subscription and nothing else. This is recorded only when the tickerplant's
 table is the attachment's own; through a table it does not own, the subscription
 is left in place, as before.
 
+### Sort rules
+
+A stack's `sort.csv` `default` rows may name a column the attached table lacks
+(`securityId`, say), and end of day then cannot sort it: preflight refuses with
+`SORT_CONFIG`. A table that needs its own layout declares it beside its
+definition, in the bundle's `tables.q` or `src/etl/plant_tables.q`:
+
+```q
+piggybank_general_ledger:([] time:`timestamp$(); sym:`symbol$(); amount:`float$())
+sorting[`piggybank_general_ledger;`sym`time!`p`]
+```
+
+The keys are the sort columns in order, the values each one's attribute (`` ` ``
+for none) - the `column`, `att` and `sort=1` of a `sort.csv` row.
+`.qetl.plant.sorting` and the bundle reader refuse a column the table lacks or
+holds lists in, an attribute other than `p s g u`, and `p` or `s` off the first
+column. Nothing is inferred from column names: without a declaration the stack's
+own rows decide, and `SORT_CONFIG` stays a blocker when they cannot sort the
+table.
+
+With a declaration, the plan reads every process that sorts the table - each
+managed wdb and the sort and sortworker processes it names - the file each
+loads, and that file's and the live `.sort.params` rows for the table. It shows
+them as `present` (reused, never removed), `add`, or a conflict, which is a
+blocker (`SORT_CONFLICT`): attaching never replaces an operator's sort policy.
+Apply then, before registering the table:
+
+1. appends exactly the declared rows to the file, in its column order and line
+   endings, after copying it into the attachment's `backups/`. The write is an
+   atomic replace that keeps the file's mode, refused if the file changed since
+   the plan you confirmed;
+2. reloads each process with TorQ's own loader (`.sort.getsortcsv` on the file
+   that process is configured with) and checks that the declared rows are live.
+
+A failed write, reload or check fails apply, and the publisher is not started.
+Re-running is safe: rows already in the file are not written twice, and only the
+reload is repeated. Where no safe reload exists - a process that is running but
+does not answer, or whose live rules differ from its file for other tables
+(`SORT_DRIFT`: a reload would also apply that edit) - the plan refuses and names
+the manual step. A sort or sortworker process that is not running is a warning:
+it reads the file when it starts.
+
+TorQ's loader takes no comment lines, so the file holds no marker. Ownership is
+in the manifest, one `sort_rows` operation per file and table: the exact text
+added, the rows, and the file's hash before and after. Verify checks the rows in
+each file and live on each process. Detach before publication removes only rows
+this attachment added, only while they are exactly as written, and refuses when
+an operator changed them, added rows for the table, or another attachment's
+manifest relies on them; it reloads and checks the live rules before reporting
+the rows reverted. After publication the rows are kept.
+
 ### Verify and start
 
 Verify checks, without publishing a row, that the tickerplant holds the table as
@@ -222,21 +273,22 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
 - **Persisted** in `attachment.json` and the manifest; `--clear-overrides`
   withdraws all of them, and is saved even when that leaves a blocker.
 
-  | Code                                                                                                                 | Overridable | Refused because / risk accepted                                                                                                                      |
-  | -----------------------------------------------------------------------------                                        | ----------- | -----------------------------------------------------------------------------------------------------------------                                    |
-  | `TORQ_VERSION`                                                                                                       | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                      |
-  | `SORT_CONFIG`                                                                                                        | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Add a row first                                                                   |
-  | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                                             |
-  | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                             |
-  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                              |
-  | `UNTYPED_COLUMN`                                                                                                     | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                         |
-  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                   |
-  | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                       |
-  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                 |
-  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                            |
-  | `PERSIST_UNAVAILABLE`                                                                                                | no          | the registration could not survive a tickerplant restart (no writable local `-schemafile`); use `--runtime-only`                                     |
-  | `STORAGE_MISMATCH`                                                                                                   | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                      |
-  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER` | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                    |
+  | Code                                                                                                                 | Overridable | Refused because / risk accepted                                                                                                                       |
+  | -----------------------------------------------------------------------------                                        | ----------- | -----------------------------------------------------------------------------------------------------------------                                     |
+  | `TORQ_VERSION`                                                                                                       | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                       |
+  | `SORT_CONFIG`                                                                                                        | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Declare a [sort rule](#sort-rules), or add a row first                             |
+  | `SORT_DECLARATION`, `SORT_CONFLICT`, `SORT_FILE`, `SORT_DRIFT`, `SORT_RELOAD_UNAVAILABLE`                            | no          | the declared sort rule is invalid, conflicts with the stack's rows, cannot be written or cannot be reloaded safely; see [Sort rules](#sort-rules)     |
+  | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                                              |
+  | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                              |
+  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                               |
+  | `UNTYPED_COLUMN`                                                                                                     | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                          |
+  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                    |
+  | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                        |
+  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                  |
+  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                             |
+  | `PERSIST_UNAVAILABLE`                                                                                                | no          | the registration could not survive a tickerplant restart (no writable local `-schemafile`); use `--runtime-only`                                      |
+  | `STORAGE_MISMATCH`                                                                                                   | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                       |
+  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER` | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                     |
 
 Detach's refusals are destructive-cleanup protections and cannot be overridden.
 
