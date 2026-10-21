@@ -86,6 +86,12 @@ website:
           - guides/new-pipeline.md
           - guides/config-audit.md
           - guides/metatables.md
+          - guides/deploy.md
+          - guides/sidecar-bundles.md
+          - guides/attach-existing-torq.md
+          - guides/odbc.md
+          - guides/kafka-crypto-example.md
+          - guides/cryptorust-kafka-books.md
           - guides/real-time-subscribers.md
       - section: "Scaffolding"
         contents:

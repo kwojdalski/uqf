@@ -48,6 +48,9 @@ this demo's own `feed:pass` credential (see `appconfig/passwords/ feed.txt`) to
 authenticate against `stp1`'s access-list, same as any other feed process here -
 no separate cryptorust-side credential to set up.
 
+The same books can also come over Kafka: [streaming cryptorust's order
+books](../guides/cryptorust-kafka-books.md).
+
 ## Fills recorder
 
 `uqs connector start|stop|status crypto-fills` is a separate proof of concept,
