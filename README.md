@@ -7,181 +7,58 @@ venue feeds into the shapes analytics expects, and the **operational tooling** -
 process orchestration, an HTTP gateway and a browser application --- that runs
 the whole thing as a fleet.
 
-**The names.** `uqf` is the repository and the family, the prefix on every
-Python package in it (`uqf_frontend`, `uqf_airflow_provider`). `uqs`, the
-*ultimate q stack*, is the process orchestrator and its `uqs` command: one
-component, not the whole. The naming is deliberate. `uqf` is an opinionated
-project with a wider remit than similar frameworks, gluing together good
-existing tools, filling in what they lack, and building its own layer on top. So
-a package named plainly `uqf` would claim to be the project while being one part
-of it.
-
-The q side uses neither: every namespace there is `.q<area>`, from `.qf.mkt` to
-`.qf.port`. Two of them have grown into trees on the same rule: `.qetl` for the
-ETL framework, and `.qpipe` for the pipelines built on it.
-
-These are separate components with separate contracts, not one library with
-extras bolted on. See [Components](#components) for what each is and where it
-lives.
-
-## Contents
-
-- [Requirements](#requirements) --- KDB-X preferred, what else might work, and
-  why nothing falls back automatically
-- [Quick start](#quick-start) --- price something, run the fleet, run a
-  backfill, add a pipeline, run the tests
-- [Components](#components) --- what this tree contains, and which part owns
-  what
-- [Further reading](#further-reading) --- the `docs/` map and component READMEs
-- [Browser application](#browser-application) --- the React desk and operations
-  app
-- [Testing](#testing) --- how to run the suites, and what q coverage measures
-- [Documentation](#documentation) --- generating browsable API docs from qDoc
-- [Licensing](#licensing) --- MIT, plus seven vendored dependencies with their
-  own terms
+**The names.** `uqf` is the repository and the package family (`uqf_frontend`,
+`uqf_airflow_provider`); `uqs`, the *ultimate q stack*, is the stack CLI. On the
+q side every namespace is `.q<area>`, with `.qetl` (the ETL framework) and
+`.qpipe` (the pipelines built on it) grown into trees.
 
 ## Requirements
 
 **KDB-X is preferred** --- KX's own interpreter, and the one everything here is
 verified against. Its Community Edition is free for personal and commercial use;
 it requires registering for a license, and the [install
-guide](https://code.kx.com/get-started/install.html) walks through it.
+guide](https://code.kx.com/get-started/install.html) walks through it. Other q
+implementations may run the pure-q modules in `src/`, but none is verified.
 
-```
-q tests/run_tests.q
-```
-
-**Other free q implementations may work for part of the tree.** Nothing in
-`src/` reaches for a KDB-X-only feature, and the quant library loads cleanly on
-a third-party q; KX's own kdb+ personal edition, being the predecessor KDB-X is
-compatible with, should be the closest fit of all. None of them is verified
-here, though, and a third-party q tried against this tree got partway through
-`tests/run_tests.q` before failing --- so treat another interpreter as worth
-trying for the pure-q modules in `src/`, not as a substitute for a green suite.
-The fleet is a separate question again: the stack under `scripts/` runs on
-vendored TorQ, which has its own compatibility surface.
-
-Every entry point, the running stack included, finds q by TorQ's own rule:
-`$QCMD` if set, otherwise `q` on `PATH` --- the default `torq.sh` itself
-applies. There is no second fallback on top of it (no `~/.kx/bin/q`, and no
-PeachQ unless chosen - see below): one rule, so the stack, its HDB and the test
-lanes cannot run different binaries. To choose an interpreter, set `$QCMD` and
-`$QHOME`:
+Every entry point, the running stack included, finds q the way TorQ does:
+`$QCMD` if set, otherwise `q` on `PATH`. There is no second fallback (no
+`~/.kx/bin/q`). To choose an interpreter, set `$QCMD` and `$QHOME`:
 
 ```
 QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
 ```
 
 **PeachQ is opt-in.** [PeachQ](https://peachq.org) is an MIT-licensed q
-interpreter this tree once ran on. It is supported again only as a choice made
-out loud: set `UQF_Q_IMPL=peachq` and point `QCMD` at its binary.
+interpreter, used only when chosen out loud --- `UQF_Q_IMPL=peachq` plus `QCMD`
+([details](docs/reference/environment.md#peachq)):
 
 ```
 UQF_Q_IMPL=peachq QCMD=/path/to/peachq/q scripts/test.py q-unit
 ```
 
-`peachq` without `QCMD` is refused, since a bare `q` on `PATH` is never taken to
-be PeachQ. `scripts/test.py` also asks the binary which implementation it is
-before any lane runs, and refuses a mismatch either way: a PeachQ binary without
-the opt-in, or a KDB-X one declared as PeachQ. A green run therefore always says
-which interpreter made it green. KDB-X stays the reference.
-
-**For now, committing needs both.** PeachQ already runs part of this tree: the q
-code blocks in `docs/`, in the commit hook and in CI, where KDB-X cannot be
-licensed. So the `q-docs-peachq` hook runs those blocks a second time on PeachQ.
-This does not replace the KDB-X run. It is there as well, until the two
-interpreters are compatible enough for one to stand for both. A block that
-cannot run on PeachQ yet is marked `kdbx-only` with the reason (the markers are
-defined in [`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
-
-**The whole suite runs on PeachQ in CI.** PeachQ rejects nested contexts
-(`\d .a.b`), so this tree opens none in `src/`, `scripts/`, `sidecars/` or
-`tests/` (`scripts/gates/check_nested_contexts.py`): every name is defined fully
-qualified from the root and every file loads on PeachQ as it is. The lane still
-writes a copy of the tree through the converter, which now has nothing to change
-([`scripts/portable/flatten_contexts.py`](scripts/portable/flatten_contexts.py)),
-then runs every suite on it. The tests that cannot pass there are listed, each
-with why, in [`tests/q/peachq_known_gaps.txt`](tests/q/peachq_known_gaps.txt). A
-failure not on that list fails CI, and so does a listed test that passes, so the
-list only shrinks. Each reason names its kind - what PeachQ lacks, or the issue
-for a bug here - and never just repeats the test's message. The list is a fact
-about CI's Linux build: run elsewhere, the lane reports differences as not
-comparable and gives no verdict.
-
-**So do the Python tests that need a q.** Without KDB-X they skip. CI runs the
-Python suites again with PeachQ as the q (`UQF_Q_IMPL=peachq`, `QCMD=<PeachQ>`).
-The tests that cannot pass there are listed in
-[`python/peachq_known_gaps.txt`](python/peachq_known_gaps.txt) and held to it
-the same way: [`python/conftest.py`](python/conftest.py) marks each one a strict
-xfail.
-
-You do not install PeachQ for this. The lane takes the commit pinned in
-[`scripts/peachq.json`](scripts/peachq.json) - the pin CI builds too - and on
-first use fetches it, checks the checkout is that commit, builds it and caches
-the binary. That needs `git`, `make`, a C compiler and the network once, and
-takes about a minute; every later run reuses the cache offline:
-
-- **Cache:** `${XDG_CACHE_HOME:-~/.cache}/uqf/peachq/`, one entry per commit,
-  platform and build options, so moving the pin builds a new one. Delete the
-  directory to force a rebuild.
-- **Platforms:** Linux x86-64 (built with CI's portable `x86-64-v2` floor) and
-  macOS arm64 (`-march=native`, since the cache never leaves the machine).
-  Anywhere else the lane fails, naming the platform.
-- **Override:** `UQF_PEACHQ=/path/to/peachq/q` uses that binary instead, and
-  nothing is built. It must be PeachQ: an override that is missing or turns out
-  to be KDB-X fails, with no fallback to the pinned build.
-- **Directly:** `python3 scripts/peachq.py` prints the binary's path, building
-  it if needed.
-
-PeachQ is never put on `PATH` and never becomes `QCMD`: only the lanes that run
-on it are given its path, and KDB-X stays the interpreter everything else uses.
-Two runs starting together build once; a failed or interrupted build leaves
-nothing behind that a later run would trust, and the next run retries.
-
-What PeachQ buys is scale: it has no connection licence, so the community
-edition's 16-connection cap does not apply. On `UQF_Q_IMPL=peachq` a start is
-held to no connection budget - `uqs start --profile all` starts,
-`uqs list profiles` shows `no cap`, and monitor1 watches every process instead
-of giving some up. `UQS_LICENCE_CONNECTIONS`, if set, still wins.
-
-Run everything from the repository root - the load scripts use paths relative to
-it (e.g. `src/foundation/stats.q`).
+Run everything from the repository root; the load scripts use relative paths.
 
 ### Also needed, by component
 
-  | Tool                                                  | For                                                                                                                                                                                                                    | Required?                                                        |
-  | ---                                                   | ---                                                                                                                                                                                                                    | ---                                                              |
-  | **KDB-X**                                             | everything in `src/`, `scripts/` and `tests/`                                                                                                                                                                          | preferred — see [above](#requirements) for what else may work    |
-  | **[uv](https://docs.astral.sh/uv/)**                  | the Python packages and every `uqs` command                                                                                                                                                                            | yes, for the fleet                                               |
-  | **`qcon`**                                            | attaching a console to a running process: `uqs query --port <p>` with no expression                                                                                                                                    | no - only that command                                           |
-  | **`rlwrap`**                                          | `torq.sh` debug starts and `qcon`; `uqs start` refuses to run without it, as with `envsubst`                                                                                                                           | yes, for the fleet                                               |
-  | **`multitail`**                                       | `uqs logs --multitail`: following process logs one pane per file                                                                                                                                                       | no - `uqs logs -f` follows the same files merged into one stream |
-  | **Node**                                              | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares                                                                    | no - only for `web/`                                             |
-  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor. `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.14 --locked`; it reads this repo's `.qlinter.toml`                            | no - never needed to build, test or run                          |
+  | Tool                                                  | For                                                                                                  | Required?                                          |
+  | ---                                                   | ---                                                                                                  | ---                                                |
+  | **KDB-X**                                             | everything in `src/`, `scripts/` and `tests/`                                                        | preferred                                          |
+  | **[uv](https://docs.astral.sh/uv/)**                  | the Python packages and every `uqs` command                                                          | yes, for the fleet                                 |
+  | **`qcon`**                                            | `uqs query --port <p>` with no expression; not in KDB-X personal edition                             | no - only that command                             |
+  | **`rlwrap`**                                          | `torq.sh` debug starts and `qcon`; `uqs start` refuses without it                                    | yes, for the fleet                                 |
+  | **`multitail`**                                       | `uqs logs --multitail`                                                                               | no - `uqs logs -f` follows the same files          |
+  | **Node**                                              | the [browser application](web/README.md), `^22.13 \|\| ^24 \|\| >=26`                                | no - only for `web/`                               |
+  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source; `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.14 --locked` | no - never needed to build, test or run            |
 
-**Setup is `./install.sh`.** It checks these first, says how to install anything
-missing (it never runs sudo), then puts `uqs` on your PATH. `--dev` also syncs
-the Python workspace and installs the pre-commit hooks, `--web` builds `web/`,
-`--odbc` sets up ODBC for q ([ODBC](docs/guides/odbc.md)), and `--check` only
-checks. TLS verification stays on: behind a re-signing proxy, set
-`SSL_CERT_FILE` (uv) and `NODE_EXTRA_CA_CERTS` (npm) to your CA.
-
-`qcon` is kdb's console client. It ships with some kdb+ distributions and
-**not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q` and
-`pg` - so `uqs raw -- qcon ...` is the one documented command that may not work
-out of the box. Everything else reaches a running process through IPC instead:
-`uqs query`, `uqs summary` and `uqs logs` need nothing beyond what is already
-installed.
-
-`torq.sh` resolves both through `$QCON` and `$RLWRAP`, which `uqs`'s
-`build_env()` sets, so a differently-named or differently-located binary is a
-variable to set rather than a patch.
+**Setup is `./install.sh`.** It checks these, says how to install anything
+missing (it never runs sudo), then puts `uqs` on your PATH. Flags: `--dev`
+(Python workspace and pre-commit hooks), `--web`, `--odbc`
+([ODBC](docs/guides/odbc.md)) and `--check`.
 
 ## Quick start
 
 Five entry points, one per thing you might have come for. None depends on the
-others - the library prices without a running process, and the fleet runs
-without anyone loading the library by hand.
+others.
 
 **Price something.** The quant library is pure functions and no processes, so
 this needs nothing but the interpreter:
@@ -204,23 +81,14 @@ uv run uqs query "count fx_orderbook" --port 6052   # 6052 = base port + 2 = rdb
 ```
 
 **Run a backfill.** A bounded worker runs over a range and exits once the window
-is covered, which is why it is a job an operator or Airflow triggers rather than
-a process that starts with the stack. It registers with discovery, so the fleet
-above has to be up:
+is covered. It registers with discovery, so the fleet above has to be up:
 
 ```
 uv run uqs job backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
-`--from` and `--to` are required, and a date without an offset is UTC: a
-backfill that silently defaulted its range would publish the wrong window and
-record coverage for it. `--version` may be left out only for a worker that
-declares a `source_version` - one whose source is never restated. `uqs` finds
-the process that runs the worker and passes all four to it as flags on its start
-line. `--fixture` is there because the demo has no credential for `demo_deals`:
-a run that would write a source's built-in fixture must ask to, and its coverage
-is recorded under `v1~fixture`, so it never counts as the source's own - a live
-run later over the same range still fetches it.
+`--from` and `--to` are required and UTC; `--fixture` is for the demo's built-in
+fixture data ([why](docs/guides/new-pipeline.md)).
 
 **Add a pipeline.** `uqs job new` scaffolds one of three shapes, and `--dry-run`
 lists every file it would create or append to without writing any of them:
@@ -239,9 +107,7 @@ uv run uqs job new eod_rates --kind backfill --dataset eod_rates \
     --columns "sym:symbol, mid:float" --width 1D --dry-run
 ```
 
-The handler it writes throws and the test it writes fails, on purpose: a
-scaffold that left something green would look implemented from outside. The
-output ends with what is still yours to write. [Adding a data
+The scaffold is meant to fail until you fill it in; [Adding a data
 pipeline](docs/guides/new-pipeline.md) walks one through end to end.
 
 **Check it all still works.** One lane per layer, listed under
@@ -251,29 +117,22 @@ pipeline](docs/guides/new-pipeline.md) walks one through end to end.
 ./scripts/test.py all
 ```
 
-`all` is every lane except the two coverage lanes and the two that reach outside
-the process: `smoke`, which checks a live external source's metadata against its
-declared contract and so needs credentials and a reachable source, and
-`stack-smoke`, which restarts the fleet and watches it.
-
 ## Components
 
 Six of them, each with its own contract and its own place in `docs/`. A change
 usually belongs to exactly one.
 
-  | Component                   | Where                                                                                                                        | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-  | ---                         | ---                                                                                                                          | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-  | **Data engineering**        | [`src/etl/`](src/etl)                                                                                                        | The pipeline framework: bounded and continuous workers, normalizers that spell many sources one way, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out                                                                                                                                                                                                         |
-  | **Quant library**           | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. The modules load into seven domain namespaces (`.qf.px` pricing, `.qf.mkt` market data, `.qf.exec`, `.qf.port`, `.qf.math`, `.qf.util`, `.qf.demo`) with a matching test file and a qDoc block per function — the domains and the old-to-new name table are [`qf-domains.md`](docs/reference/qf-domains.md), the inventory and conventions [`quant-modules.md`](docs/reference/quant-modules.md)                |
-  | **Data processing**         | [`src/market_data/`](src/market_data)                                                                                        | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw                                                                                                                                                                                                                                                                                                                                                                                           |
-  | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs)                                                                           | The uqf stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them                                                                                                                                                                                                                                                                                                                                                                                   |
-  | **Scheduling and access**   | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web)  | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, and the React desk and operations app                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-  | **Database metadata**       | [`src/metadata/`](src/metadata)                                                                                              | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable group-by breakdowns, refreshed under an explicit bound and built nightly by TorQ's DQE once `dqe1` is started. [The guide](docs/guides/metatables.md)                                                                                                                                                                                                                                                                                                     |
+  | Component                   | Where                                                                                                                        | What it does                                                                                                                                                                                                                        |
+  | ---                         | ---                                                                                                                          | ---                                                                                                                                                                                                                                 |
+  | **Data engineering**        | [`src/etl/`](src/etl)                                                                                                        | The pipeline framework: workers, normalizers, a bitemporal coverage ledger, source contracts and a job graph derived from declared inputs and outputs                                                                               |
+  | **Quant library**           | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: forwards, options and Greeks, position risk and VaR, execution analytics, in seven `.qf` domains --- [`qf-domains.md`](docs/reference/qf-domains.md), [`quant-modules.md`](docs/reference/quant-modules.md) |
+  | **Data processing**         | [`src/market_data/`](src/market_data)                                                                                        | Reshaping and signal extraction: wide venue books, LOB microstructure features, data-quality checks                                                                                                                                 |
+  | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs)                                                                           | The uqf stack, plus the CLI/MCP orchestrator that generates its configuration and starts, stops and reports on it                                                                                                                   |
+  | **Scheduling and access**   | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web)  | An Airflow sensor, an HTTP gateway over the fleet, and the React desk and operations app                                                                                                                                            |
+  | **Database metadata**       | [`src/metadata/`](src/metadata)                                                                                              | Partition-level profiling of an HDB, built nightly by DQE: [guide](docs/guides/metatables.md)                                                                                                                                       |
 
-Authority is split deliberately between them: q and TorQ own process startup,
-source reads and coverage; Airflow owns ordering, retries and alerting. Neither
-infers the other's facts from log text. That rule, and the others the tree is
-built on, are written down in [the pipeline
+q and TorQ own process startup, source reads and coverage; Airflow owns
+ordering, retries and alerting --- see [the pipeline
 philosophy](docs/architecture/pipeline-philosophy.md).
 
 ## Further reading
@@ -289,19 +148,10 @@ directories, one question each:
   | [`docs/architecture/`](docs/architecture/)        | *Why is it shaped this way?* — including the running stack                                                          |
   | [`docs/reference/`](docs/reference/)              | *What is the contract?* — the quant modules, environment variables, pipeline declaration keys and the process table |
 
-Still open, and why: the `decision`-labelled issues.
-
 Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
 [`python/uqf_frontend/`](python/uqf_frontend/README.md) (the API),
 [`web/`](web/README.md) (the React desk app),
 [`python/uqf_airflow_provider/`](python/uqf_airflow_provider/README.md).
-
-## Browser application
-
-The local React [desk and operations app](web/README.md) provides catalog-driven
-queries, coverage gaps, backfill status, fleet health, queue, connections and
-usage views. It can run against the API through a development proxy or be served
-by the API under `/ui/`.
 
 ## Testing
 
@@ -314,51 +164,11 @@ scripts/test.py all       # every lane except the two coverage lanes, smoke and 
 One lane per layer; run the one matching what you changed.
 `scripts/test.py --help` lists every lane.
 
-### Coverage
-
-`scripts/test.py coverage` measures what the suites actually **execute** ---
-line coverage for Python, and **statement and branch coverage for q** through
-the [`.cov` library](scripts/dev/coverage.q), which exists because q has no
-coverage tool and follows [KX's own coverage
-API](https://code.kx.com/analyst/libraries/code-coverage). It counts characters
-in tracked ranges, so a long untaken branch weighs more than a terse one, and it
-instruments statement positions only --- a `$` arm is *wrapped* rather than
-probed, so laziness survives.
-
-`q-coverage` is the gate: it fails when the set of functions nothing enters
-differs from `tests/q/coverage_baseline.txt` **in either direction**, so a
-newly-covered function has to be removed from the baseline deliberately.
-
-Every function is tested against at least one of a published reference value
-(Hull's worked example for `gk_call`), a provable identity (put-call parity, a
-day-count-neutral round trip) or a round trip through an inverse --- see
-[`kdb-q-conventions`](.claude/skills/kdb-q-conventions/SKILL.md) for why
-identities are preferred to hand-computed expectations.
-
-## Documentation
-
-Every function in `src/*.q` has a
-[qDoc](https://www.timestored.com/qstudio/help/qdoc) comment block
-(JavaDoc-style: `@param`, `@return`, `@throws`, `@eg`). Generate browsable HTML
-API docs with:
-
-```
-brew install openjdk                        # or any JDK 8+
-curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place at repo root
-./scripts/dev/gen-docs.sh                        # writes build/docs/index.html (gitignored)
-```
-
-`qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a side
-effect (`build/docs/lint.csv`/`build/docs/lint.html`); this repo's cross-module
-calls between `src/*.q`'s separate namespaces (e.g. `forwards.q` calling
-`.qf.px.ccy_pair_legs`) trigger a number of expected "undeclared variable" false
-positives there (the linter checks each file in isolation and can't see the
-other loaded namespaces), so don't be alarmed by those specifically.
-
-**Note:** TimeStored's own qDoc docs state the CLI usage as
-`QDocMain <sourceFolder> <targetFolder>` - that argument order is backwards. The
-verified, working order (baked into `gen-docs.sh`) is
-`QDocMain <targetFolder> <sourceFolder>`.
+`scripts/test.py coverage` measures what the suites **execute**: line coverage
+for Python, statement and branch coverage for q through the [`.cov`
+library](scripts/dev/coverage.q). `q-coverage` is the gate: it fails when the
+set of functions nothing enters differs from `tests/q/coverage_baseline.txt` in
+either direction.
 
 ## Licensing
 

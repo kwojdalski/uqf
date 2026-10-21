@@ -154,6 +154,9 @@ along with `UQS_DATA_ROOT`, so they move the trees everything else is built from
   | `QCON`                | `qcon`                                                                                                                         |
   | `QCMD`                | `$QCMD`, else `q` --- see above                                                                                                |
 
+`RLWRAP` and `QCON` are set so that a differently named or located binary is a
+variable to change rather than a patch to `torq.sh`.
+
 ## Where to put them
 
 What a source connects to can live in the gitignored application-layer
@@ -197,6 +200,39 @@ Two reasons to prefer it over typing the `export`:
 `.env` also reaches every process `uqs` starts, but it is inert data rather than
 shell, so nothing in it can be derived, and outside `uqs` only `.qdata.cfg`
 reads it (for `DATABENTO_DATA_DIR`). See [`.env.example`](../../.env.example).
+
+## PeachQ
+
+`UQF_Q_IMPL=peachq` with `QCMD` naming the binary is the only way to run on it.
+`peachq` without `QCMD` is refused (a bare `q` on `PATH` is never taken to be
+PeachQ), and `scripts/test.py` asks the binary which implementation it is before
+any lane runs, refusing a mismatch either way: a PeachQ binary without the
+opt-in, or a KDB-X one declared as PeachQ. A green run therefore says which
+interpreter made it.
+
+You need not install it for the lanes that run on it. They take the commit
+pinned in [`scripts/peachq.json`](../../scripts/peachq.json), fetch it on first
+use, check the checkout is that commit, build it and cache the binary. That
+needs `git`, `make`, a C compiler and the network once; later runs reuse the
+cache offline.
+
+- **Cache:** `${XDG_CACHE_HOME:-~/.cache}/uqf/peachq/`, one entry per commit,
+  platform and build options. Delete the directory to force a rebuild.
+- **Platforms:** Linux x86-64 and macOS arm64. Anywhere else the lane fails,
+  naming the platform.
+- **Override:** `UQF_PEACHQ=/path/to/peachq/q` uses that binary and builds
+  nothing. It must be PeachQ: a missing or KDB-X override fails, with no
+  fallback to the pinned build.
+- **Directly:** `python3 scripts/peachq.py` prints the binary's path, building
+  it if needed.
+
+PeachQ is never put on `PATH` and never becomes the shell's `QCMD`; only the
+lanes that run on it are given its path.
+
+It has no connection licence, so the community edition's 16-connection cap does
+not apply: on `UQF_Q_IMPL=peachq` a start is held to no connection budget,
+`uqs list profiles` shows `no cap`, and monitor1 watches every process.
+`UQS_LICENCE_CONNECTIONS`, if set, still wins.
 
 ## Prerequisites, not configuration
 
