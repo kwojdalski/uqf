@@ -141,10 +141,12 @@ def detach(
     `dry_run` runs each process's own removal checks and changes nothing, not even the publisher.
     """
     host = host or Host()
-    backfill_owner.refuse_while_active(att.name, state_dir)  # a run owns it (#1454)
     # A dry run writes nothing - not even the lock file - and needs no lock: it
     # only reads, and the manifest is replaced whole, never seen half-written.
     with nullcontext() if dry_run else config.locked(att.name, state_dir):
+        # Under the lock, which launch holds while it claims (#1454, #1526): checked
+        # before it, a run could start between the check and the reversal.
+        backfill_owner.refuse_while_active(att.name, state_dir)
         if not Manifest.exists(att.name, state_dir):
             raise AttachmentError(f"attachment {att.name} has not been applied: nothing to detach")
         m = Manifest.load(att.name, state_dir)
