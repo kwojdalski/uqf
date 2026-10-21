@@ -220,11 +220,23 @@
 .qpipe.job.kafka_feed.readiness:{[]
     .qetl.kafka.diag.readiness .qpipe.job.kafka_feed.facts[]}
 
+/ What the last tick saw, so a stage is retired only on evidence newer than its cause.
+.qpipe.job.kafka_feed.last_seen:`assigned`polled!0 0
+
 / Log the readiness when it changed, and retire the causes of stages that came good.
+/ .
+/ A stage is retired on NEW evidence only (#1500): the assignment going from none
+/ to some, or the polled count rising since the last tick. librdkafka keeps its
+/ assignment through a broker outage and `polled` is cumulative, so testing
+/ their level cleared the cause every tick and the next callback logged it again.
 .qpipe.job.kafka_feed.report_readiness:{[]
     f:.qpipe.job.kafka_feed.facts[];
-    if[0<f`assigned; .qetl.kafka.diag.clear `bootstrap`advertised`group];
-    if[0<f`polled; .qetl.kafka.diag.clear enlist `consume];
+    seen:.qpipe.job.kafka_feed.last_seen;
+    joined:(0=seen`assigned) and 0<f`assigned;
+    rose:(f`polled)>seen`polled;
+    `.qpipe.job.kafka_feed.last_seen set `assigned`polled!(f`assigned;f`polled);
+    if[joined or rose; .qetl.kafka.diag.clear `bootstrap`advertised`group];
+    if[rose; .qetl.kafka.diag.clear enlist `consume];
     r:.qetl.kafka.diag.readiness f;
     line:" " sv {string[x`stage],"=",string x`status} each r;
     if[not line~.qpipe.job.kafka_feed.last_readiness;
@@ -283,7 +295,7 @@
     .qpipe.job.kafka_feed.api[`on_error][c;.qpipe.job.kafka_feed.on_error];
     .qpipe.job.kafka_feed.api[`subscribe][c;topics;.qpipe.job.kafka_feed.on_message];
     older:@[value;`.z.exit;{(::)}];
-    `.z.exit set {[older;code] .qpipe.job.kafka_feed.shutdown[]; if[100h=type older; older code]}[older];
+    `.z.exit set {[older;code] .qpipe.job.kafka_feed.shutdown[]; if[((type older) within 100 107h) and not older~(::); older code]}[older];
     .qetl.log.info[`kafka_feed;"subscribed";`topics`group!(topics;cfg`group.id)];
     }
 

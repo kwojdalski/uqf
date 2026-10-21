@@ -132,13 +132,14 @@
 
 / Run f with the log captured and the diagnostics empty, then put everything back.
 .qt.qpipe.job.kafka_feed.with_log:{[f]
-    emit:.qetl.log.emit; ctx:.qetl.kafka.diag.context; causes:.qetl.kafka.diag.causes; last_r:.qpipe.job.kafka_feed.last_readiness;
+    emit:.qetl.log.emit; ctx:.qetl.kafka.diag.context; causes:.qetl.kafka.diag.causes; last_r:.qpipe.job.kafka_feed.last_readiness; seen:.qpipe.job.kafka_feed.last_seen;
     `.qt.qpipe.job.kafka_feed.lines set ();
     delete from `.qetl.kafka.diag.causes;
     `.qpipe.job.kafka_feed.last_readiness set "";
+    `.qpipe.job.kafka_feed.last_seen set `assigned`polled!0 0;
     `.qetl.log.emit set {[level;id;msg] `.qt.qpipe.job.kafka_feed.lines set .qt.qpipe.job.kafka_feed.lines,enlist (level;msg)};
     r:@[f;::;{[e] (`failed;e)}];
-    `.qetl.log.emit set emit; `.qetl.kafka.diag.context set ctx; `.qetl.kafka.diag.causes set causes; `.qpipe.job.kafka_feed.last_readiness set last_r;
+    `.qetl.log.emit set emit; `.qetl.kafka.diag.context set ctx; `.qetl.kafka.diag.causes set causes; `.qpipe.job.kafka_feed.last_readiness set last_r; `.qpipe.job.kafka_feed.last_seen set seen;
     if[(2=count r) and `failed~first r; 'last r];
     r}
 
@@ -275,3 +276,44 @@
     `.qpipe.job.kafka_feed.client set s 2; `.qpipe.job.kafka_feed.inbox set s 3;
     if[not r~1b; 'r];
     }
+
+/ --- once-per-cause diagnostics stay cleared (#1500) ------------------------
+
+/ A feed that has polled before and holds an assignment through a broker outage,
+/ then hears the same refusal five times.
+.qt.qpipe.job.kafka_feed.test_a_held_assignment_and_an_old_poll_do_not_clear_an_ongoing_cause:{[t]
+    `.qpipe.job.kafka_feed.api set (.qt.qpipe.job.kafka_feed.fake[]),(enlist `assignment)!enlist {[c] enlist `topic`partition!(`t;0i)};
+    `.qpipe.job.kafka_feed.client set 7i;
+    st:.qetl.kafka.state_new[]; st[`stats;`polled]:10; `.qpipe.job.kafka_feed.state set st;
+    .qt.qpipe.job.kafka_feed.with_log {
+        .qpipe.job.kafka_feed.report_readiness[];
+        `.qetl.kafka.diag.context set `bootstrap`group!(enlist "b:9092";"g1");
+        do[5;
+            .qetl.kafka.diag.report[`TOPIC_AUTHORIZATION_FAILED;"Topic authorization failed"];
+            .qpipe.job.kafka_feed.report_readiness[]];
+        errs:.qt.qpipe.job.kafka_feed.lines where `ERROR=first each .qt.qpipe.job.kafka_feed.lines;
+        .qunit.assertEquals[count errs;1;"five identical refusals, one ERROR"];
+        .qunit.assertEquals[count .qt.qpipe.job.kafka_feed.lines where (last each .qt.qpipe.job.kafka_feed.lines) like "*recovered*";0;"and no recovery claimed"];
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `failed;"consume reads failed, not ok"];
+        st:.qpipe.job.kafka_feed.state; st[`stats;`polled]:11; `.qpipe.job.kafka_feed.state set st;
+        .qpipe.job.kafka_feed.report_readiness[];
+        .qunit.assertEquals[exec status from .qpipe.job.kafka_feed.readiness[] where stage=`consume;enlist `ok;"a record polled after the cause does clear it"]}}
+
+/ --- the exit handler is chained whatever its type (#1505) ------------------
+
+.qt.qpipe.job.kafka_feed.exit_called:()
+
+.qt.qpipe.job.kafka_feed.test_open_chains_a_projection_as_the_previous_exit_handler:{[t]
+    `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[];
+    older:@[value;`.z.exit;{(::)}];
+    ctx:.qetl.kafka.diag.context;
+    `.qt.qpipe.job.kafka_feed.exit_called set ();
+    / TorQ's logusage leaves .z.exit a projection (104h)
+    `.z.exit set {[tag;x] `.qt.qpipe.job.kafka_feed.exit_called set .qt.qpipe.job.kafka_feed.exit_called,tag;}[`torq;];
+    .qpipe.job.kafka_feed.open[(enlist `group.id)!enlist `g;enlist `uqf.client.flow];
+    h:.z.exit;
+    `.qetl.kafka.diag.context set ctx;
+    `.qpipe.job.kafka_feed.client set 0Ni;
+    r:@[h;0;{(`failed;x)}];
+    `.z.exit set older;
+    .qunit.assertEquals[.qt.qpipe.job.kafka_feed.exit_called;enlist `torq;"the previous projection ran on exit"]};

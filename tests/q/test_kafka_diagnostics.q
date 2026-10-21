@@ -158,3 +158,8 @@
     .qunit.assertEquals[tp`kind;`topic_auth;"by code"];
     .qunit.assertEquals[.qetl.kafka.diag.kind_of[0Ni;.qt.qetl.kafka.diag.real_group];`group_auth;"and by text alone"];
     .qunit.assertEquals[.qetl.kafka.diag.kind_of[0Ni;.qt.qetl.kafka.diag.real_topic];`topic_auth;"likewise"]};
+
+.qt.qetl.kafka.diag.test_kind_of_accepts_long_codes_as_well_as_int:{[t]
+    .qunit.assertEquals[.qetl.kafka.diag.kind_of[30;"Broker: not authorized"];.qetl.kafka.diag.kind_of[30i;"Broker: not authorized"];"a long code reads as its int"];
+    .qunit.assertEquals[.qetl.kafka.diag.kind_of[-187;"1/1 brokers down"];.qetl.kafka.diag.kind_of[-187i;"1/1 brokers down"];"including a negative one"];
+    .qunit.assertEquals[.qetl.kafka.diag.kind_of[30;"Broker: not authorized"];`group_auth;"the reference value"]};
