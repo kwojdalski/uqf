@@ -198,7 +198,7 @@ it("names a gateway port that reaches the wrong process, and shows the server's 
         ? ok({
             ok: false,
             gateway: "wrong_process",
-            detail: "Set UQF_FRONTEND_GATEWAY_PORT to the gateway's port",
+            detail: "Point UQF_FRONTEND_STACK_ROOT at the gateway's stack",
             poll_seconds: 5,
           })
         : ok({}),
@@ -207,7 +207,7 @@ it("names a gateway port that reaches the wrong process, and shows the server's 
   render(<App />);
   expect(await screen.findByText("Wrong process")).toBeInTheDocument();
   expect(
-    screen.getByText("Set UQF_FRONTEND_GATEWAY_PORT to the gateway's port"),
+    screen.getByText("Point UQF_FRONTEND_STACK_ROOT at the gateway's stack"),
   ).toBeInTheDocument();
 });
 it("says a run whose process is gone is abandoned, not in progress", async () => {

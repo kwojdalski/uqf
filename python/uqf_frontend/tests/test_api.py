@@ -38,7 +38,7 @@ def test_health_refuses_a_process_that_is_not_a_gateway(gw):
     body = TestClient(create_app(gateway=gw)).get("/health").json()
     assert body["ok"] is False
     assert body["gateway"] == "wrong_process"
-    assert "rdb" in body["detail"] and "UQF_FRONTEND_GATEWAY_PORT" in body["detail"]
+    assert "rdb" in body["detail"] and "UQF_FRONTEND_STACK_ROOT" in body["detail"]
 
 
 def test_health_accepts_a_process_that_cannot_name_its_type(gw):

@@ -17,6 +17,7 @@ from uqf_frontend.config import Settings
 from uqf_frontend.errors import Forbidden
 from uqf_frontend.fleet import FakeFleet
 from uqf_frontend.gateway import FakeGateway
+from uqs import paths as stack_paths
 
 OPS = ("/ops/queue", "/ops/connections", "/ops/usage", "/ops/processes")
 
@@ -25,7 +26,7 @@ HEADER = "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras
 
 
 @pytest.fixture
-def configured(tmp_path):
+def configured(tmp_path, monkeypatch):
     """Settings with every data route actually configured.
 
     /ops/processes and /ops/backfill report themselves unconfigured (422)
@@ -36,7 +37,10 @@ def configured(tmp_path):
     csv.write_text(HEADER + "localhost,{KDBBASEPORT}+2,rdb,rdb1,,1,0,,,x.q,1,,q\n")
     status_dir = tmp_path / "status"
     status_dir.mkdir()
-    return {"process_csv": csv, "base_port": 6050, "status_dir": status_dir}
+    # The workers' own variable, read against this checkout's stack.
+    monkeypatch.setenv("UQF_STATUS_DIR", str(status_dir))
+    root = stack_paths.repo_root()
+    return {"process_csv": csv, "base_port": 6050, "stack_root": root}
 
 
 def client(policy=None, gw=None, **settings_kw):

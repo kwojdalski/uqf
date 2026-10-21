@@ -18,8 +18,9 @@ from typing import Any
 import pytest
 
 from uqf_frontend.capture import MemorySink, UsageCapture
-from uqf_frontend.config import Process, Settings
+from uqf_frontend.config import Settings
 from uqf_frontend.fleet import KolaFleet
+from uqf_frontend.stack import Process
 
 SERVER_SCRIPT = """
 / Three rows as .z.p stamps them: every one has a sub-microsecond tail.

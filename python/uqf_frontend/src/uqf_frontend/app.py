@@ -235,7 +235,8 @@ def create_app(
                 detail=(
                     f"{settings.host}:{settings.port} answers as a {proctype!r} process, "
                     f"not a gateway - routed queries and the ops views all go through "
-                    f".gw.*, which only a gateway has. Set UQF_FRONTEND_GATEWAY_PORT."
+                    f".gw.*, which only a gateway has. Point UQF_FRONTEND_STACK_ROOT at "
+                    f"the stack whose process.csv declares this gateway."
                 ),
                 poll_seconds=ops.POLL_SECONDS["health"],
                 request_timeout_seconds=settings.request_timeout,
@@ -348,8 +349,8 @@ def create_app(
         authorise(request)
         if settings.process_csv is None:
             raise ValidationFailed(
-                "fleet health needs UQF_FRONTEND_PROCESS_CSV set to TorQ's generated "
-                "process.csv; without it the declared process set is unknown"
+                "fleet health needs UQF_FRONTEND_STACK_ROOT set to the stack, whose "
+                "generated process.csv is the declared process set"
             )
         try:
             declared = procfile.read(settings.process_csv, settings.base_port)

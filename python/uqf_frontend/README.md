@@ -145,32 +145,34 @@ export UQF_FRONTEND_DATA_USER=browser UQF_FRONTEND_DATA_PASSWD=browser
 `admin:admin` is what `uqs query` uses against the generated appconfig. The
 second login is for reading tables: `/query` reads as the `browser` role,
 through the gateway's `.uqf.browse`, so the gateway's query policy holds every
-read ([query policies](../../docs/architecture/query-policies.md)). The port
-needs no setting: it is derived from the base port, and a stack on another base
-only needs `UQF_FRONTEND_BASE_PORT`.
+read ([query policies](../../docs/architecture/query-policies.md)).
+
+Point the frontend at the stack, and it reads the rest from the stack's own
+files (`stack.py`): the base port from the `setenv.sh` bootstrap writes, the
+gateway's host and port and the fan-out list from the generated `process.csv`,
+the backfill status directory as the workers resolve it, and `web/dist` once
+built. Nothing restates them, so nothing can disagree:
+
+```bash
+export UQF_FRONTEND_STACK_ROOT="$PWD"
+```
 
 Configuration is environment-only, so credentials stay server-side:
 
-  | Variable                                | Default                                                                                                                  |
-  | ---                                     | ---                                                                                                                      |
-  | `UQF_FRONTEND_GATEWAY_HOST`             | `localhost`                                                                                                              |
-  | `UQF_FRONTEND_GATEWAY_PORT`             | `6057` — the base port +7, where `process.csv` puts `gateway1`; derived from `UQF_FRONTEND_BASE_PORT` when that is set   |
-  | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty — set both; `admin`/`admin` for the demo stack                                                                     |
-  | `UQF_FRONTEND_DATA_USER` / `_PASSWD`    | empty — set both; `browser`/`browser` for the demo stack. Without it `/query` refuses with 503, naming these             |
-  | `UQF_FRONTEND_TIMEOUT`                  | `30`                                                                                                                     |
-  | `UQF_FRONTEND_MAX_ROWS`                 | `10000`                                                                                                                  |
-  | `UQF_FRONTEND_PROCESSES`                | empty — `rdb1:6052,hdb1:6053` or `name:host:port`                                                                        |
-  | `UQF_FRONTEND_PROCESS_CSV`              | unset — TorQ's generated `process.csv`                                                                                   |
-  | `UQF_FRONTEND_BASE_PORT`                | `6050` — what `{KDBBASEPORT}` resolves to, and what the gateway port is derived from                                     |
-  | `UQF_FRONTEND_STATUS_DIR`               | unset — where q writes status files (pairs with `UQF_STATUS_DIR`)                                                        |
+  | Variable                                | Default                                                                                                                         |
+  | ---                                     | ---                                                                                                                             |
+  | `UQF_FRONTEND_STACK_ROOT`               | unset — the gateway at `localhost:6057`; fleet health, the query log, backfill status and `/ui/` report themselves unconfigured |
+  | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty — set both; `admin`/`admin` for the demo stack                                                                            |
+  | `UQF_FRONTEND_DATA_USER` / `_PASSWD`    | empty — set both; `browser`/`browser` for the demo stack. Without it `/query` refuses with 503, naming these                    |
+  | `UQF_FRONTEND_TIMEOUT`                  | `30`                                                                                                                            |
+  | `UQF_FRONTEND_MAX_ROWS`                 | `10000`                                                                                                                         |
 
-A malformed numeric value fails at startup rather than falling back to a
-default.
+A malformed numeric value, or a stack root that is not the repository, fails at
+startup rather than falling back to a default.
 
 The React application lives in [`web/`](../../web/README.md). Build it with
-`npm --prefix web ci && npm --prefix web run build`, then set
-`UQF_FRONTEND_WEB_DIST` to the absolute path of `web/dist`; it is served at
-`/ui/`.
+`npm --prefix web ci && npm --prefix web run build`; the stack root's `web/dist`
+is then served at `/ui/` (read at startup).
 
 ## Tests
 
@@ -263,9 +265,9 @@ looks identical to an idle fleet. Every view also serves its own `poll_seconds`,
 because polling is the only mechanism and the right interval depends on how fast
 the underlying state moves.
 
-Configure the fan-out targets with `UQF_FRONTEND_PROCESSES=rdb1:6052,hdb1:6053`
-(or `name:host:port`). Empty by default --- so the view says it has nothing
-configured rather than lying.
+The fan-out targets are the `process.csv` rows `torq.sh start all` starts, read
+at startup. Without a stack root there are none --- so the view says it has
+nothing configured rather than lying.
 
 ### Two live-process findings
 
@@ -280,9 +282,9 @@ configured rather than lying.
 ## Fleet health
 
 `GET /ops/processes` reports every process `process.csv` declares, probed for
-liveness. The declared set comes from the **generated** `process.csv` --- set
-`UQF_FRONTEND_PROCESS_CSV`, plus `UQF_FRONTEND_BASE_PORT` so `{KDBBASEPORT}+N`
-resolves to the ports the stack actually started on.
+liveness. The declared set comes from the **generated** `process.csv` under the
+stack root, its `{KDBBASEPORT}+N` resolved against the base port the stack was
+started on.
 
 Liveness is an **IPC probe**, so it works whether or not the process is on this
 machine. It cannot tell a process never started from one that crashed - both
@@ -338,9 +340,9 @@ Airflow task - is a deployment choice.
 
 `GET /ops/backfill` reads the status files q writes, rather than calling
 Airflow's REST API. That keeps q authoritative for the facts it owns and adds no
-Airflow dependency to a frontend that should work without one. Set
-`UQF_FRONTEND_STATUS_DIR` to the directory `.qetl.status.status_dir` writes
-into.
+Airflow dependency to a frontend that should work without one. It reads the
+directory `.qetl.status.status_dir` writes into (`$UQF_STATUS_DIR`, else
+`$TORQDATA/status`), resolved for the stack root.
 
 `.qetl.status.write_status` in `src/etl/core/status.q` defines the format and
 `status.py` consumes it; `test_status.py` parses the q source to keep the two in
