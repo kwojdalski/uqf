@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -141,6 +142,65 @@ def test_an_attested_head_behind_its_base_is_reported(repo):
     ok, why = check.report(base, head)
     assert not ok and "does not contain the base's tip" in why
     assert check.report(fork, head)[0]
+
+
+def _main(base: str, head: str, tmp_path, capsys) -> tuple[int, str, str]:
+    """main() as CI's step runs it: (exit code, stdout, step summary)."""
+    summary = tmp_path / "summary.md"
+    code = check.main(["check_kdbx_attestation.py", base, head, str(summary)])
+    return code, capsys.readouterr().out, summary.read_text() if summary.exists() else ""
+
+
+def test_ci_fails_a_q_pr_with_no_attestation(repo, tmp_path, capsys):
+    """#1543: the check blocks - an exit code CI does not swallow, an error
+    annotation on the PR rather than a warning, and the reason on the summary."""
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, "src/a.q", "a:1\n")
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 1
+    assert "::error title=KDB-X attestation::" in out and "src/a.q" in out
+    assert "attest_kdbx.py" in summary
+
+
+def test_ci_fails_a_q_pr_whose_attestation_is_stale(repo, tmp_path, capsys):
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    attest_here(repo)
+    head = commit(repo, "src/a.q", "a:2\n")
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 1
+    assert "::error title=KDB-X attestation::" in out
+    assert "no KDB-X attestation" in summary
+
+
+def test_ci_passes_a_q_pr_attested_on_its_tree(repo, tmp_path, capsys):
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    head = attest_here(repo)
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 0 and "::error" not in out
+    assert "passed on exactly this tree" in summary
+
+
+def test_ci_passes_a_pr_that_touches_no_q(repo, tmp_path, capsys):
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, "web/src/app.ts", "export const y = 1;\n")
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 0 and "::error" not in out
+    assert "no attestation needed" in summary
+
+
+def test_ci_runs_the_check_as_a_blocking_step():
+    """The step's exit code is the script's: #1490 merged unattested on a
+    "success" because the workflow caught the failure and only warned."""
+    ci = (_ROOT / ".github/workflows/ci.yml").read_text()
+    found = re.search(r"\n  kdbx-attestation:\n(?:(?:    .*)?\n)*", ci)
+    assert found, "ci.yml has no kdbx-attestation job"
+    job = found.group()
+    assert "name: KDB-X attestation\n" in job
+    assert "advisory" not in job.lower() and "::warning" not in job
+    run = 'python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"'
+    assert f"run: {run}\n" in job
 
 
 def test_attest_refuses_a_dirty_tree(repo, monkeypatch):

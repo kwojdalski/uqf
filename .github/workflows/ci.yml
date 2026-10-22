@@ -316,12 +316,13 @@ jobs:
       - run: npm run build
 
   kdbx-attestation:
-    # Advisory (#1014): hosted CI has no KDB-X, so whether the q-tests,
+    # Blocking (#1014, #1543): hosted CI has no KDB-X, so whether the q-tests,
     # q-coverage, contract-surface and q-facts hooks passed on a PR's tree is
     # known only where they ran. scripts/dev/attest_kdbx.py records that as a
-    # `KDB-X-gates: <tree>` trailer; this reports whether the head's exact
-    # tree carries one. It warns and never fails.
-    name: KDB-X attestation (advisory)
+    # `KDB-X-gates: <tree>` trailer; this fails a PR that changes a path those
+    # hooks judge unless the head's exact tree carries one. PRs only: a push
+    # to master is not re-judged after the merge.
+    name: KDB-X attestation
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -333,14 +334,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Report whether the KDB-X gates passed on this tree
+      - name: Require the KDB-X gates to have passed on this tree
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if out=$(python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD"); then
-            echo "$out" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning title=KDB-X attestation::$out"
-            echo "$out" >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"

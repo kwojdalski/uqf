@@ -18,9 +18,14 @@ tree carries one. A rebase changes the tree and needs a fresh attestation -
 which is the case that broke master. A head that does not contain the base's
 tip is reported too: the tree that merges is then one no run has seen.
 
-It is ADVISORY: CI reports the answer on the PR and never fails on it.
+It BLOCKS (#1543): CI fails a PR whose judged paths changed and whose head
+tree is not attested. It judges PRs only - a push to master is not re-judged,
+since failing a merge that already happened would block nothing.
 
-    python3 scripts/gates/check_kdbx_attestation.py BASE HEAD
+CI passes its step summary as SUMMARY: the answer is appended there, and a
+refusal is also printed as an error annotation for the PR.
+
+    python3 scripts/gates/check_kdbx_attestation.py BASE HEAD [SUMMARY]
 """
 
 from __future__ import annotations
@@ -138,11 +143,16 @@ def report(base: str, head: str) -> tuple[bool, str]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3:
+    if len(argv) not in (3, 4):
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
     ok, message = report(argv[1], argv[2])
     print(f"check_kdbx_attestation: {message}")
+    if len(argv) == 4:
+        with open(argv[3], "a") as summary:
+            summary.write(f"{message}\n")
+        if not ok:
+            print(f"::error title=KDB-X attestation::{message}")
     return 0 if ok else 1
 
 
