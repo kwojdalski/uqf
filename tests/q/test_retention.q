@@ -157,8 +157,22 @@
     .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;before;`timestamp$2026.01.02;`timestamp$2026.01.04];1b;
         "the claim was withdrawn, not deleted: what was believed earlier is still answerable"];
     h:.qetl.retention.history[];
-    .qunit.assertEquals[sum h`claims_superseded;1;
-        "the withdrawal is on the record (one claim, withdrawn once)"]};
+    .qunit.assertEquals[sum h`claims_superseded;2;
+        "the withdrawals are on the record (the claim, then the remainder the first day's removal left over the second)"]};
+
+.qt.qetl.retention.test_a_claim_crossing_into_a_kept_day_keeps_the_kept_part:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_cross;root];
+    .qetl.coverage.stage_completion[`rtdeals_ds;`;.qt.qetl.retention.v;2026.01.03D12:00:00.000000000;`timestamp$2026.02.21;4];
+    .qetl.retention.run[`rt_cross;.qt.qetl.retention.as_at;`apply`supersede!(1b;1b)];
+    .qunit.assertEquals[.qt.qetl.retention.held[root];enlist 2026.02.20;"only the kept day is left"];
+    now:.z.p;
+    .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;now;`timestamp$2026.02.20;`timestamp$2026.02.21];1b;
+        "the kept day is still covered"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;now;`timestamp$2026.01.04;`timestamp$2026.02.21];1b;
+        "so is everything from the end of the removed day"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;now;2026.01.03D12:00:00.000000000;`timestamp$2026.01.04];0b;
+        "the removed part is not covered"]};
 
 / --- ledger rows --------------------------------------------------------
 

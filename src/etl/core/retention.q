@@ -144,12 +144,13 @@
     enlist `name`kind`target`item`range_from`range_to`rows`claims!
         (name;kind;target;item;from_ts;to_ts;"j"$rows;"j"$claims)}
 
-/ Private: the current coverage claims over [from_ts;to_ts) for a dataset.
+/ Private: the current coverage claims over [from_ts;to_ts) for a dataset, with
+/ the whole range each claims - a claim may reach past [from_ts;to_ts).
 / @private
 .qetl.retention.claims_over:{[ds;from_ts;to_ts]
     .qetl.coverage.init_ledger[];
     cur:.qetl.coverage.still_current;
-    select partition, source_version from .qetl.coverage.ledger[]
+    select partition, source_version, range_from, range_to from .qetl.coverage.ledger[]
         where dataset=ds, superseded_at=cur, range_from<to_ts, from_ts<range_to}
 
 / Private: the rows in one partition's table, without mapping the table.
@@ -256,6 +257,13 @@
         n:0;
         if[r[`claims]>0;
             cl:.qetl.retention.claims_over[decl`dataset;r`range_from;r`range_to];
+            / a claim reaching past the removed day is cut, not dropped: its
+            / remainders over days still on disk are staged BEFORE the supersede,
+            / so a kill between them over-claims (harmless) rather than reports
+            / kept data as a gap (#1544, as retire_fixture_claims does)
+            {[ds;r;c]
+                if[c[`range_from]<r`range_from; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;c`range_from;r`range_from;0]];
+                if[(r`range_to)<c`range_to; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;r`range_to;c`range_to;0]]}[decl`dataset;r] each cl;
             n:sum {[ds;r;c] .qetl.coverage.supersede[ds;c`partition;c`source_version;r`range_from;r`range_to]}[decl`dataset;r] each cl];
         .qetl.io.retire[decl`root;"D"$string r`item;r`target];
         .qetl.retention.record[id;enlist r;n]}[id;decl] each p;
