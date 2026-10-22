@@ -120,9 +120,9 @@ message changed.
 
 ## PeachQ
 
-PeachQ v0.88 cannot switch into a nested context, and this tree opens none: no
-`\d` names more than one level, in `src/`, `scripts/`, `sidecars/` or the q
-blocks of `docs/`
+kdb+ 4.0 cannot switch into a nested context (nor could PeachQ before v0.89),
+and this tree opens none: no `\d` names more than one level, in `src/`,
+`scripts/`, `sidecars/` or the q blocks of `docs/`
 ([`check_nested_contexts.py`](../../scripts/gates/check_nested_contexts.py)
 holds the one list of what it scans). Every name is defined from the root, fully
 qualified (`.qf.px.growth_simple:{[r;t] ...}`), and a lambda names its own
