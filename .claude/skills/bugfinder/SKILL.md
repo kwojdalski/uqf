@@ -209,11 +209,16 @@ gh issue create \
 <specific fix>
 EOF
 )" \
-  --label "bugfinder"
+  --label "bugfinder" \
+  --label "severity:<critical|high|medium|low>"
 ```
 
 - Use label `bugfinder`. Create the label first if it does not exist:
   `gh label create bugfinder --color "#d93f0b" --description "Logic bug found by bugfinder skill" 2>/dev/null || true`
+- Also label every issue with its severity, matching the body's **Severity:**
+  line: `severity:critical`, `severity:high`, `severity:medium` or
+  `severity:low`. The labels exist; if one is missing, create it rather than
+  filing without it.
 - Create one issue per finding. Do not batch findings into one issue.
 - After processing all findings, print the list of created issue URLs so the
   user can see them.

@@ -27,9 +27,11 @@ GitHub issues in this q/kdb+ eFX quant library.
 gh issue list --state open --limit 100
 ```
 
-**Priority Logic:** 1. `critical` → P0 (highest priority) 2. `high` → P1 3.
-`bugfinder` → P2 (auto-created triage) 4. `medium` → P3 5. `low` → P4 6. No
-severity label → P5 (lowest)
+**Priority Logic:** 1. `severity:critical` → P0 (highest priority) 2.
+`severity:high` → P1 3. `bugfinder` → P2 (auto-created triage) 4.
+`severity:medium` → P3 5. `severity:low` → P4 6. No severity label → P5
+(lowest). An issue with no `severity:*` label gets one before it is worked on,
+from its body's **Severity:** line or, failing that, from the triage verdict.
 
 **Tie-breaking:** - If multiple issues share same severity, pick newest issue
 (lowest issue number) - Ignore issues >30 days old unless they're critical
@@ -96,8 +98,9 @@ main checkout - Link related issues (dependencies, blockers)
 ### 7. Automatic Updates
 
 **Progress Tracking:** Update issue labels and status - `CONFIRMED` → Add label:
-`triaged-confirmed` - `IN_PROGRESS` → Use `/claim <number>` to claim the issue -
-`FIXED` → Use `/release <number> --status resolved` - `BLOCKED` → Use
+`triaged-confirmed`, plus its `severity:*` label if it has none - `IN_PROGRESS`
+→ Use `/claim <number>` to claim the issue - `FIXED` → Use
+`/release <number> --status resolved` - `BLOCKED` → Use
 `/release <number> --status blocked` - `INVALID` → Use
 `/release <number> --status invalid`
 

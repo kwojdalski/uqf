@@ -47,6 +47,16 @@ refused at load. `uqs job new` names a job's suite for you
 (`.qt.qpipe.job.<job>`); `tests/lib/discovery.q` has the rules and
 `tests/q/test_suite_layout.q` the cases.
 
+## Filing a GitHub issue: always labelled
+
+Every issue gets a kind label (`bug`, `enhancement`, `documentation`,
+`deployment`, or the finding skill's own: `bugfinder`, `architecture`,
+`antipattern`, `brainstorm`) and one rank label:
+`severity:critical|high|medium|low` for a defect or structural finding, matching
+any **Severity:** line in the body; `priority:high|medium|low` for an idea or
+chore. A severity written only in the body is not enough: the triage skills pick
+work by label.
+
 ## Working on a GitHub issue: always in a new worktree
 
 Several Claude Code sessions work in this repository at once. Whenever you pick

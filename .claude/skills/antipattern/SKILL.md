@@ -214,11 +214,16 @@ gh issue create \
 <specific fix>
 EOF
 )" \
-  --label "antipattern"
+  --label "antipattern" \
+  --label "severity:<critical|high|medium|low>"
 ```
 
 - Use label `antipattern`. Create the label first if it does not exist:
   `gh label create antipattern --color "#e4e669" --description "Anti-pattern finding" 2>/dev/null || true`
+- Also label every issue with its severity, matching the body's **Severity:**
+  line: `severity:critical`, `severity:high`, `severity:medium` or
+  `severity:low`. The labels exist; if one is missing, create it rather than
+  filing without it.
 - Create one issue per finding. Do not batch findings into one issue.
 - After processing all findings, print the list of new issue URLs and any
   existing issues that were matched instead of duplicated.
