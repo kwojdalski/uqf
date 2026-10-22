@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/peachq-org/peachq",
-  "commit": "1925d063ddd87195b366efee1b912b06623c6a2d",
+  "commit": "a872e258f59ae218c8c516485d7d49607e6386ec",
   "make_target": "q",
   "platforms": {
     "Linux-x86_64": {"RAY_MARCH": "x86-64-v2"},
