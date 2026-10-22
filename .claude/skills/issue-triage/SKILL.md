@@ -32,9 +32,9 @@ gh issue list --state open --limit 100 --json number,title,labels,createdAt
 ```
 
 Select the highest-severity open issue using this label priority order: 1.
-`critical` / `severity: critical` / `P0` 2. `high` / `severity: high` / `P1` 3.
+`critical` / `severity:critical` / `P0` 2. `high` / `severity:high` / `P1` 3.
 `bugfinder` (auto-created by the bugfinder skill) 4. `medium` /
-`severity: medium` / `P2` 5. `low` / `severity: low` / `P3` 6. No severity label
+`severity:medium` / `P2` 5. `low` / `severity:low` / `P3` 6. No severity label
 (fall back to oldest open issue)
 
 If multiple issues share the same severity tier, pick the oldest (lowest issue
@@ -140,7 +140,7 @@ labels and owner
 
 ```
 /claim <number>  # Claim the issue before starting work
-gh issue edit <number> --add-label "confirmed"
+gh issue edit <number> --add-label "confirmed" --add-label "severity:<critical|high|medium|low>"
 gh issue comment <number> --body "Triaged: confirmed. <one sentence summary of evidence>."
 ```
 
@@ -156,6 +156,10 @@ gh issue close <number> --comment "<closing comment>"
 gh issue comment <number> --body "<drafted questions>"
 gh issue edit <number> --add-label "needs-more-info"
 ```
+
+A confirmed issue always carries one `severity:*` label: keep the one it has if
+your evidence agrees, otherwise replace it (`--remove-label`) and say why in the
+comment.
 
 Create labels if they do not exist:
 

@@ -147,7 +147,7 @@ gh label list --json name | grep -q '"brainstorm"' || \
 Then, per approved idea:
 
 ```bash
-gh issue create --label brainstorm --label enhancement \
+gh issue create --label brainstorm --label enhancement --label "priority:<high|medium|low>" \
   --title "<module>: <imperative, specific, under ~70 chars>" \
   --body "$(cat <<'EOF'
 ## Proposed signature
@@ -175,9 +175,11 @@ EOF
 ```
 
 Title in the imperative and name the module, matching the repo's commit style
-(`Add src/market_data/dqchecks.q: ...`). Add `good first issue` only for an
-S-effort idea that touches exactly one function and needs no convention
-decision.
+(`Add src/market_data/dqchecks.q: ...`). An idea is not a defect, so it takes a
+`priority:*` label rather than a `severity:*` one: `high` for an idea the slate
+ranked first or that unblocks a roadmap item, `low` for nice-to-have, `medium`
+otherwise. Add `good first issue` only for an S-effort idea that touches exactly
+one function and needs no convention decision.
 
 ## Output
 

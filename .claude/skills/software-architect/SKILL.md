@@ -302,11 +302,16 @@ gh issue create \
 **Effort estimate:** <localised (hours) / moderate (days) / structural (sessions)>
 EOF
 )" \
-  --label "architecture"
+  --label "architecture" \
+  --label "severity:<critical|high|medium|low>"
 ```
 
 - Use label `architecture`. Create it first:
   `gh label create architecture --color "#0075ca" --description "Architectural design finding" 2>/dev/null || true`
+- Also label every issue with its severity, matching the body's **Severity:**
+  line: `severity:critical`, `severity:high`, `severity:medium` or
+  `severity:low`. The labels exist; if one is missing, create it rather than
+  filing without it.
 - One issue per finding.
 - Print all new issue URLs after creation.
 
