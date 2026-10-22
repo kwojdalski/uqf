@@ -15,6 +15,7 @@ SHAPES: dict[str, tuple[str, ...]] = {
     "--transform": ("backfill", "streaming"),
     "--transport": _BACKFILL,
     "--partition": _BACKFILL,
+    "--partition-column": _BACKFILL,
     "--check": _BACKFILL,
     "--dataset": _BACKFILL,
     "--source": _BACKFILL,

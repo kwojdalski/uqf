@@ -162,6 +162,13 @@ def new_job(
         str | None,
         typer.Option("--partition", help="The slice of --dataset it fills (backfill)"),
     ] = None,
+    partition_column: Annotated[
+        str | None,
+        typer.Option(
+            "--partition-column",
+            help="The column holding --partition (backfill; default sym)",
+        ),
+    ] = None,
     check: Annotated[
         bool, typer.Option("--check", help="Scaffold a quality check (backfill)")
     ] = False,
@@ -263,6 +270,7 @@ def new_job(
         "--profile": profile is not None,
         "--unprofiled": unprofiled is not None,
         "--partition": partition is not None,
+        "--partition-column": partition_column is not None,
         "--check": check,
         "--transform": transform is not None,
         "--twin-of": twin_of is not None,
@@ -315,6 +323,7 @@ def new_job(
                 procname=procname,
                 transport=transport,
                 partition=partition,
+                partition_column=partition_column,
                 check=check,
                 transform=transform,
                 start_with_all=start_with_all,

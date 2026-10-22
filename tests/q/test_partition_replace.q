@@ -53,14 +53,35 @@
     .qunit.assertEquals[.qt.qetl.partition_replace.held[];`EURUSD`USDJPY!2 4;
         "a second replace still clears its own rows the window held and the batch left out"]};
 
-.qt.qetl.partition_replace.test_a_replace_with_no_partition_column_is_refused_beside_a_sibling:{[t]
-    .qt.qetl.partition_replace.both[enlist[`on_conflict]!enlist `replace;()!()];
-    .qt.qetl.partition_replace.publish[`ppx_jpy;.qt.qetl.partition_replace.deals[`USDJPY;1;4]];
-    .qunit.assertThrows[{.qt.qetl.partition_replace.publish[`ppx_eur;.qt.qetl.partition_replace.deals[`EURUSD;11;4]]};::;
-        "on_conflict replace: ppx_eur is partition EURUSD of dataset ppx, and its window may hold other partitions' rows too - declare partition_column*";
-        "an unscoped clear would delete the sibling's rows, so it is refused"];
-    .qunit.assertEquals[.qt.qetl.partition_replace.held[];enlist[`USDJPY]!enlist 4;
-        "nothing was deleted"]};
+/ #1539: a partition is only as good as the column that lets publish check rows
+/ against it, so a partition with none is refused at define - which also makes an
+/ unscoped replace beside a sibling (#1476) unreachable.
+.qt.qetl.partition_replace.test_a_partition_without_a_partition_column_is_refused_at_define:{[t]
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ppx_eur;x]};
+        .qt.qetl.partition_replace.decl[`EURUSD;enlist[`on_conflict]!enlist `replace];
+        "define: ppx_eur's partition needs a partition_column - the output column that holds EURUSD*";
+        "a partition nothing can check a published row against is refused"];
+    .qunit.assertEquals[count select from .qetl.job.bounded.worker_cfg where name=`ppx_eur;0;"and nothing was registered"]};
+
+.qt.qetl.partition_replace.test_publish_refuses_a_row_of_another_partition:{[t]
+    .qt.qetl.partition_replace.both[enlist[`partition_column]!enlist `sym;enlist[`partition_column]!enlist `sym];
+    mixed:(.qt.qetl.partition_replace.deals[`EURUSD;1;3]),.qt.qetl.partition_replace.deals[`USDJPY;11;3];
+    .qunit.assertThrows[{.qt.qetl.partition_replace.publish[`ppx_eur;x]};mixed;
+        "publish: ppx_eur is partition EURUSD but 3 row(s) have another value in partition_column sym*";
+        "the USDJPY rows are not EURUSD's to write"];
+    .qunit.assertTrue[not `ppx in tables `.;"and nothing reached the dataset"]};
+
+.qt.qetl.partition_replace.test_publish_refuses_a_foreign_partition_under_upsert_too:{[t]
+    .qt.qetl.partition_replace.both[enlist[`partition_column]!enlist `sym;enlist[`partition_column]!enlist `sym];
+    .qunit.assertThrows[{.qt.qetl.partition_replace.publish[`ppx_jpy;x]};.qt.qetl.partition_replace.deals[`EURUSD;1;2];
+        "publish: ppx_jpy is partition USDJPY but 2 row(s) have another value*";
+        "the default strategy is held to the partition as well"]};
+
+.qt.qetl.partition_replace.test_publish_accepts_the_workers_own_partition:{[t]
+    .qt.qetl.partition_replace.both[enlist[`partition_column]!enlist `sym;enlist[`partition_column]!enlist `sym];
+    .qunit.assertEquals[.qt.qetl.partition_replace.publish[`ppx_eur;.qt.qetl.partition_replace.deals[`EURUSD;1;3]];3;"three rows published"];
+    .qunit.assertEquals[.qt.qetl.partition_replace.held[];enlist[`EURUSD]!enlist 3;"all of them its own"];
+    .qunit.assertEquals[.qt.qetl.partition_replace.publish[`ppx_eur;0#.qt.qetl.partition_replace.deals[`EURUSD;1;1]];0;"an empty window is still legal"]};
 
 .qt.qetl.partition_replace.test_an_unpartitioned_replace_needs_no_partition_column:{[t]
     .qetl.job.bounded.define[`ppx_eur;.qt.qetl.partition_replace.decl[`;enlist[`on_conflict]!enlist `replace]];
@@ -68,42 +89,19 @@
     .qunit.assertEquals[.qt.qetl.partition_replace.publish[`ppx_eur;.qt.qetl.partition_replace.deals[`EURUSD;21;2]];2;
         "a dataset with no partition dimension has no other partition's rows to delete"]};
 
-/ #1499: a real worker process loads only its own worker, so the guard cannot
+/ #1499: a real worker process loads only its own worker, so the clear cannot
 / depend on seeing a sibling. ONE worker is defined; the sibling's rows are
-/ already in the dataset, as they are when its process ran earlier.
-.qt.qetl.partition_replace.test_a_lone_partitioned_replace_is_refused_whatever_workers_are_loaded:{[t]
-    .qetl.job.bounded.define[`ppx_eur;.qt.qetl.partition_replace.decl[`EURUSD;enlist[`on_conflict]!enlist `replace]];
+/ already in the dataset. Since #1539 a partition always has its column, so
+/ the clear is scoped and the sibling's rows survive.
+.qt.qetl.partition_replace.test_a_lone_partitioned_replace_leaves_the_siblings_rows:{[t]
+    .qetl.job.bounded.define[`ppx_eur;.qt.qetl.partition_replace.decl[`EURUSD;`on_conflict`partition_column!(`replace;`sym)]];
     `ppx set .qt.qetl.partition_replace.deals[`USDJPY;1;4];
     .qunit.assertEquals[exec name from .qetl.job.bounded.worker_cfg where dataset=`ppx;enlist `ppx_eur;"only one worker fills ppx"];
-    .qunit.assertThrows[{.qt.qetl.partition_replace.publish[`ppx_eur;.qt.qetl.partition_replace.deals[`EURUSD;11;4]]};::;
-        "on_conflict replace: ppx_eur is partition EURUSD of dataset ppx*";
-        "the clear would delete the USDJPY rows no loaded worker accounts for"];
-    .qunit.assertEquals[.qt.qetl.partition_replace.held[];enlist[`USDJPY]!enlist 4;"nothing was deleted"]};
+    .qt.qetl.partition_replace.publish[`ppx_eur;.qt.qetl.partition_replace.deals[`EURUSD;11;4]];
+    .qunit.assertEquals[.qt.qetl.partition_replace.held[];`EURUSD`USDJPY!4 4;"the USDJPY rows no loaded worker accounts for were not deleted"]};
 
-.qt.qetl.partition_replace.test_a_lone_partitioned_automatic_replace_is_withheld:{[t]
-    .qetl.job.bounded.define[`ppx_eur;.qt.qetl.partition_replace.decl[`EURUSD;()!()]];
-    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;enlist "x"];
-    fv:.qetl.source.fixture_version `v1;
-    .qetl.job.bounded.write_state[`ppx_eur;`source_version;`v1];
-    .qetl.coverage.stage_completion[`ppx;`EURUSD;fv;.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1];4];
-    w:`range_from`range_to!(.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1]);
-    r:.qetl.job.bounded.runtime.write_strategy[`ppx_eur;w];
-    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
-    .qunit.assertEquals[r;`upsert;"a partitioned worker with no partition_column never switches to replace"]};
-
-/ The second way in: a live run over a window a fixture run claimed switches
-/ to replace by itself, whatever the worker declared.
-.qt.qetl.partition_replace.test_the_automatic_replace_is_withheld_when_it_cannot_be_scoped:{[t]
-    .qt.qetl.partition_replace.both[()!();()!()];
-    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;enlist "x"];
-    fv:.qetl.source.fixture_version `v1;
-    .qetl.job.bounded.write_state[`ppx_eur;`source_version;`v1];
-    .qetl.coverage.stage_completion[`ppx;`EURUSD;fv;.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1];4];
-    w:`range_from`range_to!(.qt.qetl.partition_replace.d[0];.qt.qetl.partition_replace.d[1]);
-    r:.qetl.job.bounded.runtime.write_strategy[`ppx_eur;w];
-    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
-    .qunit.assertEquals[r;`upsert;"a clear that would reach a sibling's rows is not made"]};
-
+/ A live run over a window a fixture run claimed switches to replace by itself,
+/ whatever the worker declared.
 .qt.qetl.partition_replace.test_the_automatic_replace_is_kept_when_scoped:{[t]
     .qt.qetl.partition_replace.both[enlist[`partition_column]!enlist `sym;enlist[`partition_column]!enlist `sym];
     setenv[`UQF_SOURCE_CRED_DEMO_DEALS;enlist "x"];

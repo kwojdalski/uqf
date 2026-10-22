@@ -547,14 +547,18 @@
 / @param worker the worker's name
 / @param decl its declaration, with partition already resolved
 / @return the column, a symbol
-/ @throws error when it is not a symbol naming an output column, or there is no partition
+/ @throws error when it is not a symbol naming an output column, there is no partition, or a partition has no column
 / @private
 .qetl.job.bounded.runtime.require_partition_column:{[worker;decl]
-    if[not `partition_column in key decl; :`];
-    c:decl`partition_column;
+    c:$[`partition_column in key decl; decl`partition_column; `];
     if[not -11h=type c;
         '"define: ",string[worker],"'s partition_column must be a symbol naming an output column"];
-    if[null c; :`];
+    / no column, nothing to check published rows against (#1539): refused
+    if[null c;
+        if[not null decl`partition;
+            '"define: ",string[worker],"'s partition needs a partition_column - the output column that holds ",
+             string[decl`partition],", so publish can refuse another partition's rows"];
+        :`];
     if[null decl`partition;
         '"define: ",string[worker],"'s partition_column needs a partition - with none declared there is no value for the column to hold"];
     out:cols (.qetl.transform.def decl`transform)`output;
@@ -666,6 +670,25 @@
         '"on_conflict replace: ",string[worker],"'s window column ",string[c]," has ",string[sum out],
          " value(s) outside [",string[w`range_from],"; ",string[w`range_to],
          "), so replace would delete another window's rows - declare window_column"];
+    batch}
+
+/ Private: refuse a batch holding a row of another partition, under any strategy.
+/ require_inside_window holds the batch to the window, this to the partition:
+/ else rows its coverage does not claim are written, and never cleared (#1539).
+/ @param worker the worker's name
+/ @param batch the rows about to be written
+/ @return the batch
+/ @throws error naming the partition and the count of rows outside it
+/ @private
+.qetl.job.bounded.runtime.require_inside_partition:{[worker;batch]
+    cfg:.qetl.job.bounded.def worker;
+    c:cfg`partition_column;
+    if[null c; :batch];
+    out:not (batch c)=cfg`partition;
+    if[any out;
+        '"publish: ",string[worker]," is partition ",string[cfg`partition]," but ",string[sum out],
+         " row(s) have another value in partition_column ",string[c],
+         " - its coverage would claim rows it does not own"];
     batch}
 
 / Withdraw the fixture's claims on the window just published - the window's
