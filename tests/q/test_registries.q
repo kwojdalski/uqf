@@ -219,7 +219,7 @@
 .qt.qetl.registries.test_workers_with_different_optional_fields_coexist:{[t]
     base:`source`dataset`width`transform!(`demo_deals;`regtest_ds;1D;`demo_deals_passthrough);
     .qetl.job.bounded.define[`regtest_checked;base,enlist[`check]!enlist {[b] .qetl.job.bounded.no_failures[]}];
-    .qetl.job.bounded.define[`regtest_sliced;@[base;`dataset;:;`regtest_ds2],`partition`note!(`EURUSD;"a slice")];
+    .qetl.job.bounded.define[`regtest_sliced;@[base;`dataset;:;`regtest_ds2],`partition`partition_column`note!(`EURUSD;`sym;"a slice")];
     c:.qetl.job.bounded.def `regtest_checked;
     s:.qetl.job.bounded.def `regtest_sliced;
     .qunit.assertEquals[(c`partition;c`note;s`check);(`;"";::);

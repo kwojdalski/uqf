@@ -47,6 +47,7 @@ def bounded_worker(
     define_table: bool = True,
     transport: str | None = None,
     partition: str | None = None,
+    partition_column: str | None = None,
     check: bool = False,
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
@@ -72,7 +73,10 @@ def bounded_worker(
 
     `partition` scopes the worker to one slice of its dataset: coverage is
     kept per (dataset, partition), so it is the only way two workers can fill
-    one dataset. `check` scaffolds a quality check that fails a window on bad
+    one dataset. `partition_column` is the output column holding it (default
+    `sym`): .qetl.job.bounded.define refuses a partition without one, and
+    publish refuses rows whose value in it is another partition's (#1539).
+    `check` scaffolds a quality check that fails a window on bad
     rows - most of the tree's workers declare one.
 
     `transform` is `passthrough` (the batch published as fetched) or `derive`
@@ -104,6 +108,12 @@ def bounded_worker(
             f"--partition {partition!r} must be a q symbol - letters, digits and underscores, "
             "e.g. EURUSD"
         )
+    if partition_column is not None and partition is None:
+        raise UqsError("--partition-column needs --partition: it names the column holding it")
+    if partition is not None:
+        partition_column = partition_column or "sym"
+        if not _PARTITION.match(partition_column):
+            raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"
     proc = procname or f"{name}_backfill1"
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
@@ -132,6 +142,11 @@ def bounded_worker(
     # would otherwise reach .qetl.source.define and fail the tree's load.
     transport = transports.get(transport or transports.default()).name
     cols = as_columns(columns) if columns else []
+    if partition_column and cols and partition_column not in [c for c, _ in cols]:
+        raise UqsError(
+            f"--partition-column {partition_column!r} is not among --columns "
+            f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
+        )
 
     actions: list[FileAction] = []
     if not reuse_source:
@@ -148,6 +163,7 @@ def bounded_worker(
                 width,
                 proc,
                 partition=partition,
+                partition_column=partition_column,
                 check=check,
                 transform=transform,
                 shared=shared,

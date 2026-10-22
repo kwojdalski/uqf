@@ -195,6 +195,7 @@ def worker_body(
     proc: str,
     *,
     partition: str | None = None,
+    partition_column: str | None = None,
     check: bool = False,
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
@@ -208,9 +209,9 @@ def worker_body(
     derive_stub, transform_decl, transform_name = worker_transform(
         transform, worker, src, dataset, shared
     )
-    extra_keys = ("`check" if check else "") + ("`partition" if partition else "")
+    extra_keys = ("`check" if check else "") + ("`partition`partition_column" if partition else "")
     extra_values = (f";.qpipe.job.{worker}.quality_check" if check else "") + (
-        f";`{partition}" if partition else ""
+        f";`{partition};`{partition_column or 'sym'}" if partition else ""
     )
     return f"""/ {worker}.q - the {src} bounded worker (.qpipe.job.{worker}).
 / .

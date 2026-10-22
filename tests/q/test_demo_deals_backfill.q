@@ -947,7 +947,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_worker_declaring_no_procname_runs_as_its_name_and_1:{[t]
     .qetl.job.bounded.define[`noproc_slice;
-        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`NOPROC)];
+        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`NOPROC;`sym)];
     cfg:.qetl.job.bounded.def `noproc_slice;
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`noproc_slice];
     .qunit.assertEquals[(cfg`procname;cfg`note);(`noproc_slice1;"");
@@ -967,10 +967,10 @@
 / distinguishable and no read composes them.
 .qt.qpipe.job.demo_deals_backfill.test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
     .qetl.job.bounded.define[`eurusd_slice;
-        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
+        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
     .qunit.assertEquals[
         .qetl.job.bounded.define[`usdjpy_slice;
-            `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY)];
+            `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY;`sym)];
         `usdjpy_slice;
         "two partitions of one dataset are two distinguishable claims, so both register"];
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice`usdjpy_slice];};
@@ -979,9 +979,9 @@
 / different worker is the case that was always wrong and still is.
 .qt.qpipe.job.demo_deals_backfill.test_two_workers_may_not_claim_one_partition_of_a_dataset:{[t]
     .qetl.job.bounded.define[`eurusd_slice;
-        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
+        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
     err:@[{.qetl.job.bounded.define[`another_eurusd_slice;x]; ""};
-        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD);{x}];
+        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym);{x}];
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice];
     .qunit.assertEquals[err like "*eurusd_slice*";1b;
         "the second claim on one dataset AND partition is refused, naming the holder"]};
@@ -995,7 +995,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_declared_partition_is_stored_as_given:{[t]
     .qetl.job.bounded.define[`eurusd_slice;
-        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
+        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
     r:.qetl.job.bounded.partition_of `eurusd_slice;
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice];
     .qunit.assertEquals[r;`EURUSD;"the declared partition is what coverage will be recorded under"]};

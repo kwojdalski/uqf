@@ -1019,7 +1019,7 @@
 / range was examined and held nothing.
 .qetl.job.bounded.publish:{[worker;batch]
     cfg:.qetl.job.bounded.def worker; w:.qetl.job.bounded.read_state[worker;`last_window];
-    strategy:.qetl.job.bounded.runtime.write_strategy[worker;w];
+    strategy:.qetl.job.bounded.runtime.write_strategy[worker;w]; .qetl.job.bounded.runtime.require_inside_partition[worker;batch];
     if[`replace=strategy; .qetl.job.bounded.runtime.require_inside_window[worker;batch;w]];
     opts:.qetl.job.bounded.runtime.write_opts[worker;strategy;w];
     .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}

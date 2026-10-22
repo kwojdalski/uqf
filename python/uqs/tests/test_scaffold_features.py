@@ -76,13 +76,30 @@ def test_a_period_define_would_refuse_is_refused_here(period, message):
 
 
 def test_a_partitioned_worker_declares_its_partition():
-    plan = backfill.bounded_worker("fx", "fx_rates", "px:float", partition="EURUSD")
+    plan = backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="EURUSD")
     assert symbols(_fields(plan, "fx_backfill.q")["partition"]) == ("EURUSD",)
+
+
+def test_a_partitioned_worker_declares_the_column_holding_its_partition():
+    """#1539: define refuses a partition with no partition_column."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="EURUSD")
+    assert symbols(_fields(plan, "fx_backfill.q")["partition_column"]) == ("sym",)
+    plan = backfill.bounded_worker(
+        "fx", "fx_rates", "pair:symbol,px:float", partition="EURUSD", partition_column="pair"
+    )
+    assert symbols(_fields(plan, "fx_backfill.q")["partition_column"]) == ("pair",)
+
+
+def test_a_partition_column_outside_the_columns_or_without_a_partition_is_refused():
+    with pytest.raises(UqsError, match="not among --columns"):
+        backfill.bounded_worker("fx", "fx_rates", "px:float", partition="EURUSD")
+    with pytest.raises(UqsError, match="needs --partition"):
+        backfill.bounded_worker("fx", "fx_rates", "px:float", partition_column="sym")
 
 
 def test_a_partition_that_is_not_a_symbol_is_refused():
     with pytest.raises(UqsError, match="must be a q symbol"):
-        backfill.bounded_worker("fx", "fx_rates", "px:float", partition="EUR/USD")
+        backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="EUR/USD")
 
 
 def test_check_scaffolds_a_throwing_quality_check_and_declares_it():
