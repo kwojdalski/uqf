@@ -83,8 +83,9 @@ in the main checkout.
    generates) and you have KDB-X, run `uv run python scripts/dev/attest_kdbx.py`
    after the LAST rebase and push again. Hosted CI cannot run the KDB-X gates;
    this runs them over the whole tree and records a `KDB-X-gates: <tree>`
-   trailer, which CI's advisory "KDB-X attestation" check reports on the PR
-   (#1014). A rebase changes the tree, so it needs a fresh run.
+   trailer. CI's "KDB-X attestation" check fails a PR that changes a path those
+   gates judge unless its head tree carries one (#1014, #1543). A rebase changes
+   the tree, so it needs a fresh run.
 
 Only triage without edits (reading code, commenting, labelling) may stay in the
 main checkout.
