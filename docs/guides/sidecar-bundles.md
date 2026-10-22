@@ -77,7 +77,9 @@ The additions go between `/ BEGIN bundle <name>` and `/ END bundle <name>` in
 `src/etl/installed_bundles.json` records what each bundle installed.
 Reinstalling is idempotent, and an upgrade replaces only the bundle's own files.
 A conflict with the tree or another bundle is refused before anything is
-written.
+written. That includes a source or transform the tree already registers (q would
+silently keep one of the two) and a table named like one of the TorQ starter
+pack's own (`quote`, `trade`).
 
 ## Bundles a runtime declares
 

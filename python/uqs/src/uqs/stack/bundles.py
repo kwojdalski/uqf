@@ -45,6 +45,7 @@ from pathlib import Path
 from uqs.model.declarations import read_file
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, PACKAGE_DIR, TABLES_FILE
+from uqs.stack import bundle_shadowing
 from uqs.stack import install as stack_install
 from uqs.stack.bundle_blocks import BundleError, with_block, without_block
 from uqs.stack.install import Item, Kind, Mode, Status
@@ -297,9 +298,8 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     if not items:
         raise BundleError(f"bundle {bundle.name} declares no source, worker or streaming job")
 
-    tables_text = (root / TABLES_FILE).read_text()
-    outside = without_block(tables_text, bundle.name, str(TABLES_FILE))
-    known = {m.group(1) for ln in outside.splitlines() if (m := _TABLE.match(ln))}
+    outside = without_block((root / TABLES_FILE).read_text(), bundle.name, str(TABLES_FILE))
+    known = bundle_shadowing.known_tables(root, outside)
     table_body, tables = table_lines(bundle, known)
     catalog_text = without_block((root / CATALOG_FILE).read_text(), bundle.name, str(CATALOG_FILE))
     described = {m.group(1) for ln in catalog_text.splitlines() if (m := _DESCRIBE.match(ln))}
@@ -313,8 +313,8 @@ def plan(bundle: Bundle, root: Path) -> Plan:
         if d.kind is not PipelineKind.BACKFILL
     }
     overrides = override_rows(bundle, procnames)
-    installed = {i.destination for i in items}
-    stale = sorted(p for p in mine if p not in installed and p.suffix == ".q")
+    stale = sorted(p for p in mine if p not in {i.destination for i in items} and p.suffix == ".q")
+    bundle_shadowing.refuse(root, items, stale)
     return Plan(bundle, items, tests, tables, table_body, catalog_body, overrides, stale)
 
 

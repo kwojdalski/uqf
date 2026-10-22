@@ -31,6 +31,9 @@ SIDECAR = {
 }
 
 
+TRANSFORM = ".qetl.transform.define[`{name};`inputs`output`fn`examples!()]\n"
+
+
 @pytest.fixture(scope="module")
 def plan() -> load_plan.LoadPlan:
     return load_plan.load_plan(REPO)
@@ -118,3 +121,31 @@ def test_readiness_does_not_wait_for_a_one_shot(monkeypatch):
     expected, _ = verify._expected("essential", None)
     assert "tpreplay1" in infra.ESSENTIAL_INFRA
     assert "tpreplay1" not in expected and "rdb1" in expected
+
+
+def test_two_files_registering_one_source_or_transform_are_refused():
+    """q upserts a second define, so the plan refuses it (#1545)."""
+    source = ".qpipe.source.zz_dup.source_name:`zz_dup\n"
+    with pytest.raises(UqsError, match="source zz_dup is defined by both .*zz_a.q and .*zz_b.q"):
+        load_plan.load_plan(
+            REPO,
+            {"src/etl/sources/zz_a.q": source, "src/etl/sources/zz_b.q": source},
+        )
+    transform = TRANSFORM.format(name="zz_dup")
+    with pytest.raises(UqsError, match="transform zz_dup is defined by both"):
+        load_plan.load_plan(
+            REPO,
+            {"src/etl/transforms/zz_a.q": transform, "src/etl/streaming/zz_b.q": transform},
+        )
+
+
+def test_a_transform_namespace_beside_its_define_is_not_a_second_definition():
+    """A shared transform's helpers live under .qpipe.transform.<name> in one
+    file and the job registers the transform in another (book_liquidity_1m)."""
+    load_plan.load_plan(
+        REPO,
+        {
+            "src/etl/transforms/zz_ns.q": ".qpipe.transform.zz_t.width:1\n",
+            "src/etl/streaming/zz_t.q": TRANSFORM.format(name="zz_t"),
+        },
+    )
