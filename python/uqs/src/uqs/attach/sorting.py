@@ -90,6 +90,14 @@ def _reload(ipc: Ipc, r: Reader, table: str, want: list[Key]) -> str:
     return ""
 
 
+def _probed_post(op: Op) -> dict:
+    """The `post` of a pending write the file's hash shows was ours: the run it
+    appended, as detach needs it to take exactly those rows out again."""
+    rows = op.pre.get("rows", [])
+    run = read(Path(op.process)).run(op.table, keys_of(rows))
+    return {"path": op.process, "run": run, "rows": rows, "separator": ""}
+
+
 def apply_change(
     m: Manifest, ipc: Ipc, ch: Change, expected: str, backup_dir: Path
 ) -> list[tuple[str, str, str, str, str]]:
@@ -120,7 +128,10 @@ def apply_change(
         if prior is not None and prior.status == PENDING and not prior.ownership:
             # an earlier apply lost track mid-write: the hash says whose rows these are
             ours = read(Path(ch.path)).sha == prior.pre.get("expected_sha")
-            m.finish(prior, DONE, CREATED if ours else EXISTING, prior.post,
+            # not ours: recorded as reused rows are (below), which detach never removes
+            adopted = {"path": ch.path, "rows": as_lists(ch.declared), "run": ""}
+            post = _probed_post(prior) if ours else adopted
+            m.finish(prior, DONE, CREATED if ours else EXISTING, post,
                      "outcome probed: " + ("written by this attachment" if ours
                                            else "not this attachment's write"))  # fmt: skip
         elif prior is None or prior.status not in (DONE, RETAINED):
@@ -234,12 +245,7 @@ def resolve_pending(m: Manifest, *, save: bool) -> list[tuple[str, str, str]]:
         if now and now == op.pre.get("expected_sha"):
             op.status, op.ownership = DONE, CREATED
             op.note = "outcome probed: the file is as this attachment's write left it"
-            op.post = {
-                "path": op.process,
-                "run": read(path).run(op.table, keys_of(op.pre.get("rows", []))),
-                "rows": op.pre.get("rows", []),
-                "separator": "",
-            }
+            op.post = _probed_post(op)
         elif now and now == op.pre.get("sha"):
             op.status, op.note = REVERTED, "outcome probed: it never took effect"
         else:

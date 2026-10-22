@@ -502,6 +502,22 @@ def test_a_write_whose_outcome_was_lost_is_settled_by_the_files_hash(world):
     assert csv.read_text() == ORIGINAL
 
 
+def test_a_lost_write_settled_by_applying_again_can_still_be_detached(world):
+    fake, make, state, csv = world
+    att = make()
+    apply_(att, fake, state)
+    m = Manifest.load("pb-uat", state)
+    op = m.find("sort_rows", str(csv), TABLE)
+    assert op is not None
+    op.status, op.ownership, op.post = "pending", "", {}  # as if the connection dropped mid-write
+    m.save()
+    apply_(att, fake, state)
+    op = Manifest.load("pb-uat", state).find("sort_rows", str(csv), TABLE)
+    assert op is not None and (op.status, op.ownership) == ("done", "created")
+    assert detach_(att, fake, state).outcome == "rolled_back"
+    assert csv.read_text() == ORIGINAL
+
+
 def test_after_publication_the_rows_are_retained(world):
     fake, make, state, csv = world
     att = make()
