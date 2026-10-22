@@ -95,7 +95,12 @@
     pair:`$string[rows`sym],'"|",'string rows`source;
     real:([] time:rows`source_time; sym:pair; bid_prices:rows`bid_prices;
         bid_sizes:rows`bid_sizes; ask_prices:rows`ask_prices; ask_sizes:rows`ask_sizes);
-    stale:.qf.mkt.check_stale_quotes[real;max rows`source_time;0D00:05];
+    / The reference is the newest quote that is not itself ahead of the clock
+    / (#1542): a future-dated row is withheld as bad_time below, and measuring
+    / the rest against it made every healthy row read as stale.
+    ahead:where rows[`source_time]>.z.p+.qf.mkt.max_clock_lead;
+    sane:rows[`source_time] where not (til count rows) in ahead;
+    stale:.qf.mkt.check_stale_quotes[real;$[count sane;max sane;max rows`source_time];0D00:05];
     late:where pair in exec sym from stale where status=`stale;
     stale:([] check:count[late]#`stale_quote; status:count[late]#`stale;
         detail:count[late]#enlist "older than the batch's newest quote by over 5 minutes"; row:late);
@@ -105,7 +110,6 @@
     bad:where off'[rows`bid_prices;rows`bid_sizes] or off'[rows`ask_prices;rows`ask_sizes];
     level:([] check:count[bad]#`bad_level; status:count[bad]#`bad_level;
         detail:count[bad]#enlist "a level-0 price or size that is not positive and finite"; row:bad);
-    ahead:where rows[`source_time]>.z.p+.qf.mkt.max_clock_lead;
     timed:([] check:count[ahead]#`bad_time; status:count[ahead]#`future;
         detail:count[ahead]#enlist "source_time is further ahead of this host than .qf.mkt.max_clock_lead"; row:ahead);
     crossed,stale,level,timed}

@@ -1648,6 +1648,22 @@
     lead:book[enlist 1.10;enlist 1e6;now+.qf.mkt.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
 
+/ #1542: a future-dated quote is withheld as bad_time but must not set the
+/ stale reference, or every healthy row in its batch reads as stale.
+.qt.qetl.job.stream.test_market_data_check_stale_reference_ignores_future_rows:{[t]
+    now:.z.p;
+    book:{[s;v;ts] ([] sym:enlist s; source:enlist v; market:enlist `fx; source_time:enlist ts;
+        bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 1e6)};
+    rows:raze (book[`EURUSD;`LP_A;now];book[`GBPUSD;`LP_A;now];book[`USDJPY;`LP_A;now];
+        book[`EURUSD;`LP_B;now+0D00:10]);
+    f:.qpipe.job.market_data.check rows;
+    .qunit.assertEquals[count f;1;"only the future-dated row fails"];
+    .qunit.assertEquals[exec row from f where check=`bad_time;enlist 3;"the future row is still bad_time"];
+    .qunit.assertEquals[count select from f where check=`stale_quote;0;"healthy rows are not stale"];
+    old:rows,book[`USDCHF;`LP_A;now-0D00:10];
+    g:.qpipe.job.market_data.check old;
+    .qunit.assertEquals[exec row from g where check=`stale_quote;enlist 4;"a genuinely stale row is still caught"]};
+
 / #1063: superbook reads the shared lead when a batch arrives, not a copy
 / taken at load, so tuning it moves superbook and market_data's check together.
 .qt.qetl.job.stream.test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
