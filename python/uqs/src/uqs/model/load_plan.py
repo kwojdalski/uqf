@@ -96,6 +96,10 @@ class FileFacts:
     watches: frozenset[str]
     #: the Kafka topics it declares, each owned by the one job the file declares
     topics: tuple[str, ...] = ()
+    #: the sources and transforms it REGISTERS: a transform's namespace
+    #: (its helpers under one name) is a `defines` key too, but only a
+    #: `.qetl.transform.define` puts a transform in the registry (#1545)
+    registers: frozenset[str] = frozenset()
 
 
 def declaration_files(root: Path) -> list[str]:
@@ -111,8 +115,10 @@ def facts(rel: str, text: str) -> FileFacts:
     code = strip_q_comments(text)
     defines = {f"{k}:{n}" for k, n in _NAMESPACE.findall(code)}
     defines |= {f"{k}:{n}" for k, n in _NAMESPACE_BLOCK.findall(code)}
-    defines |= {f"transform:{n}" for n in _TRANSFORM_DEF.findall(code)}
-    defines |= {f"source:{n}" for n in _SOURCE_DEF.findall(code)}
+    registers = {f"transform:{n}" for n in _TRANSFORM_DEF.findall(code)}
+    registers |= {f"source:{n}" for n in _SOURCE_DEF.findall(code)}
+    defines |= registers
+    registers |= {k for k in defines if k.startswith("source:")}
     refers = {f"{k}:{n}" for k, n in _QPIPE_REF.findall(code)}
     refers |= {f"transform:{n}" for n in _TRANSFORM_USE.findall(code)}
     jobs, writes = [], set()
@@ -137,6 +143,7 @@ def facts(rel: str, text: str) -> FileFacts:
         frozenset(writes),
         frozenset(watches),
         topics,
+        frozenset(registers),
     )
 
 
@@ -174,11 +181,23 @@ class LoadPlan:
         self.files = list(files)
         self._order = {f.path: i for i, f in enumerate(self.files)}
         self._definer: dict[str, str] = {}
+        registered: dict[str, str] = {}
         for f in self.files:
             for key in f.defines:
                 # Two files defining one name (a transform declared twice) both
                 # count; the first in load order is the one a reference needs.
                 self._definer.setdefault(key, f.path)
+            for key in sorted(f.registers):
+                # q upserts a source or transform of an existing name, so the
+                # LAST file to load wins a full load while a selected load
+                # gets whichever file it reaches (#1545). Refused, not ranked.
+                if key in registered:
+                    kind, name = key.split(":", 1)
+                    raise UqsError(
+                        f"{kind} {name} is defined by both {registered[key]} and {f.path} - "
+                        "q would silently keep one, and which depends on what loads"
+                    )
+                registered[key] = f.path
         self.jobs: dict[str, str] = {}
         self.procs: dict[str, list[str]] = {}
         #: each source and the file declaring it - what a source check loads

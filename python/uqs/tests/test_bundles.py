@@ -307,3 +307,46 @@ def test_cli_refuses_symlink_for_a_bundle(bundle: Path, cli_repo: Path) -> None:
     code, _out = _run(str(bundle), "--mode", "symlink", "--yes")
     assert code == 1
     assert not (cli_repo / LEDGER).exists()
+
+
+# ----------------------------------------------- shadowing (#1545)
+
+TRANSFORM = ".qetl.transform.define[`{name};`inputs`output`fn`examples!()]\n"
+
+
+def _tree_file(repo: Path, directory: Path, name: str, text: str) -> None:
+    (repo / directory / name).write_text(text)
+
+
+def test_a_bundle_source_redefining_a_tree_source_is_refused(bundle: Path, repo: Path) -> None:
+    _tree_file(repo, SOURCE_DIR, "demo_deals.q", ".qpipe.source.piggy.source_name:`piggy\n")
+    (bundle / "piggy.q").write_text(".qpipe.source.piggy.source_name:`piggy\n" + SOURCE)
+    with pytest.raises(BundleError, match=r"source piggy is defined by both .*demo_deals\.q and"):
+        bundles.plan(bundles.read_bundle(bundle), repo)
+
+
+def test_a_bundle_worker_redefining_a_tree_transform_is_refused(bundle: Path, repo: Path) -> None:
+    _tree_file(repo, WORKER_DIR, "core_worker.q", TRANSFORM.format(name="piggy_pass"))
+    (bundle / "piggy_backfill.q").write_text(TRANSFORM.format(name="piggy_pass") + WORKER)
+    with pytest.raises(
+        BundleError, match=r"transform piggy_pass is defined by both .*core_worker\.q and"
+    ):
+        bundles.plan(bundles.read_bundle(bundle), repo)
+
+
+def test_a_reinstalled_bundle_does_not_shadow_itself(bundle: Path, repo: Path) -> None:
+    (bundle / "piggy_backfill.q").write_text(TRANSFORM.format(name="piggy_pass") + WORKER)
+    _install(bundle, repo)
+    bundles.plan(bundles.read_bundle(bundle), repo)
+
+
+def test_a_table_the_vendored_pack_defines_is_refused(
+    bundle: Path, repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    (pack / "database.q").write_text("fills:([]time:`timestamp$();sym:`symbol$())\n")
+    monkeypatch.setenv("TORQAPPHOME", str(pack))
+    (bundle / "tables.q").write_text("fills:([]time:`timestamp$())\n")
+    with pytest.raises(BundleError, match="fills is already defined in the tree"):
+        bundles.plan(bundles.read_bundle(bundle), repo)
