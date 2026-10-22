@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 import sys
 
-from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError
+from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.selection import Selection, started_by
 from uqs.deploy.stages import Deployment
@@ -76,12 +76,14 @@ def _current(dep: Deployment) -> str:
 
 
 def _start_and_verify(dep: Deployment, release: str, report: dict, what: str) -> dict:
+    """A start that fails is a failed verification, not an escape: the caller
+    must still stop what it part-started and restore `current` (#1541)."""
     path = f"{dep.releases}/{release}"
-    dep.uqs(
-        path, "rollback", f"starting {what}", "start", "--profile", report["profile"],
-        *report["extra_processes"],
-    )  # fmt: skip
     try:
+        dep.uqs(
+            path, "rollback", f"starting {what}", "start", "--profile", report["profile"],
+            *report["extra_processes"],
+        )  # fmt: skip
         return dep.verify(
             path, report["profile"], "rollback", Selection(processes=report["extra_processes"])
         )
@@ -121,17 +123,30 @@ def rollback(
             print(json.dumps({"rollback": "planned", **plan}, indent=2), file=out)
             return 0
         log.info("stopping release {}'s processes", current)
-        dep.uqs(f"{dep.releases}/{current}", "rollback", "stopping the current processes",
-                "stop", *_started(now))  # fmt: skip
+        try:
+            dep.uqs(f"{dep.releases}/{current}", "rollback", "stopping the current processes",
+                    "stop", *_started(now))  # fmt: skip
+        except DeployError:
+            # Some of current's processes may be down: bring them back first.
+            restored = _start_and_verify(dep, current, now, f"release {current} again")
+            outcome = "verified" if restored.get("passed") else "NOT verified - check by hand"
+            log.error("stopping release {} failed; restarted it: {}", current, outcome)
+            raise
         dep.beat()
         log.info("starting release {}'s profile {}", target, then["profile"])
         result = _start_and_verify(dep, target, then, f"release {target}")
         dep.beat()
         if not result.get("passed"):
             reason = result.get("reason") or "verification failed"
-            log.error("release {} did not verify: {}; restoring {}", target, reason, current)
-            dep.uqs(f"{dep.releases}/{target}", "rollback", "stopping the target's processes",
-                    "stop", *_started(then))  # fmt: skip
+            log.error(
+                "release {} did not start or verify: {}; restoring {}", target, reason, current
+            )
+            try:
+                dep.uqs(f"{dep.releases}/{target}", "rollback", "stopping the target's processes",
+                        "stop", *_started(then))  # fmt: skip
+            except DeployError as exc:
+                log.error("stopping release {}'s processes failed: {}; restoring anyway", target,
+                          redact(str(exc)))  # fmt: skip
             restored = _start_and_verify(dep, current, now, f"release {current} again")
             outcome = "restored" if restored.get("passed") else "NOT restored - check by hand"
             failed = {"rollback": "failed", **plan, "reason": reason, "current": current}

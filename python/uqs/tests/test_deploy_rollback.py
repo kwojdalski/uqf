@@ -124,6 +124,47 @@ def test_a_target_that_does_not_verify_leaves_the_server_where_it_began():
     assert remote.ran("uqs deploy verify --profile essential"), "and the restore is verified"
 
 
+def test_a_target_that_does_not_start_leaves_the_server_where_it_began():
+    """A failed `uqs start` used to escape before the restore: current's
+    processes stopped, the target's half-started, nothing restarted (#1541)."""
+    remote = _server()
+    remote.rules[".venv/bin/uqs start --profile fx"] = _done(rc=1)
+    code, result = _roll(remote)
+    assert code == 1 and result["rollback"] == "failed" and result["current"] == NEW
+    assert result["restore"] == "restored"
+    assert not remote.ran(".current.new"), "current never moves"
+    assert not remote.ran("uqs deploy verify --profile fx"), "a target that did not start"
+    stop = remote.index(f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop rdb1 piggy1")
+    restart = remote.index(
+        f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"
+    )
+    assert stop < restart, "what the target part-started is stopped, then current restarts"
+    assert remote.ran("uqs deploy verify --profile essential"), "and the restore is verified"
+
+
+def test_a_target_that_will_not_stop_still_restores_current():
+    remote = _server(target_verifies=False)
+    remote.rules[".venv/bin/uqs stop rdb1 piggy1"] = _done(rc=1)
+    code, result = _roll(remote)
+    assert code == 1 and result["restore"] == "restored"
+    assert remote.ran(f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential")
+
+
+def test_a_current_that_will_not_stop_is_restarted_and_nothing_else_runs():
+    remote = _server()
+    remote.rules[".venv/bin/uqs stop rdb1 hdb1"] = _done(rc=1)
+    with pytest.raises(DeployError):
+        rollback.rollback(_cfg(), remote, out=io.StringIO())
+    stop = remote.index(".venv/bin/uqs stop rdb1 hdb1")
+    restart = remote.index(
+        f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"
+    )
+    assert stop < restart and remote.ran("uqs deploy verify --profile essential")
+    assert not remote.ran(".venv/bin/uqs start --profile fx"), "the target is never started"
+    assert not remote.ran(".current.new"), "current never moves"
+    assert remote.ran("rm -rf /opt/uqf/deploy.lock"), "the lock is released"
+
+
 def test_a_target_that_does_not_verify_is_stopped_by_name_never_by_all():
     """`stop all` would leave the target's startwithall=0 processes and its
     extra ones running beside the restored release (#1040)."""
