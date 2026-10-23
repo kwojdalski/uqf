@@ -185,6 +185,40 @@ uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
 - **`labels`.** Free-form `key = "value"` pairs that `uqs list targets` shows.
   Nothing deploys them.
 
+## Requirements and named overrides
+
+A target can pin what it deploys and what it deploys onto:
+
+```toml
+expected_sha256 = "<the artifact's sha256>"
+q_version = ">=4.1"  # a minimum; "4.1" means exactly 4.1
+```
+
+Push refuses an artifact with any other sha256, and a server whose q, as
+preflight runs it, is outside `q_version`. A local artifact also needs its
+`.sha256` beside it, or an `expected_sha256`. Each requirement has one named
+override that relaxes only it. An override is given on the command line, never
+in a target, and needs a reason:
+
+  | Override                    | Relaxes                                    |
+  | --------------------------- | ------------------------------------------ |
+  | `--accept-digest REASON`    | `expected_sha256`                          |
+  | `--accept-q-version REASON` | `q_version`                                |
+  | `--allow-unpinned REASON`   | the `.sha256` a local artifact must have   |
+
+- An override with nothing to relax is refused: `--accept-digest` without
+  `expected_sha256`, `--accept-q-version` without `q_version`,
+  `--allow-unpinned` with `expected_sha256`.
+- Accepting a digest is not trusting the artifact. Its actual sha256 is
+  recorded, and the server checks the bytes it receives against it.
+- No override bypasses the archive's member checks, the OS, architecture and
+  Python match, the smoke test or verification.
+- Every override asked for, `--accept-converted-release` included, opens the
+  dry-run plan in an `EXCEPTIONS` block. Each is also recorded in the report's
+  `exceptions` and in the deploy history, with its reason, what was required,
+  what was found and whether it was needed. The report records the server's q as
+  `qversion`, override or not.
+
 ## Driving a deployed release from your machine
 
 Once a target is declared, `uqs --target NAME <command>` runs any `uqs` command
@@ -590,8 +624,9 @@ checks":
 
 - After the smoke test passes on the server's q, push writes
   `CONVERTED_RELEASE_OVERRIDE.json` into the release. It records who asked, why,
-  the release's target, the server's q and the passing smoke test, and the
-  report records it as `converted_override`.
+  the release's target, the server's q and the passing smoke test. The report
+  keeps it as an entry in `exceptions` ([named
+  overrides](#requirements-and-named-overrides)).
 - `uqs start` honours it only for that deployment attempt, through a one-time
   token, and still checks the conversion record and every file's integrity.
 - Port checks, verification and rollback run as usual.

@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.deploy.artifact import Artifact, ReleaseError, read_artifact
+from uqs.deploy.artifact import Artifact, ReleaseError, q_requirement, read_artifact
 from uqs.paths import UqsError
 from uqs.stack import redact as stack_redact
 from uqs.stack import site_fields
@@ -128,6 +128,16 @@ class Config:
     #: owner/name whose releases a tag ARTIFACT names; default: origin's
     release_repo: str | None = None
 
+    #: the artifact's sha256, and the server's q version, this target requires
+    #: (#1557): `>=4.1` a minimum, `4.1` exactly. None requires nothing.
+    expected_sha256: str | None = None
+    q_version: str | None = None
+    #: the named overrides that relax them, each its reason; command-line only
+    #: (targets.PER_RUN). None: not overridden
+    accept_digest: str | None = None
+    accept_q_version: str | None = None
+    allow_unpinned: str | None = None
+
     #: fill the shared HDB's missing tables and columns in prepare (#870)
     fix_hdb: bool = False
 
@@ -192,15 +202,55 @@ def _process_fields(value: str) -> tuple[str, ...]:
         raise DeployError("arguments", str(exc)) from None
 
 
-def _reason(value: str | None) -> str | None:
-    """--accept-converted-release's reason: an override nobody explained is refused."""
+def _reason(flag: str, value: str | None) -> str | None:
+    """An override's reason: an override nobody explained is refused."""
     if value is None:
         return None
     if not value.strip():
-        raise DeployError(
-            "arguments", "--accept-converted-release needs a reason, recorded in the report"
-        )
+        raise DeployError("arguments", f"{flag} needs a reason, recorded in the report")
     return value.strip()
+
+
+def _sha256(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", value.strip()):
+        raise DeployError("arguments", f"expected_sha256 {value!r} is not a sha256 (64 hex digits)")
+    return value.strip().lower()
+
+
+def _q_version(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        q_requirement(value)
+    except ValueError as exc:
+        raise DeployError("arguments", str(exc)) from None
+    return value.strip()
+
+
+def _relaxes_something(
+    expected_sha256: str | None,
+    q_version: str | None,
+    accept_digest: str | None,
+    accept_q_version: str | None,
+    allow_unpinned: str | None,
+) -> None:
+    """An override with nothing to relax is refused, never recorded as idle."""
+    if accept_digest is not None and expected_sha256 is None:
+        raise DeployError(
+            "arguments", "--accept-digest relaxes expected_sha256, and this deployment sets none"
+        )
+    if accept_q_version is not None and q_version is None:
+        raise DeployError(
+            "arguments", "--accept-q-version relaxes q_version, and this deployment sets none"
+        )
+    if allow_unpinned is not None and expected_sha256 is not None:
+        raise DeployError(
+            "arguments",
+            "--allow-unpinned: expected_sha256 already pins the artifact - there is nothing "
+            "for it to relax",
+        )
 
 
 def _required_absolute(name: str, value: str) -> str:
@@ -239,6 +289,11 @@ def make_config(
     allow_dirty: bool = False,
     accept_converted_release: str | None = None,
     release_repo: str | None = None,
+    expected_sha256: str | None = None,
+    q_version: str | None = None,
+    accept_digest: str | None = None,
+    accept_q_version: str | None = None,
+    allow_unpinned: str | None = None,
     fix_hdb: bool = False,
     keep: int | None = None,
     soak: int | None = None,
@@ -278,6 +333,11 @@ def make_config(
         raise DeployError("arguments", "--keep must be 0 or more")
     if soak is not None and soak <= 0:
         raise DeployError("arguments", "--soak must be positive")
+    accept_digest = _reason("--accept-digest", accept_digest)
+    accept_q_version = _reason("--accept-q-version", accept_q_version)
+    allow_unpinned = _reason("--allow-unpinned", allow_unpinned)
+    expected_sha256, q_version = _sha256(expected_sha256), _q_version(q_version)
+    _relaxes_something(expected_sha256, q_version, accept_digest, accept_q_version, allow_unpinned)
     path = _required_absolute("--dest", dest)
     if path == "/":
         raise DeployError("arguments", "--dest must not be /")
@@ -308,8 +368,13 @@ def make_config(
         smoke_timeout=smoke_timeout,
         verify_timeout=verify_timeout,
         allow_dirty=allow_dirty,
-        accept_converted_release=_reason(accept_converted_release),
+        accept_converted_release=_reason("--accept-converted-release", accept_converted_release),
         release_repo=release_repo,
+        expected_sha256=expected_sha256,
+        q_version=q_version,
+        accept_digest=accept_digest,
+        accept_q_version=accept_q_version,
+        allow_unpinned=allow_unpinned,
         fix_hdb=fix_hdb,
         keep=keep,
         soak=soak,

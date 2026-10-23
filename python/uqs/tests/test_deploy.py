@@ -1190,8 +1190,10 @@ def _accepted(tmp_path, q="4.0", reason="smoke passed on the 3.6 server"):
 def test_the_override_is_recorded_after_smoke_and_bound_to_this_start(tmp_path):
     code, remote, report = _accepted(tmp_path)
     assert code == 0 and report["status"] == "deployed", report
-    record = report["converted_override"]
-    assert record["reason"] == "smoke passed on the 3.6 server"
+    (entry,) = report["exceptions"]
+    assert entry["override"] == "accept-converted-release" and entry["applied"] is True
+    record = entry["record"]
+    assert entry["reason"] == record["reason"] == "smoke passed on the 3.6 server"
     assert (record["target_q"], record["server_q"], record["smoke"]) == ("4.0", "3.6", "ok")
     stages = [stage for stage, _ in remote.scripts]
     assert stages.index("smoke") < stages.index("start"), "written only once smoke has passed"

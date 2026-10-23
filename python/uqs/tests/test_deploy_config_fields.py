@@ -62,10 +62,21 @@ SAMPLES: dict[str, Any] = {
     "allow_dirty": True,
     "accept_converted_release": "smoke passed on the 4.1 server",
     "release_repo": "owner/name",
+    "expected_sha256": "ab" * 32,
+    "q_version": ">=4.1",
+    "accept_digest": "rebuilt with the same tree",
+    "accept_q_version": "4.0 is what this site runs",
+    "allow_unpinned": "a local development build",
     "fix_hdb": True,
     "keep": 3,
     "soak": 45,
     "break_lock": True,
+}
+
+#: What an override needs beside it, or it is refused for relaxing nothing (#1557).
+RELAXES: dict[str, dict[str, Any]] = {
+    "accept_digest": {"expected_sha256": "ab" * 32},
+    "accept_q_version": {"q_version": ">=4.1"},
 }
 
 #: Config fields `make_config` does not set, and who does.
@@ -105,8 +116,9 @@ def test_every_option_is_a_field_and_every_field_is_set_somewhere():
 def test_each_option_reaches_its_field(name):
     """make_config(..., name=sample) changes Config.name: the option was not
     dropped on the way from make_config's parameters to Config(...)."""
-    baseline = make_config(**REQUIRED)
-    changed = make_config(**{**REQUIRED, name: SAMPLES[name]})
+    base: dict[str, Any] = {**REQUIRED, **RELAXES.get(name, {})}
+    baseline = make_config(**base)
+    changed = make_config(**{**base, name: SAMPLES[name]})
     assert getattr(changed, name) != getattr(baseline, name), (
         f"{name}={SAMPLES[name]!r} was accepted but Config.{name} kept "
         f"{getattr(baseline, name)!r} - is it passed to Config(...)?"
