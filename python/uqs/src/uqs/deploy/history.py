@@ -158,19 +158,23 @@ def defaults(root: Path) -> set[int]:
 
 def target_rows(root: Path) -> list[dict[str, str]]:
     """`uqs list targets`: every declared target - where it is, as whom, its
-    labels - and the release last deployed there from this machine."""
+    labels - and the release last deployed there from this machine. The
+    environment column appears only when a target names one (#1557)."""
     if not targets.declaration_path(root).is_file():
         return []
     declared = targets.read(root)
     deployed = {
         (e.get("host"), e.get("dest")): e for e in read(root) if e.get("status") == "deployed"
     }
+    envs = any(targets.ENVIRONMENT in t for t in declared.values())
     rows = []
     for name, t in sorted(declared.items()):
         last = deployed.get((t.get("host"), t.get("dest")))
+        env = {"environment": str(t.get(targets.ENVIRONMENT) or "")} if envs else {}
         rows.append(
             {
                 "target": name,
+                **env,
                 "ssh": str(t.get("host", "")),
                 "dest": str(t.get("dest", "")),
                 "as": str(t.get("remote_user") or ""),
