@@ -20,6 +20,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import deploy_components as components
 from uqs.cli import deploy_policy as policy
 from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
@@ -323,6 +324,9 @@ def push(
     accept_digest: policy.AcceptDigest = None,
     accept_q_version: policy.AcceptQVersion = None,
     allow_unpinned: policy.AllowUnpinned = None,
+    q_mode: components.QMode = components.DEFAULT,
+    torq_mode: components.TorqMode = components.DEFAULT,
+    python_mode: components.PythonMode = components.DEFAULT,
     fix_hdb: Annotated[
         bool,
         typer.Option(

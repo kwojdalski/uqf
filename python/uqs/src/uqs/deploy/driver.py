@@ -8,14 +8,15 @@ import sys
 import time
 from datetime import UTC, datetime
 
-from uqs.deploy import converted_override, fetch, hdb, overrides
+from uqs.deploy import components, converted_override, fetch, hdb, overrides
 from uqs.deploy.artifact import Artifact, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.plan import plan
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
+from uqs.deploy.report import Report
 from uqs.deploy.selection import Selection, select_jobs, started_by
-from uqs.deploy.stages import Deployment, Report
+from uqs.deploy.stages import Deployment
 from uqs.logger import get_logger
 from uqs.paths import repo_root
 from uqs.stack.converted import ATTEMPT_VAR
@@ -62,6 +63,8 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
     facts = dep.preflight()
     report.previous_release = facts.get("current")
     report.qversion = facts.get("qversion") or None
+    python = pkg.manifest["target"]["python"]
+    report.components = components.observed(cfg, facts, python, f"{dep.releases}/{rid}")
     exceptions += overrides.for_q(cfg, facts.get("qversion", ""))
     report.exceptions = exceptions
     for e in exceptions:
@@ -70,7 +73,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
                         e["requirement"], e["reason"])  # fmt: skip
     if cfg.dry_run:
         facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
-        print(plan(cfg, pkg, rid, facts, dep, exceptions), file=out)
+        print(plan(cfg, pkg, rid, facts, dep, exceptions, report.components), file=out)
         return 0
     return _run(dep, cfg, pkg, rid, report, facts, out, on_report)
 

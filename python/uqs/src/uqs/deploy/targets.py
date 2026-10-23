@@ -31,7 +31,9 @@ Settings shared by several targets are layered (#1557), lowest first:
 replaces a key's whole value - a table is never merged - and each layer is
 held to the target's key checks, its refusals naming the layer. The sources
 say which layer gave each setting: "defaults", "environment uat",
-"target prod-a", "--profile".
+"target prod-a", "--profile". One exception to a key's independence: a layer
+that switches a component's mode (`q_mode`, deploy/components.py) drops the
+old mode's fields the layers below it set, so none is inherited.
 """
 
 from __future__ import annotations
@@ -43,6 +45,7 @@ import re
 import tomllib
 from pathlib import Path
 
+from uqs.deploy import components
 from uqs.deploy.config import Config, DeployError, make_config
 
 DECLARATION = "deploy_targets.toml"
@@ -193,9 +196,11 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
         runtime = None
         for layer, settings in _layers(data, name, path):
             given = _options(layer, settings)
+            components.switch(options, sources, given)
             options.update(given)
             sources.update(dict.fromkeys(given, layer))
             runtime = settings.get("runtime", runtime)
+        components.switch(options, sources, explicit)
         options.update(explicit)
         sources.update({k: "--" + k.replace("_", "-") for k in explicit})
         absent = [k for k in ("host", "dest", "profile") if options.get(k) is None]

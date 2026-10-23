@@ -257,6 +257,31 @@ in a target, and needs a reason:
   what was found and whether it was needed. The report records the server's q as
   `qversion`, override or not.
 
+## Components
+
+A release runs on three components: q, TorQ and Python. Each has a mode, set by
+`q_mode`, `torq_mode` and `python_mode` (or `--q-mode`, `--torq-mode`,
+`--python-mode`):
+
+  | Mode       | Means                                                          |
+  | ---------- | ------------------------------------------------------         |
+  | `existing` | already on the server; the default, and today the only one     |
+  | `bundled`  | shipped with the release; refused as not yet supported (#1557) |
+
+`existing` mode's settings are the options above: `qcmd` and `qhome` for q;
+`torq_home`, `torq_app_home` and `torq_launcher` for TorQ. Python has none, uv
+finds it. A push that sets no mode is the source-only push it always was.
+
+- **Switching drops the old mode.** A layer that changes a component's mode
+  drops the old mode's settings from the layers below it. Setting one at or
+  above that layer is refused.
+- **Recorded.** The report and the deploy history keep a `components` entry:
+  each component's mode, the path preflight resolved, the version it observed,
+  and what the server must provide, such as a q licence. TorQ's version is not
+  read yet, so it is `null`.
+- **Shown.** The dry-run plan opens with a `COMPONENTS` block, after any
+  `EXCEPTIONS`.
+
 ## Driving a deployed release from your machine
 
 Once a target is declared, `uqs --target NAME <command>` runs any `uqs` command
