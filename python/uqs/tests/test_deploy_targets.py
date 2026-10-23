@@ -13,7 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.deploy import driver, targets
+from uqs.deploy import driver, plan, targets
 from uqs.deploy.config import DeployError, make_config
 
 FILE = """
@@ -187,7 +187,7 @@ def test_a_target_whose_runtime_is_not_the_artifacts_is_refused(root, tmp_path):
 
 def test_the_plan_says_where_each_setting_came_from(root):
     (cfg,) = targets.configs("prod-b", "x", {"profile": "fx"}, True, root)
-    lines = driver._source_lines(cfg)
+    lines = plan._source_lines(cfg)
     assert "settings: profile from --profile" in lines
     assert "settings: dest, host from target prod-b" in lines
 

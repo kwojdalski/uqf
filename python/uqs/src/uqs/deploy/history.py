@@ -122,6 +122,8 @@ def record(root: Path, cfg: Config, report: Reported, now: datetime | None = Non
             "status": r.get("status"),
             "stage": r.get("stage"),
             "error": r.get("error") or None,
+            # the policy overrides this push asked for (#1557), as the report has them
+            "exceptions": r.get("exceptions") or [],
         }
         _write(root, [*read(root), entry])
     except (OSError, DeployError) as exc:

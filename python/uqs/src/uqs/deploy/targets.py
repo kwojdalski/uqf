@@ -39,9 +39,17 @@ from uqs.deploy.config import Config, DeployError, make_config
 
 DECLARATION = "deploy_targets.toml"
 DECLARATION_ENV = "UQS_DEPLOY_TARGETS"
-#: Options a file may not set: what is deployed, and whether it is a rehearsal,
-#: are this run's to say.
-PER_RUN = frozenset({"artifact", "dry_run"})
+#: The named policy overrides (deploy/overrides.py, #1557): each relaxes a
+#: requirement for one push, with its reason, so none is ever a target's
+#: standing setting.
+OVERRIDES = frozenset(
+    {"accept_digest", "accept_q_version", "allow_unpinned", "accept_converted_release"}
+)
+#: What push passes configs() itself: what is deployed, and whether it is a
+#: rehearsal.
+GIVEN_SEPARATELY = frozenset({"artifact", "dry_run"})
+#: Options a file may not set: the above and the overrides are this run's to say.
+PER_RUN = GIVEN_SEPARATELY | OVERRIDES
 #: Options make_config takes as one comma-separated string; a file lists them.
 LISTED_AS_TEXT = frozenset({"jobs", "live_check", "process_fields"})
 SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
@@ -73,6 +81,13 @@ def read(root: Path) -> dict[str, dict]:
 
 def _options(name: str, declared: dict) -> dict:
     """One target's settings, as make_config's keyword arguments."""
+    overridden = sorted(set(declared) & OVERRIDES)
+    if overridden:
+        raise DeployError(
+            "arguments",
+            f"target {name}: {', '.join(overridden)} - an override is given on the command "
+            "line, with its reason, for one push; a target never sets one",
+        )
     unknown = sorted(set(declared) - SETTABLE - NOT_PUSH_OPTIONS)
     if unknown:
         raise DeployError(

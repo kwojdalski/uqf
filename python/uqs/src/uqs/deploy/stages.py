@@ -98,9 +98,10 @@ class Report:
     #: --soak's verdict and duration, and each streaming job's, when it ran (#869)
     soak: dict | None = None
 
-    #: --accept-converted-release (#936): who asked, why, and the evidence -
-    #: the release's conversion target, the server's q, the passing smoke test
-    converted_override: dict | None = None
+    #: the q preflight ran (.z.K), and every policy override asked for
+    #: (deploy/overrides.py, #1557) - --accept-converted-release's included
+    qversion: str | None = None
+    exceptions: list[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)

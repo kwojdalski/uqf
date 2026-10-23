@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,6 +85,9 @@ class Artifact:
     path: Path
     sha256: str
     manifest: dict
+    #: whether a .sha256 sat beside the archive to check it against; an
+    #: unpinned one is only deployed with --allow-unpinned (#1557)
+    pinned: bool = True
 
     @property
     def release(self) -> str:
@@ -107,7 +111,8 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
     """An artifact, checked whole before anything trusts it.
 
     The archive's sha256 must match its .sha256 file when one sits beside it
-    (and `expected_sha256` when given). Every member must be a regular file
+    (and `expected_sha256` when given); whether one did is `pinned`, for the
+    caller's policy to judge. Every member must be a regular file
     at a relative path, listed in the manifest with the hash it has; nothing
     may be missing and nothing extra. A member that fails any of these is
     named - an artifact is never half-trusted.
@@ -116,7 +121,8 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
         raise ReleaseError("artifact", f"no artifact at {path}")
     digest = _sha256(path)
     sidecar = Path(f"{path}.sha256")
-    if sidecar.is_file():
+    pinned = sidecar.is_file()
+    if pinned:
         recorded = sidecar.read_text().split()[0] if sidecar.read_text().split() else ""
         if recorded != digest:
             raise ReleaseError(
@@ -163,7 +169,7 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
             raise ReleaseError("artifact", f"{name} does not match its manifest checksum")
     if not manifest.get("python", {}).get("app_wheel"):
         raise ReleaseError("artifact", "the manifest names no uqs wheel")
-    return Artifact(path=path, sha256=digest, manifest=manifest)
+    return Artifact(path=path, sha256=digest, manifest=manifest, pinned=pinned)
 
 
 #: What a manifest WITHOUT a `runtime` means (#883). Until #883 a build for
@@ -189,6 +195,31 @@ def _older(version: str, than: str) -> bool:
     if not all(p.isdigit() for p in a + b):
         return False
     return tuple(map(int, a)) < tuple(map(int, b))
+
+
+_REQUIREMENT = re.compile(r"(>=)?\s*([0-9]+(?:\.[0-9]+)*)")
+
+
+def q_requirement(text: str) -> tuple[str, tuple[int, ...]]:
+    """A q_version requirement (#1557): `>=4.1`, a minimum, or `4.1`, exact.
+    ("min" | "exact", the version's numbers); ValueError when it is neither."""
+    found = _REQUIREMENT.fullmatch(text.strip())
+    if not found:
+        raise ValueError(f"q_version {text!r} is neither a minimum (>=4.1) nor a version (4.1)")
+    kind = "min" if found.group(1) else "exact"
+    return kind, tuple(int(p) for p in found.group(2).split("."))
+
+
+def meets(requirement: str, version: str) -> bool:
+    """Whether the q that reported `version` (.z.K) meets `requirement`. A
+    version that says nothing comparable meets nothing: it cannot be confirmed."""
+    kind, want = q_requirement(requirement)
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version.strip()):
+        return False
+    got = tuple(int(p) for p in version.strip().split("."))
+    width = max(len(got), len(want))
+    got, want = got + (0,) * (width - len(got)), want + (0,) * (width - len(want))
+    return got >= want if kind == "min" else got == want
 
 
 def compatible(target: dict, facts: dict[str, str], *, accept_converted: bool = False) -> list[str]:

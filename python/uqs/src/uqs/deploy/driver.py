@@ -1,5 +1,5 @@
-"""A deployment end to end: the plan --dry-run shows, the run, and the
-rollback when a stage fails after the previous release was stopped."""
+"""A deployment end to end: the run, and the rollback when a stage fails
+after the previous release was stopped. What --dry-run shows is plan.py's."""
 
 from __future__ import annotations
 
@@ -8,158 +8,19 @@ import sys
 import time
 from datetime import UTC, datetime
 
-from uqs.deploy import converted_override, fetch, hdb, kafka
+from uqs.deploy import converted_override, fetch, hdb, overrides
 from uqs.deploy.artifact import Artifact, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
+from uqs.deploy.plan import plan
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
-from uqs.deploy.selection import Selection, select_jobs, smoke_args, started_by, verify_args
+from uqs.deploy.selection import Selection, select_jobs, started_by
 from uqs.deploy.stages import Deployment, Report
 from uqs.logger import get_logger
 from uqs.paths import repo_root
 from uqs.stack.converted import ATTEMPT_VAR
 
 log = get_logger(__name__)
-
-
-def plan(cfg: Config, pkg: Artifact, rid: str, facts: dict[str, str], dep: Deployment) -> str:
-    """What --dry-run shows: the payload, the commands, the planned restart."""
-    previous = facts.get("current")
-    restart = (
-        f"stop release {previous}'s processes, then start {rid}'s on the same ports"
-        if previous
-        else "nothing running to replace"
-    )
-    release = f"{dep.releases}/{rid}"
-    sel = dep.selection
-    exported = ", ".join(line.split("=", 1)[0].removeprefix("export ") for line in dep.env_lines())
-    steps = [
-        "identity  "
-        + (
-            f"ssh/scp as {cfg.host}; every step below as {cfg.remote_user} "
-            f"(sudo -n -iu {cfg.remote_user})"
-            if cfg.remote_user
-            else f"ssh/scp and every step as {cfg.host}"
-        ),
-        "q         "
-        + f"QHOME={facts.get('qhome', '?')} ({facts.get('qhome_from', '?')}), "
-        + f"QCMD={facts.get('qcmd', '?')} ({facts.get('qcmd_from', '?')}) - "
-        + "resolved and run once in preflight",
-        "torq      "
-        + f"TORQHOME={cfg.torq_home or '(vendored)'}, launcher "
-        + (cfg.torq_launcher or "$TORQHOME/torq.sh"),
-        "lock      " + f"mkdir {dep.lock}",
-        "transfer  "
-        + (
-            f"scp {pkg.path.name} to a private upload directory, then {cfg.remote_user} "
-            f"copies it into {cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
-            if cfg.remote_user
-            else f"scp {pkg.path.name} {cfg.host}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
-        ),
-        "prepare   "
-        + f"{release}: deploy.env ({exported}); offline install of "
-        + f"{pkg.manifest['python']['wheels']} wheels{kafka.plan_note(release, pkg.manifest)}",
-        "hdb       " + facts.get("hdb", "not judged"),
-        "smoke     "
-        + " ".join(["q scripts/deploy_smoke.q", *smoke_args(cfg.profile, sel)])
-        + f" (timeout {cfg.smoke_timeout}s)",
-        "restart   " + restart,
-        "ports     "
-        + " ".join(
-            [
-                f"uqs deploy verify --profile {cfg.profile} --ports-free",
-                *verify_args(Selection(processes=sel.processes), False),
-            ]
-        ),
-        "start     " + " ".join(["uqs start --profile", cfg.profile, *sel.processes]),
-        "verify    "
-        + " ".join(
-            [
-                f"uqs deploy verify --profile {cfg.profile} --deadline {cfg.verify_timeout}",
-                *verify_args(sel, cfg.live),
-            ]
-        ),
-        *(
-            [
-                "live-chk  uqs config sources check "
-                + " ".join(cfg.live_check)
-                + f" --timeout {cfg.live_check_timeout}"
-                + (f" (ODBC from {cfg.odbc_home})" if cfg.odbc_home else "")
-            ]
-            if cfg.live_check
-            else []
-        ),
-        *(
-            [
-                f"soak      {cfg.soak}s of data, then every started streaming job must have "
-                "beaten with no batch failing (stream_health)"
-            ]
-            if cfg.soak
-            else []
-        ),
-        "activate  " + f"{dep.current} -> releases/{rid}",
-        *(
-            [
-                f"prune     all but the newest {cfg.keep} releases - never current, the one "
-                "a rollback returns to, or one still running"
-            ]
-            if cfg.keep is not None
-            else []
-        ),
-    ]
-    size = pkg.path.stat().st_size
-    t = pkg.manifest["target"]
-    return "\n".join(
-        [
-            f"release {rid}: revision {pkg.manifest['revision']}"
-            + (" (with uncommitted changes)" if pkg.manifest["dirty"] else ""),
-            f"artifact: {pkg.path.name}, {len(pkg.files)} files, {size} bytes compressed, "
-            f"sha256 {pkg.sha256}",
-            f"target: {t['os']}/{t['arch']}, Python {t['python']} - "
-            f"the server reports {facts.get('os', '?')}/{facts.get('arch', '?')}, "
-            f"Python {facts.get('python', '?')}",
-            f"data: {cfg.data_root} ({facts.get('data', 'unknown')}"
-            + (", created by --init-data" if facts.get("data") == "absent" else "")
-            + ")",
-            *_selection_lines(sel, cfg.live),
-            *_source_lines(cfg),
-            "planned:",
-            *[f"  {s}" for s in steps],
-        ]
-    )
-
-
-def _source_lines(cfg: Config) -> list[str]:
-    """Where each setting came from, when a target supplied any (#873)."""
-    if not cfg.target:
-        return []
-    by: dict[str, list[str]] = {}
-    for key, source in sorted(cfg.sources.items()):
-        by.setdefault(source, []).append(key)
-    return [f"settings: {', '.join(keys)} from {source}" for source, keys in sorted(by.items())]
-
-
-def _selection_lines(sel: Selection, live: bool) -> list[str]:
-    """The bundles, the jobs and the processes they add, for the plan."""
-    lines = [
-        f"bundle: {name} {b['version']}"
-        + (f" ({b['revision']['commit'][:12]})" if b.get("revision") else " (no revision)")
-        for name, b in sel.bundles.items()
-    ]
-    if sel.jobs:
-        lines.append(
-            f"jobs: {', '.join(sel.jobs)} -> beside the profile: {' '.join(sel.processes)}"
-        )
-    elif sel.bundles:
-        lines.append("jobs: none selected (--jobs) - no sidecar job starts")
-    if sel.workers:
-        lines.append(f"workers installed, never run: {', '.join(sel.workers)}")
-    lines.append(
-        "sources: "
-        + ("live only - a missing credential is refused (--live)" if live else "a source with "
-           "no credential reads its fixture (pass --live to refuse instead)")
-    )  # fmt: skip
-    return lines
 
 
 def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) -> int:
@@ -172,6 +33,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
             f"{pkg.path.name} was built from uncommitted changes (dirty: true) - deploy one "
             "built from a commit, ideally by CI, or pass --allow-dirty",
         )
+    exceptions = overrides.for_artifact(cfg, pkg)
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
     dep.runtime = release_runtime(pkg.manifest)
@@ -199,9 +61,16 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
     dep.check_sudo()
     facts = dep.preflight()
     report.previous_release = facts.get("current")
+    report.qversion = facts.get("qversion") or None
+    exceptions += overrides.for_q(cfg, facts.get("qversion", ""))
+    report.exceptions = exceptions
+    for e in exceptions:
+        if e["applied"]:
+            log.warning("--{}: {} found, {} required: {}", e["override"], e["observed"],
+                        e["requirement"], e["reason"])  # fmt: skip
     if cfg.dry_run:
         facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
-        print(plan(cfg, pkg, rid, facts, dep), file=out)
+        print(plan(cfg, pkg, rid, facts, dep, exceptions), file=out)
         return 0
     return _run(dep, cfg, pkg, rid, report, facts, out, on_report)
 
@@ -255,8 +124,9 @@ def _run(
                 facts.get("qversion") or "of unknown version",
                 cfg.accept_converted_release,
             )
-            report.converted_override = converted_override.write(dep, release, facts)
-            start_env[ATTEMPT_VAR] = report.converted_override["attempt"]
+            record = converted_override.write(dep, release, facts)
+            report.exceptions.append(overrides.converted(record))
+            start_env[ATTEMPT_VAR] = record["attempt"]
         if previous:
             prev_profile, prev_procs, prev_extra = dep.previous_processes(previous)
             log.info("stopping release {}'s processes", previous)

@@ -20,6 +20,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import deploy_policy as policy
 from uqs.cli.shared import _env_log_level, app
 from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, history, kafka, targets
@@ -307,22 +308,8 @@ def push(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
-    allow_dirty: Annotated[
-        bool,
-        typer.Option(
-            "--allow-dirty", help="Deploy an artifact built from uncommitted changes (refused)"
-        ),
-    ] = False,
-    accept_converted_release: Annotated[
-        str | None,
-        typer.Option(
-            "--accept-converted-release",
-            metavar="REASON",
-            help="Start a release converted for an older kdb+ (--q-target) on a q its "
-            "version check cannot confirm, once its smoke test passes there. Its "
-            "conversion record and integrity are still checked; recorded in the report",
-        ),
-    ] = None,
+    allow_dirty: policy.AllowDirty = False,
+    accept_converted_release: policy.AcceptConvertedRelease = None,
     release_repo: Annotated[
         str | None,
         typer.Option(
@@ -331,6 +318,11 @@ def push(
             help="Whose GitHub releases a tag ARTIFACT names; default: this checkout's origin",
         ),
     ] = None,
+    expected_sha256: policy.ExpectedSha256 = None,
+    q_version: policy.QVersion = None,
+    accept_digest: policy.AcceptDigest = None,
+    accept_q_version: policy.AcceptQVersion = None,
+    allow_unpinned: policy.AllowUnpinned = None,
     fix_hdb: Annotated[
         bool,
         typer.Option(
@@ -373,7 +365,7 @@ def push(
             given = {
                 k: v
                 for k, v in options.items()
-                if k not in targets.PER_RUN and _on_command_line(ctx, k)
+                if k not in targets.GIVEN_SEPARATELY and _on_command_line(ctx, k)
             }
             cfgs = targets.configs(target, artifact, given, dry_run, repo_root())
         else:
