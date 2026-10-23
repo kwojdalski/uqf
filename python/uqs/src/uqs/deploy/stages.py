@@ -68,7 +68,7 @@ print(json.dumps(out))
 class Deployment(Server):
     """Every stage, on top of what Server reads and locks."""
 
-    def upload(self, pkg: Artifact, staging: str) -> str:
+    def upload(self, local: Path, staging: str) -> str:
         """The archive into `staging`, as the service user; its path there.
 
         Without --remote-user, scp writes it straight in. With one, scp can
@@ -78,10 +78,10 @@ class Deployment(Server):
         no chmod, no chown, nothing anyone else can read. The upload
         directory goes in `finally`, whatever happened.
         """
-        remote_archive = f"{staging}/{pkg.path.name}"
+        remote_archive = f"{staging}/{local.name}"
         user = self.cfg.remote_user
         if not user:
-            self.remote.put(pkg.path, remote_archive, self.cfg.command_timeout, "transfer")
+            self.remote.put(local, remote_archive, self.cfg.command_timeout, "transfer")
             return remote_archive
         upload = (
             self.run_as_login(
@@ -95,8 +95,8 @@ class Deployment(Server):
         if not upload.startswith("/tmp/uqf-upload."):
             raise DeployError("transfer", f"mktemp returned {upload!r}, not an upload directory")
         try:
-            uploaded = f"{upload}/{pkg.path.name}"
-            self.remote.put(pkg.path, uploaded, self.cfg.command_timeout, "transfer")
+            uploaded = f"{upload}/{local.name}"
+            self.remote.put(local, uploaded, self.cfg.command_timeout, "transfer")
             self.run_as_login(
                 "transfer",
                 f"handing the archive to {user}",
@@ -120,7 +120,7 @@ class Deployment(Server):
             "creating the staging directory",
             f"mkdir -p {q(staging)} {q(self.releases)}",
         )
-        remote_archive = self.upload(pkg, staging)
+        remote_archive = self.upload(pkg.path, staging)
         self.run(
             "transfer",
             "checking the archive and extracting it",

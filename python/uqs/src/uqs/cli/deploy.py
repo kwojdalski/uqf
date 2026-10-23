@@ -327,6 +327,8 @@ def push(
     q_mode: components.QMode = components.DEFAULT,
     torq_mode: components.TorqMode = components.DEFAULT,
     python_mode: components.PythonMode = components.DEFAULT,
+    torq_runtime: components.TorqRuntime = None,
+    torq_runtime_sha256: components.TorqRuntimeSha256 = None,
     fix_hdb: Annotated[
         bool,
         typer.Option(
@@ -360,7 +362,7 @@ def push(
         ),
     ] = False,
 ) -> None:
-    """Deploy a release onto a server with an existing TorQ, and verify it there."""
+    """Deploy a release onto a server, on its TorQ or a bundled one, and verify it there."""
     options = dict(locals())
     del options["ctx"], options["target"]
     code = 0

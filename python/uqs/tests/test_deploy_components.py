@@ -84,7 +84,7 @@ def test_every_component_defaults_to_existing():
     assert (cfg.q_mode, cfg.torq_mode, cfg.python_mode) == ("existing",) * 3
 
 
-@pytest.mark.parametrize(("component", "step"), [("q", 6), ("torq", 5), ("python", 7)])
+@pytest.mark.parametrize(("component", "step"), [("q", 6), ("python", 7)])
 def test_bundled_is_refused_naming_the_step_that_adds_it(component, step):
     with pytest.raises(DeployError, match=rf"{component}_mode bundled is not yet supported - "
                        rf"#1557 step {step} adds it"):  # fmt: skip
@@ -173,7 +173,8 @@ def test_switching_a_mode_drops_the_fields_below_it(root):
 
 
 def test_switching_drops_the_old_fields_and_keeps_every_other(root, monkeypatch):
-    monkeypatch.setattr(components, "SUPPORTED", frozenset(components.MODES))
+    every = dict.fromkeys(components.COMPONENTS, frozenset(components.MODES))
+    monkeypatch.setattr(components, "SUPPORTED", every)
     (cfg,) = targets.configs("switched", "x", {}, False, root)
     assert (cfg.q_mode, cfg.qcmd, cfg.qhome) == ("bundled", None, None)
     assert "qcmd" not in cfg.sources and "qhome" not in cfg.sources

@@ -81,7 +81,7 @@ def test_each_override_needs_a_reason(flag, needs):
 @pytest.mark.parametrize(
     ("args", "said"),
     [
-        (["--accept-digest", "r"], "--accept-digest relaxes expected_sha256, and this"),
+        (["--accept-digest", "r"], r"--accept-digest relaxes expected_sha256 \(or torq_runtime"),
         (["--accept-q-version", "r"], "--accept-q-version relaxes q_version, and this"),
         (["--expected-sha256", OTHER, "--allow-unpinned", "r"], "already pins the artifact"),
     ],

@@ -51,7 +51,9 @@ network.
 - An existing TorQ (`--torq-home`, holding `torq.q` and `torq.sh`, or only
   `torq.q` with `--torq-launcher`, below) and starter pack (`--torq-app-home`,
   holding `database.q` and `appconfig/process.csv`). Without these flags the
-  release would need its own `lib/`, which a release does not ship.
+  release would need its own `lib/`, which a release does not ship. Or, with
+  `--torq-mode bundled`, the push installs the vendored one: see [a bundled
+  TorQ](#a-bundled-torq).
 
 - `envsubst` and `rlwrap`, which `torq.sh` needs.
 
@@ -263,10 +265,12 @@ A release runs on three components: q, TorQ and Python. Each has a mode, set by
 `q_mode`, `torq_mode` and `python_mode` (or `--q-mode`, `--torq-mode`,
 `--python-mode`):
 
-  | Mode       | Means                                                          |
-  | ---------- | ------------------------------------------------------         |
-  | `existing` | already on the server; the default, and today the only one     |
-  | `bundled`  | shipped with the release; refused as not yet supported (#1557) |
+  | Mode       | Means                                                            |
+  | ---------- | ---------------------------------------------------------------- |
+  | `existing` | already on the server; the default                               |
+  | `bundled`  | shipped by the push; TorQ only so far ([below](#a-bundled-torq)) |
+
+q and Python refuse `bundled` as not yet supported (#1557).
 
 `existing` mode's settings are the options above: `qcmd` and `qhome` for q;
 `torq_home`, `torq_app_home` and `torq_launcher` for TorQ. Python has none, uv
@@ -277,10 +281,51 @@ finds it. A push that sets no mode is the source-only push it always was.
   above that layer is refused.
 - **Recorded.** The report and the deploy history keep a `components` entry:
   each component's mode, the path preflight resolved, the version it observed,
-  and what the server must provide, such as a q licence. TorQ's version is not
-  read yet, so it is `null`.
+  and what the server must provide, such as a q licence. An existing TorQ's
+  version is not read, so it is `null`.
 - **Shown.** The dry-run plan opens with a `COMPONENTS` block, after any
   `EXCEPTIONS`.
+
+### A bundled TorQ
+
+With `torq_mode = "bundled"`, the push ships TorQ itself: `lib/torq` and
+`lib/torq-finance-starter-pack` exactly as vendored, in a runtime artifact of
+their own. Many releases share one runtime, so it is built separately:
+
+```bash
+uqs deploy build-runtime torq      # dist/torq-runtime-<version>-<id>.tar.gz
+uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+  --profile essential --torq-mode bundled \
+  --torq-runtime dist/torq-runtime-5.2.12-<id>.tar.gz
+```
+
+- **Built from the tree, unedited.** The build packs the two trees' tracked
+  files, byte for byte, and refuses when `git status` shows any change under
+  them. Its manifest records TorQ's and the starter pack's versions, from their
+  `dependency.csv`, each tree's git tree id and last commit, and every file's
+  sha256. The same trees always make the same archive, so its sha256 names that
+  TorQ.
+- **Pinned like a release.** The runtime's `.sha256` must sit beside it, and
+  `torq_runtime_sha256` (or `--torq-runtime-sha256`) pins it as
+  `expected_sha256` pins a release. `--accept-digest` and `--allow-unpinned`
+  relax these pins too, and are recorded. Its members are checked as a release's
+  are, and the server checks the bytes it receives.
+- **Installed once, never rewritten.** It goes to
+  `<dest>/shared/runtimes/torq/<sha256>/`, beside a marker naming that sha256.
+  If the directory is already there, holding exactly that runtime, it is reused
+  and nothing is written. If it holds anything else, the push stops before
+  changing anything. A runtime directory is never overwritten.
+- **Each release names its own.** The release's `deploy.env` sets `TORQHOME` and
+  `TORQAPPHOME` to the runtime's two trees, and `torq.sh` is `TORQHOME`'s. A
+  rollback starts the release it returns to on the TorQ that release was
+  deployed with. `uqs deploy prune` keeps every runtime a remaining release's
+  `deploy.env` names, and removes the others.
+- **Exclusive.** `torq_home`, `torq_app_home` and `torq_launcher` are refused
+  beside it. A layer that switches to bundled drops those settings from the
+  layers below it.
+
+The `components` entry records `bundled`, the runtime's sha256, TorQ's version,
+its path on the server, and whether this push installed or reused it.
 
 ## Driving a deployed release from your machine
 
@@ -491,10 +536,12 @@ Three releases are never removed, whatever `--keep` is, even 0:
 - any whose report still says `running`, from a push that died part-way.
 
 It prints what stayed and why, what went, and the bytes freed. Only a directory
-named like a release id is ever removed. `--dry-run` lists the removals and
-removes nothing. `uqs deploy push --keep N` prunes the same way once the new
-release is current, while it still holds the lock. If that prune fails, the
-deployment still counts as a success, and its report records the failure.
+named like a release id is ever removed. A [bundled TorQ](#a-bundled-torq)
+runtime goes once no remaining release's `deploy.env` names it. `--dry-run`
+lists the removals and removes nothing. `uqs deploy push --keep N` prunes the
+same way once the new release is current, while it still holds the lock. If that
+prune fails, the deployment still counts as a success, and its report records
+the failure.
 
 ## Deploying as a service user
 

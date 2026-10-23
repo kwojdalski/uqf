@@ -48,41 +48,54 @@ def for_artifact(cfg: Config, pkg: Artifact) -> list[dict]:
     """The digest and pin policy for `pkg`, which read_artifact has already
     checked whole: refused unless an override relaxes it, else the exceptions
     requested."""
+    return _pinned(cfg, pkg.path.name, pkg.sha256, pkg.pinned, cfg.expected_sha256, "")
+
+
+def for_runtime(cfg: Config, name: str, sha256: str, pinned: bool) -> list[dict]:
+    """The same policy for a bundled TorQ runtime (deploy/torq_runtime.py),
+    pinned by torq_runtime_sha256: its exceptions name it."""
+    return _pinned(cfg, name, sha256, pinned, cfg.torq_runtime_sha256, "the torq runtime's ")
+
+
+def _pinned(
+    cfg: Config, name: str, sha256: str, pinned: bool, expected: str | None, whose: str
+) -> list[dict]:
+    key = "torq_runtime_sha256" if whose else "expected_sha256"
     out = []
-    if cfg.expected_sha256 is not None:
-        matched = pkg.sha256 == cfg.expected_sha256
+    if expected is not None:
+        matched = sha256 == expected
         if not matched and cfg.accept_digest is None:
             raise DeployError(
                 "artifact",
-                f"{pkg.path.name} is {pkg.sha256}, not the expected_sha256 "
-                f"{cfg.expected_sha256} - pass --accept-digest REASON to deploy it anyway",
+                f"{name} is {sha256}, not the {key} {expected} - pass --accept-digest REASON "
+                "to deploy it anyway",
             )
         if cfg.accept_digest is not None:
             out.append(
                 _entry(
                     ACCEPT_DIGEST,
                     cfg.accept_digest,
-                    f"sha256 {cfg.expected_sha256}",
-                    f"sha256 {pkg.sha256}",
+                    f"{whose}sha256 {expected}",
+                    f"{whose}sha256 {sha256}",
                     not matched,
                 )
             )
     else:
-        if not pkg.pinned and cfg.allow_unpinned is None:
+        if not pinned and cfg.allow_unpinned is None:
             raise DeployError(
                 "artifact",
-                f"{pkg.path.name} has no {pkg.path.name}.sha256 beside it and no expected_sha256 "
-                "pins it - pass --allow-unpinned REASON to deploy it anyway",
+                f"{name} has no {name}.sha256 beside it and no {key} pins it - pass "
+                "--allow-unpinned REASON to deploy it anyway",
             )
         if cfg.allow_unpinned is not None:
-            observed = f"sha256 {pkg.sha256}, " + ("pinned" if pkg.pinned else "no .sha256")
+            observed = f"{whose}sha256 {sha256}, " + ("pinned" if pinned else "no .sha256")
             out.append(
                 _entry(
                     ALLOW_UNPINNED,
                     cfg.allow_unpinned,
-                    "a .sha256 beside the artifact",
+                    f"a .sha256 beside {'the torq runtime' if whose else 'the artifact'}",
                     observed,
-                    not pkg.pinned,
+                    not pinned,
                 )
             )
     return out
