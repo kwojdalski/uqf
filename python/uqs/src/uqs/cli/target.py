@@ -31,23 +31,14 @@ from uqs.paths import UqsError, repo_root
 target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The servers `uqs --target NAME <command>` runs on: add, list, check, shell.",
+    help="The servers `uqs --target NAME <command>` runs on: add, remove, check, shell. "
+    "`uqs list targets` lists them.",
 )
 app.add_typer(target_app, name="target")
 
 _ACCOUNT = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 _LABEL = re.compile(r"([A-Za-z0-9_.-]+)=(\S*)")
 Name = Annotated[str, typer.Argument(help="A target, or a server: its latest deployment")]
-
-
-def _declared() -> dict[str, dict]:
-    if not targets.declaration_path(repo_root()).is_file():
-        return {}
-    try:
-        return targets.read(repo_root())
-    except DeployError as exc:
-        _die(UqsError(str(exc)))
-        return {}
 
 
 @target_app.command("add")
@@ -60,7 +51,8 @@ def add(
         typer.Option("--remote-user", help="Run commands as this account (`sudo -n -iu`)"),
     ] = None,
     label: Annotated[
-        list[str] | None, typer.Option("--label", help="key=value, shown by `list`; repeatable")
+        list[str] | None,
+        typer.Option("--label", help="key=value, shown by `uqs list targets`; repeatable"),
     ] = None,
 ) -> None:
     """Declare a server: its ssh destination and deployment root, nothing else.
@@ -91,36 +83,6 @@ def add(
         return
     console.print(f"[green]✓[/] target {name} added to {path}")
     console.print(f"  try: uqs --target {name} summary")
-
-
-@target_app.command("list")
-def list_targets() -> None:
-    """Every declared target: where it is, as whom, its labels, and the
-    release last deployed there from this machine."""
-    declared = _declared()
-    if not declared:
-        console.print(
-            f"no targets in {targets.declaration_path(repo_root())} - add one with "
-            "`uqs target add`, or `uqs deploy push` to a server"
-        )
-        return
-    deployed = {
-        (e.get("host"), e.get("dest")): e
-        for e in history.read(repo_root())
-        if e.get("status") == "deployed"
-    }
-    table = Table("target", "ssh", "dest", "as", "labels", "last deployed")
-    for name, t in sorted(declared.items()):
-        last = deployed.get((t.get("host"), t.get("dest")))
-        table.add_row(
-            name,
-            str(t.get("host", "")),
-            str(t.get("dest", "")),
-            str(t.get("remote_user") or ""),
-            ", ".join(f"{k}={v}" for k, v in (t.get("labels") or {}).items()),
-            f"{last['release']} ({last['at']})" if last else "",
-        )
-    console.print(table)
 
 
 @target_app.command("check")
@@ -177,8 +139,8 @@ def deploy_history(
     """Show deployment history recorded on this machine, newest first.
 
     Every `uqs deploy push` made from THIS machine - not what a server has
-    installed (`uqs deploy status`) nor the declared servers (`uqs target
-    list`). `*` marks each server's default: its latest successful
+    installed (`uqs deploy status`) nor the declared servers (`uqs list
+    targets`). `*` marks each server's default: its latest successful
     deployment, which `uqs --target <server>` and `uqs target shell` use."""
     root = repo_root()
     try:
@@ -217,8 +179,11 @@ def deploy_history(
 def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
     """`uqs --target NAME <args>`: run args on the target's release, after
     asking - or `--yes` - when they may change the server."""
-    if control.command_words(args)[:1] == ("target",):
+    words = control.command_words(args)
+    if words[:1] == ("target",):
         raise UqsError("`uqs target ...` manages this machine's targets - run it without --target")
+    if words[:2] == ("list", "targets"):
+        raise UqsError("`uqs list targets` lists this machine's targets - run it without --target")
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
     if control.changes_the_server(args) and not yes:

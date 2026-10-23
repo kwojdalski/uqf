@@ -23,6 +23,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from uqs import paths as stack_paths
+from uqs.deploy import history as _registers_list_targets  # noqa: F401 - `targets` kind
 from uqs.external import crypto
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,

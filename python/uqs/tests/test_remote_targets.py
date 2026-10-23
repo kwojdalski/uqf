@@ -9,6 +9,7 @@ load and the release check are all exercised, not just the argv built.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -201,7 +202,70 @@ def test_a_declined_confirmation_runs_nothing(server, monkeypatch):
 
 def test_target_management_is_never_forwarded(server):
     with pytest.raises(UqsError, match="manages this machine's targets"):
-        target_cli.forward("uat", True, ["target", "list"], interactive=False)
+        target_cli.forward("uat", True, ["target", "check", "uat"], interactive=False)
+
+
+@pytest.mark.parametrize("args", [["list", "targets"], ["--debug", "list", "targets", "--json"]])
+def test_listing_targets_is_never_forwarded(server, args):
+    """`list` is read-only and so forwarded, but the targets are this
+    machine's: a remote's deploy_targets.toml is not what was asked for."""
+    with pytest.raises(UqsError, match="lists this machine's targets - run it without --target"):
+        target_cli.forward("uat", True, args, interactive=False)
+
+
+def test_other_kinds_of_list_are_still_forwarded(server, capfd):
+    assert target_cli.forward("uat", False, ["list", "processes"], interactive=False) == 0
+    assert "[processes]" in capfd.readouterr().out
+
+
+def test_list_targets_shows_each_target_and_its_last_deployment(server, tmp_path):
+    history.record(Path("."), _cfg("svc@uat.example", str(tmp_path / "srv"), "uat"), _report("r7"))
+    declared = Path(os.environ[targets.DECLARATION_ENV])
+    declared.write_text(
+        declared.read_text() + '\n[targets.prod]\nhost = "p"\ndest = "/srv/p"\n'
+        'remote_user = "efx"\nlabels = { env = "prod" }\n'
+    )
+    result = CliRunner().invoke(app, ["list", "targets", "--json"])
+    assert result.exit_code == 0, result.output
+    rows = {r["target"]: r for r in json.loads(result.output)}
+    assert list(rows) == ["bare", "down", "prod", "uat"]
+    assert list(rows["prod"]) == ["target", "ssh", "dest", "as", "labels", "last deployed"]
+    assert rows["prod"]["as"] == "efx" and rows["prod"]["labels"] == "env=prod"
+    assert rows["uat"]["last deployed"].startswith("r7 (")
+    assert rows["down"]["last deployed"] == ""
+    table = CliRunner().invoke(app, ["list", "targets"], terminal_width=200).output
+    assert "last deployed" in table and "svc@uat.example" in table
+
+
+def test_list_targets_with_none_declared_says_how_to_add_one(tmp_path, monkeypatch):
+    monkeypatch.setenv(targets.DECLARATION_ENV, str(tmp_path / "deploy_targets.toml"))
+    result = CliRunner().invoke(app, ["list", "targets"], terminal_width=200)
+    said = " ".join(result.output.split())  # rich wraps the long path
+    assert result.exit_code == 0 and "add one with `uqs target add`" in said
+
+
+def test_list_targets_is_a_listable_kind_and_target_list_is_gone(server):
+    from uqs.stack.listing import LISTABLE_KINDS
+
+    assert "targets" in LISTABLE_KINDS
+    old = CliRunner().invoke(app, ["target", "list"])
+    assert old.exit_code != 0 and "No such command" in old.output
+    root = typer.main.get_command(app)
+    assert isinstance(root, typer.core.TyperGroup)
+    group = root.commands["target"]
+    assert isinstance(group, typer.core.TyperGroup)
+    assert set(group.commands) == {"add", "remove", "check", "shell"}
+
+
+def test_mcp_lists_targets_too():
+    """The kind is registered from deploy/ (stack/ may not import deploy/), so
+    the MCP front end must load that registration on its own, as the CLI does."""
+    code = "import uqs.mcp, uqs.stack.listing as l; print('targets' in l.LISTABLE_KINDS)"
+    env = {**os.environ, "PYTHONPATH": str(Path(control.__file__).parents[2])}
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env, check=False
+    )
+    assert done.stdout.strip() == "True", done.stderr
 
 
 def test_add_appends_and_remove_deletes_only_that_table(server):

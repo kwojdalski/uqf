@@ -46,7 +46,7 @@ PER_RUN = frozenset({"artifact", "dry_run"})
 LISTED_AS_TEXT = frozenset({"jobs", "live_check", "process_fields"})
 SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
 #: Keys a target may hold that are not push options: the runtime it must run
-#: (checked against the artifact's), and labels, which `uqs target list` shows
+#: (checked against the artifact's), and labels, which `uqs list targets` shows
 #: and nothing deploys (#956).
 NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"})
 
