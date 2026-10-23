@@ -107,15 +107,40 @@ def _unsafe(name: str) -> bool:
     return name.startswith("/") or ".." in parts or not parts
 
 
+@dataclass
+class Checked:
+    """An archive checked whole (checked_archive): its sha256, whether a
+    .sha256 pinned it, its manifest, and the manifest member's own sha256."""
+
+    sha256: str
+    pinned: bool
+    manifest: dict
+    manifest_sha256: str
+
+
 def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
-    """An artifact, checked whole before anything trusts it.
+    """A release artifact, checked whole (checked_archive) before anything
+    trusts it, and its manifest's format and uqs wheel."""
+    c = checked_archive(path, MANIFEST, expected_sha256)
+    if c.manifest.get("format") != FORMAT:
+        raise ReleaseError(
+            "artifact", f"manifest format {c.manifest.get('format')!r}, this deploy reads {FORMAT}"
+        )
+    if not c.manifest.get("python", {}).get("app_wheel"):
+        raise ReleaseError("artifact", "the manifest names no uqs wheel")
+    return Artifact(path=path, sha256=c.sha256, manifest=c.manifest, pinned=c.pinned)
+
+
+def checked_archive(path: Path, manifest_name: str, expected_sha256: str | None = None) -> Checked:
+    """An archive, checked whole before anything trusts it - a release's, or
+    a TorQ runtime's (deploy/torq_runtime.py).
 
     The archive's sha256 must match its .sha256 file when one sits beside it
     (and `expected_sha256` when given); whether one did is `pinned`, for the
     caller's policy to judge. Every member must be a regular file
-    at a relative path, listed in the manifest with the hash it has; nothing
-    may be missing and nothing extra. A member that fails any of these is
-    named - an artifact is never half-trusted.
+    at a relative path, listed in the manifest (`manifest_name`, a member)
+    with the hash it has; nothing may be missing and nothing extra. A member
+    that fails any of these is named - an archive is never half-trusted.
     """
     if not path.is_file():
         raise ReleaseError("artifact", f"no artifact at {path}")
@@ -136,29 +161,27 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
         raise ReleaseError("artifact", f"{path.name} is not a readable tar.gz: {exc}") from None
     with tar:
         seen: dict[str, str] = {}
-        manifest = None
+        manifest, manifest_sha256 = None, ""
         for member in tar:
             if _unsafe(member.name):
                 raise ReleaseError("artifact", f"member {member.name!r} is not a relative path")
             if not member.isfile():
                 raise ReleaseError("artifact", f"member {member.name!r} is not a regular file")
-            if member.name in seen or (member.name == MANIFEST and manifest is not None):
+            if member.name in seen or (member.name == manifest_name and manifest is not None):
                 raise ReleaseError("artifact", f"member {member.name!r} appears twice")
             f = tar.extractfile(member)
             assert f is not None  # a regular file always extracts
-            if member.name == MANIFEST:
+            if member.name == manifest_name:
+                data = f.read()
+                manifest_sha256 = hashlib.sha256(data).hexdigest()
                 try:
-                    manifest = json.load(f)
+                    manifest = json.loads(data)
                 except ValueError:
-                    raise ReleaseError("artifact", f"{MANIFEST} is not JSON") from None
+                    raise ReleaseError("artifact", f"{manifest_name} is not JSON") from None
                 continue
             seen[member.name] = _digest(f)
-    if manifest is None:
-        raise ReleaseError("artifact", f"{path.name} carries no {MANIFEST}")
-    if manifest.get("format") != FORMAT:
-        raise ReleaseError(
-            "artifact", f"manifest format {manifest.get('format')!r}, this deploy reads {FORMAT}"
-        )
+    if not isinstance(manifest, dict):
+        raise ReleaseError("artifact", f"{path.name} carries no {manifest_name}")
     listed = manifest.get("files", {})
     for name in sorted(set(listed) | set(seen)):
         if name not in seen:
@@ -167,9 +190,7 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
             raise ReleaseError("artifact", f"{name} is in the archive but not the manifest")
         if listed[name] != seen[name]:
             raise ReleaseError("artifact", f"{name} does not match its manifest checksum")
-    if not manifest.get("python", {}).get("app_wheel"):
-        raise ReleaseError("artifact", "the manifest names no uqs wheel")
-    return Artifact(path=path, sha256=digest, manifest=manifest, pinned=pinned)
+    return Checked(sha256=digest, pinned=pinned, manifest=manifest, manifest_sha256=manifest_sha256)
 
 
 #: What a manifest WITHOUT a `runtime` means (#883). Until #883 a build for

@@ -10,6 +10,7 @@ from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, re
 from uqs.deploy.lock import Lock
 from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
 from uqs.deploy.selection import Selection
+from uqs.deploy.torq_runtime import Runtime
 from uqs.logger import get_logger
 from uqs.stack import site_fields
 
@@ -37,6 +38,9 @@ class Server:
         #: the runtime the artifact was built for (#852): its bundles are in it.
         #: The driver sets it from the manifest (artifact.release_runtime).
         self.runtime = LEGACY_RUNTIME
+        #: torq_mode bundled's runtime (deploy/torq_runtime.py), which
+        #: deploy.env then names in place of an existing TorQ
+        self.torq_runtime: Runtime | None = None
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -83,11 +87,15 @@ class Server:
             )
 
     def env_lines(self) -> list[str]:
-        """deploy.env: the external TorQ, q and the stable data directory."""
+        """deploy.env: the TorQ - external, or the bundled runtime's - q and
+        the stable data directory."""
         c = self.cfg
+        torq_home, torq_app_home = c.torq_home, c.torq_app_home
+        if self.torq_runtime is not None:
+            torq_home, torq_app_home = self.torq_runtime.homes(c.dest)
         pairs = [
-            ("TORQHOME", c.torq_home),
-            ("TORQAPPHOME", c.torq_app_home),
+            ("TORQHOME", torq_home),
+            ("TORQAPPHOME", torq_app_home),
             ("QCMD", self.q_env.get("QCMD", c.qcmd)),
             ("QHOME", self.q_env.get("QHOME", c.qhome)),
             ("UQS_DATA_ROOT", c.data_root),

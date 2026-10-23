@@ -68,6 +68,9 @@ SAMPLES: dict[str, Any] = {
     "accept_digest": "rebuilt with the same tree",
     "accept_q_version": "4.0 is what this site runs",
     "allow_unpinned": "a local development build",
+    "torq_mode": "bundled",
+    "torq_runtime": "dist/torq-runtime.tar.gz",
+    "torq_runtime_sha256": "cd" * 32,
     "fix_hdb": True,
     "keep": 3,
     "soak": 45,
@@ -80,11 +83,23 @@ RELAXES: dict[str, dict[str, Any]] = {
     "accept_q_version": {"q_version": ">=4.1"},
 }
 
-#: Options with no valid value but their default yet: each component's mode,
+#: What a sample needs beside it in its own call, where the baseline must not
+#: have it: a bundled TorQ and its fields come together or not at all.
+BESIDE: dict[str, dict[str, Any]] = {
+    "torq_mode": {"torq_runtime": "dist/torq-runtime.tar.gz"},
+    "torq_runtime": {"torq_mode": "bundled"},
+    "torq_runtime_sha256": {"torq_mode": "bundled", "torq_runtime": "dist/torq-runtime.tar.gz"},
+}
+
+#: Options with no valid value but their default yet: each component's mode
 #: whose other value - bundled - is refused until #1557 adds it. Each is proven
 #: to arrive with bundled allowed (test_each_mode_reaches_its_field); a mode
-#: that gains a second value moves to SAMPLES.
-ONE_VALUE = {components.mode_key(c): components.BUNDLED for c in components.COMPONENTS}
+#: that gains a second value moves to SAMPLES, as torq_mode has.
+ONE_VALUE = {
+    components.mode_key(c): components.BUNDLED
+    for c in components.COMPONENTS
+    if components.BUNDLED not in components.SUPPORTED[c]
+}
 
 #: Config fields `make_config` does not set, and who does.
 SET_ELSEWHERE = {
@@ -127,7 +142,7 @@ def test_each_option_reaches_its_field(name):
     dropped on the way from make_config's parameters to Config(...)."""
     base: dict[str, Any] = {**REQUIRED, **RELAXES.get(name, {})}
     baseline = make_config(**base)
-    changed = make_config(**{**base, name: SAMPLES[name]})
+    changed = make_config(**{**base, **BESIDE.get(name, {}), name: SAMPLES[name]})
     assert getattr(changed, name) != getattr(baseline, name), (
         f"{name}={SAMPLES[name]!r} was accepted but Config.{name} kept "
         f"{getattr(baseline, name)!r} - is it passed to Config(...)?"
@@ -137,7 +152,8 @@ def test_each_option_reaches_its_field(name):
 @pytest.mark.parametrize("name", sorted(ONE_VALUE))
 def test_each_mode_reaches_its_field(name, monkeypatch):
     """As test_each_option_reaches_its_field, with bundled allowed as it will be."""
-    monkeypatch.setattr(components, "SUPPORTED", frozenset(components.MODES))
+    every = dict.fromkeys(components.COMPONENTS, frozenset(components.MODES))
+    monkeypatch.setattr(components, "SUPPORTED", every)
     given: dict[str, Any] = {**REQUIRED, name: ONE_VALUE[name]}
     changed = make_config(**given)
     assert getattr(changed, name) == ONE_VALUE[name], f"{name} did not reach Config.{name}"
