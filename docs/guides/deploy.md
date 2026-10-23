@@ -291,6 +291,11 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   - ssh could not connect;
   - the target has no deployed release under its `dest`;
   - the remote command failed, with its own output and exit code.
+- **Querying from here instead.** `uqs query --target NAME` runs the query on
+  this machine through an ssh tunnel to the target, with ports from the target's
+  release. See [A deployed target, from
+  here](uqs.md#a-deployed-target-from-here). `uqs --target X query --target Y`
+  is refused.
 
 ### Deployments and the default per server
 

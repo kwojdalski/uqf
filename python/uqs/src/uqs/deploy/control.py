@@ -255,11 +255,11 @@ def run(
         done = runner(ssh_argv(r, args, tty, command), check=False)
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
-    _refuse_unreached(r, done.returncode)
+    refuse_unreached(r, done.returncode)
     return done.returncode
 
 
-def _refuse_unreached(r: Remote, code: int) -> None:
+def refuse_unreached(r: Remote, code: int) -> None:
     """Raise when `code` says the command never ran: ssh could not connect,
     or there is no release to run it in."""
     if code == SSH_FAILED:
@@ -290,7 +290,7 @@ def current_release(r: Remote, runner: Runner = subprocess.run) -> str:
         done = runner(["ssh", *opts, r.host, shell], capture_output=True, text=True, check=False)
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
-    _refuse_unreached(r, done.returncode)
+    refuse_unreached(r, done.returncode)
     if done.returncode:
         said = diagnostic(done) or "nothing"
         raise UqsError(f"target {r.name}: the check failed (exit {done.returncode}): {said}")

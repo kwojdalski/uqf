@@ -1179,6 +1179,32 @@ export UQS_QUERY_RENDER=kola                  # every call, and the gateway sess
 writes the data itself, whichever is chosen. From a plain q session instead:
 `q)h:hopen \`:localhost:6052:admin:admin`, then `h "..."`, then `hclose h\`.
 
+### A deployed target, from here
+
+`--target NAME` queries a target declared in `deploy_targets.toml` from this
+machine. For the call, `uqs` opens an ssh tunnel
+(`ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<port>`, with `BatchMode` and
+`ExitOnForwardFailure`) and closes it afterwards, also on an error or Ctrl-C.
+
+```
+uqs --runtime peachq-etl query --target dev 'tables[]'               # the gateway, routed
+uqs --runtime peachq-etl query --target dev --proc rdb1 'tables[]'   # rdb1, as typed
+uqs query --target dev --port 6552 'tables[]'                        # a port on the target
+uqs query --target dev                                               # a gateway session
+```
+
+The port of `--proc` (or of the gateway) comes from the target's deployed
+release: `uqs list processes --json`, run there with its `deploy.env` and the
+`--runtime` given here. It never comes from this checkout. `--port` is a port on
+the target, so neither `--proc` with `--port` nor `--target` with `--host` is
+accepted. Routing works as it does locally. An interactive `--proc` session runs
+qcon as a child process, so the tunnel stays open while the session lasts.
+
+This is not `uqs --target NAME query ...`, which runs `uqs query` on the server
+([deploy guide](deploy.md#driving-a-deployed-release-from-your-machine)). Each
+form names a different machine to run the query, so giving both `--target`
+options is refused.
+
 ## MCP server
 
 `uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_summary`,
