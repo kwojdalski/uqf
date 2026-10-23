@@ -104,6 +104,8 @@ def test_a_resolver_refusal_is_a_uqs_error_naming_the_runtime(monkeypatch, tmp_p
     """The real resolver, told to use a binary that is not there."""
     stack_env.peachq_binary.cache_clear()
     monkeypatch.setenv("UQF_PEACHQ", str(tmp_path / "nope"))
+    monkeypatch.setenv("UQF_PEACHQ_REASON", "a test")
+    monkeypatch.delenv("UQF_PEACHQ_COMMIT", raising=False)
     try:
         with pytest.raises(UqsError, match="the peachq runtime needs a PeachQ binary: UQF_PEACHQ="):
             stack_env.peachq_binary(ROOT / "scripts")

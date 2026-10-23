@@ -174,7 +174,7 @@ tree's layers, plus the bundles declared for it. It has no uqf pipelines of its
 own. The `peachq` runtime is unchanged and still runs the capture stack only.
 
 ```bash
-export UQF_PEACHQ=/path/to/peachq/q
+export UQF_PEACHQ=/path/to/peachq/q UQF_PEACHQ_REASON='why not the pinned build'
 uqs --runtime peachq-etl runtime prepare --bundle ../synthpq --dry-run
 uqs --runtime peachq-etl runtime prepare --bundle ../synthpq
 uqs --runtime peachq-etl start --profile capture

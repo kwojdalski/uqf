@@ -246,9 +246,9 @@ repos:
       # for now: PeachQ runs part of this tree (these blocks here, and CI,
       # which cannot license KDB-X), and until the two are compatible enough
       # for one to stand for both, neither run vouches for the other. PeachQ
-      # is $UQF_PEACHQ, else the pinned build from scripts/peachq.json, built
-      # into ~/.cache/uqf/peachq on first use; when neither can be had this
-      # fails, rather than skipping.
+      # is $UQF_PEACHQ (with $UQF_PEACHQ_REASON), else the pinned build from
+      # scripts/peachq.json, built into ~/.cache/uqf/peachq on first use; when
+      # neither can be had this fails, rather than skipping.
       - id: q-docs-peachq
         name: Run the q blocks in docs/ on PeachQ too
         entry: python3 scripts/test.py q-docs-peachq

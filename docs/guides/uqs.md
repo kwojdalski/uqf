@@ -402,11 +402,11 @@ start.
 `peachq` is `torq`'s stack on [PeachQ](https://github.com/peachq-org/peachq),
 the MIT-licensed q interpreter, rather than KDB-X: the starter pack as it ships,
 with no connection cap and no licence needed. Its binary comes from
-`scripts/peachq.py`: `UQF_PEACHQ` if set, otherwise the pinned build from the
-cache, built into the cache the first time. That stack alone gets
-`UQF_Q_IMPL=peachq` and that `QCMD`. Your shell's own `QCMD` and `PATH` are left
-alone, and `summary` names the interpreter on its first line. KDB-X stays the
-default and the interpreter everything here is verified against.
+`scripts/peachq.py`: `UQF_PEACHQ` if set (with `UQF_PEACHQ_REASON`), otherwise
+the pinned build from the cache, built into the cache the first time. That stack
+alone gets `UQF_Q_IMPL=peachq` and that `QCMD`. Your shell's own `QCMD` and
+`PATH` are left alone, and `summary` names the interpreter on its first line.
+KDB-X stays the default and the interpreter everything here is verified against.
 
 ```
 uqs --runtime peachq start --profile capture
