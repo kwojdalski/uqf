@@ -128,13 +128,18 @@ def plan(
 
 
 def _source_lines(cfg: Config) -> list[str]:
-    """Where each setting came from, when a target supplied any (#873)."""
+    """Where each setting came from, when a target supplied any (#873): the
+    layers lowest first - defaults, environment, target, flags (#1557)."""
     if not cfg.target:
         return []
     by: dict[str, list[str]] = {}
     for key, source in sorted(cfg.sources.items()):
         by.setdefault(source, []).append(key)
-    return [f"settings: {', '.join(keys)} from {source}" for source, keys in sorted(by.items())]
+    layers = ("defaults", "environment ", "target ", "--")
+    order = sorted(
+        by, key=lambda s: (next((i for i, p in enumerate(layers) if s.startswith(p)), 4), s)
+    )
+    return [f"settings: {', '.join(by[source])} from {source}" for source in order]
 
 
 def _selection_lines(sel: Selection, live: bool) -> list[str]:

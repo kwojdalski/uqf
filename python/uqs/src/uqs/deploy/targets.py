@@ -24,6 +24,14 @@ wins over the file. Each value's source - the target, or the flag - is kept
 in the Config, and the plan prints it. `runtime`, which push otherwise reads
 from the artifact, is the one key that is not a flag: it must match the
 artifact's, so a crypto target never runs a uqf release.
+
+Settings shared by several targets are layered (#1557), lowest first:
+`[defaults]`, then the `[environments.NAME]` a target names with
+`environment = "NAME"`, then the target, then the flags. A higher layer
+replaces a key's whole value - a table is never merged - and each layer is
+held to the target's key checks, its refusals naming the layer. The sources
+say which layer gave each setting: "defaults", "environment uat",
+"target prod-a", "--profile".
 """
 
 from __future__ import annotations
@@ -57,6 +65,9 @@ SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
 #: (checked against the artifact's), and labels, which `uqs list targets` shows
 #: and nothing deploys (#956).
 NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"})
+#: The file's tables. Only a target names its environment.
+DEFAULTS, ENVIRONMENTS, TARGETS = "defaults", "environments", "targets"
+ENVIRONMENT = "environment"
 
 
 def declaration_path(root: Path) -> Path:
@@ -64,8 +75,9 @@ def declaration_path(root: Path) -> Path:
     return Path(configured).expanduser() if configured else root / DECLARATION
 
 
-def read(root: Path) -> dict[str, dict]:
-    """{target: its settings}, from the declaration; refused when absent."""
+def _load(root: Path) -> dict:
+    """The declaration's tables, their shapes checked: {defaults, environments,
+    targets}. Each key's name is checked by configs, layer by layer."""
     path = declaration_path(root)
     if not path.is_file():
         raise DeployError("arguments", f"--target needs {path}, which does not exist")
@@ -73,26 +85,79 @@ def read(root: Path) -> dict[str, dict]:
         data = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as exc:
         raise DeployError("arguments", f"{path}: not TOML ({exc})") from None
-    found = data.get("targets")
-    if not isinstance(found, dict) or not all(isinstance(v, dict) for v in found.values()):
-        raise DeployError("arguments", f"{path}: declare targets as [targets.<name>] tables")
-    return found
+    shape = (
+        f"declare targets as [{TARGETS}.<name>] tables, beside an optional "
+        f"[{DEFAULTS}] and [{ENVIRONMENTS}.<name>] tables"
+    )
+    unknown = sorted(set(data) - {DEFAULTS, ENVIRONMENTS, TARGETS})
+    if unknown:
+        raise DeployError("arguments", f"{path}: unknown table(s) {', '.join(unknown)} - {shape}")
+    # A file holding only shared layers may have no target yet (`uqs target add`).
+    layered = DEFAULTS in data or ENVIRONMENTS in data
+    found = data.get(TARGETS, {} if layered else None)
+    defaults, envs = data.get(DEFAULTS, {}), data.get(ENVIRONMENTS, {})
+    tables = (found, envs)
+    if not isinstance(defaults, dict) or not all(
+        isinstance(t, dict) and all(isinstance(v, dict) for v in t.values()) for t in tables
+    ):
+        raise DeployError("arguments", f"{path}: {shape}")
+    shared = [(DEFAULTS, defaults), *((f"environment {n}", e) for n, e in envs.items())]
+    for layer, settings in shared:
+        if ENVIRONMENT in settings:
+            raise DeployError(
+                "arguments", f"{layer}: sets environment - only a target names its environment"
+            )
+    return {DEFAULTS: defaults, ENVIRONMENTS: envs, TARGETS: found}
 
 
-def _options(name: str, declared: dict) -> dict:
-    """One target's settings, as make_config's keyword arguments."""
+def _layers(data: dict, name: str, path: Path) -> list[tuple[str, dict]]:
+    """Target `name`'s layers, lowest first, as (source, settings)."""
+    target = dict(data[TARGETS][name])
+    env = target.pop(ENVIRONMENT, None)
+    layers = [(DEFAULTS, data[DEFAULTS])] if data[DEFAULTS] else []
+    if env is not None:
+        if not isinstance(env, str) or env not in data[ENVIRONMENTS]:
+            known = ", ".join(sorted(data[ENVIRONMENTS])) or "none"
+            raise DeployError(
+                "arguments",
+                f"target {name}: environment {env!r} is not declared in {path} - "
+                f"it declares: {known}",
+            )
+        layers.append((f"environment {env}", data[ENVIRONMENTS][env]))
+    return [*layers, (f"target {name}", target)]
+
+
+def read(root: Path) -> dict[str, dict]:
+    """{target: its settings, over its defaults and environment}, from the
+    declaration; refused when absent. A target keeps its `environment` key."""
+    data = _load(root)
+    path = declaration_path(root)
+    out = {}
+    for name, declared in data[TARGETS].items():
+        merged: dict = {}
+        for _, settings in _layers(data, name, path):
+            merged.update(settings)
+        if ENVIRONMENT in declared:
+            merged[ENVIRONMENT] = declared[ENVIRONMENT]
+        out[name] = merged
+    return out
+
+
+def _options(layer: str, declared: dict) -> dict:
+    """One layer's settings - "defaults", "environment uat", "target prod-a" -
+    as make_config's keyword arguments."""
     overridden = sorted(set(declared) & OVERRIDES)
     if overridden:
         raise DeployError(
             "arguments",
-            f"target {name}: {', '.join(overridden)} - an override is given on the command "
-            "line, with its reason, for one push; a target never sets one",
+            f"{layer}: {', '.join(overridden)} - an override is given on the command "
+            "line, with its reason, for one push; the file never sets one",
         )
     unknown = sorted(set(declared) - SETTABLE - NOT_PUSH_OPTIONS)
     if unknown:
         raise DeployError(
             "arguments",
-            f"target {name}: unknown setting(s) {', '.join(unknown)} - a target sets push's "
+            f"{layer}: unknown setting(s) {', '.join(unknown)} - the file sets push's "
             "options, spelt as parameters (torq_home for --torq-home)",
         )
     options = {}
@@ -107,21 +172,30 @@ def _options(name: str, declared: dict) -> dict:
 
 def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path) -> list[Config]:
     """A Config per target in `names` (comma-separated), in order: the file's
-    settings, with `explicit` - the flags given on the command line - over
-    them, each checked by make_config."""
-    declared = read(root)
+    settings, layered, with `explicit` - the flags given on the command line -
+    over them, each checked by make_config."""
+    data = _load(root)
+    declared, path = data[TARGETS], declaration_path(root)
+    # Every shared layer's keys are checked, whichever targets use it.
+    _options(DEFAULTS, data[DEFAULTS])
+    for env, settings in data[ENVIRONMENTS].items():
+        _options(f"environment {env}", settings)
     wanted = [n.strip() for n in names.split(",") if n.strip()]
     missing = [n for n in wanted if n not in declared]
     if not wanted or missing:
         known = ", ".join(sorted(declared)) or "none"
         asked = ", ".join(missing) or repr(names)
-        raise DeployError(
-            "arguments", f"no target {asked} in {declaration_path(root)} - it declares: {known}"
-        )
+        raise DeployError("arguments", f"no target {asked} in {path} - it declares: {known}")
     out = []
     for name in wanted:
-        options = _options(name, declared[name])
-        sources = {k: f"target {name}" for k in options}
+        options: dict = {}
+        sources: dict[str, str] = {}
+        runtime = None
+        for layer, settings in _layers(data, name, path):
+            given = _options(layer, settings)
+            options.update(given)
+            sources.update(dict.fromkeys(given, layer))
+            runtime = settings.get("runtime", runtime)
         options.update(explicit)
         sources.update({k: "--" + k.replace("_", "-") for k in explicit})
         absent = [k for k in ("host", "dest", "profile") if options.get(k) is None]
@@ -134,7 +208,7 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
         cfg = make_config(artifact=artifact, dry_run=dry_run, **options)
         cfg.target = name
         cfg.sources = sources
-        cfg.runtime = declared[name].get("runtime")
+        cfg.runtime = runtime
         out.append(cfg)
     return out
 

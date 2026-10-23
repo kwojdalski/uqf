@@ -185,6 +185,44 @@ uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
 - **`labels`.** Free-form `key = "value"` pairs that `uqs list targets` shows.
   Nothing deploys them.
 
+### Shared settings: defaults and environments
+
+Settings that several targets share can be declared once. A target picks an
+environment with `environment = "<name>"`:
+
+```toml
+[defaults]
+remote_user = "svc"
+profile = "essential"
+
+[environments.uat]
+profile = "fx"
+
+[targets.uat-a]
+environment = "uat"
+host = "deploy@uat-a"
+dest = "/srv/uqf"
+```
+
+Each layer overrides the one above it in this table:
+
+  | Layer                      | Plan shows it as  | May set                               |
+  | -------------------------  | ----------------- | ------------------------------------- |
+  | `[defaults]`               | `defaults`        | any target key except `environment`   |
+  | `[environments.<name>]`    | `environment uat` | any target key except `environment`   |
+  | `[targets.<name>]`         | `target uat-a`    | any target key, and `environment`     |
+  | a flag on the command line | `--profile`       | any `push` option                     |
+
+- **Whole values.** A higher layer replaces a key's whole value. Tables such as
+  `labels` are never merged.
+- **Same checks.** Every layer's keys are checked, and a refusal names the layer
+  and the key. An undeclared environment is refused. The merged values go
+  through the same checks as the flags.
+- **Never in a file.** No layer may set the artifact, `--dry-run`, or a named
+  override.
+- **Listing.** `uqs list targets` shows each target with its layers merged. It
+  adds an `environment` column when a target names one.
+
 ## Requirements and named overrides
 
 A target can pin what it deploys and what it deploys onto:
