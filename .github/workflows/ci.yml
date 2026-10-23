@@ -272,6 +272,8 @@ jobs:
         # now passes - the list only shrinks (#863).
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         timeout-minutes: 10
+        env:
+          UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
         run: UQF_PEACHQ="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
       - name: Install what a PeachQ stack needs
         # torq.sh needs envsubst and rlwrap (uqs's prerequisite check refuses a
@@ -291,6 +293,7 @@ jobs:
         env:
           UQF_Q_IMPL: peachq
           UQF_PEACHQ_STACK_TEST: "1"
+          UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
         run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q python
 
   web:

@@ -10,10 +10,10 @@ lanes get a PeachQ binary, in this order:
      as PeachQ; anything else fails, with no fallback to the steps below - an
      override that quietly lost to a cache would make the override a guess.
   2. The cache, ${XDG_CACHE_HOME:-~/.cache}/uqf/peachq/<entry>/q, an entry
-     per pinned commit, platform and build options, so moving the pin or the
+     per commit, platform and build options, so moving the pin or the
      options selects a new entry rather than reusing the old binary. A cached
      binary is identified before it is used. A warm cache needs no network.
-  3. A build: fetch the pinned commit, check the checkout IS that commit,
+  3. A build: fetch the commit, check the checkout IS that commit,
      `make` it with this platform's options, identify the result, and publish
      it into the cache by one rename. A lock serialises builders, so two runs
      starting together build once; a failed or interrupted build publishes
@@ -21,6 +21,17 @@ lanes get a PeachQ binary, in this order:
 
 The pin and the build options live in scripts/peachq.json, which CI reads
 through this same module - there is no second copy of either.
+
+Leaving the pin is an override, and each needs a reason (#1557):
+
+  $UQF_PEACHQ=<binary>        use that binary instead of the pinned build
+  $UQF_PEACHQ_COMMIT=<hash>   build and cache another commit, by the same path
+  $UQF_PEACHQ_REASON=<why>    required by either; refused without it
+
+Either one is logged to stderr, with its reason, on every run that uses it,
+and a commit override is recorded in its cache entry's manifest.json. Neither
+relaxes anything else: the binary must still identify as PeachQ, and the
+platform must still be declared in the pin with its build options.
 
 Nothing here puts PeachQ on PATH or touches QCMD: the caller gets an
 absolute path and hands it to the one lane that asked for it.
@@ -51,6 +62,13 @@ from pathlib import Path
 
 PIN_FILE = Path(__file__).resolve().with_name("peachq.json")
 OVERRIDE_ENV = "UQF_PEACHQ"
+COMMIT_ENV = "UQF_PEACHQ_COMMIT"
+REASON_ENV = "UQF_PEACHQ_REASON"
+#: The manifest key that records a commit override. It is left out when an
+#: entry is matched, so a second run with another reason reuses the build.
+UNPINNED_KEY = "unpinned"
+#: How a refusal tells the operator to skip the build with a binary they have.
+SKIP_HINT = f"set {OVERRIDE_ENV} to an existing PeachQ binary and {REASON_ENV} to why"
 
 #: How long one git step, and the whole build, may run. A fetch that hangs -
 #: a proxy that accepts the connection and never answers - must end as an
@@ -132,8 +150,8 @@ def build_options(pin: dict, plat: str) -> dict[str, str]:
         supported = ", ".join(sorted(pin["platforms"]))
         raise PeachQError(
             f"PeachQ is not built automatically on {plat} (supported: {supported}). "
-            f"Build it yourself and set {OVERRIDE_ENV} to the binary, or declare "
-            f"{plat} with its build options in {PIN_FILE.name}."
+            f"Build it yourself and {SKIP_HINT}, or declare {plat} with its build "
+            f"options in {PIN_FILE.name}."
         ) from None
 
 
@@ -157,6 +175,34 @@ def _manifest(pin: dict, plat: str, options: Mapping[str, str]) -> dict:
         "make_target": pin["make_target"],
         "options": dict(sorted(options.items())),
     }
+
+
+def _reason(env: Mapping[str, str], variable: str, what: str) -> str:
+    """The reason for an override, or a refusal naming both variables."""
+    reason = (env.get(REASON_ENV) or "").strip()
+    if not reason:
+        raise PeachQError(
+            f"{variable} is set, which {what}; that needs a reason - set {REASON_ENV} "
+            f"to say why, or unset {variable} to use the pinned build"
+        )
+    return reason
+
+
+def _commit_override(env: Mapping[str, str], pinned: str) -> tuple[str, str] | None:
+    """(commit, reason) when $UQF_PEACHQ_COMMIT asks for another commit, else None."""
+    commit = env.get(COMMIT_ENV)
+    if not commit:
+        return None
+    if not _COMMIT.fullmatch(commit):
+        raise PeachQError(
+            f"{COMMIT_ENV} must be a full 40-character lower-case hash, not {commit!r}"
+        )
+    if commit == pinned:
+        raise PeachQError(
+            f"{COMMIT_ENV}={commit} is the pinned commit already - there is nothing "
+            "to override; unset it"
+        )
+    return commit, _reason(env, COMMIT_ENV, "builds a PeachQ commit other than the pinned one")
 
 
 # ------------------------------------------------------- the real operations
@@ -206,7 +252,7 @@ def git_fetch(src: Path, repository: str, commit: str, log: Path) -> str:
                 raise PeachQError(
                     f"could not fetch {repository}@{commit} ({step} timed out after "
                     f"{FETCH_TIMEOUT}s). A proxy or network that never answers? Details: {log}. "
-                    f"To skip the build, set {OVERRIDE_ENV} to an existing PeachQ binary"
+                    f"To skip the build, {SKIP_HINT}"
                 ) from None
             if code:
                 raise PeachQError(
@@ -231,7 +277,7 @@ def make_build(src: Path, target: str, options: Mapping[str, str], log: Path) ->
         except subprocess.TimeoutExpired:
             raise PeachQError(
                 f"building PeachQ timed out after {BUILD_TIMEOUT}s; log: {log}. "
-                f"To skip the build, set {OVERRIDE_ENV} to an existing PeachQ binary"
+                f"To skip the build, {SKIP_HINT}"
             ) from None
     if code:
         tail = "\n".join(log.read_text(errors="replace").splitlines()[-20:])
@@ -242,7 +288,7 @@ def make_build(src: Path, target: str, options: Mapping[str, str], log: Path) ->
 # ------------------------------------------------------------------ resolve
 
 
-def _override(binary: str, identify: Callable[[Path | str], str]) -> Path:
+def _override(binary: str, identify: Callable[[Path | str], str], reason: str, log: Log) -> Path:
     found = shutil.which(binary)
     if found is None:
         raise PeachQError(f"{OVERRIDE_ENV}={binary!r} is not a runnable file")
@@ -252,7 +298,9 @@ def _override(binary: str, identify: Callable[[Path | str], str]) -> Path:
         raise PeachQError(
             f"{OVERRIDE_ENV}={binary!r} {what}, not PeachQ - unset it to use the pinned build"
         )
-    return Path(found).resolve()
+    resolved = Path(found).resolve()
+    log(f"{OVERRIDE_ENV}: using {resolved}, not the pinned build; reason: {reason}")
+    return resolved
 
 
 def _valid_entry(entry: Path, manifest: dict, identify: Callable[[Path | str], str]) -> bool:
@@ -261,6 +309,8 @@ def _valid_entry(entry: Path, manifest: dict, identify: Callable[[Path | str], s
         recorded = json.loads((entry / "manifest.json").read_text())
     except _UNREADABLE:
         return False
+    if isinstance(recorded, dict):
+        recorded.pop(UNPINNED_KEY, None)
     return recorded == manifest and os.access(binary, os.X_OK) and identify(binary) == "peachq"
 
 
@@ -290,14 +340,28 @@ def resolve(
     log: Log = _stderr,
 ) -> Path:
     """The absolute path of a PeachQ binary: the override, else the cached
-    pinned build, else a fresh build of it. Raises PeachQError otherwise."""
+    build of the pinned (or overriding) commit, else a fresh build of it.
+    Raises PeachQError otherwise."""
     env = os.environ if env is None else env
     if env.get(OVERRIDE_ENV):
-        return _override(env[OVERRIDE_ENV], identify)
+        if env.get(COMMIT_ENV):
+            raise PeachQError(
+                f"{OVERRIDE_ENV} and {COMMIT_ENV} are both set; one names a binary, the "
+                "other a commit to build - unset one"
+            )
+        reason = _reason(env, OVERRIDE_ENV, "replaces the pinned PeachQ build")
+        return _override(env[OVERRIDE_ENV], identify, reason, log)
 
     pin = load_pin(pin_path)
+    unpinned = _commit_override(env, pin["commit"])
     plat = plat or platform_key()
     options = build_options(pin, plat)
+    record = None
+    if unpinned:
+        commit, reason = unpinned
+        record = {"pinned_commit": pin["commit"], "reason": reason}
+        log(f"{COMMIT_ENV}: using {commit}, not the pinned {pin['commit']}; reason: {reason}")
+        pin = {**pin, "commit": commit}
     manifest = _manifest(pin, plat, options)
     root = cache_root(env)
     entry = root / entry_name(pin["commit"], plat, options)
@@ -319,13 +383,14 @@ def resolve(
         if missing:
             raise PeachQError(
                 f"PeachQ is not cached at {entry}, and building it needs "
-                f"{', '.join(missing)} on PATH. Install them, or set {OVERRIDE_ENV} "
-                "to a PeachQ binary you already have."
+                f"{', '.join(missing)} on PATH. Install them, or {SKIP_HINT}."
             )
-        return _build_and_publish(pin, options, manifest, entry, fetch, build, identify, log)
+        return _build_and_publish(
+            pin, options, manifest, record, entry, fetch, build, identify, log
+        )
 
 
-def _build_and_publish(pin, options, manifest, entry, fetch, build, identify, log) -> Path:
+def _build_and_publish(pin, options, manifest, record, entry, fetch, build, identify, log) -> Path:
     work = Path(tempfile.mkdtemp(prefix=f".build-{entry.name}-", dir=entry.parent))
     build_log = entry.parent / f"{entry.name}.log"
     build_log.write_text("")
@@ -340,7 +405,8 @@ def _build_and_publish(pin, options, manifest, entry, fetch, build, identify, lo
         head = fetch(src, pin["repository"], commit, build_log)
         if head != commit:
             raise PeachQError(
-                f"fetched {head or 'nothing'}, not the pinned {commit}; refusing to build it"
+                f"fetched {head or 'nothing'}, not the {'requested' if record else 'pinned'} "
+                f"{commit}; refusing to build it"
             )
         log(f"building PeachQ (about a minute); log: {build_log}")
         built = build(src, pin["make_target"], options, build_log)
@@ -352,7 +418,8 @@ def _build_and_publish(pin, options, manifest, entry, fetch, build, identify, lo
             raise PeachQError(
                 f"the freshly built {built} identifies as {actual or 'nothing'}, not PeachQ"
             )
-        (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        recorded = {**manifest, UNPINNED_KEY: record} if record else manifest
+        (out / "manifest.json").write_text(json.dumps(recorded, indent=2) + "\n")
         os.rename(out, entry)
     finally:
         shutil.rmtree(work, ignore_errors=True)

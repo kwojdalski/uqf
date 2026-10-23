@@ -150,13 +150,32 @@ def test_moving_the_pin_or_the_options_selects_a_new_entry(tmp_path):
     assert ("b" * 40) in two.parent.name
 
 
-def test_the_override_wins_and_is_not_built(tmp_path):
+def test_the_override_wins_is_not_built_and_is_logged_with_its_reason(tmp_path):
     binary = tmp_path / "mine"
     binary.write_text("peachq")
     binary.chmod(0o755)
     fake = Fake()
-    assert fake.resolve(tmp_path, {peachq.OVERRIDE_ENV: str(binary)}) == binary.resolve()
+    env = {peachq.OVERRIDE_ENV: str(binary), peachq.REASON_ENV: "bisecting a PeachQ fix"}
+    assert fake.resolve(tmp_path, env) == binary.resolve()
     assert fake.builds == 0
+    assert fake.messages == [
+        f"UQF_PEACHQ: using {binary.resolve()}, not the pinned build; "
+        "reason: bisecting a PeachQ fix"
+    ]
+
+
+@pytest.mark.parametrize("reason", [None, "", "   "])
+def test_an_override_without_a_reason_is_refused_naming_both_variables(tmp_path, reason):
+    binary = tmp_path / "mine"
+    binary.write_text("peachq")
+    binary.chmod(0o755)
+    env = {peachq.OVERRIDE_ENV: str(binary)}
+    if reason is not None:
+        env[peachq.REASON_ENV] = reason
+    fake = Fake()
+    with pytest.raises(peachq.PeachQError, match=r"UQF_PEACHQ is set.*set UQF_PEACHQ_REASON"):
+        fake.resolve(tmp_path, env)
+    assert fake.builds == 0, "a refused override must not fall back to the pinned build"
 
 
 @pytest.mark.parametrize(
@@ -170,8 +189,83 @@ def test_an_invalid_override_fails_with_no_fallback(tmp_path, content, expected)
         binary.chmod(0o755)
     fake = Fake()
     with pytest.raises(peachq.PeachQError, match=expected):
-        fake.resolve(tmp_path, {peachq.OVERRIDE_ENV: str(binary)})
+        fake.resolve(tmp_path, {peachq.OVERRIDE_ENV: str(binary), peachq.REASON_ENV: "why"})
     assert fake.builds == 0, "an invalid override must not fall back to the pinned build"
+
+
+OTHER = "b" * 40
+
+
+def test_a_commit_override_builds_that_commit_and_records_it(tmp_path):
+    fake = Fake()
+    env = {peachq.COMMIT_ENV: OTHER, peachq.REASON_ENV: "testing upstream's fix"}
+    built = fake.resolve(tmp_path, env)
+    assert OTHER in built.parent.name
+    assert COMMIT not in built.parent.name
+    assert (fake.fetches, fake.builds) == (1, 1)
+    manifest = json.loads((built.parent / "manifest.json").read_text())
+    assert manifest["commit"] == OTHER
+    assert manifest["unpinned"] == {"pinned_commit": COMMIT, "reason": "testing upstream's fix"}
+    logged = (
+        f"UQF_PEACHQ_COMMIT: using {OTHER}, not the pinned {COMMIT}; reason: testing upstream's fix"
+    )
+    assert logged in fake.messages
+
+    # A warm entry is reused under another reason, and the override is logged again.
+    again = Fake()
+    assert again.resolve(tmp_path, {**env, peachq.REASON_ENV: "still testing"}) == built
+    assert again.builds == 0
+    assert any("reason: still testing" in m for m in again.messages)
+    # The pinned build is an entry of its own, which the override never served.
+    assert fake.resolve(tmp_path) != built
+
+
+@pytest.mark.parametrize(
+    ("commit", "expected"),
+    [
+        ("1925d06", "full 40-character"),
+        ("B" * 40, "full 40-character"),
+        ("g" * 40, "full 40-character"),
+        (COMMIT, "is the pinned commit already"),
+    ],
+)
+def test_a_commit_override_is_validated(tmp_path, commit, expected):
+    fake = Fake()
+    with pytest.raises(peachq.PeachQError, match=expected):
+        fake.resolve(tmp_path, {peachq.COMMIT_ENV: commit, peachq.REASON_ENV: "why"})
+    assert fake.fetches == 0
+
+
+def test_a_commit_override_without_a_reason_is_refused(tmp_path):
+    fake = Fake()
+    with pytest.raises(peachq.PeachQError, match=r"UQF_PEACHQ_COMMIT is set.*UQF_PEACHQ_REASON"):
+        fake.resolve(tmp_path, {peachq.COMMIT_ENV: OTHER})
+    assert fake.fetches == 0
+
+
+def test_a_binary_and_a_commit_override_together_are_refused(tmp_path):
+    env = {
+        peachq.OVERRIDE_ENV: str(tmp_path / "q"),
+        peachq.COMMIT_ENV: OTHER,
+        peachq.REASON_ENV: "why",
+    }
+    with pytest.raises(peachq.PeachQError, match="both set"):
+        Fake().resolve(tmp_path, env)
+
+
+def test_a_commit_override_does_not_bypass_the_platform_check(tmp_path):
+    fake = Fake()
+    env = {peachq.COMMIT_ENV: OTHER, peachq.REASON_ENV: "why"}
+    with pytest.raises(peachq.PeachQError, match=r"Linux-riscv64.*supported: Linux-x86_64"):
+        fake.resolve(tmp_path, env, plat="Linux-riscv64")
+    assert fake.fetches == 0
+
+
+def test_a_commit_override_checkout_must_be_that_commit(tmp_path):
+    fake = Fake(head="c" * 40)
+    with pytest.raises(peachq.PeachQError, match=f"not the requested {OTHER}"):
+        fake.resolve(tmp_path, {peachq.COMMIT_ENV: OTHER, peachq.REASON_ENV: "why"})
+    assert fake.builds == 0
 
 
 def test_an_unsupported_platform_is_refused_by_name(tmp_path):
