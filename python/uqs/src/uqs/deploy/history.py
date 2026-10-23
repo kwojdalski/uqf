@@ -32,6 +32,8 @@ from typing import Protocol
 from uqs.deploy import targets
 from uqs.deploy.config import Config, DeployError
 from uqs.logger import get_logger
+from uqs.paths import UqsError, UqsPaths
+from uqs.stack import listing
 
 log = get_logger(__name__)
 
@@ -150,3 +152,40 @@ def defaults(root: Path) -> set[int]:
             seen.add(key)
             out.add(i)
     return out
+
+
+def target_rows(root: Path) -> list[dict[str, str]]:
+    """`uqs list targets`: every declared target - where it is, as whom, its
+    labels - and the release last deployed there from this machine."""
+    if not targets.declaration_path(root).is_file():
+        return []
+    declared = targets.read(root)
+    deployed = {
+        (e.get("host"), e.get("dest")): e for e in read(root) if e.get("status") == "deployed"
+    }
+    rows = []
+    for name, t in sorted(declared.items()):
+        last = deployed.get((t.get("host"), t.get("dest")))
+        rows.append(
+            {
+                "target": name,
+                "ssh": str(t.get("host", "")),
+                "dest": str(t.get("dest", "")),
+                "as": str(t.get("remote_user") or ""),
+                "labels": ", ".join(f"{k}={v}" for k, v in (t.get("labels") or {}).items()),
+                "last deployed": f"{last['release']} ({last['at']})" if last else "",
+            }
+        )
+    return rows
+
+
+def _list_targets(paths: UqsPaths, base_port: int | None) -> list[dict[str, str]]:
+    try:
+        return target_rows(paths.repo_root)
+    except DeployError as exc:
+        raise UqsError(str(exc)) from exc
+
+
+#: `uqs list targets` (#1556). Registered from here, not in stack/listing.py,
+#: because stack/ sits below deploy/ and may not read a deploy declaration.
+listing.LISTABLE_KINDS["targets"] = _list_targets

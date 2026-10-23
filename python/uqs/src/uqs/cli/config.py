@@ -35,6 +35,7 @@ from uqs.cli.shared import (
     app,
     console,
 )
+from uqs.deploy import targets
 from uqs.paths import UqsError
 from uqs.stack import channel as stack_channel
 from uqs.stack import listing
@@ -116,7 +117,8 @@ def list_items(
     """List every item of KIND - run with no argument to see the available
     kinds. Not just processes: 'fields' lists process.csv's valid config set
     columns, 'overrides' lists every process_overrides.csv entry currently
-    set, 'env' lists build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
+    set, 'env' lists build_env()'s resolved KDBBASEPORT/KDBHDB/... values,
+    'targets' lists this machine's deploy_targets.toml.
 
     `--sort` takes any column the chosen kind produces, which differ between
     kinds. The order reaches `--export` too, so an exported CSV matches what
@@ -129,6 +131,12 @@ def list_items(
         items = listing.list_items(_paths(), kind, base_port=port)
     except UqsError as exc:
         _die(exc)
+        return
+    if kind == "targets" and not items and not as_json:
+        console.print(
+            f"no targets in {targets.declaration_path(_paths().repo_root)} - add one with "
+            "`uqs target add`, or `uqs deploy push` to a server"
+        )
         return
     items = _sorted_items(items, sort, reverse)
     if as_json:

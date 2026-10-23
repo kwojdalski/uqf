@@ -110,7 +110,7 @@ def _configure(
             "--target",
             help=(
                 "Run the command on a deployed release instead of this machine: a target "
-                "from deploy_targets.toml (`uqs target list`). Add --yes to skip the "
+                "from deploy_targets.toml (`uqs list targets`). Add --yes to skip the "
                 "confirmation a command that changes the server asks for."
             ),
         ),
