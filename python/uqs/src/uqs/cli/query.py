@@ -19,6 +19,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
+from uqs.cli import query_target as via_target
 from uqs.cli.shared import ExportOpt, _die, _export, _paths, app, console, log
 from uqs.paths import UqsError
 from uqs.stack import alive, listing, runtime
@@ -93,12 +94,19 @@ def _show_q(text: str) -> None:
 
 
 def _gateway_session(
-    host: str, port: int, user: str, passwd: str, servers: str, render: str
+    host: str,
+    port: int,
+    user: str,
+    passwd: str,
+    servers: str,
+    render: str,
+    via: via_target.Via | None = None,
 ) -> None:
     """The gateway's interactive session: every line through .gw.syncexec."""
     types = "".join("`" + t for t in servers.split())
+    where = f"{host}:{port}" if via is None else via.where
     console.print(
-        f"gateway1 at {host}:{port} - each line runs as .gw.syncexec[...;{types}]. "
+        f"gateway1 at {where} - each line runs as .gw.syncexec[...;{types}]. "
         "\\\\ or Ctrl-D to leave; uqs query --raw for plain qcon.",
         markup=False,
         style="dim",
@@ -115,11 +123,13 @@ def _gateway_session(
             render=stack_render.console_size if render == stack_render.Q else None,
         )
     except Exception as exc:  # kola's own exception types on connect
-        _die(UqsError(f"could not open a session on gateway1 at {host}:{port}: {exc}"))
+        said = str(exc) if via is None else via.scrub(exc)
+        _die(UqsError(f"could not open a session on gateway1 at {where}: {said}"))
 
 
 @app.command()
 def query(
+    ctx: typer.Context,
     expr: Annotated[
         str | None,
         typer.Argument(
@@ -146,6 +156,13 @@ def query(
         typer.Option(help="stack base port --proc is resolved against (default: the runtime's)"),
     ] = None,
     host: str = "localhost",
+    target: Annotated[
+        str | None,
+        typer.Option(
+            help="deployment target (deploy_targets.toml) to query from here, through an "
+            "ssh tunnel opened for the call; ports are the target's release's own",
+        ),
+    ] = None,
     user: str = "admin",
     passwd: str = "admin",
     servers: Annotated[
@@ -186,6 +203,11 @@ def query(
     Results print as q's console prints them; `--render kola` shows the
     Python objects kola makes of them instead. `--export` always writes the
     data itself.
+
+    `--target NAME` asks a deployed target instead, from this machine: an
+    ssh tunnel to it opens on a free loopback port for the call and closes
+    after, and `--proc` (or the gateway) is resolved to a port by the
+    target's own release. `--port` is then a port on the target.
     """
     try:
         render = stack_render.renderer(render)
@@ -198,6 +220,19 @@ def query(
     if proc is None and port is None:
         proc = stack_gateway.DEFAULT_PROC
     routed = proc == stack_gateway.DEFAULT_PROC and not raw
+    if target is not None:
+        if getattr(ctx.get_parameter_source("host"), "name", None) != "DEFAULT":
+            _die(
+                UqsError("--target names the machine to query - give --target or --host, not both")
+            )
+            return
+        try:
+            with via_target.connect(target, proc, port, base_port, user, passwd) as via:
+                _ask(expr, routed, via_target.LOOPBACK, via.port, user, passwd,
+                     servers, render, export, via)  # fmt: skip
+        except UqsError as exc:
+            _die(exc)
+        return
     if proc is not None and host not in _LOCAL_HOSTS:
         # --proc reads this machine's registry and process list, so on another
         # host both the port and the up/down check would describe the wrong one.
@@ -214,12 +249,32 @@ def query(
             _die(exc)
             return
         log.debug("query {} -> {}:{}", proc, host, port)
+    _ask(expr, routed, host, port, user, passwd, servers, render, export)
+
+
+def _ask(
+    expr: str | None,
+    routed: bool,
+    host: str,
+    port: int,
+    user: str,
+    passwd: str,
+    servers: str,
+    render: str,
+    export,
+    via: via_target.Via | None = None,
+) -> None:
+    """Run `expr` - or, with none, a session - on host:port: the gateway's
+    routing when `routed`. `via` is the target reached through a tunnel."""
     if expr is None:
         if export is not None:
             _die(UqsError("--export needs an expression whose result it can write"))
             return
         if routed:
-            _gateway_session(host, port, user, passwd, servers, render)
+            _gateway_session(host, port, user, passwd, servers, render, via)
+            return
+        if via is not None:
+            via_target.run_qcon(host, port, user, passwd)
             return
         _exec_qcon(host, port, user, passwd)
         return
@@ -240,6 +295,9 @@ def query(
     try:
         result = runtime.query(expr, port, host=host, user=user, passwd=passwd, render=wrap_size)
     except Exception as exc:  # kola raises its own exception types on connect/query failure
+        if via is not None:
+            _die(via.failed(exc))
+            return
         log.error("query failed: {}", exc)
         raise typer.Exit(code=1) from exc
     if size is not None:
