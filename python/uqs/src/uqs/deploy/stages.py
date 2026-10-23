@@ -1,11 +1,11 @@
 """The stages that change the server: transfer, prepare, smoke, start,
-verify, activate - and the report a deployment leaves in its release."""
+verify, activate - and writing the report (deploy/report.py) a deployment
+leaves in its release."""
 
 from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from uqs.deploy import kafka
@@ -25,6 +25,7 @@ from uqs.deploy.config import (
     redact,
 )
 from uqs.deploy.remote import diagnostic, q, script
+from uqs.deploy.report import Report
 from uqs.deploy.selection import Selection, smoke_args, verify_command
 from uqs.deploy.server import Server
 from uqs.logger import get_logger
@@ -62,49 +63,6 @@ for proc in sorted(started & streaming):
     out[proc] = {"verdict": v, "detail": detail}
 print(json.dumps(out))
 """
-
-
-@dataclass
-class Report:
-    release: str
-    revision: str
-    dirty: bool
-    host: str
-    dest: str
-    profile: str
-    status: str = "running"
-    stage: str = ""
-    error: str = ""
-    previous_release: str | None = None
-    processes: list[dict] = field(default_factory=list)
-    checks: dict[str, str] = field(default_factory=dict)
-    rollback: str = "not needed"
-    #: --jobs, the processes they added beside the profile, and the bundles
-    jobs: list[str] = field(default_factory=list)
-    extra_processes: list[str] = field(default_factory=list)
-    bundles: dict[str, dict] = field(default_factory=dict)
-    live: bool = False
-    #: the shared HDB against this release's schema, and what was filled (#870)
-    hdb: dict | None = None
-
-    #: what --keep removed after activation (#866), when it was given
-    pruned: dict | None = None
-
-    #: an upgrade's outage (#871): when the previous release's processes began
-    #: to stop, when the new ones verified, and the seconds between. None
-    #: when nothing was replaced.
-    downtime: dict | None = None
-
-    #: --soak's verdict and duration, and each streaming job's, when it ran (#869)
-    soak: dict | None = None
-
-    #: the q preflight ran (.z.K), and every policy override asked for
-    #: (deploy/overrides.py, #1557) - --accept-converted-release's included
-    qversion: str | None = None
-    exceptions: list[dict] = field(default_factory=list)
-
-    def as_dict(self) -> dict:
-        return dict(self.__dict__)
 
 
 class Deployment(Server):

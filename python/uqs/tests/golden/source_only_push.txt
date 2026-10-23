@@ -1,0 +1,268 @@
+[preflight]
+set -euo pipefail
+dest=/opt/uqf
+qcmd_flag=''
+qhome_flag=''
+torq_home=/opt/torq
+torq_app_home=''
+torq_launcher=''
+odbc_home=''
+data=/opt/uqf/shared/data
+current=/opt/uqf/current
+lock=/opt/uqf/deploy.lock
+probe_timeout=120
+python=3.14
+release_dir=/opt/uqf/releases/20261007T000000Z-0123456789ab
+expected_user=''
+
+fail() { echo "$*" >&2; exit 1; }
+echo "user=$(id -un)"
+if [ -n "$expected_user" ] && [ "$(id -un)" != "$expected_user" ]; then
+  fail "running as $(id -un), not $expected_user"
+fi
+if [ -e "$dest" ]; then
+  test -w "$dest" || fail "destination $dest is not writable"
+else
+  test -w "$(dirname "$dest")" || fail "cannot create $dest: its parent is not writable"
+fi
+command -v uv >/dev/null || fail "uv is not on PATH"
+py=$(uv python find "$python" 2>/dev/null) ||
+  fail "uv finds no Python $python - the release's wheels need it"
+echo "python=$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+echo "os=$(uname -s)"
+echo "arch=$(uname -m)"
+for tool in bash envsubst rlwrap tar timeout python3; do
+  command -v "$tool" >/dev/null || fail "$tool is not on PATH - the release needs it"
+done
+me=$(id -un)
+# QHOME: --qhome, else this account's own $QHOME - never the caller's.
+if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--qhome"
+elif [ -n "${QHOME:-}" ]; then qhome_eff=$QHOME; qhome_from="$me's QHOME"
+else fail "QHOME is not set for $me and --qhome was not given -" \
+  "pass --qhome <the directory q finds its licence in>"
+fi
+test -d "$qhome_eff" || fail "QHOME $qhome_eff ($qhome_from) is not a directory"
+# QCMD: --qcmd, else $QCMD, else q on this account's PATH. A name or a path,
+# never a command line: it is run as one word, quoted.
+if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--qcmd"
+elif [ -n "${QCMD:-}" ]; then qcmd_want=$QCMD; qcmd_from="$me's QCMD"
+else qcmd_want=q; qcmd_from="q on $me's PATH"
+fi
+case "$qcmd_want" in
+  /*) test -f "$qcmd_want" && test -x "$qcmd_want" ||
+        fail "QCMD $qcmd_want ($qcmd_from) is not an executable file"
+      qcmd_eff=$qcmd_want;;
+  */*) fail "QCMD $qcmd_want ($qcmd_from) is a relative path - give an absolute one";;
+  *[[:space:]]*) fail "QCMD '$qcmd_want' ($qcmd_from) is not an executable name -" \
+                   "a command with arguments is not supported; pass --qcmd";;
+  *) qcmd_eff=$(command -v -- "$qcmd_want") ||
+       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --qcmd"
+     case "$qcmd_eff" in
+       /*) ;;
+       *) fail "QCMD $qcmd_want ($qcmd_from) is a shell alias or function, not an executable";;
+     esac;;
+esac
+case "$qhome_eff$qcmd_eff" in *$'\n'*) fail "QHOME or QCMD holds a newline";; esac
+export QHOME="$qhome_eff"
+echo "qhome=$qhome_eff"
+echo "qhome_from=$qhome_from"
+echo "qcmd=$qcmd_eff"
+echo "qcmd_from=$qcmd_from"
+probe=$(mktemp -d)
+printf '%s\n' '-1 "DEPLOY_Q_OK ",string .z.K; exit 0' > "$probe/probe.q"
+out=$(timeout "$probe_timeout" "$qcmd_eff" "$probe/probe.q" -q 2>&1 || true)
+rm -rf "$probe"
+case "$out" in
+  *DEPLOY_Q_OK*)
+    qversion=$(printf '%s\n' "$out" | sed -n 's/.*DEPLOY_Q_OK \([0-9.]*\).*/\1/p' | head -1)
+    echo "qversion=$qversion";;
+  *) fail "$qcmd_eff did not run a script with QHOME=$qhome_eff - is it licensed?" \
+          "$(echo "$out" | tail -3)";;
+esac
+if [ -n "$odbc_home" ]; then
+  test -f "$odbc_home/current/env.sh" ||
+    fail "no ODBC setup at $odbc_home - run \`uqs setup odbc install\` there first"
+fi
+if [ -n "$torq_launcher" ]; then
+  test -f "$torq_launcher" || fail "no TorQ launcher $torq_launcher"
+  test -x "$torq_launcher" || fail "the TorQ launcher $torq_launcher is not executable"
+fi
+if [ -n "$torq_home" ]; then
+  test -f "$torq_home/torq.q" || fail "no torq.q in $torq_home"
+  if [ -z "$torq_launcher" ]; then
+    test -f "$torq_home/torq.sh" || fail "no torq.sh in $torq_home - pass --torq-launcher" \
+      "if this site keeps its launcher elsewhere"
+  fi
+fi
+if [ -n "$torq_app_home" ]; then
+  for f in database.q appconfig/process.csv; do
+    test -f "$torq_app_home/$f" || fail "no $f in $torq_app_home"
+  done
+fi
+if [ -d "$data" ]; then echo "data=present"; else echo "data=absent"; fi
+if [ -L "$current" ]; then echo "current=$(basename "$(readlink "$current")")"; fi
+if [ -n "$release_dir" ] && [ -e "$release_dir" ]; then echo "release_exists=yes"; fi
+if [ -d "$lock" ]; then
+  hb=$(cat "$lock/heartbeat" 2>/dev/null || stat -c %Y "$lock" 2>/dev/null || true)
+  case "$hb" in ''|*[!0-9]*) age=unknown;; *) age=$(( $(date +%s) - hb ));; esac
+  echo "locked=$(head -n 1 "$lock/owner" 2>/dev/null || echo unknown), last beat ${age}s ago"
+fi
+
+=====
+[lock]
+set -euo pipefail
+mkdir -p /opt/uqf
+mkdir /opt/uqf/deploy.lock 2>/dev/null || { echo held >&2; exit 3; }
+printf '%s\n' <owner> > /opt/uqf/deploy.lock/owner
+date +%s > /opt/uqf/deploy.lock/heartbeat
+
+=====
+[lock]
+set -euo pipefail
+if [ -L /opt/uqf/current ]; then echo "current=$(basename "$(readlink /opt/uqf/current)")"; fi
+if [ -e /opt/uqf/releases/20261007T000000Z-0123456789ab ]; then echo release_exists=yes; fi
+
+=====
+[transfer]
+set -euo pipefail
+mkdir -p /opt/uqf/staging/20261007T000000Z-0123456789ab /opt/uqf/releases
+
+=====
+[transfer]
+set -euo pipefail
+got=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'"'"'rb'"'"').read()).hexdigest())' /opt/uqf/staging/20261007T000000Z-0123456789ab/uqf-20261007T000000Z-0123456789ab.tar.gz)
+if [ "$got" != <sha256> ]; then
+  echo "checksum mismatch: the archive arrived as $got" >&2
+  rm -rf /opt/uqf/staging/20261007T000000Z-0123456789ab; exit 1
+fi
+test ! -e /opt/uqf/releases/20261007T000000Z-0123456789ab || { echo 'release 20261007T000000Z-0123456789ab already exists' >&2; exit 1; }
+mkdir /opt/uqf/releases/20261007T000000Z-0123456789ab
+tar -xzf /opt/uqf/staging/20261007T000000Z-0123456789ab/uqf-20261007T000000Z-0123456789ab.tar.gz -C /opt/uqf/releases/20261007T000000Z-0123456789ab
+rm -rf /opt/uqf/staging/20261007T000000Z-0123456789ab
+
+=====
+[lock]
+set -euo pipefail
+if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+=====
+[prepare]
+set -euo pipefail
+cd /opt/uqf/releases/20261007T000000Z-0123456789ab
+cat > deploy.env <<'DEPLOYENV'
+export TORQHOME=/opt/torq
+export QCMD='/opt/kx home/bin/q'
+export QHOME='/opt/kx home'
+export UQS_DATA_ROOT=/opt/uqf/shared/data
+export UQS_RUNTIME=uqf
+export UV_OFFLINE=1
+if [ -f /opt/uqf/shared/config/secrets.env ]; then set -a; . /opt/uqf/shared/config/secrets.env; set +a; fi
+DEPLOYENV
+if [ -f /opt/uqf/shared/config/secrets.env ] && [ -n "$(find /opt/uqf/shared/config/secrets.env -perm /077)" ]; then
+  echo '/opt/uqf/shared/config/secrets.env may be read by others - make it owner-only' >&2; exit 1
+fi
+test -d /opt/uqf/shared/data || { echo 'no runtime data directory /opt/uqf/shared/data' >&2; exit 1; }
+if [ -f /opt/uqf/shared/config/scripts/torqconfig/permissions/gateway_users.csv ]; then mkdir -p scripts/torqconfig/permissions; ln -sfn /opt/uqf/shared/config/scripts/torqconfig/permissions/gateway_users.csv scripts/torqconfig/permissions/gateway_users.csv; fi
+if [ -f /opt/uqf/shared/config/scripts/torqconfig/sources.csv ]; then mkdir -p scripts/torqconfig; ln -sfn /opt/uqf/shared/config/scripts/torqconfig/sources.csv scripts/torqconfig/sources.csv; fi
+if [ -f /opt/uqf/shared/config/python/uqs/process_overrides.csv ]; then mkdir -p python/uqs; ln -sfn /opt/uqf/shared/config/python/uqs/process_overrides.csv python/uqs/process_overrides.csv; fi
+export UV_OFFLINE=1
+uv venv --quiet --python 3.14 .venv
+uv pip install --quiet --offline --no-index --python .venv/bin/python --find-links .release/wheels --require-hashes -r .release/requirements.txt
+uv pip install --quiet --offline --no-index --python .venv/bin/python --no-deps .release/wheels/uqs-0.1.0-py3-none-any.whl
+
+=====
+[lock]
+set -euo pipefail
+if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+=====
+[hdb]
+set -euo pipefail
+cd /opt/uqf/releases/20261007T000000Z-0123456789ab
+source ./deploy.env
+.venv/bin/uqs data hdb-check --json
+
+=====
+[lock]
+set -euo pipefail
+if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+=====
+[smoke]
+set -euo pipefail
+cd /opt/uqf/releases/20261007T000000Z-0123456789ab
+source ./deploy.env
+timeout 120 "$QCMD" scripts/deploy_smoke.q -q -procs discovery1 stp1 rdb1 hdb1 wdb1 sort1 sortworker1 gateway1 monitor1 housekeeping1 sctp1 metrics1 reporter1 tpreplay1
+
+=====
+[lock]
+set -euo pipefail
+if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+=====
+[lock]
+set -euo pipefail
+if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+=====
+[ports]
+set -euo pipefail
+cd /opt/uqf/releases/20261007T000000Z-0123456789ab
+source ./deploy.env
+if [ -f scripts/deploy_verify.py ]; then .venv/bin/python scripts/deploy_verify.py --profile essential --ports-free; else .venv/bin/uqs deploy verify --profile essential --ports-free; fi
+
+=====
+[start]
+set -euo pipefail
+cd /opt/uqf/releases/20261007T000000Z-0123456789ab
+source ./deploy.env
+.venv/bin/uqs start --profile essential
+
+=====
+[lock]
+set -euo pipefail
+if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+=====
+[verify]
+set -euo pipefail
+cd /opt/uqf/releases/20261007T000000Z-0123456789ab
+source ./deploy.env
+if [ -f scripts/deploy_verify.py ]; then .venv/bin/python scripts/deploy_verify.py --profile essential --deadline 180; else .venv/bin/uqs deploy verify --profile essential --deadline 180; fi
+
+=====
+[lock]
+set -euo pipefail
+if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+=====
+[report]
+set -euo pipefail
+cat > /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json.new <<'DEPLOYREPORT'
+<report>
+DEPLOYREPORT
+python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json.new /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json
+
+=====
+[activate]
+set -euo pipefail
+ln -sfn releases/20261007T000000Z-0123456789ab /opt/uqf/.current.new
+python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' /opt/uqf/.current.new /opt/uqf/current
+
+=====
+[done]
+set -euo pipefail
+cat > /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json.new <<'DEPLOYREPORT'
+<report>
+DEPLOYREPORT
+python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json.new /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json
+
+=====
+[cleanup]
+set -euo pipefail
+rm -rf /opt/uqf/staging/20261007T000000Z-0123456789ab
+
+=====
+[lock]
+set -euo pipefail
+rm -rf /opt/uqf/deploy.lock

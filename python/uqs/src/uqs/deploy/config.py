@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from uqs.deploy import components
 from uqs.deploy.artifact import Artifact, ReleaseError, q_requirement, read_artifact
 from uqs.paths import UqsError
 from uqs.stack import redact as stack_redact
@@ -137,6 +138,11 @@ class Config:
     accept_digest: str | None = None
     accept_q_version: str | None = None
     allow_unpinned: str | None = None
+
+    #: each component's mode (deploy/components.py, #1557): `existing` only, yet
+    q_mode: str = components.EXISTING
+    torq_mode: str = components.EXISTING
+    python_mode: str = components.EXISTING
 
     #: fill the shared HDB's missing tables and columns in prepare (#870)
     fix_hdb: bool = False
@@ -294,6 +300,9 @@ def make_config(
     accept_digest: str | None = None,
     accept_q_version: str | None = None,
     allow_unpinned: str | None = None,
+    q_mode: str = components.EXISTING,
+    torq_mode: str = components.EXISTING,
+    python_mode: str = components.EXISTING,
     fix_hdb: bool = False,
     keep: int | None = None,
     soak: int | None = None,
@@ -338,6 +347,11 @@ def make_config(
     allow_unpinned = _reason("--allow-unpinned", allow_unpinned)
     expected_sha256, q_version = _sha256(expected_sha256), _q_version(q_version)
     _relaxes_something(expected_sha256, q_version, accept_digest, accept_q_version, allow_unpinned)
+    modes = {"q": q_mode, "torq": torq_mode, "python": python_mode}
+    try:
+        components.check(modes, locals())
+    except ValueError as exc:
+        raise DeployError("arguments", str(exc)) from None
     path = _required_absolute("--dest", dest)
     if path == "/":
         raise DeployError("arguments", "--dest must not be /")
@@ -375,6 +389,9 @@ def make_config(
         accept_digest=accept_digest,
         accept_q_version=accept_q_version,
         allow_unpinned=allow_unpinned,
+        q_mode=q_mode,
+        torq_mode=torq_mode,
+        python_mode=python_mode,
         fix_hdb=fix_hdb,
         keep=keep,
         soak=soak,

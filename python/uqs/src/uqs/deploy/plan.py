@@ -1,10 +1,10 @@
 """The plan `uqs deploy push --dry-run` shows: the overrides asked for, the
-payload, every step and where each setting came from - split from driver.py,
-which runs it."""
+components the release runs on, the payload, every step and where each
+setting came from - split from driver.py, which runs it."""
 
 from __future__ import annotations
 
-from uqs.deploy import kafka, overrides
+from uqs.deploy import components, kafka, overrides
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import Config
 from uqs.deploy.selection import Selection, smoke_args, verify_args
@@ -18,9 +18,11 @@ def plan(
     facts: dict[str, str],
     dep: Deployment,
     exceptions: list[dict] | None = None,
+    found: dict[str, dict] | None = None,
 ) -> str:
-    """What --dry-run shows: the overrides asked for, first, then the payload,
-    the commands and the planned restart."""
+    """What --dry-run shows: the overrides asked for, first, then the
+    components found (`found`, components.observed), the payload, the
+    commands and the planned restart."""
     previous = facts.get("current")
     restart = (
         f"stop release {previous}'s processes, then start {rid}'s on the same ports"
@@ -109,6 +111,7 @@ def plan(
     return "\n".join(
         [
             *overrides.plan_lines(cfg, exceptions or []),
+            *(components.plan_lines(cfg, found) if found else []),
             f"release {rid}: revision {pkg.manifest['revision']}"
             + (" (with uncommitted changes)" if pkg.manifest["dirty"] else ""),
             f"artifact: {pkg.path.name}, {len(pkg.files)} files, {size} bytes compressed, "

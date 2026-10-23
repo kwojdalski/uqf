@@ -124,6 +124,8 @@ def record(root: Path, cfg: Config, report: Reported, now: datetime | None = Non
             "error": r.get("error") or None,
             # the policy overrides this push asked for (#1557), as the report has them
             "exceptions": r.get("exceptions") or [],
+            # what it ran on: each component's mode, path and observed version
+            "components": r.get("components") or {},
         }
         _write(root, [*read(root), entry])
     except (OSError, DeployError) as exc:

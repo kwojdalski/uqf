@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 
+from uqs.deploy import components
 from uqs.deploy.config import Config, make_config
 
 REQUIRED: dict[str, Any] = {
@@ -79,6 +80,12 @@ RELAXES: dict[str, dict[str, Any]] = {
     "accept_q_version": {"q_version": ">=4.1"},
 }
 
+#: Options with no valid value but their default yet: each component's mode,
+#: whose other value - bundled - is refused until #1557 adds it. Each is proven
+#: to arrive with bundled allowed (test_each_mode_reaches_its_field); a mode
+#: that gains a second value moves to SAMPLES.
+ONE_VALUE = {components.mode_key(c): components.BUNDLED for c in components.COMPONENTS}
+
 #: Config fields `make_config` does not set, and who does.
 SET_ELSEWHERE = {
     "target": "deploy/targets.py, from deploy_targets.toml (#873)",
@@ -97,10 +104,12 @@ def _fields() -> set[str]:
 
 def test_every_option_has_a_sample_and_every_sample_an_option():
     params = set(_params())
-    assert not params - set(SAMPLES), (
+    sampled = set(SAMPLES) | set(ONE_VALUE)
+    assert not params - sampled, (
         "make_config parameters with no SAMPLE - add one, which proves the option "
-        f"reaches its Config field: {sorted(params - set(SAMPLES))}"
+        f"reaches its Config field: {sorted(params - sampled)}"
     )
+    assert not set(SAMPLES) & set(ONE_VALUE), "an option is in SAMPLES and ONE_VALUE"
     assert not set(SAMPLES) - params, f"SAMPLES for no parameter: {sorted(set(SAMPLES) - params)}"
 
 
@@ -123,3 +132,12 @@ def test_each_option_reaches_its_field(name):
         f"{name}={SAMPLES[name]!r} was accepted but Config.{name} kept "
         f"{getattr(baseline, name)!r} - is it passed to Config(...)?"
     )
+
+
+@pytest.mark.parametrize("name", sorted(ONE_VALUE))
+def test_each_mode_reaches_its_field(name, monkeypatch):
+    """As test_each_option_reaches_its_field, with bundled allowed as it will be."""
+    monkeypatch.setattr(components, "SUPPORTED", frozenset(components.MODES))
+    given: dict[str, Any] = {**REQUIRED, name: ONE_VALUE[name]}
+    changed = make_config(**given)
+    assert getattr(changed, name) == ONE_VALUE[name], f"{name} did not reach Config.{name}"
