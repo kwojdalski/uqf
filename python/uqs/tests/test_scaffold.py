@@ -170,6 +170,19 @@ def test_a_plan_refuses_wholesale_rather_than_half_writing(tmp_path: Path):
     assert not (tmp_path / "tests").exists(), "nothing else was written"
 
 
+def test_a_process_another_job_runs_is_refused_before_anything_is_written(tmp_path: Path):
+    """#1572: --procname of an existing job's process wrote the new job, and
+    the tree then refused to load - one process runs one job."""
+    streaming = tmp_path / "src" / "etl" / "streaming"
+    streaming.mkdir(parents=True)
+    existing = jobs.streaming_job("posbook", ["trades"], None, None).actions[0]
+    (tmp_path / existing.path).write_text(existing.body)
+    plan = jobs.streaming_job("audit_proc_clash", ["trades"], None, None, procname="posbook1")
+    with pytest.raises(UqsError, match="posbook1.*posbook"):
+        write.apply_plan(plan, tmp_path)
+    assert sorted(p.name for p in streaming.iterdir()) == ["posbook.q"], "nothing was written"
+
+
 def test_appending_to_a_missing_file_is_refused(tmp_path: Path):
     plan = jobs.streaming_job("j", ["trades"], None, None)
     with pytest.raises(UqsError, match="nothing to append to"):
