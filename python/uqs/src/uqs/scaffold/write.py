@@ -13,7 +13,9 @@ import sys
 from pathlib import Path
 
 from uqs import paths
-from uqs.paths import STACK_TABLES_LIST, STACK_TABLES_TEST, UqsError
+from uqs.model.declarations import read_declarations, read_file_text
+from uqs.model.registry import NON_JOB_PIPELINES
+from uqs.paths import STACK_TABLES_LIST, STACK_TABLES_TEST, STREAM_DIR, WORKER_DIR, UqsError
 from uqs.scaffold import external, profile
 from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -64,6 +66,7 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
     neither loads nor reverts cleanly, and the half of it that did land
     registers itself on load.
     """
+    _check_processes(plan, repo_root)
     for action in plan.actions:
         target = repo_root / action.path
         if action.mode is WriteMode.CREATE and target.exists():
@@ -88,6 +91,33 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
                 raise UqsError(f"unknown write mode {action.mode!r} for {action.path}")
         written.append(action.path)
     return written
+
+
+def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
+    """Refuse a job whose process another job already runs (#1572).
+
+    One process runs one job: the tree refuses to load with two claiming the
+    same procname, so the clash is caught here, before any file is written,
+    rather than by the load or the registry after it.
+    """
+    new = [
+        d
+        for a in plan.actions
+        if a.mode is WriteMode.CREATE
+        and a.path.suffix == ".q"
+        and a.path.parent in (STREAM_DIR, WORKER_DIR)
+        for d in read_file_text(a.body, a.path)
+    ]
+    if not new:
+        return
+    taken = {p.procname: p.procname for p in NON_JOB_PIPELINES}
+    taken |= {d.procname: d.name for d in read_declarations(repo_root)}
+    for d in new:
+        if d.procname in taken:
+            raise UqsError(
+                f"{d.name} would run as {d.procname}, which {taken[d.procname]} already runs - "
+                "one process runs one job: pick another --procname"
+            )
 
 
 def _appended(existing: str, action: FileAction) -> str:
