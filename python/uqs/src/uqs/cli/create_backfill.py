@@ -177,6 +177,13 @@ def backfill_plan(
     # An existing source is reused, not rewritten, and an existing
     # table is not defined twice: a second worker over rows someone
     # already declared is the common case after the first.
+    reuse_source = (repo_root / SOURCE_DIR / f"{source or name}.q").is_file()
+    define_table = dataset not in defined_tables(repo_root)
+    if twin_of is not None and reuse_source and not define_table:
+        # A twin's columns were read from its job's table, not passed: with
+        # its source and table both written already they shape nothing, and
+        # are no reason to refuse the plan as --columns would be (#1582).
+        shape = None
     return worker.bounded_worker(
         name,
         dataset,
@@ -191,6 +198,6 @@ def backfill_plan(
         transform=transform or "passthrough",
         shared=shared,
         raw=raw,
-        reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
-        define_table=dataset not in defined_tables(repo_root),
+        reuse_source=reuse_source,
+        define_table=define_table,
     )
