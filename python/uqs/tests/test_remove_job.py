@@ -341,3 +341,32 @@ def test_strict_refuses_and_dry_run_only_says_it_would(tree, monkeypatch):
     result = runner.invoke(cli.app, ["job", "remove", "pulse", "--strict", "--yes"])
     assert result.exit_code == 1 and refused and "1 line(s)" in refused[0]
     assert (tree / "src/etl/streaming/pulse.q").is_file(), "and nothing was removed"
+
+
+def test_a_guest_writer_does_not_take_an_authored_table(tree):
+    """#1585: a job that only publishes onto a table it did not define leaves
+    that table - its definition, comment, catalog entry and expected entry."""
+    write.apply_plan(jobs.streaming_job("audit_existing", [], "audit_existing", "px:float"), tree)
+    tables = tree / TABLES_FILE
+    # Make the table authored: the scaffold's comment rewritten by hand.
+    text = tables.read_text().replace(
+        "/ audit_existing1's output. <one line: what a row means>",
+        "/ Hand-written: an audit print, one row per check.",
+    )
+    tables.write_text(text)
+    # Nothing else writes or reads it: only its authored definition remains.
+    (tree / "src/etl/streaming/audit_existing.q").unlink()
+    (tree / "tests/q/test_audit_existing.q").unlink()
+    before = _snapshot(tree)
+    write.apply_plan(
+        jobs.streaming_job(
+            "audit_guest", [], "audit_existing", None, known_tables={"audit_existing"}
+        ),
+        tree,
+    )
+    removal = plan_removal(tree, "audit_guest")
+    assert any("kept table audit_existing" in n for n in removal.notes)
+    removal.apply(tree)
+    after = _snapshot(tree)
+    changed = sorted(str(p) for p in set(before) | set(after) if before.get(p) != after.get(p))
+    assert not changed, f"not restored: {changed}"
