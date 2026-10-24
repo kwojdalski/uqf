@@ -384,3 +384,38 @@ def test_every_generated_q_namespace_passes_the_prefix_rule():
                 seen.append(ns)
                 assert ns.startswith(".q"), f"{action.path} declares {ns}"
     assert any(ns.endswith("ex") for ns in seen), "the example script was among them"
+
+
+# ---------------------------------- a passthrough between two different shapes
+
+_AUDIT_TARGET = {
+    "audit_t": ".qetl.plant.audit_t:([]time:`timestamp$(); sym:`g#`symbol$(); px:`float$())"
+}
+
+
+def _backfill_into_audit_t(shape: str, transform: str | None):
+    return create_backfill.backfill_plan(
+        UQF_ROOT, "audit_bf", "audit_t", shape,
+        width=None, source=None, procname=None, transport=None, partition=None,
+        check=False, transform=transform, start_with_all=False,
+        definitions=_AUDIT_TARGET,
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("shape", ["sym:symbol, qty:long", "sym:symbol, px:long", "px:float"])
+def test_a_passthrough_from_a_new_source_into_another_shape_is_refused(shape):
+    """#1593: the passthrough declares its input and output as the target's
+    shape and its example from the new source's fixture - two shapes, refused
+    by .qetl.transform.define when the tree next loads. Refused here instead."""
+    with pytest.raises(UqsError, match="--transform derive"):
+        _backfill_into_audit_t(shape, None)
+
+
+def test_a_passthrough_from_a_new_source_of_the_targets_shape_is_planned():
+    plan = _backfill_into_audit_t("sym:symbol, px:float", None)
+    assert plan.name == "audit_bf_backfill"
+
+
+def test_a_derivation_between_two_shapes_is_still_planned():
+    plan = _backfill_into_audit_t("sym:symbol, qty:long", "derive")
+    assert plan.name == "audit_bf_backfill"
