@@ -29,6 +29,7 @@ from uqs.scaffold.columns import (
     definition_columns,
     nested_declaration,
     parse_columns,
+    parse_raw_columns,
     resolve_shape,
     table_columns,
     table_definition,
@@ -95,6 +96,23 @@ def test_a_time_column_that_is_not_a_leading_timestamp_is_refused(spec):
 
 def test_a_leading_timestamp_time_is_kept_as_given():
     assert parse_columns("time:timestamp, sym:symbol")[0] == ("time", "`timestamp$()")
+
+
+@pytest.mark.parametrize(
+    "spec",
+    ["sym:symbol, px:float, px:long", "px:float, px:float", "time:timestamp, time:timestamp"],
+)
+def test_a_column_named_twice_is_refused(spec):
+    """q renames the second `px` to `px1` (#1575): the table that loads is not
+    the one asked for, so the spec is refused before anything is written."""
+    with pytest.raises(UqsError, match="named twice"):
+        parse_columns(spec)
+
+
+def test_a_raw_column_named_twice_is_refused():
+    with pytest.raises(UqsError, match="named twice"):
+        parse_raw_columns("ID:long, PX:float, PX:long")
+    assert [c for c, _ in parse_raw_columns("PX:float, Px:float")] == ["PX", "Px"]
 
 
 def test_an_ungrouped_sym_has_no_spelling_and_says_so():
