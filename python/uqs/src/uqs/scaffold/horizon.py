@@ -18,7 +18,6 @@ declare: which an event needs is the job's to say, not the scaffold's to guess.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 
 from uqs.paths import STREAM_DIR, TABLES_FILE, TEST_DIR, UqsError
@@ -41,9 +40,7 @@ from uqs.scaffold.jobs import (
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
-
-#: A q timespan literal, as `--horizon` takes it: 0D00:00:10, 0D00:01:00.5.
-_TIMESPAN = re.compile(r"^\d+D\d\d:\d\d:\d\d(\.\d+)?$")
+from uqs.scaffold.timespan import check_positive_timespan
 
 
 def _empty(cols: list[tuple[str, str]]) -> str:
@@ -85,10 +82,11 @@ def horizon_job(
         raise UqsError("a horizon job publishes its own NAME - drop --publishes")
     if not columns:
         raise UqsError("--kind horizon needs --columns: the table it publishes")
-    if not horizon or not _TIMESPAN.match(horizon):
+    if not horizon:
         raise UqsError(
             f"--kind horizon needs --horizon, a q timespan such as 0D00:00:10, not {horizon!r}"
         )
+    check_positive_timespan(horizon, "--horizon", "0D00:00:10")
     if name in known_tables:
         raise UqsError(f"{name!r} is already a plant table - a horizon job owns its output")
     events, reference = subscribe_to

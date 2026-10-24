@@ -53,3 +53,20 @@ def test_it_declares_a_horizon_job_over_the_two_tables():
 def test_a_bad_request_is_refused_by_name(kw, message):
     with pytest.raises(UqsError, match=message):
         plan(**kw)
+
+
+# #1584: horizon.q refuses a horizon that is not a positive timespan at load,
+# so the scaffold must refuse it before writing. q truncates a fraction past
+# nanoseconds, so 0D00:00:00.0000000001 is zero too, not "a little positive".
+@pytest.mark.parametrize(
+    "horizon",
+    ["0D00:00:00", "0D00:00:00.000", "00D00:00:00", "0D00:00:00.0000000001"],
+)
+def test_a_horizon_that_q_reads_as_zero_is_refused(horizon):
+    with pytest.raises(UqsError, match="must be positive"):
+        plan(horizon=horizon)
+
+
+@pytest.mark.parametrize("horizon", ["0D00:00:00.000000001", "0D00:00:10", "1D00:00:00"])
+def test_a_positive_horizon_is_written(horizon):
+    assert any(horizon in a.body for a in plan(horizon=horizon).actions)
