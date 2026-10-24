@@ -202,12 +202,15 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     # else that names the process is listed by the reference report below.
     for page in (STACK_PAGE, SHOWCASE_PAGE):
         _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
-    return _with_references(removal, repo_root, names - kept)
+    return _with_references(removal, repo_root, names - kept, {job})
 
 
-def _with_references(removal: Removal, repo_root: Path, names: set[str]) -> Removal:
-    """`removal`, with every line its edits leave still naming one of `names`."""
-    removal.references = stale_references(repo_root, names, removal.deletes, removal.rewrites)
+def _with_references(
+    removal: Removal, repo_root: Path, names: set[str], jobs: set[str] | None = None
+) -> Removal:
+    """`removal`, with every line its edits leave still naming one of `names`
+    or calling into one of `jobs`' namespaces."""
+    removal.references = stale_references(repo_root, names, removal.deletes, removal.rewrites, jobs)
     return removal
 
 
