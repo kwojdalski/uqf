@@ -130,6 +130,7 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
             raise UqsError(f"column {col!r}: a general (list) column cannot carry g#")
         if col in GROUPED_BY_DEFAULT and ctype.name == "symbol":
             grouped = True
+        _refuse_twice(col, out, "column")
         out.append((col, (GROUP if grouped else "") + ctype.literal))
     if not out:
         raise UqsError("--columns is empty: a published table needs at least one column")
@@ -147,6 +148,13 @@ def _refuse_q_word(col: str, what: str) -> None:
             f"{what} {col!r} is a q keyword and cannot name a column - "
             f"call it something else, e.g. '{col}_'"
         )
+
+
+def _refuse_twice(col: str, so_far: list[tuple[str, str]], what: str) -> None:
+    """Refuse a second `col`: q would load it renamed (`px` then `px1`), so
+    the table on disk would not be the one asked for (#1575)."""
+    if any(c == col for c, _ in so_far):
+        raise UqsError(f"{what} {col!r} is named twice - every column needs its own name")
 
 
 #: A physical column, as the source spells it: its case is the site's.
@@ -180,6 +188,7 @@ def parse_raw_columns(spec: str) -> list[tuple[str, str]]:
         ctype = _BY_NAME.get("list" if qtype == "any" else qtype)
         if ctype is None:
             raise UqsError(f"raw column {col!r} has unknown type {qtype!r}. Types: {names}")
+        _refuse_twice(col, out, "raw column")
         out.append((col, ctype.literal))
     if not out:
         raise UqsError("--raw-columns is empty: name the columns the adapter reads")

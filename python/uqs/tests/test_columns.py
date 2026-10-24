@@ -100,6 +100,23 @@ def test_the_example_a_bad_column_points_at_is_itself_accepted():
     assert parse_columns(found.group(1))
 
 
+@pytest.mark.parametrize(
+    "spec",
+    ["sym:symbol, px:float, px:long", "px:float, px:float", "time:timestamp, time:timestamp"],
+)
+def test_a_column_named_twice_is_refused(spec):
+    """q renames the second `px` to `px1` (#1575): the table that loads is not
+    the one asked for, so the spec is refused before anything is written."""
+    with pytest.raises(UqsError, match="named twice"):
+        parse_columns(spec)
+
+
+def test_a_raw_column_named_twice_is_refused():
+    with pytest.raises(UqsError, match="named twice"):
+        parse_raw_columns("ID:long, PX:float, PX:long")
+    assert [c for c, _ in parse_raw_columns("PX:float, Px:float")] == ["PX", "Px"]
+
+
 def test_an_ungrouped_sym_has_no_spelling_and_says_so():
     """The vendored `packets` table: `sym:symbol` would read back GROUPED,
     so the spec refuses rather than disagree with its table."""
