@@ -560,3 +560,16 @@ def test_the_source_template_keeps_the_two_rules_apart():
     assert "source_contract.q" in source, "the parameterised-query rule"
     assert "Half-open [range_from;range_to)" in source, "the half-open interval rule"
     assert "DIFFERENT rule" in source, "and the template says they are not the same one"
+
+
+def test_a_trailing_newline_does_not_pass_as_part_of_a_name():
+    """#1586: `$` matches before a final newline, so `re.match` let
+    'audit_bad\\n' through when an explicit procname skipped the derived check,
+    and the job file `audit_bad\\n.q` failed to parse."""
+    with pytest.raises(UqsError, match="job name"):
+        jobs.streaming_job("audit_bad\n", [], None, None, procname="audit_valid_proc")
+
+
+def test_a_period_refuses_a_trailing_newline():
+    with pytest.raises(UqsError, match="must be a q timespan"):
+        jobs.check_period("0D00:00:01\n")

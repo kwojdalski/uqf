@@ -33,7 +33,7 @@ _COLUMN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 def cursor_fields(raw: str | None) -> list[str]:
     """`--cursor-fields`, as names; empty when not given."""
     fields = [f.strip() for f in (raw or "").split(",") if f.strip()]
-    bad = [f for f in fields if not _COLUMN.match(f)]
+    bad = [f for f in fields if not _COLUMN.fullmatch(f)]
     if bad:
         raise UqsError(f"--cursor-fields: {', '.join(bad)} is not a q column name")
     if len(set(fields)) != len(fields):
