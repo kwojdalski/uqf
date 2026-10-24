@@ -20,6 +20,7 @@ import re
 from dataclasses import dataclass
 
 from uqs.model import schemas
+from uqs.model.qnames import Q_WORDS
 from uqs.paths import UqsError
 
 #: The column every plant table leads with: `.u.upd` stamps it, and every
@@ -112,13 +113,14 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
     names = ", ".join(sorted(t.name for t in TYPES))
     for part in (p.strip() for p in spec.split(",") if p.strip()):
         if ":" not in part:
-            raise UqsError(f"column {part!r} must be name:type, e.g. 'value:float'. Types: {names}")
+            raise UqsError(f"column {part!r} must be name:type, e.g. 'px:float'. Types: {names}")
         col, _, qtype = (s.strip() for s in part.partition(":"))
         if not _NAME.match(col):
             raise UqsError(
                 f"column {col!r} must be lower-case, start with a letter, and hold only "
                 "letters, digits and underscores"
             )
+        _refuse_q_word(col, "column")
         grouped = qtype.startswith("g#")
         ctype = _BY_NAME.get(qtype.removeprefix("g#"))
         if ctype is None:
@@ -133,6 +135,17 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
     if not any(c == TIME_COLUMN for c, _ in out):
         out.insert(0, (TIME_COLUMN, _BY_NAME["timestamp"].literal))
     return out
+
+
+def _refuse_q_word(col: str, what: str) -> None:
+    """Refuse a q keyword as a column name: `([] value:...)` is refused by q
+    with `assign`, so the table a scaffold wrote would stop the tree loading
+    (#1588)."""
+    if col in Q_WORDS:
+        raise UqsError(
+            f"{what} {col!r} is a q keyword and cannot name a column - "
+            f"call it something else, e.g. '{col}_'"
+        )
 
 
 #: A physical column, as the source spells it: its case is the site's.
@@ -162,6 +175,7 @@ def parse_raw_columns(spec: str) -> list[tuple[str, str]]:
                 f"raw column {col!r} must start with a letter and hold only letters, digits "
                 "and underscores"
             )
+        _refuse_q_word(col, "raw column")
         ctype = _BY_NAME.get("list" if qtype == "any" else qtype)
         if ctype is None:
             raise UqsError(f"raw column {col!r} has unknown type {qtype!r}. Types: {names}")

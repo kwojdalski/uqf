@@ -29,6 +29,7 @@ from uqs.scaffold.columns import (
     definition_columns,
     nested_declaration,
     parse_columns,
+    parse_raw_columns,
     resolve_shape,
     table_columns,
     table_definition,
@@ -79,6 +80,24 @@ def test_a_vector_column_is_a_list_and_cannot_be_grouped():
     assert dict(parse_columns("bid_prices:list"))["bid_prices"] == "()"
     with pytest.raises(UqsError, match="cannot carry g#"):
         parse_columns("bid_prices:g#list")
+
+
+@pytest.mark.parametrize("word", ["value", "count", "last", "type", "from"])
+def test_a_q_word_is_refused_as_a_column_name(word):
+    """`([] value:...)` is refused by q with `assign` (#1588): a table named
+    with one cannot load, so the spec is refused before anything is written."""
+    with pytest.raises(UqsError, match="q keyword"):
+        parse_columns(f"sym:symbol, {word}:float")
+    with pytest.raises(UqsError, match="q keyword"):
+        parse_raw_columns(f"ID:long, {word}:float")
+
+
+def test_the_example_a_bad_column_points_at_is_itself_accepted():
+    with pytest.raises(UqsError, match=r"e\.g\. '(\w+):(\w+)'") as err:
+        parse_columns("nocolon")
+    found = re.search(r"e\.g\. '([^']+)'", str(err.value))
+    assert found is not None
+    assert parse_columns(found.group(1))
 
 
 def test_an_ungrouped_sym_has_no_spelling_and_says_so():

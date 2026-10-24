@@ -226,7 +226,7 @@ def new_job(
     Streaming, reading two tables and writing one:
 
         uqs job new markout2 --subscribe-to trades,quote \\
-            --publishes my_metric --columns "sym:symbol, value:float"
+            --publishes my_metric --columns "sym:symbol, px:float"
 
     Bounded worker, with its source and transform - NAME is the base, so this
     writes worker fx_rates_backfill over source fx_rates (a NAME already ending
