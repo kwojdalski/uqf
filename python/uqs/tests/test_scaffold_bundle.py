@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import create, create_reaction
+from uqs.cli import create, create_bundle, create_reaction
 from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import bundle as bundle_mod
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -39,7 +39,7 @@ def tree_files():
 def _job_new(argv: list[str], monkeypatch) -> tuple[str, list[str]]:
     """Run `uqs job new`; return its output and any refusal it raised."""
     refused: list[str] = []
-    for module in (create, create_reaction):
+    for module in (create, create_bundle, create_reaction):
         monkeypatch.setattr(module, "_die", lambda exc: refused.append(str(exc)))
     result = CliRunner().invoke(cli.app, ["job", "new", *argv])
     assert result.exception is None, result.exception
@@ -122,3 +122,14 @@ def test_tree_registrations_are_dropped_and_named():
     ]  # fmt: skip
     assert out.actions[2].mode is WriteMode.CREATE and out.actions[2].body == "/ x\nx:([]a:())\n"
     assert any(str(STACK_TABLES_TEST) in n and "not written" in n for n in out.notes)
+
+
+def test_a_job_named_like_a_test_is_refused_before_writing(tmp_path, monkeypatch, tree_files):
+    """#1583: the installer reads every test_*.q as a test, so a job so named
+    would land in the bundle and then never install."""
+    folder = tmp_path / "mockups"
+    argv = ["test_audit_feed", "--kind", "backfill", "--dataset", "test_audit_feed",
+            "--columns", "trade_time:timestamp, sym:symbol, px:float"]  # fmt: skip
+    _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
+    assert any("test_" in r for r in refused), refused
+    assert not folder.exists()
