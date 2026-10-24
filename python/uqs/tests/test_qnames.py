@@ -18,7 +18,7 @@ import pytest
 
 from uqs.generated.q_facts import FIXTURE_TAG, REVISION_TAG
 from uqs.interpreter import q_interpreter
-from uqs.model.qnames import config_env_var, credential_var
+from uqs.model.qnames import Q_WORDS, config_env_var, credential_var
 from uqs.stack import runs
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
@@ -32,12 +32,13 @@ QUERY = r"""
 run_version:.qetl.job.bounded.runtime.run_version;
 cfgkeys:%s;
 srcnames:%s;
--1 .j.j `env_name`credential_var`fixture`revision`revision_fixture!(
+-1 .j.j `env_name`credential_var`fixture`revision`revision_fixture`q_words!(
     {.qetl.cfg.env_name `$x} each cfgkeys;
     {.qetl.source.credential_var `$x} each srcnames;
     {string .qetl.source.fixture_version `$x} each ("v1";"v2~fixture");
     {string run_version[`source`revision!(`demo_deals;2);`$x]} each enlist "v1";
-    {string run_version[`source`revision!(`demo_deals;0N);`$x]} each enlist "v1");
+    {string run_version[`source`revision!(`demo_deals;0N);`$x]} each enlist "v1";
+    string distinct .Q.res,k where (k:key .q) like "[a-z]*");
 exit 0
 """
 
@@ -85,3 +86,9 @@ def test_q_appends_the_tags_in_the_order_runs_strips_them(from_q):
     assert from_q["revision_fixture"] == [f"v1{FIXTURE_TAG}"]
     assert from_q["fixture"] == [f"v1{FIXTURE_TAG}", f"v2{FIXTURE_TAG}"]
     assert [runs.untagged(v) for v in from_q["revision"] + from_q["fixture"]] == ["v1", "v1", "v2"]
+
+
+def test_the_q_words_python_refuses_are_the_ones_q_keeps(from_q):
+    """A column or table named for one of these cannot load (#1588); a q
+    release that adds a keyword must add it here too."""
+    assert set(from_q["q_words"]) == Q_WORDS
