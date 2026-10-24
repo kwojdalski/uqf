@@ -421,6 +421,19 @@ def test_a_published_table_name_is_checked_like_every_other_name(publishes):
         jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)
 
 
+@pytest.mark.parametrize("publishes", ["schema", "shape", "columns", "nested", "elements"])
+def test_a_new_table_may_not_take_a_plant_runtime_name(publishes):
+    """#1597: plant tables and the plant's own functions share .qetl.plant, so
+    `.qetl.plant.schema:([]...)` replaced the function every reader calls."""
+    with pytest.raises(UqsError, match="plant runtime"):
+        jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)
+
+
+def test_an_ordinary_new_table_name_is_not_reserved():
+    plan = jobs.streaming_job("j", ["quote"], "audit_api_out", "v:float", known_tables=_PLANT)
+    assert _writes_to(plan, jobs.TABLES_FILE)
+
+
 def test_a_job_publishes_onto_an_existing_table_without_redefining_it():
     """A second producer of a plant table was refused ("needs --columns") and,
     given columns, would have defined the table twice."""
