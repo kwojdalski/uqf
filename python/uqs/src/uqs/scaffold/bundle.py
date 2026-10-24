@@ -116,7 +116,16 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
         if target is None:
             dropped.append(action.path)
             continue
-        if action.mode is WriteMode.APPEND and not target.is_file():
+        created = {a.path: i for i, a in enumerate(actions) if a.mode is WriteMode.CREATE}
+        if action.mode is WriteMode.APPEND and target in created:
+            # A later append to a file this plan creates joins that create:
+            # two creates of one path would leave only the second (#1569).
+            first = actions[created[target]]
+            body = first.body.rstrip("\n") + "\n" + action.body
+            actions[created[target]] = FileAction(target, body)
+        elif action.mode is WriteMode.CREATE and target in created:
+            raise UqsError(f"this scaffold would create {target} more than once")
+        elif action.mode is WriteMode.APPEND and not target.is_file():
             # The bundle's first table or catalog entry makes the file.
             actions.append(FileAction(target, action.body.lstrip("\n")))
         else:
