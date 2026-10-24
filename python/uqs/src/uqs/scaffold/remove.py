@@ -311,7 +311,12 @@ def _drop_definition(text: str, table: str) -> str:
         start -= 1
     if start > 0 and not lines[start - 1].strip():
         start -= 1
-    return "".join(lines[:start] + lines[at[0] + 1 :])
+    # A list column's `.qetl.plant.nested` declaration goes with its table:
+    # left behind, it names a table that no longer exists and the plant fails
+    # to load (#1567).
+    nested = f".qetl.plant.nested[`{table};"
+    rest = [line for line in lines[at[0] + 1 :] if not line.startswith(nested)]
+    return "".join(lines[:start] + rest)
 
 
 def _drop_catalog(text: str, table: str) -> str:
