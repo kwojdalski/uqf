@@ -34,7 +34,7 @@ from uqs.paths import (
     UqsError,
 )
 from uqs.scaffold import columns as columns_mod
-from uqs.scaffold import external, jobs, normalizer
+from uqs.scaffold import cycles, external, jobs, normalizer
 from uqs.scaffold import horizon as horizon_scaffold
 
 app.add_typer(job_app, name="job")
@@ -385,6 +385,7 @@ def new_job(
             )
         with planning_root(repo_root, bundle) as root:
             plan = _plan(root)
+            cycles.refuse_cycles(root, plan)
     except UqsError as exc:
         _die(exc)
         return
