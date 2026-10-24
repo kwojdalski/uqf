@@ -331,6 +331,7 @@ def new_job(
                 definitions=definitions if twin_of else None,
                 raw_table=raw_table,
                 raw_columns=raw_columns,
+                known_tables=known,
             )
         if kind == "normalizer":
             if publishes:

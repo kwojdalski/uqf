@@ -136,11 +136,16 @@ def backfill_plan(
     definitions: dict[str, str] | None = None,
     raw_table: str | None = None,
     raw_columns: str | None = None,
+    known_tables: set[str] | None = None,
 ) -> ScaffoldPlan:
     """The bounded worker's plan, or an error naming why there is none.
 
     `twin_of` names a streaming job whose published table this worker refills:
     its dataset and columns then come from there - see twin_target.
+    `known_tables` is every table the plant carries, the vendored starter
+    pack's included (cli/create_plant.py plant_tables): a dataset among them
+    is not defined a second time (#1602). Without it, only the tree's own
+    plant_tables.q is read.
     """
     if (raw_table is None) != (raw_columns is None):
         raise UqsError(
@@ -192,5 +197,6 @@ def backfill_plan(
         shared=shared,
         raw=raw,
         reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
-        define_table=dataset not in defined_tables(repo_root),
+        define_table=dataset
+        not in (defined_tables(repo_root) if known_tables is None else known_tables),
     )
