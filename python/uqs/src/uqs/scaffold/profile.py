@@ -57,6 +57,12 @@ def membership(
     known = set(known_profiles)
     if profile and unprofiled:
         raise UqsError("--profile and --unprofiled are two answers to one question - pick one")
+    if start_with_all and unprofiled is not None:
+        # --start-with-all is membership of the default profile (#1591).
+        raise UqsError(
+            "--start-with-all and --unprofiled are two answers to one question: starting "
+            "with the stack puts the process in the default profile - pick one"
+        )
     if profile is not None and profile not in known:
         raise UqsError(
             f"--profile {profile!r} is not a profile - there are {', '.join(sorted(known))}"
