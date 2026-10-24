@@ -63,14 +63,18 @@ run:{[from_ts;to_ts]
     (` sv ns,`init)[spec[from_ts;to_ts]];
     (` sv ns,`run)[]}
 
+/ A path as one shell word: dir is the absolute workspace path, which may hold
+/ spaces or quotes, and an unquoted `rm -rf` would split it into other paths.
+quoted:{[path] "'",ssr[path;"'";"'\"'\"'"],"'"}
+
 / Exit 1 with a message when a check fails, so the q-scripts lane fails too.
 check:{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}
 
 \d .
 
 -1 "\n== 1. a source kdb+ database: ",1_string .qhdbtx.src;
-system "rm -rf ",.qhdbtx.dir;
-system "mkdir -p ",.qhdbtx.dir,"/status";
+system "rm -rf ",.qhdbtx.quoted .qhdbtx.dir;
+system "mkdir -p ",.qhdbtx.quoted .qhdbtx.dir,"/status";
 setenv[`UQF_STATUS_DIR;.qhdbtx.dir,"/status"];
 sizes:150 160 170;
 written:.qhdbtx.write_day'[.qhdbtx.days;1+0,sums -1_sizes;.qhdbtx.day_trades'[.qhdbtx.days;1+0,sums -1_sizes;sizes]];
@@ -107,5 +111,5 @@ show select trades:count i, notional:sum notional by date:`date$time, quote:`$-3
 
 $[`keep in key .Q.opt .z.x;
     -1 "\nkept: ",.qhdbtx.dir,"  (q ",1_string[.qhdbtx.dst]," opens the destination as an HDB)";
-    [system "rm -rf ",.qhdbtx.dir; -1 "\nremoved ",.qhdbtx.dir," - pass -keep to look at the two databases"]];
+    [system "rm -rf ",.qhdbtx.quoted .qhdbtx.dir; -1 "\nremoved ",.qhdbtx.dir," - pass -keep to look at the two databases"]];
 exit 0
