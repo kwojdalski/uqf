@@ -59,35 +59,67 @@ def flat_source(text: str, repo_root: Path) -> str:
 def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
     """Write a plan, or refuse the whole thing.
 
-    Every target is checked BEFORE anything is written: a scaffold that
-    created three files and then refused the fourth would leave a tree that
-    neither loads nor reverts cleanly, and the half of it that did land
-    registers itself on load.
+    Every file's resulting content is computed BEFORE anything is written: a
+    scaffold that created three files and then refused the fourth would leave
+    a tree that neither loads nor reverts cleanly, and the half of it that did
+    land registers itself on load. An append can refuse on what its file holds
+    (a profile line past the limit, a list it cannot find), so existence alone
+    is not enough to check (#1568). A write that fails part way is undone.
     """
-    for action in plan.actions:
-        target = repo_root / action.path
-        if action.mode is WriteMode.CREATE and target.exists():
-            raise UqsError(f"{action.path} already exists - pick another name, or remove it first")
-        if action.mode is WriteMode.APPEND and not target.is_file():
-            raise UqsError(f"{action.path} does not exist, so there is nothing to append to")
-
-    written: list[Path] = []
+    contents: dict[Path, str] = {}
+    created: set[Path] = set()
     for action in plan.actions:
         target = repo_root / action.path
         match action.mode:
             case WriteMode.CREATE:
-                target.parent.mkdir(parents=True, exist_ok=True)
+                if target in contents or target.exists():
+                    raise UqsError(
+                        f"{action.path} already exists - pick another name, or remove it first"
+                    )
                 is_src = action.path.parts[:1] == ("src",) and action.path.suffix == ".q"
-                target.write_text(flat_source(action.body, repo_root) if is_src else action.body)
+                contents[target] = flat_source(action.body, repo_root) if is_src else action.body
+                created.add(target)
             case WriteMode.APPEND:
-                target.write_text(_appended(target.read_text(), action))
+                if target not in contents and not target.is_file():
+                    raise UqsError(
+                        f"{action.path} does not exist, so there is nothing to append to"
+                    )
+                existing = contents[target] if target in contents else target.read_text()
+                contents[target] = _appended(existing, action)
             case _:  # pragma: no cover - unreachable while WriteMode has two members
                 # Named rather than folded into the append branch, which is
                 # what the old `else` did: a third mode added later would have
                 # been silently appended instead of refused.
                 raise UqsError(f"unknown write mode {action.mode!r} for {action.path}")
-        written.append(action.path)
-    return written
+
+    _write_all(contents, created, repo_root)
+    return [action.path for action in plan.actions]
+
+
+def _write_all(contents: dict[Path, str], created: set[Path], repo_root: Path) -> None:
+    """Write every file in `contents`, or, if one write fails, put back the
+    ones already written: files this plan created are removed (with any
+    folders made for them), appended files get their old text back."""
+    originals = {t: t.read_text() for t in contents if t not in created}
+    made_dirs: list[Path] = []
+    done: list[Path] = []
+    try:
+        for target, text in contents.items():
+            missing = [p for p in [target.parent, *target.parent.parents] if not p.exists()]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            made_dirs.extend(reversed(missing))
+            target.write_text(text)
+            done.append(target)
+    except BaseException:
+        for target in done:
+            if target in created:
+                target.unlink(missing_ok=True)
+            else:
+                target.write_text(originals[target])
+        for folder in reversed(made_dirs):
+            if folder.is_dir() and folder != repo_root and not any(folder.iterdir()):
+                folder.rmdir()
+        raise
 
 
 def _appended(existing: str, action: FileAction) -> str:
