@@ -242,4 +242,9 @@ def backfill_plan(
         reuse_source=reuse_source,
         define_table=dataset
         not in (defined_tables(repo_root) if known_tables is None else known_tables),
+        target_columns=(
+            definition_columns(definitions[dataset])
+            if definitions and dataset in definitions
+            else None
+        ),
     )

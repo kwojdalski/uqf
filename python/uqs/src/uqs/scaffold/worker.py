@@ -86,6 +86,7 @@ def bounded_worker(
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
     raw: tuple[str, list[tuple[str, str]]] | None = None,
+    target_columns: list[tuple[str, str]] | None = None,
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker and its test.
 
@@ -110,6 +111,8 @@ def bounded_worker(
     one dataset. `partition_column` is the output column holding it (default
     `sym`): .qetl.job.bounded.define refuses a partition without one, and
     publish refuses rows whose value in it is another partition's (#1539).
+    The partition column is checked against the OUTPUT: `columns` when they
+    define the dataset, else `target_columns`, the existing dataset's (#1599).
     `check` scaffolds a quality check that fails a window on bad
     rows - most of the tree's workers declare one.
 
@@ -177,11 +180,22 @@ def bounded_worker(
     # would otherwise reach .qetl.source.define and fail the tree's load.
     transport = transports.get(transport or transports.default()).name
     cols = as_columns(columns) if columns else []
-    if partition_column and cols and partition_column not in [c for c, _ in cols]:
-        raise UqsError(
-            f"--partition-column {partition_column!r} is not among --columns "
-            f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
-        )
+    # Publish holds the DATASET's rows to the partition column, so it must be
+    # one of the output's: --columns when they define the dataset, the
+    # existing dataset's columns when they shape only a new source (#1599).
+    if partition_column and define_table and cols:
+        if partition_column not in [c for c, _ in cols]:
+            raise UqsError(
+                f"--partition-column {partition_column!r} is not among --columns "
+                f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
+            )
+    elif partition_column and target_columns is not None:
+        if partition_column not in [c for c, _ in target_columns]:
+            raise UqsError(
+                f"--partition-column {partition_column!r} is not a column of {dataset} "
+                f"({', '.join(c for c, _ in target_columns)}) - name the one that holds "
+                "the partition"
+            )
 
     actions: list[FileAction] = []
     if not reuse_source:
