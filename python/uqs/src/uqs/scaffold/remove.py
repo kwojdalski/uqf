@@ -10,7 +10,9 @@ suite loader finds it by what it holds, so deleting the file is the whole of
 it), and the profile lines naming its process. For a backfill, its source too, when no
 other worker reads it. A table the job publishes (or fills) goes with its
 definition, its `expected` entry and its catalog line - but only when nothing
-else in the tree mentions it, so a table another job reads is never taken.
+else in the tree mentions it, so a table another job reads is never taken, and
+only when this scaffold defined it (its comment opens "/ <process>'s"), so a
+table it merely publishes onto stays (#1585).
 A reaction is only its file and its test: it has no process, so no table,
 profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
@@ -174,6 +176,12 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             removal.notes.append(f"kept table {table}: something else in the tree uses it")
             kept.add(table)
             continue
+        if not _defined_by(repo_root, table, {job, proc}):
+            # A guest writer (#1585): the job published onto a table it did not
+            # define, so the definition is someone else's to remove.
+            removal.notes.append(f"kept table {table}: this scaffold did not define it")
+            kept.add(table)
+            continue
         names.add(table)
         _edit(removal, repo_root, TABLES_FILE, lambda t, tb=table: _drop_definition(t, tb))
         _edit(
@@ -194,12 +202,15 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     # else that names the process is listed by the reference report below.
     for page in (STACK_PAGE, SHOWCASE_PAGE):
         _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
-    return _with_references(removal, repo_root, names - kept)
+    return _with_references(removal, repo_root, names - kept, {job})
 
 
-def _with_references(removal: Removal, repo_root: Path, names: set[str]) -> Removal:
-    """`removal`, with every line its edits leave still naming one of `names`."""
-    removal.references = stale_references(repo_root, names, removal.deletes, removal.rewrites)
+def _with_references(
+    removal: Removal, repo_root: Path, names: set[str], jobs: set[str] | None = None
+) -> Removal:
+    """`removal`, with every line its edits leave still naming one of `names`
+    or calling into one of `jobs`' namespaces."""
+    removal.references = stale_references(repo_root, names, removal.deletes, removal.rewrites, jobs)
     return removal
 
 
@@ -278,6 +289,27 @@ def _mentioned_elsewhere(repo_root: Path, table: str, gone: set[Path]) -> bool:
     return False
 
 
+def _defined_by(repo_root: Path, table: str, owners: set[str]) -> bool:
+    """Whether plant_tables.q's definition of `table` is one a scaffold of
+    `owners` wrote: the comment above it opens "/ <owner>'s", as every
+    scaffold's does. References cannot tell a table's owner from a guest that
+    publishes onto it (#1585), so an authored definition is kept."""
+    path = repo_root / TABLES_FILE
+    if not path.is_file():
+        return False
+    lines = path.read_text().splitlines()
+    at = [
+        i for i, line in enumerate(lines) if re.match(rf"(?:\.qetl\.plant\.)?{table}:\(\[\]", line)
+    ]
+    if len(at) != 1:
+        return False
+    start = at[0]
+    while start > 0 and lines[start - 1].startswith("/"):
+        start -= 1
+    comment = lines[start : at[0]]
+    return any(line.startswith(f"/ {owner}'s ") for line in comment for owner in owners)
+
+
 def _edit(removal: Removal, repo_root: Path, path: Path, change) -> None:
     """Apply `change` to `path`'s pending text, keeping only real changes."""
     if path not in removal.rewrites and not (repo_root / path).is_file():
@@ -311,7 +343,12 @@ def _drop_definition(text: str, table: str) -> str:
         start -= 1
     if start > 0 and not lines[start - 1].strip():
         start -= 1
-    return "".join(lines[:start] + lines[at[0] + 1 :])
+    # A list column's `.qetl.plant.nested` declaration goes with its table:
+    # left behind, it names a table that no longer exists and the plant fails
+    # to load (#1567).
+    nested = f".qetl.plant.nested[`{table};"
+    rest = [line for line in lines[at[0] + 1 :] if not line.startswith(nested)]
+    return "".join(lines[:start] + rest)
 
 
 def _drop_catalog(text: str, table: str) -> str:
@@ -330,19 +367,29 @@ def _drop_catalog(text: str, table: str) -> str:
 
 
 def _drop_from_profiles(text: str, proc: str) -> str:
-    """profiles.py without `proc` in any one-line profile, or its exemption."""
+    """profiles.py without `proc` in any one-line profile, or its exemption.
+
+    Each edit is confined to its own dict: a process may share its name with
+    a profile, and PROFILES["default"] is keyed exactly as an exemption for a
+    process called `default` would be (#1566).
+    """
     quoted = f'"{proc}"'
     lines = text.splitlines(keepends=True)
     out: list[str] = []
+    block = None
     skipping = False
     for line in lines:
+        if m := re.match(r"^([A-Z_]+): dict\[", line):
+            block = m.group(1)
+        elif line.rstrip("\n") == "}":
+            block = None
         if skipping:
             skipping = line.strip() != "),"
             continue
-        if line.startswith(f"    {quoted}: ("):
+        if block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
             skipping = not line.rstrip().endswith("),")
             continue
-        if quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
+        if block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
             head, inner = line.split(": (", 1)
             members = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]
             members = [m for m in members if m != quoted]

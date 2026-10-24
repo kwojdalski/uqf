@@ -32,6 +32,10 @@ run:{[]
 / What the run left in the destination HDB, read back from disk.
 published:{[] .qetl.source.local_read[dst;`crypto_book_1s;range_from;range_to]}
 
+/ A path as one shell word: dir is the absolute workspace path, which may hold
+/ spaces or quotes, and an unquoted `rm -rf` would split it into other paths.
+quoted:{[path] "'",ssr[path;"'";"'\"'\"'"],"'"}
+
 / Exit 1 with a message when a check fails, so the q-scripts lane fails too.
 check:{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}
 
@@ -39,8 +43,8 @@ check:{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}
 
 -1 "\n== 1. hdb_crypto_book's fixture: ",string[count .qcbookex.fixture]," row(s)";
 -1 "  run over [",string[.qcbookex.range_from],";",string[.qcbookex.range_to],")";
-system "rm -rf ",.qcbookex.dir;
-system "mkdir -p ",.qcbookex.dir,"/status";
+system "rm -rf ",.qcbookex.quoted .qcbookex.dir;
+system "mkdir -p ",.qcbookex.quoted .qcbookex.dir,"/status";
 setenv[`UQF_STATUS_DIR;.qcbookex.dir,"/status"];
 / No credential: the worker reads the fixture, the demo path it warns about,
 / which a run must ask for before it may write it (#1082).
@@ -62,5 +66,5 @@ show out;
 
 $[`keep in key .Q.opt .z.x;
     -1 "\nkept: ",.qcbookex.dir;
-    [system "rm -rf ",.qcbookex.dir; -1 "\nremoved ",.qcbookex.dir," - pass -keep to look at it"]];
+    [system "rm -rf ",.qcbookex.quoted .qcbookex.dir; -1 "\nremoved ",.qcbookex.dir," - pass -keep to look at it"]];
 exit 0
