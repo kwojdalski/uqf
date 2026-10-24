@@ -107,7 +107,7 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
     (`venue:g#symbol`); `sym` is grouped without asking. `time` is prepended
     when absent rather than rejected: every plant table has one, and a table
     scaffolded without it would be refused later by a publish path that
-    assumes it.
+    assumes it. Named, it must be the first column and a timestamp.
     """
     out: list[tuple[str, str]] = []
     names = ", ".join(sorted(t.name for t in TYPES))
@@ -132,8 +132,17 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
         out.append((col, (GROUP if grouped else "") + ctype.literal))
     if not out:
         raise UqsError("--columns is empty: a published table needs at least one column")
+    stamp = (TIME_COLUMN, _BY_NAME["timestamp"].literal)
     if not any(c == TIME_COLUMN for c, _ in out):
-        out.insert(0, (TIME_COLUMN, _BY_NAME["timestamp"].literal))
+        out.insert(0, stamp)
+    elif out[0] != stamp:
+        # The plant reads `time` positionally and `.u.upd` stamps it as a
+        # timestamp: a table that names it later, or as another type, loads
+        # and then breaks every consumer (#1574).
+        raise UqsError(
+            f"column {TIME_COLUMN!r} must come first and be a timestamp "
+            f"('{TIME_COLUMN}:timestamp, ...') - or leave it out and it is added"
+        )
     return out
 
 
