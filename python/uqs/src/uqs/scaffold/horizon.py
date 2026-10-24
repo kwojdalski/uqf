@@ -46,6 +46,14 @@ from uqs.scaffold.templates import test_stub
 _TIMESPAN = re.compile(r"^\d+D\d\d:\d\d:\d\d(\.\d+)?$")
 
 
+#: What the file binds in the job's namespace besides the output NAME (#1573).
+_GENERATED = {
+    "events": "`events`, the events' schema",
+    "reference": "`reference`, the reference's schema",
+    "score": "`score`, the scoring function",
+}
+
+
 def _empty(cols: list[tuple[str, str]]) -> str:
     return "([] " + "; ".join(f"{c}:{lit}" for c, lit in cols) + ")"
 
@@ -91,6 +99,12 @@ def horizon_job(
         )
     if name in known_tables:
         raise UqsError(f"{name!r} is already a plant table - a horizon job owns its output")
+    if name in _GENERATED:
+        raise UqsError(
+            f"horizon job name {name!r} collides with {_GENERATED[name]}, which the "
+            f"job also defines in .qpipe.job.{name} - one would overwrite the other; "
+            "pick another name"
+        )
     events, reference = subscribe_to
     missing = [t for t in subscribe_to if t not in source_columns]
     if missing:
