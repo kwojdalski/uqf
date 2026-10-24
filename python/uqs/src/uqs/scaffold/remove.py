@@ -10,7 +10,9 @@ suite loader finds it by what it holds, so deleting the file is the whole of
 it), and the profile lines naming its process. For a backfill, its source too, when no
 other worker reads it. A table the job publishes (or fills) goes with its
 definition, its `expected` entry and its catalog line - but only when nothing
-else in the tree mentions it, so a table another job reads is never taken.
+else in the tree mentions it, so a table another job reads is never taken, and
+only when this scaffold defined it (its comment opens "/ <process>'s"), so a
+table it merely publishes onto stays (#1585).
 A reaction is only its file and its test: it has no process, so no table,
 profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
@@ -174,6 +176,12 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             removal.notes.append(f"kept table {table}: something else in the tree uses it")
             kept.add(table)
             continue
+        if not _defined_by(repo_root, table, {job, proc}):
+            # A guest writer (#1585): the job published onto a table it did not
+            # define, so the definition is someone else's to remove.
+            removal.notes.append(f"kept table {table}: this scaffold did not define it")
+            kept.add(table)
+            continue
         names.add(table)
         _edit(removal, repo_root, TABLES_FILE, lambda t, tb=table: _drop_definition(t, tb))
         _edit(
@@ -276,6 +284,27 @@ def _mentioned_elsewhere(repo_root: Path, table: str, gone: set[Path]) -> bool:
             if pattern.search(path.read_text(errors="replace")):
                 return True
     return False
+
+
+def _defined_by(repo_root: Path, table: str, owners: set[str]) -> bool:
+    """Whether plant_tables.q's definition of `table` is one a scaffold of
+    `owners` wrote: the comment above it opens "/ <owner>'s", as every
+    scaffold's does. References cannot tell a table's owner from a guest that
+    publishes onto it (#1585), so an authored definition is kept."""
+    path = repo_root / TABLES_FILE
+    if not path.is_file():
+        return False
+    lines = path.read_text().splitlines()
+    at = [
+        i for i, line in enumerate(lines) if re.match(rf"(?:\.qetl\.plant\.)?{table}:\(\[\]", line)
+    ]
+    if len(at) != 1:
+        return False
+    start = at[0]
+    while start > 0 and lines[start - 1].startswith("/"):
+        start -= 1
+    comment = lines[start : at[0]]
+    return any(line.startswith(f"/ {owner}'s ") for line in comment for owner in owners)
 
 
 def _edit(removal: Removal, repo_root: Path, path: Path, change) -> None:
