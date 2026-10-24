@@ -285,6 +285,9 @@ def streaming_job(
         stubs, after_ns, xf = streaming_transform(
             name, transform, subscribe_to[0], pubs[0], in_cols
         )
+        # Declared, so a twin refilling the table applies the same rows (#1571).
+        keys += "`transform"
+        values += f"\n    `{xf};"
         scaffolded = ""
     swa_key, swa_value = start_with_all_field(start_with_all)
 
