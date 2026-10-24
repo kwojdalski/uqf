@@ -220,7 +220,16 @@ def bounded_worker(
     actions.append(
         FileAction(
             example_path(name),
-            example_body(name, worker, src, dataset, transport, credential_var(src)),
+            example_body(
+                name,
+                worker,
+                src,
+                dataset,
+                transport,
+                credential_var(src),
+                raw=raw,
+                columns=[c for c, _ in cols],
+            ),  # fmt: skip
         )
     )
     notes.append(f"see it run: q {example_path(name).as_posix()} - on the fixture, no stack")

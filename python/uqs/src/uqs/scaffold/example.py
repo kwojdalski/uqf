@@ -30,6 +30,9 @@ from pathlib import Path
 #: Where worked examples live; the q-scripts lane globs `*.q` here.
 EXAMPLES_DIR = Path("scripts/examples")
 
+#: (physical table, [(column, q type literal)]): a source's raw contract.
+RawContract = tuple[str, list[tuple[str, str]]]
+
 
 #: The line every generated example carries. `uqs job remove` deletes an
 #: example only while it does: a hand-written one (hdb_transfer's) is reported,
@@ -42,15 +45,55 @@ def example_path(name: str) -> Path:
     return EXAMPLES_DIR / f"{name}_example.q"
 
 
-def _local_block(src: str, dataset: str, var: str) -> tuple[str, str]:
+def _seed(src: str, physical: str, raw: RawContract | None, columns: list[str]) -> str:
+    """The q that writes one day's rows of the source HDB's physical table.
+
+    Without a raw contract the physical table IS the dataset, and the fixture
+    is written as it is. With one, the source's query reads `physical`'s own
+    columns (#1590): the fixture is written under that name, projected onto
+    them when the fixture has every one. When it does not, how the raw fields
+    map to the fixture's is the query author's knowledge, not the scaffold's,
+    so the seed says so rather than write a table the query cannot read.
+    """
+    if raw is None:
+        return (
+            "write_day:{[d] (partition d) set .Q.en[src_hdb;"
+            "select from fixture where d=`date$time]}"
+        )
+    names = [c for c, _ in raw[1]]
+    missing = [c for c in names if c not in columns]
+    if missing:
+        return (
+            f"write_day:{{[d] '\"seed the raw rows of {physical} by hand: the fixture has no "
+            f'{", ".join(missing)} - write_day in this example is yours to write"}}'
+        )
+    picked = ",".join(names)
+    return (
+        f"write_day:{{[d] (partition d) set .Q.en[src_hdb;"
+        f"select {picked} from fixture where d=`date$time]}}"
+    )
+
+
+def _local_block(
+    src: str,
+    dataset: str,
+    var: str,
+    raw: RawContract | None = None,
+    columns: list[str] | None = None,
+) -> tuple[str, str]:
     """(definitions, run) for a `local` source: build a source HDB from the
-    fixture, and read it live once the query is written."""
+    fixture, and read it live once the query is written. The HDB holds the
+    table the source's query reads: its raw contract's physical table when it
+    declares one, else the dataset."""
+    physical = raw[0] if raw is not None else dataset
+    seed = _seed(src, physical, raw, columns or [])
     defs = f"""
 / The source HDB: the fixture on disk, one date partition per day, symbols
-/ enumerated against its own sym file - what a `local` source reads.
+/ enumerated against its own sym file - what a `local` source reads, under the
+/ table its query reads.
 src_hdb:hsym `$dir,"/source_hdb"
-partition:{{[d] ` sv src_hdb,(`$string d),`{dataset},`}}
-write_day:{{[d] (partition d) set .Q.en[src_hdb;select from fixture where d=`date$time]}}
+partition:{{[d] ` sv src_hdb,(`$string d),`{physical},`}}
+{seed}
 write_source:{{[] write_day each distinct `date$fixture`time}}
 
 / Still the scaffold's throwing stub? Then there is no live path to read yet.
@@ -69,7 +112,15 @@ $[.{{ns}}.query_is_stub[];
 
 
 def example_body(
-    name: str, worker: str, src: str, dataset: str, transport: str, credential: str
+    name: str,
+    worker: str,
+    src: str,
+    dataset: str,
+    transport: str,
+    credential: str,
+    *,
+    raw: RawContract | None = None,
+    columns: list[str] | None = None,
 ) -> str:
     """The example script for a new bounded worker.
 
@@ -80,7 +131,7 @@ def example_body(
     # scripts/ to, so a scaffold does not leave the tree failing it (#1228).
     ns = f"q{name}ex"
     local_defs, local_run = (
-        _local_block(src, dataset, credential) if transport == "local" else ("", "")
+        _local_block(src, dataset, credential, raw, columns) if transport == "local" else ("", "")
     )
     return f"""// {name}_example.q - run the {worker} bounded worker once, on its
 // own fixture, into a throwaway HDB, and show what it published.
