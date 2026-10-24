@@ -97,6 +97,26 @@ def test_a_partition_column_outside_the_columns_or_without_a_partition_is_refuse
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition_column="sym")
 
 
+_FX_RATES = [("time", "`timestamp$()"), ("sym", "`g#`symbol$()"), ("px", "`float$()")]
+
+
+def test_into_an_existing_target_the_partition_column_is_the_targets():
+    """#1599: with the target defined already, --columns shape the new source,
+    and publish holds the TARGET's rows to the partition column - so a source
+    without it is fine for a derivation, and a target without it is not."""
+    plan = backfill.bounded_worker(
+        "fx", "fx_rates", "pair:symbol,mid:float", partition="EURUSD", transform="derive",
+        define_table=False, target_columns=_FX_RATES,
+    )  # fmt: skip
+    assert symbols(_fields(plan, "fx_backfill.q")["partition_column"]) == ("sym",)
+    with pytest.raises(UqsError, match="not a column of fx_rates"):
+        backfill.bounded_worker(
+            "fx", "fx_rates", "pair:symbol,mid:float", partition="EURUSD",
+            partition_column="pair", transform="derive",
+            define_table=False, target_columns=_FX_RATES,
+        )  # fmt: skip
+
+
 def test_a_partition_that_is_not_a_symbol_is_refused():
     with pytest.raises(UqsError, match="must be a q symbol"):
         backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="EUR/USD")
