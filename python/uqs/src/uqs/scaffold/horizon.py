@@ -93,7 +93,7 @@ def horizon_job(
         raise UqsError("a horizon job publishes its own NAME - drop --publishes")
     if not columns:
         raise UqsError("--kind horizon needs --columns: the table it publishes")
-    if not horizon or not _TIMESPAN.match(horizon):
+    if not horizon or not _TIMESPAN.fullmatch(horizon):
         raise UqsError(
             f"--kind horizon needs --horizon, a q timespan such as 0D00:00:10, not {horizon!r}"
         )
@@ -123,6 +123,14 @@ def horizon_job(
             f"{', '.join(unsampled)} - write this horizon job by hand"
         )
     output = [(c, lit.replace("`g#", "")) for c, lit in columns if c != TIME_COLUMN]
+    if not output:
+        # The plant stamps `time`, so the horizon job's own output drops it - and an
+        # output with nothing left is `([] )`, which the transform registry
+        # refuses at load as not an unkeyed table (#1596).
+        raise UqsError(
+            "--columns must name at least one column besides time: the plant stamps "
+            "time itself, so a horizon job publishing time alone has no payload"
+        )
     ev = [(c, lit.replace("`g#", "")) for c, lit in source_columns[events]]
     ref = [(c, lit.replace("`g#", "")) for c, lit in source_columns[reference]]
     swa_key, swa_value = start_with_all_field(start_with_all)

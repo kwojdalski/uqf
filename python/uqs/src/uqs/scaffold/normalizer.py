@@ -105,6 +105,14 @@ def normalizer(
     # declared output, held strictly against the examples, which carry none -
     # as executions.q's own output does. The plant's copy keeps its attribute.
     output = [(c, lit.replace("`g#", "")) for c, lit in columns if c != TIME_COLUMN]
+    if not output:
+        # The plant stamps `time`, so the normalizer's own output drops it - and an
+        # output with nothing left is `([] )`, which the transform registry
+        # refuses at load as not an unkeyed table (#1596).
+        raise UqsError(
+            "--columns must name at least one column besides time: the plant stamps "
+            "time itself, so a normalizer publishing time alone has no payload"
+        )
 
     sections = []
     transforms = []

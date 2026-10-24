@@ -68,3 +68,14 @@ def test_a_name_that_collides_with_a_generated_one_is_refused(name):
             "0D00:00:10",
             known_tables=set(TABLES),
         )
+
+
+# #1596: as for a normalizer - an output of time alone is empty once the
+# plant's time is dropped, and the registry refuses it at load.
+def test_an_output_of_time_alone_is_refused():
+    with pytest.raises(UqsError, match="besides time"):
+        plan(columns=parse_columns("time:timestamp"))
+
+
+def test_one_payload_column_beside_time_is_enough():
+    assert plan(columns=parse_columns("time:timestamp, px:float")).actions

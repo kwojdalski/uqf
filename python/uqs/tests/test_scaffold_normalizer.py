@@ -121,3 +121,15 @@ def test_a_name_that_collides_with_a_generated_one_is_refused(name, sources):
             _COLLIDING,
             known_tables=set(sources),
         )
+
+
+# #1596: the plant stamps `time`, so the normalizer's own output drops it. A
+# canonical table of time alone leaves an empty `([] )` output, which the
+# transform registry refuses at load ("output must be an unkeyed table").
+def test_a_canonical_table_of_time_alone_is_refused():
+    with pytest.raises(UqsError, match="besides time"):
+        _plan(cols="time:timestamp")
+
+
+def test_one_payload_column_beside_time_is_enough():
+    assert _file(_plan(cols="time:timestamp, sym:symbol"), "ticks.q")
