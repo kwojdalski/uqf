@@ -51,7 +51,7 @@ def _declared(plan: jobs.ScaffoldPlan, suffix: str) -> list[Declaration]:
 def test_a_scaffolded_job_declares_edges_the_tree_can_read():
     """The anti-rot test: the process registry is built by reading these
     declarations, so the generated one has to read back as what was asked."""
-    plan = jobs.streaming_job("markout2", ["trades", "quote"], "my_metric", "value:float")
+    plan = jobs.streaming_job("markout2", ["trades", "quote"], "my_metric", "px:float")
     (d,) = _declared(plan, "markout2.q")
     assert (d.procname, d.subscribe_to, d.publishes) == (
         "markout21",
@@ -65,7 +65,7 @@ def test_a_scaffolded_job_declares_edges_the_tree_can_read():
 def test_a_scaffolded_feed_declares_no_subscription():
     """`symbol$()` and a one-table list are the two cases the registry most
     needs to tell apart, so the empty one is spelled explicitly."""
-    plan = jobs.streaming_job("tickfeed", [], "ticks", "value:float")
+    plan = jobs.streaming_job("tickfeed", [], "ticks", "px:float")
     (d,) = _declared(plan, "tickfeed.q")
     assert d.subscribe_to == ()
     assert d.kind is PipelineKind.FEED, "a job that subscribes to nothing is a feed"
@@ -87,7 +87,7 @@ def test_a_scaffolded_table_parses_as_a_definition():
     """model/schemas.py reads plant_tables.q with this regex, and Pipeline.schema
     resolves through it - a definition it cannot see is a table the plant
     never defines."""
-    plan = jobs.streaming_job("j", [], "my_metric", "sym:symbol, value:float")
+    plan = jobs.streaming_job("j", [], "my_metric", "sym:symbol, px:float")
     body = _body(plan, "plant_tables.q")
     found = _DEFINITION.search(body)
     assert found and found.group(1) == "my_metric"
@@ -99,7 +99,7 @@ def test_a_scaffolded_table_parses_as_a_definition():
 def test_time_is_added_when_the_caller_forgets_it():
     """Every plant table has one, `.u.upd` stamps it, and a table without it
     is refused later by a publish path that assumes it."""
-    assert parse_columns("value:float")[0][0] == "time"
+    assert parse_columns("px:float")[0][0] == "time"
 
 
 def test_sym_keeps_its_grouped_attribute():
@@ -109,7 +109,7 @@ def test_sym_keeps_its_grouped_attribute():
     assert cols["sym"] == "`g#`symbol$()"
 
 
-@pytest.mark.parametrize("spec", ["value", "value:nosuchtype", ""])
+@pytest.mark.parametrize("spec", ["px", "px:nosuchtype", ""])
 def test_a_malformed_column_spec_is_refused(spec):
     with pytest.raises(UqsError):
         parse_columns(spec)
@@ -124,7 +124,7 @@ def test_publishing_without_columns_is_refused():
 
 def test_columns_without_publishing_is_refused():
     with pytest.raises(UqsError, match="no --publishes"):
-        jobs.streaming_job("j", ["trades"], None, "value:float")
+        jobs.streaming_job("j", ["trades"], None, "px:float")
 
 
 # --------------------------------------------------------- the bounded path
@@ -265,7 +265,7 @@ def test_a_job_that_owns_a_table_adds_it_to_the_q_table_list():
     left a red suite that was not about the job."""
     for plan, table in (
         (backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates"),
-        (jobs.streaming_job("markout2", ["trades"], "my_metric", "value:float"), "my_metric"),
+        (jobs.streaming_job("markout2", ["trades"], "my_metric", "px:float"), "my_metric"),
     ):
         assert _body(plan, "test_stack_tables.q") == f"`{table}"
 
@@ -363,7 +363,7 @@ def test_every_action_declares_a_known_write_mode():
     the target exists - which tests for "append" exactly - and reached
     `read_text()` on a file that might not be there."""
     for plan in (
-        jobs.streaming_job("markout2", ["trades"], "my_metric", "value:float"),
+        jobs.streaming_job("markout2", ["trades"], "my_metric", "px:float"),
         backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"),
     ):
         assert all(a.mode in tuple(WriteMode) for a in plan.actions)

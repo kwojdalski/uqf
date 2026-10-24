@@ -27,6 +27,7 @@ import re
 from dataclasses import dataclass
 
 from uqs.model.declarations import split_top_level
+from uqs.model.qnames import Q_WORDS
 from uqs.paths import UqsError
 
 #: q's type names and the char `meta` reports for them. A mixed list is " ".
@@ -56,23 +57,6 @@ NESTED_CHARS = frozenset(c.upper() for c in TYPE_CHARS.values())
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
-#: q's own words: `.Q.res` plus every name in the `.q` context (KDB-X 4.x/5.x). A root
-#: global with one of these names shadows the keyword for the whole process.
-_Q_WORDS = frozenset(
-    (
-        "abs acos asin atan avg bin binr cor cos cov delete dev div do enlist exec exit exp "
-        "getenv hopen if in insert last like log max min prd select setenv sin sqrt ss sum tan "
-        "update var wavg while within wsum xexp from by neg not null string reciprocal floor "
-        "ceiling signum mod xbar xlog and or each scan over prior mmu lsq inv md5 ltime gtime "
-        "count first svar sdev scov med all any rand sums prds mins maxs fills deltas ratios "
-        "avgs differ prev next rank reverse iasc idesc asc desc msum mcount mavg mdev xrank "
-        "mmin mmax xprev rotate ema distinct group where flip type key til get value attr cut "
-        "set upsert raze union inter except cross sv vs sublist read0 read1 hclose hdel hsym "
-        "hcount peach system ltrim rtrim trim lower upper ssr view tables views cols xcols "
-        "keys xkey xcol xasc xdesc fkeys meta lj ljf aj aj0 ajf ajf0 ij ijf pj asof uj ujf ww "
-        "wj wj1 fby xgroup ungroup ej save load rsave rload dsave show csv parse eval reval use"
-    ).split()
-)
 #: Globals every TorQ process of the supported version defines at its root (read with
 #: `system"f"` / `system"v"` on an isolated 5.2.12 stack) - the entry points the plant calls
 #: by name, the views it keeps, and `sym`, the enumeration domain the wdb and hdb share.
@@ -285,7 +269,7 @@ def reserved_reason(name: str) -> str | None:
     """Why `name` cannot be a table name on a TorQ stack, or None when nothing
     static forbids it (the running processes may still hold the name, which
     preflight reads from the probe)."""
-    if name in _Q_WORDS:
+    if name in Q_WORDS:
         return "a q keyword"
     if name in _TORQ_GLOBALS:
         return "a global every TorQ process defines (an attached table would overwrite it)"
