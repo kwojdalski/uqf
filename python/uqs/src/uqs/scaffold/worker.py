@@ -103,7 +103,7 @@ def bounded_worker(
     src = source or name
     _check_name(src, "source name")
     _check_name(dataset, "dataset")
-    if partition is not None and not _PARTITION.match(partition):
+    if partition is not None and not _PARTITION.fullmatch(partition):
         raise UqsError(
             f"--partition {partition!r} must be a q symbol - letters, digits and underscores, "
             "e.g. EURUSD"
@@ -112,10 +112,10 @@ def bounded_worker(
         raise UqsError("--partition-column needs --partition: it names the column holding it")
     if partition is not None:
         partition_column = partition_column or "sym"
-        if not _PARTITION.match(partition_column):
+        if not _PARTITION.fullmatch(partition_column):
             raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"
-    proc = procname or f"{name}_backfill1"
+    proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
     # they are required when either is, and refused when neither is, rather
     # than silently ignored.
