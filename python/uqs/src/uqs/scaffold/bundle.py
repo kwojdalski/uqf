@@ -106,6 +106,20 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
     Paths in the result are `bundle_dir`'s, as given: apply it against the
     directory that path is relative to.
     """
+    named_as_tests = sorted(
+        a.path.name
+        for a in plan.actions
+        if a.mode is WriteMode.CREATE
+        and a.path.parent in _JOB_DIRS
+        and a.path.name.startswith("test_")
+    )
+    if named_as_tests:
+        # The installer reads every test_*.q in a bundle as a test, so a job
+        # file so named would be written and then never install (#1583).
+        raise UqsError(
+            f"a bundle cannot hold a job file named {', '.join(named_as_tests)}: "
+            "every test_*.q in a bundle is read as a test - pick a name not starting test_"
+        )
     actions: list[FileAction] = []
     if not bundles.is_bundle(bundle_dir):
         manifest = {"name": bundle_dir.resolve().name, "version": FIRST_VERSION}

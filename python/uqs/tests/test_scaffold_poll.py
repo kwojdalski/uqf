@@ -95,6 +95,15 @@ def test_a_one_field_cursor_is_still_a_list():
     assert "lexically_after[enlist `id]" in poll
 
 
+def test_a_one_field_cursor_takes_the_field_not_a_symbol_atom():
+    """#1592: q reads `enlist `id#last page` right to left - `id#last page
+    first, which is `type` - so the one-field list is parenthesized, here and
+    in start_cursor's example."""
+    text = job_file(jobs.streaming_job("f", [], "t", COLUMNS, poll=True, cursor="id"))
+    assert "next_cursor:{[page] (enlist `id)#last page}" in text
+    assert "/ (enlist `id)!(instant;...)" in text
+
+
 @pytest.mark.parametrize(
     ("kwargs", "said"),
     [

@@ -124,6 +124,17 @@ def test_tree_registrations_are_dropped_and_named():
     assert any(str(STACK_TABLES_TEST) in n and "not written" in n for n in out.notes)
 
 
+def test_a_job_named_like_a_test_is_refused_before_writing(tmp_path, monkeypatch, tree_files):
+    """#1583: the installer reads every test_*.q as a test, so a job so named
+    would land in the bundle and then never install."""
+    folder = tmp_path / "mockups"
+    argv = ["test_audit_feed", "--kind", "backfill", "--dataset", "test_audit_feed",
+            "--columns", "trade_time:timestamp, sym:symbol, px:float"]  # fmt: skip
+    _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
+    assert any("test_" in r for r in refused), refused
+    assert not folder.exists()
+
+
 def test_an_external_feed_is_refused_into_a_bundle(tmp_path, monkeypatch, tree_files):
     """#1570: a bundle cannot carry the Python publisher an external feed needs,
     so it was dropped and the bundle's job subscribed to a table nothing feeds."""
