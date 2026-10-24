@@ -78,6 +78,20 @@ def normalizer(
             f"{name!r} is already a plant table - a normalizer owns its canonical table, "
             "so pick a new name"
         )
+    # Every name the file binds in the job's namespace. One the user chose that
+    # equals another overwrites it, and the tree fails to load (#1573).
+    bound = [("publish", "the publish stub"), (name, "the output table")]
+    for src in sources:
+        bound += [(src, f"source {src}'s schema"), (f"from_{src}", f"source {src}'s mapping")]
+    seen: dict[str, str] = {}
+    for binding, role in bound:
+        if binding in seen:
+            raise UqsError(
+                f".qpipe.job.{name}.{binding} would be both {seen[binding]} and {role}: "
+                "the name collides with one the normalizer generates - rename the "
+                "normalizer, or write this one by hand"
+            )
+        seen[binding] = role
     missing = [s for s in sources if s not in source_columns]
     if missing:
         raise UqsError(f"no plant definition to read for source(s) {', '.join(missing)}")
