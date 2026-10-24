@@ -93,6 +93,36 @@ def test_a_source_column_with_no_sample_value_is_refused():
         normalizer("n", ["odd"], parse_columns("v:float"), odd, known_tables={"odd"})
 
 
+# #1573: a normalizer's namespace holds `publish`, its output NAME, and per
+# source the source's schema SRC and its mapping from_SRC. A name the user
+# chose that equals one of these overwrites it, and the tree fails to load.
+_COLLIDING = {
+    "quote": _SOURCES["quote"],
+    "from_quote": _SOURCES["quote"],
+    "publish": _SOURCES["quote"],
+}
+
+
+@pytest.mark.parametrize(
+    ("name", "sources"),
+    [
+        ("publish", ("quote",)),  # the output is the publish stub
+        ("from_quote", ("quote",)),  # the output is quote's mapping
+        ("ticks", ("quote", "from_quote")),  # one source is another's mapping
+        ("ticks", ("publish",)),  # a source is the publish stub
+    ],
+)
+def test_a_name_that_collides_with_a_generated_one_is_refused(name, sources):
+    with pytest.raises(UqsError, match="collides"):
+        normalizer(
+            name,
+            list(sources),
+            parse_columns("source_time:timestamp, sym:symbol"),
+            _COLLIDING,
+            known_tables=set(sources),
+        )
+
+
 # #1596: the plant stamps `time`, so the normalizer's own output drops it. A
 # canonical table of time alone leaves an empty `([] )` output, which the
 # transform registry refuses at load ("output must be an unkeyed table").
