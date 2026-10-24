@@ -149,7 +149,7 @@ def backfill_plan(
         )
     raw = None
     if raw_table is not None:
-        if not PHYSICAL_NAME.match(raw_table):
+        if not PHYSICAL_NAME.fullmatch(raw_table):
             raise UqsError(
                 f"--raw-table {raw_table!r} must start with a letter and hold only letters, "
                 "digits and underscores"

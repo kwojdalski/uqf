@@ -116,6 +116,10 @@ run:{{[]
 / What the run left in the destination HDB, read back from disk.
 published:{{[] .qetl.source.local_read[dst;`{dataset};range_from;range_to]}}
 
+/ A path as one shell word: dir is the absolute workspace path, which may hold
+/ spaces or quotes, and an unquoted `rm -rf` would split it into other paths.
+quoted:{{[path] "'",ssr[path;"'";"'\\"'\\"'"],"'"}}
+
 / Exit 1 with a message when a check fails, so the q-scripts lane fails too.
 check:{{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}}
 
@@ -123,8 +127,8 @@ check:{{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}}
 
 -1 "\\n== 1. {src}'s fixture: ",string[count .{ns}.fixture]," row(s)";
 -1 "  run over [",string[.{ns}.range_from],";",string[.{ns}.range_to],")";
-system "rm -rf ",.{ns}.dir;
-system "mkdir -p ",.{ns}.dir,"/status";
+system "rm -rf ",.{ns}.quoted .{ns}.dir;
+system "mkdir -p ",.{ns}.quoted .{ns}.dir,"/status";
 setenv[`UQF_STATUS_DIR;.{ns}.dir,"/status"];
 / No credential: the worker reads the fixture, the demo path it warns about,
 / which a run must ask for before it may write it (#1082).
@@ -146,6 +150,7 @@ show out;
 
 $[`keep in key .Q.opt .z.x;
     -1 "\\nkept: ",.{ns}.dir;
-    [system "rm -rf ",.{ns}.dir; -1 "\\nremoved ",.{ns}.dir," - pass -keep to look at it"]];
+    [system "rm -rf ",.{ns}.quoted .{ns}.dir;
+     -1 "\\nremoved ",.{ns}.dir," - pass -keep to look at it"]];
 exit 0
 """
