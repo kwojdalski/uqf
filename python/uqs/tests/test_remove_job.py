@@ -341,3 +341,26 @@ def test_strict_refuses_and_dry_run_only_says_it_would(tree, monkeypatch):
     result = runner.invoke(cli.app, ["job", "remove", "pulse", "--strict", "--yes"])
     assert result.exit_code == 1 and refused and "1 line(s)" in refused[0]
     assert (tree / "src/etl/streaming/pulse.q").is_file(), "and nothing was removed"
+
+
+def test_a_feed_with_a_list_column_round_trips_with_its_nested_declaration(tree):
+    # #1567: the table's definition went but its `.qetl.plant.nested` line
+    # stayed, and plant_tables.q then failed to load: no table to resolve.
+    before = _snapshot(tree)
+    write.apply_plan(
+        jobs.streaming_job(
+            "listbook",
+            [],
+            "listbook",
+            "sym:symbol, levels:list",
+            unprofiled="a demo feed, started by hand",
+            known_profiles=("crypto",),
+        ),
+        tree,
+    )
+    assert ".qetl.plant.nested[`listbook;" in (tree / TABLES_FILE).read_text()
+    _remove(tree, "listbook")
+    assert ".qetl.plant.nested[`listbook;" not in (tree / TABLES_FILE).read_text()
+    after = _snapshot(tree)
+    changed = sorted(str(p) for p in set(before) | set(after) if before.get(p) != after.get(p))
+    assert not changed, f"not restored: {changed}"
