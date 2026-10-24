@@ -329,7 +329,7 @@ def new_job(
                 transform=transform,
                 start_with_all=start_with_all,
                 twin_of=twin_of,
-                definitions=definitions if twin_of else None,
+                definitions=definitions,
                 raw_table=raw_table,
                 raw_columns=raw_columns,
                 known_tables=known,

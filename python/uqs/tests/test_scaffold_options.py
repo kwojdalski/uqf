@@ -318,11 +318,12 @@ def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
 
 def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
     """`quote` is the starter pack's table: --columns shape only the new source,
-    and the plant gets no second, source-shaped `quote` definition (#1602)."""
+    and the plant gets no second, source-shaped `quote` definition (#1602).
+    A derivation, since a passthrough between the two shapes is refused (#1593)."""
     result = CliRunner().invoke(
         cli.app,
         ["job", "new", "qt", "--kind", "backfill", "--dataset", "quote",
-         "--columns", "sym:symbol, bid:float", "--dry-run"],
+         "--columns", "sym:symbol, bid:float", "--transform", "derive", "--dry-run"],
     )  # fmt: skip
     assert result.exit_code == 0, result.output
     assert "create src/etl/sources/qt.q" in result.output
