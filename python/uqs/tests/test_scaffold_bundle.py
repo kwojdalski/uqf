@@ -133,3 +133,49 @@ def test_a_job_named_like_a_test_is_refused_before_writing(tmp_path, monkeypatch
     _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
     assert any("test_" in r for r in refused), refused
     assert not folder.exists()
+
+
+def test_two_appends_to_a_new_bundle_file_both_land(tmp_path):
+    """#1569: each append to a file the bundle did not have yet became its own
+    CREATE, so the second overwrote the first."""
+    folder = tmp_path / "mockups"
+    plan = ScaffoldPlan(
+        "audit_ext",
+        [
+            FileAction(
+                TABLES_FILE, "\n.qetl.plant.audit_raw:([] time:`timestamp$())\n", WriteMode.APPEND
+            ),
+            FileAction(
+                TABLES_FILE,
+                "\n.qetl.plant.audit_quotes:([] time:`timestamp$())\n",
+                WriteMode.APPEND,
+            ),
+            FileAction(CATALOG_FILE, '\n.qcat.describe[`audit_raw]:"raw"\n', WriteMode.APPEND),
+            FileAction(
+                CATALOG_FILE, '\n.qcat.describe[`audit_quotes]:"quotes"\n', WriteMode.APPEND
+            ),
+        ],
+        [],
+    )
+    redirected = bundle_mod.into_bundle(plan, folder)
+    targets = [a.path for a in redirected.actions]
+    assert len(targets) == len(set(targets)), targets
+    from uqs.scaffold import write
+
+    write.apply_plan(redirected, Path("/"))
+    tables = (folder / bundles.TABLES).read_text()
+    catalog = (folder / bundles.CATALOG).read_text()
+    assert "audit_raw" in tables and "audit_quotes" in tables
+    assert "audit_raw" in catalog and "audit_quotes" in catalog
+
+
+def test_two_creates_of_one_bundle_file_are_refused(tmp_path):
+    from uqs.paths import STREAM_DIR
+
+    plan = ScaffoldPlan(
+        "dup",
+        [FileAction(STREAM_DIR / "dup.q", "a\n"), FileAction(STREAM_DIR / "dup.q", "b\n")],
+        [],
+    )
+    with pytest.raises(UqsError, match="more than once"):
+        bundle_mod.into_bundle(plan, tmp_path / "mockups")
