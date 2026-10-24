@@ -341,3 +341,44 @@ def test_strict_refuses_and_dry_run_only_says_it_would(tree, monkeypatch):
     result = runner.invoke(cli.app, ["job", "remove", "pulse", "--strict", "--yes"])
     assert result.exit_code == 1 and refused and "1 line(s)" in refused[0]
     assert (tree / "src/etl/streaming/pulse.q").is_file(), "and nothing was removed"
+
+
+def _literal(text: str, name: str):
+    """The dict literal `name` is assigned in profiles.py's source."""
+    import ast
+
+    for node in ast.parse(text).body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and getattr(node.target, "id", None) == name
+            and node.value is not None
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"no {name} in profiles.py")
+
+
+@pytest.mark.parametrize("proc", ["default", "crypto"])
+def test_removing_a_process_named_like_a_profile_keeps_that_profile(proc):
+    # #1566: a process named `default` was removed by dropping every entry
+    # keyed `"default": (`, which is PROFILES["default"] itself.
+    from uqs.scaffold import profile
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    before = PROFILES_FILE.read_text()
+    joined = profile._with_member(before, "arbitrage", proc)
+    after = _drop_from_profiles(joined, proc)
+    assert _literal(after, "PROFILES") == _literal(before, "PROFILES")
+    assert _literal(after, "UNPROFILED") == _literal(before, "UNPROFILED")
+
+
+def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemption():
+    from uqs.scaffold import profile
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    before = PROFILES_FILE.read_text()
+    exempt = profile._with_unprofiled(
+        before, profile._unprofiled_entry("default", "a demo, started by hand")
+    )
+    assert "default" in _literal(exempt, "UNPROFILED")
+    after = _drop_from_profiles(exempt, "default")
+    assert after == before
