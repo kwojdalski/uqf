@@ -17,6 +17,7 @@ from __future__ import annotations
 from uqs.model import transports
 from uqs.model.qnames import credential_var
 from uqs.scaffold.columns import TIME_COLUMN, raw_contract, sample_value, type_char
+from uqs.scaffold.poll import symbol_list
 from uqs.scaffold.transform import worker_transform
 
 
@@ -114,7 +115,12 @@ def source_body(
     extra_decls += raw_decl
     extra_keys += raw_key
     extra_values += raw_value
+    # Vectors at every count: one column must be `enlist `time` and
+    # `enlist "p"`, not the atoms `` `time `` and "p" - registration finds and
+    # indexes into both (#1595).
+    columns = symbol_list(names)
     types = "".join(type_char(literal) for _, literal in cols)
+    types = f'enlist "{types}"' if len(types) == 1 else f'"{types}"'
     # The fixture is a real empty table of the declared shape - see its comment.
     fixture_cols = "; ".join(f"{c}:enlist {sample_value(lit)}" for c, lit in cols)
     return f"""/ {src}.q - <one line: what this source is> (.qpipe.source.{src}).
@@ -128,8 +134,8 @@ source_name:`{src}
 / The columns this adapter RETURNS - for an identity adapter, also what it
 / reads. Not everything the source has: declaring one the worker never
 / touches means an upstream change to an unused column breaks the run.
-columns:`{"`".join(names)}
-types:"{types}"
+columns:{columns}
+types:{types}
 
 / The column the window is taken on.
 time_column:`{TIME_COLUMN}
