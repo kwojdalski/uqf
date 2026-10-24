@@ -421,6 +421,19 @@ def test_a_published_table_name_is_checked_like_every_other_name(publishes):
         jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)
 
 
+@pytest.mark.parametrize("publishes", ["schema", "shape", "columns", "nested", "elements"])
+def test_a_new_table_may_not_take_a_plant_runtime_name(publishes):
+    """#1597: plant tables and the plant's own functions share .qetl.plant, so
+    `.qetl.plant.schema:([]...)` replaced the function every reader calls."""
+    with pytest.raises(UqsError, match="plant runtime"):
+        jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)
+
+
+def test_an_ordinary_new_table_name_is_not_reserved():
+    plan = jobs.streaming_job("j", ["quote"], "audit_api_out", "v:float", known_tables=_PLANT)
+    assert _writes_to(plan, jobs.TABLES_FILE)
+
+
 def test_a_job_publishes_onto_an_existing_table_without_redefining_it():
     """A second producer of a plant table was refused ("needs --columns") and,
     given columns, would have defined the table twice."""
@@ -560,3 +573,16 @@ def test_the_source_template_keeps_the_two_rules_apart():
     assert "source_contract.q" in source, "the parameterised-query rule"
     assert "Half-open [range_from;range_to)" in source, "the half-open interval rule"
     assert "DIFFERENT rule" in source, "and the template says they are not the same one"
+
+
+def test_a_trailing_newline_does_not_pass_as_part_of_a_name():
+    """#1586: `$` matches before a final newline, so `re.match` let
+    'audit_bad\\n' through when an explicit procname skipped the derived check,
+    and the job file `audit_bad\\n.q` failed to parse."""
+    with pytest.raises(UqsError, match="job name"):
+        jobs.streaming_job("audit_bad\n", [], None, None, procname="audit_valid_proc")
+
+
+def test_a_period_refuses_a_trailing_newline():
+    with pytest.raises(UqsError, match="must be a q timespan"):
+        jobs.check_period("0D00:00:01\n")

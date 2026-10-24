@@ -98,7 +98,7 @@ def _expected_table_action(table: str) -> FileAction:
 
 
 def _check_name(name: str, what: str) -> str:
-    if not _IDENTIFIER.match(name):
+    if not _IDENTIFIER.fullmatch(name):
         raise UqsError(
             f"{what} {name!r} must be lower-case, start with a letter, and hold only "
             "letters, digits and underscores - it becomes a q namespace and a filename"
@@ -117,7 +117,7 @@ def check_period(period: str) -> str:
     the generated file, and a zero one a refusal - both found only when the
     tree next loads, far from the typo.
     """
-    if not _PERIOD.match(period):
+    if not _PERIOD.fullmatch(period):
         raise UqsError(
             f"--period {period!r} must be a q timespan, e.g. 0D00:00:05 or 0D00:00:00.500"
         )
@@ -285,6 +285,9 @@ def streaming_job(
         stubs, after_ns, xf = streaming_transform(
             name, transform, subscribe_to[0], pubs[0], in_cols
         )
+        # Declared, so a twin refilling the table applies the same rows (#1571).
+        keys += "`transform"
+        values += f"\n    `{xf};"
         scaffolded = ""
     swa_key, swa_value = start_with_all_field(start_with_all)
 

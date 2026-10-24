@@ -85,7 +85,7 @@ def horizon_job(
         raise UqsError("a horizon job publishes its own NAME - drop --publishes")
     if not columns:
         raise UqsError("--kind horizon needs --columns: the table it publishes")
-    if not horizon or not _TIMESPAN.match(horizon):
+    if not horizon or not _TIMESPAN.fullmatch(horizon):
         raise UqsError(
             f"--kind horizon needs --horizon, a q timespan such as 0D00:00:10, not {horizon!r}"
         )

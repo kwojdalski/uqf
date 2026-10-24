@@ -85,6 +85,12 @@ def test_a_backfill_takes_a_procname():
     assert "`fxbf1;" in _body(plan, "fx_backfill.q")
 
 
+def test_a_backfill_procname_is_checked_like_every_other_kinds():
+    # Was emitted as a bare q symbol: `invalid-proc failed the tree's load (#1577).
+    with pytest.raises(UqsError, match="procname 'invalid-proc'"):
+        backfill.bounded_worker("fx", "fx_rates", "px:float", procname="invalid-proc")
+
+
 # ------------------------------------------------------------- one subscription
 
 
