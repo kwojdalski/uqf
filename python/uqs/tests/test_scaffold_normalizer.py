@@ -91,3 +91,15 @@ def test_a_source_column_with_no_sample_value_is_refused():
     odd = {"odd": [("time", "`timestamp$()"), ("g", "`guid$()")]}
     with pytest.raises(UqsError, match="no sample value"):
         normalizer("n", ["odd"], parse_columns("v:float"), odd, known_tables={"odd"})
+
+
+# #1596: the plant stamps `time`, so the normalizer's own output drops it. A
+# canonical table of time alone leaves an empty `([] )` output, which the
+# transform registry refuses at load ("output must be an unkeyed table").
+def test_a_canonical_table_of_time_alone_is_refused():
+    with pytest.raises(UqsError, match="besides time"):
+        _plan(cols="time:timestamp")
+
+
+def test_one_payload_column_beside_time_is_enough():
+    assert _file(_plan(cols="time:timestamp, sym:symbol"), "ticks.q")
