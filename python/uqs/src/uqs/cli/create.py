@@ -258,6 +258,7 @@ def new_job(
         "--raw-table": raw_table is not None,
         "--raw-columns": raw_columns is not None,
         "--columns": columns is not None,
+        "--columns-from": columns_from is not None,
         "--source": source is not None,
         "--width": width is not None,
         "--procname": procname is not None,
@@ -331,6 +332,7 @@ def new_job(
                 definitions=definitions,
                 raw_table=raw_table,
                 raw_columns=raw_columns,
+                known_tables=known,
             )
         if kind == "normalizer":
             if publishes:
