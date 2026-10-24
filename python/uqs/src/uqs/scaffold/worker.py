@@ -115,7 +115,7 @@ def bounded_worker(
         if not _PARTITION.fullmatch(partition_column):
             raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"
-    proc = procname or f"{name}_backfill1"
+    proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
     # they are required when either is, and refused when neither is, rather
     # than silently ignored.
