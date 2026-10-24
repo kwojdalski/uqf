@@ -194,6 +194,15 @@ def test_a_profile_choice_that_cannot_stand_is_refused(kwargs, message):
         profile.membership("p1", start_with_all=False, known_profiles=KNOWN, **args)
 
 
+def test_start_with_all_and_unprofiled_are_refused_together():
+    """#1591: --start-with-all puts the process in the default profile, so an
+    exemption beside it contradicts it - refused, as --profile is."""
+    with pytest.raises(UqsError, match="pick one"):
+        profile.membership(
+            "p1", profile=None, unprofiled="why", start_with_all=True, known_profiles=KNOWN
+        )
+
+
 def test_a_process_already_in_the_profile_is_refused():
     actions, _ = profile.membership(
         "cryptomock1", profile="crypto", unprofiled=None, start_with_all=False, known_profiles=KNOWN
