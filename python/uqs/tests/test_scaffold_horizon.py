@@ -53,3 +53,14 @@ def test_it_declares_a_horizon_job_over_the_two_tables():
 def test_a_bad_request_is_refused_by_name(kw, message):
     with pytest.raises(UqsError, match=message):
         plan(**kw)
+
+
+# #1596: as for a normalizer - an output of time alone is empty once the
+# plant's time is dropped, and the registry refuses it at load.
+def test_an_output_of_time_alone_is_refused():
+    with pytest.raises(UqsError, match="besides time"):
+        plan(columns=parse_columns("time:timestamp"))
+
+
+def test_one_payload_column_beside_time_is_enough():
+    assert plan(columns=parse_columns("time:timestamp, px:float")).actions

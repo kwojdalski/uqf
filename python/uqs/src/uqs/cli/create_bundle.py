@@ -45,7 +45,11 @@ def write_bundle_plan(plan: ScaffoldPlan, bundle: Path, *, dry_run: bool) -> Non
     Nothing is regenerated: the tree's derived files describe the tree's
     jobs, and a bundle job is not one until it is installed.
     """
-    plan = bundle_mod.into_bundle(plan, bundle)
+    try:
+        plan = bundle_mod.into_bundle(plan, bundle)
+    except UqsError as exc:
+        _die(exc)
+        return
     console.print(plan.render())
     if dry_run:
         console.print("[dim]--dry-run: nothing written[/]")
