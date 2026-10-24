@@ -18,8 +18,10 @@ from uqs.scaffold import worker
 from uqs.scaffold.columns import (
     PHYSICAL_NAME,
     Columns,
+    as_columns,
     definition_columns,
     parse_raw_columns,
+    type_char,
 )
 from uqs.scaffold.plan import ScaffoldPlan
 
@@ -117,6 +119,38 @@ def shared_transform(
     return twin_of, job.transform
 
 
+def _meta(cols: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """[(column, meta type char)]: what .qetl.transform compares, attributes aside."""
+    out = []
+    for name, literal in cols:
+        try:
+            out.append((name, type_char(literal)))
+        except UqsError:
+            out.append((name, literal))
+    return out
+
+
+def _shown(cols: list[tuple[str, str]]) -> str:
+    return ", ".join(f"{c}:{t}" for c, t in cols)
+
+
+def check_passthrough(dataset: str, source: str, columns: Columns, definition: str) -> None:
+    """Refuse a passthrough from a new source shaped by `columns` into an
+    existing `dataset` of another shape (#1593).
+
+    The passthrough declares its input and output as the dataset's shape and
+    its example from the source's fixture, which `columns` shape: two shapes,
+    which .qetl.transform.define refuses only when the tree next loads."""
+    have = _meta(as_columns(columns))
+    want = _meta(definition_columns(definition))
+    if have != want:
+        raise UqsError(
+            f"the new source {source}'s columns ({_shown(have)}) are not {dataset}'s "
+            f"({_shown(want)}), so a passthrough cannot publish them - pass --transform derive "
+            f"and map one to the other, or give --columns {dataset}'s shape"
+        )
+
+
 def backfill_plan(
     repo_root: Path,
     name: str,
@@ -177,6 +211,15 @@ def backfill_plan(
     # An existing source is reused, not rewritten, and an existing
     # table is not defined twice: a second worker over rows someone
     # already declared is the common case after the first.
+    reuse_source = (repo_root / SOURCE_DIR / f"{source or name}.q").is_file()
+    if (
+        not reuse_source
+        and shape
+        and shared is None
+        and (transform or "passthrough") == "passthrough"
+        and dataset in (definitions or {})
+    ):
+        check_passthrough(dataset, source or name, shape, (definitions or {})[dataset])
     return worker.bounded_worker(
         name,
         dataset,
@@ -191,6 +234,6 @@ def backfill_plan(
         transform=transform or "passthrough",
         shared=shared,
         raw=raw,
-        reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
+        reuse_source=reuse_source,
         define_table=dataset not in defined_tables(repo_root),
     )
