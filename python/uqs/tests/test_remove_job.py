@@ -370,3 +370,67 @@ def test_a_guest_writer_does_not_take_an_authored_table(tree):
     after = _snapshot(tree)
     changed = sorted(str(p) for p in set(before) | set(after) if before.get(p) != after.get(p))
     assert not changed, f"not restored: {changed}"
+
+
+def test_a_feed_with_a_list_column_round_trips_with_its_nested_declaration(tree):
+    # #1567: the table's definition went but its `.qetl.plant.nested` line
+    # stayed, and plant_tables.q then failed to load: no table to resolve.
+    before = _snapshot(tree)
+    write.apply_plan(
+        jobs.streaming_job(
+            "listbook",
+            [],
+            "listbook",
+            "sym:symbol, levels:list",
+            unprofiled="a demo feed, started by hand",
+            known_profiles=("crypto",),
+        ),
+        tree,
+    )
+    assert ".qetl.plant.nested[`listbook;" in (tree / TABLES_FILE).read_text()
+    _remove(tree, "listbook")
+    assert ".qetl.plant.nested[`listbook;" not in (tree / TABLES_FILE).read_text()
+    after = _snapshot(tree)
+    changed = sorted(str(p) for p in set(before) | set(after) if before.get(p) != after.get(p))
+    assert not changed, f"not restored: {changed}"
+
+
+def _literal(text: str, name: str):
+    """The dict literal `name` is assigned in profiles.py's source."""
+    import ast
+
+    for node in ast.parse(text).body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and getattr(node.target, "id", None) == name
+            and node.value is not None
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"no {name} in profiles.py")
+
+
+@pytest.mark.parametrize("proc", ["default", "crypto"])
+def test_removing_a_process_named_like_a_profile_keeps_that_profile(proc):
+    # #1566: a process named `default` was removed by dropping every entry
+    # keyed `"default": (`, which is PROFILES["default"] itself.
+    from uqs.scaffold import profile
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    before = PROFILES_FILE.read_text()
+    joined = profile._with_member(before, "arbitrage", proc)
+    after = _drop_from_profiles(joined, proc)
+    assert _literal(after, "PROFILES") == _literal(before, "PROFILES")
+    assert _literal(after, "UNPROFILED") == _literal(before, "UNPROFILED")
+
+
+def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemption():
+    from uqs.scaffold import profile
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    before = PROFILES_FILE.read_text()
+    exempt = profile._with_unprofiled(
+        before, profile._unprofiled_entry("default", "a demo, started by hand")
+    )
+    assert "default" in _literal(exempt, "UNPROFILED")
+    after = _drop_from_profiles(exempt, "default")
+    assert after == before

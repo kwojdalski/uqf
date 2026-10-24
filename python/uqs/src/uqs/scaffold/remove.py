@@ -340,7 +340,12 @@ def _drop_definition(text: str, table: str) -> str:
         start -= 1
     if start > 0 and not lines[start - 1].strip():
         start -= 1
-    return "".join(lines[:start] + lines[at[0] + 1 :])
+    # A list column's `.qetl.plant.nested` declaration goes with its table:
+    # left behind, it names a table that no longer exists and the plant fails
+    # to load (#1567).
+    nested = f".qetl.plant.nested[`{table};"
+    rest = [line for line in lines[at[0] + 1 :] if not line.startswith(nested)]
+    return "".join(lines[:start] + rest)
 
 
 def _drop_catalog(text: str, table: str) -> str:
@@ -359,19 +364,29 @@ def _drop_catalog(text: str, table: str) -> str:
 
 
 def _drop_from_profiles(text: str, proc: str) -> str:
-    """profiles.py without `proc` in any one-line profile, or its exemption."""
+    """profiles.py without `proc` in any one-line profile, or its exemption.
+
+    Each edit is confined to its own dict: a process may share its name with
+    a profile, and PROFILES["default"] is keyed exactly as an exemption for a
+    process called `default` would be (#1566).
+    """
     quoted = f'"{proc}"'
     lines = text.splitlines(keepends=True)
     out: list[str] = []
+    block = None
     skipping = False
     for line in lines:
+        if m := re.match(r"^([A-Z_]+): dict\[", line):
+            block = m.group(1)
+        elif line.rstrip("\n") == "}":
+            block = None
         if skipping:
             skipping = line.strip() != "),"
             continue
-        if line.startswith(f"    {quoted}: ("):
+        if block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
             skipping = not line.rstrip().endswith("),")
             continue
-        if quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
+        if block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
             head, inner = line.split(": (", 1)
             members = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]
             members = [m for m in members if m != quoted]

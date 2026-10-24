@@ -63,6 +63,30 @@ def test_the_generated_python_compiles_and_never_sends_time():
     assert "SCAFFOLDED" in streamer and "NotImplementedError" in streamer
 
 
+def test_the_generated_publisher_sends_a_list_of_columns_in_field_order(monkeypatch):
+    """#1580: .u.upd gets one list per column, by position. The segmented
+    tickerplant prepends its time column with `(enlist ...),x`, which a list
+    accepts and a dictionary answers with `type`."""
+    sent: list[tuple] = []
+
+    class Q:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def connect(self):
+            pass
+
+        def sync(self, *args):
+            sent.append(args)
+
+    monkeypatch.setitem(sys.modules, "kola", types.SimpleNamespace(Q=Q))
+    streamer: dict = {"__name__": "ws_streamer"}
+    exec(compile(_body(_plan(), "ws_streamer.py"), "ws_streamer.py", "exec"), streamer)
+    streamer["batches"] = lambda: iter([[{"px": 1.0, "sym": "BTC"}, {"px": 2.0, "sym": "ETH"}]])
+    assert streamer["main"](["--port", "5010", "--credential", "u:p"]) == 0
+    assert sent == [(".u.upd", "ws_raw", [["BTC", "ETH"], [1.0, 2.0]])]
+
+
 def test_the_feed_module_declares_itself_for_the_cli():
     feed = _body(_plan(), "ws_feed.py")
     assert 'FEED = ExternalFeed("ws", start, stop, status)' in feed
