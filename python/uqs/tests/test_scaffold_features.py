@@ -65,7 +65,20 @@ def test_an_etl_without_a_period_has_no_timer():
 
 @pytest.mark.parametrize(
     ("period", "message"),
-    [("5s", "must be a q timespan"), ("0D00:00:00", "must be positive")],
+    [
+        ("5s", "must be a q timespan"),
+        ("0D00:00:00", "must be positive"),
+        # #1598: a component q refuses to parse, or a day count past q's
+        # 64-bit timespans - 106752D wraps negative, 213504D to ~25 minutes.
+        ("0D00:60:00", "must be a q timespan"),
+        ("0D00:00:60", "must be a q timespan"),
+        ("0D99:99:99", "must be a q timespan"),
+        ("106752D00:00:00", "must be a q timespan"),
+        ("213504D00:00:00", "must be a q timespan"),
+        ("999999999D00:00:00", "must be a q timespan"),
+        ("\u0661D00:00:01", "must be a q timespan"),
+        ("0D00:00:00.0000000001", "must be positive"),
+    ],
 )
 def test_a_period_define_would_refuse_is_refused_here(period, message):
     with pytest.raises(UqsError, match=message):
