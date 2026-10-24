@@ -8,12 +8,18 @@ source exists - before it can plan anything.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
-from uqs.model.declarations import declaration_calls, read_declarations, symbols
+from uqs.model.declarations import (
+    declaration_calls,
+    read_declarations,
+    strip_q_comments,
+    symbols,
+)
 from uqs.model.pipeline import PipelineKind
 from uqs.model.schemas import _DEFINITION
-from uqs.paths import SOURCE_DIR, TABLES_FILE, WORKER_DIR, UqsError
+from uqs.paths import ETL_DIR, SOURCE_DIR, TABLES_FILE, WORKER_DIR, UqsError
 from uqs.scaffold import worker
 from uqs.scaffold.columns import (
     PHYSICAL_NAME,
@@ -117,6 +123,35 @@ def shared_transform(
     return twin_of, job.transform
 
 
+#: The declaration directories `src/etl/init.q` loads before workers/: a
+#: transform a worker names must be registered in one of them, or
+#: `.qetl.job.bounded.define` refuses it as not registered (#1579).
+BEFORE_WORKERS = (SOURCE_DIR, ETL_DIR / "transforms")
+
+
+def require_loaded_before_workers(repo_root: Path, twin_of: str, transform: str) -> None:
+    """Refuse a twin whose shared transform is registered too late to load.
+
+    The tree loads sources, transforms, workers, then streaming. A transform
+    registered inside a streaming job's file - where the job defines it beside
+    its handler - is not registered yet when the twin's worker is defined, so
+    the twin would stop the whole tree loading. Extracting it to
+    src/etl/transforms/ is the author's move, not the scaffold's to guess.
+    """
+    define = re.compile(rf"\.qetl\.transform\.define\[`{re.escape(transform)}\s*;")
+    for directory in BEFORE_WORKERS:
+        for path in sorted((repo_root / directory).glob("*.q")):
+            if define.search(strip_q_comments(path.read_text())):
+                return
+    raise UqsError(
+        f"--twin-of {twin_of} applies its transform {transform}, which is not registered "
+        f"under {' or '.join(d.as_posix() for d in BEFORE_WORKERS)} - the tree loads "
+        "workers before streaming jobs, so the twin's worker could not find it. Move "
+        f"{transform}'s .qetl.transform.define into src/etl/transforms/ first, as "
+        "src/etl/transforms/eq_orderbook.q does for eq_orderbook"
+    )
+
+
 def backfill_plan(
     repo_root: Path,
     name: str,
@@ -159,6 +194,8 @@ def backfill_plan(
     if twin_of is not None:
         dataset, shape = twin_target(repo_root, twin_of, dataset, shape, definitions or {})
         shared = shared_transform(repo_root, twin_of, transform)
+        if shared is not None:
+            require_loaded_before_workers(repo_root, *shared)
     if start_with_all:
         # A backfill runs a window and exits; `uqs start all` starts
         # standing processes, and .qetl.job.bounded.define has no such key.
