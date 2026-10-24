@@ -8,6 +8,7 @@ job there, a new file with its own idea of where an appended line goes here.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -37,13 +38,18 @@ def flat_source(text: str, repo_root: Path) -> str:
     )
     if "\\d ." not in text or path is None:
         return text
-    spec = importlib.util.spec_from_file_location("flatten_contexts_scaffold", path)
+    # Named by the converter's own path and registered fresh each call: its
+    # dataclasses resolve through sys.modules while it executes, and a name
+    # shared across trees kept the first tree's converter for every later one
+    # in the same process (#1601).
+    resolved = path.resolve()
+    name = "flatten_contexts_scaffold_" + hashlib.sha1(str(resolved).encode()).hexdigest()[:12]
+    spec = importlib.util.spec_from_file_location(name, resolved)
     if spec is None or spec.loader is None:  # pragma: no cover - a broken checkout
         return text
     module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault(spec.name, module)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    module = sys.modules[spec.name]
     converter = module.Converter("4.0", False)
     converter.collect("scaffold.q", text)
     converter.propagate()
