@@ -193,4 +193,9 @@ def backfill_plan(
         raw=raw,
         reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
         define_table=dataset not in defined_tables(repo_root),
+        target_columns=(
+            definition_columns(definitions[dataset])
+            if definitions and dataset in definitions
+            else None
+        ),
     )
