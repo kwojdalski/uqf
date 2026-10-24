@@ -291,3 +291,18 @@ def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
 
     monkeypatch.setattr(regenerate, "q_interpreter", lambda: None)
     assert regenerate._export_contract_surface(tmp_path) is None
+
+
+def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
+    """`quote` is the starter pack's table: --columns shape only the new source,
+    and the plant gets no second, source-shaped `quote` definition (#1602)."""
+    result = CliRunner().invoke(
+        cli.app,
+        ["job", "new", "qt", "--kind", "backfill", "--dataset", "quote",
+         "--columns", "sym:symbol, bid:float", "--dry-run"],
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "create src/etl/sources/qt.q" in result.output
+    assert "plant_tables.q" not in result.output
+    assert "uqs_catalog.q" not in result.output
+    assert "test_stack_tables.q" not in result.output
