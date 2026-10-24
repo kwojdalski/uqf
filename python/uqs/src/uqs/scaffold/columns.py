@@ -115,7 +115,7 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
         if ":" not in part:
             raise UqsError(f"column {part!r} must be name:type, e.g. 'value:float'. Types: {names}")
         col, _, qtype = (s.strip() for s in part.partition(":"))
-        if not _NAME.match(col):
+        if not _NAME.fullmatch(col):
             raise UqsError(
                 f"column {col!r} must be lower-case, start with a letter, and hold only "
                 "letters, digits and underscores"
@@ -158,7 +158,7 @@ def parse_raw_columns(spec: str) -> list[tuple[str, str]]:
                 f"raw column {part!r} must be name:type, e.g. 'CREATED_AT:timestamp'. "
                 f"Types: {names}"
             )
-        if not PHYSICAL_NAME.match(col):
+        if not PHYSICAL_NAME.fullmatch(col):
             raise UqsError(
                 f"raw column {col!r} must start with a letter and hold only letters, digits "
                 "and underscores"
