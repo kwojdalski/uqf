@@ -309,6 +309,25 @@ def test_what_the_removal_keeps_is_not_reported(tree):
     assert "src/etl/streaming/pulse_reader.q" not in _referenced(removal)
 
 
+def test_a_kept_table_does_not_hide_a_call_into_the_removed_job(tree):
+    """#1589: the job and its table share a name. Another job reads the table,
+    so the table stays - but a call into the removed job's namespace is still a
+    reference, not a use of the table."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job(
+            "pulse_reader", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}
+        ),
+        tree,
+    )
+    reader = tree / "src/etl/streaming/pulse_reader.q"
+    reader.write_text(reader.read_text() + "poke:{[] .qpipe.job.pulse.on_timer[]}\n")
+    removal = plan_removal(tree, "pulse")
+    assert any("kept table pulse" in n for n in removal.notes)
+    refs = [r for r in removal.references if r.path == Path("src/etl/streaming/pulse_reader.q")]
+    assert [r.text for r in refs] == ["poke:{[] .qpipe.job.pulse.on_timer[]}"]
+
+
 def test_a_name_inside_a_longer_one_is_not_a_reference(tree):
     write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
     (tree / "docs").mkdir(exist_ok=True)
