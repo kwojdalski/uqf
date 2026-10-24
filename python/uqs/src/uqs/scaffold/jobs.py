@@ -99,7 +99,7 @@ def _expected_table_action(table: str) -> FileAction:
 
 
 def _check_name(name: str, what: str) -> str:
-    if not _IDENTIFIER.match(name):
+    if not _IDENTIFIER.fullmatch(name):
         raise UqsError(
             f"{what} {name!r} must be lower-case, start with a letter, and hold only "
             "letters, digits and underscores - it becomes a q namespace and a filename"
@@ -278,6 +278,9 @@ def streaming_job(
         stubs, after_ns, xf = streaming_transform(
             name, transform, subscribe_to[0], pubs[0], in_cols
         )
+        # Declared, so a twin refilling the table applies the same rows (#1571).
+        keys += "`transform"
+        values += f"\n    `{xf};"
         scaffolded = ""
     swa_key, swa_value = start_with_all_field(start_with_all)
 
