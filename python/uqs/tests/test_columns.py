@@ -81,6 +81,22 @@ def test_a_vector_column_is_a_list_and_cannot_be_grouped():
         parse_columns("bid_prices:g#list")
 
 
+@pytest.mark.parametrize(
+    "spec",
+    ["sym:symbol, time:timestamp, px:float", "time:float, sym:symbol, px:float", "time:g#symbol"],
+)
+def test_a_time_column_that_is_not_a_leading_timestamp_is_refused(spec):
+    """Every plant table leads with a timestamp `time` (#1574): `.u.upd`
+    stamps it and every consumer reads it positionally. A spec that names it
+    elsewhere, or as another type, is refused rather than written as asked."""
+    with pytest.raises(UqsError, match="time"):
+        parse_columns(spec)
+
+
+def test_a_leading_timestamp_time_is_kept_as_given():
+    assert parse_columns("time:timestamp, sym:symbol")[0] == ("time", "`timestamp$()")
+
+
 def test_an_ungrouped_sym_has_no_spelling_and_says_so():
     """The vendored `packets` table: `sym:symbol` would read back GROUPED,
     so the spec refuses rather than disagree with its table."""
