@@ -90,5 +90,6 @@ def test_q_appends_the_tags_in_the_order_runs_strips_them(from_q):
 
 def test_the_q_words_python_refuses_are_the_ones_q_keeps(from_q):
     """A column or table named for one of these cannot load (#1588); a q
-    release that adds a keyword must add it here too."""
-    assert set(from_q["q_words"]) == Q_WORDS
+    release that adds a keyword must add it here too. A subset, not equal:
+    the list covers KDB-X and PeachQ, and PeachQ lacks some KDB-X words."""
+    assert set(from_q["q_words"]) <= Q_WORDS

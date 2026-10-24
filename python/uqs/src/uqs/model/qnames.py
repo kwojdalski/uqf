@@ -27,7 +27,8 @@ def config_env_var(key: str) -> str:
 #: q's own words: `.Q.res` plus every name in the `.q` context (KDB-X 4.x/5.x). A root
 #: global with one of these names shadows the keyword for the whole process, and a
 #: column named with one cannot be written in a table literal - `([] value:...)` is
-#: refused with `assign` (#1588). `test_qnames.py` holds the list to a running q.
+#: refused with `assign` (#1588). `test_qnames.py` holds the list to a running q: every
+#: word the interpreter keeps must be here (KDB-X keeps a few PeachQ does not; both are).
 Q_WORDS = frozenset(
     (
         "abs acos asin atan avg bin binr cor cos cov delete dev div do enlist exec exit exp "
@@ -40,6 +41,8 @@ Q_WORDS = frozenset(
         "set upsert raze union inter except cross sv vs sublist read0 read1 hclose hdel hsym "
         "hcount peach system ltrim rtrim trim lower upper ssr view tables views cols xcols "
         "keys xkey xcol xasc xdesc fkeys meta lj ljf aj aj0 ajf ajf0 ij ijf pj asof uj ujf ww "
-        "wj wj1 fby xgroup ungroup ej save load rsave rload dsave show csv parse eval reval use"
+        "wj wj1 fby xgroup ungroup ej save load rsave rload dsave show csv parse eval reval use "
+        # PeachQ's one word KDB-X does not have: the PeachQ lane loads the same tree
+        "rlike"
     ).split()
 )
