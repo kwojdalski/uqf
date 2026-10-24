@@ -193,3 +193,19 @@ def test_transform_is_refused_where_it_does_not_apply(argv, message, monkeypatch
     result = runner.invoke(cli.app, ["job", "new", *argv, "--dry-run"])
     assert result.exit_code == 1
     assert refused and message in refused[0]
+
+
+@pytest.mark.parametrize("mode", ["passthrough", "derive"])
+def test_a_transform_mode_job_declares_its_transform_for_a_twin(mode, tmp_path):
+    """#1571: the generated declaration names the transform its handler
+    applies, so a later `--twin-of` reuses it instead of scaffolding its own."""
+    from uqs.cli import create_backfill
+
+    plan = _stream("notional", mode, columns="sym:symbol, px:float")
+    job = next(a for a in plan.actions if str(a.path).endswith("streaming/notional.q"))
+    (tmp_path / job.path).parent.mkdir(parents=True)
+    (tmp_path / job.path).write_text(job.body)
+    assert create_backfill.shared_transform(tmp_path, "notional", None) == (
+        "notional",
+        f"notional_{mode}",
+    )
