@@ -70,3 +70,14 @@ def test_a_horizon_that_q_reads_as_zero_is_refused(horizon):
 @pytest.mark.parametrize("horizon", ["0D00:00:00.000000001", "0D00:00:10", "1D00:00:00"])
 def test_a_positive_horizon_is_written(horizon):
     assert any(horizon in a.body for a in plan(horizon=horizon).actions)
+
+
+# #1596: as for a normalizer - an output of time alone is empty once the
+# plant's time is dropped, and the registry refuses it at load.
+def test_an_output_of_time_alone_is_refused():
+    with pytest.raises(UqsError, match="besides time"):
+        plan(columns=parse_columns("time:timestamp"))
+
+
+def test_one_payload_column_beside_time_is_enough():
+    assert plan(columns=parse_columns("time:timestamp, px:float")).actions
