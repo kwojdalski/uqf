@@ -34,6 +34,40 @@ from uqs.scaffold.transform import check_mode
 #: A partition is a q symbol: `EURUSD, `binance_spot.
 _PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
 
+#: A q timespan literal as a width is written: 1D, 0D01, 0D01:30, 0D01:00:00.5.
+_WIDTH = re.compile(r"(\d+)D(?:(\d{1,2})(?::(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?)?", re.ASCII)
+_DAY_NS = 86_400 * 10**9
+#: The largest day count a q timespan holds; past it the literal wraps (#1576).
+_MAX_DAYS = 106_751
+
+
+def check_width(width: str) -> str:
+    """Refuse a width `.qetl.job.bounded.define` would refuse at load (#1576).
+
+    It wants a positive timespan. Written verbatim, a malformed width is a
+    parse error in the generated worker and a zero or negative one a refusal,
+    both found only when the tree next loads. Components are range-checked
+    and the total computed here, so a value below q's nanosecond precision or
+    past its range is refused rather than becoming zero or wrapping.
+    """
+    m = _WIDTH.fullmatch(width)
+    hint = "a positive q timespan, e.g. 1D, 0D01 or 0D01:00:00"
+    if m is None:
+        raise UqsError(f"--width {width!r} must be {hint}")
+    days, hh, mm, ss, frac = m.groups()
+    if int(hh or 0) > 23 or int(mm or 0) > 59 or int(ss or 0) > 59:
+        raise UqsError(f"--width {width!r} has an out-of-range field - it must be {hint}")
+    ns = (
+        int(days) * _DAY_NS
+        + (int(hh or 0) * 3600 + int(mm or 0) * 60 + int(ss or 0)) * 10**9
+        + int((frac or "").ljust(9, "0"))
+    )
+    if ns <= 0:
+        raise UqsError(f"--width {width!r} must be positive - a zero width plans no windows")
+    if ns > _MAX_DAYS * _DAY_NS:
+        raise UqsError(f"--width {width!r} is past what a q timespan holds ({_MAX_DAYS}D)")
+    return width
+
 
 def bounded_worker(
     name: str,
@@ -90,6 +124,7 @@ def bounded_worker(
     mapping between the two is never guessed - the query is the author's.
     """
     check_mode(transform)
+    check_width(width)
     _check_name(name, "worker name")
     if name.endswith("_backfill"):
         # NAME is the base the worker, its source and its example are named
@@ -103,7 +138,7 @@ def bounded_worker(
     src = source or name
     _check_name(src, "source name")
     _check_name(dataset, "dataset")
-    if partition is not None and not _PARTITION.match(partition):
+    if partition is not None and not _PARTITION.fullmatch(partition):
         raise UqsError(
             f"--partition {partition!r} must be a q symbol - letters, digits and underscores, "
             "e.g. EURUSD"
@@ -112,10 +147,10 @@ def bounded_worker(
         raise UqsError("--partition-column needs --partition: it names the column holding it")
     if partition is not None:
         partition_column = partition_column or "sym"
-        if not _PARTITION.match(partition_column):
+        if not _PARTITION.fullmatch(partition_column):
             raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"
-    proc = procname or f"{name}_backfill1"
+    proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
     # they are required when either is, and refused when neither is, rather
     # than silently ignored.

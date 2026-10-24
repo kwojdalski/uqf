@@ -16,11 +16,12 @@ and the vendored database.q to a round trip through these functions.
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
 
 from uqs.model import schemas
-from uqs.paths import UqsError
+from uqs.paths import TABLES_FILE, UqsError, repo_root
 
 #: The column every plant table leads with: `.u.upd` stamps it, and every
 #: consumer reads it positionally.
@@ -114,7 +115,7 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
         if ":" not in part:
             raise UqsError(f"column {part!r} must be name:type, e.g. 'value:float'. Types: {names}")
         col, _, qtype = (s.strip() for s in part.partition(":"))
-        if not _NAME.match(col):
+        if not _NAME.fullmatch(col):
             raise UqsError(
                 f"column {col!r} must be lower-case, start with a letter, and hold only "
                 "letters, digits and underscores"
@@ -127,12 +128,20 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
             raise UqsError(f"column {col!r}: a general (list) column cannot carry g#")
         if col in GROUPED_BY_DEFAULT and ctype.name == "symbol":
             grouped = True
+        _refuse_twice(col, out, "column")
         out.append((col, (GROUP if grouped else "") + ctype.literal))
     if not out:
         raise UqsError("--columns is empty: a published table needs at least one column")
     if not any(c == TIME_COLUMN for c, _ in out):
         out.insert(0, (TIME_COLUMN, _BY_NAME["timestamp"].literal))
     return out
+
+
+def _refuse_twice(col: str, so_far: list[tuple[str, str]], what: str) -> None:
+    """Refuse a second `col`: q would load it renamed (`px` then `px1`), so
+    the table on disk would not be the one asked for (#1575)."""
+    if any(c == col for c, _ in so_far):
+        raise UqsError(f"{what} {col!r} is named twice - every column needs its own name")
 
 
 #: A physical column, as the source spells it: its case is the site's.
@@ -157,7 +166,7 @@ def parse_raw_columns(spec: str) -> list[tuple[str, str]]:
                 f"raw column {part!r} must be name:type, e.g. 'CREATED_AT:timestamp'. "
                 f"Types: {names}"
             )
-        if not PHYSICAL_NAME.match(col):
+        if not PHYSICAL_NAME.fullmatch(col):
             raise UqsError(
                 f"raw column {col!r} must start with a letter and hold only letters, digits "
                 "and underscores"
@@ -165,6 +174,7 @@ def parse_raw_columns(spec: str) -> list[tuple[str, str]]:
         ctype = _BY_NAME.get("list" if qtype == "any" else qtype)
         if ctype is None:
             raise UqsError(f"raw column {col!r} has unknown type {qtype!r}. Types: {names}")
+        _refuse_twice(col, out, "raw column")
         out.append((col, ctype.literal))
     if not out:
         raise UqsError("--raw-columns is empty: name the columns the adapter reads")
@@ -262,9 +272,29 @@ def table_definition(table: str, columns: list[tuple[str, str]]) -> str:
     return f"{table}:([]{body})"
 
 
+#: A `.qetl.plant` binding that is not an unkeyed table: the plant runtime's
+#: own API (`schema`, `shape`, `nested`, ...) and its keyed registries.
+_RUNTIME_BINDING = re.compile(r"^\.qetl\.plant\.([A-Za-z_][A-Za-z0-9_]*):(?!\(\[\])", re.MULTILINE)
+
+
+@functools.cache
+def plant_runtime_names() -> frozenset[str]:
+    """The names plant_tables.q binds to something other than a table - read
+    from its definitions, so a helper added there is reserved with it (#1597)."""
+    return frozenset(_RUNTIME_BINDING.findall((repo_root() / TABLES_FILE).read_text()))
+
+
 def plant_table_definition(table: str, columns: list[tuple[str, str]]) -> str:
     """The same line as plant_tables.q holds it: fully qualified from the root,
-    since the file opens no `\\d` context (#1411)."""
+    since the file opens no `\\d` context (#1411).
+
+    Tables and the plant runtime share `.qetl.plant`, so a table named for one
+    of its functions would replace it - refused before anything is written."""
+    if table in plant_runtime_names():
+        raise UqsError(
+            f"{table} is a name the plant runtime uses (.qetl.plant.{table}, in "
+            f"{TABLES_FILE}) - a table defined under it would replace it. Pick another name"
+        )
     return f".qetl.plant.{table_definition(table, columns)}"
 
 
