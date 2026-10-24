@@ -68,16 +68,20 @@ def steps(name: str, publishes: str, fields: list[str]) -> str:
     )
     if fields:
         named = ", ".join(fields)
+        # One field is `enlist `id`, which a following # or ! would bind to the
+        # bare symbol first - q reads right to left - so it is parenthesized
+        # (#1592). Several fields are already one literal.
+        keys = symbol_list(fields) if len(fields) > 1 else f"({symbol_list(fields)})"
         next_cursor = f"""/ [page] -> the cursor that acknowledges the page: the {named} of its
 / last row, in the order the source sorts by. Keep every field: dropping a
 / tie-breaker loses the rows that share the rest.
-next_cursor:{{[page] {symbol_list(fields)}#last page}}
+next_cursor:{{[page] {keys}#last page}}
 
 / [instant] -> the cursor just before `instant`, for `uqs job preview
 / {name} --last 30s`: fetching after it must return the rows at or after
 / instant. Usually {fields[0]} set to the instant and each tie-breaker to
 / its type's null, which sorts before every value - e.g.
-/ {symbol_list(fields)}!(instant;...). Only the running feed's cursor is
+/ {keys}!(instant;...). Only the running feed's cursor is
 / untouched by it: the preview never saves.
 start_cursor:{{[instant]
     '"{name}.start_cursor: not implemented";
