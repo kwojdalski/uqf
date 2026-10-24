@@ -191,10 +191,12 @@ def batches() -> Iterator[list[dict[str, Any]]]:
     raise NotImplementedError("{name}_streamer.batches: not implemented")
 
 
-def to_columns(records: list[dict[str, Any]]) -> dict[str, list[Any]]:
-    """Records as .u.upd wants them: one list per column, in FIELDS order -
-    .u.upd places columns by position, not by name."""
-    return {{field: [record[field] for record in records] for field in FIELDS}}
+def to_columns(records: list[dict[str, Any]]) -> list[list[Any]]:
+    """Records as .u.upd wants them: a LIST of columns, one per field, in FIELDS
+    order - .u.upd places columns by position, not by name. Not a dict: the
+    segmented tickerplant prepends its time column with `(enlist ...),x`, which
+    a dictionary answers with `type` (#1580)."""
+    return [[record[field] for record in records] for field in FIELDS]
 
 
 def main(argv: list[str] | None = None) -> int:
