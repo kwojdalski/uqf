@@ -380,7 +380,7 @@ def test_a_job_that_declares_no_transform_leaves_its_twin_the_usual_scaffold():
 # ----------------------------------------------- what the generated names are
 
 
-@pytest.mark.parametrize("twin_of", [None, "crypto_markout"])
+@pytest.mark.parametrize("twin_of", [None, "arbitrage"])
 def test_a_name_already_ending_in_backfill_is_refused(twin_of):
     """#1228: the worker is NAME_backfill, so NAME foo_backfill made a worker
     foo_backfill_backfill and a source foo_backfill. Refused, saying what to pass."""
@@ -426,6 +426,23 @@ def test_every_generated_q_namespace_passes_the_prefix_rule():
                 seen.append(ns)
                 assert ns.startswith(".q"), f"{action.path} declares {ns}"
     assert any(ns.endswith("ex") for ns in seen), "the example script was among them"
+
+
+def test_a_twin_whose_transform_registers_after_workers_is_refused():
+    """#1579: crypto_execution_quality is registered inside the streaming job's
+    file, which src/etl/init.q loads after workers/. A twin naming it stopped
+    the whole tree loading with `transform ... is not registered`."""
+    with pytest.raises(UqsError, match="Move crypto_execution_quality's .qetl.transform.define"):
+        create_backfill.backfill_plan(
+            UQF_ROOT, "crypto_refill", None, None,
+            width=None, source=None, procname=None, transport=None, partition=None,
+            check=False, transform=None, start_with_all=False, twin_of="crypto_markout",
+            definitions=_plant(),
+        )  # fmt: skip
+
+
+def test_a_transform_registered_under_transforms_is_loaded_before_workers():
+    create_backfill.require_loaded_before_workers(UQF_ROOT, "eq_orderbook", "eq_orderbook")
 
 
 def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():
