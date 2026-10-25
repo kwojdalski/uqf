@@ -422,3 +422,39 @@ def test_a_scaffolded_backfill_example_runs_straight_away(tmp_path, transport):
     assert "ok    at least one row was written" in result.stdout, tail
     assert "ok    every published row is on disk" in result.stdout, tail
     assert ("query is still the scaffold's stub" in result.stdout) == (transport == "local"), tail
+
+
+def test_a_local_examples_source_hdb_holds_the_raw_contracts_physical_table(tmp_path):
+    """#1590: a local source with a raw contract reads its PHYSICAL table. The
+    example built its source HDB under the dataset's name, so once the query
+    was written against PhysicalEvents the run found no partition of it and
+    published nothing."""
+    qbin, env = _kdbx()
+    _copy_of_the_tree(tmp_path)
+    plan = backfill.bounded_worker(
+        "smokeraw", "smoke_raw_out", "sym:symbol, px:float", transport="local",
+        raw=("PhysicalEvents", parse_raw_columns("time:timestamp, sym:symbol, px:float")),
+    )  # fmt: skip
+    write.apply_plan(plan, tmp_path)
+    source = tmp_path / "src/etl/sources/smokeraw.q"
+    stub = 'query:{[h;range_from;range_to]\n    \'"smokeraw.query: not implemented";\n    }'
+    text = source.read_text()
+    assert stub in text
+    source.write_text(text.replace(stub, (
+        "query:{[h;range_from;range_to] .qetl.source.local[h;{[read;f;t]\n"
+        "    select time,sym,px from read[`PhysicalEvents;f;t] where time>=f, time<t};\n"
+        "    range_from;range_to]}"
+    )))  # fmt: skip
+    result = subprocess.run(
+        [qbin, example_path("smokeraw").as_posix(), "-q"],
+        cwd=tmp_path,
+        env=_status_dir(env, tmp_path),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=TIMEOUT_SECONDS,
+        text=True,
+    )
+    tail = "\n".join((result.stdout + result.stderr).splitlines()[-25:])
+    assert result.returncode == 0, f"the example did not run:\n{tail}"
+    assert "through the live `local` path" in result.stdout, tail
+    assert "ok    every published row is on disk" in result.stdout, tail

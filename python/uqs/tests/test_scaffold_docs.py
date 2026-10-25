@@ -134,3 +134,19 @@ def test_removal_takes_only_what_still_says_scaffolded():
     written = page.replace(showcase_card("zz1"), "**`zz1` · a pulse** --- ticks, written up.")
     assert without_stubs(written, "zz1") == written
     assert without_stubs(page, "zz") == page, "a prefix of the name is not the name"
+
+
+def test_a_raw_contract_the_fixture_cannot_seed_says_whose_seed_it_is():
+    """#1590: raw fields the fixture does not have cannot be guessed; the
+    example's seed says so instead of writing a table its query cannot read."""
+    from uqs.scaffold.columns import parse_raw_columns  # noqa: PLC0415
+
+    body = _action(
+        backfill.bounded_worker(
+            "tx", "tx_rows", "sym:symbol, px:float", transport="local",
+            raw=("TxEvents", parse_raw_columns("EVT_TS:timestamp, px:float")),
+        ),
+        example_path("tx"),
+    ).body  # fmt: skip
+    assert "`TxEvents,`}" in body, "the source HDB holds the physical table"
+    assert "seed the raw rows of TxEvents by hand: the fixture has no EVT_TS" in body
