@@ -54,6 +54,7 @@ EXCLUDED_PATTERNS = (
     r"(^|/)id_(rsa|ed25519|ecdsa)",
     r"(^|/)passwords/",
     r"^scripts/torqconfig/permissions/gateway_users\.csv$",
+    r"^python/uqs/process_overrides\.csv$",
     r"^lib/(?!kx-dbmaint/)",
     rf"^{re.escape(RELEASE_DIR)}/",
 )

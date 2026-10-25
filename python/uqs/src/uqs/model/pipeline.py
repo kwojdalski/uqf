@@ -114,6 +114,7 @@ class Pipeline:
     offset: int | None = None  # set by model/registry.py from the port lock
     localtime: str = "1"
     startwithall: str = "1"
+    extras: str = ""
     note: str = ""  # why this row deviates from the defaults, if it does
 
     # --- dataflow edges, for scripts/generate/generate_operational_docs.py ---

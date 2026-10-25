@@ -823,6 +823,9 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqsPa
     assert by_name["vectorize1"]["port"] == str(7000 + PIPELINE_OFFSETS["vectorize1"])
     assert by_name["tap1"]["port"] == str(7000 + PIPELINE_OFFSETS["tap1"])
     assert by_name["tap1"]["startwithall"] == "0"
+    assert stack_procs.get_process_config(fake_paths, "tap1")["extras"] == (
+        "-tables quote wide_book"
+    )
     assert by_name["fxtradesfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxtradesfeed1"])
     assert by_name["posbook1"]["port"] == str(7000 + PIPELINE_OFFSETS["posbook1"])
     assert by_name["demo_markout1"]["port"] == str(7000 + PIPELINE_OFFSETS["demo_markout1"])
@@ -885,6 +888,21 @@ def test_list_processes_reflects_overrides(fake_paths: UqsPaths):
     items = listing.list_items(fake_paths, "processes")
     by_name = {item["procname"]: item for item in items}
     assert by_name["fxfeed1"]["startwithall"] == "0"
+
+
+def test_bundle_and_host_overrides_have_separate_owners(fake_paths: UqsPaths):
+    bundle_path = fake_paths.repo_root / "python/uqs/bundle_overrides.csv"
+    bundle_path.parent.mkdir(parents=True, exist_ok=True)
+    bundle_path.write_text("procname,field,value\nfxfeed1,startwithall,0\n")
+    stack_procs.set_process_config(fake_paths, "fxfeed1", "extras", "-pairs EURUSD USDJPY")
+    assert bundle_path.read_text() == "procname,field,value\nfxfeed1,startwithall,0\n"
+    assert "startwithall" not in fake_paths.overrides_path.read_text()
+    row = stack_procs.get_process_config(fake_paths, "fxfeed1")
+    assert row["startwithall"] == "0"
+    assert row["extras"] == "-pairs EURUSD USDJPY"
+    stack_procs.set_process_config(fake_paths, "fxfeed1", "startwithall", "1")
+    assert stack_procs.get_process_config(fake_paths, "fxfeed1")["startwithall"] == "1"
+    assert bundle_path.read_text() == "procname,field,value\nfxfeed1,startwithall,0\n"
 
 
 def test_list_fields_matches_process_csv_fields(fake_paths: UqsPaths):

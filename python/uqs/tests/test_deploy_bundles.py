@@ -333,6 +333,7 @@ def test_an_env_file_in_a_bundle_never_reaches_an_artifact():
     assert payload.is_excluded("src/etl/streaming/.env")
     assert payload.is_excluded("python/uqs/.env.local")
     assert payload.is_excluded("scripts/torqconfig/secrets.env")
+    assert payload.is_excluded("python/uqs/process_overrides.csv")
 
 
 def test_a_release_from_before_835_is_verified_by_its_own_script():

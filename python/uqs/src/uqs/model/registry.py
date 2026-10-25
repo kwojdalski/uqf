@@ -54,6 +54,7 @@ NON_JOB_PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes_dynamic=True,
         startwithall="0",
+        extras="-tables quote wide_book",
         note="diagnostic subscriber - started on demand, not with the whole stack",
     ),
 )

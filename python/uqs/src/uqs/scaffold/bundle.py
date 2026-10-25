@@ -33,6 +33,7 @@ from pathlib import Path
 from uqs.paths import (
     CATALOG_FILE,
     ETL_DIR,
+    PACKAGE_DIR,
     REACTION_DIR,
     SOURCE_DIR,
     STREAM_DIR,
@@ -73,10 +74,11 @@ def tree_with(bundle_dir: Path, repo_root: Path) -> Iterator[Path]:
         shutil.copytree(repo_root / ETL_DIR, root / ETL_DIR)
         (root / CATALOG_FILE).parent.mkdir(parents=True)
         shutil.copy2(repo_root / CATALOG_FILE, root / CATALOG_FILE)
-        overrides = repo_root / bundles.OVERRIDES_FILE
-        (root / bundles.OVERRIDES_FILE).parent.mkdir(parents=True)
-        if overrides.is_file():
-            shutil.copy2(overrides, root / bundles.OVERRIDES_FILE)
+        for rel in (bundles.OVERRIDES_FILE, PACKAGE_DIR / "process_overrides.csv"):
+            override = repo_root / rel
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            if override.is_file():
+                shutil.copy2(override, root / rel)
         if bundles.is_bundle(bundle_dir) and _job_files(bundle_dir):
             try:
                 bundle = bundles.read_bundle(bundle_dir)

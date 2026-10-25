@@ -72,8 +72,10 @@ uqs job install ../piggybank --dry-run   # the plan
 uqs job install ../piggybank --yes
 ```
 
-The additions go between `/ BEGIN bundle <name>` and `/ END bundle <name>` in
-`plant_tables.q`, `uqs_catalog.q` and `process_overrides.csv`.
+The q additions go between `/ BEGIN bundle <name>` and `/ END bundle <name>` in
+`plant_tables.q` and `uqs_catalog.q`. A bundle's `process_overrides.csv` rows go
+into the ignored `python/uqs/bundle_overrides.csv`; host settings stay in
+`python/uqs/process_overrides.csv` and take precedence when the stack starts.
 `src/etl/installed_bundles.json` records what each bundle installed.
 Reinstalling is idempotent, and an upgrade replaces only the bundle's own files.
 A conflict with the tree or another bundle is refused before anything is
