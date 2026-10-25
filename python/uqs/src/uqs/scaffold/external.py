@@ -84,11 +84,14 @@ def external_feed(
 
     # The q half is an ordinary etl job; it is told the raw table exists so it
     # does not refuse a subscription to a table this same plan defines.
+    # --columns always shapes the NEW raw table; they shape the output too
+    # only when the output is new - onto an existing table the q job is given
+    # none, or it refuses them as shaping nothing (#1581).
     job = streaming_job(
         name,
         [raw_table],
         publishes,
-        columns,
+        None if publishes in known_tables else columns,
         procname,
         known_tables=known_tables | {raw_table},
         start_with_all=start_with_all,
