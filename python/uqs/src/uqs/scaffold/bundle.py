@@ -127,6 +127,14 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
     dropped: list[Path] = []
     for action in plan.actions:
         target = _destination(action, bundle_dir)
+        if target is None and action.path.suffix == ".py":
+            # An external feed's publisher is Python, which a bundle neither
+            # carries nor installs: the bundle would hold a job subscribed to
+            # a table nothing ever publishes (#1570).
+            raise UqsError(
+                f"--bundle cannot carry {action.path.name}: a bundle holds q jobs, not an "
+                "external feed's Python publisher - scaffold --kind external into the tree"
+            )
         if target is None:
             dropped.append(action.path)
             continue

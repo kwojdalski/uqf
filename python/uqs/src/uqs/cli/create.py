@@ -226,7 +226,7 @@ def new_job(
     Streaming, reading two tables and writing one:
 
         uqs job new markout2 --subscribe-to trades,quote \\
-            --publishes my_metric --columns "sym:symbol, value:float"
+            --publishes my_metric --columns "sym:symbol, px:float"
 
     Bounded worker, with its source and transform - NAME is the base, so this
     writes worker fx_rates_backfill over source fx_rates (a NAME already ending
@@ -258,6 +258,7 @@ def new_job(
         "--raw-table": raw_table is not None,
         "--raw-columns": raw_columns is not None,
         "--columns": columns is not None,
+        "--columns-from": columns_from is not None,
         "--source": source is not None,
         "--width": width is not None,
         "--procname": procname is not None,
@@ -328,9 +329,10 @@ def new_job(
                 transform=transform,
                 start_with_all=start_with_all,
                 twin_of=twin_of,
-                definitions=definitions if twin_of else None,
+                definitions=definitions,
                 raw_table=raw_table,
                 raw_columns=raw_columns,
+                known_tables=known,
             )
         if kind == "normalizer":
             if publishes:
