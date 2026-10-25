@@ -55,6 +55,38 @@ def test_a_bad_request_is_refused_by_name(kw, message):
         plan(**kw)
 
 
+# #1584: horizon.q refuses a horizon that is not a positive timespan at load,
+# so the scaffold must refuse it before writing. q truncates a fraction past
+# nanoseconds, so 0D00:00:00.0000000001 is zero too, not "a little positive".
+@pytest.mark.parametrize(
+    "horizon",
+    ["0D00:00:00", "0D00:00:00.000", "00D00:00:00", "0D00:00:00.0000000001"],
+)
+def test_a_horizon_that_q_reads_as_zero_is_refused(horizon):
+    with pytest.raises(UqsError, match="must be positive"):
+        plan(horizon=horizon)
+
+
+@pytest.mark.parametrize("horizon", ["0D00:00:00.000000001", "0D00:00:10", "1D00:00:00"])
+def test_a_positive_horizon_is_written(horizon):
+    assert any(horizon in a.body for a in plan(horizon=horizon).actions)
+
+
+# #1573: a horizon job's namespace holds `events`, `reference`, `score` and
+# its output NAME; a NAME equal to one of the three overwrites it.
+@pytest.mark.parametrize("name", ["events", "reference", "score"])
+def test_a_name_that_collides_with_a_generated_one_is_refused(name):
+    with pytest.raises(UqsError, match="collides"):
+        horizon_job(
+            name,
+            ["ev", "ref"],
+            parse_columns("sym:symbol, px:float"),
+            TABLES,
+            "0D00:00:10",
+            known_tables=set(TABLES),
+        )
+
+
 # #1596: as for a normalizer - an output of time alone is empty once the
 # plant's time is dropped, and the registry refuses it at load.
 def test_an_output_of_time_alone_is_refused():

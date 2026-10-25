@@ -133,3 +133,14 @@ def test_a_job_named_like_a_test_is_refused_before_writing(tmp_path, monkeypatch
     _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
     assert any("test_" in r for r in refused), refused
     assert not folder.exists()
+
+
+def test_an_external_feed_is_refused_into_a_bundle(tmp_path, monkeypatch, tree_files):
+    """#1570: a bundle cannot carry the Python publisher an external feed needs,
+    so it was dropped and the bundle's job subscribed to a table nothing feeds."""
+    folder = tmp_path / "mockups"
+    argv = ["audit_ext", "--kind", "external", "--raw-table", "audit_ext_raw",
+            "--publishes", "audit_ext_out", "--columns", "sym:symbol, px:float"]  # fmt: skip
+    _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
+    assert any("Python publisher" in r for r in refused), refused
+    assert not folder.exists()
