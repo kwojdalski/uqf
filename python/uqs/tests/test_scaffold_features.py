@@ -428,6 +428,39 @@ def test_every_generated_q_namespace_passes_the_prefix_rule():
     assert any(ns.endswith("ex") for ns in seen), "the example script was among them"
 
 
+def _twin(name: str, twin_of: str, source: str | None = None) -> jobs.ScaffoldPlan:
+    return create_backfill.backfill_plan(
+        UQF_ROOT, name, None, None,
+        width=None, source=source, procname=None, transport=None, partition=None,
+        check=False, transform=None, start_with_all=False, twin_of=twin_of,
+        definitions=_plant(),
+    )  # fmt: skip
+
+
+def test_a_twin_does_not_shape_a_new_source_like_its_shared_transforms_output():
+    """#1600: crypto_markout's transform reads real_fills and books, not the
+    crypto_execution_quality it publishes. A source generated from that table
+    could never feed it; the worker was refused only when the tree loaded."""
+    # The planner now refuses crypto_markout earlier (#1579: its transform loads
+    # after workers), so the worker-level refusal is exercised directly.
+    from uqs.scaffold.columns import parse_columns
+    from uqs.scaffold.worker import bounded_worker
+
+    with pytest.raises(UqsError, match="crypto_execution_quality, which reads its own inputs"):
+        bounded_worker(
+            "crypto_refill",
+            "crypto_execution_quality",
+            parse_columns("sym:symbol, px:float"),
+            shared=("crypto_markout", "crypto_execution_quality"),
+            define_table=False,
+        )
+
+
+def test_a_twin_of_a_job_without_a_transform_still_gets_a_new_source():
+    plan = _twin("arb_refill", "arbitrage")
+    assert any(str(a.path).endswith("sources/arb_refill.q") for a in plan.actions)
+
+
 def test_a_twin_whose_transform_registers_after_workers_is_refused():
     """#1579: crypto_execution_quality is registered inside the streaming job's
     file, which src/etl/init.q loads after workers/. A twin naming it stopped

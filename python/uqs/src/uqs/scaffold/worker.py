@@ -168,6 +168,17 @@ def bounded_worker(
             f"--columns has nothing to shape: source {src!r} and table {dataset!r} both "
             "exist already - drop --columns"
         )
+    if shared is not None and not reuse_source:
+        # The columns a twin is given are its job's PUBLISHED table, the
+        # transform's output; the transform reads its own named inputs. A new
+        # source shaped like the output cannot feed it, and the worker would
+        # be refused at load (#1600) - so the source must be written first.
+        raise UqsError(
+            f"--twin-of {shared[0]} applies its transform {shared[1]}, which reads its own "
+            f"inputs (.qetl.transform.registry[`{shared[1]}]`inputs), not the table it "
+            f"publishes - a new source {src!r} shaped from that table cannot feed it. "
+            "Write a source whose fetch hands over those inputs and pass it with --source"
+        )
     if reuse_source and raw is not None:
         raise UqsError(
             f"--raw-table shapes a new source, and {src!r} exists already - drop --raw-table"
