@@ -41,7 +41,7 @@ def _pipeline_rows() -> list[dict[str, str]]:
             "w": "",
             "load": pipeline.load_column(),
             "startwithall": pipeline.startwithall,
-            "extras": "",
+            "extras": pipeline.extras,
             "qcmd": "q",
         }
         for pipeline in PIPELINES

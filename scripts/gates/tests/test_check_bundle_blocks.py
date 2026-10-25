@@ -126,6 +126,26 @@ def test_the_staged_ledger_is_refused(tmp_path, monkeypatch, capsys):
     assert "the bundle ledger" in capsys.readouterr().out
 
 
+def test_staged_process_overrides_are_refused(tmp_path, monkeypatch, capsys):
+    root = _repo(tmp_path, monkeypatch)
+    path = root / gate.OVERRIDES
+    path.parent.mkdir(parents=True)
+    path.write_text("procname,field,value\ntap1,extras,-tables quote wide_book\n")
+    subprocess.run(["git", "-C", str(root), "add", str(path)], check=True)
+    assert gate.main() == 1
+    assert "host and bundle overrides" in capsys.readouterr().out
+
+
+def test_staged_bundle_overrides_are_refused(tmp_path, monkeypatch, capsys):
+    root = _repo(tmp_path, monkeypatch)
+    path = root / gate.BUNDLE_OVERRIDES
+    path.parent.mkdir(parents=True)
+    path.write_text("procname,field,value\npiggy_spread1,startwithall,0\n")
+    subprocess.run(["git", "-C", str(root), "add", str(path)], check=True)
+    assert gate.main() == 1
+    assert "installed bundle overrides" in capsys.readouterr().out
+
+
 def test_a_tree_file_the_ledger_does_not_list_still_commits(tmp_path, monkeypatch):
     root = _repo(tmp_path, monkeypatch)
     _install_files(root, "pb")

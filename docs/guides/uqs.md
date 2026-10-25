@@ -786,10 +786,12 @@ the generated [process table](../reference/processes.md).
 
 ## Changing a process's config
 
-`config set` writes an override to `python/uqs/process_overrides.csv` (tracked
-in git), applied every time `process.csv` is regenerated - which is every
-command, so the generated file itself is never the place to edit. The vendored
-`process.csv` is never touched.
+`config set` writes an override to `python/uqs/process_overrides.csv` (ignored
+by git because it belongs to this host), applied every time `process.csv` is
+regenerated - which is every command, so the generated file itself is never the
+place to edit. The vendored `process.csv` is never touched. Installed sidecar
+bundles keep their rows in `python/uqs/bundle_overrides.csv`; `config set`
+changes only this host's file and takes precedence over bundle rows.
 
 ```
 uqs config get fxfeed1

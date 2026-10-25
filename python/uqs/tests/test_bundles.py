@@ -251,10 +251,27 @@ def test_overrides_are_the_bundles_own_and_well_formed(
 
 
 def test_an_operator_override_is_not_silently_replaced(bundle: Path, repo: Path) -> None:
-    (repo / OVERRIDES_FILE).write_text("procname,field,value\npiggy_spread1,startwithall,1\n")
+    (repo / "python/uqs/process_overrides.csv").write_text(
+        "procname,field,value\npiggy_spread1,startwithall,1\n"
+    )
     with pytest.raises(BundleError, match="already '1'"):
         _install(bundle, repo)
     assert not (repo / STREAM_DIR / "piggy_spread.q").exists()
+
+
+def test_upgrade_moves_legacy_bundle_rows_out_of_the_host_file(bundle: Path, repo: Path) -> None:
+    _install(bundle, repo)
+    old = (repo / OVERRIDES_FILE).read_text()
+    (repo / OVERRIDES_FILE).unlink()
+    host = repo / "python/uqs/process_overrides.csv"
+    host.write_text(old + "tap1,extras,-tables quote wide_book\n")
+    (bundle / "bundle.json").write_text('{"name": "piggybank", "version": "1.1.0"}')
+    (bundle / "process_overrides.csv").write_text(
+        "procname,field,value\npiggy_spread1,startwithall,1\n"
+    )
+    _install(bundle, repo)
+    assert (repo / OVERRIDES_FILE).read_text().endswith("piggy_spread1,startwithall,1\n")
+    assert host.read_text() == "procname,field,value\ntap1,extras,-tables quote wide_book\n"
 
 
 def test_damaged_markers_are_refused() -> None:

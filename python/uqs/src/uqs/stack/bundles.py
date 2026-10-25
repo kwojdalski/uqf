@@ -44,9 +44,10 @@ from pathlib import Path
 
 from uqs.model.declarations import read_file
 from uqs.model.pipeline import PipelineKind
-from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, PACKAGE_DIR, TABLES_FILE
+from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, TABLES_FILE
 from uqs.stack import bundle_shadowing
 from uqs.stack import install as stack_install
+from uqs.stack import overrides as override_files
 from uqs.stack.bundle_blocks import BundleError, with_block, without_block
 from uqs.stack.install import Item, Kind, Mode, Status
 
@@ -58,7 +59,7 @@ OVERRIDES = "process_overrides.csv"
 ADDITIONS = (TABLES, CATALOG, OVERRIDES)
 #: Where the tree records which bundle owns what, relative to its root.
 LEDGER = BUNDLE_LEDGER
-OVERRIDES_FILE = PACKAGE_DIR / "process_overrides.csv"
+OVERRIDES_FILE = override_files.BUNDLE_FILE
 
 #: What a bundle may be called: its manifest name, and a new bundle's folder.
 NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
@@ -318,30 +319,6 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     return Plan(bundle, items, tests, tables, table_body, catalog_body, overrides, stale)
 
 
-def _merge_overrides(root: Path, p: Plan, previous: list[list[str]]) -> None:
-    path = root / OVERRIDES_FILE
-    rows: dict[tuple[str, str], str] = {}
-    if path.is_file():
-        for row in csv.DictReader(io.StringIO(path.read_text())):
-            rows[(row["procname"], row["field"])] = row["value"]
-    for proc, fld, _value in previous:
-        rows.pop((proc, fld), None)
-    for proc, fld, value in p.overrides:
-        if rows.get((proc, fld), value) != value:
-            raise BundleError(
-                f"{OVERRIDES_FILE}: {proc} {fld} is already {rows[(proc, fld)]!r}, "
-                f"bundle {p.bundle.name} sets {value!r}"
-            )
-        rows[(proc, fld)] = value
-    if not rows and not path.is_file():
-        return
-    out = io.StringIO()
-    writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(["procname", "field", "value"])
-    writer.writerows([proc, fld, value] for (proc, fld), value in rows.items())
-    path.write_text(out.getvalue())
-
-
 def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
     """Write the plan into the tree at `root`; return the ledger entry.
 
@@ -353,7 +330,7 @@ def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
     previous = ledger.get(p.bundle.name, {})
     # Overrides first: they are the one addition that can still conflict
     # with what an operator set since, and nothing else is written yet.
-    _merge_overrides(root, p, previous.get("overrides", []))
+    override_files.merge_bundle(root, p.overrides, previous.get("overrides", []), p.bundle.name)
     for item in p.jobs:
         stack_install.install(item, Mode.COPY, overwrite=item.status is Status.CONFLICT)
     for stale in p.stale:

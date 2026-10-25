@@ -177,6 +177,7 @@ def test_the_real_installer_and_generator_over_a_staged_checkout(tmp_path):
     (b / "piggy_spread.q").write_text(STREAM)
     (b / "tables.q").write_text("piggy_quote:([]time:`timestamp$();sym:`symbol$())\n")
     (b / "catalog.q").write_text('.qcat.describe[`piggy_quote]:"quotes, for the piggybank";\n')
+    (b / "process_overrides.csv").write_text("procname,field,value\npiggy_spread1,startwithall,0\n")
     files = payload.tracked_files(ROOT)
 
     def runner(argv, **kw):
@@ -188,6 +189,7 @@ def test_the_real_installer_and_generator_over_a_staged_checkout(tmp_path):
     staged = tmp_path / "staged"
     out, record = release_build.stage_bundles(ROOT, files, [str(b)], staged, runner)
     assert JOB in out and bundles.LEDGER.as_posix() in out
+    assert bundles.OVERRIDES_FILE.as_posix() in out
     entry = record["piggybank"]
     assert entry["tables"] == ["piggy_quote"]
     (job,) = entry["jobs"]

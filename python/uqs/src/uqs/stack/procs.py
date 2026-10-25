@@ -25,6 +25,7 @@ from uqs.logger import get_logger
 from uqs.model.pipelines import _pipeline_rows
 from uqs.model.runtime_members import pipeline_procnames
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import overrides as override_files
 from uqs.stack.carriable import refuse_unsafe_override
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
@@ -248,15 +249,8 @@ def monitor_dropped_proctypes(paths: UqsPaths, selected: Iterable[str] | None = 
 
 
 def _read_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
-    """{procname: {field: value}} from process_overrides.csv, or {} if it
-    doesn't exist yet (nothing has been set())."""
-    if not paths.overrides_path.is_file():
-        return {}
-    overrides: dict[str, dict[str, str]] = {}
-    with paths.overrides_path.open(newline="") as f:
-        for row in csv.DictReader(f):
-            overrides.setdefault(row["procname"], {})[row["field"]] = row["value"]
-    return overrides
+    """Effective bundle rows followed by this host's process overrides."""
+    return override_files.effective(paths)
 
 
 def _checked_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
@@ -392,7 +386,7 @@ def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -
         raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
     refuse_unsafe_override(procname, field, value)
 
-    overrides = _read_overrides(paths)
+    overrides = override_files.read_file(paths.overrides_path)
     overrides.setdefault(procname, {})[field] = value
     _write_overrides(paths, overrides)
     log.info("set {}.{} = {}", procname, field, value)
