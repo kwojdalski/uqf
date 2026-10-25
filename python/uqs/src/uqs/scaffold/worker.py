@@ -34,6 +34,40 @@ from uqs.scaffold.transform import check_mode
 #: A partition is a q symbol: `EURUSD, `binance_spot.
 _PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
 
+#: A q timespan literal as a width is written: 1D, 0D01, 0D01:30, 0D01:00:00.5.
+_WIDTH = re.compile(r"(\d+)D(?:(\d{1,2})(?::(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?)?", re.ASCII)
+_DAY_NS = 86_400 * 10**9
+#: The largest day count a q timespan holds; past it the literal wraps (#1576).
+_MAX_DAYS = 106_751
+
+
+def check_width(width: str) -> str:
+    """Refuse a width `.qetl.job.bounded.define` would refuse at load (#1576).
+
+    It wants a positive timespan. Written verbatim, a malformed width is a
+    parse error in the generated worker and a zero or negative one a refusal,
+    both found only when the tree next loads. Components are range-checked
+    and the total computed here, so a value below q's nanosecond precision or
+    past its range is refused rather than becoming zero or wrapping.
+    """
+    m = _WIDTH.fullmatch(width)
+    hint = "a positive q timespan, e.g. 1D, 0D01 or 0D01:00:00"
+    if m is None:
+        raise UqsError(f"--width {width!r} must be {hint}")
+    days, hh, mm, ss, frac = m.groups()
+    if int(hh or 0) > 23 or int(mm or 0) > 59 or int(ss or 0) > 59:
+        raise UqsError(f"--width {width!r} has an out-of-range field - it must be {hint}")
+    ns = (
+        int(days) * _DAY_NS
+        + (int(hh or 0) * 3600 + int(mm or 0) * 60 + int(ss or 0)) * 10**9
+        + int((frac or "").ljust(9, "0"))
+    )
+    if ns <= 0:
+        raise UqsError(f"--width {width!r} must be positive - a zero width plans no windows")
+    if ns > _MAX_DAYS * _DAY_NS:
+        raise UqsError(f"--width {width!r} is past what a q timespan holds ({_MAX_DAYS}D)")
+    return width
+
 
 def bounded_worker(
     name: str,
@@ -52,6 +86,7 @@ def bounded_worker(
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
     raw: tuple[str, list[tuple[str, str]]] | None = None,
+    target_columns: list[tuple[str, str]] | None = None,
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker and its test.
 
@@ -76,6 +111,8 @@ def bounded_worker(
     one dataset. `partition_column` is the output column holding it (default
     `sym`): .qetl.job.bounded.define refuses a partition without one, and
     publish refuses rows whose value in it is another partition's (#1539).
+    The partition column is checked against the OUTPUT: `columns` when they
+    define the dataset, else `target_columns`, the existing dataset's (#1599).
     `check` scaffolds a quality check that fails a window on bad
     rows - most of the tree's workers declare one.
 
@@ -90,6 +127,7 @@ def bounded_worker(
     mapping between the two is never guessed - the query is the author's.
     """
     check_mode(transform)
+    check_width(width)
     _check_name(name, "worker name")
     if name.endswith("_backfill"):
         # NAME is the base the worker, its source and its example are named
@@ -103,7 +141,7 @@ def bounded_worker(
     src = source or name
     _check_name(src, "source name")
     _check_name(dataset, "dataset")
-    if partition is not None and not _PARTITION.match(partition):
+    if partition is not None and not _PARTITION.fullmatch(partition):
         raise UqsError(
             f"--partition {partition!r} must be a q symbol - letters, digits and underscores, "
             "e.g. EURUSD"
@@ -112,10 +150,10 @@ def bounded_worker(
         raise UqsError("--partition-column needs --partition: it names the column holding it")
     if partition is not None:
         partition_column = partition_column or "sym"
-        if not _PARTITION.match(partition_column):
+        if not _PARTITION.fullmatch(partition_column):
             raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"
-    proc = procname or f"{name}_backfill1"
+    proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
     # they are required when either is, and refused when neither is, rather
     # than silently ignored.
@@ -142,11 +180,22 @@ def bounded_worker(
     # would otherwise reach .qetl.source.define and fail the tree's load.
     transport = transports.get(transport or transports.default()).name
     cols = as_columns(columns) if columns else []
-    if partition_column and cols and partition_column not in [c for c, _ in cols]:
-        raise UqsError(
-            f"--partition-column {partition_column!r} is not among --columns "
-            f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
-        )
+    # Publish holds the DATASET's rows to the partition column, so it must be
+    # one of the output's: --columns when they define the dataset, the
+    # existing dataset's columns when they shape only a new source (#1599).
+    if partition_column and define_table and cols:
+        if partition_column not in [c for c, _ in cols]:
+            raise UqsError(
+                f"--partition-column {partition_column!r} is not among --columns "
+                f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
+            )
+    elif partition_column and target_columns is not None:
+        if partition_column not in [c for c, _ in target_columns]:
+            raise UqsError(
+                f"--partition-column {partition_column!r} is not a column of {dataset} "
+                f"({', '.join(c for c, _ in target_columns)}) - name the one that holds "
+                "the partition"
+            )
 
     actions: list[FileAction] = []
     if not reuse_source:

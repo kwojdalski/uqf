@@ -18,8 +18,10 @@ from uqs.scaffold import worker
 from uqs.scaffold.columns import (
     PHYSICAL_NAME,
     Columns,
+    as_columns,
     definition_columns,
     parse_raw_columns,
+    type_char,
 )
 from uqs.scaffold.plan import ScaffoldPlan
 
@@ -117,6 +119,38 @@ def shared_transform(
     return twin_of, job.transform
 
 
+def _meta(cols: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """[(column, meta type char)]: what .qetl.transform compares, attributes aside."""
+    out = []
+    for name, literal in cols:
+        try:
+            out.append((name, type_char(literal)))
+        except UqsError:
+            out.append((name, literal))
+    return out
+
+
+def _shown(cols: list[tuple[str, str]]) -> str:
+    return ", ".join(f"{c}:{t}" for c, t in cols)
+
+
+def check_passthrough(dataset: str, source: str, columns: Columns, definition: str) -> None:
+    """Refuse a passthrough from a new source shaped by `columns` into an
+    existing `dataset` of another shape (#1593).
+
+    The passthrough declares its input and output as the dataset's shape and
+    its example from the source's fixture, which `columns` shape: two shapes,
+    which .qetl.transform.define refuses only when the tree next loads."""
+    have = _meta(as_columns(columns))
+    want = _meta(definition_columns(definition))
+    if have != want:
+        raise UqsError(
+            f"the new source {source}'s columns ({_shown(have)}) are not {dataset}'s "
+            f"({_shown(want)}), so a passthrough cannot publish them - pass --transform derive "
+            f"and map one to the other, or give --columns {dataset}'s shape"
+        )
+
+
 def backfill_plan(
     repo_root: Path,
     name: str,
@@ -136,11 +170,16 @@ def backfill_plan(
     definitions: dict[str, str] | None = None,
     raw_table: str | None = None,
     raw_columns: str | None = None,
+    known_tables: set[str] | None = None,
 ) -> ScaffoldPlan:
     """The bounded worker's plan, or an error naming why there is none.
 
     `twin_of` names a streaming job whose published table this worker refills:
     its dataset and columns then come from there - see twin_target.
+    `known_tables` is every table the plant carries, the vendored starter
+    pack's included (cli/create_plant.py plant_tables): a dataset among them
+    is not defined a second time (#1602). Without it, only the tree's own
+    plant_tables.q is read.
     """
     if (raw_table is None) != (raw_columns is None):
         raise UqsError(
@@ -149,7 +188,7 @@ def backfill_plan(
         )
     raw = None
     if raw_table is not None:
-        if not PHYSICAL_NAME.match(raw_table):
+        if not PHYSICAL_NAME.fullmatch(raw_table):
             raise UqsError(
                 f"--raw-table {raw_table!r} must start with a letter and hold only letters, "
                 "digits and underscores"
@@ -178,12 +217,22 @@ def backfill_plan(
     # table is not defined twice: a second worker over rows someone
     # already declared is the common case after the first.
     reuse_source = (repo_root / SOURCE_DIR / f"{source or name}.q").is_file()
-    define_table = dataset not in defined_tables(repo_root)
+    define_table = dataset not in (
+        defined_tables(repo_root) if known_tables is None else known_tables
+    )
     if twin_of is not None and reuse_source and not define_table:
         # A twin's columns were read from its job's table, not passed: with
         # its source and table both written already they shape nothing, and
         # are no reason to refuse the plan as --columns would be (#1582).
         shape = None
+    if (
+        not reuse_source
+        and shape
+        and shared is None
+        and (transform or "passthrough") == "passthrough"
+        and dataset in (definitions or {})
+    ):
+        check_passthrough(dataset, source or name, shape, (definitions or {})[dataset])
     return worker.bounded_worker(
         name,
         dataset,
@@ -200,4 +249,9 @@ def backfill_plan(
         raw=raw,
         reuse_source=reuse_source,
         define_table=define_table,
+        target_columns=(
+            definition_columns(definitions[dataset])
+            if definitions and dataset in definitions
+            else None
+        ),
     )
