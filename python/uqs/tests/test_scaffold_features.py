@@ -445,6 +445,24 @@ def test_a_transform_registered_under_transforms_is_loaded_before_workers():
     create_backfill.require_loaded_before_workers(UQF_ROOT, "eq_orderbook", "eq_orderbook")
 
 
+def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():
+    """#1582: a twin's columns come from its job's table, not from --columns.
+    When its source and table both exist already, nothing is shaped by them,
+    so they are not a reason to refuse the plan."""
+    plan = create_backfill.backfill_plan(
+        UQF_ROOT, "exec_refill", None, None,
+        width=None, source="hdb_executions", procname=None, transport=None, partition=None,
+        check=False, transform=None, start_with_all=False, twin_of="executions",
+        definitions=_plant(),
+    )  # fmt: skip
+    written = [str(a.path) for a in plan.actions]
+    assert not any(p.endswith("sources/hdb_executions.q") for p in written), "source reused"
+    assert not any(p.endswith("plant_tables.q") for p in written), "table not redefined"
+    fields = _fields(plan, "exec_refill_backfill.q")
+    assert symbols(fields["source"]) == ("hdb_executions",)
+    assert symbols(fields["dataset"]) == ("executions",)
+
+
 # ---------------------------------- a passthrough between two different shapes
 
 _AUDIT_TARGET = {
