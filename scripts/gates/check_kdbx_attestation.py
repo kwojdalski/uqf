@@ -25,12 +25,20 @@ since failing a merge that already happened would block nothing.
 CI passes its step summary as SUMMARY: the answer is appended there, and a
 refusal is also printed as an error annotation for the PR.
 
+The one way past a refusal is the PR label `kdbx-attestation-override`, for a
+change the gates' scopes take but no KDB-X run can judge (a docs-only edit, a
+contributor without KDB-X). CI sets KDBX_ATTESTATION_OVERRIDE=true when the
+label is on the PR; a refusal then passes, but as a warning annotation and a
+summary line naming the label and the paths, so the override is on the record
+rather than a silent green. It changes nothing for an attested tree.
+
     python3 scripts/gates/check_kdbx_attestation.py BASE HEAD [SUMMARY]
 """
 
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import subprocess
 import sys
@@ -39,6 +47,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 TRAILER = "KDB-X-gates"
+
+#: The PR label that lets an unattested tree pass, and the variable CI sets
+#: from it - "true" when the label is on the PR.
+OVERRIDE_LABEL = "kdbx-attestation-override"
+OVERRIDE_ENV = "KDBX_ATTESTATION_OVERRIDE"
 
 
 def _load(rel: str):
@@ -147,13 +160,18 @@ def main(argv: list[str]) -> int:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
     ok, message = report(argv[1], argv[2])
+    overridden = not ok and os.environ.get(OVERRIDE_ENV, "").lower() == "true"
+    if overridden:
+        message = f"OVERRIDDEN by the `{OVERRIDE_LABEL}` label - {message}"
     print(f"check_kdbx_attestation: {message}")
     if len(argv) == 4:
         with open(argv[3], "a") as summary:
             summary.write(f"{message}\n")
-        if not ok:
+        if overridden:
+            print(f"::warning title=KDB-X attestation overridden::{message}")
+        elif not ok:
             print(f"::error title=KDB-X attestation::{message}")
-    return 0 if ok else 1
+    return 0 if ok or overridden else 1
 
 
 if __name__ == "__main__":

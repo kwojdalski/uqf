@@ -85,7 +85,10 @@ in the main checkout.
    this runs them over the whole tree and records a `KDB-X-gates: <tree>`
    trailer. CI's "KDB-X attestation" check fails a PR that changes a path those
    gates judge unless its head tree carries one (#1014, #1543). A rebase changes
-   the tree, so it needs a fresh run.
+   the tree, so it needs a fresh run. The only way past it is the
+   `kdbx-attestation-override` PR label, for a change no KDB-X run can judge
+   (docs-only, no KDB-X available): the check then passes with a warning that
+   names the label, so the override stays on the record.
 
 Only triage without edits (reading code, commenting, labelling) may stay in the
 main checkout.

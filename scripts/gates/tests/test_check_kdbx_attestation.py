@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import importlib.util
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -190,17 +189,63 @@ def test_ci_passes_a_pr_that_touches_no_q(repo, tmp_path, capsys):
     assert "no attestation needed" in summary
 
 
+def test_an_override_passes_an_unattested_pr_and_says_so(repo, tmp_path, capsys, monkeypatch):
+    """#1543: the one way past the check is a labelled, visible override -
+    a pass that names itself, not a silent success."""
+    monkeypatch.setenv(check.OVERRIDE_ENV, "true")
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, "src/a.q", "a:1\n")
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 0
+    assert "::error" not in out
+    assert "::warning title=KDB-X attestation overridden::" in out
+    assert check.OVERRIDE_LABEL in summary and "src/a.q" in summary
+
+
+def test_an_override_changes_nothing_on_an_attested_pr(repo, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv(check.OVERRIDE_ENV, "true")
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    head = attest_here(repo)
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 0 and "::warning" not in out
+    assert "passed on exactly this tree" in summary
+
+
+@pytest.mark.parametrize("value", ["", "false", "0"])
+def test_no_override_label_still_blocks(repo, tmp_path, capsys, monkeypatch, value):
+    monkeypatch.setenv(check.OVERRIDE_ENV, value)
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, "src/a.q", "a:1\n")
+    code, out, _ = _main(base, head, tmp_path, capsys)
+    assert code == 1 and "::error title=KDB-X attestation::" in out
+
+
+def _attestation_workflow() -> str:
+    return (_ROOT / ".github/workflows/kdbx-attestation.yml").read_text()
+
+
 def test_ci_runs_the_check_as_a_blocking_step():
     """The step's exit code is the script's: #1490 merged unattested on a
     "success" because the workflow caught the failure and only warned."""
-    ci = (_ROOT / ".github/workflows/ci.yml").read_text()
-    found = re.search(r"\n  kdbx-attestation:\n(?:(?:    .*)?\n)*", ci)
-    assert found, "ci.yml has no kdbx-attestation job"
-    job = found.group()
+    job = _attestation_workflow()
     assert "name: KDB-X attestation\n" in job
     assert "advisory" not in job.lower() and "::warning" not in job
+    assert "continue-on-error" not in job
     run = 'python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"'
     assert f"run: {run}\n" in job
+    assert "kdbx-attestation:" not in (_ROOT / ".github/workflows/ci.yml").read_text()
+
+
+def test_the_override_is_the_label_and_relabelling_reruns_the_check():
+    """Adding or removing the label must re-judge the PR, or a label added
+    after a red run changes nothing and one removed leaves a stale green."""
+    job = _attestation_workflow()
+    for event in ("labeled", "unlabeled", "synchronize", "opened", "reopened"):
+        assert event in job
+    labels = "github.event.pull_request.labels.*.name"
+    want = f"{check.OVERRIDE_ENV}: ${{{{ contains({labels}, '{check.OVERRIDE_LABEL}') }}}}"
+    assert want in job
 
 
 def test_attest_refuses_a_dirty_tree(repo, monkeypatch):

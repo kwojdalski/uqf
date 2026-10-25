@@ -1,0 +1,42 @@
+name: KDB-X attestation
+
+# Blocking (#1014, #1543): hosted CI has no KDB-X, so whether the q-tests,
+# q-coverage, contract-surface and q-facts hooks passed on a PR's tree is
+# known only where they ran. scripts/dev/attest_kdbx.py records that as a
+# `KDB-X-gates: <tree>` trailer; this fails a PR that changes a path those
+# hooks judge unless the head's exact tree carries one. PRs only: a push to
+# master is not re-judged after the merge.
+#
+# Override: the `kdbx-attestation-override` PR label lets an unattested tree
+# pass, as a warning annotation naming the label and the paths. It is its own
+# workflow, not a job in ci.yml, so adding or removing that label re-runs
+# only this check rather than the whole of CI.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kdbx-attestation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  kdbx-attestation:
+    name: KDB-X attestation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the KDB-X gates to have passed on this tree
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          KDBX_ATTESTATION_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'kdbx-attestation-override') }}
+        run: python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"
