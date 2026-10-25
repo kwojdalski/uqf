@@ -46,6 +46,7 @@ from uqs.scaffold.docs import ANALYTICS, FEEDS, doc_stub_actions
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
+from uqs.scaffold.timespan import check_positive_timespan
 from uqs.scaffold.transform import (
     check_passthrough_shapes,
     check_streaming,
@@ -98,7 +99,7 @@ def _expected_table_action(table: str) -> FileAction:
 
 
 def _check_name(name: str, what: str) -> str:
-    if not _IDENTIFIER.match(name):
+    if not _IDENTIFIER.fullmatch(name):
         raise UqsError(
             f"{what} {name!r} must be lower-case, start with a letter, and hold only "
             "letters, digits and underscores - it becomes a q namespace and a filename"
@@ -106,24 +107,16 @@ def _check_name(name: str, what: str) -> str:
     return name
 
 
-#: A q timespan as a declaration writes it: `0D00:00:05`, `0D00:00:00.500`.
-_PERIOD = re.compile(r"^\d+D\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?$")
-
-
 def check_period(period: str) -> str:
     """Refuse a period `.qetl.job.stream.define` would refuse at load.
 
     define wants a positive timespan; a malformed one is a q parse error in
     the generated file, and a zero one a refusal - both found only when the
-    tree next loads, far from the typo.
+    tree next loads, far from the typo. The check is on the value q reads
+    (#1598): a minute of 60 does not parse, and a day count past q's 64-bit
+    range wraps - 213504D becomes about 25 minutes, and loads.
     """
-    if not _PERIOD.match(period):
-        raise UqsError(
-            f"--period {period!r} must be a q timespan, e.g. 0D00:00:05 or 0D00:00:00.500"
-        )
-    if not any(c in "123456789" for c in period):
-        raise UqsError(f"--period {period!r} must be positive - a timer that never waits spins")
-    return period
+    return check_positive_timespan(period, "--period", "0D00:00:05 or 0D00:00:00.500")
 
 
 def start_with_all_field(start_with_all: bool) -> tuple[str, str]:

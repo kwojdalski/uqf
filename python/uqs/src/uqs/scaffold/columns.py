@@ -21,6 +21,7 @@ import re
 from dataclasses import dataclass
 
 from uqs.model import schemas
+from uqs.model.qnames import Q_WORDS
 from uqs.paths import TABLES_FILE, UqsError, repo_root
 
 #: The column every plant table leads with: `.u.upd` stamps it, and every
@@ -107,19 +108,20 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
     (`venue:g#symbol`); `sym` is grouped without asking. `time` is prepended
     when absent rather than rejected: every plant table has one, and a table
     scaffolded without it would be refused later by a publish path that
-    assumes it.
+    assumes it. Named, it must be the first column and a timestamp.
     """
     out: list[tuple[str, str]] = []
     names = ", ".join(sorted(t.name for t in TYPES))
     for part in (p.strip() for p in spec.split(",") if p.strip()):
         if ":" not in part:
-            raise UqsError(f"column {part!r} must be name:type, e.g. 'value:float'. Types: {names}")
+            raise UqsError(f"column {part!r} must be name:type, e.g. 'px:float'. Types: {names}")
         col, _, qtype = (s.strip() for s in part.partition(":"))
-        if not _NAME.match(col):
+        if not _NAME.fullmatch(col):
             raise UqsError(
                 f"column {col!r} must be lower-case, start with a letter, and hold only "
                 "letters, digits and underscores"
             )
+        _refuse_q_word(col, "column")
         grouped = qtype.startswith("g#")
         ctype = _BY_NAME.get(qtype.removeprefix("g#"))
         if ctype is None:
@@ -128,12 +130,40 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
             raise UqsError(f"column {col!r}: a general (list) column cannot carry g#")
         if col in GROUPED_BY_DEFAULT and ctype.name == "symbol":
             grouped = True
+        _refuse_twice(col, out, "column")
         out.append((col, (GROUP if grouped else "") + ctype.literal))
     if not out:
         raise UqsError("--columns is empty: a published table needs at least one column")
+    stamp = (TIME_COLUMN, _BY_NAME["timestamp"].literal)
     if not any(c == TIME_COLUMN for c, _ in out):
-        out.insert(0, (TIME_COLUMN, _BY_NAME["timestamp"].literal))
+        out.insert(0, stamp)
+    elif out[0] != stamp:
+        # The plant reads `time` positionally and `.u.upd` stamps it as a
+        # timestamp: a table that names it later, or as another type, loads
+        # and then breaks every consumer (#1574).
+        raise UqsError(
+            f"column {TIME_COLUMN!r} must come first and be a timestamp "
+            f"('{TIME_COLUMN}:timestamp, ...') - or leave it out and it is added"
+        )
     return out
+
+
+def _refuse_q_word(col: str, what: str) -> None:
+    """Refuse a q keyword as a column name: `([] value:...)` is refused by q
+    with `assign`, so the table a scaffold wrote would stop the tree loading
+    (#1588)."""
+    if col in Q_WORDS:
+        raise UqsError(
+            f"{what} {col!r} is a q keyword and cannot name a column - "
+            f"call it something else, e.g. '{col}_'"
+        )
+
+
+def _refuse_twice(col: str, so_far: list[tuple[str, str]], what: str) -> None:
+    """Refuse a second `col`: q would load it renamed (`px` then `px1`), so
+    the table on disk would not be the one asked for (#1575)."""
+    if any(c == col for c, _ in so_far):
+        raise UqsError(f"{what} {col!r} is named twice - every column needs its own name")
 
 
 #: A physical column, as the source spells it: its case is the site's.
@@ -158,14 +188,16 @@ def parse_raw_columns(spec: str) -> list[tuple[str, str]]:
                 f"raw column {part!r} must be name:type, e.g. 'CREATED_AT:timestamp'. "
                 f"Types: {names}"
             )
-        if not PHYSICAL_NAME.match(col):
+        if not PHYSICAL_NAME.fullmatch(col):
             raise UqsError(
                 f"raw column {col!r} must start with a letter and hold only letters, digits "
                 "and underscores"
             )
+        _refuse_q_word(col, "raw column")
         ctype = _BY_NAME.get("list" if qtype == "any" else qtype)
         if ctype is None:
             raise UqsError(f"raw column {col!r} has unknown type {qtype!r}. Types: {names}")
+        _refuse_twice(col, out, "raw column")
         out.append((col, ctype.literal))
     if not out:
         raise UqsError("--raw-columns is empty: name the columns the adapter reads")
