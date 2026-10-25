@@ -309,6 +309,25 @@ def test_what_the_removal_keeps_is_not_reported(tree):
     assert "src/etl/streaming/pulse_reader.q" not in _referenced(removal)
 
 
+def test_a_kept_table_does_not_hide_a_call_into_the_removed_job(tree):
+    """#1589: the job and its table share a name. Another job reads the table,
+    so the table stays - but a call into the removed job's namespace is still a
+    reference, not a use of the table."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job(
+            "pulse_reader", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}
+        ),
+        tree,
+    )
+    reader = tree / "src/etl/streaming/pulse_reader.q"
+    reader.write_text(reader.read_text() + "poke:{[] .qpipe.job.pulse.on_timer[]}\n")
+    removal = plan_removal(tree, "pulse")
+    assert any("kept table pulse" in n for n in removal.notes)
+    refs = [r for r in removal.references if r.path == Path("src/etl/streaming/pulse_reader.q")]
+    assert [r.text for r in refs] == ["poke:{[] .qpipe.job.pulse.on_timer[]}"]
+
+
 def test_a_name_inside_a_longer_one_is_not_a_reference(tree):
     write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
     (tree / "docs").mkdir(exist_ok=True)
@@ -341,6 +360,35 @@ def test_strict_refuses_and_dry_run_only_says_it_would(tree, monkeypatch):
     result = runner.invoke(cli.app, ["job", "remove", "pulse", "--strict", "--yes"])
     assert result.exit_code == 1 and refused and "1 line(s)" in refused[0]
     assert (tree / "src/etl/streaming/pulse.q").is_file(), "and nothing was removed"
+
+
+def test_a_guest_writer_does_not_take_an_authored_table(tree):
+    """#1585: a job that only publishes onto a table it did not define leaves
+    that table - its definition, comment, catalog entry and expected entry."""
+    write.apply_plan(jobs.streaming_job("audit_existing", [], "audit_existing", "px:float"), tree)
+    tables = tree / TABLES_FILE
+    # Make the table authored: the scaffold's comment rewritten by hand.
+    text = tables.read_text().replace(
+        "/ audit_existing1's output. <one line: what a row means>",
+        "/ Hand-written: an audit print, one row per check.",
+    )
+    tables.write_text(text)
+    # Nothing else writes or reads it: only its authored definition remains.
+    (tree / "src/etl/streaming/audit_existing.q").unlink()
+    (tree / "tests/q/test_audit_existing.q").unlink()
+    before = _snapshot(tree)
+    write.apply_plan(
+        jobs.streaming_job(
+            "audit_guest", [], "audit_existing", None, known_tables={"audit_existing"}
+        ),
+        tree,
+    )
+    removal = plan_removal(tree, "audit_guest")
+    assert any("kept table audit_existing" in n for n in removal.notes)
+    removal.apply(tree)
+    after = _snapshot(tree)
+    changed = sorted(str(p) for p in set(before) | set(after) if before.get(p) != after.get(p))
+    assert not changed, f"not restored: {changed}"
 
 
 def test_a_feed_with_a_list_column_round_trips_with_its_nested_declaration(tree):

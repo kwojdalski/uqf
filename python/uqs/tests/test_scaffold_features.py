@@ -65,7 +65,20 @@ def test_an_etl_without_a_period_has_no_timer():
 
 @pytest.mark.parametrize(
     ("period", "message"),
-    [("5s", "must be a q timespan"), ("0D00:00:00", "must be positive")],
+    [
+        ("5s", "must be a q timespan"),
+        ("0D00:00:00", "must be positive"),
+        # #1598: a component q refuses to parse, or a day count past q's
+        # 64-bit timespans - 106752D wraps negative, 213504D to ~25 minutes.
+        ("0D00:60:00", "must be a q timespan"),
+        ("0D00:00:60", "must be a q timespan"),
+        ("0D99:99:99", "must be a q timespan"),
+        ("106752D00:00:00", "must be a q timespan"),
+        ("213504D00:00:00", "must be a q timespan"),
+        ("999999999D00:00:00", "must be a q timespan"),
+        ("\u0661D00:00:01", "must be a q timespan"),
+        ("0D00:00:00.0000000001", "must be positive"),
+    ],
 )
 def test_a_period_define_would_refuse_is_refused_here(period, message):
     with pytest.raises(UqsError, match=message):
@@ -95,6 +108,26 @@ def test_a_partition_column_outside_the_columns_or_without_a_partition_is_refuse
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition="EURUSD")
     with pytest.raises(UqsError, match="needs --partition"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition_column="sym")
+
+
+_FX_RATES = [("time", "`timestamp$()"), ("sym", "`g#`symbol$()"), ("px", "`float$()")]
+
+
+def test_into_an_existing_target_the_partition_column_is_the_targets():
+    """#1599: with the target defined already, --columns shape the new source,
+    and publish holds the TARGET's rows to the partition column - so a source
+    without it is fine for a derivation, and a target without it is not."""
+    plan = backfill.bounded_worker(
+        "fx", "fx_rates", "pair:symbol,mid:float", partition="EURUSD", transform="derive",
+        define_table=False, target_columns=_FX_RATES,
+    )  # fmt: skip
+    assert symbols(_fields(plan, "fx_backfill.q")["partition_column"]) == ("sym",)
+    with pytest.raises(UqsError, match="not a column of fx_rates"):
+        backfill.bounded_worker(
+            "fx", "fx_rates", "pair:symbol,mid:float", partition="EURUSD",
+            partition_column="pair", transform="derive",
+            define_table=False, target_columns=_FX_RATES,
+        )  # fmt: skip
 
 
 def test_a_partition_that_is_not_a_symbol_is_refused():
@@ -192,6 +225,15 @@ def test_a_profile_choice_that_cannot_stand_is_refused(kwargs, message):
     args = {"profile": None, "unprofiled": None, **kwargs}
     with pytest.raises(UqsError, match=message):
         profile.membership("p1", start_with_all=False, known_profiles=KNOWN, **args)
+
+
+def test_start_with_all_and_unprofiled_are_refused_together():
+    """#1591: --start-with-all puts the process in the default profile, so an
+    exemption beside it contradicts it - refused, as --profile is."""
+    with pytest.raises(UqsError, match="pick one"):
+        profile.membership(
+            "p1", profile=None, unprofiled="why", start_with_all=True, known_profiles=KNOWN
+        )
 
 
 def test_a_process_already_in_the_profile_is_refused():
@@ -401,3 +443,38 @@ def test_a_twin_whose_transform_registers_after_workers_is_refused():
 
 def test_a_transform_registered_under_transforms_is_loaded_before_workers():
     create_backfill.require_loaded_before_workers(UQF_ROOT, "eq_orderbook", "eq_orderbook")
+
+
+# ---------------------------------- a passthrough between two different shapes
+
+_AUDIT_TARGET = {
+    "audit_t": ".qetl.plant.audit_t:([]time:`timestamp$(); sym:`g#`symbol$(); px:`float$())"
+}
+
+
+def _backfill_into_audit_t(shape: str, transform: str | None):
+    return create_backfill.backfill_plan(
+        UQF_ROOT, "audit_bf", "audit_t", shape,
+        width=None, source=None, procname=None, transport=None, partition=None,
+        check=False, transform=transform, start_with_all=False,
+        definitions=_AUDIT_TARGET,
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("shape", ["sym:symbol, qty:long", "sym:symbol, px:long", "px:float"])
+def test_a_passthrough_from_a_new_source_into_another_shape_is_refused(shape):
+    """#1593: the passthrough declares its input and output as the target's
+    shape and its example from the new source's fixture - two shapes, refused
+    by .qetl.transform.define when the tree next loads. Refused here instead."""
+    with pytest.raises(UqsError, match="--transform derive"):
+        _backfill_into_audit_t(shape, None)
+
+
+def test_a_passthrough_from_a_new_source_of_the_targets_shape_is_planned():
+    plan = _backfill_into_audit_t("sym:symbol, px:float", None)
+    assert plan.name == "audit_bf_backfill"
+
+
+def test_a_derivation_between_two_shapes_is_still_planned():
+    plan = _backfill_into_audit_t("sym:symbol, qty:long", "derive")
+    assert plan.name == "audit_bf_backfill"
