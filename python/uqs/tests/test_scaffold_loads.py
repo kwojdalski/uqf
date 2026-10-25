@@ -71,6 +71,8 @@ check["ipc worker registered"; registered[.qetl.job.bounded.def;`smokebf_backfil
 check["odbc worker registered"; registered[.qetl.job.bounded.def;`smokedb_backfill]]
 check["local source declares its transport"; `local~.qetl.source.def[`smokelocal]`transport]
 check["local worker registered"; registered[.qetl.job.bounded.def;`smokelocal_backfill]]
+check["one-column source registered"; registered[.qetl.source.def;`smokeone]]
+check["one-column worker registered"; registered[.qetl.job.bounded.def;`smokeone_backfill]]
 check["feed on_timer throws not implemented"; unwritten {.qpipe.job.smokefeed.on_timer[]}]
 check["poll feed declares poll and gets a generated timer";
     {d:.qetl.job.stream.def x; (`poll in key d) and `on_timer in key d}`smokepoll]
@@ -234,6 +236,8 @@ def _scaffold_every_kind(root: Path) -> None:
         backfill.bounded_worker(
             "smokelocal", "smoke_local", "sym:symbol, amt:float", transport="local"
         ),
+        # Only the time column: a one-element columns/types, not an atom (#1595).
+        backfill.bounded_worker("smokeone", "smoke_one", "time:timestamp"),
         # On a dataset the worker above fills, and writing, so the graph path runs.
         reaction(
             "smokerx",
@@ -288,7 +292,8 @@ def test_every_scaffolded_kind_loads_and_registers(tmp_path):
 _SCAFFOLDED_JOBS = [
     "smokefeed", "smokepoll", "smokepollc", "smokeetl", "smokenorm", "smokehz",
     "smokebf_backfill", "smokebfd_backfill", "smokepass", "smokederive",
-    "smokedb_backfill", "smokelocal_backfill", "smoketwin_backfill", "smokerx",
+    "smokedb_backfill", "smokelocal_backfill", "smokeone_backfill", "smoketwin_backfill",
+    "smokerx",
 ]  # fmt: skip
 
 _SUITES = """

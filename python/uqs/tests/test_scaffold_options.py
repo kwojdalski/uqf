@@ -80,6 +80,23 @@ def test_a_normalizer_can_start_with_the_stack_too():
     assert (d.procname, d.start_with_all) == ("tick1", True)
 
 
+@pytest.mark.parametrize("width", ["1D", "0D01", "0D01:30", "0D01:00:00", "0D00:00:00.5"])
+def test_a_backfill_takes_a_positive_timespan_width(width):
+    plan = backfill.bounded_worker("fx", "fx_rates", "px:float", width=width)
+    assert f"`fx_rates;{width};" in _body(plan, "fx_backfill.q")
+
+
+@pytest.mark.parametrize(
+    "width",
+    ["0D", "-1D", "not_a_width", "0D00:00:00.0000000001", "0D00:60", "106752D", "١D", "1D\n"],
+)
+def test_a_backfill_width_q_would_refuse_is_refused_before_writing(width):
+    # Was written verbatim, and the tree then failed to load: `width must be
+    # positive`, or a parse error far from the typo (#1576).
+    with pytest.raises(UqsError, match="--width"):
+        backfill.bounded_worker("fx", "fx_rates", "px:float", width=width)
+
+
 def test_a_backfill_takes_a_procname():
     plan = backfill.bounded_worker("fx", "fx_rates", "px:float", procname="fxbf1")
     assert "`fxbf1;" in _body(plan, "fx_backfill.q")
@@ -297,3 +314,19 @@ def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
 
     monkeypatch.setattr(regenerate, "q_interpreter", lambda: None)
     assert regenerate._export_contract_surface(tmp_path) is None
+
+
+def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
+    """`quote` is the starter pack's table: --columns shape only the new source,
+    and the plant gets no second, source-shaped `quote` definition (#1602).
+    A derivation, since a passthrough between the two shapes is refused (#1593)."""
+    result = CliRunner().invoke(
+        cli.app,
+        ["job", "new", "qt", "--kind", "backfill", "--dataset", "quote",
+         "--columns", "sym:symbol, bid:float", "--transform", "derive", "--dry-run"],
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "create src/etl/sources/qt.q" in result.output
+    assert "plant_tables.q" not in result.output
+    assert "uqs_catalog.q" not in result.output
+    assert "test_stack_tables.q" not in result.output
