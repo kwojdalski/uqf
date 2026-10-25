@@ -97,19 +97,32 @@ def stale_references(
     names: set[str],
     deletes: list[Path],
     rewrites: dict[Path, str],
+    jobs: set[str] | None = None,
 ) -> list[Reference]:
-    """Every line outside the removal's own edits that still names one of `names`.
+    """Every line outside the removal's own edits that still names one of `names`,
+    or calls into the namespace `.qpipe.job.<job>` of one of `jobs`.
 
     A name matches on word boundaries, so a backfill's NAME does not match
-    inside NAME_backfill - which is why the caller passes both.
+    inside NAME_backfill - which is why the caller passes both. `jobs` is
+    searched even when the same spelling is a kept table's name (#1589): a
+    call into a removed job's namespace is never a use of the table.
     """
-    if not names:
+    alternatives = []
+    if names:
+        alternatives.append(
+            r"(?<![\w])(?:"
+            + "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+            + r")(?![\w])"
+        )
+    if jobs:
+        alternatives.append(
+            r"\.qpipe\.job\.(?:"
+            + "|".join(re.escape(j) for j in sorted(jobs, key=len, reverse=True))
+            + r")(?![\w])"
+        )
+    if not alternatives:
         return []
-    pattern = re.compile(
-        r"(?<![\w])(?:"
-        + "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
-        + r")(?![\w])"
-    )
+    pattern = re.compile("|".join(alternatives))
     gone = set(deletes)
     refs = []
     for rel in _searched(repo_root):

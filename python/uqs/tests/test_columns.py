@@ -29,6 +29,7 @@ from uqs.scaffold.columns import (
     definition_columns,
     nested_declaration,
     parse_columns,
+    parse_raw_columns,
     resolve_shape,
     table_columns,
     table_definition,
@@ -79,6 +80,57 @@ def test_a_vector_column_is_a_list_and_cannot_be_grouped():
     assert dict(parse_columns("bid_prices:list"))["bid_prices"] == "()"
     with pytest.raises(UqsError, match="cannot carry g#"):
         parse_columns("bid_prices:g#list")
+
+
+@pytest.mark.parametrize("word", ["value", "count", "last", "type", "from"])
+def test_a_q_word_is_refused_as_a_column_name(word):
+    """`([] value:...)` is refused by q with `assign` (#1588): a table named
+    with one cannot load, so the spec is refused before anything is written."""
+    with pytest.raises(UqsError, match="q keyword"):
+        parse_columns(f"sym:symbol, {word}:float")
+    with pytest.raises(UqsError, match="q keyword"):
+        parse_raw_columns(f"ID:long, {word}:float")
+
+
+def test_the_example_a_bad_column_points_at_is_itself_accepted():
+    with pytest.raises(UqsError, match=r"e\.g\. '(\w+):(\w+)'") as err:
+        parse_columns("nocolon")
+    found = re.search(r"e\.g\. '([^']+)'", str(err.value))
+    assert found is not None
+    assert parse_columns(found.group(1))
+
+
+@pytest.mark.parametrize(
+    "spec",
+    ["sym:symbol, time:timestamp, px:float", "time:float, sym:symbol, px:float", "time:g#symbol"],
+)
+def test_a_time_column_that_is_not_a_leading_timestamp_is_refused(spec):
+    """Every plant table leads with a timestamp `time` (#1574): `.u.upd`
+    stamps it and every consumer reads it positionally. A spec that names it
+    elsewhere, or as another type, is refused rather than written as asked."""
+    with pytest.raises(UqsError, match="time"):
+        parse_columns(spec)
+
+
+def test_a_leading_timestamp_time_is_kept_as_given():
+    assert parse_columns("time:timestamp, sym:symbol")[0] == ("time", "`timestamp$()")
+
+
+@pytest.mark.parametrize(
+    "spec",
+    ["sym:symbol, px:float, px:long", "px:float, px:float", "time:timestamp, time:timestamp"],
+)
+def test_a_column_named_twice_is_refused(spec):
+    """q renames the second `px` to `px1` (#1575): the table that loads is not
+    the one asked for, so the spec is refused before anything is written."""
+    with pytest.raises(UqsError, match="named twice"):
+        parse_columns(spec)
+
+
+def test_a_raw_column_named_twice_is_refused():
+    with pytest.raises(UqsError, match="named twice"):
+        parse_raw_columns("ID:long, PX:float, PX:long")
+    assert [c for c, _ in parse_raw_columns("PX:float, Px:float")] == ["PX", "Px"]
 
 
 def test_an_ungrouped_sym_has_no_spelling_and_says_so():

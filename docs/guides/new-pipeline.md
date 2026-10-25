@@ -46,7 +46,7 @@ tests it holds, so naming it is the whole of adding it.
 
 ```
 uqs job new markout2 --subscribe-to trades,quote \
-    --publishes my_metric --columns "sym:symbol, value:float"
+    --publishes my_metric --columns "sym:symbol, px:float"
 
 uqs job new fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D

@@ -40,7 +40,7 @@ expensive to undo.
 ```bash
 # continuous: subscribes to two tables, publishes one
 uqs job new markout2 --subscribe-to trades,quote \
-    --publishes my_metric --columns "sym:symbol, value:float" --dry-run
+    --publishes my_metric --columns "sym:symbol, px:float" --dry-run
 
 # continuous FEED: subscribes to nothing, publishes on a timer
 uqs job new tickfeed --publishes ticks --columns "sym:symbol, px:float"
