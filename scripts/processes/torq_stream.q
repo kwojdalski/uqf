@@ -65,7 +65,9 @@
         / applied it ran HERE, while the transport was being built - before
         / on_start, and before anything else had a say (#1219).
         {[job;feed;unused] `.qproc.stream.h set $[feed; .qtorq.feed_handle[]; .qtorq.connect_etl job];}[job;feed];
-        {[] .qtorq.publish[.qproc.stream.h;;]};
+        / The handle by NAME, not its value: a tickerplant restart closes it,
+        / and .qtorq.with_reconnect reopens it into .qproc.stream.h (#1651).
+        {[] .qtorq.publish_reconnecting[`.qproc.stream.h;;]};
         {[tbls] .qtorq.assert_publishable[.qproc.stream.h;tbls];};
         {[job;tbls;handler;replay]
             / The root `upd` the tickerplant calls, counting what arrives
@@ -110,9 +112,21 @@
             .qetl.job.stream.subscriptions job]];
     base,hooks}
 
+/ What a polling feed's tick asks to know where a page went (#1651,
+/ src/etl/core/stream_delivery.q): which keys of an in-doubt page an rdb
+/ already holds, and how many rows the tickerplant has logged - the second on
+/ the publish handle itself, reopened as a publish would be.
+/ @return the hooks, for .qetl.job.stream.delivery.wire
+.qproc.stream.delivery_hooks:{[]
+    `present`logged!(
+        {[t;k] .qtorq.present_keys[.qtorq.reader_handle[];t;k]};
+        {[t] .qtorq.with_reconnect[`.qproc.stream.h;"logged count of ",string t;.qtorq.logged_rows[;t]]})}
+
 \d .
 
 / Every plant subscriber needs these at ROOT - see .qtorq's own header.
 .qtorq.install_period_handlers[];
 
-{[job] .qetl.job.stream.start[job;.qproc.stream.transport[job]]} .qproc.stream.which_job[];
+{[job]
+    .qetl.job.stream.delivery.wire[job;.qproc.stream.delivery_hooks[]];
+    .qetl.job.stream.start[job;.qproc.stream.transport[job]]} .qproc.stream.which_job[];

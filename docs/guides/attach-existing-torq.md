@@ -247,63 +247,121 @@ tested over a slow path.
 
 This is what a polling feed (a job declaring `poll`,
 `src/etl/core/stream_poll.q`) does when `torq_stream.q` runs it. A job with its
-own `on_timer` or `on_batch` orders its own steps.
+own `on_timer` or `on_batch` orders its own steps. None of it is exactly-once.
 
 - **The send is synchronous.** The job's `publish` is
-  `.qtorq.publish[.qproc.stream.h;;]`, and `.qproc.stream.h` is the handle
-  `.servers.gethandlebytype` returns, so
-  `h (`.u.upd;t;x)` returns once the tickerplant's `.u.upd` has returned. What `.u.upd` has done by then depends on the segmented tickerplant's batch mode (`lib/torq/code/segmentedtickerplant/stplog.q\`):
+  `` .qtorq.publish_reconnecting[`.qproc.stream.h;;] ``. It sends
+  `` h (`.u.upd;t;x) `` on the handle `.qproc.stream.h` holds, and returns once
+  the tickerplant's `.u.upd` has returned. What `.u.upd` has done by then
+  depends on the segmented tickerplant's batch mode
+  (`lib/torq/code/segmentedtickerplant/stplog.q`):
 
   | Batch mode     | When the publish returns, the rows are                                                            |
-  | -------------- | -------------------------------------------------------------------------                         |
+  | -------------- | ------------------------------------------------------------------------------------------------- |
   | `defaultbatch` | in the tickerplant's memory and written to the table's log; sent to subscribers on its next timer |
   | `immediate`    | written to the log and sent to the subscribers                                                    |
   | `memorybatch`  | in the tickerplant's memory only; logged and sent on its next timer                               |
 
-- **What it does not acknowledge.**
-  - That an rdb or wdb received or saved the rows.
-  - That the log write reached the disk: nothing asks for an fsync.
-  - That the rows were accepted. With the tickerplant's error mode on
-    (`.stplg.errmode`), a `.u.upd` that throws is written to its error log and
-    the call returns normally. A table the tickerplant does not define discards
-    the rows without an error (`torq_pipeline.q`, invariant 8), which
-    `.qtorq.assert_publishable` checks only when the publisher starts.
-
-- **The cursor is saved after the publish.** One tick runs in this order:
-  1. load the cursor;
-  2. fetch the page after it;
+- **One tick runs in this order:**
+  1. load the cursor, and read the in-flight marker beside it;
+  2. fetch the page after the cursor;
   3. normalize it;
   4. refuse the whole page if it does not fit the plant's tables, or if its next
      cursor would not move;
-  5. publish each table in turn;
-  6. save the cursor.
+  5. if the marker says the previous page is in doubt, settle it (below);
+  6. write the marker;
+  7. publish each table in turn, confirming each with the tickerplant when the
+     poll declares `ack`;
+  8. save the cursor;
+  9. remove the marker.
 
   A timestamp cursor is the file `<name>.cursor` (the poll's `cursor`, else the
   job's name) in `$UQF_STATUS_DIR`, else `$TORQDATA/status`, on the publisher's
-  machine. It is written to a temporary file, the old one kept as `.bak`, then
-  renamed into place. A feed with its own `load` and `save` keeps its cursor
-  where those put it. A saved cursor records only that every table of the page
-  was published in the sense above.
+  machine. The marker is `<name>.inflight` in the same directory. It holds the
+  cursor the page was fetched after (`from`), the cursor it would move to
+  (`to`), and the page's row count. Both files are written to a temporary file,
+  the old one kept as `.bak`, then renamed into place. Neither is fsynced. A
+  feed with its own `load` and `save` keeps its cursor where those put it, and
+  its marker still goes in the status directory.
 
-- **Failures repeat the page, so duplicates are possible.**
-  - A publish that throws stops the tick before the save. The timer logs
-    `timer function failed`, and the next tick fetches the same page again.
-  - If one table of a page was sent before another's publish threw, the first
-    one's rows are sent again.
-  - A crash between the last publish and the save sends the whole page again
-    after the restart.
-  - Nothing deduplicates. `.u.upd` and the consumers insert what they receive,
-    and a log replay delivers each copy that was logged.
+- **A reconnect after a tickerplant restart.** When the handle is closed, the
+  publish reopens it once, through TorQ's server registry
+  (`.servers.gethandlebytype`, which retries every registered tickerplant whose
+  handle is closed), stores the new handle in `.qproc.stream.h`, logs
+  `tickerplant handle reopened`, and sends again.
+  - A handle that was already closed before the send is reopened first, so
+    nothing is sent twice.
+  - A handle that closes during the send is reopened and the send repeated. This
+    is logged as `possibly duplicated`, because the old tickerplant may have
+    logged the first send before it went.
+  - If no tickerplant can be reached, the error propagates. The tick fails, the
+    cursor stays, and the next tick tries again.
+  - An error on a handle that is still open is the tickerplant's own, and is
+    raised as it is.
+
+  The reconnect restores the publish handle only. A runtime-only registration is
+  still lost with the restart, so re-apply the attachment
+  (`uqs job attach NAME`) as above.
+
+- **An in-doubt page is settled, not blindly resent.** A marker found at the
+  start of a tick means the previous page was interrupted between the publish
+  and the save: by a crash, a kill, a publish that threw part-way, or a refused
+  acknowledgement. Some of it may already be in the tickerplant. If the saved
+  cursor equals the marker's `to`, the save happened and only the removal did
+  not, so the marker is removed and nothing is in doubt. Otherwise:
+  - **With a declared `row_key`** (the poll's `row_key`, symbols naming the
+    columns that identify a published row, never `time`), the publisher asks an
+    rdb which keys of the re-fetched page each table already holds, and
+    publishes only the absent rows. The rdb is found through discovery the first
+    time a page is in doubt, so it costs a connection only then. The tick logs
+    `in-doubt page resolved by row key` with the cursor range and the rows it
+    left out. If no rdb can be reached, or its answer is not one boolean per
+    key, the tick fails and nothing is sent.
+  - **Without a `row_key`**, or with no reader wired (the plain-q runner,
+    `run_stream.q`), the page is published again, as before. The tick logs
+    `in-doubt page published again - possibly duplicated` at WARNING with the
+    marker's `from` and `to` and the reason. It is also counted in the job's
+    health: `.qetl.stream_health.doubts_of`, and `possibly_duplicated_pages` and
+    `possibly_duplicated_rows` in `stream_health_<job>.txt`.
+
+  What the rdb answers is what it holds, not what the tickerplant logged. A row
+  logged but not yet delivered (`defaultbatch` delivers on its timer), rows an
+  rdb has already written out at end of day, and rows another publisher sent
+  under the same key all answer wrongly. The first two are sent again, and the
+  third is left out.
+
+- **An acknowledgement, when asked for.** A poll declaring `ack` 1b confirms
+  each publish. On the publish handle, before and after the `.u.upd`, it reads
+  how many rows of the table the tickerplant has logged. That is
+  `.stplg.rowcount`, plus `.stplg.tmprowcount` in `defaultbatch`, where the log
+  write happens in `.u.upd` but the count only on the timer. If the count did
+  not advance by the rows the publish reports sending, the tick fails with
+  `was not acknowledged`. The cursor does not move, and the page is in doubt on
+  the next tick. This catches rows that the error mode trapped and rows that the
+  tickerplant never logged. Without `ack`, nothing is asked. `memorybatch` logs
+  only on its timer, so it refuses `ack` before anything is sent.
+
+  The count is the tickerplant's, for all publishers together. Another
+  publisher's rows can make a short publish look counted, and a restart or end
+  of day that resets the counters can make a counted one look short.
+
+- **What is still not acknowledged.**
+  - That an rdb or wdb received or saved the rows.
+  - That the log write reached the disk. Nothing asks for an fsync, not even
+    `ack`.
+  - Without `ack`, that the rows were accepted. With the tickerplant's error
+    mode on (`.stplg.errmode`), a `.u.upd` that throws is written to its error
+    log and the call returns normally. A table the tickerplant does not define
+    discards the rows without an error (`torq_pipeline.q`, invariant 8), which
+    `.qtorq.assert_publishable` checks only when the publisher starts.
 
   Delivery is therefore at least once from the cursor's side, for rows the
-  tickerplant accepted and kept. Rows can still be lost: rows `memorybatch` held
-  when the tickerplant died, rows its error mode trapped, and rows sent onto a
+  tickerplant accepted and kept. Duplicates can still reach the tables: a page
+  republished without a `row_key`, a send repeated after the handle closed
+  mid-call, and the row-key gaps above. Each is logged, and the first is
+  counted. Rows can still be lost: rows `memorybatch` held when the tickerplant
+  died, rows its error mode trapped (unless `ack` is on), and rows sent onto a
   table it no longer defines.
-
-- **There is no reconnect.** The handle is the one `.qproc.stream.h` held when
-  the publish was wired at start, and nothing in the publish path reopens it.
-  After a tickerplant restart, restart the publisher, through
-  `uqs job attach NAME` for a runtime-only attachment, as above.
 
 ### Migration from the stage commands
 
