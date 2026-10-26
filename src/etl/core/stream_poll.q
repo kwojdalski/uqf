@@ -47,6 +47,14 @@
 /     page_limit   optional positive long, the most rows fetch returns in one
 /                  page - reported by a recent-data preview, so a window
 /                  holding more than one page says it was cut short
+/     row_key      optional symbol(s), the columns that identify one
+/                  published row (never `time`). With a reader wired, a
+/                  page fetched while the previous one is in doubt is
+/                  published only for the keys the table does not already
+/                  hold (stream_delivery.q, #1651)
+/     ack          optional boolean, 1b to confirm every publish with the
+/                  plant's logged count, failing the tick when it did not
+/                  advance (stream_delivery.q, #1651)
 / .
 / RECENT-DATA PREVIEW (preview_recent, #681). The saved cursor can be far
 / behind, and the feed's first-run lookback wider than a troubleshooter
@@ -96,6 +104,7 @@
     if[`page_limit in key p;
         if[not $[-7h=type p`page_limit; 0<p`page_limit; 0b];
             '"define: ",string[job],"'s poll page_limit must be a positive long - the most rows one fetch returns"]];
+    .qetl.job.stream.delivery.check[job;decl];
     if[count decl`subscribe_to;
         '"define: ",string[job]," declares poll and subscribes to ",(", " sv string decl`subscribe_to),
          " - a polling job fetches its own input; a job fed by the plant declares on_batch"];
@@ -153,10 +162,16 @@
 / page the next tick fetches again, so publishing it now would publish it
 / twice. The save comes after: a publish that throws leaves the cursor where
 / it was and the page is fetched again, rather than skipped.
+/ .
+/ Around the publish sits the in-flight marker (stream_delivery.q): written
+/ before, removed after the save. A marker found at the start says the page
+/ about to be fetched may already be in the plant, and settle decides what of
+/ it to send.
 / @param job the job's name
 / @return dict of state (`idle or `published), rows and cursor
 / @throws error when the page does not fit its plant tables (.qetl.plant.problems),
-/   the proposed cursor does not advance, or a step throws
+/   the proposed cursor does not advance, a publish is not acknowledged, or a
+/   step throws
 .qetl.job.stream.tick:{[job]
     d:.qetl.job.stream.def job;
     p:d`poll;
@@ -166,6 +181,7 @@
     ops:.qetl.job.stream.cursor_ops[job];
     name:.qetl.job.stream.cursor_name[job];
     current:ops[`load] name;
+    doubt:.qetl.job.stream.delivery.in_doubt[name;current];
     / Every line the fetch logs - a traced query above all - carries the job
     / and the cursor it fetched after.
     page:.qetl.log.with_context[`job`cursor!(job;current);p`fetch;enlist current];
@@ -180,10 +196,13 @@
     if[not ops[`advances][current;proposed];
         '"tick: ",string[job],"'s next cursor ",(-3!proposed)," does not move past ",(-3!current),
          " - publishing it would publish the page again next tick"];
-    pub:get ` sv (d`ns),`publish;
-    {[pub;t;rows] pub[t;rows]}[pub]'[key out;value out];
+    out:.qetl.job.stream.delivery.settle[job;doubt;out];
+    n:sum .qetl.job.stream.row_count'[key out;value out];
+    .qetl.job.stream.delivery.mark[name;current;proposed;n];
+    .qetl.job.stream.delivery.send[job;out];
     ops[`save][name;proposed];
-    `state`rows`cursor!(`published;sum count each value out;proposed)}
+    .qetl.job.stream.delivery.unmark name;
+    `state`rows`cursor!(`published;n;proposed)}
 
 / Private: what is wrong with `rows` for plant table `t` - the plant's own
 / contract, .qetl.plant.problems, so the preview and the timer hold a page to

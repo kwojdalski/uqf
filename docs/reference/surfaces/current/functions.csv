@@ -349,6 +349,7 @@ qetl.job.stream,cursor_ops,function,1,job
 qetl.job.stream,def,function,1,job
 qetl.job.stream,define,function,2,job decl
 qetl.job.stream,defined,function,1,
+qetl.job.stream,delivery,dict,,
 qetl.job.stream,drain,function,2,table_name mask
 qetl.job.stream,end_of_day,function,1,dt
 qetl.job.stream,evict,function,2,table_name mask
@@ -397,6 +398,18 @@ qetl.job.stream.bars,installed,value,,
 qetl.job.stream.bars,optional_keys,value,,
 qetl.job.stream.bars,registry,dict,,
 qetl.job.stream.bars,required_keys,value,,
+qetl.job.stream.delivery,hook_keys,value,,
+qetl.job.stream.delivery,in_doubt,function,2,name current
+qetl.job.stream.delivery,logged,dict,,
+qetl.job.stream.delivery,mark,function,4,name from to rows
+qetl.job.stream.delivery,marker,function,1,name
+qetl.job.stream.delivery,marker_path,function,1,name
+qetl.job.stream.delivery,present,dict,,
+qetl.job.stream.delivery,send,function,2,job out
+qetl.job.stream.delivery,settle,function,3,job m out
+qetl.job.stream.delivery,unmark,function,1,name
+qetl.job.stream.delivery,unwire,function,1,job
+qetl.job.stream.delivery,wire,function,2,job hooks
 qetl.job.stream.horizons,def,function,1,name
 qetl.job.stream.horizons,define,function,2,name decl
 qetl.job.stream.horizons,defined,function,1,
@@ -750,8 +763,11 @@ qetl.status,status_states,value,,
 qetl.status,terminal_states,value,,
 qetl.status,write_status,function,6,worker instance_id state spec progress err
 qetl.stream_health,batches,dict,,
+qetl.stream_health,doubts,dict,,
+qetl.stream_health,doubts_of,function,1,job
 qetl.stream_health,of,function,1,job
 qetl.stream_health,record,function,3,job ok err
+qetl.stream_health,record_doubt,function,4,job resolved n m
 qetl.stream_health,write,function,2,job failing
 qetl.tick,day_log,function,1,dt
 qetl.tick,earlier_days,function,3,want first_day last_day

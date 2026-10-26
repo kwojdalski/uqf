@@ -14,7 +14,7 @@ import pytest
 from attach_support import LEDGER_COLUMNS, FakeStack, FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import config, facts, persist, plan, service, verify
+from uqs.attach import config, facts, live, persist, plan, service, verify
 from uqs.attach.config import AttachmentError
 from uqs.attach.manifest import Manifest
 from uqs.paths import UqsError, default_paths, repo_root
@@ -396,6 +396,7 @@ def test_the_publisher_is_refused_until_verified_and_only_under_its_stack(
     with pytest.raises(UqsError, match="which is applied: it may start once"):
         attach_state.refuse_unverified_start(paths, "pb_ledger1", 6000)
     verify.verify(att, fake, state)
+    monkeypatch.setattr(live, "ipc_for", lambda _att: fake)  # runtime-only: asked live (#1651)
     attach_state.refuse_unverified_start(paths, "pb_ledger1", 6000)
     with pytest.raises(UqsError, match="discovery at 6051, not 6001"):
         attach_state.refuse_unverified_start(paths, "pb_ledger1", None)

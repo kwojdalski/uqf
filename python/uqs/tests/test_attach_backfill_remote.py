@@ -16,7 +16,14 @@ import pytest
 from test_attach_backfill_run import FROM, TO, WORKER, read_rows, upstream, world  # noqa: F401
 
 from uqs.attach import backfill_remote, backfill_run, config
+from uqs.interpreter import PEACHQ, q_impl
 from uqs.paths import UqsError
+
+pytestmark = pytest.mark.skipif(
+    q_impl() == PEACHQ,
+    reason="the world is test_attach_backfill_run's: a kdb+ HDB and upstream, which PeachQ "
+    "loads neither of",
+)
 
 
 def _free_port() -> int:

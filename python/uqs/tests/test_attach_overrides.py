@@ -20,7 +20,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import apply as applying
-from uqs.attach import config, facts, overrides, plan, preflight, service, verify
+from uqs.attach import config, facts, live, overrides, plan, preflight, service, verify
 from uqs.attach.findings import Finding
 from uqs.attach.manifest import Manifest
 from uqs.attach.overrides import OverrideError
@@ -602,7 +602,9 @@ def test_only_the_cli_and_the_attach_package_reach_the_attach_workflow():
     importers = set()
     for root in (ROOT / "python/uqs/src", ROOT / "python/uqf_frontend/src"):
         for path in root.rglob("*.py"):
-            text = path.read_text()
+            # the one import every front end makes: the start gate's live check (#1651),
+            # which reads the stack and starts or changes nothing
+            text = path.read_text().replace("from uqs.attach import live as _registers_live", "")
             if "uqs.attach" in text or "from uqs import attach" in text:
                 importers.add(str(path.relative_to(ROOT / "python")))
     assert not [p for p in importers if "mcp" in p or "uqf_frontend" in p], importers
@@ -620,6 +622,7 @@ def test_the_start_gate_still_needs_verify_even_with_accepted_risks(bundle, tmp_
     with pytest.raises(UqsError, match="which is applied"):
         attach_state.refuse_unverified_start(default_paths(), att.publisher.procname, 6000)
     verify.verify(att, fake, tmp_path)
+    monkeypatch.setattr(live, "ipc_for", lambda _att: fake)  # runtime-only: asked live (#1651)
     attach_state.refuse_unverified_start(default_paths(), att.publisher.procname, 6000)
 
 

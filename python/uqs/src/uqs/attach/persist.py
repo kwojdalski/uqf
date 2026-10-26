@@ -25,27 +25,26 @@ it: a block written into such a file says so in a comment line, the blocks
 written after it copy that line, and whichever block is removed LAST takes
 the newline with it.
 
-Local files only: whether the path is local and writable is preflight's
-question (preflight_components.persistence); this assumes the answer was yes.
+Where the file is read and changed is a `File`: `LocalFile` on this machine,
+or `RemoteFile`, the tickerplant's own file changed by the tickerplant
+(schema_files.py, #1651). Every change is one append or one cut, composed here from
+the text the file held, so both apply exactly the same rules. Whether the file
+can be written is preflight's question (preflight_components.persistence);
+this assumes the answer was yes.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.attach.config import Attachment, AttachmentError, atomic_write
+from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.schema import SchemaError, TableSpec, check_publishable
-
-#: How the file's bytes become text and back: UTF-8, with any byte that is not
-#: UTF-8 carried through unchanged, and no newline translation - so text -> bytes
-#: gives back exactly the bytes read.
-_CODEC = ("utf-8", "surrogateescape")
+from uqs.attach.schema_files import CODEC, File, LocalFile
 
 #: The comment line every block in a file that ended without a newline carries.
 SEPARATOR_NOTE = (
@@ -58,7 +57,7 @@ USES = "+uses"
 
 
 def _sha(text: str) -> str:
-    return hashlib.sha256(text.encode(*_CODEC)).hexdigest()
+    return hashlib.sha256(text.encode(*CODEC)).hexdigest()
 
 
 def begin_marker(name: str, token: str) -> str:
@@ -87,16 +86,8 @@ class BlockRecord:
     added_newline: bool = False
     #: the block's marker name; empty for a record written before `+uses` blocks existed
     block: str = ""
-
-
-def _read(target: Path) -> str:
-    return target.read_bytes().decode(*_CODEC)
-
-
-def _replace(target: Path, text: str) -> None:
-    mode = target.stat().st_mode
-    atomic_write(target, text.encode(*_CODEC))
-    os.chmod(target, mode)
+    #: the tickerplant that changed its own file (schema_files.RemoteFile); "" for a file here
+    process: str = ""
 
 
 def _lines(text: str) -> list[str]:
@@ -208,10 +199,10 @@ def locate(text: str, name: str) -> tuple[int, int] | None:
     return start, after
 
 
-def present(path: str, name: str) -> bool:
-    """Whether the file at `path` holds `name`'s block."""
-    target = Path(path)
-    return target.is_file() and locate(_read(target), name) is not None
+def present(where: str | File, name: str) -> bool:
+    """Whether the file holds `name`'s block."""
+    text = _file(where).read()
+    return text is not None and locate(text, name) is not None
 
 
 def outside(text: str, name: str) -> str:
@@ -260,38 +251,50 @@ def _real(path: str) -> Path:
     return p.resolve()
 
 
-def _write(name: str, rendered: Callable[[bool], str], path: str) -> BlockRecord:
-    target = _real(path)
-    text = _read(target)
+def _file(where: str | File) -> File:
+    """A path names a file on this machine; anything else already says where it is."""
+    return LocalFile(str(_real(where))) if isinstance(where, str) else where
+
+
+def _write(name: str, token: str, rendered: Callable[[bool], str], file: File) -> BlockRecord:
+    text = file.read()
+    if text is None:
+        raise AttachmentError(f"{file.label} does not exist")
     span = locate(text, name)
     if span is not None:
         found = text[span[0] : span[1]]
         separated = _separated(_lines(found))
         if found != rendered(separated):
             raise AttachmentError(
-                f"{target} already holds a different uqs-attach block for {name}; "
+                f"{file.label} already holds a different uqs-attach block for {name}; "
                 "remove it by hand or detach first"
             )
-        return BlockRecord(str(target), _sha(outside_all(text)), _sha(found), separated, name)
+        return BlockRecord(
+            file.path, _sha(outside_all(text)), _sha(found), separated, name, file.process
+        )
     _, others = _blocks(text)
     if others:
         # The newline question was answered when the first of them went in: copy the answer.
         separated = _separated(others)
         if not text.endswith("\n"):
             raise AttachmentError(
-                f"{target} ends without a newline after another attachment's block; "
+                f"{file.label} ends without a newline after another attachment's block; "
                 "something edited it - restore it before applying"
             )
-        base = text
+        lead = ""
     else:
         separated = bool(text) and not text.endswith("\n")
-        base = text + "\n" if separated else text
+        lead = "\n" if separated else ""
     block = rendered(separated)
-    _replace(target, base + block)
-    return BlockRecord(str(target), _sha(outside_all(base)), _sha(block), separated, name)
+    file.append(text, lead + block, name, token)
+    return BlockRecord(
+        file.path, _sha(outside_all(text + lead)), _sha(block), separated, name, file.process
+    )
 
 
-def write(att: Attachment, token: str, specs: tuple[TableSpec, ...], path: str) -> BlockRecord:
+def write(
+    att: Attachment, token: str, specs: tuple[TableSpec, ...], where: str | File
+) -> BlockRecord:
     """Add the block for the tables `att` created (or find it already there with
     this token) and say what it was.
 
@@ -299,47 +302,67 @@ def write(att: Attachment, token: str, specs: tuple[TableSpec, ...], path: str) 
     reported - exactly as the first write reported it - not duplicated. A block
     with ANOTHER token is refused - something else wrote it.
     """
-    return _write(att.name, lambda sep: render(att.name, token, specs, sep), path)
+    return _write(att.name, token, lambda sep: render(att.name, token, specs, sep), _file(where))
 
 
-def write_uses(att: Attachment, token: str, tables: tuple[str, ...], path: str) -> BlockRecord:
+def write_uses(
+    att: Attachment, token: str, tables: tuple[str, ...], where: str | File
+) -> BlockRecord:
     """Add (idempotently, as `write`) the block that keeps `att` a user of
     `tables` across a tickerplant restart."""
-    return _write(uses_name(att.name), lambda sep: render_uses(att.name, token, tables, sep), path)
+    return _write(
+        uses_name(att.name), token, lambda sep: render_uses(att.name, token, tables, sep),
+        _file(where),
+    )  # fmt: skip
 
 
 def problems(
-    record: BlockRecord, att: Attachment, token: str, specs: tuple[TableSpec, ...]
+    record: BlockRecord,
+    att: Attachment,
+    token: str,
+    specs: tuple[TableSpec, ...],
+    file: File | None = None,
 ) -> list[str]:
     """Why the block cannot be trusted to be removed, as sentences; empty when
-    the file outside the block and the block itself are as they were written."""
-    target = Path(record.path)
-    name = record.block or att.name
-    if not target.is_file():
-        return [f"{target} no longer exists"]
-    text = _read(target)
+    the file outside the block and the block itself are as they were written.
+    `file` is where the record says it is: the path here unless a tickerplant
+    changed it (schema_files.file_of)."""
+    file = file or LocalFile(record.path)
+    return _problems(record, record.block or att.name, file.label, file.read())
+
+
+def _problems(record: BlockRecord, name: str, label: str, text: str | None) -> list[str]:
+    if text is None:
+        return [f"{label} no longer exists"]
     span = locate(text, name)
     if span is None:
-        return [f"the uqs-attach block for {name} is gone from {target}"]
+        return [f"the uqs-attach block for {name} is gone from {label}"]
     found = []
     if _sha(text[span[0] : span[1]]) != record.block_sha:
-        found.append(f"the block in {target} was edited")
+        found.append(f"the block in {label} was edited")
     if _sha(outside_all(text)) != record.outside_sha:
-        found.append(f"{target} was changed outside the block since it was applied")
+        found.append(f"{label} was changed outside the block since it was applied")
     return found
 
 
-def remove(record: BlockRecord, att: Attachment, token: str, specs: tuple[TableSpec, ...]) -> None:
+def remove(
+    record: BlockRecord,
+    att: Attachment,
+    token: str,
+    specs: tuple[TableSpec, ...],
+    file: File | None = None,
+) -> None:
     """Take the block out - only if `problems` is empty - and nothing else: the
     newline added before the first block goes only with the last one (#1438)."""
-    if found := problems(record, att, token, specs):
+    file = file or LocalFile(record.path)
+    name = record.block or att.name
+    text = file.read()
+    if found := _problems(record, name, file.label, text):
         raise AttachmentError("; ".join(found))
-    target = Path(record.path)
-    text = _read(target)
-    start, end = locate(text, record.block or att.name) or (0, 0)
+    assert text is not None  # _problems says so otherwise
+    start, end = locate(text, name) or (0, 0)
     rest = text[:start] + text[end:]
     # A record from before the note line existed says it in `added_newline` instead.
     separated = _separated(_lines(text[start:end])) or record.added_newline
-    if separated and not _blocks(rest)[1] and rest.endswith("\n"):
-        rest = rest[:-1]
-    _replace(target, rest)
+    trim = separated and not _blocks(rest)[1] and rest.endswith("\n")
+    file.cut(text, (start, end), trim, name, token)
