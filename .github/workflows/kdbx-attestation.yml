@@ -1,11 +1,12 @@
 name: KDB-X attestation
 
-# Blocking (#1014, #1543): hosted CI has no KDB-X, so whether the q-tests,
-# q-coverage, contract-surface and q-facts hooks passed on a PR's tree is
-# known only where they ran. scripts/dev/attest_kdbx.py records that as a
-# `KDB-X-gates: <tree>` trailer; this fails a PR that changes a path those
-# hooks judge unless the head's exact tree carries one. PRs only: a push to
-# master is not re-judged after the merge.
+# Blocking (#1014, #1543): hosted CI has no KDB-X, so whether the KDB-X
+# hooks (HOOKS in scripts/dev/attest_kdbx.py) passed on a PR's tree is known
+# only where they ran. attest_kdbx.py runs the ones whose scope the branch
+# touches and records them as a `KDB-X-gates: <tree> hooks=<ids>` trailer;
+# this fails a PR unless the head's exact tree carries trailers covering
+# every hook whose scope the PR's diff (from the merge base) touches. PRs
+# only: a push to master is not re-judged after the merge.
 #
 # Override: the `kdbx-attestation-override` PR label lets an unattested tree
 # pass, as a warning annotation naming the label and the paths. It is its own
