@@ -18,7 +18,9 @@
 //
 //   -writers     the users an extractor may connect as (.z.u); everyone else is refused per batch
 //   -journal     where the batch journal persists - in the destination's state directory
-//   -max_rows    the most rows one batch may carry (default 100000)
+//   -max_rows    the most rows one message may carry (default 100000); a larger window arrives in
+//                chunks, staged and committed whole (src/etl/core/io_remote_chunks.q)
+//   -max_staged_rows  the most rows held staged across batches in flight (default 5000000)
 //   the rest     as scripts/dev/attached_backfill.q; the readers' password is $UQF_ATTACH_REACH_PASSWORD
 //
 // THE GATE. .z.pg admits the receiver's entry points with plain-data arguments and nothing else
@@ -79,6 +81,8 @@ mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "remote_receiver: ",e; exit 
 / the batch a worker publishes: its transform's output (.qetl.job.bounded.publish)
 schema:0#(.qetl.transform.def decl`transform)`output;
 max_rows:$[`max_rows in key o; "J"$first o`max_rows; 100000];
+/ a window larger than one message arrives in chunks (io_remote_chunks.q): how many rows may wait
+if[`max_staged_rows in key o; .qetl.io.remote.max_staged_rows:"J"$first o`max_staged_rows];
 .qetl.io.remote.open hsym `$first o`journal;
 .qetl.io.remote.serve[`$first o`attachment;decl`dataset;`mgr`target`schema`max_rows`users!(
     mgr,enlist[`on_ready]!enlist .qdev.receiver.on_ready;decl`dataset;schema;max_rows;`$"," vs first o`writers)];

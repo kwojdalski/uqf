@@ -222,3 +222,72 @@
 .qt.qetl.io.remote.test_an_unkeyed_write_is_refused:{[t]
     .qunit.assertThrows[{[ignored;b] .qetl.io.write[.qt.qetl.io.remote.client[];`rdeals;b]}[::];.qt.qetl.io.remote.batch[];
         "remote: rdeals takes keyed writes from the bounded shell, with their window";"no window, no write"]};
+
+/ --- a batch larger than one message, in chunks ------------------------------------------
+
+.qt.qetl.io.remote.chunked:{[f]
+    saved:.qetl.io.remote`chunk_rows`max_staged_rows`staged;
+    `.qetl.io.remote.chunk_rows set 1;
+    `.qetl.io.remote.staged set (enlist `)!enlist (::);
+    r:@[f;::;{[e] (`error;e)}];
+    `.qetl.io.remote.chunk_rows set saved 0;
+    `.qetl.io.remote.max_staged_rows set saved 1;
+    `.qetl.io.remote.staged set saved 2;
+    $[(0h=type r) and `error~first r; 'last r; r]}
+
+.qt.qetl.io.remote.chunk:{[s;seq;of;b]
+    o:.qt.qetl.io.remote.opts s;
+    .qetl.io.remote.chunk_keys!(`uat;`deals;`rdeals;.qetl.io.remote.batch_id[`uat;`deals;`rdeals;o;b];o;seq;of;$[of=1; b; enlist b seq])}
+
+.qt.qetl.io.remote.test_a_batch_in_chunks_commits_once_it_is_whole:{[t]
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    n:.qt.qetl.io.remote.chunked[{[x] .qt.qetl.io.remote.send[`append;.qt.qetl.io.remote.batch[]]}];
+    .qunit.assertEquals[n;2;"two one-row chunks, one batch of two rows"];
+    .qunit.assertEquals[count rdeals;2;"written once whole"];
+    .qunit.assertEquals[count .qetl.io.remote.journal;1;"journalled as one batch"]};
+
+.qt.qetl.io.remote.test_a_batch_whose_chunks_stop_half_way_writes_nothing:{[t]
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    r:.qt.qetl.io.remote.chunked[{[x] .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`append;0;2;.qt.qetl.io.remote.batch[]];`]}];
+    .qunit.assertEquals[r`status;`staged;"the first chunk is staged"];
+    .qunit.assertEquals[`rdeals in tables `.;0b;"nothing is written until the last"]};
+
+.qt.qetl.io.remote.test_a_committed_batch_answers_duplicate_at_its_first_chunk:{[t]
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    .qt.qetl.io.remote.send[`append;.qt.qetl.io.remote.batch[]];
+    r:.qt.qetl.io.remote.chunked[{[x] .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`append;0;2;.qt.qetl.io.remote.batch[]];`]}];
+    .qunit.assertEquals[r`status;`duplicate;"not staged again"];
+    .qunit.assertEquals[count rdeals;2;"nor written"]};
+
+.qt.qetl.io.remote.test_a_receiver_over_its_staging_limit_refuses_as_busy:{[t]
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    .qunit.assertThrows[{[ignored;x] .qt.qetl.io.remote.chunked[{[y]
+            `.qetl.io.remote.max_staged_rows set 1;
+            .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`append;0;2;.qt.qetl.io.remote.batch[]];`];
+            .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`upsert;0;2;.qt.qetl.io.remote.batch[]];`]}]}[::];::;
+        "remote: busy*";"a second batch's chunk past the limit is refused"]};
+
+.qt.qetl.io.remote.test_a_stale_staged_batch_is_dropped:{[t]
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    n:.qt.qetl.io.remote.chunked[{[x]
+        .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`append;0;2;.qt.qetl.io.remote.batch[]];`];
+        .qetl.io.remote.expire_staged[.z.p+.qetl.io.remote.stage_ttl+0D00:00:01]}];
+    .qunit.assertEquals[n;1;"its client gave up: the next run sends it whole"]};
+
+.qt.qetl.io.remote.test_chunks_that_do_not_reassemble_their_batch_are_refused:{[t]
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    b:.qt.qetl.io.remote.batch[];
+    c0:.qt.qetl.io.remote.chunk[`append;0;2;b];
+    c1:@[.qt.qetl.io.remote.chunk[`append;1;2;b];`rows;{[r] update notional:9e9 from r}];
+    .qunit.assertThrows[{[cs;x] .qt.qetl.io.remote.chunked[{[cs;y] .qetl.io.remote.accept_chunk[;`] each cs}[cs]]}[(c0;c1)];::;
+        "remote: the batch does not match its id - altered in transit";"refused, nothing written"];
+    .qunit.assertEquals[`rdeals in tables `.;0b;"nothing written"]};
+
+.qt.qetl.io.remote.test_the_gate_admits_a_chunk:{[t]
+    .qunit.assertTrue[.qetl.io.remote.permitted (`.qetl.io.remote.submit_chunk;.qt.qetl.io.remote.chunk[`append;0;1;.qt.qetl.io.remote.batch[]]);"a chunk"]};

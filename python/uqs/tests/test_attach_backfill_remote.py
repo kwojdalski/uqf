@@ -91,3 +91,30 @@ def test_an_extractor_with_no_receiver_fails_and_covers_nothing(world):  # noqa:
     assert code == 2, run_.log.read_text()
     assert "cannot reach the receiver" in run_.log.read_text()
     assert not (run_.state_dir / "etl_coverage").exists()
+
+
+def test_a_receiver_holds_detach_off_until_it_is_stopped(world):  # noqa: F811
+    from uqs.attach import backfill_owner
+    from uqs.attach.config import AttachmentError
+
+    port = _free_port()
+    started = backfill_remote.receive(world.paths, "pb-uat", WORKER, port=port, ipc=world.stack)
+    assert _listening(port), open(started["log"]).read()
+    with pytest.raises(AttachmentError, match="upstream_trades_backfill.receiver"):
+        backfill_owner.refuse_while_active("pb-uat")
+    stopped = backfill_remote.stop_receivers("pb-uat")
+    assert [r["pid"] for r in stopped] == [started["pid"]]
+    for _ in range(50):
+        if not _accepting(port):
+            break
+        time.sleep(0.2)
+    assert not _accepting(port), "the receiver is gone"
+    backfill_owner.refuse_while_active("pb-uat")  # nothing holds detach off any more
+
+
+def _accepting(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), 0.2).close()
+        return True
+    except OSError:
+        return False

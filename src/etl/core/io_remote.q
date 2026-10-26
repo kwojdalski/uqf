@@ -399,7 +399,10 @@
 .qetl.io.remote.send:{[call;attachment;dataset;target;batch;opts]
     o:(.qetl.io.remote.opt_keys inter key opts)#opts;
     id:.qetl.io.remote.batch_id[attachment;dataset;target;o;batch];
-    r:call (`.qetl.io.remote.submit;.qetl.io.remote.request_keys!(attachment;dataset;target;id;o;batch));
+    / a batch larger than one message goes in chunks (io_remote_chunks.q)
+    r:$[count[batch]>.qetl.io.remote.chunk_rows;
+        .qetl.io.remote.send_chunks[call;attachment;dataset;target;id;o;batch];
+        call (`.qetl.io.remote.submit;.qetl.io.remote.request_keys!(attachment;dataset;target;id;o;batch))];
     if[not r[`status] in `committed`duplicate; '"remote: the receiver answered ",.Q.s1 r];
     if[`duplicate=r`status;
         .[{.qetl.log.info[x;y;z]};(`qetl.io.remote;"the receiver already holds this batch - not sent twice";
