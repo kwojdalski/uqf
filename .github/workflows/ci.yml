@@ -294,7 +294,9 @@ jobs:
           UQF_Q_IMPL: peachq
           UQF_PEACHQ_STACK_TEST: "1"
           UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
-        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q python
+        # -n auto: in parallel (pytest-xdist); --dist loadgroup keeps the
+        # tests marked xdist_group (the whole-stack ones) on one worker.
+        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup python
 
   web:
     name: Browser application

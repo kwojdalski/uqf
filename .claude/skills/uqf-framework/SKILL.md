@@ -254,8 +254,11 @@ invariants, is `uqf-q-traps.md`.
   Its findings are clues to verify against a running q. A clean run is not
   proof.
 - **V2** The q suite is `q tests/run_tests.q`, on KDB-X. Python is
-  `uv run pytest -q`, from the repository root; its `testpaths` cover every
-  package and the gates. Named lanes run with
+  `uv run pytest -q -n auto --dist loadgroup` (pytest-xdist), from the
+  repository root; its `testpaths` cover every package and the gates. A test
+  writes only under its own `tmp_path`, never into the checkout, and one that
+  must not share (a whole stack on fixed ports) carries
+  `@pytest.mark.xdist_group("torq-stack")`. Named lanes run with
   `uv run python scripts/test.py <lane>`: `q-unit`, `q-unit-peachq`,
   `q-scripts`, `q-examples`, `q-docs`, `bundles`, `python`, `smoke`.
 - **V3** Assert the message, not just the throw. Use

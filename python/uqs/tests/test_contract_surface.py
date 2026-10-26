@@ -159,25 +159,33 @@ def test_a_process_offset_change_is_reported(baseline: dict) -> None:
     assert other["processes"][0]["procname"] in text
 
 
-def test_the_export_is_deterministic() -> None:
+def test_the_export_is_deterministic(tmp_path: Path) -> None:
     """Two runs of the same tree produce byte-identical output.
 
     Without this the first real comparison would be unreadable. It is also why
     the exporter records no timestamp: a timestamp makes every export differ
     from every other and destroys the diff the file exists to enable.
+
+    Each run exports to its own directory and the FILES are compared. This
+    once exported over the committed baseline and compared the exporter's
+    stdout - a one-line summary - so it rewrote a tracked file that other
+    tests read at the same moment under pytest-xdist, and compared counts
+    rather than the export.
     """
     if q_interpreter() is None:
         pytest.skip("no KDB-X interpreter")
     runs = []
-    for _ in range(2):
+    for run in ("first", "second"):
+        out = tmp_path / run
         result = subprocess.run(
-            [sys.executable, str(SCRIPT), "export"],
+            [sys.executable, str(SCRIPT), "export", "--out", str(out)],
             cwd=UQF_ROOT,
             capture_output=True,
             timeout=180,
         )
         assert result.returncode == 0, result.stderr.decode(errors="replace")
-        runs.append(result.stdout)
+        runs.append({p.name: p.read_bytes() for p in sorted(out.glob("*.csv"))})
+    assert runs[0], "the exporter wrote no CSV"
     assert runs[0] == runs[1], "the exporter is not deterministic"
 
 

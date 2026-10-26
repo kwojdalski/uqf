@@ -74,6 +74,8 @@ dev = [
     # right. Bump deliberately, with the findings reviewed.
     "ty==0.0.81",
     "httpx>=0.28",
+    "pytest-xdist>=3.8",
+    "pytest-testmon>=2.1",
 ]
 
 # ---------------------------------------------------------------- ty
