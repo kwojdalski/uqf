@@ -11,6 +11,15 @@ with that release's deploy.env loaded, exactly as the deployment runs it, so
 processes, ports, jobs and configuration are the SERVER's - a workstation
 whose checkout has moved on still drives what is actually deployed.
 
+A release installed by something other than `uqs deploy push` may be source
+only: `current` holds the tree, but no .venv and no deploy.env (#1642). Such a
+target says so, `launch_mode = "source"`, and names the interpreter its
+operator provisioned with uqf's dependencies (`launch_python`) and the
+environment file that sets q, TorQ and the runtime's data (`launch_env_file`).
+The command then runs the release's own source, `python -m uqs` from
+`current/python/uqs/src`, never an installed uqs. Nothing falls back: a
+prepared target whose .venv is missing is refused, not run from source.
+
 ssh runs as the deploy transport runs it (deploy/remote.py): BatchMode, so a
 missing key or an unknown host key fails instead of prompting, host-key
 checking left to the operator's ssh_config, and no credential on this side.
@@ -18,7 +27,9 @@ checking left to the operator's ssh_config, and no credential on this side.
 Three failures are told apart, because each needs a different fix:
 
   - ssh could not connect (its exit 255): the network, the key, the host key;
-  - the target has no deployed release under its dest (NO_RELEASE);
+  - the target has no deployed release under its dest (NO_RELEASE), or one
+    that cannot launch uqs: no CLI, no environment file, no interpreter, no
+    source, or an interpreter missing uqf's dependencies (UNLAUNCHABLE);
   - the remote uqs failed: its own exit code and its own words, passed through.
 
 A command that may change the server asks first, naming the target, or takes
@@ -36,12 +47,18 @@ from pathlib import Path
 
 from uqs.deploy import history, targets
 from uqs.deploy.config import DeployError
+from uqs.deploy.launch import (
+    NO_RELEASE,
+    RELEASE,
+    SOURCE,
+    UNLAUNCHABLE,
+    preflight,
+    settings,
+    uqs_command,
+)
 from uqs.deploy.remote import diagnostic
 from uqs.paths import UqsError
 
-#: The remote preflight's exit code when <dest>/current holds no release.
-#: Outside what uqs itself exits with, and below the shell's 126 and up.
-NO_RELEASE = 64
 #: What ssh exits with when it, rather than the remote command, failed.
 SSH_FAILED = 255
 DEFAULT_CONNECT_TIMEOUT = 10
@@ -90,10 +107,14 @@ class Remote:
     dest: str
     remote_user: str | None = None
     connect_timeout: int = DEFAULT_CONNECT_TIMEOUT
+    launch_mode: str = RELEASE
+    launch_python: str | None = None
+    launch_env_file: str | None = None
 
     def describe(self) -> str:
         who = f", as {self.remote_user}" if self.remote_user else ""
-        return f"{self.host}:{self.dest}{who}"
+        how = f", from source with {self.launch_python}" if self.launch_mode == SOURCE else ""
+        return f"{self.host}:{self.dest}{who}{how}"
 
 
 def remote_for(name: str | None, root: Path) -> Remote:
@@ -125,9 +146,11 @@ def remote_for(name: str | None, root: Path) -> Remote:
         raise UqsError(f"target {label}: host {host!r} is not an ssh destination")
     if not dest.startswith("/") or any(c.isspace() for c in dest):
         raise UqsError(f"target {label}: dest {dest!r} must be an absolute path without spaces")
+    mode, python, env_file = settings(label, t)
     return Remote(
         label, host, dest, str(user) if user else None,
         int(t.get("connect_timeout", DEFAULT_CONNECT_TIMEOUT)),
+        mode, python, env_file,
     )  # fmt: skip
 
 
@@ -196,9 +219,12 @@ def changes_the_server(args: Sequence[str]) -> bool:
 
 
 def remote_command(r: Remote, args: Sequence[str]) -> str:
-    """The one string the remote login shell runs: check there is a release,
-    then the release's own uqs with its deploy.env. Every value is quoted."""
-    run_uqs = "exec .venv/bin/uqs " + " ".join(shlex.quote(a) for a in args)
+    """The one string the remote login shell runs: check there is a release
+    that can launch uqs, then the release's own uqs with its environment.
+    Every value is quoted."""
+    run_uqs = f"exec {uqs_command(r.launch_mode, r.launch_python)} " + " ".join(
+        shlex.quote(a) for a in args
+    )
     return _in_release(r, run_uqs.rstrip())
 
 
@@ -206,22 +232,27 @@ def shell_command(r: Remote) -> str:
     """`uqs target shell`: an interactive shell in the release, as `poetry
     shell` is one in a project - deploy.env loaded, the release's uqs first
     on PATH, UQS_TARGET naming where it is."""
+    if r.launch_mode == SOURCE:
+        # No uqs script to put on PATH: the interpreter's directory instead,
+        # with the source on PYTHONPATH, so `python -m uqs` is the release's.
+        bindir = shlex.quote(str(Path(str(r.launch_python)).parent))
+        path = f'PATH={bindir}:"$PATH"'
+        hint = f"; run {Path(str(r.launch_python)).name} -m uqs"
+    else:
+        path, hint = 'PATH="$PWD/.venv/bin:$PATH"', ""
     return _in_release(
         r,
-        f'export UQS_TARGET={shlex.quote(r.name)} PATH="$PWD/.venv/bin:$PATH"; '
-        f'echo "uqs: {r.name} - $(basename "$(pwd -P)") in $PWD (exit to leave)"; '
+        f"export UQS_TARGET={shlex.quote(r.name)} {path}; "
+        f'echo "uqs: {r.name} - $(basename "$(pwd -P)") in $PWD (exit to leave{hint})"; '
         'exec "${SHELL:-bash}" -i',
     )
 
 
 def _in_release(r: Remote, then: str) -> str:
-    """Run `then` in r's current release with its deploy.env, as its account."""
-    current = shlex.quote(f"{r.dest.rstrip('/')}/current")
-    inner = (
-        f"if [ ! -L {current} ] || [ ! -x {current}/.venv/bin/uqs ]; then "
-        f"echo uqs: no deployed release at {current} >&2; exit {NO_RELEASE}; fi; "
-        f"cd {current} && . ./deploy.env && {then}"
-    )
+    """Run `then` in r's current release with its environment, as its
+    account, after checking each thing it needs - each missing one exits
+    with its own code (UNLAUNCHABLE), never falling back to another way."""
+    inner = preflight(r.dest, r.launch_mode, r.launch_python, r.launch_env_file) + then
     if r.remote_user:
         # as `uqs deploy push` runs every step: the service account's login
         return f"sudo -n -iu {shlex.quote(r.remote_user)} bash -c {shlex.quote(inner)}"
@@ -273,6 +304,8 @@ def refuse_unreached(r: Remote, code: int) -> None:
             f"target {r.name} has no deployed release under {r.dest} - "
             "deploy one with `uqs deploy push`, or correct the target's dest"
         )
+    if code in UNLAUNCHABLE:
+        raise UqsError(f"target {r.name} has a release but cannot launch uqs: {UNLAUNCHABLE[code]}")
 
 
 def current_release(r: Remote, runner: Runner = subprocess.run) -> str:

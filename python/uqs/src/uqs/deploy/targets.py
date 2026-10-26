@@ -64,10 +64,13 @@ PER_RUN = GIVEN_SEPARATELY | OVERRIDES
 #: Options make_config takes as one comma-separated string; a file lists them.
 LISTED_AS_TEXT = frozenset({"jobs", "live_check", "process_fields"})
 SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
+#: Keys only `uqs --target` reads, for a release push did not install: how it
+#: launches uqs (deploy/control.py, #1642).
+LAUNCH_KEYS = frozenset({"launch_mode", "launch_python", "launch_env_file"})
 #: Keys a target may hold that are not push options: the runtime it must run
-#: (checked against the artifact's), and labels, which `uqs list targets` shows
-#: and nothing deploys (#956).
-NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"})
+#: (checked against the artifact's), labels, which `uqs list targets` shows
+#: and nothing deploys (#956), and the launch keys.
+NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"}) | LAUNCH_KEYS
 #: The file's tables. Only a target names its environment.
 DEFAULTS, ENVIRONMENTS, TARGETS = "defaults", "environments", "targets"
 ENVIRONMENT = "environment"
