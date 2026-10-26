@@ -13,7 +13,8 @@
 /               `uqs job gaps` reports, with the twin that refills it
 /   on disk     stream_health_<job>.txt in the status directory, one JSON
 /               object written on each beat - what `uqs summary`'s Batches
-/               column reads, with no q
+/               column reads, with no q - and, for a polling feed, the
+/               pages it republished as possibly duplicated (#1651)
 / .
 / THE FILE IS READ OUTSIDE q, by python/uqs/src/uqs/stack/stream_health.py,
 / which carries its name and keys as literals: a renamed key is a change to
@@ -37,6 +38,37 @@
       .qetl.stream_health.batches job;
       `ok`failed`last_error`last_failure_at!(0;0;`;0Np)]}
 
+/ Per job, the polling pages fetched while the previous page was in doubt
+/ (#1651, stream_delivery.q): republished whole as possibly duplicated, or
+/ resolved by row key, and the rows each left out or sent again.
+.qetl.stream_health.doubts:([job:`symbol$()] duplicated:`long$(); duplicated_rows:`long$(); resolved:`long$(); resolved_rows:`long$(); last_range:`symbol$())
+
+/ What `job`'s in-doubt pages have come to in this process.
+/ @param job the streaming job's name
+/ @return dict duplicated (pages republished whole), duplicated_rows,
+/   resolved (pages settled by row key), resolved_rows (rows found already
+/   published and left out) and last_range (the last in-doubt page's from
+/   and to cursors, as text)
+/ @eg .qetl.stream_health.doubts_of[`nothing_streams_this]`duplicated  ->  0
+.qetl.stream_health.doubts_of:{[job]
+    $[job in exec job from .qetl.stream_health.doubts;
+      .qetl.stream_health.doubts job;
+      `duplicated`duplicated_rows`resolved`resolved_rows`last_range!(0;0;0;0;`)]}
+
+/ Count one in-doubt page of `job`'s.
+/ @param job the streaming job's name
+/ @param resolved 1b when a row key settled it, 0b when it was republished whole
+/ @param n rows left out as already published (resolved), else rows sent again
+/ @param m the page's in-flight marker, carrying from and to
+/ @return the job's counts after this page
+.qetl.stream_health.record_doubt:{[job;resolved;n;m]
+    h:.qetl.stream_health.doubts_of[job];
+    f:$[resolved; `resolved`resolved_rows; `duplicated`duplicated_rows];
+    h[f]+:1,n;
+    h[`last_range]:`$(-3!m`from)," -> ",-3!m`to;
+    `.qetl.stream_health.doubts upsert (enlist[`job]!enlist job),h;
+    h}
+
 / Count one batch of `job`'s: handled, or failed with `err`.
 / @param job the streaming job's name
 / @param ok 1b when on_batch returned, 0b when it threw
@@ -55,11 +87,13 @@
 / @return the file's path
 .qetl.stream_health.write:{[job;failing]
     h:.qetl.stream_health.of[job];
+    dup:.qetl.stream_health.doubts_of[job];
     dir:.qetl.status.status_dir[];
     system"mkdir -p ",dir;
     payload:`job`process`pid`host`at`ok`failed`failing`last_error`last_failure_at!(
         job;.qetl.run.proc_name[];.z.i;string .z.h;.z.p;h`ok;h`failed;failing;
         string h`last_error;$[null h`last_failure_at; ""; string h`last_failure_at]);
+    payload,:`possibly_duplicated_pages`possibly_duplicated_rows!dup`duplicated`duplicated_rows;
     target:dir,"/stream_health_",string[job],".txt";
     tmp:target,".tmp";
     (hsym `$tmp) 0: enlist .j.j payload;

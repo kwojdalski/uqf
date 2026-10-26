@@ -85,6 +85,7 @@
 \l src/etl/core/stream_job.q
 \l src/etl/core/stream_registries.q
 \l src/etl/core/stream_carry_recovery.q
+\l src/etl/core/stream_delivery.q
 \l src/etl/core/stream_poll.q
 \l src/etl/core/webhook.q
 \l src/etl/core/config_audit.q
