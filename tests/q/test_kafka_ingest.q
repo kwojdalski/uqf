@@ -245,8 +245,17 @@
 
 .qt.qetl.kafka.test_first_per_coordinate_keeps_the_first_in_batch_order:{[t]
     e:.qt.qetl.kafka.env[`t;0 0 0;1 0 1;("a";"b";"c")];
+    / a repeat is the same record: it carries the first copy's broker_time (#1659)
+    e:update broker_time:first broker_time by offset from e;
     f:.qetl.kafka.first_per_coordinate e;
     .qunit.assertEquals[(f`offset;f`payload);(1 0j;(enlist "a";enlist "b"));"offset 1 once, as its first copy, in batch order"]};
+
+/ #1659: a coordinate is (topic;partition;offset;broker_time), so the new run's record at a reused offset is not a repeat of the old run's.
+.qt.qetl.kafka.test_first_per_coordinate_keeps_a_restarted_records_at_a_reused_offset:{[t]
+    e:.qt.qetl.kafka.env[`t;0 0 0;1 1 1;("a";"b";"c")];
+    e:update broker_time:?[i=2;broker_time+0D01:00:00;first broker_time] from e;
+    f:.qetl.kafka.first_per_coordinate e;
+    .qunit.assertEquals[f`payload;(enlist "a";enlist "c");"the repeat with the same broker_time goes; the later record at the reused offset stays"]};
 
 .qt.qetl.kafka.test_not_in_finds_a_gap_that_a_mark_would_have_hidden:{[t]
     / Handled: 1 and 3. The mark would be 3 and call 2 done; the set does not.

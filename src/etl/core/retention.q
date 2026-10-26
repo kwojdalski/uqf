@@ -257,6 +257,8 @@
         n:0;
         if[r[`claims]>0;
             cl:.qetl.retention.claims_over[decl`dataset;r`range_from;r`range_to];
+            rc:cl where {[ds;c] not .qetl.coverage.outstanding[ds;c`partition;c`source_version]}[decl`dataset] each cl;
+            ready:distinct ([] dataset:(count rc)#decl`dataset; partition:rc`partition; source_version:rc`source_version);
             / a claim reaching past the removed day is cut, not dropped: its
             / remainders over days still on disk are staged BEFORE the supersede,
             / so a kill between them over-claims (harmless) rather than reports
@@ -264,7 +266,13 @@
             {[ds;r;c]
                 if[c[`range_from]<r`range_from; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;c`range_from;r`range_from;0]];
                 if[(r`range_to)<c`range_to; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;r`range_to;c`range_to;0]]}[decl`dataset;r] each cl;
-            n:sum {[ds;r;c] .qetl.coverage.supersede[ds;c`partition;c`source_version;r`range_from;r`range_to]}[decl`dataset;r] each cl];
+            n:sum {[ds;r;c] .qetl.coverage.supersede[ds;c`partition;c`source_version;r`range_from;r`range_to]}[decl`dataset;r] each cl;
+            / the remainders are recorded now, after their key's readiness watermark, so
+            / the days kept would stop being queryable until some worker wrote the key
+            / again (#1660). Re-advance the watermark - but only for a key with nothing
+            / unreleased before the cut, or this would release data the deployment has not
+            / yet made visible.
+            if[count ready; .qetl.coverage.mark_ready[ready;.z.p]]];
         .qetl.io.retire[decl`root;"D"$string r`item;r`target];
         .qetl.retention.record[id;enlist r;n]}[id;decl] each p;
     }
