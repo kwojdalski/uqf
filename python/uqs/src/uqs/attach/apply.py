@@ -21,10 +21,11 @@ is done, what is pending and what was not started.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, manifest, persist, plan, sorting
+from uqs.attach import config, manifest, plan, sorting
+from uqs.attach.apply_schema import block
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding, blockers
@@ -270,38 +271,6 @@ def _subscribers(ipc: Ipc, tp: Proc, table: str) -> int:
     return int(ipc.call(tp.endpoint, "probe", {"tables": [table]})["subscribers"].get(table, 0))
 
 
-def _persist(
-    m: Manifest, att: Attachment, tp: Proc, specs: list[TableSpec], deps: list[int],
-    uses: bool = False,
-) -> Step:  # fmt: skip
-    """The schema-file block for the tables this attachment created - or, with
-    `uses`, the `+uses` block for the ones it shares, so the dependency is back
-    after a restart too (#1446)."""
-    kind, ownership = ("schema_uses", SHARED) if uses else ("schema_block", CREATED)
-    block = persist.uses_name(att.name) if uses else att.name
-    path = (tp.probe or {}).get("schemafile", "")
-    name = ",".join(s.name for s in specs)
-    prior = m.done(kind, "schema-file", name)
-    if prior is not None:
-        record = persist.BlockRecord(**prior.post)
-        if not persist.problems(record, att, m.token, tuple(specs)):
-            return Step(kind, path, name, "already")
-    op = m.begin(kind, "schema-file", name, {"path": path}, deps)
-    try:
-        present = persist.present(path, block)
-        if uses:
-            record = persist.write_uses(att, m.token, tuple(s.name for s in specs), path)
-        else:
-            record = persist.write(att, m.token, tuple(specs), path)
-    except (OSError, AttachmentError) as exc:
-        m.finish(op, FAILED, note=str(exc))
-        raise AttachmentError(f"the schema file {path}: {exc}") from None
-    m.finish(op, DONE, ownership, asdict(record))
-    if present:
-        return Step(kind, path, name, "already", "the block was already there")
-    return Step(kind, path, name, "created", f"block added to {path}")
-
-
 def apply(
     att: Attachment,
     ipc: Ipc,
@@ -370,10 +339,10 @@ def apply(
                 s for s in att.tables
                 if (e := m.find("stp_register", tp.procname, s.name)) and e.ownership == SHARED
             ]  # fmt: skip
-            if att.persist == "schema-file" and made:
-                result.steps.append(_persist(m, att, tp, made, deps))
-            if att.persist == "schema-file" and used:
-                result.steps.append(_persist(m, att, tp, used, deps, uses=True))
+            if att.persist in config.DURABLE and made:
+                result.steps.append(Step(*block(m, ipc, att, tp, made, deps)))
+            if att.persist in config.DURABLE and used:
+                result.steps.append(Step(*block(m, ipc, att, tp, used, deps, uses=True)))
         except (IpcError, AttachmentError) as exc:
             m.set_state("partial", str(exc))
             result.state = "partial"
