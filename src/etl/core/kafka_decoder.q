@@ -116,7 +116,7 @@
     if[count r`dead; .qetl.kafka.decoder.var[job;`publish_dead] r`dead];
     pd:.qetl.kafka.decoder.var[job;`publish_decoded];
     {[pd;t;x] if[count x; pd[t;x]]}[pd]'[key r`out;value r`out];
-    .qetl.kafka.decoder.put[job;`marks;.qetl.kafka.advance[.qetl.kafka.decoder.var[job;`marks];rows]];
+    .qetl.kafka.decoder.put[job;`marks;.qetl.kafka.advance_runs[.qetl.kafka.decoder.var[job;`marks];rows]];
     sum count each r`out}
 
 / Private: a batch of envelope rows, minus what has been handled before.
@@ -136,7 +136,7 @@
         .qetl.log.warn[job;"partition offsets went backwards - its mark is reset and the new records are decoded";enlist[`partitions]!enlist count back];
         .qetl.kafka.decoder.put[job;`marks;.qetl.kafka.forget[.qetl.kafka.decoder.var[job;`marks];back]];
         .qetl.kafka.decoder.put[job;`done;.qetl.kafka.forget[.qetl.kafka.decoder.var[job;`done];back]]];
-    .qetl.kafka.first_per_coordinate .qetl.kafka.above_marks[.qetl.kafka.decoder.var[job;`marks];rows]}
+    .qetl.kafka.admit[.qetl.kafka.decoder.var[job;`marks];rows]}
 
 / Private: the marks, with each partition whose rows restart in the held log set to the highest offset of its last run.
 / .
@@ -149,16 +149,8 @@
 / @return the marks
 / @private
 .qetl.kafka.decoder.restart_marks:{[marks;held]
-    if[0=count held; :marks];
-    t:update back:offset<prev maxs offset by topic,partition from held;
-    t:update run:sums back by topic,partition from t;
-    t:update in_last:run=max run by topic,partition from t;
-    multi:0!select runs:max run by topic,partition from t;
-    multi:select topic,partition from multi where runs>0;
-    if[0=count multi; :marks];
-    r:0!select offset:max offset, broker_time:first broker_time where offset=max offset by topic,partition from t where in_last;
-    r:r where .qetl.kafka.pair_key[r`topic;r`partition] in .qetl.kafka.pair_key[multi`topic;multi`partition];
-    marks upsert `topic`partition xkey r}
+    tops:.qetl.kafka.restart_tops[held];
+    $[count tops; marks upsert tops; marks]}
 
 / Handle a batch on one of the job's tables.
 / .

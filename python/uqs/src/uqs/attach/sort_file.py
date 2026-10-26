@@ -6,7 +6,7 @@ again (#1517). The lifecycle around them is in sorting.py.
 the columns, fields trimmed, `sort` a boolean, an empty line a row of nulls, and
 no comment lines. So nothing can mark the rows an attachment added: what was
 added is recorded in the manifest instead, as the exact text, and a removal
-proves the text is still there, once, and alone for its table.
+proves the text is still there, once, as whole lines, and alone for its table.
 """
 
 from __future__ import annotations
@@ -180,6 +180,21 @@ def add(path: Path, expected: str, table: str, keys: list[Key], backup_dir: Path
     }
 
 
+def _whole_line_matches(text: str, run: str) -> list[int]:
+    """Where `run` sits in `text` as whole lines - a contiguous slice of lines that
+    starts at a line boundary - as character offsets. A plain substring search
+    would also find `trade,p,sym,1` inside `fxtrade,p,sym,1` (#1662)."""
+    lines, want = _lines(text), _lines(run)
+    if not want or not run.endswith("\n"):
+        return []
+    offsets, at = [], 0
+    for i, line in enumerate(lines):
+        if lines[i : i + len(want)] == want:
+            offsets.append(at)
+        at += len(line)
+    return offsets
+
+
 def removal_problems(post: dict, table: str) -> list[str]:
     """Why the rows recorded in `post` cannot be taken out of the file: gone, edited,
     or joined by other rows for the table. Empty when they are exactly as written."""
@@ -190,8 +205,7 @@ def removal_problems(post: dict, table: str) -> list[str]:
         current = read(path)
     except AttachmentError as exc:
         return [str(exc)]
-    run = post["run"]
-    found = current.text.count(run)
+    found = len(_whole_line_matches(current.text, post["run"]))
     if found != 1:
         return [
             f"the sort.csv rows this attachment added for {table} are "
@@ -209,7 +223,7 @@ def remove(post: dict, table: str, backup_dir: Path) -> dict:
         raise AttachmentError("; ".join(found))
     path, run, sep = Path(post["path"]), post["run"], post.get("separator", "")
     text = read(path).text
-    at = text.index(run)
+    (at,) = _whole_line_matches(text, run)
     rest = text[:at] + text[at + len(run) :]
     if sep and at == len(rest) and rest.endswith(sep):
         rest = rest[: -len(sep)]  # the line ending this attachment added before its run

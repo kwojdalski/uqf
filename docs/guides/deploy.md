@@ -340,7 +340,7 @@ uqs target add uat --ssh svc@uat.example --dest /opt/efx/uat/uqf --label env=uat
 uqs target check uat                       # ssh works; names the running release
 uqs --target uat summary
 uqs --target uat logs piggybankgeneralledger1 -f
-uqs --target uat query --proc rdb1 'select [20] from piggybank_general_ledger'
+uqs --target uat --yes query --proc rdb1 'select [20] from piggybank_general_ledger'
 uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the question
 ```
 
@@ -351,9 +351,10 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   other line, comments included, as it was.
 - **Confirmation.** A command that can change the server, such as `start`,
   `stop`, `restart`, `raw`, `job backfill`, `config set` or `data seed`, asks
-  first and names the target. Without a terminal it needs `--yes`. Read-only
-  commands run directly: `summary`, `logs`, `query`, `schema`, `list`, `graph`,
-  `job gaps` and `job runs show`.
+  first and names the target. Without a terminal it needs `--yes`. So do
+  `query`, which can send any q, and `summary -i`, whose browser starts and
+  stops processes. Read-only commands run directly: `summary`, `logs`, `schema`,
+  `list`, `graph`, `job gaps` and `job runs show`.
 - **ssh.** It runs with `BatchMode`, so a missing key or an unknown host key
   fails rather than prompts. Host-key checking is whatever your `ssh_config`
   says, and credentials stay on the server.
@@ -551,6 +552,12 @@ start command that returned is not taken as a recovery. `current` only moves in
 the activate stage, so it still names the previous release. The report's
 `rollback` field says what was done, and whether the restored processes
 verified.
+
+The same rollback runs when the push is interrupted rather than failed: Ctrl-C
+in the verify wait, or an unexpected error. The report then says stage
+`interrupted`, and the push exits with the interruption once the rollback is
+done. A report saying `running` is written into the release before anything is
+stopped or started, so a push killed outright leaves a release that prune keeps.
 
 What `current` names, and so which release `--restart` stops, is read again once
 the lock is held. A deployment that activated between this run's preflight and
