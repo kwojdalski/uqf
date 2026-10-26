@@ -135,16 +135,76 @@ def test_a_change_after_the_attestation_needs_a_new_one(repo):
     assert not check.report(base, head)[0]
 
 
-def test_an_attested_head_behind_its_base_is_reported(repo):
+def _attested_pr_then_master(repo, *master_paths: str) -> tuple[str, str, str]:
+    """An attested q PR forked from master, then `master_paths` committed on
+    master after the fork: (fork point, master's tip, the PR's head)."""
     fork = sh(repo, "rev-parse", "HEAD")
     sh(repo, "checkout", "-q", "-b", "pr")
     commit(repo, "src/a.q", "a:1\n")
     head = attest_here(repo)
     sh(repo, "checkout", "-q", "master")
-    base = commit(repo, "src/b.q", "b:1\n")
+    for path in master_paths:
+        commit(repo, path, "m\n")
+    return fork, sh(repo, "rev-parse", "HEAD"), head
+
+
+def test_an_attested_head_behind_a_judged_change_on_its_base_is_refused(repo):
+    """#1687: master changed a path a KDB-X hook reads, so the tree that
+    merges is one no run has seen - refused, and the path named."""
+    fork, base, head = _attested_pr_then_master(repo, "web/src/app.ts", "src/b.q")
     ok, why = check.report(base, head)
-    assert not ok and "does not contain the base's tip" in why
+    assert not ok
+    assert "does not contain the base's tip" in why and "src/b.q" in why
+    assert "web/src/app.ts" not in why
+    assert "Merge the base in" in why and "attest_kdbx.py" in why
     assert check.report(fork, head)[0]
+
+
+def test_an_attested_head_behind_only_unjudged_changes_on_its_base_passes(repo):
+    """#1687: master moved, but nothing any KDB-X hook judges - the merging
+    tree's judged paths are the attested tree's, so no re-attestation."""
+    _, base, head = _attested_pr_then_master(repo, "web/src/app.ts", "docs/guides/operations.md")
+    assert not check.contains(head, base)
+    ok, why = check.report(base, head)
+    assert ok, why
+    assert "the base has changed no path they judge" in why
+
+
+def test_ci_refuses_a_head_behind_a_judged_change_and_names_it(repo, tmp_path, capsys):
+    _, base, head = _attested_pr_then_master(repo, "python/uqs/x.py")
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 1 and "::error title=KDB-X attestation::" in out
+    assert "python/uqs/x.py" in summary
+
+
+def test_ci_passes_a_head_behind_only_unjudged_changes(repo, tmp_path, capsys):
+    _, base, head = _attested_pr_then_master(repo, "web/src/app.ts")
+    code, out, summary = _main(base, head, tmp_path, capsys)
+    assert code == 0 and "::error" not in out
+    assert "changed no path they judge" in summary
+
+
+def test_a_head_behind_its_base_still_needs_its_own_attestation(repo):
+    """Being behind an unjudged change excuses only the rebase, not the PR's
+    own missing attestation."""
+    sh(repo, "checkout", "-q", "-b", "pr")
+    head = commit(repo, "src/a.q", "a:1\n")
+    sh(repo, "checkout", "-q", "master")
+    base = commit(repo, "web/src/app.ts", "m\n")
+    ok, why = check.report(base, head)
+    assert not ok and "no KDB-X attestation" in why
+
+
+def test_an_unjudged_pr_behind_a_judged_change_needs_nothing(repo):
+    """A PR touching no judged path is unchanged by how far behind it is."""
+    sh(repo, "checkout", "-q", "-b", "pr")
+    head = commit(repo, "web/src/app.ts", "export const y = 1;\n")
+    sh(repo, "checkout", "-q", "master")
+    base = commit(repo, "src/b.q", "b:1\n")
+    assert check.report(base, head) == (
+        True,
+        "no path the KDB-X gates judge changed - no attestation needed",
+    )
 
 
 def _main(base: str, head: str, tmp_path, capsys) -> tuple[int, str, str]:
