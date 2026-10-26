@@ -1,55 +1,91 @@
 #!/usr/bin/env python3
-"""Run the KDB-X gates on this branch's tree and record that they passed (#1014).
+"""Run the KDB-X gates this branch needs and record that they passed (#1014).
 
-Hosted CI cannot run KDB-X, so whether a pull request passed the q-tests,
-q-coverage, contract-surface and q-facts hooks is known only on the machine
-that ran them. This runs those four hooks - by their ids in
-.pre-commit-config.yaml, so their definitions stay the one source - over the
-WHOLE tree, not just the files a commit staged, and when all pass records
-the tree as an empty commit carrying
+Hosted CI cannot run KDB-X, so whether a pull request passed the KDB-X hooks
+(HOOKS below, by their ids in .pre-commit-config.yaml so their definitions
+stay the one source) is known only on the machine that ran them.
 
-    KDB-X-gates: <the tree's sha>
+This runs the hooks the branch NEEDS: those whose `files:` scope (less
+`exclude:`), read from the config by scripts/gates/check_kdbx_attestation.py,
+takes a path changed in `origin/master...HEAD` - the three-dot diff, from the
+merge base. Each one runs over the WHOLE tree, not just the files a commit
+staged, and when all pass the tree is recorded as an empty commit carrying
 
-which scripts/gates/check_kdbx_attestation.py reads in CI. Run it last, after
-the final rebase: a rebase changes the tree and the attestation with it.
+    KDB-X-gates: <the tree's sha> hooks=<the hooks run, comma-sorted>
 
-Refuses a dirty tree, untracked files included since the hooks see them (what
-is tested must be what is committed), and any interpreter scripts/test.py
-does not identify as KDB-X.
+which the check reads in CI and holds to the same needed set. `--all` runs
+every hook, as this did before it was scoped. A branch that needs none
+records nothing, and says so.
 
-    uv run python scripts/dev/attest_kdbx.py
+Why skipping a hook the change does not touch still means "every KDB-X hook
+passed on the tree that merges": the check also requires the head to contain
+the base's tip, so the merge base IS that tip, and a hook whose scope the
+diff does not touch reads on the head exactly the files it read on master's
+tip. That tip's result for the hook is the one the last PR to touch its scope
+attested on its own exact tree, and every merge since left those files as
+they were. It rests on the same assumption the check always made for paths
+outside every scope: a hook's result depends only on the files its scope
+takes - which is why a scope must be complete, and why q-docs' scope is held
+to the documents with q-example blocks by scripts/gates/check_hook_scopes.py.
+
+Run it last, after the final rebase: a rebase changes the tree and the
+attestation with it. Refuses a dirty tree, untracked files included since
+the hooks see them (what is tested must be what is committed), and any
+interpreter scripts/test.py does not identify as KDB-X.
+
+    uv run python scripts/dev/attest_kdbx.py [--all] [--base REF]
 """
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+#: Where this script's sibling modules are loaded from - REPO's value at
+#: import, kept apart so a test that points REPO at a scratch repository
+#: still loads the real check.
+_SOURCE = REPO
 
 #: The hooks that need KDB-X, which hosted CI skips.
-HOOKS = ("q-tests", "q-coverage", "contract-surface", "q-facts")
+HOOKS = ("q-tests", "q-coverage", "q-docs", "contract-surface", "q-facts")
 
 #: The pre-commit CI runs the hooks with.
 PRE_COMMIT = "pre-commit==4.6.2"
 
 TRAILER = "KDB-X-gates"
 
+#: What the branch is compared with, as CI compares a PR with its base.
+BASE = "origin/master"
 
-def _test_py():
-    spec = importlib.util.spec_from_file_location("uqf_test_lanes", REPO / "scripts" / "test.py")
+
+def _load(name: str, rel: str):
+    spec = importlib.util.spec_from_file_location(name, _SOURCE / rel)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
+def _test_py():
+    return _load("uqf_test_lanes", "scripts/test.py")
+
+
 def git(*args: str) -> str:
     return subprocess.run(
         ["git", *args], cwd=REPO, capture_output=True, text=True, check=True
     ).stdout
+
+
+def needed(base: str) -> list[str]:
+    """The hooks whose scope takes a path changed in `base...HEAD`, sorted -
+    worked out by the check CI runs, so the two cannot disagree."""
+    check = _load("check_kdbx_attestation", "scripts/gates/check_kdbx_attestation.py")
+    changed = git("diff", "--name-only", f"{base}...HEAD").split()
+    return check.needed_hooks(changed)
 
 
 def run_hook(hook: str) -> bool:
@@ -96,13 +132,30 @@ def refusal() -> str | None:
     return None
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
+    parser.add_argument("--all", action="store_true", help="run every KDB-X hook")
+    parser.add_argument("--base", default=BASE, help=f"compare with this (default {BASE})")
+    args = parser.parse_args(argv)
+
+    why = dirt()
+    if why:
+        print(f"attest_kdbx: refused: {why}", file=sys.stderr)
+        return 1
+    hooks = sorted(HOOKS) if args.all else needed(args.base)
+    if not hooks:
+        print(
+            f"attest_kdbx: nothing in {args.base}...HEAD is in a KDB-X hook's scope - "
+            "no attestation needed, nothing recorded"
+        )
+        return 0
     why = refusal()
     if why:
         print(f"attest_kdbx: refused: {why}", file=sys.stderr)
         return 1
     tree = git("rev-parse", "HEAD^{tree}").strip()
-    for hook in HOOKS:
+    print(f"attest_kdbx: needed: {', '.join(hooks)}", flush=True)
+    for hook in hooks:
         print(f"attest_kdbx: {hook} ...", flush=True)
         if not run_hook(hook):
             print(f"attest_kdbx: {hook} failed - nothing recorded", file=sys.stderr)
@@ -113,6 +166,8 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
+    why_these = "every KDB-X hook (--all)" if args.all else f"the hooks {args.base}...HEAD needs"
+    trailer = f"{TRAILER}: {tree} hooks={','.join(hooks)}"
     try:
         git(
             "commit",
@@ -120,7 +175,7 @@ def main() -> int:
             "-m",
             f"KDB-X gates pass on tree {tree[:12]}",
             "-m",
-            f"{', '.join(HOOKS)}, run on KDB-X over the whole tree.\n\n{TRAILER}: {tree}",
+            f"{', '.join(hooks)} - {why_these} - run on KDB-X over the whole tree.\n\n{trailer}",
         )
     except subprocess.CalledProcessError as exc:
         # The commit runs the repository's hooks too; one that refuses (a
@@ -130,7 +185,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"attest_kdbx: recorded {TRAILER}: {tree} - push to show it on the PR")
+    print(f"attest_kdbx: recorded {trailer} - push to show it on the PR")
     return 0
 
 
