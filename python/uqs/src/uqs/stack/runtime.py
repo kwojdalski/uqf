@@ -19,7 +19,7 @@ from typing import Any
 from uqs.interpreter import q_command
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
-from uqs.stack import alive, deployment, gateway_access, qtree, start_policy
+from uqs.stack import alive, deployment, gateway_access, qtree, start_overrides, start_policy
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
 from uqs.stack.carriable import check_carriable
@@ -128,6 +128,7 @@ def run_torq_sh(
     capture: bool = False,
     timeout: float | None = None,
     selected: Sequence[str] | None = None,
+    skips: start_overrides.Overrides = start_overrides.NONE,
 ) -> subprocess.CompletedProcess[str]:
     """Check the TorQ launcher, bootstrap, then run the launcher with *args*
     under the generated env: `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER`
@@ -145,8 +146,9 @@ def run_torq_sh(
     one.
 
     `selected` is a profile start's set: what TorQ discovers (stack/deployment.py).
+    `skips` names refusals to skip for this start (stack/start_overrides.py).
     """
-    start_policy.refuse_start(paths, args, base_port)
+    start_policy.refuse_start(paths, args, base_port, skips)
     # The launcher first: bootstrap writes the data directory, process.csv and setenv.sh,
     # and a launcher that is going to be refused must not have had that written for it.
     launcher = torq_launcher(paths)

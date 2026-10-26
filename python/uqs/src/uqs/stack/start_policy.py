@@ -17,6 +17,11 @@ They live here now, below every front end:
 What stays in a front end is how it TELLS the operator: the CLI's warnings
 about unfed inputs and the connection cap for a positional start, which is
 the operator's call rather than this tree's mistake (see resolve_profiles).
+
+Two refusals may be skipped for one start, by name and with a reason
+(stack/start_overrides.py, #1643): the q-version refusal and the profile's
+connection-budget estimate. The default skips nothing, so a front end that
+passes no overrides keeps every refusal.
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ from collections.abc import Sequence
 
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import attach_state, occupancy, qtree, runtime_profiles
+from uqs.stack import attach_state, occupancy, qtree, runtime_profiles, start_overrides
 from uqs.stack import procs as stack_procs
 from uqs.stack.env import with_interpreter
 
@@ -34,7 +39,12 @@ from uqs.stack.env import with_interpreter
 STARTING_VERBS = ("start", "restart")
 
 
-def refuse_start(paths: UqsPaths, args: Sequence[str], base_port: int | None) -> None:
+def refuse_start(
+    paths: UqsPaths,
+    args: Sequence[str],
+    base_port: int | None,
+    overrides: start_overrides.Overrides = start_overrides.NONE,
+) -> None:
     """Raise if torq.sh `args` would start what a start may not: an unknown
     process (#887), a q too old for the tree as written (#882), or ports
     another stack holds. Anything but a starting verb passes untouched.
@@ -49,7 +59,8 @@ def refuse_start(paths: UqsPaths, args: Sequence[str], base_port: int | None) ->
         return
     procs = started_procs(args)
     stack_procs.assert_known_procnames(paths, procs)
-    qtree.refuse_unloadable(paths, with_interpreter(paths))
+    if not start_overrides.skipped(paths, overrides, "q_version", args[0], procs):
+        qtree.refuse_unloadable(paths, with_interpreter(paths))
     occupancy.refuse_if_taken(paths, base_port, procs)
     attach_state.refuse_unverified_start(paths, procs, base_port)
 
@@ -62,7 +73,10 @@ def started_procs(args: Sequence[str]) -> str:
 
 
 def resolve_profiles(
-    paths: UqsPaths, names: str, extra: Sequence[str] = ()
+    paths: UqsPaths,
+    names: str,
+    extra: Sequence[str] = (),
+    overrides: start_overrides.Overrides = start_overrides.NONE,
 ) -> tuple[tuple[str, ...], str]:
     """The processes `names` (comma-separated profiles) stands for, plus
     `extra` process names, and a description of the set - or a UqsError.
@@ -100,6 +114,8 @@ def resolve_profiles(
     )
     problem = profiles.over_budget_procs(members, what)
     runtime_profiles.refuse_what_the_runtime_lacks(paths, members, what)
-    if problem:
+    if problem and not start_overrides.skipped(
+        paths, overrides, "profile_budget", "start", " ".join(members)
+    ):
         raise UqsError(problem)
     return members, what

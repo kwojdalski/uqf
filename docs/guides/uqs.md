@@ -590,6 +590,39 @@ set, and TorQ discovers as it always has.
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.
 
+### Skipping a start check, for one command
+
+Two of a start's refusals guard against a start that would go wrong, rather than
+one that cannot run. To try it anyway, for instance testing compatibility, skip
+that one check by name and give the reason:
+
+```bash
+uqs start rdb1 --skip-q-version-check "checking which jobs load on uat's 4.1"
+uqs start --profile fx --skip-profile-budget-check "full licence on this host"
+uqs restart rdb1 --skip-q-version-check "..."     # up takes both too
+```
+
+- `--skip-q-version-check` starts despite a KDB-X older than 5.0 for the tree as
+  written. The tree is not converted. A process that cannot load it fails, and
+  the failure is in its log.
+- `--skip-profile-budget-check` starts (or `--print`s) a `--profile` past the
+  connection-budget estimate. The licence's own limit is still q's to enforce.
+
+Each override:
+
+- needs a nonempty reason;
+- applies to this command only;
+- prints a warning naming what may go wrong;
+- is appended to `start_overrides.jsonl` in the runtime's data directory, with
+  the command, the processes and the runtime.
+
+An override that would skip nothing is refused: `--skip-q-version-check` with
+`--print`, or `--skip-profile-budget-check` without `--profile`. Nothing else
+can be skipped. Port ownership, process names, attachment verification,
+converted-source integrity and the launcher's checks still refuse. The MCP
+server and the browser never skip anything. Through `uqs --target`, the reason
+is forwarded as given, and the start asks first as always.
+
 ### Idle subscribers
 
 A subscriber started without its producer subscribes **successfully**. The table
