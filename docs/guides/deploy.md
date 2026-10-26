@@ -359,13 +359,53 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   says, and credentials stay on the server.
 - **Failures.** Three kinds are reported separately:
   - ssh could not connect;
-  - the target has no deployed release under its `dest`;
+  - the target has no deployed release under its `dest`, or has one that cannot
+    launch `uqs`. The error names what is missing: the CLI, the environment
+    file, the interpreter, the source, or the interpreter's dependencies;
   - the remote command failed, with its own output and exit code.
 - **Querying from here instead.** `uqs query --target NAME` runs the query on
   this machine through an ssh tunnel to the target, with ports from the target's
   release. See [A deployed target, from
   here](uqs.md#a-deployed-target-from-here). `uqs --target X query --target Y`
   is refused.
+
+### A release `uqs deploy push` did not install
+
+Some servers get uqf from another release process, which installs the source
+tree and switches `current` but creates no `.venv` and no `deploy.env`. Set
+`launch_mode = "source"` on such a target, and name the interpreter and
+environment file its operator provisioned:
+
+```toml
+[targets.uat]
+host = "svc@uat.example"
+dest = "/opt/efx/uat/uqf"
+launch_mode = "source"
+launch_python = "/opt/python/3.12/bin/python3"
+launch_env_file = "/opt/efx/uat/uat-runtime.env"
+```
+
+`uqs --target uat <command>` then:
+
+1. enters `<dest>/current`;
+2. loads `launch_env_file`;
+3. runs `launch_python -m uqs` with the release's own `python/uqs/src` first on
+   `PYTHONPATH`, so it is that release's CLI that runs, not an installed one.
+
+Quoting, `remote_user`, confirmation and exit codes work as for a pushed
+release.
+
+Nothing is installed for you:
+
+- `launch_python` must already have uqf's dependencies; a missing one is refused
+  before the command runs.
+- `launch_env_file` must set what a pushed release's `deploy.env` would: where
+  q, TorQ and the runtime's data are.
+
+Both paths must be absolute. A target without `launch_mode`, or with
+`launch_mode = "release"`, is a pushed release as before. Its missing `.venv` is
+reported as such, never run from source instead. Setting either path without
+`launch_mode = "source"` is refused. `uqs deploy push` ignores these three keys.
 
 ### Deployments and the default per server
 
