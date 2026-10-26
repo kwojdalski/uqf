@@ -18,15 +18,16 @@ the stack stopped matching would be worse than none.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, persist, plan, sorting
+from uqs.attach import config, persist, plan, reach, sorting
 from uqs.attach.config import Attachment, AttachmentError
-from uqs.attach.facts import Facts
+from uqs.attach.facts import Facts, Host
 from uqs.attach.findings import blockers
 from uqs.attach.manifest import CREATED, DONE, SHARED, Manifest
 from uqs.attach.preflight import identity
+from uqs.attach.preflight_components import runtime_only
 from uqs.attach.remote import Ipc
 from uqs.attach.schema import TableSpec, differences
 from uqs.attach.topology import Observation, Proc, observe
@@ -44,6 +45,8 @@ class Check:
 class VerifyResult:
     checks: list[Check]
     state: str
+    #: true and worth saying, but not a failed check: what a runtime-only registration costs
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -190,9 +193,17 @@ def preflight_now(att: Attachment, ipc: Ipc, root: Path, m: Manifest) -> list[Ch
 
 
 def verify(
-    att: Attachment, ipc: Ipc, state_dir: Path | None = None, root: Path | None = None
+    att: Attachment,
+    ipc: Ipc,
+    state_dir: Path | None = None,
+    root: Path | None = None,
+    host: Host | None = None,
 ) -> VerifyResult:
-    """Read-only checks; records `verified` (or takes it back) in the manifest."""
+    """Read-only checks; records `verified` (or takes it back) in the manifest.
+
+    With the publisher already running here and the stack elsewhere, the stack
+    is also asked to reach it back (reach.py, #1651)."""
+    root, host = root or repo_root(), host or Host()
     with config.locked(att.name, state_dir):
         if not Manifest.exists(att.name, state_dir):
             raise AttachmentError(f"attachment {att.name} has not been applied")
@@ -205,8 +216,11 @@ def verify(
         obs, structural = observe(att, ipc)
         checks = [Check(f.component, False, f.message) for f in structural] + run(att, obs, m)
         checks += [Check(*c) for c in sorting.checks(att, obs, ipc)]
-        checks += preflight_now(att, ipc, root or repo_root(), m)
-        result = VerifyResult(checks, m.state)
+        checks += preflight_now(att, ipc, root, m)
+        port = plan.publisher_port(att, root).port
+        checks += [Check(*c) for c in reach.checks(att, ipc, port, host)]
+        warned = [runtime_only(att, Facts(host=host))] if att.persist == "runtime-only" else []
+        result = VerifyResult(checks, m.state, warned)
         if result.ok and m.state != "verified":
             m.set_state("verified", f"{len(checks)} check(s) passed")
         elif not result.ok and m.state == "verified":
@@ -216,3 +230,12 @@ def verify(
             )
         result.state = m.state
         return result
+
+
+def revoke(att: Attachment, state_dir: Path | None, why: str) -> None:
+    """Take a verified attachment back to `applied` - the start gate closed -
+    on a failure found outside verify itself (the reach after a start)."""
+    with config.locked(att.name, state_dir):
+        m = Manifest.load(att.name, state_dir)
+        if m.state == "verified":
+            m.set_state("applied", why)

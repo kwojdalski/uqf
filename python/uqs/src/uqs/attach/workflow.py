@@ -2,9 +2,10 @@
 means, and the stages that execute it, in order.
 
 One command runs the whole workflow: resolve the configuration, preflight,
-show the plan, confirm, then save -> apply -> verify -> start. The stages are
-the existing ones (apply.py, verify.py, publisher.py), called in order;
-nothing here re-implements a check. Execution never relies on an earlier
+show the plan, confirm, then save -> apply -> verify -> start, and with the
+stack on another machine -> reach. The stages are the existing ones (apply.py,
+verify.py, publisher.py, reach.py), called in order; nothing here re-implements
+a check. Execution never relies on an earlier
 preview: apply builds its own plan against the stack as it is when it runs,
 and verify reads it again. The CLI (cli/attach.py) renders what these return.
 """
@@ -16,12 +17,13 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from uqs.attach import apply as applying
-from uqs.attach import config, jobs, plan
+from uqs.attach import config, jobs, plan, reach
 from uqs.attach import verify as verifying
 from uqs.attach.config import Attachment, AttachmentError, Storage
+from uqs.attach.facts import Host
 from uqs.attach.findings import blockers
 from uqs.attach.manifest import Manifest
-from uqs.attach.publisher import Publisher
+from uqs.attach.publisher import Publisher, stop_publisher
 from uqs.attach.remote import Ipc
 from uqs.attach.service import create, manifest_of, parse_discovery, save_planned
 
@@ -174,7 +176,7 @@ def already_running(att: Attachment, p: plan.Plan, state_dir: Path | None = None
 
 @dataclass
 class Stage:
-    #: save | apply | verify | start
+    #: save | apply | verify | start | reach
     name: str
     #: done | failed | skipped
     status: str
@@ -205,6 +207,7 @@ def execute(
     start: bool = True,
     confirmed_risks: str = "",
     state_dir: Path | None = None,
+    host: Host | None = None,
 ) -> Outcome:
     """Save, apply, verify and start, in that order, stopping at the first
     failure: a failed apply or verify never reaches the publisher.
@@ -214,7 +217,7 @@ def execute(
     saved. Every stage is safe to repeat, so the recovery for any failure
     includes running the same command again.
     """
-    att, out, name = resolved.att, Outcome(), resolved.att.name
+    att, out, name, host = resolved.att, Outcome(), resolved.att.name, host or Host()
     again, back = f"`uqs job attach {name}`", f"`uqs job detach {name}`"
     running = already_running(att, p, state_dir)
 
@@ -260,14 +263,15 @@ def execute(
         stage("apply", "done", f"{out.applied.mutations()} change(s); {out.applied.state}", t)
     t = time.monotonic()
     try:
-        out.verified = verifying.verify(att, ipc, state_dir, root)
+        out.verified = verifying.verify(att, ipc, state_dir, root, host)
     except AttachmentError as exc:
         stage("verify", "failed", str(exc), t)
     else:
         failed = [c.name for c in out.verified.checks if not c.ok]
         stage("verify", "failed" if failed else "done",
               f"{len(failed)} check(s) failed: {failed[0]}" if failed
-              else f"{len(out.verified.checks)} check(s) passed", t)  # fmt: skip
+              else "; ".join([f"{len(out.verified.checks)} check(s) passed",
+                              *out.verified.warnings]), t)  # fmt: skip
     if out.stages[-1].status == "failed":
         out.recovery = (
             [
@@ -301,4 +305,35 @@ def execute(
             ]
             return out
         stage("start", "done", f"{att.publisher.procname} on stack {att.stack.id}", t)
+        if reach.applies(att, host):
+            _reach(att, ipc, root, publisher, out, state_dir)
     return out
+
+
+def _reach(
+    att: Attachment,
+    ipc: Ipc,
+    root: Path,
+    publisher: Publisher,
+    out: Outcome,
+    state_dir: Path | None,
+) -> None:
+    """The publisher just started, and the stack is elsewhere: can the stack reach
+    it back? If not it is not attached: the gate closes again and the publisher
+    this run started is stopped, so it is never left running as if verified."""
+    t, port = time.monotonic(), plan.publisher_port(att, root).port
+    found = None if port is None else reach.after_start(att, ipc, port, publisher)
+    seconds = round(time.monotonic() - t, 3)
+    if found is None:
+        out.stages.append(Stage("reach", "done", "the stack reaches the publisher", seconds))
+        return
+    out.stages.append(Stage("reach", "failed", f"{found.code}: {found.message}", seconds))
+    verifying.revoke(att, state_dir, f"{found.code}: {found.facts['address']}")
+    proc = att.publisher.procname
+    try:
+        stopped = stop_publisher(att, publisher)
+    except AttachmentError as exc:
+        out.recovery = [f"{exc}: stop it (`uqs stop {proc} --port {att.stack.id}`)"]
+    else:
+        out.recovery = [f"{proc} was stopped" if stopped else f"{proc} is not running"]
+    out.recovery.append(found.action)

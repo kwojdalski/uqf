@@ -272,18 +272,27 @@ def storage(att: Attachment, obs: Observation) -> list[Finding]:
     return out
 
 
+def runtime_only(att: Attachment, facts: Facts) -> str:
+    """What a runtime-only registration costs, said in the plan and in verify's
+    output alike. With the stack elsewhere (#1651) nothing on this machine sees
+    its tickerplant restart, so the re-apply is the operator's to make."""
+    said = (
+        "runtime-only: restarting the tickerplant DROPS the registration; the attachment "
+        f"then reports registration-lost and must be re-applied (`uqs job attach {att.name}`)"
+    )
+    if facts.host.is_local(att.stack.host):
+        return said
+    return said + (
+        f". The stack is on {att.stack.host}, and nothing on this machine is told when its "
+        f"tickerplant restarts: stop {att.publisher.procname}, then re-apply - the attach "
+        "re-verifies before it starts the publisher, a bare `uqs start` does not"
+    )
+
+
 def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]:
     tp = obs.tickerplant
     if att.persist == "runtime-only":
-        return [
-            Finding(
-                "warning",
-                "RUNTIME_ONLY",
-                "schema",
-                "runtime-only: restarting the tickerplant DROPS the registration; the "
-                "attachment then reports registration-lost until applied again",
-            )
-        ]
+        return [Finding("warning", "RUNTIME_ONLY", "schema", runtime_only(att, facts))]
     probe = (tp.probe or {}) if tp else {}
     path = probe.get("schemafile", "")
     why = ""
