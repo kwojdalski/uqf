@@ -65,6 +65,19 @@ def refuse_start(
     attach_state.refuse_unverified_start(paths, procs, base_port)
 
 
+def with_publisher_extras(paths: UqsPaths, args: Sequence[str]) -> list[str]:
+    """`args`, plus the `-extras` an attachment's publisher needs to find a
+    stack on another machine (attach_state.publisher_extras). Only a start or
+    restart is changed."""
+    args = list(args)
+    if not args or args[0] not in STARTING_VERBS:
+        return args
+    extras = attach_state.publisher_extras(paths, started_procs(args))
+    if not extras:
+        return args
+    return [*args, *extras] if "-extras" in args else [*args, "-extras", *extras]
+
+
 def started_procs(args: Sequence[str]) -> str:
     """The processes torq.sh `args` start: the words between the verb and its
     first flag (`-extras`, `-csv`), or `all` when there are none."""
