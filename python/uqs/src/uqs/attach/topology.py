@@ -118,6 +118,33 @@ def refused(att: Attachment, p: Proc) -> Finding:
     )
 
 
+def tickerplant(
+    stack: Stack, services: list[dict[str, str]], ipc: Ipc, tables: list[str]
+) -> tuple[Proc | None, list[Finding]]:
+    """The attachment's tickerplant among the `services` discovery lists, asked
+    about `tables` - or None and the finding that says why there is not one."""
+    tps = [s for s in services if s["proctype"] == TICKERPLANT]
+    if stack.tickerplant:
+        tps = [s for s in services if s["procname"] == stack.tickerplant]
+    if len(tps) != 1:
+        return None, [
+            Finding(
+                "blocker",
+                "NO_TICKERPLANT" if not tps else "AMBIGUOUS_TICKERPLANT",
+                "tickerplant",
+                f"discovery lists {len(tps)} {TICKERPLANT} process(es) "
+                f"({', '.join(s['procname'] for s in tps) or 'none'}); "
+                "an attachment needs exactly one",
+                "name it with --tickerplant",
+            )
+        ]
+    port = port_of(tps[0]["hpup"])
+    if port is None:
+        return None, []
+    host = host_of(tps[0]["hpup"], stack)
+    return ask(ipc, host, tps[0]["procname"], TICKERPLANT, port, tables), []
+
+
 def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     """Ask discovery, then the tickerplant and the consumers.
 
@@ -151,27 +178,8 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     for svc in obs.services:
         by_type.setdefault(svc["proctype"], []).append(svc)
 
-    tps = by_type.get(TICKERPLANT, [])
-    if stack.tickerplant:
-        tps = [s for s in obs.services if s["procname"] == stack.tickerplant]
-    if len(tps) != 1:
-        found.append(
-            Finding(
-                "blocker",
-                "NO_TICKERPLANT" if not tps else "AMBIGUOUS_TICKERPLANT",
-                "tickerplant",
-                f"discovery lists {len(tps)} {TICKERPLANT} process(es) "
-                f"({', '.join(s['procname'] for s in tps) or 'none'}); "
-                "an attachment needs exactly one",
-                "name it with --tickerplant",
-            )
-        )
-    else:
-        port = port_of(tps[0]["hpup"])
-        if port is not None:
-            obs.tickerplant = ask(
-                ipc, host_of(tps[0]["hpup"], stack), tps[0]["procname"], TICKERPLANT, port, names
-            )
+    obs.tickerplant, missing = tickerplant(stack, obs.services, ipc, names)
+    found.extend(missing)
 
     want = set(stack.consumers)
     for kind in CONSUMERS:

@@ -127,6 +127,7 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
         raise ValidationFailed(
             f"unknown action {action!r} - expected one of {sorted(LIFECYCLE_ACTIONS)}"
         )
+    from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
     from uqs.paths import UqsError
     from uqs.stack import runtime
 
@@ -321,6 +322,7 @@ def start_backfill(
     bound_to = _require_utc("range_to", range_to)
 
     from uqf_frontend.errors import BackfillNotStarted
+    from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
     from uqs.paths import UqsError
     from uqs.stack.backfill import procname_for
     from uqs.stack.backfill import start as start_backfill
