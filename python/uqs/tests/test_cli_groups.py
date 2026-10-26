@@ -37,7 +37,18 @@ def _group(*path: str) -> TyperGroup:
         ((), {"job", "setup", "connector"}),
         (
             ("job",),
-            {"new", "remove", "install", "backfill", "preview", "gaps", "runs", "attach", "detach"},
+            {
+                "new",
+                "remove",
+                "install",
+                "backfill",
+                "preview",
+                "gaps",
+                "runs",
+                "attach",
+                "detach",
+                "receive",
+            },  # fmt: skip
         ),
         (("job", "runs"), {"status", "list", "show", "audit", "migrate"}),
         (("setup",), {"odbc"}),
@@ -90,6 +101,7 @@ def test_job_help_keeps_authoring_apart_from_operations():
         "runs",
         "attach",
         "detach",
+        "receive",
     }
 
 

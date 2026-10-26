@@ -345,43 +345,64 @@ the day they happened, and only readers that reload see them.
 
 ### Extracting on one machine, writing on the stack's (#1650)
 
-`--attach` needs the HDB directory on the machine that runs the worker. When the
-source's driver and credentials must stay on an extraction machine instead, the
-destination can own the write: `.qetl.io.remote` (`src/etl/core/io_remote.q`)
-splits the io manager in two.
+`--attach` writes the HDB from the machine that runs the worker, so the HDB must
+be on that machine. When the source's driver and credentials must stay on an
+extraction machine instead, the stack's machine writes and the extraction
+machine sends. Use the same attachment, by the same name, on both:
 
-- **On the stack's machine**, a receiver holds the real writer: an
-  `.qetl.io.hdb_scoped` over the attachment's HDB, so the lock, the date bounds,
-  the end-of-day fence and recovery are those of a direct write. The operator
-  grants one attachment and dataset to it with `.qetl.io.remote.serve`, naming
-  the target table, its schema, a row limit per batch and the users who may
-  write. `.qetl.io.remote.permitted` is the check a `.z.pg` gate makes: only the
-  receiver's entry points are admitted, with plain data as arguments.
-- **On the extraction machine**, `.qetl.io.remote.manager` is the worker's io
-  manager. Each window's batch is one synchronous message. Coverage and the
-  checkpoint move only after the receiver says the batch is committed.
+```bash
+# on the stack's machine: admit the destination and start its receiver
+uqs job receive piggybank_ledger_backfill --attach pb-uat --port 7090
 
-Before writing anything, the receiver refuses: - an ungranted dataset, or a user
-the grant does not name; - a schema mismatch, or a batch over the row limit; -
-rows outside the window; - a request that carries anything but data (a path, a
-function, an extra key).
+# on the extraction machine: extract, and send each window to the receiver
+uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:7090 \
+    --from 2026-10-01 --to 2026-10-02 --version historical-v1 --wait
+```
 
-A batch is identified by an md5 of its destination, window and rows, and the
-receiver's journal, persisted to its own file, records each one: - A batch
-resent after a lost acknowledgement is answered `duplicate`, and nothing is
-appended. - Under `append` or `fail`, a different batch for a window already
-committed is refused, as is a batch the receiver was writing when it stopped (in
-doubt): check the target, then `.qetl.io.remote.forget` it. - `upsert`,
-`replace` and `ignore` write it again, which is harmless.
+`receive` checks everything a local attached run checks: the verified
+attachment, its pinned HDB, the stack's writers and readers, and the end-of-day
+fence. It then starts `scripts/dev/remote_receiver.q`. The receiver writes
+through `.qetl.io.hdb_scoped`, so the lock, the date bounds, the fence and
+recovery are those of a direct write. It reloads the readers as rows finish, and
+stops itself where the fence begins. It authenticates the attachment's stack
+user through q's `-U` file, written into the destination's state directory and
+readable only by its owner. The extractor connects as that user.
 
-`finish` reports what is durably written apart from whether the readers
-reloaded, and a failed reload is recorded in `.qetl.io.remote.status[]`. It does
-not undo the write.
+The extractor (`--writer`) needs no HDB: the attachment names it, and only the
+receiver opens it. It plans the windows against its own coverage. Each window's
+batch is one synchronous message (`.qetl.io.remote.manager`), and coverage and
+the checkpoint move only once the receiver has committed it. The windows are
+released as queryable only once the receiver reports that its readers reloaded.
+Otherwise the run ends `written_not_queryable`, as a local one does.
 
-`scripts/test.py q-remote-writer` runs this between two processes. Not yet done: -
-the `uqs job backfill --attach` wiring, and starting a receiver in the stack; -
-chunked transfers with backpressure (one batch is one message); - detach
-coordination.
+Before writing anything, the receiver refuses:
+
+- an ungranted dataset, or a user the grant does not name;
+- a schema mismatch, or a batch over the row limit (`--max-rows`);
+- rows outside the window;
+- a request that carries anything but data (a path, a function, an extra key).
+
+Its `.z.pg` admits the receiver's entry points (`.qetl.io.remote.permitted`),
+and its `.z.ps` refuses everything.
+
+A batch is identified by an md5 of its destination, window and rows. The
+receiver's journal records each one, persisted in the destination's state
+directory:
+
+- A batch resent after a lost acknowledgement is answered `duplicate`, and
+  nothing is appended.
+- Under `append` or `fail`, a different batch for a window already committed is
+  refused. So is a batch the receiver was writing when it stopped, because it is
+  in doubt: check the target, then `.qetl.io.remote.forget` it.
+- `upsert`, `replace` and `ignore` write it again, which is harmless.
+
+`scripts/test.py q-remote-writer` runs the receiver and an extractor between two
+processes. Not yet done:
+
+- chunked transfers with backpressure (one batch is one message);
+- detach coordination with a receiver running on another machine (a receiver
+  holds the attachment's owner record on its own machine, so detach refuses
+  there).
 
 Reactions of the backfilled dataset (`rebuild_positions`, for example) write
 through the same manager and are refused, and recorded as owed: they belong on
