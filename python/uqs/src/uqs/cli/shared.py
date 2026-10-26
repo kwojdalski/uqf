@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Sequence
+from importlib.metadata import version as installed_version
 from pathlib import Path
 from typing import Annotated
 
@@ -85,6 +86,13 @@ def _env_log_level() -> str:
     return DEFAULT_LOG_LEVEL
 
 
+def _print_version(given: bool) -> None:
+    """`uqs --version`: the installed uqs, eagerly, before any command runs."""
+    if given:
+        print(f"uqs {installed_version('uqs')}")
+        raise typer.Exit()
+
+
 @app.callback()
 def _configure(
     ctx: typer.Context,
@@ -117,6 +125,12 @@ def _configure(
     ] = None,
     yes: Annotated[
         bool, typer.Option("--yes", help="With --target: run without asking", hidden=True)
+    ] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", is_eager=True, callback=_print_version, help="Print uqs's version and exit"
+        ),
     ] = False,
 ) -> None:
     """Global options, applied before any subcommand runs."""

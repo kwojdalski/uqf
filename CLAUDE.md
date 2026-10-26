@@ -80,15 +80,23 @@ in the main checkout.
    `git worktree remove .claude/worktrees/issue-<number>`.
 
    If the PR touches q (a `.q` file, `tests/q/`, a generator or what it
-   generates) and you have KDB-X, run `uv run python scripts/dev/attest_kdbx.py`
-   after the LAST rebase and push again. Hosted CI cannot run the KDB-X gates;
-   this runs them over the whole tree and records a `KDB-X-gates: <tree>`
-   trailer. CI's "KDB-X attestation" check fails a PR that changes a path those
-   gates judge unless its head tree carries one (#1014, #1543). A rebase changes
-   the tree, so it needs a fresh run. The only way past it is the
-   `kdbx-attestation-override` PR label, for a change no KDB-X run can judge
-   (docs-only, no KDB-X available): the check then passes with a warning that
-   names the label, so the override stays on the record.
+   generates, any `.py`) and you have KDB-X, run
+   `uv run python scripts/dev/attest_kdbx.py` after the LAST rebase and push
+   again. Hosted CI cannot run the KDB-X gates (q-tests, q-coverage, q-docs,
+   contract-surface, q-facts). This runs only the ones whose `files:` scope the
+   branch's diff from `origin/master` touches - each over the whole tree - and
+   records a `KDB-X-gates: <tree> hooks=<ids>` trailer; `--all` runs every one,
+   and a branch that needs none records nothing. A Python-only change needs only
+   contract-surface, plus q-facts where it touches what q-facts generates -
+   seconds, not the q suite; a `.q` change needs all of them; a doc needs q-docs
+   only if it has a `q-example:` block. CI's "KDB-X attestation" check works out
+   the same set from the PR's merge base and fails the PR unless its head tree
+   carries trailers covering every hook in it (#1014, #1543); a trailer without
+   `hooks=` counts as all of them. A rebase changes the tree, so it needs a
+   fresh run. The only way past it is the `kdbx-attestation-override` PR label,
+   for a change no KDB-X run can judge (docs-only, no KDB-X available): the
+   check then passes with a warning that names the label, so the override stays
+   on the record.
 
 Only triage without edits (reading code, commenting, labelling) may stay in the
 main checkout.

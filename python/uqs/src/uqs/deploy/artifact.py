@@ -15,6 +15,7 @@ import hashlib
 import json
 import re
 import tarfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,8 +40,17 @@ PLATFORMS = {
     "aarch64": ("manylinux_2_28_aarch64", "manylinux_2_17_aarch64", "manylinux2014_aarch64"),
 }
 
+#: A wheel platform tag's glibc floor: manylinux_2_28_x86_64 needs 2.28; the
+#: legacy names stand for theirs (PEP 600).
+MANYLINUX = re.compile(r"manylinux_(\d+)_(\d+)_")
+LEGACY_MANYLINUX = {"manylinux1": (2, 5), "manylinux2010": (2, 12), "manylinux2014": (2, 17)}
+
 #: What `uname -m` may call an architecture, by the name used here.
 ARCH_ALIASES = {"amd64": "x86_64", "arm64": "aarch64"}
+
+#: A q licence file (k4.lic, kc.lic, kx.lic): never in any artifact (#1557).
+#: A licence is the server's; a bundled q is PeachQ, which needs none.
+LICENCE = re.compile(r"\.lic$", re.IGNORECASE)
 
 
 class ReleaseError(Exception):
@@ -107,6 +117,20 @@ class Artifact:
         return self.manifest["python"]["app_wheel"]
 
 
+def glibc_floor(wheels: Iterable[str]) -> str | None:
+    """The glibc a set of wheels needs, from their file names: each wheel needs
+    the lowest floor among its platform tags, and the set the highest of those.
+    None when no wheel is manylinux - a pure-Python set needs no glibc."""
+    floors = []
+    for name in wheels:
+        tags = name.removesuffix(".whl").split("-")[-1].split(".")
+        found = [(int(m[1]), int(m[2])) for t in tags if (m := MANYLINUX.match(t))]
+        found += [v for t in tags for k, v in LEGACY_MANYLINUX.items() if t.startswith(f"{k}_")]
+        if found:
+            floors.append(min(found))
+    return "{}.{}".format(*max(floors)) if floors else None
+
+
 def _unsafe(name: str) -> bool:
     parts = Path(name).parts
     return name.startswith("/") or ".." in parts or not parts
@@ -138,14 +162,15 @@ def read_artifact(path: Path, expected_sha256: str | None = None) -> Artifact:
 
 def checked_archive(path: Path, manifest_name: str, expected_sha256: str | None = None) -> Checked:
     """An archive, checked whole before anything trusts it - a release's, or
-    a TorQ runtime's (deploy/torq_runtime.py).
+    a TorQ or q runtime's (deploy/torq_runtime.py, deploy/q_runtime.py).
 
     The archive's sha256 must match its .sha256 file when one sits beside it
     (and `expected_sha256` when given); whether one did is `pinned`, for the
     caller's policy to judge. Every member must be a regular file
     at a relative path, listed in the manifest (`manifest_name`, a member)
     with the hash it has; nothing may be missing and nothing extra. A member
-    that fails any of these is named - an archive is never half-trusted.
+    that fails any of these is named - an archive is never half-trusted. A
+    licence file (LICENCE) is refused wherever it sits, listed or not.
     """
     if not path.is_file():
         raise ReleaseError("artifact", f"no artifact at {path}")
@@ -172,6 +197,10 @@ def checked_archive(path: Path, manifest_name: str, expected_sha256: str | None 
                 raise ReleaseError("artifact", f"member {member.name!r} is not a relative path")
             if not member.isfile():
                 raise ReleaseError("artifact", f"member {member.name!r} is not a regular file")
+            if LICENCE.search(member.name):
+                raise ReleaseError(
+                    "artifact", f"member {member.name!r} is a licence file - none is ever shipped"
+                )
             if member.name in seen or (member.name == manifest_name and manifest is not None):
                 raise ReleaseError("artifact", f"member {member.name!r} appears twice")
             f = tar.extractfile(member)
@@ -256,7 +285,9 @@ def compatible(target: dict, facts: dict[str, str], *, accept_converted: bool = 
     """Why a server cannot run a release built for `target`; empty when it can.
 
     `facts` are what the server reported: os (uname -s), arch (uname -m),
-    python (the major.minor uv finds there) and qversion (its q's .z.K).
+    glibc (getconf GNU_LIBC_VERSION), python (the major.minor uv finds
+    there, or a bundled Python's), qversion (its q's .z.K) and, for a
+    bundled q, qimpl. target["glibc"] is the floor the release's wheels set.
     `accept_converted` is --accept-converted-release: a release converted for
     a newer kdb+ than the server's is then left to its smoke test (#936).
     """
@@ -270,8 +301,18 @@ def compatible(target: dict, facts: dict[str, str], *, accept_converted: bool = 
             f"the server is {facts.get('arch') or 'an unknown architecture'}, "
             f"the release is built for {target['arch']}"
         )
+    floor = target.get("glibc")
+    if floor and (not facts.get("glibc") or _older(facts["glibc"], floor)):
+        have = f"glibc {facts['glibc']}" if facts.get("glibc") else "not glibc"
+        problems.append(
+            f"the server's C library is {have}, and the release's wheels need glibc {floor} "
+            "or later"
+        )
     version = facts.get("qversion", "")
-    if target.get("q") is None and loads_nested_contexts(KDBX, version) is False:
+    # A bundled PeachQ (qimpl) runs only a runtime declared on it, whose q_tree
+    # says what it loads (runtimes.Runtime): kdb+'s version rule is not its.
+    kdbx = (facts.get("qimpl") or KDBX) == KDBX
+    if kdbx and target.get("q") is None and loads_nested_contexts(KDBX, version) is False:
         problems.append(
             nested_contexts_problem(
                 "the server's q",

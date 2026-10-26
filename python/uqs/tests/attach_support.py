@@ -8,6 +8,7 @@ asked only read-only questions.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -119,6 +120,23 @@ class FakeStack:
         self.started: list[str] = []
         #: "host:port" -> q's error, for an address discovery's `reach` cannot open
         self.unreachable: dict[str, str] = {}
+        #: "host:port" -> q's error, for an address the publisher's own `reach` cannot open
+        self.publisher_cannot: dict[str, str] = {}
+        #: why the publisher (a local endpoint) cannot be asked at all, if it cannot
+        self.publisher_error = ""
+        #: (endpoint, op, request) of every call to the publisher uqs started here
+        self.publisher_calls: list[tuple[Endpoint, str, dict]] = []
+        #: ports whose process refuses the attachment's credential (kola's auth failure)
+        self.refuse: set[int] = set()
+        #: the files on the STACK's machine, by path - what `schema_file` reads and
+        #: changes there; never this machine's disk (#1651)
+        self.stack_files: dict[str, bytes] = {}
+        #: can the tickerplant's user write its schema file
+        self.stack_writable = True
+        #: what `disk_marks` finds on the stack's machine: earlier logs, and the
+        #: directories (save directory, HDB) that hold a partition of the table
+        self.stack_logs: list[dict[str, Any]] = []
+        self.stack_partitions: set[str] = set()
         sid = str(stack_id)
         self.add(
             probe("discovery1", "discovery", stack_id + 1, sid, torq=torq, services=[]),
@@ -223,7 +241,11 @@ class FakeStack:
         return next(p for p in self.procs.values() if p["procname"] == procname)
 
     def call(self, endpoint: Endpoint, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        if endpoint.local:
+            return self._publisher(endpoint, op, request)
         self.calls.append((endpoint.port, op, request))
+        if endpoint.port in self.refuse:
+            raise IpcError(endpoint, op, "the credential of user 'admin' was refused", True)
         if endpoint.port in self.down or endpoint.port not in self.procs:
             raise IpcError(endpoint, op, "cannot connect: Connection refused")
         proc = self.procs[endpoint.port]
@@ -238,6 +260,11 @@ class FakeStack:
             "ledger_leave": self._leave,
             "sort_reload": self._sort_reload,
             "reach": self._reach,
+            "schema_file": self._schema_file,
+            "disk_marks": lambda p, req: {
+                "logs": self.stack_logs,
+                "partitions": [d in self.stack_partitions for d in req["dirs"]],
+            },
         }.get(op)
         if handler is None:
             raise AssertionError(f"FakeStack does not answer {op}")
@@ -336,6 +363,51 @@ class FakeStack:
         p["sortrows"] = [
             {"tabname": r.table, "att": r.att, "col": r.column, "sort": r.sort} for r in rules
         ]
+
+    def _publisher(self, endpoint: Endpoint, op: str, req: dict[str, Any]) -> dict[str, Any]:
+        """The publisher uqs started on this machine: it answers `reach` with its own
+        credential, as reach.q does in it."""
+        self.publisher_calls.append((endpoint, op, req))
+        if self.publisher_error:
+            raise IpcError(endpoint, op, self.publisher_error, "refused" in self.publisher_error)
+        if op != "reach":
+            raise AssertionError(f"the publisher is not asked {op}")
+        where = f"{req['host']}:{req['port']}"
+        error = self.publisher_cannot.get(where, "")
+        return {"reached": not error, "address": where, "error": error}
+
+    def remote_schema(self, path: str, text: str) -> None:
+        """Start the tickerplant with -schemafile `path`, a file on the stack's machine."""
+        self.named("stp1")["schemafile"] = path
+        self.stack_files[path] = text.encode()
+
+    def _schema_file(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        """schema_file.q, on the stack's files: read, or one append or cut computed
+        from bytes whose md5 the request names."""
+        path = p["schemafile"]
+        out = {"path": path, "detail": ""}
+        if not path:
+            return out | {"status": "refused", "detail": "not started with -schemafile"}
+        if path not in self.stack_files:
+            return out | {"status": "absent"}
+        cur = self.stack_files[path]
+        md5 = hashlib.md5(cur, usedforsecurity=False).hexdigest()
+        if req["action"] == "read":
+            return out | {"status": "read", "md5": md5, "bytes": cur.hex(),
+                          "writable": self.stack_writable}  # fmt: skip
+        if req["expect"] != md5:
+            return out | {"status": "refused", "detail": "the file changed since it was read"}
+        if not self.stack_writable:
+            return out | {"status": "failed", "detail": "permission denied"}
+        if req["action"] == "append":
+            new = cur + bytes.fromhex(req["bytes"])
+            assert new.count(f"/ BEGIN uqs-attach {req['block']} ".encode()) == 1
+        else:
+            new = cur[: req["start"]] + cur[req["end"] :]
+            new = new[:-1] if req["trim"] else new
+        self.stack_files[path] = new
+        status = "appended" if req["action"] == "append" else "cut"
+        return out | {"status": status, "md5": hashlib.md5(new, usedforsecurity=False).hexdigest()}
 
     def _reach(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
         where = f"{req['host']}:{req['port']}"

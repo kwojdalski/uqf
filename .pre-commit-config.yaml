@@ -236,10 +236,22 @@ repos:
             # scenario added there found a false claim in plant_tables.q about
             # `quotes` being usable by cross_book_at unreshaped.
             python3 scripts/test.py q-scripts
-            # The ```q blocks in docs/ marked `<!-- q-example: ... -->`; CI
-            # runs the same lane on PeachQ, so here is where KDB-X checks them.
-            python3 scripts/test.py q-docs
-        files: '\.(q|md)$'
+        files: '\.q$'
+        pass_filenames: false
+
+      # The ```q blocks in docs/ marked `<!-- q-example: ... -->`; CI runs the
+      # same lane on PeachQ (q-docs-peachq below), so here is where KDB-X
+      # checks them. Its own hook, not a line of q-tests, so a docs edit asks
+      # only for this lane - and only a doc that HAS a marked block: the scope
+      # names those documents, and scripts/gates/check_hook_scopes.py fails
+      # when it names one more or one fewer than scripts/dev/doc_examples.py
+      # finds. Every other .md cannot change what q-docs runs, so it needs no
+      # KDB-X attestation (scripts/dev/attest_kdbx.py).
+      - id: q-docs
+        name: Run the q blocks in docs/ on KDB-X
+        entry: python3 scripts/test.py q-docs
+        language: system
+        files: '\.q$|^scripts/dev/doc_examples\.py$|^docs/(architecture/event-tape|guides/config-audit|guides/new-pipeline|reference/quant-modules|services/cross-arbitrage)\.md$'
         pass_filenames: false
 
       # The same doc blocks again, on PeachQ. Both interpreters are REQUIRED
@@ -253,7 +265,7 @@ repos:
         name: Run the q blocks in docs/ on PeachQ too
         entry: python3 scripts/test.py q-docs-peachq
         language: system
-        files: '\.(q|md)$'
+        files: '\.q$|^scripts/dev/doc_examples\.py$|^docs/(architecture/event-tape|guides/config-audit|guides/new-pipeline|reference/quant-modules|services/cross-arbitrage)\.md$'
         pass_filenames: false
 
       - id: doc-links

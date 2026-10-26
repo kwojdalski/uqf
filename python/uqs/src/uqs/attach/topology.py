@@ -40,6 +40,8 @@ class Proc:
     #: the decoded `probe` answer, None when it could not be asked
     probe: dict[str, Any] | None = None
     error: str = ""
+    #: it answered, and refused the attachment's credential (#1651)
+    refused: bool = False
 
     @property
     def up(self) -> bool:
@@ -97,7 +99,50 @@ def ask(
         answer = ipc.call(endpoint, "probe", request)
         return Proc(answer.get("procname") or procname, proctype, endpoint, answer)
     except IpcError as exc:
-        return Proc(procname, proctype, endpoint, None, exc.reason)
+        return Proc(procname, proctype, endpoint, None, exc.reason, exc.refused)
+
+
+def refused(att: Attachment, p: Proc) -> Finding:
+    """A process that answered and refused the attachment's credential (kola's
+    authentication failure): said as that, not as a process that is down (#1651)."""
+    st = att.stack
+    secret = f"${st.password_env}" if st.password_env else "TorQ's demo password"
+    return Finding(
+        "blocker",
+        "STACK_REFUSES_ATTACH_CREDENTIALS",
+        p.procname,
+        f"{p.endpoint.label} refuses the attachment's credential (user {st.user}, password "
+        f"from {secret}): {p.error}",
+        "give the user and --password-env the stack's access list accepts; the process is up",
+        {"user": st.user},
+    )
+
+
+def tickerplant(
+    stack: Stack, services: list[dict[str, str]], ipc: Ipc, tables: list[str]
+) -> tuple[Proc | None, list[Finding]]:
+    """The attachment's tickerplant among the `services` discovery lists, asked
+    about `tables` - or None and the finding that says why there is not one."""
+    tps = [s for s in services if s["proctype"] == TICKERPLANT]
+    if stack.tickerplant:
+        tps = [s for s in services if s["procname"] == stack.tickerplant]
+    if len(tps) != 1:
+        return None, [
+            Finding(
+                "blocker",
+                "NO_TICKERPLANT" if not tps else "AMBIGUOUS_TICKERPLANT",
+                "tickerplant",
+                f"discovery lists {len(tps)} {TICKERPLANT} process(es) "
+                f"({', '.join(s['procname'] for s in tps) or 'none'}); "
+                "an attachment needs exactly one",
+                "name it with --tickerplant",
+            )
+        ]
+    port = port_of(tps[0]["hpup"])
+    if port is None:
+        return None, []
+    host = host_of(tps[0]["hpup"], stack)
+    return ask(ipc, host, tps[0]["procname"], TICKERPLANT, port, tables), []
 
 
 def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
@@ -115,7 +160,9 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     obs = Observation(disc)
     if not disc.up:
         found.append(
-            Finding(
+            refused(att, disc)
+            if disc.refused
+            else Finding(
                 "blocker",
                 "DISCOVERY_UNREACHABLE",
                 "discovery",
@@ -131,27 +178,8 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     for svc in obs.services:
         by_type.setdefault(svc["proctype"], []).append(svc)
 
-    tps = by_type.get(TICKERPLANT, [])
-    if stack.tickerplant:
-        tps = [s for s in obs.services if s["procname"] == stack.tickerplant]
-    if len(tps) != 1:
-        found.append(
-            Finding(
-                "blocker",
-                "NO_TICKERPLANT" if not tps else "AMBIGUOUS_TICKERPLANT",
-                "tickerplant",
-                f"discovery lists {len(tps)} {TICKERPLANT} process(es) "
-                f"({', '.join(s['procname'] for s in tps) or 'none'}); "
-                "an attachment needs exactly one",
-                "name it with --tickerplant",
-            )
-        )
-    else:
-        port = port_of(tps[0]["hpup"])
-        if port is not None:
-            obs.tickerplant = ask(
-                ipc, host_of(tps[0]["hpup"], stack), tps[0]["procname"], TICKERPLANT, port, names
-            )
+    obs.tickerplant, missing = tickerplant(stack, obs.services, ipc, names)
+    found.extend(missing)
 
     want = set(stack.consumers)
     for kind in CONSUMERS:
