@@ -1,6 +1,6 @@
 """Float precision in log lines: one global cutoff, LOG_FLOAT_DECIMALS.
 
-get_logger (core.py) returns a CutFloatsLogger, so every `log = get_logger(...)`
+get_logger (core.py) returns a CutFloatsLogger, so every `log = get_logger()`
 in this tree writes a float with at most LOG_FLOAT_DECIMALS places. The
 helpers that build their text before logging (utils.py, decorators.py) call
 format_float / cut_floats themselves.

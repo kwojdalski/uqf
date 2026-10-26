@@ -32,7 +32,7 @@ from uqs.stack.procs import effective_process_rows
 from uqs.stack.reporter import write_reporter_config
 from uqs.stack.site_fields import process_csv_fields
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 def bootstrap(

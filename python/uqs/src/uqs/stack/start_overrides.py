@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Every override's use, one JSON object a line, in the runtime's data directory.
 OVERRIDES_LOG = "start_overrides.jsonl"

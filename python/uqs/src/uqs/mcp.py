@@ -42,7 +42,7 @@ from uqs.stack.envfiles import load_repo_env_files
 from uqs.stack.listing import LISTABLE_KINDS
 
 configure_logging(component="uqs_mcp")
-log = get_logger(__name__)
+log = get_logger()
 
 mcp = FastMCP(
     name="uqs",

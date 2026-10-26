@@ -36,7 +36,7 @@ from uqs.deploy.stages import Deployment
 from uqs.deploy.torq_runtime import RUNTIMES_DIR
 from uqs.logger import get_logger
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: A release id as `uqs deploy build` names one: UTC build time, then the revision.
 RELEASE_ID = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{12}")

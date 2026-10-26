@@ -26,7 +26,7 @@ from uqs.paths import UqsError, repo_root
 from uqs.stack import gateway as stack_gateway
 from uqs.stack import runtime
 
-log = get_logger(__name__)
+log = get_logger()
 
 LOOPBACK = tunnel.LOOPBACK
 

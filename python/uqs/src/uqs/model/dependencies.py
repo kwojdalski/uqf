@@ -33,7 +33,7 @@ from uqs.logger import get_logger
 from uqs.model.plant_schema import _publishers
 from uqs.model.registry import PIPELINES
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Tables that ALSO come from something outside the process list, and what
 #: that something is.

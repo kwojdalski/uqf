@@ -35,7 +35,7 @@ from uqs.deploy.selection import Selection, started_by
 from uqs.deploy.stages import Deployment
 from uqs.logger import get_logger
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 def _report(dep: Deployment, release: str) -> dict:

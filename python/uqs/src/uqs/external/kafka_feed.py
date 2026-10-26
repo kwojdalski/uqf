@@ -44,7 +44,7 @@ from uqs.paths import UqsPaths
 from uqs.stack import kafka_extra
 from uqs.stack.procs import get_process_config
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Same credential the q feeds, the cryptorust recorder and the Databento
 #: handler use: stp1 enforces access control on every connection, and

@@ -47,7 +47,7 @@ from pathlib import Path
 from uqs.logger import get_logger
 from uqs.model import schemas
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: A partition directory: a date, the only scheme this stack writes.
 _PARTITION = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")

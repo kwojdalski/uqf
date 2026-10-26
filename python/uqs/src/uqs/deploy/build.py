@@ -59,7 +59,9 @@ from pathlib import Path
 from uqs.deploy import foreign_blocks, kafka, portable
 from uqs.deploy.artifact import (
     FORMAT,
+    INSTALLER,
     MANIFEST,
+    PACKAGING_MODE,
     PLATFORMS,
     REQUIREMENTS,
     WHEEL_DIR,
@@ -82,7 +84,7 @@ from uqs.logger import get_logger
 from uqs.paths import repo_root
 from uqs.runtimes import DEFAULT_RUNTIME
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
 BUNDLE_LEDGER = "src/etl/installed_bundles.json"
@@ -196,7 +198,7 @@ def build_artifact(
     target: Target,
     python_dir: Path,
     bundles: dict | None = None,
-    runtime: str | None = None,
+    runtime: str = DEFAULT_RUNTIME,
     portable: dict | None = None,
     hdb_shape: dict[str, list[str]] | None = None,
     kafka_sel: kafka.Selected | None = None,
@@ -228,12 +230,16 @@ def build_artifact(
             "wheels": len(wheels),
         },
         "files": {name: _sha256(path) for name, path in sorted(members.items())},
+        # the runtime the release runs (#852), whose bundles it carries; always
+        # written, as release_runtime refuses a manifest without one (#1648)
+        "runtime": runtime,
+        # what the artifact is (#1646): the tree with every Python dependency as a
+        # locked wheel, installable with no network - by `uqs deploy push`, or on
+        # the server by the installer it carries
+        "packaging": {"mode": PACKAGING_MODE, "installer": INSTALLER},
     }
     if bundles:
         manifest["bundles"] = bundles
-    if runtime:
-        # the runtime the release runs (#852), whose bundles it carries
-        manifest["runtime"] = runtime
     if portable:
         # what was converted for the server's kdb+ (#861); target["q"] says which
         manifest["portable"] = portable

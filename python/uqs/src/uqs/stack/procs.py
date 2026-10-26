@@ -35,7 +35,7 @@ from uqs.stack.monitor_budget import (
 )
 from uqs.stack.site_fields import declared, refuse_unknown_field
 
-log = get_logger(__name__)
+log = get_logger()
 
 # Vendored rows this tree deliberately starts with the stack, against the
 # upstream default. One entry so far:

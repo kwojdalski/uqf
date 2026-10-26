@@ -19,12 +19,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.interpreter import KDBX, loads_nested_contexts, nested_contexts_problem
+from uqs.runtimes import RUNTIMES
 
 FORMAT = 1
 MANIFEST = "RELEASE_MANIFEST.json"
 RELEASE_DIR = ".release"
 REQUIREMENTS = f"{RELEASE_DIR}/requirements.txt"
 WHEEL_DIR = f"{RELEASE_DIR}/wheels"
+#: How a release is packaged (#1646): its dependencies inside it, as wheels.
+PACKAGING_MODE = "offline"
+#: The stdlib-only script that installs an unpacked release in place, offline.
+INSTALLER = "scripts/install_release.py"
 
 #: The architectures a release can target, and the wheel platform tags pip
 #: may take for each, newest glibc baseline first. A pure-Python wheel
@@ -193,20 +198,24 @@ def checked_archive(path: Path, manifest_name: str, expected_sha256: str | None 
     return Checked(sha256=digest, pinned=pinned, manifest=manifest, manifest_sha256=manifest_sha256)
 
 
-#: What a manifest WITHOUT a `runtime` means (#883). Until #883 a build for
-#: the default runtime left the field out, so its meaning was whatever the
-#: deploying uqs assumed. Every such release was built for the default of its
-#: day, and that was `uqf` in every version of runtimes.RUNTIMES - so this is
-#: frozen to `uqf`, not read from DEFAULT_RUNTIME: were the default to change,
-#: reading the current one would misread every old release. Builds since #883
-#: always write the field, so only releases from before it come here.
-LEGACY_RUNTIME = "uqf"
-
-
 def release_runtime(manifest: dict) -> str:
-    """The runtime a release was built for - its manifest's, or for a release
-    from before #883, which left the default out, LEGACY_RUNTIME."""
-    return manifest.get("runtime") or LEGACY_RUNTIME
+    """The runtime a release was built for, as its manifest names it. Every
+    build since #883 writes it, so a manifest that leaves it out, or names a
+    runtime this uqs does not know, is refused rather than guessed (#1648)."""
+    runtime = manifest.get("runtime")
+    if not runtime:
+        raise ReleaseError(
+            "artifact",
+            "the manifest names no runtime - a release from before #883 is not supported; "
+            "rebuild it with `uqs deploy build`",
+        )
+    if runtime not in RUNTIMES:
+        raise ReleaseError(
+            "artifact",
+            f"the manifest names runtime {runtime!r}, which this uqs does not know "
+            f"(known: {', '.join(RUNTIMES)})",
+        )
+    return runtime
 
 
 def _older(version: str, than: str) -> bool:

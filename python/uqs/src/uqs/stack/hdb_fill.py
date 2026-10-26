@@ -12,7 +12,7 @@ from uqs.logger import get_logger
 from uqs.paths import UqsPaths
 from uqs.stack.env import with_interpreter
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 #: The q script that writes an empty table into a partition that lacks it,
