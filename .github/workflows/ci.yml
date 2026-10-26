@@ -373,10 +373,10 @@ jobs:
           UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
         # Every configured testpath (pyproject.toml), not just python/: the gates'
         # own tests (scripts/gates/tests) ran only in the python-tests hook,
-        # which this job replaces in CI. -n auto: in parallel (pytest-xdist);
+        # which this job replaces in CI. -n 8: in parallel (pytest-xdist), twice the runner's 4 vCPUs, since the suite mostly waits on q processes and I/O;
         # --dist loadgroup keeps the tests marked xdist_group (the whole-stack
         # ones) on one worker.
-        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup
+        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n 8 --dist loadgroup --durations=15
 
 
   # The one name branch protection requires: green only when every job above
