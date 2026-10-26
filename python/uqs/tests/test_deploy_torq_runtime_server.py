@@ -184,6 +184,11 @@ def server(tmp_path):
     return dest, rts, log
 
 
+def _id(rt: torq_runtime.Runtime) -> str:
+    """A runtime as prune names it: its component, then its sha256."""
+    return f"torq/{rt.sha256}"
+
+
 def _runtimes(dest: Path) -> set[str]:
     return {p.name for p in (dest / torq_runtime.RUNTIMES_DIR).iterdir()}
 
@@ -197,9 +202,10 @@ def test_prune_keeps_every_runtime_a_remaining_release_names(server, keep):
     assert prune.prune(_dep(dest).cfg, LocalRemote(), keep=keep, out=out) == 0
     result = json.loads(out.getvalue())
     assert result["removed"] == [R1]
-    assert sorted(result["runtimes"]["removed"]) == sorted([rts["C"].sha256, rts["D"].sha256])
+    assert sorted(result["runtimes"]["removed"]) == sorted([_id(rts["C"]), _id(rts["D"])])
     kept = {k["runtime"]: k["why"] for k in result["runtimes"]["kept"]}
-    assert kept[rts["A"].sha256] == f"named by {R2}" and kept[rts["B"].sha256] == f"named by {R3}"
+    assert kept[_id(rts["A"])] == f"named by {R2}" and kept[_id(rts["B"])] == f"named by {R3}"
+    assert kept["torq/notes"] == "not named like a runtime, so never removed"
     assert _runtimes(dest) == {rts["A"].sha256, rts["B"].sha256, "notes"}
 
 
@@ -207,7 +213,7 @@ def test_a_prune_dry_run_removes_no_runtime(server):
     dest, rts, _ = server
     out = io.StringIO()
     prune.prune(_dep(dest).cfg, LocalRemote(), keep=0, dry_run=True, out=out)
-    assert rts["D"].sha256 in json.loads(out.getvalue())["runtimes"]["removed"]
+    assert _id(rts["D"]) in json.loads(out.getvalue())["runtimes"]["removed"]
     assert _runtimes(dest) == {rt.sha256 for rt in rts.values()} | {"notes"}
 
 

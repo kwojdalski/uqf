@@ -566,6 +566,118 @@ publish:{[h;t;x]
     h (`.u.upd;t;value flip out);
     record_published[t;count out]}
 
+/ -------------------------------------------------------------- DELIVERY
+
+/ What a polling feed's publish can learn and recover from (#1651); the
+/ framework side, TorQ-free, is src/etl/core/stream_delivery.q.
+
+/ Whether q still holds `h` open. A handle the plant closed is gone from
+/ .z.W, and TorQ's .z.pc has nulled it in .servers.SERVERS. Anything that is
+/ not an IPC handle - a test's stand-in function - counts as open.
+/ @param h a handle, or a function standing in for one
+/ @return 1b when it is open
+/ @eg .qtorq.handle_open 999i  ->  0b
+handle_open:{[h] $[-6h=type h; h in key .z.W; 1b]}
+
+/ Reopen the tickerplant handle held in the global `name`, through TorQ's
+/ own server registry: .servers.gethandlebytype retries every registered
+/ tickerplant whose handle is closed, as it does at start.
+/ @param name the global holding the handle, e.g. `.qproc.stream.h
+/ @return the new handle, also set into `name`
+/ @throws error when no tickerplant can be reached
+reopen:{[name]
+    h:.servers.gethandlebytype[tp_type;`any];
+    / an int handle, or a function standing in for one in a test
+    if[not $[-6h=type h; not null h; (type h) within 100 112h];
+        '"qtorq.reopen: no ",string[tp_type]," could be reached through .servers - the handle stays closed and nothing was published"];
+    name set h;
+    .qetl.log.warn[`qtorq;"tickerplant handle reopened";`proctype`handle!(tp_type;h)];
+    h}
+
+/ Run f on the tickerplant handle held in `name`, reopening it once when it
+/ is closed - the tickerplant restarted - and running f again on the new one.
+/ .
+/ A handle already closed before the call is reopened first, so nothing is
+/ sent twice. One that dies DURING the call is reopened and the call made
+/ again, and that is logged as possibly duplicated: the old plant may have
+/ logged the first send before it went. An error on a handle that is still
+/ open is the call's own, and is raised as it is.
+/ @param name the global holding the handle
+/ @param what what f does, for the log
+/ @param f a function of the handle
+/ @return what f returns
+/ @throws error when the handle cannot be reopened, or f fails again
+with_reconnect:{[name;what;f]
+    h:get name;
+    if[not handle_open h;
+        .qetl.log.warn[`qtorq;"tickerplant handle closed - reopening it before sending";`what`handle!(what;h)];
+        :f reopen name];
+    r:.[{[f;h] (1b;f h)};(f;h);{[e] (0b;e)}];
+    if[first r; :last r];
+    if[handle_open h; 'last r];
+    .qetl.log.warn[`qtorq;"tickerplant handle lost during the call - reopening it and sending again, possibly duplicated";
+        `what`handle`error!(what;h;last r)];
+    f reopen name}
+
+/ .qtorq.publish onto the handle held in `name`, reopened once when the
+/ tickerplant restarted (with_reconnect). What torq_stream.q wires as a
+/ streaming job's publisher.
+/ @param name the global holding the handle, e.g. `.qproc.stream.h
+/ @param t the destination table
+/ @param x the rows, any shape publish takes
+/ @return the number of rows published
+publish_reconnecting:{[name;t;x] with_reconnect[name;"publish ",string t;{[t;x;h] publish[h;t;x]}[t;x]]}
+
+/ How many rows of `t` the segmented tickerplant on `h` has written to its
+/ log, read from its own counters (lib/torq/code/segmentedtickerplant/stplog.q).
+/ .
+/ .stplg.rowcount counts what has been both logged and published. In
+/ `defaultbatch` the log write happens in .u.upd and the count only on the
+/ next timer, so .stplg.tmprowcount, the rows logged since, is added. In
+/ `memorybatch` nothing is logged until the timer, so no publish can be
+/ confirmed and this refuses. Sent as one sync call on the publish handle, so
+/ it is answered after every .u.upd sent before it.
+/ @param h the publish handle
+/ @param t the table
+/ @return the rows logged, a long
+/ @throws error when the plant is in memorybatch, or has no counters
+logged_rows:{[h;t]
+    / A table a counter has no entry for has counted none. Asked by key, not
+    / filled: an empty generic dict indexed by a missing key gives (), and
+    / 0^() is still () - an empty list where a count belongs.
+    r:h({[t] bm:@[get;`.stplg.batchmode;`];
+        n:{[t;v] d:@[get;v;{[e] ()!()}]; $[t in key d; "j"$d t; 0]}[t];
+        (bm;n[`.stplg.rowcount]+$[bm~`defaultbatch; n`.stplg.tmprowcount; 0])};t);
+    if[`memorybatch~first r;
+        '"qtorq.logged_rows: the tickerplant is in memorybatch - it logs only on its timer, so a publish cannot be acknowledged; turn the poll's ack off"];
+    if[null first r;
+        '"qtorq.logged_rows: the process on this handle has no .stplg.batchmode - it is not a segmented tickerplant"];
+    "j"$last r}
+
+/ The proctype asked which keys a polling feed's in-doubt page already
+/ published (#1651).
+rdb_type:`rdb
+
+/ A handle to an rdb, registering rdbs from discovery the first time one is
+/ asked for: a feed connects to the tickerplant alone, and opens this only
+/ when a page is in doubt.
+/ @return the handle
+/ @throws error when no rdb can be reached
+reader_handle:{[]
+    if[0=count .servers.getservers[`proctype;rdb_type;()!();1b;1b]; .servers.registerfromdiscovery[enlist rdb_type;1b]];
+    h:.servers.gethandlebytype[rdb_type;`any];
+    if[not $[-6h=type h; not null h; 0b];
+        '"qtorq.reader_handle: no ",string[rdb_type]," could be reached to ask which rows of an in-doubt page are published - nothing was published"];
+    h}
+
+/ Which rows of `k` the table `t` on `h` already holds, matched on k's columns.
+/ A table the process does not define holds none.
+/ @param h a handle to the process holding `t` (an rdb)
+/ @param t the table
+/ @param k a table of key columns
+/ @return one boolean per row of k
+present_keys:{[h;t;k] h({[t;k] $[t in tables[]; k in (cols k)#0!get t; (count k)#0b]};t;k)}
+
 / --------------------------------------------------------------- TRIGGER
 
 / Register a repeating timer that runs fn and can never throw (invariant 4).

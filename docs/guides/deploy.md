@@ -18,6 +18,9 @@ network.
 > against a real server is `python/uqs/tests/test_deploy_integration.py`, which
 > needs a disposable host and is skipped without one. Until it has passed
 > somewhere, treat the commands below as the design rather than a recording.
+> `test_offline_install.py` runs the push's server scripts and the installer for
+> real, on this machine with its network cut off: see [an offline
+> install](#an-offline-install-tested).
 
 ## What the server needs
 
@@ -29,8 +32,11 @@ network.
   host-key checking off.
 
 - `uv`, with the Python the artifact was built for (3.14 by default) where
-  `uv python find` sees it, and `python3`, `bash`, `tar` and `timeout`. The
-  server's OS, architecture and Python must match the artifact's manifest.
+  `uv python find` sees it. Or, with `--python-mode bundled`, neither: the push
+  installs a CPython and makes the release's `.venv` from it, see [a bundled
+  Python](#a-bundled-python). The server's OS, architecture and Python must
+  match the artifact's manifest, and its glibc must meet the floor the
+  artifact's wheels set.
 
 - A licensed q. `--qhome` and `--qcmd` are optional. Without them, the values
   are resolved on the server, in the environment of the account that deploys:
@@ -46,7 +52,9 @@ network.
   arguments, so `rlwrap q` is refused. Preflight runs a script with the resolved
   pair. It then writes the values into the release's `deploy.env`, so the smoke
   test, start, verification and rollback all use what was checked. The dry run
-  shows each value and where it came from.
+  shows each value and where it came from. Or, with `--q-mode bundled`, the push
+  installs the pinned PeachQ and needs no q or licence on the server: see [a
+  bundled q](#a-bundled-q).
 
 - An existing TorQ (`--torq-home`, holding `torq.q` and `torq.sh`, or only
   `torq.q` with `--torq-launcher`, below) and starter pack (`--torq-app-home`,
@@ -55,13 +63,44 @@ network.
   `--torq-mode bundled`, the push installs the vendored one: see [a bundled
   TorQ](#a-bundled-torq).
 
-- `envsubst` and `rlwrap`, which `torq.sh` needs.
+- The tools `torq.sh` and the push's own steps run, and a `python3` of 3.8 or
+  later: the [minimum host contract](#the-minimum-host-contract) lists them.
 
 - For live sources, their credentials and, for ODBC, a driver: see [credentials
   and ODBC](sidecar-bundles.md#credentials-and-odbc).
 
 The server needs no access to PyPI. Every Python dependency arrives as a wheel
 inside the artifact.
+
+### The minimum host contract
+
+What a server must still provide when every component that can be bundled is
+bundled: `--torq-mode`, `--q-mode` (PeachQ) and `--python-mode` all `bundled`.
+Each item is checked before anything changes: by preflight
+(`python/uqs/src/uqs/deploy/preflight.py`) for a push, and by
+`scripts/install_release.py` for a release installed by hand.
+
+  | Item                                                                                                                                                                                                  | Why                                                                                                                                                                                                                                                                                                        | Checked by                                                                      |
+  | ---                                                                                                                                                                                                   | ---                                                                                                                                                                                                                                                                                                        | ---                                                                             |
+  | Linux, on the architecture the artifact was built for (`x86_64` or `aarch64`)                                                                                                                         | the wheels, the bundled CPython and PeachQ are built for one OS and architecture                                                                                                                                                                                                                           | `uname -s`/`uname -m` in preflight; `platform` in the installer                 |
+  | glibc at or above the release's floor                                                                                                                                                                 | the highest `manylinux` floor among the release's wheels, which `uqs deploy build` records as `target.glibc` in the manifest: 2.17 or 2.28 for the tags it allows. A bundled CPython asks for 2.17 itself, and records that in its manifest. No kernel floor is checked: it is whatever that glibc runs on | `getconf GNU_LIBC_VERSION` in preflight; `platform.libc_ver()` in the installer |
+  | `bash`, `tar` with `gzip`, `timeout`, `find`, `sed`, `awk`, `grep`, `nohup`, and the coreutils every POSIX shell script uses (`mktemp`, `chmod`, `ln`, `readlink`, `date`, `id`, `head`, `cut`, `tr`) | the push's server scripts, and `torq.sh`                                                                                                                                                                                                                                                                   | preflight, by name for each but the plain coreutils                             |
+  | `python3`, 3.8 or later, standard library only                                                                                                                                                        | the push's own checks on the server (sha256s, the runtime check, prune's listing, atomic renames), and running the installer. It is never the release's Python                                                                                                                                             | preflight runs it                                                               |
+  | `envsubst` (gettext), `pgrep` (procps), `lsof`, `hostname` that takes `-I` and `-A`                                                                                                                   | `torq.sh start` substitutes `process.csv` fields with `envsubst`, finds a running process with `pgrep` and matches its host against `hostname -I`/`-A`; `torq.sh stop` finds the pid listening on a port with `lsof`                                                                                       | preflight, `hostname -I` by running it                                          |
+  | `rlwrap`                                                                                                                                                                                              | uqs refuses to run `torq.sh` without it (`uqs.paths.check_prerequisites`), though `torq.sh` uses it only for `qcon` and `debug`                                                                                                                                                                            | preflight                                                                       |
+  | `sshd`, with `scp`, reachable from where you run `push`; for `--remote-user`, a `sudo -n -iu <user>` rule                                                                                             | how the push reaches the server and runs as the service account                                                                                                                                                                                                                                            | ssh itself; `check_sudo` in preflight                                           |
+  | a writable `--dest`                                                                                                                                                                                   | the releases, the runtimes and the lock live there                                                                                                                                                                                                                                                         | preflight                                                                       |
+
+With a component left `existing`, it adds its own requirement: `uv` and a Python
+of the artifact's version for Python; a q and, for KDB-X or kdb+, **its
+licence** in `QHOME` for q (KX's q is never bundled, and no licence is in any
+artifact); TorQ and the starter pack at `--torq-home`/`--torq-app-home` for
+TorQ. A release built with `--kafka-home` loads its `kfk` in the server's q
+before starting, and `--odbc-home` needs that setup on the server.
+
+Outside the contract: `netstat` and `column`, which `torq.sh summary` uses to
+show each process's port and lay the table out. Without them `uqs summary` lacks
+those columns; nothing the push or a process needs depends on them.
 
 ## Building a release
 
@@ -265,12 +304,12 @@ A release runs on three components: q, TorQ and Python. Each has a mode, set by
 `q_mode`, `torq_mode` and `python_mode` (or `--q-mode`, `--torq-mode`,
 `--python-mode`):
 
-  | Mode       | Means                                                            |
-  | ---------- | ---------------------------------------------------------------- |
-  | `existing` | already on the server; the default                               |
-  | `bundled`  | shipped by the push; TorQ only so far ([below](#a-bundled-torq)) |
+  | Mode       | Means                                                                                                    |
+  | ---------- | -------------------------------------------------------------------------------------------------------  |
+  | `existing` | already on the server; the default                                                                       |
+  | `bundled`  | shipped by the push: [TorQ](#a-bundled-torq), [q (PeachQ)](#a-bundled-q) and [Python](#a-bundled-python) |
 
-q and Python refuse `bundled` as not yet supported (#1557).
+KX's q is never bundled.
 
 `existing` mode's settings are the options above: `qcmd` and `qhome` for q;
 `torq_home`, `torq_app_home` and `torq_launcher` for TorQ. Python has none, uv
@@ -326,6 +365,141 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
 
 The `components` entry records `bundled`, the runtime's sha256, TorQ's version,
 its path on the server, and whether this push installed or reused it.
+
+### A bundled q
+
+With `q_mode = "bundled"`, the push ships the q too: the PeachQ that
+`scripts/peachq.json` pins, in a runtime artifact of its own. KX's q (KDB-X or
+kdb+) is licensed to the server it runs on, so it is never bundled. It stays
+`existing`, with its licence in `QHOME`.
+
+```bash
+uqs deploy build-runtime q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
+uqs --runtime peachq deploy build
+uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+  --profile capture --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
+  --q-mode bundled --q-runtime dist/q-runtime-peachq-<commit>-linux-x86_64.tar.gz
+```
+
+- **Built from the pin.** The build takes the binary `scripts/peachq.py`
+  resolves: its cache, or a fresh build of the pinned commit into it. It refuses
+  `UQF_PEACHQ`, whose binary has no recorded origin. A `UQF_PEACHQ_COMMIT` build
+  is recorded in the manifest with its reason. The binary is run before it is
+  packed, and must answer that it is PeachQ.
+- **One file, never a licence.** The archive holds the binary and its manifest,
+  nothing else. The manifest records the repository, commit, platform, build
+  options and the `.z.K` the binary reported. Every artifact this tool reads,
+  release or runtime, is refused if it carries a `.lic` file.
+- **For a PeachQ runtime, on its platform.** A release built for a runtime
+  declared on KDB-X (`uqf`, `crypto`, `fx`, `torq`) is refused a bundled q:
+  nothing assumes PeachQ runs a workload until that workload's tests pass on it.
+  The runtime must also be built for the release's OS and architecture, so build
+  it on such a host.
+- **Pinned like a release.** `q_runtime_sha256` (or `--q-runtime-sha256`) pins
+  it, and `--accept-digest` and `--allow-unpinned` relax that pin as they do the
+  others, recorded. `q_version` holds it too.
+- **Installed once, run there.** It goes to `<dest>/shared/runtimes/q/<sha256>/`
+  under the same write-once rules as a TorQ runtime. Preflight looks for no q on
+  the server. Once installed, the push runs the binary there; if it does not
+  answer as PeachQ, the push stops before the release is transferred.
+- **Each release names its own.** `deploy.env` sets `QCMD` to the runtime's `q`
+  and `QHOME` to its directory, with `UQF_Q_IMPL=peachq`. It also sets
+  `UQF_PEACHQ` (and its reason) to that binary, so the release's PeachQ stack
+  never builds one on the server. Rollback and prune treat it as they treat a
+  TorQ runtime.
+- **Exclusive.** `qcmd` and `qhome` are refused beside it. A layer that switches
+  q to bundled drops them from the layers below it, and one that switches back
+  drops `q_runtime` and its pin.
+
+The `components` entry records `bundled`, the runtime's sha256, the version the
+installed q reported, PeachQ's commit, its path on the server, and whether this
+push installed or reused it.
+
+### A bundled Python
+
+With `python_mode = "bundled"`, the push ships the interpreter too: the CPython
+uv installs for any project (python-build-standalone), for the release's OS,
+architecture and Python version, in a runtime artifact of its own. The server
+then needs no `uv` and no Python 3.14.
+
+```bash
+uqs deploy build-runtime python --arch x86_64 --python 3.14
+                                   # dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
+uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+  --profile essential --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
+  --python-mode bundled --python-runtime dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
+```
+
+- **Installed by uv, packed as installed.** The build runs
+  `uv python install --no-bin --no-registry cpython-<python>-linux-<arch>-gnu`,
+  which puts nothing on your PATH, and packs that installation from
+  `uv python dir`. `--python` defaults to `requires-python`'s, `--arch` to
+  `x86_64`; it needs the network once, as uv does.
+- **Regular files only.** The installation's symbolic links (`bin/python3`, the
+  unversioned `libpython`, terminfo aliases) are left out and listed in the
+  manifest as `links_left_out`. The interpreter is the versioned file,
+  `bin/python3.<minor>`. Each file keeps its mtime, so CPython's `.pyc` files
+  stay valid and are never rewritten inside an installed runtime. CPython's own
+  `LICENSE.txt` is a notice and ships; a licence key (`.lic`) is refused, as in
+  every artifact.
+- **Recorded.** The manifest records uv's name for the installation, the
+  version, the python-build-standalone release, the platform, the glibc its ELF
+  files ask for, and every file's sha256.
+- **For this release.** It must be built for the release's OS, architecture and
+  Python `major.minor`, or the push is refused before anything runs.
+- **Pinned like a release.** `python_runtime_sha256` (or
+  `--python-runtime-sha256`) pins it; `--accept-digest` and `--allow-unpinned`
+  relax that pin as they do the others, recorded.
+- **Installed once, run there.** It goes to
+  `<dest>/shared/runtimes/python/<sha256>/` under the same write-once rules as
+  the other runtimes. Preflight looks for no `uv` and no Python on the server;
+  once installed, the push runs the interpreter isolated (`-I`), loading `ssl`,
+  `sqlite3`, `zlib`, `venv` and `ensurepip`. It must report the version it was
+  built as.
+- **`.venv` from it, with no uv.** prepare runs
+  `<runtime>/bin/python3.<minor> -m venv .venv`, then `pip install --no-index`
+  from the release's wheels with the lock's hashes required, as the installer
+  does. `deploy.env` names the runtime as `UQF_PYTHON_RUNTIME`, so prune keeps
+  it while a release's `.venv` runs on it, and a rollback returns to a release
+  on the Python it was deployed with.
+
+The `components` entry records `bundled`, the runtime's sha256, the version the
+installed interpreter reported, the python-build-standalone release, its path on
+the server, and whether this push installed or reused it.
+
+A release can also **carry** a Python runtime, for a server where it is
+installed without `push`: see [installing an artifact on the server
+yourself](#installing-an-artifact-on-the-server-yourself).
+
+### An offline install, tested
+
+`python/uqs/tests/test_offline_install.py` installs a real artifact with the
+network cut off, twice: once through the push's own server scripts (the
+write-once installs of a bundled Python and a bundled PeachQ, their probes,
+transfer and prepare), and once through `scripts/install_release.py` from the
+unpacked release, on the Python it carries. Each `.venv` must be the bundled
+interpreter's and run `uqs --version`.
+
+- **What is real.** The CPython is the one uv installed that runs the tests,
+  packed by the same code as `build-runtime python`, so the host's OS and
+  architecture rather than Linux. The artifact is `build_artifact` over this
+  checkout's release files, with the `uqs` wheel built by `uv build --offline`.
+  Its dependencies are the wheels of what `uqs --version` imports, packed from
+  the test environment's installed distributions, with their hashes in
+  `requirements.txt`. The PeachQ is a stand-in binary.
+- **How the network is cut.** Every server step runs inside a sandbox with no
+  network where the host has one (macOS `sandbox-exec`, Linux `unshare --net`).
+  It also runs with a fresh `HOME`, no proxy variables, `PIP_NO_INDEX=1` and
+  `UV_OFFLINE=1`, and behind tripwires: a `sitecustomize` that logs and refuses
+  every socket connect and name lookup in each Python started, the bundled one
+  included, and `uv`, `uvx`, `curl` and `wget` stand-ins first on `PATH`. The
+  test asserts nothing was attempted, then proves the tripwires are live. A
+  fetch from the bundled Python must be caught, and with the sandbox on, the
+  same fetch without the tripwire must fail too.
+- **What it does not prove.** A process started with `-I` or `-E`, such as
+  ensurepip's own pip, does not load the tripwire. Without the sandbox, its
+  silence rests on `--no-index` alone. The host is the test machine, not a clean
+  Linux server. That run is still `test_deploy_integration.py`'s.
 
 ## Driving a deployed release from your machine
 
@@ -413,21 +587,33 @@ reported as such, never run from source instead. Setting either path without
 The other way, when the release process delivers a `uqs deploy build` artifact
 rather than a bare source tree: the artifact already carries every Python
 dependency as a locked wheel, and an installer that needs only the server's
-`python3`. Unpack the artifact into its own release directory, then, from inside
-it:
+`python3` (3.8 or later, standard library only). Built with `--python-runtime`,
+it carries the interpreter too, so the server needs no Python 3.14:
+
+```bash
+uqs deploy build-runtime python --arch x86_64
+uqs deploy build --arch x86_64 --python-runtime dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
+```
+
+Unpack the artifact into its own release directory, then, from inside it:
 
 ```bash
 python3 scripts/install_release.py --check              # verify only; writes nothing
-python3 scripts/install_release.py --python /opt/python/3.14/bin/python3 \
-    --env-file /opt/efx/uat/uat-runtime.env
+python3 scripts/install_release.py --env-file /opt/efx/uat/uat-runtime.env
+python3 scripts/install_release.py --python /opt/python/3.14/bin/python3   # the site's instead
 ```
 
 In order, each step refusing with what to do before the next one writes:
 
 1. every file `RELEASE_MANIFEST.json` lists has its recorded sha256;
-2. the host's OS, architecture and glibc meet the artifact's target. The wheels'
-   `manylinux` tag sets the glibc floor;
-3. `--python` is the version the artifact was built for;
+2. the host's OS, architecture and glibc meet the artifact's target. The glibc
+   floor is the one `uqs deploy build` recorded from the wheels' `manylinux`
+   tags (`target.glibc`), none for a set of pure-Python wheels;
+3. the interpreter is the version the artifact was built for. Without
+   `--python`, a release that carries a Python runtime unpacks it into
+   `.release/python` (with each file's mtime) once, checks it file by file
+   against its own manifest, and uses its interpreter; a release that carries
+   none uses `python3`. `--check` unpacks nothing: it names the carried version;
 4. `.venv` is created in the release by `python -m venv`. The locked
    dependencies, then `uqs`, are installed from `.release/wheels` with pip
    `--no-index` and the lock's hashes required. No registry is reached, and a
@@ -438,10 +624,11 @@ In order, each step refusing with what to do before the next one writes:
 
 Nothing outside the release directory is written: not the system Python, not q,
 not TorQ, not `current`. The installer needs no `uv`. Switching `current` and
-starting processes stay separate steps for the release process. Once installed,
-the release has `.venv/bin/uqs` and a `deploy.env`, so a target without
-`launch_mode` drives it like a pushed release. The manifest's `packaging` entry
-records the mode (`offline`) and the installer.
+starting processes stay separate steps for the release process.
+`.release/INSTALLED.json` records the interpreter `.venv` was made from. Once
+installed, the release has `.venv/bin/uqs` and a `deploy.env`, so a target
+without `launch_mode` drives it like a pushed release. The manifest's
+`packaging` entry records the mode (`offline`) and the installer.
 
 ### Deployments and the default per server
 
@@ -482,9 +669,9 @@ Each stage stops the deployment if it fails:
   | Stage     | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
   | ---       | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
   | artifact  | the archive matches its `.sha256`, and every member matches the checksum its manifest lists, with nothing missing or extra. This runs before anything reaches the server                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-  | preflight | ssh works and the destination is writable; uv, the release's Python, q (it must run a script), the TorQ trees and the launcher's tools are there; the server's OS, architecture and Python match the artifact's target; the release is not already there; the data directory exists or `--init-data` was given; another deployment there needs `--restart`; no other deployment holds the lock                                                                                                                                                                                                                                                      |
+  | preflight | ssh works and the destination is writable; uv and the release's Python (unless bundled), q (it must run a script, unless bundled), the TorQ trees and the [host contract](#the-minimum-host-contract)'s tools are there; the server's OS, architecture, glibc and Python match the artifact's target; the release is not already there; the data directory exists or `--init-data` was given; another deployment there needs `--restart`; no other deployment holds the lock                                                                                                                                                                        |
   | transfer  | `scp` into `staging/<release>/`; the archive's sha256 is checked **on the server** before it is extracted into `releases/<release>/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-  | prepare   | `releases/<release>/deploy.env` (below), and a release-local `.venv` installed **offline** from the artifact's wheels: the dependencies with their locked hashes required, then `uqs` itself. `UV_OFFLINE=1` stays set, so nothing later fetches either                                                                                                                                                                                                                                                                                                                                                                                             |
+  | prepare   | `releases/<release>/deploy.env` (below), and a release-local `.venv` installed **offline** from the artifact's wheels: the dependencies with their locked hashes required, then `uqs` itself, by uv or, with a bundled Python, by its `-m venv` and pip. `UV_OFFLINE=1` stays set, so nothing later fetches either                                                                                                                                                                                                                                                                                                                                  |
   | kafka     | only for a release built with `--kafka-home`: `kfk.q` is loaded in `$QCMD` from the release's copy, with no broker, so a library that does not resolve on the server fails here, before any process starts                                                                                                                                                                                                                                                                                                                                                                                                                                          |
   | smoke     | `scripts/deploy_smoke.q` loads the quant library and checks known numbers, then loads the declarations of the processes the deployment starts (theirs only) against the server's `$TORQAPPHOME/database.q`, so a job whose table that schema lacks fails here, naming the job, table and schema path. It must print `DEPLOY_SMOKE_OK` and exit 0 within `--smoke-timeout`                                                                                                                                                                                                                                                                           |
   | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime: `downtime` in the report                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -624,12 +811,12 @@ Three releases are never removed, whatever `--keep` is, even 0:
 - any whose report still says `running`, from a push that died part-way.
 
 It prints what stayed and why, what went, and the bytes freed. Only a directory
-named like a release id is ever removed. A [bundled TorQ](#a-bundled-torq)
-runtime goes once no remaining release's `deploy.env` names it. `--dry-run`
-lists the removals and removes nothing. `uqs deploy push --keep N` prunes the
-same way once the new release is current, while it still holds the lock. If that
-prune fails, the deployment still counts as a success, and its report records
-the failure.
+named like a release id is ever removed. A [bundled TorQ](#a-bundled-torq) or
+[q](#a-bundled-q) runtime goes once no remaining release's `deploy.env` names
+it. `--dry-run` lists the removals and removes nothing.
+`uqs deploy push --keep N` prunes the same way once the new release is current,
+while it still holds the lock. If that prune fails, the deployment still counts
+as a success, and its report records the failure.
 
 ## Deploying as a service user
 
