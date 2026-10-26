@@ -200,6 +200,14 @@ set -euo pipefail
 if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
 
 =====
+[report]
+set -euo pipefail
+cat > /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json.new <<'DEPLOYREPORT'
+<report>
+DEPLOYREPORT
+python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json.new /opt/uqf/releases/20261007T000000Z-0123456789ab/deploy-report.json
+
+=====
 [lock]
 set -euo pipefail
 if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi

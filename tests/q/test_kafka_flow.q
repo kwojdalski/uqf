@@ -171,6 +171,34 @@
     .qt.qpipe.job.kafka_flow.push[(enlist 0j);enlist 2j];
     .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.published;n+1;"the new run's offset 2 is not mistaken for the old run's"]};
 
+/ #1659: a decoder down across a topic restart holds both runs in its log; keyed on the offset alone, the new record at each reused offset was dropped.
+.qt.qpipe.job.kafka_flow.test_a_replay_holding_both_runs_of_a_restarted_partition_decodes_every_record:{[t]
+    .qt.qpipe.job.kafka_flow.drive_ready[];
+    raw:.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;5#0j;0 1 2 0 1j;.qt.qpipe.job.kafka_flow.payload each 0 1 2 5 6j];
+    raw:update broker_time:broker_time+0D01:00:00 from raw where i>=3;
+    .qetl.job.stream.start[`kafka_flow;.qt.qpipe.job.kafka_flow.replay_transport[enlist (`kafka_message;raw)]];
+    r:.qt.qpipe.job.kafka_flow.all_rows[];
+    .qunit.assertEquals[r`trade_id;100 101 102 105 106j;"both runs decode, none dropped for sharing an offset"];
+    .qunit.assertEquals[.qt.qpipe.job.kafka_flow.mark[.qt.qpipe.job.kafka_flow.topic;0j];1j;"the mark is the top of the last run"];
+    n:count .qt.qpipe.job.kafka_flow.published;
+    .qt.qpipe.job.kafka_flow.push_later[2#0j;0 1j];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.published;n;"a redelivery of the new run is still dropped"]};
+
+/ #1659: one live batch carrying the old run's tail and then the restarted records.
+.qt.qpipe.job.kafka_flow.test_a_live_batch_with_the_old_tail_and_restarted_records_decodes_both:{[t]
+    .qt.qpipe.job.kafka_flow.drive_ready[];
+    .qt.qpipe.job.kafka_flow.push[3#0j;0 1 2j];
+    raw:.qt.qpipe.job.kafka_flow.batch_on[.qt.qpipe.job.kafka_flow.topic;4#0j;3 4 0 1j;.qt.qpipe.job.kafka_flow.payload each 3 4 5 6j];
+    raw:update broker_time:broker_time+0D01:00:00 from raw where i>=2;
+    .qpipe.job.kafka_flow.on_batch[`kafka_message;raw];
+    r:.qt.qpipe.job.kafka_flow.all_rows[];
+    .qunit.assertEquals[count r;7;"three, then the old tail 3 4 and the restarted 0 1: none lost"];
+    .qunit.assertEquals[r`trade_id;100 101 102 103 104 105 106j;"the restarted record at reused offset 0 is decoded"];
+    .qunit.assertEquals[.qt.qpipe.job.kafka_flow.mark[.qt.qpipe.job.kafka_flow.topic;0j];1j;"the mark is the top of the restarted run, not the old tail's 4"];
+    n:count .qt.qpipe.job.kafka_flow.published;
+    .qt.qpipe.job.kafka_flow.push_later[2#0j;0 1j];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.published;n;"a redelivery of the restarted run is dropped"]};
+
 .qt.qpipe.job.kafka_flow.test_a_batch_straddling_the_mark_publishes_only_the_new_part:{[t]
     .qt.qpipe.job.kafka_flow.drive_ready[];
     .qt.qpipe.job.kafka_flow.push[0 0 0j;0 1 2j];
@@ -220,7 +248,9 @@
 .qt.qpipe.job.kafka_flow.test_a_coordinate_repeated_within_one_batch_is_published_once:{[t]
     / The mark cannot catch this one: both copies are above it.
     .qt.qpipe.job.kafka_flow.drive_ready[];
-    .qt.qpipe.job.kafka_flow.push[0 0 0j;0 0 1j];
+    / a redelivered record is the same record: it carries the first copy's broker_time
+    b:update broker_time:first broker_time by partition,offset from .qt.qpipe.job.kafka_flow.batch[0 0 0j;0 0 1j];
+    .qpipe.job.kafka_flow.on_batch[`kafka_message;b];
     .qunit.assertEquals[exec offset from .qt.qpipe.job.kafka_flow.all_rows[];0 1j;"the first copy kept, in batch order"]};
 
 / --- the dead letters ------------------------------------------------------

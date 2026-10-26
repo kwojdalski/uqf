@@ -55,9 +55,9 @@ IDENTITY_EXPR = ".proc.procname"
 LIBRARY_EXPR = "@[{.qf.px.fwd_simple[1.1;0.05;0.02;1f]};::;0n]"
 LIBRARY_EXPECTED = 1.1323529411764708
 #: 1b or 0b where the ETL tree is loaded; 0N where it is not.
-ETL_EXPR = "@[{all exec passed from .qetl.transform.verify_all[]};::;0N]"
+ETL_EXPR = "@[{all exec passed from .qetl.transform.verify_all[]};::;0n]"
 #: 1b where a missing credential is refused rather than read as the fixture.
-LIVE_EXPR = "@[{.qetl.source.live_required[]};::;0N]"
+LIVE_EXPR = "@[{.qetl.source.live_required[]};::;0n]"
 #: The process that must carry every plant table.
 PLANT = "stp1"
 
@@ -122,8 +122,17 @@ def check_process(proc: ProcessCheck, query: Query, live: bool = False) -> Proce
     return proc
 
 
+#: q's int and long nulls as kola decodes them: an ordinary int, and truthy (#1654).
+Q_INT_NULLS = (-(2**31), -(2**63))
+
+
 def _is_null(value: object) -> bool:
+    """q's null as kola hands it over: None, NaN for a float null - which is why
+    every trap above answers `0n` - or the int/long null sentinel, which kola
+    leaves an ordinary (and truthy) int, so a trap answering 0N read as `ok`."""
     if value is None:
+        return True
+    if isinstance(value, int) and not isinstance(value, bool) and value in Q_INT_NULLS:
         return True
     try:
         return value != value  # NaN, q's float null

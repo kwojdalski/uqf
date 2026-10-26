@@ -127,13 +127,86 @@
     k:([] topic:rows`topic; partition:rows`partition);
     rows where rows[`offset]>(marks k)`offset}
 
-/ The rows with a repeated (topic;partition;offset) reduced to the first.
+/ The rows with a repeated (topic;partition;offset;broker_time) reduced to the first.
+/ .
+/ broker_time is part of the coordinate because a restarted partition (#1519)
+/ reuses offsets for different records: keyed on the offset alone, a batch that
+/ held both runs kept the old record at each reused offset and dropped the new
+/ one, with no dead letter and no log (#1659).
 / @param rows envelope rows
 / @return the rows, in their original order
 / @eg count .qetl.kafka.first_per_coordinate ([] topic:2#`a; partition:2#0; offset:2#5)  ->  1
 .qetl.kafka.first_per_coordinate:{[rows]
     if[0=count rows; :rows];
-    rows asc value exec first i by topic,partition,offset from rows}
+    bt:$[`broker_time in cols rows; rows`broker_time; (count rows)#0Np];
+    t:([] topic:rows`topic; partition:rows`partition; offset:rows`offset; broker_time:bt);
+    rows asc value exec first i by topic,partition,offset,broker_time from t}
+
+/ Private: per row, whether it belongs to a run that restarts WITHIN the batch.
+/ .
+/ Rows are in arrival order. A run ends where a partition's offset falls below
+/ the highest before it (as restart_marks always read a held log). A later run is
+/ a restart unless its records are not newer than the top record of the run
+/ before it - then it is a redelivery, the same time rule as restarted. A
+/ restart run's offsets are not comparable with the mark of the run before it,
+/ which is why they are not judged against it (#1659).
+/ @param rows envelope rows in arrival order
+/ @return a boolean per row, true for the rows of a restart run
+/ @private
+.qetl.kafka.restart_runs:{[rows]
+    if[0=count rows; :`boolean$()];
+    bt:$[`broker_time in cols rows; rows`broker_time; (count rows)#0Np];
+    t:([] topic:rows`topic; partition:rows`partition; offset:rows`offset; broker_time:bt);
+    t:update back:offset<prev maxs offset by topic,partition from t;
+    t:update run:sums back by topic,partition from t;
+    g:0!select newest:max broker_time, top_bt:first broker_time where offset=max offset by topic,partition,run from t;
+    g:update prev_top:prev top_bt by topic,partition from g;
+    g:update older:(not null prev_top) and (newest>-0Wp) and newest<=prev_top from g;
+    g:update restart:(run>0) and not older from g;
+    (`topic`partition`run xkey g)[([] topic:t`topic; partition:t`partition; run:t`run)]`restart}
+
+/ Private: the rows to publish or decode out of a batch: above their mark, or in a run that restarts inside the batch.
+/ .
+/ A batch carrying the old tail and then the restarted records does not trip
+/ restarted (not every row is below the mark), and above_marks alone drops the
+/ new records; so the restart runs skip the mark, and every row is deduplicated
+/ by (topic;partition;offset;broker_time) (#1659).
+/ @param marks the marks table
+/ @param rows envelope rows in arrival order
+/ @return the rows to handle, in arrival order
+/ @private
+.qetl.kafka.admit:{[marks;rows]
+    if[0=count rows; :rows];
+    k:([] topic:rows`topic; partition:rows`partition);
+    .qetl.kafka.first_per_coordinate[rows where (.qetl.kafka.restart_runs[rows]) or rows[`offset]>(marks k)`offset]}
+
+/ Private: for each partition with a restart run in the rows, the mark its last restart leaves: the top of the rows from that run on.
+/ @param rows envelope rows in arrival order
+/ @return a keyed marks-shaped table, empty when no partition restarts
+/ @private
+.qetl.kafka.restart_tops:{[rows]
+    if[0=count rows; :.qetl.kafka.marks_empty];
+    flag:.qetl.kafka.restart_runs[rows];
+    if[not any flag; :.qetl.kafka.marks_empty];
+    bt:$[`broker_time in cols rows; rows`broker_time; (count rows)#0Np];
+    t:([] topic:rows`topic; partition:rows`partition; offset:rows`offset; broker_time:bt);
+    t:update back:offset<prev maxs offset by topic,partition from t;
+    t:update run:sums back by topic,partition from t;
+    t:update flag:flag from t;
+    last_restart:select lr:max run by topic,partition from t where flag;
+    t:t lj last_restart;
+    t:select from t where run>=lr;
+    `topic`partition xkey 0!select offset:max offset, broker_time:first broker_time where offset=max offset by topic,partition from t}
+
+/ Private: advance, then set each partition that restarted inside the rows to the top of its last restart run (the one case a mark moves down).
+/ @param marks the marks table
+/ @param rows the envelope rows just handled, in arrival order
+/ @return the new marks
+/ @private
+.qetl.kafka.advance_runs:{[marks;rows]
+    m:.qetl.kafka.advance[marks;rows];
+    tops:.qetl.kafka.restart_tops[rows];
+    $[count tops; m upsert tops; m]}
 
 / The marks raised to the highest offset in rows (with that record's broker_time); never lowered.
 / .
@@ -409,12 +482,12 @@
     b:st`backlog;
     if[0=count b; :st];
     st:.qetl.kafka.reset_restarted[st;b];
-    fresh:.qetl.kafka.first_per_coordinate[.qetl.kafka.above_marks[st`marks;b]];
+    fresh:.qetl.kafka.admit[st`marks;b];
     r:.qetl.kafka.try[{[tr;f] if[count f; tr[`publish][`kafka_message;f]]; count f};(tr;fresh)];
     if[not first r;
         .qetl.log.err[`kafka;"publish failed - nothing will be committed";`rows`error!(count fresh;last r)];
         :.qetl.kafka.bump[st;`publish_errors;1]];
-    st[`marks]:.qetl.kafka.advance[st`marks;fresh];
+    st[`marks]:.qetl.kafka.advance_runs[st`marks;fresh];
     st:.qetl.kafka.plan_commit[st;b];
     st[`backlog]:0#b;
     st:.qetl.kafka.bump[st;`published;count fresh];
