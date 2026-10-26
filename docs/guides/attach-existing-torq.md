@@ -82,6 +82,14 @@ the stack's machine.
 - **Start, stop and the running check** are this machine's: the publisher's port
   is checked here, never on `--host`, where another process may hold it.
 
+- **The publisher is told the stack's discovery.** A TorQ process finds
+  discovery through its process.csv, whose discovery row is this machine's.
+  Every start of the publisher, `uqs job attach` or a bare `uqs start`, adds
+  `-extras -.servers.DISCOVERY :HOST:PORT` from the attachment, so it registers
+  with the stack's discovery and gets the tickerplant from there. `-extras`
+  reaches every process of one start, so the publisher is started on its own; a
+  start that names it beside other processes is refused.
+
 - **The stack's processes are asked where discovery lists them**, not at
   `--host`. A loopback name in that listing means the stack's own machine, so it
   is asked at `--host`. A name that does not resolve from here is reported as
