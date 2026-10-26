@@ -315,8 +315,10 @@
 / Private: tell the readers, and record how that went apart from the write.
 / @private
 .qetl.io.remote.reload:{[attachment;dataset;mgr;status]
+    / `reloaded only when on_ready says it asked: one that declined (nothing due yet) has
+    / shown the readers nothing, and a client must not take its silence for a reload
     r:$[not `on_ready in key mgr; (`none;"");
-        @[{[f;s] f s; (`reloaded;"")}[mgr`on_ready];status;{[e] (`failed;e)}]];
+        @[{[f;s] $[1b~f s; (`reloaded;""); (`none;"")]}[mgr`on_ready];status;{[e] (`failed;e)}]];
     `.qetl.io.remote.reloads insert ([] attachment:enlist attachment; dataset:enlist dataset; at:enlist .z.p;
         final:enlist status`final; finished:enlist `long$status`finished; outcome:enlist first r; error:enlist last r);
     `outcome`error!r}
@@ -397,21 +399,43 @@
 .qetl.io.remote.send:{[call;attachment;dataset;target;batch;opts]
     o:(.qetl.io.remote.opt_keys inter key opts)#opts;
     id:.qetl.io.remote.batch_id[attachment;dataset;target;o;batch];
-    r:call (`.qetl.io.remote.submit;.qetl.io.remote.request_keys!(attachment;dataset;target;id;o;batch));
+    / a batch larger than one message goes in chunks (io_remote_chunks.q)
+    r:$[count[batch]>.qetl.io.remote.chunk_rows;
+        .qetl.io.remote.send_chunks[call;attachment;dataset;target;id;o;batch];
+        call (`.qetl.io.remote.submit;.qetl.io.remote.request_keys!(attachment;dataset;target;id;o;batch))];
     if[not r[`status] in `committed`duplicate; '"remote: the receiver answered ",.Q.s1 r];
     if[`duplicate=r`status;
         .[{.qetl.log.info[x;y;z]};(`qetl.io.remote;"the receiver already holds this batch - not sent twice";
             `target`batch_id`rows!(target;id;r`rows));::]];
     r`rows}
 
+/ The receiver's last answer about its readers, for a client that defers coverage
+/ until they show the rows (scripts/dev/attached_backfill.q): outcome `reloaded,
+/ `failed or `none, its error, and `asked, the instant before the call - what a
+/ reload it reports can at most have mapped.
+.qetl.io.remote.last_reload:`outcome`error`asked!(`none;"";0Np)
+
+/ Private: note a finish or flush answer's reload outcome.
+/ @private
+.qetl.io.remote.noted:{[asked;r]
+    `.qetl.io.remote.last_reload set `outcome`error`asked!(r`reload;r`error;asked);
+    r}
+
 / Private: finish remotely, and say so when the readers did not reload.
 / @private
 .qetl.io.remote.finish_via:{[call;attachment;dataset]
-    r:call (`.qetl.io.remote.finish;attachment;dataset);
+    asked:.z.p;
+    r:.qetl.io.remote.noted[asked;call (`.qetl.io.remote.finish;attachment;dataset)];
     if[`failed=r`reload;
         .[{.qetl.log.warn[x;y;z]};(`qetl.io.remote;"written durably, but the readers did not reload";
             `attachment`dataset`error!(attachment;dataset;r`error));::]];
     r`finished}
+
+/ Private: flush remotely, noting the reload outcome as finish does.
+/ @private
+.qetl.io.remote.flush_via:{[call;attachment;dataset;upto]
+    asked:.z.p;
+    `finished`pending#.qetl.io.remote.noted[asked;call (`.qetl.io.remote.flush;attachment;dataset;upto)]}
 
 / An io manager whose writes are committed by a receiver on the destination.
 / .
@@ -427,7 +451,7 @@
     `write`write_keyed`flush`finish`recover!(
         .qetl.io.remote.unkeyed;
         .qetl.io.remote.send[call;attachment;dataset];
-        {[c;a;d;upto] `finished`pending#c (`.qetl.io.remote.flush;a;d;upto)}[call;attachment;dataset];
+        .qetl.io.remote.flush_via[call;attachment;dataset];
         / niladic: a projection with every argument supplied would be a call
         {[c;a;d;x] .qetl.io.remote.finish_via[c;a;d]}[call;attachment;dataset]; / noqa: QF016 niladic
         {[c;a;d;t;f;e] c (`.qetl.io.remote.recover;a;d;f;e)}[call;attachment;dataset])} / noqa: QF016 recover's target is the grant's

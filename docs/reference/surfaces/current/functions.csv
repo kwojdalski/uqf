@@ -169,7 +169,10 @@ qetl.io.odbc,table_names,function,1,h
 qetl.io.odbc,window_query,function,6,h table_name time_column columns range_from range_to
 qetl.io.odbc,with_connection,function,2,conn f
 qetl.io.remote,accept,function,2,req user
+qetl.io.remote,accept_chunk,function,2,req user
 qetl.io.remote,batch_id,function,5,attachment dataset target opts batch
+qetl.io.remote,chunk_keys,value,,
+qetl.io.remote,chunk_rows,value,,
 qetl.io.remote,empty_journal,function,1,
 qetl.io.remote,entry_points,dict,,
 qetl.io.remote,finish,function,2,attachment dataset
@@ -179,7 +182,9 @@ qetl.io.remote,grants,dict,,
 qetl.io.remote,idempotent,value,,
 qetl.io.remote,journal,table,,
 qetl.io.remote,journal_file,value,,
+qetl.io.remote,last_reload,dict,,
 qetl.io.remote,manager,function,3,call attachment dataset
+qetl.io.remote,max_staged_rows,value,,
 qetl.io.remote,open,function,1,path
 qetl.io.remote,opt_keys,value,,
 qetl.io.remote,permitted,function,1,msg
@@ -187,8 +192,11 @@ qetl.io.remote,recover,function,4,attachment dataset range_from range_to
 qetl.io.remote,reloads,table,,
 qetl.io.remote,request_keys,value,,
 qetl.io.remote,serve,function,3,attachment dataset g
+qetl.io.remote,stage_ttl,value,,
+qetl.io.remote,staged,dict,,
 qetl.io.remote,status,function,1,
 qetl.io.remote,submit,function,1,req
+qetl.io.remote,submit_chunk,function,1,req
 qetl.io.remote,withdraw,function,2,attachment dataset
 qetl.job.bounded,checkpoint,function,2,worker cursor
 qetl.job.bounded,cleanup,function,1,worker

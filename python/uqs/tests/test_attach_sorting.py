@@ -528,3 +528,32 @@ def test_after_publication_the_rows_are_retained(world):
     assert result.outcome == "detached" and csv.read_text() == text
     op = Manifest.load("pb-uat", state).find("sort_rows", str(csv), TABLE)
     assert op is not None and op.status == "retained"
+
+
+def _added_trade_rows(tmp_path: Path, before: str) -> tuple[Path, dict]:
+    csv = tmp_path / "sort.csv"
+    csv.write_text(before)
+    post = sort_file.add(
+        csv, sort_file.sha(before), "trade", [("p", "sym", True)], tmp_path / "bak"
+    )
+    return csv, post
+
+
+def test_rows_of_a_table_whose_name_ends_with_ours_are_not_ours(tmp_path):
+    # `trade,p,sym,1` is also the tail of `fxtrade,p,sym,1`: only whole lines count (#1662)
+    before = "tabname,att,column,sort\nfxtrade,p,sym,1\n"
+    csv, post = _added_trade_rows(tmp_path, before)
+    assert sort_file.removal_problems(post, "trade") == []
+    sort_file.remove(post, "trade", tmp_path / "bak")
+    assert csv.read_text() == before
+
+
+def test_an_equivalent_respelling_of_our_row_is_refused_not_cut_from_another_row(tmp_path):
+    # the parsed rules still agree, but the text we wrote survives only inside fxtrade's row
+    csv, post = _added_trade_rows(tmp_path, "tabname,att,column,sort\nfxtrade,p,sym,1\n")
+    csv.write_text(csv.read_text().replace("\ntrade,p,sym,1\n", "\ntrade,p,sym,true\n"))
+    edited = csv.read_text()
+    assert any("no longer in" in p for p in sort_file.removal_problems(post, "trade"))
+    with pytest.raises(AttachmentError, match="an operator changed them"):
+        sort_file.remove(post, "trade", tmp_path / "bak")
+    assert csv.read_text() == edited

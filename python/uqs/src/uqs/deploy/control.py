@@ -64,14 +64,16 @@ SSH_FAILED = 255
 DEFAULT_CONNECT_TIMEOUT = 10
 
 #: Commands that read and never change the server, as (command, subcommand);
-#: None covers every subcommand. Anything else asks before it runs.
+#: None covers every subcommand. Anything else asks before it runs. `query` is
+#: not one: --proc, --port and --raw send any q as typed, and even the gateway's
+#: routed form passes `.gw.*` calls and `\` commands through and runs anything
+#: but an in-place update or delete on every rdb and hdb (#1663).
 READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
     {
         ("summary", None),
         ("graph", None),
         ("job", "gaps"),
         ("job", "preview"),
-        ("query", None),
         ("schema", None),
         ("list", None),
         ("logs", None),
@@ -210,6 +212,8 @@ def changes_the_server(args: Sequence[str]) -> bool:
     words = command_words(args)
     if not words:
         return False
+    if words[:1] == ("summary",) and ("-i" in args or "--interactive" in args):
+        return True  # its browser starts, stops and restarts processes with single keys
     if words in READ_ONLY_DEEP:
         return False
     sub = words[1] if len(words) > 1 else None

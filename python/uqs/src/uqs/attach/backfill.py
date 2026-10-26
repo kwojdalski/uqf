@@ -192,11 +192,15 @@ def resolve(
     port: int | None = None,
     fixture: bool = False,
     attach_root: Path | None = None,
+    on_this_machine: bool = True,
 ) -> Destination:
     """The destination `worker` would write for `attachment`, or a refusal.
 
     Offline: reads the saved attachment, its manifest and the tree's
     declarations, and looks at the HDB directory on disk. Nothing is created.
+    `on_this_machine=False` is the extraction side of a remote writer (#1650):
+    the HDB is the stack's, on another machine, so it is named as the
+    attachment pinned it and not looked for here.
     """
     att = config.load(attachment, attach_root)
     if fixture:
@@ -239,12 +243,12 @@ def resolve(
             "backfill never falls back to uqf's own HDB - `uqs job attach plan --replace` "
             "against the running stack records it"
         )
-    if not Path(hdb).is_dir():
+    if on_this_machine and not Path(hdb).is_dir():
         raise UqsError(
             f"attachment {att.name}'s HDB directory {hdb} is not a directory on this machine: "
             "it is not created, and nothing falls back to another HDB"
         )
-    real = canonical(hdb)
+    real = canonical(hdb) if on_this_machine else Path(hdb)
     ident = identity_of(att.stack.host, att.stack.id, real)
     return Destination(
         att.name,

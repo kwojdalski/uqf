@@ -22,6 +22,14 @@
 //                launcher), the only processes told to reload; _none_ when there are none
 //   -user        the user the readers are reached as; its password is $UQF_ATTACH_REACH_PASSWORD
 //
+// Or, when the HDB is on another machine (#1650), in place of -hdb, -max_date, -deadline, -readers
+// and -user:
+//
+//   -writer      host:port of the destination's receiver (scripts/dev/remote_receiver.q), which
+//                admits each batch, commits it through its own fenced HDB writer and reloads the
+//                readers; this process extracts, files coverage here and writes no HDB
+//   -writer_user the user the receiver is reached as; its password is $UQF_ATTACH_WRITER_PASSWORD
+//
 // The rest are torq_backfill.q's flags, parsed by the same functions (.qetl.job.bounded.spec_from_flags,
 // .qetl.job.bounded.runtime.use_on_conflict, use_mode). -mode is dry_run or run; validate and plan are
 // the launcher's. There is no -fixture: a fixture in a native HDB is indistinguishable from data.
@@ -59,14 +67,16 @@ if[not `worker in key opts:.Q.opt .z.x;
 
 \d .
 
-/ The flags that name the destination, all required.
-.qdev.attached.required:`hdb`destid`attachment`max_date`deadline`owner`readers`user
+/ The flags every run takes; then the ones that name a destination this process writes itself,
+/ or, with -writer, the receiver on the destination's machine that writes it (#1650).
+.qdev.attached.local_flags:`hdb`destid`attachment`max_date`deadline`owner`readers`user
+.qdev.attached.remote_flags:`destid`attachment`owner`writer`writer_user
 
 / Refuse a missing destination flag, and the flags this launcher does not take.
 / @param opts the parsed command line
 / @throws error naming every missing flag, or the forbidden ones
 .qdev.attached.require_flags:{[opts]
-    missing:.qdev.attached.required except key opts;
+    missing:$[`writer in key opts; .qdev.attached.remote_flags; .qdev.attached.local_flags] except key opts;
     if[count missing; '"attached_backfill: missing ",", " sv "-",/:string missing];
     if[`fixture in key opts; '"attached_backfill: -fixture is refused: a fixture in a native HDB is indistinguishable from data"];
     if[count bad:(`plan`validate) inter `$first opts`mode;
@@ -106,63 +116,9 @@ if[not `worker in key opts:.Q.opt .z.x;
 
 / ------------------------------------------------------------ READERS
 / .
-/ Reached with the credentials the launcher passes, never the runtime's own: an attached stack is
-/ somebody else's, and its HDB readers are the verified ones for this destination.
-
-/ The readers named on the command line.
-/ @param opts the parsed command line
-/ @return a list of name/host/port dictionaries, empty for none
-.qdev.attached.readers:{[opts]
-    v:first opts`readers;
-    if[v~"_none_"; :()];
-    {[s] p:"@" vs s; hp:":" vs p 1; `name`host`port!(`$p 0;`$hp 0;"J"$hp 1)} each "," vs v}
-
-/ Ask one reader to reload the way a native wdb does at end of day: `(`reload; date)`, which a TorQ
-/ HDB answers by re-mapping its database - and then ask it whether it SERVES the dataset. A reload
-/ that succeeds is not queryable: a partitioned HDB takes its table list from its LATEST partition,
-/ so a table written only into an older date is invisible to it until the latest partition holds the
-/ table too (a native end of day writes it; `uqs data hdb-check --fix` fills it).
-/ @param user the user to connect as
-/ @param pass its password
-/ @param dataset the table the run wrote
-/ @param r the reader: name, host, port
-/ @return (1b; "") when it reloaded and serves the table, else (0b; why)
-.qdev.attached.reload_one:{[user;pass;dataset;r]
-    addr:`$":",string[r`host],":",string[r`port],":",user,":",pass;
-    h:@[hopen;(addr;10000);{[e] e}];
-    if[10h=type h; :(0b;"cannot connect: ",h)];
-    res:.[{[h;ds] h(`reload;.z.d);
-            $[h({[t] t in tables[]};ds); (1b;"");
-              (0b;"reloaded, but its HDB does not define ",string[ds]," yet: an HDB takes its tables from its latest partition, which does not hold it - it appears after the stack's next end of day writes the table, or once the latest partition is filled (uqs data hdb-check --fix)")]};
-          (h;dataset);{[e] (0b;"reload failed: ",e)}];
-    @[hclose;h;{[e] (::)}];
-    res}
-
-/ Ask every named reader, and say how it went.
-/ @return dict: registered, opened (reached), reloaded, and failed as "name: why" strings
-.qdev.attached.reload_all:{[]
-    rs:.qdev.attached.readers_named;
-    pass:getenv `UQF_ATTACH_REACH_PASSWORD;
-    out:.qdev.attached.reload_one[.qdev.attached.reach_user;pass;.qdev.attached.dataset] each rs;
-    ok:first each out;
-    failed:{[r;o] (string r`name),": ",o 1}'[rs where not ok;out where not ok];
-    reached:{not (x 1) like "cannot connect*"} each out;
-    `registered`opened`reloaded`failed!(count rs;sum "j"$reached;sum "j"$ok;failed)}
-
-/ What has been finished and not yet reloaded, and when the last reload was.
-.qdev.attached.reload_state:`dirty`last!(0b;0Np)
-
-/ The table the run writes: what a reader must serve for the rows to be queryable.
-.qdev.attached.dataset:`
-
-/ The readers that failed the last reload, for the closing line.
-.qdev.attached.last_failed:()
-
-/ Seconds between mid-run reloads: hdb_reload_seconds, else 30 (0 reloads at every finished day).
-.qdev.attached.reload_interval:{[]
-    v:.qetl.cfg.raw `hdb_reload_seconds;
-    n:$[0=count v; 30; null j:"J"$v; 30; j<0; 30; j];
-    n*0D00:00:01}
+/ Naming the readers, asking each to reload, and the reload state: scripts/dev/attached_readers.q,
+/ which the destination's receiver (scripts/dev/remote_receiver.q, #1650) loads too.
+system"l scripts/dev/attached_readers.q";
 
 / The writer's on_ready: reload the named readers when .qetl.io.due says so, and release coverage to the
 / readers only when every one acknowledged with nothing open. A reader that failed is asked again at the
@@ -200,6 +156,36 @@ if[not `worker in key opts:.Q.opt .z.x;
     .qetl.log.info[worker;"coverage the readers have not loaded yet - this run asks them to reload";`dataset`source_version!(cfg`dataset;v)];
     1b}
 
+/ ------------------------------------------------------------ REMOTE WRITER (#1650)
+/ .
+/ With -writer host:port the run extracts here and the destination's receiver
+/ (scripts/dev/remote_receiver.q) commits every batch through its own HDB writer and tells
+/ the readers, so this machine needs neither the HDB nor the readers. Coverage is filed
+/ here, deferred as above, and released only when the receiver says its readers reloaded.
+
+/ The receiver, as one synchronous call per message; refused when it cannot be reached.
+/ @param opts the parsed command line
+/ @return a function of one message
+.qdev.attached.writer_call:{[opts]
+    addr:`$":",(first opts`writer),":",(first opts`writer_user),":",getenv `UQF_ATTACH_WRITER_PASSWORD;
+    h:@[hopen;(addr;10000);{[e] e}];
+    if[10h=type h; '"attached_backfill: cannot reach the receiver at ",(first opts`writer),": ",h];
+    {[h;m] h m}[h]}
+
+/ The remote manager's on_ready: the receiver has told its readers already; release coverage
+/ when it reports they reloaded, and keep it owed when they did not.
+/ @param status `finished`pending`final, as .qetl.io.flush and finish pass it
+/ @return 1b when coverage was released
+.qdev.attached.remote_ready:{[status]
+    r:.qetl.io.remote.last_reload;
+    s:.qdev.attached.reload_state;
+    s[`dirty]:s[`dirty] or 0<status`finished;
+    done:(`reloaded=r`outcome) and 0=status`pending;
+    if[done; s[`dirty]:0b; .qetl.coverage.release_ready r`asked];
+    if[`failed=r`outcome; `.qdev.attached.last_failed set enlist r`error];
+    `.qdev.attached.reload_state set s;
+    done}
+
 / The outcome of a run, and the exit code that says it.
 / @param result the lifecycle's result dictionary
 / @param dry whether the run wrote nothing by mode
@@ -235,18 +221,27 @@ if[not (::)~decl`io;
     -1 "attached_backfill: ",string[worker]," declares its own IO manager, which would write where it likes";
     exit 2];
 
-root:hsym `$first o`hdb;
-col:(.qetl.source.def decl`source)`time_column;
-bounds:@[.qdev.attached.bounds;o;{[e] -1 "attached_backfill: bad bounds: ",e; exit 2}];
-mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "attached_backfill: ",e; exit 2}];
-/ written is not queryable: coverage is released to the readers only once each has reloaded (#1094)
-.qdev.attached.readers_named:.qdev.attached.readers o;
+remote:`writer in key o;
 .qdev.attached.dataset:decl`dataset;
-.qdev.attached.reach_user:first o`user;
-.qetl.io.default:mgr,enlist[`on_ready]!enlist .qdev.attached.on_ready;
+$[remote;
+    [bounds:enlist[`destination]!enlist `$first o`destid;
+     call:@[.qdev.attached.writer_call;o;{[e] -1 e; exit 2}];
+     / the receiver tells the readers: none are asked from here
+     .qdev.attached.readers_named:.qdev.attached.readers enlist[`readers]!enlist enlist "_none_";
+     .qetl.io.default:.qetl.io.remote.manager[call;`$first o`attachment;decl`dataset],enlist[`on_ready]!enlist .qdev.attached.remote_ready;
+     .qetl.log.info[worker;"extracting here; the receiver on the destination's machine writes the HDB";
+        `attachment`destination`writer`state!(`$first o`attachment;bounds`destination;`$first o`writer;state)]];
+    [root:hsym `$first o`hdb;
+     col:(.qetl.source.def decl`source)`time_column;
+     bounds:@[.qdev.attached.bounds;o;{[e] -1 "attached_backfill: bad bounds: ",e; exit 2}];
+     mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "attached_backfill: ",e; exit 2}];
+     / written is not queryable: coverage is released to the readers only once each has reloaded (#1094)
+     .qdev.attached.readers_named:.qdev.attached.readers o;
+     .qdev.attached.reach_user:first o`user;
+     .qetl.io.default:mgr,enlist[`on_ready]!enlist .qdev.attached.on_ready;
+     .qetl.log.info[worker;"writing into an attached stack's HDB";
+        `attachment`destination`root`partition_col`max_date`deadline`state`readers!(`$first o`attachment;bounds`destination;root;col;bounds`max_date;bounds`deadline;state;`$", " sv string .qdev.attached.readers_named`name)]]];
 .qetl.coverage.defer_ready:1b;
-.qetl.log.info[worker;"writing into an attached stack's HDB";
-    `attachment`destination`root`partition_col`max_date`deadline`state`readers!(`$first o`attachment;bounds`destination;root;col;bounds`max_date;bounds`deadline;state;`$", " sv string .qdev.attached.readers_named`name)];
 
 .qdev.attached.claim o;
 if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
@@ -259,7 +254,9 @@ result:.Q.trp[{[ns;spec;w;ignored] (` sv ns,`init)[spec]; .qdev.attached.catch_u
         `state`error!(`failed;e)}];
 / An idle run never finishes its store, so what catch_up took on is asked here; a run that wrote has
 / already asked and released, or failed to.
-if[count .qetl.coverage.unready; .qdev.attached.on_ready `finished`pending`final!(0;0;1b)];
+/ Remotely, the receiver's finish asks its readers whatever it finished (remote_receiver.q).
+if[count .qetl.coverage.unready;
+    $[remote; [.qetl.io.finish .qetl.io.default]; .qdev.attached.on_ready `finished`pending`final!(0;0;1b)]];
 .qdev.attached.release o;
 fin:.qdev.attached.outcome[result;not .qetl.job.bounded.runtime.allows`finish_store];
 .qetl.log.info[worker;"attached backfill finished";result,fin,`destination`reload_owed!(bounds`destination;.qdev.attached.reload_state`dirty)];

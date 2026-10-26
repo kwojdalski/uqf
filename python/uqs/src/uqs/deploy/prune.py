@@ -114,7 +114,10 @@ def decide(listing: dict, keep: int) -> dict:
     current = listing.get("current") or ""
     rollback_to = (releases.get(current) or {}).get("previous_release") or ""
     reasons: dict[str, str] = {}
-    newest = sorted(releases)[::-1][:keep] if keep else []
+    # Only release ids are ranked (#1655): any other name under releases/ sorts after
+    # them, and would take a slot meant for a release the operator asked to keep.
+    ids = sorted(n for n in releases if RELEASE_ID.fullmatch(n))
+    newest = ids[::-1][:keep] if keep else []
     for name in newest:
         reasons[name] = f"one of the newest {keep}"
     for name, r in releases.items():

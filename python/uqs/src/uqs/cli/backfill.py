@@ -96,6 +96,15 @@ def backfill(
             "and dry-run admit afresh and start the runner (completed historical dates only)",
         ),
     ] = None,
+    writer: Annotated[
+        str | None,
+        typer.Option(
+            "--writer",
+            metavar="HOST:PORT",
+            help="With --attach: extract here and send each window to the receiver "
+            "`uqs job receive` started on the stack's machine, which writes its HDB (#1650)",
+        ),
+    ] = None,
     as_json: Annotated[
         bool,
         typer.Option("--json", help="With --attach: print the plan as JSON"),
@@ -153,6 +162,9 @@ def backfill(
     ended. `--wait` follows the run to its outcome and exits with that - what
     a script or a scheduler wants.
     """
+    if writer is not None and attach is None:
+        _die(UqsError("--writer is for --attach: it names the receiver of an attached destination"))
+        return
     if as_json and attach is None:
         _die(UqsError("--json is for --attach: it prints the attached admission plan"))
         return
@@ -181,6 +193,7 @@ def backfill(
             wait=wait,
             verbose=_debug_requested(ctx, debug),
             trace=trace,
+            writer=writer,
         )
         return
     try:
