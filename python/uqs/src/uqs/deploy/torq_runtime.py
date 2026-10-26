@@ -39,6 +39,7 @@ import subprocess
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from uqs.deploy.artifact import ReleaseError, _sha256, checked_archive
 from uqs.deploy.payload import Runner
@@ -74,6 +75,11 @@ class Runtime:
     #: the sha256 of RUNTIME_MANIFEST.json as shipped: the server checks an
     #: installed runtime against exactly this manifest
     manifest_sha256: str
+
+    #: What runtime_install and prune need of any runtime (q_runtime.QRuntime too).
+    component: ClassVar[str] = "torq"
+    label: ClassVar[str] = "TorQ"
+    runtimes_dir: ClassVar[str] = RUNTIMES_DIR
 
     @property
     def version(self) -> str | None:

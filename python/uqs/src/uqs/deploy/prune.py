@@ -16,12 +16,13 @@ What each release holds is read on the server by one python3 program
 name shaped like a release id is ever removed, so nothing else under
 releases/ can be. --dry-run lists what would go and removes nothing.
 
-BUNDLED TORQ RUNTIMES (#1557, deploy/runtime_install.py) live beside the
-releases, under shared/runtimes/torq/<sha256>/, and many releases share one.
-LIST_PY reads which runtime each release's deploy.env names. A runtime any
-release left on the server names is kept - so a rollback to it still finds
-its TorQ - and one none of them names is removed with them. Only a name
-shaped like a sha256 is ever removed there too.
+BUNDLED RUNTIMES (#1557, deploy/runtime_install.py) - TorQ's and q's - live
+beside the releases, under shared/runtimes/<component>/<sha256>/, and many
+releases share one. Each is named here as <component>/<sha256>. LIST_PY
+reads which runtimes each release's deploy.env names. A runtime any release
+left on the server names is kept - so a rollback to it still finds its TorQ
+and its q - and one none of them names is removed with them. Only a name
+shaped like a sha256, under a component's directory, is ever removed there.
 """
 
 from __future__ import annotations
@@ -30,10 +31,10 @@ import json
 import re
 import sys
 
+from uqs.deploy.bundled import BUNDLABLE
 from uqs.deploy.config import Config, DeployError
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.stages import Deployment
-from uqs.deploy.torq_runtime import RUNTIMES_DIR
 from uqs.logger import get_logger
 
 log = get_logger()
@@ -41,22 +42,31 @@ log = get_logger()
 #: A release id as `uqs deploy build` names one: UTC build time, then the revision.
 RELEASE_ID = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{12}")
 
-#: A runtime's directory name: the sha256 of the archive it came from.
-RUNTIME_ID = re.compile(r"[0-9a-f]{64}")
+#: Where every component's runtimes live, under --dest.
+RUNTIMES_ROOT = "shared/runtimes"
+#: The components a runtime is bundled for.
+RUNTIME_COMPONENTS = BUNDLABLE
+#: A runtime, as prune names it: its component, then the sha256 of the
+#: archive it came from.
+RUNTIME_ID = re.compile(rf"({'|'.join(RUNTIME_COMPONENTS)})/[0-9a-f]{{64}}")
 
 #: Every release under argv[1], with `current` (argv[2]) resolved, and the
-#: runtimes under argv[3]: one JSON object. Sizes are what removing each would
-#: free - files, not links. A release's `runtimes` are those its deploy.env names.
+#: runtimes under argv[3]'s component directories (argv[4:]): one JSON object.
+#: Sizes are what removing each would free - files, not links. A release's
+#: `runtimes` are those its deploy.env names, as <component>/<sha256>.
 LIST_PY = r"""
 import json, os, sys
 import re
-root, cur, runtimes = sys.argv[1], sys.argv[2], sys.argv[3]
+root, cur, runtimes, kinds = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
 current = os.path.basename(os.readlink(cur)) if os.path.islink(cur) else ""
-named = re.compile(re.escape(runtimes) + r"/([0-9a-f]{64})(?![0-9a-f])")
+named = re.compile(re.escape(runtimes) + r"/((?:" + "|".join(kinds)
+                   + r")/[0-9a-f]{64})(?![0-9a-f])")
 out = {"current": current, "releases": [], "runtimes": []}
-if os.path.isdir(runtimes):
-    out["runtimes"] = sorted(n for n in os.listdir(runtimes)
-                             if os.path.isdir(os.path.join(runtimes, n)))
+for kind in kinds:
+    d = os.path.join(runtimes, kind)
+    if os.path.isdir(d):
+        out["runtimes"] += sorted(kind + "/" + n for n in os.listdir(d)
+                                  if os.path.isdir(os.path.join(d, n)))
 for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
     path = os.path.join(root, name)
     if os.path.islink(path) or not os.path.isdir(path):
@@ -92,14 +102,16 @@ print(json.dumps(out))
 
 
 def _runtimes_dir(dep: Deployment) -> str:
-    return f"{dep.cfg.dest}/{RUNTIMES_DIR}"
+    return f"{dep.cfg.dest}/{RUNTIMES_ROOT}"
 
 
 def _listing(dep: Deployment) -> dict:
+    kinds = " ".join(RUNTIME_COMPONENTS)
     out = dep.run(
         "prune",
         "listing the releases",
-        f"python3 -c {q(LIST_PY)} {q(dep.releases)} {q(dep.current)} {q(_runtimes_dir(dep))}",
+        f"python3 -c {q(LIST_PY)} {q(dep.releases)} {q(dep.current)} {q(_runtimes_dir(dep))} "
+        + kinds,
     )
     try:
         return json.loads(out.strip().splitlines()[-1])
@@ -144,8 +156,8 @@ def decide(listing: dict, keep: int) -> dict:
 
 
 def _runtimes(found: list[str], left: list[dict]) -> dict:
-    """Which TorQ runtimes stay - each one a release left on the server names
-    in its deploy.env - and which go: every other one named like a sha256."""
+    """Which runtimes stay - each one a release left on the server names in
+    its deploy.env - and which go: every other one named like a runtime."""
     users: dict[str, list[str]] = {}
     for r in left:
         for sha in r.get("runtimes", []):
@@ -179,11 +191,11 @@ def prune_locked(dep: Deployment, keep: int, dry_run: bool = False) -> dict:
     if unused and not dry_run:
         dep.run(
             "prune",
-            "removing TorQ runtimes no release names",
-            *(f"rm -rf {q(_runtimes_dir(dep))}/{q(sha)}" for sha in unused),
+            "removing runtimes no release names",
+            *(f"rm -rf {q(_runtimes_dir(dep))}/{q(name)}" for name in unused),
         )
-    for sha in unused:
-        log.info("{} TorQ runtime {}", "would remove" if dry_run else "removed", sha)
+    for name in unused:
+        log.info("{} runtime {}", "would remove" if dry_run else "removed", name)
     return {"prune": "planned" if dry_run else "done", **result}
 
 

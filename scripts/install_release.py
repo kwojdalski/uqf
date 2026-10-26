@@ -12,8 +12,12 @@ In order, each step refusing with what to do before the next one writes:
 
   1. integrity - every file RELEASE_MANIFEST.json lists has its recorded sha256;
   2. platform  - this host's OS, architecture and glibc meet the artifact's
-     target, whose wheels were built for exactly that;
-  3. Python    - the interpreter is the version the artifact targets;
+     target: the glibc its wheels need, which the manifest records;
+  3. Python    - the interpreter is the version the artifact targets. A release
+     built with `uqs deploy build --python-runtime` carries a CPython: unless
+     --python names another, it is unpacked into .release/python, checked file
+     by file against its own manifest, and is the interpreter - so the host
+     needs only a python3 (3.8 or later) to run this script;
   4. install   - `.venv` is created in the release by `python -m venv`, and the
      locked dependencies then uqs itself are installed from `.release/wheels`
      with `--no-index` and the lock's hashes required: no registry is reached,
@@ -23,8 +27,9 @@ In order, each step refusing with what to do before the next one writes:
 
 Nothing outside the release directory is written: not the system Python, not q,
 not TorQ, not `current`. Switching the current release and starting processes
-stay separate, explicit steps. `--check` runs steps 1-3 only. A failed install
-removes the `.venv` it created, so a rerun starts clean.
+stay separate, explicit steps. `--check` runs steps 1-3 only, writing nothing: a
+carried Python is unpacked and run by the install, not by --check. A failed
+install removes the `.venv` it created, so a rerun starts clean.
 """
 
 from __future__ import annotations
@@ -34,19 +39,23 @@ import hashlib
 import json
 import os
 import platform
-import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 MANIFEST = "RELEASE_MANIFEST.json"
 VENV = ".venv"
 ENV_FILE = "deploy.env"
 INSTALLED = ".release/INSTALLED.json"
-#: A manylinux wheel tag's glibc floor: manylinux_2_28_x86_64 needs glibc 2.28.
-MANYLINUX = re.compile(r"manylinux_(\d+)_(\d+)_")
+#: Where a carried Python runtime is unpacked, and the manifest inside it.
+RUNTIME_DIR = ".release/python"
+RUNTIME_MANIFEST = "RUNTIME_MANIFEST.json"
+#: What `uname -m` may call an architecture, by the name a release target uses
+#: (uqs.deploy.artifact.ARCH_ALIASES, which this stdlib-only script cannot import).
+ARCH_ALIASES = {"amd64": "x86_64", "arm64": "aarch64"}
 
 
 class Refused(Exception):
@@ -91,20 +100,20 @@ def check_integrity(release: Path, manifest: dict) -> int:
 
 
 def glibc_floor(target: dict) -> tuple[int, int] | None:
-    """The lowest glibc the target's wheel platforms need, or None."""
-    floors = [
-        (int(m.group(1)), int(m.group(2)))
-        for tag in target.get("platforms", [])
-        if (m := MANYLINUX.match(tag))
-    ]
-    return min(floors) if floors else None
+    """The glibc the release's wheels need, as `uqs deploy build` recorded it
+    from their manylinux tags; None when they need none."""
+    floor = target.get("glibc")
+    if not floor:
+        return None
+    major, minor = (int(p) for p in str(floor).split(".")[:2])
+    return major, minor
 
 
 def check_platform(target: dict, system: str, machine: str, libc: tuple[str, str]) -> None:
     want_os, want_arch = target.get("os"), target.get("arch")
     if want_os and system.lower() != want_os:
         raise Refused(f"this host runs {system}; the release was built for {want_os}")
-    if want_arch and machine != want_arch:
+    if want_arch and ARCH_ALIASES.get(machine, machine) != want_arch:
         raise Refused(f"this host is {machine}; the release was built for {want_arch}")
     floor = glibc_floor(target)
     if floor is None:
@@ -144,6 +153,56 @@ def check_python(python: str, target: dict) -> str:
             "pass --python with that version"
         )
     return version
+
+
+def _unpack(archive: Path, sha256: str, home: Path) -> None:
+    """The carried runtime into `home`, whole or not at all: its sha256 first,
+    then only regular files at relative paths, each written new."""
+    if _sha256(archive) != sha256:
+        raise Refused(f"{archive.name} is not the Python runtime the manifest records")
+    partial = home.with_name(home.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    try:
+        with tarfile.open(archive, "r:gz") as tar:
+            for member in tar:
+                parts = Path(member.name).parts
+                if not member.isfile() or member.name.startswith("/") or ".." in parts:
+                    raise Refused(f"{archive.name}: member {member.name!r} is not a plain file")
+                target = partial / member.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                source = tar.extractfile(member)
+                if source is None:  # pragma: no cover - a regular file always extracts
+                    raise Refused(f"{archive.name}: member {member.name!r} did not extract")
+                with source, open(target, "xb") as out:
+                    shutil.copyfileobj(source, out)
+                target.chmod(0o755 if member.mode & 0o100 else 0o644)
+                # its mtime too: a .pyc whose source seems newer is rewritten
+                os.utime(target, (member.mtime, member.mtime))
+        partial.rename(home)
+    except BaseException:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+
+
+def carried_python(release: Path, record: dict) -> str:
+    """The interpreter of the Python runtime the release carries: unpacked into
+    RUNTIME_DIR once, and checked file by file against its own manifest."""
+    home = release / RUNTIME_DIR
+    if not home.exists():
+        _unpack(release / record["archive"], record["sha256"], home)
+    try:
+        listed = json.loads((home / RUNTIME_MANIFEST).read_text())["files"]
+    except (OSError, ValueError, KeyError) as exc:
+        raise Refused(f"{home} holds no readable {RUNTIME_MANIFEST}: {exc}") from None
+    found = {
+        p.relative_to(home).as_posix(): p for p in home.rglob("*") if p.is_file() or p.is_symlink()
+    }
+    found.pop(RUNTIME_MANIFEST, None)
+    bad = sorted(set(found) ^ set(listed))
+    bad += sorted(r for r in listed if r in found and _sha256(found[r]) != listed[r])
+    if bad:
+        raise Refused(f"{home} is not the runtime it was unpacked from: {', '.join(bad[:5])}")
+    return str(home / record["interpreter"])
 
 
 def _run(argv: list[str], what: str, release: Path) -> None:
@@ -196,7 +255,11 @@ def write_env(release: Path, env_file: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--python", default="python3", help="the interpreter to build .venv with")
+    parser.add_argument(
+        "--python",
+        help="the interpreter to build .venv with; default: the CPython the release carries, "
+        "else python3",
+    )
     parser.add_argument("--env-file", help="absolute path of the site file deploy.env loads")
     parser.add_argument("--check", action="store_true", help="verify only; write nothing")
     parser.add_argument(
@@ -210,16 +273,29 @@ def main(argv: list[str] | None = None) -> int:
         n = check_integrity(release, manifest)
         print(f"install_release: {n} files match the manifest of {manifest.get('release')}")
         check_platform(target, platform.system(), platform.machine(), platform.libc_ver())
-        version = check_python(args.python, target)
-        print(f"install_release: platform and Python {version} match the release's target")
+        record = (manifest.get("python") or {}).get("runtime")
+        if args.check and record and args.python is None:
+            print(
+                f"install_release: the platform matches; the release carries Python "
+                f"{record['version']}, unpacked and run by the install"
+            )
+            return 0
+        python = args.python or (carried_python(release, record) if record else "python3")
+        version = check_python(python, target)
+        print(f"install_release: platform and Python {version} ({python}) match the target")
         if args.check:
             return 0
-        install(release, manifest, args.python)
+        install(release, manifest, python)
         if args.env_file:
             write_env(release, args.env_file)
         (release / INSTALLED).write_text(
             json.dumps(
-                {"release": manifest.get("release"), "python": version, "env_file": args.env_file},
+                {
+                    "release": manifest.get("release"),
+                    "python": version,
+                    "interpreter": python,
+                    "env_file": args.env_file,
+                },
                 indent=2,
             )
             + "\n"

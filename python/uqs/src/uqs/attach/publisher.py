@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.attach import plan as planning
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host

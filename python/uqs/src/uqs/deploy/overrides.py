@@ -48,19 +48,21 @@ def for_artifact(cfg: Config, pkg: Artifact) -> list[dict]:
     """The digest and pin policy for `pkg`, which read_artifact has already
     checked whole: refused unless an override relaxes it, else the exceptions
     requested."""
-    return _pinned(cfg, pkg.path.name, pkg.sha256, pkg.pinned, cfg.expected_sha256, "")
+    return _pinned(cfg, pkg.path.name, pkg.sha256, pkg.pinned, "")
 
 
-def for_runtime(cfg: Config, name: str, sha256: str, pinned: bool) -> list[dict]:
-    """The same policy for a bundled TorQ runtime (deploy/torq_runtime.py),
-    pinned by torq_runtime_sha256: its exceptions name it."""
-    return _pinned(cfg, name, sha256, pinned, cfg.torq_runtime_sha256, "the torq runtime's ")
+def for_runtime(cfg: Config, component: str, name: str, sha256: str, pinned: bool) -> list[dict]:
+    """The same policy for a bundled runtime - TorQ's or q's
+    (deploy/torq_runtime.py, deploy/q_runtime.py) - pinned by
+    <component>_runtime_sha256: its exceptions name it."""
+    return _pinned(cfg, name, sha256, pinned, component)
 
 
-def _pinned(
-    cfg: Config, name: str, sha256: str, pinned: bool, expected: str | None, whose: str
-) -> list[dict]:
-    key = "torq_runtime_sha256" if whose else "expected_sha256"
+def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -> list[dict]:
+    key = f"{component}_runtime_sha256" if component else "expected_sha256"
+    expected = getattr(cfg, key)
+    whose = f"the {component} runtime's " if component else ""
+    beside = f"the {component} runtime" if component else "the artifact"
     out = []
     if expected is not None:
         matched = sha256 == expected
@@ -93,7 +95,7 @@ def _pinned(
                 _entry(
                     ALLOW_UNPINNED,
                     cfg.allow_unpinned,
-                    f"a .sha256 beside {'the torq runtime' if whose else 'the artifact'}",
+                    f"a .sha256 beside {beside}",
                     observed,
                     not pinned,
                 )

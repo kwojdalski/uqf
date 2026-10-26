@@ -9,7 +9,7 @@ import sys
 import time
 from datetime import UTC, datetime
 
-from uqs.deploy import components, converted_override, fetch, hdb, overrides, runtime_install
+from uqs.deploy import bundled, components, converted_override, fetch, hdb, overrides
 from uqs.deploy.artifact import Artifact, ReleaseError, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.plan import plan
@@ -38,14 +38,11 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
     exceptions = overrides.for_artifact(cfg, pkg)
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
-    if cfg.torq_mode == components.BUNDLED:
-        bundled = runtime_install.load(cfg.torq_runtime)
-        exceptions += overrides.for_runtime(cfg, bundled.path.name, bundled.sha256, bundled.pinned)
-        dep.torq_runtime = bundled
     try:
         dep.runtime = release_runtime(pkg.manifest)
     except ReleaseError as exc:
         raise DeployError(exc.stage, str(exc)) from None
+    exceptions += bundled.attach(cfg, dep, pkg)
     if cfg.runtime and cfg.runtime != dep.runtime:
         raise DeployError(
             "artifact",
@@ -72,9 +69,8 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
     report.previous_release = facts.get("current")
     report.qversion = facts.get("qversion") or None
     python = pkg.manifest["target"]["python"]
-    rt = dep.torq_runtime
-    torq = rt.record(cfg.dest, runtime_install.state(dep, rt)) if rt else None
-    report.components = components.observed(cfg, facts, python, f"{dep.releases}/{rid}", torq)
+    shipped = bundled.records(dep)
+    report.components = components.observed(cfg, facts, python, f"{dep.releases}/{rid}", shipped)
     exceptions += overrides.for_q(cfg, facts.get("qversion", ""))
     report.exceptions = exceptions
     for e in exceptions:
@@ -116,11 +112,7 @@ def _run(
     stopped_previous = False
     started = False
     try:
-        if dep.torq_runtime is not None:
-            log.info("installing the TorQ runtime, or reusing it")
-            installed = runtime_install.install(dep, dep.torq_runtime, rid)
-            report.components["torq"]["install"] = installed
-            dep.beat()
+        bundled.install(dep, rid, report)
         log.info("transferring release {}", rid)
         release = dep.transfer(pkg, rid)
         dep.beat()

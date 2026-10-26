@@ -28,7 +28,7 @@ DEPLOY = Path(control.__file__).parent
 #: build.py, payload.py, kafka.py and torq_runtime.py run local commands (uv,
 #: git, pip, ldd), not remote ones; kafka.py's server-side check is read by
 #: stages.py through _checked.
-LOCAL = {"remote.py", "build.py", "payload.py", "kafka.py", "torq_runtime.py"}
+LOCAL = {"remote.py", "build.py", "payload.py", "kafka.py", "torq_runtime.py", "python_runtime.py"}
 
 
 def _refused() -> subprocess.CompletedProcess:
