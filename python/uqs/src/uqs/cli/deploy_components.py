@@ -1,7 +1,8 @@
 """`uqs deploy push`'s component modes (#1557, deploy/components.py): how q,
-TorQ and Python reach the server, and a bundled TorQ's and q's runtimes. Beside
-cli/deploy.py, which takes each as a parameter, so the push command stays
-readable in one sitting."""
+TorQ and Python reach the server - an existing q's path and home, and a bundled
+TorQ's, q's and Python's runtimes - and the Python runtime `uqs deploy build`
+can carry. Beside cli/deploy.py, which takes each as a parameter, so the push
+command stays readable in one sitting."""
 
 from __future__ import annotations
 
@@ -35,7 +36,15 @@ TorqMode = Annotated[
         "the vendored TorQ of --torq-runtime, installed once under shared/runtimes/torq/",
     ),
 ]
-PythonMode = Annotated[str, _mode("python", "the Python uv finds", "not yet supported (#1557)")]
+PythonMode = Annotated[
+    str,
+    _mode(
+        "python",
+        "the Python uv finds",
+        "the CPython of --python-runtime, installed once under shared/runtimes/python/, "
+        "which .venv is made from",
+    ),
+]
 DEFAULT = EXISTING
 TorqRuntime = Annotated[
     str | None,
@@ -67,5 +76,48 @@ QRuntimeSha256 = Annotated[
         "--q-runtime-sha256",
         metavar="SHA256",
         help="Refuse a q runtime whose sha256 is anything else (usually a target's)",
+    ),
+]
+PythonRuntime = Annotated[
+    str | None,
+    typer.Option(
+        "--python-runtime",
+        metavar="FILE",
+        help="With --python-mode bundled: the CPython `uqs deploy build-runtime python` made",
+    ),
+]
+PythonRuntimeSha256 = Annotated[
+    str | None,
+    typer.Option(
+        "--python-runtime-sha256",
+        metavar="SHA256",
+        help="Refuse a Python runtime whose sha256 is anything else (usually a target's)",
+    ),
+]
+#: `uqs deploy build --python-runtime`: carried in the release, for
+#: scripts/install_release.py on a server with no Python of the release's version.
+CarriedPythonRuntime = Annotated[
+    str | None,
+    typer.Option(
+        "--python-runtime",
+        metavar="FILE",
+        help="Carry this CPython (`uqs deploy build-runtime python`) in the release, for "
+        "scripts/install_release.py to make .venv from; built for --arch and --python",
+    ),
+]
+Qcmd = Annotated[
+    str | None,
+    typer.Option(
+        "--qcmd",
+        help="The q executable on the server, an absolute path. Default: the deploying "
+        "account's $QCMD there, else q on that account's PATH - never this machine's",
+    ),
+]
+Qhome = Annotated[
+    str | None,
+    typer.Option(
+        "--qhome",
+        help="QHOME on the server, where q finds its licence. Default: the deploying "
+        "account's $QHOME there; refused when that is unset too",
     ),
 ]

@@ -23,8 +23,8 @@ from uqs.deploy import artifact, driver, verify
 from uqs.deploy import build as release_build
 from uqs.deploy import remote as remote_mod
 from uqs.deploy.config import Config, DeployError, make_config, redact
+from uqs.deploy.preflight import PREFLIGHT
 from uqs.deploy.remote import Remote, q
-from uqs.deploy.server import PREFLIGHT
 from uqs.deploy.stages import Deployment
 
 ROOT = Path(__file__).resolve().parents[3]

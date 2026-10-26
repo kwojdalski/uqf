@@ -61,7 +61,13 @@ def plan(
         ),
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "
-        + f"{pkg.manifest['python']['wheels']} wheels{kafka.plan_note(release, pkg.manifest)}",
+        + f"{pkg.manifest['python']['wheels']} wheels{kafka.plan_note(release, pkg.manifest)}"
+        + (
+            f", into a .venv made from the bundled Python {dep.python_runtime.version} "
+            "by -m venv and pip (no uv)"
+            if dep.python_runtime is not None
+            else ""
+        ),
         "hdb       " + facts.get("hdb", "not judged"),
         "smoke     "
         + " ".join(["q scripts/deploy_smoke.q", *smoke_args(cfg.profile, sel)])

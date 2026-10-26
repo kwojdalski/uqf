@@ -31,9 +31,19 @@ py=$(uv python find "$python" 2>/dev/null) ||
 echo "python=$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 echo "os=$(uname -s)"
 echo "arch=$(uname -m)"
-for tool in bash envsubst rlwrap tar timeout python3; do
+# The host contract (docs/guides/deploy.md): the push's own steps (tar and
+# the gzip it unpacks with, timeout, find, sed, python3) and what torq.sh runs -
+# its start (awk, grep, pgrep, hostname, nohup, envsubst) and stop (lsof) -
+# and rlwrap, which uqs checks for before torq.sh is run.
+for tool in bash envsubst rlwrap tar gzip timeout python3 awk sed grep pgrep lsof hostname nohup \
+  find; do
   command -v "$tool" >/dev/null || fail "$tool is not on PATH - the release needs it"
 done
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 8))' ||
+  fail "python3 is older than 3.8 - the push's checks on the server need 3.8 or later"
+hostname -I >/dev/null 2>&1 ||
+  fail "hostname -I fails - torq.sh matches a process's host against this host's addresses with it"
+echo "glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | sed -n 's/^glibc //p')"
 me=$(id -un)
 # QHOME: --qhome, else this account's own $QHOME - never the caller's.
 if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--qhome"

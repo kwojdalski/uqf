@@ -112,6 +112,7 @@ def build(
     with_kafka_connector: Annotated[
         bool, typer.Option("--with-kafka-connector", help=kafka.CONNECTOR_HELP)
     ] = False,
+    python_runtime: components.CarriedPythonRuntime = None,
 ) -> None:
     """Build a release artifact once, for `uqs deploy push` to put on any number of servers.
 
@@ -141,6 +142,7 @@ def build(
             allow_computed_names=allow_computed_names,
             kafka_home=kafka_home,
             kafka_connector=with_kafka_connector,
+            python_runtime_file=python_runtime,
         )
     except ReleaseError as exc:
         _failed("uqs deploy build", exc.stage, exc)
@@ -226,22 +228,8 @@ def push(
             "Persisted in deploy.env as UQS_PROCESS_FIELDS",
         ),
     ] = "",
-    qcmd: Annotated[
-        str | None,
-        typer.Option(
-            "--qcmd",
-            help="The q executable on the server, an absolute path. Default: the deploying "
-            "account's $QCMD there, else q on that account's PATH - never this machine's",
-        ),
-    ] = None,
-    qhome: Annotated[
-        str | None,
-        typer.Option(
-            "--qhome",
-            help="QHOME on the server, where q finds its licence. Default: the deploying "
-            "account's $QHOME there; refused when that is unset too",
-        ),
-    ] = None,
+    qcmd: components.Qcmd = None,
+    qhome: components.Qhome = None,
     data_dir: Annotated[
         str | None,
         typer.Option("--data-dir", help="Runtime data directory; default: <dest>/shared/data"),
@@ -331,6 +319,8 @@ def push(
     torq_runtime_sha256: components.TorqRuntimeSha256 = None,
     q_runtime: components.QRuntime = None,
     q_runtime_sha256: components.QRuntimeSha256 = None,
+    python_runtime: components.PythonRuntime = None,
+    python_runtime_sha256: components.PythonRuntimeSha256 = None,
     fix_hdb: Annotated[
         bool,
         typer.Option(

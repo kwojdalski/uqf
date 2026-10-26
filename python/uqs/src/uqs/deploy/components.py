@@ -8,7 +8,9 @@ are `torq_runtime`, the artifact `uqs deploy build-runtime torq` makes, and
 `torq_runtime_sha256` to pin it. So can q (step 6, deploy/q_runtime.py) -
 PeachQ only, `q_runtime` and `q_runtime_sha256`, from `uqs deploy
 build-runtime q`; KX's q is licensed to its server, and stays `existing`.
-Python's bundled mode comes with step 7, and until then it is refused.
+So can Python (step 7, deploy/python_runtime.py): `python_runtime` and
+`python_runtime_sha256`, the CPython `uqs deploy build-runtime python` packs,
+which the release's .venv is made from.
 
 `existing` mode's fields are the push options that already exist - qcmd and
 qhome for q; torq_home, torq_app_home and torq_launcher for TorQ; Python has
@@ -37,14 +39,6 @@ if TYPE_CHECKING:
 COMPONENTS = ("q", "torq", "python")
 EXISTING, BUNDLED = "existing", "bundled"
 MODES = (EXISTING, BUNDLED)
-#: The modes a push accepts today, per component; `bundled` joins as each step lands.
-SUPPORTED: dict[str, frozenset[str]] = {
-    "q": frozenset(MODES),
-    "torq": frozenset(MODES),
-    "python": frozenset({EXISTING}),
-}
-#: The issue step that adds each component's bundled mode, while it is refused.
-BUNDLED_IN = {"python": "step 7"}
 #: The push options each mode of each component reads.
 FIELDS: dict[str, dict[str, tuple[str, ...]]] = {
     "q": {EXISTING: ("qcmd", "qhome"), BUNDLED: ("q_runtime", "q_runtime_sha256")},
@@ -52,10 +46,10 @@ FIELDS: dict[str, dict[str, tuple[str, ...]]] = {
         EXISTING: ("torq_home", "torq_app_home", "torq_launcher"),
         BUNDLED: ("torq_runtime", "torq_runtime_sha256"),
     },
-    "python": {EXISTING: (), BUNDLED: ()},
+    "python": {EXISTING: (), BUNDLED: ("python_runtime", "python_runtime_sha256")},
 }
 #: The field a mode cannot go without.
-REQUIRED = {("torq", BUNDLED): "torq_runtime", ("q", BUNDLED): "q_runtime"}
+REQUIRED = {(c, BUNDLED): f"{c}_runtime" for c in COMPONENTS}
 
 
 def mode_key(component: str) -> str:
@@ -83,8 +77,8 @@ def switch(options: dict, sources: dict[str, str], given: dict) -> None:
 
 
 def check(modes: dict[str, str], settings: dict[str, object]) -> None:
-    """Each component's mode is one this push supports, and no field of
-    another mode is set beside it. Raises ValueError, naming the key."""
+    """Each component's mode is a mode, and no field of another mode is set
+    beside it. Raises ValueError, naming the key."""
     for component, mode in modes.items():
         key = mode_key(component)
         if mode not in MODES:
@@ -98,11 +92,6 @@ def check(modes: dict[str, str], settings: dict[str, object]) -> None:
                 f"{key} is {mode}, but {', '.join(stale)} - {' and '.join(others)} mode's - "
                 f"{'is' if len(stale) == 1 else 'are'} set too. A layer that switches "
                 f"{component}'s mode drops the old mode's settings; none may be set again above it"
-            )
-        if mode not in SUPPORTED[component]:
-            raise ValueError(
-                f"{key} {mode} is not yet supported - #1557 {BUNDLED_IN[component]} adds it; "
-                f"use {EXISTING}, its paths on the server"
             )
         needed = REQUIRED.get((component, mode))
         if needed and settings.get(needed) in (None, ""):
@@ -119,7 +108,7 @@ def observed(
     mode, path, the version observed (None when nothing reads it) and what
     the server must provide. `bundled` holds each bundled component's record,
     its runtime's (torq_runtime.Runtime.record, q_runtime.QRuntime.record),
-    in place of the existing one's."""
+    in place of the existing one's (python_runtime.PythonRuntime.record too)."""
     found = {
         "q": {
             "mode": cfg.q_mode,

@@ -2,10 +2,10 @@
 before any Config is made (#1557) - split from config.py, which calls
 `checked` and turns its ValueError into the push's refusal.
 
-Three artifacts can be pinned: the release (`expected_sha256`) and, when
-bundled, the TorQ runtime (`torq_runtime_sha256`) and the q runtime
-(`q_runtime_sha256`). An override with nothing to relax is refused, never
-recorded as idle:
+Four artifacts can be pinned: the release (`expected_sha256`) and, when
+bundled, the TorQ runtime (`torq_runtime_sha256`), the q runtime
+(`q_runtime_sha256`) and the Python runtime (`python_runtime_sha256`). An
+override with nothing to relax is refused, never recorded as idle:
 
   --accept-digest   needs a pin on any of them;
   --allow-unpinned  needs an artifact no pin covers.
@@ -24,6 +24,7 @@ class Pins:
     expected_sha256: str | None
     torq_runtime_sha256: str | None
     q_runtime_sha256: str | None
+    python_runtime_sha256: str | None
     q_version: str | None
     accept_digest: str | None
     accept_q_version: str | None
@@ -59,37 +60,43 @@ def checked(
     expected_sha256: str | None,
     torq_runtime_sha256: str | None,
     q_runtime_sha256: str | None,
+    python_runtime_sha256: str | None,
     q_version_: str | None,
     accept_digest: str | None,
     accept_q_version: str | None,
     allow_unpinned: str | None,
     torq_runtime: str | None,
     q_runtime: str | None,
+    python_runtime: str | None,
 ) -> Pins:
     """Every pin and override, normalised, or the ValueError that refuses
-    them. `torq_runtime` and `q_runtime` are the bundled runtimes' paths,
-    when they ship."""
+    them. `torq_runtime`, `q_runtime` and `python_runtime` are the bundled
+    runtimes' paths, when they ship."""
     pins = Pins(
         expected_sha256=sha256("expected_sha256", expected_sha256),
         torq_runtime_sha256=sha256("torq_runtime_sha256", torq_runtime_sha256),
         q_runtime_sha256=sha256("q_runtime_sha256", q_runtime_sha256),
+        python_runtime_sha256=sha256("python_runtime_sha256", python_runtime_sha256),
         q_version=q_version(q_version_),
         accept_digest=reason("--accept-digest", accept_digest),
         accept_q_version=reason("--accept-q-version", accept_q_version),
         allow_unpinned=reason("--allow-unpinned", allow_unpinned),
     )
+    runtimes = (
+        (torq_runtime, pins.torq_runtime_sha256),
+        (q_runtime, pins.q_runtime_sha256),
+        (python_runtime, pins.python_runtime_sha256),
+    )
     if pins.accept_digest is not None and not (
-        pins.expected_sha256 or pins.torq_runtime_sha256 or pins.q_runtime_sha256
+        pins.expected_sha256 or any(pin for _, pin in runtimes)
     ):
         raise ValueError(
             "--accept-digest relaxes expected_sha256 (or torq_runtime_sha256, "
-            "q_runtime_sha256), and this deployment sets none"
+            "q_runtime_sha256, python_runtime_sha256), and this deployment sets none"
         )
     if pins.accept_q_version is not None and pins.q_version is None:
         raise ValueError("--accept-q-version relaxes q_version, and this deployment sets none")
-    runtimes_pinned = (torq_runtime is None or pins.torq_runtime_sha256 is not None) and (
-        q_runtime is None or pins.q_runtime_sha256 is not None
-    )
+    runtimes_pinned = all(path is None or pin is not None for path, pin in runtimes)
     if pins.allow_unpinned is not None and pins.expected_sha256 is not None and runtimes_pinned:
         raise ValueError(
             "--allow-unpinned: expected_sha256 already pins the artifact - there is nothing "

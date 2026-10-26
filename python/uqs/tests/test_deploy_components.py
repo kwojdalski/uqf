@@ -57,8 +57,10 @@ def _normalised(remote: FakeRemote) -> str:
 def test_a_source_only_push_sends_the_server_what_it_did_before(tmp_path, modes):
     """GOLDEN is every script a push sent before components existed: preflight,
     lock, transfer, prepare and its deploy.env, smoke, start, verify, activate -
-    and, since #1664, the `running` report written before the start. Unset or
-    spelt out, `existing` changes none of it."""
+    and, since #1664, the `running` report written before the start, and since
+    #1557 step 7 preflight's host-contract checks (tools, python3 >= 3.8,
+    hostname -I, the glibc it reports). Unset or spelt out, `existing` changes
+    none of it."""
     remote, _ = _push(tmp_path, *modes)
     assert _normalised(remote) == GOLDEN.read_text()
 
@@ -85,10 +87,10 @@ def test_every_component_defaults_to_existing():
     assert (cfg.q_mode, cfg.torq_mode, cfg.python_mode) == ("existing",) * 3
 
 
-@pytest.mark.parametrize(("component", "step"), [("python", 7)])
-def test_bundled_is_refused_naming_the_step_that_adds_it(component, step):
-    with pytest.raises(DeployError, match=rf"{component}_mode bundled is not yet supported - "
-                       rf"#1557 step {step} adds it"):  # fmt: skip
+@pytest.mark.parametrize("component", ["q", "torq", "python"])
+def test_bundled_needs_its_runtime(component):
+    with pytest.raises(DeployError, match=f"{component}_mode is bundled, and needs "
+                       f"{component}_runtime"):  # fmt: skip
         make_config(**BASE, **{f"{component}_mode": "bundled"})
 
 
@@ -106,19 +108,17 @@ def test_a_mode_that_is_not_one_is_refused():
     ],
 )  # fmt: skip
 def test_an_existing_field_beside_bundled_is_refused_before_bundled_is(component, fields, named):
-    """The rule bundled will be held to: the other mode's fields never ride
-    along. Checked before the not-yet-supported refusal, so it is testable now."""
+    """The other mode's fields never ride along with bundled."""
     with pytest.raises(DeployError, match=f"{component}_mode is bundled, but {named}"):
         make_config(**BASE, **fields, **{f"{component}_mode": "bundled"})
 
 
-def test_the_cli_takes_each_mode_and_refuses_bundled():
+def test_the_cli_takes_each_mode():
     cfg = parse_args(["a", "--host", "h", "--dest", "/srv/uqf", "--profile", "essential",
-                      "--torq-mode", "existing"])  # fmt: skip
-    assert cfg.torq_mode == "existing"
-    with pytest.raises(DeployError, match="python_mode bundled is not yet supported"):
-        parse_args(["a", "--host", "h", "--dest", "/srv/uqf", "--profile", "essential",
-                    "--python-mode", "bundled"])  # fmt: skip
+                      "--torq-mode", "existing", "--python-mode", "bundled",
+                      "--python-runtime", "dist/py.tar.gz"])  # fmt: skip
+    assert (cfg.torq_mode, cfg.python_mode) == ("existing", "bundled")
+    assert cfg.python_runtime == "dist/py.tar.gz"
 
 
 # --- layering: a switch drops the old mode's fields -----------------------------

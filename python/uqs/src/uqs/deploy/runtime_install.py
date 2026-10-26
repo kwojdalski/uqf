@@ -1,11 +1,12 @@
-"""A bundled runtime on the server - TorQ's or q's - installed once, never
-rewritten (#1557, steps 5 and 6).
+"""A bundled runtime on the server - TorQ's, q's or Python's - installed once,
+never rewritten (#1557, steps 5 to 7).
 
-A runtime (deploy/torq_runtime.py, deploy/q_runtime.py) lives at
+A runtime (deploy/torq_runtime.py, deploy/q_runtime.py,
+deploy/python_runtime.py) lives at
 <dest>/shared/runtimes/<component>/<sha256>/, named by the sha256 of the
 archive it came from, beside a marker file holding that sha256 and the
-RUNTIME_MANIFEST.json it shipped with. A push with `torq_mode` or `q_mode`
-"bundled", under the deploy lock and before its release is transferred:
+RUNTIME_MANIFEST.json it shipped with. A push with `torq_mode`, `q_mode` or
+`python_mode` "bundled", under the deploy lock and before its release is transferred:
 
   - finds no such directory: uploads the archive, checks its sha256 ON THE
     SERVER, extracts it into a hidden .partial directory, writes the marker,
@@ -19,21 +20,25 @@ RUNTIME_MANIFEST.json it shipped with. A push with `torq_mode` or `q_mode`
 
 The release's deploy.env then names it: TORQHOME=<runtime>/torq and
 TORQAPPHOME=<runtime>/torq-finance-starter-pack, and torq.sh is
-$TORQHOME's; QCMD=<runtime>/q and QHOME=<runtime>. Each release keeps naming
+$TORQHOME's; QCMD=<runtime>/q and QHOME=<runtime>; and the release's .venv
+is made from a bundled Python's interpreter, which UQF_PYTHON_RUNTIME names.
+Each release keeps naming
 its own runtimes, so a rollback (deploy/rollback.py, which sources each
 release's own deploy.env) runs the release it returns to on the TorQ and q
 it was deployed with; `uqs deploy prune` keeps every runtime a remaining
 release's deploy.env names.
 
 A q runtime is run once installed (`probe`): it must answer that it is
-PeachQ, and the .z.K it reports is the version the report records.
+PeachQ, and the .z.K it reports is the version the report records. A Python
+runtime is run too (`probe_python`): it must start, load its own extension
+modules and report the version it was built as.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from uqs.deploy import q_runtime, torq_runtime
+from uqs.deploy import python_runtime, q_runtime, torq_runtime
 from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.config import REPLACE_PY, SHA256_PY, DeployError
 from uqs.deploy.remote import q
@@ -95,9 +100,13 @@ REUSE, INSTALL = "already on the server, reused", "not on the server yet, instal
 
 
 #: Each component's runtime reader.
-READERS = {"torq": torq_runtime.read_runtime, "q": q_runtime.read_runtime}
-#: Any runtime: torq_runtime.Runtime or q_runtime.QRuntime.
-Runtime = torq_runtime.Runtime | q_runtime.QRuntime
+READERS = {
+    "torq": torq_runtime.read_runtime,
+    "q": q_runtime.read_runtime,
+    "python": python_runtime.read_runtime,
+}
+#: Any runtime: TorQ's, q's or Python's.
+Runtime = torq_runtime.Runtime | q_runtime.QRuntime | python_runtime.PythonRuntime
 
 
 def load(component: str, path: str | None) -> Runtime:
@@ -206,4 +215,24 @@ def probe(dep: Server, rt: q_runtime.QRuntime) -> str:
     if impl != PEACHQ:
         why = f"says it is {impl} - {q_runtime.KX_REFUSAL}" if impl else "did not run there"
         raise DeployError("runtime", f"the bundled q at {home} {why}: {out.strip()[-300:]}")
+    return version
+
+
+def probe_python(dep: Server, rt: python_runtime.PythonRuntime) -> str:
+    """Run the installed interpreter, isolated from the account's environment:
+    the X.Y.Z it reports, which must be the version it was built as."""
+    interpreter = rt.interpreter(rt.directory(dep.cfg.dest))
+    out = dep.run(
+        "runtime",
+        "running the bundled Python",
+        f"timeout {dep.cfg.smoke_timeout} {q(interpreter)} -I -c {q(python_runtime.PROBE)} 2>&1 "
+        "|| true",
+    )
+    version = python_runtime.parse_probe(out)
+    if version != rt.version:
+        said = f"says it is Python {version}" if version else "did not run there"
+        raise DeployError(
+            "runtime",
+            f"the bundled Python {interpreter} {said}, not {rt.version}: {out.strip()[-300:]}",
+        )
     return version

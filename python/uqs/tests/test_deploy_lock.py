@@ -172,7 +172,7 @@ def test_preflight_reports_the_holder_and_how_long_since_it_beat(tmp_path):
 
 
 def _lock_lines() -> str:
-    from uqs.deploy.server import PREFLIGHT
+    from uqs.deploy.preflight import PREFLIGHT
 
     start = PREFLIGHT.index('if [ -d "$lock" ]; then')
     return PREFLIGHT[start:]
