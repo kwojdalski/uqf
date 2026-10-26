@@ -118,6 +118,21 @@ def blocks_in(text: str, path: Path) -> list[Block]:
     return out
 
 
+def marked_docs(root: Path = REPO) -> list[str]:
+    """The documents with at least one q-example marker, as repository paths.
+
+    What the q-docs hooks' `files:` scope must name - no more, no fewer -
+    so a docs edit that cannot change what q-docs runs does not ask for a
+    KDB-X attestation; scripts/gates/check_hook_scopes.py holds the scope to
+    this list.
+    """
+    return [
+        f.relative_to(root).as_posix()
+        for f in _doc_files(root)
+        if any(_MARKER.match(line) for line in f.read_text().splitlines())
+    ]
+
+
 def all_blocks(root: Path = REPO) -> list[Block]:
     return [b for f in _doc_files(root) for b in blocks_in(f.read_text(), f.relative_to(root))]
 

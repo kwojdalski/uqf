@@ -41,9 +41,12 @@ def commit(repo: Path, path: str, text: str, msg: str = "change") -> str:
     return sh(repo, "rev-parse", "HEAD")
 
 
-def attest_here(repo: Path) -> str:
+def attest_here(repo: Path, hooks: list[str] | None = None) -> str:
+    """Record an attestation of HEAD's tree: for `hooks`, or - with None - the
+    legacy trailer without `hooks=`, which ran every hook."""
     tree = sh(repo, "rev-parse", "HEAD^{tree}")
-    sh(repo, "commit", "-q", "--allow-empty", "-m", "attest", "-m", f"KDB-X-gates: {tree}")
+    trailer = f"KDB-X-gates: {tree}" + ("" if hooks is None else f" hooks={','.join(hooks)}")
+    sh(repo, "commit", "-q", "--allow-empty", "-m", "attest", "-m", trailer)
     return sh(repo, "rev-parse", "HEAD")
 
 
@@ -67,8 +70,8 @@ def test_a_change_the_gates_do_not_judge_needs_nothing(repo):
 @pytest.mark.parametrize(
     "path",
     [
-        # q-tests runs the ```q blocks in docs/ (#1334).
-        "docs/guide.md",
+        # q-docs runs the marked ```q blocks in docs/ (#1334).
+        "docs/guides/new-pipeline.md",
         # contract-surface reads the process registry and Python (#1334).
         "scripts/processes/process.csv",
         "python/uqs/x.py",
@@ -119,7 +122,8 @@ def test_an_attestation_of_exactly_this_tree_passes(repo):
     base = sh(repo, "rev-parse", "HEAD")
     commit(repo, "src/a.q", "a:1\n")
     head = attest_here(repo)
-    assert check.report(base, head) == (True, "the KDB-X gates passed on exactly this tree")
+    ok, why = check.report(base, head)
+    assert ok and why.startswith("the KDB-X gates passed on exactly this tree")
 
 
 def test_a_change_after_the_attestation_needs_a_new_one(repo):
@@ -288,8 +292,172 @@ def test_attest_records_the_tree_only_when_every_hook_passes(repo, monkeypatch):
     base = sh(repo, "rev-parse", "HEAD")
     commit(repo, "src/a.q", "a:1\n")
     monkeypatch.setattr(attest, "run_hook", lambda hook: hook != "q-coverage")
-    assert attest.main() == 1
+    assert attest.main(["--base", base]) == 1
     assert not check.report(base, sh(repo, "rev-parse", "HEAD"))[0]
     monkeypatch.setattr(attest, "run_hook", lambda hook: True)
-    assert attest.main() == 0
+    assert attest.main(["--base", base]) == 0
     assert check.report(base, sh(repo, "rev-parse", "HEAD"))[0]
+
+
+# --- scoped attestation: only the hooks whose scope the change touches ------
+
+ALL = sorted(attest.HOOKS)
+
+
+@pytest.mark.parametrize(
+    ("paths", "want"),
+    [
+        # Python alone: contract-surface reads every .py; nothing runs q tests.
+        (["python/uqs/src/uqs/cli.py"], ["contract-surface"]),
+        (["python/uqs/src/uqs/cli.py", "scripts/gates/check_x.py"], ["contract-surface"]),
+        # ... and q-facts too where it touches what q-facts generates.
+        (["python/uqs/src/uqs/generated/q_facts.py"], ["contract-surface", "q-facts"]),
+        # q: every KDB-X hook.
+        (["src/foundation/stats.q"], ALL),
+        (["python/uqs/src/uqs/cli.py", "src/a.q"], ALL),
+        # Docs: only a document with a q-example block, and only q-docs.
+        (["docs/guides/operations.md", "README.md"], []),
+        (["docs/guides/new-pipeline.md"], ["q-docs"]),
+        # What q-coverage compares against, alone.
+        (["tests/q/coverage_baseline.txt"], ["q-coverage"]),
+        (["web/src/app.ts"], []),
+    ],
+)
+def test_the_needed_hooks_are_those_whose_scope_the_change_touches(paths, want):
+    assert check.needed_hooks(paths) == want
+
+
+def test_a_python_only_pr_passes_on_an_attestation_of_contract_surface_alone(repo):
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "python/uqs/src/uqs/x.py", "x = 1\n")
+    head = attest_here(repo, ["contract-surface"])
+    ok, why = check.report(base, head)
+    assert ok, why
+    assert "needed: contract-surface;" in why and "covers: contract-surface" in why
+
+
+def test_a_docs_only_pr_without_q_example_blocks_needs_nothing(repo):
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, "docs/guides/operations.md", "# words\n")
+    assert check.report(base, head) == (
+        True,
+        "no path the KDB-X gates judge changed - no attestation needed",
+    )
+
+
+def test_a_trailer_that_misses_a_needed_hook_is_refused(repo, tmp_path, capsys):
+    """A q change attested for the cheap hooks only: the q suite never ran."""
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    head = attest_here(repo, ["contract-surface", "q-facts"])
+    ok, why = check.report(base, head)
+    assert not ok
+    assert "does not cover q-coverage, q-docs, q-tests" in why
+    assert f"needed: {', '.join(ALL)}" in why and "covers: contract-surface, q-facts" in why
+    code, out, _ = _main(base, head, tmp_path, capsys)
+    assert code == 1 and "::error title=KDB-X attestation::" in out
+
+
+def test_a_trailer_for_one_tree_does_not_cover_another(repo):
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "python/uqs/src/uqs/x.py", "x = 1\n")
+    attest_here(repo, ALL)
+    head = commit(repo, "python/uqs/src/uqs/x.py", "x = 2\n")
+    assert check.attested(head) == set()
+    assert not check.report(base, head)[0]
+
+
+def test_a_legacy_trailer_counts_as_every_hook(repo):
+    """Written before attestations were scoped, by a run of every hook."""
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    head = attest_here(repo)
+    assert check.attested(head) == set(attest.HOOKS)
+    assert check.report(base, head)[0]
+
+
+def test_attestations_of_one_tree_add_up(repo):
+    """Two runs on the same tree, each of some hooks, attest their union."""
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    attest_here(repo, ["q-tests", "q-coverage"])
+    head = attest_here(repo, ["contract-surface", "q-docs", "q-facts"])
+    assert check.attested(head) == set(attest.HOOKS)
+    assert check.report(base, head)[0]
+
+
+def test_a_malformed_trailer_attests_nothing():
+    tree = "a" * 40
+    assert check.trailer_hooks(f"KDB-X-gates: {tree}x hooks=q-tests", tree) is None
+    assert check.trailer_hooks(f"KDB-X-gates: {tree} q-tests", tree) is None
+    assert check.trailer_hooks(f"KDB-X-gates: {tree} hooks=a,b", tree) == {"a", "b"}
+
+
+def test_the_needed_set_is_computed_from_the_merge_base(repo):
+    """A .q change master gained after the branch forked is not the branch's:
+    once merged in, the branch still needs only what its own diff touches -
+    and the q hooks' inputs are then master's tip's, which they passed on."""
+    sh(repo, "checkout", "-q", "-b", "pr")
+    commit(repo, "python/uqs/src/uqs/x.py", "x = 1\n")
+    sh(repo, "checkout", "-q", "master")
+    base = commit(repo, "src/b.q", "b:1\n")
+    sh(repo, "checkout", "-q", "pr")
+    assert check.needed_hooks(check.changed_paths(base, "pr")) == ["contract-surface"]
+    sh(repo, "merge", "-q", "--no-edit", "master")
+    head = attest_here(repo, ["contract-surface"])
+    assert check.needed_hooks(check.changed_paths(base, head)) == ["contract-surface"]
+    ok, why = check.report(base, head)
+    assert ok, why
+
+
+def _attest(repo, monkeypatch, *argv: str) -> tuple[int, list[str]]:
+    """attest_kdbx.main() in `repo` with every hook passing: (code, hooks run)."""
+    ran: list[str] = []
+    monkeypatch.setattr(attest, "REPO", repo)
+    monkeypatch.setattr(attest, "refusal", lambda: None)
+    monkeypatch.setattr(attest, "run_hook", lambda hook: ran.append(hook) or True)
+    return attest.main(list(argv)), ran
+
+
+def test_attest_runs_only_the_needed_hooks_and_names_them(repo, monkeypatch):
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "python/uqs/src/uqs/x.py", "x = 1\n")
+    code, ran = _attest(repo, monkeypatch, "--base", base)
+    assert code == 0 and ran == ["contract-surface"]
+    tree = sh(repo, "rev-parse", "HEAD^{tree}")
+    assert f"KDB-X-gates: {tree} hooks=contract-surface" in sh(repo, "log", "-1", "--format=%B")
+    assert check.report(base, sh(repo, "rev-parse", "HEAD"))[0]
+
+
+def test_attest_all_runs_every_hook(repo, monkeypatch):
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "python/uqs/src/uqs/x.py", "x = 1\n")
+    code, ran = _attest(repo, monkeypatch, "--all", "--base", base)
+    assert code == 0 and ran == ALL
+    assert check.attested(sh(repo, "rev-parse", "HEAD")) == set(attest.HOOKS)
+
+
+def test_attest_records_nothing_when_nothing_is_needed(repo, monkeypatch, capsys):
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, "docs/guides/operations.md", "# words\n")
+    code, ran = _attest(repo, monkeypatch, "--base", base)
+    assert code == 0 and ran == []
+    assert sh(repo, "rev-parse", "HEAD") == head
+    assert "no attestation needed, nothing recorded" in capsys.readouterr().out
+
+
+def test_attest_needs_what_the_check_needs(repo, monkeypatch):
+    """One computation, so the script cannot attest less than CI asks for."""
+    monkeypatch.setattr(attest, "REPO", repo)
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    head = commit(repo, "python/uqs/src/uqs/generated/q_facts.py", "x = 1\n")
+    assert attest.needed(base) == check.needed_hooks(check.changed_paths(base, head)) == ALL
+
+
+def test_ci_skips_every_kdbx_hook_where_it_has_no_q():
+    """A KDB-X hook CI forgot to SKIP would fail every hosted run."""
+    ci = (_ROOT / ".github/workflows/ci.yml").read_text()
+    skip = next(line for line in ci.splitlines() if "SKIP=$SKIP," in line)
+    named = skip.split("SKIP=$SKIP,")[1].split('"')[0].split(",")
+    assert set(attest.HOOKS) <= set(named)

@@ -73,3 +73,38 @@ def test_the_vendored_exclude_alone_leaves_everything_gated(run):
 def test_the_real_config_gates_all_tracked_python():
     """The repository's own config passes, so the hook is committable."""
     assert chs.main() == 0
+
+
+# --- the q-docs scopes name exactly the documents with q-example blocks ----
+
+DOCS = {"docs/a.md", "docs/b.md", "docs/plain.md", "README.md"}
+MARKED = {"docs/a.md", "docs/b.md"}
+
+
+def _doc_hooks(pattern: str) -> list[tuple[str, str, str | None]]:
+    return [(hook, pattern, None) for hook in chs.DOC_HOOKS] + [("q-tests", r"\.q$", None)]
+
+
+def test_a_doc_scope_naming_exactly_the_marked_documents_passes():
+    assert chs.doc_scope_drift(_doc_hooks(r"\.q$|^docs/(a|b)\.md$"), DOCS, MARKED) == []
+
+
+def test_a_marked_document_outside_the_doc_scope_is_reported():
+    """Its block would go unrun on a docs edit, and unattested in CI."""
+    problems = chs.doc_scope_drift(_doc_hooks(r"\.q$|^docs/a\.md$"), DOCS, MARKED)
+    assert problems == [
+        f"{hook}: docs/b.md has a q-example block its scope does not take" for hook in chs.DOC_HOOKS
+    ]
+
+
+def test_a_doc_scope_taking_an_unmarked_document_is_reported():
+    """An edit to it would ask for a KDB-X attestation that judges nothing."""
+    problems = chs.doc_scope_drift(_doc_hooks(r"\.(q|md)$"), DOCS, MARKED)
+    assert "q-docs: its scope takes docs/plain.md, which has no q-example block" in problems
+    assert "q-docs: its scope takes README.md, which has no q-example block" in problems
+
+
+def test_the_real_doc_scopes_match_the_marked_documents():
+    hooks = chs.scoped_hooks(chs.CONFIG.read_text())
+    assert {h for h, _, _ in hooks} >= set(chs.DOC_HOOKS)
+    assert chs.doc_scope_drift(hooks, *chs.doc_files_and_marked()) == []
