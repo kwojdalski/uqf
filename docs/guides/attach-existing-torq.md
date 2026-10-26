@@ -639,6 +639,53 @@ skips it.
 End of day needs nothing extra: the tickerplant re-reads its tables then, and
 the wdb hands its table list to the sort process.
 
+## Testing against a remote stack
+
+`python3 scripts/test.py remote-stack` puts the stack on another machine. It
+needs Docker, and is run when asked for, never as part of `all`. The machines
+are containers built from `tests/remote/Dockerfile`: Linux x86_64, with PeachQ
+built from the pin.
+
+- `uat-stack` runs discovery, the tickerplant, rdb1 and hdb1
+  (`uqs --runtime peachq start`). Its ports are published to this host.
+- `uat-client` runs `uqs`: the attachment, the publisher and the extractor.
+- `uat-laptop` is on a network of its own and reaches the stack only through
+  this host, so the stack cannot resolve its name.
+
+`uqs` runs in a container, not on this host. From this host the stack is
+reachable only through ports forwarded to an address this host owns, and `uqs`
+rightly calls such a stack local, which turns the remote checks off. Colima's VM
+would need `--network-address` for this host to be the client.
+
+Each scenario checks its effect on the stack's own processes, through their
+published ports, not through `uqs`:
+
+  | Scenario                                                                                  | Checked on the stack                                                                                                                                          |
+  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                    |
+  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                           |
+  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                       |
+  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                   |
+  | the tickerplant and rdb restarted                                                         | the table gone; `--dry-run` reports `registration-lost`; `uqs job attach` registers it again and rows flow                                                    |
+  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply. Skipped until the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                           |
+  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | the rows served by hdb1, and no HDB on uat-client. Skipped on PeachQ: TorQ's wdb does not load there (`.Q.chk`), and without a wdb the attachment pins no HDB |
+
+The lane found that a publisher attached to a stack elsewhere looked for
+discovery on its own machine; the discovery address above is the fix.
+
+What the containers do not show:
+
+- **A real network.** Every hop stays inside one VM and this host: no latency,
+  packet loss, firewall or NAT other than Docker's own. The unreachable
+  publisher is an address nothing routes to, not a firewall that drops.
+- **Clock skew.** The containers share the VM's clock, so the end-of-day fence
+  is never judged on two clocks.
+- **KDB-X.** Both sides run PeachQ, so the lane shows the workflow on PeachQ.
+  KDB-X stays the reference, through the `attach-stack` lane on one machine.
+  They differ where it shows: PeachQ answered `access`, not a timeout, for a
+  publisher that accepted the connection and never completed the handshake.
+- **Users, permissions and credentials.** Everything runs as root, with TorQ's
+  default credentials.
+
 ## Limits and known issues
 
 - **Tested TorQ: 5.2.12 only.** Any other version raises `TORQ_VERSION`; the
