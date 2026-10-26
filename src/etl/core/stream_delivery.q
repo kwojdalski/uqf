@@ -88,8 +88,9 @@
         '"delivery.wire: ",string[job]," was given ",(", " sv string bad),", which is not a delivery hook"];
     if[count bad:(key hooks) where not .qetl.job.stream.is_callable each value hooks;
         '"delivery.wire: ",string[job],"'s ",(", " sv string bad)," must be functions"];
-    if[`present in key hooks; .qetl.job.stream.delivery.present[job]:hooks`present];
-    if[`logged in key hooks; .qetl.job.stream.delivery.logged[job]:hooks`logged];
+    / enlisted, read back with first (hook): a bare indexed write can collapse a registry (#1030)
+    if[`present in key hooks; .qetl.job.stream.delivery.present[job]:enlist hooks`present];
+    if[`logged in key hooks; .qetl.job.stream.delivery.logged[job]:enlist hooks`logged];
     job}
 
 / Forget a job's wired hooks.
@@ -104,7 +105,7 @@
 / @private
 .qetl.job.stream.delivery.hook:{[job;nm]
     d:get ` sv `.qetl.job.stream.delivery,nm;
-    $[job in key d; d job; (::)]}
+    $[job in key d; first d job; (::)]}
 
 / ------------------------------------------------------------- THE MARKER
 
