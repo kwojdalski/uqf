@@ -343,6 +343,50 @@ saved, and a killed run leaves an under-claim that the next run redoes.
 through the tickerplant.** The rows exist only in the HDB, in the partition of
 the day they happened, and only readers that reload see them.
 
+### Extracting on one machine, writing on the stack's (#1650)
+
+`--attach` needs the HDB directory on the machine that runs the worker. When the
+source's driver and credentials must stay on an extraction machine instead, the
+destination can own the write: `.qetl.io.remote` (`src/etl/core/io_remote.q`)
+splits the io manager in two.
+
+- **On the stack's machine**, a receiver holds the real writer: an
+  `.qetl.io.hdb_scoped` over the attachment's HDB, so the lock, the date bounds,
+  the end-of-day fence and recovery are those of a direct write. The operator
+  grants one attachment and dataset to it with `.qetl.io.remote.serve`, naming
+  the target table, its schema, a row limit per batch and the users who may
+  write. `.qetl.io.remote.permitted` is the check a `.z.pg` gate makes: only the
+  receiver's entry points are admitted, with plain data as arguments.
+- **On the extraction machine**, `.qetl.io.remote.manager` is the worker's io
+  manager. Each window's batch is one synchronous message. Coverage and the
+  checkpoint move only after the receiver says the batch is committed.
+
+Before writing anything, the receiver refuses: - an ungranted dataset, or a user
+the grant does not name; - a schema mismatch, or a batch over the row limit; -
+rows outside the window; - a request that carries anything but data (a path, a
+function, an extra key).
+
+A batch is identified by an md5 of its destination, window and rows, and the
+receiver's journal, persisted to its own file, records each one: - A batch
+resent after a lost acknowledgement is answered `duplicate`, and nothing is
+appended. - Under `append` or `fail`, a different batch for a window already
+committed is refused, as is a batch the receiver was writing when it stopped (in
+doubt): check the target, then `.qetl.io.remote.forget` it. - `upsert`,
+`replace` and `ignore` write it again, which is harmless.
+
+`finish` reports what is durably written apart from whether the readers
+reloaded, and a failed reload is recorded in `.qetl.io.remote.status[]`. It does
+not undo the write.
+
+`scripts/test.py q-remote-writer` runs this between two processes. Not yet done: -
+the `uqs job backfill --attach` wiring, and starting a receiver in the stack; -
+chunked transfers with backpressure (one batch is one message); - detach
+coordination.
+
+Reactions of the backfilled dataset (`rebuild_positions`, for example) write
+through the same manager and are refused, and recorded as owed: they belong on
+the stack's side.
+
 ### What `plan` reports, and what it refuses
 
 The source, the half-open UTC range, the windows and which are already covered

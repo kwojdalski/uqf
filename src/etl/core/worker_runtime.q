@@ -577,8 +577,9 @@
 .qetl.job.bounded.runtime.write_opts:{[worker;strategy;w]
     cfg:.qetl.job.bounded.def worker;
     if[`replace=strategy; .qetl.job.bounded.runtime.require_replace_scoped[worker]];
-    `on_conflict`row_key`time_column`range_from`range_to`partition_column`partition!
-        (strategy;cfg`target_key;cfg`window_column;w`range_from;w`range_to;cfg`partition_column;cfg`partition)}
+    / source_version: a restatement is a new window to a remote receiver (#1650)
+    `on_conflict`row_key`time_column`range_from`range_to`partition_column`partition`source_version!
+        (strategy;cfg`target_key;cfg`window_column;w`range_from;w`range_to;cfg`partition_column;cfg`partition;.qetl.job.bounded.read_state[worker;`source_version])}
 
 / The other partitions of this worker's dataset that it can see: those of
 / loaded workers' declarations, and those the coverage ledger has recorded.
