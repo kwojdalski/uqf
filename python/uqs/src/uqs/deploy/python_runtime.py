@@ -26,7 +26,11 @@ source that seems newer is compiled again and its .pyc REWRITTEN in place -
 which would change a runtime installed write-once, and have the next push
 refuse it. So the same installation still makes the same bytes, and its .pyc
 files stay valid wherever it is unpacked with its mtimes (tar does that, and so
-does scripts/install_release.py).
+does scripts/install_release.py). python-build-standalone does not ship a .pyc
+for every stdlib module, so the first run of one writes it into __pycache__;
+the runtime's check (runtime_install.VERIFY_PY) accepts such a file for a
+source the manifest lists, which CPython checks against that source, and still
+refuses a shipped file changed.
 
 The format carries regular files only, so the installation's symbolic links -
 bin/python3 -> python3.14, the unversioned libpython, terminfo aliases - are
