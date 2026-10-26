@@ -407,6 +407,41 @@ Both paths must be absolute. A target without `launch_mode`, or with
 reported as such, never run from source instead. Setting either path without
 `launch_mode = "source"` is refused. `uqs deploy push` ignores these three keys.
 
+### Installing an artifact on the server yourself
+
+The other way, when the release process delivers a `uqs deploy build` artifact
+rather than a bare source tree: the artifact already carries every Python
+dependency as a locked wheel, and an installer that needs only the server's
+`python3`. Unpack the artifact into its own release directory, then, from inside
+it:
+
+```bash
+python3 scripts/install_release.py --check              # verify only; writes nothing
+python3 scripts/install_release.py --python /opt/python/3.14/bin/python3 \
+    --env-file /opt/efx/uat/uat-runtime.env
+```
+
+In order, each step refusing with what to do before the next one writes:
+
+1. every file `RELEASE_MANIFEST.json` lists has its recorded sha256;
+2. the host's OS, architecture and glibc meet the artifact's target. The wheels'
+   `manylinux` tag sets the glibc floor;
+3. `--python` is the version the artifact was built for;
+4. `.venv` is created in the release by `python -m venv`. The locked
+   dependencies, then `uqs`, are installed from `.release/wheels` with pip
+   `--no-index` and the lock's hashes required. No registry is reached, and a
+   missing or altered wheel is refused rather than fetched. A failed install
+   removes the `.venv` it made;
+5. with `--env-file`, `deploy.env` is written to load that site file, which
+   stays outside the release, so no setting is copied in.
+
+Nothing outside the release directory is written: not the system Python, not q,
+not TorQ, not `current`. The installer needs no `uv`. Switching `current` and
+starting processes stay separate steps for the release process. Once installed,
+the release has `.venv/bin/uqs` and a `deploy.env`, so a target without
+`launch_mode` drives it like a pushed release. The manifest's `packaging` entry
+records the mode (`offline`) and the installer.
+
 ### Deployments and the default per server
 
 Every `uqs deploy push` from this machine, deployed or failed, is recorded in

@@ -216,6 +216,8 @@ def test_the_manifest_records_revision_target_and_every_checksum(tmp_path):
     assert m["python"]["app_wheel"] == ".release/wheels/uqs-0.1.0-py3-none-any.whl"
     assert all(len(h) == 64 for h in m["files"].values()) and len(m["files"]) == 6
     assert m["hdb_shape"] == SHAPE
+    # #1646: what it is, and what installs it on a server without uqs deploy push
+    assert m["packaging"] == {"mode": "offline", "installer": "scripts/install_release.py"}
     beside = json.loads((tmp_path / "dist" / f"uqf-{m['release']}.manifest.json").read_text())
     assert beside == m
 
