@@ -19,7 +19,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack.procs import list_process_names
 from uqs.stack.trace_render import render_query_trace
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 # ---------------------------------------------------------------------------

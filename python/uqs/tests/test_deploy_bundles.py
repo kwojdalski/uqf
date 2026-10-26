@@ -217,7 +217,7 @@ def test_live_requires_live_sources_on_the_server_and_in_verification(tmp_path):
     (prepare,) = remote.stage("prepare")
     assert "export UQS_REQUIRE_LIVE_SOURCES=1" in prepare
     (check,) = remote.stage("verify")
-    assert check.rstrip().endswith("--live; fi")
+    assert check.rstrip().endswith(" --live")
 
 
 def test_without_live_nothing_is_required(tmp_path):
@@ -336,18 +336,13 @@ def test_an_env_file_in_a_bundle_never_reaches_an_artifact():
     assert payload.is_excluded("python/uqs/process_overrides.csv")
 
 
-def test_a_release_from_before_835_is_verified_by_its_own_script():
-    """A rollback can return to a release that has scripts/deploy_verify.py
-    and no `uqs deploy verify`; the command asks the release which it has,
-    and gives the old script the selection space-separated, as it parsed it."""
+def test_a_release_verifies_itself_with_uqs_deploy_verify_only():
+    """#1648: the selection is comma-joined for `uqs deploy verify`, and a
+    release from before #835 (scripts/deploy_verify.py) is no longer asked for."""
     sel = Selection(processes=["piggy_spread1", "fxfeed1"], tables=["piggy_tape"])
     command = verify_command("fx", sel, True, "--deadline", "60")
-    assert command.startswith("if [ -f scripts/deploy_verify.py ]; then ")
-    assert (
-        ".venv/bin/python scripts/deploy_verify.py --profile fx --deadline 60 "
-        "--procs piggy_spread1 fxfeed1 --tables piggy_tape --live;" in command
+    assert command == (
+        ".venv/bin/uqs deploy verify --profile fx --deadline 60 "
+        "--procs piggy_spread1,fxfeed1 --tables piggy_tape --live"
     )
-    assert (
-        "else .venv/bin/uqs deploy verify --profile fx --deadline 60 "
-        "--procs piggy_spread1,fxfeed1 --tables piggy_tape --live; fi" in command
-    )
+    assert "deploy_verify.py" not in command

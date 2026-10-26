@@ -13,7 +13,7 @@ from uqs.model.registry import (
     PIPELINES,
 )
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 def _resolved_offsets() -> dict[str, int]:

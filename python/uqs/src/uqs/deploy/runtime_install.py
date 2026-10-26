@@ -36,7 +36,7 @@ from uqs.deploy.server import Server
 from uqs.deploy.torq_runtime import RUNTIMES_DIR, Runtime, read_runtime
 from uqs.logger import get_logger
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: The file beside a runtime's trees that says which archive it came from.
 MARKER = ".uqf-runtime"

@@ -25,7 +25,7 @@ from uqs.model.schemas import (
 )
 from uqs.paths import UqsPaths
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 def _published_tables(pipelines: Iterable[Any]) -> set[str]:

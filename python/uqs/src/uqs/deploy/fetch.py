@@ -34,7 +34,7 @@ from pathlib import Path
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: How an artifact's archive is named on a release.
 ARCHIVE = re.compile(r"uqf-[0-9TZ]+-[0-9a-f]{12}\.tar\.gz")

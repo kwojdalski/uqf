@@ -267,9 +267,9 @@ def setup_logging(
     return logger
 
 
-def get_logger(name: str) -> Any:
-    """Return the loguru logger singleton (name is accepted for API compat),
-    with floats in a log call's arguments cut to LOG_FLOAT_DECIMALS places."""
+def get_logger() -> Any:
+    """Return the loguru logger singleton, with floats in a log call's
+    arguments cut to LOG_FLOAT_DECIMALS places."""
     return CutFloatsLogger(logger)
 
 

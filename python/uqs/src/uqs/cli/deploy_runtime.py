@@ -16,7 +16,7 @@ from uqs.deploy.build import DEFAULT_OUTPUT
 from uqs.logger import get_logger
 from uqs.paths import repo_root
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 @deploy_app.command("build-runtime")

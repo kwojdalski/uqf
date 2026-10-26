@@ -25,7 +25,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from uqs.stack import alive
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 @dataclass(frozen=True)

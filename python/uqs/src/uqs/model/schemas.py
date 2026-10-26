@@ -22,7 +22,7 @@ import re
 from uqs.logger import get_logger
 from uqs.paths import TABLES_FILE, repo_root
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: The q file that owns these definitions. Resolved from the repository root
 #: rather than a working directory, so the reader works from anywhere - and

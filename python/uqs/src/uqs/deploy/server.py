@@ -5,16 +5,17 @@ from __future__ import annotations
 
 import json
 
-from uqs.deploy.artifact import LEGACY_RUNTIME, compatible
+from uqs.deploy.artifact import compatible
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.lock import Lock
 from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
 from uqs.deploy.selection import Selection
 from uqs.deploy.torq_runtime import Runtime
 from uqs.logger import get_logger
+from uqs.runtimes import DEFAULT_RUNTIME
 from uqs.stack import site_fields
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 class Server:
@@ -37,7 +38,7 @@ class Server:
         self.selection = Selection()
         #: the runtime the artifact was built for (#852): its bundles are in it.
         #: The driver sets it from the manifest (artifact.release_runtime).
-        self.runtime = LEGACY_RUNTIME
+        self.runtime = DEFAULT_RUNTIME
         #: torq_mode bundled's runtime (deploy/torq_runtime.py), which
         #: deploy.env then names in place of an existing TorQ
         self.torq_runtime: Runtime | None = None

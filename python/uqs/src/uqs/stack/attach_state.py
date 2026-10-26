@@ -25,7 +25,7 @@ from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack.procs import effective_process_rows
 
-log = get_logger(__name__)
+log = get_logger()
 
 ATTACH_DIR_ENV = "UQS_ATTACH_DIR"
 CONFIG_FILE = "attachment.json"

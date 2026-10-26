@@ -35,7 +35,7 @@ from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import listing
 
-log = get_logger(__name__)
+log = get_logger()
 
 HISTORY = "deploy_history.json"
 HISTORY_ENV = "UQS_DEPLOY_HISTORY"

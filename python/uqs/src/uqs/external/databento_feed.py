@@ -45,7 +45,7 @@ from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.procs import get_process_config
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: The raw table the handler publishes onto. `databento1` subscribes to it.
 DATABENTO_RAW_TABLE = "databento_mbp10"

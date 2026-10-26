@@ -16,7 +16,7 @@ from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.logs import resolve_procnames
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Which of a process's two log files `multitail` opens.
 MULTITAIL_STREAMS = {"out": ("out",), "err": ("err",), "both": ("out", "err")}

@@ -25,7 +25,7 @@ from uqs.stack.procs import (
 from uqs.stack.runtime import query
 from uqs.stack.site_fields import process_csv_fields
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 # ---------------------------------------------------------------------------
