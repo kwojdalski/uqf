@@ -23,9 +23,12 @@ from __future__ import annotations
 
 from uqs.attach import preflight_components as components
 from uqs.attach.config import Attachment
-from uqs.attach.facts import Facts, Host, PublisherPort
+from uqs.attach.facts import LOCAL_HOSTS, Facts, Host, PublisherPort
 from uqs.attach.findings import Finding
 from uqs.attach.topology import Observation, Proc, port_of
+
+#: The publisher runs where uqs starts it (uqs.attach.publisher).
+PUBLISHER_HOST = "localhost"
 
 __all__ = ["SUPPORTED_TORQ", "Facts", "Host", "PublisherPort", "check"]
 
@@ -100,7 +103,7 @@ def _publisher(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]
                 {"port": str(port.port), "holder": clash[0]["procname"]},
             )
         )
-    elif facts.host.listening(att.stack.host, port.port):
+    elif facts.host.listening(PUBLISHER_HOST, port.port):
         out.append(
             Finding(
                 "blocker",
@@ -130,6 +133,46 @@ def _publisher(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]
             )
         )
     return out
+
+
+def advertised(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]:
+    """Can the stack reach the publisher back at the name it will register?
+
+    TorQ registers a process with discovery under its `.z.h`, and discovery
+    connects back to what it lists. On one machine any name does; with the
+    stack elsewhere, a loopback name or one the stack cannot resolve leaves the
+    publisher listed and unreachable (#1651). The port itself cannot be tried
+    before the publisher runs - verify does that."""
+    pub, name = att.publisher, att.publisher.advertised_host
+    if not name or facts.host.is_local(att.stack.host):
+        return []
+    if name.lower() in LOCAL_HOSTS or name.startswith("127."):
+        return [
+            Finding(
+                "blocker",
+                "ADVERTISED_LOOPBACK",
+                pub.procname,
+                f"{pub.procname} would register as {name}, which on {att.stack.host} is that "
+                "machine, not this one",
+                "give this machine a host name the stack can resolve, then plan again",
+                {"advertised": name},
+            )
+        ]
+    resolved = (obs.discovery.probe or {}).get("resolved")
+    if resolved == "":
+        return [
+            Finding(
+                "blocker",
+                "ADVERTISED_UNRESOLVABLE",
+                pub.procname,
+                f"discovery on {att.stack.host} cannot resolve {name}, the name {pub.procname} "
+                "registers under, so the stack could not connect back to it",
+                "make the name resolve on the stack's machine (DNS or its hosts file), then plan "
+                "again",
+                {"advertised": name},
+            )
+        ]
+    return []
 
 
 def _context(att: Attachment, obs: Observation) -> list[Finding]:
@@ -192,5 +235,5 @@ def check(att: Attachment, obs: Observation, facts: Facts | None = None) -> list
             out += components.consumer(att, c, att.tables)
     if obs.tickerplant and obs.tickerplant.up:
         out += components.storage(att, obs) + components.persistence(att, obs, facts)
-    out += _publisher(att, obs, facts) + _context(att, obs)
+    out += _publisher(att, obs, facts) + advertised(att, obs, facts) + _context(att, obs)
     return out

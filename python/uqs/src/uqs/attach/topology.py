@@ -6,6 +6,12 @@ tickerplant and every consumer are then asked directly what they are, which
 stack they belong to (`-stackid`), which TorQ they run and how they are
 configured. Nothing here changes anything: every call is the read-only `probe`.
 
+Every process is asked at the address discovery lists for it (`hpup`), not at
+--host (#1651): that is the address the stack's own processes use, so a
+process reachable only through --host (a tunnel, an alias) is reported, not
+passed. A loopback name in `hpup` means the stack's own machine, so it is
+asked at --host; a name that does not resolve here is reported as that.
+
 A process counts as THIS stack's only if it says so itself. That is the check
 that turns "discovery answered on 6051" into a refusal: 6051 is a perfectly
 good discovery, of the wrong stack.
@@ -16,7 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from uqs.attach.config import Attachment
+from uqs.attach.config import Attachment, Stack
+from uqs.attach.facts import LOCAL_HOSTS
 from uqs.attach.findings import Finding
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 
@@ -63,10 +70,31 @@ def port_of(hpup: str) -> int | None:
     return int(tail) if tail.isdigit() else None
 
 
-def ask(ipc: Ipc, host: str, procname: str, proctype: str, port: int, tables: list[str]) -> Proc:
+def host_of(hpup: str, stack: Stack) -> str:
+    """The host to reach a listed process at: the one discovery lists, except
+    that the stack's loopback (or no host) is the stack's machine."""
+    parts = hpup.split(":")
+    named = parts[1] if len(parts) >= 3 else ""
+    if not named or named.lower() in LOCAL_HOSTS or named.startswith("127."):
+        return stack.host
+    return named
+
+
+def ask(
+    ipc: Ipc,
+    host: str,
+    procname: str,
+    proctype: str,
+    port: int,
+    tables: list[str],
+    resolve: str = "",
+) -> Proc:
     endpoint = Endpoint(procname, host, port)
+    request: dict[str, Any] = {"tables": tables}
+    if resolve:
+        request["resolve"] = resolve
     try:
-        answer = ipc.call(endpoint, "probe", {"tables": tables})
+        answer = ipc.call(endpoint, "probe", request)
         return Proc(answer.get("procname") or procname, proctype, endpoint, answer)
     except IpcError as exc:
         return Proc(procname, proctype, endpoint, None, exc.reason)
@@ -80,7 +108,10 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     """
     stack, names = att.stack, [t.name for t in att.tables]
     found: list[Finding] = []
-    disc = ask(ipc, stack.discovery_host, "discovery", "discovery", stack.discovery_port, names)
+    disc = ask(
+        ipc, stack.discovery_host, "discovery", "discovery", stack.discovery_port, names,
+        resolve=att.publisher.advertised_host,
+    )  # fmt: skip
     obs = Observation(disc)
     if not disc.up:
         found.append(
@@ -118,7 +149,9 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     else:
         port = port_of(tps[0]["hpup"])
         if port is not None:
-            obs.tickerplant = ask(ipc, stack.host, tps[0]["procname"], TICKERPLANT, port, names)
+            obs.tickerplant = ask(
+                ipc, host_of(tps[0]["hpup"], stack), tps[0]["procname"], TICKERPLANT, port, names
+            )
 
     want = set(stack.consumers)
     for kind in CONSUMERS:
@@ -126,7 +159,7 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
             port = port_of(svc["hpup"])
             if port is None:
                 continue
-            proc = ask(ipc, stack.host, svc["procname"], kind, port, names)
+            proc = ask(ipc, host_of(svc["hpup"], stack), svc["procname"], kind, port, names)
             if not want or svc["procname"] in want:
                 obs.consumers.append(proc)
             elif proc.up:
@@ -144,7 +177,9 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     for svc in by_type.get(CHAINED, []):
         port = port_of(svc["hpup"])
         if port is not None:
-            obs.chained.append(ask(ipc, stack.host, svc["procname"], CHAINED, port, names))
+            obs.chained.append(
+                ask(ipc, host_of(svc["hpup"], stack), svc["procname"], CHAINED, port, names)
+            )
     skip = {"discovery", TICKERPLANT, CHAINED, *CONSUMERS}
     obs.others = [s for s in obs.services if s["proctype"] not in skip]
     return obs, found

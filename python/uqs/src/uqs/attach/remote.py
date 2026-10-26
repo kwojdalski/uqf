@@ -22,6 +22,7 @@ process's inbound slots only for the length of the call.
 from __future__ import annotations
 
 import json
+import socket
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
@@ -82,9 +83,16 @@ class KolaIpc:
     def call(self, endpoint: Endpoint, op: str, request: dict[str, Any]) -> dict[str, Any]:
         import kola  # lazy: only the commands that talk to a stack need it
 
+        # 127.0.0.1, not "localhost": with a timeout kola tries ::1 only and q listens on IPv4.
+        host = "127.0.0.1" if endpoint.host == "localhost" else endpoint.host
         try:
-            # 127.0.0.1, not "localhost": with a timeout kola tries ::1 only and q listens on IPv4.
-            host = "127.0.0.1" if endpoint.host == "localhost" else endpoint.host
+            socket.getaddrinfo(host, endpoint.port)
+        except OSError:
+            # said as what it is (#1651): a name discovery lists that this machine cannot resolve
+            raise IpcError(
+                endpoint, op, f"{endpoint.host} does not resolve from this machine"
+            ) from None
+        try:
             conn = kola.Q(
                 host, endpoint.port, user=self._user, passwd=self._password, timeout=self._timeout
             )

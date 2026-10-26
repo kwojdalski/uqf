@@ -89,11 +89,19 @@ class Stack:
 
 @dataclass(frozen=True)
 class Publisher:
-    """The uqf process that publishes the tables - held stopped until verified."""
+    """The uqf process that publishes the tables - held stopped until verified.
+
+    It runs on the machine `uqs` runs on, whatever the stack's host: start,
+    stop and its port checks are this machine's (#1651). `advertised_host` is
+    the name TorQ registers it under with discovery (the process's `.z.h`,
+    this machine's host name), recorded at plan time: the stack must be able
+    to resolve it, because discovery connects back to a process it lists.
+    """
 
     job: str
     procname: str
     runtime: str = ""
+    advertised_host: str = ""
 
 
 @dataclass(frozen=True)

@@ -117,6 +117,12 @@ POLICY: dict[str, Policy] = {
     ),
     "DISCOVERY_UNREACHABLE": Policy(False, "nothing can be verified without discovery"),
     "UNREACHABLE": Policy(False, "a process that cannot be asked cannot be verified"),
+    "ADVERTISED_LOOPBACK": Policy(
+        False, "the stack would connect back to its own machine, never to the publisher"
+    ),
+    "ADVERTISED_UNRESOLVABLE": Policy(
+        False, "the stack cannot connect back to a publisher whose name it cannot resolve"
+    ),
     "NO_TICKERPLANT": Policy(False, "there is nothing to publish to"),
     "AMBIGUOUS_TICKERPLANT": Policy(False, "name the tickerplant with --tickerplant"),
     "NO_CONSUMER": Policy(False, "nothing would receive and persist the table"),
