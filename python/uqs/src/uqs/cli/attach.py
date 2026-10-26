@@ -27,6 +27,7 @@ from uqs.attach import config, service, workflow
 from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
 from uqs.cli import shared
+from uqs.cli.attach_legacy import refuse_legacy
 from uqs.cli.attach_output import (
     Output,
     checks_table,
@@ -39,18 +40,6 @@ from uqs.cli.attach_output import (
 )
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _debug_requested, _paths, job_app
 from uqs.paths import UqsError
-
-#: The stage commands #1457 replaced, and what each is now. Refused with this
-#: text rather than taken as an attachment's name.
-MIGRATION = {
-    "plan": ("uqs job attach {name} --dry-run", "the same options; saves nothing"),
-    "validate": ("uqs job attach {name} --dry-run", "exits 1 on a blocker"),
-    "status": ("uqs list attachments", "or `uqs job attach {name} --dry-run` for the plan"),
-    "apply": ("uqs job attach {name} --no-start", "applies and verifies"),
-    "verify": ("uqs job attach {name} --no-start", "re-checks; applies nothing twice"),
-    "start": ("uqs job attach {name}", "re-verifies, then starts the publisher"),
-    "detach": ("uqs job detach {name}", ""),
-}
 
 
 def _saved_names() -> list[str]:
@@ -81,18 +70,6 @@ YesOpt = Annotated[
         help="Do not ask before changing the stack (the plan and results are still shown)",
     ),
 ]
-
-
-def _refuse_legacy(out: Output, command: str, name: str, extra: list[str]) -> None:
-    if name in MIGRATION:
-        target = extra[0] if extra else "NAME"
-        new, note = (part.format(name=target) for part in MIGRATION[name])
-        out.fail(
-            f"`uqs job attach {name}` was replaced (#1457): run `{new}`"
-            + (f" ({note})" if note else "")
-        )
-    if extra:
-        out.fail(f"unexpected argument(s) {extra}: `uqs {command}` takes one attachment name")
 
 
 # ----------------------------------------------------------------- uqs job attach
@@ -151,6 +128,14 @@ def attach(
             "--runtime-only",
             help="Accept that restarting the tickerplant drops the registration "
             "(default: add a marked block to its schema file)",
+        ),
+    ] = False,
+    remote_schema_file: Annotated[
+        bool,
+        typer.Option(
+            "--remote-schema-file",
+            help="Have the tickerplant append the marked block to its own schema file, "
+            "for a stack on another machine (default: uqs appends it, on the stack's machine)",
         ),
     ] = False,
     tplogdir: Annotated[
@@ -214,12 +199,13 @@ def attach(
     debug = _debug_requested(ctx, False)
     out = Output(as_json, debug)
     out.doc = {"attachment": name, "dry_run": dry_run}
-    _refuse_legacy(out, "job attach", name, ctx.args)
+    refuse_legacy(out, "job attach", name, ctx.args)
     began = time.monotonic()
     given = workflow.Given(
         job=job, bundle=bundle, stack_id=stack_id, host=host, discovery=discovery,
         tickerplant=tickerplant, consumers=tuple(consumer or ()), user=user,
-        password_env=password_env, runtime_only=runtime_only, tplogdir=tplogdir,
+        password_env=password_env, runtime_only=runtime_only,
+        remote_schema_file=remote_schema_file, tplogdir=tplogdir,
         schema_file=schema_file,
     )  # fmt: skip
     try:
@@ -359,7 +345,7 @@ def detach(
     """
     out = Output(as_json, _debug_requested(ctx, False))
     out.doc = {"attachment": name, "dry_run": dry_run}
-    _refuse_legacy(out, "job detach", name, ctx.args)
+    refuse_legacy(out, "job detach", name, ctx.args)
     began = time.monotonic()
     try:
         att = config.load(name)

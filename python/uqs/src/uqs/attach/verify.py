@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, persist, plan, reach, sorting
+from uqs.attach import config, persist, plan, reach, schema_files, sorting
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts, Host
 from uqs.attach.findings import blockers
@@ -122,15 +122,25 @@ def _consumer(m: Manifest, c: Proc, spec: TableSpec) -> list[Check]:
     return out
 
 
-def _schema_file(m: Manifest, att: Attachment, specs: tuple[TableSpec, ...]) -> list[Check]:
-    if att.persist != "schema-file":
+def _schema_file(
+    m: Manifest, att: Attachment, specs: tuple[TableSpec, ...], ipc: Ipc, obs: Observation
+) -> list[Check]:
+    """The blocks are where they were written, unchanged - read where they are: a
+    block the tickerplant wrote is read by it (schema_files.file_of)."""
+    if att.persist not in config.DURABLE:
         return []
-    out = []
+    out, procs = [], {p.procname: p for p in obs.procs()}
     for block in m.operations:
         if block.op not in ("schema_block", "schema_uses") or block.status != DONE:
             continue
         mine = tuple(s for s in specs if s.name in block.table.split(","))
-        found = persist.problems(persist.BlockRecord(**block.post), att, m.token, mine)
+        record = persist.BlockRecord(**block.post)
+        try:
+            found = persist.problems(
+                record, att, m.token, mine, schema_files.file_of(record, ipc, procs)
+            )
+        except AttachmentError as exc:
+            found = [str(exc)]
         what = "block" if block.op == "schema_block" else "+uses block"
         out.append(
             Check(
@@ -142,7 +152,7 @@ def _schema_file(m: Manifest, att: Attachment, specs: tuple[TableSpec, ...]) -> 
     return out
 
 
-def run(att: Attachment, obs: Observation, m: Manifest) -> list[Check]:
+def run(att: Attachment, obs: Observation, m: Manifest, ipc: Ipc) -> list[Check]:
     out: list[Check] = []
     for p in obs.procs():
         if not p.up:
@@ -157,7 +167,7 @@ def run(att: Attachment, obs: Observation, m: Manifest) -> list[Check]:
         for c in obs.consumers:
             if c.up:
                 out += _consumer(m, c, spec)
-    return out + _schema_file(m, att, att.tables)
+    return out + _schema_file(m, att, att.tables, ipc, obs)
 
 
 def preflight_now(att: Attachment, ipc: Ipc, root: Path, m: Manifest) -> list[Check]:
@@ -214,11 +224,13 @@ def verify(
                 f"(`uqs job attach {att.name}`)"
             )
         obs, structural = observe(att, ipc)
-        checks = [Check(f.component, False, f.message) for f in structural] + run(att, obs, m)
+        checks = [Check(f.component, False, f.message) for f in structural]
+        checks += run(att, obs, m, ipc)
         checks += [Check(*c) for c in sorting.checks(att, obs, ipc)]
         checks += preflight_now(att, ipc, root, m)
         port = plan.publisher_port(att, root).port
-        checks += [Check(*c) for c in reach.checks(att, ipc, port, host)]
+        tp = obs.tickerplant.endpoint if obs.tickerplant else None
+        checks += [Check(*c) for c in reach.checks(att, ipc, port, host, tp)]
         warned = [runtime_only(att, Facts(host=host))] if att.persist == "runtime-only" else []
         result = VerifyResult(checks, m.state, warned)
         if result.ok and m.state != "verified":

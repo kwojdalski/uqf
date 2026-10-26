@@ -16,6 +16,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.cli import completion
 from uqs.cli.force_stop import ForceOpt, _force_stop
 from uqs.cli.shared import (

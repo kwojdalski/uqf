@@ -23,6 +23,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from uqs import paths as stack_paths
+from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.deploy import history as _registers_list_targets  # noqa: F401 - `targets` kind
 from uqs.external import crypto
 from uqs.external.crypto import (
