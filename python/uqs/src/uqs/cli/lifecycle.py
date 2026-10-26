@@ -29,11 +29,14 @@ from uqs.cli.shared import (
     console,
     log,
 )
+from uqs.cli.start_override_opts import SkipProfileBudgetOpt, SkipQVersionOpt
+from uqs.cli.start_override_opts import parsed as _overrides
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
 from uqs.stack import alive, deployment, listing, runtime, start_policy
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as procs_model
+from uqs.stack.start_overrides import NONE, Overrides
 
 
 def _running(port: int | None) -> set[str]:
@@ -162,12 +165,14 @@ ProfileOpt = Annotated[
 ]
 
 
-def _resolve_profiles(names: str, extra: list[str] | None = None) -> str:
+def _resolve_profiles(
+    names: str, extra: list[str] | None = None, overrides: Overrides = NONE
+) -> str:
     """The space-separated process list `names` stands for, plus `extra`
     process names, or exit - refused by stack.start_policy, which every
     front end shares (#887); only the summary line is the CLI's."""
     try:
-        members, what = start_policy.resolve_profiles(_paths(), names, extra or [])
+        members, what = start_policy.resolve_profiles(_paths(), names, extra or [], overrides)
     except UqsError as exc:
         _die(exc)
         raise  # unreachable: _die exits. Keeps the type checker honest.
@@ -178,11 +183,13 @@ def _resolve_profiles(names: str, extra: list[str] | None = None) -> str:
     return " ".join(members)
 
 
-def _names_to_start(procs: list[str] | None, profile: str | None) -> str:
+def _names_to_start(
+    procs: list[str] | None, profile: str | None, overrides: Overrides = NONE
+) -> str:
     """What torq.sh is asked to start: the names given, `all`, a profile, or a
     profile with names added to it."""
     if profile is not None:
-        return _resolve_profiles(profile, procs)
+        return _resolve_profiles(profile, procs, overrides)
     return _procs(procs)
 
 
@@ -205,15 +212,20 @@ def _selected(names: str, profile: str | None) -> list[str] | None:
     return names.split() if profile is not None else None
 
 
-def _start(names: str, port: int | None, profile: str | None = None) -> None:
+def _start(
+    names: str, port: int | None, profile: str | None = None, overrides: Overrides = NONE
+) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
     _note_monitor_coverage("start", names, profile)
-    _run_streaming(runtime.start, names, base_port=port, selected=_selected(names, profile))
+    selected = _selected(names, profile)
+    _run_streaming(runtime.start, names, base_port=port, selected=selected, skips=overrides)
 
 
-def _start_in_foreground(names: str, port: int | None, profile: str | None = None) -> None:
+def _start_in_foreground(
+    names: str, port: int | None, profile: str | None = None, overrides: Overrides = NONE
+) -> None:
     """`_start`, minus its ending: _run_streaming always exits the command,
     and `up` has the whole run still to stream after the start returns."""
     _reject_unknown(names)
@@ -221,7 +233,9 @@ def _start_in_foreground(names: str, port: int | None, profile: str | None = Non
     _warn_about_connection_cap(names, port)
     _note_monitor_coverage("start", names, profile)
     selected = _selected(names, profile)
-    result = runtime.start(_paths(), names, base_port=port, capture=False, selected=selected)
+    result = runtime.start(
+        _paths(), names, base_port=port, capture=False, selected=selected, skips=overrides
+    )
     if result.returncode != 0:
         raise typer.Exit(code=result.returncode)
 
@@ -235,6 +249,8 @@ def start(
         bool,
         typer.Option("--print", help="Show the exact startup command line(s); start nothing"),
     ] = False,
+    skip_q_version_check: SkipQVersionOpt = None,
+    skip_profile_budget_check: SkipProfileBudgetOpt = None,
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
@@ -242,11 +258,14 @@ def start(
     read, resolved from the dependency graph rather than listed by hand.
     `--profile essential vectorize1` starts the set plus the names given.
     """
-    names = _names_to_start(procs, profile)
+    overrides = _overrides(
+        skip_q_version_check, skip_profile_budget_check, profile=profile, print_only=print_only
+    )
+    names = _names_to_start(procs, profile, overrides)
     if print_only:
         _print_startlines(names, port)
         return
-    _start(names, port, profile)
+    _start(names, port, profile, overrides)
 
 
 LevelOpt = Annotated[
@@ -277,6 +296,8 @@ def up(
     port: PortOpt = None,
     profile: ProfileOpt = None,
     level: LevelOpt = None,
+    skip_q_version_check: SkipQVersionOpt = None,
+    skip_profile_budget_check: SkipProfileBudgetOpt = None,
 ) -> None:
     """Start, and stream every started process's log to this console until
     Ctrl-C - which stops what this started. `up`, `up rdb1 fxpositions1`,
@@ -287,7 +308,8 @@ def up(
     began are left running; if `summary` cannot say which those were, Ctrl-C
     stops everything this was asked to start.
     """
-    names = _names_to_start(procs, profile)
+    overrides = _overrides(skip_q_version_check, skip_profile_budget_check, profile=profile)
+    names = _names_to_start(procs, profile, overrides)
     try:
         wanted = _procnames_started_by(names, port)
     except UqsError as exc:
@@ -303,7 +325,10 @@ def up(
     exit_code = 0
     try:
         stack_logs.follow_during(
-            _paths(), wanted, lambda: _start_in_foreground(names, port, profile), min_level=level
+            _paths(),
+            wanted,
+            lambda: _start_in_foreground(names, port, profile, overrides),
+            min_level=level,
         )
     except UqsError as exc:
         log.error("{}", exc)
@@ -335,14 +360,17 @@ def stop(procs: ProcsArg = None, port: PortOpt = None, force: ForceOpt = False) 
 
 
 @app.command()
-def restart(procs: ProcsArg = None, port: PortOpt = None) -> None:
+def restart(
+    procs: ProcsArg = None, port: PortOpt = None, skip_q_version_check: SkipQVersionOpt = None
+) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
+    overrides = _overrides(skip_q_version_check, None)
     names = _procs(procs)
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
     _note_monitor_coverage("restart", names)
-    _run_streaming(runtime.restart, names, base_port=port)
+    _run_streaming(runtime.restart, names, base_port=port, skips=overrides)
 
 
 def _print_startlines(names: str, port: int | None) -> None:
