@@ -32,7 +32,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import backfill_owner, config, persist, sorting
+from uqs.attach import backfill_owner, config, persist, schema_files, sorting
 from uqs.attach.apply import Step
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.drift import Blocker, drift, plant_ours
@@ -192,13 +192,13 @@ def _reverse(
         Blocker(*found) for found in unresolved(m, plant_ours(obs, m), procs, save=not dry_run)
     ]
     unknown += [Blocker(*found) for found in sorting.resolve_pending(m, save=not dry_run)]
-    result.evidence = evidence(att, obs, host)
+    result.evidence = evidence(att, obs, host, ipc)
     if result.evidence.published:
         return _retain(att, ipc, procs, m, result)
     ours = plant_ours(obs, m)
     result.blockers = (
         unknown
-        + drift(att, obs, m)
+        + drift(att, obs, m, ipc)
         + [Blocker(*b) for b in sorting.blockers(att, obs, ipc, m, state_dir, host)]
         + _dry_runs(ipc, m, procs, ours)
     )
@@ -236,7 +236,7 @@ def _retain(
             if op.op == "schema_uses":
                 # no longer a user, so a restart must not make it one again
                 try:
-                    result.steps.append(_unblock(att, m, op))
+                    result.steps.append(_unblock(att, m, op, ipc, procs))
                 except (AttachmentError, OSError) as exc:
                     result.retained.append(f"{op.op} {op.process}: {op.table} ({exc})")
                 continue
@@ -250,9 +250,12 @@ def _retain(
     return result
 
 
-def _unblock(att: Attachment, m: Manifest, op: Op) -> Step:
+def _unblock(att: Attachment, m: Manifest, op: Op, ipc: Ipc, procs: dict[str, Proc]) -> Step:
+    """Take the block out of the file it is in: the tickerplant's own, through
+    the tickerplant, when it wrote it (schema_files.file_of)."""
     specs = tuple(s for s in att.tables if s.name in op.table.split(","))
-    persist.remove(persist.BlockRecord(**op.post), att, m.token, specs)
+    record = persist.BlockRecord(**op.post)
+    persist.remove(record, att, m.token, specs, schema_files.file_of(record, ipc, procs))
     m.finish(op, REVERTED, note="block removed")
     return Step(op.op, op.process, op.table, "removed", "block removed")
 
@@ -275,7 +278,7 @@ def _rollback(
                 steps = sorting.revert(att, obs, ipc, m, op, backups)
                 result.steps += [Step(*s) for s in steps]
             elif op.op in BLOCKS and op.ownership in (CREATED, SHARED):
-                result.steps.append(_unblock(att, m, op))
+                result.steps.append(_unblock(att, m, op, ipc, procs))
             elif op.ownership == SHARED:
                 _leave(ipc, procs, m, op)
                 m.finish(op, REVERTED, note="no longer a user of the table")

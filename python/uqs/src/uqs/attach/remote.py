@@ -30,15 +30,20 @@ from typing import Any, Protocol
 
 from uqs.attach.config import AttachmentError
 
+#: The credential uqs uses for the processes it starts on this machine (stack/channel.py).
+LOCAL_USER = LOCAL_PASSWORD = "admin"
+
 
 class IpcError(AttachmentError):
     """A process did not answer, or answered with a q error."""
 
-    def __init__(self, endpoint: Endpoint, op: str, reason: str) -> None:
+    def __init__(self, endpoint: Endpoint, op: str, reason: str, refused: bool = False) -> None:
         super().__init__(f"{endpoint.label} ({op}): {reason}")
         self.endpoint = endpoint
         self.op = op
         self.reason = reason
+        #: the process refused the credential: it is up, and says no (#1651)
+        self.refused = refused
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,9 @@ class Endpoint:
     procname: str
     host: str
     port: int
+    #: a process uqs started on this machine (the publisher): asked with uqs's own
+    #: credential, not the stack's
+    local: bool = False
 
     @property
     def label(self) -> str:
@@ -85,6 +93,9 @@ class KolaIpc:
 
         # 127.0.0.1, not "localhost": with a timeout kola tries ::1 only and q listens on IPv4.
         host = "127.0.0.1" if endpoint.host == "localhost" else endpoint.host
+        user, password = (
+            (LOCAL_USER, LOCAL_PASSWORD) if endpoint.local else (self._user, self._password)
+        )
         try:
             socket.getaddrinfo(host, endpoint.port)
         except OSError:
@@ -93,15 +104,14 @@ class KolaIpc:
                 endpoint, op, f"{endpoint.host} does not resolve from this machine"
             ) from None
         try:
-            conn = kola.Q(
-                host, endpoint.port, user=self._user, passwd=self._password, timeout=self._timeout
-            )
+            conn = kola.Q(host, endpoint.port, user=user, passwd=password, timeout=self._timeout)
         except Exception as exc:  # noqa: BLE001 - kola raises its own, untyped, errors
-            raise IpcError(endpoint, op, f"cannot connect: {_clean(exc)}") from None
+            raise _failure(endpoint, op, exc, user, "cannot connect") from None
         try:
             answer = conn.sync(source(op), json.dumps(request))
         except Exception as exc:  # noqa: BLE001
-            raise IpcError(endpoint, op, f"q error: {_clean(exc)}") from None
+            # kola connects on the first call, so a refused credential surfaces here
+            raise _failure(endpoint, op, exc, user, "q error") from None
         finally:
             _close(conn)
         try:
@@ -113,6 +123,16 @@ class KolaIpc:
         if not isinstance(decoded, dict):
             raise IpcError(endpoint, op, f"answered JSON that is not an object: {answer!r:.80}")
         return decoded
+
+
+def _failure(endpoint: Endpoint, op: str, exc: Exception, user: str, what: str) -> IpcError:
+    """kola's error as an IpcError: a refused credential said as that (#1651) - the
+    process is up and says no - not as a process that does not answer."""
+    if type(exc).__name__ == "KolaAuthError":
+        return IpcError(
+            endpoint, op, f"the credential of user {user!r} was refused ({_clean(exc)})", True
+        )
+    return IpcError(endpoint, op, f"{what}: {_clean(exc)}")
 
 
 def _clean(exc: Exception) -> str:

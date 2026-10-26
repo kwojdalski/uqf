@@ -41,7 +41,12 @@ from uqs.stack.attach_state import ATTACH_DIR_ENV as ATTACH_DIR_ENV  # re-export
 from uqs.stack.attach_state import CONFIG_FILE
 
 SCHEMA_VERSION = 1
-PERSIST_MODES = ("schema-file", "runtime-only")
+#: schema-file: a marked block appended to the tickerplant's schema file from this
+#: machine; remote-schema-file: the same block, appended by the tickerplant itself
+#: (schema_files.RemoteFile, #1651); runtime-only: no block, lost on a restart.
+PERSIST_MODES = ("schema-file", "remote-schema-file", "runtime-only")
+#: The modes that write a block, so a tickerplant restart keeps the registration.
+DURABLE = ("schema-file", "remote-schema-file")
 #: The credential TorQ's starter pack ships (accesslist.txt). Used when no
 #: password variable is configured, and said so in every plan.
 DEFAULT_USER = "admin"
