@@ -49,7 +49,7 @@ from pathlib import Path
 from uqs.logger import get_logger
 from uqs.paths import UqsError
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Bound at import, so a test that stubs `subprocess.run` for a cargo build
 #: does not also stub the ps that identifies the process it spawned.

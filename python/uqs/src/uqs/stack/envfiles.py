@@ -37,7 +37,7 @@ from pathlib import Path
 from uqs.logger import get_logger
 from uqs.paths import UqsError, repo_root
 
-log = get_logger(__name__)
+log = get_logger()
 
 _KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 

@@ -43,7 +43,7 @@ from uqs.deploy.remote import q
 from uqs.logger import get_logger
 from uqs.stack.kafka_extra import EXTRA
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Where the native client goes in a release; UQF_KFK_HOME on the server.
 KAFKA_DIR = f"{RELEASE_DIR}/kafka"

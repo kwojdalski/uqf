@@ -36,7 +36,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import logs as stack_logs
 from uqs.stack.listing import configured_ports
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: What a subscriber sends each process: every logmsg row, no sym filter
 #: (logmsg's sym is the process itself). TorQ's monitor makes the same call.

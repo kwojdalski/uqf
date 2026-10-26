@@ -1154,14 +1154,17 @@ def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
 # --- a release's runtime (#883) ---------------------------------------------------
 
 
-def test_a_release_says_its_runtime_and_one_from_before_883_means_uqf():
-    from uqs.deploy.artifact import LEGACY_RUNTIME, release_runtime
-    from uqs.runtimes import RUNTIMES
+def test_a_release_says_its_runtime_and_a_missing_or_unknown_one_is_refused():
+    """#1648: no default for a manifest that leaves the runtime out."""
+    from uqs.deploy.artifact import ReleaseError, release_runtime
 
     assert release_runtime({"runtime": "crypto"}) == "crypto"
-    assert release_runtime({}) == LEGACY_RUNTIME == "uqf"
-    # frozen, not read from DEFAULT_RUNTIME - but it must still be a runtime
-    assert LEGACY_RUNTIME in RUNTIMES
+    with pytest.raises(ReleaseError, match="names no runtime - a release from before #883"):
+        release_runtime({})
+    with pytest.raises(ReleaseError, match="names no runtime"):
+        release_runtime({"runtime": ""})
+    with pytest.raises(ReleaseError, match="runtime 'equities', which this uqs does not know"):
+        release_runtime({"runtime": "equities"})
 
 
 # --- a converted release on a q its version check cannot confirm (#936) ----------

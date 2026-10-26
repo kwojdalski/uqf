@@ -661,17 +661,13 @@
     .qunit.assertEquals[.qpipe.job.demo_deals_backfill.spec[];.qetl.job.bounded.spec `demo_deals_backfill;
         "the worker's spec is the shell's spec for it, not a second copy"]};
 
-.qt.qpipe.job.demo_deals_backfill.test_plan_delegates_and_passes_the_cursor:{[t]
-    / Day 1 is published; the cursor stands at day 2. The plan is the two
-    / remaining days. This is the wiring check it always was - a delegator
-    / that dropped the cursor would still give 2 here, so the day-1 coverage
-    / is what makes the count mean something: without it, coverage alone
-    / would plan all three days whatever the cursor said, since a gap behind
-    / the cursor is planned (see .qetl.job.bounded.plan).
+.qt.qpipe.job.demo_deals_backfill.test_plan_delegates_and_plans_from_coverage:{[t]
+    / Day 1 is published, so the plan is the two remaining days: the
+    / delegate reaches the shell's plan, and coverage alone decides (#1648).
     .qetl.coverage.stage_completion[`demo_deals;`;.qt.qpipe.job.demo_deals_backfill.fv;.qt.qpipe.job.demo_deals_backfill.d[1];.qt.qpipe.job.demo_deals_backfill.d[2];1];
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
-    .qunit.assertEquals[count .qpipe.job.demo_deals_backfill.plan[.qt.qpipe.job.demo_deals_backfill.d[2]];2;
-        "with day 1 covered, a cursor at day 2 plans the two days after it"]};
+    .qunit.assertEquals[count .qpipe.job.demo_deals_backfill.plan[];2;
+        "with day 1 covered, the plan is the two days after it"]};
 
 / A gap BEHIND the cursor is planned. This is the restatement case:
 / a finished run's cursor is range_to, and a supersede then withdraws a
@@ -689,13 +685,17 @@
     .qetl.coverage.stage_completion[`demo_deals;`;.qt.qpipe.job.demo_deals_backfill.fv;.qt.qpipe.job.demo_deals_backfill.d[3];.qt.qpipe.job.demo_deals_backfill.d[4];1];
     .qetl.coverage.supersede[`demo_deals;`;.qt.qpipe.job.demo_deals_backfill.fv;.qt.qpipe.job.demo_deals_backfill.d[2];.qt.qpipe.job.demo_deals_backfill.d[3]];
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
-    w:.qpipe.job.demo_deals_backfill.plan[.qt.qpipe.job.demo_deals_backfill.d[4]];
-    .qunit.assertEquals[count w;1;"the withdrawn day is planned although the cursor is past it"];
+    w:.qpipe.job.demo_deals_backfill.plan[];
+    .qunit.assertEquals[count w;1;"the withdrawn day is planned although a finished run passed it"];
     .qunit.assertEquals[(first w)`range_from;.qt.qpipe.job.demo_deals_backfill.d[2];"and it is exactly the withdrawn day"]};
 
-.qt.qpipe.job.demo_deals_backfill.test_plan_with_a_null_cursor_plans_the_whole_range:{[t]
+.qt.qpipe.job.demo_deals_backfill.test_plan_with_no_coverage_plans_the_whole_range:{[t]
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
-    .qunit.assertEquals[count .qpipe.job.demo_deals_backfill.plan[0Np];3;"no cursor means nothing is done yet"]};
+    .qunit.assertEquals[count .qpipe.job.demo_deals_backfill.plan[];3;"no coverage means nothing is done yet"]};
+
+/ #1648: the shell's plan takes the worker alone - no cursor it would ignore.
+.qt.qpipe.job.demo_deals_backfill.test_plan_takes_no_cursor:{[t]
+    .qunit.assertEquals[(value .qetl.job.bounded.plan)1;enlist `worker;"the shell's plan takes only the worker"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_fetch_delegates_with_its_window_the_right_way_round:{[t]
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
@@ -754,7 +754,7 @@
     / Break the plan, which run calls before it can reach any per-window
     / error handling, so the throw leaves run_body by the shortest path.
     saved:.qpipe.job.demo_deals_backfill.plan;
-    .qpipe.job.demo_deals_backfill.plan:{[cursor] '"deliberate plan failure"};
+    .qpipe.job.demo_deals_backfill.plan:{[] '"deliberate plan failure"};
     err:@[{.qpipe.job.demo_deals_backfill.run[]; ""};::;{x}];
     .qpipe.job.demo_deals_backfill.plan:saved;
     .qunit.assertTrue[err like "*deliberate plan failure*";

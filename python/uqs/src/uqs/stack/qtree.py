@@ -50,7 +50,7 @@ from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import converted
 
-log = get_logger(__name__)
+log = get_logger()
 
 CONVERTER = Path("scripts") / "portable" / "flatten_contexts.py"
 #: What the tree copies from the checkout; every other top-level entry is

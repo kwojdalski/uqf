@@ -30,7 +30,7 @@ from uqs.deploy.selection import Selection, smoke_args, verify_command
 from uqs.deploy.server import Server
 from uqs.logger import get_logger
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Run from the release with its deploy.env, after a soak that began at
 #: argv[1] (epoch seconds, the server's clock): a verdict for each streaming

@@ -38,7 +38,7 @@ deploy_app = typer.Typer(
 )
 app.add_typer(deploy_app, name="deploy")
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 @deploy_app.callback()

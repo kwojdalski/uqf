@@ -24,7 +24,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack.listing import _list_processes
 from uqs.stack.runtime import query
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: The process to read schemas from when the caller does not say. rdb1 holds
 #: today's data and every table the tickerplant carries, which makes it the
