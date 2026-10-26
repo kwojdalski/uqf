@@ -704,19 +704,27 @@ exit 0
 """
 
 
-def _identify(q: str) -> str:
+def _peachq_module():
     spec = importlib.util.spec_from_file_location("peachq", REPO / "scripts" / "peachq.py")
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.identify(q)
+    return mod
+
+
+def _identify(q: str) -> str:
+    return _peachq_module().identify(q)
 
 
 def _peachq() -> str | None:
-    """A PeachQ already on this machine; never built here."""
+    """A PeachQ already on this machine; never built here. The pinned build
+    first: an older one left in the cache can differ from it, and CI has only
+    the pinned one."""
+    pinned = _peachq_module().load_pin()["commit"]
     candidates = [os.environ.get("UQF_PEACHQ", "")]
     cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "uqf" / "peachq"
-    candidates += sorted(str(p) for p in cache.glob("*/q"))
+    builds = sorted(cache.glob("*/q"), key=lambda p: (not p.parent.name.startswith(pinned), p))
+    candidates += [str(p) for p in builds]
     return next(
         (c for c in candidates if c and Path(c).is_file() and _identify(c) == "peachq"), None
     )
@@ -728,22 +736,28 @@ def _kdbx() -> str | None:
 
 
 INTERPRETERS = {
-    # PeachQ refuses a nested `\d`, as kdb+ 4.0 does: the converted tree
-    # must run on it, the original cannot.
-    "peachq": (_peachq, False),
-    # KDB-X runs both, and they must agree.
-    "kdbx": (_kdbx, True),
+    "peachq": _peachq,
+    "kdbx": _kdbx,
     # The server-equivalent 4.0 build, where one is installed.
-    "kdb40": (lambda: os.environ.get("UQF_KDB40") or None, False),
+    "kdb40": lambda: os.environ.get("UQF_KDB40") or None,
 }
 
+NESTED_PROBE = '\\d .nest.probe\nf:{x+1}\n\\d .\n-1 "NESTED_OK";\nexit 0\n'
 
-def _q_for(name: str) -> tuple[str, bool]:
-    find, nested_ok = INTERPRETERS[name]
-    q = find()
+
+def _accepts_nested(q: str, tmp: Path) -> bool:
+    """Whether `q` loads a nested `\\d`. Asked, not assumed: kdb+ 4.0 refuses
+    one, KDB-X runs it, and PeachQ changed its answer between pinned builds."""
+    probe = tmp / "nested_probe.q"
+    probe.write_text(NESTED_PROBE)
+    return "NESTED_OK" in _run_q(q, tmp, probe).stdout
+
+
+def _q_for(name: str, tmp: Path) -> tuple[str, bool]:
+    q = INTERPRETERS[name]()
     if not q:
         pytest.skip(f"no {name} interpreter on this machine")
-    return q, nested_ok
+    return q, _accepts_nested(q, tmp)
 
 
 def _run_q(q: str, cwd: Path, script: Path) -> subprocess.CompletedProcess:
@@ -761,7 +775,7 @@ def _run_q(q: str, cwd: Path, script: Path) -> subprocess.CompletedProcess:
 @pytest.mark.parametrize("interp", sorted(INTERPRETERS))
 @pytest.mark.parametrize("fixture", sorted(FIXTURES))
 def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_path):
-    q, nested_ok = _q_for(interp)
+    q, nested_ok = _q_for(interp, tmp_path)
     trees = {"converted": converted(FIXTURES[fixture])}
     if nested_ok:
         trees["original"] = FIXTURES[fixture]
@@ -777,7 +791,7 @@ def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_p
 
 @pytest.mark.parametrize("interp", sorted(INTERPRETERS))
 def test_the_converted_status_and_interval_modules_work(interp, tmp_path, capsys):
-    q, nested_ok = _q_for(interp)
+    q, nested_ok = _q_for(interp, tmp_path)
     out = tmp_path / "portable"
     corpus = nested_corpus()
     root = tmp_path / "nested"
@@ -824,7 +838,7 @@ def test_bindings_agree_with_qs_own_parser(interp, tmp_path):
     """For every lambda in a nested context in the tree, the names the
     converter qualifies are exactly the globals q itself lists for it -
     `(value f) 3` - less builtins and qSQL columns (which q may list too)."""
-    q, _ = _q_for(interp)
+    q, _ = _q_for(interp, tmp_path)
     files = subprocess.run(
         ["git", "-C", str(REPO), "ls-files", "*.q"], capture_output=True, text=True, check=True
     ).stdout.split()
