@@ -179,6 +179,7 @@ qetl.io.remote,grants,dict,,
 qetl.io.remote,idempotent,value,,
 qetl.io.remote,journal,table,,
 qetl.io.remote,journal_file,value,,
+qetl.io.remote,last_reload,dict,,
 qetl.io.remote,manager,function,3,call attachment dataset
 qetl.io.remote,open,function,1,path
 qetl.io.remote,opt_keys,value,,
