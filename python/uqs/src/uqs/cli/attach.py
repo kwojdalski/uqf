@@ -306,6 +306,7 @@ def attach(
             "ok": outcome.verified.ok,
             "state": outcome.verified.state,
             "checks": [asdict(c) for c in outcome.verified.checks],
+            "warnings": outcome.verified.warnings,
         }
         if outcome.verified
         else None

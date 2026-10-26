@@ -40,7 +40,13 @@ check:{[label;ok]
 
 / --- start the upstream, and wait until it answers -----------------------
 
+/ q's rand starts from a fixed seed: unseeded, this was the same port every run,
+/ and a leftover upstream on it answered for the one started below (#1657). Seeded
+/ per process, and a port that already answers is refused rather than tested.
+system"S ",string .z.i;
 port:5010+`int$rand 500;
+if[not null @[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
+    [-2 "run_two_instances: port ",string[port]," is already in use - not this run's upstream"; exit 1]];
 log_path:statusdir,"/upstream.log";
 child:"QHOME=",getenv[`QHOME]," ",Q," tests/q/upstream_instance.q -p ",string[port],
       " < /dev/null > ",log_path," 2>&1 & echo $!";

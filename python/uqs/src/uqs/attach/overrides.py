@@ -123,6 +123,11 @@ POLICY: dict[str, Policy] = {
     "ADVERTISED_UNRESOLVABLE": Policy(
         False, "the stack cannot connect back to a publisher whose name it cannot resolve"
     ),
+    "PUBLISHER_UNREACHABLE_FROM_STACK": Policy(
+        False,
+        "the stack tried to connect back to the running publisher and could not: discovery "
+        "would list a process it cannot use, and no acceptance makes the path exist",
+    ),
     "NO_TICKERPLANT": Policy(False, "there is nothing to publish to"),
     "AMBIGUOUS_TICKERPLANT": Policy(False, "name the tickerplant with --tickerplant"),
     "NO_CONSUMER": Policy(False, "nothing would receive and persist the table"),

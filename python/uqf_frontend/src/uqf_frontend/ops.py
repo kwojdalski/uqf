@@ -87,10 +87,22 @@ USAGE = """{[lim]
 #: again on every sweep and the newest row of an idle process was appended to
 #: the sink once per interval, forever. Each row carries its own ``time_ns``
 #: so the caller can advance the watermark without ever touching ``time``.
+#:
+#: A full batch is cut at a TIME boundary, never mid-tie (#1661). The caller
+#: moves the watermark to the last row's time and the next sweep asks for
+#: strictly later rows, so a row sharing the cut row's time but falling past
+#: ``lim`` would never be fetched. Ties are real: ``.z.p`` has microsecond
+#: resolution on macOS. So when more than ``lim`` rows qualify, only rows
+#: strictly before the time of row ``lim`` (the first one that does not fit)
+#: are returned; and when that leaves none - the batch is one time throughout -
+#: every row at that time is returned instead, more than ``lim``, so the
+#: watermark still moves.
 USAGE_SINCE = """{[since;lim]
   r:`time xasc select from .usage.usage where ("j"$time)>since;
   r:update time_ns:"j"$time from r;
-  $[lim>0; lim sublist r; r]}"""
+  if[(lim<=0)|lim>=count r; :r];
+  t:r[`time_ns] lim;
+  $[t>first r`time_ns; select from r where time_ns<t; select from r where time_ns=t]}"""
 
 #: What a process can say about itself over IPC.
 #:

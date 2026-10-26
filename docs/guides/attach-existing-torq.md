@@ -95,9 +95,90 @@ the stack's machine.
   - `ADVERTISED_UNRESOLVABLE`: discovery cannot resolve the name (it is asked
     with `.Q.addr`, read-only).
 
-  Neither can be overridden. Whether the publisher's port is reachable from the
-  stack is not checked: that can only be tried once the publisher runs, and no
-  step tries it yet.
+  Neither can be overridden.
+
+- **The stack must reach the running publisher.** The port can only be tried
+  once the publisher listens, so it is tried then. Straight after the start, a
+  `reach` stage asks discovery, with the read-only `reach` operation, to open a
+  handle to `advertised_host:port` and close it at once. Discovery opens it the
+  way TorQ's `.servers.opencon` does, with the stack's own credentials and a
+  2-second timeout, and it is retried for up to 30 seconds while the publisher
+  loads. If it fails, `PUBLISHER_UNREACHABLE_FROM_STACK` names the address and
+  q's reason (`timeout`, `access`, `hop. OS reports: ...`). The attachment then
+  goes back to `applied`, the publisher this run started is stopped, and the run
+  fails, so it is never reported attached. Verify asks the same question
+  whenever the publisher already runs here. The code cannot be overridden.
+
+- **Runtime-only is the only persistence for a remote stack**, since the
+  tickerplant's schema file is on another machine (`PERSIST_UNAVAILABLE`
+  otherwise). The plan's `RUNTIME_ONLY` warning and verify's output both say
+  that a tickerplant restart drops the registration and the attachment must be
+  re-applied. With the stack elsewhere they add that nothing on this machine is
+  told of that restart: stop the publisher, then run `uqs job attach NAME`.
+  `uqs job attach` re-verifies that the tickerplant still holds the table before
+  it starts the publisher. A bare `uqs start` checks only the saved state.
+
+#### What a publish acknowledges
+
+This is what a polling feed (a job declaring `poll`,
+`src/etl/core/stream_poll.q`) does when `torq_stream.q` runs it. A job with its
+own `on_timer` or `on_batch` orders its own steps.
+
+- **The send is synchronous.** The job's `publish` is
+  `.qtorq.publish[.qproc.stream.h;;]`, and `.qproc.stream.h` is the handle
+  `.servers.gethandlebytype` returns, so
+  `h (`.u.upd;t;x)` returns once the tickerplant's `.u.upd` has returned. What `.u.upd` has done by then depends on the segmented tickerplant's batch mode (`lib/torq/code/segmentedtickerplant/stplog.q\`):
+
+  | Batch mode     | When the publish returns, the rows are                                                            |
+  | -------------- | -------------------------------------------------------------------------                         |
+  | `defaultbatch` | in the tickerplant's memory and written to the table's log; sent to subscribers on its next timer |
+  | `immediate`    | written to the log and sent to the subscribers                                                    |
+  | `memorybatch`  | in the tickerplant's memory only; logged and sent on its next timer                               |
+
+- **What it does not acknowledge.**
+  - That an rdb or wdb received or saved the rows.
+  - That the log write reached the disk: nothing asks for an fsync.
+  - That the rows were accepted. With the tickerplant's error mode on
+    (`.stplg.errmode`), a `.u.upd` that throws is written to its error log and
+    the call returns normally. A table the tickerplant does not define discards
+    the rows without an error (`torq_pipeline.q`, invariant 8), which
+    `.qtorq.assert_publishable` checks only when the publisher starts.
+
+- **The cursor is saved after the publish.** One tick runs in this order:
+  1. load the cursor;
+  2. fetch the page after it;
+  3. normalize it;
+  4. refuse the whole page if it does not fit the plant's tables, or if its next
+     cursor would not move;
+  5. publish each table in turn;
+  6. save the cursor.
+
+  A timestamp cursor is the file `<name>.cursor` (the poll's `cursor`, else the
+  job's name) in `$UQF_STATUS_DIR`, else `$TORQDATA/status`, on the publisher's
+  machine. It is written to a temporary file, the old one kept as `.bak`, then
+  renamed into place. A feed with its own `load` and `save` keeps its cursor
+  where those put it. A saved cursor records only that every table of the page
+  was published in the sense above.
+
+- **Failures repeat the page, so duplicates are possible.**
+  - A publish that throws stops the tick before the save. The timer logs
+    `timer function failed`, and the next tick fetches the same page again.
+  - If one table of a page was sent before another's publish threw, the first
+    one's rows are sent again.
+  - A crash between the last publish and the save sends the whole page again
+    after the restart.
+  - Nothing deduplicates. `.u.upd` and the consumers insert what they receive,
+    and a log replay delivers each copy that was logged.
+
+  Delivery is therefore at least once from the cursor's side, for rows the
+  tickerplant accepted and kept. Rows can still be lost: rows `memorybatch` held
+  when the tickerplant died, rows its error mode trapped, and rows sent onto a
+  table it no longer defines.
+
+- **There is no reconnect.** The handle is the one `.qproc.stream.h` held when
+  the publish was wired at start, and nothing in the publish path reopens it.
+  After a tickerplant restart, restart the publisher, through
+  `uqs job attach NAME` for a runtime-only attachment, as above.
 
 ### Migration from the stage commands
 
@@ -315,6 +396,7 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
   | `PERSIST_UNAVAILABLE`                                                                                                | no          | the registration could not survive a tickerplant restart (no writable local `-schemafile`); use `--runtime-only`                                      |
   | `STORAGE_MISMATCH`                                                                                                   | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                       |
   | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER` | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                     |
+  | `ADVERTISED_LOOPBACK`, `ADVERTISED_UNRESOLVABLE`, `PUBLISHER_UNREACHABLE_FROM_STACK`                                 | no          | a stack on another machine could not connect back to the publisher: a loopback name, a name it cannot resolve, or a running publisher it cannot open  |
 
 Detach's refusals are destructive-cleanup protections and cannot be overridden.
 

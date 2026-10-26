@@ -117,6 +117,8 @@ class FakeStack:
         self.errors: list[str] = []
         #: publishers the CLI under test started
         self.started: list[str] = []
+        #: "host:port" -> q's error, for an address discovery's `reach` cannot open
+        self.unreachable: dict[str, str] = {}
         sid = str(stack_id)
         self.add(
             probe("discovery1", "discovery", stack_id + 1, sid, torq=torq, services=[]),
@@ -235,6 +237,7 @@ class FakeStack:
             "stp_unregister": self._unregister,
             "ledger_leave": self._leave,
             "sort_reload": self._sort_reload,
+            "reach": self._reach,
         }.get(op)
         if handler is None:
             raise AssertionError(f"FakeStack does not answer {op}")
@@ -333,6 +336,11 @@ class FakeStack:
         p["sortrows"] = [
             {"tabname": r.table, "att": r.att, "col": r.column, "sort": r.sort} for r in rules
         ]
+
+    def _reach(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+        where = f"{req['host']}:{req['port']}"
+        error = self.unreachable.get(where, "")
+        return {"reached": not error, "address": where, "error": error}
 
     def _sort_reload(self, p: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
         """sort_reload.q: `.sort.getsortcsv` on the process's own file."""
