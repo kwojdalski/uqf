@@ -243,13 +243,12 @@ runs as the same OS user as the tests, on a disk `uqs` could also read. That no
 local read happens is shown with the fake stack, whose schema file is at a path
 that does not exist here, not by a real second disk. The tickerplant's own user,
 owner and permissions on a shared production file are untested. - **A whole TorQ
-stack on the other machine.** The lane runs plain q processes with the attach
-operations, not TorQ's discovery, tickerplant, rdb and wdb. The full workflow
-against TorQ runs in the attach-stack suite on one host. - **Acceptance
-criterion 1**, a local publisher sending rows to an isolated remote tickerplant
-and its consumers, end to end. - **Clocks, latency and timeouts** across a real
-link: the 2-second `reach` timeout and the 30-second start wait were never
-tested over a slow path.
+stack on the other machine, on KDB-X.** The lane runs plain q processes with the
+attach operations. A whole TorQ stack in another container, publisher rows
+included (acceptance criterion 1), runs on PeachQ only: see [Testing against a
+remote stack](#testing-against-a-remote-stack). - **Clocks, latency and
+timeouts** across a real link: the 2-second `reach` timeout and the 30-second
+start wait were never tested over a slow path.
 
 #### What a publish acknowledges
 

@@ -39,7 +39,9 @@ def test_the_attachment_is_verified_and_its_publisher_started_and_reached(attach
         "done",
         "done",
     ], done
-    assert done["reach"]["detail"] == "the stack reaches the publisher", done["reach"]
+    # Both directions since #1672: the publisher opens discovery and the
+    # tickerplant with its own credential, and discovery opens the publisher.
+    assert done["reach"]["detail"] == "the publisher and the stack reach each other", done["reach"]
     assert attached["verify"]["state"] == "verified"
 
 
