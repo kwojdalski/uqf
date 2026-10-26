@@ -19,6 +19,7 @@ import json
 import os
 import re
 import socket
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +35,11 @@ MANIFEST_FILE = "manifest.json"
 NAME = re.compile(r"^[a-z][a-z0-9-]{0,47}$")
 #: The only manifest state in which the publisher may start.
 VERIFIED = "verified"
+#: Asks the stack whether attachment NAME's tables are still registered, and
+#: raises UqsError when they are not or that cannot be told (#1651). Set by
+#: uqs.attach.live when it is imported - `stack` may not import `attach` - and
+#: every front end that starts processes imports it. None refuses the start.
+live_check: Callable[[str], None] | None = None
 
 
 def state_root() -> Path:
@@ -185,6 +191,10 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
     It fails CLOSED (#1442): a publisher whose manifest cannot be read is
     refused, and an attachment whose attachment.json cannot be read - so whose
     publisher cannot be known - refuses every start until it is fixed.
+
+    A verified publisher started under its stack is then checked LIVE
+    (`live_check`, #1651): a runtime-only registration, or one on another
+    machine, can be gone while the manifest still says verified.
     """
     found, broken = _scan()
     if broken:
@@ -221,6 +231,14 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
                 f"{effective + 1}, not {pub.stack_id + 1}. Start it with "
                 f"`uqs job attach {pub.attachment}`, or --port {pub.stack_id}"
             )
+        if live_check is None:
+            raise UqsError(
+                f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "
+                f"{pub.stack_id}), and whether its tables are still registered there cannot "
+                "be checked: uqs.attach.live is not loaded by this front end. Start it with "
+                f"`uqs start` or `uqs job attach {pub.attachment}`. Nothing was started."
+            )
+        live_check(pub.attachment)
 
 
 def publisher_extras(paths: UqsPaths, procs: str) -> list[str]:

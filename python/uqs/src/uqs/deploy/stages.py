@@ -8,7 +8,7 @@ import json
 import time
 from pathlib import Path
 
-from uqs.deploy import kafka
+from uqs.deploy import kafka, python_runtime
 from uqs.deploy.artifact import Artifact
 from uqs.deploy.config import (
     REPLACE_PY,
@@ -167,10 +167,17 @@ class Deployment(Server):
                 f"ln -sfn {q(src)} {q(rel)}; fi"
             )
         # OFFLINE, from the artifact's wheels: the dependencies with their
-        # locked hashes required, then uqs itself, which the lock does not pin
+        # locked hashes required, then uqs itself, which the lock does not pin.
+        # A bundled Python makes .venv itself, with -m venv and pip: no uv.
+        lines.append("export UV_OFFLINE=1")
+        rt = self.python_runtime
+        if rt is not None:
+            interpreter = rt.interpreter(rt.directory(c.dest))
+            lines += python_runtime.venv_lines(interpreter, py)
+            self.run("prepare", "installing the release's Python environment offline", *lines)
+            return self.kafka_ready(release, pkg)
         offline = ["--quiet", "--offline", "--no-index", "--python", ".venv/bin/python"]
         lines += [
-            "export UV_OFFLINE=1",
             f"uv venv --quiet --python {q(self.target['python'])} .venv",
             " ".join(
                 [
@@ -186,6 +193,9 @@ class Deployment(Server):
             " ".join(["uv pip install", *offline, "--no-deps", q(py["app_wheel"])]),
         ]
         self.run("prepare", "installing the release's Python environment offline", *lines)
+        self.kafka_ready(release, pkg)
+
+    def kafka_ready(self, release: str, pkg: Artifact) -> None:
         if pkg.manifest.get("kafka"):  # before anything starts, or reads the HDB
             log.info("{}", self.kafka_check(release))
 

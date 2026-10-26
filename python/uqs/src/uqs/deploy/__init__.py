@@ -25,16 +25,19 @@ THE STAGES, in order, each stopping the deployment when it fails:
   artifact   the archive matches its .sha256, and every member its manifest
              hash, with nothing missing or extra.
   preflight  ssh works; the destination is writable; uv and the release's
-             Python are there; the OS, architecture and Python match what the
-             artifact was built for; q runs and is licensed; the TorQ and starter-pack trees
-             hold what torq.sh needs; envsubst and rlwrap are on PATH; the
-             runtime data directory exists (or --init-data was given); and a
-             deployment already there is only replaced with --restart.
+             Python are there (unless bundled); the OS, architecture, glibc and
+             Python match what the artifact was built for; q runs and is
+             licensed (unless bundled); the TorQ and starter-pack trees hold
+             what torq.sh needs; the host contract's tools are on PATH
+             (deploy/preflight.py); the runtime data directory exists (or
+             --init-data was given); and a deployment already there is only
+             replaced with --restart.
   transfer   scp into a staging directory of its own; the checksum is checked
              ON THE SERVER before anything is extracted.
   prepare    releases/<id>/ gets a release-local .venv installed OFFLINE
              from the artifact's own wheels - hashes required, no index, no
-             download - and a deploy.env naming the external TorQ, q and the
+             download; by uv, or by a bundled Python's -m venv and pip - and
+             a deploy.env naming the TorQ, q and the
              stable data directory (UQS_DATA_ROOT), with UV_OFFLINE=1 so
              nothing later fetches either. The ports this profile listens on
              are checked free.
