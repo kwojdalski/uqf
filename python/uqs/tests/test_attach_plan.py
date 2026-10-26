@@ -510,7 +510,11 @@ def test_no_schema_file_or_a_remote_one_cannot_be_persisted_to(bundle, tmp_path)
     fake = FakeStack(6000, schema_file=str(schema))
     facts = preflight.Facts(host=preflight.Host(lambda h, p: False, ("localhost",)))
     remote = plan.build(attachment(bundle, host="otherbox", runtime_only=False), fake, ROOT, facts)
-    assert any("can only be edited from that machine" in f.message for f in remote.findings)
+    # the path exists HERE, and is still not read: it names a file on otherbox (#1651)
+    (refused,) = [f for f in remote.findings if f.code == "PERSIST_UNAVAILABLE"]
+    assert "the schema file is on otherbox; this machine cannot edit it" in refused.message
+    for option in ("--remote-schema-file", "--runtime-only", "run uqs on the stack's machine"):
+        assert option in refused.action
 
 
 def test_runtime_only_is_a_warning_that_says_a_restart_drops_the_table(bundle):

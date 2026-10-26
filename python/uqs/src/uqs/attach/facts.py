@@ -82,6 +82,20 @@ class PublisherPort:
     provisional: bool = False
 
 
+@dataclass(frozen=True)
+class SchemaRead:
+    """The tickerplant's own answer about its schema file, for a block it is to
+    append itself (schema_files.inspect, #1651): the file is on its machine."""
+
+    path: str
+    #: the file's text; None when it does not exist
+    text: str | None
+    #: can the tickerplant's user append to it
+    writable: bool
+    #: why it could not be read, if it could not
+    error: str = ""
+
+
 @dataclass
 class Facts:
     """Everything preflight reads besides the observation."""
@@ -91,3 +105,5 @@ class Facts:
     #: the manifest's token, when the attachment has one: what tells a table
     #: this attachment already registered from one it must only adopt or share
     token: str = ""
+    #: with `remote-schema-file`, what the tickerplant said about its schema file
+    schema: SchemaRead | None = None

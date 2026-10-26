@@ -15,8 +15,10 @@ silently not work (see docs/guides/attach-existing-torq.md for each one):
     a tickerplant restart, which must be said, not discovered.
 
 A blocker is never downgraded by a flag. The one choice an operator has is
-`--runtime-only` (accept that a tickerplant restart drops the registration),
-and it is recorded in the attachment, not given at apply time.
+how the registration persists - `--runtime-only` (accept that a tickerplant
+restart drops it) or `--remote-schema-file` (the tickerplant writes the block
+to its own file, #1651) - and it is recorded in the attachment, not given at
+apply time.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from uqs.attach import preflight_components as components
 from uqs.attach.config import Attachment
 from uqs.attach.facts import LOCAL_HOSTS, Facts, Host, PublisherPort
 from uqs.attach.findings import Finding
-from uqs.attach.topology import Observation, Proc, port_of
+from uqs.attach.topology import Observation, Proc, port_of, refused
 
 #: The publisher runs where uqs starts it (uqs.attach.publisher).
 PUBLISHER_HOST = "localhost"
@@ -218,7 +220,7 @@ def check(att: Attachment, obs: Observation, facts: Facts | None = None) -> list
     out += components.untyped_columns(att.tables)
     out += identity(att, obs.discovery)
     for p in obs.procs()[1:]:
-        out += [_down(p)] if not p.up else identity(att, p)
+        out += [refused(att, p) if p.refused else _down(p)] if not p.up else identity(att, p)
     if obs.tickerplant and obs.tickerplant.up:
         out += components.tickerplant(att, obs.tickerplant, att.tables, facts)
     if not obs.consumers:
