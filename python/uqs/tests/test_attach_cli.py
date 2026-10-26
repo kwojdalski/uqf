@@ -23,8 +23,7 @@ from uqs import cli
 from uqs.attach import config, facts, plan, publisher, service
 from uqs.attach import verify as verifying
 from uqs.attach.manifest import Manifest
-from uqs.cli import attach as attach_cli
-from uqs.cli import shared
+from uqs.cli import attach_legacy, shared
 from uqs.deploy import control
 from uqs.paths import repo_root
 from uqs.stack import attach_state, listing, runtime
@@ -149,7 +148,7 @@ def test_every_old_stage_command_is_refused_with_the_command_that_replaced_it(wo
     assert result.exit_code == 1
     message = world.errors[-1]
     assert f"`uqs job attach {stage}` was replaced" in message
-    new_command = attach_cli.MIGRATION[stage][0].format(name="pb-uat")
+    new_command = attach_legacy.MIGRATION[stage][0].format(name="pb-uat")
     assert new_command in message
     assert not world.state_dir.exists() and changes(world) == []
 

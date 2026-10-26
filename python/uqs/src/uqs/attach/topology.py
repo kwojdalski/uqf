@@ -40,6 +40,8 @@ class Proc:
     #: the decoded `probe` answer, None when it could not be asked
     probe: dict[str, Any] | None = None
     error: str = ""
+    #: it answered, and refused the attachment's credential (#1651)
+    refused: bool = False
 
     @property
     def up(self) -> bool:
@@ -97,7 +99,23 @@ def ask(
         answer = ipc.call(endpoint, "probe", request)
         return Proc(answer.get("procname") or procname, proctype, endpoint, answer)
     except IpcError as exc:
-        return Proc(procname, proctype, endpoint, None, exc.reason)
+        return Proc(procname, proctype, endpoint, None, exc.reason, exc.refused)
+
+
+def refused(att: Attachment, p: Proc) -> Finding:
+    """A process that answered and refused the attachment's credential (kola's
+    authentication failure): said as that, not as a process that is down (#1651)."""
+    st = att.stack
+    secret = f"${st.password_env}" if st.password_env else "TorQ's demo password"
+    return Finding(
+        "blocker",
+        "STACK_REFUSES_ATTACH_CREDENTIALS",
+        p.procname,
+        f"{p.endpoint.label} refuses the attachment's credential (user {st.user}, password "
+        f"from {secret}): {p.error}",
+        "give the user and --password-env the stack's access list accepts; the process is up",
+        {"user": st.user},
+    )
 
 
 def tickerplant(
@@ -142,7 +160,9 @@ def observe(att: Attachment, ipc: Ipc) -> tuple[Observation, list[Finding]]:
     obs = Observation(disc)
     if not disc.up:
         found.append(
-            Finding(
+            refused(att, disc)
+            if disc.refused
+            else Finding(
                 "blocker",
                 "DISCOVERY_UNREACHABLE",
                 "discovery",

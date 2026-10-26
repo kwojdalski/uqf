@@ -66,12 +66,13 @@ A new attachment needs `--job` and `--stack-id`; `--host` (default `localhost`),
 `--discovery HOST:PORT` (default: the stack id + 1; its HOST must be the
 `--host` machine, since a stack is attached on one host), `--tickerplant`,
 `--consumer` (default: all), `--user`, `--password-env`,
-`--tplogdir`/`--schema-file` (pin storage) and `--runtime-only` are optional.
-After the first execution the attachment is reused by name. Options that
-contradict the saved ones are refused; `--replace` rebuilds it from them,
-keeping its manifest and accepted risks, and is refused while the manifest holds
-changes on another stack or for other tables. Credentials are redacted from
-every output. `uqs job attach --help` lists the rest.
+`--tplogdir`/`--schema-file` (pin storage), `--runtime-only` and
+`--remote-schema-file` are optional. After the first execution the attachment is
+reused by name. Options that contradict the saved ones are refused; `--replace`
+rebuilds it from them, keeping its manifest and accepted risks, and is refused
+while the manifest holds changes on another stack or for other tables.
+Credentials are redacted from every output. `uqs job attach --help` lists the
+rest.
 
 ### A publisher on this machine, a stack on another (#1651)
 
@@ -109,10 +110,16 @@ the stack's machine.
   fails, so it is never reported attached. Verify asks the same question
   whenever the publisher already runs here. The code cannot be overridden.
 
-- **Runtime-only is the only persistence for a remote stack**, since the
-  tickerplant's schema file is on another machine (`PERSIST_UNAVAILABLE`
-  otherwise). The plan's `RUNTIME_ONLY` warning and verify's output both say
-  that a tickerplant restart drops the registration and the attachment must be
+- **The tickerplant's schema file is on the stack's machine**, so this machine
+  never opens its path. The default, `schema-file`, is refused there with
+  `PERSIST_UNAVAILABLE`, which names the three ways out:
+  - `--remote-schema-file`: the tickerplant writes the block itself (below);
+  - `--runtime-only`: no block, and the registration is lost on a restart;
+  - run `uqs` on the stack's machine.
+
+- **Runtime-only** is the persistence that needs nothing of the stack's disk.
+  The plan's `RUNTIME_ONLY` warning and verify's output both say that a
+  tickerplant restart drops the registration and the attachment must be
   re-applied. With the stack elsewhere they add that nothing on this machine is
   told of that restart: stop the publisher, then run `uqs job attach NAME`.
   `uqs job attach` re-verifies that the tickerplant still holds the table before
@@ -125,67 +132,243 @@ the stack's machine.
   that does not answer refuses it too: unknown is not read as registered. An
   attachment on this machine with schema-file persistence is not asked.
 
+#### Durable registration through the tickerplant
+
+`--remote-schema-file` is recorded in the attachment as
+`persist: remote-schema-file`, like `--runtime-only`. It is not a flag for one
+run, and it excludes `--runtime-only`. The block is the one `schema-file`
+writes, with the same token, and only the process that writes it changes:
+
+- **The tickerplant changes its own file.** The `schema_file` operation runs in
+  the tickerplant, on the file it was started with (`-schemafile`), never on a
+  path taken from the request. It needs no remote filesystem access, no SSH and
+  no new service: only the q IPC and the credential every other operation uses.
+
+- **Python composes, the tickerplant checks.** `uqs` reads the file through the
+  tickerplant and computes one append or one cut, by the rules `schema-file`
+  uses. The tickerplant refuses the change unless:
+  - the file's md5 is still the one the change was computed from;
+  - an append is exactly one whole block for this name and token, after a
+    newline only when the file lacks a final one, and the file does not hold
+    that block yet;
+  - a cut removes exactly that block, from the start of a line, and at most the
+    file's final newline.
+
+- **How the bytes are written.** An append opens the file for appending, so the
+  bytes already there are never rewritten. A cut keeps the old bytes in
+  `<file>.uqs-attach.bak`, writes the new ones to `<file>.uqs-attach.tmp` and
+  `cp`s them over the file, which keeps its mode, owner and inode. It reads the
+  file back, then deletes both. If the copy fails, the backup stays for a
+  person.
+
+- **Preflight asks the tickerplant, too.** The plan reports `WILL_PERSIST` or
+  `ALREADY_PERSISTED`, or refuses with `PERSIST_UNAVAILABLE` when the file:
+  - is not given (`-schemafile`);
+  - does not exist on the stack's machine;
+  - cannot be appended to by the tickerplant's user;
+  - is one uqf generates.
+
+- **Journalled and checked like the local block.** The manifest's `schema_block`
+  (or `schema_uses`) step records the tickerplant as the block's `process`.
+  Verify, detach's drift check and the removal read the block back through that
+  tickerplant, whatever the attachment's settings say later. A tickerplant that
+  cannot be asked is a refusal, never a local read.
+
+- **Reversed before publication only.** On a stack elsewhere the publication
+  evidence on disk is read by the tickerplant too (`disk_marks`, read-only):
+  - earlier days' logs;
+  - a partition in the wdb's save directory or in the HDB.
+
+  So detach can tell "nothing was published", remove the block through the
+  tickerplant, and then roll back the rest in reverse order. After publication
+  the block stays, as it does on one machine.
+
+The operation runs code, through the tickerplant's access list, in a process
+other people depend on. It only appends or cuts a block it can check, but the
+block is q that the tickerplant runs at every start. Anyone the access list lets
+send this already has that power, so the opt-in grants no new privilege. It does
+record, in the attachment, that the stack's operators agreed to it.
+
+#### Credentials, in each direction
+
+Three credentials meet when the stack is elsewhere. Each refusal has its own
+code, so it is not reported as an unreachable address. None can be overridden.
+
+  | Credential                                                                      | Used for                                                             | Refused                                                                                                                      |
+  | ------------------------------------------------------------------------------- | -------------------------------------------------------------------  | ----------------------------------------------------------------------------------------------------------------             |
+  | The attachment's (`--user`, `--password-env`)                                   | `uqs` asking the stack's processes, at plan, apply, verify, detach   | `STACK_REFUSES_ATTACH_CREDENTIALS`, from kola's authentication failure, in place of `DISCOVERY_UNREACHABLE` or `UNREACHABLE` |
+  | The publisher's own TorQ credential (`.servers.USERPASS`, its passwords files)  | the publisher connecting to discovery and the tickerplant            | `STACK_REFUSES_PUBLISHER_CREDENTIALS`                                                                                        |
+  | The stack's (discovery's `.servers.USERPASS`)                                   | discovery connecting back to the publisher                           | `PUBLISHER_REFUSES_STACK_CREDENTIALS`                                                                                        |
+
+The two directions are tried with the read-only `reach` operation once the
+publisher runs, straight after the start and in verify: - **The publisher to the
+stack.** `uqs` asks the running publisher, with its own local credential, to
+open and close a handle to discovery and to the tickerplant. The publisher opens
+it with its own credential, the one it publishes with. - **The stack to the
+publisher.** Discovery is asked to open a handle to `advertised_host:port`.
+
+q's `access` is the refusal in both directions. Any other failure is
+`STACK_UNREACHABLE_FROM_PUBLISHER` or `PUBLISHER_UNREACHABLE_FROM_STACK`. As
+with reaching back, a failure after the start closes the gate again and stops
+the publisher this run started. Verify reports each direction as its own check.
+
+The tickerplant is tried at the address `uqs` reached it at. If discovery lists
+it under a loopback name, the publisher's own TorQ connects to that literal name
+instead, which is this machine, not the stack's.
+
+#### What one machine has not shown
+
+`test_attach_two_hosts.py` runs these operations against real KDB-X processes on
+one machine: - the stack's processes are asked at this machine's host name,
+which is not `localhost` and resolves to a non-loopback address, and the
+attachment treats that host as remote; - the publisher is advertised under this
+machine's IPv4 address, another name than the stack host, and discovery connects
+back to that; - each process enforces its own access list (`-U`), with a
+separate credential for each direction.
+
+The tickerplant appends and removes the block in its own file, leaving its
+bytes, mode and inode as they were. It refuses a stale or malformed change, and
+reads the publication evidence off its disk. Each credential refusal comes back
+as its own code.
+
+Still unverified without a second machine: - **A network between them.** No
+firewall, NAT, VPN or routing: every connection stays inside one host's network
+stack, so a port the stack's machine cannot open is never seen. - **Name
+resolution that differs by side.** Both "machines" share one resolver and one
+hosts file. A name that resolves here and not on the stack's machine (or to a
+different address) is caught only by discovery's own `.Q.addr` check, which ran
+on the same host. - **Separate file systems and users.** The tickerplant here
+runs as the same OS user as the tests, on a disk `uqs` could also read. That no
+local read happens is shown with the fake stack, whose schema file is at a path
+that does not exist here, not by a real second disk. The tickerplant's own user,
+owner and permissions on a shared production file are untested. - **A whole TorQ
+stack on the other machine.** The lane runs plain q processes with the attach
+operations, not TorQ's discovery, tickerplant, rdb and wdb. The full workflow
+against TorQ runs in the attach-stack suite on one host. - **Acceptance
+criterion 1**, a local publisher sending rows to an isolated remote tickerplant
+and its consumers, end to end. - **Clocks, latency and timeouts** across a real
+link: the 2-second `reach` timeout and the 30-second start wait were never
+tested over a slow path.
+
 #### What a publish acknowledges
 
 This is what a polling feed (a job declaring `poll`,
 `src/etl/core/stream_poll.q`) does when `torq_stream.q` runs it. A job with its
-own `on_timer` or `on_batch` orders its own steps.
+own `on_timer` or `on_batch` orders its own steps. None of it is exactly-once.
 
 - **The send is synchronous.** The job's `publish` is
-  `.qtorq.publish[.qproc.stream.h;;]`, and `.qproc.stream.h` is the handle
-  `.servers.gethandlebytype` returns, so
-  `h (`.u.upd;t;x)` returns once the tickerplant's `.u.upd` has returned. What `.u.upd` has done by then depends on the segmented tickerplant's batch mode (`lib/torq/code/segmentedtickerplant/stplog.q\`):
+  `` .qtorq.publish_reconnecting[`.qproc.stream.h;;] ``. It sends
+  `` h (`.u.upd;t;x) `` on the handle `.qproc.stream.h` holds, and returns once
+  the tickerplant's `.u.upd` has returned. What `.u.upd` has done by then
+  depends on the segmented tickerplant's batch mode
+  (`lib/torq/code/segmentedtickerplant/stplog.q`):
 
   | Batch mode     | When the publish returns, the rows are                                                            |
-  | -------------- | -------------------------------------------------------------------------                         |
+  | -------------- | ------------------------------------------------------------------------------------------------- |
   | `defaultbatch` | in the tickerplant's memory and written to the table's log; sent to subscribers on its next timer |
   | `immediate`    | written to the log and sent to the subscribers                                                    |
   | `memorybatch`  | in the tickerplant's memory only; logged and sent on its next timer                               |
 
-- **What it does not acknowledge.**
-  - That an rdb or wdb received or saved the rows.
-  - That the log write reached the disk: nothing asks for an fsync.
-  - That the rows were accepted. With the tickerplant's error mode on
-    (`.stplg.errmode`), a `.u.upd` that throws is written to its error log and
-    the call returns normally. A table the tickerplant does not define discards
-    the rows without an error (`torq_pipeline.q`, invariant 8), which
-    `.qtorq.assert_publishable` checks only when the publisher starts.
-
-- **The cursor is saved after the publish.** One tick runs in this order:
-  1. load the cursor;
-  2. fetch the page after it;
+- **One tick runs in this order:**
+  1. load the cursor, and read the in-flight marker beside it;
+  2. fetch the page after the cursor;
   3. normalize it;
   4. refuse the whole page if it does not fit the plant's tables, or if its next
      cursor would not move;
-  5. publish each table in turn;
-  6. save the cursor.
+  5. if the marker says the previous page is in doubt, settle it (below);
+  6. write the marker;
+  7. publish each table in turn, confirming each with the tickerplant when the
+     poll declares `ack`;
+  8. save the cursor;
+  9. remove the marker.
 
   A timestamp cursor is the file `<name>.cursor` (the poll's `cursor`, else the
   job's name) in `$UQF_STATUS_DIR`, else `$TORQDATA/status`, on the publisher's
-  machine. It is written to a temporary file, the old one kept as `.bak`, then
-  renamed into place. A feed with its own `load` and `save` keeps its cursor
-  where those put it. A saved cursor records only that every table of the page
-  was published in the sense above.
+  machine. The marker is `<name>.inflight` in the same directory. It holds the
+  cursor the page was fetched after (`from`), the cursor it would move to
+  (`to`), and the page's row count. Both files are written to a temporary file,
+  the old one kept as `.bak`, then renamed into place. Neither is fsynced. A
+  feed with its own `load` and `save` keeps its cursor where those put it, and
+  its marker still goes in the status directory.
 
-- **Failures repeat the page, so duplicates are possible.**
-  - A publish that throws stops the tick before the save. The timer logs
-    `timer function failed`, and the next tick fetches the same page again.
-  - If one table of a page was sent before another's publish threw, the first
-    one's rows are sent again.
-  - A crash between the last publish and the save sends the whole page again
-    after the restart.
-  - Nothing deduplicates. `.u.upd` and the consumers insert what they receive,
-    and a log replay delivers each copy that was logged.
+- **A reconnect after a tickerplant restart.** When the handle is closed, the
+  publish reopens it once, through TorQ's server registry
+  (`.servers.gethandlebytype`, which retries every registered tickerplant whose
+  handle is closed), stores the new handle in `.qproc.stream.h`, logs
+  `tickerplant handle reopened`, and sends again.
+  - A handle that was already closed before the send is reopened first, so
+    nothing is sent twice.
+  - A handle that closes during the send is reopened and the send repeated. This
+    is logged as `possibly duplicated`, because the old tickerplant may have
+    logged the first send before it went.
+  - If no tickerplant can be reached, the error propagates. The tick fails, the
+    cursor stays, and the next tick tries again.
+  - An error on a handle that is still open is the tickerplant's own, and is
+    raised as it is.
+
+  The reconnect restores the publish handle only. A runtime-only registration is
+  still lost with the restart, so re-apply the attachment
+  (`uqs job attach NAME`) as above.
+
+- **An in-doubt page is settled, not blindly resent.** A marker found at the
+  start of a tick means the previous page was interrupted between the publish
+  and the save: by a crash, a kill, a publish that threw part-way, or a refused
+  acknowledgement. Some of it may already be in the tickerplant. If the saved
+  cursor equals the marker's `to`, the save happened and only the removal did
+  not, so the marker is removed and nothing is in doubt. Otherwise:
+  - **With a declared `row_key`** (the poll's `row_key`, symbols naming the
+    columns that identify a published row, never `time`), the publisher asks an
+    rdb which keys of the re-fetched page each table already holds, and
+    publishes only the absent rows. The rdb is found through discovery the first
+    time a page is in doubt, so it costs a connection only then. The tick logs
+    `in-doubt page resolved by row key` with the cursor range and the rows it
+    left out. If no rdb can be reached, or its answer is not one boolean per
+    key, the tick fails and nothing is sent.
+  - **Without a `row_key`**, or with no reader wired (the plain-q runner,
+    `run_stream.q`), the page is published again, as before. The tick logs
+    `in-doubt page published again - possibly duplicated` at WARNING with the
+    marker's `from` and `to` and the reason. It is also counted in the job's
+    health: `.qetl.stream_health.doubts_of`, and `possibly_duplicated_pages` and
+    `possibly_duplicated_rows` in `stream_health_<job>.txt`.
+
+  What the rdb answers is what it holds, not what the tickerplant logged. A row
+  logged but not yet delivered (`defaultbatch` delivers on its timer), rows an
+  rdb has already written out at end of day, and rows another publisher sent
+  under the same key all answer wrongly. The first two are sent again, and the
+  third is left out.
+
+- **An acknowledgement, when asked for.** A poll declaring `ack` 1b confirms
+  each publish. On the publish handle, before and after the `.u.upd`, it reads
+  how many rows of the table the tickerplant has logged. That is
+  `.stplg.rowcount`, plus `.stplg.tmprowcount` in `defaultbatch`, where the log
+  write happens in `.u.upd` but the count only on the timer. If the count did
+  not advance by the rows the publish reports sending, the tick fails with
+  `was not acknowledged`. The cursor does not move, and the page is in doubt on
+  the next tick. This catches rows that the error mode trapped and rows that the
+  tickerplant never logged. Without `ack`, nothing is asked. `memorybatch` logs
+  only on its timer, so it refuses `ack` before anything is sent.
+
+  The count is the tickerplant's, for all publishers together. Another
+  publisher's rows can make a short publish look counted, and a restart or end
+  of day that resets the counters can make a counted one look short.
+
+- **What is still not acknowledged.**
+  - That an rdb or wdb received or saved the rows.
+  - That the log write reached the disk. Nothing asks for an fsync, not even
+    `ack`.
+  - Without `ack`, that the rows were accepted. With the tickerplant's error
+    mode on (`.stplg.errmode`), a `.u.upd` that throws is written to its error
+    log and the call returns normally. A table the tickerplant does not define
+    discards the rows without an error (`torq_pipeline.q`, invariant 8), which
+    `.qtorq.assert_publishable` checks only when the publisher starts.
 
   Delivery is therefore at least once from the cursor's side, for rows the
-  tickerplant accepted and kept. Rows can still be lost: rows `memorybatch` held
-  when the tickerplant died, rows its error mode trapped, and rows sent onto a
+  tickerplant accepted and kept. Duplicates can still reach the tables: a page
+  republished without a `row_key`, a send repeated after the handle closed
+  mid-call, and the row-key gaps above. Each is logged, and the first is
+  counted. Rows can still be lost: rows `memorybatch` held when the tickerplant
+  died, rows its error mode trapped (unless `ack` is on), and rows sent onto a
   table it no longer defines.
-
-- **There is no reconnect.** The handle is the one `.qproc.stream.h` held when
-  the publish was wired at start, and nothing in the publish path reopens it.
-  After a tickerplant restart, restart the publisher, through
-  `uqs job attach NAME` for a runtime-only attachment, as above.
 
 ### Migration from the stage commands
 
@@ -336,7 +519,9 @@ Detach stops the publisher, then decides from evidence read off the stack, never
 from a flag this tool set, whether anything was published: tickerplant message
 and row counters and buffers, logs larger than the empty header, rows in the
 rdb/wdb, a partition in the wdb's save directory or the hdb. Evidence that
-cannot be read counts as publication.
+cannot be read counts as publication. With the stack on another machine, the
+tickerplant reads the logs and partitions on its disk (`disk_marks`); this
+machine never looks for those paths.
 
 - **Before any publication**, what the attachment *created* is removed in
   reverse order: the schema block, the consumers' table and subscription (or,
@@ -387,23 +572,25 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
 - **Persisted** in `attachment.json` and the manifest; `--clear-overrides`
   withdraws all of them, and is saved even when that leaves a blocker.
 
-  | Code                                                                                                                 | Overridable | Refused because / risk accepted                                                                                                                       |
-  | -----------------------------------------------------------------------------                                        | ----------- | -----------------------------------------------------------------------------------------------------------------                                     |
-  | `TORQ_VERSION`                                                                                                       | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                       |
-  | `SORT_CONFIG`                                                                                                        | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Declare a [sort rule](#sort-rules), or add a row first                             |
-  | `SORT_DECLARATION`, `SORT_CONFLICT`, `SORT_FILE`, `SORT_DRIFT`, `SORT_RELOAD_UNAVAILABLE`                            | no          | the declared sort rule is invalid, conflicts with the stack's rows, cannot be written or cannot be reloaded safely; see [Sort rules](#sort-rules)     |
-  | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                                              |
-  | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                              |
-  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                               |
-  | `UNTYPED_COLUMN`                                                                                                     | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                          |
-  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                    |
-  | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                        |
-  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                  |
-  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                             |
-  | `PERSIST_UNAVAILABLE`                                                                                                | no          | the registration could not survive a tickerplant restart (no writable local `-schemafile`); use `--runtime-only`                                      |
-  | `STORAGE_MISMATCH`                                                                                                   | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                       |
-  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER` | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                     |
-  | `ADVERTISED_LOOPBACK`, `ADVERTISED_UNRESOLVABLE`, `PUBLISHER_UNREACHABLE_FROM_STACK`                                 | no          | a stack on another machine could not connect back to the publisher: a loopback name, a name it cannot resolve, or a running publisher it cannot open  |
+  | Code                                                                                                                  | Overridable | Refused because / risk accepted                                                                                                                                               |
+  | -----------------------------------------------------------------------------                                         | ----------- | -----------------------------------------------------------------------------------------------------------------                                                             |
+  | `TORQ_VERSION`                                                                                                        | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                                               |
+  | `SORT_CONFIG`                                                                                                         | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Declare a [sort rule](#sort-rules), or add a row first                                                     |
+  | `SORT_DECLARATION`, `SORT_CONFLICT`, `SORT_FILE`, `SORT_DRIFT`, `SORT_RELOAD_UNAVAILABLE`                             | no          | the declared sort rule is invalid, conflicts with the stack's rows, cannot be written or cannot be reloaded safely; see [Sort rules](#sort-rules)                             |
+  | `PORT_CONFLICT`                                                                                                       | yes         | the publisher's port is held by another process; free it before starting                                                                                                      |
+  | `PUBLISHER_RUNNING`                                                                                                   | yes         | the publisher is running; rows published during registration may be lost                                                                                                      |
+  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                                | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                                                       |
+  | `UNTYPED_COLUMN`                                                                                                      | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                                                  |
+  | `NAME_RESERVED`                                                                                                       | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                                            |
+  | `STACK_MISMATCH`                                                                                                      | no          | a process answers but belongs to another stack                                                                                                                                |
+  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                         | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                                          |
+  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                   | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                                                     |
+  | `PERSIST_UNAVAILABLE`                                                                                                 | no          | the registration could not survive a tickerplant restart (no `-schemafile` this machine, or with `--remote-schema-file` the tickerplant, can append to); use `--runtime-only` |
+  | `STORAGE_MISMATCH`                                                                                                    | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                                               |
+  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER`  | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                                             |
+  | `ADVERTISED_LOOPBACK`, `ADVERTISED_UNRESOLVABLE`, `PUBLISHER_UNREACHABLE_FROM_STACK`                                  | no          | a stack on another machine could not connect back to the publisher: a loopback name, a name it cannot resolve, or a running publisher it cannot open                          |
+  | `STACK_UNREACHABLE_FROM_PUBLISHER`                                                                                    | no          | the running publisher could not open discovery or the tickerplant (or could not be asked)                                                                                     |
+  | `STACK_REFUSES_ATTACH_CREDENTIALS`, `STACK_REFUSES_PUBLISHER_CREDENTIALS`, `PUBLISHER_REFUSES_STACK_CREDENTIALS`      | no          | a credential was refused: the attachment's by the stack, the publisher's by the stack, or the stack's by the publisher; see [Credentials](#credentials-in-each-direction)     |
 
 Detach's refusals are destructive-cleanup protections and cannot be overridden.
 
@@ -625,15 +812,17 @@ asked again, and the readiness record advances only when each has answered.
 The registration lives in memory. By default (`schema-file`) apply appends one
 marked block to the tickerplant's `-schemafile` and leaves every other byte
 untouched, line endings included; removing the block restores the file exactly,
-whatever order attachments sharing the file are removed in. `--runtime-only`
-skips it.
+whatever order attachments sharing the file are removed in.
+`--remote-schema-file` has the tickerplant append the same block to its own file
+([above](#durable-registration-through-the-tickerplant)). `--runtime-only` skips
+it.
 
-  | State                          | A tickerplant restart                                                                                       |
-  | ------------------------------ | -------------------------------------------------------------------------------------------                 |
-  | applied, `schema-file` persist | the block recreates the table and its ownership record                                                      |
-  | applied, `--runtime-only`      | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attach NAME` restores it |
-  | rolled back                    | the block went with the registration: the table does not come back                                          |
-  | detached after publication     | the block stayed, so the table comes back and its logs replay                                               |
+  | State                                                  | A tickerplant restart                                                                                       |
+  | ------------------------------                         | -------------------------------------------------------------------------------------------                 |
+  | applied, `schema-file` or `remote-schema-file` persist | the block recreates the table and its ownership record                                                      |
+  | applied, `--runtime-only`                              | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attach NAME` restores it |
+  | rolled back                                            | the block went with the registration: the table does not come back                                          |
+  | detached after publication                             | the block stayed, so the table comes back and its logs replay                                               |
 
 End of day needs nothing extra: the tickerplant re-reads its tables then, and
 the wdb hands its table list to the sort process.
