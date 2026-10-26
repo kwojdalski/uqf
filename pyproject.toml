@@ -109,6 +109,8 @@ root = [
     "python/uqs/src",
     "python/uqf_frontend/src",
     "python/uqs/tests",
+    # The remote-stack lane's helpers, imported by its tests by bare name.
+    "tests/remote",
 ]
 
 # No [tool.ty.rules] block, deliberately.

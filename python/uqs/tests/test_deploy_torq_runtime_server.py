@@ -121,6 +121,44 @@ def test_a_tampered_runtime_is_refused_and_never_overwritten(tmp_path, change, s
     assert remote.puts == []
 
 
+def _with_python(tmp_path: Path) -> torq_runtime.Runtime:
+    repo = vendored(tmp_path / "repo-py", {**VENDORED, "lib/torq/helper.py": "x = 1\n"})
+    return torq_runtime.build_runtime(repo, tmp_path / "dist-py")
+
+
+def _cache(home: Path, name: str) -> None:
+    (home / "torq" / "__pycache__").mkdir(exist_ok=True)
+    (home / "torq" / "__pycache__" / name).write_bytes(b"\x00pyc")
+
+
+def test_a_pyc_python_wrote_for_a_shipped_source_is_a_cache_not_a_change(tmp_path):
+    """python-build-standalone ships no .pyc for some of its stdlib, so the
+    first run of a module writes one beside its verified source. CPython
+    checks it against that source before use. It does not make the runtime
+    another runtime."""
+    rt, dest = _with_python(tmp_path), tmp_path / "uqf"
+    _install(dest, rt)
+    home = Path(rt.directory(str(dest)))
+    _cache(home, "helper.cpython-314.pyc")
+    _cache(home, "helper.cpython-314.opt-1.pyc")
+    assert runtime_install.state(_dep(dest), rt) == runtime_install.REUSE
+
+
+@pytest.mark.parametrize(
+    ("name", "why"),
+    [
+        ("orphan.cpython-314.pyc", "no source the runtime shipped"),
+        ("helper.cpython-314.txt", "not a .pyc"),
+    ],
+)
+def test_anything_else_in_a_pycache_is_still_refused(tmp_path, name, why):
+    rt, dest = _with_python(tmp_path), tmp_path / "uqf"
+    _install(dest, rt)
+    _cache(Path(rt.directory(str(dest))), name)
+    with pytest.raises(DeployError, match="1 file\\(s\\) not in its manifest"):
+        _install(dest, rt, LocalRemote())
+
+
 def test_a_half_finished_install_is_replaced_never_used(tmp_path):
     rt, dest = _runtime(tmp_path, "a"), tmp_path / "uqf"
     partial = dest / torq_runtime.RUNTIMES_DIR / f".{rt.sha256}.partial"

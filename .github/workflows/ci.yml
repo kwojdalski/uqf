@@ -13,11 +13,14 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR makes its older run moot; on master every commit needs
+  # a finished result, or a red master goes unseen (31 of 52 master runs were
+  # cancelled before this).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
-    name: Repository checks
+    name: Hooks and static gates
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -26,7 +29,10 @@ jobs:
       # These govern local commits/branch names, not a detached PR merge ref.
       # q-docs-peachq would build PeachQ inside the hooks, before its cache is
       # restored; "Run the marked q blocks in docs/ on PeachQ" below covers it.
-      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq
+      # python-tests: the "PeachQ Python tests" job runs every testpath with a q,
+      # which is the same suite plus what needs a q - running it here too only
+      # doubled the time.
+      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -216,6 +222,23 @@ jobs:
         # in the declaring q files.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_declaration_reference.py
+  peachq-q:
+    name: PeachQ q tests
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    env:
+      UV_LOCKED: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install workspace dependencies
+        run: uv sync --locked
       - name: Restore PeachQ built from its pinned commit
         # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
         # have one - which makes it the only interpreter CI can run q with.
@@ -275,6 +298,80 @@ jobs:
         env:
           UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
         run: UQF_PEACHQ="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
+
+  peachq-python:
+    name: PeachQ Python tests
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    env:
+      UV_LOCKED: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install workspace dependencies
+        run: uv sync --locked
+      - name: Install qlinter (the gates' own tests use it)
+        shell: bash
+        # The q-traps hook delegates most of its rules to the
+        # standalone linter, and refuses rather than passing vacuously when
+        # it is missing. Pinned: the linter releases on its own cadence, and
+        # a new rule landing upstream must not turn this repository red
+        # without anyone choosing it. The pin lives in .qlinter-version, the
+        # one place it is written; the hook refuses any other version.
+        run: |
+          set -euo pipefail
+          read -r QLINT_VERSION < .qlinter-version
+          url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL "$url" -o /tmp/qlinter.tar.gz
+          tar xzf /tmp/qlinter.tar.gz -C /tmp
+          install -m755 "/tmp/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
+          qlinter --rules > /dev/null && echo "qlinter ${QLINT_VERSION} installed"
+      - name: Restore PeachQ built from its pinned commit
+        # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
+        # have one - which makes it the only interpreter CI can run q with.
+        #
+        # Built from a pinned COMMIT, not downloaded. The v0.88 release asset
+        # was rebuilt and re-uploaded under the same tag three times in five
+        # days (#578 and after), each turning every run red at the checksum
+        # until someone re-pinned to whatever upstream had published - which
+        # makes the pin a formality. A commit hash cannot change under us.
+        #
+        # The pin and the build options are scripts/peachq.json, the same
+        # file the local lanes build from (#719): moving either is one edit
+        # there, and it changes this key. The cache is the resolver's own
+        # (~/.cache/uqf/peachq), so a hit is a warm cache and needs no network.
+        id: peachq-cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uqf/peachq
+          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Provide PeachQ beside the tree
+        # scripts/peachq.py reuses the cached build, or fetches the pinned
+        # commit, checks it out, verifies the hash, builds it with this
+        # platform's options and identifies the result - about 40s, once per
+        # pin. It prints an absolute path and puts nothing on PATH: every
+        # other step still finds no q, so nothing here can be mistaken for a
+        # KDB-X run. It is reached only by the steps below, which name it
+        # through QCMD with UQF_Q_IMPL=peachq, and scripts/test.py asks the
+        # binary which q it is before any lane.
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(python3 scripts/peachq.py)"
+          # A binary that will not even start fails here, by name, rather
+          # than as a confusing first lane.
+          printf 'exit 0\n' > "$RUNNER_TEMP/peachq-smoke.q"
+          "$bin" "$RUNNER_TEMP/peachq-smoke.q" -q
+          echo "PEACHQ_BIN=$bin" >> "$GITHUB_ENV"
+          echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq.py --commit)" >> "$GITHUB_STEP_SUMMARY"
       - name: Install what a PeachQ stack needs
         # torq.sh needs envsubst and rlwrap (uqs's prerequisite check refuses a
         # start without them); the PeachQ runtime's whole-stack test below
@@ -294,9 +391,30 @@ jobs:
           UQF_Q_IMPL: peachq
           UQF_PEACHQ_STACK_TEST: "1"
           UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
-        # -n auto: in parallel (pytest-xdist); --dist loadgroup keeps the
-        # tests marked xdist_group (the whole-stack ones) on one worker.
-        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup python
+        # Every configured testpath (pyproject.toml), not just python/: the gates'
+        # own tests (scripts/gates/tests) ran only in the python-tests hook,
+        # which this job replaces in CI. -n auto: in parallel (pytest-xdist);
+        # --dist loadgroup keeps the tests marked xdist_group (the whole-stack
+        # ones) on one worker.
+        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup
+
+
+  # The one name branch protection requires: green only when every job above
+  # is. Kept as its own job so splitting or adding jobs never changes the
+  # required check's name.
+  repository-checks:
+    name: Repository checks
+    if: ${{ always() }}
+    needs: [checks, peachq-q, peachq-python]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "a required job did not succeed"; exit 1; }; done
 
   web:
     name: Browser application

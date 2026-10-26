@@ -46,6 +46,10 @@ between them:
   q-backfill-process   the bounded lifecycle end to end - locks, resumption
                        and coverage - which needs a real filesystem and real
                        child processes to be worth anything.
+  remote-stack         a TorQ stack in a Docker container standing in for another
+                       machine, attached to from a second one (#1650, #1651):
+                       publish, reach back, registration lost, remote writer.
+                       Needs Docker; PeachQ in the containers. Not in `all`.
   python               orchestration and the BFF.
   q-coverage           the q half of `coverage`: fails when a function no
                        test enters is not in tests/q/coverage_baseline.txt,
@@ -489,6 +493,100 @@ def lane_attach_stack() -> None:
     )
 
 
+#: The remote-stack lane's image: one per checkout state, rebuilt from cached
+#: layers when the tree changed (tests/remote/Dockerfile).
+REMOTE_IMAGE = "uqf-remote-stack:latest"
+REMOTE_LABEL = "uqf-remote-run"
+
+
+def _remote_context(tmp: Path) -> Path:
+    """The build context: the files git sees in the working tree (tracked, and
+    untracked but not ignored), so .venv, output/ and caches stay out. Written
+    with tarfile rather than tar, which on macOS adds extended attributes the
+    Docker daemon refuses."""
+    import tarfile
+
+    listed = subprocess.run(
+        ["git", "ls-files", "-co", "--exclude-standard", "-z"],
+        cwd=REPO,
+        capture_output=True,
+        check=True,
+    ).stdout.decode()
+    context = tmp / "context.tar"
+    # GNU, not PAX, and the Dockerfile first: docker tells an archive from a
+    # Dockerfile by parsing the first entry out of 1024 bytes, which a PAX
+    # extended header leaves too few of.
+    with tarfile.open(context, "w", format=tarfile.GNU_FORMAT) as tar:
+        tar.add(REPO / "tests/remote/Dockerfile", arcname="tests/remote/Dockerfile")
+        for name in filter(None, listed.split("\0")):
+            if name == "tests/remote/Dockerfile":
+                continue
+            path = REPO / name
+            if path.is_symlink() or path.is_file():
+                tar.add(path, arcname=name, recursive=False)
+    return context
+
+
+def _remote_sweep(run: str) -> None:
+    """Remove the containers and networks this run created - by its label, and
+    nothing else on the Docker host."""
+    label = f"label={REMOTE_LABEL}={run}"
+    for kind, listing in (("container", ["ps", "-aq"]), ("network", ["network", "ls", "-q"])):
+        ids = subprocess.run(
+            ["docker", *listing, "--filter", label], capture_output=True, text=True, check=False
+        ).stdout.split()
+        if ids:
+            remove = ["rm", "-f"] if kind == "container" else ["network", "rm"]
+            subprocess.run(["docker", *remove, *ids], capture_output=True, check=False)
+
+
+def lane_remote_stack() -> None:
+    """A TorQ stack on another machine, attached to from this tree (#1650, #1651).
+
+    The machines are Docker containers from tests/remote/Dockerfile (Linux
+    x86_64, PeachQ from the pin): uat-stack runs the stack, uat-client runs
+    `uqs`, the publisher and the extractor, and uat-laptop is a machine the
+    stack cannot resolve. tests/remote/remote_world.py says why `uqs` runs in a
+    container rather than on this host. The scenarios check their effects on
+    the stack through its published ports.
+
+    Builds the image (cached layers make a rebuild after an edit quick), runs
+    tests/remote with pytest, and removes this run's containers and networks
+    whatever happened. Everything it writes on this host is under one temp
+    directory. Needs Docker; asked for, not part of `all`.
+    """
+    _banner("remote-stack: a TorQ stack on another machine, in Docker")
+    if (
+        shutil.which("docker") is None
+        or subprocess.run(["docker", "info"], capture_output=True, check=False).returncode
+    ):
+        raise SystemExit("remote-stack: needs a running Docker (docker info failed)")
+    run = f"lane-{os.getpid()}"
+    with tempfile.TemporaryDirectory(prefix="uqf-remote-") as tmp:
+        try:
+            with open(_remote_context(Path(tmp)), "rb") as context:
+                built = subprocess.run(
+                    ["docker", "build", "--platform", "linux/amd64",
+                     "-f", "tests/remote/Dockerfile", "-t", REMOTE_IMAGE, "-"],
+                    stdin=context, check=False, timeout=3600,
+                )  # fmt: skip
+            if built.returncode:
+                raise LaneFailed("remote-stack", built.returncode)
+            _run(
+                "remote-stack",
+                ["uv", "run", "pytest", "-v", "-rs", "-p", "no:randomly",
+                 "-p", "no:cacheprovider", "--basetemp", f"{tmp}/pytest", "tests/remote"],
+                env={
+                    "UQF_REMOTE_STACK_TEST": "1",
+                    "UQF_REMOTE_IMAGE": REMOTE_IMAGE,
+                    "UQF_REMOTE_RUN": run,
+                },
+                timeout=3600,
+            )  # fmt: skip
+        finally:
+            _remote_sweep(run)
+
+
 # ---------------------------------------------------------------- coverage
 
 
@@ -562,13 +660,15 @@ LANES: dict[str, Callable[[], None]] = {
     "smoke": lane_smoke,
     "stack-smoke": lane_stack_smoke,
     "attach-stack": lane_attach_stack,
+    "remote-stack": lane_remote_stack,
 }
 
 #: The attach tests; the ones that start an isolated stack run only with
 #: UQS_ATTACH_STACK_TEST, which the attach-stack lane sets.
 ATTACH_TESTS = sorted((REPO / "python" / "uqs" / "tests").glob("test_attach_*.py"))
 
-#: `all` is every lane except smoke, stack-smoke, attach-stack, q-coverage and coverage.
+#: `all` is every lane except smoke, stack-smoke, attach-stack, remote-stack, q-coverage
+#: and coverage.
 #: coverage runs the q suite a second time under instrumentation;
 #: stack-smoke needs a licence, free ports and a couple of minutes because
 #: it starts the actual stack. Both are worth asking for and neither is
@@ -615,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=[*LANES, "all"],
         help=(
             "which suite to run; 'all' is every lane except smoke, stack-smoke, "
-            "attach-stack, q-coverage and coverage"
+            "attach-stack, remote-stack, q-coverage and coverage"
         ),
     )
     smoke = parser.add_argument_group("smoke lane only")
