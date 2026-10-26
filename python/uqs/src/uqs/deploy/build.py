@@ -59,7 +59,9 @@ from pathlib import Path
 from uqs.deploy import foreign_blocks, kafka, portable
 from uqs.deploy.artifact import (
     FORMAT,
+    INSTALLER,
     MANIFEST,
+    PACKAGING_MODE,
     PLATFORMS,
     REQUIREMENTS,
     WHEEL_DIR,
@@ -228,6 +230,10 @@ def build_artifact(
             "wheels": len(wheels),
         },
         "files": {name: _sha256(path) for name, path in sorted(members.items())},
+        # what the artifact is (#1646): the tree with every Python dependency as a
+        # locked wheel, installable with no network - by `uqs deploy push`, or on
+        # the server by the installer it carries
+        "packaging": {"mode": PACKAGING_MODE, "installer": INSTALLER},
     }
     if bundles:
         manifest["bundles"] = bundles

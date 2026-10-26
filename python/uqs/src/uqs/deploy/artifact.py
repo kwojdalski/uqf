@@ -25,6 +25,10 @@ MANIFEST = "RELEASE_MANIFEST.json"
 RELEASE_DIR = ".release"
 REQUIREMENTS = f"{RELEASE_DIR}/requirements.txt"
 WHEEL_DIR = f"{RELEASE_DIR}/wheels"
+#: How a release is packaged (#1646): its dependencies inside it, as wheels.
+PACKAGING_MODE = "offline"
+#: The stdlib-only script that installs an unpacked release in place, offline.
+INSTALLER = "scripts/install_release.py"
 
 #: The architectures a release can target, and the wheel platform tags pip
 #: may take for each, newest glibc baseline first. A pure-Python wheel
