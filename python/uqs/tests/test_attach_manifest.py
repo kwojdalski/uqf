@@ -427,7 +427,10 @@ def test_the_start_path_refuses_a_publisher_that_is_not_verified(att, state, mon
         with pytest.raises(UqsError, match=f"which is {status}"):
             attach_state.refuse_unverified_start(paths, "pb_ledger1", 6000)
     saved(att, state, "verified")
+    asked: list[str] = []
+    monkeypatch.setattr(attach_state, "live_check", asked.append)  # test_attach_live_check.py
     attach_state.refuse_unverified_start(paths, "pb_ledger1", 6000)
+    assert asked == ["pb-uat"]
 
 
 def test_the_publisher_is_never_started_under_the_runtimes_default_port(att, state, monkeypatch):

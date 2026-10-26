@@ -116,7 +116,14 @@ the stack's machine.
   re-applied. With the stack elsewhere they add that nothing on this machine is
   told of that restart: stop the publisher, then run `uqs job attach NAME`.
   `uqs job attach` re-verifies that the tickerplant still holds the table before
-  it starts the publisher. A bare `uqs start` checks only the saved state.
+  it starts the publisher. So does every other start of it (`uqs start`, a
+  profile, the MCP server, the browser): for a runtime-only attachment or a
+  stack on another machine, the start gate asks the tickerplant, with the
+  read-only `probe` and a 3-second timeout, whether each attached table is still
+  one of its tables and its pub/sub tables. A table it lost refuses the start,
+  naming the table, the stack and `uqs job attach NAME` to re-apply. A stack
+  that does not answer refuses it too: unknown is not read as registered. An
+  attachment on this machine with schema-file persistence is not asked.
 
 #### What a publish acknowledges
 
