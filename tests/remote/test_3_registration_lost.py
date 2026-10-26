@@ -14,10 +14,6 @@ from __future__ import annotations
 import pytest
 from remote_world import PUBLISHER, TABLE, World, live_rows, stages, stp_tables, wait_for
 
-#: What #1673 adds: the start path re-asks the stack. Absent, a bare start
-#: checks only the saved state, and there is nothing to test.
-LIVE_CHECK = "python/uqs/src/uqs/attach/live.py"
-
 
 @pytest.fixture(scope="module")
 def restarted(world: World) -> World:
@@ -40,11 +36,6 @@ def test_a_dry_run_reports_the_registration_lost(restarted: World):
 
 
 def test_a_bare_start_is_refused_naming_the_reapply(restarted: World):
-    if restarted.client.sh(f"test -f {LIVE_CHECK}").returncode != 0:
-        pytest.skip(
-            f"#1673 is not in this tree ({LIVE_CHECK} is absent): a bare `uqs start` "
-            "checks only the saved state, so it would start a publisher whose table is gone"
-        )
     done = restarted.client.uqs("start", PUBLISHER, "--port", str(restarted.base))
     assert done.returncode != 0, done.stdout
     assert "uqs job attach feed-uat" in done.stdout + done.stderr

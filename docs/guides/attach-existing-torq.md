@@ -861,7 +861,7 @@ published ports, not through `uqs`:
   | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                       |
   | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                   |
   | the tickerplant and rdb restarted                                                         | the table gone; `--dry-run` reports `registration-lost`; `uqs job attach` registers it again and rows flow                                                    |
-  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply. Skipped until the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                           |
+  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                         |
   | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | the rows served by hdb1, and no HDB on uat-client. Skipped on PeachQ: TorQ's wdb does not load there (`.Q.chk`), and without a wdb the attachment pins no HDB |
 
 The lane found that a publisher attached to a stack elsewhere looked for
