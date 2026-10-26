@@ -45,6 +45,15 @@ from uqs.model.qnames import config_env_var
 #: purpose - see the module docstring.
 LIFECYCLE_ACTIONS = ("start", "stop", "restart")
 
+#: process.csv fields HTTP may NOT override, though `uqs config set` may.
+#: torq.sh composes `sline="$qcmd ..."` and evals it on the next start, so a
+#: `qcmd` built only from the characters the #1041 whitelist allows still names
+#: the program the stack host runs - and the same token can then start it
+#: (#1658). `host` chooses which machine a process is started on. Both stay
+#: settable from a terminal on the host, by someone who could run a program
+#: there anyway.
+HTTP_REFUSED_FIELDS = frozenset({"qcmd", "host"})
+
 
 @dataclass(frozen=True)
 class CommandResult:
@@ -152,6 +161,12 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     sometimes not bother.
     """
     require_writes(settings)
+    if field in HTTP_REFUSED_FIELDS:
+        raise ValidationFailed(
+            f"{field!r} cannot be set over HTTP - it chooses what or where the stack "
+            f"runs; set it with `uqs config set` on the host. Settable here: "
+            f"{settable_fields(settings)}"
+        )
     from uqs.paths import UqsError
     from uqs.stack import procs as stack_procs
 
@@ -164,15 +179,17 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
 
 
 def settable_fields(settings: Settings) -> list[str]:
-    """Which process.csv fields may be overridden.
+    """Which process.csv fields may be overridden over HTTP.
 
     Served so a UI can offer a closed list rather than a free-text box. The
-    orchestrator's whitelist is the authority; echoing it here means the two
-    cannot drift.
+    orchestrator's columns less HTTP_REFUSED_FIELDS: a column added there is
+    settable here without a second list to update, and a refused one cannot
+    come back by being re-listed. Imported here, not at module scope, so a
+    read-only deployment loads nothing of uqs.paths.
     """
     from uqs.model.pipelines import PROCESS_CSV_FIELDS
 
-    return sorted(PROCESS_CSV_FIELDS)
+    return sorted(f for f in PROCESS_CSV_FIELDS if f not in HTTP_REFUSED_FIELDS)
 
 
 def process_choices(settings: Settings) -> list[dict[str, Any]]:
