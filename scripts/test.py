@@ -40,6 +40,9 @@ between them:
   q-two-instances      a second kdb+ process is started on the starter
                        pack's HDB and a bounded worker moves trades out of
                        it - the only lane in which a worker's LIVE path runs.
+  q-remote-writer      a second kdb+ process owns an HDB and a bounded worker
+                       here writes into it over IPC (#1650): admission, a
+                       lost acknowledgement, and coverage after commit.
   q-backfill-process   the bounded lifecycle end to end - locks, resumption
                        and coverage - which needs a real filesystem and real
                        child processes to be worth anything.
@@ -409,6 +412,12 @@ def lane_q_two_instances() -> None:
         _q("q-two-instances", "tests/q/run_two_instances.q", env={"UQF_STATUS_DIR": statusdir})
 
 
+def lane_q_remote_writer() -> None:
+    _banner("q-remote-writer: a backfill extracted here and written by another process")
+    with tempfile.TemporaryDirectory() as statusdir:
+        _q("q-remote-writer", "tests/q/run_remote_writer.q", env={"UQF_STATUS_DIR": statusdir})
+
+
 def lane_python() -> None:
     _banner("python: orchestrator and frontend")
     _run("python", ["uv", "run", "pytest", "-q"])
@@ -541,6 +550,7 @@ LANES: dict[str, Callable[[], None]] = {
     "q-docs": lane_q_docs,
     "q-docs-peachq": lane_q_docs_peachq,
     "q-two-instances": lane_q_two_instances,
+    "q-remote-writer": lane_q_remote_writer,
     "python": lane_python,
     "bundles": lane_bundles,
     "q-coverage": lane_q_coverage,
@@ -569,6 +579,7 @@ ALL = [
     "q-docs-peachq",
     "q-backfill-process",
     "q-two-instances",
+    "q-remote-writer",
     "q-metatables-hdb",
     "python",
     "bundles",
