@@ -344,6 +344,34 @@ def test_an_unknown_field_is_refused_by_the_orchestrator_whitelist(writeable, mo
     assert "nope" in resp.json()["detail"]
 
 
+@pytest.mark.parametrize("field", ["qcmd", "host"])
+def test_a_field_that_chooses_what_or_where_the_stack_runs_is_refused(
+    writeable, monkeypatch, field
+):
+    """#1658: torq.sh evals `$qcmd ...` on the next start, so a qcmd made only
+    of whitelisted characters still names the program the host runs, and the
+    same token can start it. HTTP refuses it before the orchestrator is
+    reached; `uqs config set` on the host still may."""
+    written: list[Any] = []
+    _patch_core(
+        monkeypatch,
+        list_process_names=lambda p: ["rdb1"],
+        _write_overrides=lambda p, o: written.append(o),
+    )
+    resp = writeable.put("/control/process/rdb1/config", json={"field": field, "value": "touch x"})
+    assert resp.status_code == 422, resp.text
+    assert "uqs config set" in resp.json()["detail"]
+    assert written == []
+
+
+def test_the_fields_offered_over_http_exclude_the_cli_only_ones(writeable, monkeypatch):
+    _patch_core(monkeypatch, list_process_choices=lambda paths: [])
+    fields = writeable.get("/control").json()["settable_fields"]
+    assert "qcmd" not in fields
+    assert "host" not in fields
+    assert "extras" in fields
+
+
 def test_a_value_torq_sh_would_split_is_refused_before_it_is_written(writeable, monkeypatch):
     """#777: the write API reaches the same setter, and the same refusal."""
     written: list[Any] = []
