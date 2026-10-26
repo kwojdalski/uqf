@@ -9,6 +9,16 @@ asked, with the read-only `reach` operation, to open a handle to the publisher
 at `advertised_host:port` - with the stack's own credentials, as TorQ's
 `.servers.opencon` would - and close it at once.
 
+The other direction is asked of the publisher itself, with the same `reach`
+operation: can IT open a handle to discovery and to the tickerplant, with its
+own TorQ credential (`.servers.USERPASS`, from its passwords files) - the one
+it publishes with, which is not the attachment's `--user`. uqs asks the
+publisher with its own local credential (remote.LOCAL_USER).
+
+A refused credential is q's `access`, and is said as that, in each direction
+(STACK_REFUSES_PUBLISHER_CREDENTIALS, PUBLISHER_REFUSES_STACK_CREDENTIALS),
+not as an unreachable address.
+
 It runs where the publisher is known to be up: in verify when the publisher
 already listens here, and in the workflow right after starting it. A stack on
 this machine needs none of it - any name it lists reaches this machine.
@@ -27,6 +37,14 @@ from uqs.attach.publisher import Publisher
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 
 CODE = "PUBLISHER_UNREACHABLE_FROM_STACK"
+#: The stack's credential refused by the publisher.
+REFUSED = "PUBLISHER_REFUSES_STACK_CREDENTIALS"
+#: The publisher cannot open the stack's discovery or tickerplant.
+OUTBOUND = "STACK_UNREACHABLE_FROM_PUBLISHER"
+#: The publisher's own credential refused by the stack.
+OUTBOUND_REFUSED = "STACK_REFUSES_PUBLISHER_CREDENTIALS"
+#: What q's hopen signals for a credential the other side's -U or .z.pw refuses.
+ACCESS = "access"
 #: How long discovery waits for the handle: what TorQ's own .servers.HOPENTIMEOUT defaults to.
 TIMEOUT_MS = 2000
 #: How long a publisher just started has to start listening and answer the stack.
@@ -61,6 +79,17 @@ def check(att: Attachment, ipc: Ipc, port: int) -> Finding | None:
 
 def unreachable(att: Attachment, where: str, reason: str) -> Finding:
     pub = att.publisher.procname
+    if reason == ACCESS:
+        return Finding(
+            "blocker",
+            REFUSED,
+            pub,
+            f"{pub} at {where} refuses the credential the stack on {att.stack.host} connects "
+            "with (q's `access`)",
+            f"add the stack's TorQ user to {pub}'s access list (passwords/accesslist.txt), "
+            f"then run `uqs job attach {att.name}` again",
+            {"address": where},
+        )
     return Finding(
         "blocker",
         CODE,
@@ -72,12 +101,60 @@ def unreachable(att: Attachment, where: str, reason: str) -> Finding:
     )
 
 
+def outbound(att: Attachment, ipc: Ipc, port: int, tickerplant: Endpoint | None) -> Finding | None:
+    """Ask the running publisher to open and close a handle to discovery and to the
+    tickerplant, with its own credential; None when it could open both."""
+    pub, st = att.publisher.procname, att.stack
+    me = Endpoint(pub, PUBLISHER_HOST, port, local=True)
+    targets = [Endpoint("discovery", st.discovery_host, st.discovery_port)]
+    targets += [tickerplant] if tickerplant is not None else []
+    for t in targets:
+        request = {"host": t.host, "port": t.port, "timeout": TIMEOUT_MS}
+        try:
+            answer = ipc.call(me, "reach", request)
+        except IpcError as exc:
+            return _outbound(att, t, f"{pub} could not be asked: {exc.reason}")
+        if answer.get("reached") is not True:
+            return _outbound(att, t, str(answer.get("error") or "no reason given"))
+    return None
+
+
+def _outbound(att: Attachment, target: Endpoint, reason: str) -> Finding:
+    pub, where = att.publisher.procname, f"{target.host}:{target.port}"
+    facts = {"address": where, "process": target.procname}
+    if reason == ACCESS:
+        return Finding(
+            "blocker",
+            OUTBOUND_REFUSED,
+            pub,
+            f"{target.procname} at {where} refuses the credential {pub} connects with "
+            "(its .servers.USERPASS; q's `access`), so its rows would never be published",
+            f"give {pub} a credential {target.procname}'s access list accepts (passwords/"
+            f"<name>.txt in its TorQ config), then run `uqs job attach {att.name}` again",
+            facts,
+        )
+    return Finding(
+        "blocker",
+        OUTBOUND,
+        pub,
+        f"{pub} cannot connect to {target.procname} at {where}: {reason}",
+        f"open {where} to this machine, then run `uqs job attach {att.name}` again",
+        facts,
+    )
+
+
+def both(att: Attachment, ipc: Ipc, port: int, tickerplant: Endpoint | None) -> Finding | None:
+    """The publisher reaches the stack, then the stack reaches the publisher."""
+    return outbound(att, ipc, port, tickerplant) or check(att, ipc, port)
+
+
 def after_start(
     att: Attachment,
     ipc: Ipc,
     port: int,
     publisher: Publisher,
     *,
+    tickerplant: Endpoint | None = None,
     wait_s: float | None = None,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
@@ -87,7 +164,7 @@ def after_start(
     deadline = clock() + (START_WAIT_S if wait_s is None else wait_s)
     while True:
         if publisher.running(att):
-            found = check(att, ipc, port)
+            found = both(att, ipc, port, tickerplant)
         else:
             found = unreachable(
                 att, address(att, port), f"{att.publisher.procname} is not listening on {port} here"
@@ -97,11 +174,19 @@ def after_start(
         sleep(1.0)
 
 
-def checks(att: Attachment, ipc: Ipc, port: int | None, host: Host) -> list[tuple[str, bool, str]]:
-    """For verify, as (name, ok, detail): the check, when the publisher already
-    listens here; nothing to try otherwise."""
+def checks(
+    att: Attachment, ipc: Ipc, port: int | None, host: Host, tickerplant: Endpoint | None
+) -> list[tuple[str, bool, str]]:
+    """For verify, as (name, ok, detail): both directions, when the publisher
+    already listens here; nothing to try otherwise."""
     if port is None or not applies(att, host) or not host.listening(PUBLISHER_HOST, port):
         return []
-    found = check(att, ipc, port)
-    name = f"the stack reaches {att.publisher.procname} at {address(att, port)}"
-    return [(name, found is None, f"{found.code}: {found.message}" if found else "")]
+    pub = att.publisher.procname
+    out = outbound(att, ipc, port, tickerplant)
+    back = check(att, ipc, port)
+    return [
+        (f"{pub} reaches the stack with its own credential", out is None,
+         f"{out.code}: {out.message}" if out else ""),
+        (f"the stack reaches {pub} at {address(att, port)}", back is None,
+         f"{back.code}: {back.message}" if back else ""),
+    ]  # fmt: skip

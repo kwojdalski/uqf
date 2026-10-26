@@ -66,12 +66,13 @@ A new attachment needs `--job` and `--stack-id`; `--host` (default `localhost`),
 `--discovery HOST:PORT` (default: the stack id + 1; its HOST must be the
 `--host` machine, since a stack is attached on one host), `--tickerplant`,
 `--consumer` (default: all), `--user`, `--password-env`,
-`--tplogdir`/`--schema-file` (pin storage) and `--runtime-only` are optional.
-After the first execution the attachment is reused by name. Options that
-contradict the saved ones are refused; `--replace` rebuilds it from them,
-keeping its manifest and accepted risks, and is refused while the manifest holds
-changes on another stack or for other tables. Credentials are redacted from
-every output. `uqs job attach --help` lists the rest.
+`--tplogdir`/`--schema-file` (pin storage), `--runtime-only` and
+`--remote-schema-file` are optional. After the first execution the attachment is
+reused by name. Options that contradict the saved ones are refused; `--replace`
+rebuilds it from them, keeping its manifest and accepted risks, and is refused
+while the manifest holds changes on another stack or for other tables.
+Credentials are redacted from every output. `uqs job attach --help` lists the
+rest.
 
 ### A publisher on this machine, a stack on another (#1651)
 
@@ -109,14 +110,138 @@ the stack's machine.
   fails, so it is never reported attached. Verify asks the same question
   whenever the publisher already runs here. The code cannot be overridden.
 
-- **Runtime-only is the only persistence for a remote stack**, since the
-  tickerplant's schema file is on another machine (`PERSIST_UNAVAILABLE`
-  otherwise). The plan's `RUNTIME_ONLY` warning and verify's output both say
-  that a tickerplant restart drops the registration and the attachment must be
+- **The tickerplant's schema file is on the stack's machine**, so this machine
+  never opens its path. The default, `schema-file`, is refused there with
+  `PERSIST_UNAVAILABLE`, which names the three ways out:
+  - `--remote-schema-file`: the tickerplant writes the block itself (below);
+  - `--runtime-only`: no block, and the registration is lost on a restart;
+  - run `uqs` on the stack's machine.
+
+- **Runtime-only** is the persistence that needs nothing of the stack's disk.
+  The plan's `RUNTIME_ONLY` warning and verify's output both say that a
+  tickerplant restart drops the registration and the attachment must be
   re-applied. With the stack elsewhere they add that nothing on this machine is
   told of that restart: stop the publisher, then run `uqs job attach NAME`.
   `uqs job attach` re-verifies that the tickerplant still holds the table before
   it starts the publisher. A bare `uqs start` checks only the saved state.
+
+#### Durable registration through the tickerplant
+
+`--remote-schema-file` is recorded in the attachment as
+`persist: remote-schema-file`, like `--runtime-only`. It is not a flag for one
+run, and it excludes `--runtime-only`. The block is the one `schema-file`
+writes, with the same token, and only the process that writes it changes:
+
+- **The tickerplant changes its own file.** The `schema_file` operation runs in
+  the tickerplant, on the file it was started with (`-schemafile`), never on a
+  path taken from the request. It needs no remote filesystem access, no SSH and
+  no new service: only the q IPC and the credential every other operation uses.
+
+- **Python composes, the tickerplant checks.** `uqs` reads the file through the
+  tickerplant and computes one append or one cut, by the rules `schema-file`
+  uses. The tickerplant refuses the change unless:
+  - the file's md5 is still the one the change was computed from;
+  - an append is exactly one whole block for this name and token, after a
+    newline only when the file lacks a final one, and the file does not hold
+    that block yet;
+  - a cut removes exactly that block, from the start of a line, and at most the
+    file's final newline.
+
+- **How the bytes are written.** An append opens the file for appending, so the
+  bytes already there are never rewritten. A cut keeps the old bytes in
+  `<file>.uqs-attach.bak`, writes the new ones to `<file>.uqs-attach.tmp` and
+  `cp`s them over the file, which keeps its mode, owner and inode. It reads the
+  file back, then deletes both. If the copy fails, the backup stays for a
+  person.
+
+- **Preflight asks the tickerplant, too.** The plan reports `WILL_PERSIST` or
+  `ALREADY_PERSISTED`, or refuses with `PERSIST_UNAVAILABLE` when the file:
+  - is not given (`-schemafile`);
+  - does not exist on the stack's machine;
+  - cannot be appended to by the tickerplant's user;
+  - is one uqf generates.
+
+- **Journalled and checked like the local block.** The manifest's `schema_block`
+  (or `schema_uses`) step records the tickerplant as the block's `process`.
+  Verify, detach's drift check and the removal read the block back through that
+  tickerplant, whatever the attachment's settings say later. A tickerplant that
+  cannot be asked is a refusal, never a local read.
+
+- **Reversed before publication only.** On a stack elsewhere the publication
+  evidence on disk is read by the tickerplant too (`disk_marks`, read-only):
+  - earlier days' logs;
+  - a partition in the wdb's save directory or in the HDB.
+
+  So detach can tell "nothing was published", remove the block through the
+  tickerplant, and then roll back the rest in reverse order. After publication
+  the block stays, as it does on one machine.
+
+The operation runs code, through the tickerplant's access list, in a process
+other people depend on. It only appends or cuts a block it can check, but the
+block is q that the tickerplant runs at every start. Anyone the access list lets
+send this already has that power, so the opt-in grants no new privilege. It does
+record, in the attachment, that the stack's operators agreed to it.
+
+#### Credentials, in each direction
+
+Three credentials meet when the stack is elsewhere. Each refusal has its own
+code, so it is not reported as an unreachable address. None can be overridden.
+
+  | Credential                                                                      | Used for                                                             | Refused                                                                                                                      |
+  | ------------------------------------------------------------------------------- | -------------------------------------------------------------------  | ----------------------------------------------------------------------------------------------------------------             |
+  | The attachment's (`--user`, `--password-env`)                                   | `uqs` asking the stack's processes, at plan, apply, verify, detach   | `STACK_REFUSES_ATTACH_CREDENTIALS`, from kola's authentication failure, in place of `DISCOVERY_UNREACHABLE` or `UNREACHABLE` |
+  | The publisher's own TorQ credential (`.servers.USERPASS`, its passwords files)  | the publisher connecting to discovery and the tickerplant            | `STACK_REFUSES_PUBLISHER_CREDENTIALS`                                                                                        |
+  | The stack's (discovery's `.servers.USERPASS`)                                   | discovery connecting back to the publisher                           | `PUBLISHER_REFUSES_STACK_CREDENTIALS`                                                                                        |
+
+The two directions are tried with the read-only `reach` operation once the
+publisher runs, straight after the start and in verify: - **The publisher to the
+stack.** `uqs` asks the running publisher, with its own local credential, to
+open and close a handle to discovery and to the tickerplant. The publisher opens
+it with its own credential, the one it publishes with. - **The stack to the
+publisher.** Discovery is asked to open a handle to `advertised_host:port`.
+
+q's `access` is the refusal in both directions. Any other failure is
+`STACK_UNREACHABLE_FROM_PUBLISHER` or `PUBLISHER_UNREACHABLE_FROM_STACK`. As
+with reaching back, a failure after the start closes the gate again and stops
+the publisher this run started. Verify reports each direction as its own check.
+
+The tickerplant is tried at the address `uqs` reached it at. If discovery lists
+it under a loopback name, the publisher's own TorQ connects to that literal name
+instead, which is this machine, not the stack's.
+
+#### What one machine has not shown
+
+`test_attach_two_hosts.py` runs these operations against real KDB-X processes on
+one machine: - the stack's processes are asked at this machine's host name,
+which is not `localhost` and resolves to a non-loopback address, and the
+attachment treats that host as remote; - the publisher is advertised under this
+machine's IPv4 address, another name than the stack host, and discovery connects
+back to that; - each process enforces its own access list (`-U`), with a
+separate credential for each direction.
+
+The tickerplant appends and removes the block in its own file, leaving its
+bytes, mode and inode as they were. It refuses a stale or malformed change, and
+reads the publication evidence off its disk. Each credential refusal comes back
+as its own code.
+
+Still unverified without a second machine: - **A network between them.** No
+firewall, NAT, VPN or routing: every connection stays inside one host's network
+stack, so a port the stack's machine cannot open is never seen. - **Name
+resolution that differs by side.** Both "machines" share one resolver and one
+hosts file. A name that resolves here and not on the stack's machine (or to a
+different address) is caught only by discovery's own `.Q.addr` check, which ran
+on the same host. - **Separate file systems and users.** The tickerplant here
+runs as the same OS user as the tests, on a disk `uqs` could also read. That no
+local read happens is shown with the fake stack, whose schema file is at a path
+that does not exist here, not by a real second disk. The tickerplant's own user,
+owner and permissions on a shared production file are untested. - **A whole TorQ
+stack on the other machine.** The lane runs plain q processes with the attach
+operations, not TorQ's discovery, tickerplant, rdb and wdb. The full workflow
+against TorQ runs in the attach-stack suite on one host. - **Acceptance
+criterion 1**, a local publisher sending rows to an isolated remote tickerplant
+and its consumers, end to end. - **Clocks, latency and timeouts** across a real
+link: the 2-second `reach` timeout and the 30-second start wait were never
+tested over a slow path.
 
 #### What a publish acknowledges
 
@@ -329,7 +454,9 @@ Detach stops the publisher, then decides from evidence read off the stack, never
 from a flag this tool set, whether anything was published: tickerplant message
 and row counters and buffers, logs larger than the empty header, rows in the
 rdb/wdb, a partition in the wdb's save directory or the hdb. Evidence that
-cannot be read counts as publication.
+cannot be read counts as publication. With the stack on another machine, the
+tickerplant reads the logs and partitions on its disk (`disk_marks`); this
+machine never looks for those paths.
 
 - **Before any publication**, what the attachment *created* is removed in
   reverse order: the schema block, the consumers' table and subscription (or,
@@ -380,23 +507,25 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
 - **Persisted** in `attachment.json` and the manifest; `--clear-overrides`
   withdraws all of them, and is saved even when that leaves a blocker.
 
-  | Code                                                                                                                 | Overridable | Refused because / risk accepted                                                                                                                       |
-  | -----------------------------------------------------------------------------                                        | ----------- | -----------------------------------------------------------------------------------------------------------------                                     |
-  | `TORQ_VERSION`                                                                                                       | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                       |
-  | `SORT_CONFIG`                                                                                                        | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Declare a [sort rule](#sort-rules), or add a row first                             |
-  | `SORT_DECLARATION`, `SORT_CONFLICT`, `SORT_FILE`, `SORT_DRIFT`, `SORT_RELOAD_UNAVAILABLE`                            | no          | the declared sort rule is invalid, conflicts with the stack's rows, cannot be written or cannot be reloaded safely; see [Sort rules](#sort-rules)     |
-  | `PORT_CONFLICT`                                                                                                      | yes         | the publisher's port is held by another process; free it before starting                                                                              |
-  | `PUBLISHER_RUNNING`                                                                                                  | yes         | the publisher is running; rows published during registration may be lost                                                                              |
-  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                               | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                               |
-  | `UNTYPED_COLUMN`                                                                                                     | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                          |
-  | `NAME_RESERVED`                                                                                                      | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                    |
-  | `STACK_MISMATCH`                                                                                                     | no          | a process answers but belongs to another stack                                                                                                        |
-  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                        | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                  |
-  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                  | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                             |
-  | `PERSIST_UNAVAILABLE`                                                                                                | no          | the registration could not survive a tickerplant restart (no writable local `-schemafile`); use `--runtime-only`                                      |
-  | `STORAGE_MISMATCH`                                                                                                   | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                       |
-  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER` | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                     |
-  | `ADVERTISED_LOOPBACK`, `ADVERTISED_UNRESOLVABLE`, `PUBLISHER_UNREACHABLE_FROM_STACK`                                 | no          | a stack on another machine could not connect back to the publisher: a loopback name, a name it cannot resolve, or a running publisher it cannot open  |
+  | Code                                                                                                                  | Overridable | Refused because / risk accepted                                                                                                                                               |
+  | -----------------------------------------------------------------------------                                         | ----------- | -----------------------------------------------------------------------------------------------------------------                                                             |
+  | `TORQ_VERSION`                                                                                                        | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                                               |
+  | `SORT_CONFIG`                                                                                                         | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Declare a [sort rule](#sort-rules), or add a row first                                                     |
+  | `SORT_DECLARATION`, `SORT_CONFLICT`, `SORT_FILE`, `SORT_DRIFT`, `SORT_RELOAD_UNAVAILABLE`                             | no          | the declared sort rule is invalid, conflicts with the stack's rows, cannot be written or cannot be reloaded safely; see [Sort rules](#sort-rules)                             |
+  | `PORT_CONFLICT`                                                                                                       | yes         | the publisher's port is held by another process; free it before starting                                                                                                      |
+  | `PUBLISHER_RUNNING`                                                                                                   | yes         | the publisher is running; rows published during registration may be lost                                                                                                      |
+  | `SCHEMA_INCOMPATIBLE`, `NOT_PUBLISHED`                                                                                | no          | the table exists with other columns or order (no conversion), or is not a pub/sub table                                                                                       |
+  | `UNTYPED_COLUMN`                                                                                                      | no          | a saved attachment has an untyped `()` column (a bundle cannot: the bundle itself is refused); declare a type and plan again                                                  |
+  | `NAME_RESERVED`                                                                                                       | no          | the name is a global, namespace, keyword or partition name on a process; it would be overwritten. Rename the table                                                            |
+  | `STACK_MISMATCH`                                                                                                      | no          | a process answers but belongs to another stack                                                                                                                                |
+  | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                         | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                                          |
+  | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                   | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                                                     |
+  | `PERSIST_UNAVAILABLE`                                                                                                 | no          | the registration could not survive a tickerplant restart (no `-schemafile` this machine, or with `--remote-schema-file` the tickerplant, can append to); use `--runtime-only` |
+  | `STORAGE_MISMATCH`                                                                                                    | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                                               |
+  | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER`  | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                                             |
+  | `ADVERTISED_LOOPBACK`, `ADVERTISED_UNRESOLVABLE`, `PUBLISHER_UNREACHABLE_FROM_STACK`                                  | no          | a stack on another machine could not connect back to the publisher: a loopback name, a name it cannot resolve, or a running publisher it cannot open                          |
+  | `STACK_UNREACHABLE_FROM_PUBLISHER`                                                                                    | no          | the running publisher could not open discovery or the tickerplant (or could not be asked)                                                                                     |
+  | `STACK_REFUSES_ATTACH_CREDENTIALS`, `STACK_REFUSES_PUBLISHER_CREDENTIALS`, `PUBLISHER_REFUSES_STACK_CREDENTIALS`      | no          | a credential was refused: the attachment's by the stack, the publisher's by the stack, or the stack's by the publisher; see [Credentials](#credentials-in-each-direction)     |
 
 Detach's refusals are destructive-cleanup protections and cannot be overridden.
 
@@ -586,15 +715,17 @@ asked again, and the readiness record advances only when each has answered.
 The registration lives in memory. By default (`schema-file`) apply appends one
 marked block to the tickerplant's `-schemafile` and leaves every other byte
 untouched, line endings included; removing the block restores the file exactly,
-whatever order attachments sharing the file are removed in. `--runtime-only`
-skips it.
+whatever order attachments sharing the file are removed in.
+`--remote-schema-file` has the tickerplant append the same block to its own file
+([above](#durable-registration-through-the-tickerplant)). `--runtime-only` skips
+it.
 
-  | State                          | A tickerplant restart                                                                                       |
-  | ------------------------------ | -------------------------------------------------------------------------------------------                 |
-  | applied, `schema-file` persist | the block recreates the table and its ownership record                                                      |
-  | applied, `--runtime-only`      | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attach NAME` restores it |
-  | rolled back                    | the block went with the registration: the table does not come back                                          |
-  | detached after publication     | the block stayed, so the table comes back and its logs replay                                               |
+  | State                                                  | A tickerplant restart                                                                                       |
+  | ------------------------------                         | -------------------------------------------------------------------------------------------                 |
+  | applied, `schema-file` or `remote-schema-file` persist | the block recreates the table and its ownership record                                                      |
+  | applied, `--runtime-only`                              | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attach NAME` restores it |
+  | rolled back                                            | the block went with the registration: the table does not come back                                          |
+  | detached after publication                             | the block stayed, so the table comes back and its logs replay                                               |
 
 End of day needs nothing extra: the tickerplant re-reads its tables then, and
 the wdb hands its table list to the sort process.

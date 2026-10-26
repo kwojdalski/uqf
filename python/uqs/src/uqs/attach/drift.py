@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from uqs.attach import persist, sorting
-from uqs.attach.config import Attachment
+from uqs.attach import persist, schema_files, sorting
+from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.manifest import CREATED, DONE, PENDING, SHARED, Manifest, Op
 from uqs.attach.outcome import BLOCKS, CONSUMER_OPS
+from uqs.attach.remote import Ipc
 from uqs.attach.schema import differences
 from uqs.attach.topology import Observation, Proc
 
@@ -30,7 +31,7 @@ def plant_ours(obs: Observation, m: Manifest) -> set[str]:
     return {t for t, led in tp.get("owned", {}).items() if led.get("token") == m.token}
 
 
-def drift(att: Attachment, obs: Observation, m: Manifest) -> list[Blocker]:
+def drift(att: Attachment, obs: Observation, m: Manifest, ipc: Ipc) -> list[Blocker]:
     """Everything that makes a reversal unsafe or unprovable right now."""
     found: list[Blocker] = []
     procs = {p.procname: p for p in obs.procs()}
@@ -40,7 +41,7 @@ def drift(att: Attachment, obs: Observation, m: Manifest) -> list[Blocker]:
         if op.op in sorting.SORT_OPS:
             continue  # a file, not a process: sorting.blockers judges it
         if op.op in BLOCKS:
-            found += _block(att, m, op)
+            found += _block(att, m, op, ipc, procs)
         elif (proc := procs.get(op.process)) is None or not proc.up:
             found.append(
                 Blocker(
@@ -67,10 +68,15 @@ def drift(att: Attachment, obs: Observation, m: Manifest) -> list[Blocker]:
     return found
 
 
-def _block(att: Attachment, m: Manifest, op: Op) -> list[Blocker]:
+def _block(att: Attachment, m: Manifest, op: Op, ipc: Ipc, procs: dict[str, Proc]) -> list[Blocker]:
     specs = tuple(s for s in att.tables if s.name in op.table.split(","))
-    problems = persist.problems(persist.BlockRecord(**op.post), att, m.token, specs)
-    where = op.post.get("path")
+    record = persist.BlockRecord(**op.post)
+    try:
+        file = schema_files.file_of(record, ipc, procs)
+        problems = persist.problems(record, att, m.token, specs, file)
+    except AttachmentError as exc:  # the tickerplant that holds it cannot be asked
+        problems = [str(exc)]
+    where = record.path + (f" on {record.process}" if record.process else "")
     return [
         Blocker(
             "schema file",

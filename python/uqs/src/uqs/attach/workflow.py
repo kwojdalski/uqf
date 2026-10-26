@@ -24,7 +24,7 @@ from uqs.attach.facts import Host
 from uqs.attach.findings import blockers
 from uqs.attach.manifest import Manifest
 from uqs.attach.publisher import Publisher, stop_publisher
-from uqs.attach.remote import Ipc
+from uqs.attach.remote import Endpoint, Ipc
 from uqs.attach.service import create, manifest_of, parse_discovery, save_planned
 
 
@@ -43,6 +43,7 @@ class Given:
     user: str | None = None
     password_env: str | None = None
     runtime_only: bool = False
+    remote_schema_file: bool = False
     tplogdir: str = ""
     schema_file: str = ""
 
@@ -75,6 +76,11 @@ def differences(saved: Attachment, given: Given, root: Path) -> list[str]:
     differs("--user", st.user, given.user)
     differs("--password-env", st.password_env, given.password_env)
     differs("--runtime-only", saved.persist, "runtime-only" if given.runtime_only else None)
+    differs(
+        "--remote-schema-file",
+        saved.persist,
+        "remote-schema-file" if given.remote_schema_file else None,
+    )
     differs("--tplogdir", saved.storage.tplogdir, given.tplogdir or None)
     differs("--schema-file", saved.storage.schema_file, given.schema_file or None)
     differs("--job", saved.publisher.job, given.job)
@@ -134,7 +140,7 @@ def resolve(
         host=given.host or "localhost", discovery=given.discovery,
         tickerplant=given.tickerplant or "", consumers=tuple(given.consumers),
         user=given.user or config.DEFAULT_USER, password_env=given.password_env or "",
-        runtime_only=given.runtime_only,
+        runtime_only=given.runtime_only, remote_schema_file=given.remote_schema_file,
         storage=Storage(tplogdir=given.tplogdir, schema_file=given.schema_file), runtime=runtime,
     )  # fmt: skip
     if saved is None:
@@ -306,7 +312,8 @@ def execute(
             return out
         stage("start", "done", f"{att.publisher.procname} on stack {att.stack.id}", t)
         if reach.applies(att, host):
-            _reach(att, ipc, root, publisher, out, state_dir)
+            tp = p.observation.tickerplant
+            _reach(att, ipc, root, publisher, out, state_dir, tp.endpoint if tp else None)
     return out
 
 
@@ -317,15 +324,23 @@ def _reach(
     publisher: Publisher,
     out: Outcome,
     state_dir: Path | None,
+    tickerplant: Endpoint | None,
 ) -> None:
-    """The publisher just started, and the stack is elsewhere: can the stack reach
-    it back? If not it is not attached: the gate closes again and the publisher
-    this run started is stopped, so it is never left running as if verified."""
+    """The publisher just started, and the stack is elsewhere: can it reach the
+    stack with its own credential, and the stack reach it back? If not it is not
+    attached: the gate closes again and the publisher this run started is
+    stopped, so it is never left running as if verified."""
     t, port = time.monotonic(), plan.publisher_port(att, root).port
-    found = None if port is None else reach.after_start(att, ipc, port, publisher)
+    found = (
+        None
+        if port is None
+        else reach.after_start(att, ipc, port, publisher, tickerplant=tickerplant)
+    )
     seconds = round(time.monotonic() - t, 3)
     if found is None:
-        out.stages.append(Stage("reach", "done", "the stack reaches the publisher", seconds))
+        out.stages.append(
+            Stage("reach", "done", "the publisher and the stack reach each other", seconds)
+        )
         return
     out.stages.append(Stage("reach", "failed", f"{found.code}: {found.message}", seconds))
     verifying.revoke(att, state_dir, f"{found.code}: {found.facts['address']}")
