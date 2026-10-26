@@ -56,8 +56,9 @@ def _normalised(remote: FakeRemote) -> str:
 )
 def test_a_source_only_push_sends_the_server_what_it_did_before(tmp_path, modes):
     """GOLDEN is every script a push sent before components existed: preflight,
-    lock, transfer, prepare and its deploy.env, smoke, start, verify, activate.
-    Unset or spelt out, `existing` changes none of it."""
+    lock, transfer, prepare and its deploy.env, smoke, start, verify, activate -
+    and, since #1664, the `running` report written before the start. Unset or
+    spelt out, `existing` changes none of it."""
     remote, _ = _push(tmp_path, *modes)
     assert _normalised(remote) == GOLDEN.read_text()
 
