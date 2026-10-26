@@ -46,7 +46,9 @@ network.
   arguments, so `rlwrap q` is refused. Preflight runs a script with the resolved
   pair. It then writes the values into the release's `deploy.env`, so the smoke
   test, start, verification and rollback all use what was checked. The dry run
-  shows each value and where it came from.
+  shows each value and where it came from. Or, with `--q-mode bundled`, the push
+  installs the pinned PeachQ and needs no q or licence on the server: see [a
+  bundled q](#a-bundled-q).
 
 - An existing TorQ (`--torq-home`, holding `torq.q` and `torq.sh`, or only
   `torq.q` with `--torq-launcher`, below) and starter pack (`--torq-app-home`,
@@ -265,12 +267,12 @@ A release runs on three components: q, TorQ and Python. Each has a mode, set by
 `q_mode`, `torq_mode` and `python_mode` (or `--q-mode`, `--torq-mode`,
 `--python-mode`):
 
-  | Mode       | Means                                                            |
-  | ---------- | ---------------------------------------------------------------- |
-  | `existing` | already on the server; the default                               |
-  | `bundled`  | shipped by the push; TorQ only so far ([below](#a-bundled-torq)) |
+  | Mode       | Means                                                                              |
+  | ---------- | ------------------------------------------------------------------------------     |
+  | `existing` | already on the server; the default                                                 |
+  | `bundled`  | shipped by the push: [TorQ](#a-bundled-torq) and [q (PeachQ)](#a-bundled-q) so far |
 
-q and Python refuse `bundled` as not yet supported (#1557).
+Python refuses `bundled` as not yet supported (#1557). KX's q is never bundled.
 
 `existing` mode's settings are the options above: `qcmd` and `qhome` for q;
 `torq_home`, `torq_app_home` and `torq_launcher` for TorQ. Python has none, uv
@@ -326,6 +328,55 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
 
 The `components` entry records `bundled`, the runtime's sha256, TorQ's version,
 its path on the server, and whether this push installed or reused it.
+
+### A bundled q
+
+With `q_mode = "bundled"`, the push ships the q too: the PeachQ that
+`scripts/peachq.json` pins, in a runtime artifact of its own. KX's q (KDB-X or
+kdb+) is licensed to the server it runs on, so it is never bundled. It stays
+`existing`, with its licence in `QHOME`.
+
+```bash
+uqs deploy build-runtime q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
+uqs --runtime peachq deploy build
+uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+  --profile capture --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
+  --q-mode bundled --q-runtime dist/q-runtime-peachq-<commit>-linux-x86_64.tar.gz
+```
+
+- **Built from the pin.** The build takes the binary `scripts/peachq.py`
+  resolves: its cache, or a fresh build of the pinned commit into it. It refuses
+  `UQF_PEACHQ`, whose binary has no recorded origin. A `UQF_PEACHQ_COMMIT` build
+  is recorded in the manifest with its reason. The binary is run before it is
+  packed, and must answer that it is PeachQ.
+- **One file, never a licence.** The archive holds the binary and its manifest,
+  nothing else. The manifest records the repository, commit, platform, build
+  options and the `.z.K` the binary reported. Every artifact this tool reads,
+  release or runtime, is refused if it carries a `.lic` file.
+- **For a PeachQ runtime, on its platform.** A release built for a runtime
+  declared on KDB-X (`uqf`, `crypto`, `fx`, `torq`) is refused a bundled q:
+  nothing assumes PeachQ runs a workload until that workload's tests pass on it.
+  The runtime must also be built for the release's OS and architecture, so build
+  it on such a host.
+- **Pinned like a release.** `q_runtime_sha256` (or `--q-runtime-sha256`) pins
+  it, and `--accept-digest` and `--allow-unpinned` relax that pin as they do the
+  others, recorded. `q_version` holds it too.
+- **Installed once, run there.** It goes to `<dest>/shared/runtimes/q/<sha256>/`
+  under the same write-once rules as a TorQ runtime. Preflight looks for no q on
+  the server. Once installed, the push runs the binary there; if it does not
+  answer as PeachQ, the push stops before the release is transferred.
+- **Each release names its own.** `deploy.env` sets `QCMD` to the runtime's `q`
+  and `QHOME` to its directory, with `UQF_Q_IMPL=peachq`. It also sets
+  `UQF_PEACHQ` (and its reason) to that binary, so the release's PeachQ stack
+  never builds one on the server. Rollback and prune treat it as they treat a
+  TorQ runtime.
+- **Exclusive.** `qcmd` and `qhome` are refused beside it. A layer that switches
+  q to bundled drops them from the layers below it, and one that switches back
+  drops `q_runtime` and its pin.
+
+The `components` entry records `bundled`, the runtime's sha256, the version the
+installed q reported, PeachQ's commit, its path on the server, and whether this
+push installed or reused it.
 
 ## Driving a deployed release from your machine
 
@@ -624,12 +675,12 @@ Three releases are never removed, whatever `--keep` is, even 0:
 - any whose report still says `running`, from a push that died part-way.
 
 It prints what stayed and why, what went, and the bytes freed. Only a directory
-named like a release id is ever removed. A [bundled TorQ](#a-bundled-torq)
-runtime goes once no remaining release's `deploy.env` names it. `--dry-run`
-lists the removals and removes nothing. `uqs deploy push --keep N` prunes the
-same way once the new release is current, while it still holds the lock. If that
-prune fails, the deployment still counts as a success, and its report records
-the failure.
+named like a release id is ever removed. A [bundled TorQ](#a-bundled-torq) or
+[q](#a-bundled-q) runtime goes once no remaining release's `deploy.env` names
+it. `--dry-run` lists the removals and removes nothing.
+`uqs deploy push --keep N` prunes the same way once the new release is current,
+while it still holds the lock. If that prune fails, the deployment still counts
+as a success, and its report records the failure.
 
 ## Deploying as a service user
 

@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from test_deploy import _HEALTHY, SERVER, FakeRemote, _args, _artifact, _done, _verified, parse_args
 
-from uqs.deploy import components, driver, history, targets
+from uqs.deploy import driver, history, targets
 from uqs.deploy.config import DeployError, make_config
 
 GOLDEN = Path(__file__).parent / "golden" / "source_only_push.txt"
@@ -85,7 +85,7 @@ def test_every_component_defaults_to_existing():
     assert (cfg.q_mode, cfg.torq_mode, cfg.python_mode) == ("existing",) * 3
 
 
-@pytest.mark.parametrize(("component", "step"), [("q", 6), ("python", 7)])
+@pytest.mark.parametrize(("component", "step"), [("python", 7)])
 def test_bundled_is_refused_naming_the_step_that_adds_it(component, step):
     with pytest.raises(DeployError, match=rf"{component}_mode bundled is not yet supported - "
                        rf"#1557 step {step} adds it"):  # fmt: skip
@@ -143,6 +143,7 @@ q_mode = "existing"
 host = "h"
 dest = "/srv/uqf"
 q_mode = "bundled"
+q_runtime = "dist/q-runtime.tar.gz"
 
 [targets.both]
 host = "h"
@@ -166,28 +167,25 @@ def test_a_mode_is_layered_like_any_key(root):
     assert cfg.sources["qcmd"] == "defaults"
 
 
-def test_switching_a_mode_drops_the_fields_below_it(root):
+def test_switching_drops_the_old_fields_and_keeps_every_other(root):
     """[defaults]' qcmd and qhome are existing mode's: the target that switches
-    q to bundled does not inherit them, so the refusal is bundled's own."""
-    with pytest.raises(DeployError, match="q_mode bundled is not yet supported"):
-        targets.configs("switched", "x", {}, False, root)
-
-
-def test_switching_drops_the_old_fields_and_keeps_every_other(root, monkeypatch):
-    every = dict.fromkeys(components.COMPONENTS, frozenset(components.MODES))
-    monkeypatch.setattr(components, "SUPPORTED", every)
+    q to bundled does not inherit them - its q table is replaced whole."""
     (cfg,) = targets.configs("switched", "x", {}, False, root)
     assert (cfg.q_mode, cfg.qcmd, cfg.qhome) == ("bundled", None, None)
     assert "qcmd" not in cfg.sources and "qhome" not in cfg.sources
     assert cfg.torq_home == "/opt/torq"  # another component's: untouched
     # a flag switching back is a switch too, and drops nothing it does not own
     (cfg,) = targets.configs("switched", "x", {"q_mode": "existing"}, False, root)
-    assert (cfg.q_mode, cfg.qcmd) == ("existing", None)
+    assert (cfg.q_mode, cfg.qcmd, cfg.q_runtime) == ("existing", None, None)
 
 
 def test_a_flag_switching_a_mode_drops_the_targets_fields(root):
-    with pytest.raises(DeployError, match="q_mode bundled is not yet supported"):
+    """The flag drops [defaults]' qcmd and qhome, so the refusal is bundled's own."""
+    with pytest.raises(DeployError, match="q_mode is bundled, and needs q_runtime"):
         targets.configs("kx", "x", {"q_mode": "bundled"}, False, root)
+    flags = {"q_mode": "bundled", "q_runtime": "dist/q-runtime.tar.gz"}
+    (cfg,) = targets.configs("kx", "x", flags, False, root)
+    assert (cfg.qcmd, cfg.qhome, cfg.q_runtime) == (None, None, "dist/q-runtime.tar.gz")
 
 
 def test_a_field_set_beside_the_switch_is_refused(root):

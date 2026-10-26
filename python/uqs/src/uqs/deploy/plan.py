@@ -43,7 +43,11 @@ def plan(
         "q         "
         + f"QHOME={facts.get('qhome', '?')} ({facts.get('qhome_from', '?')}), "
         + f"QCMD={facts.get('qcmd', '?')} ({facts.get('qcmd_from', '?')}) - "
-        + "resolved and run once in preflight",
+        + (
+            "installed under the lock, and run once there"
+            if dep.q_runtime is not None
+            else "resolved and run once in preflight"
+        ),
         "torq      "
         + f"TORQHOME={cfg.torq_home or '(vendored)'}, launcher "
         + (cfg.torq_launcher or "$TORQHOME/torq.sh"),
