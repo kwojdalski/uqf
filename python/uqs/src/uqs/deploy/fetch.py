@@ -30,6 +30,7 @@ import subprocess
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
+from urllib.parse import urlparse
 
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
@@ -58,6 +59,23 @@ def _token() -> str | None:
     return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
 
 
+class _DropAuthOnHostChange(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect, without the token when it leaves the host (#1656).
+
+    urllib copies every header but the content ones to the redirected request,
+    Authorization included, whatever its host: a release asset's download
+    redirects to a separate asset host, which must not be handed GH_TOKEN."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: PLR0913
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and urlparse(newurl).netloc != urlparse(req.full_url).netloc:
+            new.remove_header("Authorization")
+        return new
+
+
+_OPENER = urllib.request.build_opener(_DropAuthOnHostChange)
+
+
 def http_get(url: str) -> bytes:
     headers = {"User-Agent": "uqs-deploy"}
     if url.startswith(API):
@@ -66,9 +84,7 @@ def http_get(url: str) -> bytes:
     if token and (url.startswith(API) or url.startswith("https://github.com/")):
         headers["Authorization"] = f"Bearer {token}"
     try:
-        with urllib.request.urlopen(
-            urllib.request.Request(url, headers=headers), timeout=TIMEOUT
-        ) as r:  # noqa: S310 - https only, checked by the caller
+        with _OPENER.open(urllib.request.Request(url, headers=headers), timeout=TIMEOUT) as r:  # noqa: S310 - https only, checked by the caller
             return r.read()
     except OSError as exc:
         raise DeployError("artifact", f"could not download {url}: {exc}") from None

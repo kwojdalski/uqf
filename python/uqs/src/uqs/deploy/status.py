@@ -26,6 +26,7 @@ import json
 
 from uqs.deploy.artifact import MANIFEST
 from uqs.deploy.config import REPORT, Config, DeployError
+from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.selection import Selection
 from uqs.deploy.stages import Deployment
@@ -149,6 +150,9 @@ def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
     facts = [line.split("=", 1) for line in out.splitlines() if "=" in line]
     one = {k: v for k, v in facts if k != "release"}
     kept = sorted(v for k, v in facts if k == "release")
+    # the newest RELEASE, by id: another directory under releases/ sorts after every
+    # id and would be shown as the last deployment, hiding a failed push (#1655)
+    ids = [r for r in kept if RELEASE_ID.fullmatch(r)]
     current = one.get("current")
     report = _json_file(dep, current, REPORT) if current in kept else None
     previous = (report or {}).get("previous_release")
@@ -160,7 +164,7 @@ def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
         "current": _release(dep, current, kept),
         "previous": _release(dep, previous, kept),
         "releases": {"kept": len(kept), "others": len(set(kept) - named), "names": kept},
-        "last_deployment": _last(dep, kept[-1]) if kept else None,
+        "last_deployment": _last(dep, ids[-1]) if ids else None,
         "health": (
             {"checked": False, "reason": "--no-health"}
             if not health
