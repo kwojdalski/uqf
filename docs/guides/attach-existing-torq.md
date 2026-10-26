@@ -73,6 +73,32 @@ keeping its manifest and accepted risks, and is refused while the manifest holds
 changes on another stack or for other tables. Credentials are redacted from
 every output. `uqs job attach --help` lists the rest.
 
+### A publisher on this machine, a stack on another (#1651)
+
+The publisher always runs on the machine `uqs` runs on, so its source driver and
+credentials stay there, and only the tables travel, over q IPC. `--host` names
+the stack's machine.
+
+- **Start, stop and the running check** are this machine's: the publisher's port
+  is checked here, never on `--host`, where another process may hold it.
+
+- **The stack's processes are asked where discovery lists them**, not at
+  `--host`. A loopback name in that listing means the stack's own machine, so it
+  is asked at `--host`. A name that does not resolve from here is reported as
+  that, so a tunnel to discovery alone does not pass for a reachable stack.
+
+- **The stack must be able to reach the publisher back.** TorQ registers the
+  publisher under this machine's host name, recorded in the attachment as
+  `advertised_host`, and discovery connects back to what it lists. With the
+  stack elsewhere, the plan refuses:
+  - `ADVERTISED_LOOPBACK`: the name is a loopback one;
+  - `ADVERTISED_UNRESOLVABLE`: discovery cannot resolve the name (it is asked
+    with `.Q.addr`, read-only).
+
+  Neither can be overridden. Whether the publisher's port is reachable from the
+  stack is not checked: that can only be tried once the publisher runs, and no
+  step tries it yet.
+
 ### Migration from the stage commands
 
   | Before                                   | Now                                                        |

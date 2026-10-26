@@ -18,6 +18,9 @@ from uqs.attach.facts import Host
 from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack import runtime
 
+#: Where the publisher runs: `runtime.start` starts it on this machine.
+PUBLISHER_HOST = "localhost"
+
 
 class Publisher(Protocol):
     def running(self, att: Attachment) -> bool: ...
@@ -45,8 +48,10 @@ class UqsPublisher:
         self._paths, self._host = paths, host or Host()
 
     def running(self, att: Attachment) -> bool:
+        """Listening HERE: the publisher runs where `start` started it, not on
+        the stack's host, which may hold another process on that port (#1651)."""
         port = planning.publisher_port(att, repo_root()).port
-        return port is not None and self._host.listening(att.stack.host, port)
+        return port is not None and self._host.listening(PUBLISHER_HOST, port)
 
     def start(self, att: Attachment) -> None:
         try:

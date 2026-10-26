@@ -7,6 +7,7 @@ through, so tests pass a scripted one and failure injection wraps the real one.
 from __future__ import annotations
 
 import getpass
+import socket
 from dataclasses import replace
 from pathlib import Path
 
@@ -82,7 +83,7 @@ def create(
         stack=Stack(
             stack_id, host, d_host, d_port, tickerplant, tuple(consumers), user, password_env
         ),
-        publisher=Publisher(spec.job, spec.procname, runtime),
+        publisher=Publisher(spec.job, spec.procname, runtime, socket.gethostname().lower()),
         tables=spec.tables,
         storage=storage or Storage(),
         persist="runtime-only" if runtime_only else "schema-file",

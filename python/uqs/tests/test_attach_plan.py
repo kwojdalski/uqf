@@ -216,7 +216,17 @@ def test_discovery_is_asked_at_the_address_the_attachment_records(bundle):
     obs, found = topology.observe(att, fake)
     assert not found and obs.tickerplant is not None
     assert fake.hosts[0] == ("discovery", "uat-box.example"), "the host --discovery gave"
-    assert {h for _, h in fake.hosts[1:]} == {"UAT-box.example"}, "processes: --host"
+    # #1651: every process at the host discovery lists for it, not --host
+    assert {h for _, h in fake.hosts[1:]} == {"testhost"}, "processes: as discovery lists them"
+
+
+def test_a_process_listed_on_loopback_is_asked_at_the_stacks_host(bundle):
+    """The stack's own loopback is the stack's machine, not this one (#1651)."""
+    stack = attachment(bundle, 6000, host="uat-box.example").stack
+    assert topology.host_of(":localhost:6002", stack) == "uat-box.example"
+    assert topology.host_of(":127.0.0.1:6002", stack) == "uat-box.example"
+    assert topology.host_of(":uat-tp.internal:6002", stack) == "uat-tp.internal"
+    assert topology.host_of(":uat-tp.internal:6002:admin:pw", stack) == "uat-tp.internal"
 
 
 def test_two_names_for_this_machine_are_one_host(bundle):

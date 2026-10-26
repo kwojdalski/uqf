@@ -6,7 +6,13 @@
 / another TorQ) answers with a default and the Python side decides whether the
 / default is acceptable. Lambdas have no closures: helpers take g explicitly.
 / .
-/ @param req JSON {"tables": ["name", ...]} - the tables the caller cares about
+/ Discovery also resolves `resolve`, a host name, with .Q.addr (#1651): the name a
+/ publisher on another machine registers under, which discovery must reach back to.
+/ resolved is its IPv4 address, or "" when the name does not resolve there (.Q.addr
+/ answers -1i, 255.255.255.255, for such a name under KDB-X).
+/ .
+/ @param req JSON {"tables": ["name", ...], "resolve": "host"} - the tables the caller
+/   cares about, and for discovery, a host name to resolve
 / @return JSON string
 {[req]
  r:.j.k $[10h=type req;req;string req];
@@ -75,5 +81,8 @@
    select tabname:string tabname,att:string att,col:string column,sort from sp;
    string each @[.wdb.tablelist;::;`$()])];
  if[pt~`discovery;
-  ext:enlist[`services]!enlist select procname:string procname,proctype:string proctype,hpup:string hpup from .servers.SERVERS];
+  rs:$[`resolve in key r;`$r`resolve;`];
+  ad:$[null rs;0i;@[.Q.addr;rs;0i]];
+  ext:`services`resolved!(select procname:string procname,proctype:string proctype,hpup:string hpup from .servers.SERVERS;
+   $[(null ad) or ad in 0 -1i;"";"." sv string "i"$0x0 vs ad])];
  .j.j base,ext}
