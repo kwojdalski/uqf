@@ -424,7 +424,9 @@ def lane_q_remote_writer() -> None:
 
 def lane_python() -> None:
     _banner("python: orchestrator and frontend")
-    _run("python", ["uv", "run", "pytest", "-q"])
+    # In parallel (pytest-xdist); --dist loadgroup keeps each xdist_group -
+    # the tests that start a whole stack - on one worker.
+    _run("python", ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup"])
 
 
 def lane_bundles() -> None:
@@ -632,7 +634,9 @@ def lane_coverage() -> None:
     ]
     if not cov:
         raise LaneFailed("coverage", 1)
-    _run("coverage", ["uv", "run", "pytest", "-q", *cov, "--cov-report=term"])
+    # pytest-cov combines the xdist workers' data into one report.
+    xdist = ["-n", "auto", "--dist", "loadgroup"]
+    _run("coverage", ["uv", "run", "pytest", "-q", *xdist, *cov, "--cov-report=term"])
 
 
 # ------------------------------------------------------------------ dispatch

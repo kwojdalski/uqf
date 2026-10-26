@@ -13,6 +13,10 @@ the portable converter's tests as well as python/'s - and runs before any
 test module is imported. Dropping the variables changes nothing a test means:
 git then finds the repository it is pointed at (`git -C <path>`) or the one
 it is run in, as it does outside a hook.
+
+The same goes for the variables that say where status and data live (see
+STATE_LOCATION_VARS): a test must never write where another test, another
+pytest-xdist worker or a running stack reads.
 """
 
 from __future__ import annotations
@@ -31,4 +35,18 @@ GIT_LOCATION_VARS = (
 )
 
 for _name in GIT_LOCATION_VARS:
+    os.environ.pop(_name, None)
+
+
+#: Where q code and uqs put status files and generated state:
+#: `.qetl.status.status_dir` reads $UQF_STATUS_DIR, else $TORQDATA/status, and
+#: uqs.paths puts the stack's data under $UQS_DATA_ROOT. Inherited from a
+#: developer's shell, they would send every test that starts q or reads the
+#: ledger without setting its own to that developer's real directory - shared
+#: by every pytest-xdist worker at once, and by a running stack - and they
+#: override the per-test roots tests do set (test_deploy_soak.py). Dropped, so
+#: each test supplies its own under tmp_path, which xdist makes per worker.
+STATE_LOCATION_VARS = ("UQF_STATUS_DIR", "TORQDATA", "UQS_DATA_ROOT")
+
+for _name in STATE_LOCATION_VARS:
     os.environ.pop(_name, None)

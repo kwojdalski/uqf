@@ -32,13 +32,25 @@ def _q() -> tuple[str, dict[str, str]]:
     return str(q), env
 
 
-def test_complete_replay_exits_zero_with_every_tick() -> None:
+def _workdir(tmp_path: Path) -> Path:
+    """A directory to run the example from, with the repository's src/ in it.
+
+    The example loads src/ by relative path and persists its table to
+    output/timer_replay_quotes, relative to where it runs. Run from the
+    repository root, both tests here wrote that one file - at once, under
+    pytest-xdist - and left it in the checkout.
+    """
+    (tmp_path / "src").symlink_to(UQF_ROOT / "src", target_is_directory=True)
+    return tmp_path
+
+
+def test_complete_replay_exits_zero_with_every_tick(tmp_path: Path) -> None:
     q, env = _q()
     read_fd, write_fd = os.pipe()  # stdin that never reaches EOF
     try:
         done = subprocess.run(
             [q, str(EXAMPLE), "-q"],
-            cwd=UQF_ROOT,
+            cwd=_workdir(tmp_path),
             env=env,
             stdin=read_fd,
             capture_output=True,
@@ -55,13 +67,14 @@ def test_complete_replay_exits_zero_with_every_tick() -> None:
 
 def test_handler_on_the_clock_instead_of_the_timer_fails(tmp_path: Path) -> None:
     q, env = _q()
+    work = _workdir(tmp_path)
     broken = tmp_path / "broken_replay.q"
     source = EXAMPLE.read_text()
     assert "\n.z.ts:{" in source
     broken.write_text(source.replace("\n.z.ts:{", "\n.z.time:{"))
     done = subprocess.run(
         [q, str(broken), "-q"],
-        cwd=UQF_ROOT,
+        cwd=work,
         env=env,
         stdin=subprocess.DEVNULL,
         capture_output=True,
