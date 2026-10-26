@@ -1,13 +1,15 @@
-"""A push's bundled components (#1557, steps 5 and 6): the TorQ and q
+"""A push's bundled components (#1557, steps 5 to 7): the TorQ, q and Python
 runtimes it ships, from loading each to installing it.
 
   attach    loads each runtime the config bundles, checked whole, holds it to
-            its pin (overrides.for_runtime) and, for q, to the release: the
-            platform it was built for, and a runtime declared on PeachQ.
+            its pin (overrides.for_runtime) and, for q and Python, to the
+            release: the platform it was built for, a q for a runtime declared
+            on PeachQ, a Python of the version the release's wheels are for.
   records   each one's components entry, with what the push would do with it
             (runtime_install.state): for the plan and the report.
   install   under the lock, before the release is transferred: each one
-            installed write-once or reused, and the q run once there.
+            installed write-once or reused, and the q and the Python run once
+            there.
 
 A bundled q is PeachQ for a runtime declared on PeachQ (uqs.runtimes): the
 issue's rule that nothing assumes PeachQ runs a workload until its tests pass
@@ -18,8 +20,9 @@ never bundled at all (deploy/q_runtime.py).
 from __future__ import annotations
 
 from uqs.deploy import components, overrides, runtime_install
-from uqs.deploy.artifact import Artifact
+from uqs.deploy.artifact import Artifact, ReleaseError
 from uqs.deploy.config import Config, DeployError
+from uqs.deploy.python_runtime import PythonRuntime
 from uqs.deploy.q_runtime import KX_REFUSAL, QRuntime
 from uqs.deploy.report import Report
 from uqs.deploy.stages import Deployment
@@ -30,7 +33,7 @@ from uqs.runtimes import RUNTIMES
 log = get_logger()
 
 #: The components that can be bundled so far, in the order they install.
-BUNDLABLE = ("torq", "q")
+BUNDLABLE = ("torq", "q", "python")
 
 
 def attach(cfg: Config, dep: Deployment, pkg: Artifact) -> list[dict]:
@@ -45,6 +48,11 @@ def attach(cfg: Config, dep: Deployment, pkg: Artifact) -> list[dict]:
         setattr(dep, f"{component}_runtime", rt)
     if dep.q_runtime is not None:
         _fits(dep.q_runtime, pkg, dep.runtime)
+    if dep.python_runtime is not None:
+        try:
+            dep.python_runtime.fits(pkg.manifest["target"])
+        except ReleaseError as exc:
+            raise DeployError(exc.stage, str(exc)) from None
     return exceptions
 
 
@@ -80,12 +88,14 @@ def records(dep: Deployment) -> dict[str, dict]:
 
 
 def install(dep: Deployment, rid: str, report: Report) -> None:
-    """Install or reuse each bundled runtime, under the lock; run the q once
-    installed, recording the version it reports."""
+    """Install or reuse each bundled runtime, under the lock; run the q and
+    the Python once installed, recording the version each reports."""
     for component, rt in _runtimes(dep):
         log.info("installing the {} runtime, or reusing it", rt.label)
         report.components[component]["install"] = runtime_install.install(dep, rt, rid)
         if isinstance(rt, QRuntime):
             version = runtime_install.probe(dep, rt)
             report.components[component]["version"] = report.qversion = version
+        if isinstance(rt, PythonRuntime):
+            report.components[component]["version"] = runtime_install.probe_python(dep, rt)
         dep.beat()
