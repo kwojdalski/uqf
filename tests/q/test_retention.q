@@ -174,6 +174,27 @@
     .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;now;2026.01.03D12:00:00.000000000;`timestamp$2026.01.04];0b;
         "the removed part is not covered"]};
 
+/ #1660: the remainder is recorded after the key's readiness watermark, so cutting a ready claim hid the days it kept from /query's require_coverage.
+.qt.qetl.retention.test_cutting_a_ready_claim_leaves_the_kept_days_queryable:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_ready;root];
+    .qt.qetl.retention.claim["2026.01.02";"2026.02.21"];
+    .qetl.coverage.note_written[`rtdeals_ds;`;.qt.qetl.retention.v];
+    .qunit.assertEquals[count .qetl.coverage.ready_claims[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p];1;"queryable before the cut"];
+    .qetl.retention.run[`rt_ready;.qt.qetl.retention.as_at;`apply`supersede!(1b;1b)];
+    rc:.qetl.coverage.ready_claims[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p];
+    .qunit.assertEquals[(rc`range_from;rc`range_to);(enlist `timestamp$2026.01.04;enlist `timestamp$2026.02.21);"the kept days [01-04, 02-21) are still queryable"];
+    .qunit.assertEquals[.qetl.coverage.outstanding[`rtdeals_ds;`;.qt.qetl.retention.v];0b;"and nothing is left outstanding"]};
+
+/ A key with a claim its deployment has not released must stay unreleased: the re-advance is only for a key that was fully ready.
+.qt.qetl.retention.test_cutting_an_unreleased_claim_does_not_release_it:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_unready;root];
+    .qt.qetl.retention.claim["2026.01.02";"2026.02.21"];
+    .qetl.retention.run[`rt_unready;.qt.qetl.retention.as_at;`apply`supersede!(1b;1b)];
+    .qunit.assertEquals[count .qetl.coverage.ready_claims[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p];0;"never released, still not queryable"];
+    .qunit.assertEquals[.qetl.coverage.outstanding[`rtdeals_ds;`;.qt.qetl.retention.v];1b;"and still outstanding"]};
+
 / --- ledger rows --------------------------------------------------------
 
 .qt.qetl.retention.test_ledger_retention_removes_only_withdrawn_claims_past_the_horizon:{[t]

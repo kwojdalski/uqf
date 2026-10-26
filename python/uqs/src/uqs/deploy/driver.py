@@ -1,5 +1,6 @@
-"""A deployment end to end: the run, and the rollback when a stage fails
-after the previous release was stopped. What --dry-run shows is plan.py's."""
+"""A deployment end to end: the run, and the rollback when a stage fails, or
+the push is interrupted, after the previous release was stopped. What
+--dry-run shows is plan.py's."""
 
 from __future__ import annotations
 
@@ -144,6 +145,10 @@ def _run(
             record = converted_override.write(dep, release, facts)
             report.exceptions.append(overrides.converted(record))
             start_env[ATTEMPT_VAR] = record["attempt"]
+        # Before anything is stopped or started: a push killed outright from
+        # here on leaves a release whose report says `running`, which prune
+        # will not remove and status reports as a push in progress (#1664).
+        dep.write_report(release, report)
         if previous:
             prev_profile, prev_procs, prev_extra = dep.previous_processes(previous)
             log.info("stopping release {}'s processes", previous)
@@ -216,6 +221,18 @@ def _run(
         report.rollback = _rollback(
             dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
         )
+    except BaseException as exc:
+        # Ctrl-C in the verify wait, or a bug's KeyError: the previous release
+        # may already be down, so it is rolled back as a failed stage is, and
+        # then the interruption goes on to the caller (#1664).
+        report.status = "failed"
+        report.stage = "interrupted"
+        report.error = ": ".join(filter(None, (type(exc).__name__, str(exc))))
+        log.error("INTERRUPTED: {}", redact(report.error))
+        report.rollback = _rollback(
+            dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
+        )
+        raise
     finally:
         dep.write_report(release, report)
         dep.discard_staging(rid)

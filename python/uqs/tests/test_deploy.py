@@ -354,6 +354,45 @@ def test_a_failed_upgrade_restores_the_previous_release(tmp_path):
     assert not remote.ran(".current.new")
 
 
+class Interrupted(FakeRemote):
+    """Ctrl-C while the new release is being verified."""
+
+    def run(self, script, timeout, stage, as_login=False):
+        if stage == "verify" and "uqs deploy verify --profile" in script:
+            self.scripts.append((stage, script))
+            raise KeyboardInterrupt
+        return super().run(script, timeout, stage, as_login)
+
+
+def test_an_interrupted_upgrade_restores_the_previous_release_and_goes_on(tmp_path):
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    remote = Interrupted(
+        {
+            **_HEALTHY,
+            "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+            "deploy-report.json\n": _done(previous),
+            "readlink": _done("current=OLD\n"),
+            "uqs deploy verify --profile": _verified(True),
+        }
+    )
+    seen: list[dict] = []
+    cfg = parse_args(_args(_artifact(tmp_path), "--restart"))
+    with pytest.raises(KeyboardInterrupt):
+        driver.deploy(cfg, remote, out=io.StringIO(), on_report=lambda r: seen.append(r.as_dict()))
+    (report,) = seen
+    assert report["status"] == "failed" and report["stage"] == "interrupted"
+    assert "restarted and verified release OLD's profile fx" in report["rollback"]
+    assert "stopped the new release's processes" in report["rollback"]
+    rollback = remote.stage("rollback")
+    assert any("cd /opt/uqf/releases/OLD" in s and "uqs start --profile fx" in s for s in rollback)
+    assert not remote.ran(".current.new")
+    # a hard kill instead would have left a report that says `running`, written before the start
+    stages = [stage for stage, _ in remote.scripts]
+    running = next(i for i, (_, s) in enumerate(remote.scripts) if '"status": "running"' in s)
+    assert running < stages.index("start")
+    assert any('"stage": "interrupted"' in s for _, s in remote.scripts)
+
+
 def test_a_busy_port_fails_before_the_profile_starts(tmp_path):
     busy = _done(json.dumps({"busy": {"rdb1": 6052}}) + "\n" + verify.FAILED_MARKER + "\n", rc=1)
     code, remote, report = _run(tmp_path, {"--ports-free": busy})
