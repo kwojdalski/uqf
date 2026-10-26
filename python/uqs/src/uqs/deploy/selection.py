@@ -84,13 +84,6 @@ def started_by(profile: str, extra: Sequence[str]) -> list[str]:
     return list(dict.fromkeys([*procs, *extra]))
 
 
-#: A release from before #835 carries scripts/deploy_verify.py and no
-#: `uqs deploy verify`. A rollback can return to one, and a release must be
-#: verified by its own code, so the command asks the release which it has.
-#: Remove once no server keeps a release from before #835.
-_LEGACY_VERIFIER = "scripts/deploy_verify.py"
-
-
 def verify_args(sel: Selection, live: bool) -> list[str]:
     """`uqs deploy verify`'s flags for a selection; none without one."""
     argv = []
@@ -102,20 +95,8 @@ def verify_args(sel: Selection, live: bool) -> list[str]:
 
 
 def verify_command(profile: str, sel: Selection, live: bool, *extra: str) -> str:
-    """The shell command a release verifies itself with, from its own root:
-    `uqs deploy verify`, or in a release from before #835 its verifier
-    script, which spelled the selection as space-separated words."""
-    argv = ["--profile", profile, *extra]
-    legacy = list(argv)
-    if sel.processes:
-        legacy += ["--procs", *sel.processes]
-    if sel.tables:
-        legacy += ["--tables", *sel.tables]
-    if live:
-        legacy.append("--live")
-    new = " ".join(q(a) for a in [*argv, *verify_args(sel, live)])
-    old = " ".join(q(a) for a in legacy)
-    return (
-        f"if [ -f {_LEGACY_VERIFIER} ]; then .venv/bin/python {_LEGACY_VERIFIER} {old}; "
-        f"else .venv/bin/uqs deploy verify {new}; fi"
-    )
+    """The shell command a release verifies itself with, from its own root.
+    A release from before #835, which had no `uqs deploy verify`, is not a
+    supported rollback target (#1648)."""
+    argv = ["--profile", profile, *extra, *verify_args(sel, live)]
+    return ".venv/bin/uqs deploy verify " + " ".join(q(a) for a in argv)

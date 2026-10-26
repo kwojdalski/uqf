@@ -42,7 +42,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runtime
 from uqs.stack.alive import _command_lines
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: The process that performs the replay. Vendored, `startwithall=0`.
 REPLAY_PROCNAME = "tpreplay1"

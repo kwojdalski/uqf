@@ -841,7 +841,7 @@
     opened:live and null had;
     .qetl.job.bounded.write_state[worker;`live;live];
     if[opened; .qetl.job.bounded.write_state[worker;`handle;.qetl.job.bounded.connect worker]];
-    r:.[{[w;c] .qetl.job.bounded.own[w;`plan][c]};(worker;cursor);{[e] (`failed;e)}];
+    r:@[{[w] .qetl.job.bounded.own[w;`plan][]};worker;{[e] (`failed;e)}];
     if[opened;
         ((.qetl.source.for_source (.qetl.job.bounded.def worker)`source)`close) .qetl.job.bounded.read_state[worker;`handle];
         .qetl.job.bounded.write_state[worker;`handle;0Ni]];
@@ -927,15 +927,12 @@
 / The windows still to do.
 / .
 / ONE narrowing: coverage. Every gap in the range is planned, at this
-/ source_version, whatever the cursor says - the body below explains what
-/ went wrong when the cursor was a hard lower bound, and `cursor` is now an
-/ unread parameter kept for the signature its callers already pass.
-/ .
-/ This header used to describe TWO narrowings, cursor first and coverage
-/ second, which is what the function did before a restatement could withdraw
-/ coverage the cursor had already passed. The body changed and the header did
-/ not, so the two disagreed about the thing the function is for.
-.qetl.job.bounded.plan:{[worker;cursor]
+/ source_version - the body below explains what went wrong when the
+/ checkpointed cursor was a hard lower bound. The plan takes no cursor at all
+/ (#1648): coverage alone decides, so a cursor argument could only mislead.
+/ @param worker the worker's name
+/ @return the windows still to do: table range_from, range_to
+.qetl.job.bounded.plan:{[worker]
     cfg:.qetl.job.bounded.def worker;
     s:.qetl.job.bounded.spec worker;
     / The range ends where the source can vouch for its data (#1187), rounded down to an `align` worker's
@@ -945,8 +942,7 @@
     / ONE as_of for the whole plan, captured once: a ledger superseded midway
     / would report a range both covered and uncovered in one pass.
     as_of:.z.p;
-    / COVERAGE DECIDES WHAT IS LEFT. The cursor is a resumption hint and
-    / nothing more.
+    / COVERAGE DECIDES WHAT IS LEFT, and the checkpoint has no say.
     / .
     / This used to plan from the cursor as a hard lower bound, and the
     / cursor of a finished run is range_to. So after a restatement withdrew
@@ -959,18 +955,17 @@
     / tests/q/run_two_instances.q, the first place a supersede was followed
     / by a same-spec re-run.
     / .
-    / Now every gap in the whole range is planned, whatever the cursor says.
-    / The cursor still does the one thing it is for: when the range BEHIND it
-    / is fully covered - the ordinary resume after an interruption - the
-    / gaps all lie at or after it and the plan starts there, exactly as
-    / before. When a gap lies behind it, the gap wins, because a gap is a
-    / fact about the data and a cursor is a note about a previous run.
+    / Now every gap in the whole range is planned. The ordinary resume after
+    / an interruption needs no cursor: the range already done is covered, so
+    / the gaps all lie after it and the plan starts there. A gap behind it is
+    / planned too, because a gap is a fact about the data and a cursor is a
+    / note about a previous run.
     todo:.qetl.job.bounded.runtime.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;s`range_from;to];
     if[0=count todo; :.qetl.job.bounded.empty_windows[]];
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.
     ws:raze {[width;w] .qetl.job.bounded.runtime.windows[w`range_from;w`range_to;width]}[cfg`width] each todo;
-    .qetl.log.dbg[worker;"planned";`gaps`windows`width`cursor!(count todo;count ws;cfg`width;cursor)];
+    .qetl.log.dbg[worker;"planned";`gaps`windows`width!(count todo;count ws;cfg`width)];
     ws}
 
 / ------------------------------------------------------- FETCH / PUBLISH
@@ -1125,7 +1120,7 @@
     recovered:.qetl.job.bounded.recover_unfinished worker;
     replayed:.qetl.job.bounded.replay_reactions worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;.qetl.job.bounded.spec worker];
-    windows:.qetl.job.bounded.own[worker;`plan][cursor];
+    windows:.qetl.job.bounded.own[worker;`plan][];
     .qetl.job.bounded.write_state[worker;`progress;@[.qetl.job.bounded.read_state[worker;`progress];`windows_planned;:;count windows]];
     if[0=count windows;
         / "ran, found no work" is a SUCCESS, not a failure. An

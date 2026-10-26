@@ -15,7 +15,7 @@ from pathlib import Path
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 #: One entry `clean` would remove: its path, and the bytes it holds.

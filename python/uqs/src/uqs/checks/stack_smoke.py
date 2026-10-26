@@ -37,7 +37,7 @@ from uqs.model.plant_schema import _publishers
 from uqs.model.registry import PIPELINES
 from uqs.paths import torq_log_stem
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Tables a running pipeline publishes that may legitimately still be empty,
 #: and why. An entry here is a claim that emptiness carries no information,

@@ -593,6 +593,12 @@ and moves `current` only once the target's own verifier passes. A target that
 does not verify is stopped, and the current release's processes are started and
 verified again, so the server ends where it began. Nothing is deleted.
 
+A target is verified with `uqs deploy verify`, so a release from before that
+command existed (#835) cannot be a rollback target: its verification fails and
+the rollback is undone as above. Nor can an artifact whose manifest names no
+runtime, or one this uqs does not know: `push` refuses it at stage `artifact`.
+Rebuild such a release with `uqs deploy build`.
+
 ## Removing old releases
 
 Every push leaves its release, with its own offline `.venv`, in `releases/`.

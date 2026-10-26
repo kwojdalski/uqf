@@ -276,7 +276,7 @@ def test_a_float_is_written_with_at_most_six_places(value, expected):
 
 def test_a_float_argument_is_cut_and_nothing_else_is():
     seen = _records()
-    log = logcore.get_logger("t")
+    log = logcore.get_logger()
     log.info("mid={} rows={} ok={} id={}", 1.0850000000000002, 7, True, "a.1234567891")
     assert seen[0]["message"] == "mid=1.085 rows=7 ok=True id=a.1234567891"
 
@@ -285,26 +285,26 @@ def test_a_q_timestamp_in_a_message_keeps_every_digit():
     """The reason the cut is on arguments, not on the finished text: a regex
     over the message would round the fraction of this timestamp too."""
     seen = _records()
-    logcore.get_logger("t").info("{}", "2026.09.24D11:21:28.123456789")
+    logcore.get_logger().info("{}", "2026.09.24D11:21:28.123456789")
     assert seen[0]["message"] == "2026.09.24D11:21:28.123456789"
 
 
 def test_an_explicit_format_spec_wins_over_the_cutoff():
     seen = _records()
-    logcore.get_logger("t").info("{:.2f} {:.9f}", 1.23456, 0.123456789123)
+    logcore.get_logger().info("{:.2f} {:.9f}", 1.23456, 0.123456789123)
     assert seen[0]["message"] == "1.23 0.123456789"
 
 
 def test_floats_inside_a_list_tuple_or_dict_are_cut():
     seen = _records()
-    logcore.get_logger("t").info("{} {} {}", [0.1234567891], (2.0,), {"mid": 1.0850000000000002})
+    logcore.get_logger().info("{} {} {}", [0.1234567891], (2.0,), {"mid": 1.0850000000000002})
     assert seen[0]["message"] == "[0.123457] (2,) {'mid': 1.085}"
 
 
 def test_the_cutoff_is_one_global_setting(monkeypatch):
     monkeypatch.setattr(floats, "LOG_FLOAT_DECIMALS", 3)
     seen = _records()
-    logcore.get_logger("t").info("{}", 0.123456789)
+    logcore.get_logger().info("{}", 0.123456789)
     assert seen[0]["message"] == "0.123"
 
 
@@ -312,15 +312,15 @@ def test_the_location_is_still_the_callers():
     """loguru records whoever called it; through the wrapper that would be the
     wrapper, and --debug would point every line at logger/core.py."""
     seen = _records()
-    logcore.get_logger("t").warning("{}", 1.5)
-    logcore.get_logger("t").log("INFO", "{}", 1.5)
+    logcore.get_logger().warning("{}", 1.5)
+    logcore.get_logger().log("INFO", "{}", 1.5)
     assert [r["function"] for r in seen] == ["test_the_location_is_still_the_callers"] * 2
     assert all(r["file"].name == "test_logger.py" for r in seen)
 
 
 def test_bind_and_opt_still_work_through_the_wrapper():
     seen = _records()
-    log = logcore.get_logger("t")
+    log = logcore.get_logger()
     log.bind(procname="rdb1").info("{}", 0.123456789)
     log.opt(lazy=True).info("{}", lambda: 0.123456789)
     assert [r["message"] for r in seen] == ["0.123457", "0.123457"]
@@ -515,7 +515,7 @@ def test_the_kdb_sink_formats_uqs_records_too(capsys):
     from uqs.stack.logs import log_sink
 
     log_sink()
-    log = get_logger(__name__)
+    log = get_logger()
     try:
         log.error("{}", "the data directory has moved")
         out = capsys.readouterr()
@@ -537,7 +537,7 @@ def test_the_kdb_sink_still_formats_kdb_records_as_kdb(capsys):
     from uqs.stack.logs import log_sink
 
     log_sink()
-    log = get_logger(__name__)
+    log = get_logger()
     try:
         log.bind(kdb_time="2026.09.24D13:28:55.853", procname="cross1", proctype="metrics").info(
             "creating alias"
@@ -562,3 +562,14 @@ def test_a_format_chooser_is_accepted_where_a_template_is():
     from_chooser = _make_kv_format(lambda _r: "{level} | {message}")(record)
     assert from_template == from_chooser
     assert "budget=" in from_chooser
+
+
+def test_get_logger_takes_no_name():
+    """#1648: the name was accepted and never used; it is gone, not ignored."""
+    import inspect
+
+    from uqs.logger import core
+
+    assert inspect.signature(core.get_logger).parameters == {}
+    with pytest.raises(TypeError):
+        core.get_logger(__name__)  # ty: ignore[too-many-positional-arguments]

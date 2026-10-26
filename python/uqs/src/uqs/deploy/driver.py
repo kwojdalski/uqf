@@ -9,7 +9,7 @@ import time
 from datetime import UTC, datetime
 
 from uqs.deploy import components, converted_override, fetch, hdb, overrides, runtime_install
-from uqs.deploy.artifact import Artifact, release_runtime
+from uqs.deploy.artifact import Artifact, ReleaseError, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
 from uqs.deploy.plan import plan
 from uqs.deploy.prune import prune_locked
@@ -21,7 +21,7 @@ from uqs.logger import get_logger
 from uqs.paths import repo_root
 from uqs.stack.converted import ATTEMPT_VAR
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) -> int:
@@ -41,7 +41,10 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
         bundled = runtime_install.load(cfg.torq_runtime)
         exceptions += overrides.for_runtime(cfg, bundled.path.name, bundled.sha256, bundled.pinned)
         dep.torq_runtime = bundled
-    dep.runtime = release_runtime(pkg.manifest)
+    try:
+        dep.runtime = release_runtime(pkg.manifest)
+    except ReleaseError as exc:
+        raise DeployError(exc.stage, str(exc)) from None
     if cfg.runtime and cfg.runtime != dep.runtime:
         raise DeployError(
             "artifact",

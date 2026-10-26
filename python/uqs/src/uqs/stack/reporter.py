@@ -62,7 +62,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import Runtime
 from uqs.stack import deployment
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: reporter.q's columns, in its order (csvloader in
 #: lib/torq/code/processes/reporter.q, read as "s**s*Ssuuun*").

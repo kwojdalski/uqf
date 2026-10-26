@@ -31,7 +31,7 @@ app = typer.Typer(
     help="Bridges lib/torq + lib/torq-finance-starter-pack into a runnable demo.",
 )
 console = Console()
-log = get_logger(__name__)
+log = get_logger()
 
 #: `uqs job ...`: everything about one ETL job short of the fleet's
 #: lifecycle (#1417). Authoring - new, remove, install - WRITES jobs into the

@@ -33,7 +33,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.procs import effective_process_rows, resolve_process_config
 
-log = get_logger(__name__)
+log = get_logger()
 
 HEADER = "TIME | PROCESS | STATUS | PID | PORT"
 

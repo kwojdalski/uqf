@@ -32,7 +32,7 @@ from uqs.deploy.config import Config, DeployError
 from uqs.deploy.remote import Transport, _checked, q, script
 from uqs.logger import get_logger
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: Slack past the holder's longest step before its silence means it is gone.
 MARGIN = 60

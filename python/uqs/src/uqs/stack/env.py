@@ -27,7 +27,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import RUNTIME_ENV
 from uqs.stack import qtree
 
-log = get_logger(__name__)
+log = get_logger()
 
 #: The variable naming the deployment set's file to every TorQ process
 #: (stack/deployment.py writes it, scripts/torqcode/handlers/deployment.q reads it).

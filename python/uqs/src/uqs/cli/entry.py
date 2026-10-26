@@ -76,7 +76,7 @@ from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError
 from uqs.stack.envfiles import load_repo_env_files
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 def main() -> None:

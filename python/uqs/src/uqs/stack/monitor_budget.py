@@ -24,7 +24,7 @@ from uqs.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsPaths
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 # Proctypes monitor1 must also subscribe to, on top of the ten the vendored

@@ -14,7 +14,7 @@ from pathlib import Path
 from uqs.logger import get_logger
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIME_ENV, RUNTIMES, Runtime
 
-log = get_logger(__name__)
+log = get_logger()
 
 
 #: ---------------------------------------------------------------------------
