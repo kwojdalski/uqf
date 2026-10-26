@@ -92,10 +92,20 @@ def receive(
     attach: Annotated[
         str, typer.Option("--attach", help="The saved, verified attachment whose HDB it writes")
     ],
-    port: Annotated[int, typer.Option("--port", help="The port the extractor connects to")],
+    port: Annotated[
+        int | None, typer.Option("--port", help="The port the extractor connects to")
+    ] = None,
     max_rows: Annotated[
-        int, typer.Option("--max-rows", help="The most rows one batch may carry")
+        int, typer.Option("--max-rows", help="The most rows one message may carry")
     ] = 100_000,
+    stop: Annotated[
+        bool,
+        typer.Option(
+            "--stop",
+            help="Stop this machine's receiver for the attachment instead, so a detach can go "
+            "ahead; an extractor then fails its next window without covering it",
+        ),
+    ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Print what started as JSON")] = False,
 ) -> None:
     """Start the receiver for a backfill extracted on another machine (#1650).
@@ -108,6 +118,14 @@ def receive(
     HDB writer; the readers are asked to reload as rows finish. It authenticates the
     attachment's stack user, and stops itself where the end-of-day fence begins.
     """
+    if stop:
+        stopped = backfill_remote.stop_receivers(attach)
+        names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
+        console.print(f"stopped: {names}", markup=False)
+        raise typer.Exit(code=0)
+    if port is None:
+        _die(UqsError("--port is required to start a receiver: the port the extractor connects to"))
+        return
     try:
         att = config.load(attach)
         out = backfill_remote.receive(

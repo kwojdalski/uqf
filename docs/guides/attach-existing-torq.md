@@ -396,13 +396,24 @@ directory:
   in doubt: check the target, then `.qetl.io.remote.forget` it.
 - `upsert`, `replace` and `ignore` write it again, which is harmless.
 
-`scripts/test.py q-remote-writer` runs the receiver and an extractor between two
-processes. Not yet done:
+A window larger than one message (`--max-rows`, 100000 by default) is sent in
+chunks of 50000 rows. The receiver stages them and commits the window only when
+its last chunk arrives and the reassembled rows match the batch's id, so a
+window that stops half-way writes nothing and its coverage does not move. Each
+chunk is a synchronous call, so the extractor never runs ahead of the receiver.
+The receiver holds at most `-max_staged_rows` rows staged across batches in
+flight (5000000 by default) and refuses more as busy, and it drops a batch
+staged for longer than ten minutes. Resending is safe: a chunk sent twice
+replaces itself, and a committed batch answers `duplicate` at its first chunk.
 
-- chunked transfers with backpressure (one batch is one message);
-- detach coordination with a receiver running on another machine (a receiver
-  holds the attachment's owner record on its own machine, so detach refuses
-  there).
+A running receiver holds the attachment's owner record on the stack's machine,
+so `uqs job detach` there refuses while it runs.
+`uqs job receive WORKER --attach NAME --stop` stops it. An extractor elsewhere
+then fails its next window without covering it, and the next run, once a
+receiver is back, sends it again.
+
+`scripts/test.py q-remote-writer` runs the receiver and an extractor between two
+processes.
 
 Reactions of the backfilled dataset (`rebuild_positions`, for example) write
 through the same manager and are refused, and recorded as owed: they belong on

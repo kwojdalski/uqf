@@ -25,8 +25,10 @@ The attachment must carry the same name on both, because the grant is by name.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
+import signal
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,6 +41,7 @@ from uqs.attach.backfill_plan import admit, evaluate
 from uqs.attach.backfill_run import LOGS, REACH_PASSWORD_ENV, RUNNER, Launched, q_date
 from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter
+from uqs.liveness import on_this_host
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs
@@ -227,3 +230,21 @@ def receive(
         "readers": readers.split(",") if readers else [],
         "log": str(log),
     }
+
+
+def stop_receivers(attachment: str, attach_root: Path | None = None) -> list[dict[str, Any]]:
+    """Stop this machine's receivers for `attachment` (`uqs job receive --stop`), so a
+    detach here - which refuses while one runs - can go ahead. An extractor elsewhere
+    then fails its next window without covering it, and nothing it sent half-way is
+    written (a staged batch is committed only whole). Returns the receivers stopped."""
+    stopped = []
+    for run in backfill_owner.active(attachment, attach_root):
+        if not str(run.get("worker", "")).endswith(".receiver") or not on_this_host(
+            str(run.get("host", ""))
+        ):
+            continue
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(int(run["pid"]), signal.SIGTERM)
+        backfill_owner.release(attachment, str(run["worker"]), attach_root)
+        stopped.append(run)
+    return stopped
