@@ -1,11 +1,11 @@
-"""A bundled TorQ runtime on the server: installed once, never rewritten
-(#1557, step 5).
+"""A bundled runtime on the server - TorQ's or q's - installed once, never
+rewritten (#1557, steps 5 and 6).
 
-A runtime (deploy/torq_runtime.py) lives at <dest>/shared/runtimes/torq/<sha256>/,
-named by the sha256 of the archive it came from, beside a marker file holding
-that sha256 and the RUNTIME_MANIFEST.json it shipped with. A push with
-`torq_mode = "bundled"`, under the deploy lock and before its release is
-transferred:
+A runtime (deploy/torq_runtime.py, deploy/q_runtime.py) lives at
+<dest>/shared/runtimes/<component>/<sha256>/, named by the sha256 of the
+archive it came from, beside a marker file holding that sha256 and the
+RUNTIME_MANIFEST.json it shipped with. A push with `torq_mode` or `q_mode`
+"bundled", under the deploy lock and before its release is transferred:
 
   - finds no such directory: uploads the archive, checks its sha256 ON THE
     SERVER, extracts it into a hidden .partial directory, writes the marker,
@@ -19,21 +19,26 @@ transferred:
 
 The release's deploy.env then names it: TORQHOME=<runtime>/torq and
 TORQAPPHOME=<runtime>/torq-finance-starter-pack, and torq.sh is
-$TORQHOME's. Each release keeps naming its own runtime, so a rollback
-(deploy/rollback.py, which sources each release's own deploy.env) runs the
-release it returns to on the TorQ it was deployed with; `uqs deploy prune`
-keeps every runtime a remaining release's deploy.env names.
+$TORQHOME's; QCMD=<runtime>/q and QHOME=<runtime>. Each release keeps naming
+its own runtimes, so a rollback (deploy/rollback.py, which sources each
+release's own deploy.env) runs the release it returns to on the TorQ and q
+it was deployed with; `uqs deploy prune` keeps every runtime a remaining
+release's deploy.env names.
+
+A q runtime is run once installed (`probe`): it must answer that it is
+PeachQ, and the .z.K it reports is the version the report records.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from uqs.deploy import q_runtime, torq_runtime
 from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.config import REPLACE_PY, SHA256_PY, DeployError
 from uqs.deploy.remote import q
 from uqs.deploy.server import Server
-from uqs.deploy.torq_runtime import RUNTIMES_DIR, Runtime, read_runtime
+from uqs.interpreter import PEACHQ
 from uqs.logger import get_logger
 
 log = get_logger()
@@ -89,12 +94,19 @@ print("runtime=ok")
 REUSE, INSTALL = "already on the server, reused", "not on the server yet, installed write-once"
 
 
-def load(path: str | None) -> Runtime:
-    """The bundled TorQ runtime a push was given, checked whole."""
+#: Each component's runtime reader.
+READERS = {"torq": torq_runtime.read_runtime, "q": q_runtime.read_runtime}
+#: Any runtime: torq_runtime.Runtime or q_runtime.QRuntime.
+Runtime = torq_runtime.Runtime | q_runtime.QRuntime
+
+
+def load(component: str, path: str | None) -> Runtime:
+    """The bundled runtime of `component` a push was given, checked whole."""
     if not path:
-        raise DeployError("arguments", "torq_mode is bundled, and needs torq_runtime")
+        needs = f"{component}_mode is bundled, and needs {component}_runtime"
+        raise DeployError("arguments", needs)
     try:
-        return read_runtime(Path(path))
+        return READERS[component](Path(path))
     except ReleaseError as exc:
         raise DeployError(exc.stage, str(exc)) from None
 
@@ -105,7 +117,7 @@ def _check(dep: Server, rt: Runtime, stage: str) -> str:
     home = rt.directory(dep.cfg.dest)
     out = dep.run(
         stage,
-        "reading the TorQ runtime's directory",
+        f"reading the {rt.label} runtime's directory",
         f"if [ ! -e {q(home)} ]; then echo runtime=absent; else",
         f"  python3 -c {q(VERIFY_PY)} {q(home)} {q(rt.sha256)} {q(rt.manifest_sha256)}",
         "fi",
@@ -133,21 +145,22 @@ def install(dep, rt: Runtime, rid: str) -> str:
     """Install `rt` under the lock, or reuse it: "installed" or "reused".
     `dep` is a stages.Deployment, whose upload this uses."""
     if _check(dep, rt, "runtime") == REUSE:
-        log.info("TorQ runtime {} is already installed: reused", rt.sha256[:12])
+        log.info("{} runtime {} is already installed: reused", rt.label, rt.sha256[:12])
         return "reused"
     c = dep.cfg
     home = rt.directory(c.dest)
     staging = f"{c.dest}/staging/{rid}"
-    partial = f"{c.dest}/{RUNTIMES_DIR}/.{rt.sha256}.partial"
+    runtimes = f"{c.dest}/{rt.runtimes_dir}"
+    partial = f"{runtimes}/.{rt.sha256}.partial"
     dep.run(
         "runtime",
         "creating the runtime's directories",
-        f"mkdir -p {q(staging)} {q(f'{c.dest}/{RUNTIMES_DIR}')}",
+        f"mkdir -p {q(staging)} {q(runtimes)}",
     )
     archive = dep.upload(rt.path, staging)
     out = dep.run(
         "runtime",
-        "checking the TorQ runtime and installing it",
+        f"checking the {rt.label} runtime and installing it",
         f"got=$(python3 -c {q(SHA256_PY)} {q(archive)})",
         f'if [ "$got" != {q(rt.sha256)} ]; then',
         '  echo "checksum mismatch: the runtime arrived as $got" >&2',
@@ -172,5 +185,25 @@ def install(dep, rt: Runtime, rid: str) -> str:
     )
     if "runtime=ok" not in out:
         raise DeployError("runtime", f"the runtime install printed no verdict: {out.strip()}")
-    log.info("TorQ runtime {} installed at {}", rt.sha256[:12], home)
+    log.info("{} runtime {} installed at {}", rt.label, rt.sha256[:12], home)
     return "installed"
+
+
+def probe(dep: Server, rt: q_runtime.QRuntime) -> str:
+    """Run the installed q, as the release will: it must say it is PeachQ.
+    Its .z.K, the version the report records."""
+    home = rt.directory(dep.cfg.dest)
+    out = dep.run(
+        "runtime",
+        "running the bundled q",
+        "probe=$(mktemp -d)",
+        f"printf '%s' {q(q_runtime.PROBE)} > \"$probe/probe.q\"",
+        f"QHOME={q(home)} timeout {dep.cfg.smoke_timeout} {q(f'{home}/{q_runtime.BINARY}')} "
+        '"$probe/probe.q" -q 2>&1 || true',
+        'rm -rf "$probe"',
+    )
+    impl, version = q_runtime.parse_probe(out)
+    if impl != PEACHQ:
+        why = f"says it is {impl} - {q_runtime.KX_REFUSAL}" if impl else "did not run there"
+        raise DeployError("runtime", f"the bundled q at {home} {why}: {out.strip()[-300:]}")
+    return version

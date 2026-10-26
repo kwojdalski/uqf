@@ -8,9 +8,11 @@ import json
 from uqs.deploy.artifact import compatible
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.lock import Lock
+from uqs.deploy.q_runtime import QRuntime
 from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
 from uqs.deploy.selection import Selection
 from uqs.deploy.torq_runtime import Runtime
+from uqs.interpreter import PEACHQ
 from uqs.logger import get_logger
 from uqs.runtimes import DEFAULT_RUNTIME
 from uqs.stack import site_fields
@@ -42,6 +44,8 @@ class Server:
         #: torq_mode bundled's runtime (deploy/torq_runtime.py), which
         #: deploy.env then names in place of an existing TorQ
         self.torq_runtime: Runtime | None = None
+        #: q_mode bundled's PeachQ (deploy/q_runtime.py): deploy.env's QCMD and QHOME
+        self.q_runtime: QRuntime | None = None
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -88,17 +92,19 @@ class Server:
             )
 
     def env_lines(self) -> list[str]:
-        """deploy.env: the TorQ - external, or the bundled runtime's - q and
-        the stable data directory."""
+        """deploy.env: the TorQ and the q - external, or the bundled runtimes'
+        - and the stable data directory."""
         c = self.cfg
         torq_home, torq_app_home = c.torq_home, c.torq_app_home
         if self.torq_runtime is not None:
             torq_home, torq_app_home = self.torq_runtime.homes(c.dest)
+        q_env = [(k, self.q_env.get(k, v)) for k, v in (("QCMD", c.qcmd), ("QHOME", c.qhome))]
+        if self.q_runtime is not None:
+            q_env = self.q_runtime.env(c.dest)
         pairs = [
             ("TORQHOME", torq_home),
             ("TORQAPPHOME", torq_app_home),
-            ("QCMD", self.q_env.get("QCMD", c.qcmd)),
-            ("QHOME", self.q_env.get("QHOME", c.qhome)),
+            *q_env,
             ("UQS_DATA_ROOT", c.data_root),
             ("UQS_RUNTIME", self.runtime),
             # a source with no credential is refused, never read as its fixture
@@ -144,12 +150,23 @@ class Server:
             "release_dir": f"{self.releases}/{self.release}" if self.release else "",
             "expected_user": c.remote_user or "",
         }
-        return script(*(f"{k}={q(v)}" for k, v in values.items())) + PREFLIGHT
+        body = PREFLIGHT
+        if self.q_runtime is not None:
+            # A bundled q is installed under the lock, and run there
+            # (runtime_install.probe): none is looked for on the server.
+            start, end = body.index(Q_RESOLUTION[0]), body.index(Q_RESOLUTION[1])
+            body = body[:start] + body[end:]
+        return script(*(f"{k}={q(v)}" for k, v in values.items())) + body
 
     def preflight(self) -> dict[str, str]:
         r = self.remote.run(self.preflight_script(), self.cfg.command_timeout, "preflight")
         out = _checked(r, "preflight", "the preflight checks")
         facts = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        rt = self.q_runtime
+        if rt is not None:  # the version it reported building; it is run once installed
+            home = rt.directory(self.cfg.dest)
+            facts.update(qhome=home, qcmd=f"{home}/q", qversion=rt.version, qimpl=PEACHQ)
+            facts.update(qhome_from="bundled", qcmd_from="bundled")
         if self.cfg.remote_user and facts.get("user") != self.cfg.remote_user:
             raise DeployError(
                 "preflight",
@@ -367,3 +384,7 @@ if [ -d "$lock" ]; then
   echo "locked=$(head -n 1 "$lock/owner" 2>/dev/null || echo unknown), last beat ${age}s ago"
 fi
 """
+
+#: Where PREFLIGHT resolves and runs the server's q: from the first line to
+#: the second, exclusive. A push with a bundled q leaves it out.
+Q_RESOLUTION = ("# QHOME: --qhome", 'if [ -n "$odbc_home" ]')

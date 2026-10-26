@@ -71,6 +71,9 @@ SAMPLES: dict[str, Any] = {
     "torq_mode": "bundled",
     "torq_runtime": "dist/torq-runtime.tar.gz",
     "torq_runtime_sha256": "cd" * 32,
+    "q_mode": "bundled",
+    "q_runtime": "dist/q-runtime.tar.gz",
+    "q_runtime_sha256": "ef" * 32,
     "fix_hdb": True,
     "keep": 3,
     "soak": 45,
@@ -89,6 +92,9 @@ BESIDE: dict[str, dict[str, Any]] = {
     "torq_mode": {"torq_runtime": "dist/torq-runtime.tar.gz"},
     "torq_runtime": {"torq_mode": "bundled"},
     "torq_runtime_sha256": {"torq_mode": "bundled", "torq_runtime": "dist/torq-runtime.tar.gz"},
+    "q_mode": {"q_runtime": "dist/q-runtime.tar.gz"},
+    "q_runtime": {"q_mode": "bundled"},
+    "q_runtime_sha256": {"q_mode": "bundled", "q_runtime": "dist/q-runtime.tar.gz"},
 }
 
 #: Options with no valid value but their default yet: each component's mode

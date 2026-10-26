@@ -1,5 +1,5 @@
 """`uqs deploy push`'s component modes (#1557, deploy/components.py): how q,
-TorQ and Python reach the server, and a bundled TorQ's runtime. Beside
+TorQ and Python reach the server, and a bundled TorQ's and q's runtimes. Beside
 cli/deploy.py, which takes each as a parameter, so the push command stays
 readable in one sitting."""
 
@@ -19,7 +19,14 @@ def _mode(component: str, fields: str, bundled: str) -> typer.models.OptionInfo:
     )  # fmt: skip
 
 
-QMode = Annotated[str, _mode("q", "the q of --qcmd/--qhome", "not yet supported (#1557)")]
+QMode = Annotated[
+    str,
+    _mode(
+        "q",
+        "the q of --qcmd/--qhome",
+        "the PeachQ of --q-runtime, installed once under shared/runtimes/q/ (never KX's q)",
+    ),
+]
 TorqMode = Annotated[
     str,
     _mode(
@@ -44,5 +51,21 @@ TorqRuntimeSha256 = Annotated[
         "--torq-runtime-sha256",
         metavar="SHA256",
         help="Refuse a TorQ runtime whose sha256 is anything else (usually a target's)",
+    ),
+]
+QRuntime = Annotated[
+    str | None,
+    typer.Option(
+        "--q-runtime",
+        metavar="FILE",
+        help="With --q-mode bundled: the PeachQ runtime `uqs deploy build-runtime q` made",
+    ),
+]
+QRuntimeSha256 = Annotated[
+    str | None,
+    typer.Option(
+        "--q-runtime-sha256",
+        metavar="SHA256",
+        help="Refuse a q runtime whose sha256 is anything else (usually a target's)",
     ),
 ]
