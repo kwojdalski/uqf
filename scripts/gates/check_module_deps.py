@@ -36,6 +36,17 @@ Four rules, each a failure on its own:
 
 A `\\d` that opens a nested context is refused by check_nested_contexts.py.
 
+TWO READERS OF THE SAME EDGES (#1690). With a qlinter that has `qlinter
+analyze graph` (scripts/gates/qlint_graph.py says which, and where it looks),
+the edges are q-lint's file graph over the library files, mapped to modules.
+Without one - the pinned 0.14.14 the q-traps hook requires has no graph - they
+come from the regex reader below, which is what this gate has always used.
+Both find the same 31 edges on this tree, and
+scripts/gates/tests/test_check_module_deps.py holds them equal wherever a
+graph-capable qlinter is installed; the regex reader goes once the pin in
+.qlinter-version moves past the graph's release. Either way a message names
+the line the regex reader found, and the file alone when only the graph saw it.
+
 STRING AND COMMENT AWARE, like check_etl_layering.py: an error message or a
 comment naming another module's function documents it and is not a call.
 
@@ -44,11 +55,26 @@ comment naming another module's function documents it and is not a call.
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def _load_qlint_graph():
+    spec = importlib.util.spec_from_file_location(
+        "qlint_graph", Path(__file__).resolve().parent / "qlint_graph.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("qlint_graph", module)
+    spec.loader.exec_module(module)
+    return module
+
+
+qlint_graph = _load_qlint_graph()
 
 #: The library: one module per file directly under these src/ directories.
 #: Not src/etl/ (held by check_etl_layering.py) and not the loaders.
@@ -190,8 +216,8 @@ def definitions(root: Path = REPO) -> dict[tuple[str, str], list[Path]]:
     return found
 
 
-def edges(root: Path = REPO, groups: dict[str, str] = GROUPS) -> dict[tuple[str, str], str]:
-    """{(from, to): the first `path:line` that makes the edge}."""
+def regex_edges(root: Path = REPO, groups: dict[str, str] = GROUPS) -> dict[tuple[str, str], str]:
+    """{(from, to): the first `path:line` that makes the edge}, read by regex."""
     owner: dict[tuple[str, str], str] = {}
     for key, paths in definitions(root).items():
         mods = {module_of(p, groups) for p in paths}
@@ -206,6 +232,43 @@ def edges(root: Path = REPO, groups: dict[str, str] = GROUPS) -> dict[tuple[str,
                 if to and to != me:
                     found.setdefault((me, to), f"{path.relative_to(root)}:{n}")
     return found
+
+
+def graph_edges(
+    root: Path = REPO, groups: dict[str, str] = GROUPS, qlinter: str | None = None
+) -> dict[tuple[str, str], str]:
+    """{(from, to): the first file that makes the edge}, from `qlinter analyze graph`.
+
+    Only the library's own files are given to the graph, so a name the ETL
+    or a test also defines does not draw an edge out of the library.
+    """
+    lib = {str(p.relative_to(root)): p for p in files(root)}
+    g = qlint_graph.graph(sorted(lib), cwd=root, qlinter=qlinter)
+    found: dict[tuple[str, str], str] = {}
+    for src in sorted(g):
+        if src not in lib:
+            continue
+        me = module_of(lib[src], groups)
+        for dep in g[src]:
+            if dep in lib and (to := module_of(lib[dep], groups)) != me:
+                found.setdefault((me, to), src)
+    return found
+
+
+def edges(
+    root: Path = REPO, groups: dict[str, str] = GROUPS, use_graph: bool | None = None
+) -> dict[tuple[str, str], str]:
+    """{(from, to): where} - from the graph when the installed qlinter draws one.
+
+    `use_graph` None asks qlint_graph.available(); True requires the graph and
+    False forces the regex reader.
+    """
+    if use_graph is None:
+        use_graph = qlint_graph.available()
+    regex = regex_edges(root, groups)
+    if not use_graph:
+        return regex
+    return {e: regex.get(e, where) for e, where in graph_edges(root, groups).items()}
 
 
 def duplicates(root: Path = REPO) -> list[str]:
@@ -284,7 +347,11 @@ def main() -> int:
         print(p, file=sys.stderr)
     if found:
         return 1
-    print(f"check_module_deps: {len(ALLOWED)} reviewed edges, acyclic, no name defined twice")
+    reader = "qlinter analyze graph" if qlint_graph.available() else "the regex reader"
+    print(
+        f"check_module_deps: {len(ALLOWED)} reviewed edges ({reader}), acyclic, "
+        "no name defined twice"
+    )
     return 0
 
 
