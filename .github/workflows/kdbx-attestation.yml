@@ -57,10 +57,17 @@ jobs:
           tar xzf /tmp/qlinter.tar.gz -C /tmp
           install -m755 "/tmp/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
           qlinter analyze graph --help > /dev/null && echo "qlinter ${QLINT_VERSION} draws the graph"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        # The repository's Python (requires-python >=3.14): the check imports
+        # scripts/dev/test_impact.py, written - and ruff-formatted - for 3.14,
+        # which the runner's own python3 cannot parse (`except A, B:`).
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
       - name: Require the KDB-X gates to have passed on this tree
         env:
           UQF_QLINTER: /usr/local/bin/qlinter
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           KDBX_ATTESTATION_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'kdbx-attestation-override') }}
-        run: python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"
+        run: uv run --no-project --python 3.14 python scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"
