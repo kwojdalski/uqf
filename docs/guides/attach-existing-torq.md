@@ -632,25 +632,98 @@ the day they happened, and only readers that reload see them.
 `--attach` writes the HDB from the machine that runs the worker, so the HDB must
 be on that machine. When the source's driver and credentials must stay on an
 extraction machine instead, the stack's machine writes and the extraction
-machine sends. Use the same attachment, by the same name, on both:
+machine sends. The stack's machine needs none of the job's code (#1717). It
+writes under a **receiver contract**: data exported from the worker's
+declarations on the extraction machine and approved by the stack's operator.
+
+#### Piggybank: what each machine holds
+
+The Piggybank ledger is extracted on `etl-host`, which has the source's ODBC
+driver and credentials, and written into the HDB of the stack on `uat-host`:
+
+  |            | `etl-host` (extraction)                                                                             | `uat-host` (the stack)                                                                                |
+  | ---        | ---                                                                                                 | ---                                                                                                   |
+  | installed  | uqf, KDB-X, the Piggybank bundle (`uqs job install ../piggybank`): its source, transform and worker | uqf and KDB-X only: no Piggybank source, transform or worker                                          |
+  | configured | the source's credential (`UQF_SOURCE_CRED_...`); the attachment `pb-uat`                            | the attachment `pb-uat`, copied from `etl-host`; the approved contract; the stack's password variable |
+  | runs       | `uqs job backfill --attach pb-uat --writer uat-host:7090`                                           | the TorQ stack, and `uqs job receive`                                                                 |
+  | holds      | coverage, the checkpoint and the run ledger                                                         | the HDB and the receiver's batch journal                                                              |
 
 ```bash
-# on the stack's machine: admit the destination and start its receiver
-uqs job receive piggybank_ledger_backfill --attach pb-uat --port 7090
+# etl-host: attach (this records the stack, its HDB and the table), then export
+# the worker's receiver contract
+uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank --stack-id 6000 \
+    --host uat-host --consumer rdb1 --consumer wdb1 --yes
+uqs job contract export piggybank_ledger_backfill --output ledger.contract.json
 
-# on the extraction machine: extract, and send each window to the receiver
+# carry both to uat-host, into its $UQS_DATA_ROOT/attachments (here /srv/uqs): the
+# attachment's directory holds no secret - the password comes from the variable
+# it names - and the contract is data
+scp -r "$UQS_DATA_ROOT/attachments/pb-uat" uat-host:/srv/uqs/attachments/
+scp ledger.contract.json uat-host:
+
+# uat-host: approve the contract for the attachment, then start the receiver
+uqs job contract approve ledger.contract.json --attach pb-uat --conflict upsert --conflict replace
+uqs job contract list --attach pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
+uqs job receive --contract 3f9a0c2e --attach pb-uat --port 7090
+
+# etl-host: extract, and send each window to the receiver
 uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:7090 \
     --from 2026-10-01 --to 2026-10-02 --version historical-v1 --wait
 ```
 
-`receive` checks everything a local attached run checks: the verified
-attachment, its pinned HDB, the stack's writers and readers, and the end-of-day
-fence. It then starts `scripts/dev/remote_receiver.q`. The receiver writes
-through `.qetl.io.hdb_scoped`, so the lock, the date bounds, the fence and
-recovery are those of a direct write. It reloads the readers as rows finish, and
-stops itself where the fence begins. It authenticates the attachment's stack
-user through q's `-U` file, written into the destination's state directory and
-readable only by its owner. The extractor connects as that user.
+#### The receiver contract
+
+`uqs job contract export WORKER` runs a q that loads the worker
+(`scripts/dev/receiver_contract.q`) and derives the contract from its
+declarations (`.qetl.io.remote.contract.of`). It is never written by hand:
+
+  | Field                                                       | From                                                                                                                       |
+  | ---                                                         | ---                                                                                                                        |
+  | `format`, `version`                                         | `uqf-receiver-contract`, 1. A receiver refuses a version it does not read                                                  |
+  | `identity`                                                  | the first 16 hex digits of the SHA-256 of the canonical JSON. Any change is a new contract                                 |
+  | `dataset`                                                   | the worker's dataset                                                                                                       |
+  | `columns`                                                   | the transform's output columns and `meta` types. A nested `()` column takes the element type `.qetl.plant.nested` declares |
+  | `time_column`                                               | the source's time column, which the HDB is partitioned by                                                                  |
+  | `window_column`, `row_key`, `partition_column`, `partition` | the worker's window column, target key and partition, as its batches carry them                                            |
+  | `conflict_policies`                                         | every strategy the declarations admit. `replace` needs a window column, and a partition column for a partitioned worker    |
+  | `origin`                                                    | the worker, source and transform it came from, for the operator to read                                                    |
+
+`uqs job contract approve FILE --attach NAME` runs on the stack's machine. It
+refuses, and stores nothing, in any of these cases:
+
+- the contract is malformed, of an unsupported version, or altered since export;
+- the attachment is not `verified`;
+- the attachment does not publish the dataset in the contract's shape, with the
+  `time` the HDB writer adds;
+- the attachment pins no HDB that exists here.
+
+Otherwise it stores the contract beside the attachment
+(`attachments/NAME/receiver_contracts/IDENTITY.json`), bound to what the
+operator controls, not the contract:
+
+- the destination (host, stack and canonical HDB);
+- the attachment's stack user, the only writer;
+- the conflict policies (`--conflict` narrows the contract's, never widens
+  them);
+- the most rows one message may carry (`--max-rows`, 100000).
+
+A worker whose output changes has a new identity, so it must be exported and
+approved again. An attachment pointed at another HDB since the approval is
+refused by `receive` until the contract is approved again.
+
+#### What the receiver does
+
+`receive --contract ID` reads the approved record, never a worker. It checks
+everything a local attached run checks: the verified attachment, its pinned HDB,
+the stack's writers and readers, and the end-of-day fence. It then starts
+`scripts/dev/remote_receiver.q`, which loads no declaration at all: what the
+batches look like comes from the contract (`.qetl.io.remote.contract.read`). The
+receiver writes through `.qetl.io.hdb_scoped`, so the lock, the date bounds, the
+fence and recovery are those of a direct write. It reloads the readers as rows
+finish, and stops itself where the fence begins. It authenticates the
+attachment's stack user through q's `-U` file, written into the destination's
+state directory and readable only by its owner. The extractor connects as that
+user.
 
 The extractor (`--writer`) needs no HDB: the attachment names it, and only the
 receiver opens it. It plans the windows against its own coverage. Each window's
@@ -662,7 +735,10 @@ Otherwise the run ends `written_not_queryable`, as a local one does.
 Before writing anything, the receiver refuses:
 
 - an ungranted dataset, or a user the grant does not name;
-- a schema mismatch, or a batch over the row limit (`--max-rows`);
+- columns or types other than the contract's, or a batch over the approved row
+  limit;
+- a window column, row key, partition column or partition other than the
+  contract's, or a conflict policy the approval does not permit;
 - rows outside the window;
 - a request that carries anything but data (a path, a function, an extra key).
 
@@ -680,21 +756,21 @@ directory:
   in doubt: check the target, then `.qetl.io.remote.forget` it.
 - `upsert`, `replace` and `ignore` write it again, which is harmless.
 
-A window larger than one message (`--max-rows`, 100000 by default) is sent in
-chunks of 50000 rows. The receiver stages them and commits the window only when
-its last chunk arrives and the reassembled rows match the batch's id, so a
-window that stops half-way writes nothing and its coverage does not move. Each
-chunk is a synchronous call, so the extractor never runs ahead of the receiver.
-The receiver holds at most `-max_staged_rows` rows staged across batches in
-flight (5000000 by default) and refuses more as busy, and it drops a batch
-staged for longer than ten minutes. Resending is safe: a chunk sent twice
+A window larger than one message (the approval's `--max-rows`, 100000 by
+default) is sent in chunks of 50000 rows. The receiver stages them and commits
+the window only when its last chunk arrives and the reassembled rows match the
+batch's id, so a window that stops half-way writes nothing and its coverage does
+not move. Each chunk is a synchronous call, so the extractor never runs ahead of
+the receiver. The receiver holds at most `-max_staged_rows` rows staged across
+batches in flight (5000000 by default) and refuses more as busy, and it drops a
+batch staged for longer than ten minutes. Resending is safe: a chunk sent twice
 replaces itself, and a committed batch answers `duplicate` at its first chunk.
 
 A running receiver holds the attachment's owner record on the stack's machine,
 so `uqs job detach` there refuses while it runs.
-`uqs job receive WORKER --attach NAME --stop` stops it. An extractor elsewhere
-then fails its next window without covering it, and the next run, once a
-receiver is back, sends it again.
+`uqs job receive --attach NAME --stop` stops it. An extractor elsewhere then
+fails its next window without covering it, and the next run, once a receiver is
+back, sends it again.
 
 `scripts/test.py q-remote-writer` runs the receiver and an extractor between two
 processes.
@@ -858,14 +934,14 @@ would need `--network-address` for this host to be the client.
 Each scenario checks its effect on the stack's own processes, through their
 published ports, not through `uqs`:
 
-  | Scenario                                                                                  | Checked on the stack                                                                                                                                                                                                                                                                |
-  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                                                                                                                                          |
-  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                 |
-  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                                                                                                                                             |
-  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                         |
-  | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted    | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attach` registers it again and rows flow                                                                                         |
-  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                                                                                                                                               |
-  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | the day's rows counted on uat-stack's disk, coverage on uat-client, a rerun that writes nothing, no HDB on uat-client. hdb1 serves them where it maps a partitioned HDB; PeachQ's maps none, so there the run ends `written_not_queryable` with the reader's failure reported apart |
+  | Scenario                                                                                  | Checked on the stack                                                                                                                                                                                                                                                                                                                                                                       |
+  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                                                                                                                                                                                                                                                 |
+  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                                                                                                                        |
+  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                                                                                                                                                                                                                                                    |
+  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                                                                                                                                |
+  | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted    | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attach` registers it again and rows flow                                                                                                                                                                                                |
+  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                                                                                                                                                                                                                                                      |
+  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | uat-stack has no copy of the bundle: the contract is exported on uat-client and approved on uat-stack. The day's rows counted on uat-stack's disk, coverage on uat-client, a rerun that writes nothing, no HDB on uat-client. hdb1 serves them where it maps a partitioned HDB; PeachQ's maps none, so there the run ends `written_not_queryable` with the reader's failure reported apart |
 
 The lane found that a publisher attached to a stack elsewhere looked for
 discovery on its own machine; the discovery address above is the fix. It also

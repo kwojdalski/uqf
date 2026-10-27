@@ -4,12 +4,14 @@ An attached backfill (backfill_run) writes the stack's HDB from the machine it
 runs on, so the HDB must be on that machine. When the source's driver and
 credentials must stay somewhere else, the two halves run apart:
 
-  receive   on the STACK's machine: `uqs job receive W --attach NAME --port P`.
-            Resolves the destination exactly as an attached backfill does - the
-            verified attachment, its pinned HDB, the live stack's writers, readers
-            and end-of-day fence - and starts scripts/dev/remote_receiver.q, which
-            grants that one (attachment; dataset) and commits every batch through
-            the fenced HDB writer (.qetl.io.hdb_scoped). It stops at the fence.
+  receive   on the STACK's machine: `uqs job receive --contract ID --attach NAME --port P`.
+            Takes the receiver contract approved there (uqs.attach.receiver_contract)
+            - never the worker, whose code that machine need not have - and admits
+            its destination exactly as an attached backfill does: the verified
+            attachment, its pinned HDB, the live stack's writers, readers and
+            end-of-day fence. Starts scripts/dev/remote_receiver.q, which grants that
+            one (attachment; dataset) under the contract and commits every batch
+            through the fenced HDB writer (.qetl.io.hdb_scoped). It stops at the fence.
   extract   on the SOURCE's machine: `uqs job backfill W --attach NAME --writer HOST:P`.
             Resolves the same attachment WITHOUT the HDB (it is the stack's), plans
             the windows against this machine's coverage, and starts
@@ -21,6 +23,8 @@ The receiver authenticates with q's own -U file, written for the attachment's
 stack user and password and readable only by this account. The extractor
 connects as that user: one attachment, one credential, on both machines.
 The attachment must carry the same name on both, because the grant is by name.
+The contract is exported on the source's machine (`uqs job contract export W`) and
+approved on the stack's (`uqs job contract approve FILE --attach NAME`).
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from uqs.attach import backfill_owner, config
+from uqs.attach import backfill_owner, config, receiver_contract
 from uqs.attach.backfill import Destination, require_verified, resolve
 from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_plan import admit, evaluate
@@ -171,15 +175,16 @@ def _access_file(dest: Destination, user: str, password: str) -> Path:
 def receive(
     paths: UqsPaths,
     attachment: str,
-    worker: str,
+    contract_id: str,
     *,
     port: int,
     ipc: Ipc,
-    max_rows: int = 100_000,
     attach_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Admit the destination against the live stack and start its receiver;
-    what it serves, until when, and where it logs."""
+    """Start the receiver for the contract `contract_id` approved for `attachment`,
+    after admitting its destination against the live stack; what it serves, until
+    when, and where it logs. Reads no worker: the contract and its binding are all
+    it knows of the batches."""
     q = q_interpreter(os.environ)
     if q is None:
         raise UqsError(
@@ -187,26 +192,35 @@ def receive(
         )
     if not 0 < port < 65536:
         raise UqsError(f"--port {port} is not a port")
-    dest = resolve(paths, attachment, worker, attach_root=attach_root)
+    contract, binding, dest, record = receiver_contract.approved(
+        paths, attachment, contract_id, attach_root
+    )
     att = config.load(attachment, attach_root)
+    users = [str(u) for u in binding.get("users", [])]
+    if att.stack.user not in users:
+        raise UqsError(
+            f"contract {contract.identity} was approved for writer(s) "
+            f"{', '.join(users) or 'none'}, "
+            f"but attachment {attachment} connects as {att.stack.user}: approve it again"
+        )
     admission = admit(att, dest, ipc)
     assert admission.observation is not None
     co = assess(att, dest, admission.observation, admission.writers, ipc, []).as_dict()
     readers = ",".join(f"{r.procname}@{att.stack.host}:{r.port}" for r in admission.reload_targets)
-    receiver = f"{worker}.receiver"
+    receiver = f"{contract.dataset}.receiver"
     with config.locked(attachment, attach_root):
         require_verified(attachment, attach_root)
         backfill_owner.refuse_while_active(attachment, attach_root)
         access = _access_file(dest, att.stack.user, att.stack.password())
         flags = [
             "-p", str(port), "-U", str(access),
-            "-worker", worker, "-attachment", dest.attachment, "-destid", dest.identity,
+            "-contract", str(record), "-attachment", dest.attachment, "-destid", dest.identity,
             "-hdb", str(dest.hdb_dir),
             "-max_date", q_date(datetime.fromisoformat(co["last_writable_date"]).date()),
             "-deadline", runs.to_q_timestamp(datetime.fromisoformat(co["writes_stop_at"])),
             "-readers", readers or "_none_", "-user", att.stack.user,
-            "-journal", str(dest.state_dir / JOURNAL), "-writers", att.stack.user,
-            "-max_rows", str(max_rows),
+            "-journal", str(dest.state_dir / JOURNAL), "-writers", ",".join(users),
+            "-max_rows", str(int(binding.get("max_rows", receiver_contract.DEFAULT_MAX_ROWS))),
         ]  # fmt: skip
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
@@ -223,8 +237,10 @@ def receive(
         "pid": proc.pid,
         "port": port,
         "attachment": dest.attachment,
+        "contract": contract.identity,
         "dataset": dest.dataset,
         "hdb_dir": str(dest.hdb_dir),
+        "conflict_policies": binding.get("conflict_policies", contract.conflict_policies),
         "last_writable_date": co["last_writable_date"],
         "stops_at": co["writes_stop_at"],
         "readers": readers.split(",") if readers else [],
