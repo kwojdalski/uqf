@@ -9,6 +9,7 @@ from uqs.logger.core import (
     configure_logging,
     get_logger,
     is_level_enabled,
+    json_requested,
     setup_logging,
 )
 from uqs.logger.decorators import trace_calls
@@ -27,6 +28,7 @@ __all__ = [
     "configure_logging",
     "get_logger",
     "is_level_enabled",
+    "json_requested",
     "log_banner",
     "log_error_with_context",
     "log_function_call",

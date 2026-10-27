@@ -493,6 +493,7 @@ def stack_copy(tmp_path: Path):
 @needs_peachq
 @pytest.mark.skipif(not STACK, reason="UQF_PEACHQ_STACK_TEST=1 starts a PeachQ stack")
 @pytest.mark.xdist_group("torq-stack")  # both bind the fixed 6550 span
+@pytest.mark.shard_apart  # ~40s each: on separate CI runners they need not queue
 def test_a_bundles_jobs_run_on_peachq(stack_copy):
     repo, bundle, uqs, _env = stack_copy
     ledger = repo / "src" / "etl" / "installed_bundles.json"
@@ -551,6 +552,7 @@ DEMO_TABLES = ("quote", "trade", "packets")
 @needs_peachq
 @pytest.mark.skipif(not STACK, reason="UQF_PEACHQ_STACK_TEST=1 starts a PeachQ stack")
 @pytest.mark.xdist_group("torq-stack")  # both bind the fixed 6550 span
+@pytest.mark.shard_apart  # ~40s each: on separate CI runners they need not queue
 def test_a_sidecar_runs_against_a_managed_schema_without_the_demo_tables(stack_copy, tmp_path):
     """#902: every process used to load every declaration, so the demo's
     market_data - which asks for `quote` at load time - stopped a sidecar from

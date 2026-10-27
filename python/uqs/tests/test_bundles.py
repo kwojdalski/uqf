@@ -259,10 +259,11 @@ def test_an_operator_override_is_not_silently_replaced(bundle: Path, repo: Path)
     assert not (repo / STREAM_DIR / "piggy_spread.q").exists()
 
 
-def test_upgrade_moves_legacy_bundle_rows_out_of_the_host_file(bundle: Path, repo: Path) -> None:
+def test_upgrade_migrates_legacy_rows_when_bundle_file_exists(bundle: Path, repo: Path) -> None:
     _install(bundle, repo)
     old = (repo / OVERRIDES_FILE).read_text()
     (repo / OVERRIDES_FILE).unlink()
+    (repo / OVERRIDES_FILE).write_text("procname,field,value\nother_process,startwithall,0\n")
     host = repo / "python/uqs/process_overrides.csv"
     host.write_text(old + "tap1,extras,-tables quote wide_book\n")
     (bundle / "bundle.json").write_text('{"name": "piggybank", "version": "1.1.0"}')
@@ -270,7 +271,9 @@ def test_upgrade_moves_legacy_bundle_rows_out_of_the_host_file(bundle: Path, rep
         "procname,field,value\npiggy_spread1,startwithall,1\n"
     )
     _install(bundle, repo)
-    assert (repo / OVERRIDES_FILE).read_text().endswith("piggy_spread1,startwithall,1\n")
+    assert (repo / OVERRIDES_FILE).read_text() == (
+        "procname,field,value\nother_process,startwithall,0\npiggy_spread1,startwithall,1\n"
+    )
     assert host.read_text() == "procname,field,value\ntap1,extras,-tables quote wide_book\n"
 
 
