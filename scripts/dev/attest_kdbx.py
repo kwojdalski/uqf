@@ -43,20 +43,26 @@ plain run because run_coverage.q is seeded as run_tests.q is, and on KDB-X
 the two gave every test the same outcome.
 
 Why skipping a hook the change does not touch still means "every KDB-X hook
-passed on the tree that merges": the check also requires the head to contain
-the base's tip, so the merge base IS that tip, and a hook whose scope the
-diff does not touch reads on the head exactly the files it read on master's
-tip. That tip's result for the hook is the one the last PR to touch its scope
-attested on its own exact tree, and every merge since left those files as
-they were. It rests on the same assumption the check always made for paths
-outside every scope: a hook's result depends only on the files its scope
-takes - which is why a scope must be complete, and why q-docs' scope is held
-to the documents with q-example blocks by scripts/gates/check_hook_scopes.py.
+passed on the judged paths that merge": the check accepts a head only if it
+contains the base's tip or the base changed no judged path since the merge
+base (#1687). Either way the merge base's judged files are master's tip's,
+and a hook whose scope the diff does not touch reads on the head exactly the
+files it read on master's tip. That tip's result for the hook is the one the
+last PR to touch its scope attested on its own exact tree, and every merge
+since left those files as they were. It rests on the same assumption the
+check always made for paths outside every scope: a hook's result depends only
+on the files its scope takes - which is why a scope must be complete, and why
+q-docs' scope is held to the documents with q-example blocks by
+scripts/gates/check_hook_scopes.py.
 
-Run it last, after the final rebase: a rebase changes the tree and the
-attestation with it. Refuses a dirty tree, untracked files included since
-the hooks see them (what is tested must be what is committed), and any
-interpreter scripts/test.py does not identify as KDB-X.
+Run it last, after the final rebase or merge of master: either changes the
+tree and the attestation with it. A branch need not merge master in just to
+be current - only when master has changed a judged path since the branch
+forked, which is when the check would refuse it.
+
+Refuses a dirty tree, untracked files included since the hooks see them (what
+is tested must be what is committed), and any interpreter scripts/test.py does
+not identify as KDB-X.
 
     uv run python scripts/dev/attest_kdbx.py [--all] [--base REF]
 """

@@ -5,8 +5,12 @@ name: KDB-X attestation
 # only where they ran. attest_kdbx.py runs the ones whose scope the branch
 # touches and records them as a `KDB-X-gates: <tree> hooks=<ids>` trailer;
 # this fails a PR unless the head's exact tree carries trailers covering
-# every hook whose scope the PR's diff (from the merge base) touches. PRs
-# only: a push to master is not re-judged after the merge.
+# every hook whose scope the PR's diff (from the merge base) touches. A head
+# behind the base passes on its attestation only while the base's own commits
+# since the merge base touch no judged path (#1687): the merging tree then has
+# the attested tree's judged paths. Otherwise it is refused, naming the path,
+# and needs master merged in and a fresh attestation. PRs only: a push to
+# master is not re-judged after the merge.
 #
 # q-tests may have run only the q suites the change reaches (#1690), recorded
 # as `q-tests=<sha256 of the sorted file names>`. The check makes the same

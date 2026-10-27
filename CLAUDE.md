@@ -93,10 +93,12 @@ in the main checkout.
    the same set from the PR's merge base and fails the PR unless its head tree
    carries trailers covering every hook in it (#1014, #1543); a trailer without
    `hooks=` counts as all of them. A rebase changes the tree, so it needs a
-   fresh run. The only way past it is the `kdbx-attestation-override` PR label,
-   for a change no KDB-X run can judge (docs-only, no KDB-X available): the
-   check then passes with a warning that names the label, so the override stays
-   on the record.
+   fresh run. A head behind master still passes while master's commits since the
+   merge base touch no judged path; the check names the path when one does, and
+   only then must master be merged in and the tree attested again (#1687). The
+   only way past it is the `kdbx-attestation-override` PR label, for a change no
+   KDB-X run can judge (docs-only, no KDB-X available): the check then passes
+   with a warning that names the label, so the override stays on the record.
 
    `scripts/dev/ship.sh <pr> issue-<number>` does the rest once a PR may merge:
    it attests only when the check needs it, merges master in only for a conflict
