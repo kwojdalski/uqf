@@ -37,7 +37,7 @@ scripts/dev/test_impact.py selects from q-lint's dependency graph for the
 branch's change. The trailer then says `q-tests=<sha256>`, the digest of the
 sorted file names (test_impact.digest), and this check makes the same
 selection from the PR's diff and the head's tree - with the qlinter
-.qlinter-graph-rev pins, which the workflow installs - and accepts the subset
+.qlinter-version pins, which the workflow installs - and accepts the subset
 only when the digests agree. So it depends on nothing but the diff, the tree
 and that pinned binary; an attestation built with another graph binary that
 selected differently is refused, never trusted. `q-tests=all`, and a trailer
@@ -255,7 +255,7 @@ def q_tests_refusal(base: str, head: str) -> str | None:
         return (
             f"q-tests ran a subset of the q suites ({', '.join(sorted(runs))}) that is not "
             f"the one selected here ({len(plan.files)} files, {plan.record}). Was the "
-            "attestation's graph qlinter the commit .qlinter-graph-rev pins? Install that, "
+            "attestation's qlinter the release .qlinter-version pins? Install that, "
             f"or run {full}, on this tree, then push."
         )
     return None

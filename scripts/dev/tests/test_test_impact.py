@@ -141,7 +141,7 @@ def test_a_qlinter_without_the_graph_is_refused_naming_what_is_needed(
         ti.build(REPO)
     assert ti.main(["src/pricing/forwards.q"]) == 2
     err = capsys.readouterr().err
-    assert "has no `qlinter analyze graph`" in err and "0.14.14" in err
+    assert "has no `qlinter analyze graph`" in err and "0.14.15" in err
 
 
 def test_a_missing_binary_is_refused(tmp_path, monkeypatch):
@@ -437,7 +437,7 @@ def test_no_graph_qlinter_runs_the_whole_suite_and_says_why(small_repo, monkeypa
     monkeypatch.setenv("UQF_QLINTER", _fake_qlinter(tmp_path))
     plan = ti.plan(base, root)
     assert plan.files is None and plan.line == "ALL"
-    assert "the selector cannot run" in plan.why and ".qlinter-graph-rev" in plan.why
+    assert "the selector cannot run" in plan.why and ".qlinter-version" in plan.why
 
 
 def test_an_unreadable_base_runs_the_whole_suite(small_repo):
