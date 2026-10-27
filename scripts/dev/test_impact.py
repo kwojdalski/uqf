@@ -841,7 +841,7 @@ def plan_for(changed: Iterable[str], root: Path = REPO) -> Plan:
         tree = build(root)
     except qlint_graph.GraphUnavailable as e:
         short = str(e).split(". Needed:")[0]
-        return Plan(None, f"the selector cannot run: {short} (see .qlinter-graph-rev)")
+        return Plan(None, f"the selector cannot run: {short} (see .qlinter-version)")
     except RuntimeError as e:
         return Plan(None, f"the selector failed: {e}")
     sel = select(changed, tree)

@@ -48,7 +48,7 @@ Run everything from the repository root; the load scripts use relative paths.
   | **`rlwrap`**                                          | `torq.sh` debug starts and `qcon`; `uqs start` refuses without it                                    | yes, for the fleet                                 |
   | **`multitail`**                                       | `uqs logs --multitail`                                                                               | no - `uqs logs -f` follows the same files          |
   | **Node**                                              | the [browser application](web/README.md), `^22.13 \|\| ^24 \|\| >=26`                                | no - only for `web/`                               |
-  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source; `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.14 --locked` | no - never needed to build, test or run            |
+  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source; `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.16 --locked` | no - never needed to build, test or run            |
 
 **Setup is `./install.sh`.** It checks these, says how to install anything
 missing (it never runs sudo), then puts `uqs` on your PATH. Flags: `--dev`

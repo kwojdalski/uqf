@@ -236,7 +236,7 @@ repos:
             # plus what is being committed - the branch's whole change, as the
             # KDB-X attestation check reads the PR, not just this commit. It
             # prints ALL - and the whole suite runs - when it says so, when it
-            # cannot run (no graph-capable qlinter; see .qlinter-graph-rev),
+            # cannot run (no graph-capable qlinter; see .qlinter-version),
             # or when UQF_Q_TESTS_FULL=1. attest_kdbx.py hands its own
             # decision over in UQF_Q_TESTS_SELECTION, so the run is the one
             # its trailer records. The full suite still runs on master.

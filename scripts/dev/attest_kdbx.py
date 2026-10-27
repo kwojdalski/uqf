@@ -22,7 +22,7 @@ scripts/dev/test_impact.py makes for `base...HEAD` from q-lint's dependency
 graph, handed to the hook in UQF_Q_TESTS_SELECTION so the hook runs exactly
 what is recorded. `q-tests=<sha256>` records that subset by its digest
 (test_impact.digest: the sorted file names), and CI's check, with the qlinter
-.qlinter-graph-rev pins, makes the same selection from the PR's diff and
+.qlinter-version pins, makes the same selection from the PR's diff and
 accepts the trailer only when the digests agree. `q-tests=all` records the
 whole suite, which needs no recomputation: what ran when the selector said
 ALL, could not run here (no graph-capable qlinter), or UQF_Q_TESTS_FULL=1 was
