@@ -168,7 +168,14 @@ One lane per layer; run the one matching what you changed.
 for Python, statement and branch coverage for q through the [`.cov`
 library](scripts/dev/coverage.q). `q-coverage` is the gate: it fails when the
 set of functions nothing enters differs from `tests/q/coverage_baseline.txt` in
-either direction.
+either direction. At commit and in an attestation it judges only the production
+files a change reaches, running q-tests' suites plus, for each function judged,
+a suite that enters it according to `tests/q/coverage_map.txt`; a subset that
+finds a function never entered hands the verdict to a whole-suite run. The whole
+suite, judging every function, runs on master's tip through
+`python3 scripts/dev/master_coverage.py` on a machine with KDB-X:
+`scripts/dev/ship.sh` starts it after each merge, and it also refreshes the map
+(`--write-map tests/q/coverage_map.txt`) (#1719).
 
 ## Licensing
 

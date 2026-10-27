@@ -267,6 +267,96 @@
     .qunit.assertEquals[.qt.support.selected_suites[all_suites;("-files";"test_seed.q,test_suite_layout.q")];
         all_suites where all_suites in `.qt.harness.layout`.qt.harness.seed;"two files, two suites, in run order"]};
 
+/ --- coverage of a subset: -modules (#1719) --------------------------------
+/ `q tests/q/run_coverage.q -files a.q -modules src/x.q` runs a's suites and
+/ judges only what src/x.q defines; scripts/test.py q-coverage hands any
+/ failure of it to a run of the whole suite.
+
+.qt.harness.layout.test_the_modules_option_is_read_from_the_command_line:{[t]
+    .qunit.assertEquals[.qt.support.modules_option ("-files";"test_a.q");::;"not given"];
+    .qunit.assertEquals[.qt.support.modules_option ("-modules";"src/a.q, src/b.q");("src/a.q";"src/b.q");
+        "comma-separated, trimmed"];
+    .qunit.assertThrows[.qt.support.modules_option;("-modules";" , ");
+        "support.modules_option: -modules names no file - give .q paths, comma-separated";
+        "a subset judging nothing is refused, not run"]};
+
+.qt.harness.layout.test_a_function_s_module_is_the_file_that_defined_it:{[t]
+    .qunit.assertEquals[.qt.support.source_file `.qt.support.modules_option;"tests/lib/support.q";
+        "relative to the repository root, where every runner starts"];
+    .qunit.assertEquals[.qt.support.source_file `.qt.fixture.no_such_function;"";"no function, no file"];
+    nms:`.qt.support.modules_option`.qt.support.suite_files`.qt.harness.layout.probe_name;
+    .qunit.assertEquals[.qt.support.defined_in[nms;enlist "tests/lib/support.q"];
+        `.qt.support.modules_option`.qt.support.suite_files;"only what the module defines"];
+    .qunit.assertEquals[.qt.support.defined_in[nms;::];nms;"every function, without -modules"]};
+
+/ The gate's two directions, each among the functions a subset judges - a
+/ function it does not judge (`.o.g`, entered only by a suite outside the
+/ subset) is not reported either way.
+.qt.harness.layout.test_a_subset_still_fails_a_newly_uncovered_function_it_judges:{[t]
+    known:`.m.f`.m.g`.o.g`.o.h;
+    judged:`.m.f`.m.g;
+    g:.qt.support.coverage_gate[enlist `.m.f;`symbol$();judged;known];
+    .qunit.assertEquals[g`new_gaps;enlist `.m.f;"a function of a changed module nothing entered"];
+    .qunit.assertEquals[g`closed;`symbol$();"and nothing closed"]};
+
+.qt.harness.layout.test_a_subset_does_not_report_what_it_does_not_judge:{[t]
+    known:`.m.f`.m.g`.o.g`.o.h;
+    judged:`.m.f`.m.g;
+    / .o.g is no probe here, so not cold; .o.h, in the baseline, was not
+    / instrumented and so not cold either - neither is this run's to judge
+    g:.qt.support.coverage_gate[`symbol$();enlist `.o.h;judged;known];
+    .qunit.assertEquals[g`new_gaps;`symbol$();"nothing outside the judged modules is a new gap"];
+    .qunit.assertEquals[g`closed;`symbol$();"nor a closed baseline entry"]};
+
+.qt.harness.layout.test_a_subset_still_reports_a_closed_entry_it_judges_and_a_gone_one:{[t]
+    known:`.m.f`.m.g`.o.g;
+    g:.qt.support.coverage_gate[`symbol$();`.m.g`.gone.f`.o.g;`.m.f`.m.g;known];
+    .qunit.assertEquals[g`closed;`.gone.f`.m.g;
+        "a judged entry now entered, and one naming no function at all"]};
+
+.qt.harness.layout.test_a_whole_run_is_judged_as_before:{[t]
+    known:`.m.f`.m.g`.o.g;
+    g:.qt.support.coverage_gate[`.m.f`.o.g;`.o.g`.m.g;known;known];
+    .qunit.assertEquals[g`new_gaps;enlist `.m.f;"cold, not in the baseline"];
+    .qunit.assertEquals[g`closed;enlist `.m.g;"in the baseline, entered"]};
+
+/ --- the coverage map: which suite files enter each function (#1719) -------
+
+.qt.harness.layout.test_the_map_option_is_read_from_the_command_line:{[t]
+    .qunit.assertEquals[.qt.support.map_option ("-files";"test_a.q");::;"not given"];
+    .qunit.assertEquals[.qt.support.map_option ("-map";"tests/q/coverage_map.txt");"tests/q/coverage_map.txt";"a path"];
+    .qunit.assertThrows[.qt.support.map_option;enlist "-map";
+        "support.map_option: -map names no file - give the path to write";"no path is refused"]};
+
+/ Three functions whose probes start at 100: the first has two (100 101),
+/ the second none - nothing can enter it - and the third three (102 103 104).
+/ Suite .s1 raised 100 and 101, .s2 raised 103 only (the third's second
+/ statement, not its first: not entered) and .s3 raised 102.
+.qt.harness.layout.test_the_coverage_map_names_the_files_whose_suites_enter_each_function:{[t]
+    nms:`.qt.support.map_option`.qt.support.suite_files`.qt.support.select_files;
+    res:([] name:nms; lines:(100 101;`long$();102 103 104));
+    hits:`.s1`.s2`.s3!(100 101;enlist 103;enlist 102);
+    files:`test_a.q`test_b.q`test_c.q!(enlist `.s1;`.s1`.s3;enlist `.s2);
+    m:.qt.support.coverage_map[res;100;hits;files];
+    .qunit.assertEquals[m`function;`.qt.support.map_option`.qt.support.select_files;
+        "the functions some suite entered, sorted - not the one with no statement"];
+    .qunit.assertEquals[m`module;2#`$"tests/lib/support.q";"by the file that defined them"];
+    .qunit.assertEquals[m`files;(`test_a.q`test_b.q;enlist `test_b.q);
+        "every file declaring a suite that entered it - and not .s2's, which ran a later statement only"]};
+
+.qt.harness.layout.test_the_coverage_map_of_a_run_nothing_entered_is_empty:{[t]
+    res:([] name:enlist `.qt.support.map_option; lines:enlist 100 101);
+    m:.qt.support.coverage_map[res;100;(enlist `.s1)!enlist `long$();(enlist `test_a.q)!enlist enlist `.s1];
+    .qunit.assertEquals[count m;0;"no row"];
+    .qunit.assertEquals[cols m;`module`function`files;"the same columns"]};
+
+.qt.harness.layout.test_the_coverage_map_is_written_one_tab_separated_line_per_function:{[t]
+    m:([] module:enlist `$"src/a.q"; function:enlist `.a.f; files:enlist `test_a.q`test_b.q);
+    lines:.qt.support.map_lines m;
+    .qunit.assertEquals[last lines;"src/a.q\t.a.f\ttest_a.q,test_b.q";"module, function, files"];
+    .qunit.assertTrue[all "#"=first each -1_lines;"a commented header before it"];
+    .qunit.assertEquals[distinct type each lines;enlist 10h;"every line a string, as 0: needs"]};
+
 .qt.harness.layout.test_a_suite_split_over_files_is_found_from_each:{[t]
     / A file declaring tests in a parent and a child suite selects both. The
     / file is only read, never loaded, so its names are not reserved ones.

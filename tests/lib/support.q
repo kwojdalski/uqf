@@ -142,6 +142,144 @@
     files:.qt.support.select_files[.qt.support.suite_files[];sel];
     .qt.support.suites_of[suites;"tests/q/",/:string files]}
 
+// --- coverage of a subset: -modules (#1719) --------------------------------
+// `q tests/q/run_coverage.q -files a.q,b.q -modules src/x.q,src/y.q` runs the
+// suites those files define and instruments and judges only the functions
+// the named production files define - what scripts/dev/test_impact.py's
+// coverage_for picks for a change. A subset that finds a function newly
+// uncovered exits 3 and scripts/test.py q-coverage hands the verdict to a run
+// of the whole suite; one that finds a baseline entry now entered fails, as
+// the whole suite would (it runs these suites and more).
+
+// The `-modules` option among command-line arguments.
+// @param args strings, as .z.x
+// @return the paths, as strings, or :: when it was not given
+// @throws error when it is given and names nothing
+.qt.support.modules_option:{[args]
+    o:.Q.opt args;
+    if[not `modules in key o; :(::)];
+    v:o`modules;
+    m:{x where 0<count each x} trim each "," vs $[10h=type v; v; "," sv v];
+    if[0=count m; '"support.modules_option: -modules names no file - give .q paths, comma-separated"];
+    m}
+
+// The file a function was defined in, relative to the working directory
+// (the repository root, where every runner starts) - "" when it has none,
+// as for one built from a string at run time.
+// @param nm a function's name, fully qualified
+// @return a string
+.qt.support.source_file:{[nm]
+    f:@[{first -3#value value x};nm;{[e] ""}];
+    if[not 10h=type f; :""];
+    cwd:raze[system "cd"],"/";
+    $[cwd~(count cwd)#f; (count cwd)_f; f]}
+
+// The functions among `names` that the files `modules` define.
+// @param names function names
+// @param modules repository-relative paths as strings, or :: for every file
+// @return the names defined there, in the order given
+.qt.support.defined_in:{[names;modules]
+    if[modules~(::); :names];
+    / As symbols: `in` over strings compares characters, not paths.
+    names where (`$.qt.support.source_file each names) in `$modules}
+
+// What a coverage run is judged on: the functions nothing entered against
+// the baseline, both ways, among the functions it judges.
+// A baseline entry outside `judged` is not this run's to judge - unless the
+// tree defines no such function at all (`known`), when it is stale wherever
+// the run looked.
+// @param cold symbols, the judged functions nothing entered
+// @param baseline symbols, tests/q/coverage_baseline.txt's names
+// @param judged symbols, the functions this run judged
+// @param known symbols, every function the run could have instrumented
+// @return a dictionary new_gaps (cold, not in the baseline) and closed
+//   (in the baseline, not cold)
+.qt.support.coverage_gate:{[cold;baseline;judged;known]
+    base:baseline where (baseline in judged) or not baseline in known;
+    cold:cold where cold in judged;
+    `new_gaps`closed!(asc cold except base;asc base except cold)}
+
+// --- which test files enter each function: the coverage map (#1719) --------
+// tests/q/coverage_map.txt says, for every function a whole run enters, the
+// suite files whose suites enter it. scripts/dev/test_impact.py's
+// coverage_for adds to a subset a file that enters each function it judges,
+// so a function covered only by a suite outside q-tests' selection is not
+// reported as never entered. `q tests/q/run_coverage.q -map PATH` writes it
+// from a whole run (scripts/dev/master_coverage.py --write-map).
+
+// The `-map` option among command-line arguments.
+// @param args strings, as .z.x
+// @return the path as a string, or :: when it was not given
+// @throws error when it is given without a path
+.qt.support.map_option:{[args]
+    o:.Q.opt args;
+    if[not `map in key o; :(::)];
+    v:o`map;
+    v:trim $[10h=type v; v; " " sv v];
+    if[0=count v; '"support.map_option: -map names no file - give the path to write"];
+    v}
+
+// While a coverage run runs, each suite's probes it raised: .qunit.runNsTests
+// is wrapped, and its before/after hooks count as the suite's. A dictionary
+// suite -> indices into .cov.lineHits.
+.qt.support.suite_hits:(`symbol$())!();
+
+// Wrap .qunit.runNsTests to record into .qt.support.suite_hits; returns the
+// original, for .qt.support.untrack_suites. .qunit.runTests calls it by name,
+// so the wrapper is what runs. Only the probes that existed before the suite
+// ran are compared: a nested .cov.run in a suite grows the vector.
+// @return the original .qunit.runNsTests
+.qt.support.track_suites:{[]
+    orig:.qunit.runNsTests;
+    .qt.support.suite_hits:(`symbol$())!();
+    .qunit.runNsTests:{[orig;ns]
+        before:.cov.lineHits;
+        r:orig ns;
+        now:(count before)#.cov.lineHits;
+        .qt.support.suite_hits[ns]:where now>before;
+        r}[orig];
+    orig}
+
+// Put back what .qt.support.track_suites replaced.
+// @param orig its return value
+.qt.support.untrack_suites:{[orig] .qunit.runNsTests:orig;}
+
+// The coverage map from a whole run.
+// @param results .cov.run's table, in probe order
+// @param first0 .cov.nextLine before the run: the first probe it allocated
+// @param hits suite -> probe indices raised, as .qt.support.suite_hits
+// @param files suite file -> the suites it declares, as symbols
+// @return a table module/function/files (files a sorted symbol list), one row
+//   per function some suite entered, sorted by module then function
+.qt.support.coverage_map:{[results;first0;hits;files]
+    n:count each results`lines;
+    start:first0+0^prev sums n;
+    / A function is entered when its first statement's probe ran - the same
+    / test as run_coverage.q's `iterations=0`, which reads that probe.
+    entered:{[n;start;names;h] names where (n>0) and start in h}[n;start;results`name] each hits;
+    pairs:raze {[s;fs] ([] function:fs; suite:(count fs)#s)}'[key entered;value entered];
+    if[0=count pairs; :([] module:`symbol$(); function:`symbol$(); files:())];
+    / function -> the suites entering it -> the files declaring those suites
+    fsuites:exec suite by function from pairs;
+    filesOf:{[files;s] `#asc where {[s;x] any x in s}[s] each files}[files];
+    t:([] function:key fsuites; files:filesOf each value fsuites);
+    t:update module:`$.qt.support.source_file each function from t;
+    `module`function xasc `module`function`files xcols select from t where not null module}
+
+// The map as tests/q/coverage_map.txt's lines.
+// @param m a table as .qt.support.coverage_map returns
+// @return strings
+.qt.support.map_lines:{[m]
+    head:("# Which suite files enter each function, written by a whole coverage run";
+        "# (q tests/q/run_coverage.q -map tests/q/coverage_map.txt, #1719). A subset";
+        "# coverage run adds a file that enters each function it judges, so a";
+        "# function only a suite outside q-tests' selection enters is not reported";
+        "# as never entered. Stale is slow, never wrong: a subset that finds a";
+        "# function never entered hands its verdict to a whole run.";
+        enlist "#";
+        "# module<TAB>function<TAB>suite files, comma-separated");
+    head,{"\t" sv (string x`module;string x`function;"," sv string x`files)} each m}
+
 // Load every suite file. Globbed, so a new suite runs the day it is written.
 .qt.support.load_suites:{[] {system "l tests/q/",string x} each .qt.support.suite_files[];}
 

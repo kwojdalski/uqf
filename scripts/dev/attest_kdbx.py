@@ -11,9 +11,10 @@ takes a path changed in `origin/master...HEAD` - the three-dot diff, from the
 merge base. Each one runs over the WHOLE tree, not just the files a commit
 staged, and when all pass the tree is recorded as an empty commit carrying
 
-    KDB-X-gates: <the tree's sha> hooks=<the hooks run, comma-sorted> q-tests=<what ran>
+    KDB-X-gates: <the tree's sha> hooks=<the hooks run, comma-sorted>
+        q-tests=<what ran> q-coverage=<what ran>
 
-which the check reads in CI and holds to the same needed set. `--all` runs
+as one line, which the check reads in CI and holds to the same needed set. `--all` runs
 every hook, and the whole q suite, as this did before it was scoped. A branch
 that needs none records nothing, and says so.
 
@@ -41,6 +42,23 @@ still names the selection, and every suite in it ran and passed - in the
 whole-suite process, as on master, rather than alone. That stands for a
 plain run because run_coverage.q is seeded as run_tests.q is, and on KDB-X
 the two gave every test the same outcome.
+
+q-coverage runs only what the change reaches too (#1719): q-tests' suites,
+plus, for each function it judges, a suite file that enters it according to
+tests/q/coverage_map.txt, instrumenting and judging only the functions
+defined in the production files the change reaches
+(test_impact.coverage_for) - or the whole suite, judging every function, when
+q-tests runs the whole suite, when no suite or no production file is reached,
+or when the change touches the coverage tool, its driver or its baseline. A
+subset that finds a judged function never entered is no verdict:
+scripts/test.py q-coverage then runs the whole suite and its verdict stands,
+so a function only a suite outside the subset enters can never fail a change.
+`q-coverage=<sha256>` records the subset (test_impact.coverage_digest: its
+suite files and its modules) and CI's check recomputes it from the same map;
+`q-coverage=all` records a whole run, including one a subset handed its
+verdict to. The whole suite's coverage, judging every function, runs on
+master's tip: scripts/dev/master_coverage.py, which scripts/dev/ship.sh
+starts after each merge; this prints its last verdict.
 
 Why skipping a hook the change does not touch still means "every KDB-X hook
 passed on the judged paths that merge": the check accepts a head only if it
@@ -75,6 +93,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -126,6 +145,46 @@ def q_tests_plan(base: str, full: bool):
     if full:
         return impact.Plan(None, "--all")
     return impact.plan(base, REPO, with_uncommitted=False)
+
+
+def q_coverage_plan(base: str, plan):
+    """What q-coverage runs, given q-tests' `plan` for `base...HEAD`:
+    test_impact.coverage_for - q-tests' suites, judging the production files
+    the change reaches, or the whole suite."""
+    impact = _test_impact()
+    if plan.files is None:
+        return impact.CoveragePlan(None, None, f"q-tests runs the whole suite ({plan.why})")
+    return impact.coverage_for(plan, impact.changed_paths(base, REPO), REPO)
+
+
+#: Where scripts/test.py q-coverage writes what decided it - `subset` or `all`
+#: (a subset that found something hands its verdict to the whole suite).
+COVERAGE_RAN_ENV = "UQF_Q_COVERAGE_RAN"
+
+
+def master_coverage_status() -> str:
+    """One line on the whole-suite coverage run on master's tip, which a
+    subset leaves the rest of the tree to (scripts/dev/master_coverage.py).
+    Informational: it never stops an attestation."""
+    spec = importlib.util.spec_from_file_location(
+        "master_coverage", Path(__file__).resolve().parent / "master_coverage.py"
+    )
+    try:
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.status_line(REPO)
+    except Exception as exc:  # noqa: BLE001 - a status line must not fail the run
+        return f"cannot read the whole-suite coverage run's last verdict: {exc}"
+
+
+def coverage_ran(path: Path) -> str | None:
+    """`subset` or `all`, as the q-coverage lane wrote it at `path`, or None."""
+    try:
+        ran = path.read_text().strip()
+    except OSError:
+        return None
+    return ran if ran in ("subset", "all") else None
 
 
 #: tests/run_tests.q's outcome files (tests/lib/support.q writes both), which
@@ -252,23 +311,37 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     tree = git("rev-parse", "HEAD^{tree}").strip()
     print(f"attest_kdbx: needed: {', '.join(hooks)}", flush=True)
-    plan = None
+    cov = None
+    cov_ran = "all"
     envs: dict[str, dict[str, str]] = {}
-    if "q-tests" in hooks:
-        plan = q_tests_plan(args.base, args.all)
-        impact = _test_impact()
+    needs_plan = "q-tests" in hooks or "q-coverage" in hooks
+    plan = q_tests_plan(args.base, args.all) if needs_plan else None
+    impact = _test_impact()
+    if "q-tests" in hooks and plan is not None:
         envs["q-tests"] = {impact.DECIDED_ENV: plan.line}
         print(f"attest_kdbx: q-tests: {plan.why}", flush=True)
     one_run = "q-tests" in hooks and "q-coverage" in hooks
     with tempfile.TemporaryDirectory(prefix="attest_kdbx.") as tmp:
         outcomes = Path(tmp)
+        if "q-coverage" in hooks:
+            cov = q_coverage_plan(args.base, plan)
+            envs["q-coverage"] = {
+                impact.COVERAGE_DECIDED_ENV: cov.line,
+                COVERAGE_RAN_ENV: str(outcomes / "coverage_ran"),
+            }
+            print(f"attest_kdbx: q-coverage: {cov.why}", flush=True)
+            if cov.files is not None:
+                print(f"attest_kdbx: {master_coverage_status()}", flush=True)
         if one_run:
-            envs["q-coverage"] = outcome_env(outcomes)
+            envs["q-coverage"].update(outcome_env(outcomes))
             envs["q-tests"][FROM_COVERAGE_ENV] = "1"
             print("attest_kdbx: q-tests: its q-unit verdict is the q-coverage run's", flush=True)
         for hook in run_order(hooks):
             print(f"attest_kdbx: {hook} ...", flush=True)
-            if not run_hook(hook, envs.get(hook)):
+            started = time.monotonic()
+            passed = run_hook(hook, envs.get(hook))
+            print(f"attest_kdbx: {hook}: {time.monotonic() - started:.0f}s", flush=True)
+            if not passed:
                 print(f"attest_kdbx: {hook} failed - nothing recorded", file=sys.stderr)
                 return 1
             if hook == "q-coverage" and one_run:
@@ -276,6 +349,22 @@ def main(argv: list[str] | None = None) -> int:
                 if why:
                     print(f"attest_kdbx: q-tests failed: {why} - nothing recorded", file=sys.stderr)
                     return 1
+            if hook == "q-coverage":
+                ran_ = coverage_ran(outcomes / "coverage_ran")
+                if ran_ is None:
+                    print(
+                        "attest_kdbx: q-coverage passed but did not say what it ran "
+                        f"(${COVERAGE_RAN_ENV}) - nothing recorded",
+                        file=sys.stderr,
+                    )
+                    return 1
+                cov_ran = ran_
+                if cov_ran == "all" and cov is not None and cov.files is not None:
+                    print(
+                        "attest_kdbx: q-coverage: the subset found something, and the "
+                        "whole suite decided",
+                        flush=True,
+                    )
     if git("rev-parse", "HEAD^{tree}").strip() != tree or dirt():
         print(
             "attest_kdbx: a hook changed the tree - commit that, then run this again",
@@ -285,13 +374,29 @@ def main(argv: list[str] | None = None) -> int:
     why_these = "every KDB-X hook (--all)" if args.all else f"the hooks {args.base}...HEAD needs"
     trailer = f"{TRAILER}: {tree} hooks={','.join(hooks)}"
     ran = ""
-    if plan is not None:
+    if "q-tests" in hooks and plan is not None:
         trailer += f" q-tests={plan.record}"
         ran = f"\n\nq-tests: {plan.why}" + (
             f"\nq-tests ran: {', '.join(plan.files) or 'none'}" if plan.files is not None else ""
         )
+    if cov is not None:
+        subset = cov_ran == "subset"
+        trailer += f" q-coverage={cov.record if subset else 'all'}"
+        ran += f"\n\nq-coverage: {cov.why}" + (
+            f"\nq-coverage ran: {', '.join(cov.files)}"
+            + (f"\nq-coverage added from the map: {', '.join(cov.added)}" if cov.added else "")
+            + f"\nq-coverage judged: {', '.join(cov.modules)}"
+            if subset
+            else (
+                "\nq-coverage: the subset found something; the whole suite decided"
+                if cov.files is not None
+                else ""
+            )
+        )
         if one_run:
-            ran += "\nq-tests' q-unit verdict: the q-coverage run of the whole suite"
+            ran += "\nq-tests' q-unit verdict: the q-coverage run of " + (
+                "the suites q-tests selected" if subset else "the whole suite"
+            )
     try:
         git(
             "commit",

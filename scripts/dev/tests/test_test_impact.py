@@ -273,8 +273,9 @@ def test_what_the_graph_cannot_judge_runs_everything(small, path, why):
 
 @GRAPH
 def test_a_file_q_reads_is_walked_from_its_reader(small):
-    """data/fixture.csv is named by src/reads.q, which no suite reaches."""
-    assert _pick(small, "data/fixture.csv") == ti.Selection([], 10, [])
+    """data/fixture.csv is named by src/reads.q, which no suite reaches - and
+    which is the production file the change reaches."""
+    assert _pick(small, "data/fixture.csv") == ti.Selection([], 10, [], ["src/reads.q"])
 
 
 @GRAPH
@@ -484,3 +485,178 @@ def test_a_change_the_selector_says_all_for_runs_everything(small_repo):
     plan = ti.plan(base, root)
     assert plan.files is None and plan.line == "ALL" and plan.record == "all"
     assert "the library loader" in plan.why
+
+
+# --- q-coverage over what the change reaches (#1719) -------------------------
+
+COV_FILES = ["test_a.q", "test_b.q"]
+COV_MODULES = ["src/a.q", "src/b.q"]
+
+
+def test_the_coverage_digest_is_of_the_sorted_suites_then_the_sorted_modules():
+    d = ti.coverage_digest(["tests/q/test_b.q", "test_a.q"], ["src/b.q", "src/a.q"])
+    assert d == hashlib.sha256(b"suites\ntest_a.q\ntest_b.q\nmodules\nsrc/a.q\nsrc/b.q").hexdigest()
+    # the modules are part of what is recorded: same suites, other modules, other digest
+    assert d != ti.coverage_digest(COV_FILES, ["src/a.q"])
+
+
+def test_a_coverage_plan_is_one_hook_line_and_one_trailer_record():
+    sub = ti.CoveragePlan(COV_FILES, COV_MODULES, "x")
+    assert sub.line == "-files test_a.q,test_b.q -modules src/a.q,src/b.q"
+    assert sub.args == ["-files", "test_a.q,test_b.q", "-modules", "src/a.q,src/b.q"]
+    assert sub.record == ti.coverage_digest(COV_FILES, COV_MODULES)
+    back = ti.parse_coverage_line(sub.line)
+    assert (back.files, back.modules) == (COV_FILES, COV_MODULES)
+    every = ti.CoveragePlan(None, None, "x")
+    assert (every.line, every.args, every.record) == ("ALL", [], "all")
+    assert ti.parse_coverage_line("ALL").files is None
+
+
+@pytest.mark.parametrize(
+    "line", ["NONE", "-files test_a.q", "-files test_a.q -modules", "-modules src/a.q -files t.q"]
+)
+def test_a_coverage_decision_that_is_not_a_line_is_refused(line):
+    with pytest.raises(ValueError, match="want ALL or -files"):
+        ti.parse_coverage_line(line)
+
+
+def test_coverage_runs_q_tests_suites_and_judges_the_modules_the_change_reaches():
+    """q-tests' verdict is read from this run, so its suites are all here."""
+    plan = ti.Plan(COV_FILES, "x", COV_MODULES)
+    cov = ti.coverage_for(plan, ["src/a.q"])
+    assert cov.files == plan.files and cov.modules == COV_MODULES
+
+
+@pytest.mark.parametrize(
+    ("plan", "changed", "why"),
+    [
+        (ti.Plan(None, "the selector says ALL: x"), ["src/a.q"], "q-tests runs the whole suite"),
+        (ti.Plan([], "x", []), ["src/a.q"], "no suite reaches the change"),
+        (ti.Plan(COV_FILES, "x", []), ["tests/q/test_a.q"], "no production .q file"),
+        (ti.Plan(COV_FILES, "x", None), ["src/a.q"], "no production .q file"),
+        (
+            ti.Plan(COV_FILES, "x", COV_MODULES),
+            ["src/a.q", "scripts/dev/coverage.q"],
+            "instrumenter",
+        ),
+        (ti.Plan(COV_FILES, "x", COV_MODULES), ["tests/q/run_coverage.q"], "coverage driver"),
+        (ti.Plan(COV_FILES, "x", COV_MODULES), ["tests/q/coverage_baseline.txt"], "baseline"),
+    ],
+)
+def test_coverage_runs_the_whole_suite_as_before_when_a_subset_cannot_judge(plan, changed, why):
+    cov = ti.coverage_for(plan, changed)
+    assert cov.files is None and cov.line == "ALL" and cov.record == "all"
+    assert why in cov.why
+
+
+def test_the_coverage_hook_runs_what_attest_decided_unless_told_to_run_all(monkeypatch, tmp_path):
+    line = "-files test_b.q,test_a.q -modules src/a.q"
+    monkeypatch.delenv(ti.FULL_ENV, raising=False)
+    monkeypatch.setenv(ti.COVERAGE_DECIDED_ENV, line)
+    cov = ti.coverage_hook_line(tmp_path)
+    assert (cov.files, cov.modules) == (["test_a.q", "test_b.q"], ["src/a.q"])
+    monkeypatch.setenv(ti.FULL_ENV, "1")
+    assert ti.coverage_hook_line(tmp_path).files is None
+
+
+def test_the_coverage_hook_cli_always_prints_a_line(small_repo, monkeypatch, tmp_path, capsys):
+    root, _ = small_repo
+    monkeypatch.delenv(ti.COVERAGE_DECIDED_ENV, raising=False)
+    monkeypatch.setenv("UQF_QLINTER", _fake_qlinter(tmp_path))
+    assert ti.main(["--coverage-hook", "--root", str(root)]) == 0
+    out = capsys.readouterr()
+    assert out.out.strip() == "ALL" and "q-coverage:" in out.err
+
+
+@GRAPH
+def test_the_modules_a_change_reaches_are_it_and_its_production_dependents(small):
+    """src/b.q calls src/a.q; the loader src/init.q loads both and is not one."""
+    assert _pick(small, "src/a.q").modules == ["src/a.q", "src/b.q"]
+    assert _pick(small, "src/c.q").modules == ["src/c.q"]
+    # a suite is no module; a child process's file is not loaded here
+    assert _pick(small, "tests/q/test_a.q").modules == []
+    assert _pick(small, "tests/q/child.q").modules == []
+
+
+@GRAPH
+def test_a_src_change_runs_a_coverage_subset_the_check_can_recompute(small_repo):
+    root, base = small_repo
+    _change(root, "src/a.q")
+    changed = ti.changed_paths(base, root)
+    plan = ti.plan(base, root)
+    cov = ti.coverage_plan_for(changed, root)
+    assert cov.files == plan.files and cov.modules == ["src/a.q", "src/b.q"]
+    assert cov.line == f"-files {','.join(plan.files)} -modules src/a.q,src/b.q"
+
+
+@GRAPH
+def test_a_test_only_change_runs_the_whole_coverage_suite(small_repo):
+    """A test change can drop coverage in any module, so nothing narrower judges it."""
+    root, base = small_repo
+    _change(root, "tests/q/test_a.q")
+    cov = ti.coverage_plan_for(ti.changed_paths(base, root), root)
+    assert cov.files is None and "no production .q file" in cov.why
+
+
+# --- the coverage map widens a subset (#1719) --------------------------------
+
+MAP_TEXT = (
+    "# header\n"
+    "src/a.q\t.a.f\ttest_a.q\n"
+    "src/a.q\t.a.g\ttest_c.q,test_d.q\n"
+    "src/a.q\t.a.h\ttest_d.q\n"
+    "src/b.q\t.b.f\ttest_e.q\n"
+    "not a row\n"
+)
+SUITES = ["test_a.q", "test_b.q", "test_c.q", "test_d.q", "test_e.q"]
+
+
+def _map_root(tmp_path, text=MAP_TEXT, suites=SUITES):
+    (tmp_path / "tests/q").mkdir(parents=True)
+    (tmp_path / ti.COVERAGE_MAP).write_text(text)
+    for s in suites:
+        (tmp_path / "tests/q" / s).write_text("")
+    return tmp_path
+
+
+def test_the_coverage_map_is_read_by_module_then_function(tmp_path):
+    cmap = ti.read_coverage_map(_map_root(tmp_path))
+    assert cmap == {
+        "src/a.q": {".a.f": ["test_a.q"], ".a.g": ["test_c.q", "test_d.q"], ".a.h": ["test_d.q"]},
+        "src/b.q": {".b.f": ["test_e.q"]},
+    }
+    assert ti.read_coverage_map(tmp_path / "nowhere") == {}
+
+
+def test_a_function_covered_only_outside_the_selection_brings_its_suite_in(tmp_path):
+    """q-tests runs test_a.q; .a.g and .a.h are entered only by other files.
+    test_d.q enters both, so it alone is added - not test_c.q too."""
+    cmap = ti.read_coverage_map(_map_root(tmp_path))
+    assert ti.widen(["test_a.q"], ["src/a.q"], cmap, SUITES) == ["test_d.q"]
+    # nothing to add when the selection already enters every function
+    assert ti.widen(["test_a.q", "test_d.q"], ["src/a.q"], cmap, SUITES) == []
+    # only the modules judged: src/b.q's function brings in nothing here
+    assert "test_e.q" not in ti.widen(["test_a.q"], ["src/a.q"], cmap, SUITES)
+
+
+def test_a_stale_map_naming_a_deleted_suite_adds_nothing_for_it(tmp_path):
+    cmap = ti.read_coverage_map(_map_root(tmp_path))
+    assert ti.widen(["test_a.q"], ["src/a.q"], cmap, ["test_a.q", "test_c.q"]) == ["test_c.q"]
+
+
+def test_coverage_runs_the_map_s_suites_too_and_records_them(tmp_path):
+    root = _map_root(tmp_path)
+    plan = ti.Plan(["test_a.q"], "x", ["src/a.q"])
+    cov = ti.coverage_for(plan, ["src/a.q"], root)
+    assert cov.files == ["test_a.q", "test_d.q"] and cov.added == ["test_d.q"]
+    assert "1 q-tests suite files and 1 more" in cov.why
+    assert cov.record == ti.coverage_digest(["test_a.q", "test_d.q"], ["src/a.q"])
+    # without a map, q-tests' suites alone - what the check would then recompute
+    (root / ti.COVERAGE_MAP).unlink()
+    assert ti.coverage_for(plan, ["src/a.q"], root).files == ["test_a.q"]
+
+
+def test_all_is_unchanged_by_the_map(tmp_path):
+    root = _map_root(tmp_path)
+    cov = ti.coverage_for(ti.Plan(None, "the selector says ALL: x"), ["src/a.q"], root)
+    assert cov.files is None and cov.line == "ALL" and cov.record == "all" and cov.added == []

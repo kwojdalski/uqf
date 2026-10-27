@@ -11,6 +11,7 @@ arguments (nothing for ALL, which is the runner without them).
     uv run python scripts/dev/test_impact.py src/pricing/forwards.q
     uv run python scripts/dev/test_impact.py --format json --base origin/master
     python3 scripts/dev/test_impact.py --hook   # the q-tests hook's line
+    python3 scripts/dev/test_impact.py --coverage-hook   # the q-coverage hook's
 
 The q-tests hook and scripts/dev/attest_kdbx.py run what `--hook` (plan())
 decides: the suites `origin/master...HEAD`, plus what is being committed,
@@ -76,6 +77,12 @@ ALL INSTEAD, with the reason, when:
   to read), or a .q file is not one this can place.
 
 The full suite on master is the backstop for what the graph cannot see.
+
+COVERAGE (#1719). The q-coverage gate runs q-tests' suites, plus a suite
+that enters each function it judges per tests/q/coverage_map.txt, and judges
+only the functions defined in the production files the walk reached
+(`modules`) - or the whole suite as before. See CoveragePlan, and
+coverage_for for when.
 """
 
 from __future__ import annotations
@@ -672,6 +679,10 @@ class Selection:
     files: list[str]  # the suites to run, when not all
     total: int
     reasons: list[str]  # why ALL; empty for a subset
+    #: the production .q files the change reaches - what changed and what the
+    #: walk reached from it, loaded into the test process - which a subset
+    #: coverage run instruments and judges (#1719); empty for ALL
+    modules: list[str] = field(default_factory=list)
 
     @property
     def all(self) -> bool:
@@ -746,7 +757,27 @@ def select(changed: Iterable[str], tree: Tree) -> Selection:
                 reached.add(m)
                 todo.append(m)
     picked = {tree.nodes[n] for n in reached if is_suite(tree.nodes[n])}
-    return Selection(sorted(picked), total, [])
+    modules = {tree.nodes[n] for n in reached if is_module(tree, tree.nodes[n])}
+    return Selection(sorted(picked), total, [], sorted(modules))
+
+
+#: Not a module a coverage run judges: the instrumenter, which reaches every
+#: file (DYNAMIC_REVIEWED) and whose own namespace it never instruments.
+COVERAGE_TOOL = "scripts/dev/coverage.q"
+
+
+def is_module(tree: Tree, path: str) -> bool:
+    """Whether `path` is production code the test process loads, whose
+    functions a coverage run instruments (#1719). Not a loader or a TorQ
+    process script: the walk stops at those (they LOAD what changed), so
+    reaching one says nothing about which suites enter what it defines - and
+    a change to one runs the whole suite anyway."""
+    return (
+        path in tree.runner
+        and not path.startswith("tests/")
+        and path != COVERAGE_TOOL
+        and not full_suite_reason(path)
+    )
 
 
 def changed_paths(base: str, root: Path = REPO, head: str = "HEAD") -> list[str]:
@@ -794,10 +825,13 @@ DECIDED_ENV = "UQF_Q_TESTS_SELECTION"
 @dataclass
 class Plan:
     """What the q-tests gate runs: `files` (bare suite file names, sorted),
-    or None for the whole suite; `why` says which and why."""
+    or None for the whole suite; `why` says which and why. `modules` are the
+    production files the change reaches, for coverage_for: None when unknown
+    (a decision handed over, the whole suite)."""
 
     files: list[str] | None
     why: str
+    modules: list[str] | None = None
 
     @property
     def line(self) -> str:
@@ -848,7 +882,14 @@ def plan_for(changed: Iterable[str], root: Path = REPO) -> Plan:
     if sel.all:
         return Plan(None, "the selector says ALL: " + "; ".join(sel.reasons))
     files = sorted(Path(f).name for f in sel.files)
-    return Plan(files, f"{len(files)} of {sel.total} suite files reach the change")
+    return Plan(files, f"{len(files)} of {sel.total} suite files reach the change", sel.modules)
+
+
+def _changed(base: str, root: Path, with_uncommitted: bool) -> list[str]:
+    changed = changed_paths(base, root)
+    if with_uncommitted:
+        changed += uncommitted(root)
+    return changed
 
 
 def plan(base: str = BASE, root: Path = REPO, *, with_uncommitted: bool = True) -> Plan:
@@ -857,9 +898,7 @@ def plan(base: str = BASE, root: Path = REPO, *, with_uncommitted: bool = True) 
     if os.environ.get(FULL_ENV) == "1":
         return Plan(None, f"${FULL_ENV}=1")
     try:
-        changed = changed_paths(base, root)
-        if with_uncommitted:
-            changed += uncommitted(root)
+        changed = _changed(base, root, with_uncommitted)
     except subprocess.CalledProcessError as e:
         return Plan(None, f"cannot diff against {base}: {(e.stderr or '').strip()}")
     return plan_for(changed, root)
@@ -872,6 +911,209 @@ def hook_line(root: Path = REPO) -> Plan:
     if decided is not None and os.environ.get(FULL_ENV) != "1":
         return parse_line(decided)
     return plan(root=root)
+
+
+# --------------------------------------------------------------------------
+# The q-coverage gate (#1704)
+# --------------------------------------------------------------------------
+#: The decision attest_kdbx.py made for q-coverage, handed to its hook.
+COVERAGE_DECIDED_ENV = "UQF_Q_COVERAGE_SELECTION"
+
+#: A change to one of these runs the whole coverage gate, whatever q-tests
+#: runs: what measures, what drives it and what it is judged against.
+COVERAGE_FULL = {
+    COVERAGE_TOOL: "the instrumenter",
+    "tests/q/run_coverage.q": "the coverage driver",
+    "tests/q/coverage_baseline.txt": "the coverage baseline",
+}
+
+
+@dataclass
+class CoveragePlan:
+    """What the q-coverage gate runs: the whole suite judging every function
+    (`files` None), or the suites `files` judging only the functions the
+    production files `modules` define. `why` says which and why.
+
+    The guarantee (#1719): every function `modules` define that the whole
+    suite leaves never entered is never entered here too, since these suites
+    are among the whole suite's - so a newly uncovered function in a module
+    the change reaches is caught. What a subset finds never entered is
+    checked by a run of the whole suite, which decides (scripts/test.py
+    q-coverage), so a function covered only by a suite outside `files` cannot
+    fail a change; the coverage map adds such suites up front, so that is
+    rare. A baseline entry a subset enters, the whole suite enters too: that
+    fails the subset outright. What a subset cannot see - coverage moving in
+    a module the change does not reach, or a baseline entry only an outside
+    suite now enters - the whole run on master catches
+    (scripts/dev/master_coverage.py)."""
+
+    files: list[str] | None
+    modules: list[str] | None
+    why: str
+    #: the files among `files` that the coverage map added (#1719)
+    added: list[str] = field(default_factory=list)
+
+    @property
+    def line(self) -> str:
+        """The hook's one line: ALL, or the driver's `-files ... -modules ...`."""
+        if self.files is None or self.modules is None:
+            return "ALL"
+        return f"-files {','.join(self.files)} -modules {','.join(self.modules)}"
+
+    @property
+    def args(self) -> list[str]:
+        """What scripts/test.py q-coverage passes tests/q/run_coverage.q."""
+        return [] if self.files is None else self.line.split()
+
+    @property
+    def record(self) -> str:
+        """What the attestation trailer records: `all`, or the subset's digest."""
+        if self.files is None or self.modules is None:
+            return "all"
+        return coverage_digest(self.files, self.modules)
+
+
+def coverage_digest(files: Iterable[str], modules: Iterable[str]) -> str:
+    """sha256 of the sorted bare suite file names, then the sorted module
+    paths - the coverage subset as the trailer records it and CI recomputes it."""
+    names = sorted({Path(f).name for f in files})
+    text = "\n".join(["suites", *names, "modules", *sorted(set(modules))])
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+#: Which suite files enter each function, from a whole coverage run (#1719):
+#: `module<TAB>function<TAB>a.q,b.q` lines, written by
+#: `q tests/q/run_coverage.q -map tests/q/coverage_map.txt`.
+COVERAGE_MAP = "tests/q/coverage_map.txt"
+
+
+def read_coverage_map(root: Path = REPO) -> dict[str, dict[str, list[str]]]:
+    """module -> function -> the suite files that enter it, from COVERAGE_MAP
+    in `root`; empty when there is none. A malformed line is skipped: the map
+    only widens a subset, and a subset that misses a covering file hands its
+    verdict to a whole run."""
+    try:
+        text = (root / COVERAGE_MAP).read_text()
+    except OSError:
+        return {}
+    cmap: dict[str, dict[str, list[str]]] = {}
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 3:
+            continue
+        module, function, files = parts
+        cmap.setdefault(module, {})[function] = [f for f in files.split(",") if f]
+    return cmap
+
+
+def widen(
+    files: Iterable[str],
+    modules: Iterable[str],
+    cmap: dict[str, dict[str, list[str]]],
+    suites: Iterable[str],
+) -> list[str]:
+    """The suite files to add to `files` so that, for every function the
+    `modules` define that the map says some suite enters, a suite that enters
+    it runs (#1719). Greedy: the file entering the most functions still
+    without one first, then by name - deterministic, so CI recomputes the same
+    set. Only files that are suite files now (`suites`) are added: a stale map
+    may name one since deleted."""
+    have = {Path(f).name for f in files}
+    exists = {Path(f).name for f in suites}
+    need: list[set[str]] = []
+    for module in sorted(set(modules)):
+        for covering in cmap.get(module, {}).values():
+            options = {f for f in covering if f in exists}
+            if options and not options & have:
+                need.append(options)
+    added: list[str] = []
+    while need:
+        counts: dict[str, int] = {}
+        for options in need:
+            for f in options:
+                counts[f] = counts.get(f, 0) + 1
+        best = min(counts, key=lambda f: (-counts[f], f))
+        added.append(best)
+        need = [o for o in need if best not in o]
+    return sorted(added)
+
+
+def suite_files(root: Path = REPO) -> list[str]:
+    """Every suite file under tests/q/, by bare name."""
+    return sorted(p.name for p in (root / "tests/q").glob("test_*.q"))
+
+
+def coverage_for(plan_: Plan, changed: Iterable[str], root: Path = REPO) -> CoveragePlan:
+    """What q-coverage runs, given q-tests' plan for the same change.
+
+    The suites are q-tests' own - its verdict is read from this run
+    (attest_kdbx.py), so they must all run here - and, for each function the
+    reached modules define, one that enters it per the coverage map (widen).
+    The whole suite when q-tests runs it; when no suite reaches the change, or
+    no production file - there is then nothing a subset could judge, and a
+    test change can drop coverage anywhere; and when the change touches what
+    measures (COVERAGE_FULL)."""
+    if plan_.files is None:
+        return CoveragePlan(None, None, f"q-tests runs the whole suite ({plan_.why})")
+    full = [why for p in sorted(set(changed)) if (why := COVERAGE_FULL.get(p))]
+    if full:
+        return CoveragePlan(None, None, f"the change touches {', '.join(full)}")
+    if not plan_.files:
+        return CoveragePlan(None, None, "no suite reaches the change")
+    if not plan_.modules:
+        return CoveragePlan(None, None, "the change reaches no production .q file")
+    added = widen(plan_.files, plan_.modules, read_coverage_map(root), suite_files(root))
+    files = sorted({*plan_.files, *added})
+    return CoveragePlan(
+        files,
+        list(plan_.modules),
+        f"{len(plan_.files)} q-tests suite files and {len(added)} more that enter a "
+        f"function they judge, judging the {len(plan_.modules)} production files the "
+        "change reaches",
+        added,
+    )
+
+
+def coverage_plan_for(changed: Iterable[str], root: Path = REPO) -> CoveragePlan:
+    """coverage_for over plan_for: what CI's check recomputes."""
+    changed = list(changed)
+    return coverage_for(plan_for(changed, root), changed, root)
+
+
+def parse_coverage_line(line: str) -> CoveragePlan:
+    """The inverse of CoveragePlan.line, for a decision in COVERAGE_DECIDED_ENV."""
+    line = line.strip()
+    if line == "ALL":
+        return CoveragePlan(None, None, f"${COVERAGE_DECIDED_ENV}=ALL")
+    words = line.split()
+    if len(words) == 4 and words[0] == "-files" and words[2] == "-modules":
+        files = sorted({f for f in words[1].split(",") if f})
+        modules = sorted({m for m in words[3].split(",") if m})
+        if files and modules:
+            return CoveragePlan(
+                files, modules, f"${COVERAGE_DECIDED_ENV} names {len(files)} suite files"
+            )
+    raise ValueError(
+        f"${COVERAGE_DECIDED_ENV} is {line!r}: want ALL or -files a.q,b.q -modules src/x.q,..."
+    )
+
+
+def coverage_hook_line(root: Path = REPO) -> CoveragePlan:
+    """The q-coverage hook's decision: the one attest_kdbx.py handed over,
+    else the whole suite under FULL_ENV, else coverage_for what `BASE...HEAD`
+    and the commit being made reach."""
+    decided = os.environ.get(COVERAGE_DECIDED_ENV)
+    if decided is not None and os.environ.get(FULL_ENV) != "1":
+        return parse_coverage_line(decided)
+    if os.environ.get(FULL_ENV) == "1":
+        return CoveragePlan(None, None, f"${FULL_ENV}=1")
+    try:
+        changed = _changed(BASE, root, True)
+    except subprocess.CalledProcessError as e:
+        return CoveragePlan(None, None, f"cannot diff against {BASE}: {(e.stderr or '').strip()}")
+    return coverage_for(plan_for(changed, root), changed, root)
 
 
 def render(sel: Selection, fmt: str) -> str:
@@ -906,7 +1148,24 @@ def main(argv: list[str] | None = None) -> int:
             f"${DECIDED_ENV} if set. Always exits 0 with a line"
         ),
     )
+    ap.add_argument(
+        "--coverage-hook",
+        action="store_true",
+        help=(
+            "the q-coverage hook's line: ALL or `-files ... -modules ...` (coverage_for); "
+            f"${COVERAGE_DECIDED_ENV} if set. Always exits 0 with a line"
+        ),
+    )
     args = ap.parse_args(argv)
+    if args.coverage_hook:
+        try:
+            cov = coverage_hook_line(args.root)
+        except ValueError as e:
+            print(f"test_impact: {e}", file=sys.stderr)
+            return 2
+        print(f"test_impact: q-coverage: {cov.why}", file=sys.stderr)
+        print(cov.line)
+        return 0
     if args.hook:
         try:
             decision = hook_line(args.root)

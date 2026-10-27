@@ -597,16 +597,57 @@ def lane_remote_stack() -> None:
 # ---------------------------------------------------------------- coverage
 
 
-def lane_q_coverage() -> None:
+#: tests/q/run_coverage.q's exit when a SUBSET found a function never
+#: entered: not a verdict, so the whole suite runs and decides (#1719).
+COVERAGE_SUBSET_UNSURE = 3
+
+#: When set, q-coverage writes there what decided it: `subset` or `all` -
+#: which scripts/dev/attest_kdbx.py records in its trailer.
+COVERAGE_RAN_ENV = "UQF_Q_COVERAGE_RAN"
+
+
+def lane_q_coverage(qargs: Sequence[str] = ()) -> None:
     r"""The q half of `coverage`, and the half a q change needs.
 
     Split out so the pre-commit hook - which fires on `\.q$` - does not also
     run pytest over the Python packages. The gate itself lives in
     `run_coverage.q`: it compares the functions nothing entered against
     `tests/q/coverage_baseline.txt` and fails when they disagree either way.
+
+    `qargs` (`-files a.q,... -modules src/x.q,...`, what
+    scripts/dev/test_impact.py's coverage_for picks) run a SUBSET: those
+    suites, judging only the functions those modules define (#1719). A subset
+    that finds a judged function never entered exits 3, and the whole suite
+    runs and its verdict is the gate's: a function only a suite outside the
+    subset enters must not fail a change (the coverage map adds such suites,
+    but may be stale). One the whole suite leaves never entered is never
+    entered in any subset of it, so a subset that passes has missed no newly
+    uncovered function it judges. A baseline entry a subset enters, the whole
+    suite enters too, so that fails here. `-map PATH` on a whole run writes
+    tests/q/coverage_map.txt's content to PATH.
     """
+    ran = os.environ.get(COVERAGE_RAN_ENV)
+    subset = "-files" in qargs
+    if subset:
+        _banner(f"q-coverage: a subset ({' '.join(qargs)})")
+        try:
+            _q("q-coverage", "tests/q/run_coverage.q", *qargs)
+        except LaneFailed as failure:
+            if failure.code != COVERAGE_SUBSET_UNSURE:
+                raise
+            print(
+                "\nq-coverage: the subset is not a verdict - running the whole suite, "
+                "whose verdict stands",
+                flush=True,
+            )
+        else:
+            if ran:
+                Path(ran).write_text("subset\n")
+            return
     _banner("q-coverage: q statement and branch coverage")
-    _q("q-coverage", "tests/q/run_coverage.q")
+    _q("q-coverage", "tests/q/run_coverage.q", *(() if subset else qargs))
+    if ran:
+        Path(ran).write_text("all\n")
 
 
 def lane_coverage() -> None:
@@ -669,6 +710,9 @@ LANES: dict[str, Callable[[], None]] = {
     "attach-stack": lane_attach_stack,
     "remote-stack": lane_remote_stack,
 }
+
+#: The lanes that pass arguments argparse does not know on to their q script.
+QARGS_LANES = ("q-unit", "q-coverage")
 
 #: The attach tests; the ones that start an isolated stack run only with
 #: UQS_ATTACH_STACK_TEST, which the attach-stack lane sets.
@@ -739,15 +783,18 @@ def main(argv: list[str] | None = None) -> int:
     smoke.add_argument(
         "--timeout-ms", type=int, default=None, help="per-connection timeout (default 5000)"
     )
-    # q-unit only: anything argparse does not know goes on to
-    # tests/run_tests.q as it is, e.g. `q-unit -files test_a.q,test_b.q`.
+    # q-unit and q-coverage only: anything argparse does not know goes on to
+    # their q script as it is, e.g. `q-unit -files test_a.q,test_b.q`.
     args, qargs = parser.parse_known_args(argv)
     args.qargs = qargs
     flags = smoke_flags(args.targets, args.tables, args.timeout_ms)
     if flags and args.lane != "smoke":
         parser.error("--targets, --tables and --timeout-ms apply to the smoke lane only")
-    if args.qargs and args.lane != "q-unit":
-        parser.error(f"unrecognized arguments: {' '.join(qargs)} (only q-unit passes its own on)")
+    if args.qargs and args.lane not in QARGS_LANES:
+        parser.error(
+            f"unrecognized arguments: {' '.join(qargs)} "
+            f"(only {' and '.join(QARGS_LANES)} pass their own on)"
+        )
 
     lanes = ALL if args.lane == "all" else [args.lane]
     impl = check_interpreter()
@@ -759,6 +806,8 @@ def main(argv: list[str] | None = None) -> int:
                 lane_smoke(flags)
             elif name == "q-unit":
                 lane_q_unit(args.qargs)
+            elif name == "q-coverage":
+                lane_q_coverage(args.qargs)
             else:
                 LANES[name]()
     except LaneFailed as failure:
