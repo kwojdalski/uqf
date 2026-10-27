@@ -214,8 +214,15 @@ def test_render_runs_an_expression_with_its_own_semicolons_and_quotes(q_port):
 
 def test_render_fits_the_given_width_and_puts_the_servers_back(q_port):
     """`\\c` is the SERVER's, so a wrapper that left it changed would change
-    every later caller's output - including after an expression that threw."""
+    every later caller's output - including after an expression that threw.
+
+    The server's size is set first: q takes it from LINES/COLUMNS, and a q
+    started without them can hold a null width (seen as `25 0N` on PeachQ in
+    CI, #1696), which no `\\c` can be set back to - the test would then judge
+    the environment it inherited, not the wrapper."""
+    runtime.query('system"c 25 80"', q_port, user="", passwd="")
     before = runtime.query('system"c"', q_port, user="", passwd="")
+    assert list(before) == [25, 80]
     wide = "til 200"
     narrow = runtime.query(wide, q_port, user="", passwd="", render=(20, 40))
     assert max(len(line) for line in narrow.splitlines()) <= 40
