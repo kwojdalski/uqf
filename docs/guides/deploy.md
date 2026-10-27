@@ -145,6 +145,30 @@ adds the native client under `.release/kafka/`, and `--with-kafka-connector`
 adds confluent-kafka's locked wheels (the `uqs` `kafka` extra). See [Kafka in a
 release](../services/kafka.md#in-a-release).
 
+The browser frontend is opt-in too. `--frontend DIST` adds the app that
+`npm --prefix web run build` wrote, usually `web/dist`, and the backend that
+serves it:
+
+```bash
+npm --prefix web ci && npm --prefix web run build
+uqs deploy build --frontend web/dist
+```
+
+- **The assets** go into the release at `web/dist/`, file for file and each
+  checksummed, which is where `uqf_frontend` serves them from, at `/ui/`. The
+  server needs no Node or npm. `DIST` is refused without an `index.html`, with a
+  symbolic link, or with a file no release ships (an `.env`, a key,
+  `node_modules`).
+- **The backend.** uqf-frontend's wheel joins uqs's, and its locked dependencies
+  (FastAPI, uvicorn and the rest) join the release's wheels. The push's prepare,
+  or the installer, installs it into the release's `.venv` after uqs, offline.
+  The manifest lists it in `python.extra_wheels`, and records a `frontend`
+  entry.
+- **Starting it** stays yours: from the release, with `deploy.env` loaded,
+  `.venv/bin/uvicorn --factory uqf_frontend.app:create_app --port 8000`. See
+  `python/uqf_frontend/README.md` for its settings, and for the write controls
+  that are off by default.
+
 `--bundle <folder>`, repeatable, adds a [sidecar bundle](sidecar-bundles.md).
 
 The target defaults to Linux on x86_64 with the Python `requires-python` names.
@@ -1069,7 +1093,8 @@ nesting flattened blocks again wherever every name keeps its meaning (#859).
 - Installing q, TorQ or licences.
 - Copying data.
 - Migrations: a column whose type changed is refused, never converted.
-- Frontend builds.
+- Frontend builds on the server: the frontend ships prebuilt
+  (`uqs deploy build --frontend`), and nothing starts it.
 - Zero-downtime upgrades. Each upgrade's report records its `downtime`: when the
   previous processes began to stop, when the new ones verified, and the seconds
   between. The design for removing it is

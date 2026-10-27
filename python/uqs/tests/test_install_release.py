@@ -262,6 +262,24 @@ def test_a_carried_archive_that_is_not_the_recorded_one_is_refused(carrying):
     assert not (release / installer.RUNTIME_DIR).exists()
 
 
+def test_a_release_built_with_frontend_installs_its_wheel_after_uqs(release):
+    """`uqs deploy build --frontend` lists uqf-frontend's wheel as an extra."""
+    wheel = _wheel(release / ".release" / "wheels", "uqffront", "0.1.0", "uqffront_probe",
+                   "import uqs_probe\nREADY = uqs_probe.ANSWER\n")  # fmt: skip
+    manifest = json.loads((release / installer.MANIFEST).read_text())
+    rel = wheel.relative_to(release).as_posix()
+    manifest["files"][rel] = _sha(wheel)
+    manifest["python"]["extra_wheels"] = [rel]
+    (release / installer.MANIFEST).write_text(json.dumps(manifest))
+    assert _install(release) == 0
+    out = subprocess.run(
+        [str(release / installer.VENV / "bin" / "python"), "-c",
+         "import uqffront_probe; print(uqffront_probe.READY)"],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    assert out.stdout.strip() == "42"
+
+
 # --- the host contract, and the environment it writes (#1646) ------------------------
 
 

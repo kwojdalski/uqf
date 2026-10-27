@@ -191,6 +191,11 @@ class Deployment(Server):
                 ]
             ),
             " ".join(["uv pip install", *offline, "--no-deps", q(py["app_wheel"])]),
+            # what --frontend adds (uqs.deploy.frontend), its dependencies locked above
+            *(
+                " ".join(["uv pip install", *offline, "--no-deps", q(w)])
+                for w in py.get("extra_wheels", [])
+            ),
         ]
         self.run("prepare", "installing the release's Python environment offline", *lines)
         self.kafka_ready(release, pkg)

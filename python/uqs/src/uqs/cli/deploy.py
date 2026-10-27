@@ -24,7 +24,7 @@ from uqs.cli import deploy_components as components
 from uqs.cli import deploy_policy as policy
 from uqs.cli.shared import _env_log_level, app, json_refusal
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, history, kafka, targets
+from uqs.deploy import config, driver, frontend, history, kafka, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import configure_logging, get_logger
@@ -115,6 +115,9 @@ def build(
         bool, typer.Option("--with-kafka-connector", help=kafka.CONNECTOR_HELP)
     ] = False,
     python_runtime: components.CarriedPythonRuntime = None,
+    frontend_dist: Annotated[
+        Path | None, typer.Option("--frontend", metavar="DIST", help=frontend.HELP)
+    ] = None,
 ) -> None:
     """Build a release artifact once, for `uqs deploy push` to put on any number of servers.
 
@@ -145,6 +148,7 @@ def build(
             kafka_home=kafka_home,
             kafka_connector=with_kafka_connector,
             python_runtime_file=python_runtime,
+            frontend_dist=frontend_dist,
         )
     except ReleaseError as exc:
         _failed("uqs deploy build", exc.stage, exc)
