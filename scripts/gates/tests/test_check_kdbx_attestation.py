@@ -314,7 +314,10 @@ def test_ci_runs_the_check_as_a_blocking_step():
     assert "name: KDB-X attestation\n" in job
     assert "advisory" not in job.lower() and "::warning" not in job
     assert "continue-on-error" not in job
-    run = 'python3 scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"'
+    run = (
+        "uv run --no-project --python 3.14 python scripts/gates/check_kdbx_attestation.py "
+        '"$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"'
+    )
     assert f"run: {run}\n" in job
     assert "kdbx-attestation:" not in (_ROOT / ".github/workflows/ci.yml").read_text()
 
@@ -821,3 +824,10 @@ def test_the_coverage_run_records_outcomes_and_seeds_as_the_plain_run_does():
         ]
     assert any(".qt.support.write_outcomes res" in ln for ln in cov)
     assert any(".qt.support.write_outcomes res" in ln for ln in plain)
+
+
+def test_ci_runs_the_check_on_the_repositorys_python():
+    """test_impact.py is 3.14 code (`except A, B:`); the runner's python3 is older."""
+    wf = _attestation_workflow()
+    assert 'python-version: "3.14"' in wf
+    assert "uv run --no-project --python 3.14 python scripts/gates/check_kdbx_attestation.py" in wf
