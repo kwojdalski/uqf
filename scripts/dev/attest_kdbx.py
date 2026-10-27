@@ -81,6 +81,8 @@ def _load(name: str, rel: str):
     spec = importlib.util.spec_from_file_location(name, _SOURCE / rel)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    # registered before it runs: a @dataclass looks its own module up there
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 

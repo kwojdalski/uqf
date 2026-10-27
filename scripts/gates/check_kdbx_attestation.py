@@ -76,6 +76,8 @@ def _load(rel: str):
     spec = importlib.util.spec_from_file_location(Path(rel).stem, REPO / rel)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    # registered before it runs: a @dataclass looks its own module up there
+    sys.modules[Path(rel).stem] = module
     spec.loader.exec_module(module)
     return module
 

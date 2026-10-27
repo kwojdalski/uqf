@@ -604,3 +604,21 @@ def test_the_q_tests_hook_runs_the_selection():
     hook = config.split("- id: q-tests", 1)[1].split("- id:", 1)[0]
     assert "scripts/dev/test_impact.py --hook" in hook
     assert "scripts/test.py q-unit -files" in hook
+
+
+@pytest.mark.parametrize(
+    "script", ["scripts/dev/attest_kdbx.py", "scripts/gates/check_kdbx_attestation.py"]
+)
+def test_the_selector_loads_from_a_fresh_interpreter(script):
+    """As CI and attest_kdbx.py run it: nothing loaded test_impact beforehand
+    (its @dataclass needs its module registered, which once failed here)."""
+    code = (
+        "import importlib.util, sys\n"
+        f"spec = importlib.util.spec_from_file_location('m', {str(_ROOT / script)!r})\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "loader = getattr(m, '_test_impact', None) or "
+        "(lambda: m._load('scripts/dev/test_impact.py'))\n"
+        "print(loader().Plan(['test_a.q'], 'x').line)\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "-files test_a.q"
