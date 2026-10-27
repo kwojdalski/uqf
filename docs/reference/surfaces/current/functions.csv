@@ -173,6 +173,7 @@ qetl.io.remote,accept_chunk,function,2,req user
 qetl.io.remote,batch_id,function,5,attachment dataset target opts batch
 qetl.io.remote,chunk_keys,value,,
 qetl.io.remote,chunk_rows,value,,
+qetl.io.remote,contract,dict,,
 qetl.io.remote,empty_journal,function,1,
 qetl.io.remote,entry_points,dict,,
 qetl.io.remote,finish,function,2,attachment dataset
@@ -198,6 +199,14 @@ qetl.io.remote,status,function,1,
 qetl.io.remote,submit,function,1,req
 qetl.io.remote,submit_chunk,function,1,req
 qetl.io.remote,withdraw,function,2,attachment dataset
+qetl.io.remote.contract,format,value,,
+qetl.io.remote.contract,keys,value,,
+qetl.io.remote.contract,of,function,1,worker
+qetl.io.remote.contract,read,function,1,path
+qetl.io.remote.contract,require,function,1,c
+qetl.io.remote.contract,require_opts,function,2,k o
+qetl.io.remote.contract,schema,function,1,k
+qetl.io.remote.contract,versions,value,,
 qetl.job.bounded,checkpoint,function,2,worker cursor
 qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect_error,function,2,source e

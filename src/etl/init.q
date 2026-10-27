@@ -56,6 +56,7 @@
 \l src/etl/core/io_hdb_scoped.q
 \l src/etl/core/io_remote.q
 \l src/etl/core/io_remote_chunks.q
+\l src/etl/core/io_remote_contract.q
 \l src/etl/core/singlestore_odbc.q
 \l src/etl/core/heartbeat.q
 \l src/etl/core/dag.q
