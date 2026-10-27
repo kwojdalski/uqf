@@ -119,8 +119,23 @@ def filesystem_of(path: Path) -> str:
     return best[1] if best else "unknown"
 
 
+#: The digits of a q timestamp's fraction past the microsecond.
+_PAST_MICROSECOND = re.compile(r"(\.\d{6})\d+$")
+
+
 def _moment(text: str) -> datetime | None:
-    return stack_backfill.parse_bound("writer clock", text) if text else None
+    """A writer's clock reading, to the microsecond.
+
+    The writer sends `.z.p`, which on Linux carries nanoseconds (macOS's clock
+    stops at the microsecond, so a run there never showed it). parse_bound
+    refuses those digits in a bound someone typed; a clock reading nobody typed
+    is cut to the microsecond instead, which no fence measured in minutes can
+    feel (#1650: the remote-stack lane's wdb on Linux was refused for it)."""
+    return (
+        stack_backfill.parse_bound("writer clock", _PAST_MICROSECOND.sub(r"\1", text))
+        if text
+        else None
+    )
 
 
 def _day(text: str) -> date | None:
