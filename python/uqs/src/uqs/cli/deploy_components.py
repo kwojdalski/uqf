@@ -83,7 +83,8 @@ PythonRuntime = Annotated[
     typer.Option(
         "--python-runtime",
         metavar="FILE",
-        help="With --python-mode bundled: the CPython `uqs deploy build-runtime python` made",
+        help="With --python-mode bundled: the CPython `uqs deploy build-runtime python` made; "
+        "default: the one the release carries",
     ),
 ]
 PythonRuntimeSha256 = Annotated[
@@ -102,7 +103,8 @@ CarriedPythonRuntime = Annotated[
         "--python-runtime",
         metavar="FILE",
         help="Carry this CPython (`uqs deploy build-runtime python`) in the release, for "
-        "scripts/install_release.py to make .venv from; built for --arch and --python",
+        "scripts/install_release.py, or a push with --python-mode bundled, to make .venv "
+        "from; built for --arch and --python",
     ),
 ]
 Qcmd = Annotated[

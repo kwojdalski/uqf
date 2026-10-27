@@ -142,6 +142,11 @@ POLICY: dict[str, Policy] = {
         False,
         "the running publisher could not open a connection to the stack it publishes to",
     ),
+    "PUBLISHER_UNRESPONSIVE": Policy(
+        False,
+        "the publisher listens but did not answer: its startup has not finished, and a "
+        "process that does not answer cannot be verified",
+    ),
     "PUBLISHER_REFUSES_STACK_CREDENTIALS": Policy(
         False,
         "the publisher refuses the credential the stack connects back with: discovery would "

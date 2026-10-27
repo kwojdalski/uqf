@@ -22,7 +22,7 @@ import typer
 
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_policy as policy
-from uqs.cli.shared import _env_log_level, app
+from uqs.cli.shared import _env_log_level, app, json_refusal
 from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, history, kafka, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
@@ -47,7 +47,9 @@ def _log_to_stderr() -> None:
 
 
 def _failed(prefix: str, stage: str, exc: Exception) -> None:
-    log.error("{}: FAILED at {}: {}", prefix, stage, config.redact(str(exc)))
+    message = f"{prefix}: FAILED at {stage}: {config.redact(str(exc))}"
+    log.error("{}", message)
+    json_refusal(message)
     raise typer.Exit(code=1)
 
 

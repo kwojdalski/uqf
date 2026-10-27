@@ -19,6 +19,10 @@ A refused credential is q's `access`, and is said as that, in each direction
 (STACK_REFUSES_PUBLISHER_CREDENTIALS, PUBLISHER_REFUSES_STACK_CREDENTIALS),
 not as an unreachable address.
 
+Every call is bounded (ANSWER_S, #1684): a publisher whose port is open but
+which never answers - stuck in its TorQ startup - is said as that
+(PUBLISHER_UNRESPONSIVE), not waited on forever and not said as a network path.
+
 It runs where the publisher is known to be up: in verify when the publisher
 already listens here, and in the workflow right after starting it. A stack on
 this machine needs none of it - any name it lists reaches this machine.
@@ -34,7 +38,7 @@ from uqs.attach.facts import Host
 from uqs.attach.findings import Finding
 from uqs.attach.preflight import PUBLISHER_HOST
 from uqs.attach.publisher import Publisher
-from uqs.attach.remote import Endpoint, Ipc, IpcError
+from uqs.attach.remote import Bounded, Endpoint, Ipc, IpcError
 
 CODE = "PUBLISHER_UNREACHABLE_FROM_STACK"
 #: The stack's credential refused by the publisher.
@@ -43,10 +47,15 @@ REFUSED = "PUBLISHER_REFUSES_STACK_CREDENTIALS"
 OUTBOUND = "STACK_UNREACHABLE_FROM_PUBLISHER"
 #: The publisher's own credential refused by the stack.
 OUTBOUND_REFUSED = "STACK_REFUSES_PUBLISHER_CREDENTIALS"
+#: The publisher listens but does not answer: its startup has not finished (#1684).
+UNRESPONSIVE = "PUBLISHER_UNRESPONSIVE"
 #: What q's hopen signals for a credential the other side's -U or .z.pw refuses.
 ACCESS = "access"
 #: How long discovery waits for the handle: what TorQ's own .servers.HOPENTIMEOUT defaults to.
 TIMEOUT_MS = 2000
+#: How long uqs waits for an answer to `reach`: the asked process's own hopen
+#: (TIMEOUT_MS) and a few seconds for the round trip, then it stops waiting (#1684).
+ANSWER_S = TIMEOUT_MS / 1000 + 3
 #: How long a publisher just started has to start listening and answer the stack.
 START_WAIT_S = 30.0
 
@@ -65,7 +74,7 @@ def check(att: Attachment, ipc: Ipc, port: int) -> Finding | None:
     st, where = att.stack, address(att, port)
     request = {"host": att.publisher.advertised_host, "port": port, "timeout": TIMEOUT_MS}
     try:
-        answer = ipc.call(
+        answer = Bounded(ipc, ANSWER_S).call(
             Endpoint("discovery", st.discovery_host, st.discovery_port), "reach", request
         )
     except IpcError as exc:
@@ -111,12 +120,30 @@ def outbound(att: Attachment, ipc: Ipc, port: int, tickerplant: Endpoint | None)
     for t in targets:
         request = {"host": t.host, "port": t.port, "timeout": TIMEOUT_MS}
         try:
-            answer = ipc.call(me, "reach", request)
+            answer = Bounded(ipc, ANSWER_S).call(me, "reach", request)
         except IpcError as exc:
+            if exc.unresponsive:
+                return unresponsive(att, port, exc.reason)
             return _outbound(att, t, f"{pub} could not be asked: {exc.reason}")
         if answer.get("reached") is not True:
             return _outbound(att, t, str(answer.get("error") or "no reason given"))
     return None
+
+
+def unresponsive(att: Attachment, port: int, reason: str) -> Finding:
+    """The publisher listens on `port` and does not answer: its own startup is stuck,
+    so nothing about the network between it and the stack is known yet."""
+    pub = att.publisher.procname
+    return Finding(
+        "blocker",
+        UNRESPONSIVE,
+        pub,
+        f"{pub} listens on {PUBLISHER_HOST}:{port} but {reason}: it has not finished "
+        "starting, so whether it and the stack reach each other is not known",
+        f"find where {pub}'s startup stops (its TorQ log), fix that, then run "
+        f"`uqs job attach {att.name}` again",
+        {"address": f"{PUBLISHER_HOST}:{port}"},
+    )
 
 
 def _outbound(att: Attachment, target: Endpoint, reason: str) -> Finding:

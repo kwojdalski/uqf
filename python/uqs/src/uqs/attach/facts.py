@@ -41,6 +41,13 @@ class Host:
             return True
         return any(_owned(address) for address in _addresses(lowered))
 
+    def is_elsewhere(self, name: str) -> bool:
+        """Whether `name` is KNOWN to be another machine: it resolves, and is not
+        this one by `is_local`'s rule. A name that does not resolve here is not
+        elsewhere - a check that must not miss a clash on this machine treats
+        an unknown host as possibly this one (#1686)."""
+        return not self.is_local(name) and bool(_addresses(name.lower()))
+
 
 def _is_ip(text: str) -> bool:
     try:
