@@ -104,6 +104,19 @@ def test_just_after_end_of_day_is_fenced(world):
     )
 
 
+def test_a_writer_clock_in_nanoseconds_is_read_to_the_microsecond(world):
+    """A Linux writer's `.z.p` has nanoseconds: read, not refused (#1650)."""
+    world.stack.state_over["wdb1"] = {"now": "2026.10.16D12:00:00.080122814"}
+    assert plan_with(world, facts_of())["coordination"]["next_roll"] == (
+        "2026-10-17T00:00:00+00:00"
+    )
+    refused(
+        world,
+        "end of day is at 2026-10-17T00:00:00\\+00:00, 30 minutes away",
+        wdb1={"now": "2026.10.16D23:29:59.999999999"},
+    )
+
+
 def test_an_open_end_of_day_reload_blocks(world):
     refused(world, "end-of-day reload in progress", wdb1={"reloadcomplete": False})
 
