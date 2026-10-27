@@ -27,8 +27,8 @@ WHAT IS IN IT:
                 which scripts/install_release.py makes .venv from.
   RELEASE_MANIFEST.json
                 the revision, whether the tree was dirty, the target OS,
-                architecture, Python and the glibc its wheels need, and every
-                member's sha256.
+                architecture, Python and the glibc its wheels need, the host
+                tools it needs (#1646) and every member's sha256.
 
 SIDECAR BUNDLES (#800), only when --bundle is given. The tracked files are
 copied into a staging directory, each bundle is installed THERE by the uqs
@@ -40,9 +40,8 @@ revision, installed files with their hashes, and its jobs' identities - with
 every streaming job's dependency closure, which `uqs deploy push --jobs`
 starts.
 
-The builder needs uv (to export the lock and build the uqs wheel) and the
-network (to fetch dependency wheels); it needs no SSH access and no
-deployment credentials, so CI can run it. It never runs on the server.
+The builder needs uv and the network (to export the lock, build the uqs wheel
+and fetch dependency wheels), and no SSH or credentials: CI can run it.
 """
 
 from __future__ import annotations
@@ -63,6 +62,7 @@ from pathlib import Path
 from uqs.deploy import foreign_blocks, kafka, portable, python_runtime
 from uqs.deploy.artifact import (
     FORMAT,
+    HOST_TOOLS,
     INSTALLER,
     MANIFEST,
     PACKAGING_MODE,
@@ -94,8 +94,7 @@ log = get_logger()
 #: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
 BUNDLE_LEDGER = "src/etl/installed_bundles.json"
 GENERATOR = "scripts/generate/generate_operational_docs.py"
-#: Tracked beyond the allowlist, copied into a staged tree for the generator
-#: to read and rewrite, and never packaged.
+#: Tracked beyond the allowlist, staged for the generator, never packaged.
 STAGED_EXTRA = ("docs",)
 
 _PYTHON = re.compile(r"3\.\d{1,2}")
@@ -245,6 +244,7 @@ def build_artifact(
         # locked wheel, installable with no network - by `uqs deploy push`, or on
         # the server by the installer it carries
         "packaging": {"mode": PACKAGING_MODE, "installer": INSTALLER},
+        "host": {"tools": list(HOST_TOOLS)},  # the installer checks them (#1646)
     }
     if bundles:
         manifest["bundles"] = bundles

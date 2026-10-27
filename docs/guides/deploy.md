@@ -78,7 +78,10 @@ What a server must still provide when every component that can be bundled is
 bundled: `--torq-mode`, `--q-mode` (PeachQ) and `--python-mode` all `bundled`.
 Each item is checked before anything changes: by preflight
 (`python/uqs/src/uqs/deploy/preflight.py`) for a push, and by
-`scripts/install_release.py` for a release installed by hand.
+`scripts/install_release.py` for a release installed by hand. The tools are
+`HOST_TOOLS` in `python/uqs/src/uqs/deploy/artifact.py`, which a test holds
+equal to the list preflight checks. Every release's manifest records them as
+`host.tools`, for the installer to check.
 
   | Item                                                                                                                                                                                                  | Why                                                                                                                                                                                                                                                                                                        | Checked by                                                                      |
   | ---                                                                                                                                                                                                   | ---                                                                                                                                                                                                                                                                                                        | ---                                                                             |
@@ -627,18 +630,24 @@ In order, each step refusing with what to do before the next one writes:
 2. the host's OS, architecture and glibc meet the artifact's target. The glibc
    floor is the one `uqs deploy build` recorded from the wheels' `manylinux`
    tags (`target.glibc`), none for a set of pure-Python wheels;
-3. the interpreter is the version the artifact was built for. Without
+3. every tool the manifest's `host.tools` names is on `PATH`: the [host
+   contract](#the-minimum-host-contract)'s, as preflight checks them on a push.
+   A missing one is refused, naming it;
+4. the interpreter is the version the artifact was built for. Without
    `--python`, a release that carries a Python runtime unpacks it into
    `.release/python` (with each file's mtime) once, checks it file by file
    against its own manifest, and uses its interpreter; a release that carries
    none uses `python3`. `--check` unpacks nothing: it names the carried version;
-4. `.venv` is created in the release by `python -m venv`. The locked
+5. `.venv` is created in the release by `python -m venv`. The locked
    dependencies, then `uqs`, are installed from `.release/wheels` with pip
    `--no-index` and the lock's hashes required. No registry is reached, and a
    missing or altered wheel is refused rather than fetched. A failed install
    removes the `.venv` it made;
-5. with `--env-file`, `deploy.env` is written to load that site file, which
-   stays outside the release, so no setting is copied in.
+6. `deploy.env` is written when there is something to put in it. With
+   `--env-file`, it loads that site file, which stays outside the release, so no
+   setting is copied in. For a release built with `--kafka-home`, it then sets
+   `UQF_KFK_HOME` to the release's own `.release/kafka` and puts its `lib/`
+   first on `LD_LIBRARY_PATH`, as a push's `deploy.env` does.
 
 Nothing outside the release directory is written: not the system Python, not q,
 not TorQ, not `current`. The installer needs no `uv`. Switching `current` and
