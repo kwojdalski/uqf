@@ -324,18 +324,16 @@ def test_it_installs_write_once_and_prune_keeps_it_while_named(tmp_path):
 
 # --- the host contract preflight checks -----------------------------------------------
 
-CONTRACT_TOOLS = (
-    "bash envsubst rlwrap tar gzip timeout python3 awk sed grep pgrep lsof hostname nohup find"
-).split()
+CONTRACT_TOOLS = artifact.HOST_TOOLS
 
 
 def _contract(tmp_path: Path, missing: str = "", python3: str = "") -> subprocess.CompletedProcess:
     """PREFLIGHT's host-contract checks alone, on a PATH holding each tool but
     `missing`: a stand-in that succeeds, or `python3` as given."""
-    from uqs.deploy.preflight import PREFLIGHT
+    from uqs.deploy.preflight import PREFLIGHT as text
 
-    start = PREFLIGHT.index("# The host contract")
-    end = PREFLIGHT.index('echo "glibc=')
+    start = text.index("# The host contract")
+    end = text.index('echo "glibc=')
     tools = tmp_path / "bin"
     tools.mkdir()
     for tool in CONTRACT_TOOLS:
@@ -343,7 +341,7 @@ def _contract(tmp_path: Path, missing: str = "", python3: str = "") -> subproces
             stand_in = tools / tool
             stand_in.write_text(python3 if tool == "python3" and python3 else "#!/bin/sh\nexit 0\n")
             stand_in.chmod(0o755)
-    body = 'fail() { echo "$*" >&2; exit 1; }\n' + PREFLIGHT[start:end] + "echo contract=ok\n"
+    body = 'fail() { echo "$*" >&2; exit 1; }\n' + text[start:end] + "echo contract=ok\n"
     bash = subprocess.run(["sh", "-c", "command -v bash"], capture_output=True, text=True).stdout
     return subprocess.run(
         [bash.strip(), "-c", body], env={"PATH": str(tools)}, capture_output=True, text=True,
