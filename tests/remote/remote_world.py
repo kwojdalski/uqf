@@ -3,8 +3,9 @@
 Three Linux x86_64 machines from one image (tests/remote/Dockerfile), each with
 its own hostname, filesystem and process table:
 
-  uat-stack   the TorQ stack, on PeachQ: discovery, tickerplant, rdb, hdb (and a
-              wdb, which PeachQ cannot run yet). Its ports are published to this
+  uat-stack   the TorQ stack, on PeachQ: discovery, tickerplant, rdb, hdb and wdb
+              (which runs on PeachQ through scripts/peachq_init.q's .Q.chk,
+              #1650). Its ports are published to this
               host's 127.0.0.1, so the tests can look at it directly.
   uat-client  the machine `uqs` runs on: the attachment, the publisher, the
               extractor. On the stack's network, so each resolves the other.
@@ -43,9 +44,8 @@ LABEL = f"uqf-remote-run={RUN}"
 SPAN = 41
 RECEIVER_OFFSET = 40
 OFFSETS = {"stp1": 0, "discovery1": 1, "rdb1": 2, "hdb1": 3, "wdb1": 5}
-#: The stack's own processes. wdb1 is asked for so that a PeachQ able to run
-#: it is noticed; today it fails to load (`.Q.chk`), and the tests that need it
-#: say so.
+#: The stack's own processes. wdb1 is the writer an attached backfill is
+#: coordinated with, and what pins the HDB its receiver writes (test_4).
 STACK_PROCS = ("discovery1", "stp1", "rdb1", "hdb1", "wdb1")
 BUNDLE = "tests/remote/bundle"
 CLIENT_RUNTIME = "peachq-etl"
@@ -221,11 +221,14 @@ TABLE = "remote_trades"
 
 
 def attach_args(world: World, name: str, *extra: str) -> list[str]:
-    """`uqs job attach NAME` for the fixture feed, against the stack on uat-stack."""
+    """`uqs job attach NAME` for the fixture feed, against the stack on uat-stack.
+
+    wdb1 is a consumer so that the attachment pins the stack's HDB: the same
+    attachment names the destination of test_4's remote writer (#1650)."""
     return [
         "job", "attach", name, "--job", FEED_JOB, "--bundle", BUNDLE,
         "--stack-id", str(world.base), "--host", "uat-stack", "--consumer", "rdb1",
-        "--runtime-only", "--yes", *extra,
+        "--consumer", "wdb1", "--runtime-only", "--yes", *extra,
     ]  # fmt: skip
 
 

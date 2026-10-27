@@ -230,7 +230,33 @@ repos:
             # to "which interpreter", and the only one that fell back to
             # something the tree is not verified on. test.py's rule is the
             # README's: $QCMD if you set it, otherwise q on PATH, as TorQ does.
-            python3 scripts/test.py q-unit
+            #
+            # Only the suites the change reaches (#1690): test_impact.py reads
+            # q-lint's dependency graph and selects for origin/master...HEAD
+            # plus what is being committed - the branch's whole change, as the
+            # KDB-X attestation check reads the PR, not just this commit. It
+            # prints ALL - and the whole suite runs - when it says so, when it
+            # cannot run (no graph-capable qlinter; see .qlinter-version),
+            # or when UQF_Q_TESTS_FULL=1. attest_kdbx.py hands its own
+            # decision over in UQF_Q_TESTS_SELECTION, so the run is the one
+            # its trailer records. The full suite still runs on master.
+            #
+            # In an attestation the suite runs ONCE (#1704): attest_kdbx.py
+            # runs q-coverage first, which executes every test, reads the
+            # outcomes it records, and fails q-tests itself on any test that
+            # did not pass. It then sets UQF_Q_UNIT_FROM_COVERAGE=1 and only
+            # the rest of this hook runs. A commit never sets it.
+            if [ "${UQF_Q_UNIT_FROM_COVERAGE:-}" = 1 ]; then
+              echo "== q-unit: verdict taken from the q-coverage run (attest_kdbx.py) =="
+            else
+              selection=$(python3 scripts/dev/test_impact.py --hook)
+              case "$selection" in
+                ALL) python3 scripts/test.py q-unit ;;
+                NONE) echo "== q-unit: no suite reaches this change - none run ==" ;;
+                -files\ *) python3 scripts/test.py q-unit -files "${selection#-files }" ;;
+                *) echo "q-tests: unexpected selection: $selection" >&2; exit 1 ;;
+              esac
+            fi
             python3 scripts/test.py q-examples
             # The worked examples under scripts/examples/, run as scripts.
             # Nothing ran them until this lane existed, and the first
@@ -342,8 +368,10 @@ repos:
           - -c
           - |
             set -euo pipefail
-            # Runs the whole suite a SECOND time, under .cov's in-memory
-            # instrumentation, and fails when the set of functions nothing
+            # Runs the whole suite a second time at commit, under .cov's
+            # in-memory instrumentation (in an attestation, the only time:
+            # attest_kdbx.py takes q-tests' q-unit verdict from this run's
+            # outcomes, #1704), and fails when the set of functions nothing
             # enters differs from tests/q/coverage_baseline.txt - in either
             # direction. A new blind spot is a failure; so is a baseline
             # entry whose gap has been closed, because a list that only grows

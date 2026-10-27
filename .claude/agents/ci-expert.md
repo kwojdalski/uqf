@@ -37,7 +37,8 @@ together. Your job is to ask that, with numbers, and to propose what to change.
 - `scripts/dev/attest_kdbx.py` and `scripts/gates/check_kdbx_attestation.py` -
   why CI cannot run the KDB-X gates (licence, macOS-only install), what a
   `KDB-X-gates: <tree>` trailer binds to, and why a PR whose tree does not
-  contain master's tip is refused.
+  contain master's tip is refused only when master has since changed a path the
+  KDB-X gates judge (#1687).
 - `CLAUDE.md` - the worktree-per-issue rule, the attestation rule, the
   `kdbx-attestation-override` label.
 - The history: `gh run list`, `gh pr list --state merged`, `git log` - how long

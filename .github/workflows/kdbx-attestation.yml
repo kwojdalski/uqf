@@ -5,8 +5,20 @@ name: KDB-X attestation
 # only where they ran. attest_kdbx.py runs the ones whose scope the branch
 # touches and records them as a `KDB-X-gates: <tree> hooks=<ids>` trailer;
 # this fails a PR unless the head's exact tree carries trailers covering
-# every hook whose scope the PR's diff (from the merge base) touches. PRs
-# only: a push to master is not re-judged after the merge.
+# every hook whose scope the PR's diff (from the merge base) touches. A head
+# behind the base passes on its attestation only while the base's own commits
+# since the merge base touch no judged path (#1687): the merging tree then has
+# the attested tree's judged paths. Otherwise it is refused, naming the path,
+# and needs master merged in and a fresh attestation. PRs only: a push to
+# master is not re-judged after the merge.
+#
+# q-tests may have run only the q suites the change reaches (#1690), recorded
+# as `q-tests=<sha256 of the sorted file names>`. The check makes the same
+# selection here - scripts/dev/test_impact.py over the PR's diff and the head's
+# tree - with q-lint's `analyze graph`: so this installs the qlinter release
+# .qlinter-version pins (0.14.15, the first with the graph), the one an
+# attestation's selection must have been made with to agree. `q-tests=all`
+# needs none of it.
 #
 # Override: the `kdbx-attestation-override` PR label lets an unattested tree
 # pass, as a warning annotation naming the label and the paths. It is its own
@@ -35,8 +47,19 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Install the pinned qlinter (.qlinter-version)
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r QLINT_VERSION < .qlinter-version
+          url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL "$url" -o /tmp/qlinter.tar.gz
+          tar xzf /tmp/qlinter.tar.gz -C /tmp
+          install -m755 "/tmp/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
+          qlinter analyze graph --help > /dev/null && echo "qlinter ${QLINT_VERSION} draws the graph"
       - name: Require the KDB-X gates to have passed on this tree
         env:
+          UQF_QLINTER: /usr/local/bin/qlinter
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           KDBX_ATTESTATION_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'kdbx-attestation-override') }}

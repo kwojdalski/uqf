@@ -63,6 +63,9 @@ def _tools(files: list[str]):
             )
             return _done()
         if "download" in argv:
+            (Path(argv[argv.index("--dest") + 1]) / "rich-15.0.0-py3-none-any.whl").write_bytes(
+                b"r"
+            )
             return _done()
         if "uqs.stack.hdb_shape" in argv:
             return _done('{"quote": ["time", "sym"]}')

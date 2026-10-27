@@ -1,8 +1,9 @@
 """A tickerplant restart on the stack's machine drops a runtime-only registration.
 
 Nothing on the client is told (attach-existing-torq.md, "A publisher on this
-machine, a stack on another"). The operator stops the publisher, the stack's
-tickerplant and rdb are restarted, and then:
+machine, a stack on another"). The operator stops the publisher - on its own
+machine, leaving the stack untouched - the stack's tickerplant, rdb and wdb are
+restarted, and then:
 
 - `uqs job attach NAME --dry-run` reports the registration lost;
 - a bare `uqs start` of the publisher is refused, naming the re-apply (#1673);
@@ -12,19 +13,34 @@ tickerplant and rdb are restarted, and then:
 from __future__ import annotations
 
 import pytest
-from remote_world import PUBLISHER, TABLE, World, live_rows, stages, stp_tables, wait_for
+from remote_world import (
+    PUBLISHER,
+    STACK_PROCS,
+    TABLE,
+    World,
+    live_rows,
+    stages,
+    stp_tables,
+    wait_for,
+)
 
 
 @pytest.fixture(scope="module")
 def restarted(world: World) -> World:
     stopped = world.client.uqs("stop", PUBLISHER, "--port", str(world.base))
     assert stopped.returncode == 0, stopped.stdout + stopped.stderr
-    assert world.stack_uqs("stop", "stp1").returncode == 0
-    assert world.stack_uqs("stop", "rdb1").returncode == 0
-    for proc in ("stp1", "rdb1"):
+    # #1651: the stop is the publisher's machine's, and touches nothing on the stack's
+    running = world.client.sh(f"ps -eo args | grep -q '[-]procname {PUBLISHER}'")
+    assert running.returncode != 0, "the publisher on uat-client is stopped"
+    assert all(world.answers(p) for p in STACK_PROCS), "every stack process still answers"
+    # TorQ reconnects neither an rdb nor a wdb to a restarted tickerplant: the
+    # operator restarts them too
+    for proc in ("stp1", "rdb1", "wdb1"):
+        assert world.stack_uqs("stop", proc).returncode == 0
+    for proc in ("stp1", "rdb1", "wdb1"):
         started = world.stack_uqs("start", proc)
         assert started.returncode == 0, started.stdout + started.stderr
-    world.wait_answering("stp1", "rdb1")
+    world.wait_answering("stp1", "rdb1", "wdb1")
     assert TABLE not in stp_tables(world), "a runtime-only registration does not survive"
     return world
 

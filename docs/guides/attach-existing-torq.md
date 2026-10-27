@@ -597,6 +597,7 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
   | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER`  | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                                             |
   | `ADVERTISED_LOOPBACK`, `ADVERTISED_UNRESOLVABLE`, `PUBLISHER_UNREACHABLE_FROM_STACK`                                  | no          | a stack on another machine could not connect back to the publisher: a loopback name, a name it cannot resolve, or a running publisher it cannot open                          |
   | `STACK_UNREACHABLE_FROM_PUBLISHER`                                                                                    | no          | the running publisher could not open discovery or the tickerplant (or could not be asked)                                                                                     |
+  | `PUBLISHER_UNRESPONSIVE`                                                                                              | no          | the publisher listens but did not answer within a few seconds: its TorQ startup is stuck. Find where in its log, then attach again                                            |
   | `STACK_REFUSES_ATTACH_CREDENTIALS`, `STACK_REFUSES_PUBLISHER_CREDENTIALS`, `PUBLISHER_REFUSES_STACK_CREDENTIALS`      | no          | a credential was refused: the attachment's by the stack, the publisher's by the stack, or the stack's by the publisher; see [Credentials](#credentials-in-each-direction)     |
 
 Detach's refusals are destructive-cleanup protections and cannot be overridden.
@@ -841,8 +842,10 @@ needs Docker, and is run when asked for, never as part of `all`. The machines
 are containers built from `tests/remote/Dockerfile`: Linux x86_64, with PeachQ
 built from the pin.
 
-- `uat-stack` runs discovery, the tickerplant, rdb1 and hdb1
-  (`uqs --runtime peachq start`). Its ports are published to this host.
+- `uat-stack` runs discovery, the tickerplant, rdb1, hdb1 and wdb1
+  (`uqs --runtime peachq start`). Its ports are published to this host. TorQ's
+  wdb calls `.Q.chk` as it starts, which PeachQ lacks; a PeachQ runtime's
+  processes load `scripts/peachq_init.q` first (`QINIT`), which defines it.
 - `uat-client` runs `uqs`: the attachment, the publisher and the extractor.
 - `uat-laptop` is on a network of its own and reaches the stack only through
   this host, so the stack cannot resolve its name.
@@ -855,17 +858,20 @@ would need `--network-address` for this host to be the client.
 Each scenario checks its effect on the stack's own processes, through their
 published ports, not through `uqs`:
 
-  | Scenario                                                                                  | Checked on the stack                                                                                                                                          |
-  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                    |
-  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                           |
-  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                       |
-  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                   |
-  | the tickerplant and rdb restarted                                                         | the table gone; `--dry-run` reports `registration-lost`; `uqs job attach` registers it again and rows flow                                                    |
-  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                         |
-  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | the rows served by hdb1, and no HDB on uat-client. Skipped on PeachQ: TorQ's wdb does not load there (`.Q.chk`), and without a wdb the attachment pins no HDB |
+  | Scenario                                                                                  | Checked on the stack                                                                                                                                                                                                                                                                |
+  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                                                                                                                                          |
+  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                 |
+  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                                                                                                                                             |
+  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                         |
+  | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted    | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attach` registers it again and rows flow                                                                                         |
+  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                                                                                                                                               |
+  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | the day's rows counted on uat-stack's disk, coverage on uat-client, a rerun that writes nothing, no HDB on uat-client. hdb1 serves them where it maps a partitioned HDB; PeachQ's maps none, so there the run ends `written_not_queryable` with the reader's failure reported apart |
 
 The lane found that a publisher attached to a stack elsewhere looked for
-discovery on its own machine; the discovery address above is the fix.
+discovery on its own machine; the discovery address above is the fix. It also
+found that on Linux a writer's clock (`.z.p`) carries nanoseconds, which
+`receive` refused as a reading it could not hold; the clock is now read to the
+microsecond.
 
 What the containers do not show:
 
@@ -877,7 +883,10 @@ What the containers do not show:
 - **KDB-X.** Both sides run PeachQ, so the lane shows the workflow on PeachQ.
   KDB-X stays the reference, through the `attach-stack` lane on one machine.
   They differ where it shows: PeachQ answered `access`, not a timeout, for a
-  publisher that accepted the connection and never completed the handshake.
+  publisher that accepted the connection and never completed the handshake. A
+  PeachQ hdb1 maps no partitioned table, so the remote writer's rows are shown
+  durable on the stack's disk but never queryable there; queryable after a
+  remote write is shown on KDB-X, in `test_attach_backfill_remote.py`.
 - **Users, permissions and credentials.** Everything runs as root, with TorQ's
   default credentials.
 

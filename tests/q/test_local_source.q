@@ -15,10 +15,17 @@
     system"rm -rf ",d; system"mkdir -p ",d;
     (hsym `$d,"/sym") set `USDJPY`EURUSD;
     / enumerated by POSITION against that file, as a writer of that HDB would
-    / leave them: 1 is EURUSD, 0 is USDJPY
+    / leave them: 1 is EURUSD, 0 is USDJPY. `sym!ix enumerates against this
+    / PROCESS's `sym, so it is set to one of its own for the write and put
+    / back (#1694): a q that re-enumerates on a splayed set (PeachQ) otherwise
+    / wrote whatever symbols an earlier suite had left at those positions, and
+    / a test passed or failed on which suites ran first.
+    keep:@[get;`sym;{`symbol$()}];
+    `sym set `PROCA`PROCB;
     {[d;dt;ix;px] (hsym `$d,"/",string[dt],"/trades/") set
         ([] time:dt+0D10:00 0D11:00; sym:`sym!ix; px:px)}[d]'[
         2026.09.17 2026.09.18;(1 0;0 1);(1.1 150.;151. 1.2)];
+    `sym set keep;
     hsym `$d}
 
 .qt.qetl.source.local.beforeNamespace_isolate:{[]

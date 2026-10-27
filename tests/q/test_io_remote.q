@@ -208,6 +208,21 @@
     .qunit.assertEquals[exec state from .qetl.io.remote.journal where range_from=2026.02.01D00:00:00.000000000;
         enlist `pending;"refused by the writer, so never committed"]};
 
+/ Past the deadline - where the stack's end-of-day fence begins - the receiver's
+/ writer refuses the batch, and nothing reaches the HDB or the journal's commits
+/ (#1650). remote_receiver.q also stops itself there, on a one-minute timer.
+.qt.qetl.io.remote.test_past_the_end_of_day_fence_the_receiver_writes_nothing:{[t]
+    .qt.qetl.io.remote.reset[];
+    root:`$":",first system"mktemp -d";
+    (` sv root,`sym) set `symbol$();
+    b:`max_date`deadline`destination!(2026.01.31;2000.01.01D00:00:00.000000000;`dest_test);
+    .qt.qetl.io.remote.grant[.qetl.io.hdb_scoped[root;`time;b];`symbol$()];
+    .qunit.assertThrows[{[mgr;x] .qetl.io.write_keyed[mgr;`rdeals;x 0;x 1]}[.qt.qetl.io.remote.client[]];
+        (.qt.qetl.io.remote.batch[];.qt.qetl.io.remote.opts `upsert);
+        "hdb_scoped: rdeals - the end-of-day fence began at 2000.01.01D00:00:00*";"refused at the fence"];
+    .qunit.assertEquals[key root;enlist `sym;"no partition was written"];
+    .qunit.assertEquals[distinct exec state from .qetl.io.remote.journal;enlist `pending;"nothing committed"]};
+
 / --- what the client forwards ---------------------------------------------------------
 
 .qt.qetl.io.remote.test_flush_and_recover_are_forwarded_to_the_grants_manager:{[t]

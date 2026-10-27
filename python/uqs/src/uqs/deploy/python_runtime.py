@@ -105,6 +105,9 @@ class PythonRuntime:
     manifest: dict
     pinned: bool
     manifest_sha256: str
+    #: the release this runtime was extracted from, when it is the one a
+    #: release carries rather than one given as python_runtime (#1646)
+    carried_by: str | None = None
 
     #: What runtime_install and prune need of any runtime.
     component: ClassVar[str] = "python"
@@ -165,6 +168,7 @@ class PythonRuntime:
             "sha256": self.sha256,
             "runtime": home,
             "install": install,
+            **({"carried_by": self.carried_by} if self.carried_by else {}),
             "requires": [f"a {m['os']} {m['arch']} host{floor}; no uv, no Python of its own"],
         }
 
@@ -192,6 +196,42 @@ def for_release(path: Path | str | None, target: dict) -> PythonRuntime | None:
         return None
     rt = read_runtime(Path(path))
     rt.fits(target)
+    return rt
+
+
+def from_release(release: Path, manifest: dict, out_dir: Path) -> PythonRuntime | None:
+    """The runtime the release at `release` carries (#1646), extracted into
+    `out_dir` and read whole; None when it carries none.
+
+    Pinned by the release: its manifest records the runtime's sha256, the
+    release's own checks cover those bytes, and the copy is refused unless it
+    has that sha256 - so the `.sha256` written beside it is the release's
+    record, never a digest taken on trust."""
+    record = (manifest.get("python") or {}).get("runtime")
+    if not record:
+        return None
+    want = record["sha256"]
+    name = f"python-runtime-{record['version']}-{record['os']}-{record['arch']}.tar.gz"
+    path = out_dir / want / name
+    if not (path.is_file() and _sha256(path) == want):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_name(f".{name}.partial")
+        with tarfile.open(release, "r:gz") as tar:
+            member = tar.extractfile(record["archive"])
+            if member is None:
+                raise ReleaseError("artifact", f"{release.name} lacks {record['archive']}")
+            with member, partial.open("wb") as copy:
+                copy.write(member.read())
+        if _sha256(partial) != want:
+            partial.unlink()
+            raise ReleaseError(
+                "artifact", f"{release.name}'s {record['archive']} is not the sha256 {want} "
+                "its manifest records",
+            )  # fmt: skip
+        partial.replace(path)
+    Path(f"{path}.sha256").write_text(f"{want}  {name}\n")
+    rt = read_runtime(path)
+    rt.carried_by = release.name
     return rt
 
 
@@ -307,4 +347,5 @@ def venv_lines(interpreter: str, py: dict) -> list[str]:
         f"{q(interpreter)} -m venv .venv",
         f"{pip} --find-links {q(py['wheel_dir'])} --require-hashes -r {q(py['requirements'])}",
         f"{pip} --no-deps {q(py['app_wheel'])}",
+        *(f"{pip} --no-deps {q(w)}" for w in py.get("extra_wheels", [])),
     ]

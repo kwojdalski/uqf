@@ -10,6 +10,13 @@ arguments (nothing for ALL, which is the runner without them).
     uv run python scripts/dev/test_impact.py --base origin/master
     uv run python scripts/dev/test_impact.py src/pricing/forwards.q
     uv run python scripts/dev/test_impact.py --format json --base origin/master
+    python3 scripts/dev/test_impact.py --hook   # the q-tests hook's line
+
+The q-tests hook and scripts/dev/attest_kdbx.py run what `--hook` (plan())
+decides: the suites `origin/master...HEAD`, plus what is being committed,
+reaches - or the whole suite when this says ALL, cannot run, or
+UQF_Q_TESTS_FULL=1. An attestation records the subset by its digest, and CI's
+check makes the same selection to verify it (scripts/gates/check_kdbx_attestation.py).
 
 Needs a qlinter with `qlinter analyze graph` - scripts/gates/qlint_graph.py
 says which and where it looks - and refuses without one rather than guess.
@@ -74,6 +81,7 @@ The full suite on master is the backstop for what the graph cannot see.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -741,16 +749,129 @@ def select(changed: Iterable[str], tree: Tree) -> Selection:
     return Selection(sorted(picked), total, [])
 
 
-def changed_paths(base: str, root: Path = REPO) -> list[str]:
-    """What the branch changes against `base`: the three-dot diff, as CI reads a PR."""
+def changed_paths(base: str, root: Path = REPO, head: str = "HEAD") -> list[str]:
+    """What `head` changes against `base`: the three-dot diff, as CI reads a PR.
+
+    `--no-renames`, so a renamed file is its old path deleted and its new one
+    added - a deleted .q runs the whole suite, which a rename must too."""
     out = subprocess.run(
-        ["git", "diff", "--name-only", "--no-renames", f"{base}...HEAD"],
+        ["git", "diff", "--name-only", "--no-renames", f"{base}...{head}"],
         cwd=root,
         capture_output=True,
         text=True,
         check=True,
     ).stdout
     return [p for p in out.splitlines() if p]
+
+
+def uncommitted(root: Path = REPO) -> list[str]:
+    """What the index and the working tree change against HEAD - in a commit
+    hook, the commit being made (pre-commit has set unstaged changes aside)."""
+    out = subprocess.run(
+        ["git", "diff", "--name-only", "--no-renames", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return [p for p in out.splitlines() if p]
+
+
+# --------------------------------------------------------------------------
+# The q-tests gate (#1690 step 4)
+# --------------------------------------------------------------------------
+#: What the q-tests hook and scripts/dev/attest_kdbx.py select against: the
+#: branch's whole change, as CI's KDB-X attestation check reads the PR.
+BASE = "origin/master"
+#: `1` runs the whole q suite whatever changed.
+FULL_ENV = "UQF_Q_TESTS_FULL"
+#: The decision attest_kdbx.py made, handed to the hook it runs - one
+#: selection per attestation, the one its trailer records, not a second one
+#: worked out inside the hook.
+DECIDED_ENV = "UQF_Q_TESTS_SELECTION"
+
+
+@dataclass
+class Plan:
+    """What the q-tests gate runs: `files` (bare suite file names, sorted),
+    or None for the whole suite; `why` says which and why."""
+
+    files: list[str] | None
+    why: str
+
+    @property
+    def line(self) -> str:
+        """The hook's one line: ALL, NONE, or the runner's `-files` argument."""
+        if self.files is None:
+            return "ALL"
+        if not self.files:
+            return "NONE"
+        return "-files " + ",".join(self.files)
+
+    @property
+    def record(self) -> str:
+        """What the attestation trailer records: `all`, or the subset's digest."""
+        return "all" if self.files is None else digest(self.files)
+
+
+def digest(files: Iterable[str]) -> str:
+    """sha256 of the sorted bare file names, one per line - the subset as the
+    attestation trailer records it, and as CI recomputes it."""
+    names = sorted({Path(f).name for f in files})
+    return hashlib.sha256("\n".join(names).encode()).hexdigest()
+
+
+def parse_line(line: str) -> Plan:
+    """The inverse of Plan.line, for a decision handed over in DECIDED_ENV."""
+    line = line.strip()
+    if line == "ALL":
+        return Plan(None, f"${DECIDED_ENV}=ALL")
+    if line == "NONE":
+        return Plan([], f"${DECIDED_ENV}=NONE")
+    if line.startswith("-files ") and line[7:].strip():
+        files = sorted({f for f in line[7:].strip().split(",") if f})
+        return Plan(files, f"${DECIDED_ENV} names {len(files)} suite files")
+    raise ValueError(f"${DECIDED_ENV} is {line!r}: want ALL, NONE or -files a.q,b.q")
+
+
+def plan_for(changed: Iterable[str], root: Path = REPO) -> Plan:
+    """The subset `changed` reaches in the tree at `root`, or the whole suite -
+    when the selector says ALL, or cannot run (no graph-capable qlinter)."""
+    try:
+        tree = build(root)
+    except qlint_graph.GraphUnavailable as e:
+        short = str(e).split(". Needed:")[0]
+        return Plan(None, f"the selector cannot run: {short} (see .qlinter-version)")
+    except RuntimeError as e:
+        return Plan(None, f"the selector failed: {e}")
+    sel = select(changed, tree)
+    if sel.all:
+        return Plan(None, "the selector says ALL: " + "; ".join(sel.reasons))
+    files = sorted(Path(f).name for f in sel.files)
+    return Plan(files, f"{len(files)} of {sel.total} suite files reach the change")
+
+
+def plan(base: str = BASE, root: Path = REPO, *, with_uncommitted: bool = True) -> Plan:
+    """What the q-tests gate runs here: the whole suite under FULL_ENV, else
+    what `base...HEAD` (and, in a hook, the commit being made) reaches."""
+    if os.environ.get(FULL_ENV) == "1":
+        return Plan(None, f"${FULL_ENV}=1")
+    try:
+        changed = changed_paths(base, root)
+        if with_uncommitted:
+            changed += uncommitted(root)
+    except subprocess.CalledProcessError as e:
+        return Plan(None, f"cannot diff against {base}: {(e.stderr or '').strip()}")
+    return plan_for(changed, root)
+
+
+def hook_line(root: Path = REPO) -> Plan:
+    """The q-tests hook's decision: the one attest_kdbx.py handed over, else
+    plan() - which falls back to the whole suite, never to nothing."""
+    decided = os.environ.get(DECIDED_ENV)
+    if decided is not None and os.environ.get(FULL_ENV) != "1":
+        return parse_line(decided)
+    return plan(root=root)
 
 
 def render(sel: Selection, fmt: str) -> str:
@@ -776,7 +897,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base", help="select for what HEAD changes against this ref (three-dot)")
     ap.add_argument("--root", type=Path, default=REPO, help=argparse.SUPPRESS)
     ap.add_argument("--format", choices=("text", "json", "args"), default="text")
+    ap.add_argument(
+        "--hook",
+        action="store_true",
+        help=(
+            f"the q-tests hook's line: ALL, NONE or `-files ...`, for {BASE}...HEAD and "
+            f"what is uncommitted; ALL when ${FULL_ENV}=1 or the selector cannot run; "
+            f"${DECIDED_ENV} if set. Always exits 0 with a line"
+        ),
+    )
     args = ap.parse_args(argv)
+    if args.hook:
+        try:
+            decision = hook_line(args.root)
+        except ValueError as e:
+            print(f"test_impact: {e}", file=sys.stderr)
+            return 2
+        print(f"test_impact: q-tests: {decision.why}", file=sys.stderr)
+        print(decision.line)
+        return 0
     if not args.paths and not args.base:
         ap.error("give changed paths, or --base REF")
     changed = list(args.paths)

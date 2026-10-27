@@ -27,7 +27,7 @@ from uqs.attach import preflight_components as components
 from uqs.attach.config import Attachment
 from uqs.attach.facts import LOCAL_HOSTS, Facts, Host, PublisherPort
 from uqs.attach.findings import Finding
-from uqs.attach.topology import Observation, Proc, port_of, refused
+from uqs.attach.topology import Observation, Proc, host_of, port_of, refused
 
 #: The publisher runs where uqs starts it (uqs.attach.publisher).
 PUBLISHER_HOST = "localhost"
@@ -91,7 +91,15 @@ def _publisher(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]
         ]
     out: list[Finding] = []
     note = " (provisional: fixed when the job is installed)" if port.provisional else ""
-    taken = [s for s in obs.services if port_of(s["hpup"]) == port.port]
+    # Only a service on the publisher's machine can hold its port: the same port
+    # on another host never collides (#1686). A host that cannot be resolved
+    # here counts as this one, so an unknown errs towards refusing.
+    taken = [
+        s
+        for s in obs.services
+        if port_of(s["hpup"]) == port.port
+        and not facts.host.is_elsewhere(host_of(s["hpup"], att.stack))
+    ]
     clash = [s for s in taken if s["procname"] != pub.procname]
     if clash:
         out.append(
