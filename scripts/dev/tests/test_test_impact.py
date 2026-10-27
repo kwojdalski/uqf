@@ -7,8 +7,10 @@ installed ($UQF_QLINTER or PATH), and is skipped elsewhere, saying so.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -360,3 +362,125 @@ def test_the_cli_prints_the_runner_arguments(capsys):
     assert ti.main(["--format", "args", "src/pricing/forwards.q"]) == 0
     out = capsys.readouterr().out.strip()
     assert out.startswith("-files ") and "test_forwards.q" in out
+
+
+# --- the q-tests gate: what the hook and attest_kdbx.py run (step 4) ---------
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+@pytest.fixture
+def small_repo(tmp_path, monkeypatch):
+    """_SMALL as a git repository: (root, the base commit)."""
+    monkeypatch.delenv(ti.FULL_ENV, raising=False)
+    monkeypatch.delenv(ti.DECIDED_ENV, raising=False)
+    root = _tree(tmp_path, _SMALL)
+    _git(root, "init", "-q", "-b", "master")
+    _git(root, "config", "user.email", "t@example.com")
+    _git(root, "config", "user.name", "t")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "base")
+    return root, _git(root, "rev-parse", "HEAD")
+
+
+def _change(root: Path, rel: str, commit: bool = True) -> None:
+    (root / rel).write_text((root / rel).read_text() + "/ changed\n")
+    if commit:
+        _git(root, "commit", "-q", "-am", f"change {rel}")
+
+
+def test_the_digest_is_of_the_sorted_bare_names():
+    a = ti.digest(["tests/q/test_b.q", "test_a.q"])
+    assert a == ti.digest(["test_a.q", "test_b.q", "test_b.q"])
+    assert a == hashlib.sha256(b"test_a.q\ntest_b.q").hexdigest()
+    assert ti.digest([]) == hashlib.sha256(b"").hexdigest()
+
+
+@pytest.mark.parametrize(
+    ("plan", "line", "record"),
+    [
+        (ti.Plan(None, "x"), "ALL", "all"),
+        (ti.Plan([], "x"), "NONE", ti.digest([])),
+        (ti.Plan(["test_a.q", "test_b.q"], "x"), "-files test_a.q,test_b.q", None),
+    ],
+)
+def test_a_plan_is_one_hook_line_and_one_trailer_record(plan, line, record):
+    assert plan.line == line
+    assert plan.record == (record or ti.digest(plan.files))
+    assert ti.parse_line(plan.line).files == plan.files
+
+
+def test_a_decision_that_is_not_a_line_is_refused():
+    with pytest.raises(ValueError, match="ALL, NONE or -files"):
+        ti.parse_line("-files ")
+
+
+def test_full_env_runs_the_whole_suite_without_reading_anything(monkeypatch, tmp_path):
+    monkeypatch.setenv(ti.FULL_ENV, "1")
+    monkeypatch.setenv(ti.DECIDED_ENV, "-files test_a.q")
+    assert ti.hook_line(tmp_path).files is None
+
+
+def test_the_hook_runs_what_attest_decided(monkeypatch, tmp_path):
+    monkeypatch.delenv(ti.FULL_ENV, raising=False)
+    monkeypatch.setenv(ti.DECIDED_ENV, "-files test_b.q,test_a.q")
+    assert ti.hook_line(tmp_path).files == ["test_a.q", "test_b.q"]
+
+
+def test_no_graph_qlinter_runs_the_whole_suite_and_says_why(small_repo, monkeypatch, tmp_path):
+    root, base = small_repo
+    _change(root, "src/c.q")
+    monkeypatch.setenv("UQF_QLINTER", _fake_qlinter(tmp_path))
+    plan = ti.plan(base, root)
+    assert plan.files is None and plan.line == "ALL"
+    assert "the selector cannot run" in plan.why and ".qlinter-graph-rev" in plan.why
+
+
+def test_an_unreadable_base_runs_the_whole_suite(small_repo):
+    root, _ = small_repo
+    plan = ti.plan("no-such-ref", root)
+    assert plan.files is None and "cannot diff against no-such-ref" in plan.why
+
+
+def test_the_hook_cli_always_prints_a_line(small_repo, monkeypatch, tmp_path, capsys):
+    root, _ = small_repo
+    monkeypatch.setenv("UQF_QLINTER", _fake_qlinter(tmp_path))
+    assert ti.main(["--hook", "--root", str(root)]) == 0
+    out = capsys.readouterr()
+    assert out.out.strip() == "ALL" and "q-tests:" in out.err
+
+
+@GRAPH
+def test_a_change_outside_most_suites_runs_fewer_files(small_repo):
+    root, base = small_repo
+    _change(root, "src/c.q")
+    plan = ti.plan(base, root)
+    total = len(list((root / "tests/q").glob("test_*.q")))
+    assert plan.files == ["test_c.q", "test_child.q", "test_text.q"]
+    assert len(plan.files) < total
+    assert plan.line == "-files test_c.q,test_child.q,test_text.q"
+
+
+@GRAPH
+def test_what_is_being_committed_counts_in_a_hook(small_repo):
+    """In a commit hook the change is the branch AND the staged commit."""
+    root, base = small_repo
+    _change(root, "src/c.q")
+    _change(root, "src/a.q", commit=False)
+    _git(root, "add", "src/a.q")
+    hook = ti.plan(base, root).files
+    committed = ti.plan(base, root, with_uncommitted=False).files
+    assert set(committed) < set(hook) and "test_a.q" in hook
+
+
+@GRAPH
+def test_a_change_the_selector_says_all_for_runs_everything(small_repo):
+    root, base = small_repo
+    _change(root, "src/init.q")
+    plan = ti.plan(base, root)
+    assert plan.files is None and plan.line == "ALL" and plan.record == "all"
+    assert "the library loader" in plan.why
