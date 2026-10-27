@@ -115,3 +115,6 @@ def test_merging_the_shards_records_gives_one_record(tmp_path):
 def test_a_test_marked_apart_is_a_unit_of_its_own():
     assert shards.unit_of("m.py::t", {"shard_apart": True}) == "m.py::t"
     assert shards.unit_of("m.py::t", {}) == "m.py"
+    assert shards.unit_of("m.py::t@torq-stack", {"shard_apart": True}) == "m.py::t", (
+        "xdist's suffix"
+    )

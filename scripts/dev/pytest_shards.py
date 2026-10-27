@@ -25,6 +25,7 @@ whatever the record says.
 from __future__ import annotations
 
 import json
+import re
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -73,8 +74,9 @@ APART = "shard_apart"
 
 def unit_of(nodeid: str, keywords) -> str:
     """What is assigned to a shard: the test itself when marked APART, else
-    its module."""
-    return nodeid if APART in keywords else module_of(nodeid)
+    its module. xdist's loadgroup reports a grouped test as `<id>@<group>`;
+    the suffix is dropped, so the record names what collection names."""
+    return re.sub(r"@[\w.-]+$", "", nodeid) if APART in keywords else module_of(nodeid)
 
 
 def load_weights(path: Path = MODULE_DURATIONS) -> dict[str, float]:
