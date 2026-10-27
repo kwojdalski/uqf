@@ -89,24 +89,25 @@ repos:
       # Every Python test in the repository, from the uv workspace root.
       # This replaced a hook scoped to python/uqf_client alone, under which
       # 229 of the repo's 231 Python tests never ran on commit - and no CI
-      # exists as a backstop. All 231 run in about 0.6s, so the gap was never
-      # a cost question.
+      # exists as a backstop.
+      #
+      # scripts/dev/python_tests_hook.py picks how many: a commit of .py files
+      # alone runs `pytest --testmon` (only the tests that execute what
+      # changed); anything else - a .q, a CSV, a config, a document a test
+      # reads, pyproject or uv.lock - runs the whole suite in parallel with
+      # pytest-xdist. testmon sees only in-process Python, and many tests start
+      # q, so a .q edit must never be left to it. CI runs the whole suite.
+      #
+      # Scoped to every file for that reason: a change anywhere can fail a
+      # Python test. Some suites start a real q process (uqf_frontend's kola
+      # IPC tests, uqs's example-script runs) and skip if they find no
+      # interpreter. They find it by $QCMD, else q on PATH - TorQ's rule
+      # (uqs.paths.q_interpreter).
       - id: python-tests
-        name: Run all Python tests (workspace)
-        entry: bash
+        name: Run the Python tests (testmon for .py-only commits, else all with xdist)
+        entry: uv run python scripts/dev/python_tests_hook.py
         language: system
-        args:
-          - -c
-          - |
-            set -euo pipefail
-            # Some suites start a real q process (uqf_frontend's kola IPC
-            # tests, uqs's example-script runs) and skip if they find no
-            # interpreter. They find it by $QCMD, else q on PATH - TorQ's
-            # rule (uqs.paths.q_interpreter). This hook used to put
-            # ~/.kx/bin on PATH first, a second default TorQ does not have.
-            uv run pytest -q
-        files: '\.py$'
-        exclude: '^lib/'
+        files: '.'
         pass_filenames: false
 
       - id: check-hook-scopes
@@ -229,7 +230,23 @@ repos:
             # to "which interpreter", and the only one that fell back to
             # something the tree is not verified on. test.py's rule is the
             # README's: $QCMD if you set it, otherwise q on PATH, as TorQ does.
-            python3 scripts/test.py q-unit
+            #
+            # Only the suites the change reaches (#1690): test_impact.py reads
+            # q-lint's dependency graph and selects for origin/master...HEAD
+            # plus what is being committed - the branch's whole change, as the
+            # KDB-X attestation check reads the PR, not just this commit. It
+            # prints ALL - and the whole suite runs - when it says so, when it
+            # cannot run (no graph-capable qlinter; see .qlinter-graph-rev),
+            # or when UQF_Q_TESTS_FULL=1. attest_kdbx.py hands its own
+            # decision over in UQF_Q_TESTS_SELECTION, so the run is the one
+            # its trailer records. The full suite still runs on master.
+            selection=$(python3 scripts/dev/test_impact.py --hook)
+            case "$selection" in
+              ALL) python3 scripts/test.py q-unit ;;
+              NONE) echo "== q-unit: no suite reaches this change - none run ==" ;;
+              -files\ *) python3 scripts/test.py q-unit -files "${selection#-files }" ;;
+              *) echo "q-tests: unexpected selection: $selection" >&2; exit 1 ;;
+            esac
             python3 scripts/test.py q-examples
             # The worked examples under scripts/examples/, run as scripts.
             # Nothing ran them until this lane existed, and the first

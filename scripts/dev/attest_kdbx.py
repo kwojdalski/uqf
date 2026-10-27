@@ -11,11 +11,25 @@ takes a path changed in `origin/master...HEAD` - the three-dot diff, from the
 merge base. Each one runs over the WHOLE tree, not just the files a commit
 staged, and when all pass the tree is recorded as an empty commit carrying
 
-    KDB-X-gates: <the tree's sha> hooks=<the hooks run, comma-sorted>
+    KDB-X-gates: <the tree's sha> hooks=<the hooks run, comma-sorted> q-tests=<what ran>
 
 which the check reads in CI and holds to the same needed set. `--all` runs
-every hook, as this did before it was scoped. A branch that needs none
-records nothing, and says so.
+every hook, and the whole q suite, as this did before it was scoped. A branch
+that needs none records nothing, and says so.
+
+q-tests runs only the q suites the change reaches (#1690): the selection
+scripts/dev/test_impact.py makes for `base...HEAD` from q-lint's dependency
+graph, handed to the hook in UQF_Q_TESTS_SELECTION so the hook runs exactly
+what is recorded. `q-tests=<sha256>` records that subset by its digest
+(test_impact.digest: the sorted file names), and CI's check, with the qlinter
+.qlinter-graph-rev pins, makes the same selection from the PR's diff and
+accepts the trailer only when the digests agree. `q-tests=all` records the
+whole suite, which needs no recomputation: what ran when the selector said
+ALL, could not run here (no graph-capable qlinter), or UQF_Q_TESTS_FULL=1 was
+set - the way to an attestation CI accepts whatever its selector says. The
+other hooks are unchanged; q-coverage still runs the whole suite. The full
+suite still runs on master, and a test only a full run would have caught is
+caught there.
 
 Why skipping a hook the change does not touch still means "every KDB-X hook
 passed on the judged paths that merge": the check accepts a head only if it
@@ -46,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -72,6 +87,8 @@ def _load(name: str, rel: str):
     spec = importlib.util.spec_from_file_location(name, _SOURCE / rel)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    # registered before it runs: a @dataclass looks its own module up there
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -86,6 +103,19 @@ def git(*args: str) -> str:
     ).stdout
 
 
+def _test_impact():
+    return _load("test_impact", "scripts/dev/test_impact.py")
+
+
+def q_tests_plan(base: str, full: bool):
+    """What q-tests runs: the whole suite with `full`, else test_impact's plan
+    for `base...HEAD` - which falls back to the whole suite itself."""
+    impact = _test_impact()
+    if full:
+        return impact.Plan(None, "--all")
+    return impact.plan(base, REPO, with_uncommitted=False)
+
+
 def needed(base: str) -> list[str]:
     """The hooks whose scope takes a path changed in `base...HEAD`, sorted -
     worked out by the check CI runs, so the two cannot disagree."""
@@ -94,10 +124,12 @@ def needed(base: str) -> list[str]:
     return check.needed_hooks(changed)
 
 
-def run_hook(hook: str) -> bool:
-    """Run one pre-commit hook over the whole tree; whether it passed."""
+def run_hook(hook: str, env: dict[str, str] | None = None) -> bool:
+    """Run one pre-commit hook over the whole tree, with `env` added to this
+    process's environment; whether it passed."""
     cmd = ["uv", "tool", "run", "--from", PRE_COMMIT, "pre-commit", "run", hook, "--all-files"]
-    return subprocess.run(cmd, cwd=REPO, check=False).returncode == 0
+    merged = {**os.environ, **(env or {})}
+    return subprocess.run(cmd, cwd=REPO, env=merged, check=False).returncode == 0
 
 
 def dirt() -> str | None:
@@ -161,9 +193,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     tree = git("rev-parse", "HEAD^{tree}").strip()
     print(f"attest_kdbx: needed: {', '.join(hooks)}", flush=True)
+    plan = None
+    hook_env: dict[str, str] = {}
+    if "q-tests" in hooks:
+        plan = q_tests_plan(args.base, args.all)
+        impact = _test_impact()
+        hook_env = {impact.DECIDED_ENV: plan.line}
+        print(f"attest_kdbx: q-tests: {plan.why}", flush=True)
     for hook in hooks:
         print(f"attest_kdbx: {hook} ...", flush=True)
-        if not run_hook(hook):
+        if not run_hook(hook, hook_env if hook == "q-tests" else None):
             print(f"attest_kdbx: {hook} failed - nothing recorded", file=sys.stderr)
             return 1
     if git("rev-parse", "HEAD^{tree}").strip() != tree or dirt():
@@ -174,6 +213,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     why_these = "every KDB-X hook (--all)" if args.all else f"the hooks {args.base}...HEAD needs"
     trailer = f"{TRAILER}: {tree} hooks={','.join(hooks)}"
+    ran = ""
+    if plan is not None:
+        trailer += f" q-tests={plan.record}"
+        ran = f"\n\nq-tests: {plan.why}" + (
+            f"\nq-tests ran: {', '.join(plan.files) or 'none'}" if plan.files is not None else ""
+        )
     try:
         git(
             "commit",
@@ -181,7 +226,8 @@ def main(argv: list[str] | None = None) -> int:
             "-m",
             f"KDB-X gates pass on tree {tree[:12]}",
             "-m",
-            f"{', '.join(hooks)} - {why_these} - run on KDB-X over the whole tree.\n\n{trailer}",
+            f"{', '.join(hooks)} - {why_these} - run on KDB-X over the whole tree."
+            f"{ran}\n\n{trailer}",
         )
     except subprocess.CalledProcessError as exc:
         # The commit runs the repository's hooks too; one that refuses (a

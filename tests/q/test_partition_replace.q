@@ -7,6 +7,14 @@
 / in-process manager, so the clear under test is the one a real window runs.
 
 
+/ Its own status directory: the runs here write status and outcome files, and
+/ without this the suite borrowed the one an earlier suite had set - so run
+/ alone (a selected subset, #1690) it wrote to "/status" and failed.
+.qt.qetl.partition_replace.beforeNamespace_status_dir:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"mkdir -p build/test-status";
+    }
+
 .qt.qetl.partition_replace.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
 .qt.qetl.partition_replace.setUp_clean:{[]

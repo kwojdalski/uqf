@@ -100,5 +100,10 @@ in the main checkout.
    KDB-X run can judge (docs-only, no KDB-X available): the check then passes
    with a warning that names the label, so the override stays on the record.
 
+   `scripts/dev/ship.sh <pr> issue-<number>` does the rest once a PR may merge:
+   it attests only when the check needs it, merges master in only for a conflict
+   or a judged change on master, waits for "Repository checks" to pass, and
+   merges.
+
 Only triage without edits (reading code, commenting, labelling) may stay in the
 main checkout.

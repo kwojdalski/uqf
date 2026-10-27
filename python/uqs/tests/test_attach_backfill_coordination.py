@@ -38,7 +38,11 @@ COMMON = ["--attach", "pb-uat", "--from", "2026-09-11", "--to", "2026-09-13", "-
 
 
 def invoke(*argv):
-    return CliRunner().invoke(cli.app, ["job", "backfill", WORKER, *COMMON, *argv])
+    # Wide, as test_attach_backfill_run.py's: rich truncates a long cell to the
+    # terminal, so a longer tmp path (an xdist worker's) cut the plan's lines.
+    return CliRunner().invoke(
+        cli.app, ["job", "backfill", WORKER, *COMMON, *argv], env={"COLUMNS": "300"}
+    )
 
 
 def refused(world, match, **state):

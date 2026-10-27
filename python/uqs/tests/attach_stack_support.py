@@ -37,10 +37,20 @@ CORE = ("discovery1", "stp1", "rdb1", "hdb1", "wdb1", "sort1")
 SPAN = 80
 
 
-def requires_stack():
-    return pytest.mark.skipif(
-        not STACK_TEST, reason="UQS_ATTACH_STACK_TEST=1 starts an isolated TorQ stack"
-    )
+def requires_stack() -> list[pytest.MarkDecorator]:
+    """A module's `pytestmark`: opt-in, and one stack at a time under xdist.
+
+    pick_base_port shuffles per process, but between its check that a span is
+    free and the stack binding it, another xdist worker's stack can take the
+    same span. The group puts every stack test on one worker
+    (`-n auto --dist loadgroup`), so they start one after another.
+    """
+    return [
+        pytest.mark.skipif(
+            not STACK_TEST, reason="UQS_ATTACH_STACK_TEST=1 starts an isolated TorQ stack"
+        ),
+        pytest.mark.xdist_group("torq-stack"),
+    ]
 
 
 def _free(port: int) -> bool:

@@ -112,3 +112,8 @@ docs/_site/
 # Host process settings (and bundle-installed rows), never repository defaults.
 /python/uqs/process_overrides.csv
 /python/uqs/bundle_overrides.csv
+
+# pytest-testmon's record of which tests run which code: this checkout's,
+# rebuilt by `uv run pytest --testmon` (scripts/dev/python_tests_hook.py).
+/.testmondata
+/.testmondata-*

@@ -86,7 +86,17 @@ for root, dirs, files in os.walk(d):
         rel = os.path.relpath(os.path.join(root, name), d)
         if rel not in (".uqf-runtime", "RUNTIME_MANIFEST.json"):
             found[rel] = sha(os.path.join(root, name))
-extra, missing = sorted(set(found) - set(listed)), sorted(set(listed) - set(found))
+def cache_of_listed(rel):
+    # A .pyc CPython wrote on first import, for a source the manifest lists:
+    # it is checked against that (verified) source before use, so it is a
+    # cache, not a change. A listed .pyc rewritten is still a change.
+    head, tail = os.path.split(rel)
+    parent, cache = os.path.split(head)
+    if cache != "__pycache__" or not tail.endswith(".pyc"):
+        return False
+    return os.path.join(parent, tail.split(".")[0] + ".py") in listed
+extra = sorted(r for r in set(found) - set(listed) if not cache_of_listed(r))
+missing = sorted(set(listed) - set(found))
 if extra or missing:
     refuse(f"{len(extra)} file(s) not in its manifest, {len(missing)} missing")
 changed = sorted(r for r in listed if found[r] != listed[r])

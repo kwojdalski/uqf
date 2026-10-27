@@ -260,9 +260,14 @@ def test_a_launcher_that_execs_its_real_program_is_still_ours(proc):
     pid = proc.start(launcher, cwd=proc.pid_path.parent)
     recorded = proc.pid_path.read_text().split("\n")[1]
     deadline = time.monotonic() + 10
-    while (lifecycle._ps(pid, "args") or "/bin/sh").startswith("/bin/sh"):
+    while (lifecycle._ps(pid, "args") or "/bin/sh").startswith(("/bin/sh", "(sh)")):
         assert time.monotonic() < deadline, "the launcher never exec'd"
         time.sleep(0.05)
-    assert "/bin/sh" in recorded or recorded.startswith("boot+"), "recorded before the exec"
+    # macOS's ps shows a process whose argv it cannot read yet as its command
+    # name in parentheses: under load (pytest-xdist) start() can read the
+    # launcher as "(sh)" rather than "/bin/sh -c ...". Both are the launcher.
+    assert recorded.startswith("boot+") or "/bin/sh" in recorded or recorded.endswith("(sh)"), (
+        "recorded before the exec"
+    )
     assert proc.running(), "the exec'd launcher is the process start() spawned"
     assert proc.stop(missing_ok=False) == pid
