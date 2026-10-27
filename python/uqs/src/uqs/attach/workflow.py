@@ -25,7 +25,7 @@ from uqs.attach.findings import blockers
 from uqs.attach.manifest import Manifest
 from uqs.attach.publisher import Publisher, stop_publisher
 from uqs.attach.remote import Endpoint, Ipc
-from uqs.attach.service import create, manifest_of, parse_discovery, save_planned
+from uqs.attach.service import create, manifest_of, newly_pinned, parse_discovery, save_planned
 
 
 @dataclass(frozen=True)
@@ -233,7 +233,14 @@ def execute(
 
     t = time.monotonic()
     if running:
-        stage("save", "skipped", "already attached and verified; the publisher is running", t)
+        # nothing to apply, but storage the attachment left unpinned (a wdb that was
+        # down, or not among its consumers, when it was saved) is pinned now: a
+        # backfill needs the HDB directory and never guesses it
+        if pins := newly_pinned(att, p):
+            where = save_planned(att, p, state_dir)
+            stage("save", "done", f"pinned {', '.join(pins)} the stack now reports ({where})", t)
+        else:
+            stage("save", "skipped", "already attached and verified; the publisher is running", t)
         stage("apply", "skipped", "nothing to apply", t)
     else:
         where = save_planned(att, p, state_dir)

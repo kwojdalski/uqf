@@ -278,6 +278,45 @@ def test_a_rerun_converges_without_a_second_registration_or_publisher(world):
     assert run("attach", "pb-uat", "--yes").exit_code == 0, "by name alone, too"
 
 
+def saved_storage(fake) -> dict:
+    return json.loads((fake.state_dir / "pb-uat" / config.CONFIG_FILE).read_text())["storage"]
+
+
+def test_a_rerun_of_a_running_attachment_pins_the_hdb_it_left_unpinned(world):
+    """Saved while the wdb reported no HDB, the attachment refuses every backfill
+    (`pins no HDB directory`); re-running the attach is how that is put right, so it
+    must pin the directory even though there is nothing to apply."""
+    wdb = world.named("wdb1")
+    hdbdir, wdb["hdbdir"] = wdb["hdbdir"], ""
+    assert run("attach", *new(world, "--yes")).exit_code == 0
+    assert saved_storage(world)["hdb_dir"] == ""
+    wdb["hdbdir"] = hdbdir
+    first = changes(world)
+    result = run("attach", "pb-uat", "--yes", "--json")
+    assert result.exit_code == 0, result.output
+    stages = json.loads(result.output)["stages"]
+    assert [s["status"] for s in stages] == ["done", "skipped", "done", "skipped"]
+    assert "pinned hdb_dir" in stages[0]["detail"]
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+    assert changes(world) == first and world.started == ["pb_ledger1"]
+    again = json.loads(run("attach", "pb-uat", "--yes", "--json").output)["stages"]
+    assert again[0]["status"] == "skipped", "a pinned directory is never re-pinned"
+
+
+def test_an_attachment_without_its_wdb_pins_the_hdb_an_unmanaged_wdb_reports(world):
+    assert run("attach", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
+    storage = saved_storage(world)
+    assert storage["hdb_dir"] == "/data/hdb" and storage["wdb_savedir"] == "/data/wdbhdb"
+
+
+def test_wdbs_outside_the_attachment_that_disagree_pin_nothing(world):
+    other = dict(world.named("wdb1"), procname="wdb2", port=6006, hdbdir=":/elsewhere")
+    world.add(other)
+    world.refresh_discovery()
+    assert run("attach", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
+    assert saved_storage(world)["hdb_dir"] == ""
+
+
 def test_a_rerun_after_no_start_applies_nothing_and_then_starts(world):
     assert run("attach", *new(world, "--yes", "--no-start")).exit_code == 0
     first = changes(world)
