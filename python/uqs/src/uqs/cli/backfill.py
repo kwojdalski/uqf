@@ -105,6 +105,17 @@ def backfill(
             "`uqs job receive` started on the stack's machine, which writes its HDB (#1650)",
         ),
     ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="With --writer: HOST:PORT is any q process of the stack (e.g. its wdb), and "
+            "each date's rows are appended into that process's own HDB over plain IPC. "
+            "NOTHING is checked there - no receiver, contract, schema, attachment "
+            "verification, end-of-day fence or retry protection - and no reader is told "
+            "to reload. Append only; a re-run or a retry duplicates rows",
+        ),
+    ] = False,
     as_json: Annotated[
         bool,
         typer.Option("--json", help="With --attach: print the plan as JSON"),
@@ -162,6 +173,9 @@ def backfill(
     ended. `--wait` follows the run to its outcome and exits with that - what
     a script or a scheduler wants.
     """
+    if force and writer is None:
+        _die(UqsError("--force is for --writer: it writes through the process at HOST:PORT"))
+        return
     if writer is not None and attach is None:
         _die(UqsError("--writer is for --attach: it names the receiver of an attached destination"))
         return
@@ -194,6 +208,7 @@ def backfill(
             verbose=_debug_requested(ctx, debug),
             trace=trace,
             writer=writer,
+            force=force,
         )
         return
     try:

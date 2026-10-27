@@ -36,8 +36,10 @@ def extract(
     wait: bool,
     verbose: bool,
     trace: bool,
+    force: bool = False,
 ) -> None:
-    """`uqs job backfill --attach NAME --writer HOST:PORT`: plan or start the extractor."""
+    """`uqs job backfill --attach NAME --writer HOST:PORT`: plan or start the extractor.
+    With `force`, HOST:PORT is any q process (a wdb), written to with nothing checked."""
     from uqs.cli.backfill_attached import _outcome_text, _report
 
     if fixture:
@@ -46,15 +48,26 @@ def extract(
     if port is not None:
         _die(UqsError("--port is not taken with --writer: the receiver's address is the stack's"))
         return
+    if force:
+        if on_conflict not in (None, "append"):
+            _die(
+                UqsError(
+                    f"--force only appends: --on-conflict {on_conflict} would need to read what "
+                    "the writer holds, and nothing is read there"
+                )
+            )
+            return
+        on_conflict = "append"
     try:
         paths = _paths()
         if mode in ("validate", "plan"):
             _, plan = backfill_remote.remote_plan(
                 paths, attachment, worker, version, bound_from, bound_to,
-                writer=writer, on_conflict=on_conflict,
+                writer=writer, on_conflict=on_conflict, force=force,
             )  # fmt: skip
             text = (
-                f"{worker} -> attachment {attachment} through the receiver at {writer}: "
+                f"{worker} -> attachment {attachment} "
+                f"{'FORCED straight into' if force else 'through the receiver at'} {writer}: "
                 f"{len(plan['windows'])} window(s) (nothing was written)"
             )
             _report(plan, as_json, text)
@@ -62,6 +75,7 @@ def extract(
         run_, plan = backfill_remote.launch_remote(
             paths, attachment, worker, version, bound_from, bound_to,
             writer=writer, mode=mode, on_conflict=on_conflict, verbose=verbose, trace=trace,
+            force=force,
         )  # fmt: skip
     except UqsError as exc:
         _die(exc)

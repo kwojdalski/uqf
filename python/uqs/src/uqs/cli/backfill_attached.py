@@ -38,6 +38,7 @@ def run(
     verbose: bool = False,
     trace: bool = False,
     writer: str | None = None,
+    force: bool = False,
 ) -> None:
     """Validate, plan or run a backfill into `attachment`'s native HDB; non-zero on a refusal."""
     mode = mode or "run"
@@ -48,7 +49,7 @@ def run(
         backfill_receive.extract(
             attachment, worker, version, bound_from, bound_to,
             writer=writer, mode=mode, port=port, fixture=fixture, on_conflict=on_conflict,
-            as_json=as_json, wait=wait, verbose=verbose, trace=trace,
+            as_json=as_json, wait=wait, verbose=verbose, trace=trace, force=force,
         )  # fmt: skip
         return
     try:
@@ -189,6 +190,12 @@ def _outcome_text(worker, run_, code, result) -> str:
         return (
             f"{head}\n  the rows are WRITTEN and covered but NOT queryable: {failed}."
             f"\n  Re-run the same command: nothing is rewritten, the readers are asked again."
+        )
+    if outcome == "written_forced":
+        return (
+            f"{head}\n  appended into the writer's HDB WITHOUT CHECKS (--force); no reader was "
+            "told to reload - run `\\l .` on the HDB processes. A re-run of covered windows "
+            "sends nothing, but nothing guards against a duplicate append"
         )
     if outcome == "queryable":
         readers = ", ".join(result.get("readers", [])) or "none"

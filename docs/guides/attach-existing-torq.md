@@ -779,6 +779,42 @@ Reactions of the backfilled dataset (`rebuild_positions`, for example) write
 through the same manager and are refused, and recorded as owed: they belong on
 the stack's side.
 
+#### Without a receiver: `--force`
+
+`--force` with `--writer` skips the receiver and everything it checks. HOST:PORT
+is then any q process of the stack, usually its wdb. The stack's machine runs
+none of uqf's code and needs no approved contract, and the attachment need not
+be `verified`, pin an HDB or publish the dataset: it is read only for the
+stack's user and password.
+
+```bash
+uqs job backfill piggybank_ledger_backfill --attach pb-uat \
+    --writer uat-host:6055 --force \
+    --from 2026-10-01 --to 2026-10-02 --version historical-v1 --wait
+```
+
+The extractor sends each date's rows as a q lambda that the wdb evaluates. The
+lambda enumerates the rows against the HDB's own `sym` file and appends them to
+`<hdb>/<date>/<table>/`. The HDB is the wdb's `.wdb.hdbdir`, or the attachment's
+pinned HDB directory when it has one. Once every window is sent, one more call
+sorts each partition it wrote by `sym` and `time` and puts `p#` back on `sym`.
+
+Nothing is checked on the stack's side:
+
+- **Re-runs and retries append twice.** There is no batch journal. Coverage is
+  filed on the extraction machine under the writer's address, apart from a
+  checked destination's, so a re-run of a covered range sends nothing. But a
+  window whose acknowledgement was lost is sent again and appended again.
+- **Append only.** Any other `--on-conflict` is refused before anything runs,
+  because resolving keys would mean reading what the wdb holds. Without one, the
+  run appends whatever the worker declares.
+- **No schema or date checks.** Columns that differ from a partition already on
+  disk fail inside the wdb, possibly after some dates are written. Rows dated
+  today land in a partition that the wdb's own end of day then writes over.
+- **The wdb blocks** while it evaluates each call, so live ingestion queues
+  behind a large date.
+- **No reader is told to reload.** Run `\l .` on the HDB processes yourself.
+
 ### What `plan` reports, and what it refuses
 
 The source, the half-open UTC range, the windows and which are already covered

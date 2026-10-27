@@ -30,6 +30,13 @@
 //                readers; this process extracts, files coverage here and writes no HDB
 //   -writer_user the user the receiver is reached as; its password is $UQF_ATTACH_WRITER_PASSWORD
 //
+// With -force as well (`uqs job backfill --writer HOST:PORT --force`), -writer is ANY q process of the
+// stack - its wdb - running none of uqf's code: each date's rows are sent as a lambda that process
+// evaluates, appending them into its own HDB (`.wdb.hdbdir`, or -force_hdb when it is not _own_).
+// NOTHING is checked there: no receiver, contract, schema, date fence or batch journal, so a retry or
+// a re-run appends twice, and no reader is told to reload. Append only. Coverage is recorded here as
+// each window is acknowledged.
+//
 // The rest are torq_backfill.q's flags, parsed by the same functions (.qetl.job.bounded.spec_from_flags,
 // .qetl.job.bounded.runtime.use_on_conflict, use_mode). -mode is dry_run or run; validate and plan are
 // the launcher's. There is no -fixture: a fixture in a native HDB is indistinguishable from data.
@@ -50,6 +57,7 @@
 //   queryable    0  written, covered, and every reader reloaded (or there is none to ask)
 //   dry_run      0  nothing written
 //   written_not_queryable  3  written and covered; some reader has not reloaded: re-run to retry
+//   written_forced  0  -force: appended into the writer's HDB unchecked; no reader was told to reload
 //   partial      1  some windows failed; those are neither written nor covered
 //   failed       1  the run did not do its job
 //
@@ -172,6 +180,73 @@ system"l scripts/dev/attached_readers.q";
     if[10h=type h; '"attached_backfill: cannot reach the receiver at ",(first opts`writer),": ",h];
     {[h;m] h m}[h]}
 
+/ ------------------------------------------------------------ FORCED WRITER
+/ .
+/ -force: the process at -writer is the stack's own (a wdb) and runs nothing of ours, so what it
+/ does is sent with every call. These two lambdas are what it evaluates; they name only q and,
+/ for an _own_ root, the TorQ wdb's .wdb.hdbdir. They stay in the root context so they serialise
+/ as plain lambdas.
+
+/ Evaluated BY THE WRITER: append one date's rows to <root>/<date>/<target>/ and return how many.
+/ `p# comes off sym first, as io_hdb.q's append does; forced_sort puts it back.
+/ @param root the HDB root, or ` for the writer's own .wdb.hdbdir
+/ @param d the partition date
+/ @param target the table
+/ @param rows the date's rows, with a time column and no date column
+/ @return the rows appended
+.qdev.attached.forced_append:{[root;d;target;rows]
+    db:$[null root; hsym .wdb.hdbdir; root];
+    part:` sv .Q.par[db;d;target],`;
+    data:.Q.en[db;rows];
+    have:key part;
+    if[`sym in have; @[{@[x;`sym;`#]};part;::]];
+    / an interpreter that cannot upsert onto a splayed table on disk rewrites it whole
+    $[()~have; part set data; .[upsert;(part;data);{[p;d;e] p set (get p),d}[part;data]]];
+    count data}
+
+/ Evaluated BY THE WRITER at the end: sort each date's partition by sym then time and put `p# on
+/ sym (where the interpreter can), as a finished partition is left. Returns how many it sorted.
+/ @param root as forced_append's
+/ @param target the table
+/ @param dates the dates written
+/ @return the partitions sorted
+.qdev.attached.forced_sort:{[root;target;dates]
+    db:$[null root; hsym .wdb.hdbdir; root];
+    sum {[db;target;d]
+        base:.Q.par[db;d;target];
+        part:` sv base,`;
+        if[()~key part; :0];
+        (`sym`time inter get ` sv base,`.d) xasc part;
+        if[`sym in key part; @[{@[x;`sym;`p#]};part;::]];
+        1}[db;target] each dates}
+
+/ The client's manager: each window's rows go out a date at a time, through forced_append.
+/ Refuses every strategy but append - anything else would need to read what the writer holds.
+/ @param call the writer, as a function of one message
+/ @param root the HDB root, or ` for the writer's own
+/ @param partition_col the column `time copies when the batch has none (the source's time column)
+/ @return a manager with write, write_keyed and finish
+.qdev.attached.forced_manager:{[call;root;partition_col]
+    write:{[call;root;pc;target;batch;opts]
+        if[not `append~opts`on_conflict;
+            '"attached_backfill: -force only appends - pass --on-conflict append (this run: ",string[opts`on_conflict],")"];
+        if[0=count batch; :0];
+        data:$[`time in cols batch; batch; `time xcols ![batch;();0b;enlist[`time]!enlist pc]];
+        data:(cols[data] except `date)#data;
+        days:`date$data`time;
+        `.qdev.attached.forced_dates set distinct .qdev.attached.forced_dates,distinct days;
+        sum {[call;root;target;data;days;d] call (.qdev.attached.forced_append;root;d;target;data where days=d)}[call;root;target;data;days] each distinct days}[call;root;partition_col];
+    `write`write_keyed`finish!(
+        {[w;target;batch] w[target;batch;enlist[`on_conflict]!enlist `append]}[write];
+        write;
+        {[call;root;x] / noqa: QF016 niladic
+            n:call (.qdev.attached.forced_sort;root;.qdev.attached.dataset;.qdev.attached.forced_dates);
+            `.qdev.attached.forced_dates set `date$();
+            n}[call;root])}
+
+/ The dates this run has sent, for the end-of-run sort.
+.qdev.attached.forced_dates:`date$()
+
 / The remote manager's on_ready: the receiver has told its readers already; release coverage
 / when it reports they reloaded, and keep it owed when they did not.
 / @param status `finished`pending`final, as .qetl.io.flush and finish pass it
@@ -189,12 +264,14 @@ system"l scripts/dev/attached_readers.q";
 / The outcome of a run, and the exit code that says it.
 / @param result the lifecycle's result dictionary
 / @param dry whether the run wrote nothing by mode
+/ @param forced whether it wrote through -force, where no reader is told: written_forced, never queryable
 / @return dict: outcome, queryable, code
-.qdev.attached.outcome:{[result;dry]
+.qdev.attached.outcome:{[result;dry;forced]
     code:.qetl.job.bounded.exit_code result`state;
     owed:.qdev.attached.reload_state`dirty;
     o:$[not 0=code; $[`partial~result`state; `partial; `failed];
         dry; `dry_run;
+        forced; `written_forced;
         owed; `written_not_queryable;
         `queryable];
     `outcome`queryable`code!(o;o~`queryable;$[o~`written_not_queryable; 3; code])}
@@ -222,15 +299,21 @@ if[not (::)~decl`io;
     exit 2];
 
 remote:`writer in key o;
+forced:remote and `force in key o;
 .qdev.attached.dataset:decl`dataset;
 $[remote;
     [bounds:enlist[`destination]!enlist `$first o`destid;
      call:@[.qdev.attached.writer_call;o;{[e] -1 e; exit 2}];
      / the receiver tells the readers: none are asked from here
      .qdev.attached.readers_named:.qdev.attached.readers enlist[`readers]!enlist enlist "_none_";
-     .qetl.io.default:.qetl.io.remote.manager[call;`$first o`attachment;decl`dataset],enlist[`on_ready]!enlist .qdev.attached.remote_ready;
-     .qetl.log.info[worker;"extracting here; the receiver on the destination's machine writes the HDB";
-        `attachment`destination`writer`state!(`$first o`attachment;bounds`destination;`$first o`writer;state)]];
+     $[forced;
+        [froot:$["_own_"~first o`force_hdb; `; hsym `$first o`force_hdb];
+         .qetl.io.default:.qdev.attached.forced_manager[call;froot;(.qetl.source.def decl`source)`time_column];
+         .qetl.log.warn[worker;"FORCED: appending straight into the writer's HDB - nothing is checked there, a re-run duplicates rows, and no reader is told to reload";
+            `attachment`destination`writer`root`state!(`$first o`attachment;bounds`destination;`$first o`writer;$[null froot;`$".wdb.hdbdir";froot];state)]];
+        [.qetl.io.default:.qetl.io.remote.manager[call;`$first o`attachment;decl`dataset],enlist[`on_ready]!enlist .qdev.attached.remote_ready;
+         .qetl.log.info[worker;"extracting here; the receiver on the destination's machine writes the HDB";
+            `attachment`destination`writer`state!(`$first o`attachment;bounds`destination;`$first o`writer;state)]]]];
     [root:hsym `$first o`hdb;
      col:(.qetl.source.def decl`source)`time_column;
      bounds:@[.qdev.attached.bounds;o;{[e] -1 "attached_backfill: bad bounds: ",e; exit 2}];
@@ -241,7 +324,8 @@ $[remote;
      .qetl.io.default:mgr,enlist[`on_ready]!enlist .qdev.attached.on_ready;
      .qetl.log.info[worker;"writing into an attached stack's HDB";
         `attachment`destination`root`partition_col`max_date`deadline`state`readers!(`$first o`attachment;bounds`destination;root;col;bounds`max_date;bounds`deadline;state;`$", " sv string .qdev.attached.readers_named`name)]]];
-.qetl.coverage.defer_ready:1b;
+/ forced: no reader is told, so coverage cannot wait for one
+.qetl.coverage.defer_ready:not forced;
 
 .qdev.attached.claim o;
 if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
@@ -258,7 +342,7 @@ result:.Q.trp[{[ns;spec;w;ignored] (` sv ns,`init)[spec]; .qdev.attached.catch_u
 if[count .qetl.coverage.unready;
     $[remote; [.qetl.io.finish .qetl.io.default]; .qdev.attached.on_ready `finished`pending`final!(0;0;1b)]];
 .qdev.attached.release o;
-fin:.qdev.attached.outcome[result;not .qetl.job.bounded.runtime.allows`finish_store];
+fin:.qdev.attached.outcome[result;not .qetl.job.bounded.runtime.allows`finish_store;forced];
 .qetl.log.info[worker;"attached backfill finished";result,fin,`destination`reload_owed!(bounds`destination;.qdev.attached.reload_state`dirty)];
 / the launcher reads this line: written and queryable are different things
 -1 "RESULT ",.j.j `worker`state`outcome`queryable`error`destination`readers`failed_readers!(string worker;string result`state;string fin`outcome;fin`queryable;$[`error in key result;$[10h=type e:result`error;e;string e];""];string bounds`destination;string .qdev.attached.readers_named`name;.qdev.attached.last_failed);
