@@ -194,8 +194,8 @@ def test_a_release_carries_it_for_the_installer(tmp_path):
 
 
 def test_bundled_python_needs_a_runtime_and_pins_it_like_the_others():
-    with pytest.raises(DeployError, match="python_mode is bundled, and needs python_runtime"):
-        make_config(**BASE, python_mode="bundled")
+    # without python_runtime it may be the release's own (#1646): the push decides
+    assert make_config(**BASE, python_mode="bundled").python_runtime is None
     with pytest.raises(DeployError, match="python_runtime - bundled mode's - is set"):
         make_config(**BASE, python_runtime="py.tar.gz")
     cfg = make_config(**BASE, python_mode="bundled", python_runtime="py.tar.gz",
@@ -324,18 +324,16 @@ def test_it_installs_write_once_and_prune_keeps_it_while_named(tmp_path):
 
 # --- the host contract preflight checks -----------------------------------------------
 
-CONTRACT_TOOLS = (
-    "bash envsubst rlwrap tar gzip timeout python3 awk sed grep pgrep lsof hostname nohup find"
-).split()
+CONTRACT_TOOLS = artifact.HOST_TOOLS
 
 
 def _contract(tmp_path: Path, missing: str = "", python3: str = "") -> subprocess.CompletedProcess:
     """PREFLIGHT's host-contract checks alone, on a PATH holding each tool but
     `missing`: a stand-in that succeeds, or `python3` as given."""
-    from uqs.deploy.preflight import PREFLIGHT
+    from uqs.deploy.preflight import PREFLIGHT as text
 
-    start = PREFLIGHT.index("# The host contract")
-    end = PREFLIGHT.index('echo "glibc=')
+    start = text.index("# The host contract")
+    end = text.index('echo "glibc=')
     tools = tmp_path / "bin"
     tools.mkdir()
     for tool in CONTRACT_TOOLS:
@@ -343,7 +341,7 @@ def _contract(tmp_path: Path, missing: str = "", python3: str = "") -> subproces
             stand_in = tools / tool
             stand_in.write_text(python3 if tool == "python3" and python3 else "#!/bin/sh\nexit 0\n")
             stand_in.chmod(0o755)
-    body = 'fail() { echo "$*" >&2; exit 1; }\n' + PREFLIGHT[start:end] + "echo contract=ok\n"
+    body = 'fail() { echo "$*" >&2; exit 1; }\n' + text[start:end] + "echo contract=ok\n"
     bash = subprocess.run(["sh", "-c", "command -v bash"], capture_output=True, text=True).stdout
     return subprocess.run(
         [bash.strip(), "-c", body], env={"PATH": str(tools)}, capture_output=True, text=True,
@@ -365,3 +363,97 @@ def test_the_host_contract_names_a_missing_tool(tmp_path, tool):
 def test_the_host_contract_refuses_a_python3_before_3_8(tmp_path):
     r = _contract(tmp_path, python3="#!/bin/sh\nexit 1\n")
     assert r.returncode == 1 and "python3 is older than 3.8" in r.stderr
+
+
+# --- the runtime a release carries, reused by a push (#1646) -----------------------
+
+
+def carrying(tmp_path: Path, rt: python_runtime.PythonRuntime | None) -> Path:
+    """A small release of the peachq runtime, carrying `rt` when given."""
+    root = tmp_path / "tree"
+    files = ["pyproject.toml", "src/init.q", "scripts/deploy_smoke.q"]
+    for f in files:
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(f"content of {f}\n")
+    py = tmp_path / "py"
+    (py / "wheels").mkdir(parents=True)
+    (py / "requirements.txt").write_text("rich==15.0.0 --hash=sha256:00\n")
+    (py / "wheels" / "uqs-0.1.0-py3-none-any.whl").write_bytes(b"uqs")
+    pkg = release_build.build_artifact(
+        root, tmp_path / "dist", rid="20261007T000000Z-0123456789ab", rev="0123456789abcdef",
+        dirty=False, files=files, python_dir=py, carried=rt, runtime="peachq",
+        target=artifact.Target(os="linux", arch="x86_64", python="3.14"),
+    )  # fmt: skip
+    return pkg.path
+
+
+def push_carried(tmp_path: Path, pkg: Path, *extra: str, state: dict | None = None):
+    remote, out = FakeRemote({**ABSENT, **(state or {})}), io.StringIO()
+    argv = [str(pkg), "--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
+            "--torq-home", "/opt/torq", "--python-mode", "bundled"]  # fmt: skip
+    code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
+    return code, remote, out.getvalue()
+
+
+@pytest.fixture
+def cache(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    return tmp_path / "cache" / "uqf" / "runtimes" / "python"
+
+
+def test_a_push_with_no_python_runtime_uses_the_one_the_release_carries(tmp_path, cache):
+    rt = runtime(tmp_path)
+    pkg = carrying(tmp_path / "release", rt)
+    code, remote, out = push_carried(tmp_path, pkg)
+    report = json.loads(out)
+    assert code == 0 and report["exceptions"] == [], "the release's own record pins it"
+    py = report["components"]["python"]
+    assert (py["mode"], py["sha256"], py["carried_by"]) == ("bundled", rt.sha256, pkg.name)
+    home = f"/opt/uqf/shared/runtimes/python/{rt.sha256}"
+    (prepare,) = remote.stage("prepare")
+    assert f"{home}/bin/python3.14 -m venv .venv" in prepare
+    # the very bytes the runtime was built as: extracted from the release, then sent
+    sent = cache / rt.sha256 / rt.path.name
+    assert sent.read_bytes() == rt.path.read_bytes()
+    assert remote.puts[0].endswith(f"/{rt.path.name}")
+
+
+def test_the_dry_run_names_the_release_that_carries_it(tmp_path, cache):
+    rt = runtime(tmp_path)
+    pkg = carrying(tmp_path / "release", rt)
+    code, remote, out = push_carried(tmp_path, pkg, "--dry-run")
+    assert code == 0 and remote.puts == []
+    assert f"the runtime {pkg.name} carries" in out
+
+
+def test_a_release_that_carries_none_is_refused_naming_both_ways(tmp_path, cache):
+    pkg = carrying(tmp_path / "release", None)
+    with pytest.raises(DeployError, match=r"needs python_runtime.*carries none.*--python-runtime"):
+        push_carried(tmp_path, pkg)
+
+
+def test_a_python_runtime_given_wins_over_the_carried_one(tmp_path, cache):
+    carried = runtime(tmp_path / "a")
+    given = runtime(tmp_path / "b", "cpython-3.14.8-linux-x86_64-gnu")
+    pkg = carrying(tmp_path / "release", carried)
+    probe = {" -I -c ": _done("UQF_PYTHON 3.14.8 cpython\n")}
+    code, _, out = push_carried(tmp_path, pkg, "--python-runtime", str(given.path), state=probe)
+    py = json.loads(out)["components"]["python"]
+    assert code == 0 and py["sha256"] == given.sha256 and "carried_by" not in py
+    assert not cache.exists(), "nothing is extracted when a runtime is given"
+
+
+def test_a_pin_holds_the_carried_runtime_too(tmp_path, cache):
+    pkg = carrying(tmp_path / "release", runtime(tmp_path))
+    with pytest.raises(DeployError, match="python_runtime_sha256"):
+        push_carried(tmp_path, pkg, "--python-runtime-sha256", "ab" * 32)
+
+
+def test_an_altered_extracted_copy_is_extracted_again(tmp_path, cache):
+    rt = runtime(tmp_path)
+    pkg = carrying(tmp_path / "release", rt)
+    push_carried(tmp_path, pkg, "--dry-run")
+    copy = cache / rt.sha256 / rt.path.name
+    copy.write_bytes(b"not the runtime")
+    code, _, _ = push_carried(tmp_path, pkg, "--dry-run")
+    assert code == 0 and copy.read_bytes() == rt.path.read_bytes()

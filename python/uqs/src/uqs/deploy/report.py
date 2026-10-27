@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 class Report:
     release: str
     revision: str
+    #: the artifact deployed: its file name and the sha256 the server checked
+    #: its bytes against (#1557), whether or not a pin or an override named it
+    artifact: dict[str, str]
     dirty: bool
     host: str
     dest: str

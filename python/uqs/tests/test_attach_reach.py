@@ -9,7 +9,11 @@ read-only `reach` operation, to open and close a handle to it.
 from __future__ import annotations
 
 import json
+import socket
 import subprocess
+import threading
+import time
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 
@@ -20,7 +24,7 @@ from uqs.attach import config, facts, plan, reach, service, verify, workflow
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Host
 from uqs.attach.manifest import Manifest
-from uqs.attach.remote import source
+from uqs.attach.remote import Bounded, Endpoint, IpcError, KolaIpc, source
 from uqs.paths import repo_root
 
 ROOT = repo_root()
@@ -246,3 +250,88 @@ def test_reach_q_opens_and_closes_a_handle_and_never_answers_the_credential(
     assert closed["reached"] is False and closed["address"] == f"localhost:{unused_port}"
     assert closed["error"], "q's own reason is passed on"
     assert credentialed["reached"] is True and "hunter2" not in lines[2]
+
+
+# ------------------------------------------- a publisher that never answers (#1684)
+
+
+@pytest.fixture
+def silent_port() -> Iterator[int]:
+    """A port that accepts every connection and never sends a byte: a q stuck in
+    its startup script, whose port the OS already accepts on."""
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(8)
+    held: list[socket.socket] = []
+
+    def accept() -> None:
+        while True:
+            try:
+                held.append(srv.accept()[0])
+            except OSError:
+                return
+
+    threading.Thread(target=accept, daemon=True).start()
+    try:
+        yield srv.getsockname()[1]
+    finally:
+        srv.close()
+        for conn in held:
+            conn.close()
+
+
+def _local(att: Attachment, discovery_port: int) -> Attachment:
+    """The stack's discovery at `discovery_port` on this machine, so a real q can open it."""
+    return replace(
+        att, stack=replace(att.stack, discovery_host="127.0.0.1", discovery_port=discovery_port)
+    )
+
+
+def test_a_publisher_that_never_answers_is_said_as_unresponsive_within_the_bound(
+    bundle, silent_port
+):
+    att = _local(_att(bundle), silent_port)
+    t = time.monotonic()
+    found = reach.outbound(att, KolaIpc("admin", "admin"), silent_port, None)
+    took = time.monotonic() - t
+    assert found is not None and found.code == reach.UNRESPONSIVE, found
+    assert reach.ANSWER_S <= took < reach.ANSWER_S + 2, took
+    assert f"localhost:{silent_port}" in found.message and "did not answer" in found.message
+    assert found.code not in (reach.OUTBOUND, reach.CODE), "not said as a network path"
+
+
+def test_after_start_on_a_publisher_that_never_answers_ends_with_that_finding(bundle, silent_port):
+    att = _local(_att(bundle), silent_port)
+    pub = Publisher()
+    pub.start(att)
+    t = time.monotonic()
+    found = reach.after_start(att, KolaIpc("admin", "admin"), silent_port, pub, wait_s=0)
+    assert time.monotonic() - t < reach.ANSWER_S + 2
+    assert found is not None and found.code == reach.UNRESPONSIVE
+
+
+def test_a_responsive_publisher_still_reaches_the_stack(bundle, start_q, tmp_path):
+    boot = tmp_path / "pub.q"
+    boot.write_text("")
+    with start_q(str(boot)) as port:
+        # one q is both the publisher and the discovery it opens: q can hopen itself
+        att = _local(_att(bundle), port)
+        t = time.monotonic()
+        found = reach.outbound(att, KolaIpc("admin", "admin"), port, None)
+        assert found is None, found
+        assert time.monotonic() - t < reach.ANSWER_S
+
+
+def test_bounded_passes_on_an_answer_and_an_error_unchanged():
+    class Answers:
+        def call(self, endpoint, op, request):
+            if op == "boom":
+                raise IpcError(endpoint, op, "q error: type")
+            return {"echo": request}
+
+    ep = Endpoint("p", "localhost", 1, local=True)
+    bounded = Bounded(Answers(), 1.0)
+    assert bounded.call(ep, "reach", {"a": 1}) == {"echo": {"a": 1}}
+    with pytest.raises(IpcError, match="q error: type") as err:
+        bounded.call(ep, "boom", {})
+    assert not err.value.unresponsive

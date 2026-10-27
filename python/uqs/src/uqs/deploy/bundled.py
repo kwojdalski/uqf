@@ -19,7 +19,10 @@ never bundled at all (deploy/q_runtime.py).
 
 from __future__ import annotations
 
-from uqs.deploy import components, overrides, runtime_install
+import os
+from pathlib import Path
+
+from uqs.deploy import components, overrides, python_runtime, runtime_install
 from uqs.deploy.artifact import Artifact, ReleaseError
 from uqs.deploy.config import Config, DeployError
 from uqs.deploy.python_runtime import PythonRuntime
@@ -43,7 +46,11 @@ def attach(cfg: Config, dep: Deployment, pkg: Artifact) -> list[dict]:
     for component in BUNDLABLE:
         if getattr(cfg, components.mode_key(component)) != components.BUNDLED:
             continue
-        rt = runtime_install.load(component, getattr(cfg, f"{component}_runtime"))
+        path = getattr(cfg, f"{component}_runtime")
+        if component == "python" and not path:
+            rt = _carried(pkg)
+        else:
+            rt = runtime_install.load(component, path)
         exceptions += overrides.for_runtime(cfg, component, rt.path.name, rt.sha256, rt.pinned)
         setattr(dep, f"{component}_runtime", rt)
     if dep.q_runtime is not None:
@@ -54,6 +61,31 @@ def attach(cfg: Config, dep: Deployment, pkg: Artifact) -> list[dict]:
         except ReleaseError as exc:
             raise DeployError(exc.stage, str(exc)) from None
     return exceptions
+
+
+def carried_dir() -> Path:
+    """Where a release's carried Python runtime is extracted to, keyed by its
+    sha256: beside fetch.py's downloaded releases."""
+    base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(base) / "uqf" / "runtimes" / "python"
+
+
+def _carried(pkg: Artifact) -> PythonRuntime:
+    """A bundled Python with no `python_runtime`: the one the release carries
+    (#1646), or the refusal naming both ways to give one."""
+    try:
+        rt = python_runtime.from_release(pkg.path, pkg.manifest, carried_dir())
+    except ReleaseError as exc:
+        raise DeployError(exc.stage, str(exc)) from None
+    if rt is None:
+        raise DeployError(
+            "arguments",
+            f"python_mode is bundled, and needs python_runtime: the artifact `uqs deploy "
+            f"build-runtime python` makes - {pkg.path.name} carries none (build it with "
+            "`uqs deploy build --python-runtime FILE` to carry one)",
+        )
+    log.info("the bundled Python is the one {} carries: {}", pkg.path.name, rt.sha256[:12])
+    return rt
 
 
 def _fits(rt: QRuntime, pkg: Artifact, runtime: str) -> None:
