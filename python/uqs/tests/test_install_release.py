@@ -71,7 +71,7 @@ def release(tmp_path: Path) -> Path:
         "release": "r1",
         "target": {
             "os": platform.system().lower(),
-            "arch": platform.machine(),
+            "arch": installer.ARCH_ALIASES.get(platform.machine(), platform.machine()),
             "python": PY,
             "platforms": [],
         },
@@ -162,15 +162,34 @@ def test_a_relative_env_file_is_refused(release, capsys):
     ],
 )
 def test_a_host_the_wheels_were_not_built_for_is_refused(system, machine, libc, says):
-    target = {"os": "linux", "arch": "x86_64", "platforms": ["manylinux_2_28_x86_64"]}
+    target = {"os": "linux", "arch": "x86_64", "glibc": "2.28"}
     with pytest.raises(installer.Refused, match=says):
         installer.check_platform(target, system, machine, libc)
 
 
 def test_a_host_at_or_above_the_glibc_floor_passes():
-    target = {"os": "linux", "arch": "x86_64", "platforms": ["manylinux_2_28_x86_64"]}
+    target = {"os": "linux", "arch": "x86_64", "glibc": "2.28"}
     installer.check_platform(target, "Linux", "x86_64", ("glibc", "2.28"))
     installer.check_platform(target, "Linux", "x86_64", ("glibc", "2.39"))
+
+
+def test_pure_python_wheels_set_no_glibc_floor():
+    """The floor is what the build recorded from the wheels' manylinux tags,
+    never guessed from the platforms pip was allowed: none recorded, none checked."""
+    target = {
+        "os": "linux",
+        "arch": "x86_64",
+        "glibc": None,
+        "platforms": ["manylinux_2_28_x86_64"],
+    }
+    installer.check_platform(target, "Linux", "x86_64", ("musl", "1.2"))
+
+
+def test_the_installer_names_architectures_as_the_push_does():
+    from uqs.deploy.artifact import ARCH_ALIASES
+
+    assert installer.ARCH_ALIASES == ARCH_ALIASES
+    installer.check_platform({"os": "darwin", "arch": "aarch64"}, "Darwin", "arm64", ("", ""))
 
 
 def test_the_installer_ships_in_every_release():
@@ -181,3 +200,63 @@ def test_the_installer_ships_in_every_release():
     assert any(
         "scripts/install_release.py".startswith(prefix + "/") for prefix in payload.ALLOWLIST
     )
+
+
+# --- a release that carries its Python (#1557, step 7) -------------------------------
+
+
+@pytest.fixture
+def carrying(release: Path, tmp_path: Path) -> tuple[Path, dict]:
+    """`release`, carrying a Python runtime as `uqs deploy build --python-runtime`
+    puts one in: the archive at its path, recorded in the manifest."""
+    from test_deploy_python_runtime import runtime
+
+    from uqs.deploy import python_runtime
+
+    rt = runtime(tmp_path / "rt")
+    archive = release / python_runtime.CARRIED
+    archive.write_bytes(rt.path.read_bytes())
+    manifest = json.loads((release / installer.MANIFEST).read_text())
+    manifest["files"][python_runtime.CARRIED] = rt.sha256
+    manifest["python"]["runtime"] = rt.carried()
+    (release / installer.MANIFEST).write_text(json.dumps(manifest))
+    return release, rt.carried()
+
+
+def test_check_names_the_carried_python_and_unpacks_nothing(carrying, capsys):
+    release, record = carrying
+    assert installer.main(["--release", str(release), "--check"]) == 0
+    assert "carries Python 3.14.9, unpacked and run by the install" in capsys.readouterr().out
+    assert not (release / installer.RUNTIME_DIR).exists()
+
+
+def test_the_carried_python_is_unpacked_once_and_checked_file_by_file(carrying):
+    release, record = carrying
+    interpreter = installer.carried_python(release, record)
+    home = release / installer.RUNTIME_DIR
+    assert interpreter == str(home / "bin" / "python3.14")
+    assert installer.carried_python(release, record) == interpreter, "a rerun reuses it"
+    (home / "lib" / "python3.14" / "os.py").write_text("# changed\n")
+    with pytest.raises(installer.Refused, match="is not the runtime it was unpacked from"):
+        installer.carried_python(release, record)
+
+
+def test_a_pyc_the_carried_python_wrote_for_its_own_source_is_a_cache(carrying):
+    """Its first run writes a .pyc for a stdlib module the build shipped none
+    for; CPython checks it against the verified source. Not a change."""
+    release, record = carrying
+    installer.carried_python(release, record)
+    cache = release / installer.RUNTIME_DIR / "lib" / "python3.14" / "__pycache__"
+    cache.mkdir(exist_ok=True)
+    (cache / "os.cpython-314.pyc").write_bytes(b"\x00pyc")
+    installer.carried_python(release, record)
+    (cache / "orphan.cpython-314.pyc").write_bytes(b"\x00pyc")
+    with pytest.raises(installer.Refused, match="orphan.cpython-314.pyc"):
+        installer.carried_python(release, record)
+
+
+def test_a_carried_archive_that_is_not_the_recorded_one_is_refused(carrying):
+    release, record = carrying
+    with pytest.raises(installer.Refused, match="is not the Python runtime the manifest records"):
+        installer.carried_python(release, {**record, "sha256": "ab" * 32})
+    assert not (release / installer.RUNTIME_DIR).exists()

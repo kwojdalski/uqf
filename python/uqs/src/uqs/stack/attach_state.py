@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,6 +35,11 @@ MANIFEST_FILE = "manifest.json"
 NAME = re.compile(r"^[a-z][a-z0-9-]{0,47}$")
 #: The only manifest state in which the publisher may start.
 VERIFIED = "verified"
+#: Asks the stack whether attachment NAME's tables are still registered, and
+#: raises UqsError when they are not or that cannot be told (#1651). Set by
+#: uqs.attach.live when it is imported - `stack` may not import `attach` - and
+#: every front end that starts processes imports it. None refuses the start.
+live_check: Callable[[str], None] | None = None
 
 
 def state_root() -> Path:
@@ -67,6 +74,9 @@ class Published:
     stack_id: int
     state: str
     problem: str = ""
+    #: the stack's discovery as TorQ spells it (`:host:port`) when it is on
+    #: another machine, else "": see `publisher_extras`
+    remote_discovery: str = ""
 
 
 #: The state of a publisher whose manifest exists but cannot be read (#1442).
@@ -103,8 +113,30 @@ def _scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
             broken.append(f"{cfg_path} cannot be read ({exc})")
             continue
         state, problem = _manifest_state(folder / MANIFEST_FILE)
-        found.append(Published(folder.name, procname, stack_id, state, problem))
+        found.append(
+            Published(folder.name, procname, stack_id, state, problem, _remote_discovery(cfg))
+        )
     return found, broken
+
+
+#: Names that are always this machine. uqs.attach.facts holds the same three;
+#: `stack` may not import `attach`.
+_LOOPBACK = ("localhost", "127.0.0.1", "::1")
+
+
+def _remote_discovery(cfg: dict) -> str:
+    """`:host:port` of the attachment's discovery when its host is not this
+    machine by name, else "". By name only, as TorQ's own process.csv names
+    it: an address this machine owns is still a name TorQ would connect to."""
+    stack = cfg.get("stack") or {}
+    host = str(stack.get("discovery_host") or "").lower()
+    port = stack.get("discovery_port")
+    here = socket.gethostname().lower()
+    if not host or not port or host in _LOOPBACK or host.startswith("127."):
+        return ""
+    if host in (here, here.split(".")[0]) or host.split(".")[0] == here.split(".")[0]:
+        return ""
+    return f":{host}:{int(port)}"
 
 
 def _manifest_state(manifest: Path) -> tuple[str, str]:
@@ -159,6 +191,10 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
     It fails CLOSED (#1442): a publisher whose manifest cannot be read is
     refused, and an attachment whose attachment.json cannot be read - so whose
     publisher cannot be known - refuses every start until it is fixed.
+
+    A verified publisher started under its stack is then checked LIVE
+    (`live_check`, #1651): a runtime-only registration, or one on another
+    machine, can be gone while the manifest still says verified.
     """
     found, broken = _scan()
     if broken:
@@ -195,6 +231,45 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
                 f"{effective + 1}, not {pub.stack_id + 1}. Start it with "
                 f"`uqs job attach {pub.attachment}`, or --port {pub.stack_id}"
             )
+        if live_check is None:
+            raise UqsError(
+                f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "
+                f"{pub.stack_id}), and whether its tables are still registered there cannot "
+                "be checked: uqs.attach.live is not loaded by this front end. Start it with "
+                f"`uqs start` or `uqs job attach {pub.attachment}`. Nothing was started."
+            )
+        live_check(pub.attachment)
+
+
+def publisher_extras(paths: UqsPaths, procs: str) -> list[str]:
+    """The torq.sh `-extras` words that point a publisher at its stack's
+    discovery when that stack is on another machine (#1651).
+
+    A TorQ process finds discovery through its process.csv, whose discovery
+    row is this machine's. A publisher attached to a stack elsewhere would
+    look for discovery here, find none (or another stack's), and never reach
+    the tickerplant - while its start reported success. `-.servers.DISCOVERY`
+    adds the attachment's discovery to the ones TorQ tries (trackservers.q).
+
+    `procs` is `start_policy.started_procs`'s words. Such a publisher must be
+    started on its own: `-extras` reaches every process of one torq.sh call,
+    and no other process may be pointed at that discovery.
+    """
+    found, _ = _scan()
+    remote = [pub for pub in found if pub.remote_discovery]
+    if not remote:
+        return []
+    wanted = _started_by(paths, set(procs.split()))
+    named = [pub for pub in remote if pub.procname in wanted]
+    if not named:
+        return []
+    if len(wanted) > 1:
+        raise UqsError(
+            f"{', '.join(p.procname for p in named)} publishes to a stack on another machine and "
+            "is told that stack's discovery when it starts, which no other process may be: "
+            f"start it on its own (`uqs job attach {named[0].attachment}`). Nothing was started."
+        )
+    return ["-.servers.DISCOVERY", named[0].remote_discovery]
 
 
 # ------------------------------------------------------- `uqs list attachments`

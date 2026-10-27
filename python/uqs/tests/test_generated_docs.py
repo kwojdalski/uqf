@@ -55,26 +55,24 @@ def test_the_committed_document_matches_the_registry():
     assert result.returncode == 0, result.stderr
 
 
-def test_check_fails_on_a_stale_document():
+def test_check_fails_on_a_stale_document(monkeypatch, capsys):
     """A checker nobody has seen fail might be comparing nothing.
 
-    Perturbs the committed file, requires `--check` to exit non-zero and say
-    so, then restores it byte-for-byte.
+    Makes the generator's rendering of the document differ from the committed
+    file, and requires `--check` to exit non-zero and say so. The difference
+    is made on the generated side, in this process: this test used to edit the
+    committed file and restore it, and under pytest-xdist another worker
+    reading docs/reference/processes.md in that window saw the edited copy.
     """
-    original = GENERATED.read_text()
-    try:
-        GENERATED.write_text(original.replace("# uqf stack processes", "# Edited by hand", 1))
-        result = subprocess.run(
-            [sys.executable, str(GENERATOR), "--check"],
-            capture_output=True,
-            text=True,
-            cwd=REPO,
-        )
-        assert result.returncode == 1
-        assert "stale" in result.stderr
-    finally:
-        GENERATED.write_text(original)
-    assert GENERATED.read_text() == original
+    committed = GENERATED.read_text()
+    monkeypatch.setattr(
+        gen, "render", lambda: committed.replace("# uqf stack processes", "# Edited by hand", 1)
+    )
+    monkeypatch.setattr(sys, "argv", [str(GENERATOR), "--check"])
+    assert gen.main() == 1
+    err = capsys.readouterr().err
+    assert "docs/reference/processes.md is stale" in err
+    assert GENERATED.read_text() == committed
 
 
 def test_every_pipeline_appears_in_the_document():

@@ -68,6 +68,13 @@ TEST_HOOKS = ("python-tests",)
 #: everything passes because almost nothing is checked.
 TYPE_HOOKS = ("ty",)
 
+#: Hook ids that run the q blocks in docs/. Each one's scope must take
+#: exactly the documents that carry a `q-example:` marker among the files
+#: scripts/dev/doc_examples.py reads - a narrower scope would leave a marked
+#: block unrun on a docs edit, a wider one asks a KDB-X attestation of a docs
+#: edit that cannot change what runs (scripts/dev/attest_kdbx.py).
+DOC_HOOKS = ("q-docs", "q-docs-peachq")
+
 #: Path prefixes exempt from needing lint coverage, each with its reason.
 #: Vendored trees only: this repository's standing rule is never to edit a
 #: vendored tree, so linting one would produce findings nobody may fix.
@@ -85,6 +92,48 @@ def tracked_files() -> list[str]:
         cwd=CONFIG.parent,
     )
     return out.stdout.splitlines()
+
+
+def _doc_examples():
+    import importlib.util
+
+    path = CONFIG.parent / "scripts" / "dev" / "doc_examples.py"
+    spec = importlib.util.spec_from_file_location("doc_examples", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    # Registered first: its dataclass resolves annotations through sys.modules.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def doc_files_and_marked() -> tuple[set[str], set[str]]:
+    """(every document doc_examples.py reads, the ones with a q-example marker)."""
+    docex = _doc_examples()
+    root = CONFIG.parent
+    docs = {f.relative_to(root).as_posix() for f in docex._doc_files(root)}
+    return docs, set(docex.marked_docs(root))
+
+
+def doc_scope_drift(
+    hooks: list[tuple[str, str, str | None]], docs: set[str], marked: set[str]
+) -> list[str]:
+    """What is wrong with each DOC_HOOKS scope, one line per problem.
+
+    A hook is judged only when the config has it; a q-docs hook dropped from
+    the config is check_kdbx_attestation.py's to refuse, not this.
+    """
+    problems: list[str] = []
+    for hook_id, pattern, exclude in hooks:
+        if hook_id not in DOC_HOOKS:
+            continue
+        files, excl = re.compile(pattern), re.compile(exclude) if exclude else None
+        taken = {d for d in docs if files.search(d) and not (excl and excl.search(d))}
+        for doc in sorted(marked - taken):
+            problems.append(f"{hook_id}: {doc} has a q-example block its scope does not take")
+        for doc in sorted(taken - marked):
+            problems.append(f"{hook_id}: its scope takes {doc}, which has no q-example block")
+    return problems
 
 
 def scoped_hooks(config_text: str) -> list[tuple[str, str, str | None]]:
@@ -226,6 +275,12 @@ def main() -> int:
                     file=sys.stderr,
                 )
 
+    drift: list[str] = []
+    if any(hook_id in DOC_HOOKS for hook_id, _, _ in hooks):
+        drift = doc_scope_drift(hooks, *doc_files_and_marked())
+        for problem in drift:
+            print(f"  DOC SCOPE  {problem}", file=sys.stderr)
+
     if dead:
         print(file=sys.stderr)
         print(
@@ -238,6 +293,16 @@ def main() -> int:
             "\nA hook that matches nothing exits zero and reports green, so the commit "
             "looks gated when it is not. Fix the scope, or add the hook to ALLOWED_EMPTY "
             "with a reason.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if drift:
+        print(file=sys.stderr)
+        print(
+            f"The scopes of {DOC_HOOKS} must name exactly the documents with a "
+            "`<!-- q-example: ... -->` block (scripts/dev/doc_examples.py). Edit the "
+            "`docs/(...)\\.md$` alternation in .pre-commit-config.yaml to match.",
             file=sys.stderr,
         )
         return 1

@@ -147,6 +147,14 @@ class Config:
     #: torq`), a local path, and the sha256 a target pins it to
     torq_runtime: str | None = None
     torq_runtime_sha256: str | None = None
+    #: q_mode bundled's: the q runtime artifact (`uqs deploy build-runtime q`,
+    #: PeachQ only), a local path, and the sha256 a target pins it to
+    q_runtime: str | None = None
+    q_runtime_sha256: str | None = None
+    #: python_mode bundled's: the Python runtime artifact (`uqs deploy
+    #: build-runtime python`), a local path, and the sha256 a target pins it to
+    python_runtime: str | None = None
+    python_runtime_sha256: str | None = None
 
     #: fill the shared HDB's missing tables and columns in prepare (#870)
     fix_hdb: bool = False
@@ -258,6 +266,10 @@ def make_config(
     python_mode: str = components.EXISTING,
     torq_runtime: str | None = None,
     torq_runtime_sha256: str | None = None,
+    q_runtime: str | None = None,
+    q_runtime_sha256: str | None = None,
+    python_runtime: str | None = None,
+    python_runtime_sha256: str | None = None,
     fix_hdb: bool = False,
     keep: int | None = None,
     soak: int | None = None,
@@ -302,11 +314,15 @@ def make_config(
         pinned = pins.checked(
             expected_sha256=expected_sha256,
             torq_runtime_sha256=torq_runtime_sha256,
+            q_runtime_sha256=q_runtime_sha256,
+            python_runtime_sha256=python_runtime_sha256,
             q_version_=q_version,
             accept_digest=accept_digest,
             accept_q_version=accept_q_version,
             allow_unpinned=allow_unpinned,
             torq_runtime=torq_runtime,
+            q_runtime=q_runtime,
+            python_runtime=python_runtime,
         )
         components.check(modes, locals())
         accepted = pins.reason("--accept-converted-release", accept_converted_release)
@@ -353,7 +369,11 @@ def make_config(
         torq_mode=torq_mode,
         torq_runtime=torq_runtime,
         torq_runtime_sha256=pinned.torq_runtime_sha256,
+        q_runtime=q_runtime,
+        q_runtime_sha256=pinned.q_runtime_sha256,
         python_mode=python_mode,
+        python_runtime=python_runtime,
+        python_runtime_sha256=pinned.python_runtime_sha256,
         fix_hdb=fix_hdb,
         keep=keep,
         soak=soak,

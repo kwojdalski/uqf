@@ -54,6 +54,7 @@ def create(
     user: str = config.DEFAULT_USER,
     password_env: str = "",
     runtime_only: bool = False,
+    remote_schema_file: bool = False,
     storage: Storage | None = None,
     runtime: str = "",
 ) -> Attachment:
@@ -86,9 +87,22 @@ def create(
         publisher=Publisher(spec.job, spec.procname, runtime, socket.gethostname().lower()),
         tables=spec.tables,
         storage=storage or Storage(),
-        persist="runtime-only" if runtime_only else "schema-file",
+        persist=persist_mode(runtime_only, remote_schema_file),
         origin=spec.origin,
     )
+
+
+def persist_mode(runtime_only: bool, remote_schema_file: bool) -> str:
+    """The persistence the options choose: each is an explicit opt-in, recorded in
+    the attachment, and they exclude each other."""
+    if runtime_only and remote_schema_file:
+        raise AttachmentError(
+            "--runtime-only and --remote-schema-file exclude each other: one keeps no "
+            "block, the other has the tickerplant write one"
+        )
+    if remote_schema_file:
+        return "remote-schema-file"
+    return "runtime-only" if runtime_only else "schema-file"
 
 
 def observed_storage(att: Attachment, obs: Observation) -> Storage:

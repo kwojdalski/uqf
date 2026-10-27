@@ -13,11 +13,14 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR makes its older run moot; on master every commit needs
+  # a finished result, or a red master goes unseen (31 of 52 master runs were
+  # cancelled before this).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
-    name: Repository checks
+    name: Hooks and static gates
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -26,7 +29,12 @@ jobs:
       # These govern local commits/branch names, not a detached PR merge ref.
       # q-docs-peachq would build PeachQ inside the hooks, before its cache is
       # restored; "Run the marked q blocks in docs/ on PeachQ" below covers it.
-      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq
+      # python-tests: the "PeachQ Python tests" job runs every testpath with a q,
+      # which is the same suite plus what needs a q - running it here too only
+      # doubled the time.
+      # doc-links: the "Docs links" job runs it strictly, in parallel; here it
+      # was 37s of the hooks' 49s, and then ran a second time (#1689).
+      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests,doc-links
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -38,20 +46,6 @@ jobs:
           enable-cache: true
       - name: Install workspace dependencies
         run: uv sync --locked
-      - name: Install Quarto
-        # The doc-links hook renders docs/ to resolve every link. Pinned for
-        # the same reason qlinter is: a renderer that changes how it resolves
-        # a link must not turn this repository red without anyone choosing it.
-        #
-        # Installed rather than skipped, which is the whole point. The
-        # contract-surface gate skips here because a hosted runner cannot
-        # have KDB-X, and the cost of that skip is visible in this repository's
-        # history - the surface went stale and the doc-reference gate was
-        # reading it. Quarto costs one step, so there is no reason to repeat
-        # that shape of hole.
-        uses: quarto-dev/quarto-actions/setup@v2
-        with:
-          version: "1.10.18"
       - name: Install d2
         # The rendered-diagrams check compares each committed .svg with a
         # fresh render, and used to skip with "no d2 on PATH" on every CI run
@@ -95,21 +89,13 @@ jobs:
           if command -v "${QCMD:-q}" >/dev/null; then
             echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "SKIP=$SKIP,q-tests,q-coverage,contract-surface,q-facts" >> "$GITHUB_ENV"
+            echo "SKIP=$SKIP,q-tests,q-coverage,q-docs,contract-surface,q-facts" >> "$GITHUB_ENV"
             echo "::warning::No q interpreter on this runner. The full qUnit suite, the coverage gate and q-dependent Python IPC tests are not exercised here; static q checks still run, and the portable qUnit suites run on PeachQ further down."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
             echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q and scripts/test.py q-coverage locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
-      - name: Check every link and anchor in docs/ resolves
-        # Run again here, WITHOUT --allow-missing, which the pre-commit hook
-        # passes. The hook's flag exists so a q developer without Quarto is
-        # not blocked; on CI a missing Quarto must be a hard error rather
-        # than a gate that quietly checked nothing - the failure mode this
-        # repository already has on the contract surface.
-        if: ${{ !cancelled() }}
-        run: uv run python scripts/gates/check_doc_links.py
       - name: Check the generated operational docs match the registry
         # Operational docs are generated, committed and checked.
         # Where the source and the document disagree the source is right by
@@ -216,6 +202,23 @@ jobs:
         # in the declaring q files.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_declaration_reference.py
+  peachq-q:
+    name: PeachQ q tests
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    env:
+      UV_LOCKED: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install workspace dependencies
+        run: uv sync --locked
       - name: Restore PeachQ built from its pinned commit
         # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
         # have one - which makes it the only interpreter CI can run q with.
@@ -275,6 +278,89 @@ jobs:
         env:
           UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
         run: UQF_PEACHQ="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
+
+  peachq-python:
+    name: PeachQ Python tests (${{ matrix.shard }}/4)
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    # Four runners, a quarter of the test modules each (#1696): on one 4-vCPU
+    # runner the suite is CPU-bound, and more xdist workers measured no faster
+    # (#1695). scripts/dev/pytest_shards.py splits by module, balanced by
+    # scripts/dev/test_module_durations.json; every module is in exactly one
+    # shard whatever that record says. "Repository checks" needs every shard.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      UV_LOCKED: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install workspace dependencies
+        run: uv sync --locked
+      - name: Install qlinter (the gates' own tests use it)
+        shell: bash
+        # The q-traps hook delegates most of its rules to the
+        # standalone linter, and refuses rather than passing vacuously when
+        # it is missing. Pinned: the linter releases on its own cadence, and
+        # a new rule landing upstream must not turn this repository red
+        # without anyone choosing it. The pin lives in .qlinter-version, the
+        # one place it is written; the hook refuses any other version.
+        run: |
+          set -euo pipefail
+          read -r QLINT_VERSION < .qlinter-version
+          url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL "$url" -o /tmp/qlinter.tar.gz
+          tar xzf /tmp/qlinter.tar.gz -C /tmp
+          install -m755 "/tmp/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
+          qlinter --rules > /dev/null && echo "qlinter ${QLINT_VERSION} installed"
+      - name: Restore PeachQ built from its pinned commit
+        # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
+        # have one - which makes it the only interpreter CI can run q with.
+        #
+        # Built from a pinned COMMIT, not downloaded. The v0.88 release asset
+        # was rebuilt and re-uploaded under the same tag three times in five
+        # days (#578 and after), each turning every run red at the checksum
+        # until someone re-pinned to whatever upstream had published - which
+        # makes the pin a formality. A commit hash cannot change under us.
+        #
+        # The pin and the build options are scripts/peachq.json, the same
+        # file the local lanes build from (#719): moving either is one edit
+        # there, and it changes this key. The cache is the resolver's own
+        # (~/.cache/uqf/peachq), so a hit is a warm cache and needs no network.
+        id: peachq-cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uqf/peachq
+          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Provide PeachQ beside the tree
+        # scripts/peachq.py reuses the cached build, or fetches the pinned
+        # commit, checks it out, verifies the hash, builds it with this
+        # platform's options and identifies the result - about 40s, once per
+        # pin. It prints an absolute path and puts nothing on PATH: every
+        # other step still finds no q, so nothing here can be mistaken for a
+        # KDB-X run. It is reached only by the steps below, which name it
+        # through QCMD with UQF_Q_IMPL=peachq, and scripts/test.py asks the
+        # binary which q it is before any lane.
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(python3 scripts/peachq.py)"
+          # A binary that will not even start fails here, by name, rather
+          # than as a confusing first lane.
+          printf 'exit 0\n' > "$RUNNER_TEMP/peachq-smoke.q"
+          "$bin" "$RUNNER_TEMP/peachq-smoke.q" -q
+          echo "PEACHQ_BIN=$bin" >> "$GITHUB_ENV"
+          echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq.py --commit)" >> "$GITHUB_STEP_SUMMARY"
       - name: Install what a PeachQ stack needs
         # torq.sh needs envsubst and rlwrap (uqs's prerequisite check refuses a
         # start without them); the PeachQ runtime's whole-stack test below
@@ -294,7 +380,73 @@ jobs:
           UQF_Q_IMPL: peachq
           UQF_PEACHQ_STACK_TEST: "1"
           UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
-        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q python
+        # Every configured testpath (pyproject.toml), not just python/: the gates'
+        # own tests (scripts/gates/tests) ran only in the python-tests hook,
+        # which this job replaces in CI. -n auto: in parallel (pytest-xdist);
+        # --dist loadgroup keeps the tests marked xdist_group (the whole-stack
+        # ones) on one worker.
+        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
+      - name: Keep this shard's module durations
+        # What scripts/dev/test_module_durations.json is refreshed from: CI's
+        # own times, which differ from a laptop's (#1696). Merge the four with
+        # scripts/dev/pytest_shards.py --merge.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: durations-${{ matrix.shard }}
+          path: ${{ runner.temp }}/durations-${{ matrix.shard }}.json
+          retention-days: 30
+
+
+  # The one name branch protection requires: green only when every job above
+  # is. Kept as its own job so splitting or adding jobs never changes the
+  # required check's name.
+  doc-links:
+    name: Docs links
+    # Its own job (#1689): rendering docs/ is the slowest gate the hooks job
+    # had, and nothing else there needs Quarto. Standard library only, so no
+    # uv sync.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install Quarto
+        # The doc-links hook renders docs/ to resolve every link. Pinned for
+        # the same reason qlinter is: a renderer that changes how it resolves
+        # a link must not turn this repository red without anyone choosing it.
+        #
+        # Installed rather than skipped, which is the whole point. The
+        # contract-surface gate skips here because a hosted runner cannot
+        # have KDB-X, and the cost of that skip is visible in this repository's
+        # history - the surface went stale and the doc-reference gate was
+        # reading it. Quarto costs one step, so there is no reason to repeat
+        # that shape of hole.
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.10.18"
+      - name: Check every link and anchor in docs/ resolves
+        # WITHOUT --allow-missing, which the pre-commit hook passes. The
+        # hook's flag exists so a q developer without Quarto is not blocked;
+        # on CI a missing Quarto must be a hard error rather than a gate that
+        # quietly checked nothing - the failure mode this repository already
+        # has on the contract surface.
+        run: python3 scripts/gates/check_doc_links.py
+
+  repository-checks:
+    name: Repository checks
+    if: ${{ always() }}
+    needs: [checks, doc-links, peachq-q, peachq-python]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "a required job did not succeed"; exit 1; }; done
 
   web:
     name: Browser application

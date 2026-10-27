@@ -121,6 +121,44 @@ def test_a_tampered_runtime_is_refused_and_never_overwritten(tmp_path, change, s
     assert remote.puts == []
 
 
+def _with_python(tmp_path: Path) -> torq_runtime.Runtime:
+    repo = vendored(tmp_path / "repo-py", {**VENDORED, "lib/torq/helper.py": "x = 1\n"})
+    return torq_runtime.build_runtime(repo, tmp_path / "dist-py")
+
+
+def _cache(home: Path, name: str) -> None:
+    (home / "torq" / "__pycache__").mkdir(exist_ok=True)
+    (home / "torq" / "__pycache__" / name).write_bytes(b"\x00pyc")
+
+
+def test_a_pyc_python_wrote_for_a_shipped_source_is_a_cache_not_a_change(tmp_path):
+    """python-build-standalone ships no .pyc for some of its stdlib, so the
+    first run of a module writes one beside its verified source. CPython
+    checks it against that source before use. It does not make the runtime
+    another runtime."""
+    rt, dest = _with_python(tmp_path), tmp_path / "uqf"
+    _install(dest, rt)
+    home = Path(rt.directory(str(dest)))
+    _cache(home, "helper.cpython-314.pyc")
+    _cache(home, "helper.cpython-314.opt-1.pyc")
+    assert runtime_install.state(_dep(dest), rt) == runtime_install.REUSE
+
+
+@pytest.mark.parametrize(
+    ("name", "why"),
+    [
+        ("orphan.cpython-314.pyc", "no source the runtime shipped"),
+        ("helper.cpython-314.txt", "not a .pyc"),
+    ],
+)
+def test_anything_else_in_a_pycache_is_still_refused(tmp_path, name, why):
+    rt, dest = _with_python(tmp_path), tmp_path / "uqf"
+    _install(dest, rt)
+    _cache(Path(rt.directory(str(dest))), name)
+    with pytest.raises(DeployError, match="1 file\\(s\\) not in its manifest"):
+        _install(dest, rt, LocalRemote())
+
+
 def test_a_half_finished_install_is_replaced_never_used(tmp_path):
     rt, dest = _runtime(tmp_path, "a"), tmp_path / "uqf"
     partial = dest / torq_runtime.RUNTIMES_DIR / f".{rt.sha256}.partial"
@@ -184,6 +222,11 @@ def server(tmp_path):
     return dest, rts, log
 
 
+def _id(rt: torq_runtime.Runtime) -> str:
+    """A runtime as prune names it: its component, then its sha256."""
+    return f"torq/{rt.sha256}"
+
+
 def _runtimes(dest: Path) -> set[str]:
     return {p.name for p in (dest / torq_runtime.RUNTIMES_DIR).iterdir()}
 
@@ -197,9 +240,10 @@ def test_prune_keeps_every_runtime_a_remaining_release_names(server, keep):
     assert prune.prune(_dep(dest).cfg, LocalRemote(), keep=keep, out=out) == 0
     result = json.loads(out.getvalue())
     assert result["removed"] == [R1]
-    assert sorted(result["runtimes"]["removed"]) == sorted([rts["C"].sha256, rts["D"].sha256])
+    assert sorted(result["runtimes"]["removed"]) == sorted([_id(rts["C"]), _id(rts["D"])])
     kept = {k["runtime"]: k["why"] for k in result["runtimes"]["kept"]}
-    assert kept[rts["A"].sha256] == f"named by {R2}" and kept[rts["B"].sha256] == f"named by {R3}"
+    assert kept[_id(rts["A"])] == f"named by {R2}" and kept[_id(rts["B"])] == f"named by {R3}"
+    assert kept["torq/notes"] == "not named like a runtime, so never removed"
     assert _runtimes(dest) == {rts["A"].sha256, rts["B"].sha256, "notes"}
 
 
@@ -207,7 +251,7 @@ def test_a_prune_dry_run_removes_no_runtime(server):
     dest, rts, _ = server
     out = io.StringIO()
     prune.prune(_dep(dest).cfg, LocalRemote(), keep=0, dry_run=True, out=out)
-    assert rts["D"].sha256 in json.loads(out.getvalue())["runtimes"]["removed"]
+    assert _id(rts["D"]) in json.loads(out.getvalue())["runtimes"]["removed"]
     assert _runtimes(dest) == {rt.sha256 for rt in rts.values()} | {"notes"}
 
 

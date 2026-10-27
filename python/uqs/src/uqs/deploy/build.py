@@ -22,9 +22,13 @@ WHAT IS IN IT:
   .release/kafka/
                 only with --kafka-home (#1515): KX's kfk for the target, with
                 its libraries and notices (uqs.deploy.kafka).
+  .release/python-runtime.tar.gz
+                only with --python-runtime (#1557): a CPython for the target,
+                which scripts/install_release.py makes .venv from.
   RELEASE_MANIFEST.json
                 the revision, whether the tree was dirty, the target OS,
-                architecture and Python, and every member's sha256.
+                architecture, Python and the glibc its wheels need, and every
+                member's sha256.
 
 SIDECAR BUNDLES (#800), only when --bundle is given. The tracked files are
 copied into a staging directory, each bundle is installed THERE by the uqs
@@ -56,7 +60,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from uqs.deploy import foreign_blocks, kafka, portable
+from uqs.deploy import foreign_blocks, kafka, portable, python_runtime
 from uqs.deploy.artifact import (
     FORMAT,
     INSTALLER,
@@ -69,6 +73,7 @@ from uqs.deploy.artifact import (
     ReleaseError,
     Target,
     _sha256,
+    glibc_floor,
 )
 from uqs.deploy.payload import (
     ALLOWLIST,
@@ -202,6 +207,7 @@ def build_artifact(
     portable: dict | None = None,
     hdb_shape: dict[str, list[str]] | None = None,
     kafka_sel: kafka.Selected | None = None,
+    carried: python_runtime.PythonRuntime | None = None,
 ) -> Artifact:
     """The archive, its .sha256 and its manifest, written into `out_dir`.
 
@@ -216,18 +222,20 @@ def build_artifact(
     app = [f"{WHEEL_DIR}/{w.name}" for w in wheels if w.name.startswith("uqs-")]
     kafka_sel = kafka_sel or kafka.Selected()
     members.update(kafka_sel.members())
+    members.update({python_runtime.CARRIED: carried.path} if carried else {})
     manifest = {
         "format": FORMAT,
         "release": rid,
         "revision": rev,
         "dirty": dirty,
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "target": target.as_dict(),
+        "target": {**target.as_dict(), "glibc": glibc_floor(w.name for w in wheels)},
         "python": {
             "requirements": REQUIREMENTS,
             "wheel_dir": WHEEL_DIR,
             "app_wheel": app[0] if app else None,
             "wheels": len(wheels),
+            **({"runtime": carried.carried()} if carried else {}),
         },
         "files": {name: _sha256(path) for name, path in sorted(members.items())},
         # the runtime the release runs (#852), whose bundles it carries; always
@@ -284,9 +292,11 @@ def build(
     allow_computed_names: bool = False,
     kafka_home: Path | str | None = None,
     kafka_connector: bool = False,
+    python_runtime_file: Path | str | None = None,
 ) -> Artifact:
     """Build the artifact for the checkout at `root` into `output`, by
-    default `root`/dist. Kafka is opt-in (uqs.deploy.kafka.select).
+    default `root`/dist. Kafka is opt-in (uqs.deploy.kafka.select), and so is
+    carrying a Python runtime (`python_runtime_file`, python_runtime.for_release).
 
     With `q_target`, its q is converted for that kdb+ (#861), in a staged
     copy: the checkout is never written (uqs.deploy.portable).
@@ -308,6 +318,7 @@ def build(
             "package", "the tree has uncommitted changes - commit them, or pass --allow-dirty"
         )
     target = Target(os="linux", arch=arch, python=python or default_python(root), q=q_target)
+    carried = python_runtime.for_release(python_runtime_file, target.as_dict())
     rid = release_id(rev)
     files = tracked_files(root, runner)
     foreign_blocks.refuse(root, files, runtime, {m.bundle.name for m in members})
@@ -353,6 +364,7 @@ def build(
             portable=converted,
             hdb_shape=declared_shape(tree, runtime, root, runner),
             kafka_sel=kafka_sel,
+            carried=carried,
         )
 
 
@@ -363,13 +375,10 @@ def declared_shape(
     - with a warning - when it cannot be composed; push then judges the HDB
     in prepare only.
 
-    Composed by the uqs of `tree`, in a subprocess (tree_python), not in
-    this process: which tables a runtime holds is read at import from the
-    tree uqs was imported from - its job graph, its bundle ledger, its
-    plant_tables.q - and only the staged tree has the bundles installed
-    (#1158, #1162, #1163). The base schema is the configured starter pack,
-    TORQAPPHOME, else the builder checkout `root`'s vendored one: a release
-    never carries lib/."""
+    Composed by the uqs of `tree`, in a subprocess (tree_python): which tables
+    a runtime holds is read at import from the tree uqs was imported from, and
+    only the staged tree has the bundles installed (#1158, #1162, #1163). The
+    base schema is TORQAPPHOME's, else `root`'s vendored one."""
     step = tree_python(root, tree, runner, "hdb_shape")
     argv = ("-m", "uqs.stack.hdb_shape", "declared", "--runtime", runtime)
     try:

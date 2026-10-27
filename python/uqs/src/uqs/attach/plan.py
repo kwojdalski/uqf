@@ -12,8 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import overrides, preflight, sort_plan
-from uqs.attach.config import Attachment
+from uqs.attach import overrides, preflight, schema_files, sort_plan
+from uqs.attach.config import DURABLE, Attachment
 from uqs.attach.findings import Finding, blockers
 from uqs.attach.manifest import DONE, RETAINED, Manifest
 from uqs.attach.remote import Ipc
@@ -88,12 +88,16 @@ class Plan:
                         "needs_restart": False,
                     }
                 )
-        if att.persist == "schema-file":
-            path = (obs.tickerplant.probe or {}).get("schemafile", "") if obs.tickerplant else ""
+        if att.persist in DURABLE:
+            tp = obs.tickerplant
+            path = (tp.probe or {}).get("schemafile", "") if tp else ""
+            by = f"{tp.procname if tp else 'the tickerplant'} appends" * (
+                att.persist == "remote-schema-file"
+            )
             steps.append(
                 {
                     "process": "schema file",
-                    "action": f"append a marked block to {path}",
+                    "action": f"{by or 'append'} a marked block to {path}",
                     "table": ", ".join(t.name for t in att.tables),
                     "creates": True,
                     "reversible_before": "remove the block (hash checked)",
@@ -229,6 +233,8 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
     port = publisher_port(att, root)
     facts = facts or preflight.Facts()
     facts.publisher = port
+    if att.persist == "remote-schema-file" and obs.tickerplant and obs.tickerplant.up:
+        facts.schema = schema_files.inspect(ipc, obs.tickerplant)
     changes, sort_findings = sort_plan.assess(att, obs, ipc, facts, root)
     found = structural + preflight.check(att, obs, facts) + sort_findings
     found, problems = overrides.evaluate(att.overrides, found)

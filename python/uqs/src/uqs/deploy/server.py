@@ -5,12 +5,16 @@ from __future__ import annotations
 
 import json
 
+from uqs.deploy import preflight as checks
 from uqs.deploy.artifact import compatible
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.lock import Lock
+from uqs.deploy.python_runtime import PythonRuntime
+from uqs.deploy.q_runtime import QRuntime
 from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
 from uqs.deploy.selection import Selection
 from uqs.deploy.torq_runtime import Runtime
+from uqs.interpreter import PEACHQ
 from uqs.logger import get_logger
 from uqs.runtimes import DEFAULT_RUNTIME
 from uqs.stack import site_fields
@@ -42,6 +46,10 @@ class Server:
         #: torq_mode bundled's runtime (deploy/torq_runtime.py), which
         #: deploy.env then names in place of an existing TorQ
         self.torq_runtime: Runtime | None = None
+        #: q_mode bundled's PeachQ (deploy/q_runtime.py): deploy.env's QCMD and QHOME
+        self.q_runtime: QRuntime | None = None
+        #: python_mode bundled's CPython (deploy/python_runtime.py): .venv's interpreter
+        self.python_runtime: PythonRuntime | None = None
         d = cfg.dest
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
@@ -88,17 +96,21 @@ class Server:
             )
 
     def env_lines(self) -> list[str]:
-        """deploy.env: the TorQ - external, or the bundled runtime's - q and
-        the stable data directory."""
+        """deploy.env: the TorQ and the q - external, or the bundled runtimes'
+        - a bundled Python's runtime, and the stable data directory."""
         c = self.cfg
         torq_home, torq_app_home = c.torq_home, c.torq_app_home
         if self.torq_runtime is not None:
             torq_home, torq_app_home = self.torq_runtime.homes(c.dest)
+        q_env = [(k, self.q_env.get(k, v)) for k, v in (("QCMD", c.qcmd), ("QHOME", c.qhome))]
+        if self.q_runtime is not None:
+            q_env = self.q_runtime.env(c.dest)
+        python_env = self.python_runtime.env(c.dest) if self.python_runtime else []
         pairs = [
             ("TORQHOME", torq_home),
             ("TORQAPPHOME", torq_app_home),
-            ("QCMD", self.q_env.get("QCMD", c.qcmd)),
-            ("QHOME", self.q_env.get("QHOME", c.qhome)),
+            *q_env,
+            *python_env,
             ("UQS_DATA_ROOT", c.data_root),
             ("UQS_RUNTIME", self.runtime),
             # a source with no credential is refused, never read as its fixture
@@ -144,12 +156,22 @@ class Server:
             "release_dir": f"{self.releases}/{self.release}" if self.release else "",
             "expected_user": c.remote_user or "",
         }
-        return script(*(f"{k}={q(v)}" for k, v in values.items())) + PREFLIGHT
+        # A bundled q or Python is installed under the lock, and run there
+        # (runtime_install): none is looked for on the server.
+        body = checks.body(self.q_runtime is not None, self.python_runtime is not None)
+        return script(*(f"{k}={q(v)}" for k, v in values.items())) + body
 
     def preflight(self) -> dict[str, str]:
         r = self.remote.run(self.preflight_script(), self.cfg.command_timeout, "preflight")
         out = _checked(r, "preflight", "the preflight checks")
         facts = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        rt = self.q_runtime
+        if rt is not None:  # the version it reported building; it is run once installed
+            home = rt.directory(self.cfg.dest)
+            facts.update(qhome=home, qcmd=f"{home}/q", qversion=rt.version, qimpl=PEACHQ)
+            facts.update(qhome_from="bundled", qcmd_from="bundled")
+        if self.python_runtime is not None:  # fitted to the release; run once installed
+            facts["python"] = self.python_runtime.minor
         if self.cfg.remote_user and facts.get("user") != self.cfg.remote_user:
             raise DeployError(
                 "preflight",
@@ -267,103 +289,3 @@ class Server:
             self.remote.run(script(f"rm -rf {q(self.lock)}"), self.cfg.command_timeout, "lock")
         except DeployError as exc:
             log.warning("could not release {}: {}", self.lock, redact(str(exc)))
-
-
-#: The preflight checks, run on the server. Read-only - safe under --dry-run.
-#: Each failure says what is missing on stderr and exits 1; the facts the
-#: caller decides on (data present, a current release, a held lock) come
-#: back on stdout as name=value lines.
-PREFLIGHT = r"""
-fail() { echo "$*" >&2; exit 1; }
-echo "user=$(id -un)"
-if [ -n "$expected_user" ] && [ "$(id -un)" != "$expected_user" ]; then
-  fail "running as $(id -un), not $expected_user"
-fi
-if [ -e "$dest" ]; then
-  test -w "$dest" || fail "destination $dest is not writable"
-else
-  test -w "$(dirname "$dest")" || fail "cannot create $dest: its parent is not writable"
-fi
-command -v uv >/dev/null || fail "uv is not on PATH"
-py=$(uv python find "$python" 2>/dev/null) ||
-  fail "uv finds no Python $python - the release's wheels need it"
-echo "python=$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-echo "os=$(uname -s)"
-echo "arch=$(uname -m)"
-for tool in bash envsubst rlwrap tar timeout python3; do
-  command -v "$tool" >/dev/null || fail "$tool is not on PATH - the release needs it"
-done
-me=$(id -un)
-# QHOME: --qhome, else this account's own $QHOME - never the caller's.
-if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--qhome"
-elif [ -n "${QHOME:-}" ]; then qhome_eff=$QHOME; qhome_from="$me's QHOME"
-else fail "QHOME is not set for $me and --qhome was not given -" \
-  "pass --qhome <the directory q finds its licence in>"
-fi
-test -d "$qhome_eff" || fail "QHOME $qhome_eff ($qhome_from) is not a directory"
-# QCMD: --qcmd, else $QCMD, else q on this account's PATH. A name or a path,
-# never a command line: it is run as one word, quoted.
-if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--qcmd"
-elif [ -n "${QCMD:-}" ]; then qcmd_want=$QCMD; qcmd_from="$me's QCMD"
-else qcmd_want=q; qcmd_from="q on $me's PATH"
-fi
-case "$qcmd_want" in
-  /*) test -f "$qcmd_want" && test -x "$qcmd_want" ||
-        fail "QCMD $qcmd_want ($qcmd_from) is not an executable file"
-      qcmd_eff=$qcmd_want;;
-  */*) fail "QCMD $qcmd_want ($qcmd_from) is a relative path - give an absolute one";;
-  *[[:space:]]*) fail "QCMD '$qcmd_want' ($qcmd_from) is not an executable name -" \
-                   "a command with arguments is not supported; pass --qcmd";;
-  *) qcmd_eff=$(command -v -- "$qcmd_want") ||
-       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --qcmd"
-     case "$qcmd_eff" in
-       /*) ;;
-       *) fail "QCMD $qcmd_want ($qcmd_from) is a shell alias or function, not an executable";;
-     esac;;
-esac
-case "$qhome_eff$qcmd_eff" in *$'\n'*) fail "QHOME or QCMD holds a newline";; esac
-export QHOME="$qhome_eff"
-echo "qhome=$qhome_eff"
-echo "qhome_from=$qhome_from"
-echo "qcmd=$qcmd_eff"
-echo "qcmd_from=$qcmd_from"
-probe=$(mktemp -d)
-printf '%s\n' '-1 "DEPLOY_Q_OK ",string .z.K; exit 0' > "$probe/probe.q"
-out=$(timeout "$probe_timeout" "$qcmd_eff" "$probe/probe.q" -q 2>&1 || true)
-rm -rf "$probe"
-case "$out" in
-  *DEPLOY_Q_OK*)
-    qversion=$(printf '%s\n' "$out" | sed -n 's/.*DEPLOY_Q_OK \([0-9.]*\).*/\1/p' | head -1)
-    echo "qversion=$qversion";;
-  *) fail "$qcmd_eff did not run a script with QHOME=$qhome_eff - is it licensed?" \
-          "$(echo "$out" | tail -3)";;
-esac
-if [ -n "$odbc_home" ]; then
-  test -f "$odbc_home/current/env.sh" ||
-    fail "no ODBC setup at $odbc_home - run \`uqs setup odbc install\` there first"
-fi
-if [ -n "$torq_launcher" ]; then
-  test -f "$torq_launcher" || fail "no TorQ launcher $torq_launcher"
-  test -x "$torq_launcher" || fail "the TorQ launcher $torq_launcher is not executable"
-fi
-if [ -n "$torq_home" ]; then
-  test -f "$torq_home/torq.q" || fail "no torq.q in $torq_home"
-  if [ -z "$torq_launcher" ]; then
-    test -f "$torq_home/torq.sh" || fail "no torq.sh in $torq_home - pass --torq-launcher" \
-      "if this site keeps its launcher elsewhere"
-  fi
-fi
-if [ -n "$torq_app_home" ]; then
-  for f in database.q appconfig/process.csv; do
-    test -f "$torq_app_home/$f" || fail "no $f in $torq_app_home"
-  done
-fi
-if [ -d "$data" ]; then echo "data=present"; else echo "data=absent"; fi
-if [ -L "$current" ]; then echo "current=$(basename "$(readlink "$current")")"; fi
-if [ -n "$release_dir" ] && [ -e "$release_dir" ]; then echo "release_exists=yes"; fi
-if [ -d "$lock" ]; then
-  hb=$(cat "$lock/heartbeat" 2>/dev/null || stat -c %Y "$lock" 2>/dev/null || true)
-  case "$hb" in ''|*[!0-9]*) age=unknown;; *) age=$(( $(date +%s) - hb ));; esac
-  echo "locked=$(head -n 1 "$lock/owner" 2>/dev/null || echo unknown), last beat ${age}s ago"
-fi
-"""

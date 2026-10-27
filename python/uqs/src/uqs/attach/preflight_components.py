@@ -290,21 +290,41 @@ def runtime_only(att: Attachment, facts: Facts) -> str:
 
 
 def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding]:
+    """Can the block be added? A path on another machine is never looked for
+    here: only `remote-schema-file`, where the tickerplant reads and appends to
+    its own file, persists to a stack elsewhere (#1651)."""
     tp = obs.tickerplant
     if att.persist == "runtime-only":
         return [Finding("warning", "RUNTIME_ONLY", "schema", runtime_only(att, facts))]
-    probe = (tp.probe or {}) if tp else {}
-    path = probe.get("schemafile", "")
-    why = ""
+    path = ((tp.probe or {}) if tp else {}).get("schemafile", "")
     if not path:
-        why = "the tickerplant was not started with -schemafile"
-    elif not facts.host.is_local(att.stack.host):
-        why = f"the schema file is on {att.stack.host}; it can only be edited from that machine"
-    elif not Path(path).is_file():
-        why = f"{path} does not exist on this machine"
-    elif not _writable(Path(path)):
-        why = f"{path} is not writable by this user"
-    elif persist.locate(Path(path).read_text(errors="replace"), att.name) is not None:
+        return _unavailable("the tickerplant was not started with -schemafile")
+    if att.persist == "remote-schema-file":
+        by, read = tp.procname if tp else "the tickerplant", facts.schema
+        if read is None or read.error:
+            return _unavailable(f"{by} could not read it: {read.error if read else 'not asked'}")
+        if read.text is None:
+            return _unavailable(f"{read.path} does not exist on {att.stack.host}")
+        if not read.writable:
+            return _unavailable(f"{read.path} is not writable by {by}'s user")
+        return _judge(att, read.path, read.text, f"{by} will append a marked block to it")
+    if not facts.host.is_local(att.stack.host):
+        return _unavailable(
+            f"the schema file is on {att.stack.host}; this machine cannot edit it",
+            f"give --remote-schema-file to have {tp.procname if tp else 'the tickerplant'} "
+            "append the block to its own file, or --runtime-only to accept losing the "
+            "registration on a restart, or run uqs on the stack's machine",
+        )
+    if not Path(path).is_file():
+        return _unavailable(f"{path} does not exist on this machine")
+    if not _writable(Path(path)):
+        return _unavailable(f"{path} is not writable by this user")
+    return _judge(att, path, Path(path).read_text(errors="replace"), "a marked block will be added")
+
+
+def _judge(att: Attachment, path: str, text: str, will: str) -> list[Finding]:
+    """The file can be written: is the block there already, or is it a file uqf rebuilds?"""
+    if persist.locate(text, att.name) is not None:
         return [
             Finding(
                 "info",
@@ -313,22 +333,26 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
                 f"{path} already holds this attachment's block",
             )
         ]
-    elif "GENERATED" in Path(path).read_text(errors="replace")[:400]:
-        why = (
+    if "GENERATED" in text[:400]:
+        return _unavailable(
             f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "
             "persist through `uqs job install` / `runtime prepare` instead"
         )
-    if why:
-        return [
-            Finding(
-                "blocker",
-                "PERSIST_UNAVAILABLE",
-                "schema",
-                f"cannot persist the table across a tickerplant restart: {why}",
-                "choose --runtime-only to accept losing it on restart, or fix the above",
-            )
-        ]
-    return [Finding("info", "WILL_PERSIST", "schema", f"a marked block will be added to {path}")]
+    return [Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}")]
+
+
+def _unavailable(
+    why: str, action: str = "choose --runtime-only to accept losing it on restart, or fix the above"
+) -> list[Finding]:
+    return [
+        Finding(
+            "blocker",
+            "PERSIST_UNAVAILABLE",
+            "schema",
+            f"cannot persist the table across a tickerplant restart: {why}",
+            action,
+        )
+    ]
 
 
 def _writable(path: Path) -> bool:

@@ -149,6 +149,7 @@ def run_torq_sh(
     `skips` names refusals to skip for this start (stack/start_overrides.py).
     """
     start_policy.refuse_start(paths, args, base_port, skips)
+    args = start_policy.with_publisher_extras(paths, args)
     # The launcher first: bootstrap writes the data directory, process.csv and setenv.sh,
     # and a launcher that is going to be refused must not have had that written for it.
     launcher = torq_launcher(paths)

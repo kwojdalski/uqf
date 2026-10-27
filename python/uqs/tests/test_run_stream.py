@@ -241,7 +241,17 @@ def test_a_remote_publish_the_plant_refuses_throws_in_the_publisher(tmp_path: Pa
     client = tmp_path / "publisher.q"
     client.write_text(_PUBLISHER.format(port=port))
     plant = subprocess.Popen(
-        [q, "scripts/processes/run_stream.q", "-q", "-plant", str(port)],
+        # -logdir: without it the plant logs to tplog/ under its working
+        # directory, which is the checkout.
+        [
+            q,
+            "scripts/processes/run_stream.q",
+            "-q",
+            "-plant",
+            str(port),
+            "-logdir",
+            str(tmp_path / "tplog"),
+        ],
         cwd=UQF_ROOT,
         env=env,
         stdin=subprocess.DEVNULL,

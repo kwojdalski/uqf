@@ -113,7 +113,9 @@ POLICY: dict[str, Policy] = {
         False, "a recorded location is not where the stack keeps it; plan again"
     ),
     "PERSIST_UNAVAILABLE": Policy(
-        False, "use --runtime-only to accept losing the registration on a restart"
+        False,
+        "use --runtime-only to accept losing the registration on a restart, or, for a stack "
+        "on another machine, --remote-schema-file to have its tickerplant write the block",
     ),
     "DISCOVERY_UNREACHABLE": Policy(False, "nothing can be verified without discovery"),
     "UNREACHABLE": Policy(False, "a process that cannot be asked cannot be verified"),
@@ -127,6 +129,23 @@ POLICY: dict[str, Policy] = {
         False,
         "the stack tried to connect back to the running publisher and could not: discovery "
         "would list a process it cannot use, and no acceptance makes the path exist",
+    ),
+    "STACK_REFUSES_ATTACH_CREDENTIALS": Policy(
+        False, "the stack refuses the credential uqs asks it with; nothing can be verified"
+    ),
+    "STACK_REFUSES_PUBLISHER_CREDENTIALS": Policy(
+        False,
+        "the stack refuses the credential the running publisher connects with, so its "
+        "rows would never reach the tickerplant; no acceptance makes the credential valid",
+    ),
+    "STACK_UNREACHABLE_FROM_PUBLISHER": Policy(
+        False,
+        "the running publisher could not open a connection to the stack it publishes to",
+    ),
+    "PUBLISHER_REFUSES_STACK_CREDENTIALS": Policy(
+        False,
+        "the publisher refuses the credential the stack connects back with: discovery would "
+        "list a process it cannot use",
     ),
     "NO_TICKERPLANT": Policy(False, "there is nothing to publish to"),
     "AMBIGUOUS_TICKERPLANT": Policy(False, "name the tickerplant with --tickerplant"),

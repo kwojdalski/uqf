@@ -12,6 +12,14 @@
 / the tests missed before, and the one where the reaction did nothing.
 
 
+/ Its own status directory: the runs here write status and outcome files, and
+/ without this the suite borrowed the one an earlier suite had set - so run
+/ alone (a selected subset, #1690) it wrote to "/status" and failed.
+.qt.qpipe.job.rebuild_positions.beforeNamespace_status_dir:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"mkdir -p build/test-status";
+    }
+
 .qt.qpipe.job.rebuild_positions.d:{[n] 2026.09.11D00:00:00.000000000+n*1D}
 
 / test_react.q resets .qetl.reaction between its tests, which takes this
