@@ -19,9 +19,18 @@ each hook whose `files:` scope (less `exclude:`) takes a path changed since
 the merge base - and says whether the head's exact tree carries trailers
 covering it. A trailer without `hooks=`, written before attestations were
 scoped, ran every hook and covers all of them. A rebase changes the tree and
-needs a fresh attestation - which is the case that broke master. A head that
-does not contain the base's tip is reported too: the tree that merges is then
-one no run has seen.
+needs a fresh attestation - which is the case that broke master.
+
+A head that does not contain the base's tip (#1687) is judged by what the base
+did since the merge base. If those commits touch no path any KDB-X hook judges
+- the same `judged_scopes()` - the head passes on its attestation: the tree
+that merges then has exactly the attested tree's judged paths, since nothing
+the hooks read changed on the base. So the guarantee is "the merging tree's
+judged paths equal an attested tree's", not "the merging tree was attested",
+and the gap between the two is a gate whose result depends on a path outside
+its scope. That is a hook-scope bug, which scripts/gates/check_hook_scopes.py
+exists to catch. If the base side did touch a judged path, the head is
+refused and the path named: merge the base in and attest again.
 
 q-tests may have run a SUBSET of the q suites (#1690): those
 scripts/dev/test_impact.py selects from q-lint's dependency graph for the
@@ -259,6 +268,13 @@ def contains(head: str, base: str) -> bool:
     )
 
 
+def base_judged_changes(base: str, head: str, scopes: Scopes) -> list[str]:
+    """The judged paths `base` changed since its merge base with `head` - the
+    base side's three-dot diff. Empty means a head behind `base` merges into
+    a tree whose judged paths are the head's own."""
+    return [p for p in changed_paths(head, base) if is_judged(p, scopes)]
+
+
 def _names(hooks) -> str:
     return ", ".join(sorted(hooks)) or "none"
 
@@ -289,13 +305,21 @@ def report(base: str, head: str) -> tuple[bool, str]:
         why = q_tests_refusal(base, head)
         if why:
             return False, why
-    if not contains(head, base):
+    if contains(head, base):
+        return True, f"the KDB-X gates passed on exactly this tree ({scope})"
+    moved = base_judged_changes(base, head, scopes)
+    if moved:
+        theirs = ", ".join(moved[:5]) + (f" and {len(moved) - 5} more" if len(moved) > 5 else "")
         return False, (
-            "this tree is attested, but it does not contain the base's tip, so the "
+            "this tree is attested, but it does not contain the base's tip, and the "
+            f"base has since changed {theirs}, which the KDB-X gates judge - so the "
             f"tree that merges is not the one attested ({scope}). "
-            f"Rebase, then `{ATTEST}` again."
+            f"Merge the base in, then `{ATTEST}` again."
         )
-    return True, f"the KDB-X gates passed on exactly this tree ({scope})"
+    return True, (
+        "the KDB-X gates passed on this tree, and the base has changed no path they "
+        f"judge since the merge base, so the tree that merges has the same judged paths ({scope})"
+    )
 
 
 def main(argv: list[str]) -> int:

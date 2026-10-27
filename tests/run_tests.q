@@ -88,23 +88,10 @@ nErr:sum res[`status]=`error;
 -1 (string nTotal)," tests: ",(string nPass)," passed, ",(string nFail)," failed, ",(string nErr)," errored";
 -1 "============================================================";
 
-/ Every test that ran, as data, for a lane that holds the run to a list: one
-/ line per test - suite and name, tab-separated - in the file UQF_TEST_RESULTS
-/ names, in run order. What a rename or a move must not change is the SET of
-/ these, which this makes comparable by diff rather than by total.
-if[count getenv `UQF_TEST_RESULTS;
-    (hsym `$getenv `UQF_TEST_RESULTS) 0: {(string x`namespace),"\t",string x`name} each 0!select namespace,name from res];
-
-/ The failures as data, for a lane that holds them to a list
-/ (scripts/portable/full_suite.py, the PeachQ lane): one line per test that
-/ did not pass - name, status and why, tab-separated - in the file
-/ UQF_TEST_FAILURES names. Written before the exit below, and empty when
-/ every test passed.
-if[count getenv `UQF_TEST_FAILURES;
-    bad:select name,status,detail:{$[x=`error; y; z]}'[status;result;msg] from res where status<>`pass;
-    flat:{ssr[ssr[x;"\n";" "];"\t";" "]};
-    lines:{[flat;r] "\t" sv (string r`name;string r`status;flat $[10h=type d:r`detail; d; -3!d])}[flat] each bad;
-    (hsym `$getenv `UQF_TEST_FAILURES) 0: $[count lines; lines; enlist ""]];
+/ Every test that ran, and every one that did not pass, as data - in the
+/ files UQF_TEST_RESULTS and UQF_TEST_FAILURES name, before the exit below.
+/ tests/lib/support.q has the format; tests/q/run_coverage.q writes the same.
+.qt.support.write_outcomes res;
 
 if[(nFail+nErr)>0;
     -1 "";

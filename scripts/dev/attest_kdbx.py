@@ -27,25 +27,42 @@ accepts the trailer only when the digests agree. `q-tests=all` records the
 whole suite, which needs no recomputation: what ran when the selector said
 ALL, could not run here (no graph-capable qlinter), or UQF_Q_TESTS_FULL=1 was
 set - the way to an attestation CI accepts whatever its selector says. The
-other hooks are unchanged; q-coverage still runs the whole suite. The full
-suite still runs on master, and a test only a full run would have caught is
-caught there.
+full suite still runs on master, and a test only a full run would have caught
+is caught there.
+
+The q suite runs ONCE (#1704). q-coverage runs every test under
+instrumentation anyway, so when both hooks are needed it runs first, writing
+its per-test outcomes (tests/lib/support.q's write_outcomes), and q-tests'
+q-unit verdict is read from them: any test that did not pass there - inside
+the selection or not - fails q-tests, and a run that recorded no outcome is
+no verdict. The q-tests hook is then told (UQF_Q_UNIT_FROM_COVERAGE=1) to run
+only q-examples and q-scripts. The trailer is unchanged: q-tests=<digest>
+still names the selection, and every suite in it ran and passed - in the
+whole-suite process, as on master, rather than alone. That stands for a
+plain run because run_coverage.q is seeded as run_tests.q is, and on KDB-X
+the two gave every test the same outcome.
 
 Why skipping a hook the change does not touch still means "every KDB-X hook
-passed on the tree that merges": the check also requires the head to contain
-the base's tip, so the merge base IS that tip, and a hook whose scope the
-diff does not touch reads on the head exactly the files it read on master's
-tip. That tip's result for the hook is the one the last PR to touch its scope
-attested on its own exact tree, and every merge since left those files as
-they were. It rests on the same assumption the check always made for paths
-outside every scope: a hook's result depends only on the files its scope
-takes - which is why a scope must be complete, and why q-docs' scope is held
-to the documents with q-example blocks by scripts/gates/check_hook_scopes.py.
+passed on the judged paths that merge": the check accepts a head only if it
+contains the base's tip or the base changed no judged path since the merge
+base (#1687). Either way the merge base's judged files are master's tip's,
+and a hook whose scope the diff does not touch reads on the head exactly the
+files it read on master's tip. That tip's result for the hook is the one the
+last PR to touch its scope attested on its own exact tree, and every merge
+since left those files as they were. It rests on the same assumption the
+check always made for paths outside every scope: a hook's result depends only
+on the files its scope takes - which is why a scope must be complete, and why
+q-docs' scope is held to the documents with q-example blocks by
+scripts/gates/check_hook_scopes.py.
 
-Run it last, after the final rebase: a rebase changes the tree and the
-attestation with it. Refuses a dirty tree, untracked files included since
-the hooks see them (what is tested must be what is committed), and any
-interpreter scripts/test.py does not identify as KDB-X.
+Run it last, after the final rebase or merge of master: either changes the
+tree and the attestation with it. A branch need not merge master in just to
+be current - only when master has changed a judged path since the branch
+forked, which is when the check would refuse it.
+
+Refuses a dirty tree, untracked files included since the hooks see them (what
+is tested must be what is committed), and any interpreter scripts/test.py does
+not identify as KDB-X.
 
     uv run python scripts/dev/attest_kdbx.py [--all] [--base REF]
 """
@@ -57,6 +74,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -108,6 +126,53 @@ def q_tests_plan(base: str, full: bool):
     if full:
         return impact.Plan(None, "--all")
     return impact.plan(base, REPO, with_uncommitted=False)
+
+
+#: tests/run_tests.q's outcome files (tests/lib/support.q writes both), which
+#: tests/q/run_coverage.q writes too: every test the run ran, and those that
+#: did not pass.
+RESULTS_ENV = "UQF_TEST_RESULTS"
+FAILURES_ENV = "UQF_TEST_FAILURES"
+
+#: Set for the q-tests hook when its q-unit verdict has already been taken from
+#: the q-coverage run (#1704): the hook then runs q-examples and q-scripts only.
+FROM_COVERAGE_ENV = "UQF_Q_UNIT_FROM_COVERAGE"
+
+
+def run_order(hooks: list[str]) -> list[str]:
+    """`hooks` in the order they run: q-coverage before q-tests, whose q-unit
+    verdict it supplies; the rest as given."""
+    late = [h for h in hooks if h == "q-tests"]
+    return [h for h in hooks if h != "q-tests"] + late
+
+
+def outcome_env(outcomes: Path) -> dict[str, str]:
+    """What makes the coverage run record its tests in `outcomes`."""
+    return {
+        RESULTS_ENV: str(outcomes / "results.tsv"),
+        FAILURES_ENV: str(outcomes / "failures.tsv"),
+    }
+
+
+def unit_verdict(outcomes: Path) -> str | None:
+    """Why the q suite, as the q-coverage run ran it, did not pass - or None.
+
+    One instrumented run of the whole suite stands for q-tests' q-unit run
+    (#1704): what q-tests selects is a subset of it, so a test that failed
+    there fails q-tests, whether or not the selection names its suite. A run
+    that recorded nothing - no outcome files, or no test - is no verdict, and
+    is refused rather than read as a pass."""
+    env = outcome_env(outcomes)
+    results, failures = Path(env[RESULTS_ENV]), Path(env[FAILURES_ENV])
+    if not results.is_file() or not failures.is_file():
+        return "the q-coverage run recorded no test outcomes"
+    if not [line for line in results.read_text().splitlines() if line.strip()]:
+        return "the q-coverage run ran no test"
+    bad = [line for line in failures.read_text().splitlines() if line.strip()]
+    if not bad:
+        return None
+    shown = "\n  ".join(bad[:20]) + (f"\n  and {len(bad) - 20} more" if len(bad) > 20 else "")
+    return f"{len(bad)} test(s) did not pass in the q-coverage run:\n  {shown}"
 
 
 def needed(base: str) -> list[str]:
@@ -188,17 +253,29 @@ def main(argv: list[str] | None = None) -> int:
     tree = git("rev-parse", "HEAD^{tree}").strip()
     print(f"attest_kdbx: needed: {', '.join(hooks)}", flush=True)
     plan = None
-    hook_env: dict[str, str] = {}
+    envs: dict[str, dict[str, str]] = {}
     if "q-tests" in hooks:
         plan = q_tests_plan(args.base, args.all)
         impact = _test_impact()
-        hook_env = {impact.DECIDED_ENV: plan.line}
+        envs["q-tests"] = {impact.DECIDED_ENV: plan.line}
         print(f"attest_kdbx: q-tests: {plan.why}", flush=True)
-    for hook in hooks:
-        print(f"attest_kdbx: {hook} ...", flush=True)
-        if not run_hook(hook, hook_env if hook == "q-tests" else None):
-            print(f"attest_kdbx: {hook} failed - nothing recorded", file=sys.stderr)
-            return 1
+    one_run = "q-tests" in hooks and "q-coverage" in hooks
+    with tempfile.TemporaryDirectory(prefix="attest_kdbx.") as tmp:
+        outcomes = Path(tmp)
+        if one_run:
+            envs["q-coverage"] = outcome_env(outcomes)
+            envs["q-tests"][FROM_COVERAGE_ENV] = "1"
+            print("attest_kdbx: q-tests: its q-unit verdict is the q-coverage run's", flush=True)
+        for hook in run_order(hooks):
+            print(f"attest_kdbx: {hook} ...", flush=True)
+            if not run_hook(hook, envs.get(hook)):
+                print(f"attest_kdbx: {hook} failed - nothing recorded", file=sys.stderr)
+                return 1
+            if hook == "q-coverage" and one_run:
+                why = unit_verdict(outcomes)
+                if why:
+                    print(f"attest_kdbx: q-tests failed: {why} - nothing recorded", file=sys.stderr)
+                    return 1
     if git("rev-parse", "HEAD^{tree}").strip() != tree or dirt():
         print(
             "attest_kdbx: a hook changed the tree - commit that, then run this again",
@@ -213,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
         ran = f"\n\nq-tests: {plan.why}" + (
             f"\nq-tests ran: {', '.join(plan.files) or 'none'}" if plan.files is not None else ""
         )
+        if one_run:
+            ran += "\nq-tests' q-unit verdict: the q-coverage run of the whole suite"
     try:
         git(
             "commit",
