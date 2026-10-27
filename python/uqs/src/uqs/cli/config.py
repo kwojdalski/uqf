@@ -125,7 +125,10 @@ def list_items(
     was on screen.
     """
     if kind is None:
-        console.print(f"Available kinds: {', '.join(sorted(LISTABLE_KINDS))}")
+        if as_json:
+            print(json.dumps(sorted(LISTABLE_KINDS)))
+        else:
+            console.print(f"Available kinds: {', '.join(sorted(LISTABLE_KINDS))}")
         return
     try:
         items = listing.list_items(_paths(), kind, base_port=port)

@@ -236,9 +236,12 @@ def _banner(text: str) -> None:
 # ------------------------------------------------------------------- lanes
 
 
-def lane_q_unit() -> None:
-    _banner("q-unit: deterministic qUnit suite")
-    _q("q-unit", "tests/run_tests.q")
+def lane_q_unit(qargs: Sequence[str] = ()) -> None:
+    """The qUnit suite; `qargs` go to tests/run_tests.q as they are -
+    `-files a.q,b.q` runs only the suites those files define (#1690), which is
+    how the q-tests hook runs what scripts/dev/test_impact.py selects."""
+    _banner("q-unit: deterministic qUnit suite" + (f" ({' '.join(qargs)})" if qargs else ""))
+    _q("q-unit", "tests/run_tests.q", *qargs)
 
 
 def lane_q_unit_peachq() -> None:
@@ -255,10 +258,14 @@ def lane_q_unit_peachq() -> None:
         binary = peachq.resolve()
     except peachq.PeachQError as exc:
         raise SystemExit(f"q-unit-peachq: {exc}") from None
+    # As several PeachQ processes at once (#1694): the suite alone was CI's
+    # slowest step. Four is the hosted runner's vCPU count.
+    shards = str(min(4, os.cpu_count() or 1))
     _run(
         "q-unit-peachq",
-        [sys.executable, "scripts/portable/full_suite.py", "--q", str(binary), "--bundles"],
-    )
+        [sys.executable, "scripts/portable/full_suite.py", "--q", str(binary), "--bundles",
+         "--shards", shards],
+    )  # fmt: skip
 
 
 def lane_q_order() -> None:
@@ -732,10 +739,15 @@ def main(argv: list[str] | None = None) -> int:
     smoke.add_argument(
         "--timeout-ms", type=int, default=None, help="per-connection timeout (default 5000)"
     )
-    args = parser.parse_args(argv)
+    # q-unit only: anything argparse does not know goes on to
+    # tests/run_tests.q as it is, e.g. `q-unit -files test_a.q,test_b.q`.
+    args, qargs = parser.parse_known_args(argv)
+    args.qargs = qargs
     flags = smoke_flags(args.targets, args.tables, args.timeout_ms)
     if flags and args.lane != "smoke":
         parser.error("--targets, --tables and --timeout-ms apply to the smoke lane only")
+    if args.qargs and args.lane != "q-unit":
+        parser.error(f"unrecognized arguments: {' '.join(qargs)} (only q-unit passes its own on)")
 
     lanes = ALL if args.lane == "all" else [args.lane]
     impl = check_interpreter()
@@ -745,6 +757,8 @@ def main(argv: list[str] | None = None) -> int:
         for name in lanes:
             if name == "smoke":
                 lane_smoke(flags)
+            elif name == "q-unit":
+                lane_q_unit(args.qargs)
             else:
                 LANES[name]()
     except LaneFailed as failure:

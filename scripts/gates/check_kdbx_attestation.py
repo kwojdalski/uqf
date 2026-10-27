@@ -23,6 +23,19 @@ needs a fresh attestation - which is the case that broke master. A head that
 does not contain the base's tip is reported too: the tree that merges is then
 one no run has seen.
 
+q-tests may have run a SUBSET of the q suites (#1690): those
+scripts/dev/test_impact.py selects from q-lint's dependency graph for the
+branch's change. The trailer then says `q-tests=<sha256>`, the digest of the
+sorted file names (test_impact.digest), and this check makes the same
+selection from the PR's diff and the head's tree - with the qlinter
+.qlinter-graph-rev pins, which the workflow installs - and accepts the subset
+only when the digests agree. So it depends on nothing but the diff, the tree
+and that pinned binary; an attestation built with another graph binary that
+selected differently is refused, never trusted. `q-tests=all`, and a trailer
+from before subsets (no `q-tests=`), ran the whole suite and need no
+selection. What the subset gives up is a test outside what the graph sees the
+change reach: the full suite still runs on master, and catches it there.
+
 It BLOCKS (#1543): CI fails a PR whose judged paths changed and whose head
 tree is not attested. It judges PRs only - a push to master is not re-judged,
 since failing a merge that already happened would block nothing.
@@ -63,6 +76,8 @@ def _load(rel: str):
     spec = importlib.util.spec_from_file_location(Path(rel).stem, REPO / rel)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    # registered before it runs: a @dataclass looks its own module up there
+    sys.modules[Path(rel).stem] = module
     spec.loader.exec_module(module)
     return module
 
@@ -140,12 +155,15 @@ def changed_paths(base: str, head: str) -> list[str]:
     return git("diff", "--name-only", f"{base}...{head}").split()
 
 
-def trailer_hooks(line: str, tree: str) -> set[str] | None:
-    """The hooks one trailer line attests for `tree`, or None if it is not one.
+def parse_trailer(line: str, tree: str) -> tuple[set[str], str] | None:
+    """(the hooks one trailer line attests for `tree`, what q-tests ran), or
+    None if it is not one.
 
-    `KDB-X-gates: <tree> hooks=a,b` names its hooks; a bare
-    `KDB-X-gates: <tree>`, written before attestations were scoped, ran
-    every hook over the whole tree and counts as all of them.
+    `KDB-X-gates: <tree> hooks=a,b q-tests=<sha256|all>` names its hooks and,
+    when they include q-tests, the subset of the q suites it ran by digest, or
+    `all`. Without `q-tests=` - written before subsets - q-tests ran the whole
+    suite. A bare `KDB-X-gates: <tree>`, written before attestations were
+    scoped, ran every hook over the whole tree and counts as all of them.
     """
     prefix = f"{TRAILER}: {tree}"
     line = line.strip()
@@ -153,18 +171,30 @@ def trailer_hooks(line: str, tree: str) -> set[str] | None:
         return None
     rest = line[len(prefix) :]
     if not rest.strip():
-        return set(_load("scripts/dev/attest_kdbx.py").HOOKS)
-    if not rest.startswith(" ") or not rest.strip().startswith("hooks="):
+        return set(_load("scripts/dev/attest_kdbx.py").HOOKS), "all"
+    words = rest.split()
+    if not rest.startswith(" ") or not words[0].startswith("hooks="):
         return None
-    return {h for h in rest.strip().removeprefix("hooks=").split(",") if h}
+    q_tests = "all"
+    for word in words[1:]:
+        key, eq, value = word.partition("=")
+        if key != "q-tests" or not eq or not re.fullmatch(r"all|[0-9a-f]{64}", value):
+            return None
+        q_tests = value
+    return {h for h in words[0].removeprefix("hooks=").split(",") if h}, q_tests
 
 
-def attested(head: str) -> set[str]:
-    """The hooks attested for head's tree - by head itself, or the empty
-    commits attestations add on top of the same tree, together. Empty when
-    none is."""
+def trailer_hooks(line: str, tree: str) -> set[str] | None:
+    """The hooks one trailer line attests for `tree`, or None if it is not one."""
+    parsed = parse_trailer(line, tree)
+    return None if parsed is None else parsed[0]
+
+
+def _attestations(head: str) -> list[tuple[set[str], str]]:
+    """Every trailer for head's tree - on head itself, or the empty commits
+    attestations add on top of the same tree - parsed."""
     tree = git("rev-parse", f"{head}^{{tree}}").strip()
-    covered: set[str] = set()
+    found: list[tuple[set[str], str]] = []
     log = git("log", "--format=%T%x00%B%x01", head)
     for entry in log.split("\x01"):
         entry = entry.strip("\n")
@@ -174,10 +204,52 @@ def attested(head: str) -> set[str]:
         if commit_tree != tree:
             break
         for line in body.splitlines():
-            hooks = trailer_hooks(line, tree)
-            if hooks is not None:
-                covered |= hooks
-    return covered
+            parsed = parse_trailer(line, tree)
+            if parsed is not None:
+                found.append(parsed)
+    return found
+
+
+def attested(head: str) -> set[str]:
+    """The hooks attested for head's tree, together. Empty when none is."""
+    return set().union(*(hooks for hooks, _ in _attestations(head)))
+
+
+def q_tests_runs(head: str) -> set[str]:
+    """What the q-tests attestations of head's tree ran: `all` and digests."""
+    return {q for hooks, q in _attestations(head) if "q-tests" in hooks}
+
+
+def q_tests_plan(base: str, head: str):
+    """The q suites test_impact.py selects for `base...head` in this checkout
+    (CI checks the head out): a test_impact.Plan, its files None for all."""
+    impact = _load("scripts/dev/test_impact.py")
+    return impact.plan_for(impact.changed_paths(base, REPO, head), REPO)
+
+
+def q_tests_refusal(base: str, head: str) -> str | None:
+    """Why head's q-tests attestation does not cover the PR, or None.
+
+    The whole suite covers any change. A subset covers it only when the
+    selection made here, from the diff and the tree, has the same digest."""
+    runs = q_tests_runs(head)
+    if "all" in runs:
+        return None
+    plan = q_tests_plan(base, head)
+    full = f"`UQF_Q_TESTS_FULL=1 {ATTEST}`"
+    if plan.files is None:
+        return (
+            f"q-tests ran a subset of the q suites, but here the selection is the whole "
+            f"suite ({plan.why}). Run {full} on this tree, then push."
+        )
+    if plan.record not in runs:
+        return (
+            f"q-tests ran a subset of the q suites ({', '.join(sorted(runs))}) that is not "
+            f"the one selected here ({len(plan.files)} files, {plan.record}). Was the "
+            "attestation's graph qlinter the commit .qlinter-graph-rev pins? Install that, "
+            f"or run {full}, on this tree, then push."
+        )
+    return None
 
 
 def contains(head: str, base: str) -> bool:
@@ -213,6 +285,10 @@ def report(base: str, head: str) -> tuple[bool, str]:
             f"this tree's KDB-X attestation does not cover {_names(missing)}, which "
             f"{shown} needs ({scope}). Run `{ATTEST}` again on this tree, then push."
         )
+    if "q-tests" in needed:
+        why = q_tests_refusal(base, head)
+        if why:
+            return False, why
     if not contains(head, base):
         return False, (
             "this tree is attested, but it does not contain the base's tip, so the "

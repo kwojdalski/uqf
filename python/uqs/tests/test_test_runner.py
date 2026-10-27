@@ -90,3 +90,21 @@ def test_q_docs_peachq_reruns_q_docs_declared_as_peachq(monkeypatch):
     assert argv[1:] == [str(SCRIPT), "q-docs"]
     assert env == {runner.Q_IMPL_ENV: "peachq", "QCMD": "/cache/peachq/q"}
     assert runner.Q_CMD != "/cache/peachq/q", "the global QCMD is left alone"
+
+
+def test_q_unit_passes_its_own_arguments_to_the_runner(ran):
+    """How the q-tests hook runs the suites test_impact.py selects (#1690)."""
+    assert runner.main(["q-unit", "-files", "test_a.q,test_b.q"]) == 0
+    assert ran == [("q-unit", "tests/run_tests.q", ("-files", "test_a.q,test_b.q"))]
+
+
+def test_q_unit_without_arguments_runs_the_whole_suite(ran):
+    assert runner.main(["q-unit"]) == 0
+    assert ran == [("q-unit", "tests/run_tests.q", ())]
+
+
+def test_another_lane_refuses_arguments_it_would_drop(ran):
+    with pytest.raises(SystemExit) as exc:
+        runner.main(["q-examples", "-files", "test_a.q"])
+    assert exc.value.code == 2
+    assert ran == []

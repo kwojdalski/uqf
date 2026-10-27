@@ -8,6 +8,14 @@
 
 
 / The jobs this suite defines are process-global; leave the registry as found (#1375).
+/ Its own status directory: the runs here write status and outcome files, and
+/ without this the suite borrowed the one an earlier suite had set - so run
+/ alone (a selected subset, #1690) it wrote to "/status" and failed.
+.qt.qetl.job.stream.endofday.beforeNamespace_status_dir:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"mkdir -p build/test-status";
+    }
+
 .qt.qetl.job.stream.endofday.beforeNamespace_save_jobs:{[] .qt.support.save_stream_jobs[`.qt.qetl.job.stream.endofday]}
 .qt.qetl.job.stream.endofday.afterNamespace_restore_jobs:{[] .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.endofday]}
 

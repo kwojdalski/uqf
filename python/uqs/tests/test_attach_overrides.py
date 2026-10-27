@@ -649,6 +649,15 @@ def test_a_host_given_as_an_address_this_machine_owns_is_local():
     assert h.is_local(own), "the machine's own LAN address is local, not 'another machine'"
 
 
+def test_only_a_host_that_resolves_to_another_machine_is_elsewhere():
+    """An unknown name is neither local nor known to be elsewhere (#1686)."""
+    h = facts.Host()
+    assert h.is_elsewhere("192.0.2.77")
+    assert not h.is_elsewhere("no-such-host.invalid")
+    assert not h.is_elsewhere("localhost") and not h.is_elsewhere("127.0.0.1")
+    assert not h.is_elsewhere(socket.gethostname().upper())
+
+
 def test_a_schema_file_on_this_disk_is_persistable_with_the_stack_host_given_as_an_ip(
     bundle, tmp_path
 ):
