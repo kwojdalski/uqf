@@ -118,7 +118,7 @@ def state_dir_of(paths: UqsPaths, attachment: str, attach_root: Path | None = No
     return state_dir_for(paths, att.name, ident)
 
 
-def _declaration(paths: UqsPaths, worker: str) -> Declaration:
+def declaration(paths: UqsPaths, worker: str) -> Declaration:
     stack_backfill.procname_for(worker)  # the refusal that names the known workers
     found = [d for d in read_declarations(paths.repo_root) if d.worker == worker]
     if not found or not found[0].dataset:
@@ -215,7 +215,7 @@ def resolve(
             f"or pass --port {att.stack.id}"
         )
     require_verified(att.name, attach_root)
-    decl = _declaration(paths, worker)
+    decl = declaration(paths, worker)
     published(att, decl.dataset, worker)
     wanted = worker_table(paths, att, decl.dataset)
     if wanted is None:

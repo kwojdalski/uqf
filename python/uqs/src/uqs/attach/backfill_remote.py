@@ -39,7 +39,14 @@ from pathlib import Path
 from typing import Any
 
 from uqs.attach import backfill_owner, config, receiver_contract
-from uqs.attach.backfill import Destination, require_verified, resolve
+from uqs.attach.backfill import (
+    Destination,
+    declaration,
+    identity_of,
+    require_verified,
+    resolve,
+    state_dir_for,
+)
 from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_plan import admit, evaluate
 from uqs.attach.backfill_run import LOGS, REACH_PASSWORD_ENV, RUNNER, Launched, q_date
@@ -56,6 +63,11 @@ WRITER_PASSWORD_ENV = "UQF_ATTACH_WRITER_PASSWORD"
 #: The receiver's batch journal and access file, in the destination's state directory.
 JOURNAL = "remote_journal"
 ACCESS = "receiver.access"
+#: --force: the HDB a destination names when the attachment pins none - the
+#: writer's own `.wdb.hdbdir`, resolved by that process - and the prefix that keeps a
+#: forced destination's identity, and so its coverage, apart from a checked one.
+FORCED_HDB = ".wdb.hdbdir"
+FORCED_PREFIX = "forced:"
 _WRITER = re.compile(r"(?P<host>[A-Za-z0-9_][A-Za-z0-9._-]*):(?P<port>\d{1,5})")
 
 
@@ -77,13 +89,18 @@ def remote_plan(
     *,
     writer: str,
     on_conflict: str | None = None,
+    force: bool = False,
     attach_root: Path | None = None,
 ) -> tuple[Destination, dict[str, Any]]:
     """The extractor's plan: the destination named, the windows against this
     machine's coverage, and the refusals that need no stack. The stack-side
     admission - writers, readers, the fence - is the receiver's."""
     parse_writer(writer)
-    dest = resolve(paths, attachment, worker, attach_root=attach_root, on_this_machine=False)
+    dest = (
+        forced_destination(paths, attachment, worker, writer, attach_root)
+        if force
+        else resolve(paths, attachment, worker, attach_root=attach_root, on_this_machine=False)
+    )
     facts = evaluate(paths, dest, worker, version, range_from, range_to, on_conflict)
     if facts["custom_io"]:
         raise UqsError(f"{worker} declares its own IO manager, which would write where it likes")
@@ -102,8 +119,33 @@ def remote_plan(
         "source_version": version,
         "windows": facts["windows"],
         "mutates": False,
+        "forced": force,
     }
     return dest, plan
+
+
+def forced_destination(
+    paths: UqsPaths,
+    attachment: str,
+    worker: str,
+    writer: str,
+    attach_root: Path | None = None,
+) -> Destination:
+    """`--force`: the process at `writer` itself, with nothing about it checked.
+
+    The attachment is read for its stack's credential and nothing else: it need not
+    be verified, pin an HDB or publish the dataset. The rows go wherever that process
+    keeps its HDB (`.wdb.hdbdir`, or the attachment's pinned HDB when it has one).
+    Coverage is filed under the writer's address, apart from any checked destination.
+    """
+    host, port = parse_writer(writer)
+    att = config.load(attachment, attach_root)
+    dataset = declaration(paths, worker).dataset
+    where = Path(att.storage.hdb_dir or FORCED_HDB)
+    ident = identity_of(f"{FORCED_PREFIX}{host}", port, where)
+    return Destination(
+        att.name, att.stack.id, host, where, dataset, ident, state_dir_for(paths, att.name, ident)
+    )
 
 
 def launch_remote(
@@ -119,18 +161,22 @@ def launch_remote(
     on_conflict: str | None = None,
     verbose: bool = False,
     trace: bool = False,
+    force: bool = False,
     attach_root: Path | None = None,
 ) -> tuple[Launched, dict[str, Any]]:
-    """Start the extractor: the runner with -writer, after the remote plan."""
+    """Start the extractor: the runner with -writer, after the remote plan. With
+    `force` the runner gets -force and writes through the process at `writer`
+    directly (forced_destination): no receiver, contract or verification."""
     q = q_interpreter(os.environ)
     if q is None:
         raise UqsError("no q interpreter - set $QCMD, or put q on PATH; the run is a q process")
     dest, plan = remote_plan(
         paths, attachment, worker, version, range_from, range_to,
-        writer=writer, on_conflict=on_conflict, attach_root=attach_root,
+        writer=writer, on_conflict=on_conflict, force=force, attach_root=attach_root,
     )  # fmt: skip
     with config.locked(attachment, attach_root):
-        require_verified(attachment, attach_root)
+        if not force:
+            require_verified(attachment, attach_root)
         backfill_owner.refuse_while_active(attachment, attach_root)
         att = config.load(attachment, attach_root)
         owner = backfill_owner.owner_file(attachment, worker, attach_root)
@@ -141,6 +187,7 @@ def launch_remote(
             ),
             "-destid", dest.identity, "-attachment", dest.attachment, "-owner", str(owner),
             "-writer", writer, "-writer_user", att.stack.user,
+            *(["-force", "-force_hdb", att.storage.hdb_dir or "_own_"] if force else []),
         ]  # fmt: skip
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
