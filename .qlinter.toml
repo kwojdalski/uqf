@@ -3,7 +3,9 @@
 # linter is installed separately and is not a dependency of this project.
 # lib/ is vendored code (TorQ, its starter pack, kdb-parquet, qAutomatedTrading, KX ml, KX dbmaint):
 # never edited here, so its findings are not this tree's to act on.
-exclude = ["lib/", ".claude/worktrees/"]
+# `lib/**`, not `lib/`: qlinter 0.14.14 matched `lib/` against tests/lib/ as
+# well, so `qlinter tests/` silently skipped the test harness (#1690's report).
+exclude = ["lib/**", ".claude/worktrees/"]
 
 # Named, not left to the default: the command line defaults to `uqf` but the
 # language server (the VS Code extension) to `style`, so without this the
