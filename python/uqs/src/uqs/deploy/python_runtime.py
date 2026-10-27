@@ -307,4 +307,5 @@ def venv_lines(interpreter: str, py: dict) -> list[str]:
         f"{q(interpreter)} -m venv .venv",
         f"{pip} --find-links {q(py['wheel_dir'])} --require-hashes -r {q(py['requirements'])}",
         f"{pip} --no-deps {q(py['app_wheel'])}",
+        *(f"{pip} --no-deps {q(w)}" for w in py.get("extra_wheels", [])),
     ]

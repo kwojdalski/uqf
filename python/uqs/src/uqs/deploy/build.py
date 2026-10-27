@@ -1,12 +1,7 @@
 """`uqs deploy build`: a versioned uqf release artifact, built once, for
-`uqs deploy push` to put on any number of servers (#778, #835).
-
-    uqs deploy build
-
-writes into dist/ at the repository root (or --output), for the committed
-revision, the archive, its .sha256 and its manifest
-(uqs.deploy.artifact). <release> is the UTC build time and the first 12
-characters of the revision.
+`uqs deploy push` to put on any number of servers (#778, #835). It writes the
+archive, its .sha256 and its manifest (uqs.deploy.artifact) into dist/ (or
+--output); <release> is the UTC build time and the revision's first 12 characters.
 
 WHAT IS IN IT:
 
@@ -25,24 +20,23 @@ WHAT IS IN IT:
   .release/python-runtime.tar.gz
                 only with --python-runtime (#1557): a CPython for the target,
                 which scripts/install_release.py makes .venv from.
+  web/dist/     only with --frontend (#1646): the built browser app, and
+                uqf-frontend's wheels beside uqs's (uqs.deploy.frontend).
   RELEASE_MANIFEST.json
                 the revision, whether the tree was dirty, the target OS,
                 architecture, Python and the glibc its wheels need, and every
                 member's sha256.
 
-SIDECAR BUNDLES (#800), only when --bundle is given. The tracked files are
-copied into a staging directory, each bundle is installed THERE by the uqs
-bundle installer (`uqs job install`'s, in uqs.stack.bundle_build), the derived
-files are regenerated there, and the release is packaged from that staged
-tree - so the checkout is never touched, and every hash in the manifest is of
-a file as installed. The manifest then gains `bundles`: each bundle's version,
-revision, installed files with their hashes, and its jobs' identities - with
-every streaming job's dependency closure, which `uqs deploy push --jobs`
-starts.
+SIDECAR BUNDLES (#800), only with --bundle: each is installed by `uqs job
+install`'s installer (uqs.stack.bundle_build) into a staged copy of the tracked
+files, the derived files are regenerated there, and the release is packaged
+from that copy - the checkout is never touched, and every hash is of a file as
+installed. The manifest gains `bundles`: each one's version, revision, files
+and hashes, and its jobs - with each streaming job's dependency closure, which
+`uqs deploy push --jobs` starts.
 
-The builder needs uv (to export the lock and build the uqs wheel) and the
-network (to fetch dependency wheels); it needs no SSH access and no
-deployment credentials, so CI can run it. It never runs on the server.
+The builder needs uv and the network (to export the lock, build the uqs wheel
+and fetch dependency wheels), and no SSH or credentials: CI can run it.
 """
 
 from __future__ import annotations
@@ -60,7 +54,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from uqs.deploy import foreign_blocks, kafka, portable, python_runtime
+from uqs.deploy import foreign_blocks, frontend, kafka, portable, python_runtime
 from uqs.deploy.artifact import (
     FORMAT,
     INSTALLER,
@@ -94,8 +88,7 @@ log = get_logger()
 #: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
 BUNDLE_LEDGER = "src/etl/installed_bundles.json"
 GENERATOR = "scripts/generate/generate_operational_docs.py"
-#: Tracked beyond the allowlist, copied into a staged tree for the generator
-#: to read and rewrite, and never packaged.
+#: Tracked beyond the allowlist, staged for the generator, never packaged.
 STAGED_EXTRA = ("docs",)
 
 _PYTHON = re.compile(r"3\.\d{1,2}")
@@ -208,6 +201,7 @@ def build_artifact(
     hdb_shape: dict[str, list[str]] | None = None,
     kafka_sel: kafka.Selected | None = None,
     carried: python_runtime.PythonRuntime | None = None,
+    frontend_sel: frontend.Selected | None = None,
 ) -> Artifact:
     """The archive, its .sha256 and its manifest, written into `out_dir`.
 
@@ -223,6 +217,8 @@ def build_artifact(
     kafka_sel = kafka_sel or kafka.Selected()
     members.update(kafka_sel.members())
     members.update({python_runtime.CARRIED: carried.path} if carried else {})
+    frontend_sel = frontend_sel or frontend.Selected()
+    members.update(frontend_sel.members())
     manifest = {
         "format": FORMAT,
         "release": rid,
@@ -252,6 +248,7 @@ def build_artifact(
         # what was converted for the server's kdb+ (#861); target["q"] says which
         manifest["portable"] = portable
     kafka_sel.annotate(manifest)
+    frontend_sel.annotate(manifest, wheels)
     if hdb_shape:
         # the tables and columns this release declares, for a dry run to judge
         # the server's HDB by before any of the release is there (#870)
@@ -293,6 +290,7 @@ def build(
     kafka_home: Path | str | None = None,
     kafka_connector: bool = False,
     python_runtime_file: Path | str | None = None,
+    frontend_dist: Path | str | None = None,
 ) -> Artifact:
     """Build the artifact for the checkout at `root` into `output`, by
     default `root`/dist. Kafka is opt-in (uqs.deploy.kafka.select), and so is
@@ -319,6 +317,7 @@ def build(
         )
     target = Target(os="linux", arch=arch, python=python or default_python(root), q=q_target)
     carried = python_runtime.for_release(python_runtime_file, target.as_dict())
+    front = frontend.select(frontend_dist)
     rid = release_id(rev)
     files = tracked_files(root, runner)
     foreign_blocks.refuse(root, files, runtime, {m.bundle.name for m in members})
@@ -347,7 +346,7 @@ def build(
                 len(converted["excluded"]),
             )
         log.info("Python {} wheels for linux/{}", target.python, target.arch)
-        python_payload(root, Path(tmp) / "python", target, runner, kafka_sel.extras)
+        python_payload(root, Path(tmp) / "python", target, runner, kafka_sel.extras, front.packages)
         log.info("packaging {} files", len(files))
         return build_artifact(
             tree,
@@ -365,6 +364,7 @@ def build(
             hdb_shape=declared_shape(tree, runtime, root, runner),
             kafka_sel=kafka_sel,
             carried=carried,
+            frontend_sel=front,
         )
 
 
