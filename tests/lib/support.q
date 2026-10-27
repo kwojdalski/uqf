@@ -83,6 +83,65 @@
     if[0=count f; '"support.suite_files: no tests/q/test_*.q found - wrong directory?"];
     f}
 
+// --- running a subset: -files (#1690, #1694) ------------------------------
+// `q tests/run_tests.q -files a.q,b.q` RUNS only the suites those files
+// define - comma-separated names, bare or as tests/q/ paths. Every file is
+// still LOADED: a suite may lean on what another file defines (the contract
+// drivers test_job_output_contracts runs, the builders the documentation
+// examples reuse, the scripts a TorQ suite \l's), and loading is cheap
+// next to running. What scripts/dev/test_impact.py selects for a change, and
+// what a shard of the suite runs.
+//
+// An empty list and a name that is no suite file are refused, not skipped:
+// a subset that silently lost a file would pass without running it. A
+// command-line option rather than an environment variable, so the child
+// processes a suite starts - which load the suites themselves - do not
+// inherit it.
+
+// The `-files` option among command-line arguments.
+// @param args strings, as .z.x
+// @return the option's value as one string, or :: when it was not given
+.qt.support.files_option:{[args]
+    o:.Q.opt args;
+    if[not `files in key o; :(::)];
+    v:o`files;
+    $[10h=type v; v; "," sv v]}
+
+// The suite files a selection names, in suite order.
+// @param files symbols, every suite file (`test_a.q`test_b.q...)
+// @param sel :: for no selection, else a string of comma-separated file names
+// @return symbols, the selected files - every one when sel is ::
+// @throws error when sel names no file, or names one that is not a suite file
+.qt.support.select_files:{[files;sel]
+    if[sel~(::); :files];
+    names:{x where 0<count each x} trim each "," vs sel;
+    if[0=count names; '"support.select_files: -files names no file - give tests/q/test_*.q names, comma-separated"];
+    want:`${$["tests/q/"~8#x; 8_x; x]} each names;
+    if[count bad:want except files;
+        '"support.select_files: -files names no suite file: ",", " sv string bad];
+    files where files in want}
+
+// The suites among `suites` that the files at `paths` declare a test in -
+// read from the files, by the rule the layout check holds every file to
+// (.qt.support.declared_tests), so it is the same answer the load gave.
+// @param suites namespace symbols, as .qt.support.suites returns them
+// @param paths file paths, as strings
+// @return the suites those files define, in the order given
+.qt.support.suites_of:{[suites;paths]
+    tests:raze {.qt.support.declared_tests read0 hsym `$x} each paths;
+    suites where suites in distinct {` sv -1_` vs x} each tests}
+
+// The suites this run runs: those of the files -files names, or all of them.
+// @param suites namespace symbols, every suite discovered
+// @param args strings, as .z.x
+// @return symbols
+// @throws as select_files does
+.qt.support.selected_suites:{[suites;args]
+    sel:.qt.support.files_option args;
+    if[sel~(::); :suites];
+    files:.qt.support.select_files[.qt.support.suite_files[];sel];
+    .qt.support.suites_of[suites;"tests/q/",/:string files]}
+
 // Load every suite file. Globbed, so a new suite runs the day it is written.
 .qt.support.load_suites:{[] {system "l tests/q/",string x} each .qt.support.suite_files[];}
 

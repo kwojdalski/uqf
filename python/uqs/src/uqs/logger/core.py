@@ -194,6 +194,21 @@ def _colorize() -> bool | None:
     return None
 
 
+def json_requested(argv: list[str] | None = None) -> bool:
+    """Whether this command line asks for `--json` (#1685).
+
+    A command run with --json promises exactly one JSON document on stdout, so
+    a log line there - a refusal's `ERROR | ...` first of all - is what makes
+    the refusal unparseable. Read from the command line rather than from the
+    command's own option because logging is configured before Typer parses
+    anything (cli/entry.py), and a refusal can be logged before the option is
+    reached. Words after `--` are arguments, not options."""
+    words = sys.argv[1:] if argv is None else argv
+    if "--" in words:
+        words = words[: words.index("--")]
+    return "--json" in words
+
+
 def setup_logging(
     level: str = "INFO",
     log_file: str | None = None,
@@ -208,8 +223,10 @@ def setup_logging(
 ) -> Any:
     """Configure loguru sinks and return the logger.
 
-    The console sink writes to `stream`, stdout when it is None - read at call
-    time, so a test that swaps sys.stdout is honoured."""
+    The console sink writes to `stream`. When it is None: stdout, or stderr
+    when the command line asks for --json, whose stdout is one JSON document
+    and nothing else (#1685). Either is read at call time, so a test that
+    swaps sys.stdout is honoured."""
     logger.remove()
 
     if log_regex is None:
@@ -240,7 +257,7 @@ def setup_logging(
         # what turns a per-record template choice into one.
         console_fmt = _make_kv_format(fmt) if use_color or callable(fmt) else fmt
         logger.add(
-            stream or sys.stdout,
+            stream or (sys.stderr if json_requested() else sys.stdout),
             level=level.upper(),
             format=console_fmt,
             colorize=_colorize() if use_color else False,

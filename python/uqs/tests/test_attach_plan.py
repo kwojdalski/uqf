@@ -7,6 +7,7 @@ The same questions are put to a real TorQ 5.2.12 stack in test_attach_stack.py.
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 
 import pytest
@@ -380,6 +381,42 @@ def test_a_port_another_process_holds_in_the_stack_is_a_conflict(bundle):
     fake.named("discovery1")["services"].append(squatter)
     p = run(att, fake)
     assert any(f.code == "PORT_CONFLICT" and "squatter1" in f.message for f in p.findings)
+
+
+def _squat(bundle, hpup_host: str, facts_host: preflight.Host | None = None) -> set[str]:
+    """Blocker codes when `squatter1` holds the publisher's port at `hpup_host`."""
+    att = attachment(bundle)
+    port = plan.publisher_port(att, ROOT).port
+    assert port is not None
+    fake = FakeStack(6000)
+    fake.named("discovery1")["services"].append(
+        {"procname": "squatter1", "proctype": "feed", "hpup": f":{hpup_host}:{port}"}
+    )
+    p = plan.build(att, fake, ROOT, preflight.Facts(host=facts_host or host()))
+    return codes(p.findings, "blocker")
+
+
+def test_the_publishers_port_held_on_another_host_is_no_conflict(bundle):
+    """The same port on another machine never collides (#1686). 192.0.2.0/24 is
+    TEST-NET-1: an address, so it resolves, that no machine here owns."""
+    assert "PORT_CONFLICT" not in _squat(bundle, "192.0.2.77")
+
+
+@pytest.mark.parametrize("name", ["TESTHOST", "TestHost.example.com", "localhost", "127.0.0.1", ""])
+def test_the_publishers_port_held_on_its_own_host_is_a_conflict_however_named(bundle, name):
+    """By name in any case (q's .z.h is lower-case, gethostname() on macOS is not,
+    #726), by loopback, or with no host at all - all this machine (#1686)."""
+    assert "PORT_CONFLICT" in _squat(bundle, name)
+
+
+def test_the_machines_real_hostname_in_upper_case_is_a_conflict(bundle):
+    real = preflight.Host(lambda h, port: False)
+    assert "PORT_CONFLICT" in _squat(bundle, socket.gethostname().upper(), real)
+
+
+def test_a_host_that_does_not_resolve_errs_to_a_conflict(bundle):
+    """An unknown host might be this machine, so the port check refuses (#1686)."""
+    assert "PORT_CONFLICT" in _squat(bundle, "no-such-host.invalid")
 
 
 def test_a_port_in_use_by_something_unknown_is_a_conflict_and_the_publisher_itself_is_running(

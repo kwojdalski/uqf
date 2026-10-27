@@ -54,6 +54,11 @@
 nsList:.qt.support.suites[];
 if[0=count nsList; '"run_tests: no test suites found"];
 
+/ `q tests/run_tests.q -files a.q,b.q` runs only the suites those files
+/ define (#1690, #1694); every file was loaded above all the same. An unknown
+/ or empty list is refused. tests/lib/support.q has the rule.
+nsList:.qt.support.selected_suites[nsList;.z.x];
+
 / ORDER. Default is depth first by name: a parent before its children,
 / siblings alphabetical.
 / UQF_TEST_ORDER=reverse or =shuffle runs the same suites in another one.
