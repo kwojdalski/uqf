@@ -102,6 +102,7 @@ def test_job_help_keeps_authoring_apart_from_operations():
         "attach",
         "detach",
         "receive",
+        "contract",
     }
 
 

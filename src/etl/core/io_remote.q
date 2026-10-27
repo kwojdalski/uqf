@@ -142,9 +142,11 @@
 / @param g dict: mgr (an io manager with write_keyed), target (the table),
 /   schema (an empty table: the columns and types a batch must have),
 /   max_rows (the most rows one batch may carry) and users (who may write;
-/   empty admits only calls from inside this process)
+/   empty admits only calls from inside this process); optionally contract,
+/   a receiver contract (io_remote_contract.q) every batch's options must
+/   keep to
 / @return the grant's key
-/ @throws error when a key is missing or the manager cannot take keyed writes
+/ @throws error when a key is missing, the manager cannot take keyed writes, or the contract is for another dataset
 / @eg .qetl.io.remote.serve[`uat;`deals;`mgr`target`schema`max_rows`users!(.qetl.io.memory;`deals;([] id:`long$());1000;`symbol$())]
 .qetl.io.remote.serve:{[attachment;dataset;g]
     need:`mgr`target`schema`max_rows`users;
@@ -153,8 +155,11 @@
     .qetl.io.require_manager g`mgr;
     if[not `write_keyed in key g`mgr; '"remote serve: the manager must take keyed writes"];
     if[not 98h=type g`schema; '"remote serve: schema must be an empty table"];
+    if[`contract in key g;
+        if[not dataset=g[`contract]`dataset;
+            '"remote serve: the contract is for ",string[g[`contract]`dataset],", not ",string dataset]];
     k:.qetl.io.remote.grant_key[attachment;dataset];
-    .qetl.io.remote.grants[k]:need#g;
+    .qetl.io.remote.grants[k]:(need,(enlist `contract) inter key g)#g;
     k}
 
 / Withdraw a grant: later requests for it are refused.
@@ -210,8 +215,10 @@
     b:req`batch; s:g`schema;
     if[not (cols b)~cols s;
         '"remote: ",string[g`target]," takes columns ",(" " sv string cols s),", not ",(" " sv string cols b)];
-    if[(count b) and not (exec t from meta b)~exec t from meta s;
+    want:$[`contract in key g; g[`contract]`types; exec t from meta s];
+    if[(count b) and not (exec t from meta b)~want;
         '"remote: ",string[g`target],"'s batch types differ from its schema"];
+    if[`contract in key g; .qetl.io.remote.contract.require_opts[g`contract;req`opts]];
     if[count[b]>g`max_rows;
         '"remote: a batch of ",string[count b]," rows is over ",string[g`target],"'s limit of ",string g`max_rows];
     o:req`opts;

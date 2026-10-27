@@ -216,25 +216,53 @@ def resolve(
         )
     require_verified(att.name, attach_root)
     decl = _declaration(paths, worker)
-    try:
-        table = att.table(decl.dataset)
-    except AttachmentError:
-        raise UqsError(
-            f"{worker} writes {decl.dataset}, which attachment {att.name} does not publish "
-            f"(it has {', '.join(t.name for t in att.tables) or 'no tables'}): "
-            "a backfill only fills a dataset the attachment owns"
-        ) from None
+    published(att, decl.dataset, worker)
     wanted = worker_table(paths, att, decl.dataset)
     if wanted is None:
         raise UqsError(
             f"no table definition for {decl.dataset} in the attachment's bundle or this tree: "
             "its shape cannot be compared with the attachment's"
         )
-    drift = differences(table, [[n, c] for n, c in wanted.columns])
+    return destination(
+        paths, att, decl.dataset, wanted.as_pairs(),
+        writer=worker, shape_of="the worker's definition", on_this_machine=on_this_machine,
+    )  # fmt: skip
+
+
+def published(att: Attachment, dataset: str, writer: str) -> TableSpec:
+    """The attachment's table `dataset`, or a refusal naming `writer`, which would write it."""
+    try:
+        return att.table(dataset)
+    except AttachmentError:
+        raise UqsError(
+            f"{writer} writes {dataset}, which attachment {att.name} does not publish "
+            f"(it has {', '.join(t.name for t in att.tables) or 'no tables'}): "
+            "a backfill only fills a dataset the attachment owns"
+        ) from None
+
+
+def destination(
+    paths: UqsPaths,
+    att: Attachment,
+    dataset: str,
+    columns: list[list[str]],
+    *,
+    writer: str,
+    shape_of: str,
+    on_this_machine: bool = True,
+) -> Destination:
+    """Where `dataset`, in the shape `columns` ([name, char] pairs), would be written
+    for the verified attachment `att`, or a refusal: the attachment must publish the
+    dataset in that shape and pin an HDB (present here when `on_this_machine`).
+
+    Shared by a worker's resolution (`resolve`) and a receiver contract's
+    (uqs.attach.receiver_contract), which has no worker to read the shape from:
+    `writer` and `shape_of` name, in a refusal, what asked and where its shape came from.
+    """
+    drift = differences(published(att, dataset, writer), columns)
     if drift:
         raise UqsError(
-            f"{decl.dataset} differs between attachment {att.name} and the worker's "
-            f"definition: {'; '.join(drift)}"
+            f"{dataset} differs between attachment {att.name} and {shape_of}: {'; '.join(drift)}"
         )
     hdb = att.storage.hdb_dir
     if not hdb:
@@ -255,7 +283,7 @@ def resolve(
         att.stack.id,
         att.stack.host,
         real,
-        decl.dataset,
+        dataset,
         ident,
         state_dir_for(paths, att.name, ident),
     )

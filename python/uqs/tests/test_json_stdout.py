@@ -83,6 +83,11 @@ CASES: dict[str, tuple[list[str], str]] = {
         "--json is for --attach",
     ),
     "job attach": (["job", "attach", "nosuch"], "needs --job"),
+    "job contract approve": (
+        ["job", "contract", "approve", "nosuch.json", "--attach", "nosuch"],
+        "cannot read nosuch.json",
+    ),
+    "job contract list": (["job", "contract", "list", "--attach", "nosuch"], "[]"),
     "job detach": (["job", "detach", "nosuch"], "no attachment 'nosuch'"),
     "deploy status": (
         ["deploy", "status", "--host", "nosuch.invalid", "--dest", "relative/dest"],
