@@ -297,6 +297,9 @@ in a target, and needs a reason:
   `exceptions` and in the deploy history, with its reason, what was required,
   what was found and whether it was needed. The report records the server's q as
   `qversion`, override or not.
+- The report and the deploy history also record the release artifact itself as
+  `artifact`: its file name and the sha256 the server checked its bytes against,
+  whether a pin, an override or only its `.sha256` named it.
 
 ## Components
 

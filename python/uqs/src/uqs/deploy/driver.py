@@ -53,6 +53,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
     report = Report(
         release=rid,
         revision=pkg.manifest["revision"],
+        artifact={"name": pkg.path.name, "sha256": pkg.sha256},
         dirty=pkg.manifest["dirty"],
         host=cfg.host,
         dest=cfg.dest,
