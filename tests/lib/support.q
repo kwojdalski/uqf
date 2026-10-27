@@ -145,6 +145,28 @@
 // Load every suite file. Globbed, so a new suite runs the day it is written.
 .qt.support.load_suites:{[] {system "l tests/q/",string x} each .qt.support.suite_files[];}
 
+// A run's outcomes as data, for whoever holds the run to something - one
+// writer, so tests/run_tests.q and tests/q/run_coverage.q cannot drift into
+// two formats. `res` is what .qunit.runTests returns.
+//   UQF_TEST_RESULTS   every test that ran: suite and name, tab-separated,
+//                      in run order. What a rename or a move must not change
+//                      is the SET of these, comparable by diff, not by total.
+//   UQF_TEST_FAILURES  every test that did not pass: name, status and why,
+//                      tab-separated; one empty line when all passed. Read by
+//                      scripts/portable/full_suite.py (PeachQ) and by
+//                      scripts/dev/attest_kdbx.py, which takes q-tests'
+//                      verdict from the coverage run (#1704).
+// Each is written only when its variable names a file.
+.qt.support.write_outcomes:{[res]
+    if[count getenv `UQF_TEST_RESULTS;
+        (hsym `$getenv `UQF_TEST_RESULTS) 0: {(string x`namespace),"\t",string x`name} each 0!select namespace,name from res];
+    if[count getenv `UQF_TEST_FAILURES;
+        bad:select name,status,detail:{$[x=`error; y; z]}'[status;result;msg] from res where status<>`pass;
+        flat:{ssr[ssr[x;"\n";" "];"\t";" "]};
+        lines:{[flat;r] "\t" sv (string r`name;string r`status;flat $[10h=type d:r`detail; d; -3!d])}[flat] each bad;
+        (hsym `$getenv `UQF_TEST_FAILURES) 0: $[count lines; lines; enlist ""]];
+    }
+
 // ---------------------------------------------------------------------------
 // What the TREE declares, as opposed to what a test registered
 // ---------------------------------------------------------------------------
