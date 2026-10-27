@@ -59,6 +59,11 @@ EXECUTION_MODES = ("dry-run", "run")
 #: directory) attached runs keep their state in.
 PLAN_SCRIPT = Path("scripts") / "dev" / "attached_plan.q"
 STATE_SUBDIR = backfill_status.STATE_SUBDIR
+#: How an unpinned HDB gets pinned, said wherever its absence refuses a run.
+_PIN = (
+    " - re-run `uqs job attach {name}` while a wdb of the stack is up: it pins the HDB "
+    "directory that wdb reports"
+)
 _TABLE_LINE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
 
 
@@ -113,7 +118,10 @@ def state_dir_of(paths: UqsPaths, attachment: str, attach_root: Path | None = No
     attachment's host, stack and pinned HDB alone."""
     att = config.load(attachment, attach_root)
     if not att.storage.hdb_dir:
-        raise UqsError(f"attachment {att.name} pins no HDB directory: it has no destination")
+        raise UqsError(
+            f"attachment {att.name} pins no HDB directory: it has no destination"
+            + _PIN.format(name=att.name)
+        )
     ident = identity_of(att.stack.host, att.stack.id, canonical(att.storage.hdb_dir))
     return state_dir_for(paths, att.name, ident)
 
@@ -268,8 +276,7 @@ def destination(
     if not hdb:
         raise UqsError(
             f"attachment {att.name} pins no HDB directory (storage.hdb_dir is empty): an attached "
-            "backfill never falls back to uqf's own HDB - `uqs job attach plan --replace` "
-            "against the running stack records it"
+            f"backfill never falls back to uqf's own HDB{_PIN.format(name=att.name)}"
         )
     if on_this_machine and not Path(hdb).is_dir():
         raise UqsError(

@@ -107,9 +107,19 @@ def persist_mode(runtime_only: bool, remote_schema_file: bool) -> str:
 
 def observed_storage(att: Attachment, obs: Observation) -> Storage:
     """`att.storage` with every location it left unpinned filled from the
-    stack as it is now."""
+    stack as it is now.
+
+    The wdb is the attachment's own when it names one; otherwise an up wdb it
+    does not manage, as long as every such wdb reports the same directories - the
+    backfill admission counts those as the destination's writers too, so an
+    attachment made with `--consumer rdb1` still learns where its HDB is.
+    """
     tp = (obs.tickerplant.probe or {}) if obs.tickerplant else {}
-    wdb = next((c.probe or {} for c in obs.consumers if c.proctype == "wdb" and c.up), {})
+    wdb = next((c.probe or {} for c in obs.consumers if c.proctype == "wdb" and c.up), None)
+    if wdb is None:
+        others = [c.probe or {} for c in obs.unmanaged if c.proctype == "wdb" and c.up]
+        dirs = {(o.get("savedir", ""), o.get("hdbdir", "")) for o in others}
+        wdb = others[0] if len(dirs) == 1 else {}
     seen = {
         "tplogdir": tp.get("tplogdir", ""),
         "schema_file": tp.get("schemafile", ""),
@@ -157,3 +167,10 @@ def save_planned(att: Attachment, p: plan.Plan, state_dir: Path | None = None) -
     """Write the config, with the storage the plan saw pinned into it."""
     pinned = replace(att, storage=observed_storage(att, p.observation))
     return config.save(pinned, state_dir)
+
+
+def newly_pinned(att: Attachment, p: plan.Plan) -> list[str]:
+    """The storage locations `att` left empty that the plan's stack now reports:
+    what saving would pin. Never one that is already pinned."""
+    seen = observed_storage(att, p.observation)
+    return [k for k, v in att.storage.__dict__.items() if not v and getattr(seen, k)]
