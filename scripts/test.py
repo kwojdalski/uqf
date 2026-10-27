@@ -258,10 +258,14 @@ def lane_q_unit_peachq() -> None:
         binary = peachq.resolve()
     except peachq.PeachQError as exc:
         raise SystemExit(f"q-unit-peachq: {exc}") from None
+    # As several PeachQ processes at once (#1694): the suite alone was CI's
+    # slowest step. Four is the hosted runner's vCPU count.
+    shards = str(min(4, os.cpu_count() or 1))
     _run(
         "q-unit-peachq",
-        [sys.executable, "scripts/portable/full_suite.py", "--q", str(binary), "--bundles"],
-    )
+        [sys.executable, "scripts/portable/full_suite.py", "--q", str(binary), "--bundles",
+         "--shards", shards],
+    )  # fmt: skip
 
 
 def lane_q_order() -> None:

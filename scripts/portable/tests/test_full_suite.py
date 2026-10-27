@@ -182,3 +182,42 @@ def test_elsewhere_a_difference_is_not_comparable_rather_than_a_verdict(capsys):
     out = capsys.readouterr()
     assert "NOT COMPARABLE on Darwin-arm64" in out.out
     assert "NEW FAILURE" not in out.err and "NOW PASSES" not in out.err
+
+
+# --- --shards (#1694) -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("count", [1, 2, 4, 9])
+def test_every_suite_file_is_in_exactly_one_shard(count):
+    files = [f"test_{i}.q" for i in range(30)]
+    weights = {f: float(i % 7 + 1) for i, f in enumerate(files)}
+    split = fs.assign(files, weights, count)
+    flat = [f for shard in split for f in shard]
+    assert len(split) == count and sorted(flat) == sorted(files)
+
+
+def test_the_shards_are_balanced_and_the_split_is_stable():
+    weights = {"a.q": 40.0, "b.q": 30.0, "c.q": 20.0, "d.q": 10.0, "e.q": 10.0}
+    split = fs.assign(list(weights), weights, 2)
+    assert sorted(sum(weights[f] for f in s) for s in split) == [50.0, 60.0]
+    assert fs.assign(list(reversed(list(weights))), weights, 2) == split
+
+
+def test_shards_merge_their_failures_and_a_shard_that_never_loaded_fails_the_lane(tmp_path):
+    """Two fake 'q's: each writes its own failures file, or none at all."""
+
+    def fake_q(writes: str) -> str:
+        script = tmp_path / f"q-{len(list(tmp_path.glob('q-*')))}"
+        script.write_text(f"#!/bin/sh\n{writes}\n")
+        script.chmod(0o755)
+        return str(script)
+
+    trees = []
+    for name in ("shard-1", "shard-2"):
+        (tmp_path / name).mkdir()
+        trees.append((tmp_path / name, [f"{name}.q"]))
+    ok = fake_q('printf ".qt.a.test_x\\tfail\\twhy\\n" > "$UQF_TEST_FAILURES"')
+    merged = fs.run_shards(ok, trees, 30, {})
+    assert merged == {".qt.a.test_x": "fail: why"}
+    silent = fake_q("exit 1")
+    assert fs.run_shards(silent, trees, 30, {}) is None
