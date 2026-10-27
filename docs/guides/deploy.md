@@ -467,9 +467,24 @@ The `components` entry records `bundled`, the runtime's sha256, the version the
 installed interpreter reported, the python-build-standalone release, its path on
 the server, and whether this push installed or reused it.
 
-A release can also **carry** a Python runtime, for a server where it is
-installed without `push`: see [installing an artifact on the server
-yourself](#installing-an-artifact-on-the-server-yourself).
+A release can also **carry** a Python runtime
+(`uqs deploy build --python-runtime FILE`), for a server where it is installed
+without `push`: see [installing an artifact on the server
+yourself](#installing-an-artifact-on-the-server-yourself). A push of such a
+release with `--python-mode bundled` and no `--python-runtime` uses the one it
+carries:
+
+- **Extracted, then checked.** The push copies it out of the release into
+  `~/.cache/uqf/runtimes/python/<sha256>/` (under `XDG_CACHE_HOME` when set),
+  and refuses a copy whose sha256 is not the one the release's manifest records.
+  The release's own pin and checks therefore pin it: it needs no `.sha256` of
+  its own, and `python_runtime_sha256` still holds it.
+- **Installed as any other.** From there it is installed, probed, recorded and
+  pruned exactly as a runtime given with `--python-runtime`. Its `components`
+  entry adds `carried_by`, the release it came from, and the plan says so.
+- **A given runtime wins.** `--python-runtime` names another, and nothing is
+  extracted. A release that carries none is refused, naming both ways to give
+  one.
 
 ### An offline install, tested
 

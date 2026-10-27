@@ -10,7 +10,8 @@ PeachQ only, `q_runtime` and `q_runtime_sha256`, from `uqs deploy
 build-runtime q`; KX's q is licensed to its server, and stays `existing`.
 So can Python (step 7, deploy/python_runtime.py): `python_runtime` and
 `python_runtime_sha256`, the CPython `uqs deploy build-runtime python` packs,
-which the release's .venv is made from.
+which the release's .venv is made from - or, with no `python_runtime`, the
+one the release itself carries (#1646).
 
 `existing` mode's fields are the push options that already exist - qcmd and
 qhome for q; torq_home, torq_app_home and torq_launcher for TorQ; Python has
@@ -48,8 +49,10 @@ FIELDS: dict[str, dict[str, tuple[str, ...]]] = {
     },
     "python": {EXISTING: (), BUNDLED: ("python_runtime", "python_runtime_sha256")},
 }
-#: The field a mode cannot go without.
-REQUIRED = {(c, BUNDLED): f"{c}_runtime" for c in COMPONENTS}
+#: The field a mode cannot go without. A bundled Python can do without
+#: `python_runtime` when the release carries one (`uqs deploy build
+#: --python-runtime`, #1646): only the artifact says, so bundled.attach checks.
+REQUIRED = {(c, BUNDLED): f"{c}_runtime" for c in COMPONENTS if c != "python"}
 
 
 def mode_key(component: str) -> str:
@@ -156,5 +159,7 @@ def plan_lines(cfg: Config, found: dict[str, dict]) -> list[str]:
         lines.append(f"  {name:<7}{c['mode']} ({source}): {path}, {version}")
         if c.get("sha256"):
             lines.append(f"           runtime sha256 {c['sha256']}: {c['install']}")
+        if c.get("carried_by"):
+            lines.append(f"           the runtime {c['carried_by']} carries")
         lines += [f"           needs {r}" for r in c["requires"]]
     return [*lines, ""]

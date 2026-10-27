@@ -87,7 +87,7 @@ def test_every_component_defaults_to_existing():
     assert (cfg.q_mode, cfg.torq_mode, cfg.python_mode) == ("existing",) * 3
 
 
-@pytest.mark.parametrize("component", ["q", "torq", "python"])
+@pytest.mark.parametrize("component", ["q", "torq"])
 def test_bundled_needs_its_runtime(component):
     with pytest.raises(DeployError, match=f"{component}_mode is bundled, and needs "
                        f"{component}_runtime"):  # fmt: skip
