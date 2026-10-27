@@ -60,6 +60,7 @@ from test_deploy_q_runtime import peachq_entry
 
 from uqs.deploy import artifact, bundled, payload, python_runtime, q_runtime, runtime_install
 from uqs.deploy import build as release_build
+from uqs.deploy.artifact import HOST_TOOLS
 from uqs.deploy.config import make_config
 from uqs.deploy.stages import Deployment
 
@@ -69,7 +70,7 @@ SOURCE = Path(sys.base_prefix)
 RID = "20261026T000000Z-0123456789ab"
 #: What `uqs --version` imports beyond uqs itself: uqs.cli's import-time
 #: third-party packages, measured; their requirements join them.
-ROOTS = ("typer", "rich", "loguru")
+ROOTS = ("typer", "rich", "loguru", "packaging")
 #: A sitecustomize: every connect and name lookup is logged, then refused.
 GUARD = """
 import os, socket
@@ -120,6 +121,14 @@ class Offline:
             fake = guard / "bin" / tool
             fake.write_text(f'#!/bin/sh\necho "{tool} $*" >> "$UQF_NET_LOG"\nexit 1\n')
             fake.chmod(0o755)
+        # The host contract's tools this machine lacks (macOS has no envsubst,
+        # rlwrap or timeout): the installer checks they are on PATH, and
+        # nothing here runs them. A Linux server's own are preflight's to judge.
+        for tool in HOST_TOOLS:
+            if not shutil.which(tool):
+                stand_in = guard / "bin" / tool
+                stand_in.write_text("#!/bin/sh\nexit 0\n")
+                stand_in.chmod(0o755)
         (tmp / "home").mkdir()
         keep = ("PATH", "LANG", "LC_ALL", "TMPDIR", "USER", "LOGNAME", "SHELL")
         self.env = {k: os.environ[k] for k in keep if k in os.environ}

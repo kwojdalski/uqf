@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import socket
+import threading
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
@@ -37,13 +38,24 @@ LOCAL_USER = LOCAL_PASSWORD = "admin"
 class IpcError(AttachmentError):
     """A process did not answer, or answered with a q error."""
 
-    def __init__(self, endpoint: Endpoint, op: str, reason: str, refused: bool = False) -> None:
+    def __init__(
+        self,
+        endpoint: Endpoint,
+        op: str,
+        reason: str,
+        refused: bool = False,
+        *,
+        unresponsive: bool = False,
+    ) -> None:
         super().__init__(f"{endpoint.label} ({op}): {reason}")
         self.endpoint = endpoint
         self.op = op
         self.reason = reason
         #: the process refused the credential: it is up, and says no (#1651)
         self.refused = refused
+        #: the call did not end within its bound (Bounded): the process holds the
+        #: connection and says nothing - not an address that cannot be reached (#1684)
+        self.unresponsive = unresponsive
 
 
 @dataclass(frozen=True)
@@ -123,6 +135,46 @@ class KolaIpc:
         if not isinstance(decoded, dict):
             raise IpcError(endpoint, op, f"answered JSON that is not an object: {answer!r:.80}")
         return decoded
+
+
+class Bounded:
+    """An Ipc whose every call ends within `seconds`, answered or not (#1684).
+
+    kola's own timeout bounds the TCP connect, not the wait for an answer: a
+    process that accepts the connection and never answers - a q still inside its
+    startup script, whose port the OS already accepts on - holds the call
+    forever. So the call runs on a daemon thread and is waited on for at most
+    `seconds`; past that it raises IpcError(unresponsive=True). The abandoned
+    thread keeps its socket until the process answers or uqs exits - the price
+    of a bound that does not depend on kola, whose timeout cannot reach q on
+    localhost on every machine (KolaIpc's comment).
+    """
+
+    def __init__(self, inner: Ipc, seconds: float) -> None:
+        self.inner, self.seconds = inner, seconds
+
+    def call(self, endpoint: Endpoint, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        box: dict[str, Any] = {}
+
+        def run() -> None:
+            try:
+                box["answer"] = self.inner.call(endpoint, op, request)
+            except BaseException as exc:  # noqa: BLE001 - re-raised on the caller's thread
+                box["error"] = exc
+
+        worker = threading.Thread(target=run, name=f"uqs-ipc-{op}", daemon=True)
+        worker.start()
+        worker.join(self.seconds)
+        if worker.is_alive():
+            raise IpcError(
+                endpoint,
+                op,
+                f"did not answer within {self.seconds:g}s",
+                unresponsive=True,
+            )
+        if "error" in box:
+            raise box["error"]
+        return box["answer"]
 
 
 def _failure(endpoint: Endpoint, op: str, exc: Exception, user: str, what: str) -> IpcError:

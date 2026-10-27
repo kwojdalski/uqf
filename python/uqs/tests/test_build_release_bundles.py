@@ -57,6 +57,7 @@ def _python_tools(argv: list[str]) -> subprocess.CompletedProcess | None:
         (Path(argv[argv.index("--out-dir") + 1]) / "uqs-0.1.0-py3-none-any.whl").write_bytes(b"u")
         return _done()
     if "download" in argv:
+        (Path(argv[argv.index("--dest") + 1]) / "rich-15.0.0-py3-none-any.whl").write_bytes(b"r")
         return _done()
     return None
 

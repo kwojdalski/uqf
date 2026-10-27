@@ -31,6 +31,17 @@ WHEEL_DIR = f"{RELEASE_DIR}/wheels"
 PACKAGING_MODE = "offline"
 #: The stdlib-only script that installs an unpacked release in place, offline.
 INSTALLER = "scripts/install_release.py"
+#: The host contract's tools (docs/guides/deploy.md, "The minimum host
+#: contract"): what the push's own server steps run - tar and the gzip it
+#: unpacks with, timeout, find, sed, python3 - and what torq.sh runs - its start
+#: (awk, grep, pgrep, hostname, nohup, envsubst) and stop (lsof) - and rlwrap,
+#: which uqs checks for before torq.sh is run. Preflight checks them on a push
+#: (preflight.PREFLIGHT spells the list out; a test holds the two equal), and a
+#: release's manifest records them for the installer to check (#1646).
+HOST_TOOLS = (
+    "bash", "envsubst", "rlwrap", "tar", "gzip", "timeout", "python3", "awk", "sed", "grep",
+    "pgrep", "lsof", "hostname", "nohup", "find",
+)  # fmt: skip
 
 #: The architectures a release can target, and the wheel platform tags pip
 #: may take for each, newest glibc baseline first. A pure-Python wheel

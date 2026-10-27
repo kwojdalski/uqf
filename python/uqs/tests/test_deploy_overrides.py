@@ -368,3 +368,30 @@ def test_the_history_records_the_exceptions(tmp_path, monkeypatch):
     assert code == 0 and entry["status"] == "deployed"
     (e,) = entry["exceptions"]
     assert (e["override"], e["reason"], e["applied"]) == ("allow-unpinned", "dev build", True)
+
+
+# --- the artifact's digest is recorded whether or not anything pinned it -------------
+
+
+def test_the_report_records_the_artifacts_digest_with_no_pin_or_override(tmp_path):
+    path = _artifact(tmp_path)
+    code, remote, out = _deploy(path)
+    report = _report(out)
+    assert code == 0 and report["exceptions"] == []
+    assert report["artifact"] == {"name": path.name, "sha256": _digest(path)}
+    # the digest recorded is the one the server checked the bytes against
+    assert any(f'"$got" != {_digest(path)}' in s for s in remote.stage("transfer"))
+
+
+def test_the_history_records_the_artifacts_digest(tmp_path, monkeypatch):
+    monkeypatch.setenv(history.HISTORY_ENV, str(tmp_path / "h.json"))
+    monkeypatch.setenv(targets.DECLARATION_ENV, str(tmp_path / "t.toml"))
+    path = _artifact(tmp_path)
+    remote = FakeRemote({**_HEALTHY, "uv python find": _done(SERVER + "data=present\n"),
+                         "uqs deploy verify --profile": _verified(True)})  # fmt: skip
+    cfg = parse_args(_args(path))
+    code = driver.deploy(
+        cfg, remote, out=io.StringIO(), on_report=lambda r: history.record(tmp_path, cfg, r)
+    )
+    (entry,) = history.read(tmp_path)
+    assert code == 0 and entry["artifact"] == {"name": path.name, "sha256": _digest(path)}
