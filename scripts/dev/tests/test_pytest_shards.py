@@ -97,3 +97,14 @@ def test_the_recorder_sums_seconds_per_module(tmp_path):
         rec.pytest_runtest_logreport(Report(nodeid, d))
     rec.pytest_sessionfinish(Session())
     assert json.loads(out.read_text()) == {"a.py": 2.0, "b.py": 2.0}
+
+
+def test_merging_the_shards_records_gives_one_record(tmp_path):
+    (tmp_path / "1.json").write_text(json.dumps({"a.py": 1.0}))
+    (tmp_path / "2.json").write_text(json.dumps({"b.py": 2.5}))
+    out = tmp_path / "all.json"
+    assert shards.merge([tmp_path / "1.json", tmp_path / "2.json"], out) == {
+        "a.py": 1.0,
+        "b.py": 2.5,
+    }
+    assert json.loads(out.read_text()) == {"a.py": 1.0, "b.py": 2.5}

@@ -385,7 +385,17 @@ jobs:
         # which this job replaces in CI. -n auto: in parallel (pytest-xdist);
         # --dist loadgroup keeps the tests marked xdist_group (the whole-stack
         # ones) on one worker.
-        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --shard "${{ matrix.shard }}/4"
+        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
+      - name: Keep this shard's module durations
+        # What scripts/dev/test_module_durations.json is refreshed from: CI's
+        # own times, which differ from a laptop's (#1696). Merge the four with
+        # scripts/dev/pytest_shards.py --merge.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: durations-${{ matrix.shard }}
+          path: ${{ runner.temp }}/durations-${{ matrix.shard }}.json
+          retention-days: 30
 
 
   # The one name branch protection requires: green only when every job above
