@@ -210,11 +210,14 @@ def python_payload(
     target: Target,
     runner: Runner = subprocess.run,
     extras: Sequence[str] = (),
+    packages: Sequence[str] = (),
 ) -> None:
     """requirements.txt and every wheel the target needs, under `into`.
 
     `extras` are uqs extras whose locked dependencies join the default ones
     (`kafka`: confluent-kafka, for `--with-kafka-connector`); none by default.
+    `packages` are workspace packages whose wheels, and locked dependencies,
+    join uqs's (`uqf-frontend`, for `--frontend`, uqs.deploy.frontend).
 
     The pins come from the committed uv.lock (`--frozen`, never re-resolved),
     with hashes, so the server's install refuses a wheel that is not the one
@@ -233,7 +236,8 @@ def python_payload(
     _run(
         root, runner, "exporting the locked dependencies",
         [
-            "uv", "export", "--package", "uqs", "--no-dev", "--frozen",
+            "uv", "export", *[a for p in ("uqs", *packages) for a in ("--package", p)],
+            "--no-dev", "--frozen",
             "--no-emit-workspace", "--format", "requirements-txt",
             *[arg for e in extras for arg in ("--extra", e)],
             "--quiet", "-o", str(requirements),
@@ -247,10 +251,11 @@ def python_payload(
             "{} locked pin(s) not for {}/{} Python {}: {}",
             len(dropped), target.os, target.arch, target.python, ", ".join(dropped),
         )  # fmt: skip
-    _run(
-        root, runner, "building the uqs wheel",
-        ["uv", "build", "--package", "uqs", "--wheel", "--quiet", "--out-dir", str(wheels)],
-    )  # fmt: skip
+    for p in ("uqs", *packages):
+        _run(
+            root, runner, f"building the {p} wheel",
+            ["uv", "build", "--package", p, "--wheel", "--quiet", "--out-dir", str(wheels)],
+        )  # fmt: skip
     _run(
         root, runner, "fetching the dependency wheels",
         [

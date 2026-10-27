@@ -22,7 +22,8 @@ In order, each step refusing with what to do before the next one writes:
      by file against its own manifest, and is the interpreter - so the host
      needs only a python3 (3.8 or later) to run this script;
   5. install   - `.venv` is created in the release by `python -m venv`, and the
-     locked dependencies then uqs itself are installed from `.release/wheels`
+     locked dependencies then uqs itself (and, for a release built with
+     --frontend, uqf-frontend) are installed from `.release/wheels`
      with `--no-index` and the lock's hashes required: no registry is reached,
      and a wheel that is missing or altered is refused rather than fetched;
   6. environment - `deploy.env` is written when there is anything for it: with
@@ -275,6 +276,10 @@ def install(release: Path, manifest: dict, python: str) -> None:
             release,
         )
         _run([*pip, "--no-deps", app], "installing uqs from the release's wheel", release)
+        # what `uqs deploy build --frontend` adds: uqf-frontend, its dependencies
+        # already installed above from the lock
+        for extra in py.get("extra_wheels") or []:
+            _run([*pip, "--no-deps", extra], f"installing {extra}", release)
     except BaseException:
         shutil.rmtree(venv, ignore_errors=True)
         raise
