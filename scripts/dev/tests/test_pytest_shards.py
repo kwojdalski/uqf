@@ -84,8 +84,9 @@ def test_the_recorder_sums_seconds_per_module(tmp_path):
     rec = shards.Recorder(out)
 
     class Report:
-        def __init__(self, nodeid, duration):
+        def __init__(self, nodeid, duration, keywords=()):
             self.nodeid, self.duration = nodeid, duration
+            self.keywords = dict.fromkeys(keywords, 1)
 
     class Config:
         pass
@@ -95,8 +96,9 @@ def test_the_recorder_sums_seconds_per_module(tmp_path):
 
     for nodeid, d in [("a.py::t1", 1.5), ("a.py::t2", 0.5), ("b.py::t", 2.0)]:
         rec.pytest_runtest_logreport(Report(nodeid, d))
+    rec.pytest_runtest_logreport(Report("c.py::slow", 9.0, ["shard_apart"]))
     rec.pytest_sessionfinish(Session())
-    assert json.loads(out.read_text()) == {"a.py": 2.0, "b.py": 2.0}
+    assert json.loads(out.read_text()) == {"a.py": 2.0, "b.py": 2.0, "c.py::slow": 9.0}
 
 
 def test_merging_the_shards_records_gives_one_record(tmp_path):
@@ -108,3 +110,8 @@ def test_merging_the_shards_records_gives_one_record(tmp_path):
         "b.py": 2.5,
     }
     assert json.loads(out.read_text()) == {"a.py": 1.0, "b.py": 2.5}
+
+
+def test_a_test_marked_apart_is_a_unit_of_its_own():
+    assert shards.unit_of("m.py::t", {"shard_apart": True}) == "m.py::t"
+    assert shards.unit_of("m.py::t", {}) == "m.py"

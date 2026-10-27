@@ -1,5 +1,7 @@
 """Split the Python suite across CI runners by test module (#1696).
 
+A test marked `shard_apart` is a unit of its own (see APART).
+
 The PeachQ Python job is CPU-bound on its 4-vCPU runner: more xdist workers
 measured no faster (#1695). So the suite is split across several runners, a
 whole module to one shard. A module's fixtures are then built once, in one
@@ -62,6 +64,19 @@ def module_of(nodeid: str) -> str:
     return nodeid.split("::", 1)[0]
 
 
+#: The marker for a test that is a shard unit of its own rather than part of
+#: its module's: a slow test that may not share a MACHINE with another one
+#: (the fixed-port whole-stack tests), so on one runner it waits for it, while
+#: on separate runners it need not.
+APART = "shard_apart"
+
+
+def unit_of(nodeid: str, keywords) -> str:
+    """What is assigned to a shard: the test itself when marked APART, else
+    its module."""
+    return nodeid if APART in keywords else module_of(nodeid)
+
+
 def load_weights(path: Path = MODULE_DURATIONS) -> dict[str, float]:
     return json.loads(path.read_text()) if path.is_file() else {}
 
@@ -74,7 +89,7 @@ class Recorder:
         self.seconds: dict[str, float] = defaultdict(float)
 
     def pytest_runtest_logreport(self, report) -> None:
-        self.seconds[module_of(report.nodeid)] += report.duration
+        self.seconds[unit_of(report.nodeid, report.keywords)] += report.duration
 
     def pytest_sessionfinish(self, session) -> None:
         if hasattr(session.config, "workerinput"):
