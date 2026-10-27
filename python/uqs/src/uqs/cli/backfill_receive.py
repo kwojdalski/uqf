@@ -40,7 +40,7 @@ def extract(
 ) -> None:
     """`uqs job backfill --attach NAME --writer HOST:PORT`: plan or start the extractor.
     With `force`, HOST:PORT is any q process (a wdb), written to with nothing checked."""
-    from uqs.cli.backfill_attached import _outcome_text, _report
+    from uqs.cli.backfill_attached import _outcome_text, _report, logs_command
 
     if fixture:
         _die(UqsError("--fixture is refused with --attach: a fixture in a native HDB is data"))
@@ -82,7 +82,12 @@ def extract(
         return
     info = {"mode": mode, "worker": worker, "writer": writer, "plan": plan, **run_.as_dict()}
     if not wait:
-        _report(info, as_json, f"started {worker} (pid {run_.pid}) -> {writer}; log {run_.log}")
+        _report(
+            info,
+            as_json,
+            f"started {worker} (pid {run_.pid}) -> {writer}; log {run_.log}"
+            f"\n  follow it with `{logs_command(attachment, worker)} -f`",
+        )
         raise typer.Exit(code=0)
     if not as_json:  # with --json, stdout is the one document below (#1685)
         console.print(
@@ -172,7 +177,8 @@ def receive(
             f"receiving {out['dataset']} (contract {out['contract']}) for attachment "
             f"{out['attachment']} on port {out['port']} "
             f"(pid {out['pid']}) into {out['hdb_dir']}: dates to {out['last_writable_date']}, "
-            f"until {out['stops_at']}; log {out['log']}",
+            f"until {out['stops_at']}; log {out['log']}\n  follow it with "
+            f"`uqs logs --attach {out['attachment']} --worker {out['dataset']}.receiver -f`",
             markup=False,
         )
     raise typer.Exit(code=0)

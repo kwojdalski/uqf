@@ -165,7 +165,8 @@ def _execute(
         _report(
             info,
             as_json,
-            f"started {worker} (pid {run_.pid}) into {run_.destination.hdb_dir}; log {run_.log}",
+            f"started {worker} (pid {run_.pid}) into {run_.destination.hdb_dir}; log {run_.log}"
+            f"\n  follow it with `{logs_command(attachment, worker)} -f`",
         )
         raise typer.Exit(code=0)
     if not as_json:  # with --json, stdout is the one document below (#1685)
@@ -181,10 +182,18 @@ def _execute(
     raise typer.Exit(code=code)
 
 
+def logs_command(attachment: str, worker: str) -> str:
+    """The command that reads a run's log through `uqs logs` (#1725)."""
+    return f"uqs logs --attach {attachment} --worker {worker}"
+
+
 def _outcome_text(worker, run_, code, result) -> str:
     """What the run did, in the words that keep written and queryable apart."""
     outcome = result.get("outcome") or result.get("state", "unknown")
-    head = f"{worker}: {outcome} (exit {code}); log {run_.log}"
+    head = (
+        f"{worker}: {outcome} (exit {code}); log {run_.log}\n"
+        f"  read it with `{logs_command(run_.destination.attachment, worker)}`"
+    )
     if outcome == "written_not_queryable":
         failed = "; ".join(result.get("failed_readers", [])) or "a reader"
         return (
