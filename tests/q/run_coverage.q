@@ -17,6 +17,15 @@
 / Run from the repository root:
 /   q tests/q/run_coverage.q
 
+/ Seeded and sized as tests/run_tests.q is, so the tests run on the same
+/ random draws there and here: attest_kdbx.py reads a pass here as a pass of
+/ the plain run (#1704). test_seed.q says why the runner seeds. The size is
+/ not cosmetic: -3! truncates to the console width, and at the default 80
+/ columns two .qt.man.examples tests failed here and passed there - the only
+/ disagreement between the two runs over all 3417 tests on KDB-X.
+\c 400 1000
+\S 20260916
+
 \l tests/lib/qunit.q
 \l tests/lib/support.q
 \l src/init.q
@@ -48,7 +57,13 @@ namespaces:.qt.support.library_only .qf.util.functional[];
 
 -1 "== coverage: instrumenting ",string[count namespaces]," namespace(s) ==";
 
-results:.cov.run[{[] .qunit.runTests[nsList]}; enlist (::); (enlist `namespaces)!enlist namespaces];
+/ The run's test outcomes are kept, not discarded: with UQF_TEST_RESULTS and
+/ UQF_TEST_FAILURES set they are written as tests/run_tests.q writes them,
+/ and scripts/dev/attest_kdbx.py takes q-tests' q-unit verdict from them
+/ rather than running the suite a second time (#1704). This exit code does
+/ not change: it is the coverage gate's, and a failing test fails q-tests.
+results:.cov.run[{[] `res set .qunit.runTests[nsList]}; enlist (::); (enlist `namespaces)!enlist namespaces];
+.qt.support.write_outcomes res;
 
 / Banner, because the suite this instruments contains .cov's OWN tests, and
 / one of them prints a two-line coverage report of its fixture. Without a
