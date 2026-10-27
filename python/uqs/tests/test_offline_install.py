@@ -82,10 +82,15 @@ socket.getaddrinfo = socket.create_connection = _blocked
 """
 FETCH = "import urllib.request; urllib.request.urlopen('http://pypi.org/simple/', timeout=5)"
 
-pytestmark = pytest.mark.skipif(
-    python_runtime.UV_KEY.fullmatch(SOURCE.name) is None or shutil.which("uv") is None,
-    reason="the tests' Python is not a CPython uv installed, or uv is not on PATH",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        python_runtime.UV_KEY.fullmatch(SOURCE.name) is None or shutil.which("uv") is None,
+        reason="the tests' Python is not a CPython uv installed, or uv is not on PATH",
+    ),
+    # One worker for the module: `built` takes ~43s, and xdist builds a
+    # module-scoped fixture once per worker that runs one of its tests (#1696).
+    pytest.mark.xdist_group("offline-build"),
+]
 
 
 def _jail() -> list[str]:

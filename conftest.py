@@ -50,3 +50,60 @@ STATE_LOCATION_VARS = ("UQF_STATUS_DIR", "TORQDATA", "UQS_DATA_ROOT")
 
 for _name in STATE_LOCATION_VARS:
     os.environ.pop(_name, None)
+
+
+# --- sharding across CI runners (#1696, scripts/dev/pytest_shards.py) ------------
+
+
+def _shards():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).with_name("scripts") / "dev" / "pytest_shards.py"
+    spec = importlib.util.spec_from_file_location("pytest_shards", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def pytest_addoption(parser):
+    group = parser.getgroup("shards", "split the suite across CI runners by module")
+    group.addoption("--shard", default=None, help="run shard I of N, as I/N")
+    group.addoption(
+        "--store-shard-durations",
+        default=None,
+        metavar="PATH",
+        help="record seconds per test module, for balancing --shard",
+    )
+
+
+def pytest_configure(config):
+    spec = config.getoption("--shard")
+    if spec:
+        import pytest
+
+        try:
+            config._uqf_shard = _shards().parse_shard(spec)
+        except ValueError as exc:
+            raise pytest.UsageError(str(exc)) from None
+    path = config.getoption("--store-shard-durations")
+    if path:
+        from pathlib import Path
+
+        config.pluginmanager.register(_shards().Recorder(Path(path)), "shard-durations")
+
+
+def pytest_collection_modifyitems(config, items):
+    spec = config.getoption("--shard")
+    if not spec:
+        return
+    shards = _shards()
+    index, count = config._uqf_shard
+    modules = [shards.module_of(item.nodeid) for item in items]
+    mine = set(shards.assign(modules, shards.load_weights(), count)[index - 1])
+    keep = [item for item in items if shards.module_of(item.nodeid) in mine]
+    dropped = [item for item in items if shards.module_of(item.nodeid) not in mine]
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+    items[:] = keep
