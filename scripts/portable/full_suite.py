@@ -21,7 +21,16 @@ full suite - tests/run_tests.q, every suite - on that copy:
          improved, and the entry must go. The list only ever shrinks.
 
     python3 scripts/portable/full_suite.py --q "$PEACHQ_BIN"
+    python3 scripts/portable/full_suite.py --q "$PEACHQ_BIN" --shards 4   # in parallel
     python3 scripts/test.py q-unit-peachq      # the same, as a lane
+
+With `--shards N` (#1694) the suite runs as N PeachQ processes at once, each
+in its own copy of the tree, running a share of the tests/q/test_*.q files
+through the runner's `-files` option. Every process still LOADS every suite
+file - suites lean on each other's definitions (job_output_contracts drives
+each job through the driver its own test file defines) - and runs only its
+share. Every test file is in exactly one shard, and the shards' failures are
+merged before the comparison below, which is unchanged.
 
 The known-gaps file is one test per line, its full name, then `#` and the
 reason it cannot pass on PeachQ, which starts with its kind (#986):
@@ -184,7 +193,68 @@ def build_tree(into: Path, bundles: bool = False) -> None:
     shutil.copytree(flat, tree, dirs_exist_ok=True)
 
 
-def run(q: str, timeout: float, keep: Path | None = None, bundles: bool = False) -> int:
+def assign(files: list[str], weights: dict[str, float], count: int) -> list[list[str]]:
+    """`files` in `count` shards of near-equal weight: the heaviest first,
+    each onto the least loaded shard (the lowest-numbered on a tie), so the
+    split is the same on every run. Every file is in exactly one shard."""
+    load = [0.0] * count
+    shards: list[list[str]] = [[] for _ in range(count)]
+    for name in sorted(set(files), key=lambda f: (-weights.get(f, 1.0), f)):
+        target = min(range(count), key=lambda i: (load[i], i))
+        shards[target].append(name)
+        load[target] += weights.get(name, 1.0)
+    return [sorted(shard) for shard in shards]
+
+
+def shard_trees(work: Path, count: int) -> list[tuple[Path, list[str]]]:
+    """`count` copies of work/tree, each with the test files it runs: a share
+    of tests/q/test_*.q weighed by size, a stand-in for their run time. A copy
+    each, so suites that write beside the tree never meet another shard's."""
+    suites = work / "tree" / "tests" / "q"
+    files = sorted(p.name for p in suites.glob("test_*.q"))
+    weights = {name: float((suites / name).stat().st_size) for name in files}
+    shards = []
+    for index, mine in enumerate(assign(files, weights, count), start=1):
+        tree = work / f"shard-{index}"
+        shutil.copytree(work / "tree", tree, symlinks=True)
+        shards.append((tree, mine))
+    return shards
+
+
+def run_shards(
+    q: str, shards: list[tuple[Path, list[str]]], timeout: float, env: dict[str, str]
+) -> dict[str, str] | None:
+    """Run every shard at once; the merged failures, or None when a shard did
+    not finish loading (its failures file was never written)."""
+    procs = []
+    for tree, mine in shards:
+        failures = tree.parent / f"{tree.name}.failures.txt"
+        failures.unlink(missing_ok=True)  # only this run's may count
+        procs.append((tree, failures, subprocess.Popen(
+            [q, "tests/run_tests.q", "-q", "-files", ",".join(mine)], cwd=tree,
+            env={**env, "UQF_TEST_FAILURES": str(failures)},
+        )))  # fmt: skip
+    merged: dict[str, str] = {}
+    missing = []
+    for tree, failures, proc in procs:
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            code = "timed out"
+        if not failures.exists():
+            missing.append(f"{tree.name} (exit {code})")
+            continue
+        merged.update(read_failures(failures))
+    if missing:
+        print(f"these shards did not finish loading: {', '.join(missing)}", file=sys.stderr)
+        return None
+    return merged
+
+
+def run(
+    q: str, timeout: float, keep: Path | None = None, bundles: bool = False, shards: int = 1
+) -> int:
     gaps = read_gaps()
     if bad := restated(gaps):
         raise SystemExit(f"{GAPS.name}: these reasons repeat their test's own message - say "
@@ -199,6 +269,10 @@ def run(q: str, timeout: float, keep: Path | None = None, bundles: bool = False)
         work.mkdir(parents=True, exist_ok=True)
         print(f"flattening {', '.join(CONVERTED) or 'nothing'} into {work}", flush=True)
         build_tree(work, bundles)
+        if shards > 1:
+            env = {**os.environ, "UQF_Q_IMPL": "peachq", "QCMD": q}
+            merged = run_shards(q, shard_trees(work, shards), timeout, env)
+            return 1 if merged is None else report(merged, gaps, recorded, here)
         failures = work / "failures.txt"
         env = {**os.environ, "UQF_Q_IMPL": "peachq", "QCMD": q, "UQF_TEST_FAILURES": str(failures)}
         r = subprocess.run(
@@ -238,8 +312,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--timeout", type=float, default=1800, help="seconds for the suite")
     p.add_argument("--keep", type=Path, help="build the tree here and leave it, to debug")
     p.add_argument("--bundles", action="store_true", help="install sidecars/* bundles first (#925)")
+    p.add_argument("--shards", type=int, default=1,
+                   help="run the suite as this many processes at once (#1694)")  # fmt: skip
     a = p.parse_args(argv)
-    return run(a.q, a.timeout, a.keep, a.bundles)
+    if a.shards < 1:
+        p.error("--shards must be at least 1")
+    return run(a.q, a.timeout, a.keep, a.bundles, a.shards)
 
 
 if __name__ == "__main__":
