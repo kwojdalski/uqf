@@ -79,6 +79,10 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "shard_apart: a shard unit of its own, not its module's (scripts/dev/pytest_shards.py)",
+    )
     spec = config.getoption("--shard")
     if spec:
         import pytest
@@ -100,10 +104,10 @@ def pytest_collection_modifyitems(config, items):
         return
     shards = _shards()
     index, count = config._uqf_shard
-    modules = [shards.module_of(item.nodeid) for item in items]
-    mine = set(shards.assign(modules, shards.load_weights(), count)[index - 1])
-    keep = [item for item in items if shards.module_of(item.nodeid) in mine]
-    dropped = [item for item in items if shards.module_of(item.nodeid) not in mine]
+    unit = {item.nodeid: shards.unit_of(item.nodeid, item.keywords) for item in items}
+    mine = set(shards.assign(list(unit.values()), shards.load_weights(), count)[index - 1])
+    keep = [item for item in items if unit[item.nodeid] in mine]
+    dropped = [item for item in items if unit[item.nodeid] not in mine]
     if dropped:
         config.hook.pytest_deselected(items=dropped)
     items[:] = keep

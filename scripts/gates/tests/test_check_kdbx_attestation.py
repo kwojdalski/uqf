@@ -24,6 +24,15 @@ def _load(name: str, rel: str):
 
 check = _load("check_kdbx_attestation", "scripts/gates/check_kdbx_attestation.py")
 attest = _load("attest_kdbx", "scripts/dev/attest_kdbx.py")
+impact = _load("test_impact", "scripts/dev/test_impact.py")
+
+
+@pytest.fixture(autouse=True)
+def _whole_q_suite(monkeypatch):
+    """attest_kdbx.py runs the whole q suite unless a test says otherwise: the
+    selector reads a real q tree with a graph-capable qlinter, and these
+    throwaway repositories are neither. Its own tests are test_test_impact.py."""
+    monkeypatch.setattr(attest, "q_tests_plan", lambda base, full: impact.Plan(None, "test"))
 
 
 def sh(repo: Path, *args: str) -> str:
@@ -291,10 +300,10 @@ def test_attest_records_the_tree_only_when_every_hook_passes(repo, monkeypatch):
     monkeypatch.setattr(attest, "refusal", lambda: None)
     base = sh(repo, "rev-parse", "HEAD")
     commit(repo, "src/a.q", "a:1\n")
-    monkeypatch.setattr(attest, "run_hook", lambda hook: hook != "q-coverage")
+    monkeypatch.setattr(attest, "run_hook", lambda hook, env=None: hook != "q-coverage")
     assert attest.main(["--base", base]) == 1
     assert not check.report(base, sh(repo, "rev-parse", "HEAD"))[0]
-    monkeypatch.setattr(attest, "run_hook", lambda hook: True)
+    monkeypatch.setattr(attest, "run_hook", lambda hook, env=None: True)
     assert attest.main(["--base", base]) == 0
     assert check.report(base, sh(repo, "rev-parse", "HEAD"))[0]
 
@@ -415,7 +424,7 @@ def _attest(repo, monkeypatch, *argv: str) -> tuple[int, list[str]]:
     ran: list[str] = []
     monkeypatch.setattr(attest, "REPO", repo)
     monkeypatch.setattr(attest, "refusal", lambda: None)
-    monkeypatch.setattr(attest, "run_hook", lambda hook: ran.append(hook) or True)
+    monkeypatch.setattr(attest, "run_hook", lambda hook, env=None: ran.append(hook) or True)
     return attest.main(list(argv)), ran
 
 
@@ -461,3 +470,155 @@ def test_ci_skips_every_kdbx_hook_where_it_has_no_q():
     skip = next(line for line in ci.splitlines() if "SKIP=$SKIP," in line)
     named = skip.split("SKIP=$SKIP,")[1].split('"')[0].split(",")
     assert set(attest.HOOKS) <= set(named)
+
+
+# --- q-tests ran a subset of the q suites (#1690 step 4) --------------------
+
+SUBSET = ["test_a.q", "test_b.q"]
+
+
+def test_a_trailer_says_what_q_tests_ran():
+    tree = "a" * 40
+    d = impact.digest(SUBSET)
+    assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-tests q-tests={d}", tree) == (
+        {"q-tests"},
+        d,
+    )
+    assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-tests q-tests=all", tree)[1] == "all"
+    # before subsets, and before scoping: the whole suite
+    assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-tests", tree)[1] == "all"
+    assert check.parse_trailer(f"KDB-X-gates: {tree}", tree)[1] == "all"
+    # a record that is neither is not an attestation of anything
+    assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-tests q-tests=abc", tree) is None
+    assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-tests other=1", tree) is None
+
+
+def _attest_subset(repo, monkeypatch, files: list[str] | None) -> tuple[str, dict]:
+    """attest_kdbx.main() over a .q change, its selection `files` (None: all):
+    (the base, the env each hook was run with)."""
+    envs: dict[str, dict | None] = {}
+    monkeypatch.setattr(attest, "REPO", repo)
+    monkeypatch.setattr(attest, "refusal", lambda: None)
+    monkeypatch.setattr(attest, "run_hook", lambda hook, env=None: envs.update({hook: env}) or True)
+    monkeypatch.setattr(
+        attest, "q_tests_plan", lambda base, full: impact.Plan(None if full else files, "test")
+    )
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    assert attest.main(["--base", base]) == 0
+    return base, envs
+
+
+def test_attest_hands_its_selection_to_q_tests_and_records_its_digest(repo, monkeypatch):
+    _, envs = _attest_subset(repo, monkeypatch, SUBSET)
+    assert envs["q-tests"] == {impact.DECIDED_ENV: "-files test_a.q,test_b.q"}
+    assert envs["q-coverage"] is None
+    body = sh(repo, "log", "-1", "--format=%B")
+    assert f"q-tests={impact.digest(SUBSET)}" in body
+    assert "q-tests ran: test_a.q, test_b.q" in body
+
+
+def test_attest_records_the_whole_suite_as_all(repo, monkeypatch):
+    _, envs = _attest_subset(repo, monkeypatch, None)
+    assert envs["q-tests"] == {impact.DECIDED_ENV: "ALL"}
+    assert " q-tests=all" in sh(repo, "log", "-1", "--format=%B")
+
+
+def test_a_subset_passes_when_the_check_selects_the_same_one(repo, monkeypatch):
+    base, _ = _attest_subset(repo, monkeypatch, SUBSET)
+    monkeypatch.setattr(check, "q_tests_plan", lambda b, h: impact.Plan(list(SUBSET), "here"))
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert ok, why
+
+
+def test_a_subset_the_check_does_not_select_is_refused(repo, monkeypatch):
+    base, _ = _attest_subset(repo, monkeypatch, SUBSET)
+    monkeypatch.setattr(check, "q_tests_plan", lambda b, h: impact.Plan(["test_a.q"], "here"))
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert not ok
+    assert "not the one selected here" in why and ".qlinter-graph-rev" in why
+    assert "UQF_Q_TESTS_FULL=1" in why
+
+
+def test_a_subset_where_the_check_selects_everything_is_refused(repo, monkeypatch):
+    """Including where the check cannot run the selector: never trusted."""
+    base, _ = _attest_subset(repo, monkeypatch, SUBSET)
+    monkeypatch.setattr(
+        check, "q_tests_plan", lambda b, h: impact.Plan(None, "the selector cannot run: x")
+    )
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert not ok and "the whole suite (the selector cannot run: x)" in why
+
+
+def test_the_whole_suite_needs_no_selection_to_verify(repo, monkeypatch):
+    base, _ = _attest_subset(repo, monkeypatch, None)
+
+    def refuse(b, h):
+        raise AssertionError("q-tests=all needs no selector")
+
+    monkeypatch.setattr(check, "q_tests_plan", refuse)
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert ok, why
+
+
+def test_attest_all_runs_the_whole_q_suite(repo, monkeypatch):
+    monkeypatch.setattr(attest, "REPO", repo)
+    monkeypatch.setattr(attest, "refusal", lambda: None)
+    envs: dict = {}
+    monkeypatch.setattr(attest, "run_hook", lambda hook, env=None: envs.update({hook: env}) or True)
+    monkeypatch.setattr(
+        attest, "q_tests_plan", lambda base, full: impact.Plan(None if full else SUBSET, "t")
+    )
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    assert attest.main(["--all", "--base", base]) == 0
+    assert envs["q-tests"] == {impact.DECIDED_ENV: "ALL"}
+
+
+def test_the_real_check_selects_with_test_impact(repo, monkeypatch):
+    """check.q_tests_plan is test_impact's plan_for over the PR's diff."""
+    seen = {}
+    fake = type(
+        "M",
+        (),
+        {
+            "changed_paths": staticmethod(lambda base, root, head: [f"{base}...{head}"]),
+            "plan_for": staticmethod(lambda changed, root: seen.setdefault("c", changed)),
+        },
+    )
+    monkeypatch.setattr(check, "_load", lambda rel: fake)
+    check.q_tests_plan("B", "H")
+    assert seen["c"] == ["B...H"]
+
+
+def test_ci_installs_the_pinned_graph_qlinter_for_the_check():
+    wf = _attestation_workflow()
+    assert ".qlinter-graph-rev" in wf and "cargo install --git" in wf
+    assert "UQF_QLINTER:" in wf
+    rev = (_ROOT / ".qlinter-graph-rev").read_text().strip()
+    assert len(rev) == 40 and all(c in "0123456789abcdef" for c in rev)
+
+
+def test_the_q_tests_hook_runs_the_selection():
+    config = (_ROOT / ".pre-commit-config.yaml").read_text()
+    hook = config.split("- id: q-tests", 1)[1].split("- id:", 1)[0]
+    assert "scripts/dev/test_impact.py --hook" in hook
+    assert "scripts/test.py q-unit -files" in hook
+
+
+@pytest.mark.parametrize(
+    "script", ["scripts/dev/attest_kdbx.py", "scripts/gates/check_kdbx_attestation.py"]
+)
+def test_the_selector_loads_from_a_fresh_interpreter(script):
+    """As CI and attest_kdbx.py run it: nothing loaded test_impact beforehand
+    (its @dataclass needs its module registered, which once failed here)."""
+    code = (
+        "import importlib.util, sys\n"
+        f"spec = importlib.util.spec_from_file_location('m', {str(_ROOT / script)!r})\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "loader = getattr(m, '_test_impact', None) or "
+        "(lambda: m._load('scripts/dev/test_impact.py'))\n"
+        "print(loader().Plan(['test_a.q'], 'x').line)\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "-files test_a.q"

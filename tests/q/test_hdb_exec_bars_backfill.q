@@ -6,6 +6,14 @@
 / The fixture is swapped for one fill in each of two windows.
 
 
+/ Its own status directory: the runs here write status and outcome files, and
+/ without this the suite borrowed the one an earlier suite had set - so run
+/ alone (a selected subset, #1690) it wrote to "/status" and failed.
+.qt.qpipe.job.hdb_exec_bars_backfill.beforeNamespace_status_dir:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"mkdir -p build/test-status";
+    }
+
 .qt.qpipe.job.hdb_exec_bars_backfill.spec_for:{[version;from_ts;to_ts] `source_version`range_from`range_to!(version;from_ts;to_ts)}
 
 / One fill at 10:59:30 (window 10:00) and one at 11:00:30 (window 11:00).
