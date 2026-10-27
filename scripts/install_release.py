@@ -184,6 +184,16 @@ def _unpack(archive: Path, sha256: str, home: Path) -> None:
         raise
 
 
+def _cache_of(rel: str, listed: dict) -> bool:
+    """Whether `rel` is a __pycache__ .pyc of a source `listed` names."""
+    parent, _, name = rel.rpartition("/")
+    folder, _, cache = parent.rpartition("/")
+    if cache != "__pycache__" or not name.endswith(".pyc"):
+        return False
+    source = name.split(".")[0] + ".py"
+    return (f"{folder}/{source}" if folder else source) in listed
+
+
 def carried_python(release: Path, record: dict) -> str:
     """The interpreter of the Python runtime the release carries: unpacked into
     RUNTIME_DIR once, and checked file by file against its own manifest."""
@@ -198,6 +208,11 @@ def carried_python(release: Path, record: dict) -> str:
         p.relative_to(home).as_posix(): p for p in home.rglob("*") if p.is_file() or p.is_symlink()
     }
     found.pop(RUNTIME_MANIFEST, None)
+    # python-build-standalone ships no .pyc for some stdlib modules, so the
+    # first run of one writes it beside its source; CPython checks it against
+    # that (verified) source before use. A cache, not a change - the rule
+    # uqs.deploy.runtime_install's own check applies on a server.
+    found = {r: f for r, f in found.items() if r in listed or not _cache_of(r, listed)}
     bad = sorted(set(found) ^ set(listed))
     bad += sorted(r for r in listed if r in found and _sha256(found[r]) != listed[r])
     if bad:

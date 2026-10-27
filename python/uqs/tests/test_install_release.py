@@ -241,6 +241,20 @@ def test_the_carried_python_is_unpacked_once_and_checked_file_by_file(carrying):
         installer.carried_python(release, record)
 
 
+def test_a_pyc_the_carried_python_wrote_for_its_own_source_is_a_cache(carrying):
+    """Its first run writes a .pyc for a stdlib module the build shipped none
+    for; CPython checks it against the verified source. Not a change."""
+    release, record = carrying
+    installer.carried_python(release, record)
+    cache = release / installer.RUNTIME_DIR / "lib" / "python3.14" / "__pycache__"
+    cache.mkdir(exist_ok=True)
+    (cache / "os.cpython-314.pyc").write_bytes(b"\x00pyc")
+    installer.carried_python(release, record)
+    (cache / "orphan.cpython-314.pyc").write_bytes(b"\x00pyc")
+    with pytest.raises(installer.Refused, match="orphan.cpython-314.pyc"):
+        installer.carried_python(release, record)
+
+
 def test_a_carried_archive_that_is_not_the_recorded_one_is_refused(carrying):
     release, record = carrying
     with pytest.raises(installer.Refused, match="is not the Python runtime the manifest records"):
