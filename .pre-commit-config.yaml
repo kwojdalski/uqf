@@ -368,14 +368,25 @@ repos:
           - -c
           - |
             set -euo pipefail
-            # Runs the whole suite a second time at commit, under .cov's
-            # in-memory instrumentation (in an attestation, the only time:
+            # Runs the suite again at commit, under .cov's in-memory
+            # instrumentation (in an attestation, the only time:
             # attest_kdbx.py takes q-tests' q-unit verdict from this run's
             # outcomes, #1704), and fails when the set of functions nothing
             # enters differs from tests/q/coverage_baseline.txt - in either
             # direction. A new blind spot is a failure; so is a baseline
             # entry whose gap has been closed, because a list that only grows
             # stops describing anything.
+            #
+            # Only what the change reaches (#1719): q-tests' suites, plus a
+            # suite that enters each judged function per
+            # tests/q/coverage_map.txt, judging the functions of the
+            # production files the change reaches, as
+            # scripts/dev/test_impact.py --coverage-hook says (attest_kdbx.py
+            # hands its own decision over in UQF_Q_COVERAGE_SELECTION). ALL
+            # is the whole suite judging every function, as before. A subset
+            # that finds a function never entered hands its verdict to a
+            # whole run; the rest of the tree is judged by the whole run on
+            # master (scripts/dev/master_coverage.py).
             #
             # Through scripts/test.py for the same reason the hook above is:
             # one rule for which interpreter ($QCMD, else q on PATH), never a
@@ -386,7 +397,13 @@ repos:
             # for --no-verify, move this one hook to `stages: [pre-push]`
             # rather than dropping it: the check is cheap compared to
             # noticing months later that nothing calls a function.
-            python3 scripts/test.py q-coverage
+            selection=$(python3 scripts/dev/test_impact.py --coverage-hook)
+            case "$selection" in
+              ALL) python3 scripts/test.py q-coverage ;;
+              # -files a.q,b.q -modules src/x.q,...: no spaces in either list
+              -files\ *\ -modules\ *) read -ra words <<< "$selection"; python3 scripts/test.py q-coverage "${words[@]}" ;;
+              *) echo "q-coverage: unexpected selection: $selection" >&2; exit 1 ;;
+            esac
         # The baseline too: an edit to it alone changes what this judges.
         files: '\.q$|^tests/q/coverage_baseline\.txt$'
         pass_filenames: false

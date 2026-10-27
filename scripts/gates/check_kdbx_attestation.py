@@ -45,6 +45,15 @@ from before subsets (no `q-tests=`), ran the whole suite and need no
 selection. What the subset gives up is a test outside what the graph sees the
 change reach: the full suite still runs on master, and catches it there.
 
+q-coverage may have run a subset too (#1719): q-tests' suites and, per
+tests/q/coverage_map.txt, a suite entering each function it judges,
+instrumenting and judging only the functions of the production files the
+change reaches. `q-coverage=<sha256>` (test_impact.coverage_digest, over those
+suites and modules) is verified the same way, from test_impact.coverage_for
+over this checkout - the head's tree, so the head's map; `all`, and a trailer
+without the field, ran the whole suite. A subset that found a function never
+entered handed its verdict to a whole run, which then records `all`.
+
 It BLOCKS (#1543): CI fails a PR whose judged paths changed and whose head
 tree is not attested. It judges PRs only - a push to master is not re-judged,
 since failing a merge that already happened would block nothing.
@@ -64,6 +73,7 @@ rather than a silent green. It changes nothing for an attested tree.
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import os
 import re
@@ -164,14 +174,15 @@ def changed_paths(base: str, head: str) -> list[str]:
     return git("diff", "--name-only", f"{base}...{head}").split()
 
 
-def parse_trailer(line: str, tree: str) -> tuple[set[str], str] | None:
-    """(the hooks one trailer line attests for `tree`, what q-tests ran), or
-    None if it is not one.
+def parse_trailer(line: str, tree: str) -> tuple[set[str], str, str] | None:
+    """(the hooks one trailer line attests for `tree`, what q-tests ran, what
+    q-coverage ran), or None if it is not one.
 
-    `KDB-X-gates: <tree> hooks=a,b q-tests=<sha256|all>` names its hooks and,
-    when they include q-tests, the subset of the q suites it ran by digest, or
-    `all`. Without `q-tests=` - written before subsets - q-tests ran the whole
-    suite. A bare `KDB-X-gates: <tree>`, written before attestations were
+    `KDB-X-gates: <tree> hooks=a,b q-tests=<sha256|all> q-coverage=<sha256|all>`
+    names its hooks and, for q-tests and q-coverage, the subset each ran by
+    digest, or `all`. Without `q-tests=` - written before subsets - q-tests
+    ran the whole suite; without `q-coverage=` - before #1719 - so did
+    q-coverage. A bare `KDB-X-gates: <tree>`, written before attestations were
     scoped, ran every hook over the whole tree and counts as all of them.
     """
     prefix = f"{TRAILER}: {tree}"
@@ -180,17 +191,18 @@ def parse_trailer(line: str, tree: str) -> tuple[set[str], str] | None:
         return None
     rest = line[len(prefix) :]
     if not rest.strip():
-        return set(_load("scripts/dev/attest_kdbx.py").HOOKS), "all"
+        return set(_load("scripts/dev/attest_kdbx.py").HOOKS), "all", "all"
     words = rest.split()
     if not rest.startswith(" ") or not words[0].startswith("hooks="):
         return None
-    q_tests = "all"
+    ran = {"q-tests": "all", "q-coverage": "all"}
     for word in words[1:]:
         key, eq, value = word.partition("=")
-        if key != "q-tests" or not eq or not re.fullmatch(r"all|[0-9a-f]{64}", value):
+        if key not in ran or not eq or not re.fullmatch(r"all|[0-9a-f]{64}", value):
             return None
-        q_tests = value
-    return {h for h in words[0].removeprefix("hooks=").split(",") if h}, q_tests
+        ran[key] = value
+    hooks = {h for h in words[0].removeprefix("hooks=").split(",") if h}
+    return hooks, ran["q-tests"], ran["q-coverage"]
 
 
 def trailer_hooks(line: str, tree: str) -> set[str] | None:
@@ -199,11 +211,11 @@ def trailer_hooks(line: str, tree: str) -> set[str] | None:
     return None if parsed is None else parsed[0]
 
 
-def _attestations(head: str) -> list[tuple[set[str], str]]:
+def _attestations(head: str) -> list[tuple[set[str], str, str]]:
     """Every trailer for head's tree - on head itself, or the empty commits
     attestations add on top of the same tree - parsed."""
     tree = git("rev-parse", f"{head}^{{tree}}").strip()
-    found: list[tuple[set[str], str]] = []
+    found: list[tuple[set[str], str, str]] = []
     log = git("log", "--format=%T%x00%B%x01", head)
     for entry in log.split("\x01"):
         entry = entry.strip("\n")
@@ -221,19 +233,40 @@ def _attestations(head: str) -> list[tuple[set[str], str]]:
 
 def attested(head: str) -> set[str]:
     """The hooks attested for head's tree, together. Empty when none is."""
-    return set().union(*(hooks for hooks, _ in _attestations(head)))
+    return set().union(*(hooks for hooks, _, _ in _attestations(head)))
 
 
 def q_tests_runs(head: str) -> set[str]:
     """What the q-tests attestations of head's tree ran: `all` and digests."""
-    return {q for hooks, q in _attestations(head) if "q-tests" in hooks}
+    return {q for hooks, q, _ in _attestations(head) if "q-tests" in hooks}
+
+
+def q_coverage_runs(head: str) -> set[str]:
+    """What the q-coverage attestations of head's tree ran: `all` and digests."""
+    return {c for hooks, _, c in _attestations(head) if "q-coverage" in hooks}
 
 
 def q_tests_plan(base: str, head: str):
     """The q suites test_impact.py selects for `base...head` in this checkout
     (CI checks the head out): a test_impact.Plan, its files None for all."""
+    return _plan_for(base, head)
+
+
+@functools.cache
+def _plan_for(base: str, head: str):
+    # once per PR: q-tests' and q-coverage's checks both need it, and drawing
+    # the graph is most of the check's time
     impact = _load("scripts/dev/test_impact.py")
     return impact.plan_for(impact.changed_paths(base, REPO, head), REPO)
+
+
+def q_coverage_plan(base: str, head: str):
+    """What q-coverage runs for `base...head`: test_impact.coverage_for over
+    q-tests' plan - a CoveragePlan, its files None for the whole suite."""
+    impact = _load("scripts/dev/test_impact.py")
+    return impact.coverage_for(
+        q_tests_plan(base, head), impact.changed_paths(base, REPO, head), REPO
+    )
 
 
 def q_tests_refusal(base: str, head: str) -> str | None:
@@ -257,6 +290,32 @@ def q_tests_refusal(base: str, head: str) -> str | None:
             f"the one selected here ({len(plan.files)} files, {plan.record}). Was the "
             "attestation's qlinter the release .qlinter-version pins? Install that, "
             f"or run {full}, on this tree, then push."
+        )
+    return None
+
+
+def q_coverage_refusal(base: str, head: str) -> str | None:
+    """Why head's q-coverage attestation does not cover the PR, or None.
+
+    A whole run covers any change. A subset - q-tests' suites, judging the
+    production files the change reaches (#1719) - covers it only when the
+    one worked out here, from the diff and the tree, has the same digest."""
+    runs = q_coverage_runs(head)
+    if "all" in runs:
+        return None
+    cov = q_coverage_plan(base, head)
+    full = f"`UQF_Q_TESTS_FULL=1 {ATTEST}`"
+    if cov.files is None:
+        return (
+            f"q-coverage ran a subset, but here it is the whole suite ({cov.why}). "
+            f"Run {full} on this tree, then push."
+        )
+    if cov.record not in runs:
+        return (
+            f"q-coverage ran a subset ({', '.join(sorted(runs))}) that is not the one "
+            f"worked out here ({len(cov.files)} suite files, {len(cov.modules)} modules, "
+            f"{cov.record}). Was the attestation's graph qlinter the commit "
+            f".qlinter-graph-rev pins? Install that, or run {full}, on this tree, then push."
         )
     return None
 
@@ -303,6 +362,10 @@ def report(base: str, head: str) -> tuple[bool, str]:
         )
     if "q-tests" in needed:
         why = q_tests_refusal(base, head)
+        if why:
+            return False, why
+    if "q-coverage" in needed:
+        why = q_coverage_refusal(base, head)
         if why:
             return False, why
     if contains(head, base):

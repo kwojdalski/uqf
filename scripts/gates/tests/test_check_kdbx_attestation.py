@@ -35,12 +35,20 @@ def _whole_q_suite(monkeypatch):
     monkeypatch.setattr(attest, "q_tests_plan", lambda base, full: impact.Plan(None, "test"))
 
 
-def recorded(env: dict | None, failures: tuple[str, ...] = ()) -> bool:
+def recorded(env: dict | None, failures: tuple[str, ...] = (), ran: str | None = None) -> bool:
     """What tests/q/run_coverage.q does with attest's outcome variables: write
-    every test it ran, and those that did not pass. True, as a passing hook."""
+    every test it ran, and those that did not pass - and what scripts/test.py
+    q-coverage does with UQF_Q_COVERAGE_RAN: say whether the subset it was
+    given decided (`subset`) or the whole suite did (`all`; `ran` overrides).
+    True, as a passing hook."""
     if env and attest.FAILURES_ENV in env:
         Path(env[attest.RESULTS_ENV]).write_text(".qt.a\ttest_one\n.qt.b\ttest_two\n")
         Path(env[attest.FAILURES_ENV]).write_text("\n".join(failures) + "\n")
+    if env and attest.COVERAGE_RAN_ENV in env:
+        subset = env[impact.COVERAGE_DECIDED_ENV] != "ALL"
+        Path(env[attest.COVERAGE_RAN_ENV]).write_text(
+            (ran or ("subset" if subset else "all")) + "\n"
+        )
     return True
 
 
@@ -559,6 +567,7 @@ def test_a_trailer_says_what_q_tests_ran():
     assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-tests q-tests={d}", tree) == (
         {"q-tests"},
         d,
+        "all",
     )
     assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-tests q-tests=all", tree)[1] == "all"
     # before subsets, and before scoping: the whole suite
@@ -593,7 +602,12 @@ def test_attest_hands_its_selection_to_q_tests_and_records_its_digest(repo, monk
         impact.DECIDED_ENV: "-files test_a.q,test_b.q",
         attest.FROM_COVERAGE_ENV: "1",
     }
-    assert set(envs["q-coverage"]) == {attest.RESULTS_ENV, attest.FAILURES_ENV}
+    assert set(envs["q-coverage"]) == {
+        attest.RESULTS_ENV,
+        attest.FAILURES_ENV,
+        impact.COVERAGE_DECIDED_ENV,
+        attest.COVERAGE_RAN_ENV,
+    }
     body = sh(repo, "log", "-1", "--format=%B")
     assert f"q-tests={impact.digest(SUBSET)}" in body
     assert "q-tests ran: test_a.q, test_b.q" in body
@@ -773,13 +787,13 @@ def test_a_clean_run_passes_both_with_the_suite_run_once(repo, monkeypatch, file
 
 
 @pytest.mark.parametrize(("files", "record"), [(None, "all"), (SUBSET, impact.digest(SUBSET))])
-def test_the_trailer_is_the_one_1703_defines(repo, monkeypatch, files, record):
-    """One run instead of two changes what ran, not what is recorded: the
-    trailer is byte for byte the one #1703 wrote, so CI's check is unchanged."""
+def test_the_trailer_is_1703s_with_what_q_coverage_ran(repo, monkeypatch, files, record):
+    """#1703's trailer, and `q-coverage=` (#1704): `all` here, where q-tests'
+    plan names no module for coverage to judge."""
     assert _attest_once(repo, monkeypatch, files)[0] == 0
     tree = sh(repo, "rev-parse", "HEAD^{tree}")
     trailer = sh(repo, "log", "-1", f"--format=%(trailers:key={check.TRAILER},valueonly)").strip()
-    assert trailer == f"{tree} hooks={','.join(ALL)} q-tests={record}"
+    assert trailer == f"{tree} hooks={','.join(ALL)} q-tests={record} q-coverage=all"
 
 
 def test_q_tests_without_q_coverage_runs_its_own_q_unit(repo, monkeypatch):
@@ -831,3 +845,172 @@ def test_ci_runs_the_check_on_the_repositorys_python():
     wf = _attestation_workflow()
     assert 'python-version: "3.14"' in wf
     assert "uv run --no-project --python 3.14 python scripts/gates/check_kdbx_attestation.py" in wf
+
+
+# --- q-coverage over what the change reaches (#1719) -------------------------
+
+MODULES = ["src/a.q"]
+COV_LINE = "-files test_a.q,test_b.q -modules src/a.q"
+COV_RECORD = impact.coverage_digest(SUBSET, MODULES)
+
+
+def _attest_cov(repo, monkeypatch, ran: str | None = None, failures=()):
+    """attest_kdbx.main() over a src/a.q change whose q-tests plan is SUBSET
+    reaching MODULES; q-coverage's lane says `ran` (default: what it was given).
+    (exit code, the env each hook got, the base)."""
+    envs: dict = {}
+
+    def hook(name, env=None):
+        envs[name] = env
+        return recorded(env, failures, ran)
+
+    monkeypatch.setattr(attest, "REPO", repo)
+    monkeypatch.setattr(attest, "refusal", lambda: None)
+    monkeypatch.setattr(attest, "run_hook", hook)
+    monkeypatch.setattr(
+        attest, "q_tests_plan", lambda base, full: impact.Plan(SUBSET, "test", MODULES)
+    )
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    return attest.main(["--base", base]), envs, base
+
+
+def _trailer(repo) -> str:
+    return sh(repo, "log", "-1", f"--format=%(trailers:key={check.TRAILER},valueonly)").strip()
+
+
+def test_attest_hands_q_coverage_its_subset_and_records_its_digest(repo, monkeypatch):
+    code, envs, _ = _attest_cov(repo, monkeypatch)
+    assert code == 0
+    assert envs["q-coverage"][impact.COVERAGE_DECIDED_ENV] == COV_LINE
+    tree = sh(repo, "rev-parse", "HEAD^{tree}")
+    assert _trailer(repo) == (
+        f"{tree} hooks={','.join(ALL)} q-tests={impact.digest(SUBSET)} q-coverage={COV_RECORD}"
+    )
+    body = sh(repo, "log", "-1", "--format=%B")
+    assert "q-coverage judged: src/a.q" in body
+    assert "q-unit verdict: the q-coverage run of the suites q-tests selected" in body
+
+
+def test_q_tests_selection_is_inside_the_coverage_run(repo, monkeypatch):
+    """q-tests' verdict is read from the coverage run: it must run them all."""
+    _, envs, _ = _attest_cov(repo, monkeypatch)
+    decided = impact.parse_coverage_line(envs["q-coverage"][impact.COVERAGE_DECIDED_ENV])
+    q_tests = impact.parse_line(envs["q-tests"][impact.DECIDED_ENV])
+    assert set(q_tests.files) <= set(decided.files)
+
+
+def test_a_subset_that_handed_its_verdict_to_the_whole_suite_records_all(repo, monkeypatch):
+    """The subset found something; the whole suite ran and passed - which is
+    what is recorded, and what any check accepts."""
+    code, _, base = _attest_cov(repo, monkeypatch, ran="all")
+    assert code == 0
+    assert _trailer(repo).endswith(" q-coverage=all")
+    body = sh(repo, "log", "-1", "--format=%B")
+    assert "the whole suite decided" in body
+    monkeypatch.setattr(check, "q_tests_plan", lambda b, h: impact.Plan(list(SUBSET), "here"))
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert ok, why
+
+
+def test_a_coverage_lane_that_did_not_say_what_it_ran_records_nothing(repo, monkeypatch, capsys):
+    monkeypatch.setattr(attest, "REPO", repo)
+    monkeypatch.setattr(attest, "refusal", lambda: None)
+    # the outcomes are written, so q-tests has its verdict; the record is not
+    monkeypatch.setattr(
+        attest,
+        "run_hook",
+        lambda hook, env=None: recorded(
+            {k: v for k, v in (env or {}).items() if k != attest.COVERAGE_RAN_ENV}
+        ),
+    )
+    base = sh(repo, "rev-parse", "HEAD")
+    commit(repo, "src/a.q", "a:1\n")
+    assert attest.main(["--base", base]) == 1
+    assert "did not say what it ran" in capsys.readouterr().err
+    assert check.TRAILER not in sh(repo, "log", "-1", "--format=%B")
+
+
+def test_a_failure_in_the_coverage_subset_still_fails_q_tests(repo, monkeypatch, capsys):
+    code, envs, _ = _attest_cov(repo, monkeypatch, failures=(".qt.b.test_two\tfail\tx",))
+    assert code == 1 and "q-tests" not in envs
+    assert "q-tests failed" in capsys.readouterr().err
+
+
+def test_a_trailer_says_what_q_coverage_ran():
+    tree = "a" * 40
+    line = f"KDB-X-gates: {tree} hooks=q-coverage,q-tests q-tests=all q-coverage={COV_RECORD}"
+    assert check.parse_trailer(line, tree) == ({"q-coverage", "q-tests"}, "all", COV_RECORD)
+    # before #1704: the whole suite
+    assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-coverage", tree)[2] == "all"
+    assert check.parse_trailer(f"KDB-X-gates: {tree}", tree)[2] == "all"
+    assert check.parse_trailer(f"KDB-X-gates: {tree} hooks=q-coverage q-coverage=x", tree) is None
+
+
+def _same_selection(monkeypatch, modules=MODULES):
+    monkeypatch.setattr(check, "q_tests_plan", lambda b, h: impact.Plan(list(SUBSET), "here"))
+    monkeypatch.setattr(
+        check,
+        "q_coverage_plan",
+        lambda b, h: impact.coverage_for(impact.Plan(list(SUBSET), "here", modules), ["src/a.q"]),
+    )
+
+
+def test_a_coverage_subset_passes_when_the_check_works_out_the_same_one(repo, monkeypatch):
+    _, _, base = _attest_cov(repo, monkeypatch)
+    _same_selection(monkeypatch)
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert ok, why
+
+
+def test_a_coverage_subset_judging_other_modules_is_refused(repo, monkeypatch):
+    _, _, base = _attest_cov(repo, monkeypatch)
+    _same_selection(monkeypatch, modules=["src/a.q", "src/b.q"])
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert not ok
+    assert "q-coverage ran a subset" in why and "not the one worked out here" in why
+    assert "UQF_Q_TESTS_FULL=1" in why
+
+
+def test_a_coverage_subset_where_the_check_runs_the_whole_suite_is_refused(repo, monkeypatch):
+    _, _, base = _attest_cov(repo, monkeypatch)
+    _same_selection(monkeypatch, modules=[])
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert not ok and "here it is the whole suite" in why
+
+
+def test_a_whole_coverage_run_needs_no_selection_to_verify(repo, monkeypatch):
+    _, _, base = _attest_cov(repo, monkeypatch, ran="all")
+    monkeypatch.setattr(check, "q_tests_plan", lambda b, h: impact.Plan(list(SUBSET), "here"))
+
+    def refuse(b, h):
+        raise AssertionError("q-coverage=all needs no selector")
+
+    monkeypatch.setattr(check, "q_coverage_plan", refuse)
+    ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
+    assert ok, why
+
+
+def test_the_real_check_works_coverage_out_with_test_impact(monkeypatch):
+    """check.q_coverage_plan is test_impact's coverage_for over q-tests' plan
+    and the PR's diff."""
+    plan = impact.Plan(list(SUBSET), "x", MODULES)
+    monkeypatch.setattr(check, "q_tests_plan", lambda b, h: plan)
+    fake = type(
+        "M",
+        (),
+        {
+            "changed_paths": staticmethod(lambda base, root, head: ["src/a.q"]),
+            "coverage_for": staticmethod(impact.coverage_for),
+        },
+    )
+    monkeypatch.setattr(check, "_load", lambda rel: fake)
+    assert check.q_coverage_plan("B", "H").record == COV_RECORD
+
+
+def test_the_q_coverage_hook_runs_the_coverage_selection():
+    config = (_ROOT / ".pre-commit-config.yaml").read_text()
+    hook = config.split("- id: q-coverage", 1)[1].split("- id:", 1)[0]
+    assert "scripts/dev/test_impact.py --coverage-hook" in hook
+    assert "ALL) python3 scripts/test.py q-coverage ;;" in hook
+    assert 'python3 scripts/test.py q-coverage "${words[@]}"' in hook

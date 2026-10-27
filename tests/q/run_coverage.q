@@ -54,15 +54,59 @@ nsList:.qt.support.suites[];
 / the failure this tool exists to reveal. `qunit` is the vendored test
 / framework, not this library's code.
 namespaces:.qt.support.library_only .qf.util.functional[];
+known:.cov.targets (enlist `namespaces)!enlist namespaces;
 
--1 "== coverage: instrumenting ",string[count namespaces]," namespace(s) ==";
+/ A SUBSET (#1719): `-files a.q,b.q -modules src/x.q,...` runs the suites the
+/ files define and instruments and judges only the functions the modules
+/ define - what scripts/dev/test_impact.py's coverage_for picks for a change:
+/ q-tests' suites, and for each function judged a file that enters it
+/ (tests/q/coverage_map.txt). Both or neither. A function the subset finds
+/ newly never entered is not a verdict - the map may be stale - so it exits 3
+/ and scripts/test.py q-coverage runs the whole suite, whose verdict stands. A
+/ baseline entry the subset enters is one the whole suite enters too: that
+/ fails here (exit 1), as it would there.
+/ .
+/ `-map PATH` (a whole run only) writes the coverage map: which suite files
+/ enter each function (.qt.support.coverage_map).
+modules:.qt.support.modules_option .z.x;
+subset:not modules~(::);
+if[subset<>not (::)~.qt.support.files_option .z.x;
+    -1 "coverage: -files and -modules go together - a subset names its suites and the modules it judges";
+    exit 2];
+map_path:.qt.support.map_option .z.x;
+if[subset and not map_path~(::);
+    -1 "coverage: -map is written from a whole run - a subset does not see what the other suites enter";
+    exit 2];
+all_suites:nsList;
+nsList:.qt.support.selected_suites[nsList;.z.x];
+judged:.qt.support.defined_in[known;modules];
+
+-1 "== coverage: instrumenting ",$[subset;
+    string[count judged]," function(s) in ",string[count modules]," module(s), running ",string[count nsList]," suite(s)";
+    string[count namespaces]," namespace(s)"]," ==";
 
 / The run's test outcomes are kept, not discarded: with UQF_TEST_RESULTS and
 / UQF_TEST_FAILURES set they are written as tests/run_tests.q writes them,
 / and scripts/dev/attest_kdbx.py takes q-tests' q-unit verdict from them
 / rather than running the suite a second time (#1704). This exit code does
 / not change: it is the coverage gate's, and a failing test fails q-tests.
-results:.cov.run[{[] `res set .qunit.runTests[nsList]}; enlist (::); (enlist `namespaces)!enlist namespaces];
+/ A subset whose modules define no function still runs its suites, for
+/ those outcomes, and has nothing to judge.
+if[0=count judged;
+    .qt.support.write_outcomes .qunit.runTests[nsList];
+    -1 "";
+    -1 "coverage: the modules define no function to judge - nothing is uncovered";
+    exit 0];
+first_probe:.cov.nextLine;
+tracking:$[map_path~(::); (::); .qt.support.track_suites[]];
+results:.cov.run[{[] `res set .qunit.runTests[nsList]}; enlist (::); (enlist `functions)!enlist judged];
+if[not map_path~(::);
+    .qt.support.untrack_suites tracking;
+    suite_files:.qt.support.suite_files[];
+    file_suites:suite_files!{[s;f] .qt.support.suites_of[s;enlist "tests/q/",string f]}[all_suites] each suite_files;
+    cmap:.qt.support.coverage_map[results;first_probe;.qt.support.suite_hits;file_suites];
+    (hsym `$map_path) 0: .qt.support.map_lines cmap;
+    -1 "coverage: wrote the coverage map (",string[count cmap]," function(s)) to ",map_path];
 .qt.support.write_outcomes res;
 
 / Banner, because the suite this instruments contains .cov's OWN tests, and
@@ -70,7 +114,7 @@ results:.cov.run[{[] `res set .qunit.runTests[nsList]}; enlist (::); (enlist `na
 / delimiter the reader meets "Coverage: 100% of 3 tracked character(s)"
 / immediately before the real total and has no way to tell them apart.
 -1 "";
--1 "================= whole-suite coverage =================";
+-1 $[subset; "================= subset coverage ================="; "================= whole-suite coverage ================="];
 -1 each .cov.format.summary results;
 
 / The functions nothing entered at all. Listed rather than left in a
@@ -93,7 +137,9 @@ if[count cold;
 / BOTH directions. A new never-entered function is a blind spot that just
 / opened. A baseline entry that is now entered means the list has gone stale,
 / and a list that only ever grows stops describing anything - so closing a
-/ gap includes deleting its line.
+/ gap includes deleting its line. A subset judges the baseline entries among
+/ its functions, and any that names no function at all
+/ (.qt.support.coverage_gate).
 baseline_path:`:tests/q/coverage_baseline.txt;
 baseline_lines:@[read0;baseline_path;{[e] ()}];
 if[0=count baseline_lines;
@@ -103,8 +149,9 @@ if[0=count baseline_lines;
 / Comments and blanks out; the rest are function names.
 baseline:`$baseline_lines where not (baseline_lines like "#*") or 0=count each baseline_lines;
 
-new_gaps:asc cold except baseline;
-closed:asc baseline except cold;
+gate:.qt.support.coverage_gate[cold;baseline;judged;known];
+new_gaps:gate`new_gaps;
+closed:gate`closed;
 
 if[count new_gaps;
     -1 "";
@@ -120,8 +167,13 @@ if[count closed;
     -1 "";
     -1 "      A baseline that keeps entries after their gap is closed stops describing anything."];
 
+if[subset and (count new_gaps) and 0=count closed;
+    -1 "";
+    -1 "coverage: a subset that finds a function never entered is not a verdict - a run of the whole suite decides (exit 3)";
+    exit 3];
 if[count[new_gaps]+count closed; exit 1];
 
 -1 "";
--1 "coverage: every uncovered function is a known one (",string[count baseline]," in the baseline)";
+-1 "coverage: every uncovered function is a known one (",string[count baseline]," in the baseline",
+    $[subset; "; ",string[count judged]," function(s) judged"; ""],")";
 exit 0

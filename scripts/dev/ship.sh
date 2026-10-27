@@ -15,6 +15,8 @@
 # itself passed, not merely that nothing failed: before CI has created its
 # jobs, the checks reported so far can all be green (#1697 merged that way).
 # Repeats up to three times when master moves underneath. One line per step.
+# After the merge it starts the whole-suite coverage run on master's new tip
+# in the background (scripts/dev/master_coverage.py, #1719).
 set -u
 pr=$1
 wt=$2
@@ -34,6 +36,19 @@ ci_state() {
     | if any($b[]; . == "fail") then "fail"
       elif $agg == "pass" and (any($b[]; . == "pending") | not) then "pass"
       else "pending" end' 2>/dev/null
+}
+
+# The whole-suite coverage run on master's new tip (#1719), in the background:
+# an attestation judges coverage only in the modules its change reaches, and
+# this is where the rest of the tree is judged. Started with python3, from the
+# git directory, so it outlives this worktree; --if-new and its lock keep two
+# merges from running it twice. attest_kdbx.py prints its last verdict.
+master_coverage() {
+  local state
+  state="$(git rev-parse --path-format=absolute --git-common-dir)/uqf-master-coverage"
+  mkdir -p "$state"
+  nohup python3 "$wt/scripts/dev/master_coverage.py" --if-new >> "$state/log" 2>&1 < /dev/null &
+  echo "$pr: whole-suite coverage of master started in the background (log: $state/log)"
 }
 
 for _ in 1 2 3; do
@@ -71,7 +86,11 @@ for _ in 1 2 3; do
   git fetch -q origin
   gate_ok || { echo "$pr: master moved a judged path meanwhile, again"; continue; }
   conflicted && { echo "$pr: conflicts with master now, again"; continue; }
-  gh pr merge "$pr" --merge > /dev/null 2>&1 && { echo "$pr: MERGED"; exit 0; }
+  if gh pr merge "$pr" --merge > /dev/null 2>&1; then
+    echo "$pr: MERGED"
+    master_coverage
+    exit 0
+  fi
   echo "$pr: merge refused, retrying"
 done
 echo "$pr: gave up after 3 attempts (logs: $logs)"
