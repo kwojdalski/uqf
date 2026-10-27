@@ -60,7 +60,16 @@ def test_only_the_peachq_runtime_gets_an_interpreter_of_its_own(pinned):
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "peachq")) == {
         "UQF_Q_IMPL": "peachq",
         "QCMD": str(pinned),
+        "QINIT": str(ROOT / "scripts" / "peachq_init.q"),
     }
+
+
+def test_the_peachq_init_file_exists_and_only_fills_gaps():
+    """QINIT names a file that is there, and that defines .Q.chk only when the
+    interpreter lacks it (#1650: TorQ's wdb calls it as it starts)."""
+    init = ROOT / "scripts" / stack_env.PEACHQ_INIT
+    assert init.is_file()
+    assert "if[10h=type @[value;`.Q.chk;{x}];" in init.read_text()
 
 
 def test_build_env_stays_pure_and_never_resolves_a_binary(monkeypatch, tmp_path):
