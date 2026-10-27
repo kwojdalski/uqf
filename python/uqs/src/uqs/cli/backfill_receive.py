@@ -1,8 +1,9 @@
 """The two halves of a backfill whose HDB is on another machine (#1650).
 
-`uqs job receive WORKER --attach NAME --port P`, on the stack's machine, starts
-the receiver; `uqs job backfill WORKER --attach NAME --writer HOST:P ...`, on the
-source's machine, extracts and sends to it. What each decides is in
+`uqs job receive --contract ID --attach NAME --port P`, on the stack's machine,
+starts the receiver for a receiver contract approved there (`uqs job contract`);
+`uqs job backfill WORKER --attach NAME --writer HOST:P ...`, on the source's
+machine, extracts and sends to it. What each decides is in
 uqs.attach.backfill_remote.
 """
 
@@ -15,7 +16,6 @@ from typing import Annotated
 import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
-from uqs.cli import completion
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
@@ -85,22 +85,20 @@ def extract(
 
 @job_app.command("receive", rich_help_panel=JOB_OPERATIONS_PANEL)
 def receive(
-    worker: Annotated[
-        str,
-        typer.Argument(
-            help="The bounded worker whose dataset the receiver writes",
-            autocompletion=completion.backfill_workers,
-        ),
-    ],
     attach: Annotated[
         str, typer.Option("--attach", help="The saved, verified attachment whose HDB it writes")
     ],
+    contract: Annotated[
+        str | None,
+        typer.Option(
+            "--contract",
+            help="The identity of the receiver contract approved for the attachment "
+            "(`uqs job contract approve`); a unique prefix will do",
+        ),
+    ] = None,
     port: Annotated[
         int | None, typer.Option("--port", help="The port the extractor connects to")
     ] = None,
-    max_rows: Annotated[
-        int, typer.Option("--max-rows", help="The most rows one message may carry")
-    ] = 100_000,
     stop: Annotated[
         bool,
         typer.Option(
@@ -113,13 +111,18 @@ def receive(
 ) -> None:
     """Start the receiver for a backfill extracted on another machine (#1650).
 
-    Run on the STACK's machine. It admits the attachment's destination against the
+    Run on the STACK's machine, which needs no code of the job: it serves the
+    receiver contract --contract that `uqs job contract approve` bound to the
+    attachment here (#1717), and takes the row limit and the permitted conflict
+    policies from that approval. It admits the attachment's destination against the
     live stack as `uqs job backfill --attach` does - the pinned HDB, its writers and
     readers, the end-of-day fence - then listens on --port for the extractor
     (`uqs job backfill WORKER --attach NAME --writer THIS-HOST:PORT ...` on the
-    source's machine). Every batch is admitted and committed through the fenced
-    HDB writer; the readers are asked to reload as rows finish. It authenticates the
-    attachment's stack user, and stops itself where the end-of-day fence begins.
+    source's machine). Every batch is checked against the contract - dataset,
+    columns and types, window column, row key, partition, conflict policy - and
+    committed through the fenced HDB writer; the readers are asked to reload as rows
+    finish. It authenticates the attachment's stack user, and stops itself where the
+    end-of-day fence begins.
     """
     if stop:
         stopped = backfill_remote.stop_receivers(attach)
@@ -132,10 +135,18 @@ def receive(
     if port is None:
         _die(UqsError("--port is required to start a receiver: the port the extractor connects to"))
         return
+    if contract is None:
+        _die(
+            UqsError(
+                "--contract is required to start a receiver: the identity of a contract "
+                f"approved for the attachment (`uqs job contract list --attach {attach}`)"
+            )
+        )
+        return
     try:
         att = config.load(attach)
         out = backfill_remote.receive(
-            _paths(), attach, worker, port=port, ipc=service.ipc_for(att), max_rows=max_rows
+            _paths(), attach, contract, port=port, ipc=service.ipc_for(att)
         )
     except UqsError as exc:
         _die(exc)
@@ -144,7 +155,8 @@ def receive(
         typer.echo(json.dumps(out, indent=2, sort_keys=True))
     else:
         console.print(
-            f"receiving {out['dataset']} for attachment {out['attachment']} on port {out['port']} "
+            f"receiving {out['dataset']} (contract {out['contract']}) for attachment "
+            f"{out['attachment']} on port {out['port']} "
             f"(pid {out['pid']}) into {out['hdb_dir']}: dates to {out['last_writable_date']}, "
             f"until {out['stops_at']}; log {out['log']}",
             markup=False,

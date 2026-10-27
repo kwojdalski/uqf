@@ -44,9 +44,14 @@ port:5510+`int$rand 400;
 if[not null @[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
     [-2 "run_remote_writer: port ",string[port]," is already in use - not this run's receiver"; exit 1]];
 log_path:statusdir,"/remote_receiver.log";
+/ the receiver contract the destination's operator approved, derived here from the worker's
+/ declarations as `uqs job contract export` derives it (#1717): the receiver loads no worker
+contract_path:statusdir,"/contract.json";
+(hsym `$contract_path) 0: enlist .j.j `contract`binding!(.qetl.io.remote.contract.of `demo_deals_backfill;
+    (enlist `conflict_policies)!enlist `append`upsert);
 / the real receiver (scripts/dev/remote_receiver.q), as `uqs job receive` starts it - no readers
 / to reload here, the writer allowed as this account, the fence a day away
-flags:" -worker demo_deals_backfill -attachment uat -destid rwtest -hdb ",root,
+flags:" -contract ",contract_path," -attachment uat -destid rwtest -hdb ",root,
     " -max_date ",string[.z.d-1]," -deadline ",string[.z.p+1D]," -readers _none_ -user nobody",
     " -journal ",statusdir,"/journal -writers ",string .z.u;
 child:"QHOME=",getenv[`QHOME]," ",Q," scripts/dev/remote_receiver.q -p ",string[port],flags,
@@ -94,6 +99,16 @@ check["which the destination acknowledges without appending it again";
 check["coverage now holds the whole range";
     .qetl.coverage.is_covered[`demo_deals;`;`$"v1~fixture";.z.p;d 1;d 4]];
 check["nothing was written to an HDB from this process";0=count .qetl.io.touched];
+
+/ a batch the approved contract does not admit is refused over the wire, and nothing is written
+o:`on_conflict`row_key`time_column`range_from`range_to`partition_column`partition`source_version!(
+    `replace;`deal_id;`deal_time;d 5;d 6;`;`;`v1);
+b:select from .qpipe.source.demo_deals.fixture[] where deal_time>=d 5, deal_time<d 6;
+st:@[h;(`.qetl.io.remote.submit;.qetl.io.remote.request_keys!(`uat;`demo_deals;`demo_deals;`;o;b));{x}];
+check["a conflict policy the approval does not permit is refused";st like "remote: on_conflict replace is not one the contract permits*"];
+st:@[h;(`.qetl.io.remote.submit;.qetl.io.remote.request_keys!(`uat;`demo_deals;`demo_deals;`;@[o;`on_conflict`row_key;:;(`upsert;`sym)];b));{x}];
+check["so is a row key that is not the contract's";st like "remote: the batch's row key sym is not the contract's deal_id"];
+check["and nothing more reached the destination";(fixture_rows[d 1;d 4])=rows_on_disk[]];
 
 st:@[h;(`.qetl.io.remote.status;::);{x}];
 check["the gate refuses the receiver's status - it is not an entry point";st~"remote_receiver: not an entry point"];

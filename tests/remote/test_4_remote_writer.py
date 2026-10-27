@@ -8,6 +8,11 @@ client must hold no HDB of its own. hdb1 must serve the day where it can map a
 partitioned HDB; a PeachQ hdb1 maps none, and there the run must say it is
 written but not queryable, apart from the durable write.
 
+uat-stack has NO copy of the job (#1717): its checkout lacks the bundle that
+defines remote_trades' source, transform and worker. The worker's receiver
+contract is exported on uat-client, carried to uat-stack with the attachment,
+approved there, and the receiver is started by that contract's identity.
+
 The receiver writes the HDB the attachment pinned from the stack's wdb, and is
 coordinated with that wdb, so it needs one running. TorQ's wdb calls `.Q.chk`
 as it starts, which PeachQ lacks: the stack's PeachQ runtime defines it from
@@ -18,7 +23,7 @@ with its own error log, rather than skipping it.
 from __future__ import annotations
 
 import pytest
-from remote_world import BUNDLE, FEED_JOB, TABLE, World
+from remote_world import BUNDLE, TABLE, World, copy_between
 
 WORKER = "remote_trades_backfill"
 DAY, NEXT = "2026-01-05", "2026-01-06"
@@ -32,15 +37,22 @@ def receiving(world: World) -> World:
     # Without a wdb the attachment pins no HDB for a receiver to write: fails,
     # with the tail of the wdb's error log.
     world.wait_answering("wdb1", seconds=60)
-    local = world.stack.uqs(
-        "job", "attach", "feed-uat", "--job", FEED_JOB, "--bundle", BUNDLE,
-        "--stack-id", str(world.base), "--consumer", "rdb1", "--consumer", "wdb1",
-        "--runtime-only", "--no-start", "--yes",
-    )  # fmt: skip
-    assert local.returncode == 0, local.stdout + local.stderr
-    started = world.stack.uqs(
-        "job", "receive", WORKER, "--attach", "feed-uat", "--port", str(world.receiver_port)
+    # the attachment the client made, carried to the stack's machine as it stands
+    copy_between(world.client, world.stack, "/data/attachments", "feed-uat")
+    exported = world.client.uqs(
+        "job", "contract", "export", WORKER, "--output", "/tmp/remote_trades.contract.json"
     )
+    assert exported.returncode == 0, exported.stdout + exported.stderr
+    copy_between(world.client, world.stack, "/tmp", "remote_trades.contract.json")
+    code, approved = world.stack.uqs_json(
+        "job", "contract", "approve", "/tmp/remote_trades.contract.json", "--attach", "feed-uat"
+    )
+    assert code == 0, approved
+    world.contract = approved["contract"]["identity"]
+    started = world.stack.uqs(
+        "job", "receive", "--contract", world.contract, "--attach", "feed-uat",
+        "--port", str(world.receiver_port),
+    )  # fmt: skip
     assert started.returncode == 0, started.stdout + started.stderr
     return world
 
@@ -110,3 +122,13 @@ def test_a_rerun_rewrites_nothing(receiving: World, backfilled):
 
 def test_the_extracting_machine_holds_no_hdb(receiving: World, backfilled):
     assert receiving.client.sh(f"ls -d /data/*/hdb/{DAY_Q}/{TABLE}").returncode != 0
+
+
+def test_the_stacks_machine_has_none_of_the_jobs_code(receiving: World, backfilled):
+    """What wrote the rows had no source, transform or worker of the job to load."""
+    assert receiving.stack.sh(f"ls {BUNDLE}").returncode != 0, "no bundle in its checkout"
+    found = receiving.stack.sh("grep -rl remote_trades_backfill src scripts/dev || true")
+    assert found.stdout.strip() == "", f"no definition of the worker: {found.stdout}"
+    logs = "/data/*/status/attached/feed-uat-*/logs"
+    log = receiving.stack.sh(f"cat {logs}/remote_trades.receiver-*.log")
+    assert f"under contract {receiving.contract}" in log.stdout, log.stdout + log.stderr

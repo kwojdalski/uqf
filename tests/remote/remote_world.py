@@ -116,6 +116,8 @@ class World:
     client: Machine
     laptop: Machine
     networks: list[str] = field(default_factory=list)
+    #: the receiver contract test_4 approved on the stack's machine
+    contract: str = ""
 
     @property
     def receiver_port(self) -> int:
@@ -197,10 +199,30 @@ def build() -> World:
     started = world.stack_uqs("start", *STACK_PROCS)
     assert started.returncode == 0, started.stdout + started.stderr
     world.wait_answering("discovery1", "stp1", "rdb1", "hdb1")
-    for machine in (world.client, world.laptop, world.stack):
+    for machine in (world.client, world.laptop):
         prepared = machine.uqs("runtime", "prepare", "--bundle", BUNDLE)
         assert prepared.returncode == 0, prepared.stdout + prepared.stderr
+    # The stack's machine never has the client's job bundle (#1717): its receiver
+    # writes the backfill from an approved receiver contract, not from the job's code.
+    gone = world.stack.sh(f"rm -rf {BUNDLE}")
+    assert gone.returncode == 0, gone.stdout + gone.stderr
     return world
+
+
+def copy_between(src: Machine, dst: Machine, directory: str, name: str) -> None:
+    """Carry `directory/name` from one machine to another, as an operator would by
+    hand: a tar stream through this host, the two machines sharing no filesystem."""
+    out = subprocess.Popen(
+        ["docker", "exec", src.name, "tar", "-C", directory, "--exclude=backfills",
+         "-cf", "-", name],
+        stdout=subprocess.PIPE,
+    )  # fmt: skip
+    done = subprocess.run(
+        ["docker", "exec", "-i", dst.name, "sh", "-c",
+         f"mkdir -p {directory} && tar -C {directory} -xf -"],
+        stdin=out.stdout, capture_output=True, text=True, timeout=120, check=False,
+    )  # fmt: skip
+    assert out.wait(timeout=120) == 0 and done.returncode == 0, done.stdout + done.stderr
 
 
 def teardown(world: World | None) -> None:

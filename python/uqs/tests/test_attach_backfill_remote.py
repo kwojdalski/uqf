@@ -2,8 +2,9 @@
 
 End to end on real q processes, with the world test_attach_backfill_run builds: an upstream
 the worker reads, a scripted stack, a native-shaped HDB and a fake reader. The receiver runs
-as `uqs job receive` starts it; the extractor as `uqs job backfill --attach --writer` does,
-under an attachment directory of its own, as it would be on another machine.
+as `uqs job receive` starts it, from a receiver contract exported from the worker and
+approved for the attachment (#1717); the extractor as `uqs job backfill --attach --writer`
+does, under an attachment directory of its own, as it would be on another machine.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import socket
 import time
 
 import pytest
-from attach_backfill_support import save_attachment
+from attach_backfill_support import UQF_ROOT, save_attachment
 from test_attach_backfill_run import (  # noqa: F401
     FROM,
     FUTURE,
@@ -25,17 +26,29 @@ from test_attach_backfill_run import (  # noqa: F401
     world,
 )
 
-from uqs.attach import backfill_owner, backfill_remote, backfill_run, config
+from uqs.attach import backfill_owner, backfill_remote, backfill_run, config, receiver_contract
 from uqs.attach.config import AttachmentError
 from uqs.attach.schema import parse_definition
 from uqs.interpreter import PEACHQ, q_impl
-from uqs.paths import UqsError
+from uqs.paths import UqsError, paths_for_root
 
 pytestmark = pytest.mark.skipif(
     q_impl() == PEACHQ,
     reason="the world is test_attach_backfill_run's: a kdb+ HDB and upstream, which PeachQ "
     "loads neither of",
 )
+
+
+@pytest.fixture(scope="module")
+def exported() -> receiver_contract.Contract:
+    """The worker's contract, exported from this checkout - the extraction machine's."""
+    return receiver_contract.export(paths_for_root(UQF_ROOT), WORKER)
+
+
+@pytest.fixture
+def approved(world, exported) -> str:  # noqa: F811
+    """The contract approved for pb-uat on the stack's machine: its identity."""
+    return receiver_contract.approve(world.paths, exported, "pb-uat")["contract"]["identity"]
 
 
 def _free_port() -> int:
@@ -60,9 +73,9 @@ def test_a_writer_that_is_not_host_and_port_is_refused(bad):
         backfill_remote.parse_writer(bad)
 
 
-def test_a_backfill_extracted_here_is_written_by_the_stacks_receiver(world):  # noqa: F811
+def test_a_backfill_extracted_here_is_written_by_the_stacks_receiver(world, approved):  # noqa: F811
     port = _free_port()
-    started = backfill_remote.receive(world.paths, "pb-uat", WORKER, port=port, ipc=world.stack)
+    started = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     receiver_log = started["log"]
     try:
         assert _listening(port), open(receiver_log).read()
@@ -112,14 +125,14 @@ def test_an_extractor_with_no_receiver_fails_and_covers_nothing(world):  # noqa:
     assert not (run_.state_dir / "etl_coverage").exists()
 
 
-def test_a_receiver_holds_detach_off_until_it_is_stopped(world):  # noqa: F811
+def test_a_receiver_holds_detach_off_until_it_is_stopped(world, approved):  # noqa: F811
     from uqs.attach import backfill_owner
     from uqs.attach.config import AttachmentError
 
     port = _free_port()
-    started = backfill_remote.receive(world.paths, "pb-uat", WORKER, port=port, ipc=world.stack)
+    started = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     assert _listening(port), open(started["log"]).read()
-    with pytest.raises(AttachmentError, match="upstream_trades_backfill.receiver"):
+    with pytest.raises(AttachmentError, match="imported_trades.receiver"):
         backfill_owner.refuse_while_active("pb-uat")
     stopped = backfill_remote.stop_receivers("pb-uat")
     assert [r["pid"] for r in stopped] == [started["pid"]]
@@ -146,49 +159,51 @@ def _accepting(port: int) -> bool:
 # q and leaves no owner record.
 
 
-def _refused_receive(world, match, exc=UqsError):  # noqa: F811
+def _refused_receive(world, approved, match, exc=UqsError):  # noqa: F811
     with pytest.raises(exc, match=match):
-        backfill_remote.receive(world.paths, "pb-uat", WORKER, port=_free_port(), ipc=world.stack)
+        backfill_remote.receive(world.paths, "pb-uat", approved, port=_free_port(), ipc=world.stack)
     assert backfill_owner.active("pb-uat") == [], "nothing was started"
 
 
 @pytest.mark.parametrize("state", ["applied", "detached"])
-def test_a_receiver_is_never_started_for_an_unverified_attachment(world, state):  # noqa: F811
+def test_a_receiver_is_never_started_for_an_unverified_attachment(world, approved, state):  # noqa: F811
     save_attachment(
         "pb-uat", world.hdb, host="localhost", table=parse_definition(TABLE),
         origin={"folder": str(world.bundle)}, state=state,
     )  # fmt: skip
-    _refused_receive(world, f"attachment pb-uat is {state}, not verified")
+    _refused_receive(world, approved, f"attachment pb-uat is {state}, not verified")
 
 
-def test_a_receiver_is_not_started_inside_the_end_of_day_fence(world):  # noqa: F811
+def test_a_receiver_is_not_started_inside_the_end_of_day_fence(world, approved):  # noqa: F811
     world.stack.state_over["wdb1"] = dict(FUTURE) | {
         "partition": "2090.01.01",
         "now": "2090.01.01D23:30:00.000000000",
     }
-    _refused_receive(world, "end of day is at 2090-01-02T00:00:00\\+00:00, 30 minutes away")
+    _refused_receive(
+        world, approved, "end of day is at 2090-01-02T00:00:00\\+00:00, 30 minutes away"
+    )
 
 
-def test_a_receiver_is_not_started_for_a_wdb_that_reports_another_hdb(world):  # noqa: F811
+def test_a_receiver_is_not_started_for_a_wdb_that_reports_another_hdb(world, approved):  # noqa: F811
     world.stack.named("wdb1")["hdbdir"] = f":{world.tmp / 'elsewhere'}"
-    _refused_receive(world, "report another HDB directory than attachment pb-uat")
+    _refused_receive(world, approved, "report another HDB directory than attachment pb-uat")
 
 
-def test_a_second_receiver_for_the_attachment_is_refused(world):  # noqa: F811
+def test_a_second_receiver_for_the_attachment_is_refused(world, approved):  # noqa: F811
     port = _free_port()
-    started = backfill_remote.receive(world.paths, "pb-uat", WORKER, port=port, ipc=world.stack)
+    started = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     try:
         assert _listening(port), open(started["log"]).read()
         with pytest.raises(AttachmentError, match="has an attached backfill running"):
             backfill_remote.receive(
-                world.paths, "pb-uat", WORKER, port=_free_port(), ipc=world.stack
+                world.paths, "pb-uat", approved, port=_free_port(), ipc=world.stack
             )
         assert [r["pid"] for r in backfill_owner.active("pb-uat")] == [started["pid"]]
     finally:
         backfill_remote.stop_receivers("pb-uat")
 
 
-def test_a_killed_receiver_is_replaced_and_the_rerun_fills_the_hdb(world):  # noqa: F811
+def test_a_killed_receiver_is_replaced_and_the_rerun_fills_the_hdb(world, approved):  # noqa: F811
     """A receiver killed outright (SIGKILL, no clean-up) holds nothing: the extractor
     against it fails and covers nothing, and a receiver started in its place takes
     the rerun to completion."""
@@ -196,7 +211,7 @@ def test_a_killed_receiver_is_replaced_and_the_rerun_fills_the_hdb(world):  # no
     import signal
 
     port = _free_port()
-    first = backfill_remote.receive(world.paths, "pb-uat", WORKER, port=port, ipc=world.stack)
+    first = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     assert _listening(port), open(first["log"]).read()
     os.kill(first["pid"], signal.SIGKILL)
     for _ in range(50):
@@ -215,7 +230,7 @@ def test_a_killed_receiver_is_replaced_and_the_rerun_fills_the_hdb(world):  # no
     assert not (failed.state_dir / "etl_coverage").exists(), "a dead receiver covers nothing"
     world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(world.attach_dir))
     port = _free_port()
-    second = backfill_remote.receive(world.paths, "pb-uat", WORKER, port=port, ipc=world.stack)
+    second = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     try:
         assert _listening(port), open(second["log"]).read()
         world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(theirs))
@@ -229,3 +244,76 @@ def test_a_killed_receiver_is_replaced_and_the_rerun_fills_the_hdb(world):  # no
         assert (rerun.state_dir / "etl_coverage").is_file()
     finally:
         os.kill(second["pid"], signal.SIGTERM)
+
+
+# ------------------------------------------------- the receiver needs no job (#1717)
+
+
+def test_a_receiver_is_never_started_for_a_contract_not_approved_here(world):  # noqa: F811
+    _refused_receive(world, "0123456789abcdef", "no contract 0123456789abcdef is approved")
+
+
+def _checkout_without_jobs(world):  # noqa: F811
+    """A receiving checkout: this tree's src/ and scripts/dev/ with every source,
+    transform, worker, streaming job and reaction removed - nothing that could
+    define the worker whose rows it is about to write."""
+    root = world.tmp / "receiving-checkout"
+    shutil.copytree(UQF_ROOT / "src", root / "src")
+    shutil.copytree(UQF_ROOT / "scripts" / "dev", root / "scripts" / "dev")
+    for kind in ("sources", "transforms", "workers", "streaming", "reactions"):
+        shutil.rmtree(root / "src" / "etl" / kind, ignore_errors=True)
+    assert not list(root.rglob("upstream_trades*")), "no trace of the job is left"
+    return paths_for_root(root)
+
+
+def test_a_checkout_with_no_job_definitions_receives_the_backfill(world, approved):  # noqa: F811
+    receiving = _checkout_without_jobs(world)
+    port = _free_port()
+    started = backfill_remote.receive(receiving, "pb-uat", approved, port=port, ipc=world.stack)
+    receiver_log = started["log"]
+    try:
+        assert _listening(port), open(receiver_log).read()
+        assert f"under contract {approved}" in open(receiver_log).read()
+        theirs = world.tmp / "extractor-attachments"
+        shutil.copytree(world.attach_dir, theirs, ignore=shutil.ignore_patterns("backfills"))
+        world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(theirs))
+        run_, _ = backfill_remote.launch_remote(
+            world.paths, "pb-uat", WORKER, "v1", FROM, TO,
+            writer=f"localhost:{port}", mode="run", on_conflict="replace",
+        )  # fmt: skip
+        code, result = backfill_run.follow(run_, timeout=180)
+        assert code == 0 and result["state"] == "completed", (
+            run_.log.read_text() + open(receiver_log).read()
+        )
+        assert result["outcome"] == "queryable"
+        assert read_rows(world.hdb, "2015.01.07") > 0, "written by a receiver with no job code"
+    finally:
+        backfill_remote.stop_receivers("pb-uat")
+
+
+def test_a_policy_the_approval_does_not_permit_writes_and_covers_nothing(world, exported):  # noqa: F811
+    """The stack's operator approved upsert only: an extractor running replace is
+    refused batch by batch, so nothing reaches the HDB and nothing is covered."""
+    ident = receiver_contract.approve(
+        world.paths, exported, "pb-uat", conflict_policies=["upsert"]
+    )["contract"]["identity"]
+    port = _free_port()
+    started = backfill_remote.receive(world.paths, "pb-uat", ident, port=port, ipc=world.stack)
+    try:
+        assert _listening(port), open(started["log"]).read()
+        assert started["conflict_policies"] == ["upsert"]
+        theirs = world.tmp / "extractor-attachments"
+        shutil.copytree(world.attach_dir, theirs, ignore=shutil.ignore_patterns("backfills"))
+        world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(theirs))
+        run_, _ = backfill_remote.launch_remote(
+            world.paths, "pb-uat", WORKER, "v1", FROM, TO,
+            writer=f"localhost:{port}", mode="run", on_conflict="replace",
+        )  # fmt: skip
+        code, _ = backfill_run.follow(run_, timeout=180)
+        log = run_.log.read_text()
+        assert code != 0, log
+        assert "is not one the contract permits" in log
+        assert not list(world.hdb.glob("*/imported_trades")), "nothing was written"
+        assert not (run_.state_dir / "etl_coverage").exists(), "nothing was covered"
+    finally:
+        backfill_remote.stop_receivers("pb-uat")
