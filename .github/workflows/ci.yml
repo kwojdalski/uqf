@@ -280,9 +280,18 @@ jobs:
         run: UQF_PEACHQ="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
 
   peachq-python:
-    name: PeachQ Python tests
+    name: PeachQ Python tests (${{ matrix.shard }}/3)
     timeout-minutes: 20
     runs-on: ubuntu-24.04
+    # Three runners, a third of the test modules each (#1696): on one 4-vCPU
+    # runner the suite is CPU-bound, and more xdist workers measured no faster
+    # (#1695). scripts/dev/pytest_shards.py splits by module, balanced by
+    # scripts/dev/test_module_durations.json; every module is in exactly one
+    # shard whatever that record says. "Repository checks" needs every shard.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       UV_LOCKED: "true"
     steps:
@@ -376,7 +385,7 @@ jobs:
         # which this job replaces in CI. -n auto: in parallel (pytest-xdist);
         # --dist loadgroup keeps the tests marked xdist_group (the whole-stack
         # ones) on one worker.
-        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup
+        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --shard "${{ matrix.shard }}/3"
 
 
   # The one name branch protection requires: green only when every job above
