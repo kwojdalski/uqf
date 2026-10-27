@@ -614,7 +614,7 @@ def test_a_subset_the_check_does_not_select_is_refused(repo, monkeypatch):
     monkeypatch.setattr(check, "q_tests_plan", lambda b, h: impact.Plan(["test_a.q"], "here"))
     ok, why = check.report(base, sh(repo, "rev-parse", "HEAD"))
     assert not ok
-    assert "not the one selected here" in why and ".qlinter-graph-rev" in why
+    assert "not the one selected here" in why and ".qlinter-version" in why
     assert "UQF_Q_TESTS_FULL=1" in why
 
 
@@ -673,10 +673,8 @@ def test_the_real_check_selects_with_test_impact(repo, monkeypatch):
 
 def test_ci_installs_the_pinned_graph_qlinter_for_the_check():
     wf = _attestation_workflow()
-    assert ".qlinter-graph-rev" in wf and "cargo install --git" in wf
-    assert "UQF_QLINTER:" in wf
-    rev = (_ROOT / ".qlinter-graph-rev").read_text().strip()
-    assert len(rev) == 40 and all(c in "0123456789abcdef" for c in rev)
+    assert ".qlinter-version" in wf and "releases/download" in wf
+    assert "UQF_QLINTER:" in wf and "analyze graph" in wf
 
 
 def test_the_q_tests_hook_runs_the_selection():

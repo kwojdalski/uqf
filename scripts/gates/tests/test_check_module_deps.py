@@ -11,8 +11,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parents[3]
 
 # scripts/ is not a package, so the gate is loaded by path, as the other gate
@@ -64,7 +62,7 @@ def test_every_library_file_is_in_a_domain_or_the_data_module():
     }, namespaces
 
 
-def test_a_new_edge_fails_naming_its_line(tmp_path):
+def test_a_new_edge_fails_naming_its_file(tmp_path):
     root = _tree(
         tmp_path,
         {
@@ -74,7 +72,7 @@ def test_a_new_edge_fails_naming_its_line(tmp_path):
     )
     out = cmd.problems(root, frozenset())
     assert out == [
-        "src/pricing/b.q:2: b -> a is a new module dependency - add it to ALLOWED in "
+        "src/pricing/b.q: b -> a is a new module dependency - add it to ALLOWED in "
         "scripts/gates/check_module_deps.py in the same change, or call something the "
         "module may already depend on"
     ]
@@ -143,7 +141,7 @@ def test_a_removed_edge_is_refused_even_when_listed(tmp_path):
         },
     )
     out = cmd.problems(root, frozenset({("cross", "execution")}))
-    assert "src/pricing/cross.q:1: cross -> execution is refused" in out[0]
+    assert "src/pricing/cross.q: cross -> execution is refused" in out[0]
 
 
 def test_a_module_split_across_files_keeps_every_files_edges(tmp_path):
@@ -203,27 +201,15 @@ def test_a_namespace_only_file_is_read_for_duplicates(tmp_path):
     assert len(cmd.duplicates(root)) == 1
 
 
-# --- the two readers (#1690) ------------------------------------------------
-# The gate reads its edges from `qlinter analyze graph` where the installed
-# qlinter draws one, and by regex where it does not (the pinned 0.14.14). These
-# hold the two to the same answer, so the regex reader can be removed when the
-# pin moves without the gate's verdict moving with it.
-
-_GRAPH = pytest.mark.skipif(
-    not cmd.qlint_graph.available(),
-    reason="no qlinter with `analyze graph` ($UQF_QLINTER or PATH): scripts/gates/qlint_graph.py",
-)
+# --- the graph reader (#1690) -----------------------------------------------
+# The gate reads its edges from `qlinter analyze graph`, which the pinned
+# qlinter (0.14.15) draws.
 
 
-@_GRAPH
-def test_the_graph_and_the_regex_reader_find_the_same_edges_on_this_tree():
-    graph = cmd.edges(use_graph=True)
-    regex = cmd.edges(use_graph=False)
-    assert set(graph) == set(regex) == set(cmd.ALLOWED)
-    assert graph == regex, "every graph edge is reported at the line the regex reader found"
+def test_the_graph_finds_exactly_the_reviewed_edges_on_this_tree():
+    assert set(cmd.edges()) == set(cmd.ALLOWED)
 
 
-@_GRAPH
 def test_the_graph_reader_fails_a_new_edge_too(tmp_path):
     root = _tree(
         tmp_path,
@@ -232,10 +218,15 @@ def test_the_graph_reader_fails_a_new_edge_too(tmp_path):
             "src/pricing/b.q": "/ .qf.px.f in a comment\n.qf.mkt.g:{.qf.px.f x}\n",
         },
     )
-    assert cmd.edges(root, use_graph=True) == {("b", "a"): "src/pricing/b.q:2"}
+    assert cmd.edges(root) == {("b", "a"): "src/pricing/b.q"}
 
 
-def test_without_a_graph_the_regex_reader_is_used(monkeypatch):
-    """The pinned 0.14.14 has no graph: the gate must still run on it."""
-    monkeypatch.setattr(cmd.qlint_graph, "available", lambda qlinter=None: False)
-    assert set(cmd.edges()) == set(cmd.ALLOWED)
+def test_a_comment_or_a_string_draws_no_edge(tmp_path):
+    root = _tree(
+        tmp_path,
+        {
+            "src/foundation/a.q": ".qf.px.f:{x}\n",
+            "src/pricing/b.q": '/ .qf.px.f\n.qf.mkt.g:{"see .qf.px.f"}\n',
+        },
+    )
+    assert cmd.edges(root) == {}

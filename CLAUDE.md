@@ -28,7 +28,7 @@ means no rule matched, which is much weaker than "this is correct" - it is never
 a substitute for `q tests/run_tests.q`.
 
 Installed separately, because the linter is its own project:
-`cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.14 --locked`.
+`cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.16 --locked`.
 The tag must match `.qlinter-version`, the one place the pin is set: the q-traps
 hook refuses any other installed version.
 

@@ -31,13 +31,8 @@ ENV = "UQF_QLINTER"
 
 #: What a binary has to be to draw the graph - said in every refusal.
 NEEDED = (
-    "q-lint with `qlinter analyze graph` (kwojdalski/q-lint#115 and #116, merged after "
-    "the 0.14.14 release): install the commit .qlinter-graph-rev pins - the one CI's "
-    "KDB-X attestation check selects q tests with - out of the way of the pinned "
-    "qlinter the q-traps hook needs, `cargo install --git "
-    "https://github.com/kwojdalski/q-lint --rev $(cat .qlinter-graph-rev) --locked "
-    f"--root ~/.cache/uqf/qlint-graph`, and point ${ENV} at its bin/qlinter; or "
-    "install the first release after 0.14.14 once .qlinter-version moves to it"
+    "q-lint v0.14.15 or later, the release with `qlinter analyze graph` - the pin in "
+    f".qlinter-version (install it, or point ${ENV} at a build of it)"
 )
 
 
