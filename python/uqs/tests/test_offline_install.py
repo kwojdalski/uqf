@@ -69,7 +69,7 @@ SOURCE = Path(sys.base_prefix)
 RID = "20261026T000000Z-0123456789ab"
 #: What `uqs --version` imports beyond uqs itself: uqs.cli's import-time
 #: third-party packages, measured; their requirements join them.
-ROOTS = ("typer", "rich", "loguru")
+ROOTS = ("typer", "rich", "loguru", "packaging")
 #: A sitecustomize: every connect and name lookup is logged, then refused.
 GUARD = """
 import os, socket
