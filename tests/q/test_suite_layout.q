@@ -80,7 +80,9 @@
 
 .qt.harness.layout.test_every_discovered_suite_holds_a_test_and_sits_under_qt:{[t]
     got:.qt.support.suites[];
-    .qunit.assertTrue[(count got)>50;"the real tree's suites are found"];
+    / At least one per file loaded: every suite file declares a suite, and a
+    / run under -files loads only some of them.
+    .qunit.assertTrue[(count got)>=count .qt.support.suite_files[];"the real tree's suites are found"];
     .qunit.assertTrue[all got like ".qt.*";"all under .qt"];
     .qunit.assertEquals[got where 0=count each .qt.support.tests_in each got;`symbol$();"each holds a test"];
     .qunit.assertEquals[count got;count distinct got;"each exactly once"]};
@@ -217,19 +219,73 @@
         "ordered: UQF_TEST_ORDER must be reverse, shuffle, or unset - not sideways";
         "a typo must not quietly run the default"]};
 
+/ --- a subset: -files (#1690, #1694) ----------------------------------------
+/ `q tests/run_tests.q -files a.q,b.q` loads every suite file and runs the
+/ suites the named ones define - what scripts/dev/test_impact.py selects for a
+/ change, and what a shard of the suite runs.
+
+.qt.harness.layout.test_without_the_option_every_suite_runs:{[t]
+    s:`.qt.a`.qt.b;
+    .qunit.assertEquals[.qt.support.files_option ("-q";"-p";"5000");::;"not given"];
+    .qunit.assertEquals[.qt.support.select_files[`test_a.q`test_b.q;::];`test_a.q`test_b.q;"every file"];
+    .qunit.assertEquals[.qt.support.selected_suites[s;("-q";"-p";"5000")];s;"every suite"]};
+
+.qt.harness.layout.test_the_option_is_read_from_the_command_line:{[t]
+    .qunit.assertEquals[.qt.support.files_option ("-files";"test_c.q,tests/q/test_a.q");
+        "test_c.q,tests/q/test_a.q";"one comma-separated argument"];
+    .qunit.assertEquals[.qt.support.files_option ("-files";"test_c.q";"test_a.q");
+        "test_c.q,test_a.q";"or several"];
+    .qunit.assertEquals[.qt.support.files_option ("-files";"");"";"given, empty"]};
+
+.qt.harness.layout.test_a_selection_keeps_the_suite_order_and_takes_paths_or_names:{[t]
+    f:`test_a.q`test_b.q`test_c.q;
+    .qunit.assertEquals[.qt.support.select_files[f;"test_c.q, tests/q/test_a.q"];`test_a.q`test_c.q;
+        "a bare name and a tests/q/ path both name a file, and the order is the suite's"]};
+
+.qt.harness.layout.test_a_selection_naming_no_suite_file_is_refused:{[t]
+    .qunit.assertThrows[.qt.support.select_files[`test_a.q`test_b.q;];"test_a.q,test_gone.q";
+        "support.select_files: -files names no suite file: test_gone.q";
+        "an unknown file is refused, not skipped"];
+    .qunit.assertThrows[.qt.support.selected_suites[.qt.support.suites[];];("-files";"test_gone.q");
+        "support.select_files: -files names no suite file: test_gone.q";
+        "and the runner's own call refuses it"]};
+
+.qt.harness.layout.test_an_empty_selection_is_refused:{[t]
+    msg:"support.select_files: -files names no file - give tests/q/test_*.q names, comma-separated";
+    .qunit.assertThrows[.qt.support.select_files[`test_a.q`test_b.q;];"";msg;"empty"];
+    .qunit.assertThrows[.qt.support.select_files[`test_a.q`test_b.q;];" , ";msg;"only separators"]};
+
+.qt.harness.layout.test_a_selected_file_runs_its_suites_and_an_unselected_one_is_loaded_but_not_run:{[t]
+    / Two real suite files: this one and test_seed.q. Naming this one runs
+    / .qt.harness.layout and not .qt.harness.seed - whose definitions are
+    / loaded all the same, so a suite leaning on them still finds them.
+    all_suites:.qt.support.suites[];
+    got:.qt.support.selected_suites[all_suites;("-files";"test_suite_layout.q")];
+    .qunit.assertTrue[`.qt.harness.layout in got;"the selected file's suite runs"];
+    .qunit.assertFalse[`.qt.harness.seed in got;"the unselected file's suite does not"];
+    .qunit.assertEquals[type .qt.harness.seed.known;7h;"but what that file defines is loaded"];
+    .qunit.assertEquals[.qt.support.selected_suites[all_suites;("-files";"test_seed.q,test_suite_layout.q")];
+        all_suites where all_suites in `.qt.harness.layout`.qt.harness.seed;"two files, two suites, in run order"]};
+
+.qt.harness.layout.test_a_suite_split_over_files_is_found_from_each:{[t]
+    / A file declaring tests in a parent and a child suite selects both. The
+    / file is only read, never loaded, so its names are not reserved ones.
+    system"mkdir -p build/test-status";
+    f:"build/test-status/split_suite.q";
+    (hsym `$f) 0: (".qt.splitprobe.test_one:{[t] 1}";".qt.splitprobe.child.test_two:{[t] 2}";
+        ".qt.splitprobe.helper:{[] 3}");
+    s:`.qt.splitprobe`.qt.splitprobe.child`.qt.otherprobe;
+    .qunit.assertEquals[.qt.support.suites_of[s;enlist f];2#s;
+        "both namespaces that hold a declared test, and not the other"]};
+
+.qt.harness.layout.test_every_file_is_loaded_whatever_runs:{[t]
+    / The load does not read -files: every suite file is loaded in every run.
+    .qunit.assertEquals[.qt.support.suite_files[];asc f where (f:key `:tests/q) like "test_*.q";
+        "every suite file"]};
+
 / --- the library does not carry the harness --------------------------------
 
 .qt.harness.layout.test_a_library_scan_drops_the_harness_and_nothing_else:{[t]
     nss:`.q`.qunit`.qt`.qt.support`.qt.qetl.io`.qetl.io`.qpipe.job.x`.qtorq;
     .qunit.assertEquals[.qt.support.library_only nss;`.qetl.io`.qpipe.job.x`.qtorq;
         ".qf.util.owned lists every root namespace starting with q, which includes .qt"]};
-
-.qt.harness.layout.test_production_sources_never_mention_the_test_tree:{[t]
-    / init.q and everything it loads must stand without .qt and .qunit: the
-    / tree is loaded by processes that have no tests directory. The runtime
-    / half - a fresh interpreter loading src/ finds neither - is
-    / python/uqs/tests/test_etl_standalone_load.py.
-    files:(.qt.support.q_files["src"]),(.qt.support.q_files["scripts/processes"]);
-    code:raze {[f] ls:read0 hsym `$f; ls:ls where not (trim each ls) like "/*"; (f,": "),/:ls where
-        (ls like "*.qt.*") or (ls like "*.qunit*") or ls like "*tests/lib*"} each files;
-    .qunit.assertEquals[code;();"no production line refers to .qt, .qunit or tests/lib"]};

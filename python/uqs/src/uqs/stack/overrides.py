@@ -63,11 +63,10 @@ def merge_bundle(
     # Earlier installs placed bundle rows in the host file. Move rows only
     # when they still match the ledger; changed values belong to the operator.
     migrated = False
-    if not path.is_file():
-        for proc, fld, value in previous:
-            if host_rows.get((proc, fld)) == value:
-                host_rows.pop((proc, fld))
-                migrated = True
+    for proc, fld, value in previous:
+        if host_rows.get((proc, fld)) == value:
+            host_rows.pop((proc, fld))
+            migrated = True
     for proc, fld, value in new_rows:
         if (proc, fld) in host_rows and host_rows[(proc, fld)] != value:
             raise BundleError(
