@@ -260,3 +260,87 @@ def test_a_carried_archive_that_is_not_the_recorded_one_is_refused(carrying):
     with pytest.raises(installer.Refused, match="is not the Python runtime the manifest records"):
         installer.carried_python(release, {**record, "sha256": "ab" * 32})
     assert not (release / installer.RUNTIME_DIR).exists()
+
+
+# --- the host contract, and the environment it writes (#1646) ------------------------
+
+
+def _manifest(release: Path, **extra) -> None:
+    """`release`'s manifest with `extra` keys, which no file listing covers."""
+    manifest = json.loads((release / installer.MANIFEST).read_text())
+    manifest.update(extra)
+    (release / installer.MANIFEST).write_text(json.dumps(manifest))
+
+
+def test_a_host_lacking_a_contract_tool_is_refused_before_anything_is_written(release, capsys):
+    _manifest(release, host={"tools": ["sh", "uqf-no-such-tool"]})
+    assert _install(release) == 1
+    err = capsys.readouterr().err
+    assert "this host lacks uqf-no-such-tool" in err and "minimum host contract" in err
+    assert not (release / installer.VENV).exists()
+    assert _install(release, "--check") == 1, "--check refuses it too"
+
+
+def test_a_host_with_every_contract_tool_installs(release, capsys):
+    _manifest(release, host={"tools": ["sh"]})
+    assert _install(release) == 0
+    assert "the host has the 1 tools the release runs" in capsys.readouterr().out
+
+
+def test_a_release_naming_no_host_tools_checks_none():
+    assert installer.check_host({}) == []
+
+
+def test_every_release_names_the_tools_preflight_checks(tmp_path):
+    from uqs.deploy import artifact, preflight
+    from uqs.deploy import build as release_build
+
+    root, py = tmp_path / "tree", tmp_path / "py"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "init.q").write_text("/ the tree\n")
+    (py / "wheels").mkdir(parents=True)
+    (py / "requirements.txt").write_text("")
+    pkg = release_build.build_artifact(
+        root, tmp_path / "out", rid="20261007T000000Z-0123456789ab", rev="0123456789abcdef",
+        dirty=False, files=["src/init.q"], python_dir=py,
+        target=artifact.Target(os="linux", arch="x86_64", python="3.14"),
+    )  # fmt: skip
+    assert pkg.manifest["host"]["tools"] == list(artifact.HOST_TOOLS)
+    loop = preflight.PREFLIGHT.split("for tool in ", 1)[1].split("; do", 1)[0]
+    assert tuple(loop.replace("\\\n", " ").split()) == artifact.HOST_TOOLS
+
+
+def test_no_env_file_and_no_kafka_write_no_deploy_env(release):
+    assert _install(release) == 0
+    assert not (release / installer.ENV_FILE).exists()
+
+
+def test_a_release_carrying_kafka_names_its_own_copy_in_deploy_env(release, tmp_path):
+    _manifest(release, kafka={"native": {"kfk": "1.6.6"}})
+    env_file = tmp_path / "site.env"
+    env_file.write_text("export LD_LIBRARY_PATH=/opt/site/lib\n")
+    assert _install(release, "--env-file", str(env_file)) == 0
+    home = release.resolve() / ".release" / "kafka"
+    lines = (release / installer.ENV_FILE).read_text().splitlines()
+    assert lines[1:] == [
+        f"set -a; . {env_file}; set +a",
+        f"export UQF_KFK_HOME={home}",
+        f'export LD_LIBRARY_PATH={home}/lib"${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"',
+    ], "the site file first, so the release's own copy comes ahead of the site's"
+    out = subprocess.run(
+        ["bash", "-c", f". {release / installer.ENV_FILE}; echo $UQF_KFK_HOME; "
+         "echo $LD_LIBRARY_PATH"],
+        capture_output=True, text=True, check=True,
+    ).stdout.split()  # fmt: skip
+    assert out == [str(home), f"{home}/lib:/opt/site/lib"]
+
+
+def test_the_installer_puts_kafka_where_the_build_does():
+    from uqs.deploy import kafka
+
+    assert installer.KAFKA_DIR == kafka.KAFKA_DIR and installer.KAFKA_LIB == kafka.LIB_SUBDIR
+
+
+def test_a_relative_env_file_is_refused_before_the_venv_is_made(release, capsys):
+    assert _install(release, "--env-file", "site.env") == 1
+    assert not (release / installer.VENV).exists()

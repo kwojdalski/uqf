@@ -1,5 +1,7 @@
 """Split the Python suite across CI runners by test module (#1696).
 
+A test marked `shard_apart` is a unit of its own (see APART).
+
 The PeachQ Python job is CPU-bound on its 4-vCPU runner: more xdist workers
 measured no faster (#1695). So the suite is split across several runners, a
 whole module to one shard. A module's fixtures are then built once, in one
@@ -15,11 +17,15 @@ whatever the record says.
     # refresh the record, on a CI-like run (PeachQ, the stack tests on):
     uv run pytest -n auto --dist loadgroup \
         --store-shard-durations scripts/dev/test_module_durations.json
+    # or from CI's own times: each shard uploads durations-N.json
+    gh run download <run-id> --pattern 'durations-*' --dir /tmp/d
+    python3 scripts/dev/pytest_shards.py --merge /tmp/d/*/durations-*.json
 """
 
 from __future__ import annotations
 
 import json
+import re
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -59,6 +65,20 @@ def module_of(nodeid: str) -> str:
     return nodeid.split("::", 1)[0]
 
 
+#: The marker for a test that is a shard unit of its own rather than part of
+#: its module's: a slow test that may not share a MACHINE with another one
+#: (the fixed-port whole-stack tests), so on one runner it waits for it, while
+#: on separate runners it need not.
+APART = "shard_apart"
+
+
+def unit_of(nodeid: str, keywords) -> str:
+    """What is assigned to a shard: the test itself when marked APART, else
+    its module. xdist's loadgroup reports a grouped test as `<id>@<group>`;
+    the suffix is dropped, so the record names what collection names."""
+    return re.sub(r"@[\w.-]+$", "", nodeid) if APART in keywords else module_of(nodeid)
+
+
 def load_weights(path: Path = MODULE_DURATIONS) -> dict[str, float]:
     return json.loads(path.read_text()) if path.is_file() else {}
 
@@ -71,10 +91,29 @@ class Recorder:
         self.seconds: dict[str, float] = defaultdict(float)
 
     def pytest_runtest_logreport(self, report) -> None:
-        self.seconds[module_of(report.nodeid)] += report.duration
+        self.seconds[unit_of(report.nodeid, report.keywords)] += report.duration
 
     def pytest_sessionfinish(self, session) -> None:
         if hasattr(session.config, "workerinput"):
             return  # an xdist worker: the controller sees every report
         data = {m: round(s, 2) for m, s in sorted(self.seconds.items())}
         self.path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
+
+
+def merge(paths: list[Path], out: Path = MODULE_DURATIONS) -> dict[str, float]:
+    """One record from the shards' own: each holds only its modules, so a
+    module appears in exactly one of them."""
+    data: dict[str, float] = {}
+    for path in paths:
+        data.update(json.loads(path.read_text()))
+    out.write_text(json.dumps(dict(sorted(data.items())), indent=1) + "\n")
+    return data
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) < 3 or sys.argv[1] != "--merge":
+        raise SystemExit("usage: pytest_shards.py --merge durations-1.json ...")
+    merged = merge([Path(a) for a in sys.argv[2:]])
+    print(f"{MODULE_DURATIONS.name}: {len(merged)} modules, {round(sum(merged.values()))}s")
