@@ -205,7 +205,8 @@ def _passes_level(level: str, min_level: str | None) -> bool:
 
 def emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
     level = _LOGURU_LEVEL.get(rec["loglevel"], "INFO")
-    if not _passes_level(level, min_level):
+    # a line with no level of its own (an attached run's RESULT, #1725) always shows
+    if not rec.get("unleveled") and not _passes_level(level, min_level):
         return
     # A query trace's code is shown as a block; every other message as it is.
     # Here, the one path both the recent and the follow modes print through.
@@ -342,6 +343,7 @@ def _follow(
     awaited: list[Path] | None = None,
     before: Callable[[], None] | None = None,
     history: Callable[[], list[dict[str, str]]] | None = None,
+    parse: Callable[[str], dict[str, str] | None] = parse_log_line,
 ) -> None:
     import queue
 
@@ -379,13 +381,13 @@ def _follow(
 
     try:
         for rec in history() if history is not None else []:
-            emit(log, rec, None)
+            emit(log, rec, min_level)
         if before is not None:
             before()
         if awaited:
             threading.Thread(target=await_new, args=(list(awaited),), daemon=True).start()
         while True:
-            rec = parse_log_line(line_queue.get())
+            rec = parse(line_queue.get())
             if rec is not None:
                 emit(log, rec, min_level)
     except KeyboardInterrupt:

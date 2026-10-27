@@ -902,6 +902,11 @@ uqs logs fxorderbookfeed1 -f --level WARNING   # live tail, warnings/errors only
 Lines are sorted by the log's own timestamp. `-f` keeps following across
 restarts and the daily roll. `--level` filters to that level and above.
 
+An attached backfill or receiver is no TorQ process and has no `out_` log.
+`uqs logs --attach NAME --worker WORKER` reads its latest run instead, with the
+same `-f`, `-n` and `--level`; `--run` picks an older run
+([attach-existing-torq](attach-existing-torq.md#seeing-what-happened)).
+
 `uqs logs --multitail` follows the same files in
 [multitail](https://www.vanheusden.com/multitail/), one pane per file, titled
 with its file name, instead of merging them - so two busy processes stay side by

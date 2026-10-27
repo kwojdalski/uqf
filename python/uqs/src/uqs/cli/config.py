@@ -37,8 +37,8 @@ from uqs.cli.shared import (
 )
 from uqs.deploy import targets
 from uqs.paths import UqsError
+from uqs.stack import attached_logs, listing
 from uqs.stack import channel as stack_channel
-from uqs.stack import listing
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
@@ -225,6 +225,30 @@ def logs(
             "--id", help="With --channel: only this worker or component's lines (repeatable)"
         ),
     ] = None,
+    attach: Annotated[
+        str | None,
+        typer.Option(
+            "--attach",
+            help="Read an attached backfill's or receiver's log instead: the latest run for "
+            "this attachment (`uqs job backfill --attach`)",
+        ),
+    ] = None,
+    worker: Annotated[
+        str | None,
+        typer.Option(
+            "--worker",
+            help="With --attach: whose run - the worker, or <dataset>.receiver. Needed when "
+            "the attachment has logs of more than one",
+        ),
+    ] = None,
+    run: Annotated[
+        str | None,
+        typer.Option(
+            "--run",
+            help="With --attach: an older run, by its log's file name or a prefix of its "
+            "stamp (e.g. 20261027T1304)",
+        ),
+    ] = None,
 ) -> None:
     """Tail out_/err_*.log for one or more processes through the same
     colorized logger the CLI itself uses, instead of raw per-process files -
@@ -236,7 +260,30 @@ def logs(
     `--channel` subscribes instead of reading files: every line the processes
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
     --level ERROR`, `logs fxpositions1 --channel --id fx_positions` (#1067).
+
+    `--attach` reads an attached backfill's or receiver's run instead, which is
+    no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`
+    (#1725). Its q errors and RESULT line are shown whatever `--level` says.
     """
+    if attach is None:
+        for option, used in {"--worker": worker, "--run": run}.items():
+            if used is not None:
+                _die(UqsError(f"{option} needs --attach"))
+                return
+    else:
+        clash = {"a process name": bool(procs), "--channel": channel, "--multitail": multitail}
+        for option, used in clash.items():
+            if used:
+                _die(UqsError(f"{option} does not apply with --attach, which reads one run's log"))
+                return
+        try:
+            attached_logs.show(
+                _paths(), attach, worker=worker, run=run,
+                follow=follow, lines=lines, min_level=level,
+            )  # fmt: skip
+        except UqsError as exc:
+            _die(exc)
+        return
     if ids and not channel:
         _die(UqsError("--id needs --channel"))
         return

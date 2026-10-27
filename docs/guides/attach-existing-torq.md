@@ -922,6 +922,11 @@ asked again, and the readiness record advances only when each has answered.
 - `uqs list backfills` - per destination: attachment, worker, state (`running`,
   `completed`, ...), outcome, whether the rows are queryable, the log, and what
   to do next when they are not.
+- `uqs logs --attach NAME --worker WORKER [-f]` - a run's log, coloured as a
+  process's is, with `--lines` and `--level`. It reads the latest run of that
+  worker (or `<dataset>.receiver`) across the attachment's destinations, and
+  `--run` picks an older one by its log's file name or a prefix of its stamp. q
+  errors and the closing `RESULT` line are shown whatever `--level` says.
 - `uqs job runs list | status | show --attach NAME` - the destination's run
   ledger; `show` prints the re-run command with `--attach` in it.
 - `uqs job backfill ... --attach NAME --mode plan` shows `reload owed` when an
