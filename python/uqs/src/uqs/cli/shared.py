@@ -10,6 +10,7 @@ is what keeps `uqs start` spelled that way after the split.
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Callable, Sequence
 from importlib.metadata import version as installed_version
@@ -23,7 +24,7 @@ from rich.table import Table
 from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cli import completion, table_browser
-from uqs.logger import configure_logging, get_logger
+from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError
 from uqs.stack import runtime
 
@@ -280,7 +281,18 @@ def _lines(result) -> int:
 
 def _die(exc: UqsError) -> None:
     log.error("{}", exc)
+    json_refusal(str(exc))
     raise typer.Exit(code=1)
+
+
+def json_refusal(message: str) -> None:
+    """With --json, the refusal as the one JSON document stdout carries (#1685).
+
+    The log line has gone to stderr (uqs.logger.json_requested); without this
+    a refused --json command would leave stdout empty, and a caller parsing it
+    would read a refusal as a broken pipe. Nothing without --json."""
+    if json_requested():
+        print(json.dumps({"ok": False, "error": message}, indent=2))
 
 
 def _sort_key(value: object):

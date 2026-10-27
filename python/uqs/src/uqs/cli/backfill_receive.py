@@ -70,7 +70,10 @@ def extract(
     if not wait:
         _report(info, as_json, f"started {worker} (pid {run_.pid}) -> {writer}; log {run_.log}")
         raise typer.Exit(code=0)
-    console.print(f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]")
+    if not as_json:  # with --json, stdout is the one document below (#1685)
+        console.print(
+            f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
+        )
     code, result = backfill_run.follow(run_)
     _report(
         {**info, "result": result, "exit_code": code},
@@ -121,7 +124,10 @@ def receive(
     if stop:
         stopped = backfill_remote.stop_receivers(attach)
         names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
-        console.print(f"stopped: {names}", markup=False)
+        if as_json:
+            typer.echo(json.dumps({"stopped": stopped}, indent=2, sort_keys=True))
+        else:
+            console.print(f"stopped: {names}", markup=False)
         raise typer.Exit(code=0)
     if port is None:
         _die(UqsError("--port is required to start a receiver: the port the extractor connects to"))
