@@ -117,6 +117,8 @@ def record(root: Path, cfg: Config, report: Reported, now: datetime | None = Non
             "remote_user": cfg.remote_user,
             "release": r.get("release"),
             "revision": r.get("revision"),
+            # the bytes deployed, as the server checked them (#1557)
+            "artifact": r.get("artifact"),
             "profile": r.get("profile"),
             "runtime": cfg.runtime,
             "status": r.get("status"),

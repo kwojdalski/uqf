@@ -11,9 +11,8 @@ WHAT IS IN IT:
                 credentials, licences, .envrc, virtual environments, runtime
                 data, logs, tests or build output.
   .release/     requirements.txt, uqs's dependencies pinned with hashes from
-                the committed uv.lock, and wheels/: the uqs wheel and every
-                pinned dependency's wheel for the TARGET, so the server
-                installs without a network.
+                uv.lock, and wheels/: uqs's and every pinned dependency's wheel
+                for the TARGET, so the server installs without a network.
   .release/kafka/
                 only with --kafka-home (#1515): KX's kfk for the target, with
                 its libraries and notices (uqs.deploy.kafka).
@@ -24,8 +23,8 @@ WHAT IS IN IT:
                 uqf-frontend's wheels beside uqs's (uqs.deploy.frontend).
   RELEASE_MANIFEST.json
                 the revision, whether the tree was dirty, the target OS,
-                architecture, Python and the glibc its wheels need, and every
-                member's sha256.
+                architecture, Python and the glibc its wheels need, the host
+                tools it needs (#1646) and every member's sha256.
 
 SIDECAR BUNDLES (#800), only with --bundle: each is installed by `uqs job
 install`'s installer (uqs.stack.bundle_build) into a staged copy of the tracked
@@ -35,8 +34,7 @@ installed. The manifest gains `bundles`: each one's version, revision, files
 and hashes, and its jobs - with each streaming job's dependency closure, which
 `uqs deploy push --jobs` starts.
 
-The builder needs uv and the network (to export the lock, build the uqs wheel
-and fetch dependency wheels), and no SSH or credentials: CI can run it.
+The builder needs uv and the network, never SSH or credentials: CI can run it.
 """
 
 from __future__ import annotations
@@ -57,6 +55,7 @@ from pathlib import Path
 from uqs.deploy import foreign_blocks, frontend, kafka, portable, python_runtime
 from uqs.deploy.artifact import (
     FORMAT,
+    HOST_TOOLS,
     INSTALLER,
     MANIFEST,
     PACKAGING_MODE,
@@ -241,6 +240,7 @@ def build_artifact(
         # locked wheel, installable with no network - by `uqs deploy push`, or on
         # the server by the installer it carries
         "packaging": {"mode": PACKAGING_MODE, "installer": INSTALLER},
+        "host": {"tools": list(HOST_TOOLS)},  # the installer checks them (#1646)
     }
     if bundles:
         manifest["bundles"] = bundles

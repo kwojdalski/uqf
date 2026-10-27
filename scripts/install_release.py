@@ -13,22 +13,28 @@ In order, each step refusing with what to do before the next one writes:
   1. integrity - every file RELEASE_MANIFEST.json lists has its recorded sha256;
   2. platform  - this host's OS, architecture and glibc meet the artifact's
      target: the glibc its wheels need, which the manifest records;
-  3. Python    - the interpreter is the version the artifact targets. A release
+  3. host      - every tool the manifest's host contract names is on PATH: what
+     torq.sh and the release's processes run (docs/guides/deploy.md, "The
+     minimum host contract"), the list preflight checks on a push;
+  4. Python    - the interpreter is the version the artifact targets. A release
      built with `uqs deploy build --python-runtime` carries a CPython: unless
      --python names another, it is unpacked into .release/python, checked file
      by file against its own manifest, and is the interpreter - so the host
      needs only a python3 (3.8 or later) to run this script;
-  4. install   - `.venv` is created in the release by `python -m venv`, and the
+  5. install   - `.venv` is created in the release by `python -m venv`, and the
      locked dependencies then uqs itself (and, for a release built with
      --frontend, uqf-frontend) are installed from `.release/wheels`
      with `--no-index` and the lock's hashes required: no registry is reached,
      and a wheel that is missing or altered is refused rather than fetched;
-  5. environment - with `--env-file`, `deploy.env` is written to load that
-     site file, so `.venv/bin/uqs` (and `uqs --target`) run the release with it.
+  6. environment - `deploy.env` is written when there is anything for it: with
+     `--env-file`, a line loading that site file, so `.venv/bin/uqs` (and
+     `uqs --target`) run the release with it; for a release that carries
+     KX's Kafka client, UQF_KFK_HOME and LD_LIBRARY_PATH naming the release's
+     own copy, as a push's deploy.env does.
 
 Nothing outside the release directory is written: not the system Python, not q,
 not TorQ, not `current`. Switching the current release and starting processes
-stay separate, explicit steps. `--check` runs steps 1-3 only, writing nothing: a
+stay separate, explicit steps. `--check` runs steps 1-4 only, writing nothing: a
 carried Python is unpacked and run by the install, not by --check. A failed
 install removes the `.venv` it created, so a rerun starts clean.
 """
@@ -57,6 +63,10 @@ RUNTIME_MANIFEST = "RUNTIME_MANIFEST.json"
 #: What `uname -m` may call an architecture, by the name a release target uses
 #: (uqs.deploy.artifact.ARCH_ALIASES, which this stdlib-only script cannot import).
 ARCH_ALIASES = {"amd64": "x86_64", "arm64": "aarch64"}
+#: Where a release carries KX's Kafka client, and the libraries it loads
+#: (uqs.deploy.kafka.KAFKA_DIR and LIB_SUBDIR).
+KAFKA_DIR = ".release/kafka"
+KAFKA_LIB = "lib"
 
 
 class Refused(Exception):
@@ -131,6 +141,20 @@ def check_platform(target: dict, system: str, machine: str, libc: tuple[str, str
             f"the release's wheels need glibc {floor[0]}.{floor[1]} or later; "
             f"this host has {version}"
         )
+
+
+def check_host(manifest: dict, which=shutil.which) -> list[str]:
+    """The host contract's tools the manifest names, each on PATH; returns
+    them. A release built before the manifest named them names none."""
+    tools = (manifest.get("host") or {}).get("tools") or []
+    missing = [t for t in tools if not which(t)]
+    if missing:
+        raise Refused(
+            f"this host lacks {', '.join(missing)} - the release's processes and torq.sh run "
+            "them (docs/guides/deploy.md, the minimum host contract): install them, or put "
+            "them on PATH"
+        )
+    return list(tools)
 
 
 def check_python(python: str, target: dict) -> str:
@@ -261,15 +285,36 @@ def install(release: Path, manifest: dict, python: str) -> None:
         raise
 
 
-def write_env(release: Path, env_file: str) -> None:
-    """deploy.env, loading the site's own file - which stays where it is,
-    outside the release, so no setting is copied into it."""
+def check_env_file(env_file: str | None) -> None:
+    if env_file is None:
+        return
     source = Path(env_file)
     if not source.is_absolute() or not source.is_file():
         raise Refused(f"--env-file {env_file!r} must be an absolute path to a readable file")
+
+
+def env_lines(release: Path, manifest: dict, env_file: str | None) -> list[str]:
+    """deploy.env's lines: loading the site's own file - which stays where it
+    is, outside the release, so no setting is copied into it - and, for a
+    release carrying KX's Kafka client, its own copy ahead of anything the
+    site's environment holds. Empty when there is nothing to write."""
+    lines = []
+    if env_file is not None:
+        lines.append(f"set -a; . {shlex.quote(env_file)}; set +a")
+    if manifest.get("kafka"):
+        home = release.resolve() / KAFKA_DIR
+        rest = '"${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"'
+        lines += [
+            f"export UQF_KFK_HOME={shlex.quote(str(home))}",
+            f"export LD_LIBRARY_PATH={shlex.quote(str(home / KAFKA_LIB))}{rest}",
+        ]
+    return lines
+
+
+def write_env(release: Path, lines: list[str]) -> None:
     (release / ENV_FILE).write_text(
-        "# written by scripts/install_release.py: the site's environment for this release\n"
-        f"set -a; . {shlex.quote(str(source))}; set +a\n"
+        "# written by scripts/install_release.py: the environment for this release\n"
+        + "".join(f"{line}\n" for line in lines)
     )
 
 
@@ -293,6 +338,10 @@ def main(argv: list[str] | None = None) -> int:
         n = check_integrity(release, manifest)
         print(f"install_release: {n} files match the manifest of {manifest.get('release')}")
         check_platform(target, platform.system(), platform.machine(), platform.libc_ver())
+        tools = check_host(manifest)
+        if tools:
+            print(f"install_release: the host has the {len(tools)} tools the release runs")
+        check_env_file(args.env_file)
         record = (manifest.get("python") or {}).get("runtime")
         if args.check and record and args.python is None:
             print(
@@ -306,8 +355,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.check:
             return 0
         install(release, manifest, python)
-        if args.env_file:
-            write_env(release, args.env_file)
+        lines = env_lines(release, manifest, args.env_file)
+        if lines:
+            write_env(release, lines)
         (release / INSTALLED).write_text(
             json.dumps(
                 {

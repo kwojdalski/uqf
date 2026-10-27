@@ -230,7 +230,23 @@ repos:
             # to "which interpreter", and the only one that fell back to
             # something the tree is not verified on. test.py's rule is the
             # README's: $QCMD if you set it, otherwise q on PATH, as TorQ does.
-            python3 scripts/test.py q-unit
+            #
+            # Only the suites the change reaches (#1690): test_impact.py reads
+            # q-lint's dependency graph and selects for origin/master...HEAD
+            # plus what is being committed - the branch's whole change, as the
+            # KDB-X attestation check reads the PR, not just this commit. It
+            # prints ALL - and the whole suite runs - when it says so, when it
+            # cannot run (no graph-capable qlinter; see .qlinter-graph-rev),
+            # or when UQF_Q_TESTS_FULL=1. attest_kdbx.py hands its own
+            # decision over in UQF_Q_TESTS_SELECTION, so the run is the one
+            # its trailer records. The full suite still runs on master.
+            selection=$(python3 scripts/dev/test_impact.py --hook)
+            case "$selection" in
+              ALL) python3 scripts/test.py q-unit ;;
+              NONE) echo "== q-unit: no suite reaches this change - none run ==" ;;
+              -files\ *) python3 scripts/test.py q-unit -files "${selection#-files }" ;;
+              *) echo "q-tests: unexpected selection: $selection" >&2; exit 1 ;;
+            esac
             python3 scripts/test.py q-examples
             # The worked examples under scripts/examples/, run as scripts.
             # Nothing ran them until this lane existed, and the first
