@@ -139,7 +139,7 @@ def test_a_qlinter_without_the_graph_is_refused_naming_what_is_needed(
         ti.build(REPO)
     assert ti.main(["src/pricing/forwards.q"]) == 2
     err = capsys.readouterr().err
-    assert "has no `qlinter analyze graph`" in err and "0.14.14" in err
+    assert "has no `qlinter analyze graph`" in err and "0.14.15" in err
 
 
 def test_a_missing_binary_is_refused(tmp_path, monkeypatch):
