@@ -167,7 +167,10 @@ def _execute(
             f"started {worker} (pid {run_.pid}) into {run_.destination.hdb_dir}; log {run_.log}",
         )
         raise typer.Exit(code=0)
-    console.print(f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]")
+    if not as_json:  # with --json, stdout is the one document below (#1685)
+        console.print(
+            f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
+        )
     code, result = backfill_run.follow(run_)
     _report(
         {**info, "result": result, "exit_code": code},
