@@ -21,6 +21,9 @@ from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
+    QHostOpt,
+    QPasswdOpt,
+    QUserOpt,
     _die,
     _export,
     _paths,
@@ -151,9 +154,9 @@ def schema(
     base_port: Annotated[
         int | None, typer.Option(help="stack base port (default: the runtime's)")
     ] = None,
-    host: str = "localhost",
-    user: str = "admin",
-    passwd: str = "admin",
+    host: QHostOpt = "localhost",
+    user: QUserOpt = "admin",
+    passwd: QPasswdOpt = "admin",
     export: ExportOpt = None,
     interactive: InteractiveOpt = False,
     every: Annotated[

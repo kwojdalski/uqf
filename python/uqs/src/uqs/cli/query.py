@@ -20,7 +20,18 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
-from uqs.cli.shared import ExportOpt, _die, _export, _paths, app, console, log
+from uqs.cli.shared import (
+    ExportOpt,
+    QHostOpt,
+    QPasswdOpt,
+    QUserOpt,
+    _die,
+    _export,
+    _paths,
+    app,
+    console,
+    log,
+)
 from uqs.paths import UqsError
 from uqs.stack import alive, listing, runtime
 from uqs.stack import gateway as stack_gateway
@@ -155,7 +166,7 @@ def query(
         int | None,
         typer.Option(help="stack base port --proc is resolved against (default: the runtime's)"),
     ] = None,
-    host: str = "localhost",
+    host: QHostOpt = "localhost",
     target: Annotated[
         str | None,
         typer.Option(
@@ -163,8 +174,8 @@ def query(
             "ssh tunnel opened for the call; ports are the target's release's own",
         ),
     ] = None,
-    user: str = "admin",
-    passwd: str = "admin",
+    user: QUserOpt = "admin",
+    passwd: QPasswdOpt = "admin",
     servers: Annotated[
         str,
         typer.Option(help="with the gateway: the process types an expression is routed to"),

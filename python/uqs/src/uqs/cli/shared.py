@@ -222,6 +222,13 @@ ExportOpt = Annotated[
 ]
 
 
+#: The connection to one q process, shared by `query` and `schema` (#1738:
+#: every option states what it means, so one name cannot quietly mean two things).
+QHostOpt = Annotated[str, typer.Option("--host", help="Host the q process listens on")]
+QUserOpt = Annotated[str, typer.Option("--user", help="User to log in to the q process as")]
+QPasswdOpt = Annotated[str, typer.Option("--passwd", help="Password for --user")]
+
+
 InteractiveOpt = Annotated[
     bool,
     typer.Option(
