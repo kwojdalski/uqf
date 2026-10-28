@@ -39,6 +39,7 @@ from typing import Any, cast
 import pytest
 import typer
 from typer.testing import CliRunner
+from which_support import fake_which
 
 # The CLI is a package of command families now (see cli/entry.py): the `cli`
 # package itself still exposes the assembled `app` and `main`, and each
@@ -147,8 +148,14 @@ def _no_real_paths(monkeypatch):
     arithmetic) that no registry would know. Tests that are ABOUT the guard
     take the `_known_procs` fixture, which puts the real one back against a
     small stub registry.
+
+    The port map is stubbed empty too - no word names a process - since
+    `_Paths` cannot be read for one either. A test about process names
+    patches its own (`_conn`); `_known_procs` no longer turns the error
+    reading `_Paths` into an empty set (#1759).
     """
     monkeypatch.setattr(stack_paths, "default_paths", _Paths)
+    monkeypatch.setattr(listing, "configured_ports", lambda _paths, _base_port=None: {})
     monkeypatch.setattr(stack_procs, "assert_known_procnames", lambda _paths, _procs: None)
 
 
@@ -1940,7 +1947,7 @@ def test_query_with_no_expression_execs_qcon_on_the_same_connection(monkeypatch)
     """No expression means a session: the same four options pointed at a
     different transport, so it must land on the process a query would hit."""
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    fake_which(monkeypatch, {"rlwrap": "/usr/bin/rlwrap", "qcon": "/usr/bin/qcon"})
     monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: seen.update(file=f, argv=a))
     result = runner.invoke(
         cli.app,
@@ -1955,7 +1962,7 @@ def test_a_session_without_qcon_installed_says_what_still_works(monkeypatch):
     ordinary state rather than a broken install - and the message has to leave
     the reader with a way to run their query."""
     errors = _error_log(monkeypatch)
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: None)
+    fake_which(monkeypatch)
     assert runner.invoke(cli.app, ["query", "--port", "6099"]).exit_code == 1
     assert any("not on PATH" in m and "still works over IPC" in m for m in errors.messages), (
         errors.messages
@@ -2000,7 +2007,7 @@ def _conn(monkeypatch, *, running=("rdb1",), ports=None):
         monkeypatch.setattr(query_cli.alive, "running", refuse)
     else:
         monkeypatch.setattr(query_cli.alive, "running", lambda paths, base_port: set(running))
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    fake_which(monkeypatch, {"rlwrap": "/usr/bin/rlwrap", "qcon": "/usr/bin/qcon"})
     monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: seen.update(argv=a))
     return seen
 
@@ -2038,15 +2045,47 @@ def test_query_proc_refuses_a_stopped_process_and_says_how_to_start_it(monkeypat
 
 def test_query_proc_still_connects_when_it_cannot_tell_what_is_running(monkeypatch):
     """The up/down check is advisory; qcon says for itself if nothing listens."""
-    seen = _conn(monkeypatch, running=RuntimeError("ps failed"))
+    seen = _conn(monkeypatch, running=UqsError("ps failed (1): no such process"))
     assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 0
     assert seen["argv"][-1] == "localhost:6052:admin:admin"
+
+
+def _ports_raise(monkeypatch, exc: Exception) -> None:
+    def refuse(paths, base_port=None):
+        raise exc
+
+    monkeypatch.setattr(listing, "configured_ports", refuse)
+
+
+def test_a_missing_registry_means_no_word_names_a_process(monkeypatch):
+    """No vendored process.csv: the word is an expression for the gateway."""
+    _ports_raise(
+        monkeypatch, FileNotFoundError("lib/torq-finance-starter-pack/appconfig/process.csv")
+    )
+    assert shared._known_procs() == set()
+
+
+def test_an_unexpected_error_reading_the_registry_propagates(monkeypatch):
+    """A bug is not "no registry": swallowed, it turned `uqs query WORD` into a
+    gateway query for the q expression WORD instead of an error (#1759)."""
+    _ports_raise(monkeypatch, TypeError("q_impl() got an unexpected keyword argument"))
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        shared._known_procs()
+    result = runner.invoke(cli.app, ["query", "rdb1"])
+    assert isinstance(result.exception, TypeError), result.output
+
+
+def test_a_refused_registry_is_refused_not_read_as_empty(monkeypatch):
+    errors = _error_log(monkeypatch)
+    _ports_raise(monkeypatch, UqsError("process_overrides.csv sets rdb1.nope"))
+    assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 1
+    assert any("rdb1.nope" in m for m in errors.messages), errors.messages
 
 
 def test_query_proc_without_qcon_installed_says_what_still_works(monkeypatch):
     errors = _error_log(monkeypatch)
     _conn(monkeypatch)
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: None)
+    fake_which(monkeypatch)
     assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 1
     assert any("not on PATH" in m for m in errors.messages), errors.messages
 

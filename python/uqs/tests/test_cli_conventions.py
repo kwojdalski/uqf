@@ -307,6 +307,7 @@ OPTIONS = {
     "--columns": Meaning("which columns of a table to show", r"`all`"),
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
+    "--date": Meaning("one day of a time range: --from D --to D+1", r"--from D --to D\+1"),
     "--dataset": Meaning("the dataset a bounded worker fills", r"table it fills"),
     "--debug": Meaning("log at DEBUG", r"^Log at DEBUG\. Same as LOG_LEVEL"),
     "--dest": Meaning("the absolute directory on the server", r"absolute"),
@@ -321,6 +322,7 @@ OPTIONS = {
     "--interactive": Meaning("browse the table", r"browse"),
     "--json": Meaning("one JSON document on stdout", r"JSON"),
     "--keep": Meaning("how many newest releases to keep", r"newest"),
+    "--last": Meaning("a time range up to now", r"up to now"),
     "--level": Meaning("the lowest log level shown", r"level"),
     "--lines": Meaning("how many lines of a log to show", r"lines"),
     "--live": Meaning("refuse fixtures", r"fixture"),
@@ -378,7 +380,6 @@ SHORT_FLAGS = {
 RULE3_ALLOWLIST = {
     # a hidden alias of #1736's positional TARGET, until the alias goes
     ("deploy push", "--target"): "#1729",
-    ("data seed", "--from"): "#1739",
     ("deploy rollback", "--to"): "#1739",
     ("logs", "--columns"): "#1739",
     ("job new", "--columns"): "#1739",

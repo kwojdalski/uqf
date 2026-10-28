@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from which_support import fake_which
 
 from uqs import paths as stack_paths
 from uqs.model import profiles
@@ -89,7 +90,7 @@ def test_bootstrap_hands_torq_sh_and_setenv_the_peachq_binary(pinned, monkeypatc
     (root / "lib" / "torq").mkdir(parents=True)
     (root / "lib" / "torq" / "torq.q").touch()
     (root / "src" / "etl").mkdir(parents=True)
-    monkeypatch.setattr(shutil, "which", lambda t, path=None: None if t == "q" else "/usr/bin/true")
+    fake_which(monkeypatch, {"q": None}, other="/usr/bin/true")
     monkeypatch.setattr(runtime, "fill_hdb_partitions", lambda paths: False)
     p = stack_paths.paths_for_root(root, "peachq")
     env = runtime.bootstrap(p)
