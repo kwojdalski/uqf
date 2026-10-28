@@ -64,7 +64,7 @@ def artifacts(tmp_path_factory) -> list[Path]:
 
 def _deploy(artifact: Path, *extra: str) -> subprocess.CompletedProcess:
     argv = [UQS, "deploy", "push", str(artifact)]
-    argv += ["--host", HOST, "--dest", DEST, "--profile", PROFILE, *extra]
+    argv += ["--ssh", HOST, "--dest", DEST, "--profile", PROFILE, *extra]
     for flag, var in (
         ("--torq-home", "UQF_DEPLOY_TEST_TORQHOME"),
         ("--torq-app-home", "UQF_DEPLOY_TEST_TORQAPPHOME"),

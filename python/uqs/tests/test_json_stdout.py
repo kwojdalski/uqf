@@ -104,7 +104,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job attachment show": (["job", "attachment", "show", "nosuch"], "no attachment 'nosuch'"),
     "job attachment remove": (["job", "attachment", "remove", "nosuch"], "no attachment 'nosuch'"),
     "deploy status": (
-        ["deploy", "status", "--host", "nosuch.invalid", "--dest", "relative/dest"],
+        ["deploy", "status", "--ssh", "nosuch.invalid", "--dest", "relative/dest"],
         "must be an absolute path",
     ),
     # #1731: every reporting command

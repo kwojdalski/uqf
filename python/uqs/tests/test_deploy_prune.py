@@ -146,7 +146,7 @@ def test_decide_keeps_the_newest_by_name_which_is_by_time():
 
 def test_the_command_refuses_a_negative_keep():
     r = CliRunner().invoke(
-        cli.app, ["deploy", "prune", "--host", "h", "--dest", "/d", "--keep", "-1"]
+        cli.app, ["deploy", "prune", "--ssh", "h", "--dest", "/d", "--keep", "-1"]
     )
     plain = re.sub(r"\x1b\[[0-9;]*m", "", r.output)  # CI renders usage errors in colour
     assert r.exit_code != 0 and "--keep" in plain

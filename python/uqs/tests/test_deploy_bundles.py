@@ -37,7 +37,7 @@ def parse_args(argv: list[str]) -> Config:
     return make_config(**params)
 
 
-ARGS = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
+ARGS = ["--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
 SERVER = "os=Linux\narch=x86_64\npython=3.14\nqhome=/opt/kx\nqcmd=/opt/kx/bin/q\ndata=present\n"
 
 BUNDLES = {

@@ -1,5 +1,5 @@
 """`uqs deploy status|rollback|prune TARGET` (#1736): the server named once, in
-deploy_targets.toml, rather than by --host/--dest/--remote-user on every
+deploy_targets.toml, rather than by --ssh/--dest/--remote-user on every
 command - those flags kept as the escape for a server no target declares, and
 declared once (cli/deploy_connection.py) so every command spells them alike."""
 
@@ -82,7 +82,7 @@ def test_a_flag_given_wins_over_the_targets_value(root, monkeypatch, command):
 
 @pytest.mark.parametrize("command", sorted(COMMANDS))
 def test_the_flags_still_name_a_server_no_target_declares(root, monkeypatch, command):
-    r, seen = _run(monkeypatch, command, ["--host", "h", "--dest", "/opt/uqf"])
+    r, seen = _run(monkeypatch, command, ["--ssh", "h", "--dest", "/opt/uqf"])
     assert r.exit_code == 0, r.output
     assert (seen[0].host, seen[0].dest, seen[0].remote_user) == ("h", "/opt/uqf", None)
 
@@ -91,7 +91,7 @@ def test_the_flags_still_name_a_server_no_target_declares(root, monkeypatch, com
 def test_no_target_and_no_flags_is_refused(root, monkeypatch, command):
     r, seen = _run(monkeypatch, command, [])
     assert r.exit_code == 1 and not seen
-    assert "give a TARGET, or --host and --dest" in r.output
+    assert "give a TARGET, or --ssh and --dest" in r.output
 
 
 def test_an_unknown_target_is_refused_naming_the_known_ones(root, monkeypatch):
@@ -105,10 +105,43 @@ def test_the_connection_flags_read_the_same_wherever_they_are_accepted():
     same names with the same help."""
     # typer vendors its own click, so the group is reached by attribute, not class
     deploy = cast(Any, typer.main.get_command(cli.app)).commands["deploy"]
-    flags = ("--host", "--dest", "--remote-user", "--connect-timeout")
+    flags = ("--ssh", "--dest", "--remote-user", "--connect-timeout")
     seen = {}
     for name in ("push", "status", "rollback", "prune"):
         params = {p.opts[0]: p for p in deploy.commands[name].params}
         assert set(flags) <= set(params), name
         seen[name] = {f: params[f].help for f in flags}
     assert len({tuple(v.items()) for v in seen.values()}) == 1, seen
+
+
+@pytest.mark.parametrize("command", sorted(COMMANDS))
+def test_the_old_host_spelling_still_names_the_ssh_destination(root, monkeypatch, command):
+    """#1768: `--host` is `--ssh` now, since every other --host is a q host;
+    the old spelling parses for one release, saying what to type instead."""
+    from uqs.cli import renames
+
+    said: list[tuple[str, str]] = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
+    r, seen = _run(monkeypatch, command, ["--host", "h", "--dest", "/opt/uqf"])
+    assert r.exit_code == 0, r.output
+    assert seen[0].host == "h"
+    assert said == [("--host", "--ssh")]
+
+
+def test_rollback_to_is_release_and_the_old_spelling_still_parses(root, monkeypatch):
+    """#1768: `--to` ends a time range everywhere else, so rollback names its
+    release with `--release`; `--to` parses for one release."""
+    from uqs.cli import renames
+
+    said: list[tuple[str, str]] = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
+    to = []
+    monkeypatch.setattr(
+        deploy_server.rollback, "rollback", lambda cfg, remote, **kw: to.append(kw["to"]) or 0
+    )
+    release = "20260101T000000Z-abc123456789"
+    for flag in ("--release", "--to"):
+        r = CliRunner().invoke(cli.app, ["deploy", "rollback", "prod-a", flag, release])
+        assert r.exit_code == 0, r.output
+    assert to == [release, release]
+    assert said == [("--to", "--release")]

@@ -34,7 +34,7 @@ def _server(ctx, target, host, dest, remote_user, connect_timeout, **timeouts):
     return cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
 
 
-@deploy_app.command("status")
+@deploy_app.command("status", cls=renamed(conn.OLD_SPELLINGS))
 def status_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
@@ -68,14 +68,16 @@ def status_cmd(
     raise typer.Exit(code=1 if h["checked"] and not h["passed"] else 0)
 
 
-@deploy_app.command("rollback")
+#: `--to` names a release here, and only here, while everywhere else it ends a
+#: time range: `--release` since #1768, the old spelling parsing for one release.
+@deploy_app.command("rollback", cls=renamed(conn.OLD_SPELLINGS | {"--to": "--release"}))
 def rollback_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
     to: Annotated[
         str | None,
         typer.Option(
-            "--to",
+            "--release",
             metavar="RELEASE",
             help="The release to return to; default: the one current replaced",
         ),
@@ -106,7 +108,9 @@ def rollback_cmd(
     and verify the target's, then move `current`. A target that fails to verify
     is stopped and current's processes are started again."""
     if to is not None and not RELEASE_ID.fullmatch(to):
-        _failed("uqs deploy rollback", "arguments", ValueError(f"--to {to!r} is not a release id"))
+        _failed(
+            "uqs deploy rollback", "arguments", ValueError(f"--release {to!r} is not a release id")
+        )
     try:
         cfg, remote = _server(
             ctx,
@@ -125,7 +129,7 @@ def rollback_cmd(
     raise typer.Exit(code=code)
 
 
-@deploy_app.command("prune")
+@deploy_app.command("prune", cls=renamed(conn.OLD_SPELLINGS))
 def prune_cmd(
     ctx: typer.Context,
     keep: Annotated[

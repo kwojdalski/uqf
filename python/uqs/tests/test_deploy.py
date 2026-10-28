@@ -47,7 +47,7 @@ def parse_args(argv: list[str]) -> Config:
     return make_config(**params)
 
 
-ARGS = ["--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
+ARGS = ["--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
 BASE = ["dist/uqf-x.tar.gz", *ARGS]
 
 #: What a healthy server says about itself in preflight.
@@ -138,7 +138,7 @@ def test_the_required_arguments_are_host_dest_and_profile(capfd):
 
     from uqs import cli
 
-    r = CliRunner().invoke(cli.app, ["deploy", "push", "a", "--host", "h", "--dest", "/opt/uqf"])
+    r = CliRunner().invoke(cli.app, ["deploy", "push", "a", "--ssh", "h", "--dest", "/opt/uqf"])
     assert r.exit_code == 1
     assert "--profile is required, or a TARGET after ARTIFACT" in r.output + capfd.readouterr().err
     cfg = parse_args(BASE)
@@ -151,14 +151,14 @@ def test_the_required_arguments_are_host_dest_and_profile(capfd):
 )
 def test_a_destination_that_is_not_a_plain_absolute_path_is_refused(dest):
     with pytest.raises(DeployError, match="--dest"):
-        parse_args(["a", "--host", "h", "--dest", dest, "--profile", "essential"])
+        parse_args(["a", "--ssh", "h", "--dest", dest, "--profile", "essential"])
 
 
 @pytest.mark.parametrize("host", ["-oProxyCommand=evil", "a b", "h;x"])
 def test_a_host_that_could_be_read_as_an_option_is_refused(host):
-    with pytest.raises(DeployError, match="--host"):
-        # --host=VALUE: argparse alone would refuse "--host -o..." as a missing value.
-        parse_args(["a", f"--host={host}", "--dest", "/opt/uqf", "--profile", "essential"])
+    with pytest.raises(DeployError, match="--ssh"):
+        # --ssh=VALUE: argparse alone would refuse "--ssh -o..." as a missing value.
+        parse_args(["a", f"--ssh={host}", "--dest", "/opt/uqf", "--profile", "essential"])
 
 
 def test_ssh_keeps_host_key_checking_and_never_prompts():

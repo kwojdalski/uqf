@@ -185,7 +185,7 @@ artifact, and one with its q converted for kdb+ 4.0 (`--q-target 4.0`). Each
 comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
 
 ```bash
-uqs deploy push v1.4.0 --host uqf-server --dest /opt/uqf ... --dry-run
+uqs deploy push v1.4.0 --ssh uqf-server --dest /opt/uqf ... --dry-run
 uqs deploy push https://github.com/<owner>/uqf/releases/download/v1.4.0/uqf-<release>.tar.gz ...
 ```
 
@@ -207,7 +207,7 @@ server reports, every step, and any restart it would make. It changes nothing:
 
 ```bash
 uqs deploy push dist/uqf-<release>.tar.gz \
-  --host uqf-server --dest /opt/uqf \
+  --ssh uqf-server --dest /opt/uqf \
   --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \
   --qcmd /opt/kx/bin/q --qhome /opt/kx \
   --profile essential --init-data --dry-run
@@ -249,11 +249,13 @@ Every `deploy` command that reaches a server takes the target as its TARGET:
 `push ARTIFACT TARGET...`, deploying each in order and stopping at the first
 failure, and `status`, `rollback`, `prune` and `history TARGET`. `status`,
 `rollback` and `prune` also take a server a push from here registered (see
-`uqs deploy history`). `--host`, `--dest`, `--remote-user` and
+`uqs deploy history`). `--ssh`, `--dest`, `--remote-user` and
 `--connect-timeout` remain for a server no target declares, and read the same on
 every command. Given beside a TARGET, they override its values.
 `push --target A,B`, the spelling before #1736, still works for one release and
-prints the new one.
+prints the new one. So does `--host`, the ssh destination's name before #1768:
+`--ssh` now, as `uqs target add` spells it, since every other command's `--host`
+is a q host.
 
 - **The keys.** Each key is a `push` option, spelt as its parameter (`torq_home`
   for `--torq-home`). The values go through the same checks as the flags, and an
@@ -442,7 +444,7 @@ name before #1740, `uqs deploy build-runtime`, still works for one release.
 
 ```bash
 uqs deploy component build torq      # dist/torq-runtime-<version>-<id>.tar.gz
-uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   --profile essential --torq-mode bundled \
   --torq-runtime dist/torq-runtime-5.2.12-<id>.tar.gz
 ```
@@ -486,7 +488,7 @@ kdb+) is licensed to the server it runs on, so it is never bundled. It stays
 ```bash
 uqs deploy component build q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
 uqs --runtime peachq deploy build
-uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   --profile capture --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
   --q-mode bundled --q-runtime dist/q-runtime-peachq-<commit>-linux-x86_64.tar.gz
 ```
@@ -541,7 +543,7 @@ then needs no `uv` and no Python 3.14.
 ```bash
 uqs deploy component build python --arch x86_64 --python 3.14
                                    # dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
-uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   --profile essential --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
   --python-mode bundled --python-runtime dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 ```
@@ -935,7 +937,7 @@ What a server runs, without ssh-ing in:
 ```bash
 uqs deploy status prod-a
 uqs deploy status prod-a --json                             # to script against
-uqs deploy status --host uqf-server --dest /opt/uqf         # a server no target declares
+uqs deploy status --ssh uqf-server --dest /opt/uqf          # a server no target declares
 ```
 
 It reports `current` and the release it replaced (revision, build time, dirty or
@@ -960,11 +962,12 @@ uqs deploy rollback prod-a
 ```
 
 It returns to the release the current one replaced, as the current release's
-report records it, or to `--to RELEASE`. Under the deploy lock it stops the
-current release's processes, starts the target's from the target's own release,
-and moves `current` only once the target's own verifier passes. A target that
-does not verify is stopped, and the current release's processes are started and
-verified again, so the server ends where it began. Nothing is deleted.
+report records it, or to `--release RELEASE` (`--to` before #1768, which still
+works for one release). Under the deploy lock it stops the current release's
+processes, starts the target's from the target's own release, and moves
+`current` only once the target's own verifier passes. A target that does not
+verify is stopped, and the current release's processes are started and verified
+again, so the server ends where it began. Nothing is deleted.
 
 A target is verified with `uqs deploy check`, so a release from before that
 command existed (#835) cannot be a rollback target: its verification fails and
@@ -1005,11 +1008,11 @@ non-interactively (#780):
 
 ```bash
 uqs deploy push dist/uqf-<release>.tar.gz \
-  --host deploy@uqf-server --remote-user svc \
+  --ssh deploy@uqf-server --remote-user svc \
   --dest /srv/uqf --torq-home /opt/torq ... --profile essential --dry-run
 ```
 
-- **ssh and scp** still log in as the `--host` user.
+- **ssh and scp** still log in as the `--ssh` user.
 
 - **Every deployment step** runs as `svc` through `sudo -n -iu svc bash -s`.
   That covers preflight, prepare, smoke, start, verify, activate and rollback.
@@ -1051,7 +1054,7 @@ as supplied. `--torq-launcher` names it, and `--torq-home` still names the core:
 
 ```bash
 uqs deploy push dist/uqf-<release>.tar.gz \
-  --host svc@uqf-server --dest /opt/site/uqf \
+  --ssh svc@uqf-server --dest /opt/site/uqf \
   --torq-home /opt/site/torq/core/current \
   --torq-app-home /opt/site/torq/TorQApp \
   --torq-launcher /opt/site/torq/bin/torq.sh \

@@ -223,7 +223,7 @@ def test_a_push_records_itself_and_registers_its_server(root, monkeypatch, tmp_p
         return 0
 
     monkeypatch.setattr(driver, "deploy", deploy)
-    argv = ["deploy", "push", "x.tar.gz", "--host", "svc@uat.example", "--dest", "/srv/uat"]
+    argv = ["deploy", "push", "x.tar.gz", "--ssh", "svc@uat.example", "--dest", "/srv/uat"]
     r = CliRunner().invoke(cli.app, [*argv, "--profile", "essential"])
     assert r.exit_code == 0, r.output
     (entry,) = history.read(tmp_path)

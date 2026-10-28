@@ -6,7 +6,7 @@ release HAS activated there was no way back but symlinks and restarts by hand
 from the same stages a push uses:
 
   1. the lock, as a push takes it;
-  2. what `current` names, and which release to return to: --to, else the
+  2. what `current` names, and which release to return to: --release, else the
      one `current`'s own deploy-report.json says it replaced
      (`previous_release`) - recorded by the push that activated it, so this
      never guesses from directory order;
@@ -21,7 +21,7 @@ If the target fails to start or verify, its processes are stopped, `current`'s
 are started again and verified, and `current` never moves: the server ends
 where it began. Nothing is deleted - the release rolled back from stays in
 releases/, so a push of the same artifact is refused and a rollback with
---to can return to it.
+--release can return to it.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def rollback(
         if not target:
             raise DeployError(
                 "rollback",
-                f"release {current}'s report names no release it replaced - pass --to RELEASE",
+                f"release {current}'s report names no release it replaced - pass --release RELEASE",
             )
         if target == current:
             raise DeployError("rollback", f"{target} is already current")

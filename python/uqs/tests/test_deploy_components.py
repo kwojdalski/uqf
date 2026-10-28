@@ -114,7 +114,7 @@ def test_an_existing_field_beside_bundled_is_refused_before_bundled_is(component
 
 
 def test_the_cli_takes_each_mode():
-    cfg = parse_args(["a", "--host", "h", "--dest", "/srv/uqf", "--profile", "essential",
+    cfg = parse_args(["a", "--ssh", "h", "--dest", "/srv/uqf", "--profile", "essential",
                       "--torq-mode", "existing", "--python-mode", "bundled",
                       "--python-runtime", "dist/py.tar.gz"])  # fmt: skip
     assert (cfg.torq_mode, cfg.python_mode) == ("existing", "bundled")

@@ -121,7 +121,7 @@ all. Build from a clean checkout, or uninstall the bundles first.
 
 ```bash
 uqs deploy build --bundle ../piggybank
-uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
+uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \
   --profile essential --jobs pb_quotes --live --dry-run
 ```

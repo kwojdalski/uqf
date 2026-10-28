@@ -198,7 +198,7 @@ def test_a_dry_run_stops_and_starts_nothing():
 
 def test_without_a_recorded_predecessor_it_asks_for_to():
     remote = _server(previous=None)
-    with pytest.raises(DeployError, match="pass --to RELEASE"):
+    with pytest.raises(DeployError, match="pass --release RELEASE"):
         _roll(remote)
     assert remote.ran("rm -rf /opt/uqf/deploy.lock"), "a refusal releases the lock"
 
@@ -216,6 +216,6 @@ def test_rolling_back_to_the_current_release_is_refused():
 def test_the_cli_refuses_a_to_that_is_not_a_release_id():
     result = CliRunner().invoke(
         cli.app,
-        ["deploy", "rollback", "--host", "h", "--dest", "/opt/uqf", "--to", "../etc;rm -rf /"],
+        ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--release", "../etc;rm -rf /"],
     )
     assert result.exit_code == 1

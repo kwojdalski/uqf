@@ -245,7 +245,7 @@ def test_the_cli_prints_json_and_exits_1_only_when_health_fails(monkeypatch):
     """The exit code is for scripts: 0 healthy (or not checked), 1 failing."""
     from uqs.cli import deploy_server
 
-    args = ["deploy", "status", "--host", "uqf-server", "--dest", "/opt/uqf", "--json"]
+    args = ["deploy", "status", "--ssh", "uqf-server", "--dest", "/opt/uqf", "--json"]
     for healthy, code in ((True, 0), (False, 1)):
         monkeypatch.setattr(deploy_server, "Remote", lambda *a, h=healthy, **kw: _server(health=h))
         result = CliRunner().invoke(cli.app, args)
