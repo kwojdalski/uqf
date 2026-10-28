@@ -107,11 +107,9 @@ def _list_overrides(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
 def _list_env(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     env = build_env(paths, base_port=base_port)
     rows = [{"name": name, "value": value} for name, value in env.items()]
-    # Which q that QCMD is, beside it (#518): the declaration, and what the
-    # binary says when asked. A mismatch is reported, never refused - this
-    # command only reads.
+    # Which q that QCMD is, beside it (#518): what the binary says when asked
+    # (#1753). A problem is reported, never refused - this command only reads.
     status = interpreter_status(with_interpreter(paths))
-    rows.append({"name": "UQF_Q_IMPL", "value": status.declared})
     rows.append({"name": "q_impl (binary)", "value": _binary_impl(status)})
     if status.problem:
         log.warning("interpreter: {}", status.problem)
@@ -135,8 +133,8 @@ def interpreter_line(status: InterpreterStatus | None = None) -> str:
     """
     status = status or interpreter_status()
     if status.binary is None:
-        return f"interpreter: {status.declared} declared - not runnable (no q found)"
-    impl = status.actual or status.declared
+        return "interpreter: not runnable (no q found)"
+    impl = status.actual or "unknown"
     try:
         limit = profiles.licence_limit()
         budget = "no connection cap" if limit is None else f"{limit} connections"

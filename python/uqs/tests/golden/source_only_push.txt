@@ -16,6 +16,9 @@ release_dir=/opt/uqf/releases/20261007T000000Z-0123456789ab
 expected_user=''
 
 fail() { echo "$*" >&2; exit 1; }
+[ -z "${UQF_Q_IMPL+set}" ] || fail 'UQF_Q_IMPL is set on the server, and is no longer read - the binary is asked which q it is - set QCMD=<binary> alone; unset it'
+[ -z "${UQF_PEACHQ+set}" ] || fail 'UQF_PEACHQ is set on the server, and is no longer read - set QCMD=<binary> to run everything on that PeachQ, or pass --peachq PATH (scripts/test.py, pytest) for the PeachQ lanes alone; unset it'
+[ -z "${UQF_PEACHQ_REASON+set}" ] || fail 'UQF_PEACHQ_REASON is set on the server, and is no longer read - a PeachQ in QCMD that is not the pinned build is named in a warning instead; unset it'
 echo "user=$(id -un)"
 if [ -n "$expected_user" ] && [ "$(id -un)" != "$expected_user" ]; then
   fail "running as $(id -un), not $expected_user"

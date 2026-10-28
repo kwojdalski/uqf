@@ -270,11 +270,11 @@ def run(
         print(f"flattening {', '.join(CONVERTED) or 'nothing'} into {work}", flush=True)
         build_tree(work, bundles)
         if shards > 1:
-            env = {**os.environ, "UQF_Q_IMPL": "peachq", "QCMD": q}
+            env = {**os.environ, "QCMD": q}
             merged = run_shards(q, shard_trees(work, shards), timeout, env)
             return 1 if merged is None else report(merged, gaps, recorded, here)
         failures = work / "failures.txt"
-        env = {**os.environ, "UQF_Q_IMPL": "peachq", "QCMD": q, "UQF_TEST_FAILURES": str(failures)}
+        env = {**os.environ, "QCMD": q, "UQF_TEST_FAILURES": str(failures)}
         r = subprocess.run(
             [q, "tests/run_tests.q", "-q"], cwd=work / "tree", env=env, timeout=timeout, check=False
         )

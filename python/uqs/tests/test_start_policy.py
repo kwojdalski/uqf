@@ -115,10 +115,10 @@ def old_q(monkeypatch, tmp_path):
     decl = dataclasses.replace(paths.runtime_declaration, q_tree="source")
     monkeypatch.setattr(type(paths), "runtime_declaration", property(lambda _s: decl))
     q = tmp_path / "q"
-    q.write_text("#!/bin/sh\necho '4.1'\n")
+    # KDB-X when asked which q it is, 4.1 when asked its version.
+    q.write_text("#!/bin/sh\n/usr/bin/grep -q load_natives \"$1\" && echo kdbx || echo '4.1'\n")
     q.chmod(0o755)
     monkeypatch.setenv("QCMD", str(q))
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     interpreter.q_version.cache_clear()
     yield paths
     interpreter.q_version.cache_clear()
