@@ -140,8 +140,8 @@ shaped the way it is.
 
 Two different shells. Which one a job wants is
 [`scaffolding/`](../scaffolding/README.md)'s opening question, asked there over
-all four shapes; what follows here is what the two shells actually are, which is
-what you need before writing into either.
+all seven shapes; what follows here is what the two shells actually are, which
+is what you need before writing into either.
 
 <!-- Source: docs/diagrams/pipeline-decision.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->

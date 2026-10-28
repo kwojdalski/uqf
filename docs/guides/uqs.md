@@ -170,7 +170,7 @@ whose pinned HDB its live wdb contradicts. With `--attach`, the table defaults
 to the attachment's own. A segmented HDB (`par.txt`) is followed into its
 segments.
 
-**`hdb-check --table T`** (or `--attach`, `--hdb`) checks and fills ONE table:
+**`data check --table T`** (or `--attach`, `--hdb`) checks and fills ONE table:
 only partitions lacking it get an empty one, enumerated against the HDB's sym
 file, which an empty table adds nothing to. Its schema is this runtime's
 declaration when the runtime declares the table, else one partition holding it -
@@ -178,7 +178,7 @@ the latest, or `--template YYYY.MM.DD` - taken in its column order and types.
 Partitions holding the table with another shape are refused, never rewritten.
 Without a handle or `--table` it is the whole-runtime check above.
 
-**`hdb-alter [TABLE]`** makes one change per run, in each partition holding the
+**`data alter [TABLE]`** makes one change per run, in each partition holding the
 table and nowhere else:
 
   | operation                     | writes                                                     | `--undo`                                                                                                                      |
@@ -191,7 +191,7 @@ table and nowhere else:
 A cast to or from symbol is refused: that changes the enumeration. Every run
 checks first that the partitions holding the table agree on its columns, order
 and types, and refuses - naming each shape and the partitions that hold it -
-before any write; `hdb-check --table` repairs a missing table, anything else is
+before any write; `data check --table` repairs a missing table, anything else is
 for a person to decide.
 
 **Dry run first.** Both commands print the plan and write nothing - the HDB and
@@ -1110,7 +1110,7 @@ is not a TorQ process, such as the external feeds.
 what `start` would - the same names, `all`, or `--profile` - then streams those
 processes' logs to this console until Ctrl-C, which stops what it started, the
 way `docker compose up` does. The console is the run. `restart -f` does the same
-after a restart. It was `uqs up`, which still works for a release.
+after a restart.
 
 ```
 uqs start -f                          # the default set, streamed; Ctrl-C stops it
@@ -1339,7 +1339,7 @@ name none and get the gateway:
 uqs query                          # a session on gateway1, every line routed
 uqs query --no-gateway             # plain qcon on gateway1, nothing routed
 uqs query rdb1                     # qcon localhost:6052:admin:admin, under rlwrap if installed
-uqs query --base-port 7000         # gateway1 in a stack started with --port 7000
+uqs query --base-port 7000         # gateway1 in a stack started with --base-port 7000
 ```
 
 The gateway holds no tables of its own, so what is sent to it is routed: `uqs`
