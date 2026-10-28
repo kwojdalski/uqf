@@ -302,6 +302,25 @@
         "5s and 1s ago are in [now-7s, now); the future row is fetched and dropped"];
     .qunit.assertEquals[r[`sample;`spt_out;`v];3 4f;"the two recent rows"]};
 
+/ A window given outright (#1735): the same rows, judged the same way.
+.qt.qetl.job.stream.poll.test_a_window_preview_keeps_the_rows_in_the_window:{[t]
+    .qt.qetl.job.stream.poll.recent_feed ()!();
+    now:.z.p;
+    r:.qetl.job.stream.preview_window[`spt_quote;5;now-0D00:00:12;now-0D00:00:03];
+    .qunit.assertEquals[(r`mode;r`state;r`kept;r[`sample;`spt_out;`v];r[`window;`from`to]);
+        (`window;`previewed;2;2 3f;(now-0D00:00:12;now-0D00:00:03));
+        "10s and 5s ago are in [now-12s, now-3s); the window is the one given"]};
+
+.qt.qetl.job.stream.poll.test_a_window_preview_refuses_an_empty_window:{[t]
+    .qt.qetl.job.stream.poll.recent_feed ()!();
+    .qunit.assertThrows[{.qetl.job.stream.preview_window[`spt_quote;5;.z.p;.z.p-1]};::;
+        "preview_window: the window is empty*";"the end before the start"]};
+
+.qt.qetl.job.stream.poll.test_a_window_preview_takes_only_timestamps:{[t]
+    .qt.qetl.job.stream.poll.recent_feed ()!();
+    .qunit.assertThrows[{.qetl.job.stream.preview_window[`spt_quote;5;2026.09.13;2026.09.14]};::;
+        "preview_window: the bounds must be timestamps*";"dates are not timestamps"]};
+
 .qt.qetl.job.stream.poll.test_a_recent_window_is_from_one_instant:{[t]
     .qt.qetl.job.stream.poll.recent_feed ()!();
     w:.qetl.job.stream.preview_recent[`spt_quote;5;0D00:00:07]`window;

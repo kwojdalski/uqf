@@ -379,6 +379,7 @@ qetl.job.stream,plant_today,function,1,tr
 qetl.job.stream,poll_keys,value,,
 qetl.job.stream,preview,function,2,job n
 qetl.job.stream,preview_recent,function,3,job n span
+qetl.job.stream,preview_window,function,4,job n window_start window_end
 qetl.job.stream,procnames,dict,,
 qetl.job.stream,recovery_keys,value,,
 qetl.job.stream,registries,value,,

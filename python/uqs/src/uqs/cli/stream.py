@@ -13,8 +13,16 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.shared import (
+    JOB_OPERATIONS_PANEL,
+    _die,
+    _paths,
+    console,
+    job_app,
+)
 from uqs.paths import UqsError
 from uqs.stack import stream_preview
 from uqs.stack.trace_render import render_query_trace
@@ -69,15 +77,10 @@ def preview(
             "time or error - as `uqs job backfill --trace` does. Off by default.",
         ),
     ] = False,
-    last: Annotated[
-        str | None,
-        typer.Option(
-            "--last",
-            help="Preview the recent data instead: the rows in [now - LAST, now), e.g. 30s, "
-            "5m, 2h. Fetched from a temporary cursor - the saved cursor and the live poll "
-            "are untouched, and this is not the running job's next page.",
-        ),
-    ] = None,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
     as_json: PreviewJson = False,
 ) -> None:
     """One page of a polling feed: what it would publish, and where its cursor
@@ -86,10 +89,18 @@ def preview(
     The page is fetched for real, through the feed's own fetch, so a live
     source is queried. Exits 1 when the output does not fit the plant's
     tables, or the cursor would not advance.
+
+    With a time range - --from/--to, --date or --last - it previews the rows
+    in that window instead, fetched from a temporary cursor: the saved cursor
+    and the live poll are untouched, and it is not the running job's next page.
+    e.g. `uqs job preview vectorize2 --last 30s`
     """
     try:
-        last_ns = None if last is None else stream_preview.duration_ns(last)
-        r = stream_preview.preview(_paths(), job, sample, trace=trace, last_ns=last_ns)
+        given = (range_from, range_to, day, last)
+        window = (
+            None if given == (None,) * 4 else timerange.resolve(range_from, range_to, day, last)
+        )
+        r = stream_preview.preview(_paths(), job, sample, trace=trace, window=window)
     except UqsError as exc:
         if not as_json:
             _print_trace(getattr(exc, "trace", []))
@@ -103,10 +114,11 @@ def preview(
         return
     _print_trace(r.get("trace", []))
     mode = "dry run" if dry_run else "preview"
-    recent = r.get("mode") == "recent"
+    recent = r.get("mode") in ("recent", "window")
     if recent:
+        what = "recent-data sample" if r.get("mode") == "recent" else "sample"
         console.print(
-            f"[bold]recent-data sample of {job}[/] - not the running job's next page; "
+            f"[bold]{what} of {job}[/] - not the running job's next page; "
             "nothing published, saved cursor untouched"
         )
     else:
