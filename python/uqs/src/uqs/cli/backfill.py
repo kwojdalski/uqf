@@ -15,14 +15,11 @@ import typer
 
 from uqs import timerange
 from uqs.cli import backfill_attached, completion
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     BasePortOpt,
-    DateOpt,
-    LastOpt,
-    RangeFromOpt,
-    RangeToOpt,
     _debug_requested,
     _die,
     _paths,
@@ -44,6 +41,7 @@ def backfill(
     worker: Annotated[
         str,
         typer.Argument(
+            metavar="JOB",
             help="The bounded worker to run, e.g. demo_deals_backfill",
             autocompletion=completion.backfill_workers,
         ),

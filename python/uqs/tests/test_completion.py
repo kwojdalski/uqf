@@ -104,7 +104,7 @@ def test_config_fields_complete_after_the_process():
 def test_a_port_is_offered_with_the_process_it_belongs_to():
     ports = listing.configured_ports(stack_paths.default_paths())
     assert ports["fxpositions1"] in complete("uqs query --port ")
-    assert "fxpositions1" in complete("uqs query --proc ")
+    assert "fxpositions1" in complete("uqs query ")
 
 
 def test_fixed_choices_complete():

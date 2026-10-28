@@ -101,7 +101,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "summary": (["summary", "--columns", "nosuch"], "unknown summary column"),
     "graph": (["graph", "nosuchproc", "--offline"], "no process 'nosuchproc'"),
     "query": (["query"], "--json needs an expression"),
-    "schema": (["schema", "--proc", "nosuchproc"], "is not a declared process"),
+    "schema": (["schema", "nosuchproc", "trade"], "is not a declared process"),
     "logs": (["logs", "--follow"], "--follow does not apply"),
     "config get": (["config", "get", "nosuchproc"], "unknown process"),
     "job gaps": (["job", "gaps", "demo_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),

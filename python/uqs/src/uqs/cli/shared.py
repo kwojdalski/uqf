@@ -24,10 +24,10 @@ from rich.table import Table
 from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cli import completion, table_browser
+from uqs.cli.renames import MOVED_KEY
 from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError
-from uqs.stack import runtime
-from uqs.timerange import BOUND_FORMS
+from uqs.stack import listing, runtime
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -239,34 +239,6 @@ QUserOpt = Annotated[str, typer.Option("--user", help="User to log in to the q p
 QPasswdOpt = Annotated[str, typer.Option("--passwd", help="Password for --user")]
 
 
-#: A time range, the one way every command takes it (#1735): --from/--to,
-#: --date or --last, resolved by uqs.timerange.resolve.
-RangeFromOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--from", help=f"Start of the time range, included. A date or a timestamp: {BOUND_FORMS}"
-    ),
-]
-RangeToOpt = Annotated[
-    str | None,
-    typer.Option("--to", help="End of the time range, exclusive. A date or a timestamp, as --from"),
-]
-DateOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--date",
-        help="One day, 2026-09-13 or 2026.09.13: the same as --from D --to D+1",
-    ),
-]
-LastOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--last",
-        help="A DURATION up to now - 30s, 5m, 2h, 7d: the same as --from now-DURATION --to now",
-    ),
-]
-
-
 InteractiveOpt = Annotated[
     bool,
     typer.Option(
@@ -394,3 +366,35 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
+
+
+#: The process a command acts on, as its first positional (#1730).
+ProcArg = Annotated[
+    str | None,
+    typer.Argument(
+        metavar="[PROC]",
+        help="The process, by name, e.g. rdb1",
+        autocompletion=completion.procname,
+        show_default=False,
+    ),
+]
+
+
+def _proc_first(
+    ctx: typer.Context, proc: str | None, rest: str | None, port_given: bool
+) -> tuple[str | None, str | None]:
+    """`CMD [PROC] [X]` given one word: PROC if it names a process of this stack
+    and no --port was given, else X (`uqs query 'count quote'` asks the gateway).
+    A word the old `--proc` gave is PROC whatever it names, so a typo is refused."""
+    if proc is None or rest is not None or proc in ctx.meta.get(MOVED_KEY, ()):
+        return proc, rest
+    if port_given or proc not in _known_procs():
+        return None, proc
+    return proc, None
+
+
+def _known_procs() -> set[str]:
+    try:
+        return set(listing.configured_ports(_paths(), None))
+    except Exception:  # noqa: BLE001 - no registry: no word names a process
+        return set()

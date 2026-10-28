@@ -10,13 +10,10 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
-    DateOpt,
     InteractiveOpt,
-    LastOpt,
-    RangeFromOpt,
-    RangeToOpt,
     _die,
     _paths,
     _show,

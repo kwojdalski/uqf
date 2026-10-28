@@ -147,7 +147,7 @@ def resolve_plant(procname: str | None = None, timeout: float | None = None) -> 
         )
     if len(plants) > 1:
         names = ", ".join(p.procname for p in plants)
-        raise UqsError(f"several tickerplants are running ({names}) - pick one with --proc")
+        raise UqsError(f"several tickerplants are running ({names}) - `uqs data replay PROC`")
     return plants[0]
 
 

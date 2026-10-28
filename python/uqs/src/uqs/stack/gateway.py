@@ -17,7 +17,7 @@ from typing import Any
 from uqs.paths import UqsError
 from uqs.stack import render as stack_render
 
-#: The process `uqs query` asks when told neither --proc nor --port.
+#: The process `uqs query` asks when told neither PROC nor --port.
 DEFAULT_PROC = "gateway1"
 
 #: Where the gateway sends an expression by default: today's rows and history.
@@ -43,7 +43,7 @@ def expression(
 
     Wrapped in `.gw.syncexec`, unless it is already a `.gw.*` call or a
     system command, which the gateway runs as typed. An in-place update or
-    delete is refused: to change a table, name its process with --proc.
+    delete is refused: to change a table, name its process: `uqs query rdb1 ...`.
 
     With `render`, a (rows, columns) console size, what comes back is the
     text q's console would print rather than the data. Not by wrapping the
@@ -60,7 +60,7 @@ def expression(
     if _IN_PLACE.match(expr):
         raise UqsError(
             "an update or delete `from `table` changes that table in place - routed through "
-            "the gateway it would change live data; name the process with --proc, e.g. rdb1"
+            "the gateway it would change live data; name the process first: `uqs query rdb1 ...`"
         )
     types = servers.split()
     bad = [t for t in types if not _PROCTYPE.match(t)]

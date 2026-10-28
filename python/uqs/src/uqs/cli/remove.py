@@ -24,7 +24,7 @@ from uqs.scaffold.remove import plan_removal
     "remove", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed({"--force": "--even-if-edited"})
 )
 def remove_job(
-    name: Annotated[str, typer.Argument(help="The job, as uqs job new named it")],
+    name: Annotated[str, typer.Argument(metavar="JOB", help="The job, as uqs job new named it")],
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print what would be removed, remove nothing")
     ] = False,

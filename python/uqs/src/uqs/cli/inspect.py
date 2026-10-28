@@ -19,6 +19,7 @@ from uqs.checks import schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
@@ -28,6 +29,7 @@ from uqs.cli.shared import (
     _die,
     _export,
     _paths,
+    _proc_first,
     _show,
     app,
     console,
@@ -134,8 +136,19 @@ SchemaJson = json_opt(
 )
 
 
-@app.command()
+@app.command(cls=renamed({"--proc": "PROC"}))
 def schema(
+    ctx: typer.Context,
+    proc: Annotated[
+        str | None,
+        typer.Argument(
+            metavar="[PROC]",
+            help=f"process to read from, e.g. rdb1 (today, the default: {DEFAULT_PROC}) or "
+            "hdb1 (history)",
+            autocompletion=completion.procname,
+            show_default=False,
+        ),
+    ] = None,
     table: Annotated[
         str | None,
         typer.Argument(
@@ -143,17 +156,10 @@ def schema(
             autocompletion=completion.plant_table,
         ),
     ] = None,
-    proc: Annotated[
-        str,
-        typer.Option(
-            help="process to read from, e.g. rdb1 (today) or hdb1 (history)",
-            autocompletion=completion.procname,
-        ),
-    ] = DEFAULT_PROC,
     port: Annotated[
         int | None,
         typer.Option(
-            help="read this port directly, instead of resolving --proc",
+            help="read this port directly, instead of resolving PROC",
             autocompletion=completion.process_ports,
         ),
     ] = None,
@@ -181,7 +187,12 @@ def schema(
     from a process that failed to load its schema file, and that is exactly
     when someone runs this. With -i it keeps reading: the browser re-reads
     the process every `--every` seconds, so row counts can be watched grow.
+
+    `uqs schema hdb1 trade`: a lone word that names a process is PROC, any
+    other is TABLE (`uqs schema 'crypto*'` reads rdb1).
     """
+    proc, table = _proc_first(ctx, proc, table, port is not None)
+    proc = proc or DEFAULT_PROC
     paths = stack_paths.default_paths()
     try:
         target = port if port is not None else schema_view.resolve_port(paths, proc, base_port)

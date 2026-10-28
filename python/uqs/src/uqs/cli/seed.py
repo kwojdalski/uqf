@@ -9,12 +9,9 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import warn_renamed
 from uqs.cli.shared import (
-    DateOpt,
-    LastOpt,
-    RangeFromOpt,
-    RangeToOpt,
     _die,
     _paths,
     console,
