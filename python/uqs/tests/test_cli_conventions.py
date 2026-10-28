@@ -15,9 +15,9 @@ on a listed one that is no longer a violation, so the lists only shrink - the
 way tests/q/peachq_known_gaps.txt does for PeachQ. When a sub-issue lands, the
 test names the rows to delete.
 
-Hidden commands are skipped: rule 6 ships each rename with the old spelling as
-a hidden alias for one release, and an alias is on its way out, not a command
-to hold to the rules.
+Hidden commands and options are skipped: rule 6 ships each rename with the old
+spelling as a hidden alias for one release, and an alias is on its way out, not
+a command or an option to hold to the rules.
 """
 
 from __future__ import annotations
@@ -54,7 +54,12 @@ class Cmd:
 
     @property
     def options(self) -> list:
-        return [p for p in self.command.params if p.param_type_name == "option"]
+        # a hidden option is a renamed one's old spelling (rule 6): on its way out
+        return [
+            p
+            for p in self.command.params
+            if p.param_type_name == "option" and not getattr(p, "hidden", False)
+        ]
 
     def option(self, name: str):
         return next((p for p in self.options if name in p.opts + p.secondary_opts), None)
@@ -336,6 +341,7 @@ OPTIONS = {
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--rename": Meaning("rename a column", r"rename"),
     "--reverse": Meaning("sort descending", r"descending"),
+    "--schema": Meaning("tables' columns and their types", r"schema"),
     "--skip-profile-budget-check": Meaning("bypass the budget check", r"budget"),
     "--skip-q-version-check": Meaning("bypass the q version check", r"q too old"),
     "--sort": Meaning("sort by a column", r"sort by"),
@@ -357,8 +363,9 @@ OPTIONS = {
 OPTIONS |= {
     name: Meaning(f"a connector's own start option ({name})", r"\((databento|kafka|crypto)")
     for name in (
-        "--api-key", "--brokers", "--group", "--interval-ms", "--oms-socket-path",
-        "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels", "--topic", "--venues",
+        "--api-key", "--brokers", "--databento-dataset", "--group", "--interval-ms",
+        "--oms-socket-path", "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels",
+        "--topic", "--venues",
     )
 }  # fmt: skip
 
@@ -375,15 +382,7 @@ SHORT_FLAGS = {
 
 #: (command, option) -> the issue that renames the option there
 RULE3_ALLOWLIST = {
-    # a hidden alias of #1736's positional TARGET, until the alias goes
-    ("deploy push", "--target"): "#1729",
     ("deploy rollback", "--to"): "#1739",
-    ("logs", "--columns"): "#1739",
-    ("job new", "--columns"): "#1739",
-    ("connector start", "--dataset"): "#1739",
-    ("connector restart", "--dataset"): "#1739",
-    ("job install", "--mode"): "#1739",
-    ("job backfill", "--version"): "#1739",
     **{(f"deploy {c}", "--host"): "#1739" for c in ("push", "status", "rollback", "prune")},
 }
 

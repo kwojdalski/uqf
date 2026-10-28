@@ -611,7 +611,7 @@ instead:
 
 ```bash
 uqs job backfill piggybank_ledger_backfill --attach pb-uat \
-    --from 2026-10-01 --to 2026-10-02 --version historical-v1 \
+    --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 \
     --on-conflict replace --mode plan          # then --mode dry-run, then run
 ```
 
@@ -669,7 +669,7 @@ uqs job receive --contract 3f9a0c2e --attach pb-uat --listen-port 7090
 
 # etl-host: extract, and send each window to the receiver
 uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:7090 \
-    --from 2026-10-01 --to 2026-10-02 --version historical-v1 --wait
+    --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 
 #### The receiver contract
@@ -791,7 +791,7 @@ stack's user and password.
 ```bash
 uqs job backfill piggybank_ledger_backfill --attach pb-uat \
     --writer uat-host:6055 --force \
-    --from 2026-10-01 --to 2026-10-02 --version historical-v1 --wait
+    --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 
 The extractor sends each date's rows as a q lambda that the wdb evaluates. The
@@ -819,11 +819,12 @@ Nothing is checked on the stack's side:
 ### What `plan` reports, and what it refuses
 
 The source, the half-open UTC range, the windows and which are already covered
-at this `--version` (read from the destination's own ledger), the conflict
-policy, the native date partitions the fetched windows fall on and whether each
-exists, the processes that write the destination, the HDB readers a reload would
-reach, and where the run would write beside the root. `--json` prints the same.
-It starts no worker and creates no directory, ledger, checkpoint or symbol file.
+at this `--source-version` (read from the destination's own ledger), the
+conflict policy, the native date partitions the fetched windows fall on and
+whether each exists, the processes that write the destination, the HDB readers a
+reload would reach, and where the run would write beside the root. `--json`
+prints the same. It starts no worker and creates no directory, ledger,
+checkpoint or symbol file.
 
 It refuses, naming the cause: an attachment that is not `verified` (including a
 detached one), a stack that `--base-port` names differently, no pinned or

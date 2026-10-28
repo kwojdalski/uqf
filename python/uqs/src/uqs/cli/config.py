@@ -128,7 +128,16 @@ def _json_lines(records: list[dict]) -> None:
     emit({"lines": [{k: r.get(k) for k in _LINE_KEYS} for r in records]})
 
 
-@app.command(cls=renamed({"-n": "--lines", "--print": "--show-command"}))
+@app.command(
+    cls=renamed(
+        {
+            "-n": "--lines",
+            "--print": "--show-command",
+            "--columns": "--pane-columns",
+            "-c": "--pane-columns",
+        }
+    )
+)
 def logs(
     procs: ProcsArg = None,
     follow: Annotated[
@@ -158,9 +167,9 @@ def logs(
             autocompletion=completion.choices("out", "err", "both"),
         ),
     ] = None,
-    columns: Annotated[
+    pane_columns: Annotated[
         int | None,
-        typer.Option("--columns", "-c", help="With --multitail: split the panes into N columns"),
+        typer.Option("--pane-columns", help="With --multitail: lay the panes out in N columns"),
     ] = None,
     print_only: Annotated[
         bool,
@@ -213,7 +222,7 @@ def logs(
     e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
 
     `--multitail` follows the same files in the `multitail` binary, one pane
-    each: `logs all --multitail --stream err -c 2`.
+    each: `logs all --multitail --stream err --pane-columns 2`.
 
     `--channel` subscribes instead of reading files: every line the processes
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
@@ -227,7 +236,7 @@ def logs(
     option a filter on how. `--attach NAME` replaces PROCS - one attachment's
     run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
     which need it. `--channel` and `--multitail` each read PROCS another way:
-    `--id` needs `--channel`; `--stream`, `--columns` and `--show-command` need
+    `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
     with `--attach`.
     """
@@ -274,7 +283,7 @@ def logs(
                 return
     given = {
         "--stream": stream is not None,
-        "--columns": columns is not None,
+        "--pane-columns": pane_columns is not None,
         "--show-command": print_only,
     }
     if multitail:
@@ -289,7 +298,11 @@ def logs(
             stack_channel.follow_channel(_paths(), _procs(procs), ids=ids or (), min_level=level)
         elif multitail:
             argv = stack_multitail.multitail_command(
-                _paths(), _procs(procs), stream=stream or "both", columns=columns or 1, lines=lines
+                _paths(),
+                _procs(procs),
+                stream=stream or "both",
+                columns=pane_columns or 1,
+                lines=lines,
             )
             if print_only:
                 console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)

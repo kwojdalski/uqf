@@ -62,7 +62,7 @@ def normalizer(
 ) -> ScaffoldPlan:
     """Plan a normalizer publishing `name` from `sources`.
 
-    `columns` is the canonical table as `parse_columns` reads `--columns`,
+    `columns` is the canonical table as `parse_columns` reads `--schema`,
     `time` included: the plant's copy keeps it, the normalizer's own output
     drops it, since `.qetl.job.stream.normalize` refuses an output carrying `time`.
     `source_columns` is each source's plant schema, the facts the caller reads
@@ -110,7 +110,7 @@ def normalizer(
         # output with nothing left is `([] )`, which the transform registry
         # refuses at load as not an unkeyed table (#1596).
         raise UqsError(
-            "--columns must name at least one column besides time: the plant stamps "
+            "--schema must name at least one column besides time: the plant stamps "
             "time itself, so a normalizer publishing time alone has no payload"
         )
 

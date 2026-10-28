@@ -82,7 +82,7 @@ def twin_target(
         )
     if shape:
         raise UqsError(
-            f"--twin-of takes the columns from the table {twin_of} publishes - drop --columns"
+            f"--twin-of takes the columns from the table {twin_of} publishes - drop --schema"
         )
     published = list(jobs[twin_of].publishes)
     if not published:
@@ -182,7 +182,7 @@ def check_passthrough(dataset: str, source: str, columns: Columns, definition: s
         raise UqsError(
             f"the new source {source}'s columns ({_shown(have)}) are not {dataset}'s "
             f"({_shown(want)}), so a passthrough cannot publish them - pass --transform derive "
-            f"and map one to the other, or give --columns {dataset}'s shape"
+            f"and map one to the other, or give --schema {dataset}'s shape"
         )
 
 
@@ -260,7 +260,7 @@ def backfill_plan(
     if twin_of is not None and reuse_source and not define_table:
         # A twin's columns were read from its job's table, not passed: with
         # its source and table both written already they shape nothing, and
-        # are no reason to refuse the plan as --columns would be (#1582).
+        # are no reason to refuse the plan as --schema would be (#1582).
         shape = None
     if (
         not reuse_source

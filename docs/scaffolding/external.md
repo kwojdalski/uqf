@@ -13,7 +13,7 @@ Kafka](../services/README.md#external-sources) are:
 
 ```bash
 uqs job new ws_quotes --kind external --raw-table ws_quotes_raw \
-    --publishes ws_quotes_book --columns "sym:symbol, bid:float, ask:float"
+    --publishes ws_quotes_book --schema "sym:symbol, bid:float, ask:float"
 ```
 
 It writes:
@@ -25,7 +25,7 @@ It writes:
   | `python/uqs/tests/test_NAME_streamer.py`       | a test that fails until it's written                                                                                                                                      |
   | the raw table and `src/etl/streaming/NAME.q`   | the q job subscribing to `--raw-table` and publishing `--publishes`, with its own failing test                                                                            |
 
-Both tables start with the same `--columns`. The q job is where they come to
+Both tables start with the same `--schema`. The q job is where they come to
 differ, as `databento1` folds 40 per-level columns into four vectors.
 
 ## Acknowledge after the publish
