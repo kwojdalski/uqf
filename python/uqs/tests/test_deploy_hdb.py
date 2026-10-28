@@ -2,14 +2,13 @@
 
 prepare's check is the release's own `uqs data hdb-check --json`, faked here
 by what it prints. The dry run's listing (LIST_PY) runs for real, with bash
-and python3, against an HDB under tmp_path. The q type check runs on PeachQ
-when UQF_PEACHQ names one.
+and python3, against an HDB under tmp_path. The q type check runs on PeachQ:
+the `peachq` fixture's (conftest.py), the pinned build unless chosen otherwise.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -18,8 +17,6 @@ import pytest
 from uqs.deploy import hdb
 from uqs.deploy.config import DeployError, make_config
 from uqs.deploy.stages import Deployment
-
-PEACHQ = os.environ.get("UQF_PEACHQ", "")
 
 
 def _done(stdout: str = "", rc: int = 0) -> subprocess.CompletedProcess:
@@ -131,8 +128,7 @@ def test_an_artifact_without_a_shape_is_not_judged_in_the_dry_run():
     assert "built before #870" in hdb.planned(_dep(LocalRemote()), {})
 
 
-@pytest.mark.skipif(not (PEACHQ and Path(PEACHQ).is_file()), reason="UQF_PEACHQ names no q")
-def test_the_type_check_finds_a_column_stored_as_another_type(tmp_path):
+def test_the_type_check_finds_a_column_stored_as_another_type(peachq, tmp_path):
     from uqs.stack import hdb_types
 
     script = Path(__file__).resolve().parents[3] / "scripts" / hdb_types.TYPES_SCRIPT
@@ -141,9 +137,9 @@ def test_the_type_check_finds_a_column_stored_as_another_type(tmp_path):
         "`:hdb/2026.01.02/book/ set .Q.en[`:hdb] ([] sym:`a`b; px:1 2);\nexit 0\n"
     )
     (tmp_path / "schema.q").write_text("book:([] sym:`symbol$(); px:`float$())\n")
-    subprocess.run([PEACHQ, "mk.q", "-q"], cwd=tmp_path, check=True, stdin=subprocess.DEVNULL)
+    subprocess.run([str(peachq), "mk.q", "-q"], cwd=tmp_path, check=True, stdin=subprocess.DEVNULL)
     out = subprocess.run(
-        [PEACHQ, str(script), "hdb", "schema.q", "-q"],
+        [str(peachq), str(script), "hdb", "schema.q", "-q"],
         cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False,
     ).stdout.splitlines()  # fmt: skip
     assert out == ["type_change|2026.01.02|book|px|j|f", "DONE"]

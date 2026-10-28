@@ -161,7 +161,7 @@ def _launch(
         return
     try:
         already: set[str] | None = _running(port)
-    except Exception as exc:  # noqa: BLE001 - not knowing only widens the stop
+    except (UqsError, OSError) as exc:  # not knowing only widens the stop
         log.debug("could not tell what was already running: {}", exc)
         already = None
 

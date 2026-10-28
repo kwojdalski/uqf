@@ -146,7 +146,8 @@ def attach(
         str | None,
         typer.Option(
             "--ssh",
-            help="USER@HOST to reach the stack's files over ssh, for `uqs data hdb-check` and "
+            help="The ssh destination, USER@HOST, that reaches the stack's files, for `uqs data "
+            "hdb-check` and "
             "`hdb-alter --attach` (default: --host as the current user). Changes a saved "
             "attachment without --replace",
         ),

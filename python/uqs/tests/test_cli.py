@@ -39,6 +39,7 @@ from typing import Any, cast
 import pytest
 import typer
 from typer.testing import CliRunner
+from which_support import fake_which
 
 # The CLI is a package of command families now (see cli/entry.py): the `cli`
 # package itself still exposes the assembled `app` and `main`, and each
@@ -147,8 +148,14 @@ def _no_real_paths(monkeypatch):
     arithmetic) that no registry would know. Tests that are ABOUT the guard
     take the `_known_procs` fixture, which puts the real one back against a
     small stub registry.
+
+    The port map is stubbed empty too - no word names a process - since
+    `_Paths` cannot be read for one either. A test about process names
+    patches its own (`_conn`); `_known_procs` no longer turns the error
+    reading `_Paths` into an empty set (#1759).
     """
     monkeypatch.setattr(stack_paths, "default_paths", _Paths)
+    monkeypatch.setattr(listing, "configured_ports", lambda _paths, _base_port=None: {})
     monkeypatch.setattr(stack_procs, "assert_known_procnames", lambda _paths, _procs: None)
 
 
@@ -781,7 +788,7 @@ def test_a_start_past_the_licence_cap_warns(monkeypatch):
     and it does so silently: the extra handle is reset, the process wedges in
     its retry loop, and `summary` still reports it `up` because that is a PID
     check."""
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
     over = {f"p{i}" for i in range(LICENCE_CONNECTION_LIMIT + 1)}
     _patch(monkeypatch, alive, "running", result=over)
     _patch(monkeypatch, runtime, "start", result=Completed())
@@ -1940,7 +1947,7 @@ def test_query_with_no_expression_execs_qcon_on_the_same_connection(monkeypatch)
     """No expression means a session: the same four options pointed at a
     different transport, so it must land on the process a query would hit."""
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    fake_which(monkeypatch, {"rlwrap": "/usr/bin/rlwrap", "qcon": "/usr/bin/qcon"})
     monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: seen.update(file=f, argv=a))
     result = runner.invoke(
         cli.app,
@@ -1955,7 +1962,7 @@ def test_a_session_without_qcon_installed_says_what_still_works(monkeypatch):
     ordinary state rather than a broken install - and the message has to leave
     the reader with a way to run their query."""
     errors = _error_log(monkeypatch)
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: None)
+    fake_which(monkeypatch)
     assert runner.invoke(cli.app, ["query", "--port", "6099"]).exit_code == 1
     assert any("not on PATH" in m and "still works over IPC" in m for m in errors.messages), (
         errors.messages
@@ -2000,7 +2007,7 @@ def _conn(monkeypatch, *, running=("rdb1",), ports=None):
         monkeypatch.setattr(query_cli.alive, "running", refuse)
     else:
         monkeypatch.setattr(query_cli.alive, "running", lambda paths, base_port: set(running))
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    fake_which(monkeypatch, {"rlwrap": "/usr/bin/rlwrap", "qcon": "/usr/bin/qcon"})
     monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: seen.update(argv=a))
     return seen
 
@@ -2038,15 +2045,47 @@ def test_query_proc_refuses_a_stopped_process_and_says_how_to_start_it(monkeypat
 
 def test_query_proc_still_connects_when_it_cannot_tell_what_is_running(monkeypatch):
     """The up/down check is advisory; qcon says for itself if nothing listens."""
-    seen = _conn(monkeypatch, running=RuntimeError("ps failed"))
+    seen = _conn(monkeypatch, running=UqsError("ps failed (1): no such process"))
     assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 0
     assert seen["argv"][-1] == "localhost:6052:admin:admin"
+
+
+def _ports_raise(monkeypatch, exc: Exception) -> None:
+    def refuse(paths, base_port=None):
+        raise exc
+
+    monkeypatch.setattr(listing, "configured_ports", refuse)
+
+
+def test_a_missing_registry_means_no_word_names_a_process(monkeypatch):
+    """No vendored process.csv: the word is an expression for the gateway."""
+    _ports_raise(
+        monkeypatch, FileNotFoundError("lib/torq-finance-starter-pack/appconfig/process.csv")
+    )
+    assert shared._known_procs() == set()
+
+
+def test_an_unexpected_error_reading_the_registry_propagates(monkeypatch):
+    """A bug is not "no registry": swallowed, it turned `uqs query WORD` into a
+    gateway query for the q expression WORD instead of an error (#1759)."""
+    _ports_raise(monkeypatch, TypeError("q_impl() got an unexpected keyword argument"))
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        shared._known_procs()
+    result = runner.invoke(cli.app, ["query", "rdb1"])
+    assert isinstance(result.exception, TypeError), result.output
+
+
+def test_a_refused_registry_is_refused_not_read_as_empty(monkeypatch):
+    errors = _error_log(monkeypatch)
+    _ports_raise(monkeypatch, UqsError("process_overrides.csv sets rdb1.nope"))
+    assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 1
+    assert any("rdb1.nope" in m for m in errors.messages), errors.messages
 
 
 def test_query_proc_without_qcon_installed_says_what_still_works(monkeypatch):
     errors = _error_log(monkeypatch)
     _conn(monkeypatch)
-    monkeypatch.setattr(query_cli.shutil, "which", lambda name: None)
+    fake_which(monkeypatch)
     assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 1
     assert any("not on PATH" in m for m in errors.messages), errors.messages
 
@@ -2241,7 +2280,7 @@ def test_a_profile_over_the_cap_is_refused_rather_than_warned(monkeypatch):
     """The asymmetry with a positional start: a profile is a set this tree
     named, so one that cannot run is reported here rather than discovered when
     the plant resets a handle and the process wedges while reporting `up`."""
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
     rec = _patch(monkeypatch, runtime, "start", result=Completed())
     result = runner.invoke(cli.app, ["start", "--profile", "fx,arbitrage"])
     assert result.exit_code != 0
@@ -2294,7 +2333,7 @@ def test_a_profile_that_fits_plus_names_that_do_not_is_refused(monkeypatch):
     chain's subscribers named beside it take it past the cap."""
     from uqs.model import profiles
 
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
     assert profiles.over_budget(["fx"]) is None, "the premise: fx alone fits"
     rec = _patch(monkeypatch, runtime, "start", result=Completed())
     result = runner.invoke(
@@ -2328,8 +2367,7 @@ def test_a_positional_start_over_the_cap_still_only_warns(monkeypatch):
 
 def test_on_peachq_a_big_start_does_not_warn_and_profiles_have_no_cap(monkeypatch):
     """PeachQ has no connection licence: past sixteen is what it is for."""
-    monkeypatch.setenv("UQF_Q_IMPL", "peachq")
-    monkeypatch.setenv("QCMD", "/opt/peachq/q")
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "peachq")
     over = {f"p{i}" for i in range(LICENCE_CONNECTION_LIMIT + 5)}
     _patch(monkeypatch, alive, "running", result=over)
     _patch(monkeypatch, runtime, "start", result=Completed())
@@ -2340,7 +2378,7 @@ def test_on_peachq_a_big_start_does_not_warn_and_profiles_have_no_cap(monkeypatc
 
 
 def test_list_profiles_shows_the_slot_count(monkeypatch):
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
     result = runner.invoke(cli.app, ["list", "profiles"])
     assert result.exit_code == 0
     assert "arbitrage" in result.output
@@ -2432,26 +2470,25 @@ def test_the_removal_commands_are_noun_first():
 
 def _stand_in_q(tmp_path, answer: str):
     """An executable answering the identity probe as `answer`, as in
-    test_interpreter.py."""
+    test_interpreter.py, beside a manifest saying it is the pinned build -
+    so a PeachQ one draws no warning."""
     q = tmp_path / f"q_{answer}"
     q.write_text(f"#!/bin/sh\necho '{answer}'\n")
     q.chmod(0o755)
+    pin = json.loads((stack_paths.repo_root() / "scripts" / "peachq.json").read_text())
+    (tmp_path / "manifest.json").write_text(json.dumps({"commit": pin["commit"]}))
     return q
 
 
 @pytest.mark.parametrize(
-    ("answer", "declared", "budget"),
-    [("kdbx", None, "16 connections"), ("peachq", "peachq", "no connection cap")],
+    ("answer", "budget"), [("kdbx", "16 connections"), ("peachq", "no connection cap")]
 )
-def test_summary_says_which_q_runs_the_fleet(monkeypatch, tmp_path, answer, declared, budget):
+def test_summary_says_which_q_runs_the_fleet(monkeypatch, tmp_path, answer, budget):
+    """Which q that is, the binary says: QCMD alone (#1753)."""
     _summary_ok(monkeypatch)
     q = _stand_in_q(tmp_path, answer)
     monkeypatch.setenv("QCMD", str(q))
     monkeypatch.delenv("UQS_LICENCE_CONNECTIONS", raising=False)
-    if declared:
-        monkeypatch.setenv("UQF_Q_IMPL", declared)
-    else:
-        monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     result = runner.invoke(cli.app, ["summary"])
     assert result.exit_code == 0, result.output
     # Rich wraps the long temporary path mid-word, so compare with every
@@ -2461,41 +2498,36 @@ def test_summary_says_which_q_runs_the_fleet(monkeypatch, tmp_path, answer, decl
     assert "warning:" not in result.output
 
 
-def test_summary_warns_on_a_mismatch_and_still_prints(monkeypatch, tmp_path):
+def test_summary_warns_on_a_q_that_will_not_say_and_still_prints(monkeypatch, tmp_path):
     _summary_ok(monkeypatch)
-    q = _stand_in_q(tmp_path, "peachq")
+    q = _stand_in_q(tmp_path, "banner")
     monkeypatch.setenv("QCMD", str(q))
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     result = runner.invoke(cli.app, ["summary"])
-    assert result.exit_code == 0, "a reading command reports a mismatch, it does not refuse"
+    assert result.exit_code == 0, "a reading command reports a problem, it does not refuse"
     flat = "".join(result.output.split())
-    hint = "but UQF_Q_IMPL declares kdbx - set UQF_Q_IMPL=peachq to run it knowingly"
-    assert "".join(hint.split()) in flat
+    assert "".join(f"warning: could not ask {q}: could not tell which q".split()) in flat
 
 
 def test_summary_with_no_q_reports_not_runnable(monkeypatch, tmp_path):
     _summary_ok(monkeypatch)
     monkeypatch.setenv("QCMD", str(tmp_path / "no-such-q"))
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     result = runner.invoke(cli.app, ["summary"])
     assert result.exit_code == 0, result.output
     assert "not runnable" in result.output
 
 
-def test_list_env_shows_the_declared_and_the_actual_implementation(monkeypatch, tmp_path):
+def test_list_env_shows_what_the_binary_says_it_is(monkeypatch, tmp_path):
     q = _stand_in_q(tmp_path, "peachq")
     monkeypatch.setenv("QCMD", str(q))
-    monkeypatch.setenv("UQF_Q_IMPL", "peachq")
     rows = {
         r["name"]: r["value"]
         for r in listing._list_env(stack_paths.paths_for_root(stack_paths.repo_root()), 6050)
     }
-    assert (rows["UQF_Q_IMPL"], rows["q_impl (binary)"]) == ("peachq", "peachq")
+    assert rows["q_impl (binary)"] == "peachq"
 
 
 def test_list_env_says_not_runnable_without_a_q(monkeypatch, tmp_path):
     monkeypatch.setenv("QCMD", str(tmp_path / "no-such-q"))
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     rows = {
         r["name"]: r["value"]
         for r in listing._list_env(stack_paths.paths_for_root(stack_paths.repo_root()), 6050)

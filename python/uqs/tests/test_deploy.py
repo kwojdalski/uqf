@@ -40,6 +40,7 @@ def parse_args(argv: list[str]) -> Config:
     # TARGETs (and the old --target) are resolved by targets.configs, not make_config
     params.pop("target", None)
     params.pop("target_names", None)
+    params.pop("no_register", None)  # a choice about this machine, not the push
     return make_config(**params)
 
 

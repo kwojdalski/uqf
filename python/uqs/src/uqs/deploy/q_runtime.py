@@ -15,7 +15,9 @@ Like the TorQ runtime (deploy/torq_runtime.py) it is its own artifact,
 CONTENT-ADDRESSED - one member, the binary, at a fixed mtime with no owner,
 gzip without a timestamp - and installed once on the server, under
 shared/runtimes/q/<sha256>/ (deploy/runtime_install.py). deploy.env then sets
-QCMD to its `q` and QHOME to its directory.
+QCMD to its `q` and QHOME to its directory, and nothing else: which q that
+is, the binary answers when asked (#1753), and a PeachQ runtime's stack takes
+QCMD because it is PeachQ (uqs.interpreter.peachq_binary).
 
 ONLY PEACHQ IS EVER BUNDLED. KX's q is licensed to the server it runs on: a
 KDB-X or kdb+ q stays `q_mode = "existing"`, a path on the server with its
@@ -25,16 +27,17 @@ other implementation, and - as artifact.checked_archive refuses for every
 artifact - any licence file.
 
 The manifest records where the binary came from: the repository, the commit
-(and, when $UQF_PEACHQ_COMMIT built another, the pinned one and the reason),
-the platform and build options, and the .z.K it reported. $UQF_PEACHQ, a
-binary of no recorded provenance, is refused: a runtime says what it was
-built from.
+(and, when $UQF_PEACHQ_COMMIT built another, the pinned one), the platform
+and build options, and the .z.K it reported. It is always built from
+scripts/peachq.py's cache, never from $QCMD, a binary of no recorded
+provenance: a runtime says what it was built from. RUNTIME_MANIFEST.json,
+installed beside the binary, is how scripts/peachq.py's `is_pinned` knows it
+for the pinned build on the server.
 """
 
 from __future__ import annotations
 
 import gzip
-import importlib.util
 import io
 import json
 import os
@@ -47,7 +50,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from uqs.deploy.artifact import ARCH_ALIASES, ReleaseError, _sha256, checked_archive
-from uqs.interpreter import PEACHQ, Q_IMPL_ENV, Q_INTERPRETER_ENV
+from uqs.interpreter import PEACHQ, Q_INTERPRETER_ENV, peachq_module
+from uqs.paths import UqsError
 
 FORMAT = 1
 KIND = "q-runtime"
@@ -68,8 +72,6 @@ KX_REFUSAL = (
     "KX's q is never bundled - it is licensed to the server it runs on; deploy it with "
     'q_mode = "existing" (--qcmd/--qhome) and its licence in QHOME'
 )
-#: The PeachQ binary override a runtime is never built from.
-PEACHQ_OVERRIDE = "UQF_PEACHQ"
 
 
 def parse_probe(output: str) -> tuple[str, str]:
@@ -106,19 +108,11 @@ class QRuntime:
         return f"{dest}/{RUNTIMES_DIR}/{self.sha256}"
 
     def env(self, dest: str) -> list[tuple[str, str]]:
-        """deploy.env's q: QCMD and QHOME, and - for a runtime declared on
-        PeachQ, whose stack asks scripts/peachq.py for its binary - that
-        binary as the reasoned UQF_PEACHQ override, so the server never
-        builds one."""
+        """deploy.env's q: QCMD and QHOME, and nothing else (#1753). A
+        runtime declared on PeachQ takes QCMD because it answers as PeachQ,
+        so the server never builds one."""
         home = self.directory(dest)
-        commit = self.manifest["commit"]
-        return [
-            (Q_INTERPRETER_ENV, f"{home}/{BINARY}"),
-            ("QHOME", home),
-            (Q_IMPL_ENV, PEACHQ),
-            (PEACHQ_OVERRIDE, f"{home}/{BINARY}"),
-            ("UQF_PEACHQ_REASON", f"the bundled q runtime {self.sha256}, PeachQ {commit}"),
-        ]
+        return [(Q_INTERPRETER_ENV, f"{home}/{BINARY}"), ("QHOME", home)]
 
     def record(self, dest: str, install: str) -> dict:
         """The components entry for a bundled q (components.observed)."""
@@ -183,19 +177,14 @@ def run_probe(binary: Path) -> str:
 
 def pinned_peachq(scripts_dir: Path, env: Mapping[str, str] | None = None) -> Path:
     """The pinned PeachQ's cache entry - built into the cache if need be - by
-    scripts/peachq.py, loaded by path as stack/env.py loads it."""
+    scripts/peachq.py, loaded by path (uqs.interpreter.peachq_module). Never
+    $QCMD, even when it is PeachQ: a runtime is built from the pin (or
+    $UQF_PEACHQ_COMMIT), so its manifest can say what it was built from."""
     source = os.environ if env is None else env
-    if source.get(PEACHQ_OVERRIDE):
-        raise ReleaseError(
-            "runtime",
-            f"{PEACHQ_OVERRIDE} names a binary of no recorded provenance - a q runtime is built "
-            f"from the pin (or $UQF_PEACHQ_COMMIT, with its reason); unset {PEACHQ_OVERRIDE}",
-        )
-    spec = importlib.util.spec_from_file_location("uqf_peachq", scripts_dir / "peachq.py")
-    if spec is None or spec.loader is None:  # pragma: no cover - a broken checkout
-        raise ReleaseError("runtime", f"cannot load {scripts_dir / 'peachq.py'}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    try:
+        module = peachq_module(scripts_dir)
+    except UqsError as exc:
+        raise ReleaseError("runtime", str(exc)) from None
     try:
         return module.resolve(dict(source)).parent
     except module.PeachQError as exc:

@@ -271,7 +271,10 @@ def test_targets_are_listed_by_their_own_noun(server):
     assert isinstance(root, typer.core.TyperGroup)
     group = root.commands["target"]
     assert isinstance(group, typer.core.TyperGroup)
-    assert set(group.commands) == {"add", "list", "remove", "check", "shell"}
+    assert set(group.commands) == {
+        "add", "set", "unset", "rename", "remove", "edit", "log", "revert", "adopt",
+        "list", "check", "shell",
+    }  # fmt: skip
 
 
 def test_mcp_lists_targets_too():

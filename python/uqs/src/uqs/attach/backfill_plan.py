@@ -17,6 +17,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+from uqs import timerange
 from uqs.attach import config
 from uqs.attach.backfill import PLAN_SCRIPT, Destination, canonical, resolve
 from uqs.attach.backfill_coordination import assess
@@ -193,7 +194,7 @@ def evaluate(
 
 
 def _utc(text: str) -> str:
-    return stack_backfill.parse_bound("window", text).isoformat()
+    return timerange.parse_bound("window", text).isoformat()
 
 
 def build_plan(

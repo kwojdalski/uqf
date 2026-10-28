@@ -13,8 +13,10 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
-from uqs.cli.seed import parse_dates
+from uqs import cli
+from uqs.cli import seed as cli_seed
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_seed
@@ -178,19 +180,87 @@ def test_a_source_with_no_hdb_is_refused_naming_it(tmp_path):
         hdb_seed.seed(_paths(tmp_path, "torq"), _paths(tmp_path, "uqf"))
 
 
+# --- the command's range (#1735) and its renamed spellings (#1738 rule 6) -----
+
+
+@pytest.fixture
+def seeded(monkeypatch, tmp_path):
+    """What `data seed` hands hdb_seed.seed, and the renames it warned of."""
+    seen: dict = {"renamed": []}
+    monkeypatch.setattr(cli_seed, "_paths", lambda: _paths(tmp_path, "torq"))
+    monkeypatch.setattr(cli_seed.runtime, "bootstrap", lambda p: None)
+    monkeypatch.setattr(
+        cli_seed, "warn_renamed", lambda old, new: seen["renamed"].append((old, new))
+    )
+    monkeypatch.setattr(cli_seed, "_die", lambda exc: seen.setdefault("refused", str(exc)))
+
+    def seed(target, source, tables, first, last, overwrite):
+        seen.update(source=source.runtime, first=first, last=last)
+        return "seeded"
+
+    monkeypatch.setattr(cli_seed.hdb_seed, "seed", seed)
+
+    def run(*argv: str) -> dict:
+        CliRunner().invoke(cli.app, ["data", "seed", *argv])
+        return seen
+
+    return run
+
+
 @pytest.mark.parametrize(
-    ("text", "want"),
+    ("argv", "want"),
     [
-        ("2026-09-01..2026-09-30", (date(2026, 9, 1), date(2026, 9, 30))),
-        ("2026-09-01..", (date(2026, 9, 1), None)),
-        ("..2026-09-30", (None, date(2026, 9, 30))),
-        (None, (None, None)),
+        ([], (None, None)),
+        (["--from", "2026-09-01", "--to", "2026-10-01"], (date(2026, 9, 1), date(2026, 9, 30))),
+        (["--date", "2026-09-05"], (date(2026, 9, 5), date(2026, 9, 5))),
+        (["--from", "2026-09-01"], (date(2026, 9, 1), None)),
+        (["--to", "2026-09-03"], (None, date(2026, 9, 2))),
+        (
+            ["--from", "2026-09-01T06:00", "--to", "2026-09-03"],
+            (date(2026, 9, 2), date(2026, 9, 2)),
+        ),
     ],
 )
-def test_dates_take_either_side_open(text, want):
-    assert parse_dates(text) == want
+def test_the_partitions_are_the_dates_in_the_range(seeded, argv, want):
+    seen = seeded("--from-runtime", "uqf", *argv)
+    assert (seen["source"], seen["first"], seen["last"]) == ("uqf", *want)
+    assert seen["renamed"] == []
 
 
-def test_a_malformed_date_range_is_refused():
-    with pytest.raises(UqsError, match="is not FIRST..LAST"):
-        parse_dates("2026-09-01-2026-09-30")
+def test_from_naming_a_runtime_is_the_old_spelling_and_says_the_new(seeded):
+    seen = seeded("--from", "uqf", "--to", "2026-09-03")
+    assert (seen["source"], seen["first"], seen["last"]) == ("uqf", None, date(2026, 9, 2))
+    assert seen["renamed"] == [("--from uqf", "--from-runtime uqf")]
+
+
+@pytest.mark.parametrize(
+    ("text", "want", "spelled"),
+    [
+        (
+            "2026-09-01..2026-09-30",
+            (date(2026, 9, 1), date(2026, 9, 30)),
+            "--from 2026-09-01 --to 2026-10-01",
+        ),
+        ("2026-09-01..", (date(2026, 9, 1), None), "--from 2026-09-01"),
+        ("..2026-09-30", (None, date(2026, 9, 30)), "--to 2026-10-01"),
+    ],
+)
+def test_dates_is_the_old_spelling_of_the_range(seeded, text, want, spelled):
+    seen = seeded("--from-runtime", "uqf", "--dates", text)
+    assert (seen["first"], seen["last"]) == want
+    assert seen["renamed"] == [(f"--dates {text}", spelled)]
+
+
+def test_dates_with_a_range_is_refused(seeded):
+    seen = seeded("--from-runtime", "uqf", "--dates", "2026-09-01..", "--date", "2026-09-01")
+    assert seen["refused"].startswith("--dates cannot be given with a time range")
+
+
+def test_a_malformed_dates_is_refused(seeded):
+    seen = seeded("--from-runtime", "uqf", "--dates", "2026-09-01-2026-09-30")
+    assert "is not FIRST..LAST" in seen["refused"]
+
+
+def test_no_runtime_to_copy_from_is_refused(seeded):
+    seen = seeded("--from", "2026-09-01")
+    assert seen["refused"].startswith("name the runtime to copy from: --from-runtime")

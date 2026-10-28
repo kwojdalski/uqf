@@ -164,7 +164,7 @@ def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
     The ledger's JSON spells nanoseconds - 2026-09-13T00:00:00.000000000 -
     which `datetime.fromisoformat` refuses, so the command would not run as
     printed. A whole second is printed as ISO (the common case); a fraction
-    becomes the q literal `parse_bound` reads.
+    becomes the q literal `timerange.parse_bound` reads.
 
     `parse_bound` stops at the microsecond, and q's `.z.p` does not - on Linux
     an uptime edge carries nine digits (#1253). So a finer value is rounded

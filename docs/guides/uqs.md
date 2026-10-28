@@ -546,12 +546,12 @@ start.
 
 `peachq` is `torq`'s stack on [PeachQ](https://github.com/peachq-org/peachq),
 the MIT-licensed q interpreter, rather than KDB-X: the starter pack as it ships,
-with no connection cap and no licence needed. Its binary comes from
-`scripts/peachq.py`: `UQF_PEACHQ` if set (with `UQF_PEACHQ_REASON`), otherwise
-the pinned build from the cache, built into the cache the first time. That stack
-alone gets `UQF_Q_IMPL=peachq` and that `QCMD`. Your shell's own `QCMD` and
-`PATH` are left alone, and `summary` names the interpreter on its first line.
-KDB-X stays the default and the interpreter everything here is verified against.
+with no connection cap and no licence needed. Its binary is your `QCMD` when
+that is PeachQ, otherwise the pinned build from `scripts/peachq.py`'s cache,
+built into the cache the first time (`uqs.interpreter.peachq_binary`). That
+stack alone gets that `QCMD`; your shell's own `QCMD` and `PATH` are left alone,
+and `summary` names the interpreter on its first line. KDB-X stays the default
+and the interpreter everything here is verified against.
 
 ```
 uqs --runtime peachq start --profile capture
@@ -583,9 +583,13 @@ compare it with `uqf` on the same history, copy `uqf`'s partitions of the tables
 both declare:
 
 ```
-uqs --runtime torq data seed --from uqf                       # every table torq declares
-uqs --runtime torq data seed --from uqf --tables trade,quote --dates 2026-09-01..2026-09-30
+uqs --runtime torq data seed --from-runtime uqf     # every table torq declares
+uqs --runtime torq data seed --from-runtime uqf --tables trade,quote --from 2026-09-01 --to 2026-10-01
 ```
+
+The partitions copied are those whose date lies in the [time
+range](#cli-conventions); either bound may be left off. `--from RUNTIME` and
+`--dates FIRST..LAST` are the old spellings, kept for one release.
 
 Each symbol column is re-enumerated against the target's sym file. A plain copy
 of the partition directories would decode, in the target, to whatever its sym
@@ -693,10 +697,10 @@ has (see the table). On that licence it is refused like any profile over the
 cap. On a q licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
 is held to - `--profile`, `uqs list profiles`' `fits` column and the
-positional-start warning. On PeachQ (`UQF_Q_IMPL=peachq`, see the README's
-Requirements) there is no cap at all, so `all` starts as it is. `all` leaves out
-`crypto`, because the mock replaces cryptorust's recorders rather than joining
-them; ask for it with `--profile all,crypto`.
+positional-start warning. On PeachQ (`QCMD` naming a PeachQ binary, see the
+README's Requirements) there is no cap at all, so `all` starts as it is. `all`
+leaves out `crypto`, because the mock replaces cryptorust's recorders rather
+than joining them; ask for it with `--profile all,crypto`.
 
 Profiles never change `startwithall`, so `start all` is untouched. A closure
 stops at a table fed from outside the stack: `fx` needs `crypto_book` but does
@@ -824,8 +828,10 @@ interpreter: kdbx (/Users/me/.kx/bin/q) - 16 connections
 interpreter: peachq (/opt/peachq/q) - no connection cap
 ```
 
-The implementation is asked of the binary; when it disagrees with `UQF_Q_IMPL`,
-a warning follows. `uqs list env` carries both as rows.
+The implementation is asked of the binary, which is the only thing that says it
+(#1753); a binary that will not say is named in a warning, and so is a PeachQ
+other than the pinned build. `uqs list env` carries the answer as its
+`q_impl (binary)` row.
 
 `summary` shows the whole graph, not just the unsatisfied part of it, in three
 columns derived from the same declarations:
@@ -1442,6 +1448,21 @@ command that breaks a rule, and on a listed exception that has since been fixed.
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 
+A time range is given one way, on every command that takes one (`job backfill`,
+`job gaps`, `job preview`, `job runs audit`, `data seed`, `data replay`), and
+read by one parser, `uqs.timerange`:
+
+- `--from A --to B` is `[A, B)`: `B` is excluded. A bound is a date or a
+  timestamp, ISO-8601 or a q literal - `2026-09-13`, `2026-09-13T06:00`,
+  `2026-09-13T06:00+02:00`, `2026.09.13D06:00` - and is UTC without an offset;
+- `--date D` is one day, `--from D --to D+1`;
+- `--last DURATION` is up to now, `--from now-DURATION --to now`: `30s`, `5m`,
+  `2h`, `7d`, `500ms`.
+
+A command whose unit is coarser takes the range in that unit: `data replay`
+replays one day's log, so its range must be one whole day; `data seed` copies
+the date partitions whose date lies in the range.
+
 The verbs of rule 4:
 
   | verb                                          | means                                                     |
@@ -1466,6 +1487,15 @@ The verbs of rule 4:
   | `env`                                         | print variables to source                                 |
   | `build` `push` `rollback` `prune` `history`   | releases and their deployment                             |
   | `shell`                                       | a shell on a target                                       |
+  | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file |
+  | `log` `revert`                                | a target's change log, and undoing one change in it       |
+  | `adopt`                                       | take over a release copied onto a server by hand          |
+
+Three of these sit beside a near neighbour on purpose (#1756): `log` is a
+record's change history, where `logs` is processes' output and `history` what
+was deployed; `revert` undoes one recorded change and is itself recorded, where
+`rollback` returns a server to its previous release; `unset` removes a setting
+so the layer beneath applies, which no value given to `set` can say.
 
 ### Renamed spellings
 

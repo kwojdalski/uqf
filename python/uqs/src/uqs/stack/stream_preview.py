@@ -15,11 +15,13 @@ import os
 import re
 import subprocess
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runs
+from uqs.timerange import TimeRange
 
 #: A job name as q declares it - checked before it is spliced into q.
 _JOB = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
@@ -29,19 +31,23 @@ _MARK = "UQS_PREVIEW "
 
 _TREE = ("src/init.q", "src/etl/init.q")
 
-#: `--last`: a positive whole number and a unit (#681).
-_DURATION = re.compile(r"([0-9]+)(ms|s|m|h|d)")
-_UNIT_NS = {"ms": 10**6, "s": 10**9, "m": 60 * 10**9, "h": 3600 * 10**9, "d": 86400 * 10**9}
-
 #: A line .qetl.log writes outside TorQ: time|level|id|message (log.q's emit).
 _LOG_LINE = re.compile(r"^[^|]+\|(TRACE|DEBUG|INFO|WARNING|ERROR)\|([^|]*)\|(.*)$")
 
 
-def _call(job: str, sample: int, last_ns: int | None) -> str:
-    """The q call the child makes: the next page, or a recent window."""
-    if last_ns is None:
+def _call(job: str, sample: int, window: TimeRange | None) -> str:
+    """The q call the child makes: the next page, the recent span up to the
+    child's own now (--last), or a window given outright (--from/--to, --date)."""
+    if window is None:
         return f".qetl.job.stream.preview[`{job};{int(sample)}]"
-    return f".qetl.job.stream.preview_recent[`{job};{int(sample)};`timespan${int(last_ns)}]"
+    if window.last is not None:
+        ns = window.last // timedelta(microseconds=1) * 1000
+        return f".qetl.job.stream.preview_recent[`{job};{int(sample)};`timespan${ns}]"
+    start, end = window.bounds
+    return (
+        f".qetl.job.stream.preview_window[`{job};{int(sample)};"
+        f"{runs.to_q_timestamp(start)};{runs.to_q_timestamp(end)}]"
+    )
 
 
 class PreviewFailed(UqsError):
@@ -51,22 +57,6 @@ class PreviewFailed(UqsError):
     def __init__(self, message: str, trace: list[tuple[str, str, str]]):
         super().__init__(message)
         self.trace = trace
-
-
-def duration_ns(raw: str) -> int:
-    """`--last` as nanoseconds: `30s`, `5m`, `2h`, `1d` or `500ms`.
-
-    @raise UqsError for anything else, and for zero - a window must cover time.
-    """
-    m = _DURATION.fullmatch(raw.strip())
-    if not m:
-        raise UqsError(
-            f"--last {raw!r}: expected a whole number and a unit - ms, s, m, h or d - e.g. 30s"
-        )
-    ns = int(m.group(1)) * _UNIT_NS[m.group(2)]
-    if ns <= 0:
-        raise UqsError(f"--last {raw!r}: the window must be longer than zero")
-    return ns
 
 
 def trace_lines(output: str) -> list[tuple[str, str, str]]:
@@ -84,7 +74,7 @@ def preview(
     sample: int = 5,
     timeout: float = 120,
     trace: bool = False,
-    last_ns: int | None = None,
+    window: TimeRange | None = None,
 ) -> dict:
     """What `job`'s next page would publish: `.qetl.job.stream.preview`'s result.
 
@@ -95,9 +85,10 @@ def preview(
     or times out raises PreviewFailed carrying them, so the query it stopped
     on is still shown.
 
-    With `last_ns`, the preview is of the recent data instead -
-    `.qetl.job.stream.preview_recent`: the rows in [now - last_ns, now),
-    fetched from a temporary cursor; the saved one is not read (#681).
+    With `window`, the preview is of the rows in that window instead -
+    `.qetl.job.stream.preview_recent` for a span up to now (#681),
+    `.qetl.job.stream.preview_window` for one given outright (#1735) - fetched
+    from a temporary cursor; the saved one is not read.
 
     @raise UqsError when there is no q, the name is not a job's, or the
     preview itself refuses or fails - with q's own message.
@@ -113,7 +104,7 @@ def preview(
         [
             *(f"\\l {f}" for f in _TREE),
             *([".qetl.log.trace 1b;", ".qetl.log.debug 1b;"] if trace else []),
-            f"r:@[{{[x] {_call(job, sample, last_ns)}}};::;{{[e] enlist[`error]!enlist e}}];",
+            f"r:@[{{[x] {_call(job, sample, window)}}};::;{{[e] enlist[`error]!enlist e}}];",
             f'-1 "{_MARK}",.j.j r;',
             "exit 0",
             "",
