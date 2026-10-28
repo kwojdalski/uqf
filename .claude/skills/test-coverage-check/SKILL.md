@@ -124,7 +124,7 @@ number - Why it matters (what goes wrong if it is broken)
   missing columns), first-row conventions for rolling functions. Save to
   `tests/test_<component>.q`, wire it into `tests/run_tests.q` if it's a new
   file, and add `\l src/<component>.q` to `src/init.q` if the module itself is
-  somehow not yet loaded. Run `./q tests/run_tests.q` (and real KDB-X if
+  somehow not yet loaded. Run `q tests/run_tests.q` (and real KDB-X if
   available) and commit immediately after it passes:
   `Add tests for <component>`.
 - `skip` --- move to the next gap
@@ -153,7 +153,7 @@ When the user says `write <component>`:
    the real logic.
 5. Keep each test function focused on one behavior. Prefer multiple small tests
    over one large one.
-6. Run the tests after writing: `./q tests/run_tests.q`, and real KDB-X if
+6. Run the tests after writing: `q tests/run_tests.q`, and real KDB-X if
    available
    (`export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q tests/run_tests.q`).
 7. Fix any failures --- on **both** interpreters --- before reporting done.

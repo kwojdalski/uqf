@@ -237,7 +237,7 @@ Work through the ranked list one item at a time. For each item:
 - Wait for the user's reply:
   - `ok` --- apply the fix using the Edit tool if the change is safe and
     localised; if the fix requires larger refactoring, describe the steps
-    clearly. After any fix, run `./q tests/run_tests.q` (and real KDB-X if
+    clearly. After any fix, run `q tests/run_tests.q` (and real KDB-X if
     available) before moving on
   - `s` / `skip` --- move to the next item
   - Any other text --- treat as a custom instruction and act on it
@@ -249,7 +249,7 @@ When the user types `done`, or all items have been reviewed:
 
 - Apply any pending edits.
 
-- Run the full test suite (`./q tests/run_tests.q`, and real KDB-X if available)
+- Run the full test suite (`q tests/run_tests.q`, and real KDB-X if available)
   before committing anything.
 
 - Create a git commit for each changed file (or one commit per logical fix

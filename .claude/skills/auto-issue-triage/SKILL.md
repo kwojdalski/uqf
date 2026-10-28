@@ -120,7 +120,7 @@ For each issue, the skill generates:
 **Next Steps:**
 1. /claim <number>  # Claim the issue before starting work
 2. git worktree add .claude/worktrees/issue-<number> -b kwojdalski/issue-<number>-<slug> origin/master
-3. Implement fix inside that worktree and run `./q tests/run_tests.q` (both interpreters if available)
+3. Implement fix inside that worktree and run `q tests/run_tests.q` (both interpreters if available)
 4. git push origin kwojdalski/issue-<number>-<slug>
 5. /release <number> --status resolved
 6. git worktree remove .claude/worktrees/issue-<number>

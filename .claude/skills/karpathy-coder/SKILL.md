@@ -82,7 +82,7 @@ simplify.
   | ---              | ---                                                                                           |
   | "Add validation" | "Write a test for the invalid-input case (missing column, unsorted table), then make it pass" |
   | "Fix the bug"    | "Write a test that reproduces it, then make it pass"                                          |
-  | "Refactor X"     | "Run `./q tests/run_tests.q` before and after; ensure identical pass count"                   |
+  | "Refactor X"     | "Run `q tests/run_tests.q` before and after; ensure identical pass count"                     |
 
 For multi-step tasks, state a brief plan:
 
@@ -93,7 +93,7 @@ For multi-step tasks, state a brief plan:
 ```
 
 In this codebase, "verify" almost always means: run the full qUnit suite
-(`./q tests/run_tests.q`, and real KDB-X if available via
+(`q tests/run_tests.q`, and real KDB-X if available via
 `export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH"`) before considering a change
 done.
 
