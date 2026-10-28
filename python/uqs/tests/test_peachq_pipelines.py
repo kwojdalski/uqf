@@ -4,8 +4,9 @@
 
 The unit tests build a small tree under tmp_path and run the real converter
 over it, with a stand-in interpreter that says what a test needs it to. The
-tests marked with PEACHQ run the real PeachQ binary (UQF_PEACHQ): the tree this
-checkout converts must load on it, and the capability probe must find what is
+tests taking the `peachq` fixture run the real PeachQ binary (conftest.py:
+--peachq PATH, else $QCMD when it is PeachQ, else the pinned build): the tree
+this checkout converts must load on it, and the capability probe must find what is
 missing. UQF_PEACHQ_STACK_TEST=1 also starts a whole stack from a copy of this
 checkout - a sidecar bundle's streaming job publishing into an RDB, and its
 bounded worker recording coverage - which takes a minute and the 6550 ports.
@@ -34,10 +35,6 @@ from uqs.stack import capabilities, gateway_access, qtree, runtime, runtime_bund
 from uqs.stack.env import build_env
 
 REPO = Path(stack_paths.__file__).resolve().parents[4]
-PEACHQ = os.environ.get("UQF_PEACHQ", "")
-needs_peachq = pytest.mark.skipif(
-    not (PEACHQ and Path(PEACHQ).is_file()), reason="UQF_PEACHQ names no PeachQ binary"
-)
 
 NESTED = "\\d .demo.inner\noffset:2\nadd:{[amount] amount+offset}\n\\d .\n"
 REFUSED = "\\d .demo.inner\n\\l other.q\n\\d .\n"
@@ -355,20 +352,18 @@ def test_a_kdbx_runtime_is_never_probed(tmp_path, monkeypatch):
 # ----------------------------------------------------------- real PeachQ
 
 
-@needs_peachq
-def test_peachq_reports_what_it_cannot_do():
+def test_peachq_reports_what_it_cannot_do(peachq):
     capabilities.probe.cache_clear()
-    have = capabilities.probe(PEACHQ)
+    have = capabilities.probe(str(peachq))
     assert set(have) == set(capabilities.CAPABILITIES)
     assert all(isinstance(v, bool) for v in have.values()), "an answer for each, never a guess"
 
 
-@needs_peachq
-def test_this_checkouts_tree_converts_and_loads_on_peachq(tmp_path, monkeypatch):
+def test_this_checkouts_tree_converts_and_loads_on_peachq(peachq, tmp_path, monkeypatch):
     monkeypatch.setenv(stack_paths.DATA_ROOT_ENV, str(tmp_path))
     paths = stack_paths.paths_for_root(REPO, "peachq-etl")
     env = {**os.environ, "TORQAPPHOME": str(paths.torqapphome)}
-    tree = qtree.prepare(paths, PEACHQ, env)
+    tree = qtree.prepare(paths, str(peachq), env)
     assert (tree / "src" / "etl" / "init.q").is_file()
     # This tree writes no nested context (#1411), so it arrives converted by
     # nothing; the copy still has to load on PeachQ, and a site's own nested
@@ -376,16 +371,15 @@ def test_this_checkouts_tree_converts_and_loads_on_peachq(tmp_path, monkeypatch)
     assert json.loads((paths.torqdata / qtree.REPORT).read_text())["transformed"] == []
 
 
-@needs_peachq
-def test_a_load_failure_is_caught_though_peachq_exits_zero(tmp_path):
+def test_a_load_failure_is_caught_though_peachq_exits_zero(peachq, tmp_path):
     tree = tmp_path / "tree"
     (tree / "src" / "etl").mkdir(parents=True)
     (tree / "src" / "init.q").write_text("x:1\n")
     (tree / "src" / "etl" / "init.q").write_text("y:til 2.5\n")
     with pytest.raises(UqsError, match=r"does not load .*no UQS_QTREE_LOADED"):
-        qtree.probe(tree, PEACHQ, dict(os.environ))
+        qtree.probe(tree, str(peachq), dict(os.environ))
     (tree / "src" / "etl" / "init.q").write_text("y:til 2\n")
-    qtree.probe(tree, PEACHQ, dict(os.environ))
+    qtree.probe(tree, str(peachq), dict(os.environ))
 
 
 # ------------------------------------------- a whole stack, from a copy
@@ -447,9 +441,10 @@ SYNTH = {
 
 
 @pytest.fixture
-def stack_copy(tmp_path: Path):
+def stack_copy(peachq: Path, tmp_path: Path):
     """This checkout, copied - nothing here writes into it - with uqs run from
-    the copy, so its repository root is the copy's."""
+    the copy, so its repository root is the copy's, and QCMD the PeachQ the
+    test runs on, which the peachq-etl runtime then takes as its own."""
     repo = tmp_path / "repo"
     ignore = shutil.ignore_patterns(".venv", "output", "node_modules", ".git", "__pycache__")
     for entry in REPO.iterdir():
@@ -471,6 +466,7 @@ def stack_copy(tmp_path: Path):
         **os.environ,
         "PYTHONPATH": str(repo / "python" / "uqs" / "src"),
         "UQS_RUNTIME": "peachq-etl",
+        "QCMD": str(peachq),
         "SYNTH_PW": "admin",
     }
 
@@ -490,11 +486,10 @@ def stack_copy(tmp_path: Path):
         uqs("stop", proc)
 
 
-@needs_peachq
 @pytest.mark.skipif(not STACK, reason="UQF_PEACHQ_STACK_TEST=1 starts a PeachQ stack")
 @pytest.mark.xdist_group("torq-stack")  # both bind the fixed 6550 span
 @pytest.mark.shard_apart  # ~40s each: on separate CI runners they need not queue
-def test_a_bundles_jobs_run_on_peachq(stack_copy):
+def test_a_bundles_jobs_run_on_peachq(peachq, stack_copy):
     repo, bundle, uqs, _env = stack_copy
     ledger = repo / "src" / "etl" / "installed_bundles.json"
     dry = uqs("runtime", "prepare", "--bundle", str(bundle), "--dry-run")
@@ -540,7 +535,7 @@ def test_a_bundles_jobs_run_on_peachq(stack_copy):
     read = part.parent.parent / "read.q"
     read.write_text(f'-1 .Q.s1 get `$":{part}/seq";\n-1 .Q.s1 get `$":{part}/px";\nexit 0\n')
     written = subprocess.run(
-        [PEACHQ, str(read), "-q"], capture_output=True, text=True, timeout=60, check=False
+        [str(peachq), str(read), "-q"], capture_output=True, text=True, timeout=60, check=False
     ).stdout.splitlines()
     assert written == ["1 2 3 4 5", "101 102 103 104 105f"], "yesterday's partition, in order"
 
@@ -549,11 +544,12 @@ def test_a_bundles_jobs_run_on_peachq(stack_copy):
 DEMO_TABLES = ("quote", "trade", "packets")
 
 
-@needs_peachq
 @pytest.mark.skipif(not STACK, reason="UQF_PEACHQ_STACK_TEST=1 starts a PeachQ stack")
 @pytest.mark.xdist_group("torq-stack")  # both bind the fixed 6550 span
 @pytest.mark.shard_apart  # ~40s each: on separate CI runners they need not queue
-def test_a_sidecar_runs_against_a_managed_schema_without_the_demo_tables(stack_copy, tmp_path):
+def test_a_sidecar_runs_against_a_managed_schema_without_the_demo_tables(
+    peachq, stack_copy, tmp_path
+):
     """#902: every process used to load every declaration, so the demo's
     market_data - which asks for `quote` at load time - stopped a sidecar from
     starting against a schema without it. Now the sidecar loads its own."""
@@ -588,7 +584,7 @@ def test_a_sidecar_runs_against_a_managed_schema_without_the_demo_tables(stack_c
     # The deploy smoke over this composition, on the tree it started from,
     # passes; one that needs quote fails, naming it.
     tree = repo / "output" / "uqs-peachq-etl" / "qtree"
-    smoke = [PEACHQ, "scripts/deploy_smoke.q", "-q", "-procs", "rdb1", "synthfeed1"]
+    smoke = [str(peachq), "scripts/deploy_smoke.q", "-q", "-procs", "rdb1", "synthfeed1"]
     ok = subprocess.run(smoke, cwd=tree, env=env, capture_output=True, text=True, timeout=120)
     assert "DEPLOY_SMOKE_OK" in ok.stdout, ok.stdout + ok.stderr
     assert "synthfeed1" in ok.stdout

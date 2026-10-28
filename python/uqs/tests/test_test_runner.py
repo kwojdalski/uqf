@@ -70,26 +70,52 @@ def test_the_smoke_options_are_refused_for_another_lane(ran):
 def test_q_docs_peachq_fails_rather_than_skips_when_peachq_cannot_be_had(ran, monkeypatch):
     """PeachQ is required beside KDB-X, so a resolver failure fails the lane."""
 
-    def unavailable():
+    def unavailable(env=None, override=None):
         raise runner.peachq.PeachQError("offline, and the cache is cold")
 
-    monkeypatch.setattr(runner.peachq, "resolve", unavailable)
+    monkeypatch.setattr(runner, "peachq_binary", unavailable)
     with pytest.raises(SystemExit, match="q-docs-peachq: offline"):
         runner.main(["q-docs-peachq"])
 
 
-def test_q_docs_peachq_reruns_q_docs_declared_as_peachq(monkeypatch):
-    """The child is told it is PeachQ, so the interpreter check refuses a
-    binary that is not; the resolved path reaches that lane and no other."""
-    calls = []
+def _docs_peachq_calls(monkeypatch) -> tuple[list, list]:
+    calls, asked = [], []
     monkeypatch.setattr(runner, "check_interpreter", lambda env=None: None)
     monkeypatch.setattr(runner, "_run", lambda lane, argv, *, env=None: calls.append((argv, env)))
-    monkeypatch.setattr(runner.peachq, "resolve", lambda: Path("/cache/peachq/q"))
+
+    def binary(env=None, override=None):
+        asked.append(override)
+        return Path(override or "/cache/peachq/q")
+
+    monkeypatch.setattr(runner, "peachq_binary", binary)
+    return calls, asked
+
+
+def test_q_docs_peachq_reruns_q_docs_with_qcmd_alone(monkeypatch):
+    """The child gets PeachQ as QCMD and nothing else (#1753): it asks the
+    binary which q it is. The path reaches that lane and no other."""
+    calls, asked = _docs_peachq_calls(monkeypatch)
     assert runner.main(["q-docs-peachq"]) == 0
     [(argv, env)] = calls
     assert argv[1:] == [str(SCRIPT), "q-docs"]
-    assert env == {runner.Q_IMPL_ENV: "peachq", "QCMD": "/cache/peachq/q"}
+    assert env == {"QCMD": "/cache/peachq/q"}
+    assert asked == [None]
     assert runner.Q_CMD != "/cache/peachq/q", "the global QCMD is left alone"
+
+
+def test_peachq_names_the_binary_for_the_peachq_lanes(monkeypatch):
+    """KDB-X plus a custom PeachQ: --peachq PATH, not an inherited variable."""
+    calls, asked = _docs_peachq_calls(monkeypatch)
+    assert runner.main(["q-docs-peachq", "--peachq", "/opt/pq/q"]) == 0
+    assert asked == ["/opt/pq/q"]
+    assert calls[0][1] == {"QCMD": "/opt/pq/q"}
+
+
+def test_peachq_is_refused_for_a_lane_that_would_ignore_it(ran):
+    with pytest.raises(SystemExit) as exc:
+        runner.main(["q-unit", "--peachq", "/opt/pq/q"])
+    assert exc.value.code == 2
+    assert ran == []
 
 
 def test_q_unit_passes_its_own_arguments_to_the_runner(ran):

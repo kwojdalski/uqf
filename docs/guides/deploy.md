@@ -431,10 +431,10 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
 ```
 
 - **Built from the pin.** The build takes the binary `scripts/peachq.py`
-  resolves: its cache, or a fresh build of the pinned commit into it. It refuses
-  `UQF_PEACHQ`, whose binary has no recorded origin. A `UQF_PEACHQ_COMMIT` build
-  is recorded in the manifest with its reason. The binary is run before it is
-  packed, and must answer that it is PeachQ.
+  resolves: its cache, or a fresh build of the pinned commit into it. It never
+  takes `QCMD`, even a PeachQ one, whose binary has no recorded origin. A
+  `UQF_PEACHQ_COMMIT` build is recorded in the manifest as unpinned. The binary
+  is run before it is packed, and must answer that it is PeachQ.
 - **One file, never a licence.** The archive holds the binary and its manifest,
   nothing else. The manifest records the repository, commit, platform, build
   options and the `.z.K` the binary reported. Every artifact this tool reads,
@@ -452,10 +452,16 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   the server. Once installed, the push runs the binary there; if it does not
   answer as PeachQ, the push stops before the release is transferred.
 - **Each release names its own.** `deploy.env` sets `QCMD` to the runtime's `q`
-  and `QHOME` to its directory, with `UQF_Q_IMPL=peachq`. It also sets
-  `UQF_PEACHQ` (and its reason) to that binary, so the release's PeachQ stack
-  never builds one on the server. Rollback and prune treat it as they treat a
-  TorQ runtime.
+  and `QHOME` to its directory, and no other interpreter variable: the binary
+  answers that it is PeachQ, so the release's PeachQ stack takes `QCMD` and
+  never builds one on the server, and the `RUNTIME_MANIFEST.json` beside it
+  marks it as the pinned build. Rollback and prune treat it as they treat a TorQ
+  runtime.
+- **Older releases need a redeploy.** A `deploy.env` written before #1753 also
+  set the variables that declared the implementation and named the PeachQ
+  binary. The release's `uqs` refuses them now, and so does preflight when the
+  server account's own environment sets them, each naming what replaces it. Push
+  the release again to write a `deploy.env` without them.
 - **Exclusive.** `qcmd` and `qhome` are refused beside it. A layer that switches
   q to bundled drops them from the layers below it, and one that switches back
   drops `q_runtime` and its pin.

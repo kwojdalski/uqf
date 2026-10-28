@@ -220,7 +220,7 @@ def licence_limit() -> int | None:
     """Concurrent connections a q process may hold on this machine's licence,
     or None for no cap.
 
-    None when the interpreter is PeachQ (`UQF_Q_IMPL=peachq`), which has no
+    None when the interpreter is PeachQ (`$QCMD` answers as PeachQ), which has no
     connection licence - the reason to run it for a fleet past sixteen. An
     explicit UQS_LICENCE_CONNECTIONS still wins, as a budget chosen on purpose.
 

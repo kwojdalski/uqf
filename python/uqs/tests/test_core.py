@@ -730,9 +730,6 @@ def _generated_qcmds(fake_paths: UqsPaths, monkeypatch, qcmd: str | None) -> dic
     monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
     if qcmd is None:
         monkeypatch.delenv("QCMD", raising=False)
-        # Without QCMD there is no PeachQ to name: a run on PeachQ (CI's lane)
-        # sets UQF_Q_IMPL, which refuses an unset QCMD.
-        monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     else:
         monkeypatch.setenv("QCMD", qcmd)
     vendored = fake_paths.torqapphome / "appconfig" / "process.csv"
@@ -2398,8 +2395,10 @@ def _monitor_connections(rows: list[dict[str, str]]) -> list[str]:
 def _community_licence(monkeypatch):
     """The real tree on the community licence, with no operator overrides:
     the budget the committed profiles are sized for."""
-    for name in ("UQF_Q_IMPL", "UQS_LICENCE_CONNECTIONS", "UQS_RUNTIME"):
+    for name in ("UQS_LICENCE_CONNECTIONS", "UQS_RUNTIME"):
         monkeypatch.delenv(name, raising=False)
+    # Whichever q runs the suite (CI's is PeachQ, which has no cap).
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
     monkeypatch.setattr(stack_procs, "_read_overrides", lambda paths: {})
 
 

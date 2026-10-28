@@ -57,13 +57,13 @@ for _ in 1 2 3; do
   if conflicted || ! gate_ok; then
     if [ "$(git rev-list --count HEAD..origin/master)" != "0" ] && { conflicted || master_moved_judged; }; then
       echo "$pr: must merge master: $(tail -1 "$logs/gate.log" | cut -c1-160)"
-      env -u UQF_PEACHQ git merge --no-edit -q origin/master > "$logs/merge.log" 2>&1 \
+      git merge --no-edit -q origin/master > "$logs/merge.log" 2>&1 \
         || { echo "$pr: merge with master failed (conflict?)"; tail -5 "$logs/merge.log"; exit 1; }
       echo "$pr: merged master"
       changed=1
     fi
     if ! gate_ok; then
-      env -u UQF_PEACHQ uv run python scripts/dev/attest_kdbx.py > "$logs/attest.log" 2>&1 \
+      uv run python scripts/dev/attest_kdbx.py > "$logs/attest.log" 2>&1 \
         || { echo "$pr: attestation failed"; tail -5 "$logs/attest.log"; exit 1; }
       echo "$pr: attested"
       changed=1

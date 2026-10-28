@@ -246,8 +246,8 @@ jobs:
         # pin. It prints an absolute path and puts nothing on PATH: every
         # other step still finds no q, so nothing here can be mistaken for a
         # KDB-X run. It is reached only by the steps below, which name it
-        # through QCMD with UQF_Q_IMPL=peachq, and scripts/test.py asks the
-        # binary which q it is before any lane.
+        # through QCMD and nothing else (#1753): scripts/test.py, uqs and the
+        # pytest conftest ask the binary which q it is.
         if: ${{ !cancelled() }}
         shell: bash
         run: |
@@ -265,7 +265,7 @@ jobs:
         # here is either wrong, or correct on KDB-X only - and then it says
         # so with `kdbx-only: REASON` rather than being unmarked.
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
-        run: UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-docs
+        run: QCMD="$PEACHQ_BIN" python3 scripts/test.py q-docs
       - name: Run the whole qUnit suite on PeachQ, flattened (blocking)
         # The q tests CI can hold a merge to. This runner has no KDB-X, and
         # PeachQ rejects nested contexts, so scripts/portable/full_suite.py
@@ -275,9 +275,7 @@ jobs:
         # now passes - the list only shrinks (#863).
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         timeout-minutes: 10
-        env:
-          UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
-        run: UQF_PEACHQ="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
+        run: QCMD="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
 
   peachq-python:
     name: PeachQ Python tests (${{ matrix.shard }}/4)
@@ -348,8 +346,8 @@ jobs:
         # pin. It prints an absolute path and puts nothing on PATH: every
         # other step still finds no q, so nothing here can be mistaken for a
         # KDB-X run. It is reached only by the steps below, which name it
-        # through QCMD with UQF_Q_IMPL=peachq, and scripts/test.py asks the
-        # binary which q it is before any lane.
+        # through QCMD and nothing else (#1753): scripts/test.py, uqs and the
+        # pytest conftest ask the binary which q it is.
         if: ${{ !cancelled() }}
         shell: bash
         run: |
@@ -377,15 +375,13 @@ jobs:
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         timeout-minutes: 10
         env:
-          UQF_Q_IMPL: peachq
           UQF_PEACHQ_STACK_TEST: "1"
-          UQF_PEACHQ_REASON: CI passes the pinned build the step above provided
         # Every configured testpath (pyproject.toml), not just python/: the gates'
         # own tests (scripts/gates/tests) ran only in the python-tests hook,
         # which this job replaces in CI. -n auto: in parallel (pytest-xdist);
         # --dist loadgroup keeps the tests marked xdist_group (the whole-stack
         # ones) on one worker.
-        run: QCMD="$PEACHQ_BIN" UQF_PEACHQ="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
+        run: QCMD="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
       - name: Keep this shard's module durations
         # What scripts/dev/test_module_durations.json is refreshed from: CI's
         # own times, which differ from a laptop's (#1696). Merge the four with
