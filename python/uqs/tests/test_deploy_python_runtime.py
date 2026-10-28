@@ -1,5 +1,5 @@
 """A bundled Python (#1557, step 7): the runtime artifact `uqs deploy
-build-runtime python` makes of the CPython uv installs - every regular file,
+component build python` makes of the CPython uv installs - every regular file,
 content-addressed, its links left out and listed - and a push with
 `python_mode = "bundled"`: what it holds the runtime to, what it sends the
 server (no uv, .venv by -m venv and pip from the runtime's interpreter) and

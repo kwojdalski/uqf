@@ -4,12 +4,12 @@ mode (#1557, step 4).
 A component is either `existing`, a path already on the server that
 preflight resolves and probes, or `bundled`, an artifact shipped with the
 release. TorQ can be bundled (step 5, deploy/torq_runtime.py): its fields
-are `torq_runtime`, the artifact `uqs deploy build-runtime torq` makes, and
+are `torq_runtime`, the artifact `uqs deploy component build torq` makes, and
 `torq_runtime_sha256` to pin it. So can q (step 6, deploy/q_runtime.py) -
 PeachQ only, `q_runtime` and `q_runtime_sha256`, from `uqs deploy
-build-runtime q`; KX's q is licensed to its server, and stays `existing`.
+component build q`; KX's q is licensed to its server, and stays `existing`.
 So can Python (step 7, deploy/python_runtime.py): `python_runtime` and
-`python_runtime_sha256`, the CPython `uqs deploy build-runtime python` packs,
+`python_runtime_sha256`, the CPython `uqs deploy component build python` packs,
 which the release's .venv is made from - or, with no `python_runtime`, the
 one the release itself carries (#1646).
 
@@ -99,7 +99,7 @@ def check(modes: dict[str, str], settings: dict[str, object]) -> None:
         needed = REQUIRED.get((component, mode))
         if needed and settings.get(needed) in (None, ""):
             raise ValueError(
-                f"{key} is {mode}, and needs {needed}: the artifact `uqs deploy build-runtime "
+                f"{key} is {mode}, and needs {needed}: the artifact `uqs deploy component build "
                 f"{component}` makes"
             )
 

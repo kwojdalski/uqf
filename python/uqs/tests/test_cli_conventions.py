@@ -174,7 +174,6 @@ RULE4_ALLOWLIST = {
     "data hdb-check": "#1733",  # -> data check
     "config get": "#1733",  # -> show
     "deploy verify": "#1733",  # -> deploy check
-    "deploy build-runtime": "#1740",  # a verb glued to a noun
 }
 
 #: Leaves named by a vocabulary verb used with another meaning: a name test
@@ -431,7 +430,7 @@ KIND = {
     "setup odbc env": "prints shell exports, for eval",
     "deploy build": CHANGES,
     "deploy push": CHANGES,
-    "deploy build-runtime": CHANGES,
+    "deploy component build": CHANGES,
     "deploy status": REPORTS,
     "deploy rollback": CHANGES,
     "deploy prune": CHANGES,
@@ -485,7 +484,7 @@ RULE5B_ALLOWLIST = {
         "setup odbc install",
         "setup odbc rollback",
         "deploy build",
-        "deploy build-runtime",
+        "deploy component build",
         "deploy push",
         "deploy rollback",
         "deploy prune",
