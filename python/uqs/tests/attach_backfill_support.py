@@ -277,3 +277,89 @@ def start_upstream():
             time.sleep(0.2)
     proc.terminate()
     pytest.fail("the upstream q process did not come up")
+
+
+# ------------------------------------------------- receivers a test started (#1760)
+#
+# `uqs job receive` starts scripts/dev/remote_receiver.q in a session of its own,
+# and the receiver stops itself only at its -deadline. A test that loses track of
+# one - a refusal that started it anyway, a failed assertion, a stop that looked in
+# the wrong attachment directory - leaves it idling on its port for as long as that
+# deadline says. These find a test's receivers by the paths on their command line
+# (each names its HDB and journal, under the test's tmp_path) and stop them.
+
+RECEIVER_SCRIPT = "remote_receiver.q"
+
+
+def receivers_under(root: Path) -> list[int]:
+    """The live remote_receiver.q processes whose command line names a path under
+    `root` - this test's (or this run's) receivers, and no one else's."""
+    import subprocess
+
+    spellings = {str(root), str(root.resolve())}
+    listed = subprocess.run(
+        ["ps", "-A", "-ww", "-o", "pid=,stat=,command="],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    found = []
+    for line in listed.stdout.splitlines():
+        pid, stat, command = (line.split(None, 2) + ["", ""])[:3]
+        if stat.startswith("Z") or RECEIVER_SCRIPT not in command:
+            continue
+        if any(s + os.sep in command or command.endswith(s) for s in spellings):
+            found.append(int(pid))
+    return found
+
+
+def _gone(pid: int) -> bool:
+    try:
+        reaped, _ = os.waitpid(pid, os.WNOHANG)
+        if reaped == pid:
+            return True
+    except ChildProcessError:
+        pass  # not this process's child, or already reaped
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    return False
+
+
+def stop_process(pid: int, grace: float = 5.0) -> None:
+    """SIGTERM `pid`, then SIGKILL it if it is still there after `grace` seconds."""
+    import signal
+    import time
+
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return
+        until = time.monotonic() + grace
+        while time.monotonic() < until:
+            if _gone(pid):
+                return
+            time.sleep(0.05)
+
+
+class Receivers:
+    """The receivers one test starts: each is stopped in teardown whatever the
+    test's outcome, and so is any other receiver under the test's tmp_path."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.pids: list[int] = []
+
+    def start(self, paths, attachment: str, contract: str, *, port: int, ipc) -> dict[str, Any]:
+        from uqs.attach import backfill_remote
+
+        started = backfill_remote.receive(paths, attachment, contract, port=port, ipc=ipc)
+        self.pids.append(started["pid"])
+        return started
+
+    def stop_all(self) -> None:
+        for pid in dict.fromkeys([*self.pids, *receivers_under(self.root)]):
+            stop_process(pid)
