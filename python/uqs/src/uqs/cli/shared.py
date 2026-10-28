@@ -263,6 +263,9 @@ def _export(rows, export: Path | None) -> None:
     except UqsError as exc:
         _die(exc)
         return
+    if json_requested():  # stdout is the one JSON document
+        log.info("exported to {}", export)
+        return
     console.print(f"[green]exported to {export}[/]")
 
 

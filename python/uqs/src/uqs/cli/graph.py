@@ -24,6 +24,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.shared import InteractiveOpt, PortOpt, _die, _paths, app, console, log
 from uqs.cli.table_filter import match_row, terms
 from uqs.model import process_graph
@@ -118,6 +119,26 @@ def describe(name: str, info: dict[str, dict[str, str]], status: dict[str, str])
     return text
 
 
+GraphJson = json_opt(
+    '{"direction", "trees": [{process, status, tables, repeat, children: [...]}]} - '
+    "status null with --offline or when the fleet cannot say"
+)
+
+
+def tree_records(trees: list[Node], status: dict[str, str]) -> list[dict]:
+    """The trees as nested records: what each line of the drawing says."""
+    return [
+        {
+            "process": node.name,
+            "status": status.get(node.name),
+            "tables": list(node.tables),
+            "repeat": node.repeat,
+            "children": tree_records(node.children, status),
+        }
+        for node in trees
+    ]
+
+
 @app.command()
 def graph(
     proc: Annotated[
@@ -140,6 +161,7 @@ def graph(
     ] = False,
     port: PortOpt = None,
     interactive: InteractiveOpt = False,
+    as_json: GraphJson = False,
 ) -> None:
     """Every process and who feeds whom, as a tree, with the tables on each edge.
 
@@ -162,6 +184,10 @@ def graph(
         return
     status = {} if offline else live_status(port)
     direction: Direction = "upstream" if upstream else "downstream"
+    if as_json:
+        trees = process_graph.forest(info, edges, direction, root=proc)
+        emit({"direction": direction, "trees": tree_records(trees, status)})
+        return
     if not interactive:
         trees = process_graph.forest(info, edges, direction, root=proc)
         console.print(rich_trees(trees, status, direction))

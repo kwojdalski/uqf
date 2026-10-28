@@ -450,29 +450,8 @@ ASKS = {ROOT, "job remove", "job install", "job attach", "job detach"}
 #: put it in ASKS, then here.
 PROMPTING_MODULES = {"attach", "install", "install_bundle", "remove", "target"}
 
-#: leaf -> the issue that adds its --json
-RULE5A_ALLOWLIST = {
-    c: "#1731"
-    for c in (
-        "summary",
-        "graph",
-        "query",
-        "schema",
-        "logs",
-        "config get",
-        "job gaps",
-        "job preview",
-        "job runs status",
-        "job runs list",
-        "job runs show",
-        "job runs audit",
-        "connector status",
-        "setup odbc status",
-        "deploy verify",
-        "deploy history",
-        "target check",
-    )
-}
+#: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
+RULE5A_ALLOWLIST: dict[str, str] = {}
 
 #: leaf -> the issue that gives it --dry-run/-n (or, for one that changes
 #: nothing, takes its --dry-run away)

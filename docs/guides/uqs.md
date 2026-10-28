@@ -23,6 +23,7 @@ draws the topology.
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
 - [CLI conventions](#cli-conventions)
+- [Machine-readable output](#machine-readable-output)
 - [Installing](#installing)
 
 ## Quick start
@@ -1315,6 +1316,40 @@ The verbs of rule 4:
   | `env`                                         | print variables to source                                 |
   | `build` `push` `rollback` `prune` `history`   | releases and their deployment                             |
   | `shell`                                       | a shell on a target                                       |
+
+## Machine-readable output
+
+Every command that reports something takes `--json` and prints one JSON document
+on stdout, holding the same data as the table it would print (#1731). Its lists
+are records with snake_case keys: the `Depends on` column is `depends_on`. Logs
+go to stderr, and a refusal is the document `{"ok": false, "error": "..."}` with
+exit code 1, so stdout always parses:
+
+```bash
+uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_id'
+uqs summary --json | jq -r '.processes[] | select(.status == "down") | .process'
+```
+
+Each command's `--help` names its document. The commands #1731 added:
+
+  | command                            | document                                                                                                                                                                                                       |
+  | ---                                | ---                                                                                                                                                                                                            |
+  | `summary`                          | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
+  | `graph`                            | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
+  | `query EXPR`                       | `{expression, result}`: a table is a list of records                                                                                                                                                           |
+  | `schema [TABLE]`                   | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
+  | `logs`                             | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
+  | `config get PROC [FIELD]`          | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
+  | `job gaps`                         | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |
+  | `job preview`                      | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                    |
+  | `job runs status`, `job runs list` | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                       |
+  | `job runs show RUN`                | `{run, facts, logs, rerun}`                                                                                                                                                                                    |
+  | `job runs audit`                   | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                              |
+  | `connector status`                 | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                               |
+  | `setup odbc status`                | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                      |
+  | `deploy verify`                    | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                 |
+  | `deploy history`                   | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                          |
+  | `target check`                     | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                               |
 
 ## Installing
 
