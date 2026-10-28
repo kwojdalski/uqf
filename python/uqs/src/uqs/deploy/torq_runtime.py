@@ -1,7 +1,7 @@
 """The TorQ runtime artifact (#1557, step 5): lib/torq and
 lib/torq-finance-starter-pack exactly as vendored, for `torq_mode = "bundled"`.
 
-    uqs deploy build-runtime torq
+    uqs deploy component build torq
 
 writes, into dist/ (or --output):
 
@@ -118,7 +118,7 @@ def read_runtime(path: Path) -> Runtime:
             "artifact",
             f"{path.name} is not a TorQ runtime of format {FORMAT} (kind "
             f"{c.manifest.get('kind')!r}, format {c.manifest.get('format')!r}) - build one "
-            "with `uqs deploy build-runtime torq`",
+            "with `uqs deploy component build torq`",
         )
     tops = {name.split("/", 1)[0] for name in c.manifest["files"]}
     if tops - set(TREES):

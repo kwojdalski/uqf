@@ -1,4 +1,4 @@
-"""A bundled q (#1557, step 6): the runtime artifact `uqs deploy build-runtime q`
+"""A bundled q (#1557, step 6): the runtime artifact `uqs deploy component build q`
 makes of the pinned PeachQ - its one binary, content-addressed, checked whole -
 and a push with `q_mode = "bundled"`: its refusals, KX's above all, its pins,
 what it sends the server and what it records. No licence file ever enters an
@@ -113,7 +113,7 @@ def test_the_cli_refuses_kx_by_name(capfd):
 
     from uqs import cli
 
-    r = CliRunner().invoke(cli.app, ["deploy", "build-runtime", "kdbx"])
+    r = CliRunner().invoke(cli.app, ["deploy", "component", "build", "kdbx"])
     assert r.exit_code == 1
     assert "KX's q is never bundled" in r.output + capfd.readouterr().err
 
@@ -137,12 +137,12 @@ def test_the_cli_builds_a_q_runtime(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import deploy_runtime
+    from uqs.cli import deploy_component
 
     entry = peachq_entry(tmp_path / "peachq")
-    monkeypatch.setattr(deploy_runtime, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(deploy_component, "repo_root", lambda: tmp_path)
     monkeypatch.setattr(q_runtime, "pinned_peachq", lambda scripts: entry)
-    r = CliRunner().invoke(cli.app, ["deploy", "build-runtime", "q"])
+    r = CliRunner().invoke(cli.app, ["deploy", "component", "build", "q"])
     assert r.exit_code == 0, r.output
     (built,) = list((tmp_path / "dist").glob("q-runtime-peachq-*.tar.gz"))
     assert str(built) in r.output
