@@ -47,6 +47,8 @@ from uqs.cli import stream  # noqa: F401
 from uqs.cli import replay  # noqa: F401
 from uqs.cli import seed  # noqa: F401
 from uqs.cli import migrate  # noqa: F401
+from uqs.cli import hdb_check  # noqa: F401
+from uqs.cli import hdb_alter  # noqa: F401
 from uqs.cli import summary  # noqa: F401
 from uqs.cli import graph  # noqa: F401
 from uqs.cli import query  # noqa: F401

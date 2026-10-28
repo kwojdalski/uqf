@@ -445,7 +445,7 @@
 / rows off this table with zero reshaping.
 / fill_id (#1080) is the fill's identity: unique per fill, so a keyed consumer
 / never collapses two fills that share a time, sym and price. Null in a
-/ partition written before the column existed (uqs data hdb-check --fix adds it).
+/ partition written before the column existed (uqs data hdb-check --apply adds it).
 .qetl.plant.trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$(); fill_id:`symbol$())
 
 / posbook1's output: weighted-average-cost positions, republished onto the

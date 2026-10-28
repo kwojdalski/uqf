@@ -142,6 +142,15 @@ def attach(
         str, typer.Option("--tplogdir", help="Pin the tickerplant log directory")
     ] = "",
     schema_file: Annotated[str, typer.Option("--schema-file", help="Pin the schema file")] = "",
+    ssh: Annotated[
+        str | None,
+        typer.Option(
+            "--ssh",
+            help="USER@HOST to reach the stack's files over ssh, for `uqs data hdb-check` and "
+            "`hdb-alter --attach` (default: --host as the current user). Changes a saved "
+            "attachment without --replace",
+        ),
+    ] = None,
     replace: Annotated[
         bool,
         typer.Option(
@@ -206,7 +215,7 @@ def attach(
         tickerplant=tickerplant, consumers=tuple(consumer or ()), user=user,
         password_env=password_env, runtime_only=runtime_only,
         remote_schema_file=remote_schema_file, tplogdir=tplogdir,
-        schema_file=schema_file,
+        schema_file=schema_file, ssh=ssh,
     )  # fmt: skip
     try:
         paths = _paths()

@@ -221,6 +221,12 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             "give the target once: `uqs --target NAME query` runs the query on the server, "
             "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
         )
+    if words[:2] in control.CONFIRMS_ON_SERVER:
+        if any(a.partition("=")[0] in ("--attach", "--hdb") for a in args):
+            # each names an HDB; --target already named the release's own (#1755)
+            raise UqsError("give one of --target, --attach and --hdb: each names an HDB")
+        if yes and "--apply" in args and not {"--yes", "-y"} & set(args):
+            args = [*args, "--yes"]  # the one --yes answers the server's question too
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
     if control.changes_the_server(args) and not yes:

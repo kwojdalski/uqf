@@ -762,8 +762,8 @@ the first short one. Once the release's `.venv` exists, prepare runs that
 release's own `uqs data hdb-check --json` against the shared HDB:
 
 - **Missing tables or columns** are refused, naming the partitions. With
-  `--fix-hdb`, prepare runs `hdb-check --fix` and checks again. The fix is
-  additive: each missing table is written empty, and each missing column is
+  `--fix-hdb`, prepare runs `hdb-check --apply --yes` and checks again. The fix
+  is additive: each missing table is written empty, and each missing column is
   written as its type's null. It is a thin wrapper over KX's `dbmaint.q` (it
   decides what the declared schema lacks, `dbmaint` writes the columns), checks
   the database afterwards and exits 1 if anything is still missing. It takes no

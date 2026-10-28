@@ -35,7 +35,7 @@ class FakeRemote:
 
     def run(self, script: str, timeout: int, stage: str, as_login: bool = False):
         self.scripts.append(script)
-        body = (self.fixed if "--fix" in script else self.check) or {}
+        body = (self.fixed if "--apply" in script else self.check) or {}
         return _done(json.dumps(body, indent=2) + "\n", rc=1 if body.get("missing_tables") else 0)
 
 
@@ -69,14 +69,14 @@ def test_a_short_partition_is_refused_without_fix_hdb():
     remote = FakeRemote(SHORT)
     with pytest.raises(DeployError, match=r"2 HDB partition\(s\) lack .*pass --fix-hdb"):
         hdb.check(_dep(remote), "/r")
-    assert not any("--fix" in s for s in remote.scripts), "nothing is written"
+    assert not any("--apply" in s for s in remote.scripts), "nothing is written"
 
 
 def test_fix_hdb_fills_and_checks_again():
     remote = FakeRemote(SHORT, fixed=CLEAN)
     got = hdb.check(_dep(remote, fix_hdb=True), "/r")
     assert got["hdb"] == "filled" and got["filled"]["tables"] == {"2026.01.01": ["book"]}
-    assert "data hdb-check --fix --json" in remote.scripts[-1]
+    assert "data hdb-check --apply --yes --json" in remote.scripts[-1]
 
 
 def test_fix_hdb_that_leaves_a_gap_is_refused():

@@ -200,6 +200,7 @@ def test_rule2_a_process_or_a_job_is_a_positional_called_proc_or_job():
 RULE4_ALLOWLIST = {
     "summary": "#1733",  # -> status
     "data hdb-check": "#1733",  # -> data check
+    "data hdb-alter": "#1733",  # #1755 names it beside hdb-check; #1733 renames both
     "config get": "#1733",  # -> show
     "deploy verify": "#1733",  # -> deploy check
 }
@@ -280,11 +281,13 @@ class Meaning:
 #: text that does not match the pattern is a second meaning.
 OPTIONS = {
     "--allow-dirty": Meaning("accept uncommitted changes", r"uncommitted"),
+    "--apply": Meaning("write what the dry run planned", r"write|replace"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
     "--attach": Meaning("a saved attachment, by name", r"attach"),
     "--base-port": Meaning("the stack's base port", r"base port"),
     "--break-lock": Meaning("remove a stale deploy lock", r"deploy lock"),
     "--bundle": Meaning("a sidecar bundle folder", r"bundle"),
+    "--cast": Meaning("cast a column's type", r"cast"),
     "--columns": Meaning("which columns of a table to show", r"`all`"),
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
@@ -297,6 +300,7 @@ OPTIONS = {
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"stream"),
     "--force": Meaning("retired: each use gets its own name", None),
     "--from": Meaning("start of a time range", r"start"),
+    "--hdb": Meaning("an HDB directory", r"HDB directory|this database"),
     "--home": Meaning("the ODBC home", r"ODBC home"),
     "--host": Meaning("where a q process listens", r"listen"),
     "--interactive": Meaning("browse the table", r"browse"),
@@ -319,10 +323,13 @@ OPTIONS = {
     "--qhome": Meaning("a QHOME", r"QHOME"),
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
+    "--rename": Meaning("rename a column", r"rename"),
     "--reverse": Meaning("sort descending", r"descending"),
     "--skip-profile-budget-check": Meaning("bypass the budget check", r"budget"),
     "--skip-q-version-check": Meaning("bypass the q version check", r"q too old"),
     "--sort": Meaning("sort by a column", r"sort by"),
+    "--ssh": Meaning("an ssh destination, user@host", r"ssh"),
+    "--table": Meaning("one table to act on", r"this table"),
     "--tables": Meaning("a set of tables", r"tables"),
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
     "--timeout": Meaning("seconds for the whole command", r"seconds"),
@@ -447,7 +454,8 @@ KIND = {
     "data replay": CHANGES,
     "data seed": CHANGES,
     "data migrate": CHANGES,
-    "data hdb-check": REPORTS,  # --fix writes, opt-in: #1732 settles --apply-style modes
+    "data hdb-check": REPORTS,  # --apply writes what it reports missing, after asking
+    "data hdb-alter": CHANGES,  # dry run by default; --dry-run/-n says so explicitly
     "config get": REPORTS,
     "config set": CHANGES,
     "config sources stub": CHANGES,
@@ -496,11 +504,14 @@ KIND = {
 
 #: Every command that asks before acting. ROOT asks before running a command
 #: on a --target.
-ASKS = {ROOT, "job remove", "job install", "job attach", "job detach"}
+ASKS = {
+    ROOT, "job remove", "job install", "job attach", "job detach", "data hdb-check",
+    "data hdb-alter",
+}  # fmt: skip
 
 #: The cli modules that call a prompt. A new one means a command that asks:
 #: put it in ASKS, then here.
-PROMPTING_MODULES = {"attach", "install", "install_bundle", "remove", "target"}
+PROMPTING_MODULES = {"attach", "hdb_scope", "install", "install_bundle", "remove", "target"}
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
 RULE5A_ALLOWLIST: dict[str, str] = {}
