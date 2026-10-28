@@ -373,10 +373,13 @@ finds it. A push that sets no mode is the source-only push it always was.
 
 With `torq_mode = "bundled"`, the push ships TorQ itself: `lib/torq` and
 `lib/torq-finance-starter-pack` exactly as vendored, in a runtime artifact of
-their own. Many releases share one runtime, so it is built separately:
+their own. Many releases share one runtime, so it is built separately, by
+`uqs deploy component build`. A bundled component's runtime is not a stack
+runtime (`uqs --runtime`), which is why the command is not named for it. Its
+name before #1740, `uqs deploy build-runtime`, still works for one release.
 
 ```bash
-uqs deploy build-runtime torq      # dist/torq-runtime-<version>-<id>.tar.gz
+uqs deploy component build torq      # dist/torq-runtime-<version>-<id>.tar.gz
 uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   --profile essential --torq-mode bundled \
   --torq-runtime dist/torq-runtime-5.2.12-<id>.tar.gz
@@ -418,7 +421,7 @@ kdb+) is licensed to the server it runs on, so it is never bundled. It stays
 `existing`, with its licence in `QHOME`.
 
 ```bash
-uqs deploy build-runtime q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
+uqs deploy component build q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
 uqs --runtime peachq deploy build
 uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   --profile capture --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
@@ -467,7 +470,7 @@ architecture and Python version, in a runtime artifact of its own. The server
 then needs no `uv` and no Python 3.14.
 
 ```bash
-uqs deploy build-runtime python --arch x86_64 --python 3.14
+uqs deploy component build python --arch x86_64 --python 3.14
                                    # dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   --profile essential --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
@@ -540,7 +543,7 @@ unpacked release, on the Python it carries. Each `.venv` must be the bundled
 interpreter's and run `uqs --version`.
 
 - **What is real.** The CPython is the one uv installed that runs the tests,
-  packed by the same code as `build-runtime python`, so the host's OS and
+  packed by the same code as `component build python`, so the host's OS and
   architecture rather than Linux. The artifact is `build_artifact` over this
   checkout's release files, with the `uqs` wheel built by `uv build --offline`.
   Its dependencies are the wheels of what `uqs --version` imports, packed from
@@ -650,7 +653,7 @@ dependency as a locked wheel, and an installer that needs only the server's
 it carries the interpreter too, so the server needs no Python 3.14:
 
 ```bash
-uqs deploy build-runtime python --arch x86_64
+uqs deploy component build python --arch x86_64
 uqs deploy build --arch x86_64 --python-runtime dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 ```
 
