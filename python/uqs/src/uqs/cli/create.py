@@ -42,7 +42,9 @@ app.add_typer(job_app, name="job")
 
 @job_app.command("new", rich_help_panel=JOB_AUTHORING_PANEL)
 def new_job(
-    name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
+    name: Annotated[
+        str, typer.Argument(metavar="JOB", help="Job name: a q namespace and a filename")
+    ],
     kind: Annotated[
         str,
         typer.Option(

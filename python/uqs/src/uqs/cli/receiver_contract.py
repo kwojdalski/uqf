@@ -32,6 +32,7 @@ def export(
     worker: Annotated[
         str,
         typer.Argument(
+            metavar="JOB",
             help="The bounded worker whose batches the receiver will take",
             autocompletion=completion.backfill_workers,
         ),

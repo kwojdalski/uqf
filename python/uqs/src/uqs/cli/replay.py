@@ -26,14 +26,15 @@ from uqs.stack import replay as stack_replay
 app.add_typer(data_app, name="data")
 
 
-@data_app.command("replay", cls=renamed({"--port": "--base-port"}))
+@data_app.command("replay", cls=renamed({"--port": "--base-port", "--proc": "PROC"}))
 def replay(
     proc: Annotated[
         str | None,
-        typer.Option(
-            "--proc",
+        typer.Argument(
+            metavar="[PROC]",
             help="Which running tickerplant's log to replay. Only needed when more than one is up",
             autocompletion=completion.procname,
+            show_default=False,
         ),
     ] = None,
     date: Annotated[
