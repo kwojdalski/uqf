@@ -142,7 +142,7 @@ def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:
     docstring conflated the two by calling both "just skipped".
 
     Only the log commands route through here, because only they need the
-    names expanded. `start`/`stop`/`restart`/`start --show-command` check the same thing
+    names expanded. `start`/`stop`/`restart`/`start --dry-run` check the same thing
     without expanding, via `procs.assert_known_procnames`.
     """
     if procs == "all":

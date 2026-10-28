@@ -7,8 +7,8 @@ bundled, the TorQ runtime (`torq_runtime_sha256`), the q runtime
 (`q_runtime_sha256`) and the Python runtime (`python_runtime_sha256`). An
 override with nothing to relax is refused, never recorded as idle:
 
-  --accept-digest   needs a pin on any of them;
-  --allow-unpinned  needs an artifact no pin covers.
+  --override accept-digest   needs a pin on any of them;
+  --override allow-unpinned  needs an artifact no pin covers.
 """
 
 from __future__ import annotations
@@ -78,9 +78,9 @@ def checked(
         q_runtime_sha256=sha256("q_runtime_sha256", q_runtime_sha256),
         python_runtime_sha256=sha256("python_runtime_sha256", python_runtime_sha256),
         q_version=q_version(q_version_),
-        accept_digest=reason("--accept-digest", accept_digest),
-        accept_q_version=reason("--accept-q-version", accept_q_version),
-        allow_unpinned=reason("--allow-unpinned", allow_unpinned),
+        accept_digest=reason("--override accept-digest", accept_digest),
+        accept_q_version=reason("--override accept-q-version", accept_q_version),
+        allow_unpinned=reason("--override allow-unpinned", allow_unpinned),
     )
     runtimes = (
         (torq_runtime, pins.torq_runtime_sha256),
@@ -91,15 +91,17 @@ def checked(
         pins.expected_sha256 or any(pin for _, pin in runtimes)
     ):
         raise ValueError(
-            "--accept-digest relaxes expected_sha256 (or torq_runtime_sha256, "
+            "--override accept-digest relaxes expected_sha256 (or torq_runtime_sha256, "
             "q_runtime_sha256, python_runtime_sha256), and this deployment sets none"
         )
     if pins.accept_q_version is not None and pins.q_version is None:
-        raise ValueError("--accept-q-version relaxes q_version, and this deployment sets none")
+        raise ValueError(
+            "--override accept-q-version relaxes q_version, and this deployment sets none"
+        )
     runtimes_pinned = all(path is None or pin is not None for path, pin in runtimes)
     if pins.allow_unpinned is not None and pins.expected_sha256 is not None and runtimes_pinned:
         raise ValueError(
-            "--allow-unpinned: expected_sha256 already pins the artifact - there is nothing "
-            "for it to relax"
+            "--override allow-unpinned: expected_sha256 already pins the artifact - there "
+            "is nothing for it to relax"
         )
     return pins

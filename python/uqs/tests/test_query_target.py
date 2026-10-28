@@ -389,3 +389,8 @@ def test_without_target_a_failed_query_still_exits_1_as_before(monkeypatch):
 def test_scrub_masks_each_secret():
     assert tunnel.scrub("u:pw@h pw", ["pw", ""]) == "u:***@h ***"
     assert json.loads(json.dumps(tunnel.list_args(None, None))) == ["list", "processes", "--json"]
+
+
+def test_split_global_takes_yes_as_y_too():
+    """The root's --yes has a -y like every other --yes (#1732)."""
+    assert control.split_global(["-y", "--target", "uat", "stop"]) == ("uat", True, ["stop"])

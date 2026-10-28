@@ -22,6 +22,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
     ExportOpt,
@@ -105,14 +106,22 @@ def config_set(
     ],
     field: Annotated[str, typer.Argument(autocompletion=completion.csv_fields)],
     value: str,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Check the setting and show it; write nothing"),
+    ] = False,
 ) -> None:
     """Set one process.csv field for *procname* (persisted to
     process_overrides.csv, applied on every later start/stop/summary/...).
     """
     try:
-        stack_procs.set_process_config(_paths(), procname, field, value)
+        stack_procs.set_process_config(_paths(), procname, field, value, dry_run)
     except UqsError as exc:
         _die(exc)
+        return
+    if dry_run:
+        console.print(f"would set {procname}.{field} = {value}", markup=False)
+        console.print(dry_run_note())
         return
     console.print(f"{procname}.{field} = {value}")
 

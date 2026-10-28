@@ -14,6 +14,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     InteractiveOpt,
@@ -152,7 +153,12 @@ def list_runs(
 
 
 @runs_app.command("migrate")
-def migrate() -> None:
+def migrate(
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Count the runs it would upgrade; write nothing"),
+    ] = False,
+) -> None:
     """Upgrade a run ledger written before it recorded each run's range and counts.
 
     Run once, when a backfill refuses to start with "etl_runs predates the
@@ -160,11 +166,14 @@ def migrate() -> None:
     they were asked to do was never recorded.
     """
     try:
-        upgraded = stack_runs.migrate(_paths())
+        upgraded = stack_runs.migrate(_paths(), dry_run)
     except UqsError as exc:
         _die(exc)
         return
-    if upgraded:
+    if dry_run:
+        console.print(f"would upgrade {upgraded} run(s)", markup=False)
+        console.print(dry_run_note())
+    elif upgraded:
         console.print(f"upgraded {upgraded} run(s) - the ledger is current", markup=False)
     else:
         console.print("the run ledger is already current - nothing to do", markup=False)

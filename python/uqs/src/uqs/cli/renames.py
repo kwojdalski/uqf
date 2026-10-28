@@ -12,7 +12,7 @@ the row or the alias.
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 import typer
 from typer.core import TyperCommand
@@ -30,6 +30,10 @@ RENAMED_GLOBAL_FLAGS = frozenset({"--debug"})
 #: rdb1` -> PROC rdb1), so a command can tell a named PROC from a guessed one.
 MOVED_KEY = "uqs.renames.moved"
 
+#: The new spelling of a flag that is gone because it did nothing (`job preview
+#: --dry-run`: a preview is always dry), so the old one is accepted and ignored.
+DROPPED = ""
+
 #: `--port` meant the stack's base port on most commands; it is `--base-port`
 #: now, and `--port` is only ever one process's port (#1729).
 BASE_PORT = {"--port": "--base-port"}
@@ -41,7 +45,7 @@ def warn_renamed(old: str, new: str) -> None:
 
 def _rewrite_renamed(
     args: list[str],
-    renames: dict[str, str],
+    renames: Mapping[str, str | tuple[str, str]],
     command_path: str,
     root: typer.Context | None,
     moved: list[str] | None = None,
@@ -53,12 +57,19 @@ def _rewrite_renamed(
     value as the first word, where the command's first positional is."""
     out: list[str] = []
     front: list[str] = []
+    reasons: list[str] = []
     warned: set[str] = set()
     rest = iter(args)
     for arg in rest:
         if arg == "--":
-            return front + out + [arg, *rest]
+            return front + out + _reason(reasons) + [arg, *rest]
         name, eq, value = arg.partition("=")
+        bypass = renames.get(name)
+        if isinstance(bypass, tuple) and name.startswith("--"):
+            _warn_once(warned, name, f"{' '.join(bypass)} --reason REASON")
+            out += list(bypass)
+            reasons.append(value if eq else next(rest, ""))
+            continue
         if name in RENAMED_GLOBAL_FLAGS and name in renames:
             command = command_path.partition(" ")[2]
             _warn_once(warned, f"uqs {command} {name}", f"uqs {name} {command}")
@@ -71,25 +82,34 @@ def _rewrite_renamed(
             shared.configure_logging(component="uqs", level="DEBUG")
             continue
         new = renames.get(name)
-        if new is not None and name.startswith("--") and not new.startswith("-"):
+        if new == DROPPED and name.startswith("--"):
+            log.warning("`{}` does nothing here and goes in the next release; drop it", name)
+            continue
+        if isinstance(new, str) and name.startswith("--") and not new.startswith("-"):
             _warn_once(warned, name, f"{command_path} {new}")
             front.append(value if eq else next(rest, ""))
             if moved is not None:
                 moved.append(front[-1])
             continue
-        if new is not None and name.startswith("--"):
+        if isinstance(new, str) and name.startswith("--"):
             _warn_once(warned, name, new)
             out.append(new + eq + value)
             continue
         short = next((o for o in renames if not o.startswith("--") and arg.startswith(o)), None)
         if short is not None:
-            _warn_once(warned, short, renames[short])
-            out.append(renames[short])
+            long = str(renames[short])
+            _warn_once(warned, short, long)
+            out.append(long)
             if len(arg) > len(short):  # `-n20`: the value attached to the flag
                 out.append(arg[len(short) :])
             continue
         out.append(arg)
-    return front + out
+    return front + out + _reason(reasons)
+
+
+def _reason(reasons: list[str]) -> list[str]:
+    """The one --reason the old per-override options' reasons become (#1732)."""
+    return ["--reason", "; ".join(reasons)] if reasons else []
 
 
 def _warn_once(warned: set[str], old: str, new: str) -> None:
@@ -98,17 +118,19 @@ def _warn_once(warned: set[str], old: str, new: str) -> None:
         warn_renamed(old, new)
 
 
-def renamed(renames: dict[str, str]) -> type[TyperCommand]:
+def renamed(renames: Mapping[str, str | tuple[str, str]]) -> type[TyperCommand]:
     """`cls=` for a command whose options were renamed: the old spellings in
     `renames` (old -> new) still parse, hidden from --help, each logging its
     new spelling. A short old spelling (`-n`) matches only as its own word or
     with its value attached (`-n20`). `--debug` -> `--debug` moves a
     per-command `--debug` to the global one, and a new spelling with no dash
-    names the first positional (`--proc` -> `PROC`)."""
+    names the first positional (`--proc` -> `PROC`). A pair names a bypass:
+    `--skip-q-version-check R` -> `--override q-version-check`, its value the
+    --reason (#1732)."""
 
     class Renamed(TyperCommand):
         #: old spelling -> new, read by the tests
-        renames: dict[str, str] = {}
+        renames: dict[str, str | tuple[str, str]] = {}
 
         def parse_args(self, ctx, args):
             root = ctx.find_root()

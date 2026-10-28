@@ -50,6 +50,7 @@ from uqs.cli import (
     lifecycle,
     lists,
     shared,
+    start_warnings,
     summary,
     summary_columns,
     summary_graph,
@@ -189,7 +190,7 @@ def _known_procs(monkeypatch):
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _paths: ["rdb1", "stp1"])
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command", "up"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --dry-run", "up"])
 def test_an_unknown_process_is_refused_before_anything_runs(monkeypatch, _known_procs, command):
     """A typo must not reach torq.sh.
 
@@ -345,32 +346,32 @@ def test_a_lifecycle_command_passes_the_process_names_through(monkeypatch, comma
     assert rec.args[1] == "rdb1 hdb1"
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --dry-run"])
 def test_the_port_option_reaches_core(monkeypatch, command):
     """A dropped --port silently drives the DEFAULT stack.
 
     That is the worst shape of wiring bug available here: every command
     succeeds, against the wrong fleet.
     """
-    fn = "print_procs" if command == "start --show-command" else command
+    fn = "print_procs" if command == "start --dry-run" else command
     rec = _patch(monkeypatch, runtime, fn, result=Completed())
     runner.invoke(cli.app, [*command.split(), "--base-port", "7000"])
     assert rec.kwargs["base_port"] == 7000
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --dry-run"])
 def test_a_failing_subprocess_exit_code_survives(monkeypatch, command):
     """The property CI depends on. A non-zero torq.sh must not become a
     zero `uqs`."""
-    fn = "print_procs" if command == "start --show-command" else command
+    fn = "print_procs" if command == "start --dry-run" else command
     _patch(monkeypatch, runtime, fn, result=Completed(returncode=3))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 3
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --dry-run"])
 def test_a_refusal_exits_one_rather_than_raising(monkeypatch, command):
-    fn = "print_procs" if command == "start --show-command" else command
+    fn = "print_procs" if command == "start --dry-run" else command
     _patch(monkeypatch, runtime, fn, raises=UqsError("no such process"))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 1
@@ -1002,7 +1003,7 @@ def test_config_set_reports_what_it_wrote(monkeypatch):
     rec = _patch(monkeypatch, stack_procs, "set_process_config")
     result = runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall", "1"])
     assert result.exit_code == 0
-    assert rec.args[1:] == ("rdb1", "startwithall", "1")
+    assert rec.args[1:] == ("rdb1", "startwithall", "1", False)
 
 
 def test_config_set_refuses_a_comma_before_writing(monkeypatch):
@@ -1661,7 +1662,7 @@ def test_a_skipped_dependency_warning_keeps_its_reason(monkeypatch):
     why the warning was skipped explained nothing."""
     _patch(monkeypatch, alive, "running", raises=RuntimeError("fleet unreachable"))
     _patch(monkeypatch, runtime, "start", result=Completed())
-    captured = _debug_log(monkeypatch, lifecycle)
+    captured = _debug_log(monkeypatch, start_warnings)
     assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
     assert any("fleet unreachable" in m for m in captured.messages)
     assert not any("%s" in m for m in captured.messages)

@@ -258,9 +258,11 @@ def approve(
     conflict_policies: list[str] | None = None,
     max_rows: int = DEFAULT_MAX_ROWS,
     attach_root: Path | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Store `contract` as approved for `attachment`, bound to its destination here,
-    its stack user and the limits given. Returns the approved record."""
+    its stack user and the limits given. Returns the approved record - with
+    `dry_run`, the record it would store, storing nothing."""
     policies = conflict_policies or contract.conflict_policies
     wider = sorted(set(policies) - set(contract.conflict_policies))
     if wider:
@@ -288,6 +290,8 @@ def approve(
         },
     }
     folder = approved_dir(attachment, attach_root)
+    if dry_run:
+        return {**record, "path": str(folder / f"{contract.identity}.json")}
     with config.locked(attachment, attach_root):
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{contract.identity}.json"

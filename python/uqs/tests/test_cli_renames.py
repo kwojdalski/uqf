@@ -22,7 +22,7 @@ runner = CliRunner()
 #: (command path, old spelling, new spelling): every rename #1729 made.
 RENAMED = [
     ("start", "--port", "--base-port"),
-    ("start", "--print", "--show-command"),
+    ("start", "--print", "--dry-run"),
     ("up", "--port", "--base-port"),
     ("stop", "--port", "--base-port"),
     ("stop", "--force", "--kill"),
@@ -44,6 +44,28 @@ RENAMED = [
     ("job backfill", "--force", "--any-writer"),
     ("job receive", "--port", "--listen-port"),
     ("job remove", "--force", "--even-if-edited"),
+    # #1732: one safety vocabulary
+    ("start", "--show-command", "--dry-run"),
+    ("job attach", "--override-reason", "--reason"),
+    ("job preview", "--dry-run", renames.DROPPED),
+    *[
+        (path, f"--skip-{name}", ("--override", name))
+        for path, name in [
+            ("start", "q-version-check"),
+            ("start", "profile-budget-check"),
+            ("up", "q-version-check"),
+            ("restart", "q-version-check"),
+        ]
+    ],
+    *[
+        ("deploy push", f"--{name}", ("--override", name))
+        for name in (
+            "accept-digest",
+            "accept-q-version",
+            "allow-unpinned",
+            "accept-converted-release",
+        )
+    ],
 ]
 
 
@@ -61,7 +83,8 @@ def _names(command) -> set[str]:
 @pytest.mark.parametrize(("path", "old", "new"), RENAMED)
 def test_the_old_spelling_is_hidden_and_maps_to_the_new(path, old, new):
     command = _command(path)
-    assert new in _names(command)
+    option = new[0] if isinstance(new, tuple) else new  # a bypass: its --override
+    assert option == renames.DROPPED or option in _names(command)
     assert old not in _names(command), f"`{path} {old}` still has a meaning of its own"
     assert command.renames[old] == new
 
@@ -85,6 +108,25 @@ def test_old_spellings_are_rewritten_and_each_warned_about_once(monkeypatch):
     assert got == ["rdb1", "--base-port", "7000", "--base-port=7001",
                    "--lines", "20", "--lines", "5", "--", "--port"]  # fmt: skip
     assert said == [("--port", "--base-port"), ("-n", "--lines")]
+
+
+def test_an_old_bypass_becomes_an_override_with_one_reason(monkeypatch):
+    """`--skip-X REASON` and `--accept-Y REASON` are `--override NAME`s; their
+    reasons become the one --reason (#1732)."""
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append(old))
+    table = {"--skip-a": ("--override", "a"), "--skip-b": ("--override", "b")}
+    got = renames._rewrite_renamed(
+        ["rdb1", "--skip-a", "why a", "--skip-b=why b"], table, "uqs start", None
+    )
+    assert got == ["rdb1", "--override", "a", "--override", "b", "--reason", "why a; why b"]
+    assert said == ["--skip-a", "--skip-b"]
+
+
+def test_a_dropped_flag_is_accepted_and_ignored():
+    """`job preview --dry-run`: a preview never wrote, so the flag goes."""
+    got = renames._rewrite_renamed(["feed", "--dry-run"], {"--dry-run": renames.DROPPED}, "x", None)
+    assert got == ["feed"]
 
 
 def test_a_new_spelling_is_left_alone(monkeypatch):

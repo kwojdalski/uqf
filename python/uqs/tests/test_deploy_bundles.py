@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from typer.main import get_group
 
+from uqs.cli import deploy_policy
 from uqs.cli.deploy import deploy_app
 from uqs.deploy import artifact, driver, payload, verify
 from uqs.deploy import build as release_build
@@ -31,6 +32,7 @@ def parse_args(argv: list[str]) -> Config:
     # TARGETs (and the old --target) are resolved by targets.configs, not make_config
     params.pop("target", None)
     params.pop("target_names", None)
+    params |= deploy_policy.bypasses(params.pop("override"), params.pop("reason"))
     return make_config(**params)
 
 

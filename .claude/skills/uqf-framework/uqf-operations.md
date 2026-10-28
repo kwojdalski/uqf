@@ -123,9 +123,10 @@ Any failure rolls back, and a report is written into the release.
 **kdb+ 4.0 servers:** build with `--q-target 4.0`. The release's q is flattened,
 and the manifest records what was converted. `uqs start` recognises a converted
 release from that manifest, and checks each q file's sha256. For a server q
-older than the target, use `--accept-converted-release "REASON"`. It works only
-after the smoke test passes, applies only to that deployment, and is recorded in
-the report.
+older than the target, use
+`--override accept-converted-release --reason "REASON"`. It works only after the
+smoke test passes, applies only to that deployment, and is recorded in the
+report.
 
 ## ODBC sources
 

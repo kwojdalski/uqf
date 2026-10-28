@@ -533,7 +533,7 @@ def overrides_args() -> list[str]:
     args = []
     for spec in ALL_FOUR:
         args += ["--override", spec]
-    return [*args, "--override-reason", "Validated against the site's TorQ 4.2.0 build"]
+    return [*args, "--reason", "Validated against the site's TorQ 4.2.0 build"]
 
 
 def mutations(world) -> list[str]:
@@ -555,13 +555,11 @@ def test_a_dry_run_without_the_override_is_blocked_and_with_it_shows_the_accepte
 def test_an_override_needs_a_reason_a_known_code_and_an_overridable_one(world, bundle):
     no_reason = invoke(*plan_args(bundle), "--override", "TORQ_VERSION:stp1", "--dry-run")
     assert no_reason.exit_code != 0 and any("needs a reason" in m for m in world.errors)
-    unknown = invoke(
-        *plan_args(bundle), "--override", "NOPE:stp1", "--override-reason", "x", "--dry-run"
-    )
+    unknown = invoke(*plan_args(bundle), "--override", "NOPE:stp1", "--reason", "x", "--dry-run")
     assert unknown.exit_code != 0 and any("not a finding code" in m for m in world.errors)
     world.named("stp1")["multilog"] = "singular"
     fixed = invoke(
-        *plan_args(bundle), "--override", "LOGGING_MODE:stp1", "--override-reason", "x", "--dry-run"
+        *plan_args(bundle), "--override", "LOGGING_MODE:stp1", "--reason", "x", "--dry-run"
     )
     assert fixed.exit_code != 0 and any("cannot be overridden" in m for m in world.errors)
 

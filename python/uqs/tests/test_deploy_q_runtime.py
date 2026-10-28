@@ -403,9 +403,13 @@ def test_q_version_holds_the_bundled_q_too(tmp_path):
 def test_an_unpinned_q_runtime_is_refused_without_allow_unpinned(tmp_path):
     rt = runtime(tmp_path)
     Path(f"{rt.path}.sha256").unlink()
-    with pytest.raises(DeployError, match="no q_runtime_sha256 pins it - pass --allow-unpinned"):
+    with pytest.raises(
+        DeployError, match="no q_runtime_sha256 pins it - pass --override allow-unpinned"
+    ):
         push(tmp_path, rt)
-    code, _, out = push(tmp_path, rt, "--allow-unpinned", "a local PeachQ build")
+    code, _, out = push(
+        tmp_path, rt, "--override", "allow-unpinned", "--reason", "a local PeachQ build"
+    )
     exceptions = json.loads(out)["exceptions"]
     assert code == 0 and exceptions[-1]["requirement"] == "a .sha256 beside the q runtime"
 
@@ -415,7 +419,9 @@ def test_a_q_runtime_that_is_not_the_pinned_one_needs_accept_digest(tmp_path):
     pin = ("--q-runtime-sha256", "ab" * 32)
     with pytest.raises(DeployError, match="not the q_runtime_sha256 abab"):
         push(tmp_path, rt, *pin)
-    code, remote, out = push(tmp_path, rt, *pin, "--accept-digest", "rebuilt PeachQ")
+    code, remote, out = push(
+        tmp_path, rt, *pin, "--override", "accept-digest", "--reason", "rebuilt PeachQ"
+    )
     (e,) = json.loads(out)["exceptions"]
     assert code == 0 and e["observed"] == f"the q runtime's sha256 {rt.sha256}"
     assert remote.ran(f'if [ "$got" != {rt.sha256} ]'), "the actual bytes are still verified"

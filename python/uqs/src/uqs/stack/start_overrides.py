@@ -34,10 +34,17 @@ log = get_logger()
 
 #: Every override's use, one JSON object a line, in the runtime's data directory.
 OVERRIDES_LOG = "start_overrides.jsonl"
-#: Each override's flag, and what skipping it risks - the warning's words.
-FLAGS = {
-    "q_version": "--skip-q-version-check",
-    "profile_budget": "--skip-profile-budget-check",
+#: Each override's name, as `--override NAME` gives it (#1732).
+NAMES = {
+    "q_version": "q-version-check",
+    "profile_budget": "profile-budget-check",
+}
+#: Each override as it is spelled on the command line - the warning's and the log's.
+FLAGS = {field: f"--override {name}" for field, name in NAMES.items()}
+#: The commands that take each override (`uqs override list`).
+COMMANDS = {
+    "q_version": ("start", "up", "restart"),
+    "profile_budget": ("start", "up"),
 }
 CONSEQUENCES = {
     "q_version": "the q is older than the tree as written needs: processes may die on "
@@ -58,7 +65,7 @@ class Overrides:
         for f in fields(self):
             reason = getattr(self, f.name)
             if reason is not None and not reason.strip():
-                raise UqsError(f"{FLAGS[f.name]} needs a reason: say why this check is skipped")
+                raise UqsError(f"{FLAGS[f.name]} needs --reason: say why this check is skipped")
 
     def given(self) -> dict[str, str]:
         """{override: its reason}, for those given."""

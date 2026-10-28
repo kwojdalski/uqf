@@ -17,6 +17,7 @@ import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
 from uqs.cli.renames import renamed
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
@@ -133,6 +134,14 @@ def receive(
             "ahead; an extractor then fails its next window without covering it",
         ),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            "-n",
+            help="Admit the destination and show what it would serve; start nothing",
+        ),
+    ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Print what started as JSON")] = False,
 ) -> None:
     """Start the receiver for a backfill extracted on another machine (#1650).
@@ -151,6 +160,9 @@ def receive(
     end-of-day fence begins.
     """
     if stop:
+        if dry_run:
+            _die(UqsError("--stop with --dry-run: give one of them"))
+            return
         stopped = backfill_remote.stop_receivers(attach)
         names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
         if as_json:
@@ -176,13 +188,21 @@ def receive(
     try:
         att = config.load(attach)
         out = backfill_remote.receive(
-            _paths(), attach, contract, port=port, ipc=service.ipc_for(att)
+            _paths(), attach, contract, port=port, ipc=service.ipc_for(att), dry_run=dry_run
         )
     except UqsError as exc:
         _die(exc)
         return
     if as_json:
         typer.echo(json.dumps(out, indent=2, sort_keys=True))
+    elif dry_run:
+        console.print(
+            f"would receive {out['dataset']} (contract {out['contract']}) for attachment "
+            f"{out['attachment']} on port {out['port']} into {out['hdb_dir']}: dates to "
+            f"{out['last_writable_date']}, until {out['stops_at']}",
+            markup=False,
+        )
+        console.print(dry_run_note())
     else:
         console.print(
             f"receiving {out['dataset']} (contract {out['contract']}) for attachment "

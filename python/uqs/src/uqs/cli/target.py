@@ -24,6 +24,7 @@ from rich.table import Table
 
 from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, app, console
 from uqs.deploy import control, history, targets
 from uqs.deploy.config import DeployError
@@ -54,6 +55,9 @@ def add(
         list[str] | None,
         typer.Option("--label", help="key=value, shown by `uqs target list`; repeatable"),
     ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", "-n", help="Check the entry and show it; write nothing")
+    ] = False,
 ) -> None:
     """Declare a server: its ssh destination and deployment root, nothing else.
     Processes, ports and configuration are read from the server when used. A
@@ -75,14 +79,25 @@ def add(
         targets.append(root, name, entry)
         control.remote_for(name, root)
     except (DeployError, UqsError) as exc:
-        if before is None:
-            path.unlink(missing_ok=True)
-        else:
-            path.write_text(before)
+        _restore(path, before)
         _die(UqsError(str(exc)))
+        return
+    if dry_run:  # checked as a real add is - remote_for reads the file - then undone
+        _restore(path, before)
+        shown = ", ".join(f"{k}={v}" for k, v in entry.items() if v)
+        console.print(f"would add target {name} ({shown}) to {path}", markup=False)
+        console.print(dry_run_note())
         return
     console.print(f"[green]✓[/] target {name} added to {path}")
     console.print(f"  try: uqs --target {name} summary")
+
+
+def _restore(path, before: str | None) -> None:
+    """Put the declaration back as it was before an add."""
+    if before is None:
+        path.unlink(missing_ok=True)
+    else:
+        path.write_text(before)
 
 
 CheckJson = json_opt('{"ok": true, "target", "host", "dest", "remote_user", "release"}')
@@ -128,12 +143,21 @@ def shell(
 
 
 @target_app.command("remove")
-def remove(name: Annotated[str, typer.Argument(help="The target")]) -> None:
+def remove(
+    name: Annotated[str, typer.Argument(help="The target")],
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", "-n", help="Check it is declared; remove nothing")
+    ] = False,
+) -> None:
     """Delete one target's [targets.NAME] table; every other line stays."""
     try:
-        path = targets.remove(repo_root(), name)
+        path = targets.remove(repo_root(), name, dry_run)
     except DeployError as exc:
         _die(UqsError(str(exc)))
+        return
+    if dry_run:
+        console.print(f"would remove target {name} from {path}", markup=False)
+        console.print(dry_run_note())
         return
     console.print(f"[green]✓[/] target {name} removed from {path}")
 

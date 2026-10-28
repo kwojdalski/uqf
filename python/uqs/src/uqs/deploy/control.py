@@ -173,7 +173,7 @@ def split_global(argv: Sequence[str]) -> tuple[str | None, bool, list[str]]:
             target, i = argv[i + 1], i + 2
         elif a.startswith("--target="):
             target, i = a.split("=", 1)[1], i + 1
-        elif a == "--yes":
+        elif a in ("--yes", "-y"):
             yes, i = True, i + 1
         elif a == "--runtime" and i + 1 < len(argv):
             rest += argv[i : i + 2]
@@ -208,12 +208,16 @@ def command_words(args: Sequence[str]) -> tuple[str, ...]:
 
 
 def changes_the_server(args: Sequence[str]) -> bool:
-    """Whether `args` may change the server. Help never does; an unclassified
-    command is assumed to."""
+    """Whether `args` may change the server. Help never does, nor a dry run -
+    every command that changes state takes --dry-run/-n (#1732) - but a
+    backfill's, which starts a process to fetch; an unclassified command is
+    assumed to."""
     if "--help" in args or "-h" in args:
         return False
     words = command_words(args)
     if not words:
+        return False
+    if ("--dry-run" in args or "-n" in args) and words[:2] != ("job", "backfill"):
         return False
     if words[:1] == ("summary",) and ("-i" in args or "--interactive" in args):
         return True  # its browser starts, stops and restarts processes with single keys

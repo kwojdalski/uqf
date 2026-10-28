@@ -160,7 +160,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         steps.add_row(f"{len(steps.rows) + 1}.", what, command)
 
     step("The registry sees them", "uqs list processes")
-    step("The exact start line", f"uqs start --show-command {procs}")
+    step("The exact start line", f"uqs start --dry-run {procs}")
     if streaming or not workers:
         step("Start them", f"uqs start {procs}")
     for worker in workers:
@@ -218,7 +218,7 @@ def install_jobs(
         bool, typer.Option("--overwrite", help="Replace tree files that differ, without asking")
     ] = False,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Show the plan, install nothing")
+        bool, typer.Option("--dry-run", "-n", help="Show the plan, install nothing")
     ] = False,
     yes: Annotated[
         bool,

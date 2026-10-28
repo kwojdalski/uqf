@@ -727,3 +727,11 @@ def test_wait_with_a_mode_that_writes_no_status_is_refused(monkeypatch):
     assert result.exit_code == 1
     assert refused and "nothing to wait for" in refused[0]
     assert started == []
+
+
+def test_a_dry_run_names_the_checkpoint_and_deletes_nothing(status):
+    """`uqs job checkpoint remove --dry-run` (#1732)."""
+    (status / f"{WORKER}.checkpoint").write_text("{}")
+    path = backfill.clear_checkpoint(stack_paths.default_paths(), WORKER, dry_run=True)
+    assert path == status / f"{WORKER}.checkpoint"
+    assert path is not None and path.exists()

@@ -79,6 +79,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "runtime list": (["runtime", "list"], "uqf"),
     "job list": (["job", "list"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
+    "override list": (["override", "list"], "q-version-check"),
     "data hdb-check": (["data", "hdb-check"], "present"),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),

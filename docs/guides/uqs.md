@@ -124,7 +124,7 @@ the pattern, or the shell will try to expand it against your filenames first.
 changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
+uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --dry-run
 uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
 uqs data hdb-check
 uqs restart hdb1
@@ -606,21 +606,22 @@ leaves.
 ### Skipping a start check, for one command
 
 Two of a start's refusals guard against a start that would go wrong, rather than
-one that cannot run. To try it anyway, for instance testing compatibility, skip
-that one check by name and give the reason:
+one that cannot run. To try it anyway, for instance testing compatibility,
+override that one check by name and give the reason:
 
 ```bash
-uqs start rdb1 --skip-q-version-check "checking which jobs load on uat's 4.1"
-uqs start --profile fx --skip-profile-budget-check "full licence on this host"
-uqs restart rdb1 --skip-q-version-check "..."     # up takes both too
+uqs start rdb1 --override q-version-check --reason "checking which jobs load on uat's 4.1"
+uqs start --profile fx --override profile-budget-check --reason "full licence on this host"
+uqs restart rdb1 --override q-version-check --reason "..."     # up takes both too
 ```
 
-- `--skip-q-version-check` starts despite a KDB-X older than 5.0 for the tree as
+- `q-version-check` starts despite a KDB-X older than 5.0 for the tree as
   written. The tree is not converted. A process that cannot load it fails, and
   the failure is in its log.
-- `--skip-profile-budget-check` starts (or `--show-command`s) a `--profile` past
-  the connection-budget estimate. The licence's own limit is still q's to
-  enforce.
+- `profile-budget-check` starts (or `--dry-run`s) a `--profile` past the
+  connection-budget estimate. The licence's own limit is still q's to enforce.
+
+`uqs override list` names every override and the commands that take it.
 
 Each override:
 
@@ -630,9 +631,9 @@ Each override:
 - is appended to `start_overrides.jsonl` in the runtime's data directory, with
   the command, the processes and the runtime.
 
-An override that would skip nothing is refused: `--skip-q-version-check` with
-`--show-command`, or `--skip-profile-budget-check` without `--profile`. Nothing
-else can be skipped. Port ownership, process names, attachment verification,
+An override that would skip nothing is refused: `q-version-check` with
+`--dry-run`, or `profile-budget-check` without `--profile`. Nothing else can be
+skipped. Port ownership, process names, attachment verification,
 converted-source integrity and the launcher's checks still refuse. The MCP
 server and the browser never skip anything. Through `uqs --target`, the reason
 is forwarded as given, and the start asks first as always.
@@ -1152,7 +1153,7 @@ check it is running:
 
 ```
 uqs list processes                      # the registry sees the new processes
-uqs start --show-command <procname>                    # the exact start line
+uqs start --dry-run <procname>          # the exact start line
 uqs start <procname>                    # streaming jobs
 uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
 uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02
@@ -1301,9 +1302,13 @@ command that breaks a rule, and on a listed exception that has since been fixed.
 4. **A fixed verb vocabulary**: the table below.
 5. **Uniform flags.** `--json`, one JSON document on stdout, on every command
    that reports (`uqs runtime diff uqf torq --json`); `--dry-run`/`-n` on every
-   command that changes state (`uqs clean -n`); `--yes`/`-y` on every command
-   that asks (`uqs job remove NAME -y`). A check is bypassed only with
-   `--override NAME --reason TEXT`.
+   command that changes state (`uqs clean -n`), which checks everything and
+   changes nothing; `--yes`/`-y` on every command that asks
+   (`uqs job remove NAME -y`). A check is bypassed only with
+   `--override NAME --reason TEXT`: NAME is one of the command's own, which
+   `uqs override list` shows, repeatable, with one reason for all of them,
+   warned about and recorded. Through `uqs --target`, a `--dry-run` asks nothing
+   first, except a backfill's, which starts a process to fetch.
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 
@@ -1348,7 +1353,8 @@ One meaning per option name (#1729):
   | `job backfill --force`                                                                  | `job backfill --any-writer`     |
   | `job remove --force`                                                                    | `job remove --even-if-edited`   |
   | `logs -n N`                                                                             | `logs --lines N` / `-l N`       |
-  | `start --print`, `logs --print`                                                         | `--show-command`                |
+  | `start --print`                                                                         | `start --dry-run` (#1732)       |
+  | `logs --print`                                                                          | `--show-command`                |
   | `query --raw`                                                                           | `query --no-gateway`            |
   | `config get --raw`                                                                      | `config get --unresolved`       |
   | `summary --debug`, `job backfill --debug`                                               | `uqs --debug summary`, ...      |
@@ -1382,6 +1388,30 @@ stack is PROC, any other is the expression or table, so
 `uqs query 'count quote'` still asks the gateway and `uqs schema 'crypto*'`
 still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
 `job contract export JOB`), a process PROC (`config get PROC`).
+
+One safety vocabulary (#1732):
+
+  | old                                                         | new                                                       |
+  | ---                                                         | ---                                                       |
+  | `start --show-command`                                      | `start --dry-run` / `-n`                                  |
+  | `start` `up` `restart --skip-q-version-check REASON`        | `--override q-version-check --reason REASON`              |
+  | `start` `up --skip-profile-budget-check REASON`             | `--override profile-budget-check --reason REASON`         |
+  | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`    |
+  | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`         |
+  | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                 |
+  | `job preview --dry-run`                                     | dropped: a preview never writes                           |
+  | `data migrate` (dry by default)                             | `data migrate --dry-run`; writing still says `--apply`    |
+
+Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
+`restart`, `up`, `config set`, `data seed`, `job receive`, `job backfill`
+(`--mode dry-run`), `job runs migrate`, `job contract approve`,
+`connector start`/`stop`, `setup odbc install`/`rollback`,
+`deploy component build` and `target add`/`remove`. The old
+`--accept-...`/`--skip-...` options each took their own reason; given together,
+their reasons are joined into the one `--reason`. `data migrate` was dry unless
+`--apply`: for one release it refuses to run with neither `--dry-run` nor
+`--apply`, so a script written for the old default does not start writing, and
+the release after writes by default.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

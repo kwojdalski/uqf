@@ -42,7 +42,7 @@ from uqs.paths import UqsError
 #: The release's manifest, at its root (deploy.artifact.MANIFEST - held equal
 #: by test_converted.py, since stack/ does not reach into deploy/).
 MANIFEST = "RELEASE_MANIFEST.json"
-#: What `uqs deploy push --accept-converted-release` writes into the release
+#: What `uqs deploy push --override accept-converted-release` writes into the release
 #: once the smoke test has passed on the server's q.
 OVERRIDE = "CONVERTED_RELEASE_OVERRIDE.json"
 #: The deployment attempt's token; `uqs start` honours OVERRIDE only when its
@@ -180,8 +180,9 @@ def recognise(root: Path, server_version: str, env: Mapping[str, str]) -> Eviden
     if override is None:
         raise UqsError(
             f"release {release} was converted for kdb+ {target}, and this q reports "
-            f"{server_version or 'no version'}. Deploy it with --accept-converted-release "
-            "REASON once its smoke test passes on this q, or use a q of that version. "
+            f"{server_version or 'no version'}. Deploy it with --override "
+            "accept-converted-release --reason REASON once its smoke test passes on this q, "
+            "or use a q of that version. "
             "Nothing was started"
         )
     return Evidence(release, target, checked, override)

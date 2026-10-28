@@ -205,7 +205,7 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
             runtime = settings.get("runtime", runtime)
         components.switch(options, sources, explicit)
         options.update(explicit)
-        sources.update({k: "--" + k.replace("_", "-") for k in explicit})
+        sources.update({k: _flag(k) for k in explicit})
         absent = [k for k in ("host", "dest", "profile") if options.get(k) is None]
         if absent:
             raise DeployError(
@@ -250,9 +250,9 @@ def append(root: Path, name: str, entry: dict) -> Path:
     return path
 
 
-def remove(root: Path, name: str) -> Path:
+def remove(root: Path, name: str, dry_run: bool = False) -> Path:
     """Delete [targets.NAME]'s lines - its header to the next table - and no
-    others."""
+    others; with `dry_run`, only check that they are there."""
     path = declaration_path(root)
     if name not in read(root):
         raise DeployError("arguments", f"no target {name!r} in {path}")
@@ -264,5 +264,14 @@ def remove(root: Path, name: str) -> Path:
     end = next(
         (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines)
     )
+    if dry_run:
+        return path
     path.write_text("".join(lines[:start] + lines[end:]))
     return path
+
+
+def _flag(option: str) -> str:
+    """How `option` is given on the command line: `--override NAME` for one of
+    the named overrides (#1732), `--name` for anything else."""
+    name = option.replace("_", "-")
+    return f"--override {name}" if option in OVERRIDES else f"--{name}"

@@ -18,6 +18,7 @@ import pytest
 import typer
 from typer.main import get_group
 
+from uqs.cli import deploy_policy
 from uqs.cli.deploy import deploy_app
 from uqs.deploy import artifact, driver, verify
 from uqs.deploy import build as release_build
@@ -40,6 +41,8 @@ def parse_args(argv: list[str]) -> Config:
     # TARGETs (and the old --target) are resolved by targets.configs, not make_config
     params.pop("target", None)
     params.pop("target_names", None)
+    # --override NAME --reason TEXT become make_config's per-override fields (#1732)
+    params |= deploy_policy.bypasses(params.pop("override"), params.pop("reason"))
     return make_config(**params)
 
 
@@ -1212,7 +1215,9 @@ def test_a_release_says_its_runtime_and_a_missing_or_unknown_one_is_refused():
 
 
 def test_a_release_converted_for_a_newer_q_is_refused_at_preflight(tmp_path):
-    with pytest.raises(DeployError, match="older than the kdb\\+ 4.0.*--accept-converted-release"):
+    with pytest.raises(
+        DeployError, match="older than the kdb\\+ 4.0.*--override accept-converted-release"
+    ):
         _run_with_facts(tmp_path, SERVER + "qversion=3.6\ndata=present\n", "4.0")
 
 
@@ -1226,7 +1231,7 @@ def _accepted(tmp_path, q="4.0", reason="smoke passed on the 3.6 server"):
     )
     out = io.StringIO()
     path = _artifact(tmp_path, **({"q": q} if q else {}))
-    args = _args(path, "--accept-converted-release", reason)
+    args = _args(path, "--override", "accept-converted-release", "--reason", reason)
     code = driver.deploy(parse_args(args), remote, out=out)
     return code, remote, json.loads(out.getvalue())
 
@@ -1252,8 +1257,10 @@ def test_the_override_is_refused_for_a_release_as_written(tmp_path):
 
 
 def test_the_override_needs_a_reason():
-    with pytest.raises(DeployError, match="needs a reason"):
-        parse_args(_args(Path("a.tar.gz"), "--accept-converted-release", "  "))
+    with pytest.raises(DeployError, match="accept-converted-release needs --reason"):
+        parse_args(
+            _args(Path("a.tar.gz"), "--override", "accept-converted-release", "--reason", "  ")
+        )
 
 
 def test_a_remote_failure_keeps_the_refusal_behind_ssh_warnings():

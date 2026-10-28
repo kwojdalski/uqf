@@ -26,7 +26,7 @@ from uqs.scaffold.remove import plan_removal
 def remove_job(
     name: Annotated[str, typer.Argument(metavar="JOB", help="The job, as uqs job new named it")],
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Print what would be removed, remove nothing")
+        bool, typer.Option("--dry-run", "-n", help="Print what would be removed, remove nothing")
     ] = False,
     force: Annotated[
         bool,

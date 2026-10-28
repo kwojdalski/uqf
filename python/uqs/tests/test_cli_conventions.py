@@ -308,6 +308,7 @@ OPTIONS = {
     "--odbc-home": Meaning("a private ODBC setup", r"ODBC"),
     "--output": Meaning("where to write the output", r"write"),
     "--overwrite": Meaning("replace what is already there", r"replace"),
+    "--override": Meaning("bypass one named check", r"bypass"),
     "--passwd": Meaning("the q password", r"password"),
     "--port": Meaning("one process's port", r"directly"),
     "--print": Meaning("retired: --show-command", None),
@@ -317,10 +318,9 @@ OPTIONS = {
     "--python-runtime": Meaning("a bundled CPython", r"CPython"),
     "--qhome": Meaning("a QHOME", r"QHOME"),
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
+    "--reason": Meaning("why an --override is acceptable", r"--override"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--reverse": Meaning("sort descending", r"descending"),
-    "--skip-profile-budget-check": Meaning("bypass the budget check", r"budget"),
-    "--skip-q-version-check": Meaning("bypass the q version check", r"q too old"),
     "--sort": Meaning("sort by a column", r"sort by"),
     "--tables": Meaning("a set of tables", r"tables"),
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
@@ -430,13 +430,14 @@ KIND = {
     "runtime list": REPORTS,
     "job list": REPORTS,
     "job attachment list": REPORTS,
+    "override list": REPORTS,
     "logs": REPORTS,
     "clean": CHANGES,
     "job checkpoint remove": CHANGES,
     "data replay": CHANGES,
     "data seed": CHANGES,
     "data migrate": CHANGES,
-    "data hdb-check": REPORTS,  # --fix writes, opt-in: #1732 settles --apply-style modes
+    "data hdb-check": REPORTS,  # --fix writes, opt-in: a repair the report offers
     "config get": REPORTS,
     "config set": CHANGES,
     "config sources stub": CHANGES,
@@ -494,60 +495,13 @@ RULE5A_ALLOWLIST: dict[str, str] = {}
 
 #: leaf -> the issue that gives it --dry-run/-n (or, for one that changes
 #: nothing, takes its --dry-run away)
-RULE5B_ALLOWLIST = {
-    c: "#1732"
-    for c in (
-        "start",
-        "up",
-        "stop",
-        "restart",
-        "job checkpoint remove",
-        "data replay",
-        "data seed",
-        "data migrate",  # --apply: dry by default
-        "config set",
-        "config sources stub",
-        "runtime prepare",
-        "job receive",
-        "job backfill",  # --mode validate/plan
-        "job preview",  # changes nothing, yet has --dry-run
-        "job new",
-        "job remove",
-        "job install",
-        "job attach",
-        "job detach",
-        "job runs migrate",
-        "job contract approve",
-        "connector start",
-        "connector stop",
-        "setup odbc install",
-        "setup odbc rollback",
-        "deploy build",
-        "deploy component build",
-        "deploy push",
-        "deploy rollback",
-        "deploy prune",
-        "target add",
-        "target remove",
-    )
-}
+RULE5B_ALLOWLIST: dict[str, str] = {}
 
 #: command -> the issue that gives its --yes a -y
-RULE5C_ALLOWLIST = {ROOT: "#1732", "job attach": "#1732", "job detach": "#1732"}
+RULE5C_ALLOWLIST: dict[str, str] = {}
 
 #: (command, option) -> the issue that folds the bypass into --override NAME --reason
-RULE5D_ALLOWLIST = {
-    ("start", "--skip-q-version-check"): "#1732",
-    ("start", "--skip-profile-budget-check"): "#1732",
-    ("up", "--skip-q-version-check"): "#1732",
-    ("up", "--skip-profile-budget-check"): "#1732",
-    ("restart", "--skip-q-version-check"): "#1732",
-    ("job attach", "--override-reason"): "#1732",
-    ("deploy push", "--accept-converted-release"): "#1732",
-    ("deploy push", "--accept-digest"): "#1732",
-    ("deploy push", "--accept-q-version"): "#1732",
-    ("deploy push", "--allow-unpinned"): "#1732",
-}
+RULE5D_ALLOWLIST: dict[str, str] = {}
 
 
 def _flag(cmd: Cmd, long: str, short: str | None = None) -> bool:
@@ -603,6 +557,17 @@ def test_rule5d_a_bypass_is_override_name_reason():
             if name.startswith("--skip-") or name == "--override-reason" or reason_taking:
                 found.add((cmd.path, name))
     _hold("rule 5d", found, RULE5D_ALLOWLIST)
+
+
+def test_rule5d_every_override_is_named_where_uqs_override_list_finds_it():
+    """A command that takes --override takes the names `uqs override list`
+    shows, and every name listed is taken by the commands it names (#1732)."""
+    from uqs.cli import safety
+
+    taking = {c.path for c in TREE if c.option("--override") is not None}
+    named = {command for b in safety.catalog() for command in b.commands}
+    assert taking == named
+    assert all(c.option("--reason") is not None for c in TREE if c.path in taking)
 
 
 # ------------------------------------------------------------- the lists

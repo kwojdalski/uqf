@@ -131,7 +131,7 @@ def _configure(
         ),
     ] = None,
     yes: Annotated[
-        bool, typer.Option("--yes", help="With --target: run without asking", hidden=True)
+        bool, typer.Option("--yes", "-y", help="With --target: run without asking", hidden=True)
     ] = False,
     version: Annotated[
         bool,

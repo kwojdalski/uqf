@@ -282,7 +282,7 @@ def list_process_names(paths: UqsPaths) -> list[str]:
 def assert_known_procnames(paths: UqsPaths, procs: str) -> None:
     """Refuse a lifecycle selector naming a process that does not exist.
 
-    `start`/`stop`/`restart`/`start --show-command` used to hand `procs` straight to the
+    `start`/`stop`/`restart`/`start --dry-run` used to hand `procs` straight to the
     vendored torq.sh on the grounds that it owns its own handling of an
     unknown name. It does, but badly, and the cost is paid before you see it:
     `uqs start xyz` first printed a licence-cap warning whose arithmetic
@@ -375,16 +375,21 @@ def get_process_config(
     return row
 
 
-def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -> None:
+def set_process_config(
+    paths: UqsPaths, procname: str, field: str, value: str, dry_run: bool = False
+) -> None:
     """Persist a process.csv field override for *procname*, applied by every
     later bootstrap() (i.e. every start/stop/summary/... call) until
     changed again. Read-modify-write against process_overrides.csv - the
     only file this touches; the vendored process.csv is never edited.
+    With `dry_run`, every check runs and nothing is written.
     """
     refuse_unknown_field(field, "unknown process.csv field")
     if procname not in list_process_names(paths):
         raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
     refuse_unsafe_override(procname, field, value)
+    if dry_run:
+        return
 
     overrides = override_files.read_file(paths.overrides_path)
     overrides.setdefault(procname, {})[field] = value

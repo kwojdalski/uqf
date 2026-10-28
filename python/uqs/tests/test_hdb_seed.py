@@ -138,6 +138,15 @@ def test_the_source_is_only_read(hdbs):
     assert _tree(src.torqdata / "hdb") == before
 
 
+def test_a_dry_run_names_the_partitions_and_writes_nothing(hdbs):
+    """`uqs data seed --dry-run` (#1732)."""
+    src, dst, _ = hdbs
+    before = _tree(dst.torqdata / "hdb")
+    said = hdb_seed.seed(dst, src, first=date(2026, 1, 2), dry_run=True)
+    assert said.startswith("would copy 1 partition(s) (2026.01.02..2026.01.02)"), said
+    assert _tree(dst.torqdata / "hdb") == before
+
+
 def test_a_partition_already_there_is_skipped_unless_overwritten(hdbs):
     src, dst, _ = hdbs
     hdb_seed.seed(dst, src)

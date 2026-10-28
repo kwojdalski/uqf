@@ -164,10 +164,14 @@ def test_migrate_upgrades_a_ledger_from_before_the_range_and_counts(tmp_path, pa
     assert result.returncode == 0, result.stdout + result.stderr
     with pytest.raises(UqsError, match="uqs job runs migrate"):
         runs.history(paths, directory=tmp_path)
+    assert runs.migrate(paths, dry_run=True, directory=tmp_path) == 1, "counted, not written"
+    with pytest.raises(UqsError, match="uqs job runs migrate"):
+        runs.history(paths, directory=tmp_path)
     assert runs.migrate(paths, directory=tmp_path) == 1
     (row,) = runs.history(paths, directory=tmp_path)
     assert (row["worker"], row["dataset"], row["windows_completed"]) == ("old_worker", "", None)
     assert runs.migrate(paths, directory=tmp_path) == 0, "a second migrate has nothing to do"
+    assert runs.migrate(paths, dry_run=True, directory=tmp_path) == 0
 
 
 @pytest.mark.parametrize(
