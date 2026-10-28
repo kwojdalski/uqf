@@ -111,6 +111,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job runs show": (["job", "runs", "show", "r", "--attach", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
     "connector status": (["connector", "status", "nosuch"], "no feed 'nosuch'"),
+    "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),
     "setup odbc status": (
         ["setup", "odbc", "status", "--home", "/nonexistent-1731"],
         "cannot read",

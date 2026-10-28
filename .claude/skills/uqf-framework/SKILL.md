@@ -364,7 +364,7 @@ scaffold bug: report it, don't work around it.
 4. Run `q tests/run_tests.q`, `uv run pytest -q`, `qlinter` on the new files,
    and `uv run python scripts/gates/check_q_traps.py`.
 5. Run it for real:
-   - `uqs up NAME`, which starts it and its log;
+   - `uqs start NAME -f`, which starts it and follows its log;
    - `uqs summary`, which should show it `up` and wired;
    - or on stock kdb+ with `q scripts/processes/run_stream.q -job NAME`, which
      starts its in-tree producers itself.

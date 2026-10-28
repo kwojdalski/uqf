@@ -61,6 +61,7 @@ from uqs.cli import remove  # noqa: F401
 from uqs.cli import install  # noqa: F401
 from uqs.cli import attach  # noqa: F401
 from uqs.cli import external  # noqa: F401
+from uqs.cli import connector_logs  # noqa: F401
 from uqs.cli import odbc  # noqa: F401
 from uqs.cli import deploy  # noqa: F401
 from uqs.cli import deploy_component  # noqa: F401

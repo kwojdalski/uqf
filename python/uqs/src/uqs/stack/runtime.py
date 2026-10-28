@@ -136,7 +136,7 @@ def run_torq_sh(
     bootstrap writes anything.
 
     A `start` or `restart` is refused first by start_policy.refuse_start -
-    here, so no caller (`uqs start`, `uqs job backfill`, `uqs replay`, `uqs raw`)
+    here, so no caller (`uqs start`, `uqs job backfill`, `uqs replay`, `uqs exec`)
     can skip it (#964).
 
     `timeout` is seconds to wait before giving up, or None to wait forever -
@@ -239,7 +239,7 @@ def qcon_command(host: str, port: int, user: str, passwd: str, *, rlwrap: bool) 
 
     NOTE the password is on the command line, so it is visible in `ps` to
     anyone on the box. That is qcon's interface, not a choice made here, and
-    it is the same exposure as the documented `uqs raw -- qcon gateway1
+    it is the same exposure as the documented `uqs exec -- qcon gateway1
     admin:admin`.
     """
     prefix = ["rlwrap"] if rlwrap else []
