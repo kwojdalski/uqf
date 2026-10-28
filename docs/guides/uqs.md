@@ -1535,6 +1535,8 @@ One meaning per option name (#1729):
   | `query --raw`                                                                           | `query --no-gateway`             |
   | `config get --raw`                                                                      | `config show --unresolved`       |
   | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...        |
+  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                  |
+  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)      |
 
 Noun first (#1727):
 

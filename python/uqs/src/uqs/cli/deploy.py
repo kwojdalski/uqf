@@ -159,7 +159,7 @@ def build(
     print(artifact.path)
 
 
-@deploy_app.command("push", cls=renamed(policy.OLD_SPELLINGS))
+@deploy_app.command("push", cls=renamed(policy.OLD_SPELLINGS | conn.OLD_SPELLINGS))
 def push(
     ctx: typer.Context,
     artifact: Annotated[
@@ -175,7 +175,7 @@ def push(
             metavar="TARGET...",
             help="Targets in deploy_targets.toml (or $UQS_DEPLOY_TARGETS), deployed in "
             "order, stopping at the first failure; a flag given here wins over a target's "
-            "value. None: --host, --dest and --profile say it all",
+            "value. None: --ssh, --dest and --profile say it all",
             show_default=False,
         ),
     ] = None,
@@ -375,7 +375,7 @@ def push(
             for name in ("host", "dest", "profile"):
                 if options[name] is None:
                     raise config.DeployError(
-                        "arguments", f"--{name} is required, or a TARGET after ARTIFACT"
+                        "arguments", f"{config.flag(name)} is required, or a TARGET after ARTIFACT"
                     )
             cfgs = [config.make_config(**options)]
         for cfg in cfgs:

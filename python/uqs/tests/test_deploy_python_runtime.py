@@ -222,7 +222,7 @@ ABSENT = {
 def push(tmp_path: Path, rt: python_runtime.PythonRuntime, *extra: str, state: dict | None = None):
     remote, out = FakeRemote({**ABSENT, **(state or {})}), io.StringIO()
     pkg = release(tmp_path / "release")
-    argv = [str(pkg), "--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
+    argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--python-mode", "bundled",
             "--python-runtime", str(rt.path)]  # fmt: skip
     code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
@@ -389,7 +389,7 @@ def carrying(tmp_path: Path, rt: python_runtime.PythonRuntime | None) -> Path:
 
 def push_carried(tmp_path: Path, pkg: Path, *extra: str, state: dict | None = None):
     remote, out = FakeRemote({**ABSENT, **(state or {})}), io.StringIO()
-    argv = [str(pkg), "--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
+    argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--python-mode", "bundled"]  # fmt: skip
     code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()

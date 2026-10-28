@@ -63,6 +63,18 @@ UNPARSED = (IndexError, ValueError)
 UNPARSED_BUSY = (IndexError, ValueError, KeyError, TypeError, AttributeError)
 
 
+#: make_config's options whose flag is not the option's own name: `host` -
+#: the ssh destination, kept under that key in deploy_targets.toml - is
+#: `--ssh`, since `--host` is a q host everywhere else (#1768).
+FLAG_NAMES = {"host": "ssh"}
+
+
+def flag(option: str) -> str:
+    """How make_config's `option` is given on the command line: `--ssh` for
+    `host`, `--torq-home` for `torq_home`."""
+    return "--" + FLAG_NAMES.get(option, option).replace("_", "-")
+
+
 class DeployError(Exception):
     """A deployment that cannot go on; `stage` says where it stopped."""
 
@@ -278,7 +290,7 @@ def make_config(
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
     if not _HOST.fullmatch(host):
-        raise DeployError("arguments", f"--host {host!r} is not an ssh destination")
+        raise DeployError("arguments", f"--ssh {host!r} is not an ssh destination")
     if remote_user is not None and not _USER.fullmatch(remote_user):
         raise DeployError("arguments", f"--remote-user {remote_user!r} is not an account name")
     if not _PROFILE.fullmatch(profile):

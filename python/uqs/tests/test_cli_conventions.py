@@ -352,6 +352,7 @@ OPTIONS = {
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
     "--reach": Meaning("reach the server first; save nothing it cannot reach", r"reach"),
     "--reason": Meaning("why an --override is acceptable", r"--override"),
+    "--release": Meaning("a release on the server", r"release"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--rename": Meaning("rename a column", r"rename"),
     "--reverse": Meaning("sort descending", r"descending"),
@@ -393,10 +394,7 @@ SHORT_FLAGS = {
 }
 
 #: (command, option) -> the issue that renames the option there
-RULE3_ALLOWLIST = {
-    ("deploy rollback", "--to"): "#1739",
-    **{(f"deploy {c}", "--host"): "#1739" for c in ("push", "status", "rollback", "prune")},
-}
+RULE3_ALLOWLIST: dict[tuple[str, str], str] = {}
 
 
 def _option_uses() -> dict[str, dict[str, str]]:

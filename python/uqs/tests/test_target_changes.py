@@ -429,7 +429,7 @@ def test_push_takes_no_register(declared, monkeypatch):
 
     monkeypatch.setattr(cli_deploy, "repo_root", lambda: ROOT)
     monkeypatch.setattr(driver, "deploy", deploy)
-    argv = ["deploy", "push", "x.tar.gz", "--host", "svc@n.example", "--dest", "/srv/n"]
+    argv = ["deploy", "push", "x.tar.gz", "--ssh", "svc@n.example", "--dest", "/srv/n"]
     r = uqs(*argv, "--profile", "essential", "--no-register")
     assert r.exit_code == 0, r.output
     assert declared.read_text() == HAND_WRITTEN

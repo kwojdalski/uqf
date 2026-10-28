@@ -4,7 +4,7 @@ runs TorQ, and prove it works before calling it deployed.
 
     uqs deploy build
     uqs deploy push dist/uqf-<release>.tar.gz \\
-        --host uqf-server --dest /opt/uqf \\
+        --ssh uqf-server --dest /opt/uqf \\
         --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \\
         --qcmd /opt/kx/bin/q --qhome /opt/kx --profile essential --dry-run
 
@@ -105,7 +105,7 @@ with the operator's own configuration, in batch mode so a missing key fails
 rather than prompts.
 
 A SERVICE USER (#780). With --remote-user svc, ssh and scp still log in as
-the --host user, but every deployment step runs as svc through
+the --ssh user, but every deployment step runs as svc through
 `sudo -n -iu svc bash -s` - non-interactive, so a sudo that would ask for a
 password fails instead of hanging, and a login shell, so q, uv, TorQ and the
 ports are checked in svc's own environment. Settings cross sudo inside the

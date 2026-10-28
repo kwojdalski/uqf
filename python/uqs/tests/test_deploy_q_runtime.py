@@ -305,7 +305,7 @@ def push(tmp_path: Path, rt: q_runtime.QRuntime, *extra: str, state: dict | None
     rules["uv python find"] = _done(SERVER + "data=present\n")
     remote, out = FakeRemote(rules), io.StringIO()
     pkg = release(tmp_path / "release", runtime_name)
-    argv = [str(pkg), "--host", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
+    argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--q-mode", "bundled",
             "--q-runtime", str(rt.path)]  # fmt: skip
     code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)

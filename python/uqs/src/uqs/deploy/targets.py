@@ -18,7 +18,7 @@ a file the operator keeps outside the source - like runtime_bundles.json
     live_check = ["deals_db"]
 
 Each key is a `uqs deploy push` option, spelt as its parameter (`torq_home`
-for --torq-home). The values go through make_config like the flags', so a
+for --torq-home; `host` for --ssh). The values go through make_config like the flags', so a
 file is held to exactly the same checks. A flag given on the command line
 wins over the file. Each value's source - the target, or the flag - is kept
 in the Config, and the plan prints it. `runtime`, which push otherwise reads
@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from uqs.deploy import components, launch
-from uqs.deploy.config import Config, DeployError, make_config
+from uqs.deploy.config import Config, DeployError, flag, make_config
 from uqs.paths import UqsError
 
 DECLARATION = "deploy_targets.toml"
@@ -343,6 +343,5 @@ NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}")
 
 def _flag(option: str) -> str:
     """How `option` is given on the command line: `--override NAME` for one of
-    the named overrides (#1732), `--name` for anything else."""
-    name = option.replace("_", "-")
-    return f"--override {name}" if option in OVERRIDES else f"--{name}"
+    the named overrides (#1732), config.flag's spelling for anything else."""
+    return f"--override {option.replace('_', '-')}" if option in OVERRIDES else flag(option)

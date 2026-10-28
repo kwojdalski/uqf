@@ -15,7 +15,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.deploy import control
+from uqs.deploy import config, control
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError, repo_root
@@ -31,14 +31,21 @@ Target = Annotated[
     typer.Argument(
         metavar="TARGET",
         help="A target in deploy_targets.toml, or a server pushed to from here "
-        "(`uqs deploy history`); for one neither knows, give --host and --dest",
+        "(`uqs deploy history`); for one neither knows, give --ssh and --dest",
         show_default=False,
     ),
 ]
+#: `--ssh`, as `uqs target add` names it; `--host` until #1768, where every
+#: other command's --host is a q host. The old spelling parses for one release.
 Host = Annotated[
     str | None,
-    typer.Option("--host", help="ssh destination, as your ssh config knows it; overrides TARGET's"),
+    typer.Option(
+        "--ssh",
+        help="The ssh destination, as your ssh config knows it: user@host or a Host "
+        "alias; overrides TARGET's",
+    ),
 ]
+OLD_SPELLINGS = {"--host": "--ssh"}
 Dest = Annotated[
     str | None,
     typer.Option("--dest", help="Absolute directory on the server; overrides TARGET's"),
@@ -48,7 +55,7 @@ RemoteUser = Annotated[
     typer.Option(
         "--remote-user",
         help="Run the steps as this account through `sudo -n -iu`; ssh and scp stay the "
-        "--host login. Overrides TARGET's",
+        "--ssh login. Overrides TARGET's",
     ),
 ]
 ConnectTimeout = Annotated[
@@ -80,7 +87,7 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
     one server: TARGET's, with each connection flag given on the command line
     over it; with no TARGET, the flags alone, which must then name the server."""
     if target is None:
-        absent = [f"--{k}" for k in ("host", "dest") if flags[k] is None]
+        absent = [config.flag(k) for k in ("host", "dest") if flags[k] is None]
         if absent:
             raise DeployError(
                 "arguments",
